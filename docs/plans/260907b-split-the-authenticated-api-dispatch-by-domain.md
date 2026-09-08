@@ -8,12 +8,13 @@ Check `ListAgents` and ask before starting any slice: referee was built twice, i
 minutes apart, because both plans queued it and neither session announced. Biome on
 `serveAuthenticatedApi`: **244 → 234 → 183 → 164 → 153**.
 
-**Four holes were found inside this plan's own safety net, and all four are fixed** — the `const`
-hole in `literalConstants` (stage 3c), the last-match-wins AST extractor (the merge), the referee
-grace window that spared a row regardless of its lock (stage 4a), and the leftover-guard filter that
-could not see a regex route (below). None was found by reading; every one was found by asking what it
-would take to make the check fail. That is the transferable result of this job, more than the
-migration is.
+**Five holes have been found inside this plan's own safety net, and all five are fixed** — the
+`const` hole in `literalConstants` (stage 3c), the last-match-wins AST extractor (the merge), the
+referee grace window that spared a row regardless of its lock (stage 4a), the leftover-guard filter
+that could not see a regex route (below), and the body diff's blindness to comment prose (260907e,
+below). Four of the five were found by asking what it would take to make the check fail, and the
+fifth by reading a diff nobody had asked to be read. **None was found by reading the check itself.**
+That is the transferable result of this job, more than the migration is.
 
 **This supersedes an earlier "done enough to stop here."** That recommendation rested on a cost
 estimate that was wrong — see § *Fable settles the end-state, and corrects the price*. The remaining
@@ -811,6 +812,39 @@ Covered, and safe to move on the existing recipe: **chat POST** (`chat-route.tes
 `handleApi` then requires frames and stored rows), **quiz mark**, the live-session routes, and the
 non-streaming domains — glossary, ideas, quotes, timeline, arc, sketch, illustrated.
 
+### The body diff was blind to comments, and a generator corrupted English through it
+
+Found 2026-09-08 by **260907e**, in the chat slice, and it is a hole in the recipe *this* plan hands
+to every remaining slice rather than in any stage this plan built.
+
+Their move generator rewrote the matcher binding with a global `\bchat\b` → `captures`. Inside code
+that is exactly the substitution the move requires. Inside **prose** it is vandalism: a comment
+reading *"one thing from chat"* became *"one thing from captures"*, and a citation turned into a link
+to a file that does not exist. **Every body still diffed clean**, because their normaliser stripped
+comments before comparing. The check whose entire job is to prove that a move is only a move was
+blind by construction to a whole class of change the move can make.
+
+**This plan got the same thing right by luck, not by specification.** Stage 5's brief said nothing
+about comments either way; the agent implementing it happened to choose the stricter reading and
+compared prose token-for-token (§ *Stage 5*, which records that it "was stricter than the brief
+asked"). Referee, in stage 4b, was compared the same way. So the recipe below has been silently
+relying on an implementer's taste at the exact point where it claims to be mechanical.
+
+**The recipe is now explicit: the body comparison compares comment text.** 260907e's verifier does,
+and they watched it catch that exact corruption while the code body still reported `identical` — the
+red-first discipline applied to the checker rather than to the test. It is committed as
+`docs/plans/260908a-verify-move.mjs.txt` and supersedes the referee-era one for every remaining
+slice. Two related fixes of theirs travel with it: a refusal used to skip the **whole** body
+comparison rather than narrowing it, so any change anywhere in a refused guard printed "refused,
+accounted" (Sol's F10); now every body is compared, and the expected refusal is matched against the
+refusal's own words, so an explanation covering two returns cannot silently cover three.
+
+Worth naming what makes this the fifth of a kind. A normaliser exists to delete differences that do
+not matter, and every one it deletes is a difference it can no longer report. Each thing you teach it
+to ignore — whitespace, the binding name, the trailing `return;`, comments — buys precision and sells
+coverage, and the sale is silent. The four rewrites this plan normalises are each justified in §
+*Stage 3b*; comments never were, and that is the whole bug.
+
 ### The normaliser should refuse, not rely on a hand check
 
 Sol's **P2-RETURN-NORMALIZER**: the body comparison should refuse automatic comparison whenever the
@@ -833,7 +867,9 @@ referee slice paid the only one. Sol confirmed that in the stage 4b review — *
 remaining prerequisite… I found no other test reading the `searches` or `oneRun` dispatch syntax"* —
 and gave the recipe: four ordered pair-keys added red-first, two shared module-scope matcher
 constants, four handlers prepended in GET/POST/PATCH/DELETE order, bodies compared while normalising
-**both** `slugPart` and `part` uses, `EXPECTED_AUTH_ROUTES` and the lifetime oracle untouched.
+**both** `slugPart` and `part` uses, `EXPECTED_AUTH_ROUTES` and the lifetime oracle untouched. Read
+that recipe together with § *The body diff was blind to comments*: **comment text is compared, never
+stripped**, which this stage got right without being told to.
 
 **It is now a contiguous suffix, which it was not when 260907e queued it.** That plan's § *The next
 slice* warns search is "not adjacent to the table" because referee's eight guards sat between them;
