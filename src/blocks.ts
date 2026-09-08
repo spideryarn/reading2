@@ -1796,8 +1796,10 @@ export class IdsNotCarried extends Error {
  * Interpolating a stretch of the document, or another error's message, would
  * break that claim without anything going red.
  *
- * The reader is shown `ARTICLE_HAD_NO_TEXT` (src/messages.ts) instead; this
- * half is the log's.
+ * The reader is shown `articleHadNoText` (src/messages.ts) instead; this half
+ * is the log's. That one is a pair of sentences chosen by where the document
+ * came from — this branch is reachable from an uploaded scan, and an upload has
+ * no address to be sent back to.
  */
 export class NoBlocksProduced extends Error {
   constructor(readonly slug: string) {
