@@ -3328,15 +3328,96 @@ pre-existing annotation that counted *Correction* among the article's twelve `<h
 existed, the single-root selector, and the region-size tripwire that went red. Recorded because the
 weaker version of that argument is the one this stage nearly shipped.
 
-###### The pattern across three reviews, which is the thing worth carrying out of C3
+###### What closing them took, and the one place Sol was wrong
 
-Every defect found in this stage has been in a **guard**, not in the feature: the shared token, the
-substitution that destroyed overlapping terms, the ancestor mirror that was not one, the ladder's
-oracle that disagreed with the rule it measured, the floor tuned to one fixture, and the fallback
-that covered one of the two rules. **The recogniser itself has been right since the first
-measurement.** What keeps being wrong is the machinery built to prove it safe — which is
-[silent-success.md](../reusable/silent-success.md)'s thesis arriving from a direction it does not name:
-not a check that passes while doing nothing, but a check that does something and is wrong about what.
+**No corpus fixture moves.** The three that stamp are byte-identical to before any of this, verified
+independently of the agent that made the fixes — and the census is now a *stricter* one: dropping the
+floor from 100 to 25 took `wiki_gdp_table` from 24 prose runs under scrutiny to **58**, and it still
+loses none.
+
+- **The floor is 25 and the chrome is excluded by markup.** `notForPrintText` reads the flattened text
+  of `.noprint` elements off the **pre-Readability** document — Readability strips the class that says
+  so — and a run contained in one of those is not the author's. **`.noprint` only**: `no-print`,
+  `hidden-print` and `d-print-none` were considered and left out for the same reason `erratum` was
+  left out of rule B. An unmeasured token here is a rollback that should fire and does not.
+- **Both rules are under the control now.** `controlOptionsFor(kept)` switches off exactly the rules
+  that fired, so a page where only rule A stamped still gets its correction notice in the control arm.
+  Where both fired and prose was lost, **both are withdrawn** — the coarse answer, taken deliberately:
+  separating A's fault from B's costs a third and fourth Readability run for a shape no fixture has,
+  and it costs a rescue rather than a paragraph.
+- **The provenance divergence closed by construction rather than by a test.** `readArticle` and
+  `readArticleWithProvenance` are now one shared generic over two arms, so there is no second copy of
+  the decision to drift; the byte-equivalence test is there as well, on both a rule-A and a rule-B
+  rollback page.
+
+**And Sol's rule-B reproduction did not reproduce.** Its construction used `<section>` wrappers; the
+loss needs `<article>`. **There are two reasons and the first account gave only one**: `<div>` is
+worth +5 in `_initializeNode` where `<article>` has no case at all, *and* `section` is itself in
+`DEFAULT_TAGS_TO_SCORE` (Readability.js:128), so a `<section>` wrapper is scored and feeds its parent.
+Both verified directly; the second was Fable's, checking a sentence this plan had stated as though it
+were complete. The defect is real and was found by
+sweeping for the shape that does it — 520 characters and no prose against 1,508 with protection off —
+but **the reviewer's own repro was wrong**, which is the fourth time in this stage that checking a
+report beat believing it.
+
+Cost of the second arm, measured on a loaded box so read the ratios: `wiki_gdp_table` 6.0s against
+1.9s, `ar5iv` 2.8s against 1.5s, `plos_biology` 1.5s against 0.7s. Three fixtures in thirty-five, in
+a batch stage nobody is waiting on.
+
+###### The pattern across three reviews — as first written, and as Fable corrected it
+
+**The first version of this section said every defect had been in a guard rather than in the feature,
+and that the recogniser had been right since the first measurement. That is false**, and Fable said
+why: the `headerelated` substitution was *in the recogniser*. `headerIsTheSoleUnlikelyTerm` is the
+predicate that decides what rule A recognises, *"neutralise `header` and re-test"* was its definition
+of **sole**, and it was wrong in a way that cost a whole page. Kept here rather than quietly
+rewritten, because a comforting story about one's own code is worth recording as a thing one reached
+for.
+
+**"The defect rate is falling" does not survive either.** Round one: 3 P0. Round two: 4 P0. Round
+three: 2 P0 and a P1 — on a review deliberately narrowed to a single fix. **Fewer findings from a
+narrower scope is what narrowing does, not convergence.**
+
+What genuinely converges is **where the findings sit**: the recogniser recovering navigation
+furniture → a guard missing a case → a guard's *threshold* being wrong. That is a weaker claim than
+the one first written here and it is the true one.
+
+**And the two rules are not the same kind of thing, which the first version blurred.** Rule A removes
+an *accidental penalty*: its effect is the page Readability would have produced had the publisher not
+written `header`, and its failure mode — a 24-row table beside thin prose — is Readability's ordinary
+behaviour on `wikitable sortable`, which ships on every Wikipedia table page today. It enlarges an
+exposed set; it does not create a hazard class. **Rule B is an affirmative `+25`**, and the plan had
+already rejected a registry because a positive token displaced prose — then Sol showed the *accepted*
+two-token topology doing the same. So **rule B is safe only under the fallback**, and what keeps it
+acceptable is exposure rather than design: two PLOS class names, on a platform whose body is tens of
+thousands of characters and never lets a notice win.
+
+###### The residual class, and the rule that stops this stage reopening
+
+Textual containment has an unbounded false-negative surface by construction, and Sol accepted its
+general shape in round three — *"acceptable only if the invariant is explicitly 'words retained
+somewhere'"*, which `proseRetention` now says outright. The known instances:
+
+- prose runs under the 25-character floor — poetry, dialogue — beside a rescued table;
+- article prose that happens to sit inside a `.noprint` container, which the exclusion then makes
+  invisible (the guard uses bare `.noprint`, wider than the `#siteSub.noprint` Sol proposed);
+- prose the control keeps in a container outside `PROSE_RUN_TAGS`;
+- a paragraph duplicated in a footnote or a table, whose main occurrence can go while the identical
+  string elsewhere keeps the check happy.
+
+**The stopping rule, written down so the next reviewer does not restart the loop: a further
+constructed instance of this class is not a P0 and does not reopen the stage. A real page that loses
+prose does.** ⟨Fable, arbitrating under
+[engineering-manager.md](../reusable/engineering-manager.md)'s *settle it through Fable or Greg*
+clause, 2026-09-08.⟩
+
+**Why the fallback stays**, against the honest case for dropping it and shipping the recogniser bare:
+nothing would ever show it was needed. The loss it guards against is **silent to the reader** — a page
+of table rows instead of an article — and there is no control arm in production, so the
+`…-rolled-back` key in the audit line is the only production instrument for this class at all. And
+its errors are asymmetric: a false rollback costs a rescue, which is the status quo; a missed loss
+costs prose, which is the bare feature. **Every fallback bug is therefore bounded by "the bare
+feature", so dropping it cannot be safer than keeping it.**
 
 ##### The gold was wrong, and the test that says so is the one that could have gone the other way
 

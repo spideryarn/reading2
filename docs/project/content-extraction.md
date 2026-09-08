@@ -344,12 +344,37 @@ are stripped with every other class.
 move no score, and at the size the pair was measured at the table survives and so does the prose
 either side of it — but take the same synthetic from twelve body rows to twenty-four and
 `spya-keep-column` loses the prose as well. **A rescued table is a table that gets scored**, and on a
-page whose prose is thin beside it, `<td>`s alone win candidacy. That is not a reason to narrow rule
-A, because it is not ours: the identical page written `class="wikitable sortable"` — a string
-Readability never disliked, so nothing is stamped — loses the same four paragraphs at the same row
-count. The pass hands a page the extraction it would have had if the publisher had not written
-`header`, and that includes the bad ones. Both readings are pinned in that test file's adversarial
-set.
+page whose prose is thin beside it, `<td>`s alone win candidacy. The identical page written
+`class="wikitable sortable"` — a string Readability never disliked, so nothing is stamped — loses the
+same four paragraphs at the same row count, so the arithmetic is the library's rather than ours.
+
+**That was once the end of the paragraph, and it was the wrong place to stop.** *"It is not ours"*
+explains the mechanism and does not absolve the pass: **this pass is the action** that turns a real
+header-named page from *prose, missing table* into *flattened table, missing prose*. GPT Sol refused
+the absolution and it was right to. So the pass carries a **fallback**: whenever a rule stamps
+anything, stage 2 runs a second time with those rules off, and the **control arm ships** if the
+treatment lost the author's prose — `kept` then names the rule that was withdrawn, so a rollback is
+visible rather than silent.
+
+The criterion is `proseRetention`, and two things about it are worth carrying:
+
+- **It is not a length comparison**, and could not be. In the case that caused it the bad arm was the
+  *longer* one — 3,726 characters of flattened rows against 801 characters and four paragraphs.
+  Length scores the disaster as an improvement. Every paragraph-level run in the control must appear
+  somewhere in the treatment instead, so the invariant is **"the words are retained somewhere"**
+  rather than "the prose occurrence is retained" — stated that way because a paragraph duplicated in
+  a table or a footnote can lose its main occurrence while the identical string elsewhere keeps the
+  check happy.
+- **The chrome it must ignore is excluded by what the publisher wrote, not by a length.** A first
+  version set a 100-character floor, because at Readability's own 25 the check fired on
+  `wiki_gdp_table` over *"From Wikipedia, the free encyclopedia"* — 37 characters of
+  `<div id="siteSub" class="noprint">`. That floor was tuned to one fixture and it let a page of
+  eight 99-character paragraphs vanish with the check reporting success. The floor is 25 and
+  `.noprint` text is excluded instead, read off the pre-Readability document because Readability
+  strips the class that says so.
+
+Both readings of the two-token table, and both directions of the fallback, are pinned in that test
+file's adversarial set.
 
 **What it recovers, measured through the real pipeline on both arms** — the second arm being
 `withProtectionDisabled`, a seam that exists only so a counterfactual can be run, because *"the

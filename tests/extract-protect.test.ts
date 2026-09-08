@@ -50,7 +50,13 @@ import { describe, expect, it } from "vitest";
 
 import { ALL_FIXTURES } from "../evals/extraction/corpus.mjs";
 import { splitIntoBlocks } from "../src/blocks.js";
-import { TooLittleTextToRead, runExtract } from "../src/extract.js";
+import {
+  TooLittleTextToRead,
+  readArticle,
+  readArticleWithProvenance,
+  runExtract,
+  withoutSourceRefs,
+} from "../src/extract.js";
 import {
   KEEP_COLUMN,
   KEEP_CONTENT,
@@ -58,6 +64,7 @@ import {
   RULES,
   UNLIKELY_CANDIDATES,
   UNLIKELY_EXCEPT_HEADER,
+  notForPrintText,
   proseRetention,
   protectAuthoredStructure,
   protectionIsDisabled,
@@ -843,22 +850,39 @@ const ADV_P = (n: number) =>
   `on whether the ${n}th column was measured in the same year as the first. It was not.</p>`;
 
 /**
+ * **The same marker, at a length the floor used to hide** — `len` visible
+ * characters exactly, sliced or padded, so the number in the test is the test's
+ * rather than an accident of how the sentence came out.
+ *
+ * 99 is the interesting one: one character under the 100-character
+ * `PROSE_RUN_FLOOR` this file's fallback used to run on, and above Readability's
+ * own 25.
+ */
+const ADV_SHORT = (n: number, len: number) =>
+  `<p>${`ADV-PROSE-${n}. The committee met in Braemar and argued about the figures all morning, again and again.`
+    .slice(0, len)
+    .padEnd(len, ".")}</p>`;
+
+/**
  * The Braemar page again, parameterised. **Two paragraphs each side rather than
  * one, and that is load-bearing**: with one, the control arm's article comes to
  * 402 characters, Readability disowns the parse under its own 500-character
  * threshold and retries with `FLAG_STRIP_UNLIKELYS` off — so the table survives
  * in the arm that is supposed to be showing what happens without it, and both
  * arms print the same number for opposite reasons.
+ *
+ * `para` is how a run of prose is written, so the same page can be built out of
+ * ~250-character paragraphs or out of short ones — see `ADV_SHORT`.
  */
-function advBraemar(cls: string, rows = 12, paras = 2): string {
+function advBraemar(cls: string, rows = 12, paras = 2, para: (n: number) => string = ADV_P): string {
   const cell = (i: number, c: number) =>
     `Reported figure for region ${i + 1}, column ${c}, as revised by the clerk in March ${1990 + (i % 30)}`;
   const body = Array.from(
     { length: rows },
     (_, i) => `<tr><td>${cell(i, 1)}</td><td>${cell(i, 2)}</td><td>${cell(i, 3)}</td><td>${cell(i, 4)}</td></tr>`,
   ).join("");
-  const above = Array.from({ length: paras }, (_, i) => ADV_P(i + 1)).join("");
-  const below = Array.from({ length: paras }, (_, i) => ADV_P(paras + i + 1)).join("");
+  const above = Array.from({ length: paras }, (_, i) => para(i + 1)).join("");
+  const below = Array.from({ length: paras }, (_, i) => para(paras + i + 1)).join("");
   return `<!doctype html><html><head><title>The Braemar figures</title></head><body><div id="wrapper">
 <h1>The Braemar figures</h1>
 ${above}
@@ -1216,9 +1240,69 @@ describe("the adversarial set — the size at which a rescue would cost prose", 
   });
 
   /**
+   * **RED before the fix.** The floor under a "run of prose" was 100
+   * characters, and 100 was tuned to a fixture: it was picked to stop
+   * `wiki_gdp_table`'s one line of site chrome withdrawing that page's real
+   * recovery. GPT Sol reproduced what it cost on 2026-09-08 — this page, with
+   * every authored paragraph one character under it. The treatment shipped
+   * 7,470 characters of flattened table and **none of the eight paragraphs**,
+   * and `proseRetention` said `{ runs: 0, lost: 0, retained: true }`, because
+   * from behind a 100-character floor the page had no prose to lose.
+   *
+   * The floor is Readability's own 25 now, and the chrome is excluded by what
+   * the publisher said about it rather than by how long it is
+   * (`notForPrintText`, src/protect.ts). Short news paragraphs, Q&A answers,
+   * list prose and poetry are all this length, so the page is not exotic.
+   */
+  it("rolls back when the prose it costs is shorter than a paragraph", async () => {
+    const html = advBraemar("wikitable sortable sticky-header-multi", 24, 4, (n) => ADV_SHORT(n, 99));
+    const stamped = await advCard(html);
+    const control = await advCard(html, true);
+
+    /* The control is the page as it was before this pass existed: eight short
+       paragraphs, no table. Asserted, so the comparison below is a comparison. */
+    expect(control.prose).toBe(8);
+    expect(control.tables).toBe(0);
+    /* And the treatment ships exactly that, saying it withdrew the rescue. */
+    expect(stamped.prose).toBe(8);
+    expect(stamped.kept).toEqual({ [RULES.headerNamedTableRolledBack]: 1 });
+    expect(stamped.chars).toBe(control.chars);
+  });
+
+  /**
+   * The other half of the same change, and the reason the floor was ever raised:
+   * `wiki_gdp_table` must **not** roll back. Its one lost run is
+   * *"From Wikipedia, the free encyclopedia"* — 37 characters, which the source
+   * writes as `<div id="siteSub" class="noprint">` — and at a 25-character floor
+   * with no exclusion that single line of chrome would withdraw the recovery of
+   * the page's own data tables.
+   *
+   * The `kept` assertion is made in § *rule A* above on the shared corpus run;
+   * what is checked here is the mechanism that makes it survivable, on the real
+   * fixture's own bytes rather than on a construction.
+   */
+  it("reads the publisher's `noprint` off the real fixture that needed it", async () => {
+    const source = dom(await readFile(path.join(FIXTURES, "wiki_gdp_table.html"), "utf8"));
+    const marked = notForPrintText(source);
+    expect(marked).toContain("From Wikipedia, the free encyclopedia");
+    /* **Not everything, and nothing the size of a paragraph.** The exclusion
+       weakens the retention check wherever it applies, so what it applies to has
+       to be chrome: this page marks three strings, of 37, 50 and 11 characters,
+       against the ~250-character paragraphs the check exists to protect. */
+    expect(marked).toHaveLength(3);
+    expect(Math.max(...marked.map((s) => s.length))).toBeLessThan(100);
+
+    /* And the fixture still ships its rescue rather than a withdrawal. */
+    const { on } = await extracted("wiki-gdp-table");
+    expect(on.kept).toEqual({ [RULES.headerNamedTable]: 2 });
+  });
+
+  /**
    * The fallback's own instrument, exercised directly rather than through a
-   * page, because two of its three decisions are invisible from outside: a run
-   * that moved between elements is not lost, and a short one is not counted.
+   * page, because three of its four decisions are invisible from outside: a run
+   * that moved between elements is not lost, a run under Readability's own
+   * 25-character floor is not counted, and a run the publisher marked as not for
+   * print is not the author's.
    */
   it("counts prose retention by containment, not by length or by element", () => {
     const body = (html: string) => dom(`<!doctype html><html><body>${html}</body></html>`).body;
@@ -1242,11 +1326,51 @@ describe("the adversarial set — the size at which a rescue would cost prose", 
     const flattened = proseRetention(body(`<p>${long(1)}</p>`), body(`<table>${rows}</table>`));
     expect(flattened.retained).toBe(false);
     expect(body(`<table>${rows}</table>`).textContent!.length).toBeGreaterThan(long(1).length);
-    /* Under the floor: a line of site chrome is not a paragraph of the article,
-       and counting it as one withdrew a real recovery on `wiki_gdp_table`. */
-    expect(proseRetention(body("<p>From Wikipedia, the free encyclopedia</p>"), body("<p>Something else</p>"))).toEqual(
-      { runs: 0, lost: 0, retained: true },
-    );
+    /* **The floor is Readability's own 25**, and it is the only length rule
+       left: below it the library has already declined to score the element. */
+    expect(proseRetention(body(`<p>${"a".repeat(24)}</p>`), body("<p>z</p>"))).toEqual({
+      runs: 0,
+      lost: 0,
+      retained: true,
+    });
+    expect(proseRetention(body(`<p>${"a".repeat(25)}</p>`), body("<p>z</p>"))).toEqual({
+      runs: 1,
+      lost: 1,
+      retained: false,
+    });
+    /* **Chrome is excluded by what the publisher said about it, not by how long
+       it is.** `wiki_gdp_table`'s `#siteSub` is 37 characters, so with the floor
+       at 25 it is a run and its loss withdraws the page's real recovery — unless
+       the fallback is told the publisher marked it `noprint`. Both directions,
+       because the exclusion doing nothing looks exactly like it working. */
+    const siteSub = "From Wikipedia, the free encyclopedia";
+    expect(proseRetention(body(`<p>${siteSub}</p>`), body("<p>Something else</p>"))).toEqual({
+      runs: 1,
+      lost: 1,
+      retained: false,
+    });
+    expect(proseRetention(body(`<p>${siteSub}</p>`), body("<p>Something else</p>"), [siteSub])).toEqual({
+      runs: 0,
+      lost: 0,
+      retained: true,
+    });
+    /* And it excludes that region rather than everything: an authored paragraph
+       of the same page is still a run, and still lost. */
+    expect(proseRetention(body(`<p>${long(1)}</p>`), body("<p>Something else</p>"), [siteSub])).toEqual({
+      runs: 1,
+      lost: 1,
+      retained: false,
+    });
+    /* **The invariant is *the words are retained somewhere*, not *the prose
+       occurrence is retained*** — the blind spot named in `proseRetention`'s own
+       comment, pinned so nobody reads a stronger claim into a green tick: a
+       paragraph that loses its place in the prose and survives inside a table
+       cell reads as retained. */
+    expect(proseRetention(body(`<p>${long(1)}</p>`), body(`<table><tr><td>${long(1)}</td></tr></table>`))).toEqual({
+      runs: 1,
+      lost: 0,
+      retained: true,
+    });
     /* Whitespace is normalised rather than compared. */
     expect(proseRetention(body(`<p>${long(1)}</p>`), body(`<p>\n   ${long(1).replace(/ /g, "\n  ")}\n</p>`))).toEqual({
       runs: 1,
@@ -1400,5 +1524,149 @@ describe("the adversarial set — rule B's topology", { timeout: 120_000 }, () =
       expect(card.kept, name).toEqual({ [RULES.correctionNotice]: 2 });
       expect(card.prose, name).toBe(4);
     }
+  });
+
+  /**
+   * **RED before the fix, and it is the case the exemption was written on.**
+   * Rule B used to be outside the prose-retention fallback, on a measurement —
+   * no construction above costs a paragraph — plus a story: rule B stamps an
+   * *ancestor* of the prose or a sibling too small to win, where rule A stamps
+   * the one element built to out-score everything round it.
+   *
+   * GPT Sol reproduced the counterexample on 2026-09-08 and the story does not
+   * survive it. Give the notice two paragraphs of its own and put the authored
+   * prose in sibling `<article>` sections at the body root — no shared container
+   * accumulating their score, and no qualifying table anywhere on the page — and
+   * the stamped notice wins candidacy: **all four paragraphs gone**, `kept`
+   * saying `{"an-amendment-correction": 2}`, and no rollback, because the second
+   * arm ran only when rule A had stamped.
+   *
+   * The `<article>` wrapper rather than the `<div class="sect">` of the cases
+   * above is the whole difference and it was found by sweeping the three
+   * wrappers against the notice's size, not reasoned to: `<div>` is worth +5 to
+   * Readability's `_initializeNode` and `<article>` nothing, so the div-wrapped
+   * sections out-score the notice and the article-wrapped ones do not.
+   */
+  it("rolls rule B back when the notice's own weight costs the page its prose", async () => {
+    const notice = `<div class="${ADV_AMENDMENT}"><h2>ADV-NOTICE-HEADING</h2>${ADV_CITATION}
+      ${[0, 1]
+        .map(
+          (i) =>
+            `<p>NOTICE-BODY-${i}. The correction restated the endpoint and the committee accepted it in full, ` +
+            `without comment, after a discussion the minutes record only as having taken place.</p>`,
+        )
+        .join("")}</div>`;
+    const html = `<!doctype html><html><head><title>t</title></head><body>
+<h1>t</h1>${notice}${[1, 2, 3, 4].map((n) => `<article><h2>Section ${n}</h2>${ADV_P(n)}</article>`).join("")}
+</body></html>`;
+
+    const stamped = await advCard(html);
+    const control = await advCard(html, true);
+    /* The page without the pass keeps every paragraph — asserted, so what
+       follows is a comparison rather than a description. */
+    expect(control.prose).toBe(4);
+    expect(stamped.prose).toBe(4);
+    /* And says which rule it took back. A withdrawal nobody can see is the
+       failure class this whole pass is about. */
+    expect(stamped.kept).toEqual({ [RULES.correctionNoticeRolledBack]: 2 });
+    expect(stamped.chars).toBe(control.chars);
+  });
+
+  /**
+   * **Both rules on one page, which no fixture has** — rule A fires on
+   * `wiki_gdp_table` and `ar5iv`, rule B on `plos_biology`, and the sets are
+   * disjoint. So the case where the two interact exists only here, and both
+   * directions are pinned: at twelve rows nothing is lost and both stamps stand;
+   * at twenty-four the treatment loses the prose and **both** are withdrawn.
+   *
+   * Withdrawing both is the coarse answer and it is deliberate — telling A's
+   * fault from B's costs a third and fourth Readability run to find out which
+   * single rule the page can keep, for a shape nobody has seen. What it costs is
+   * a rescue, never a paragraph, and only on a page that was losing one anyway.
+   * § *The fallback* in src/protect.ts.
+   */
+  it("withdraws both rules together when both stamped and the prose went", async () => {
+    const withNotice = (rows: number) =>
+      advBraemar("wikitable sortable sticky-header-multi", rows).replace(
+        "<h1>The Braemar figures</h1>",
+        `<h1>The Braemar figures</h1><div class="${ADV_AMENDMENT}"><h2>ADV-NOTICE-HEADING</h2>${ADV_CITATION}</div>`,
+      );
+
+    const small = await advCard(withNotice(12));
+    expect(small.kept).toEqual({ [RULES.headerNamedTable]: 1, [RULES.correctionNotice]: 2 });
+    expect(small.prose).toBe(4);
+    expect(small.tables).toBe(1);
+
+    const big = await advCard(withNotice(24));
+    const control = await advCard(withNotice(24), true);
+    expect(control.prose).toBe(4);
+    expect(big.prose).toBe(4);
+    expect(big.kept).toEqual({
+      [RULES.headerNamedTableRolledBack]: 1,
+      [RULES.correctionNoticeRolledBack]: 2,
+    });
+    expect(big.chars).toBe(control.chars);
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * The two read paths, which have to agree.
+ * ------------------------------------------------------------------ */
+
+/**
+ * **RED before the fix.** `readArticleWithProvenance` is the arm every eval
+ * instrument reads, and it did not run the fallback. GPT Sol measured the
+ * divergence on the fallback's own committed construction on 2026-09-08:
+ * `readArticle` returned four prose markers and
+ * `a-table-called-header-rolled-back`, the instrument returned none and
+ * `a-table-called-header`, 1,323 serialised characters against 3,805. So the
+ * harness's *shipped* arm would have inspected an extraction we discarded, on
+ * the first real rollback page.
+ *
+ * The fix is not this test: both entry points now go through the one
+ * `armThatKeptTheProse` (src/extract.ts), so there is no second copy of the
+ * decision to keep in step. This is the check that the construction actually
+ * did that — bytes, not counts, with `withoutSourceRefs` taking off the one
+ * attribute the instrument adds and nothing else, which is the comparison
+ * tests/extract-provenance.test.ts already makes on pages that do not roll back.
+ */
+describe("the two read paths, on the pages where one of them used to diverge", { timeout: 120_000 }, () => {
+  const ROLLBACK_URL = "https://example.invalid/adv";
+
+  it.each([
+    ["rule A withdrawn", () => advBraemar("wikitable sortable sticky-header-multi", 24), RULES.headerNamedTableRolledBack],
+    [
+      "rule B withdrawn",
+      () =>
+        `<!doctype html><html><head><title>t</title></head><body>
+<h1>t</h1><div class="${ADV_AMENDMENT}"><h2>ADV-NOTICE-HEADING</h2>${ADV_CITATION}
+${[0, 1]
+  .map(
+    (i) =>
+      `<p>NOTICE-BODY-${i}. The correction restated the endpoint and the committee accepted it in full, ` +
+      `without comment, after a discussion the minutes record only as having taken place.</p>`,
+  )
+  .join("")}</div>${[1, 2, 3, 4].map((n) => `<article><h2>Section ${n}</h2>${ADV_P(n)}</article>`).join("")}
+</body></html>`,
+      RULES.correctionNoticeRolledBack,
+    ],
+  ])("%s: the instrument ships the bytes the pipeline ships", (_what, page, withdrawn) => {
+    const html = page();
+    const stock = readArticle(html, ROLLBACK_URL);
+    const instrumented = readArticleWithProvenance(html, ROLLBACK_URL);
+
+    /* **The page has to actually roll back**, or every line below is a
+       comparison of two arms that were never asked to disagree. */
+    expect(Object.keys(stock.kept)).toEqual([withdrawn]);
+    expect(instrumented.kept).toEqual(stock.kept);
+
+    expect(stock.article?.content, "the page must extract at all").toBeTruthy();
+    expect(withoutSourceRefs(instrumented.article!.content!)).toBe(stock.article!.content);
+    expect(instrumented.article?.title).toBe(stock.article?.title);
+
+    /* And the stamped source belongs to the arm that shipped: the ids every
+       instrument resolves are looked up in this document, so the control's
+       source is the only one that can answer for the control's output. */
+    expect(instrumented.source.querySelectorAll(`.${KEEP_COLUMN}, .${KEEP_CONTENT}`)).toHaveLength(0);
   });
 });

@@ -76,14 +76,17 @@
  *
  * ## The fallback — every rescue is checked, and a bad one is taken back
  *
- * When rule A has stamped at least one table, stage 2 runs a second time with
- * rule A switched off and compares the two extractions. If the treatment lost
- * prose the control had, the **control** is what ships — which is exactly the
- * behaviour of the day before this pass existed — and `kept` says
- * `a-table-called-header-rolled-back` instead of `a-table-called-header`, so a
- * withdrawal is as visible in the audit line as a rescue. `readArticle`
- * (src/extract.ts) owns the second run, because it owns the Readability call;
- * the criterion itself is `proseRetention` below.
+ * When **either rule** has stamped anything, stage 2 runs a second time with
+ * **exactly the rules that fired** switched off, and compares the two
+ * extractions. If the treatment lost prose the control had, the **control** is
+ * what ships — which is exactly the behaviour of the day before this pass
+ * existed — and `kept` says `a-table-called-header-rolled-back` /
+ * `an-amendment-correction-rolled-back` instead of the stamped name, so a
+ * withdrawal is as visible in the audit line as a rescue. `readArticle` and
+ * `readArticleWithProvenance` (src/extract.ts) both run it through the one
+ * shared `armThatKeptTheProse`, because they own the Readability call; the
+ * criterion itself is `proseRetention` below and the arm arithmetic is
+ * `controlOptionsFor` and `keptWithdrawn`.
  *
  * **The criterion is not length**, and that is the trap in it: in the case that
  * caused all this the treatment was *longer* — 3,726 characters of flattened
@@ -92,21 +95,39 @@
  * retention**: every paragraph-level run of text in the control has to still be
  * somewhere in the treatment.
  *
- * **Rule B does not get one**, and that was measured rather than assumed: on
- * `plos_biology` not one control run is missing from the treatment, and every
- * construction in tests/extract-protect.test.ts § *rule B's topology* — the
- * notice scattered, linky, trailing, nested — keeps all four paragraphs. Rule B
- * also stamps an *ancestor* of the prose or a sibling too small to win, where
- * rule A stamps the one element on the page built to out-score everything
- * round it. If a page is ever found where rule B costs a paragraph, the same
- * fallback fits it with rule B switched off in the control arm instead.
+ * **Rule B used to be exempt, and that was wrong.** The argument for the
+ * exemption was a measurement — on `plos_biology` not one control run is missing
+ * from the treatment, and every construction in tests/extract-protect.test.ts
+ * § *rule B's topology* keeps all four paragraphs — plus a story about topology:
+ * rule B stamps an *ancestor* of the prose or a sibling too small to win, where
+ * rule A stamps the one element on the page built to out-score everything round
+ * it. GPT Sol reproduced the counterexample on 2026-09-08 and the story does not
+ * survive it: with the notice's four sibling `<article>` sections at the body
+ * root and two paragraphs of text inside the notice, the stamped notice wins
+ * candidacy and **all four authored paragraphs go**, ~520 characters against the
+ * 1,508 the pass leaves alone. `kept` said `{"an-amendment-correction": 2}` and
+ * nothing rolled back, because the second arm ran only when rule A had stamped.
+ * That is the same positive-token failure class the plan rejected at the design
+ * stage, at its third address. **Both rules are now under the fallback.**
  *
- * **It costs a second parse and a second Readability run**, on the pages rule A
- * stamped and no others — two of the thirty-five corpus fixtures. Measured:
- * `wiki_gdp_table` 4.6s against 1.7s for a single arm, `ar5iv` 3.3s against
- * 1.4s, `plos_biology` unchanged because rule B does not trigger it. Stage 2 is
- * a batch step with nobody waiting on it, and the alternative to spending three
- * seconds is shipping an extraction nobody checked.
+ * **When both rules stamped and the treatment lost prose, both are withdrawn** —
+ * the control arm has both switched off, and `kept` names both withdrawals. It
+ * is the coarse answer and it is deliberate: telling A's fault from B's takes a
+ * third and fourth Readability run to find out which single rule the page can
+ * keep, for a page shape **no fixture has** (rule A fires on `wiki_gdp_table`
+ * and `ar5iv`, rule B on `plos_biology`, and the sets are disjoint). What the
+ * coarse answer costs is a rescue, never a paragraph, and it costs it only on a
+ * page that was already going to lose one. What would change it is a real
+ * fixture where both fire and only one is at fault.
+ *
+ * **It costs a second parse and a second Readability run**, on the pages one of
+ * the rules stamped and no others — three of the thirty-five corpus fixtures.
+ * Measured on one busy box in one run, so read the ratios rather than the
+ * seconds: `wiki_gdp_table` 6.0s against 1.9s for a single arm, `ar5iv` 2.8s
+ * against 1.5s, and `plos_biology` — new to the fallback, since rule B is now in
+ * it — 1.5s against 0.7s. Stage 2 is a batch step with nobody waiting on it, and
+ * the alternative to spending those seconds is shipping an extraction nobody
+ * checked.
  *
  * ## Rule A — and the false positive that shrank it
  *
@@ -203,12 +224,12 @@
  * counts 2, because both the outer `div` and its citation child are stamped and
  * stamping either alone recovers nothing.
  *
- * `headerNamedTableRolledBack` is the one key that counts something the shipped
- * page does *not* have: the tables rule A stamped on a run whose result was then
- * thrown away for losing prose. It is in the same object rather than beside it
- * so that the pipeline's audit line (src/pipeline.ts, `extract … kept …`) says
- * it without being taught to — a withdrawal nobody can see is the failure class
- * this whole pass is about.
+ * The two `…RolledBack` keys are the ones that count something the shipped page
+ * does *not* have: what a rule stamped on a run whose result was then thrown
+ * away for losing prose. They are in the same object rather than beside it so
+ * that the pipeline's audit line (src/pipeline.ts, `extract … kept …`) says
+ * them without being taught to — a withdrawal nobody can see is the failure
+ * class this whole pass is about.
  */
 export type KeptStructure = Readonly<Record<string, number>>;
 
@@ -239,22 +260,94 @@ export const RULES = {
    * page that shipped carries no stamp at all. See § *The fallback* above.
    */
   headerNamedTableRolledBack: "a-table-called-header-rolled-back",
+  /**
+   * Rule B, stamped and then taken back — the same arrangement for the
+   * correction notice, and it exists because rule B turned out to be able to
+   * cost an author four paragraphs on its own (§ *The fallback*, and GPT Sol's
+   * reproduction of 2026-09-08).
+   *
+   * It can appear **beside** `headerNamedTableRolledBack` where both rules
+   * stamped the same page, because the control arm switches both off together.
+   * It never appears beside `correctionNotice`.
+   */
+  correctionNoticeRolledBack: "an-amendment-correction-rolled-back",
 } as const;
 
 /**
- * **What to leave out of a run**, and there is one caller: `readArticle`
- * (src/extract.ts) builds the fallback's control arm by asking for the same
- * pass without rule A.
+ * **Every rule, paired with the key that means "and then taken back"** — the
+ * one table both halves of the fallback read, so a third rule cannot be added
+ * with a rollback name and no way to reach it, or with a way to reach it and no
+ * name.
+ *
+ * `controlOptionsFor` turns the left column into the control arm's brief and
+ * `keptWithdrawn` turns it into the audit line; neither knows any rule by name.
+ */
+const WITHDRAWALS: ReadonlyArray<{
+  readonly stamped: string;
+  readonly withdrawn: string;
+  readonly switchOff: keyof ProtectOptions;
+}> = [
+  { stamped: RULES.headerNamedTable, withdrawn: RULES.headerNamedTableRolledBack, switchOff: "withoutHeaderNamedTables" },
+  { stamped: RULES.correctionNotice, withdrawn: RULES.correctionNoticeRolledBack, switchOff: "withoutCorrectionNotices" },
+];
+
+/**
+ * **The control arm's brief: switch off exactly the rules that fired**, or
+ * `null` when none did and there is nothing to check.
+ *
+ * Exactly those and not all of them, so the arms differ by the thing under
+ * test: on a page where only rule A stamped, the control still gets its
+ * correction notices, and a rollback of A does not silently cost the reader a
+ * notice rule B was right about.
+ */
+export function controlOptionsFor(kept: KeptStructure): ProtectOptions | null {
+  const opts: { -readonly [K in keyof ProtectOptions]: boolean } = {};
+  let any = false;
+  for (const rule of WITHDRAWALS) {
+    if ((kept[rule.stamped] ?? 0) === 0) continue;
+    opts[rule.switchOff] = true;
+    any = true;
+  }
+  return any ? opts : null;
+}
+
+/**
+ * **`kept`, rewritten for the run that was thrown away** — every stamped rule
+ * renamed to its rolled-back key, its count carried over unchanged.
+ *
+ * The count is what the *treatment* stamped, which is the number the withdrawal
+ * is about: the page that ships carries no stamp at all, so a count read off the
+ * control arm would always be zero and the audit line would say nothing.
+ */
+export function keptWithdrawn(kept: KeptStructure): KeptStructure {
+  const out: Record<string, number> = { ...kept };
+  for (const rule of WITHDRAWALS) {
+    const n = out[rule.stamped];
+    if (n === undefined) continue;
+    delete out[rule.stamped];
+    out[rule.withdrawn] = n;
+  }
+  return out;
+}
+
+/**
+ * **What to leave out of a run**, and it is written by one function:
+ * `controlOptionsFor` above, which switches off exactly the rules that fired so
+ * that the fallback's two arms differ by the thing under test.
  *
  * Deliberately not the `withProtectionDisabled` seam above. That one is module
- * state for mutation testing and switches off *everything*; this is a
- * parameter, on the shipping path, and rule B goes on running — so a page that
- * rolls rule A back still gets its correction notice. Two mechanisms because
- * they are two different jobs, and the seam's own header says it is for tests.
+ * state for mutation testing and switches off *everything* unconditionally;
+ * this is a parameter, on the shipping path, and it leaves a rule that did not
+ * fire running — so a page that rolls rule A back still gets its correction
+ * notice, unless rule B stamped it too and is under the same withdrawal. Two
+ * mechanisms because they are two different jobs, and the seam's own header
+ * says it is for tests.
  */
 export interface ProtectOptions {
   /** Skip rule A entirely — the control arm of the prose-retention check. */
   readonly withoutHeaderNamedTables?: boolean;
+  /** Skip rule B entirely — the same, for the correction notice. */
+  readonly withoutCorrectionNotices?: boolean;
 }
 
 /**
@@ -396,7 +489,9 @@ export function protectAuthoredStructure(doc: Document, opts: ProtectOptions = {
      `.a.b` is `class~=a` and `class~=b`, never a substring of the attribute.
      A substring match would take `amendment-correction-withdrawn` and anything
      else a publisher coins with the same prefix. */
-  for (const outer of Array.from(doc.querySelectorAll("div.amendment.amendment-correction"))) {
+  const notices =
+    opts.withoutCorrectionNotices === true ? [] : Array.from(doc.querySelectorAll("div.amendment.amendment-correction"));
+  for (const outer of notices) {
     /* **A direct child, which is the topology this was measured on.** PLOS
        writes `div.amendment-citation` as a child of the notice
        (evals/extraction/fixtures/plos_biology.html), and a plain
@@ -515,30 +610,66 @@ function hasItsOwnHeaderMarkup(table: Element): boolean {
 const PROSE_RUN_TAGS = "p, li, dd, dt, blockquote, figcaption, pre, h1, h2, h3, h4, h5, h6";
 
 /**
- * **How long a run has to be before its loss means anything, and this number was
- * measured rather than chosen.**
+ * **How short a run can be and still count as prose, and the number is
+ * Readability's own** — `_grabArticle` declines to score any element under 25
+ * characters, so below it the library has already said this is not a paragraph.
  *
- * The obvious floor is Readability's own: `_grabArticle` declines to score any
- * element under 25 characters. At 25 the check **fires on a real corpus
- * fixture** — `wiki_gdp_table`'s control keeps *"From Wikipedia, the free
- * encyclopedia"*, 37 characters, which the source writes as
- * `<div id="siteSub" class="noprint">` and Readability rewrites as a `<p>`; the
- * treatment arm drops it, because `_cleanConditionally`'s arithmetic moves with
- * the article's total score and the article got 237 rows of tables longer. So a
- * 25-character floor would withdraw the recovery of the page's own data tables
- * over one line of site chrome the publisher had already marked as not for
- * print.
+ * **It was 100 for a day, and 100 was fixture-tuned.** The one thing a
+ * 25-character floor fires on across the whole corpus is `wiki_gdp_table`'s
+ * *"From Wikipedia, the free encyclopedia"* — 37 characters, written by the
+ * source as `<div id="siteSub" class="noprint">`, rewritten by Readability as a
+ * `<p>`, and dropped by the treatment arm because `_cleanConditionally`'s
+ * arithmetic moves with the article's total score and the article got 237 rows
+ * of tables longer. Raising the floor over it withdrew nothing on the corpus and
+ * looked free.
  *
- * 100 characters is above every such line measured on the two stamped fixtures
- * — with it, `wiki_gdp_table` compares 24 runs and loses none, `ar5iv` compares
- * 111 and loses none — and far below the ~250-character paragraphs whose loss is
- * the failure this exists to catch. **What it gives up** is a page whose only
- * prose is short: it has few runs above the floor, so little to lose, and a
- * catastrophe there is invisible to this check. That is the trade, and it is
- * this direction because the check that fires on chrome costs a reader four
- * tables on a page that was fine.
+ * It was not free. GPT Sol reproduced the price on 2026-09-08: a header-named
+ * 24-row table beside eight authored paragraphs of 99 characters each: the
+ * control keeps all eight and 797 characters, the treatment keeps none of them
+ * and 7,470 characters of flattened table, and `proseRetention` reported
+ * `{ runs: 0, lost: 0, retained: true }` — **a whole page of prose gone, below
+ * a floor that could not see it.** Short news paragraphs, Q&A answers, list
+ * prose, poetry and concise technical documentation all live under 100
+ * characters, so that is not an exotic page.
+ *
+ * The chrome is excluded by what the publisher said about it instead — see
+ * `notForPrintText` — which is a statement about the markup, where a length
+ * threshold is a statement about nothing. Measured after the change:
+ * `wiki_gdp_table` compares 57 runs and loses none, `ar5iv` 127 and loses none,
+ * `plos_biology` 75 and loses none.
  */
-const PROSE_RUN_FLOOR = 100;
+const PROSE_RUN_FLOOR = 25;
+
+/**
+ * **The text of everything the publisher marked as not for print** — flattened,
+ * and read off the document *before* Readability, which is the only place it can
+ * be read.
+ *
+ * `keepClasses` defaults to `false`, so by the time there are two extractions to
+ * compare the `noprint` class is gone from both and the run is indistinguishable
+ * from a paragraph. So the source is asked, and `proseRetention` matches its
+ * answers by text.
+ *
+ * **Why `noprint` and nothing else.** It is a statement the publisher made about
+ * their own markup — MediaWiki writes it on `#siteSub`, on the portal bar and on
+ * the *"Mobile view"* link — and excluding *"what the publisher said not to
+ * print"* from a check about *"what the author wrote"* is this plan's own rule:
+ * rule on markup, model on meaning. The near neighbours (`no-print`,
+ * `hidden-print`, `d-print-none`) were considered and left out for the reason
+ * `correction`/`erratum`/`retraction` were left out of rule B: a token nobody has
+ * measured on a real page is a guess, and a wrong guess here is a rollback that
+ * should have fired and did not, which is the exact failure this whole section
+ * exists for. **What would widen it** is a fixture whose chrome carries one of
+ * them and whose retention check goes wrong for the want of it.
+ *
+ * **Text, and therefore counts nothing** — the strings never leave this module's
+ * comparison, and `proseRetention` returns three numbers.
+ */
+export function notForPrintText(doc: Document): readonly string[] {
+  return Array.from(doc.querySelectorAll(".noprint"))
+    .map((el) => flatten(el.textContent ?? ""))
+    .filter((text) => text !== "");
+}
 
 /** Every run of whitespace to one space, so an indentation change is not a loss. */
 const flatten = (s: string): string => s.replace(/\s+/gu, " ").trim();
@@ -561,6 +692,26 @@ const flatten = (s: string): string => s.replace(/\s+/gu, " ").trim();
  * about the elements it arrived in. A run split down the middle in the treatment
  * would read as lost; nothing measured does that.
  *
+ * **The invariant is *the words are retained somewhere*, not *the prose
+ * occurrence is retained*, and the difference is a real blind spot.** A
+ * paragraph the page also prints inside a table cell, a footnote or a
+ * pull-quote can lose its occurrence in the article body and still be found in
+ * the treatment's text, so this returns `retained: true` for a page that has
+ * moved a paragraph out of the prose and left a copy behind. Named by GPT Sol
+ * on 2026-09-08 and accepted rather than closed: the narrower invariant needs
+ * run-for-run identity between two parses, which Readability does not give — it
+ * re-wraps and merges legitimately, so the narrow check would roll back pages
+ * that lost nothing, and a rollback that fires on a healthy page costs the
+ * reader the tables this pass exists to rescue. This one is a floor under
+ * *"the reader can still find the words"*, which is the claim it is safe to
+ * make.
+ *
+ * `notForPrint` is the flattened text of what the publisher marked as chrome
+ * (`notForPrintText`, read off the pre-Readability document); a control run
+ * whose text sits inside one of those strings is not the author's prose and its
+ * loss is not a loss. Omitting it makes the check stricter, never looser, which
+ * is why it is optional.
+ *
  * **Counts, never text.** The return is three numbers, so a caller logging the
  * result cannot log the article — the rule in docs/project/logging.md, made
  * true by the signature rather than by remembering.
@@ -568,11 +719,16 @@ const flatten = (s: string): string => s.replace(/\s+/gu, " ").trim();
 export function proseRetention(
   control: Element,
   treatment: Element,
+  notForPrint: readonly string[] = [],
 ): { readonly runs: number; readonly lost: number; readonly retained: boolean } {
   const kept = flatten(treatment.textContent ?? "");
   const runs = Array.from(control.querySelectorAll(PROSE_RUN_TAGS))
     .map((el) => flatten(el.textContent ?? ""))
-    .filter((run) => run.length >= PROSE_RUN_FLOOR);
+    .filter((run) => run.length >= PROSE_RUN_FLOOR)
+    /* Containment rather than equality, because Readability rewrites the
+       publisher's `<div class="noprint">` as a `<p>` and may split or trim it —
+       what survives of a marked-up region is still that region's words. */
+    .filter((run) => !notForPrint.some((chrome) => chrome.includes(run)));
   const lost = runs.filter((run) => !kept.includes(run)).length;
   return { runs: runs.length, lost, retained: lost === 0 };
 }
