@@ -312,7 +312,25 @@ revision.
 | | rule that wins | why |
 |---|---|---|
 | **D1** bare `--` | `steer.ts` | Stop scanning; everything after is positional. Fixes a shape the launcher generates on every prompted run, and no legitimate flag is lost. |
-| **D2** duplicate ids | `harness.ts`, **corrected** | Accept when *every* occurrence is the same non-empty id; refuse if any differ or any is missing its value. Availability without risk: first-and-last semantics converge on one value. **`recogniseClaude` compares only the first two today** (Sol P2-2), so `A A B` is accepted as `A` — the fix is a set over all occurrences before the boundary, with a three-or-more test. |
+| **D2** duplicate ids | `harness.ts`, **corrected** | Accept when *every* occurrence is the same non-empty id; refuse if any differ or any is missing its value. Availability without risk: first-and-last semantics converge on one value. The fix is a set over all occurrences before the boundary, with a three-or-more test. |
+
+**D2's defect, measured rather than quoted.** Sol's P2-2 said `recogniseClaude` "compares only the
+first two". True, and the consequence is narrower and stranger than that phrasing suggests — it
+destructures `const [first, second] = sessionIds` and compares exactly those, so **a third differing
+id is invisible only when the first two agree**:
+
+```
+A B      (two, differing)   -> ambiguous
+A A      (two, identical)   -> claude-code A
+A A B    (odd one LAST)     -> claude-code A     <-- WRONG, and in the granting direction
+B A A    (odd one FIRST)    -> ambiguous
+A B A    (odd one MIDDLE)   -> ambiguous
+```
+
+So two of the three three-id orderings are already caught, and the position of the odd one decides.
+That is worth writing down because "compares only the first two" reads as *ignores everything after
+the second*, which would have predicted `B A A` to be accepted too. It is not. A test suite built
+from the looser description would have tested the wrong ordering and passed.
 | **D5** `--print` | `harness.ts` | Headless beats session identity, and steering is refused. Low urgency, right invariant. Sol: *"not overstated as a correctness rule; it would be overstated only as justification for urgency."* |
 
 ### What the tests must be
