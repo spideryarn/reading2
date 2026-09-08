@@ -606,76 +606,108 @@ function makeStore(
     },
 
     read(options): HistoryRead {
-      const read = options.readFile ?? ((path: string) => readFileSync(path, "utf8"));
-      const samples: HealthSample[] = [];
-      const holes: { afterAtMs: number | null; beforeAtMs: number | null }[] = [];
-      let unreadableLines = 0;
-      let earliestAt: string | null = null;
-      let files = 0;
-      let predecessor: HealthSample | null = null;
-      /* The most recent good sample seen, so an unparseable line can be PLACED
-         between its neighbours rather than merely counted. */
-      let lastGoodAtMs: number | null = null;
-      let openHole: { afterAtMs: number | null; beforeAtMs: number | null } | null = null;
-
-      const rotated = existsSync(prev);
-
+      const readFile = options.readFile ?? ((path: string) => readFileSync(path, "utf8"));
       /* Previous file first: it holds the older half, and `samples` must come
          out oldest first. */
+      const scan = newScan(options.sinceMs);
+      let files = 0;
       for (const path of [prev, live]) {
         if (!existsSync(path)) continue;
         files += 1;
         let text: string;
         try {
-          text = read(path);
+          text = readFile(path);
         } catch (err) {
           return {
             kind: "unreadable",
             why: `could not read ${path}: ${err instanceof Error ? err.message : String(err)}`,
           };
         }
-        for (const line of text.split("\n")) {
-          if (line === "") continue;
-          const sample = parseSampleLine(line);
-          if (sample === null) {
-            unreadableLines += 1;
-            /* One hole per RUN of bad lines: two adjacent corrupt records are
-               one place the record is broken, not two. */
-            if (openHole === null) {
-              openHole = { afterAtMs: lastGoodAtMs, beforeAtMs: null };
-              holes.push(openHole);
-            }
-            continue;
-          }
-          const atMs = Date.parse(sample.at);
-          if (openHole !== null) {
-            openHole.beforeAtMs = atMs;
-            openHole = null;
-          }
-          lastGoodAtMs = atMs;
-          if (earliestAt === null || sample.at < earliestAt) earliestAt = sample.at;
-          if (atMs >= options.sinceMs) samples.push(sample);
-          /* KEEP THE LAST ONE BEFORE THE WINDOW. It is what tells the left edge
-             "an outage was already running" from "this is where the record
-             starts" — see `predecessor`. */
-          else predecessor = sample;
-        }
+        scanLines(scan, text);
       }
-
-      return {
-        kind: "read",
-        samples,
-        predecessor,
-        /* Holes entirely before the window are somebody else's problem; a hole
-           bracketing the window's start still matters, because it is what the
-           left edge is made of. */
-        holes: holes.filter((hole) => (hole.beforeAtMs ?? Number.POSITIVE_INFINITY) >= options.sinceMs),
-        earliestAt,
-        rotated,
-        unreadableLines,
-        files,
-      };
+      return finishScan(scan, existsSync(prev), files);
     },
+  };
+}
+
+/* ------------------------------------------------------------------ *
+ * Walking the lines.
+ * ------------------------------------------------------------------ */
+
+/**
+ * The accumulator a scan builds up, extracted from `read` because that function
+ * measured 43 cognitive complexity in one body — and because **the interesting
+ * decisions are all in here**: which sample is the predecessor, where a hole
+ * goes, and what counts as one hole rather than three.
+ */
+type Scan = {
+  sinceMs: number;
+  samples: HealthSample[];
+  holes: { afterAtMs: number | null; beforeAtMs: number | null }[];
+  unreadableLines: number;
+  earliestAt: string | null;
+  predecessor: HealthSample | null;
+  /** The most recent good sample seen, so a bad line can be PLACED between its neighbours. */
+  lastGoodAtMs: number | null;
+  /** The hole currently being opened by a run of bad lines, if any. */
+  openHole: { afterAtMs: number | null; beforeAtMs: number | null } | null;
+};
+
+function newScan(sinceMs: number): Scan {
+  return {
+    sinceMs,
+    samples: [],
+    holes: [],
+    unreadableLines: 0,
+    earliestAt: null,
+    predecessor: null,
+    lastGoodAtMs: null,
+    openHole: null,
+  };
+}
+
+function scanLines(scan: Scan, text: string): void {
+  for (const line of text.split("\n")) {
+    if (line === "") continue;
+    const sample = parseSampleLine(line);
+    if (sample === null) {
+      scan.unreadableLines += 1;
+      /* ONE HOLE PER RUN of bad lines: two adjacent corrupt records are one
+         place the record is broken, not two. */
+      if (scan.openHole === null) {
+        scan.openHole = { afterAtMs: scan.lastGoodAtMs, beforeAtMs: null };
+        scan.holes.push(scan.openHole);
+      }
+      continue;
+    }
+    const atMs = Date.parse(sample.at);
+    if (scan.openHole !== null) {
+      scan.openHole.beforeAtMs = atMs;
+      scan.openHole = null;
+    }
+    scan.lastGoodAtMs = atMs;
+    if (scan.earliestAt === null || sample.at < scan.earliestAt) scan.earliestAt = sample.at;
+    if (atMs >= scan.sinceMs) scan.samples.push(sample);
+    /* KEEP THE LAST ONE BEFORE THE WINDOW. It is what tells the left edge "a
+       break was already running" from "this is where the record starts" — see
+       `predecessor`. */
+    else scan.predecessor = sample;
+  }
+}
+
+function finishScan(scan: Scan, rotated: boolean, files: number): HistoryRead {
+  return {
+    kind: "read",
+    samples: scan.samples,
+    predecessor: scan.predecessor,
+    /* Holes entirely before the window are somebody else's problem; a hole
+       bracketing the window's start still matters, because it is what the left
+       edge is made of. */
+    holes: scan.holes.filter((hole) => (hole.beforeAtMs ?? Number.POSITIVE_INFINITY) >= scan.sinceMs),
+    earliestAt: scan.earliestAt,
+    rotated,
+    unreadableLines: scan.unreadableLines,
+    files,
   };
 }
 

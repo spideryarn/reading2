@@ -380,61 +380,7 @@ export function plotHistory(view: Extract<HistoryView, { kind: "history" }>, now
     if (hole.afterAtMs !== null) isGapStart.add(hole.afterAtMs);
   }
 
-  const series: SeriesPlot[] = SERIES.map((spec) => {
-    const segments: Point[][] = [];
-    const unknowns: (Span & { why: string })[] = [];
-    const absences: (Span & { why: string })[] = [];
-    let current: Point[] = [];
-    let peak: number | null = null;
-    let worst: Point | null = null;
-    let latest: Point | null = null;
-    const overCeiling: Span[] = [];
-    const isWorse = (a: number, b: number): boolean => (spec.bands.worseIs === "lower" ? a < b : a > b);
-
-    const flush = (): void => {
-      if (current.length > 0) segments.push(current);
-      current = [];
-    };
-
-    for (let i = 0; i < samples.length; i++) {
-      const sample = samples[i];
-      if (sample === undefined) continue;
-      const reading = spec.read(sample);
-      /* A span wide enough to see: from this sample to the next, or one
-         nominal interval when it is the last. */
-      const until = samples[i + 1]?.atMs ?? Math.min(sample.atMs + sample.nextDueMs, toMs);
-
-      if (reading.kind === "value") {
-        const point = { atMs: sample.atMs, value: reading.value };
-        current.push(point);
-        peak = peak === null ? reading.value : Math.max(peak, reading.value);
-        if (worst === null || isWorse(point.value, worst.value)) worst = point;
-        latest = point;
-        if (reading.value > spec.max) {
-          const tail = overCeiling[overCeiling.length - 1];
-          if (tail !== undefined && tail.toMs >= sample.atMs) tail.toMs = until;
-          else overCeiling.push({ fromMs: sample.atMs, toMs: until });
-        }
-      } else {
-        /* THE LINE STOPS. A value on either side of an unreadable turn must not
-           be joined, or the picture claims a measurement that was not taken. */
-        flush();
-        /* MERGED WITH THE ONE BEFORE IT when they touch and say the same thing.
-           A four-hour collector failure is ~200 consecutive samples, and one
-           `<rect>` each is two hundred sub-pixel rectangles in the DOM on a
-           phone — measured at 1px wide apiece in a real browser pass. It is the
-           same "merge neighbours that agree" `collapseVerdict` does, and for the
-           same reason. */
-        const into = reading.kind === "unknown" ? unknowns : absences;
-        const tail = into[into.length - 1];
-        if (tail !== undefined && tail.toMs >= sample.atMs && tail.why === reading.why) tail.toMs = until;
-        else into.push({ fromMs: sample.atMs, toMs: until, why: reading.why });
-      }
-      if (isGapStart.has(sample.atMs)) flush();
-    }
-    flush();
-    return { spec, segments, unknowns, absences, peak, worst, latest, overCeiling };
-  });
+  const series: SeriesPlot[] = SERIES.map((spec) => plotSeries(spec, samples, isGapStart, toMs));
 
   const verdict: VerdictBand[] = samples.map((sample, i) => {
     const level = levelOf(sample);
@@ -472,6 +418,103 @@ export function plotHistory(view: Extract<HistoryView, { kind: "history" }>, now
     retainedOnly: view.rotated,
     sampleCount: samples.length,
   };
+}
+
+/**
+ * Extend the last span when it touches this one and agrees with it, else start a
+ * new one.
+ *
+ * **One rule, three lists** — the unknown runs, the absent runs, and the
+ * over-ceiling marks all merge, and they were three copies of the same four
+ * lines. What differs between them is only what "agrees" means, so that is the
+ * parameter. Without any of them, a four-hour collector failure is ~200
+ * consecutive samples and ~200 sub-pixel `<rect>`s in a phone's DOM, which is
+ * what a browser pass measured before this existed.
+ */
+function joinSpan<T extends Span>(into: T[], span: T, agrees: (a: T, b: T) => boolean): void {
+  const tail = into[into.length - 1];
+  if (tail !== undefined && tail.toMs >= span.fromMs && agrees(tail, span)) tail.toMs = span.toMs;
+  else into.push(span);
+}
+
+/**
+ * One series' worth of a window: where the line runs, and where it stops.
+ *
+ * Extracted from `plotHistory` because it was the larger half of a function
+ * biome measured at 39 cognitive complexity, and because the accumulators here
+ * (`current`, `overCeiling`, the two span lists) are exactly where an off-by-one
+ * in the gap arithmetic would hide. Named and alone, its whole contract fits on
+ * a screen.
+ *
+ * **The rule it exists to enforce, in one line: any reading that is not a value
+ * ENDS the current segment.** Never filtered out, never bridged.
+ */
+function plotSeries(
+  spec: SeriesSpec,
+  samples: HealthSampleView[],
+  /** Sample timestamps after which the line must be cut — a gap, or a corrupt record. */
+  isGapStart: ReadonlySet<number>,
+  toMs: number,
+): SeriesPlot {
+  const segments: Point[][] = [];
+  const unknowns: (Span & { why: string })[] = [];
+  const absences: (Span & { why: string })[] = [];
+  const overCeiling: Span[] = [];
+  let current: Point[] = [];
+  let peak: number | null = null;
+  let worst: Point | null = null;
+  let latest: Point | null = null;
+
+  const isWorse = (a: number, b: number): boolean => (spec.bands.worseIs === "lower" ? a < b : a > b);
+  const flush = (): void => {
+    if (current.length > 0) segments.push(current);
+    current = [];
+  };
+  /* One merge rule for all three span lists, rather than the same four lines
+     written three times — see `joinSpan`. */
+  const extend = (into: (Span & { why: string })[], span: Span & { why: string }): void => {
+    joinSpan(into, span, (a, b) => a.why === b.why);
+  };
+
+  for (let i = 0; i < samples.length; i++) {
+    const sample = samples[i];
+    if (sample === undefined) continue;
+    const reading = spec.read(sample);
+    /* A span wide enough to see: from this sample to the next, or one nominal
+       interval when it is the last. */
+    const until = samples[i + 1]?.atMs ?? Math.min(sample.atMs + sample.nextDueMs, toMs);
+
+    if (reading.kind === "value") {
+      const point = { atMs: sample.atMs, value: reading.value };
+      current.push(point);
+      peak = peak === null ? reading.value : Math.max(peak, reading.value);
+      if (worst === null || isWorse(point.value, worst.value)) worst = point;
+      latest = point;
+      /* WHERE THE LINE RAN OFF A FIXED AXIS. Clipped on the chart, marked on the
+         top edge, and stated in full in the sentence beside the label — see
+         `SeriesSpec.max` for what a fitted axis did instead. */
+      if (reading.value > spec.max) {
+        joinSpan(overCeiling, { fromMs: sample.atMs, toMs: until }, () => true);
+      }
+    } else {
+      /* THE LINE STOPS. A value on either side of an unreadable turn must not be
+         joined, or the picture claims a measurement that was not taken. */
+      flush();
+      /* MERGED WITH THE ONE BEFORE IT when they touch and say the same thing. A
+         four-hour collector failure is ~200 consecutive samples, and one `<rect>`
+         each is two hundred sub-pixel rectangles in the DOM on a phone — measured
+         at 1px apiece in a real browser pass. Same reasoning as
+         `collapseVerdict`'s merge. */
+      extend(reading.kind === "unknown" ? unknowns : absences, {
+        fromMs: sample.atMs,
+        toMs: until,
+        why: reading.why,
+      });
+    }
+    if (isGapStart.has(sample.atMs)) flush();
+  }
+  flush();
+  return { spec, segments, unknowns, absences, peak, worst, latest, overCeiling };
 }
 
 /* ------------------------------------------------------------------ *
