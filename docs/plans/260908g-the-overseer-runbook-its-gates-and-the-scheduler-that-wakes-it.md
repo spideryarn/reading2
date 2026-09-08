@@ -603,6 +603,66 @@ fleet dashboard's owner**, who is deciding on that evidence whether to cross a d
 their own code. The sampler now records categorical counts, and they have been told which number
 changed and why.
 
+#### `working` is not a proxy for busy either, and the measurement nearly said otherwise
+
+The dashboard's owner then checked the live board against `ListAgents` as an independent oracle and
+found something neither of us had assumed: **a row the board calls `working` can be a session whose
+turn has ended** with something backgrounded behind it. Claude Code's own `status: "shell"` means
+`idle && hasUnfinishedLocalBash`, and such a session is at a prompt and can be messaged — but
+`drainGate` excludes it. So `working` is a poor proxy for load *and* an unreliable proxy for busy,
+and some of what the exclusion drops was reachable all along.
+
+Measured 2026-09-08 at 20:53: **one of three `working` rows was at a prompt**, with no unknowns.
+
+**The instrument nearly reported the opposite, and how it nearly did is the durable part.** The
+oracle is `~/.claude/sessions/*.json`, and the join is **not** the pid in the filename: measured
+pairs are pane `1921921` against file `1921927`, pane `3184904` against `3184909`, and (from
+`pause.ts`, which already joins correctly) `124240` against `124250`. The pane pid is the shell and
+Claude is a descendant at no fixed offset. My first attempt joined on the filename and returned
+*unknown for four rows out of four*.
+
+Had `unknown` been folded into "no", it would have reported `working_but_at_prompt = 0` — clean,
+plausible, precise, and false — and that number would have gone to the person deciding the stage.
+**An absent reading standing in for a negative one**, which is [silent-success.md](../reusable/silent-success.md)
+in its purest form and the shape this whole day kept producing.
+
+My second attempt walked the process tree instead. It returned zero unknowns, so it *looked*
+correct — and read `0` where the identity join reads `1`. **A join that returns no unknowns is not
+thereby a join that answers the right question**; ancestry is merely adjacent to identity. The
+sampler now joins on the `sessionId` inside each file, the way `pause.ts` always did, and reports
+`unknown` as its own column so the next reader can check it rather than trust it.
+
+**The reason both joins were kept rather than the loser deleted**: letting two answers to the same
+question disagree is what caught the ancestry error, and it caught a second thing within minutes.
+
+The dashboard's owner drew a cheap fix out of the finding above — `working` plus a pause of
+`{kind: "background-work"}` should gate `now` rather than `later`, since the server already knows
+which working rows have merely backgrounded something. That would reach some deferred sessions
+**without touching the `:505` refusal and without the design argument the expensive version waits
+on**, which is a much better stage. It rests entirely on `background-work` picking out the rows that
+are genuinely at a prompt.
+
+Measured 2026-09-08 at 20:56, first reading with both joins: `working_but_at_prompt=1`,
+`server_bg_work=0`, `joins_disagree=1`, `oracle_unknown=0`. The two working rows were
+
+| row | Claude's own status | the server's `pause` |
+|---|---|---|
+| `overseer-md-agent-coordinator` | `busy` | `cannot-tell` |
+| `overseer-orchestrator-design-and` | `idle` | `cannot-tell` |
+
+The second is the one at a prompt, and its pause is not `background-work` — it is `cannot-tell`,
+**with a reason string identical to the busy row's**. At that instant `pause` did not discriminate
+between them at all. `background-work` is real and does occur (observed at 20:25 with
+`sinceMs: 326418`); what is unproven is that it *coincides* with being reachable.
+
+**One reading of two rows is not a refutation**, and it is recorded here as an open question rather
+than an answer: the overnight series says how often the two coincide, and `joins_disagree` makes the
+misses visible instead of leaving them to be inferred from a total. If they rarely coincide the
+cheap fix is cheap and nearly useless rather than cheap and sufficient. **The likeliest error is
+mine** — the column treats Claude's own `idle` as at-a-prompt-and-messageable, and if `idle` there
+can also mean something a broadcast should not interrupt, the column measures something looser than
+reachability.
+
 #### The Overseer sees less of the fleet than the fleet sends, and the rules should not fix that by widening the differ
 
 The three fields the rules most want are all outside `ObservedRow`: `permissionMode`, `pause`, and
