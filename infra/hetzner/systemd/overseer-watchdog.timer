@@ -17,10 +17,15 @@ OnBootSec=2min
 # overseer-direction.md documents for the dashboard's own collector -- a timer
 # is not something this can overlap with itself on a slow box.
 OnUnitActiveSec=5min
-# Missed runs come out better than being skipped, per
-# overseer-direction.md § "The scheduler": if the box was off across a
-# scheduled tick, this fires once on the next boot rather than staying quiet
-# until the following interval boundary.
+# INERT ON THIS TIMER, and kept deliberately rather than removed. systemd.timer(5):
+# "Note that this setting only has an effect on timers configured with
+# OnCalendar=." This timer has OnBootSec= and OnUnitActiveSec= and no
+# OnCalendar=, so nothing here catches up a missed run -- what covers a box that
+# was off is OnBootSec=2min above, which checks within two minutes of coming
+# back. It stays so that a later move to OnCalendar= does not silently lose the
+# catch-up. The comment this replaces claimed the catch-up as a fact and was
+# wrong; GPT Sol found it, and tests/systemd-units.test.ts now asserts the
+# mechanism that really does the work.
 Persistent=true
 Unit=overseer-watchdog.service
 

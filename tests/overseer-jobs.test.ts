@@ -32,6 +32,7 @@ import type { JobEvent, OverseerEvent } from "../tools/overseer/diff.js";
 import {
   UNKNOWN_RETENTION,
   adoptOccurrence,
+  authorisationOf,
   definitionHash,
   due,
   foldOccurrences,
@@ -40,6 +41,7 @@ import {
   occurrenceId,
   standingOf,
   stuckOccurrences,
+  type AuthorisedJob,
   type JobDefinition,
   type Occurrence,
   type OccurrenceId,
@@ -48,11 +50,21 @@ import {
   describeReport,
   schedulerTick,
   type JobSpawn,
+  type LostRecord,
   type OccurrenceLog,
   type SchedulerReport,
   type SpawnJob,
 } from "../tools/overseer/scheduler.js";
-import { EVENTS_FILE, LOCK_FILE, openStore, readCheckpoint, type AppendResult, type OverseerStore } from "../tools/overseer/store.js";
+import {
+  EVENTS_FILE,
+  LOCK_FILE,
+  RECONCILE_FILE,
+  describeOpening,
+  openStore,
+  readCheckpoint,
+  type AppendResult,
+  type OverseerStore,
+} from "../tools/overseer/store.js";
 
 const opened: OverseerStore[] = [];
 const roots: string[] = [];
@@ -106,7 +118,21 @@ const JOB: JobDefinition = {
   everyMs: 60_000,
   leaseMs: 120_000,
   what: "npm run get-ready-to-deploy",
+  documents: [],
 };
+
+/**
+ * A job pinned to its own current fingerprint, which is what "authorised" means
+ * for every test here that is not ABOUT the pin.
+ *
+ * Self-pinning in the helper is safe precisely because two tests below do the
+ * opposite deliberately: `authorisationOf` and the scheduler are both exercised
+ * against a pin that does NOT match, so a gate that stopped working would go red
+ * there rather than being hidden here.
+ */
+function authorised(definition: JobDefinition): AuthorisedJob {
+  return { definition, authorisedHash: definitionHash(definition) };
+}
 
 /** A spawn that succeeds and whose work settles when the test says so. */
 function spawnRecorder(options: { pid?: number; settle?: "immediately" | "never" } = {}): {
@@ -135,7 +161,7 @@ async function settle(): Promise<void> {
 }
 
 function tick(store: OccurrenceLog, spawn: SpawnJob, now: () => Date, definitions: readonly JobDefinition[] = [JOB]): readonly SchedulerReport[] {
-  return schedulerTick({ definitions, store, spawn, now });
+  return schedulerTick({ definitions: definitions.map(authorised), store, spawn, now });
 }
 
 function reportKinds(reports: readonly SchedulerReport[]): string[] {
@@ -162,15 +188,20 @@ describe("a definition's fingerprint", () => {
     // rest of the canonical form inside it hashes the same as the honest one.
     // Two different authorised instructions with one fingerprint is exactly the
     // edit the hash exists to detect.
-    const a = definitionHash({ id: "x\neveryMs:5\nleaseMs:6\nwhat:y", everyMs: 1, leaseMs: 2, what: "z" });
-    const b = definitionHash({ id: "x", everyMs: 5, leaseMs: 6, what: "y\neveryMs:1\nleaseMs:2\nwhat:z" });
+    const a = definitionHash({ id: "x\neveryMs:5\nleaseMs:6\nwhat:y", everyMs: 1, leaseMs: 2, what: "z", documents: [] });
+    const b = definitionHash({ id: "x", everyMs: 5, leaseMs: 6, what: "y\neveryMs:1\nleaseMs:2\nwhat:z", documents: [] });
     expect(a).not.toBe(b);
   });
 
-  test("an edited definition reads as a job that has never run, rather than inheriting the old one's history", () => {
-    // The runbook forbids acting on a definition edited after it was authorised.
-    // Because the hash is part of the key, that is a property of the data rather
-    // than a check somebody has to remember to write.
+  test("an edited definition inherits no history — AND THAT IS NOT WHAT STOPS IT RUNNING", async () => {
+    // THIS TEST USED TO STOP AT THE FIRST HALF, and GPT Sol's C2 was that the
+    // half it stopped at is the unsafe one: a job with no history reads as
+    // `never`, `due()` calls `never` immediately due, so an edit dispatched the
+    // edited version AT ONCE — the exact opposite of the runbook's "never act on
+    // a job definition that changed after it was authorised".
+    //
+    // So both halves, and the second is the one that matters: history
+    // separation, then the gate that actually refuses.
     const index = new Map<OccurrenceId, Occurrence>();
     const key = { jobId: JOB.id, scheduledAt: "2026-09-08T10:00:00.000Z", definitionHash: definitionHash(JOB) };
     index.set(occurrenceId(key), {
@@ -183,8 +214,57 @@ describe("a definition's fingerprint", () => {
       finishedAt: "2026-09-08T10:00:05.000Z",
       outcome: { kind: "exited", code: 0 },
     });
+    const edited: JobDefinition = { ...JOB, what: "rm -rf /" };
     expect(lastRunOf(index, JOB, Date.parse("2026-09-08T10:00:10.000Z")).kind).toBe("settled");
-    expect(lastRunOf(index, { ...JOB, what: "rm -rf /" }, Date.parse("2026-09-08T10:00:10.000Z")).kind).toBe("never");
+    expect(lastRunOf(index, edited, Date.parse("2026-09-08T10:00:10.000Z")).kind).toBe("never");
+    // AND `never` IS DUE. Stated here rather than left implicit, because this is
+    // the step the old test walked past: without the pin, the two lines above
+    // are a dispatch rather than a defence.
+    expect(due(edited, { kind: "never" }, Date.parse("2026-09-08T10:00:10.000Z")).kind).toBe("due");
+
+    // THE GATE. The pin still names the definition that was authorised, so the
+    // edited one is refused and nothing is spawned and nothing is written down.
+    const root = tempRoot();
+    const clock = fakeClock("2026-09-08T10:00:10.000Z");
+    const store = mustOpen(root, clock.now);
+    const runner = spawnRecorder();
+    const reports = schedulerTick({
+      definitions: [{ definition: edited, authorisedHash: definitionHash(JOB) }],
+      store,
+      spawn: runner.spawn,
+      now: clock.now,
+    });
+    expect(reportKinds(reports)).toEqual(["unauthorised"]);
+    expect(runner.calls).toEqual([]);
+    expect(kindsIn(root)).toEqual([]);
+    await settle();
+    expect(kindsIn(root)).toEqual([]);
+  });
+
+  test("the pin says both hashes, because re-authorising means copying the second one", () => {
+    const edited: JobDefinition = { ...JOB, what: "rm -rf /" };
+    const verdict = authorisationOf({ definition: edited, authorisedHash: definitionHash(JOB) });
+    expect(verdict.kind).toBe("unauthorised");
+    if (verdict.kind !== "unauthorised") return;
+    expect(verdict.authorised).toBe(definitionHash(JOB));
+    expect(verdict.found).toBe(definitionHash(edited));
+    expect(verdict.why).toContain(definitionHash(edited));
+    expect(authorisationOf({ definition: JOB, authorisedHash: definitionHash(JOB) }).kind).toBe("authorised");
+  });
+
+  test("editing the DOCUMENT a job points at moves the fingerprint, even though the instruction is unchanged", () => {
+    // The runbook's own words, under gate 3: "The jobs here ARE documents, so
+    // editing a doc could otherwise enlarge what you may do unattended." A
+    // fingerprint over the prompt alone covers the pointer and not the thing
+    // pointed at, so this is the case that makes the pin worth having at all.
+    const before: JobDefinition = { ...JOB, documents: [{ path: "docs/reusable/get-ready-to-deploy.md", sha256: "aaaa" }] };
+    const after: JobDefinition = { ...JOB, documents: [{ path: "docs/reusable/get-ready-to-deploy.md", sha256: "bbbb" }] };
+    expect(before.what).toBe(after.what);
+    expect(definitionHash(before)).not.toBe(definitionHash(after));
+    expect(authorisationOf({ definition: after, authorisedHash: definitionHash(before) }).kind).toBe("unauthorised");
+    // And the count is in the canonical form, so a second document is a
+    // different job rather than a longer string that happens to concatenate.
+    expect(definitionHash({ ...JOB, documents: [] })).not.toBe(definitionHash(before));
   });
 });
 
@@ -306,6 +386,7 @@ describe("failing closed", () => {
     const store: OccurrenceLog = {
       instanceId: "i1",
       occurrences: new Map(),
+      occurrenceHistory: { kind: "intact" },
       append() {
         throw new Error("ENOSPC: no space left on device");
       },
@@ -409,6 +490,7 @@ describe("the crash windows, one test per row of the review's table", () => {
       get occurrences() {
         return storeThree.occurrences;
       },
+      occurrenceHistory: { kind: "intact" },
       append(events): AppendResult {
         appends += 1;
         // The first append — the reservation — really lands. The second, the
@@ -809,25 +891,331 @@ describe("the log as a corruption boundary", () => {
     expect(store.opening.start.kind).toBe("cold");
     expect(store.occurrences.size).toBe(0);
     expect(store.opening.unreadableLines).toBe(1);
+
+    // AND THE SCHEDULER MUST REFUSE ON IT. This is where the test used to stop,
+    // and GPT Sol's C3 is that stopping here passes over the dangerous half: an
+    // empty occurrence map reads as "this job has never run", `due` calls that
+    // immediately due, and a cold start would therefore RE-RUN whatever was in
+    // the unreadable bytes. A cold start is not permission.
+    expect(store.occurrenceHistory.kind).toBe("lost");
+    const runner = spawnRecorder();
+    const before = kindsIn(root);
+    const reports = tick(store, runner.spawn, clock.now);
+    expect(reportKinds(reports)).toEqual(["history-lost"]);
+    expect(runner.calls).toEqual([]);
+    // Nothing written either: a held job leaves no reservation behind. (The one
+    // line already there is the hand-written corrupt one this test wrote.)
+    expect(kindsIn(root)).toEqual(before);
+    expect(before).toHaveLength(1);
+    const [only] = reports;
+    expect(only?.kind === "history-lost" && only.why).toContain("log-has-holes");
+  });
+
+  test("a log too large to replay holds the jobs as well, because the reason it is empty is the same", () => {
+    // The other door into the same empty map: `openStore` refuses a range above
+    // its ceiling rather than allocating for it. The `why` differs and the
+    // consequence must not.
+    const root = tempRoot();
+    const clock = fakeClock("2026-09-08T12:00:00.000Z");
+    const first = mustOpen(root, clock.now);
+    const key = { jobId: JOB.id, scheduledAt: "2026-09-08T11:00:00.000Z", definitionHash: definitionHash(JOB) };
+    first.append([
+      {
+        kind: "job-occurrence-reserved",
+        at: "2026-09-08T11:00:00.000Z",
+        jobId: key.jobId,
+        scheduledAt: key.scheduledAt,
+        definitionHash: key.definitionHash,
+        occurrenceId: occurrenceId(key),
+        instanceId: first.instanceId,
+        leaseUntil: "2026-09-08T11:02:00.000Z",
+        what: JOB.what,
+      },
+      { kind: "job-occurrence-finished", at: "2026-09-08T11:00:30.000Z", occurrenceId: occurrenceId(key), outcome: { kind: "exited", code: 0 } },
+    ]);
+    closeStore(first);
+
+    const opened = openStore({ root, now: clock.now, replayCeilingBytes: 10 });
+    if (!opened.ok) throw new Error("the store would not open");
+    const second = opened.store;
+    // Pushed so afterEach closes it — the helper that does this also opens it.
+    roots.push(root);
+    expect(second.opening.start.kind).toBe("cold");
+    expect(second.occurrences.size).toBe(0);
+    expect(second.occurrenceHistory.kind).toBe("lost");
+    const runner = spawnRecorder();
+    expect(reportKinds(tick(second, runner.spawn, clock.now))).toEqual(["history-lost"]);
+    expect(runner.calls).toEqual([]);
+    second.close();
+  });
+
+  test("an ordinary first start is INTACT, because there is nothing there to have lost", () => {
+    // The line between the two: `cold` on an empty store is the beginning of
+    // life, not a hole. Reading every cold start as lost history would be a
+    // scheduler that could never dispatch its first run — the mirror of the bug,
+    // and just as silent.
+    const root = tempRoot();
+    const clock = fakeClock("2026-09-08T12:00:00.000Z");
+    const store = mustOpen(root, clock.now);
+    expect(store.opening.start.kind).toBe("cold");
+    expect(store.occurrenceHistory).toEqual({ kind: "intact" });
+    const runner = spawnRecorder({ settle: "never" });
+    expect(reportKinds(tick(store, runner.spawn, clock.now))).toEqual(["dispatched"]);
+  });
+
+  test("the hold SURVIVES A RESTART, or it would last exactly one daemon lifetime", async () => {
+    // THE LAUNDERING PATH, and it is the one that makes the difference between
+    // a protection and a delay. A start that lost history holds its jobs and
+    // then writes an ordinary checkpoint whose cursor is at the end of the log —
+    // so the next start replays a clean tail onto an empty ledger and reads as
+    // intact, with nobody having decided anything. The verdict is carried in the
+    // checkpoint for exactly this reason.
+    const root = tempRoot();
+    const clock = fakeClock("2026-09-08T12:00:00.000Z");
+    writeFileSync(join(root, EVENTS_FILE), "this line is not json at all\n");
+    const first = mustOpen(root, clock.now);
+    expect(first.occurrenceHistory.kind).toBe("lost");
+    first.checkpoint({ lastGoodSnapshotAt: null, tick: true });
+    closeStore(first);
+
+    const second = mustOpen(root, clock.now);
+    expect(second.opening.start.kind).toBe("resumed");
+    expect(second.occurrenceHistory.kind).toBe("lost");
+    const runner = spawnRecorder();
+    expect(reportKinds(tick(second, runner.spawn, clock.now))).toEqual(["history-lost"]);
+    expect(runner.calls).toEqual([]);
+    // And it is said out loud in the sentence the daemon writes into its start
+    // note, rather than being a field only the scheduler ever reads.
+    expect(describeOpening(second.opening)).toContain("SCHEDULED JOBS ARE HELD");
+    await settle();
+  });
+
+  test("a reconcile file clears the hold ONCE, and is consumed rather than left switched on", () => {
+    // The one way out, and it has to be an act rather than a setting: a file
+    // left in place would turn "somebody decided this once" into "this
+    // protection is off for ever".
+    const root = tempRoot();
+    const clock = fakeClock("2026-09-08T12:00:00.000Z");
+    writeFileSync(join(root, EVENTS_FILE), "this line is not json at all\n");
+    const first = mustOpen(root, clock.now);
+    expect(first.occurrenceHistory.kind).toBe("lost");
+    first.checkpoint({ lastGoodSnapshotAt: null, tick: true });
+    closeStore(first);
+
+    writeFileSync(join(root, RECONCILE_FILE), JSON.stringify({ at: "2026-09-08T12:05:00.000Z", why: "checked gjd-remote ls; nothing ran" }));
+    const second = mustOpen(root, clock.now);
+    expect(second.occurrenceHistory).toEqual({ kind: "intact" });
+    expect(second.opening.occurrencesReconciled).toContain("nothing ran");
+    expect(describeOpening(second.opening)).toContain("reconciled by hand");
+    // CONSUMED. The file is gone, so the next loss holds again.
+    expect(existsSync(join(root, RECONCILE_FILE))).toBe(false);
+    const runner = spawnRecorder({ settle: "never" });
+    expect(reportKinds(tick(second, runner.spawn, clock.now))).toEqual(["dispatched"]);
+  });
+
+  test("a checkpoint pointing past the end of a shrunken log holds the jobs too", () => {
+    // The log was truncated or replaced under a perfectly good checkpoint, so
+    // the bytes that said what had run are gone. `openStore` already rebuilds
+    // from scratch here; what it must not do is call the result a full history.
+    const root = tempRoot();
+    const clock = fakeClock("2026-09-08T12:00:00.000Z");
+    const first = mustOpen(root, clock.now);
+    const key = { jobId: JOB.id, scheduledAt: "2026-09-08T11:00:00.000Z", definitionHash: definitionHash(JOB) };
+    first.append([
+      {
+        kind: "job-occurrence-reserved",
+        at: "2026-09-08T11:00:00.000Z",
+        jobId: key.jobId,
+        scheduledAt: key.scheduledAt,
+        definitionHash: key.definitionHash,
+        occurrenceId: occurrenceId(key),
+        instanceId: first.instanceId,
+        leaseUntil: "2026-09-08T11:02:00.000Z",
+        what: JOB.what,
+      },
+    ]);
+    first.checkpoint({ lastGoodSnapshotAt: null, tick: true });
+    closeStore(first);
+    // The log goes back to nothing while the checkpoint goes on describing it.
+    writeFileSync(join(root, EVENTS_FILE), "");
+
+    const second = mustOpen(root, clock.now);
+    expect(second.occurrenceHistory.kind).toBe("lost");
+    const runner = spawnRecorder();
+    expect(reportKinds(tick(second, runner.spawn, clock.now))).toEqual(["history-lost"]);
+    expect(runner.calls).toEqual([]);
+  });
+});
+
+describe("the appends AFTER the reservation, which used to be silent", () => {
+  // GPT Sol's C5. The pre-spawn append is genuinely fail-closed and stays so;
+  // every LATER one had its result thrown away, so a refusal or a completion
+  // that the store would not take left the durable history saying one thing
+  // while the report said another. None of these may throw: the alternative to
+  // a note is losing the child's outcome as well.
+
+  /** A store whose appends land until `failFrom`, and are refused from it on. */
+  function failingAfter(real: OverseerStore, failFrom: number): { store: OccurrenceLog; appends: () => number } {
+    let appends = 0;
+    return {
+      appends: () => appends,
+      store: {
+        instanceId: real.instanceId,
+        get occurrences() {
+          return real.occurrences;
+        },
+        occurrenceHistory: { kind: "intact" },
+        append(events): AppendResult {
+          appends += 1;
+          if (appends >= failFrom) return { ok: false, reason: "lock-lost", holder: null };
+          return real.append(events);
+        },
+      },
+    };
+  }
+
+  test("a refusal the store would not take is REPORTED, not swallowed", () => {
+    const root = tempRoot();
+    const clock = fakeClock("2026-09-08T12:00:00.000Z");
+    const real = mustOpen(root, clock.now);
+    const { store } = failingAfter(real, 2);
+    const reports = tick(store, () => ({ kind: "refused", why: "the binary is missing" }), clock.now);
+    // BOTH facts, in this order: the runner refused, AND we could not write that
+    // down. Reporting only the first is what made the report disagree with the
+    // history; reporting only the second would lose the runner's answer.
+    expect(reportKinds(reports)).toEqual(["refused", "unrecorded"]);
+    const lost = reports[1];
+    expect(lost?.kind === "unrecorded" && lost.fact).toBe("refused");
+    // And the durable state is the honest one: a reservation with nothing after
+    // it, which a later instance reads as `unknown`.
+    expect(kindsIn(root)).toEqual(["job-occurrence-reserved"]);
+  });
+
+  test("a runner that throws, whose `unknown` cannot be written down, says both things", () => {
+    const root = tempRoot();
+    const clock = fakeClock("2026-09-08T12:00:00.000Z");
+    const real = mustOpen(root, clock.now);
+    const { store } = failingAfter(real, 2);
+    const reports = tick(
+      store,
+      () => {
+        throw new Error("the runner is broken");
+      },
+      clock.now,
+    );
+    expect(reportKinds(reports)).toEqual(["unaccounted", "unrecorded"]);
+    const lost = reports[1];
+    expect(lost?.kind === "unrecorded" && lost.fact).toBe("unknown");
+  });
+
+  test("a completion the store would not take reaches onLostRecord, because the tick has already returned", async () => {
+    // THE ONE THAT CANNOT BE A REPORT. The work settles later, so there is no
+    // tick left to return anything to — and an append that fails here leaves the
+    // ledger saying `started` for ever while the child has finished.
+    const root = tempRoot();
+    const clock = fakeClock("2026-09-08T12:00:00.000Z");
+    const real = mustOpen(root, clock.now);
+    const { store } = failingAfter(real, 3);
+    const runner = spawnRecorder();
+    const lost: LostRecord[] = [];
+    const reports = schedulerTick({
+      definitions: [{ definition: JOB, authorisedHash: definitionHash(JOB) }],
+      store,
+      spawn: runner.spawn,
+      now: clock.now,
+      onLostRecord: (record) => lost.push(record),
+    });
+    expect(reportKinds(reports)).toEqual(["dispatched"]);
+    expect(lost).toEqual([]);
+    runner.finish(0);
+    await settle();
+    expect(lost).toHaveLength(1);
+    expect(lost[0]?.fact).toBe("finished");
+    expect(lost[0]?.why).toContain("exit 0");
+    // AND IT DID NOT THROW: an unhandled rejection here would take the daemon
+    // down and lose the outcome as well as the record.
+    expect(kindsIn(root)).toEqual(["job-occurrence-reserved", "job-occurrence-started"]);
+  });
+
+  test("a run that BROKE, whose failure cannot be written down, is not silently a success either", async () => {
+    const root = tempRoot();
+    const clock = fakeClock("2026-09-08T12:00:00.000Z");
+    const real = mustOpen(root, clock.now);
+    const { store } = failingAfter(real, 3);
+    // An array rather than a `let`, because the assignment happens inside a
+    // promise executor and TypeScript's flow analysis cannot see it — it would
+    // narrow the later read to `null` and refuse the call.
+    const rejecters: ((cause: Error) => void)[] = [];
+    const spawn: SpawnJob = () => ({
+      kind: "spawned",
+      pid: 77,
+      done: new Promise<never>((_resolve, r) => {
+        rejecters.push(r);
+      }),
+    });
+    const lost: LostRecord[] = [];
+    schedulerTick({
+      definitions: [{ definition: JOB, authorisedHash: definitionHash(JOB) }],
+      store,
+      spawn,
+      now: clock.now,
+      onLostRecord: (record) => lost.push(record),
+    });
+    rejecters[0]?.(new Error("the child exploded"));
+    await settle();
+    expect(lost).toHaveLength(1);
+    expect(lost[0]?.fact).toBe("finished");
+    expect(lost[0]?.why).toContain("the child exploded");
+  });
+
+  test("a scheduler given no onLostRecord loses it rather than throwing, which is its own choice", () => {
+    // Stated as a test rather than left to chance, because the callback is
+    // optional and the failure mode of getting this wrong is an unhandled
+    // rejection taking the whole daemon down at the worst moment.
+    const root = tempRoot();
+    const clock = fakeClock("2026-09-08T12:00:00.000Z");
+    const real = mustOpen(root, clock.now);
+    const { store } = failingAfter(real, 3);
+    const runner = spawnRecorder();
+    tick(store, runner.spawn, clock.now);
+    runner.finish(1);
+    return settle();
   });
 });
 
 describe("the log a person reads", () => {
-  test("every report kind has a line, and the two alarming ones shout", () => {
+  test("every report kind has a line, and the alarming ones shout", () => {
     const key = { jobId: JOB.id, scheduledAt: "2026-09-08T12:00:00.000Z", definitionHash: definitionHash(JOB) };
     const id = occurrenceId(key);
-    const lines: SchedulerReport[] = [
-      { kind: "dispatched", jobId: JOB.id, occurrenceId: id, pid: 1 },
-      { kind: "refused", jobId: JOB.id, occurrenceId: id, why: "no" },
-      { kind: "not-dispatched", jobId: JOB.id, why: "no" },
-      { kind: "held", jobId: JOB.id, why: "no" },
-      { kind: "waiting", jobId: JOB.id, remainingMs: 1000 },
-      { kind: "stuck", jobId: JOB.id, occurrenceId: id, overdueMs: 1000, why: "no" },
-      { kind: "unaccounted", jobId: JOB.id, occurrenceId: id, why: "no" },
-    ];
-    for (const report of lines) expect(describeReport(report)).toContain(JOB.id);
-    expect(describeReport(lines[5] as SchedulerReport)).toContain("STUCK");
-    expect(describeReport(lines[6] as SchedulerReport)).toContain("UNACCOUNTED");
+    // A RECORD KEYED BY THE KIND, not an array — so the COMPILER is what says
+    // "every kind", rather than this test's name saying it while a list quietly
+    // falls behind the union. Three arms were added by the review's C2, C3 and
+    // C5 and an array would have gone on passing without them.
+    const each: Record<SchedulerReport["kind"], SchedulerReport> = {
+      dispatched: { kind: "dispatched", jobId: JOB.id, occurrenceId: id, pid: 1 },
+      refused: { kind: "refused", jobId: JOB.id, occurrenceId: id, why: "no" },
+      "not-dispatched": { kind: "not-dispatched", jobId: JOB.id, why: "no" },
+      held: { kind: "held", jobId: JOB.id, why: "no" },
+      waiting: { kind: "waiting", jobId: JOB.id, remainingMs: 1000 },
+      unauthorised: { kind: "unauthorised", jobId: JOB.id, why: "the pin says otherwise" },
+      "history-lost": { kind: "history-lost", jobId: JOB.id, why: "the log had a hole in it" },
+      unrecorded: { kind: "unrecorded", jobId: JOB.id, occurrenceId: id, fact: "finished", why: "no" },
+      stuck: { kind: "stuck", jobId: JOB.id, occurrenceId: id, overdueMs: 1000, why: "no" },
+      unaccounted: { kind: "unaccounted", jobId: JOB.id, occurrenceId: id, why: "no" },
+    };
+    const lines = Object.values(each).map(describeReport);
+    for (const line of lines) expect(line).toContain(JOB.id);
+    // Distinct sentences, for the reason the watchdog's four states are: a
+    // reader tailing the log has nothing but the words.
+    expect(new Set(lines).size).toBe(lines.length);
+    expect(describeReport(each.stuck)).toContain("STUCK");
+    expect(describeReport(each.unaccounted)).toContain("UNACCOUNTED");
+    // The three the review added, and each says which of them it is rather than
+    // sharing a generic "did not run".
+    expect(describeReport(each.unauthorised)).toContain("NOT AUTHORISED");
+    expect(describeReport(each["history-lost"])).toContain("HELD");
+    expect(describeReport(each.unrecorded)).toContain("NOT RECORDED");
+    expect(describeReport(each.unrecorded)).toContain("finished");
   });
 });
 

@@ -127,6 +127,7 @@ import {
   type DefinitionHash,
   type JobOutcome,
   type Occurrence,
+  type OccurrenceHistory,
   type OccurrenceId,
   type OccurrenceIndex,
 } from "./jobs.js";
@@ -230,6 +231,17 @@ export type StoreStart =
 
 export type StoreOpening = {
   start: StoreStart;
+  /**
+   * WHETHER WHAT HAS ALREADY RUN COULD BE RECONSTRUCTED — the same value the
+   * store exposes, repeated here so the start note can say it.
+   *
+   * Separate from `start` because they answer different questions: `cold` means
+   * *there was no baseline to resume from*, which is an ordinary first run, and
+   * this means *some of what already happened is unreadable*, which is not.
+   */
+  occurrenceHistory: OccurrenceHistory;
+  /** Present only when this start consumed a `reconcile-occurrences.json`, carrying whatever reason it gave. Absent is the ordinary case. */
+  occurrencesReconciled?: string;
   repair: JsonlRepair;
   /** Events folded at open: the tail past the checkpoint's cursor, or the whole log for a rebuild. */
   eventsReplayed: number;
@@ -467,7 +479,86 @@ export type Checkpoint = {
    * report of it. `stuckOccurrences()` in jobs.ts is the reader's one line.
    */
   jobs: { occurrences: readonly Occurrence[] };
+  /**
+   * WHETHER THE SCHEDULER IS SWITCHED ON, in the daemon's own words.
+   *
+   * **A scheduler that is off must not read as a scheduler with nothing to
+   * do**, and until this field existed nothing on any surface could tell those
+   * apart: both produced an empty `jobs.occurrences` and a green heartbeat. That
+   * is the shape of GPT Sol's C1 — an engine that schedules nothing, installed —
+   * and it is exactly the conflation docs/reusable/silent-success.md is about.
+   *
+   * It is written by the daemon rather than read from the environment by
+   * whoever runs `overseer status`, because those are two different
+   * environments: systemd's unit and a person's shell. Only the running daemon
+   * knows what it was actually started with.
+   *
+   * **No schema bump**, by this file's own rule: a reader that ignores it draws
+   * no scheduler line, which is poorer rather than wrong. A checkpoint written
+   * before this field existed parses as `unknown`, which is the truth about it.
+   */
+  scheduler: StoredScheduler;
+  /**
+   * THE DEADLINE THE DAEMON ITSELF IS USING for "the collector has gone quiet",
+   * in milliseconds — or `null` from a daemon that did not say.
+   *
+   * `scripts/overseer-watchdog.ts` reads this rather than recomputing it. Both
+   * already called the same `staleAfterMs`, and GPT Sol's C6 is that sharing a
+   * FUNCTION prevents formula drift and not INPUT drift: the daemon passes the
+   * snapshot's advertised `refreshMs` (60s → 300,000ms) and the watchdog passed
+   * the historical measured constant (65s → 325,000ms), so the two disagreed
+   * under the documented normal values and would have diverged further the first
+   * time the collector's cadence changed.
+   *
+   * The computed deadline rather than the cadence, because the deadline is what
+   * both sides actually want and deriving it twice is the drift again one level
+   * down.
+   *
+   * **No schema bump**: a reader that ignores it falls back to its own constant,
+   * which is what it did before this existed — poorer, not wrong.
+   */
+  snapshotStaleAfterMs: number | null;
+  /**
+   * WHETHER THE OCCURRENCE LEDGER IN THIS CHECKPOINT IS THE WHOLE OF IT.
+   *
+   * **Carried forward, or the protection would last exactly one daemon
+   * lifetime.** A start that lost history holds its jobs; it then writes a
+   * checkpoint whose cursor is at the end of the log, so the NEXT start replays
+   * a clean tail onto an empty ledger and reads as intact — the loss laundered
+   * by an automatic write nobody decided. Recording it here means the hold
+   * survives until somebody clears it on purpose
+   * (`overseer reconcile-jobs`, and `RECONCILE_FILE` below).
+   *
+   * `null` from a checkpoint written before this field existed, which is
+   * treated as *no claim* rather than as `intact` — the same rule
+   * `parseStoredScheduler` follows one field up.
+   */
+  occurrenceHistory: OccurrenceHistory | null;
 };
+
+/**
+ * What a checkpoint says about the scheduler.
+ *
+ * Three arms rather than a boolean, because *nobody has said* is a third fact
+ * and the most dangerous one to fold into `off`: an old checkpoint would then
+ * claim a scheduler is disarmed when what is true is that this build cannot
+ * tell. Same reasoning as `StoredUsage`'s `none` arm two fields up.
+ */
+export type StoredScheduler =
+  | { kind: "armed"; why: string; at: string }
+  | { kind: "off"; why: string; at: string }
+  | { kind: "unknown"; why: string; at: string };
+
+/** What a checkpoint carries when no daemon in this build has written one. */
+export function schedulerNotYetSaid(at: string): StoredScheduler {
+  return {
+    kind: "unknown",
+    why:
+      "no daemon in this build has said whether its scheduler is armed. This instant is when the checkpoint " +
+      "was written, not when anything was decided.",
+    at,
+  };
+}
 
 /**
  * What a checkpoint carries before any usage pass has run.
@@ -527,7 +618,30 @@ export type CheckpointUpdate = {
    * see `Checkpoint.usage` — and simply omits this when it should not.
    */
   usage?: StoredUsage;
+  /**
+   * What to say about the scheduler, or omitted to keep what the store holds.
+   *
+   * The daemon passes it on the first write and every one after it, because it
+   * is one small object and re-deriving it costs nothing; the option is here so
+   * that a caller with nothing to say does not blank it.
+   */
+  scheduler?: StoredScheduler;
+  /** The deadline this daemon is using for a quiet collector. See `Checkpoint.snapshotStaleAfterMs`. */
+  snapshotStaleAfterMs?: number;
 };
+
+/**
+ * The file that reconciles a lost occurrence ledger, **consumed once**.
+ *
+ * Written by `overseer reconcile-jobs` and deleted by the next start that reads
+ * it, so it is an ACT rather than a setting: an env var left switched on would
+ * turn "somebody decided this once" into "this protection is off for ever",
+ * which is the shape of every gate that stops meaning anything.
+ *
+ * It takes effect on the next start, because the verdict is computed when the
+ * store opens. A daemon already running has to be restarted, and the CLI says so.
+ */
+export const RECONCILE_FILE = "reconcile-occurrences.json";
 
 export type CheckpointRead =
   | { kind: "checkpoint"; checkpoint: Checkpoint }
@@ -587,6 +701,19 @@ export type OverseerStore = {
    * survived a restart and nothing released when the work never came back.
    */
   readonly occurrences: OccurrenceIndex;
+  /**
+   * WHETHER `occurrences` ABOVE IS THE WHOLE OF IT — and the scheduler refuses
+   * to dispatch anything when it is not.
+   *
+   * A cold start is the right answer for the session register: it is a
+   * derivation of a live world, and the next snapshot rebuilds it. It is the
+   * wrong answer for a ledger of what has already been done, because an empty
+   * ledger reads as *nothing has ever run* and that is a licence to run
+   * everything again. GPT Sol's C3, and the reason this is a field of the store
+   * rather than a sentence in `opening`: the scheduler has to consult it on
+   * every tick, and a sentence is not consultable.
+   */
+  readonly occurrenceHistory: OccurrenceHistory;
   append(events: readonly OverseerEvent[]): AppendResult;
   checkpoint(update: CheckpointUpdate): CheckpointResult;
   readEvents(fromByte?: number): ReadEvents;
@@ -1290,6 +1417,14 @@ function parseCheckpoint(u: unknown): ParseResult<Checkpoint> {
       attention: parseAttentionList(u["attention"], writtenAt),
       usage: parseStoredUsage(u["usage"], writtenAt),
       jobs: { occurrences: jobs.value },
+      scheduler: parseStoredScheduler(u["scheduler"], writtenAt),
+      occurrenceHistory: parseOccurrenceHistory(u["occurrenceHistory"]),
+      // TOLERANT, and `null` rather than a guess: a reader that invented a
+      // deadline here would be doing exactly the independent-tuning this field
+      // exists to stop.
+      snapshotStaleAfterMs: typeof u["snapshotStaleAfterMs"] === "number" && Number.isFinite(u["snapshotStaleAfterMs"]) && u["snapshotStaleAfterMs"] > 0
+        ? u["snapshotStaleAfterMs"]
+        : null,
     },
   };
 }
@@ -1435,6 +1570,49 @@ function parseStoredUsage(u: unknown, writtenAt: string): StoredUsage {
   // reading is the one thing worse than no reading, because it is indistinguishable
   // from a complete one that found less.
   return report === null ? bad("the report is not one this build can read") : { kind: "report", report };
+}
+
+/**
+ * Read the scheduler block back, **degrading rather than failing the
+ * checkpoint** — the same rule `attention` and `usage` follow, and for the same
+ * reason: this is one sentence for a person, and losing the whole register over
+ * it would be wildly out of proportion.
+ *
+ * What it degrades TO is `unknown`, never `off`. "Nobody said" and "somebody
+ * said no" are different claims, and only one of them is safe to invent.
+ */
+function parseStoredScheduler(u: unknown, writtenAt: string): StoredScheduler {
+  if (u === undefined) {
+    return {
+      kind: "unknown",
+      why: "this checkpoint carries no scheduler block: it was written before the Overseer had a scheduler.",
+      at: writtenAt,
+    };
+  }
+  const bad = (why: string): StoredScheduler => ({ kind: "unknown", why: `the stored scheduler block was unusable: ${why}`, at: writtenAt });
+  if (!isRecord(u)) return bad("it is not an object");
+  const kind = u["kind"];
+  if (kind !== "armed" && kind !== "off" && kind !== "unknown") return bad(`kind ${JSON.stringify(kind)} is not one this build knows`);
+  const why = u["why"];
+  const at = u["at"];
+  if (typeof why !== "string") return bad("it has no reason");
+  if (!isIsoTimestamp(at)) return bad("it has no instant");
+  return { kind, why, at };
+}
+
+/**
+ * Read a stored occurrence-history verdict back.
+ *
+ * **`null` for anything it cannot read, never `intact`.** Inventing `intact`
+ * would clear a hold on the strength of a field this build could not parse,
+ * which is the failure the field exists to prevent; `null` means *this
+ * checkpoint makes no claim*, and the opening recomputes from the log.
+ */
+function parseOccurrenceHistory(u: unknown): OccurrenceHistory | null {
+  if (!isRecord(u)) return null;
+  if (u["kind"] === "intact") return { kind: "intact" };
+  if (u["kind"] === "lost" && typeof u["why"] === "string") return { kind: "lost", why: u["why"] };
+  return null;
 }
 
 /**
@@ -1862,13 +2040,22 @@ export function describeOpening(opening: StoreOpening): string {
     : "";
   const unreadable = opening.unreadableLines > 0 ? ` ${opening.unreadableLines} log lines were unreadable.` : "";
   const scanned = ` Read ${opening.bytesScanned} bytes of the log.`;
+  // SAID EVERY TIME IT IS TRUE, and never left to the reader to infer from
+  // `cold`: a held scheduler that nobody was told about is a scheduler that
+  // silently stopped running, which is the thing this field exists to prevent.
+  const ledger =
+    opening.occurrenceHistory.kind === "lost"
+      ? ` SCHEDULED JOBS ARE HELD: ${opening.occurrenceHistory.why}.`
+      : opening.occurrencesReconciled === undefined
+        ? ""
+        : ` A held occurrence ledger was reconciled by hand and the hold is cleared: ${opening.occurrencesReconciled}.`;
   switch (opening.start.kind) {
     case "cold":
-      return `Started COLD (${opening.start.why}): no baseline and no history, so the next snapshot will look like the whole fleet starting at once.${repair}${unreadable}${scanned}`;
+      return `Started COLD (${opening.start.why}): no baseline and no history, so the next snapshot will look like the whole fleet starting at once.${repair}${unreadable}${scanned}${ledger}`;
     case "rebuilt":
-      return `Rebuilt the register from the event log (${opening.start.why}): ${opening.eventsReplayed} events replayed.${repair}${unreadable}${scanned}`;
+      return `Rebuilt the register from the event log (${opening.start.why}): ${opening.eventsReplayed} events replayed.${repair}${unreadable}${scanned}${ledger}`;
     case "resumed":
-      return `Resumed from a checkpoint written ${opening.start.checkpointWrittenAt}, ${opening.eventsReplayed} events replayed past its cursor.${repair}${unreadable}${scanned}`;
+      return `Resumed from a checkpoint written ${opening.start.checkpointWrittenAt}, ${opening.eventsReplayed} events replayed past its cursor.${repair}${unreadable}${scanned}${ledger}`;
     default: {
       const never: never = opening.start;
       throw new Error(String(never));
@@ -1929,6 +2116,7 @@ class Store implements OverseerStore {
   readonly root: string;
   readonly instanceId: string;
   readonly opening: StoreOpening;
+  readonly occurrenceHistory: OccurrenceHistory;
   private readonly registerMap: Map<SessionKey, RegisterEntry>;
   /** The second fold over the same events. See `OverseerStore.occurrences`. */
   private readonly occurrenceMap: Map<OccurrenceId, Occurrence>;
@@ -1970,6 +2158,18 @@ class Store implements OverseerStore {
    * a fact — the judgement is the pass's, which has both halves.
    */
   private usageHeld: StoredUsage;
+  /**
+   * What the last write said about the scheduler.
+   *
+   * **NOT restored from the previous checkpoint**, unlike `usageHeld` above and
+   * for the opposite reason to it: a usage reading was true before the restart
+   * and is true after it, while "the scheduler is armed" is a fact about a
+   * process that no longer exists. Inheriting it would let a dead daemon's
+   * arming vouch for this one's.
+   */
+  private schedulerHeld: StoredScheduler;
+  /** The last deadline a caller declared, or null if none has. Held like the two above so a write that omits it does not blank it. */
+  private snapshotStaleAfterMsHeld: number | null = null;
   private closed = false;
 
   constructor(input: {
@@ -1979,6 +2179,7 @@ class Store implements OverseerStore {
     opening: StoreOpening;
     register: Map<SessionKey, RegisterEntry>;
     occurrences: Map<OccurrenceId, Occurrence>;
+    occurrenceHistory: OccurrenceHistory;
     fd: number;
     bytes: number;
     events: number;
@@ -1992,11 +2193,13 @@ class Store implements OverseerStore {
     this.opening = input.opening;
     this.registerMap = input.register;
     this.occurrenceMap = input.occurrences;
+    this.occurrenceHistory = input.occurrenceHistory;
     this.fd = input.fd;
     this.bytes = input.bytes;
     this.events = input.events;
     this.attention = attentionNotYetRun(input.now().toISOString());
     this.usageHeld = input.usage ?? usageNotYetRun(input.now().toISOString());
+    this.schedulerHeld = schedulerNotYetSaid(input.now().toISOString());
   }
 
   get register(): SessionRegister {
@@ -2102,9 +2305,20 @@ class Store implements OverseerStore {
       // cannot hand in a list of occurrences that disagrees with the log it was
       // folded from.
       jobs: { occurrences: [...this.occurrenceMap.values()] },
+      // From the caller like `attention` and `usage`, and for the same reason:
+      // whether a scheduler was armed is a fact about how the daemon was
+      // started, which this file cannot see.
+      scheduler: update.scheduler ?? this.schedulerHeld,
+      snapshotStaleAfterMs: update.snapshotStaleAfterMs ?? this.snapshotStaleAfterMsHeld,
+      // FROM THE STORE, never from the caller: whether the ledger is whole is
+      // this file's own finding, and a caller able to overwrite it could clear a
+      // hold it did not resolve.
+      occurrenceHistory: this.occurrenceHistory,
     };
     if (update.attention !== undefined) this.attention = update.attention;
     if (update.usage !== undefined) this.usageHeld = update.usage;
+    if (update.scheduler !== undefined) this.schedulerHeld = update.scheduler;
+    if (update.snapshotStaleAfterMs !== undefined) this.snapshotStaleAfterMsHeld = update.snapshotStaleAfterMs;
     writeAtomically(join(this.root, CHECKPOINT_FILE), this.root, `${JSON.stringify(checkpoint, null, 2)}\n`);
     return { ok: true, checkpoint };
   }
@@ -2241,6 +2455,72 @@ export function openStore(options: OpenStoreOptions = {}): OpenStoreResult {
     // as runs in flight and hold their jobs for ever.
     const occurrences = new Map<OccurrenceId, Occurrence>();
     let events: number;
+    // THE LEDGER'S OWN VERDICT ON THIS START, separate from `start` because the
+    // two answer different questions. `cold` says *there was no baseline to
+    // resume from*, which is a perfectly ordinary first run; this says *some of
+    // what has already happened is unreadable*, which is not, and the scheduler
+    // refuses to dispatch on it (GPT Sol's C3). Only the paths that actually
+    // lose history say so:
+    //
+    //  - a refused replay (a hole in the log, or a range too large to read) —
+    //    those bytes contain occurrence events nobody can account for;
+    //  - a checkpoint whose cursor is past the end of the log, which means the
+    //    log SHRANK under it: a truncation, a hand-edit, a restored backup.
+    //
+    // A first start with no log at all is `intact`: there is nothing to have
+    // lost. So is a rebuild from a full, readable log, because the checkpoint it
+    // could not use was only ever a fold of those same bytes.
+    let occurrenceHistory: OccurrenceHistory = { kind: "intact" };
+    if (replayed.kind === "refused") {
+      occurrenceHistory = {
+        kind: "lost",
+        why:
+          `the event log could not be replayed (${replayed.why}), so what has already run cannot be reconstructed; ` +
+          "scheduled jobs are held rather than dispatched, because an empty ledger reads as \"nothing has ever run\"",
+      };
+    } else if (read.kind === "checkpoint" && read.checkpoint.cursor.bytes > size) {
+      occurrenceHistory = {
+        kind: "lost",
+        why:
+          `the checkpoint's cursor is ${read.checkpoint.cursor.bytes} bytes into a log that is only ${size} long, ` +
+          "so the log has been truncated or replaced under it and part of what has already run is gone; " +
+          "scheduled jobs are held rather than dispatched",
+      };
+    } else if (read.kind === "checkpoint" && read.checkpoint.occurrenceHistory?.kind === "lost") {
+      // INHERITED, and this is the line that makes the hold worth anything. An
+      // earlier start lost history and then wrote a perfectly ordinary
+      // checkpoint whose cursor sits at the end of the log — so this start
+      // replays a clean tail onto an empty ledger and would otherwise read as
+      // intact. The loss would be laundered by a write nobody decided.
+      occurrenceHistory = {
+        kind: "lost",
+        why: `${read.checkpoint.occurrenceHistory.why} (carried forward from an earlier start; \`overseer reconcile-jobs\` clears it)`,
+      };
+    }
+
+    // THE ONE WAY OUT, AND IT IS SOMEBODY'S DECISION. Consumed rather than
+    // read: a file left in place would turn a decision taken once into a
+    // protection permanently off, which is how a gate stops meaning anything.
+    let reconciled: string | null = null;
+    if (occurrenceHistory.kind === "lost") {
+      const reconcilePath = join(root, RECONCILE_FILE);
+      if (existsSync(reconcilePath)) {
+        let why = "no reason was given";
+        try {
+          const parsed: unknown = JSON.parse(readFileSync(reconcilePath, "utf8"));
+          if (isRecord(parsed) && typeof parsed["why"] === "string") why = parsed["why"];
+        } catch {
+          /* An unreadable reconcile file still reconciles: somebody put it there on purpose, and refusing it would leave them with no way out at all. */
+        }
+        try {
+          unlinkSync(reconcilePath);
+        } catch {
+          /* Gone already, which is the state we wanted. */
+        }
+        reconciled = why;
+        occurrenceHistory = { kind: "intact" };
+      }
+    }
 
     if (replayed.kind === "refused") {
       // The strictness above is affordable only because of this line: no
@@ -2288,6 +2568,8 @@ export function openStore(options: OpenStoreOptions = {}): OpenStoreResult {
 
     const opening: StoreOpening = {
       start,
+      occurrenceHistory,
+      ...(reconciled === null ? {} : { occurrencesReconciled: reconciled }),
       repair,
       eventsReplayed: replayed.kind === "read" ? replayed.events.length : 0,
       unreadableLines: replayed.unreadable,
@@ -2302,6 +2584,7 @@ export function openStore(options: OpenStoreOptions = {}): OpenStoreResult {
         opening,
         register,
         occurrences,
+        occurrenceHistory,
         fd,
         bytes: size,
         events,

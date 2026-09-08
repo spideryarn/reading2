@@ -134,6 +134,24 @@ facts in these docs **are** rules, and the sentence stating a rule is the rule.
 
 These are queued by definition — they are documents, and the document is the authorisation.
 
+**Two of them are built and switched off.** `get-ready-to-deploy` and the feedback sweep are defined
+as data in [`tools/overseer/standing-jobs.ts`](../../tools/overseer/standing-jobs.ts) and dispatched
+by the daemon's scheduler — but only when `OVERSEER_JOBS_ENABLED=1`, which nothing in
+`infra/hetzner/` sets. Arming it starts real Claude sessions on this box, so it is Greg's switch, in
+the same spirit as `FLEET_ACT_ENABLED`. `overseer status` prints `scheduler ARMED` or `scheduler OFF`
+on a line of its own, because *off* and *nothing to do* are different states and both otherwise look
+like an empty job list.
+
+**A start that could not reconstruct the occurrence ledger holds every job**, because an empty
+ledger reads as *nothing has ever run*. `overseer status` says `HOLDING EVERY JOB` and the hold
+survives restarts; `overseer reconcile-jobs --why '<what you checked>'` clears it once, and the
+reason goes into the store for whoever later asks why a job ran twice.
+
+**And each one is pinned.** The digest of the document it points at is part of the job's fingerprint,
+and the fingerprint is compared against a constant in that file before anything is dispatched — so
+editing one of these documents stops its job until somebody re-pins it in a reviewed commit. That is
+gate 3's last bullet made mechanical rather than remembered.
+
 - **[get-ready-to-deploy.md](../reusable/get-ready-to-deploy.md)**, in unattended mode, every few
   hours. It has a skip-and-report fallback at every point where an attended run would ask.
 - **[feedback-reports.md](feedback-reports.md)**, a couple of times a day. Read the queue in full

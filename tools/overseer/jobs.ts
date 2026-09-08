@@ -20,10 +20,23 @@
  * The **definition hash** is the third of those three for one reason: a job
  * definition edited after it was authorised must be *detectable*. An occurrence
  * whose hash does not match the definition in front of us is not the run we
- * authorised, and the runbook forbids acting on it. Because the hash is part of
- * the key, an edited definition cannot inherit an old occurrence's history: it
- * gets a different key and reads as a job that has never run, which is the
- * conservative side to be wrong on.
+ * authorised, so it cannot vouch for it, and an edited definition therefore
+ * inherits no history.
+ *
+ * ## History separation is NOT authorisation, and reading it as one was a bug
+ *
+ * That property used to be the whole of the answer, and GPT Sol's C2 showed it
+ * pointed the wrong way: a definition with no history reads as `never`, `due()`
+ * calls `never` immediately due, and so **editing a job dispatched the edited
+ * version at once** — the exact opposite of the runbook's *never act on a job
+ * definition that changed after it was authorised*. "Being in the key is not
+ * equivalent to comparing against an authorisation."
+ *
+ * So the authorisation is a **separate, pinned fingerprint** carried beside the
+ * definition (`AuthorisedJob`), and a mismatch is its own state
+ * (`Authorisation`) that the scheduler refuses on, loudly. The key keeps the
+ * hash as well, because the two answer different questions: the key asks *which
+ * run is this*, and the pin asks *may this run at all*.
  *
  * ## The five states, and the one that matters
  *
@@ -82,6 +95,34 @@ export type JobDefinition = {
   readonly leaseMs: number;
   /** The authorised instruction. In the hash, because editing it is what the hash exists to detect. */
   readonly what: string;
+  /**
+   * THE DOCUMENTS THIS JOB'S AUTHORITY ACTUALLY COMES FROM, by digest.
+   *
+   * The standing jobs *are* documents — `what` is a sentence telling a session
+   * to go and follow one — so without this the fingerprint covers the pointer
+   * and not the thing pointed at, and the runbook's own warning applies word for
+   * word: *"The jobs here are documents, so editing a doc could otherwise
+   * enlarge what you may do unattended."*
+   * (docs/project/overseer.md § gate 3.)
+   *
+   * Empty is a legitimate answer — a job whose instruction is self-contained —
+   * and it is required rather than optional so that a new job has to say so.
+   */
+  readonly documents: readonly JobDocument[];
+};
+
+/**
+ * One document a job's instruction leans on, and the digest of its bytes at the
+ * moment the definition was built.
+ *
+ * The path is here for the person reading a refusal; the digest is what the
+ * hash actually depends on.
+ */
+export type JobDocument = {
+  /** Repo-relative, so the sentence a refusal prints means something to a reader. */
+  readonly path: string;
+  /** Hex sha256 of the file's bytes. */
+  readonly sha256: string;
 };
 
 /** A definition's fingerprint. Branded so a `jobId` cannot be passed where this belongs. */
@@ -106,15 +147,87 @@ export const DEFINITION_HASH_LENGTH = 12;
  * is exposed to; the destructure below is exhaustive so the compiler says so.
  */
 export function definitionHash(definition: JobDefinition): DefinitionHash {
-  const { id, everyMs, leaseMs, what } = definition;
+  const { id, everyMs, leaseMs, what, documents } = definition;
   const canonical = [
     `id:${id.length}:${id}`,
     `everyMs:${everyMs}`,
     `leaseMs:${leaseMs}`,
     `what:${what.length}:${what}`,
+    // THE COUNT FIRST, then each entry length-prefixed like the strings above:
+    // without the count, a job with one document could hash the same as a job
+    // with two whose paths concatenate to the same bytes.
+    `documents:${documents.length}`,
+    ...documents.map((document) => `document:${document.path.length}:${document.path}:${document.sha256.length}:${document.sha256}`),
   ].join("\n");
   return createHash("sha256").update(canonical, "utf8").digest("hex").slice(0, DEFINITION_HASH_LENGTH) as DefinitionHash;
 }
+
+/**
+ * A definition together with the fingerprint somebody authorised.
+ *
+ * **The pin is the separate artefact, and that is the whole point.** A hash
+ * computed from the definition in front of us can only say "this is
+ * self-consistent"; the authorisation has to come from somewhere the job cannot
+ * edit on its own account. Here that is a literal in
+ * `tools/overseer/standing-jobs.ts`, which changes only in a reviewed commit —
+ * so a job whose prompt or whose *document* moved stops dispatching until a
+ * person re-pins it, which is exactly Greg's "nothing dispatched that Greg did
+ * not queue".
+ *
+ * A pin is deliberately NOT stored in `~/.overseer`: the store is written by the
+ * daemon, and an authorisation the authorised party can write is not one.
+ */
+export type AuthorisedJob = {
+  readonly definition: JobDefinition;
+  /** What `definitionHash(definition)` must equal for this job to be dispatched at all. */
+  readonly authorisedHash: DefinitionHash;
+};
+
+/**
+ * Whether a definition still matches the fingerprint it was authorised under.
+ *
+ * A union rather than a boolean, because the unauthorised arm has to carry both
+ * hashes: the sentence a person needs is *"it was authorised as a1b2 and it is
+ * now c3d4"*, and re-authorising means copying the second of those into the pin.
+ */
+export type Authorisation =
+  | { readonly kind: "authorised"; readonly hash: DefinitionHash }
+  | {
+      readonly kind: "unauthorised";
+      readonly authorised: DefinitionHash;
+      readonly found: DefinitionHash;
+      readonly why: string;
+    };
+
+export function authorisationOf(job: AuthorisedJob): Authorisation {
+  const found = definitionHash(job.definition);
+  if (found === job.authorisedHash) return { kind: "authorised", hash: found };
+  return {
+    kind: "unauthorised",
+    authorised: job.authorisedHash,
+    found,
+    why:
+      `this definition was authorised as ${job.authorisedHash} and now fingerprints as ${found}` +
+      (job.definition.documents.length === 0
+        ? ""
+        : ` (its documents are ${job.definition.documents.map((document) => document.path).join(", ")})`) +
+      ", so it is not the job that was queued and it will not be dispatched until somebody re-pins it",
+  };
+}
+
+/**
+ * Whether the occurrence ledger in front of us is the whole of it.
+ *
+ * **A cold start is not permission.** `openStore` deliberately comes up with an
+ * empty occurrence map when the log has a hole in it or is too large to replay,
+ * which is right for the session register — the next snapshot repairs it — and
+ * wrong for a ledger whose entire purpose is stopping uncertain work being
+ * repeated. An empty map read as "this job has never run" is the same mistake
+ * C2 was, arriving through a different door.
+ */
+export type OccurrenceHistory =
+  | { readonly kind: "intact" }
+  | { readonly kind: "lost"; readonly why: string };
 
 /**
  * What identifies one run.
@@ -372,6 +485,11 @@ export function lastRunOf(index: OccurrenceIndex, definition: JobDefinition, now
     // the log and still visible; they just do not vouch for this one, so a job
     // whose `what` was rewritten reads as never having run rather than as
     // recently satisfied by a run of something else.
+    //
+    // **AND `never` HERE IS NOT A LICENCE TO RUN.** It used to be read as one,
+    // which is how an edit became an immediate unauthorised dispatch (C2). The
+    // scheduler asks `authorisationOf` BEFORE it asks this function anything,
+    // so an edited definition never reaches `due` at all.
     if (occurrence.key.definitionHash !== hash) continue;
     if (newest === null || Date.parse(occurrence.key.scheduledAt) > Date.parse(newest.key.scheduledAt)) newest = occurrence;
   }

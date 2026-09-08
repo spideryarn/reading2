@@ -8,6 +8,23 @@
  *
  *     append `reserved` and fsync it   ──▶  spawn  ──▶  append `started`
  *
+ * ## Three gates, and only one of them is about the clock
+ *
+ * A tick asks, in this order:
+ *
+ *  1. **Is the occurrence ledger whole?** A store that opened cold has an empty
+ *     one, which reads as *nothing has ever run* — a licence to run everything
+ *     again. So a lost history holds every job (`history-lost`). GPT Sol's C3:
+ *     *a cold start is not permission*.
+ *  2. **Is this definition the one that was authorised?** The pin lives beside
+ *     the definition and is compared before anything else about the job is
+ *     asked (`unauthorised`). It used to be that an edited definition merely
+ *     lost its history — and `due()` reads no history as *due now*, so an edit
+ *     dispatched the edited version immediately, which is the opposite of what
+ *     the runbook says. GPT Sol's C2.
+ *  3. **Has enough time passed?** Only now, and only for a job that got past
+ *     the first two.
+ *
  * ## Fail closed, and what that actually means here
  *
  * **If the reservation does not land on the disk, nothing is spawned.** Not
@@ -43,18 +60,31 @@
  *
  * **Those attention and usage guards are deliberately untouched.** They belong to
  * another stage's work, and only the scheduled-job path uses leases.
+ *
+ * ## Every append is answered for, not only the first
+ *
+ * The reservation fails closed. The four appends after it — the throw-to-unknown,
+ * the refusal, and the two completions — used to have their results dropped, so
+ * the durable history could say `started` for ever while the report said the run
+ * had ended (GPT Sol's C5). They still must not throw, because the alternative
+ * to a lost record is a lost record AND a lost outcome; instead the synchronous
+ * ones become an `unrecorded` report and the completion, which lands after the
+ * tick has returned, goes to `onLostRecord`.
  */
 import type { JobEvent, OverseerEvent } from "./diff.js";
 import {
+  authorisationOf,
   definitionHash,
   due,
   lastRunOf,
   leaseExpired,
   occurrenceId,
   standingOf,
+  type AuthorisedJob,
   type JobDefinition,
   type JobOutcome,
   type Occurrence,
+  type OccurrenceHistory,
   type OccurrenceId,
   type OccurrenceIndex,
   type OccurrenceKey,
@@ -91,7 +121,27 @@ export type SpawnJob = (definition: JobDefinition, key: OccurrenceKey) => JobSpa
 export type OccurrenceLog = {
   readonly instanceId: string;
   readonly occurrences: OccurrenceIndex;
+  /** Whether that index is the whole history, or whether opening the store lost some of it. See `OccurrenceHistory`. */
+  readonly occurrenceHistory: OccurrenceHistory;
   append(events: readonly OverseerEvent[]): AppendResult;
+};
+
+/**
+ * A fact about a run that could not be written down, AFTER the reservation was.
+ *
+ * The pre-spawn append is fail-closed — nothing is started until it lands — but
+ * every later append used to have its result thrown away, so a failed `started`
+ * or `finished` left the durable history saying something the report did not
+ * (GPT Sol's C5). These do not throw, deliberately: a completion append that
+ * fails must not also destroy the child's outcome. It is reported instead, and
+ * the daemon writes it into `daemon.jsonl`.
+ */
+export type LostRecord = {
+  readonly jobId: string;
+  readonly occurrenceId: OccurrenceId;
+  /** Which fact was lost. `finished` is the one that arrives after the tick has returned. */
+  readonly fact: "started" | "finished" | "refused" | "unknown";
+  readonly why: string;
 };
 
 /**
@@ -110,17 +160,36 @@ export type SchedulerReport =
   /** A run is genuinely in flight and inside its lease. The ordinary overlap case. */
   | { readonly kind: "held"; readonly jobId: string; readonly why: string }
   | { readonly kind: "waiting"; readonly jobId: string; readonly remainingMs: number }
+  /** THE GATE. The definition in front of us is not the one that was authorised, so no key is minted and nothing is spawned. */
+  | { readonly kind: "unauthorised"; readonly jobId: string; readonly why: string }
+  /** Opening the store could not reconstruct the occurrence ledger, so every job is held: a cold start is not permission. */
+  | { readonly kind: "history-lost"; readonly jobId: string; readonly why: string }
+  /** Something HAPPENED and could not be written down. The child is unaffected; the durable history now disagrees with this report. */
+  | {
+      readonly kind: "unrecorded";
+      readonly jobId: string;
+      readonly occurrenceId: OccurrenceId;
+      readonly fact: LostRecord["fact"];
+      readonly why: string;
+    }
   /** THE ALARM. A lease ran out with nothing to say how the run ended. */
   | { readonly kind: "stuck"; readonly jobId: string; readonly occurrenceId: OccurrenceId; readonly overdueMs: number; readonly why: string }
   /** A reservation left behind by an instance that is gone — noticed, written down, and never retried. */
   | { readonly kind: "unaccounted"; readonly jobId: string; readonly occurrenceId: OccurrenceId; readonly why: string };
 
 export type TickInput = {
-  readonly definitions: readonly JobDefinition[];
+  /** Each with the fingerprint it was authorised under — see `AuthorisedJob`, and C2 for what a bare definition let through. */
+  readonly definitions: readonly AuthorisedJob[];
   readonly store: OccurrenceLog;
   readonly spawn: SpawnJob;
   /** Injected, always. Nothing in this area reads the wall clock for itself. */
   readonly now: () => Date;
+  /**
+   * Where a fact that could not be written down goes when the tick has already
+   * returned — which is only ever the completion append, because the work
+   * settles later. Everything synchronous reaches the report instead.
+   */
+  readonly onLostRecord?: (lost: LostRecord) => void;
 };
 
 /** One pass of the scheduler: sweep what nobody can account for, then dispatch what is due. */
@@ -128,8 +197,20 @@ export function schedulerTick(input: TickInput): readonly SchedulerReport[] {
   const at = input.now();
   const nowMs = at.getTime();
   const reports: SchedulerReport[] = [...sweep(input, at.toISOString(), nowMs)];
+  // EVERY JOB IS HELD WHEN THE LEDGER IS INCOMPLETE, and it is checked here
+  // rather than inside `dispatch` so that it cannot be reached round the side by
+  // a later arm. `sweep` above still runs: what it can see is still worth
+  // writing down, and it starts nothing.
+  const history = input.store.occurrenceHistory;
+  if (history.kind === "lost") {
+    for (const job of input.definitions) {
+      reports.push({ kind: "history-lost", jobId: job.definition.id, why: history.why });
+    }
+    return reports;
+  }
   const seen = new Set<string>();
-  for (const definition of input.definitions) {
+  for (const job of input.definitions) {
+    const definition = job.definition;
     // TWO DEFINITIONS WITH ONE ID IS A CONFIGURATION MISTAKE THAT WOULD BE
     // SILENT. Identical ones mint the same key at the same instant, so the
     // second dispatch spawns a second process and then overwrites the first's
@@ -141,6 +222,15 @@ export function schedulerTick(input: TickInput): readonly SchedulerReport[] {
       continue;
     }
     seen.add(definition.id);
+    // THE AUTHORISATION GATE, AND IT COMES BEFORE `due`. An edited definition
+    // has no history, `due` reads no history as "run it now", and that pair is
+    // what turned an edit into an immediate unauthorised dispatch (C2). Asking
+    // here means the edited job never reaches the arithmetic at all.
+    const authorisation = authorisationOf(job);
+    if (authorisation.kind === "unauthorised") {
+      reports.push({ kind: "unauthorised", jobId: definition.id, why: authorisation.why });
+      continue;
+    }
     reports.push(...dispatch(input, definition, at.toISOString(), nowMs));
   }
   return reports;
@@ -252,12 +342,25 @@ function dispatch(input: TickInput, definition: JobDefinition, at: string, nowMs
     // contract has told us nothing about whether a process exists, so the only
     // honest record is `unknown` — and an unknown is never retried.
     const why = `the runner threw instead of answering: ${cause instanceof Error ? cause.message : String(cause)}`;
-    record(input.store, [{ kind: "job-occurrence-unknown", at, occurrenceId: id, why }]);
-    return [{ kind: "unaccounted", jobId: definition.id, occurrenceId: id, why }];
+    const wrote = record(input.store, [{ kind: "job-occurrence-unknown", at, occurrenceId: id, why }]);
+    // AND IF THAT APPEND FAILED, SAY SO. It used to be dropped, which left the
+    // occurrence durably `reserved` while this report claimed it was accounted
+    // for — a report disagreeing with the history is the shape of C5.
+    return [
+      { kind: "unaccounted", jobId: definition.id, occurrenceId: id, why },
+      ...lostReports(wrote, definition.id, id, "unknown"),
+    ];
   }
   if (outcome.kind === "refused") {
-    record(input.store, [{ kind: "job-occurrence-refused", at, occurrenceId: id, why: outcome.why }]);
-    return [{ kind: "refused", jobId: definition.id, occurrenceId: id, why: outcome.why }];
+    const wrote = record(input.store, [{ kind: "job-occurrence-refused", at, occurrenceId: id, why: outcome.why }]);
+    // THE REFUSAL IS STILL REPORTED — the runner told us the job did not start,
+    // and that is true whether or not we managed to write it down. What changes
+    // is that the failure to write it down is no longer silent: the occurrence
+    // stays `reserved` on disk and a later instance will read it as `unknown`.
+    return [
+      { kind: "refused", jobId: definition.id, occurrenceId: id, why: outcome.why },
+      ...lostReports(wrote, definition.id, id, "refused"),
+    ];
   }
 
   // (3) THE ACKNOWLEDGEMENT. If this does not land, the occurrence stays
@@ -277,25 +380,60 @@ function dispatch(input: TickInput, definition: JobDefinition, at: string, nowMs
 
   // The completion, whenever it comes. A promise that never settles appends
   // nothing, which is what the lease is for.
+  //
+  // THIS IS THE ONE PATH THAT CANNOT REACH THE REPORT, because the tick returned
+  // long ago — so a failed completion append goes to `onLostRecord`, and a
+  // daemon that supplies none is choosing to lose it. It must not throw: the
+  // alternative to a note here is a rejected promise nobody awaits, which is an
+  // unhandled rejection and the child's outcome gone as well.
+  const lost = (fact: LostRecord["fact"], why: string): void => {
+    input.onLostRecord?.({ jobId: definition.id, occurrenceId: id, fact, why });
+  };
   void outcome.done.then(
     (result) => {
-      record(input.store, [{ kind: "job-occurrence-finished", at: input.now().toISOString(), occurrenceId: id, outcome: result }]);
+      const wrote = record(input.store, [{ kind: "job-occurrence-finished", at: input.now().toISOString(), occurrenceId: id, outcome: result }]);
+      if (!wrote.ok) {
+        lost(
+          "finished",
+          `the run ended (${result.kind === "exited" ? `exit ${result.code}` : `failed: ${result.why}`}) and the completion could not be recorded: ${wrote.why}`,
+        );
+      }
     },
     (cause: unknown) => {
       // A REJECTED PROMISE IS A FINISH, not an unknown: the runner watched the
       // work and is telling us it broke. `failed` carries the sentence; an
       // exit code would have to be invented.
-      record(input.store, [
+      const why = cause instanceof Error ? cause.message : String(cause);
+      const wrote = record(input.store, [
         {
           kind: "job-occurrence-finished",
           at: input.now().toISOString(),
           occurrenceId: id,
-          outcome: { kind: "failed", why: cause instanceof Error ? cause.message : String(cause) },
+          outcome: { kind: "failed", why },
         },
       ]);
+      if (!wrote.ok) lost("finished", `the run broke (${why}) and that could not be recorded either: ${wrote.why}`);
     },
   );
   return reports;
+}
+
+/**
+ * A failed append, as a report — or nothing at all when it landed.
+ *
+ * A helper rather than four `if`s, so that adding a fifth append cannot quietly
+ * be the one nobody wired up: the call site returns `...lostReports(...)` beside
+ * the fact it was trying to record, and an ignored result is visible as an
+ * ignored result.
+ */
+function lostReports(
+  wrote: { ok: true } | { ok: false; why: string },
+  jobId: string,
+  id: OccurrenceId,
+  fact: LostRecord["fact"],
+): readonly SchedulerReport[] {
+  if (wrote.ok) return [];
+  return [{ kind: "unrecorded", jobId, occurrenceId: id, fact, why: wrote.why }];
 }
 
 /** Every way an append can fail, as one closed door. A refusal and a thrown filesystem error mean the same thing to a caller that must not proceed. */
@@ -322,6 +460,12 @@ export function describeReport(report: SchedulerReport): string {
       return `job ${report.jobId}: held — ${report.why}`;
     case "waiting":
       return `job ${report.jobId}: not due for another ${Math.round(report.remainingMs / 1000)}s`;
+    case "unauthorised":
+      return `job ${report.jobId}: NOT AUTHORISED — ${report.why}`;
+    case "history-lost":
+      return `job ${report.jobId}: HELD — ${report.why}`;
+    case "unrecorded":
+      return `job ${report.jobId}: NOT RECORDED — ${report.occurrenceId} ${report.fact} could not be written down: ${report.why}`;
     case "stuck":
       return `job ${report.jobId}: STUCK — ${report.occurrenceId} ${report.why}`;
     case "unaccounted":

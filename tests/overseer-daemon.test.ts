@@ -32,7 +32,9 @@ import {
   latestAttempt,
   runOverseer,
   staleAfterMs,
+  type DaemonOptions,
 } from "../tools/overseer/daemon.js";
+import { definitionHash, type AuthorisedJob, type JobDefinition } from "../tools/overseer/jobs.js";
 import { NOTES_FILE, openConditions, readNotes, type DaemonNote } from "../tools/overseer/notes.js";
 import { parseAttempt, parseObservation, type JsonValue, type ObservedAttemptClock } from "../tools/overseer/observation.js";
 import { EVENTS_FILE, readCheckpoint } from "../tools/overseer/store.js";
@@ -71,7 +73,19 @@ function payload(json: JsonValue, via: "sse" | "poll" = "sse"): SourceMessage {
 async function run(
   root: string,
   script: () => AsyncGenerator<SourceMessage>,
-  options: { clock?: ReturnType<typeof fakeClock>; tickMs?: number } = {},
+  options: {
+    clock?: ReturnType<typeof fakeClock>;
+    tickMs?: number;
+    jobs?: DaemonOptions["jobs"];
+    schedulerDetail?: string;
+    /**
+     * What this run is expected to END as. Defaults to a clean stop, which is
+     * every other test here — one deliberately takes the lock away mid-run, and
+     * `lock-lost` is then the CORRECT outcome rather than a failure to assert
+     * past.
+     */
+    outcome?: "stopped" | "lock-lost";
+  } = {},
 ): Promise<{ notes: DaemonNote[]; events: OverseerEvent[] }> {
   const controller = new AbortController();
   // A CLOCK, ALWAYS, and by default one standing a few seconds after the
@@ -88,8 +102,12 @@ async function run(
     tickMs: options.tickMs ?? 5,
     log: () => undefined,
     source: () => script(),
+    // Absent rather than undefined: `exactOptionalPropertyTypes` tells those
+    // apart, and an ABSENT `jobs` is what makes the daemon build no scheduler.
+    ...(options.jobs === undefined ? {} : { jobs: options.jobs }),
+    ...(options.schedulerDetail === undefined ? {} : { schedulerDetail: options.schedulerDetail }),
   });
-  expect(outcome.kind).toBe("stopped");
+  expect(outcome.kind).toBe(options.outcome ?? "stopped");
   return { notes: readNotes(root).notes, events: eventsIn(root) };
 }
 
@@ -774,7 +792,9 @@ describe("the scheduler on the daemon's clock", () => {
   /** Real milliseconds, only so the timers under test actually fire. The daemon's own clock is still the fake one. */
   const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
-  const JOB = { id: "prod-the-overseer", everyMs: 60_000, leaseMs: 120_000, what: "say hello" };
+  const JOB: JobDefinition = { id: "prod-the-overseer", everyMs: 60_000, leaseMs: 120_000, what: "say hello", documents: [] };
+  /** Pinned to its own fingerprint: this file is about the daemon's timers, and the pin itself is tested in overseer-jobs.test.ts. */
+  const AUTHORISED: AuthorisedJob = { definition: JOB, authorisedHash: definitionHash(JOB) };
 
   test("a job whose work never settles is dispatched, reported STUCK, and dispatched again — while the heartbeat goes on ticking", async () => {
     // The daemon-level statement of GPT Sol's S6. The in-memory
@@ -803,7 +823,7 @@ describe("the scheduler on the daemon's clock", () => {
         })(),
       jobs: {
         intervalMs: 5,
-        definitions: [JOB],
+        definitions: [AUTHORISED],
         spawn: () => {
           spawned.push(spawned.length);
           // NEVER SETTLES. This is the hung model subprocess the whole lease
@@ -845,6 +865,78 @@ describe("the scheduler on the daemon's clock", () => {
     const read = readCheckpoint(root);
     if (read.kind !== "checkpoint") throw new Error("expected a checkpoint");
     expect(read.checkpoint.jobs.occurrences).toEqual([]);
+    // AND THE CHECKPOINT SAYS SO, which is the half GPT Sol's C1 was about: an
+    // empty occurrence list is what a disarmed scheduler and a busy-but-idle one
+    // both produce, so the reader needs a field rather than an inference.
+    expect(read.checkpoint.scheduler.kind).toBe("off");
+    expect(read.checkpoint.scheduler.why).toContain("no scheduled jobs");
+  });
+
+  test("a completion the store would not take lands in daemon.jsonl, not only on a console", async () => {
+    // GPT Sol's C5, at the level a person actually reads. The child finished and
+    // the ledger could not be told, so the durable history says `started` for
+    // ever — and until this note existed nothing anywhere said why. A console
+    // line is not a report; the note log is.
+    const root = tempRoot();
+    const clock = fakeClock("2026-09-08T02:48:40.000Z");
+    let settleRun: ((code: number) => void) | null = null;
+    const { notes } = await run(
+      root,
+      async function* () {
+        yield payload(fixture("session-new-before"));
+        await sleep(30);
+        // The child finishes AFTER the lock has been taken from under the
+        // daemon, so its completion append is refused for real rather than by a
+        // stub — the same shape as a second daemon starting beside this one.
+        writeFileSync(
+          join(root, "overseer.lock"),
+          `${JSON.stringify({ pid: process.pid, instanceId: "somebody-else", hostname: "box", startedAt: "2026-09-08T02:00:00.000Z" })}\n`,
+        );
+        settleRun?.(0);
+        await sleep(40);
+      },
+      {
+        clock,
+        // Taking the lock away is what refuses the append, and it correctly
+        // stops the daemon a moment later — the note has to survive that.
+        outcome: "lock-lost",
+        jobs: {
+          intervalMs: 5,
+          definitions: [AUTHORISED],
+          spawn: () => ({
+            kind: "spawned",
+            pid: 4242,
+            done: new Promise<{ kind: "exited"; code: number }>((resolve) => {
+              settleRun = (code) => resolve({ kind: "exited", code });
+            }),
+          }),
+        },
+      },
+    );
+    const lost = notes.filter((note) => note.kind === "job-record-lost");
+    expect(lost.length).toBeGreaterThanOrEqual(1);
+    expect(lost[0]?.kind === "job-record-lost" && lost[0].fact).toBe("finished");
+    expect(lost[0]?.kind === "job-record-lost" && lost[0].jobId).toBe("prod-the-overseer");
+  });
+
+  test("a daemon that IS given jobs says armed, in the same field", async () => {
+    const root = tempRoot();
+    await run(root, async function* () {
+      yield payload(fixture("session-new-before"));
+    }, {
+      jobs: {
+        intervalMs: 5,
+        definitions: [AUTHORISED],
+        // Refused, so nothing is started and nothing outlives the test — the
+        // arming is what is under test, not the dispatch.
+        spawn: () => ({ kind: "refused", why: "not in a test" }),
+      },
+      schedulerDetail: "ARMED — prod-the-overseer",
+    });
+    const read = readCheckpoint(root);
+    if (read.kind !== "checkpoint") throw new Error("expected a checkpoint");
+    expect(read.checkpoint.scheduler.kind).toBe("armed");
+    expect(read.checkpoint.scheduler.why).toContain("prod-the-overseer");
   });
 });
 

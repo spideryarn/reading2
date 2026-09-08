@@ -102,15 +102,18 @@ export const DEFAULT_MAX_TICK_AGE_MS = 5 * TICK_MS;
  * clock, so "five ticks" (150s) would be tuned to the wrong process entirely
  * and would fire on a single ordinary collection or two.
  *
- * **Reuses `tools/overseer/daemon.ts`'s own `staleAfterMs`, rather than
- * picking a second number** — the same "do not invent a second way" this file
- * already follows for `OVERSEER_STORE_DIR`. That function is what the daemon
- * itself uses to decide "the collector has gone quiet" (`freshness()`,
- * `checkFreshness` in daemon.ts) and to write its own `daemon.jsonl`
- * degraded/restored notes — so this watchdog's `deaf` threshold and the
- * daemon's own idea of "the collector is behind" are, by construction, the
- * same number rather than two independently-tuned ones that drift apart the
- * first time somebody retunes only one. Its value: `max(STALE_FLOOR_MS,
+ * **THE DAEMON'S OWN DEADLINE IS READ OUT OF THE CHECKPOINT, and this constant
+ * is only the fallback.** Both sides used to call `staleAfterMs` and that was
+ * not enough: sharing a function prevents FORMULA drift and does nothing about
+ * INPUT drift. The daemon calls it with the snapshot's advertised `refreshMs`
+ * (60s → 300,000ms) and this file called it with the historical measured
+ * constant (65s → 325,000ms), so the two already disagreed under the documented
+ * normal values, and a change to the collector's cadence would have moved one
+ * and not the other. GPT Sol's C6.
+ *
+ * So `Checkpoint.snapshotStaleAfterMs` carries the number the daemon is
+ * actually using, and this is what a watchdog falls back to when the checkpoint
+ * predates that field or does not carry one: `max(STALE_FLOOR_MS,
  * STALE_MULTIPLE * MEASURED_CADENCE_MS)` = `max(300_000, 5 * 65_000)` =
  * 325_000ms — five collections' worth of tolerance, floored at five minutes so
  * a couple of ordinary misses on a busy box never fire it.
@@ -130,7 +133,16 @@ export function assessWatchdog(
   read: CheckpointRead,
   nowMs: number,
   maxTickAgeMs: number,
-  maxSnapshotAgeMs: number = DEFAULT_MAX_SNAPSHOT_AGE_MS,
+  /**
+   * An operator's `--max-snapshot-age-ms`, or **`null` to use the daemon's own
+   * deadline** out of the checkpoint (falling back to
+   * `DEFAULT_MAX_SNAPSHOT_AGE_MS` when it carries none).
+   *
+   * `null` is what `main()` passes, so the ordinary run takes the daemon's
+   * number. An explicit value still wins, because somebody typing a flag is
+   * asking a different question on purpose.
+   */
+  maxSnapshotAgeMs: number | null = null,
 ): WatchdogVerdict {
   if (read.kind === "absent") {
     return {
@@ -153,6 +165,9 @@ export function assessWatchdog(
   }
   const { checkpoint } = read;
   const { pid, lastTickAt, ticks } = checkpoint.heartbeat;
+  // THE DAEMON'S NUMBER, not one derived here. An override beats it; nothing
+  // else does.
+  const snapshotDeadlineMs = maxSnapshotAgeMs ?? checkpoint.snapshotStaleAfterMs ?? DEFAULT_MAX_SNAPSHOT_AGE_MS;
 
   // Checked FIRST, before the snapshot clock: a dead process's snapshot is
   // trivially old too, and `stale` is the more useful thing to say about a
@@ -189,13 +204,13 @@ export function assessWatchdog(
     };
   }
   const snapshotAgeMs = nowMs - Date.parse(lastGoodSnapshotAt);
-  if (snapshotAgeMs > maxSnapshotAgeMs) {
+  if (snapshotAgeMs > snapshotDeadlineMs) {
     return {
       healthy: false,
       state: "deaf",
       detail:
         `pid ${pid} is alive and ticking (${ticks} ticks) but the last good snapshot was ${Math.round(snapshotAgeMs / 1000)}s ago, ` +
-        `over the ${Math.round(maxSnapshotAgeMs / 1000)}s threshold -- the daemon is up and writing checkpoints while its ` +
+        `over the ${Math.round(snapshotDeadlineMs / 1000)}s threshold (${checkpoint.snapshotStaleAfterMs === null ? "this watchdog's fallback: the checkpoint carries no deadline" : "the daemon's own deadline, read from the checkpoint"}) -- the daemon is up and writing checkpoints while its ` +
         "register goes stale underneath it. Check `systemctl is-active fleet-dashboard` and the dashboard's own logs.",
     };
   }
@@ -220,7 +235,10 @@ const HELP = `overseer-watchdog -- checks the Overseer daemon's heartbeat AND it
   --max-tick-age-ms N       how old heartbeat.lastTickAt may be before this
                             reports stale (default ${DEFAULT_MAX_TICK_AGE_MS}, i.e. ${DEFAULT_MAX_TICK_AGE_MS / TICK_MS} ticks)
   --max-snapshot-age-ms N  how old lastGoodSnapshotAt may be before this
-                            reports deaf (default ${DEFAULT_MAX_SNAPSHOT_AGE_MS})
+                            reports deaf. WITHOUT IT, the daemon's own deadline
+                            is read out of the checkpoint, so the two cannot
+                            drift apart; a checkpoint carrying none falls back to
+                            ${DEFAULT_MAX_SNAPSHOT_AGE_MS}
 
 The store root is $OVERSEER_STORE_DIR, or ~/.overseer -- the same override
 tools/overseer/store.ts honours everywhere else, per storeRoot().
@@ -261,7 +279,10 @@ export function main(argv: readonly string[]): number {
   }
   const root = storeRoot();
   const read = readCheckpoint(root);
-  const verdict = assessWatchdog(read, Date.now(), tick.value ?? DEFAULT_MAX_TICK_AGE_MS, snapshot.value ?? DEFAULT_MAX_SNAPSHOT_AGE_MS);
+  // `null` rather than the constant, so the DAEMON'S deadline is used unless a
+  // person overrode it: two components tuning the same threshold independently
+  // is the drift C6 was about.
+  const verdict = assessWatchdog(read, Date.now(), tick.value ?? DEFAULT_MAX_TICK_AGE_MS, snapshot.value ?? null);
   console.log(formatVerdict(verdict));
   return verdict.healthy ? 0 : 1;
 }

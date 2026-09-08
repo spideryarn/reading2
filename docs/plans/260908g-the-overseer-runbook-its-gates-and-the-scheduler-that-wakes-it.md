@@ -373,7 +373,57 @@ removed it.
 - **Configuring the schedule from the web interface.** Greg called it a nice-to-have future stage.
 - **Renaming `docs/plans/260908f-orchestrator-wave-2-….md`.** A dated plan record, mid-flight.
 
-## The review, and what it changed
+## The review OF STAGE 2, and what it changed
+
+**GPT Sol reviewed the built Stage 2 and blocked it: no P0, four P1s.**
+[The full text](260908g-stage2-code-review-sol.md). Its crash-window table passed on all five rows,
+and every P1 was about the same thing from a different angle — **something correct in isolation that
+was not true in operation.** What was done about each:
+
+- **C1 — the scheduler was installed and scheduled nothing.** `scripts/overseer.ts` called
+  `runOverseer` with no `jobs`, so `daemon.ts` built no timer, and there were no definitions and no
+  `SpawnJob` anywhere outside the tests. Now there are:
+  [`tools/overseer/standing-jobs.ts`](../../tools/overseer/standing-jobs.ts) holds the two jobs that
+  are pure documents (`get-ready-to-deploy`, the feedback sweep) and
+  [`dispatch.ts`](../../tools/overseer/dispatch.ts) starts each as `gjd-remote new-claude <name>
+  --no-attach -p -`.
+  **It is off unless `OVERSEER_JOBS_ENABLED=1`**, in the spirit of `FLEET_ACT_ENABLED`, because
+  arming it starts real Claude sessions on a shared box and that is Greg's decision rather than a
+  consequence of merging. `overseer status` prints ARMED or OFF from a field the daemon writes into
+  the checkpoint — not from the reader's own environment, which is a different one, and not inferred
+  from an empty occurrence list, which is what *off* and *nothing to do* both look like.
+- **C2 — the definition hash separated history and did not gate anything, and the effect ran
+  backwards.** An edited definition read as *never run*, `due()` reads *never* as due now, so an edit
+  dispatched the edited job immediately — the opposite of the runbook's gate 3. The authorisation is
+  now a **pin**: a hash constant beside each definition, compared before `due` is asked anything, and
+  a mismatch is its own refusing state. The document's own digest is inside the definition, so
+  editing `get-ready-to-deploy.md` moves the fingerprint even though the prompt did not — which is
+  the only version of this that means anything for jobs that *are* documents.
+- **C3 — a cold recovery discarded the ledger and let jobs run again.** `openStore` deliberately
+  comes up with an empty occurrence map when the log has a hole or exceeds the replay ceiling. That
+  is right for the session register and wrong for a ledger of what has been done. The store now
+  carries `occurrenceHistory`, and a `lost` one holds every job rather than dispatching it.
+- **C5 — only the reservation append was fail-closed.** The four later appends dropped their
+  results, so reports disagreed with durable history. They are reported now (`unrecorded`) or, for
+  the completion that lands after the tick has returned, sent to `onLostRecord` and written into
+  `daemon.jsonl` as `job-record-lost`. None of them throws: losing the record must not also lose the
+  child's outcome.
+- **C6 — the watchdog and the daemon did not share the deadline they thought they shared.** Both
+  called `staleAfterMs`, which prevents formula drift and not input drift: 300,000ms against
+  325,000ms under the documented normal values. The daemon now writes the deadline it is using into
+  the checkpoint and the watchdog reads it.
+- **C7 — `Persistent=true` does not prove missed-run catch-up here.** `systemd.timer(5)`: it only
+  affects `OnCalendar=` timers, and this one has `OnBootSec=`/`OnUnitActiveSec=`. The setting stays
+  (harmless, and correct if the timer ever moves); the comment and the test now name `OnBootSec=2min`
+  as what actually covers a box that was off, and the neighbouring "parses as a valid unit" test runs
+  `systemd-analyze verify` instead of checking that a line exists.
+- **C8 — one watchdog test did not test what its name said.** It compared internal `state` tags and
+  never called `formatVerdict`, so all four rendered messages could have become identical. It renders
+  them now.
+
+**C4 — the global model-call budget — is deliberately not done here.** It is its own stage.
+
+## The review OF THE PLAN, and what it changed
 
 **GPT Sol reviewed this plan at `004a12eb` and blocked it: no P0, eleven P1s.**
 [The full text](260908g-plan-review-sol.md). Its headline is architectural — *"prose gates cannot

@@ -17,12 +17,13 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { DEFAULT_MAX_SNAPSHOT_AGE_MS, DEFAULT_MAX_TICK_AGE_MS, assessWatchdog, formatVerdict, main } from "../scripts/overseer-watchdog.js";
-import { TICK_MS } from "../tools/overseer/daemon.js";
+import { MEASURED_CADENCE_MS, TICK_MS, runOverseer, staleAfterMs } from "../tools/overseer/daemon.js";
 import {
   CHECKPOINT_FILE,
   STORE_SCHEMA,
   attentionNotYetRun,
   readCheckpoint,
+  schedulerNotYetSaid,
   usageNotYetRun,
   type Checkpoint,
 } from "../tools/overseer/store.js";
@@ -59,6 +60,9 @@ function checkpointAt(tickAgoMs: number, snapshotAgoMs: number | null): Checkpoi
     register: [],
     attention: attentionNotYetRun(writtenAt),
     usage: usageNotYetRun(writtenAt),
+    scheduler: schedulerNotYetSaid(writtenAt),
+    snapshotStaleAfterMs: null,
+    occurrenceHistory: null,
     // No jobs pass wired in here -- an empty register is the honest starting
     // shape for `Checkpoint.jobs`, the same way `attentionNotYetRun` /
     // `usageNotYetRun` are for those two fields. Added by a peer agent's
@@ -171,10 +175,13 @@ describe("assessWatchdog", () => {
     expect(verdict).toEqual({ healthy: true, detail: expect.any(String) });
   });
 
-  it("the four unhealthy states are textually distinct from one another", () => {
-    // A regression this test would catch: two of the four states sharing a
-    // word like "unknown" or a generic "cannot read" that would read the same
-    // to a person tailing the journal.
+  it("the four unhealthy states are textually distinct — IN WHAT THEY PRINT", () => {
+    // THIS TEST USED TO COMPARE THE INTERNAL `state` TAGS and never call
+    // `formatVerdict`, which GPT Sol's C8 pointed out means all four rendered
+    // messages could become identical and it would stay green. The tags are a
+    // discriminated union and the compiler already keeps those apart; what
+    // nothing keeps apart is the SENTENCE, which is the only part a person
+    // tailing the journal ever sees.
     const root = tempRoot();
     const absent = assessWatchdog(readCheckpoint(root), NOW, DEFAULT_MAX_TICK_AGE_MS, DEFAULT_MAX_SNAPSHOT_AGE_MS);
     writeCheckpointFile(root, "not json");
@@ -183,8 +190,92 @@ describe("assessWatchdog", () => {
     const stale = assessWatchdog(readCheckpoint(root), NOW, DEFAULT_MAX_TICK_AGE_MS, DEFAULT_MAX_SNAPSHOT_AGE_MS);
     writeCheckpointFile(root, JSON.stringify(checkpointAt(0, DEFAULT_MAX_SNAPSHOT_AGE_MS + 60_000)));
     const deaf = assessWatchdog(readCheckpoint(root), NOW, DEFAULT_MAX_TICK_AGE_MS, DEFAULT_MAX_SNAPSHOT_AGE_MS);
-    const states = [absent, unreadable, stale, deaf].map((v) => (v.healthy ? "healthy" : v.state));
-    expect(new Set(states).size).toBe(4);
+    writeCheckpointFile(root, JSON.stringify(checkpointAt(0, 0)));
+    const healthy = assessWatchdog(readCheckpoint(root), NOW, DEFAULT_MAX_TICK_AGE_MS, DEFAULT_MAX_SNAPSHOT_AGE_MS);
+
+    const verdicts = [absent, unreadable, stale, deaf, healthy];
+    const states = verdicts.map((v) => (v.healthy ? "healthy" : v.state));
+    expect(new Set(states).size).toBe(5);
+
+    // THE RENDERED LINES, which is what the name has always claimed.
+    const lines = verdicts.map(formatVerdict);
+    expect(new Set(lines).size).toBe(5);
+    // And distinct is not enough on its own: a line has to name its own state,
+    // or four different sentences saying nothing useful would pass the set test.
+    expect(formatVerdict(absent)).toContain("no-checkpoint");
+    expect(formatVerdict(unreadable)).toContain("unreadable");
+    expect(formatVerdict(stale)).toContain("stale");
+    expect(formatVerdict(deaf)).toContain("deaf");
+    expect(formatVerdict(healthy)).toContain("healthy");
+    // The unhealthy ones are marked as such at a glance; the healthy one is not.
+    for (const line of lines.slice(0, 4)) expect(line.startsWith("✗")).toBe(true);
+    expect(formatVerdict(healthy).startsWith("✓")).toBe(true);
+  });
+
+  it("the deaf threshold comes from THE DAEMON'S OWN checkpoint, not from a constant here", () => {
+    // GPT Sol's C6. Both sides already called `staleAfterMs`, and that prevents
+    // formula drift and not INPUT drift: the daemon passes the snapshot's
+    // advertised refreshMs (60s → 300,000ms) and this file passed the historical
+    // measured constant (65s → 325,000ms), so they disagreed under the
+    // documented normal values.
+    //
+    // A snapshot 310s old is the gap between those two numbers — deaf by the
+    // daemon's own deadline, healthy by the constant. That is the disagreement,
+    // made into an assertion.
+    const root = tempRoot();
+    const daemonDeadlineMs = 300_000;
+    expect(DEFAULT_MAX_SNAPSHOT_AGE_MS).toBe(325_000);
+    writeCheckpointFile(root, JSON.stringify({ ...checkpointAt(0, 310_000), snapshotStaleAfterMs: daemonDeadlineMs }));
+
+    // `null` is what main() passes: use the daemon's number.
+    const verdict = assessWatchdog(readCheckpoint(root), NOW, DEFAULT_MAX_TICK_AGE_MS, null);
+    expect(verdict.healthy).toBe(false);
+    if (verdict.healthy) return;
+    expect(verdict.state).toBe("deaf");
+    expect(verdict.detail).toContain("300s threshold");
+    expect(verdict.detail).toContain("the daemon's own deadline");
+
+    // And the old behaviour, kept only as an override somebody typed on purpose.
+    expect(assessWatchdog(readCheckpoint(root), NOW, DEFAULT_MAX_TICK_AGE_MS, DEFAULT_MAX_SNAPSHOT_AGE_MS).healthy).toBe(true);
+  });
+
+  it("a checkpoint carrying no deadline falls back to this file's constant, and says which it used", () => {
+    // The old checkpoints on the box have no such field. Falling back is right;
+    // pretending the fallback is the daemon's number is not.
+    const root = tempRoot();
+    writeCheckpointFile(root, JSON.stringify(checkpointAt(0, DEFAULT_MAX_SNAPSHOT_AGE_MS + 60_000)));
+    const verdict = assessWatchdog(readCheckpoint(root), NOW, DEFAULT_MAX_TICK_AGE_MS, null);
+    expect(verdict.healthy).toBe(false);
+    if (verdict.healthy) return;
+    expect(verdict.state).toBe("deaf");
+    expect(verdict.detail).toContain("fallback");
+  });
+
+  it("a daemon's real checkpoint carries the deadline it is actually using", async () => {
+    // THE OTHER HALF OF C6, and the half a fixture cannot prove: the field is
+    // only worth reading if the daemon really writes it. This asserts against a
+    // checkpoint the daemon wrote, not one this test built.
+    const root = tempRoot();
+    const controller = new AbortController();
+    const outcome = await runOverseer({
+      root,
+      baseUrl: "http://127.0.0.1:0",
+      signal: controller.signal,
+      tickMs: 5,
+      log: () => undefined,
+      source: async function* () {
+        await new Promise((resolve) => setTimeout(resolve, 30));
+      },
+    });
+    expect(outcome.kind).toBe("stopped");
+    const read = readCheckpoint(root);
+    expect(read.kind).toBe("checkpoint");
+    if (read.kind !== "checkpoint") return;
+    // Before any snapshot has arrived the daemon uses the measured cadence, so
+    // this is `staleAfterMs(MEASURED_CADENCE_MS)` — computed from the daemon's
+    // own exports rather than written out, because a literal here would be the
+    // third independently-maintained copy of the number.
+    expect(read.checkpoint.snapshotStaleAfterMs).toBe(staleAfterMs(MEASURED_CADENCE_MS));
   });
 
   it("MUTATION CHECK: collapsing deaf into healthy is caught by this suite", () => {
@@ -233,6 +324,9 @@ describe("main()", () => {
       register: [],
       attention: attentionNotYetRun(writtenAt),
       usage: usageNotYetRun(writtenAt),
+      scheduler: schedulerNotYetSaid(writtenAt),
+      snapshotStaleAfterMs: null,
+      occurrenceHistory: null,
       jobs: { occurrences: [] },
     };
   }

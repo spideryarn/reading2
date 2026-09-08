@@ -1281,6 +1281,36 @@ dashboard agent, on the dashboard's side of the seam, for a row assigned to the 
 the seam working rather than a boundary being crossed: the prefix belongs where the message is
 delivered, not where it is decided.
 
+### Built, tested, and called from nothing but its own tests
+
+**That is now twice in one day, so it is a class rather than an anecdote**, and it is the one to
+check for on this page's work specifically. `renderSpoken` above was the first. The second, found by
+GPT Sol reviewing the scheduler on 2026-09-08: `tools/overseer/scheduler.ts` implemented occurrence
+identity, leases and the whole crash-window contract, with 36 passing tests — and
+`scripts/overseer.ts` called `runOverseer` without `jobs`, so `daemon.ts` set `jobsTicker` to `null`.
+There were no job definitions and no `SpawnJob` implementation anywhere outside the tests. The
+reviewer's sentence is the one to remember: *"This revision contains a scheduler engine, but the
+installed Overseer schedules nothing."*
+
+**Why it keeps happening here rather than elsewhere is worth naming.** This area is built as a
+library of honest mechanisms — a lease, a prefix, a three-armed reading — each of which is *testable
+in isolation*, and isolation is exactly the condition under which a green suite says nothing about
+whether the thing runs. The tests are not weak; they are answering the narrower question, and both
+times the passing suite was the reason nobody looked.
+
+**Three things catch it, in order of how mechanical they are.** Make the wiring a *type* obligation
+rather than an option, the way `QueuedItem.speaker` was made required so the compiler found 111 sites
+— an optional `jobs` parameter is the whole of this defect in one word. Failing that, **a test that
+exercises the real entry point**, not the engine: the daemon test that pinned "no jobs, no occurrence
+events" was faithfully describing the shipped state and reading as a pass. And failing that, ask of
+every new mechanism *what calls this in production*, and answer it with a grep rather than from
+memory.
+
+**And the reporting rule that follows**: a capability that is off must never render the same as a
+capability that has nothing to do. The scheduler's opt-in exists for that reason as much as for
+safety — *armed and idle* and *not armed* are different sentences, and this page's whole argument is
+that a quiet surface and a healthy one must not be the same picture.
+
 **A5 is CLOSED too, 2026-09-08, and the answer was none of the options.** Astra's row said *"Tailscale's
 default policy is permissive, so verify rather than assume"*, and nobody had verified. Greg's
 instruction: *"Get input from GPT Sol and/or Fable then use your judgment about whether/how to deal

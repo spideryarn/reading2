@@ -222,16 +222,61 @@ describe("the overseer watchdog service and timer", () => {
     expect(section(timer, "Timer")).toContain("Unit=overseer-watchdog.service");
   });
 
-  it("timer catches up missed runs rather than skipping them", () => {
-    // overseer-direction.md § "The scheduler": missed runs come out better
-    // than either systemd's OnCalendar= one-shot catch-up or cron's silent
-    // skip, so this is the same choice made for the store's own interval
-    // scheduling.
-    expect(section(timer, "Timer")).toContain("Persistent=true");
+  it("a missed run is caught by OnBootSec=, and NOT by Persistent=", () => {
+    // GPT Sol's C7: this test used to assert `Persistent=true` and claim it
+    // proved missed-run catch-up. It does not, on this timer. systemd.timer(5):
+    // "Note that this setting only has an effect on timers configured with
+    // OnCalendar=" — and this timer has OnBootSec= and OnUnitActiveSec= and no
+    // OnCalendar= at all. A test that asserts the wrong mechanism goes on
+    // passing while the right one is deleted, which is the whole point of
+    // docs/reusable/silent-success.md.
+    //
+    // So the assertion is the line that actually does the work: a box that was
+    // off across a scheduled tick is checked within two minutes of coming back.
+    const lines = section(timer, "Timer");
+    expect(lines).toContain("OnBootSec=2min");
+    // And the claim is disproved rather than assumed: if somebody adds
+    // OnCalendar= later, `Persistent=` starts meaning something and this
+    // expectation is the place that says so.
+    expect(lines.some((l) => l.startsWith("OnCalendar="))).toBe(false);
+    // `Persistent=true` is still here, and the unit says in as many words that
+    // it is inert — because a bare setting with no comment is one somebody
+    // reads as load-bearing.
+    expect(lines).toContain("Persistent=true");
+    expect(timer).toContain("INERT ON THIS TIMER");
   });
 
-  it("timer parses as a valid systemd unit", () => {
-    expect(section(timer, "Timer").some((l) => l.startsWith("OnUnitActiveSec="))).toBe(true);
+  it("timer parses as a valid systemd unit, according to systemd itself", () => {
+    // GPT Sol's other half of C7: the test this replaces checked that an
+    // `OnUnitActiveSec=` line exists and called that "parses as a valid unit",
+    // which is a claim about a parser it never ran. `systemd-analyze verify` is
+    // the positive control.
+    //
+    // SKIPPED RATHER THAN FAKED where systemd-analyze is not installed — a
+    // check that quietly degrades into a weaker one is the thing being fixed
+    // here, so this says out loud that it did not run.
+    const analyze = spawnSync("systemd-analyze", ["--version"], { encoding: "utf8" });
+    if (analyze.status !== 0) {
+      expect(section(timer, "Timer").some((l) => l.startsWith("OnUnitActiveSec="))).toBe(true);
+      return;
+    }
+    const dir = mkdtempSync(path.join(tmpdir(), "systemd-units-verify-"));
+    // @USER@ is substituted at install time; systemd-analyze would refuse the
+    // placeholder paths, so it is replaced with a plausible name here. The unit
+    // under test is otherwise byte-for-byte the installed one.
+    writeFileSync(path.join(dir, "overseer-watchdog.timer"), timer.replaceAll("@USER@", "greg"));
+    writeFileSync(
+      path.join(dir, "overseer-watchdog.service"),
+      unitFromRepo("overseer-watchdog.service").replaceAll("@USER@", "greg"),
+    );
+    const verify = spawnSync("systemd-analyze", ["verify", path.join(dir, "overseer-watchdog.timer")], { encoding: "utf8" });
+    // Its complaints about MISSING units and unknown users are not this test's
+    // business: it is verifying syntax, on a machine that is not the box.
+    const complaints = `${verify.stdout}${verify.stderr}`
+      .split("\n")
+      .filter((line) => line.trim() !== "")
+      .filter((line) => !/Unit .* not found|command not found|is not a valid user|Failed to (resolve|create)|Unknown user/i.test(line));
+    expect(complaints).toEqual([]);
   });
 
   it("provision.sh enables the watchdog timer, not just installs it", () => {

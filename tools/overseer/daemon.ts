@@ -59,9 +59,9 @@ import type { AttentionList, StoredUsage, UsageReport } from "../fleet/wire.js";
 import { chooseUsage } from "./usage-carry.js";
 import { admissible, type AdmissibleSnapshot } from "./admissible.js";
 import { baselineOf, diff, sessionKey, type Baseline, type OverseerEvent, type SessionIdentity } from "./diff.js";
-import type { JobDefinition } from "./jobs.js";
+import type { AuthorisedJob } from "./jobs.js";
 import { conditionTracker, describeNote, openNoteLog, type DaemonNote } from "./notes.js";
-import { describeReport, schedulerTick, type SpawnJob } from "./scheduler.js";
+import { describeReport, schedulerTick, type LostRecord, type SpawnJob } from "./scheduler.js";
 import { parseAttempt, parseObservation, type JsonValue, type ObservedAttemptClock, type ObservedRow } from "./observation.js";
 import { fleetSource, type SourceMessage, type SourceOptions, type Transport } from "./source.js";
 import {
@@ -72,6 +72,7 @@ import {
   type LockHolder,
   type OverseerStore,
   type SessionRegister,
+  type StoredScheduler,
   type StoreRefusal,
 } from "./store.js";
 
@@ -344,7 +345,21 @@ export type DaemonOptions = {
    * overdue one is reported rather than skipped. The attention and usage guards
    * are deliberately left exactly as they were: they belong to another stage.
    */
-  jobs?: { intervalMs?: number; definitions: readonly JobDefinition[]; spawn: SpawnJob };
+  jobs?: { intervalMs?: number; definitions: readonly AuthorisedJob[]; spawn: SpawnJob };
+  /**
+   * WHAT TO SAY ABOUT THE SCHEDULER on the status page — the job ids, and any
+   * whose definition no longer matches its pin.
+   *
+   * **Whether it is ARMED is decided by whether `jobs` above was supplied, not
+   * by this string**, so the two cannot disagree; this only carries the detail,
+   * which is the caller's knowledge (it read the environment and built the
+   * definitions, and this file did neither).
+   *
+   * It exists because a scheduler that is OFF must not look like a scheduler
+   * with nothing to do. Both produce an empty occurrence list and a green
+   * heartbeat, and until GPT Sol's C1 nothing anywhere could tell them apart.
+   */
+  schedulerDetail?: string;
 };
 
 /**
@@ -541,9 +556,29 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
   // and "a pass ran and `chooseUsage` kept the stored one". Absent means the same
   // thing in each case: leave the store's own report alone.
   let usage: StoredUsage | null = null;
+  // ONE OBJECT, BUILT ONCE, WRITTEN ON EVERY CHECKPOINT. `armed` is read off the
+  // option rather than off a flag beside it, so "armed" and "there are jobs"
+  // cannot come apart.
+  const schedulerStanding: StoredScheduler = {
+    kind: options.jobs === undefined ? "off" : "armed",
+    why:
+      options.schedulerDetail ??
+      (options.jobs === undefined
+        ? "this daemon was started with no scheduled jobs at all, so nothing will be dispatched"
+        : `${options.jobs.definitions.length} standing job(s)`),
+    at: now().toISOString(),
+  };
   const checkpointUpdate = (): CheckpointUpdate => ({
     lastGoodSnapshotAt,
     tick: true,
+    scheduler: schedulerStanding,
+    // THE DEADLINE, NOT THE CADENCE, and written on every tick because
+    // `refreshMs` moves when a producer says so. `overseer-watchdog.ts` reads
+    // this instead of computing its own: sharing `staleAfterMs` stopped the
+    // formula drifting and did nothing about the INPUT drifting, which is GPT
+    // Sol's C6 — the daemon was using 300,000ms and the watchdog 325,000ms
+    // under the documented normal values.
+    snapshotStaleAfterMs: staleAfterMs(refreshMs),
     // Spread rather than assigned: `exactOptionalPropertyTypes` makes "absent"
     // and "present and undefined" different things, and here absent means *keep
     // the list the store already holds*.
@@ -669,12 +704,41 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
    * a console line would be a stuck job nobody could prove afterwards.
    */
   const jobOptions = options.jobs;
+  /**
+   * A fact about a run that the store would not accept, written down where a
+   * console line would not survive.
+   *
+   * GPT Sol's C5: the reservation append is fail-closed, and every later one had
+   * its result dropped — so a failed `finished` left the durable history saying
+   * `started` for ever while the report claimed the run had ended. It cannot
+   * throw (that would lose the child's outcome as well), so the only honest
+   * thing left is to say so loudly in both places.
+   */
+  const recordLost = (lost: LostRecord): void => {
+    write({
+      kind: "job-record-lost",
+      at: now().toISOString(),
+      instanceId: store.instanceId,
+      jobId: lost.jobId,
+      occurrenceId: lost.occurrenceId,
+      fact: lost.fact,
+      why: lost.why,
+    });
+  };
   const jobsTicker =
     jobOptions === undefined
       ? null
       : setInterval(() => {
           if (halted() !== null) return;
-          for (const report of schedulerTick({ definitions: jobOptions.definitions, store, spawn: jobOptions.spawn, now })) {
+          for (const report of schedulerTick({
+            definitions: jobOptions.definitions,
+            store,
+            spawn: jobOptions.spawn,
+            now,
+            // The completion append lands after the tick has returned, so its
+            // failure cannot reach the reports above. This is where it goes.
+            onLostRecord: recordLost,
+          })) {
             log(describeReport(report));
             if (report.kind === "stuck" || report.kind === "unaccounted") {
               write({
@@ -686,6 +750,12 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
                 reason: report.kind === "stuck" ? "lease-expired" : "reservation-abandoned",
                 why: report.why,
               });
+            }
+            // The synchronous half of the same failure — a refusal or an
+            // unknown that could not be appended. Same note, so a reader has one
+            // place to look rather than two.
+            if (report.kind === "unrecorded") {
+              recordLost({ jobId: report.jobId, occurrenceId: report.occurrenceId, fact: report.fact, why: report.why });
             }
           }
         }, jobOptions.intervalMs ?? JOBS_INTERVAL_MS);
