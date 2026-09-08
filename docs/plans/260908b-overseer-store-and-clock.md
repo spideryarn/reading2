@@ -46,6 +46,21 @@ All measured on 2026-09-08 unless stated. The first is the finding that makes th
   survive under `~/.claude/projects/`, but **which** sessions were alive, and what each was for, is
   written down nowhere.
 
+- **The Overseer does not collect.** Settled with the dashboard agent on 2026-09-08. Its server
+  serves the whole snapshot at `/api/state` and streams it at `/api/live` (SSE, event name
+  `snapshot`, same bytes by construction — both call one `statePayload()`). A collection costs ~12s
+  of transcript grepping, the dashboard already chains one every 60s from the *end* of the previous
+  run with 5× backoff after a failure, and this box hit load 391 with the OOM killer firing that
+  morning. **A second collector is a real cost, not untidiness.**
+- **`/api/state` verified live**, returning `rows`, `collectedAt`, `tookMs`, `error` and `health`.
+- **Box vitals are already built and are not ours.**
+  [`tools/fleet/health.ts`](../../tools/fleet/health.ts) implements
+  [diagnose-box-resources.md](../reusable/diagnose-box-resources.md), with every field a
+  discriminated union that can say *I could not tell* rather than returning a zero that reads as
+  healthy. Verified live: `strained — load average 40.8 is over 2x the 16 cores, actively swapping`.
+- **The box is genuinely short of resources.** Load 33–41 against 16 cores, 23 of 30 GB of RAM and
+  18–23 of 31 GB of swap in use, on an ordinary afternoon.
+
 ### What resume actually needs, and what it can never get back
 
 Spiked 2026-09-08. Two corrections to what this plan assumed, both of which make the register
@@ -84,20 +99,6 @@ regardless). A resumed session is the *conversation* back, not the *work* back.
 ("starts a copy and says so when the session is already running"); plain interactive `--resume`
 documents none, and nobody here has tried it. So the Overseer checks liveness before it ever calls
 resume, and O4's dry-run exists partly to make that check visible.
-- **The Overseer does not collect.** Settled with the dashboard agent on 2026-09-08. Its server
-  serves the whole snapshot at `/api/state` and streams it at `/api/live` (SSE, event name
-  `snapshot`, same bytes by construction — both call one `statePayload()`). A collection costs ~12s
-  of transcript grepping, the dashboard already chains one every 60s from the *end* of the previous
-  run with 5× backoff after a failure, and this box hit load 391 with the OOM killer firing that
-  morning. **A second collector is a real cost, not untidiness.**
-- **`/api/state` verified live**, returning `rows`, `collectedAt`, `tookMs`, `error` and `health`.
-- **Box vitals are already built and are not ours.**
-  [`tools/fleet/health.ts`](../../tools/fleet/health.ts) implements
-  [diagnose-box-resources.md](../reusable/diagnose-box-resources.md), with every field a
-  discriminated union that can say *I could not tell* rather than returning a zero that reads as
-  healthy. Verified live: `strained — load average 40.8 is over 2x the 16 cores, actively swapping`.
-- **The box is genuinely short of resources.** Load 33–41 against 16 cores, 23 of 30 GB of RAM and
-  18–23 of 31 GB of swap in use, on an ordinary afternoon.
 
 ## Design decisions
 
@@ -269,16 +270,55 @@ Both reviewers reached this independently, from different directions: the dashbo
 resumption, Sol from tmux handles being reusable after the tmux server restarts. Two independent
 derivations is the strongest evidence available.
 
-So there are three ways a session stops being what it was, and **all three look identical if you key
-on the handle**:
+So there are **four** ways a session stops being what it was, and all four look identical if you key
+on the handle:
 
 - the tmux session was killed → `tmux-session-gone`
 - its Claude exited, tmux still there → a **status change**, not a disappearance
-- the handle was reused by a new conversation → `session-replaced`
+- same handle, same tmux generation, different `claudeSessionId` → `session-replaced`
+- same handle, **different tmux generation** → *a different world*
 
 `tmux-session-gone` is Sol's renaming of the first draft's `session-gone`, and it earns the extra
 word: Claude exiting does *not* remove the row — it becomes `no-claude` — so only the tmux session
-going removes it. Keyed by runtime generation, so the meaning is explicit rather than implied.
+going removes it.
+
+**The fourth case is the dashboard agent's, added 2026-09-08, and it is not a variant of the third —
+it is a rule about when not to diff at all.** They landed `snapshot.tmuxServerPid` as a generation
+(free: `#{pid}` on the `list-panes -a` they already run), which separates the two changes cleanly:
+
+> a **reboot** changes the generation and nothing else; a **resume** changes the uuid and nothing
+> else … Same handle + *different generation* is not a replacement at all — it's a different world,
+> and the right move is probably to close every open session from the old generation rather than
+> diff across the boundary. Diffing across it will generate a plausible-looking burst of
+> replacements that never happened.
+
+So the diff **refuses to run across a generation boundary**: it closes out the old generation's
+register and starts the new one. That is the same failure class as everything else on this page — the
+wrong answer is not an error, it is a plausible history — and it is the case a reboot produces, which
+is precisely the event this whole stage exists to survive.
+
+### What the payload now carries
+
+Landed by the dashboard agent on 2026-09-08 (`bad6eee5`) in answer to Sol F1, and it is more than was
+asked for:
+
+- **`row.meta` is the whole discriminated union**, not flattened. Offered the choice, they took the
+  union so that `meta.version === 1` gates `dir`, `kind` and `repo` together, rather than a
+  `dir: string | null` that lets a consumer read the field without deciding what a legacy session
+  means. `repo` and `worktree` stay on the row separately, lossy on purpose, for rendering.
+- **`snapshot.tmuxServerPid`** — the generation above.
+- **`schema: 1`**, with the bump rule written beside it: bump when a consumer that ignored the change
+  would be *wrong*, not merely poorer. Adding a field is not a bump, because a version that changes
+  on every addition is one nobody checks.
+- **`refreshMs`**, which the freshness watchdog can use rather than hard-coding a deadline.
+
+**And one correction to this plan's reading, in our favour:** SSE never emits the empty placeholder.
+`subscribe()` passes `snapshot ? statePayload() : null`, so a subscriber connecting before the first
+collection gets no initial event at all — it is the *poll* that can return `{rows: [], collectedAt:
+null}`. The admissibility rules cover both, so nothing changes; but do not rely on "SSE always gives
+me a payload". They have also extracted `statePayload` into `tools/fleet/state.ts` with a test
+pinning that a null `collectedAt` is never replaced by a fresh timestamp for a caller's convenience —
+which would be, in their phrase, a lie with a clock on it.
 
 ## Stages
 

@@ -353,6 +353,111 @@ these before designing anything that talks to a session.**
   deferred building one on 2026-09-08. See [cron-scheduler.md](cron-scheduler.md), which says the
   same thing from the product side.
 
+## Attention, and who the Overseer is really watching
+
+Fable was asked on 2026-09-08 to arbitrate the design of attention triage, and **rejected the
+framing** before answering it. The reframing is the most useful thing anyone has said about this
+system so far, so it is recorded here rather than in a plan:
+
+> "Attention triage" as posed is about the agents that are **blocked**. But a blocked agent is the
+> cheapest thing on the box. It burns no quota, no CPU, no reviewer time; its only cost is
+> wall-clock and a worktree … The agent that costs real money is the one that is **working,
+> confidently, on the wrong thing** — forty minutes into the hard version of a feature Greg would
+> have cut, or building in the primary checkout, or re-running a red suite that is red because the
+> box is swapping. It never asks. It never appears on a "needs you" list. With 36 sessions it is
+> statistically certain one or two are doing this right now.
+>
+> — Fable, 2026-09-08
+
+**So the scarce resource is not attention to questions; it is attention to direction.** The question
+surface still gets built — it is where the taps go — but it is the small, boring half. The proxies
+for misdirection already exist in what we collect: plan-doc name, last commit, time since a push,
+whether the session is in the primary checkout.
+
+### Three surfaces, not one page
+
+- **The inbox — act.** One question at a time, not a ranked list of sessions. **The unit is the
+  question, not the session**: at 11pm nobody cares which of 36 asked. A card shows the question, its
+  options, the agent's recommendation, one line of context, and two actions — answer, or skip.
+  Sorted by *kind* first (irreversible, product, technical, other) and only then by age, because
+  the agent that has waited longest is the one for whom ten more minutes matters least. **Age is a
+  tie-breaker, not a rank.**
+- **The log — calibrate.** What was decided on Greg's behalf since he last looked, by whom, and what
+  landed. This is his own first bullet from § What we are going towards, and it is the 8am surface.
+- **The roster — look.** The full fleet, for when you want to look around.
+
+Two things the inbox does that a list cannot: **collapse duplicates** (with 36 agents on one box
+several hit the same wall at once — "tests are red, is it me?" — so answer once and apply to all,
+and a repeated duplicate is the strongest available signal that a *policy* is missing), and **mark
+which questions are answerable from a phone at all**, since one whose answer needs reading a diff
+just makes him feel behind.
+
+### Push almost nothing
+
+Two categories only, per Fable: **something irreversible or externally visible** (a deploy, a
+production write, spending money, a push to `main`, removing a worktree with uncommitted work), and
+**the box or the Overseer dying**. An agent blocked on a question is *not* enough to push, at any
+duration.
+
+> notification blindness is a one-way door. Once he learns the buzz is usually an agent asking
+> whether it may run `npm test`, the buzz that says "about to push to main" is lost too, and no
+> ranking buys that back.
+>
+> — Fable, 2026-09-08
+
+Every other failure here is recovered by waiting; that one is not. The named escape hatch, if agents
+sit too long: one daytime nudge, *"N things have waited more than two hours"*, at most every two
+hours — and the signal that the strict version was wrong is a median wait past ~4 hours, or Greg
+saying "I'd have wanted to know sooner" twice.
+
+### Route by who has the information, not by confidence
+
+Greg's rule in [§ What we are going towards](#what-we-are-going-towards) says agents should escalate
+below a confidence threshold. Fable's amendment: **confidence is the wrong hinge** — a model's
+self-reported confidence is its least reliable output, and a threshold on it is exactly the tuned
+parameter this design should not have. Route on *who holds the information*, with reversibility as
+the override:
+
+- **The Overseer answers only what it can verify**, never what it must judge — "pull latest" is
+  always yes; "are the tests red because of me?" is answered by checking other trees; "is the box
+  overloaded?" from vitals it already has; and a question already answered today for another session
+  gets the same answer.
+- **Sol** for technical questions whose evidence is in the tree; **Fable** for wording, defaults, and
+  whether a case can be dropped.
+- **Greg** for anything irreversible or externally visible, anything changing a rule doc, anything
+  where the routed model *disagreed with the agent's own recommendation* (**disagreement is the
+  signal, not a low score**), and any question of the form *would a small product tweak remove a lot
+  of this engineering?* — because his answer to those is often a fifth option nobody offered.
+
+Two disciplines keep this honest: every non-Greg answer is **attributed** on delivery ("Fable via the
+Overseer, not Greg") so the agent weights it correctly, and every one is **vetoable after the fact**
+from the log. A veto is just a steering message.
+
+### Does the augmentation principle apply?
+
+Partly, and not the obvious part. In reading, the understanding *is* the product, so a summary that
+replaces it defeats the point; in supervising, the **decision** is the product, and it is fine for
+the Overseer to summarise what 36 sessions did overnight. What carries over is the other half:
+**never hide that a decision was made, or who made it.** The thing to refuse is a tool that makes the
+fleet *look* supervised — a calm page, a green count — when judgement was quietly substituted.
+
+### The failure to design against
+
+**Notification blindness**, because it is the only one that cannot be undone by waiting. And its
+sibling, which this project keeps meeting: **the Overseer silently dead while the page says "nothing
+needs you"** — an absence reported as success. Hence the heartbeat, and hence *"the Overseer was last
+seen 40 minutes ago"* belongs where the count would be, not in a footer.
+
+### Things the framing was missing
+
+Fable's list, kept because each is a candidate stage: an answer that lands in a dead pane looks
+exactly like one that worked, **so a card should disappear when the session's status changes, not
+when Send is pressed**; *finishing* is attention too, so "done, green, ready to remove" belongs in
+the inbox as a one-tap and shrinks the roster; **every answer Greg gives is a candidate rule**, and
+the third identical answer should say so, which is how the inbox shrinks over weeks without anyone
+designing a threshold; steering costs the target its context, so batch it and time it for idle; and
+quiet hours are one line of config.
+
 ## Access
 
 **Tailscale for now** (Greg, 2026-09-08) — the server binds a private interface, and reachability is
