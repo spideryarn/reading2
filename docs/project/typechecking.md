@@ -159,6 +159,23 @@ So the rule is duller than the trick, and it is the rule rather than the trick t
   `const total: Record<RefusalCode, number> = REFUSAL_STATUS;`. Nothing clever, and it reads the thing
   it is guarding.
 
+**And an unexpected use of it: a return type can guard a *timing* property.** In `tools/fleet/`,
+`answerQuestion` compares a freshly parsed dialog against the one the caller saw, then sends a
+keystroke. `steer.ts`'s KNOWN GAPS already recorded that a window remains between the last check and
+the send, because tmux offers no compare-and-send. What it did not say is the thing the safety
+actually rests on: **that window is microseconds only because nothing suspends inside it.** Make the
+function `async` and put a single `await` between the comparison and the send, and the window becomes
+arbitrarily long — the pane gets answered from a terminal meanwhile, and the digit lands in whatever
+replaced the dialog. **No test would go red**, because every test drives a synchronous fake.
+
+So the guard is the return type: `SteerResult`, and deliberately not `Promise<SteerResult>`. Making
+the function `async` fails `npm run typecheck` in three places, one of them an unused
+`@ts-expect-error`. **In this language, "does not suspend" is expressible as a return type** — which
+means a concurrency property that would otherwise live in a comment can be handed to the gate.
+
+Worth knowing because the reflex is to reach for a type guard when the claim is about *shape*. It is
+also available when the claim is about *when*.
+
 **And the general form, which covers both this and the injected-seam rule:** *the guard must read the
 thing it is guarding, not a copy of it.* An assertion whose premise is written in the test, and a
 test seam whose default is a stub, are the same failure — an instrument disconnected from its

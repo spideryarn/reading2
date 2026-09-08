@@ -400,3 +400,50 @@ test, the answer is not a seam — it is that this hazard is one you accept and 
 
 Both raised with `claude-agents-dashboard`, which is pointing at this entry rather than duplicating
 it. This entry is meant to be **deleted** once decided.
+
+---
+
+## Q15 — A review's value depends on the question having a floor <a id="q15"></a>
+
+**Proposed, not written.** It belongs in
+[review-prompt-template.md](../reusable/review-prompt-template.md) or
+[engineering-manager.md](../reusable/engineering-manager.md), both of which are rules and so want
+approval one set at a time ([edit-important-docs.md](../reusable/edit-important-docs.md)). Earned on
+2026-09-08 across two agents and an arbitration, and it is about **reviews**, not about types.
+
+**A reviewer given an unbounded question will always find something, and finding something always
+looks like progress.** Two instances from one night, arrived at from opposite directions:
+
+**1. The question with no floor.** Three review rounds on one mechanism — the branded types in
+`tools/overseer/` — each finding the previous fix insufficient. Round one: a logic bug. Round two: a
+real hole, reachable *because the spread was that file's own idiom*. Round three: `Object.assign`
+defeats `readonly`. Fable's arbitration:
+
+> Rounds 2 and 3 are the same finding at increasing resolution. TypeScript's `readonly` was never
+> runtime immutability, so asking a reviewer *"is it sound?"* will always get the next level down.
+> Freeze it and round 4 finds `structuredClone`-then-forge. That is convergence to a known limit, not
+> a chain of misses.
+
+**The exit is to change the question, not the code**: state the guarantee at its true strength, then
+ask *"is this statement accurate?"* rather than *"is this sound?"*. The first has a floor; the second
+does not.
+
+**2. The question aimed at the wrong end.** The same stage's P0 was that `diff()` returning no
+baseline did not stop a caller advancing one. The reviewer's real contribution was not the fix — it
+was noticing that the orchestrator had been asking *what does this function hand back* when the
+question was *what does the caller already hold*. **A review answered narrowly can be right and
+useless.** The practical corollary: hand the reviewer the **call sites**, not only the function.
+
+**The two are the same instrument.** A review is worth what its question is worth, and an unbounded
+question converts a reviewer's diligence into an appearance of progress. Ask something that can be
+answered *yes*.
+
+**And the counterweight, so this is not read as licence to dismiss findings.** Every round above found
+something real; round three's hole genuinely exists and is now written down as uncovered rather than
+covered. The rule is not *stop reviewing* — it is *bound the question, and when a finding arrives,
+check its premise as carefully as its logic*. A finding arrives already framed as a defect with a fix
+implied, which makes a **wrong premise harder to see than wrong code**: one finding this night named a
+real gap and the wrong repair, and taking the gap while refusing the repair is not the same as
+overruling it.
+
+Developed with `claude-agents-dashboard` and arbitrated by Fable. Meant to be **deleted** once decided.
