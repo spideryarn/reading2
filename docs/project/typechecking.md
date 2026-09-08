@@ -143,6 +143,27 @@ The mechanical part worth copying: put the mutation's counterpart in a test file
 `@ts-expect-error`, so **removing the guard makes the directive unused and the compile fails**. That
 turns "this should not compile" from a comment into something the gate enforces.
 
+**But reach for it only when the claim really is negative, and this is the trap** — found within the
+hour by the agent who took the paragraph above and applied it, whose first attempt did not work and
+who only discovered that by mutating it. Their guard declared **its own** `Record<RefusalCode, number>`
+in the test file and put `@ts-expect-error` on an incomplete literal. So the annotation under test was
+the one in the test. Widening the real export to `Partial<Record<…>>` left the guard **green**.
+
+> An assertion that constructs its own premise cannot detect the premise changing.
+
+So the rule is duller than the trick, and it is the rule rather than the trick that matters:
+
+- The claim is **"this shape cannot be constructed"** → `@ts-expect-error`. Negative claims need
+  something that fails when they stop being true.
+- The claim is **"this export already has this type"** → a **plain assignment of the real export**:
+  `const total: Record<RefusalCode, number> = REFUSAL_STATUS;`. Nothing clever, and it reads the thing
+  it is guarding.
+
+**And the general form, which covers both this and the injected-seam rule:** *the guard must read the
+thing it is guarding, not a copy of it.* An assertion whose premise is written in the test, and a
+test seam whose default is a stub, are the same failure — an instrument disconnected from its
+subject.
+
 ### The `@/` alias, and where it may live
 
 shadcn generates its imports as `@/lib/utils`, so the alias had to exist before any component landed

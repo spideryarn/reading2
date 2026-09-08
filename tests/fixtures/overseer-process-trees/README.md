@@ -21,12 +21,35 @@ three and the classifier would have been built to find it there.
 
 | file | pane pid | what it is |
 |---|---|---|
-| `codex-review-under-pane.txt` | `3184904` | A Claude session with a **real, paid `codex exec`** running under it. Captured during a deliberate one-word review run, so the tree is the genuine `run-codex.ts` chain rather than a reconstruction. |
-| `headless-claude-under-pane.txt` | `3184904` | The same pane during a **real `npx tsx scripts/run-claude.ts` run** — `claude --print` at the bottom of an identical chain. |
+| `codex-review-under-pane.txt` | `3184904` | **CONTROL.** A Claude session with a **real, paid `codex exec`** running under it. Captured during a deliberate one-word review run, so the tree is the genuine `run-codex.ts` chain rather than a reconstruction. |
+| `headless-claude-under-pane.txt` | `3184904` | **CONTROL.** The same pane during a **real `npx tsx scripts/run-claude.ts` run** — `claude --print` at the bottom of an identical chain. |
 | `quiet-claude-pane.txt` | `652780` | A Claude session doing nothing but hold two MCP servers open. The `no-child-work` baseline. |
 | `browser-pane.txt` | `430640` | A Claude session with a whole headless Chrome under it — 20 processes, none of them a job anyone is waiting on. |
-| `shell-pane-running-tests.txt` | `1234211` | A **`shell`-kind** pane running the suite under `scripts/tmux-job.ts`. Real, and 21 minutes into a run when captured. |
+| `shell-pane-running-tests.txt` | `1234211` | **CONTROL.** A **`shell`-kind** pane running the suite under `scripts/tmux-job.ts`. Real, and 21 minutes into a run when captured. |
 | `orphan-fake-codex.txt` | — | The two rows of the `/tmp/fake-codex-*/codex` test harness, **reparented to init** (`ppid 1`) since 2026-09-01. Not a subtree; it exists to be pasted onto another file. |
+
+## Three of these are POSITIVE CONTROLS, and that is their job
+
+`codex-review-under-pane.txt`, `shell-pane-running-tests.txt` and `headless-claude-under-pane.txt`
+are not ordinary coverage. **They exist so that a future zero means "there was none" rather than "we
+stopped finding any."**
+
+The number this module produces is allowed to be nought — on a quiet fleet, `no-child-work`
+everywhere is the correct answer, and it was the answer measured over 927 session-rows on the day
+these were captured. The difficulty is that a zero from a working instrument and a zero from a
+broken one are the same number, and after any refactor the second is the likelier: a regex that
+stopped matching, a walk that stopped descending. Almost every other test in
+`tests/overseer-work.test.ts` asserts an *absence*, so almost all of them would pass a classifier
+that had quietly stopped detecting anything at all.
+
+These three are the ones that would not. Each holds real, running, paid-for work — a genuine
+`codex exec`, a genuine 21-minute suite, a genuine `claude --print` — and the `POSITIVE CONTROL`
+block in the test file asserts each is still found, with a fourth test checking that **every**
+recogniser has one, so the table cannot grow an entry that no capture stands behind.
+
+If one of them goes stale, **re-capture it; do not relax the assertion.** Weakening a control leaves
+the number looking the same and meaning nothing. There is a third control that needs no fixture:
+`probeProcessTable` refuses any reading that does not contain its own pid, on every call.
 
 ## What the capture proves
 
