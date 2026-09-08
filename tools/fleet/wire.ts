@@ -1415,38 +1415,52 @@ export type KillObservation =
   /** `kill` exited non-zero: no such process, or not ours to signal. Nothing happened to it. */
   | "signal-refused"
   /**
-   * The `kill` could not be run, was killed for taking too long, or died on a
-   * signal itself. **The most expensive arm to get wrong in either direction**:
-   * the signal may have gone out before it died, and it may not have.
+   * The attempt did not settle. The `kill` could not be spawned, or was killed
+   * for taking too long, or died on a signal itself — and in two of those three
+   * **it ran**. **The most expensive arm to get wrong in either direction**:
+   * the signal may have gone out before the command died, and it may not.
+   *
+   * There is deliberately no `not-attempted` beside this. `planKillProcesses`
+   * builds one step per pid and a `best-effort` step cannot stop a plan, so no
+   * pid on this route goes unreached; `killReport` asserts that rather than
+   * carrying an arm nothing can produce. An arm no code can reach is
+   * decoration, and the plan cut `reception observed` for the same reason.
    */
-  | "not-established"
-  /** The plan stopped before reaching this pid, so nothing was sent to it at all. */
-  | "not-attempted";
+  | "not-established";
 
 /** One pid, and what became of the attempt to signal it. */
 export type KillAttempt = {
   pid: number;
   observation: KillObservation;
-  /** The step's own verdict, verbatim, or why there was no step. */
+  /** The step's own verdict, verbatim. */
   why: string;
 };
 
 /**
  * A kill, reported as **intent and evidence separately**.
  *
- * `attempted` is the list the route meant to signal and is a fact about the
+ * `targeted` is the list the route set out to signal and is a fact about the
  * request; `observed` is what came back and is a fact about the box. They are
  * two fields rather than one because the route used to answer with the first
  * under a name that reads as the second, and a page cannot recover a
  * distinction the wire has already collapsed.
+ *
+ * **`targeted` WAS CALLED `attempted` FOR ONE DAY AND THAT WAS THE SAME
+ * MISTAKE ONE NOTCH SMALLER.** This stage exists to stop a kill reporting
+ * intent as outcome, and then named its own intent field after the attempt.
+ * The list is who we aimed at; whether each was attempted is `observed`, one
+ * entry at a time.
+ *
+ * There is no `planCompleted`. Every pid here has a step — `killReport`
+ * asserts it — so a flag saying the plan reached the end of the list could
+ * only ever be true, and a field that cannot be false is a claim rather than a
+ * reading.
  */
 export type KillReport = {
   /** Every pid the plan set out to signal, in order. INTENT, not effect. */
-  attempted: readonly number[];
-  /** One entry per attempted pid, in the same order. EVIDENCE. */
+  targeted: readonly number[];
+  /** One entry per targeted pid, in the same order. EVIDENCE. */
   observed: readonly KillAttempt[];
-  /** Every step ran. False means the tail of `attempted` was never signalled. */
-  planCompleted: boolean;
 };
 
 /**

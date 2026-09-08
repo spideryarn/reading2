@@ -246,20 +246,93 @@ distinction and should have.
 its own case; the id stays opaque to the client (never rendered, only a React key and a callback
 argument). 194 tests green across six files, and the full fleet suite at 1,390.
 
-### Stage 3 — process and broadcast outcomes stop claiming more than they know
+### ✅ Stage 3 — process and broadcast outcomes stop claiming more than they know (landed 2026-09-08, fixed 2026-09-09)
 
 The stage added on R4, and the one that makes "takes Delivery uncertainty whole" true.
 
-- `killRoute` labels intended pids `killed` regardless of `run.completed` (`:1670-1673`). Report
-  **attempted versus observed** separately; a command that exited is not an effect that happened.
-- Broadcast collapses throws, `partial` and `unknown` into `outcome: "refused"` (`:1798-1823`) —
-  the same Class B defect as Stage 1's, in the `ok: true` arm, so Stage 1's fix does not reach it.
-  Preserve delivery **per recipient** and render per-state counts.
+**The P0 that prompted it named the wrong mechanism, and I relayed it unchecked.** The review said
+`killRoute` mislabels pids *"even when `run.completed` is false"*. **`run.completed` is always true
+on that route**: `planKillProcesses` makes every step `best-effort`, and `judgeStep` maps
+`best-effort` to `passed`/`failed-ignored` and never to `failed`, so `runPlan` has no path to
+`completed: false` here. The defect was real and one level down: `killed: pids` was the list we
+*meant* to signal, while the per-step evidence — one `kill -TERM <pid>` per pid — sat discarded in
+`run.steps` of the same response. A kill of three pids where one had already exited answered
+`killed: [5001,5002,5003]` with the contradicting step outcome printed beside it.
 
-**Done:** a kill whose plan did not complete cannot render as a completed kill; a broadcast recipient
-whose send came back `partial` is not reported as refused; both are visible per recipient.
+The broadcast was worse than described: **four fates into two words.** The `ok: true` arm went to
+`"sent"` — itself an overclaim, since `SteerResult`'s success arm carries no delivery — the throw
+went to `"refused"`, and all three `Delivery` values went to `"refused"` as well.
+
+**Three more collapses turned up by looking:** `PlanRun` had no denominator, so a three-step plan
+stopping at step 2 could only render *"2 of 2 steps ran"*; the dry-run preview also said `"sent"`,
+one word for a promise and a receipt; and `drain.ts` settles `partial`/`unknown` as `refused` —
+left for Stage 4, and see the note there, because only the *word* is wrong.
+
+#### The review of the built code, and the irony in it
+
+Three P0s, all sentences claiming more than the code knows — `not-established` rendered as *"the
+kill could not be run"* when two of its three causes did run; every plan step described as *"a
+command that exited"* when spawn failures and timeouts did not; and a broadcast throw described as
+happening *"partway through the send"* when the `try` surrounds the whole call and the test injects
+an immediate throw.
+
+**And the naming finding, which is the sharpest thing in the stage.** `KillReport.attempted` was
+the *targeted* list — so **a stage built to stop a kill reporting intent as outcome named its own
+field after the intent.** Renamed `targeted` throughout. Alongside it, `not-attempted` had **no
+production path** (every step is `best-effort`, so the plan cannot stop early) and `planCompleted`
+was always true: both **removed**, the same rule that cut `reception observed`. `killObservation`
+now takes a non-optional step and `killReport` asserts one step per targeted pid, throwing rather
+than answering 200 with fewer pids than were signalled — which is the defect the stage removed.
+
+**The missing guard was the important one.** A mutation changing the `signal-accepted` explanation
+to *"process killed"* left the suite green: nothing asserted the sentence `BoxEffectSummary`
+actually shows. It is now driven end-to-end — real route bytes, real client parse, real component —
+with each arm's ceiling pinned and the rendered list asserted against `/killed/i`, `/\bdead\b/i`,
+`/\bdied\b/i`, `/terminat/i`, `/no longer running/i`, `/shut down/i`. **Scoped to the summary
+list**, because a page-wide assertion would be a false guard: the raw dump underneath legitimately
+carries the server saying the `kill` *command* was killed for taking too long.
+
+#### A verification method that does not work, found here
+
+The implementer's mutation driver reverted by string replacement, and its leftover check was
+`git diff | grep`. **That cannot see a mutation which restores a line to its committed text**: when
+a fix changes a line from A to B, a mutation reverting B→A makes the file match `HEAD` exactly, so
+the diff is clean and the grep finds nothing. One sat applied through a whole subsequent run. The
+driver now snapshots and restores by `cp`, with a verifier that reads the *files* for every fixed
+string and refuses to start otherwise. Worth knowing beyond this stage: a diff is not a witness to
+file contents when the mutation is a reversion.
+
+**Done:** ✅ no rendered sentence claims a process died — *signal accepted* is the ceiling and it is
+tested; delivery is preserved per recipient; the plan card carries a real denominator; seven
+mutations caught. 1,479 tests green across 36 files, typecheck 0.
 
 ### Stage 4 — quarantine a session after an uncertain delivery
+
+#### Read `drain.ts` before briefing this, because it is more careful than this plan said
+
+Checked at `9e340ec5`, and it corrects this plan's own description. Stage 3 recorded
+`drain.ts`'s settling of `partial`/`unknown` as `refused` as *"the same Class B collapse, third
+file"*. **Half of that is wrong, and it is the half a brief would act on.**
+
+- **The behaviour is deliberate and right.** `drain.ts:371-373`: *"`partial` and `unknown` are the
+  ambiguous arms: something may be sitting in that agent's input box unsent. Those settle and are
+  gone, which is the never-retry rule doing its job."* Settling them is what stops an automatic
+  keystroke retry. **Do not change it.**
+- **The word is wrong.** `settle(row.id, item.id, "refused")` writes *refused* into the queue for an
+  item that may well have been delivered. That is the collapse, and it is only the label.
+- **A throw is already handled correctly and separately** (`:344-353`): the lease stays open, the
+  item shows as in-flight then `stuck`, and a person settles it with `abandoned`. Its comment ends
+  *"A later reader will be tempted to 'fix' this line; this is why it is not broken."* **Heed it.**
+- **`release()` on `delivery: "none"` must also survive untouched.** The commonest refusal is
+  `pane-is-asking` — the row said idle and the agent opened a dialog in the seconds since collection
+  — and settling that would destroy the person's instruction at the moment they most wanted it.
+
+So this stage adds an **honest settled state** (`uncertain`, distinct from both `refused` and
+`delivered`) plus the quarantine, and changes no branch of the existing control flow. That is a
+much smaller change than "fix the third instance of a collapse", and the smaller reading is the
+correct one.
+
+
 
 Sol confirmed `SteeringQueue.next()` as the enforcement seam, and found four things missing.
 

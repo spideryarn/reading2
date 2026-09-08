@@ -1678,14 +1678,85 @@ thirty-six reviews a minute — and neither of these can do that. So arming thes
 Stage 7, and Stage 7 becomes load-bearing at the first condition-triggered dispatch, which is 3d and
 which Greg has just said no to.
 
+#### The review blocked all of that, and it was right — GPT Sol, 2026-09-09
+
+Third Sol review of this job, third block. Three P0s, four P1s, one P2, all accepted; verbatim in
+[260908g-stage8-plan-review-sol.md](260908g-stage8-plan-review-sol.md).
+
+**S8-1 — the idempotent script defeats gate 3, and my own tool says so.** Recomputing a pin from the
+*whole* definition means a schedule edit riding beside a prompt or document change **blesses both**.
+`scripts/overseer-pins.ts`, which I wrote during Stage 3a, has this in its header:
+
+> **This does not re-pin anything.** It prints, and a person decides. […] an authorisation the
+> authorised party can write is not one, and a script that edited the literal would be exactly that.
+
+I planned the script that sentence forbids, ten hours later, in the same repository, and Sol found it
+by reading the tool rather than the plan. **The right answer was already written down by me and I did
+not read it.**
+
+**And the fix is better than the thing it replaces**, which is why this is not merely a save: split
+`JobBehaviour` from `ScheduleConfig`. The **instruction, the work kind and the documents** are what
+gate 3 is about — they are what the job *does* — and stay hashed and hand-pinned. **Cadence, phase
+and first-eligibility come out of the fingerprint entirely**, because they change *when* a job runs,
+not *what* it does. Then Greg's config file works the way he expected it to: edit a number, no
+re-pin, no refusal. The paragraph above claiming the script was *"required by the authorisation
+design"* was true only of a design that should not exist.
+
+**S8-2 — "the schedule is the budget" is the exact argument gate 4 rules out.** I asked for the
+hardest look here because I suspected it was comfortable, and it is. Twelve is a ceiling on session
+*launches*, not model calls; those sessions run for hours and call repeatedly; attention, routing and
+recovery draw on the same subscription; and re-pinning resets cadence, so even the launch ceiling is
+not invariant. Gate 4 expressly rejects each component keeping *"a locally sensible number"*.
+
+**So this stage cannot reinterpret gate 4 on its own.** Either the smallest honest shared reservation
+is built first, or **Greg amends the gate having been shown this** — and that is a question for him,
+not a judgement call, because he wrote the gate and he has just asked for the arming that runs into
+it. It is asked below.
+
+**S8-3 — the handoff commands would have restarted the old, disarmed unit and looked successful.**
+`systemctl daemon-reload` rereads `/etc/systemd/system/overseer.service`; it does not copy the
+checked-in file there. Only `provision.sh`'s `install_unit()` does. And a `restart` before the tmux
+daemon is stopped loses the store lock and can burn the unit's ten-start limit. **This is exactly the
+failure I asked Sol to hunt for** — a person believing the jobs are scheduled when they are not — and
+it was sitting in my own command list.
+
+The remaining findings, folded in: **S8-4**, re-pinning discards cadence (SC-3 again, and Stage 8
+walks the unsafe path deliberately); **S8-5**, a one-shot offset does not survive — after downtime
+both jobs are overdue in the same tick, a stuck occurrence reschedules from its reservation, and the
+recorded outcome is the *launcher* exiting rather than the session finishing, so the real invariant is
+**a durable minimum separation between launches**, not a phase; **S8-6**, `notBefore` needs a genuine
+`armedAt` anchor outside the ledger, or every restart postpones the first run for ever; **S8-7**, the
+`ARMED` headline comes from the environment flag alone, so status can say `ARMED` while both jobs are
+unauthorised or failed to build; **S8-8**, arming belongs in `EnvironmentFile=/etc/overseer.env`
+(no `-`), provisioned once disarmed and never overwritten, because hardcoding it in the unit makes
+every restart a re-arm and a repo edit the only way to disarm at 3am.
+
+Config format, settled: a **TypeScript module**, not JSON — comments, `hours(6)`, `satisfies` to
+enforce exactly the two job ids, `StandingJobId` derived from its keys, and both interval constants
+deleted from `standing-jobs.ts` so there is one home for the fact.
+
+#### Stage 8 restructured: 8a lands, 8b waits for Greg
+
+- **8a — the split, the config, and honest activation.** `JobBehaviour` / `ScheduleConfig`, the TS
+  config module, cadence out of the fingerprint, occurrence lineage separated from the behaviour hash
+  (S8-4), the launch-spacing gate (S8-5), `armedAt` (S8-6), an `ARMED` headline that is a fact about
+  the loaded definitions rather than about an environment variable (S8-7), the unit reading
+  `EnvironmentFile` (S8-8), and **one idempotent activation command** that installs the unit, stops
+  the tmux daemon, restarts, waits for a fresh checkpoint and **exits non-zero unless both jobs are
+  genuinely eligible** (S8-3). Every part of this is worth having whether or not anything is ever
+  armed, and none of it arms anything.
+- **8b — arming.** Blocked on Greg's answer to the gate 4 question, and on the minimal reservation if
+  that is the answer.
+
 #### Done when
 
-The config file exists and Greg can edit a number in it; the script makes the running definitions
-match it, is safe to re-run, and prints what changed and what did not; the two jobs are 6h and 3h
-and offset; the unit and `provision.sh` carry the arming and agree byte-for-byte with each other and
-with `tests/systemd-units.test.ts`; and the stage ends with **the exact command list for Greg**, with
-nothing armed until he runs it — `systemctl daemon-reload`, `enable`, `restart`, and stopping the
-tmux daemon are his, not ours.
+8a: the config module exists and Greg can edit a number in it with no re-pin and no refusal; the
+behaviour pin still requires a person; the activation command is idempotent and fails loudly rather
+than quietly; `tests/systemd-units.test.ts` is green against both copies of the unit; and
+`overseer status` cannot say `ARMED` about a job that cannot run.
+
+8b: not started. **Nothing is armed by this stage** — `EnvironmentFile` ships with an explicitly
+disarmed value, and the commands that arm it are Greg's.
 
 ## Deliberately not in this job
 
