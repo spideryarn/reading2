@@ -83,6 +83,13 @@ reference, and is authoritative wherever the two disagree.
   against the box: the server is disposable and the volume is not, `push-env` builds from an
   allowlist rather than copying your `.env.local`, and every pause you will notice is an ssh
   handshake.
+- **[orchestrator-direction.md](orchestrator-direction.md)** — where the agent fleet dashboard is
+  going: a page that shows every session on the box, what it is blocked on, and eventually the
+  decisions agents made without asking — with a coordinator agent, not a person, driving the
+  steering. Read it before writing anything that talks to a running session, because it holds the
+  measured constraints: "needs you" is usually a modal dialog rather than a text prompt, `send-keys`
+  is the only delivery channel yet proven, `claude agents --json` is fast but incomplete, and Codex
+  batch jobs cannot receive keystrokes at all.
 - **[changelog.md](changelog.md)** — how a deploy becomes a line on the public `/changelog`: why a
   version *is* a deploy and why Vercel's list rather than git is the only place that knows which shas
   those were, the append-only NDJSON the process writes, and the four stages — a fan-out of small

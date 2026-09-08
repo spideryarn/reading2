@@ -1179,6 +1179,27 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "`MissingRawObject`, which is the proof that a wrong hash is loud rather than empty. The " +
       "coverage claim is unchanged; only the store under it is.",
   },
+  /**
+   * **Written 2026-09-07, after the witness ran**, so `static-only` for the
+   * ordinary reason the header gives. It was born on Postgres — there is no
+   * filesystem half to finish moving — so it is collateral rather than a
+   * `database-integration`.
+   */
+  "tests/referee-stream-lifetime.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "The three streaming referee routes held open mid-stream, so that moving them into " +
+      "`AUTH_ROUTES` cannot quietly turn an awaited handler into a launched one. It seeds through " +
+      "`scratchArticleInPg` and that copy step is the only condemned module it reaches: all three " +
+      "generators are stubbed, so no model is called and no ledger row is written. Watched red " +
+      "three times against the unmoved routes — dropping the guard's `await`, deleting " +
+      "`refereeing.delete(key)`, and releasing the lock before the stream finishes — each failing " +
+      "on its own assertion. The second of those is the one that matters: an earlier draft of the " +
+      "file stayed green under it, because a freshly begun row is spared by `sweepPending`'s age " +
+      "guard whether or not the lock holds it.",
+  },
   "tests/remember-route.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["ledger-redirect", "fixture-loader"],
@@ -2510,6 +2531,10 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/pg-session-real-step.test.ts": "private-postgres",
   "tests/pipeline-slug-claim.test.ts": "private-postgres",
   "tests/plans-match-tiers.test.ts": "private-postgres",
+  /* Stage 2b of 260906a: publication queues the free `labels` job. Postgres
+     throughout — it publishes real revisions, claims a real job and inserts a
+     real `ingest_events` row to prove the successor never settles one. */
+  "tests/publication-enqueues-the-labels-successor.test.ts": "private-postgres",
   /* The lane's own negative control, and it has to be *in* the lane to be one:
      it asks Postgres which database this worker landed in after a
      `vi.resetModules()`, which is a question only a worker with a minted
@@ -2546,12 +2571,24 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/referee-mirror-route.test.ts": "private-postgres",
   "tests/referee-routes-postgres.test.ts": "private-postgres",
   "tests/referee-scan-route.test.ts": "private-postgres",
+  /* Three streaming referee routes held open mid-stream. Private rather than
+     shared because it backdates `attempt_started_at` and `created_at` on this
+     article's rows to reach the sweep's age branch, which a peer suite reading
+     the same table at the same moment would see. */
+  "tests/referee-stream-lifetime.test.ts": "private-postgres",
   /* Converted in the hinge, 2026-09-05: its child wrote a JSONL ledger through
      `fsCostStore`, which `costStore` chose because the flag was unset. The rows
      are `spideryarn.ai_calls` now, and the child reaches the private database
      because it inherits both `DATABASE_URL` and `SPIDERYARN_ENV_PINNED`. */
   "tests/request-spend.test.ts": "private-postgres",
   "tests/remember-route.test.ts": "private-postgres",
+  /* The guarantee the Metadata page's "Generate it again" control sells: a
+     re-run that fails leaves the reader on the artefact they already had
+     (docs/plans/260907d-re-run-any-generated-mode-from-the-metadata-page.md).
+     It publishes a revision, fails a draft over it, and reads back through
+     `loadQuotes` — the reader's own path — so there is no honest version of it
+     without a database. */
+  "tests/rerun-failure-keeps-the-old-artefact.test.ts": "private-postgres",
   /* Landed 2026-09-04 with the reservation of `/read/public`
      (docs/plans/260904b-pricing-page-and-public-showcase.md § Stage 3a). Two of
      its three enforcers are pure functions and need nothing; the third is

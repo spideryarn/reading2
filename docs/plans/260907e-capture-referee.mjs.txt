@@ -1,0 +1,91 @@
+/**
+ * Capture the eight referee handler bodies and normalise them, so the move can
+ * be shown to be a move rather than claimed to be one.
+ *
+ *   node e4f7-capture-referee.mjs before <routes.ts> <out.json>
+ *   node e4f7-capture-referee.mjs after  <routes.ts> <out.json>
+ *
+ * "before" cuts each body out of the `if (matcher && req.method === "X") { … }`
+ * guard in the chain. "after" cuts it out of the matching `AUTH_ROUTES` row.
+ * Both go through the *same* normaliser, so a difference in the output is a
+ * difference in the code and not a difference in the wrapper.
+ */
+import { readFileSync, writeFileSync } from "node:fs";
+
+/** The eight, in the order the chain had them, with the row's `pattern:` text. */
+const GUARDS = [
+  ["criteria", "GET", "CRITERIA_PATTERN"],
+  ["criteria", "POST", "CRITERIA_PATTERN"],
+  ["oneCriterion", "PATCH", "ONE_CRITERION_PATTERN"],
+  ["oneCriterion", "DELETE", "ONE_CRITERION_PATTERN"],
+  ["refereeClaims", "GET", "REFEREE_CLAIMS_PATTERN"],
+  ["refereeClaims", "POST", "REFEREE_CLAIMS_PATTERN"],
+  ["refereeScan", "GET", String.raw`/^\/api\/referee\/scan\/([\w.%-]+)$/`],
+  ["refereeMirror", "POST", String.raw`/^\/api\/referee\/mirror\/([\w.%-]+)$/`],
+];
+
+const escape = (s) => s.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
+
+/**
+ * Everything the table's shape forces, and nothing else.
+ *
+ * The matcher identifier becomes `captures`; a trailing `return;` goes, because
+ * a guard has to return and a handler simply ends; comments and whitespace are
+ * collapsed so re-indenting by two spaces is not a difference. Anything left
+ * over after this is a real edit.
+ */
+function normalise(body, matcher) {
+  return body
+    .replace(new RegExp(`\\b${matcher}\\b`, "g"), "captures")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/.*$/gm, "")
+    .replace(/return;\s*$/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Walk braces from the first `{` at or after `from`; return the body inside. */
+function blockAt(src, from) {
+  const open = src.indexOf("{", from);
+  let depth = 0;
+  for (let i = open; i < src.length; i++) {
+    if (src[i] === "{") depth++;
+    else if (src[i] === "}") {
+      depth--;
+      if (depth === 0) return src.slice(open + 1, i);
+    }
+  }
+  throw new Error("unbalanced braces");
+}
+
+const [, , mode, file, out] = process.argv;
+const src = readFileSync(file, "utf8");
+const captured = {};
+let missing = 0;
+
+for (const [matcher, method, pattern] of GUARDS) {
+  const key = `${matcher} ${method}`;
+  let at = -1;
+  if (mode === "before") {
+    at = src.indexOf(`if (${matcher} && req.method === "${method}") {`);
+  } else {
+    const re = new RegExp(`method: "${method}",\\s*\\n\\s*pattern: ${escape(pattern)},\\s*\\n`);
+    const m = re.exec(src);
+    /* Past the arrow, not merely past `handler:` — the first `{` after the key
+       is the parameter destructuring (`{ request: { res } }`), and taking that
+       as the body is a capture that succeeds while measuring nothing. */
+    if (m) at = src.indexOf("=>", m.index) + 2;
+  }
+  if (at < 0) {
+    captured[key] = "!! NOT FOUND !!";
+    missing++;
+    continue;
+  }
+  captured[key] = normalise(blockAt(src, at), matcher);
+}
+
+writeFileSync(out, JSON.stringify(captured, null, 2));
+console.log(`${mode}: ${Object.keys(captured).length} bodies, ${missing} not found -> ${out}`);
+for (const [k, v] of Object.entries(captured)) {
+  console.log(`  ${k.padEnd(22)} ${v === "!! NOT FOUND !!" ? v : `${v.length} chars`}`);
+}

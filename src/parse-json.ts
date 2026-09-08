@@ -117,6 +117,15 @@
 
 import { readFile } from "node:fs/promises";
 
+/* **The only thing resembling a logger this module may import, and it is not
+   one.** It takes a source label, a count and an outcome — so the raw text and
+   the repaired span are not among the things it asks for, and the logger itself
+   stays out of this module's scope, which is the header's rule kept by the
+   arrangement rather than by everybody remembering it. Not a guarantee that
+   nothing could be passed: `source` is a `string`. src/json-repair-log.ts says
+   why it is a file of its own, and how far the promise goes. */
+import { noteJsonRepair } from "./json-repair-log.js";
+
 /**
  * A file or a response that would not parse. Thrown by `parseJsonFrom`.
  *
@@ -347,13 +356,20 @@ export function stripFence(raw: string): string {
  * still throws, which is this module's whole disposition — a refusal costs the
  * reader a Retry click, a wrong guess corrupts an artefact and says nothing.
  *
- * **Nothing records that it fired**, and that is a known cost rather than an
- * oversight: this module has no logger on purpose (see the header — a bare
- * `JSON.parse` here must not be able to write the model's answer into a line),
- * and `parseJsonAnswer` returns the value alone. So a model that starts emitting
- * these on every answer gets quietly accommodated instead of noticed. The place
- * to count them, if that ever matters, is the caller that has a logger — which
- * needs a signature change nobody needs yet.
+ * **That it fired is now recorded, and this function is still not the place that
+ * does it.** Until 2026-09-07 nothing did, which this docstring called a known
+ * cost rather than an oversight: a model that starts emitting these on every
+ * answer got quietly accommodated instead of noticed. What has not changed is
+ * the reason it could not be fixed here — this module has no logger on purpose,
+ * because a bare `JSON.parse` here must not be able to write the model's answer
+ * into a line (see the header).
+ *
+ * So the report is made by the **caller**, `parseJsonAnswer`, which is the one
+ * that knows whether the repaired span went on to parse, and it goes through
+ * `noteJsonRepair` (src/json-repair-log.ts) — a signature that takes a label, a
+ * count and an outcome, and therefore cannot carry the payload. The signature
+ * change this docstring said would be needed was not needed: `parseJsonAnswer`
+ * already takes a `source`, and `removed` was already on the return value here.
  */
 export function dropTrailingCommas(text: string): { text: string; removed: number } {
   let out = "";
@@ -571,31 +587,49 @@ export function parseJsonAnswer<T>(raw: string, source: string): T {
   const to = from + end;
   const unambiguous = end !== -1 && text.indexOf("{", to + 1) === -1;
   if (unambiguous) {
-    try {
-      /* **The trailing-comma repair lives here and only here**, and where it
-         lives took a perturbation to settle. It was written twice — once over
-         the whole text before this hunt, once over the extracted span — and
-         with either one disabled every test still passed, because each was
-         quietly covering the other's absence. Two repairs, neither necessary,
-         and the suite could not tell.
+    /* **The trailing-comma repair lives here and only here**, and where it
+       lives took a perturbation to settle. It was written twice — once over
+       the whole text before this hunt, once over the extracted span — and
+       with either one disabled every test still passed, because each was
+       quietly covering the other's absence. Two repairs, neither necessary,
+       and the suite could not tell.
 
-         This is the one that survives, on two grounds. It is strictly the
-         larger: a clean document is trivially its own extracted span, so
-         anything the earlier site mended this one mends, and it additionally
-         mends "a document, a comma, then a sign-off", which the earlier site
-         could not, because the prose defeated the whole-text parse. And the
-         earlier site quietly re-admitted ARRAY-ROOTED answers — `[{"a":1},]`
-         repaired and returned — which rule 3 above excludes on purpose.
+       This is the one that survives, on two grounds. It is strictly the
+       larger: a clean document is trivially its own extracted span, so
+       anything the earlier site mended this one mends, and it additionally
+       mends "a document, a comma, then a sign-off", which the earlier site
+       could not, because the prose defeated the whole-text parse. And the
+       earlier site quietly re-admitted ARRAY-ROOTED answers — `[{"a":1},]`
+       repaired and returned — which rule 3 above excludes on purpose.
 
-         Nothing is mended that would have parsed: `removed` is 0 on a clean
-         span and this is then the same call it always was. */
-      return JSON.parse(dropTrailingCommas(text.slice(from, to + 1)).text) as T;
-    } catch {
-      /* Discarded on purpose, and this is the one line in this function that
-         has to stay that way: V8's message quotes the span, so letting it
-         escape — as a `cause`, a log, or a richer message — puts the model's
-         writing about the article into a line. See the header. */
+       Nothing is mended that would have parsed: `removed` is 0 on a clean
+       span and this is then the same call it always was. */
+    const repaired = dropTrailingCommas(text.slice(from, to + 1));
+    /* **The attempt as a value, rather than a `return` inside the `try`.** The
+       report below has to happen on both paths and exactly once, and it has to
+       sit *outside* the `catch` — inside it, a throw from the reporting itself
+       would be indistinguishable from the answer being unparseable, which is
+       the shape of bug this whole module is about. `src/json-repair-log.ts`. */
+    const attempt = ((): { ok: true; value: T } | { ok: false } => {
+      try {
+        return { ok: true, value: JSON.parse(repaired.text) as T };
+      } catch {
+        /* Discarded on purpose, and this is the one line in this function that
+           has to stay that way: V8's message quotes the span, so letting it
+           escape — as a `cause`, a log, or a richer message — puts the model's
+           writing about the article into a line. See the header. */
+        return { ok: false };
+      }
+    })();
+    /* **Only when commas actually came out.** `removed === 0` is the ordinary
+       case — a clean answer, no repair, nothing to say — and reporting it would
+       turn a signal into a line on every model call. Both outcomes of a real
+       repair are reported, because they mean opposite things: see
+       `RepairOutcome`. */
+    if (repaired.removed > 0) {
+      noteJsonRepair(source, repaired.removed, attempt.ok ? "accepted" : "still-invalid");
     }
+    if (attempt.ok) return attempt.value;
   }
   return parseJsonFrom<T>(text, source);
 }

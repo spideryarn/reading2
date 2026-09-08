@@ -305,7 +305,10 @@ worth knowing from here:
   own wrapper, and a wrapper of one heading plus one link scores to Readability as navigation — so
   `wiki_transformer.html` was reaching the reader with 19 of its 47 section headings. Taking the edit
   links out recovers all 47, and every MediaWiki article ingested before this had a hierarchy built
-  on a quarter of its headings.
+  on a quarter of its headings. **Those articles are not being repaired.** Greg decided on
+  2026-09-07 not to re-extract the shelf, so an article imported before this keeps the outline it
+  came in with until its reader re-imports it — the fix is forward-only, and if somebody asks why an
+  old Wikipedia page has almost no sections, this is why.
 - **What went is recorded as counts per selector, and nothing more.** They ride on `ExtractResult`
   and reach the log; they are deliberately **not** on `Meta`, which is persisted as columns
   ([database.md](database.md)), so the audit line stage D will show is a migration that waits for the
@@ -455,6 +458,33 @@ Both passes stamp and move on; neither rewrites the author's words, because stag
 block's id by matching its tag and its text and a re-worded block is a re-minted id
 ([block-ids.md](block-ids.md)).
 
+**The shape that puts "recognise by markup" under most pressure is ArchWiki's**, added 2026-09-07.
+The wiki writes `<div class="archwiki-template-box archwiki-template-box-note"><strong>Note</strong>
+…body…</div>` — no titled element, no attribute, and the label is a bare `<strong>` at the front of
+the body, so the *visible word* is the only thing that looks like a signal. It is recognised by the
+class and never by the word — and **the negative that proves it is `rfc9110.html`, not the `acx.html`
+this paragraph named until 2026-09-07.** acx says "Note" ten times in ordinary prose, so it kills a
+rule matching the word anywhere; measured, **not one of its elements leads with a `<strong>` label**,
+so it says nothing about a rule matching a *leading* `<strong>Note</strong>` — which is the shortcut
+this markup invites and the one anybody would actually write. rfc9110 carries **32 note-labelled
+paragraphs inside unclassed `<aside>`s**, `<aside><p><strong>Note:</strong> …`, and `mdn_cache.html`
+has 3. A corpus can hold the negative you need and still not be the negative you cited.
+
+Nor is that the end of it: rfc9110's labels are inside a `<p>`, ArchWiki's sit directly in the
+`<div>`, so a rule keying on *an unclassed `<div>` whose first child is the label* escapes both — and
+no fixture has that shape, so its negative is synthetic and says so. **Each negative rules out one
+rule, not the idea of keying on words**, which is the argument for the class and not merely evidence
+for it. The whole
+exposure ladder for it — candidates, matches, stamps, survivors, blocks — is asserted in
+[tests/callouts.test.ts](../../tests/callouts.test.ts) rather than written down twice.
+
+Two facts from it are worth carrying here because they are about *this stage's limits* rather than
+about ArchWiki. **The stamp buys recognition, not recall**: the boxes Readability drops stay dropped,
+and no scoring hack was added to change that. And **a callout nested inside a list item is invisible
+to this mechanism** — stage 3 emits the `<li>` as one block and `Block.context` is resolved by
+`closest`, which reads a block's ancestors and never what is inside it. One of the thirteen boxes is
+lost that way.
+
 **The attributes themselves belong to [`src/reserved.ts`](../../src/reserved.ts)**, which is the one
 file allowed to name a `data-spya-*` attribute and owns the scrub that makes them ours — every copy
 the page arrived carrying is removed before we write one, `<template>` fragments included. A
@@ -475,6 +505,17 @@ The rest is not fixed, and the largest of it is not truncation at all:
 (Wikipedia is the gentler of those two: the `<math>` is inside `style="display: none"` and the
 **188 fallback images survive**, so the reader sees every formula. What is lost is the machine-readable
 copy. The ACX case has no fallback — those headings are simply gone.)
+
+**That ACX number was challenged on 2026-09-07 and it held.** A reviewer read
+`probe.mts`'s `structure lost: h2 0/6 (0%)` as "none lost" and reported the claim stale. The numbers
+on that line were *kept*, not lost, so it meant the opposite — and re-measuring the fixture directly
+found **139 headings at `h2`–`h6` in the source and 19 in the output, all `h5`** — one domain on both
+sides, because the first draft of this sentence counted `h1` in the source and not in the output and
+Sol caught it. (All six levels, it is 141 in and 20 out.) That is exactly the 19 the inventory
+named. `Part 1: Why don't schools work?` is still absent. Two things were fixed as a result, neither
+of them this paragraph: the probe now writes `h4 0 of 80 kept` so the direction cannot be misread,
+and `STRUCTURE` counts `h4`–`h6`, without which the summary could not see the 80 `h4`s this page
+loses at all.
 
 That matters here more than in most reading apps, because the table of contents and the
 granularity-zoom tree are the same structure, built from headings

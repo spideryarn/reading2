@@ -95,6 +95,7 @@ import { forgetCachedScans } from "../src/source-scan.js";
 import { acceptAny, asTestOwner, AUTHED_HEADERS, TEST_OWNER } from "./helpers/authed.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { scratchArticleInPg, type ScratchArticle } from "./helpers/scratch-article.js";
+import { type AstNode, parseSource, walkAst } from "./helpers/ts-ast.js";
 
 loadEnvLocal();
 
@@ -339,9 +340,60 @@ describe("whose manuscript this is", () => {
       fileURLToPath(new URL("../src/routes.ts", import.meta.url)),
       "utf8",
     );
-    const whole =
-      /if \(refereeScan && req\.method === "GET"\) \{[\s\S]*?\n {4}\}/.exec(source)?.[0] ?? "";
-    expect(whole, "the route is not in src/routes.ts under that name").not.toBe("");
+    /* **The scan is an `AUTH_ROUTES` row, not a chain guard, since 260907e.**
+       This used to cut `if (refereeScan && req.method === "GET") { … }` with the
+       closing brace pinned at four spaces — the guard's indentation *inside*
+       `serveAuthenticatedApi`. The route is a table row now, so that regex
+       returns `""` and the control below fires. It did, which is the safety net
+       working: the ordering claim is unchanged, and only the shape it is read
+       out of has moved.
+
+       **Cut structurally rather than lexically**, which is the one thing both
+       260907b and 260907e got wrong when they rewrote this independently. Both
+       ended the cut at a literal `\n    },`, and GPT Sol's 260907b stage 4b
+       review (§ P2-LEXICAL-HANDLER-BOUNDARY) put the objection precisely: such a
+       delimiter "can stop early if those characters appear inside a block
+       comment or template literal, or overrun if the handler's closing
+       indentation changes", and the presence control below only proves the
+       *opening* anchor. A terminator landing early but after both required calls
+       would hide a later `withSpendAttribution` and leave every assertion green
+       — which is the exact silent success this test exists to refuse. So the row
+       is selected by its own `pattern`, and the text read is the handler
+       function's own source span, which cannot end anywhere but where it ends. */
+    const scanPattern = "/^\\/api\\/referee\\/scan\\/([\\w.%-]+)$/";
+    const handlers: AstNode[] = [];
+    walkAst(parseSource(source).program, (node) => {
+      if (node.type !== "ObjectExpression") return;
+      const props = new Map<string, AstNode>();
+      for (const raw of node.properties as AstNode[]) {
+        if (raw?.type !== "ObjectProperty" || raw.computed === true) continue;
+        const key = (raw.key as AstNode | undefined)?.name;
+        if (typeof key === "string") props.set(key, raw.value as AstNode);
+      }
+      const pattern = props.get("pattern");
+      const method = props.get("method");
+      if (pattern?.type !== "RegExpLiteral" || method?.type !== "StringLiteral") return;
+      if (`/${String(pattern.pattern)}/` !== scanPattern || method.value !== "GET") return;
+      const fn = props.get("handler");
+      /* Refused rather than skipped: a row whose handler is not a function
+         literal is a shape this reader cannot honestly report on. */
+      expect(fn?.type, "the scan row's handler is not an inline function").toBe(
+        "ArrowFunctionExpression",
+      );
+      if (fn) handlers.push(fn);
+    });
+    /* **Collected and counted, rather than assigned and overwritten.** An
+       earlier draft kept whichever match came last, and a merge that silently
+       duplicated the whole referee block — eight rows appearing twice, because
+       both sides added them where the text did not collide — went unnoticed:
+       the reader quietly inspected the second copy while a mutation sat in the
+       first. Two rows answering one method and pattern is a real defect in
+       `AUTH_ROUTES` and this is a place that can see it, so it says so rather
+       than picking one. */
+    expect(handlers.length, "GET /api/referee/scan/:slug is declared more than once").toBe(1);
+    const handler = handlers[0];
+    const whole = handler ? source.slice(Number(handler.start), Number(handler.end)) : "";
+    expect(whole, "the route is not in src/routes.ts under that pattern").not.toBe("");
     /* Comments out, so a sentence *about* a call cannot stand in for one. */
     const body = whole.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
 

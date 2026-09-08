@@ -21,8 +21,10 @@
  * a link out of the article, in the slot Greg emptied.
  *
  * What has actually changed is **the bar**. It had one kind of button then and
- * has three now, one of them explicitly app-level (the experimental switch, the
- * only button in the bar that is about the app rather than about this article).
+ * has three now, one of them explicitly app-level (the experimental switch,
+ * which is a setting rather than a view of this article — it was *the only*
+ * button in the bar not about the article when this was written, and stopped
+ * being when `DockHome` and `DockFeedback` moved in. GPT Sol, 2026-09-07).
  * And the modes have grown a hairline frame of their own — `.dock-modes` is
  * what says *these are the things the document can be*, so a control outside
  * that frame is not making the claim Greg objected to. The markup says it three
@@ -220,7 +222,9 @@ import { shownBehindTheSwitch } from "./experimental-visibility.js";
    on, already degraded by `diagramInSearch`. */
 import type { DiagramKind } from "./diagram.js";
 import { DEFAULT_MODE, diagramInSearch, type Mode, type Panel } from "./params.js";
+import { cn } from "@/lib/utils";
 import { Link } from "./Link.js";
+import { useLogoAnimation } from "./logo-animation.js";
 /* The trigger only — the dialog and the `open` state stay mounted at the
    signed-in `App` level, where a `Dock` unmounting cannot destroy a draft.
    FeedbackButton.tsx § One dialog, two triggers. */
@@ -1524,110 +1528,156 @@ export function Dock({
             the only surface a phone has. */}
         <DockCommands mode={mode} onMode={onMode} isVisitor={isVisitor} onOpen={commandBar.show} />
 
-        {/* Two shapes of the same button. On the reading view it opens the
-            drawer in place. Everywhere else it goes back to the reading view
-            with the drawer already open — which is where a question is useful
-            anyway, since clicking one scrolls to the passage it is about, and
-            these pages have no passages. No count off the reading view: this
-            page did not fetch the comments, and a number would have to be
-            guessed or paid for. */}
-        {drawer ? (
-          <DockTab
-            panel="questions"
-            current={panel}
-            onPanel={drawer.onPanel}
-            icon={MessageSquareText}
-            label="Comments"
-            className={own ? "" : MARKED}
-            title={
-              own
-                ? "The passages you have marked on this article"
-                : "Comments belong to whoever added this article"
-            }
-          >
-            {/* No count for a visitor — there is nothing to count, and a `0`
-                would read as "you have none" rather than "these are not
-                yours". */}
-            {own && own.comments.length > 0 && (
-              <span className={`dock-count${pending ? " pending" : ""}`}>
-                {own.comments.length}
-              </span>
-            )}
-          </DockTab>
-        ) : (
+        {/* **The three that are not modes, in one group**, so that running
+            along the end of the bar is instant after the first card rather than
+            three separate 300ms waits — the same grouping `DockModes` and
+            `DockModeLinks` give the fourteen. `TooltipGroup` is
+            `FloatingDelayGroup`, a context provider that renders no element, so
+            it cannot disturb the flex row it wraps (Tooltip.tsx § grouping).
+
+            **The experimental switch is outside it on purpose.** It is the
+            adjacent account-level control — a setting, not a view of this
+            article — so the gap in the scrubbing is a boundary being felt
+            rather than an oversight. Not *the only button here not about this
+            article*, which was the first wording and is too absolute: `DockHome`
+            and `DockFeedback` are not about it either. GPT Sol. */}
+        <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
+          {/* Two shapes of the same button. On the reading view it opens the
+              drawer in place. Everywhere else it goes back to the reading view
+              with the drawer already open — which is where a question is useful
+              anyway, since clicking one scrolls to the passage it is about, and
+              these pages have no passages. No count off the reading view: this
+              page did not fetch the comments, and a number would have to be
+              guessed or paid for. */}
+          {drawer ? (
+            <DockTab
+              panel="questions"
+              current={panel}
+              onPanel={drawer.onPanel}
+              icon={MessageSquareText}
+              label="Comments"
+              className={own ? "" : MARKED}
+              /* **One `what` for both, and the ownership in `state`** — the shape
+                 the modes use, and it is the shape because the alternative was
+                 two descriptions to keep in step and one of them went stale.
+                 `NOT_A_MODE.comments` carries the note. */
+              hover={
+                <ControlTip
+                  head="Comments"
+                  state={own ? undefined : NOT_A_MODE.comments.visitor}
+                  what={NOT_A_MODE.comments.what}
+                  how={NOT_A_MODE.comments.how}
+                />
+              }
+            >
+              {/* No count for a visitor — there is nothing to count, and a `0`
+                  would read as "you have none" rather than "these are not
+                  yours". */}
+              {own && own.comments.length > 0 && (
+                <span className={`dock-count${pending ? " pending" : ""}`}>
+                  {own.comments.length}
+                </span>
+              )}
+            </DockTab>
+          ) : (
+            <DockLink
+              href={readHref(slug, withPanel(search, "questions"), "article")}
+              current={false}
+              icon={MessageSquareText}
+              label="Comments"
+              /* **Whose, and the visitor pages reach this arm too.**
+                 `PublicMetadataPage` and `VisitorPage` mount the bar with no
+                 drawer, which lands here — so two of the three visitor pages went
+                 on calling somebody else's comments *"Your comments"* after the
+                 reading view had been corrected. The heading inside the drawer
+                 was fixed and the link that leads to it was not. GPT Sol, second
+                 pass, 2026-08-28.
+
+                 `signedIn` is not the question; ownership is. A drawer-less bar
+                 belongs to the owner on the metadata and tweets pages of *their*
+                 article, and to a visitor on the public stand-ins. */
+              /* **The same card the drawer trigger draws, plus where the press
+                 lands** — the rule `DockModeLinks` follows for the modes, and for
+                 the same reason: a reader who learned on the reading view what a
+                 comment survives should not meet a one-line OS box for it on the
+                 metadata page. The trailing clause on `what` is the only
+                 difference in the words. */
+              hover={
+                <ControlTip
+                  head="Comments"
+                  state={isVisitor ? NOT_A_MODE.comments.visitor : undefined}
+                  what={`${NOT_A_MODE.comments.what} — back in the article they are about`}
+                  how={NOT_A_MODE.comments.how}
+                />
+              }
+            />
+          )}
+
+          {/* Labelled `Thread` until 2026-08-26, and `Tweets` now — after its own
+              page and its own route, which is the same rule that renamed `About`
+              to `Metadata`.
+
+              **Pressing this writes the thread, since 2026-09-06** — one model
+              call over the whole article, tens of seconds — where before it took
+              you to a page with a button on it. Greg's rule about opening a mode
+              (activation.ts), applied to the one surface in this bar that is not
+              a mode.
+
+              `onNavigate` rather than `onClick`, and that distinction is the
+              whole of the care here: a ⌘-click opens the thread in a *new* tab
+              and leaves this one where it is, so an `onClick` would mint a token
+              in a tab that is not going to the thread. Link.tsx § `onNavigate`.
+
+              The page keeps its button. It is what a reader presses after a
+              failure, and after this session has spent its one automatic try. */}
           <DockLink
-            href={readHref(slug, withPanel(search, "questions"), "article")}
-            current={false}
-            icon={MessageSquareText}
-            label="Comments"
-            /* **Whose, and the visitor pages reach this arm too.**
-               `PublicMetadataPage` and `VisitorPage` mount the bar with no
-               drawer, which lands here — so two of the three visitor pages went
-               on calling somebody else's comments *"Your comments"* after the
-               reading view had been corrected. The heading inside the drawer
-               was fixed and the link that leads to it was not. GPT Sol, second
-               pass, 2026-08-28.
-
-               `signedIn` is not the question; ownership is. A drawer-less bar
-               belongs to the owner on the metadata and tweets pages of *their*
-               article, and to a visitor on the public stand-ins. */
-            hover={{
-              kind: "title",
-              text: isVisitor
-                ? "Comments on this article, back in the article they are about"
-                : "Your comments, back in the article they are about",
-            }}
+            href={readHref(slug, search, "tweets")}
+            current={view === "tweets"}
+            icon={ListOrdered}
+            label="Tweets"
+            /* **The card says nothing about pressing it**, and that is not a
+               stylistic preference: this link arms a run only for the owner, only
+               from the reading view's own bar, and only when they are not already
+               on the thread — see `onNavigate` directly below. Three of the four
+               surfaces this string is drawn on arm nothing at all, so *"pressing
+               this writes the thread"* would be false on them. `NOT_A_MODE` above
+               carries the rule. */
+            hover={
+              <ControlTip
+                head="Tweets"
+                what={NOT_A_MODE.tweets.what}
+                how={NOT_A_MODE.tweets.how}
+              />
+            }
+            /* **Only for the owner, and only from the reading view's own bar.**
+               `isVisitor` is the same capability seam every band uses: a visitor
+               cannot write anything, so arming would mint a token nothing can
+               ever spend. And `current` keeps a press on the page you are already
+               on from arming a second time — that navigation does not happen. */
+            onNavigate={
+              isVisitor || view === "tweets"
+                ? undefined
+                : () => armActivationForTweets(slug)
+            }
           />
-        )}
 
-        {/* Labelled `Thread` until 2026-08-26, and `Tweets` now — after its own
-            page and its own route, which is the same rule that renamed `About`
-            to `Metadata`.
-
-            **Pressing this writes the thread, since 2026-09-06** — one model
-            call over the whole article, tens of seconds — where before it took
-            you to a page with a button on it. Greg's rule about opening a mode
-            (activation.ts), applied to the one surface in this bar that is not
-            a mode.
-
-            `onNavigate` rather than `onClick`, and that distinction is the
-            whole of the care here: a ⌘-click opens the thread in a *new* tab
-            and leaves this one where it is, so an `onClick` would mint a token
-            in a tab that is not going to the thread. Link.tsx § `onNavigate`.
-
-            The page keeps its button. It is what a reader presses after a
-            failure, and after this session has spent its one automatic try. */}
-        <DockLink
-          href={readHref(slug, search, "tweets")}
-          current={view === "tweets"}
-          icon={ListOrdered}
-          label="Tweets"
-          hover={{ kind: "title", text: "The article as a numbered thread of short posts" }}
-          /* **Only for the owner, and only from the reading view's own bar.**
-             `isVisitor` is the same capability seam every band uses: a visitor
-             cannot write anything, so arming would mint a token nothing can
-             ever spend. And `current` keeps a press on the page you are already
-             on from arming a second time — that navigation does not happen. */
-          onNavigate={
-            isVisitor || view === "tweets"
-              ? undefined
-              : () => armActivationForTweets(slug)
-          }
-        />
-
-        {/* A link, not a drawer trigger — the details are a page now. Last in
-            the bar, which is the right end for it: it is the machinery behind
-            the article rather than a way of reading it. */}
-        <DockLink
-          href={readHref(slug, search, "metadata")}
-          current={view === "metadata"}
-          icon={Info}
-          label="Metadata"
-          hover={{
-            kind: "title",
-            text: "Where this article came from, what shape it is, and what the pipeline wrote",
-          }}
-        />
+          {/* A link, not a drawer trigger — the details are a page now. Last in
+              the bar, which is the right end for it: it is the machinery behind
+              the article rather than a way of reading it. */}
+          <DockLink
+            href={readHref(slug, search, "metadata")}
+            current={view === "metadata"}
+            icon={Info}
+            label="Metadata"
+            hover={
+              <ControlTip
+                head="Metadata"
+                what={NOT_A_MODE.metadata.what}
+                how={NOT_A_MODE.metadata.how}
+              />
+            }
+          />
+        </TooltipGroup>
 
         {/* **The switch itself, last, and only for somebody who has an account
             to save it to.** Greg, 2026-09-03:
@@ -1642,8 +1692,9 @@ export function Dock({
             too. `/profile` keeps the checkbox, and keeps the one thing this
             cannot say, which is when you turned it on.
 
-            After Metadata because it is not about this article at all. It is
-            the only button in the bar that is about the app. */}
+            After Metadata because it is not about this article at all — it is a
+            setting. It was *the only* such button when that was written;
+            `DockHome` and `DockFeedback` are not article controls either. */}
         {toggle !== null && (
           <DockExperimentalSwitch setting={experimental} variant={toggle} />
         )}
@@ -1701,6 +1752,112 @@ export function Dock({
 const TITLES: Record<Panel, { own: string; visitor: string }> = {
   questions: { own: "Your comments", visitor: "Comments" },
 };
+
+/**
+ * **The three buttons in this bar that are not modes**, and the two sentences
+ * each of them says on hover.
+ *
+ * The fourteen modes keep theirs in `MODE_CATALOG` because a `Record<Mode, …>`
+ * makes a fifteenth mode a compile error until somebody writes them
+ * (src/mode-catalog.ts § `how`). These three are not modes and never will be,
+ * so a record keyed by `Mode` is the wrong home; here, beside the bar they
+ * belong to, is the right one. They took a `title` attribute until 2026-09-07,
+ * which is the OS's box: a second's wait, unstyleable, and *absent entirely on
+ * a touch device* — docs/project/tooltips.md § A `title` attribute is not a
+ * small version of this.
+ *
+ * ## The same two rules the modes are under, and they bite harder here
+ *
+ * **`what` is the guessable half and `how` is the half they could not have
+ * guessed.** A card whose second paragraph is the first one again costs a
+ * reader 300ms to be told what the label already told them.
+ *
+ * **Write about the thing, never about the press.** Every sentence below is
+ * read on at least four surfaces: the button on the reading view, the same
+ * button on the metadata and tweets pages, and either of those seen by a
+ * **visitor** rather than the owner. So *"pressing this writes the thread"* is
+ * false on three of the four — the Tweets link arms a run only for the owner,
+ * only from the reading view's own bar, and only when they are not already on
+ * that page (`onNavigate` below). The artefact-shaped sentence carries the same
+ * fact and is true wherever it is drawn. The rule and the twelve wrong drafts
+ * that produced it: src/mode-catalog.ts § `how`, and
+ * docs/plans/260907b-rich-tooltips-on-the-dock-modes.md § The register.
+ *
+ * Comments carries a third string because it is the one of the three a visitor
+ * is not merely *reading differently* but **cannot do**: a shared link carries
+ * the owner's marks and a visitor may open every one of them, and may add none.
+ * It goes in `state`, above the description, for the reason the modes' does —
+ * the line explaining why a button behaves unlike its neighbours is the first
+ * thing wanted and the last thing reached (`ControlTip`).
+ */
+const NOT_A_MODE = {
+  comments: {
+    what: "Passages marked on this article, with any notes written on them",
+    /* **Not `readersOwnWork("Comments")`, and that is deliberate.**
+       `COMMENTS_GAP` still exists in visitor.ts and its sentence ends *"A
+       shared link carries the piece, never anybody's notes about it"* — which
+       stopped being true on 2026-09-04, when a shared link started carrying
+       them (docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 3). The
+       drawer dropped that notice the same day; this button went on saying half
+       of it for three days. Nothing live reads `COMMENTS_GAP` any more —
+       tests/visitor-gaps.test.ts is its only consumer — and retiring the
+       `readers-own` variant is a separate change, noted in the plan. */
+    visitor: "These belong to whoever added this article. You can read them; only they can add one.",
+    /* **Two drafts of the second sentence were wrong, in opposite directions,
+       and both were caught by GPT Sol on 2026-09-07.**
+
+       *"Each mark survives…"* — the visible underline is exactly what does
+       not. `resolveMark` (annotate.ts) re-finds the quote by text and returns
+       `null` when it is gone, so no `<mark>` is drawn. "Mark" is the reader's
+       word for that underline, so the sentence promised the one part of this
+       that is untrue.
+
+       *"…pinned to the permanent id, **so** the comment survives"* — right
+       fact, wrong causation, which is the subtler one. Stage 3 carries a block
+       id over by matching the new block to an old one **by its text**
+       (docs/project/block-ids.md § Surviving stage 2), so a block whose words
+       changed can be re-minted and the id is not what saves anything. The
+       comment survives because it is stored against the article rather than a
+       revision, and `orderComments` keeps one whose block is gone entirely.
+       So the sentence states the two halves and the outcome, and claims no
+       mechanism between them. */
+    how: "Saving one costs nothing and asks the model nothing — the tick-box that brings the AI in saves your words first, then opens a chat about the passage. Each stores the passage's permanent id as well as the exact words it quotes, and after the article is re-fetched the saved comment stays in the list even when those words are gone and the underline can no longer be drawn.",
+  },
+  tweets: {
+    what: "The article as a numbered thread of short posts",
+    /* Two claims corrected before this landed, both by reading the page rather
+       than the module header. *"Written once and then kept"* said a thread can
+       never be redone, and `Rewrite` on the thread page is a deliberate second
+       call — the empty state upstairs has the same drift. And *"kept exactly as
+       written"* is not literally true: `buildThread` trims each post
+       (src/tweets.ts). The load-bearing claim is the one about the limit, so it
+       is the one the sentence makes. GPT Sol, 2026-09-07. */
+    how: "Each thread is one model pass over the whole article and is kept until somebody asks for it again — writing one is not part of adding a piece, so a thread exists only on the pieces somebody wanted one for. Nothing in it is shortened to fit: a post over the length limit is left at the length the model wrote, and the page marks the overrun rather than cutting it.",
+  },
+  metadata: {
+    what: "Where this article came from, what shape it is, and what the pipeline wrote",
+    /* **"Opening it spends nothing" — and the two wider claims that came
+       before it were each false, a few hours apart.**
+
+       *"Nothing on it is generated"* was inherited from `Metadata.tsx`'s own
+       header, and the page opens with the hierarchy's `gist` and `summary`
+       under *In one sentence*, which are model output. GPT Sol.
+
+       *"The page itself generates nothing and makes no model call"* survived
+       about an hour, and was killed by a merge rather than by a reviewer:
+       260907d landed the same day and gave that page a *Generate it again*
+       button per step (`RerunSection`, src/rerun-steps.ts). A press there
+       spends.
+
+       What is left is the claim that is actually load-bearing, and it is about
+       **arriving** rather than about the page: this button, alone among the
+       three, arms nothing. The re-run buttons are on the page and announce
+       their own cost; a tooltip on the bar does not need to inventory them, and
+       a sentence that tried would be owner-only into the bargain — the
+       visitor's metadata page has no `RerunSection` at all. */
+    how: "Opening it spends nothing: every number on it is read off what has already been written, which is why it is the page to go to when something looks wrong. It also says which parts have been built for this article and which have not.",
+  },
+} as const;
 
 /**
  * A carried query string with a drawer panel asked for in it.
@@ -2023,7 +2180,8 @@ function DockModeLinks({
     /* **One group, so these scrub like the segment does.** Fourteen independent
        300ms waits is what a row of tooltips feels like without it —
        Tooltip.tsx § grouping. Only the modes are in it; the three buttons after
-       this block are not modes and still carry a `title`. */
+       this block are not modes and have a group of their own, for the reason
+       given where it is opened (`Dock` § the three that are not modes). */
     <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
       {modes.map((m) => (
         <DockLink
@@ -2054,17 +2212,14 @@ function DockModeLinks({
              that in first draft; the rule that replaced it is
              src/mode-catalog.ts § `how`, first bullet. GPT Sol, 2026-09-07.
              docs/plans/260907b-rich-tooltips-on-the-dock-modes.md. */
-          hover={{
-            kind: "card",
-            content: (
-              <ControlTip
-                head={MODE_LABEL[m.mode]}
-                state={marked?.get(m.mode)}
-                what={`${MODE_CATALOG[m.mode].description} — back in the article itself`}
-                how={MODE_CATALOG[m.mode].how}
-              />
-            ),
-          }}
+          hover={
+            <ControlTip
+              head={MODE_LABEL[m.mode]}
+              state={marked?.get(m.mode)}
+              what={`${MODE_CATALOG[m.mode].description} — back in the article itself`}
+              how={MODE_CATALOG[m.mode].how}
+            />
+          }
         />
       ))}
     </TooltipGroup>
@@ -2116,16 +2271,25 @@ function DockModeLinks({
  * in: that class is hidden by the 731px query, which would be a second and
  * invisible authority over a word the ladder is supposed to own. The
  * `.logo-letter` spans inside are kept, because they are what the original
- * app's CSS-only logo animations key on and dropping that file in later is the
- * point of them — docs/project/original-version/design-system.md. Anything
- * animating `.logo-text .logo-letter` will need this element's selector adding.
+ * app's CSS-only logo animations key on, and **since 2026-09-07 that is no
+ * longer a bet on the future**: `useLogoAnimation` is spread onto this link
+ * exactly as it is onto `HomeLogo`'s, so hovering or long-pressing either copy
+ * runs the same random animation from src/web/styles/logo-animations.css.
+ *
+ * That stylesheet is written against `.logo-letter` and `.logo-image` and
+ * **never against `.logo-text`**, which is the whole reason it can be one file
+ * serving both copies — docs/project/design-logo.md § Two mount points. A rule
+ * added there that reaches for `.logo-text` works in the corner and silently
+ * does nothing here.
  */
 function DockHome() {
+  const anim = useLogoAnimation();
   return (
     <Link
       href={LIBRARY_HREF}
-      className="logo dock-home"
+      className={cn("logo", "dock-home", anim.className)}
       title="Spideryarn — back to the library"
+      {...anim.handlers}
       /* Explicit, for the reason `DockLink` gives: the ladder hides the visible
          word, and an accessible name computed from the text would go with it —
          leaving `title`, which is the long sentence rather than the name. */
@@ -2134,7 +2298,9 @@ function DockHome() {
       {/* `alt=""` and not "Spideryarn": the wordmark beside it already says the
           name, and a screen reader reading it twice is how a decorative image
           becomes noise. HomeLogo.tsx says the same in the corner. */}
-      <img className="logo-image" src="/spideryarn-logo.png" alt="" width={20} height={20} />
+      <span className="logo-mark">
+        <img className="logo-image" src="/spideryarn-logo.png" alt="" width={20} height={20} />
+      </span>
       <span className="dock-btn-label">
         {"Spideryarn".split("").map((ch, i) => (
           // biome-ignore lint/suspicious/noArrayIndexKey: fixed string, rebuilt whole
@@ -2337,24 +2503,26 @@ function DockLink({
   icon: typeof Info;
   label: string;
   /**
-   * **How this link explains itself on hover**, and a union rather than two
-   * optional props so that it cannot be both or neither.
+   * **The card this link explains itself with**, and it is required because
+   * every caller has one.
    *
-   * The two arms are not equals. A `card` is what this app means by a tooltip
-   * — styled, instant in a group, and reachable by a finger and by focus. A
-   * `title` is the OS's box: it waits about a second, cannot be styled,
-   * truncates at the OS's idea of a line, and does not exist at all on a touch
-   * device (docs/project/tooltips.md § A `title` attribute is not a small
-   * version of this).
+   * This was a union — `{kind:"card"}` or `{kind:"title"}` — for one day. The
+   * `title` arm was a **debt marked in the type** rather than a choice, and it
+   * named its own three callers: Comments, Tweets and Metadata, the buttons in
+   * this bar that are not modes. They took cards on 2026-09-07 (`NOT_A_MODE`
+   * above) and the arm went with them, because a discriminant with nothing on
+   * one side of it is a shape the next author has to read before finding out it
+   * decides nothing.
    *
-   * So the `title` arm is a **debt marked in the type**, not a choice. Its
-   * three remaining callers are Comments, Tweets and Metadata — the buttons in
-   * this bar that are not modes, and which each need their own verified second
-   * sentence before they can move. The loose mode links took the card
-   * arm on 2026-09-07 and the shape is here so the next three can, one at a
-   * time, without a fifth prop.
+   * A card is what this app means by a tooltip — styled, instant in a group,
+   * and reachable by a finger and by focus. A `title` is the OS's box: about a
+   * second's wait, unstyleable, truncated at the OS's idea of a line, and
+   * absent entirely on a touch device (docs/project/tooltips.md § A `title`
+   * attribute is not a small version of this). Two of the bar's buttons still
+   * carry one — `DockHome` and `DockCommands`, neither of which comes through
+   * here.
    */
-  hover: { kind: "card"; content: ReactNode } | { kind: "title"; text: string };
+  hover: ReactNode;
   /** Extra classes — `MARKED` for a mode a visitor cannot have, and
    *  `dock-mode` for the loose mode links off the reading view. */
   className?: string | undefined;
@@ -2382,23 +2550,22 @@ function DockLink({
       onNavigate={onNavigate}
       className={`dock-btn${current ? " on" : ""}${className ? ` ${className}` : ""}`}
       aria-current={current ? "page" : undefined}
-      /* **Exactly one of the two, and never both.** A `title` beside a card is
-         not a fallback, it is a race: the OS box appears over our panel a
-         second later, saying a shorter version of the same thing. Five test
-         files assert the absence of this attribute for that reason
-         (docs/project/tooltips.md), and this one is now covered by
-         tests/dock-mode-tooltips.test.tsx, in both arms. */
-      title={hover.kind === "title" ? hover.text : undefined}
+      /* **No `title` here, and its absence is asserted rather than assumed.** A
+         `title` beside a card is not a fallback, it is a race: the OS box
+         appears over our panel a second later, saying a shorter version of the
+         same thing. Five test files assert the absence of this attribute for
+         that reason (docs/project/tooltips.md), and this component is covered
+         by tests/dock-mode-tooltips.test.tsx — the modes in both arms, and the
+         three buttons that are not modes since 2026-09-07. */
       /* Explicit, for the reason DockModes gives: § the bar's fit ladder hides
          the visible label, and an accessible name computed from the text would go
-         with it. `title` would step in as a fallback, but `title` is the long
-         sentence — a screen reader would read the whole blurb where the name
-         is wanted. Not hypothetical since 2026-08-27: these three lose their
+         with it. Not hypothetical since 2026-08-27: these three lose their
          labels on the last rung too, not just the modes.
 
-         So `title` is now the hover description and **not** the accessible
-         name — this attribute is. Anything below claiming otherwise is stale.
-         It is also what keeps the card arm honest: the tooltip is the trigger's
+         There used to be a `title` here to fall back on, and it was the wrong
+         thing to fall back on — a whole sentence read out where a name is
+         wanted. It is gone, so this attribute is the accessible name outright.
+         It is also what keeps the card honest: the tooltip is the trigger's
          *description* (`useRole` wires `aria-describedby`), never its name, so
          a link with a card and no `aria-label` would be an anonymous icon on
          every width where the ladder has taken the word. */
@@ -2410,15 +2577,13 @@ function DockLink({
           one rule and a bare-element selector that would break the moment
           somebody wrapped the text. The name is still announced: the explicit
           `aria-label` above is the accessible name on both of these, and the
-          long hover sentence is whichever arm of `hover` this link took — the
-          card for a mode, the `title` attribute for the three that are not one.
-          A comment here used to name `title` as the accessible name — it was the
-          fallback before the `aria-label` was added, and it stopped being true
-          then. GPT Sol. */}
+          long hover sentence is the card. A comment here used to name `title` as
+          the accessible name — it was the fallback before the `aria-label` was
+          added, and it stopped being true then; there is no `title` on these at
+          all since 2026-09-07. GPT Sol. */}
       <span className={`dock-btn-label${keepLabel ? " always" : ""}`}>{label}</span>
     </Link>
   );
-  if (hover.kind === "title") return link;
   /* **`Link` is the one trigger in this app that is not a host element**, and
      it works because React 19 hands a function component its `ref` as an
      ordinary prop and `Link` both names it and spreads its rest props onto the
@@ -2432,7 +2597,7 @@ function DockLink({
      always room above it, so nothing here needs `keepSide` the way a chip at
      the edge of the diagram panel does. */
   return (
-    <Tooltip placement="top" className="tip-soon" content={hover.content}>
+    <Tooltip placement="top" className="tip-soon" content={hover}>
       {link}
     </Tooltip>
   );
@@ -2444,7 +2609,7 @@ function DockTab({
   onPanel,
   icon: Icon,
   label,
-  title,
+  hover,
   className = "",
   children,
 }: {
@@ -2453,42 +2618,60 @@ function DockTab({
   onPanel(next: Panel | null): void;
   icon: typeof Info;
   label: string;
-  title: string;
+  /**
+   * **The card, same as `DockLink` above**, and a card rather than the `title`
+   * string this took until 2026-09-07.
+   *
+   * One caller, Comments — but Comments is *two* buttons, this one on the
+   * reading view and a `DockLink` everywhere else, and the pair had drifted
+   * before: the drawer's own visitor notice was retired on 2026-09-04 and this
+   * button went on saying half of it. `NOT_A_MODE` is now the one copy both
+   * arms read, which is the only arrangement that cannot drift again.
+   */
+  hover: ReactNode;
   /** Extra classes — today, `MARKED` for the drawer a visitor cannot fill. */
   className?: string | undefined;
   children?: ReactNode;
 }) {
   const on = current === panel;
   return (
-    <button
-      type="button"
-      className={`dock-btn${on ? " on" : ""}${className ? ` ${className}` : ""}`}
-      // This button opens a drawer, so `aria-expanded` is the honest
-      // relationship — not `aria-pressed`, which would say these are toggles in
-      // a set, and not a tab role, which would promise arrow-key traversal we
-      // deliberately do not implement (the arrows belong to the article — see
-      // keynav.ts). The bar's *other* buttons navigate, and say so differently:
-      // DockLink above.
-      aria-expanded={on}
-      title={title}
-      // Explicit for the same reason as DockLink above — the visible label is
-      // hidden on a narrow window and `title` is a sentence, not a name.
-      aria-label={label}
-      onClick={() => onPanel(on ? null : panel)}
-    >
-      <Icon size={15} />
-      {/* Same class the modes segment gives its label, so § the bar's fit ladder
-          can drop all eighteen of the bar's labels with one rule rather than with
-          one rule and a bare-element selector that would break the moment
-          somebody wrapped the text. The name is still announced: the explicit
-          `aria-label` above is the accessible name on both of these, and the
-          `title` beside it is the long hover sentence. A comment here used to
-          name `title` as the accessible name — it was the fallback before the
-          `aria-label` was added, and it stopped being true then. GPT Sol. */}
-      <span className="dock-btn-label">{label}</span>
-      {children}
-      <ChevronUp className={`dock-chev${on ? " open" : ""}`} size={12} />
-    </button>
+    /* `placement="top"` for the reason `DockLink` gives: this bar is at the
+       foot of the window, so there is always room above it. The button is a
+       host element, so unlike `Link` there is no ref to lose here. */
+    <Tooltip placement="top" className="tip-soon" content={hover}>
+      <button
+        type="button"
+        className={`dock-btn${on ? " on" : ""}${className ? ` ${className}` : ""}`}
+        // This button opens a drawer, so `aria-expanded` is the honest
+        // relationship — not `aria-pressed`, which would say these are toggles in
+        // a set, and not a tab role, which would promise arrow-key traversal we
+        // deliberately do not implement (the arrows belong to the article — see
+        // keynav.ts). The bar's *other* buttons navigate, and say so differently:
+        // DockLink above.
+        aria-expanded={on}
+        /* No `title`: the card above is the description now, and the OS box
+           beside it would be a race rather than a fallback — `DockLink`'s
+           render carries the whole note. */
+        // Explicit for the same reason as DockLink above — the visible label is
+        // hidden on a narrow window, and the card is the trigger's *description*
+        // (`useRole` wires `aria-describedby`) rather than its name.
+        aria-label={label}
+        onClick={() => onPanel(on ? null : panel)}
+      >
+        <Icon size={15} />
+        {/* Same class the modes segment gives its label, so § the bar's fit ladder
+            can drop all eighteen of the bar's labels with one rule rather than with
+            one rule and a bare-element selector that would break the moment
+            somebody wrapped the text. The name is still announced: the explicit
+            `aria-label` above is the accessible name on both of these, and the
+            long hover sentence is the card. A comment here used to name `title`
+            as the accessible name — it was the fallback before the `aria-label`
+            was added, and it stopped being true then. GPT Sol. */}
+        <span className="dock-btn-label">{label}</span>
+        {children}
+        <ChevronUp className={`dock-chev${on ? " open" : ""}`} size={12} />
+      </button>
+    </Tooltip>
   );
 }
 

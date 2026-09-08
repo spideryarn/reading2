@@ -657,11 +657,18 @@ both would apply to any future schema change here.
   not shared yet**; see the last box.
 - [ ] Verify narrow portrait, landscape/notch, keyboard open/closed, pinch/viewport pan, large text,
   long labels and touch selection. No footer/composer or close control may be unreachable. —
-  **blocked, and correctly so.** No machine here has an iPhone with a keyboard, and A5 is explicit
-  that the device chooses the arithmetic. What exists instead is the instrument that would settle it:
-  `?probe=1` renders `src/web/ViewportProbe.tsx`, which uses `ModeSurface` itself rather than copied
-  markup and retains timestamped, copyable samples on every visual-viewport `resize` and `scroll`
-  (`2dfa5235`). **Until a trace arrives, no viewport-fit arithmetic is chosen and A5 is incomplete.**
+  **waiting on a requested iPhone trace, and A5 remains incomplete.** The device chooses the
+  arithmetic, and no machine here has an iPhone with a keyboard. What was wrong until 2026-09-07 was
+  recording the blocker as *missing hardware*: `?probe=1` (`src/web/ViewportProbe.tsx`, `2dfa5235`)
+  is **already in production** — verified by fetching the deployed reader chunk and finding the
+  probe's own marker string in it — so the measurement is a two-minute task on the phone, and the
+  blocker was a request nobody had sent. It has now been asked for.
+  [`scripts/viewport-trace.ts`](../../scripts/viewport-trace.ts) reads the file it produces and turns
+  it into the decision: whether anything a reader must reach is outside the visible strip, whether
+  the keyboard **shrank** that strip or **panned** it — which decides whether a `bottom:` rule is
+  even the right shape — and `max` against `+` per sample. Two review rounds found twelve defects in
+  that reader alone, three of them blocker-grade, including a baseline taken from a moment in its own
+  future. **Until the trace is read, no viewport-fit arithmetic is chosen and A5 is incomplete.**
 - [ ] Check true modals separately from modeless annotations. Tab, Shift-Tab, Escape, click-away
   and return focus must follow the declared contract, including nested help/lightbox/tooltips. —
   **the Escape half is built; Tab, Shift-Tab and click-away are not audited.**
@@ -673,8 +680,36 @@ both would apply to any future schema change here.
   **every one painted a single surface**. Two pairs are **renounced rather than fixed** (12 and 18),
   because reaching them needs registration-order ownership, which § A6 forbids; the limit on that is
   written down — no surface that can lose a reader's unsaved words is on the list. The focus/restore
-  half was A2's and is done. **Still open**: Tab and Shift-Tab order, and click-away, across the
-  nested help/lightbox/tooltip cases — Escape was the half with a reproduced loss behind it.
+  half was A2's and is done.
+
+  **The other half is now inventoried too, and the finding inverts the expected work.**
+  [The focus inventory](260906f-the-active-mode-gets-one-surface-and-one-way-to-fit-the-screen-focus-inventory.md)
+  covers Tab, Shift-Tab, click-away and return focus over seventeen surfaces — the escape inventory's
+  sixteen plus `RefereeHowCard`, which a first pass wrongly excluded for being in flow (being in flow
+  removes the *trap* requirement, not the *return-focus* one). **Twelve of the seventeen have no
+  focus trap, and for ten of those that is correct and already argued in their own docstrings**: this
+  app is deliberately modeless, `aria-modal` appears nowhere as an attribute and `inert` nowhere in
+  the UI. So the work is not adding traps; it is checking each surface against its own declared
+  contract. Measured, not assumed: jsdom has **no** Tab traversal, **no** `showModal`, **no** `inert`
+  and does not move focus on `select()` — so a jsdom test claiming to prove a trap asserts the
+  behaviour of a fake, and the real-Chrome-in-vitest pattern
+  (`tests/mark-sign-in-chrome.test.ts`) is what makes an honest Tab test possible.
+
+  **Built since (stage 5a, `3381e700` and `38a7cca6`), 25 tests:** the backdrop press on all five
+  native dialogs, which **no test anywhere had ever dispatched** — delete the close call from one and
+  the whole 15,000-test suite went red on exactly one test, the new one; focus restore for
+  `ChatDialog` and for `RefereeHowCard`, a seventeenth surface the first inventory had wrongly
+  excluded for being in flow; Floating UI's outside press in both consumers; the rename's
+  focus-on-open, which had been deletable in silence; and **Tab itself, in a real Chrome** —
+  `tests/tab-traversal-in-chrome.test.ts`, the first Tab traversal test in this repo, over the real
+  components' own rendered markup rather than a replica. The contract is written down in
+  [keyboard.md § Tab, and the surfaces it walks through](../project/keyboard.md).
+
+  **The box stays unticked, and deliberately.** The remaining defect is the one A5's wording names
+  outright: the two prose hover cards are `role="dialog"` with a link and a button inside, portalled
+  to the end of `<body>`, **keyboard-openable and keyboard-unusable**, so Tab goes to the next link
+  in the article instead of into the card. Fixing it is a **product call flagged to Greg** — a card
+  you can Tab into is a card you must Tab out of, on every hyperlink in the article. Stage 5b.
 - [ ] Migrate remaining surfaces in batches, including visitor/empty/error variants. Delete the
   replaced geometry rules after checking all callers, retaining feature-specific scrolling. —
   **migration done, deletion not.** All twelve bands are migrated, visitor and empty variants
@@ -691,8 +726,10 @@ both would apply to any future schema change here.
   2026-09-07 and the reading view's own narrow-window arithmetic lives in
   [narrow-windows.md](../project/narrow-windows.md). [new-mode.md](../project/new-mode.md) has been
   updated (render the band with `ModeSurface`; decide whether the header row should *persist* or
-  *not exist*), but the four above wait on the fit being settled — writing down an arithmetic no
-  device has chosen is how a doc starts lying.
+  *not exist*), and so has [keyboard.md](../project/keyboard.md), which gained the modal/modeless
+  contract in stage 5a — a sixth destination, and the one that needed no device. The four above still
+  wait on the fit being settled: writing down an arithmetic no device has chosen is how a doc starts
+  lying.
 
 ### Stage: Make style ownership visible
 
@@ -752,7 +789,7 @@ implying the sluggishness is fixed.
 
 ### Stage: Consolidate geometry only after the preceding baseline
 
-- [ ] Profile the actual scroll/layout reads after A7. If they are not material, close this stage
+- [x] Profile the actual scroll/layout reads after A7. If they are not material, close this stage
   as deferred with evidence; a new observer service has a real maintenance cost.
 - [ ] Share the smallest read snapshot between two existing consumers. Preserve distinct focus
   calculations and fresh explicit jumps; test delayed image/font/viewport changes.
