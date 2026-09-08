@@ -397,8 +397,10 @@
    this is a correction rather than a change.
 
    The thread hangs off the sixth letter's own box rather than off a measured
-   coordinate, which is what lets one rule serve two different typefaces
-   (Trebuchet in the corner, Geist in the bar).
+   coordinate, which is what let one rule serve two different typefaces when the
+   corner was Trebuchet and the bar was Geist. Both are Geist since 2026-09-08
+   (styles/tokens.css § Wordmark), but they are still two different *sizes*, so
+   the reason to keep it relative has not gone away.
 
    Six pixels of total gap is the ceiling. At eight the word reads as broken
    rather than as parted.
@@ -677,9 +679,11 @@
   left: 50%;
   /* **From the top of the `n` as it was to the top of the `n` as it is.** The
      letter's *box* is 20.3px tall — `body`'s line-height reaches the letters —
-     and the glyph starts about half an em below the box top (7px in Trebuchet,
-     6px in Geist). Anchored at the box top instead, the yarn stopped 7px above
-     the letter hanging from it and the two read as unrelated marks. */
+     and the glyph starts about half an em below the box top: 6px in Geist,
+     which since 2026-09-08 is both copies (styles/tokens.css § Wordmark; it was
+     7px in the corner while that copy was Trebuchet). Anchored at the box top
+     instead, the yarn stopped 7px above the letter hanging from it and the two
+     read as unrelated marks. */
   top: calc(0.5em - 8px);
   width: 1px;
   height: 8px;

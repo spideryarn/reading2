@@ -1,9 +1,13 @@
 # Agent fleet dashboard
 
-**Status as of 2026-09-08: re-sliced, nothing built.** No code, no Tailscale on the box — evidence:
-`ls tools/` returns nothing and `which tailscale` is empty. One claim in an earlier version of this
-plan was **retracted**; see [Evidence](#evidence-what-was-actually-tested), which now records what
-failed as well as what worked.
+**Status as of 2026-09-08: running.** Serving on the box at `127.0.0.1:8787` and on the tailnet at
+`100.92.255.119:8787`, showing ~36 sessions with status, and rendering the pending question for
+blocked ones. Evidence: `tools/fleet/` holds seven modules, 163 tests pass across six files, and
+`curl -sN /api/live` streams a `snapshot` event. Tailscale 1.102.3 is installed and logged in.
+
+**Not yet reachable from the page:** `steer.ts` (no route calls it) and the React client (in
+flight). One claim in an earlier version of this plan was **retracted** — see
+[Evidence](#evidence-what-was-actually-tested), which records what failed as well as what worked.
 
 The standing direction is [orchestrator-direction.md](../project/orchestrator-direction.md); this
 plan is one implementation of it. **Read that first** — it holds the constraints, and it outlives
@@ -167,7 +171,60 @@ The direction these serve is [orchestrator-direction.md](../project/orchestrator
 Each slice must be **visible in a browser** and must **not need the next one to be worth having**.
 The earlier A–G staging is superseded; what it got right survives in the direction doc.
 
-### Stage v0.1: a page listing session titles — READ ONLY, then stop
+### ✅ Stage v0.1: a page listing session titles — READ ONLY (landed 2026-09-08, `ec4110de`)
+
+Shipped and running. 37 sessions on a page, served from `tools/fleet/`, reachable over an ssh
+forward (`ssh -N -L 8787:localhost:8787 greg@188.245.166.213` → `http://localhost:8787`).
+
+- ✅ `tools/fleet/collect.ts` — calls `buildSessionScript`/`parseSessions` through `bash` rather than
+  `ssh`, since we are already on the box they want to ask.
+- ✅ `tools/fleet/page.ts` — pure render. **Separate from the server on purpose**: the first draft put
+  `esc()` next to `server.listen()`, so importing it from a test bound port 8787 as a side effect.
+  Splitting it took the test file from 19s to 4s.
+- ✅ `tools/fleet/server.ts` — `node:http`, binds `127.0.0.1`, background refresh every 30s.
+- ✅ 16 tests, and the escape was mutated to confirm the suite goes red without it.
+- 📔 One collection costs ~12s, so the cache is load-bearing rather than an optimisation. A failed
+  refresh keeps the last good snapshot and says STALE.
+- ✅ `tools/` added to `tsconfig.json` — box utilities that run the way `scripts/` does and must not
+  import from `src/`.
+
+### Stage v0.1b: what it says about itself (in flight, 2026-09-08)
+
+Greg, 2026-09-08: *"ideally i'd like to be able to hit refresh on that webpage (or even better still,
+for it to hot-reload) and see things improving steadily over time."* So the slices below land one at
+a time, each pushed as it goes green, rather than batched.
+
+Running as parallel subagents against **disjoint file sets**, which is the only reason they can share
+this worktree — `tools/fleet/status.ts`, `tools/fleet/pane.ts`, and `infra/hetzner/provision.sh`.
+Wiring each into `server.ts`/`page.ts` is the orchestrator's job, so those two files have exactly one
+writer.
+
+- ✅ Tailscale installed, and Greg logged in 2026-09-08. `spideryarn-box`, `100.92.255.119`,
+  MagicDNS `spideryarn-box.taildc3f16.ts.net`. **The ssh forward stays as the fallback that depends
+  on nothing**, which is why the server binds a list of addresses rather than one.
+  `tailscale serve` was NOT used: it wants an HTTPS toggle in the admin console and hung waiting for
+  it. Plain HTTP over the tailnet is what the reference system does, and WireGuard already encrypts it.
+- ✅ [agent-fleet-dashboard.md](../reusable/agent-fleet-dashboard.md) — the carry-elsewhere version.
+- ✅ `status.ts` wired in: status per row, blocked first, tally in the header.
+- ✅ `pane.ts` wired in: the pending question and its options, for blocked rows only.
+- ✅ `live.ts` wired in: `/api/live` streams a `snapshot` event; `/api/state` is the same bytes for
+  pollers, built by one function so the two cannot drift.
+- ✅ `health.ts` built — not yet on the page; needs a `health` field in the payload.
+- ✅ `steer.ts` built — deliberately **not** reachable: no route calls it yet.
+- [ ] The React client, and the modes (Sessions / Box health / Orchestrator).
+
+**📔 A hand-launched Claude session is classified as a shell.** Found on 2026-09-08 trying to fake a
+blocked session for testing: `sessionState` keys off the `CLAUDE_SESSION_ID` that `gjd-remote` pins
+into the tmux environment at launch, and off a process matching `claude --session-id <that uuid>`. A
+session made with plain `tmux new-session` running plain `claude` has neither, so it is `shell,
+busy`. Everything on this box comes from `gjd-remote`, so it costs nothing today — but a dashboard
+that claims to show every agent does not, quite.
+
+**📔 End-to-end proof came from a real blocked session, not the probe.** While trying to manufacture
+one, an actual agent hit a genuine question — five options about upload policy — and the parser read
+it correctly, digits and all. Worth more than the fixture it was meant to replace.
+
+### Stage v0.1 (original scope, for the record)
 
 The whole of it. No status, no colours, no actions, no CLI, no auth code.
 

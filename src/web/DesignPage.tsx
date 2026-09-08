@@ -1136,10 +1136,11 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
  * and hangs itself in `position: fixed` in the corner of the window, neither of
  * which is wanted twelve times in a grid.
  *
- * **The two copies of the wordmark are set in different faces**, which is not
- * this page's doing and is drawn at the top of the section so it cannot be
- * forgotten: `.logo-text` takes `--font-brand` (Trebuchet MS) in
- * styles/tokens.css, and the reading view's `.dock-btn-label` inherits Geist.
+ * **The two copies of the wordmark were set in different faces** until
+ * 2026-09-08, which is why this section draws both. `--font-brand` now
+ * resolves to Geist (styles/tokens.css), the same face `.dock-btn-label`
+ * inherits from `--font-ui`, so what remains between them is the weight and the
+ * orange that `.logo-text` sets and the dock's label does not.
  * docs/project/design-logo.md § The two copies are not the same typeface.
  */
 function LogoAnimations() {
@@ -1177,9 +1178,10 @@ function LogoAnimations() {
       </p>
       <div className="design-panel">
         <p className="design-note">
-          The same wordmark in its two forms. The corner copy is Trebuchet at weight 600 and the
-          reading view's is Geist — a divergence that predates these animations and is the reason
-          every one of them wants looking at in both places.
+          The same wordmark in its two forms. Both are Geist since 2026-09-08; what still differs
+          is that the corner copy sets weight 600 and the orange and the reading view's inherits
+          neither. They were two different faces until then, which is why every animation here is
+          written against the letter's own box rather than a measured coordinate.
         </p>
         <div className="design-logo-row">
           <span className="logo">
