@@ -120,9 +120,10 @@ export async function fetchFleetState(
      `useFleetState`: the hook's `receivedAt` is stamped a React render later
      and is a different measurement, of how long since this page heard anything,
      and reusing it would fold that delay into the skew.
-     `Date.parse(servedAt) − this` is skew plus network latency, so it is read
-     after the body rather than before the fetch: an early stamp would count the
-     whole round trip as clock error. */
+     `Date.parse(servedAt) − this` is the skew MINUS the one-way latency (see
+     types.ts § `readClockSkew`), which is why it is read after the body rather
+     than before the fetch: an early stamp would count the whole round trip as
+     clock error instead of half of one direction of it. */
   const receivedAt = Date.now();
   /* The reason, not just the refusal. A payload from a schema this build cannot
      read looks exactly like a healthy one on the wire, so the banner has to say

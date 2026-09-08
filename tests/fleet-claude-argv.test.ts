@@ -14,10 +14,13 @@
  *  3. **A fidelity pair.** The same command line read as faithful argv and as a `ps` blob, once
  *     where the two agree and once where they cannot.
  *
- * The suite was checked by mutation rather than by re-reading it: five mutants — walk through the
- * bare `--`, skip an unknown flag instead of refusing, match `--session-id` by prefix, drop the
- * subcommand check, ignore `-p` — plus a sixth for the variadic separator rule. All six were caught;
- * the count of failing tests for each is in the plan's Stage A report.
+ * The suite was checked by mutation rather than by re-reading it, twice. Round 1: eight mutants,
+ * none surviving. Round 2 added seven more for the rules that changed when the boundary rule was
+ * corrected — stop at the first positional again, drop the flattened ambiguity rule, apply it on
+ * both arms, arm it on a flag's consumed value, drop the terminal-flag check, run it before the
+ * arity check, accept an empty separate value, pop the whole trailing-NUL run. The table of every
+ * mutant and how many tests each one turned red is in the plan's Stage A report; the point of
+ * writing it down is that a mutant with a LOW kill count marks a rule held by one assertion.
  */
 import { describe, expect, it } from "vitest";
 
@@ -91,6 +94,16 @@ describe("real captures, redacted", () => {
       "",
       "--print",
     ]);
+    // EXACTLY ONE trailing empty is dropped — the one the terminating NUL leaves — and no more.
+    // `claude --name ""` really does end in two NULs, and a reader that pops the whole run deletes
+    // a real final element while claiming to hand back faithful argv (Sol ARGV-06).
+    expect(fromProcCmdline("claude\0--name\0\0").argv).toEqual(["claude", "--name", ""]);
+    // The rule that was here before dropped the run instead, on the theory that a process which
+    // has rewritten its own argv (setproctitle) leaves padding. No such process exists on the box:
+    // census 2026-09-08, 5 live `claude` processes, every one with a trailing-empty run of exactly
+    // 1. And a trailing empty is harmless downstream now — it is a positional, and positionals no
+    // longer end the option region.
+    expect(fromProcCmdline("claude\0\0\0").argv).toEqual(["claude", "", ""]);
   });
 
   it("reads the shape run-claude actually builds", () => {
@@ -122,7 +135,87 @@ describe("real captures, redacted", () => {
   });
 });
 
-describe("the option region ends at `--` or the first bare word", () => {
+describe("the option region ends at a bare `--` and nowhere else", () => {
+  // ROUND 2, Sol's ARGV-01. Measured against `claude` 2.1.263 on this box: `claude
+  // ordinary-prompt --session-id not-a-uuid --print` fails the UUID check, `claude some-prompt
+  // --version` prints the version, `claude say-only-OK --print --model nonsense` reaches the model
+  // lookup. Claude permutes; a positional does not end the option region. The rule this suite used
+  // to assert was a rule about nothing.
+
+  it("reads a flag that comes after a positional, on faithful argv", () => {
+    // The measurement, in one case. `ordinary-prompt` is the prompt; `--print` is still a flag.
+    expect(read(["claude", "ordinary-prompt", "--print"])).toEqual({
+      kind: "session",
+      headless: true,
+      sessionIds: [],
+    });
+  });
+
+  it("reads a `--session-id` that comes after a positional, on faithful argv", () => {
+    expect(read(["claude", "a whole prompt in one element", "--session-id", ID_A])).toEqual({
+      kind: "session",
+      headless: false,
+      sessionIds: [ID_A],
+    });
+  });
+
+  it("does not let an empty argv element end the option region", () => {
+    // `["claude","","--print"]` — an empty element is a bare word, so the old rule stopped dead on
+    // it and reported an interactive session for a headless run. Sol's own case.
+    expect(read(["claude", "", "--print"])).toEqual({
+      kind: "session",
+      headless: true,
+      sessionIds: [],
+    });
+  });
+
+  it("keeps a flag inside a faithful prompt as prose, because the prompt is ONE element", () => {
+    // The fidelity tag earning its keep, half one. This process is NOT headless: the kernel says
+    // the prompt is a single argv element, so its `--print` is text.
+    expect(read(["claude", "--session-id", ID_A, "Please add a --print flag"])).toEqual({
+      kind: "session",
+      headless: false,
+      sessionIds: [ID_A],
+    });
+  });
+
+  it("refuses the same command line flattened, because there it IS headless", () => {
+    // Half two. `ps` cannot tell that process from `claude … Please add a --print flag` as six
+    // arguments, and THAT one is headless. Two fidelities, two different correct answers.
+    const reading = readFlat(`claude --session-id ${ID_A} Please add a --print flag`);
+    expect(reading.kind).toBe("unreadable");
+    expect(reading.kind === "unreadable" && reading.why).toContain("--print");
+  });
+
+  it("refuses a flattened prompt that mentions `--session-id`, rather than reporting a second id", () => {
+    const reading = readFlat(
+      `claude --session-id ${ID_A} Please add a --print flag and --session-id ${ID_B}`,
+    );
+    const idsItWouldHaveHandedOver = reading.kind === "session" ? reading.sessionIds : [];
+    expect(idsItWouldHaveHandedOver).not.toContain(ID_B);
+    expect(reading.kind).toBe("unreadable");
+  });
+
+  it("still reads the launcher's own shape, which is why the refusal is affordable", () => {
+    // `claude --session-id A --permission-mode auto -- <prompt>` is what `new-claude` emits, and
+    // the `--` means no prompt is ever scanned. This must stay readable on BOTH arms.
+    const argv = ["claude", "--session-id", ID_A, "--permission-mode", "auto", "--", "<prompt>"];
+    const expected = { kind: "session", headless: false, sessionIds: [ID_A] };
+    expect(read(argv)).toEqual(expected);
+    expect(readFlat(argv.join(" "))).toEqual(expected);
+  });
+
+  it("does not arm the flattened refusal on a bare word a flag consumed as its value", () => {
+    // `auto` is `--permission-mode`'s value, not a positional. If consumed values armed the
+    // ambiguity rule, the ordinary launcher shape would refuse — which is the whole cost of
+    // getting this distinction wrong.
+    expect(readFlat(`claude --permission-mode auto --print --session-id ${ID_A}`)).toEqual({
+      kind: "session",
+      headless: true,
+      sessionIds: [ID_A],
+    });
+  });
+
   it("stops at a bare `--`, so a prompt that says `--session-id` is not a second id", () => {
     // The literal form of the bug: `claude --session-id B -- --session-id A` is a prompt whose
     // text is `--session-id A`.
@@ -131,13 +224,6 @@ describe("the option region ends at `--` or the first bare word", () => {
       headless: false,
       sessionIds: [ID_B],
     });
-  });
-
-  it("stops at the first bare word, so a flattened prompt mentioning flags is still prose", () => {
-    // `ps` has already destroyed the quoting, so the prompt arrives as seven words. The boundary at
-    // `Please` is the only thing between us and reading `--print` out of somebody's sentence.
-    const reading = readFlat(`claude --session-id ${ID_A} Please add a --print flag and --session-id ${ID_B}`);
-    expect(reading).toEqual({ kind: "session", headless: false, sessionIds: [ID_A] });
   });
 
   it("does not read a flag that lives after the separator", () => {
@@ -175,6 +261,18 @@ describe("subcommands are not sessions", () => {
     });
   });
 
+  it("only the FIRST positional can be a command word", () => {
+    // A flattened prompt is a run of positionals, and one of its later words may be a subcommand
+    // name — `stop` is, and "tell me to stop" is a thing somebody writes. Checking every bare word
+    // would make that prompt a `subcommand` and the pane unaddressable. Commander dispatches on the
+    // first operand, and so do we.
+    expect(readFlat(`claude --session-id ${ID_A} tell me to stop`)).toEqual({
+      kind: "session",
+      headless: false,
+      sessionIds: [ID_A],
+    });
+  });
+
   it("does not treat `help` as a subcommand", () => {
     // Measured: `claude help me fix this` runs "help me fix this" as a PROMPT. A prompt beginning
     // "help" is a thing people type, so `help` is deliberately out of the list.
@@ -183,6 +281,50 @@ describe("subcommands are not sessions", () => {
       headless: false,
       sessionIds: [ID_A],
     });
+  });
+});
+
+describe("a flag that prints and exits is not a session either", () => {
+  // Sol's ARGV-02. `--version` was in the flag table with arity `none`, and only `--print` affected
+  // the classification, so `claude --version --session-id A` came back as a steerable session
+  // carrying A. Measured on 2.1.263: it prints `2.1.263 (Claude Code)` and exits 0 — even in front
+  // of a `--session-id` value so malformed that the same line with `--print` errors on it. So the
+  // version flag short-circuits everything, and the reading has to say so.
+
+  it("reads `claude --version` as a subcommand, not a session", () => {
+    expect(read(["claude", "--version"])).toEqual({ kind: "subcommand", name: "--version" });
+  });
+
+  it("reads `claude --version --session-id <uuid>`, which is the shape that lied", () => {
+    // The box health check emits `claude --version`. Nothing may be typed at it.
+    expect(read(["claude", "--version", "--session-id", ID_A])).toEqual({
+      kind: "subcommand",
+      name: "--version",
+    });
+  });
+
+  it("reads `-v` the same way", () => {
+    expect(read(["claude", "-v"])).toEqual({ kind: "subcommand", name: "-v" });
+  });
+
+  it("sees a `--version` that follows a positional on faithful argv", () => {
+    // Measured: `claude some-prompt-here --version` prints the version. Permutation again.
+    expect(read(["claude", "some-prompt-here", "--version"])).toEqual({
+      kind: "subcommand",
+      name: "--version",
+    });
+  });
+
+  it("does not see a `--version` behind the separator", () => {
+    expect(read(["claude", "--session-id", ID_A, "--", "--version"])).toEqual({
+      kind: "session",
+      headless: false,
+      sessionIds: [ID_A],
+    });
+  });
+
+  it("refuses `--version=x`, because it takes no value", () => {
+    expect(read(["claude", "--version=x"]).kind).toBe("unreadable");
   });
 });
 
@@ -264,6 +406,15 @@ describe("every --session-id before the boundary is reported, and the caller dec
     expect(read(["claude", "--session-id="]).kind).toBe("unreadable");
   });
 
+  it("is unreadable when the SEPARATE value is empty, exactly as the inline one is", () => {
+    // Sol's ARGV-04. `["claude","--session-id","","--print"]` returned `sessionIds: [""]`, and an
+    // empty id is not an id — Stage C's awk refuses it, and the two spellings of the same mistake
+    // must not disagree. `steer.ts` would then have compared "" against a real pane's id.
+    const reading = read(["claude", "--session-id", "", "--print"]);
+    expect(reading.kind).toBe("unreadable");
+    expect(reading.kind === "unreadable" && reading.why).toContain("--session-id");
+  });
+
   it("does not match `--session-id` by prefix", () => {
     // `--session-idle` is not `--session-id`, and a reader that matched by prefix would read
     // `idle` as somebody's session. Exactly, or not at all.
@@ -340,11 +491,13 @@ describe("variadic flags", () => {
   });
 });
 
-describe("`--name` is one value on argv and an unknown number on a ps blob", () => {
+describe("`--name` takes exactly one token, and a flattened multi-word name spills into positionals", () => {
   // `scripts/gjd-remote.ts` emits `--name ${shq(name)}` BEFORE the `--`, shell-quoted because the
   // name may contain spaces. On the faithful arm that is one element. On the flattened arm the
-  // quoting is already gone, and reading it as one token ends the option region in the middle of
-  // somebody's session name.
+  // quoting is gone — and the CLI, measured, takes ONE token: `claude --name my mcp` and
+  // `claude --name=my mcp` both print the `mcp` usage. So the extra words are positionals, and the
+  // general positional rule (above) is what refuses the dangerous continuations. Round 2 deleted
+  // the `one-free-text` arity that used to consume the whole run; see the module header.
 
   it("reads a multi-word name as one value on faithful argv, and still sees the --print after it", () => {
     expect(read(["claude", "--session-id", ID_A, "--name", "my session", "--print"])).toEqual({
@@ -374,13 +527,41 @@ describe("`--name` is one value on argv and an unknown number on a ps blob", () 
   });
 
   it("refuses rather than reporting an interactive session when --print follows a flattened name", () => {
-    // THE CASE THAT MATTERS. Reading `--name` as one token here takes `my`, calls `session` the
-    // first bare word, stops, and never sees `--print` — a headless run reported as steerable.
-    // Whatever else we do, we must not return that.
+    // THE CASE THAT MATTERS, and note what it is NOT any more: reading `--name` as one token no
+    // longer ends the option region, so this is not "we never see the --print". It is that
+    // `session` may be the second word of a name or the first word of a prompt, and `--print` is a
+    // flag in one reading and prose in the other. Whatever else we do, we must not return a
+    // steerable interactive session here.
     const reading = readFlat(`claude --session-id ${ID_A} --name my session --print`);
     expect(reading).not.toEqual({ kind: "session", headless: false, sessionIds: [ID_A] });
     expect(reading.kind).toBe("unreadable");
-    expect(reading.kind === "unreadable" && reading.why).toContain("--name");
+    expect(reading.kind === "unreadable" && reading.why).toContain("--print");
+  });
+
+  it("does not swallow a subcommand after an inline name", () => {
+    // Sol's ARGV-03, half one. `--name=my` bounds its own value, so `mcp` is a positional — and
+    // measured, `claude --name=my mcp` really does print the mcp usage. The reader consumed it
+    // anyway and called the process a session.
+    expect(readFlat("claude --name=my mcp")).toEqual({ kind: "subcommand", name: "mcp" });
+    expect(read(["claude", "--name=my", "mcp"])).toEqual({ kind: "subcommand", name: "mcp" });
+  });
+
+  it("does not swallow a subcommand after a separate name", () => {
+    // Half two, and the same measurement: `claude --name my mcp` prints the mcp usage. One token
+    // is what the CLI takes, so one token is what we take.
+    expect(readFlat("claude --name my mcp")).toEqual({ kind: "subcommand", name: "mcp" });
+  });
+
+  it("does not let a trailing separator rescue a swallowed subcommand", () => {
+    // Sol's third form: `claude --name my mcp -- --help` still dispatches `mcp`, so the presence
+    // of a `--` says nothing about what came before it. The plan's three-endings analysis said
+    // otherwise and was wrong.
+    expect(readFlat("claude --name my mcp -- --help")).toEqual({ kind: "subcommand", name: "mcp" });
+  });
+
+  it("refuses an empty name, on both spellings", () => {
+    expect(read(["claude", "--name", "", "--print"]).kind).toBe("unreadable");
+    expect(read(["claude", "--name="]).kind).toBe("unreadable");
   });
 
   it("refuses rather than reading a session id out of the prose after a flattened name", () => {

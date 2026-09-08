@@ -37,13 +37,50 @@ export const NEW_SESSION_URL = "api/sessions/new";
 
 export type LaunchState = "starting" | "started" | "failed";
 
+/**
+ * **WHICH ADMISSION PATH THE LAUNCH TOOK**, or the fact that the server did not
+ * say.
+ *
+ * `repo` is gjd-remote's verified route: the child runs with its cwd set to the
+ * requested directory, gjd-remote identifies the checkout by its origin, reads
+ * that repo's setup status and creates the session **under the setup lock**.
+ * `dir` is `-d`, the escape hatch — an arbitrary path gjd-remote cannot
+ * identify, so it skips the setup status and starts the session outside that
+ * lock. routes-new.ts § THE DIRECTORY GOES THROUGH gjd-remote's OWN ADMISSION,
+ * which was written after this dashboard was caught starting an agent in a
+ * checkout `gjd-remote setup` was in the middle of rewriting.
+ *
+ * So the two are not a detail of plumbing: they are different promises about
+ * the tree the agent woke up in, and a page that draws neither leaves the
+ * reader assuming the safe one. **`null` is the third arm and not a default** —
+ * a server too old to send the field has made no claim, and printing either
+ * word for it would invent one.
+ */
+export type LaunchResolution = "repo" | "dir" | null;
+
 /** One attempt, from the moment it was accepted to whatever became of it. */
 export type LaunchRecord = {
   id: string;
   state: LaunchState;
   /** What gjd-remote said it made. Null while starting, since Claude names it. */
   name: string | null;
+  /** What was ASKED for. The box may have chosen another — see `startedDir`. */
   dir: string;
+  /** See `LaunchResolution`. Null means the server did not say, never "repo". */
+  resolution: LaunchResolution;
+  /**
+   * **THE DIRECTORY THE BOX SAYS IT ACTUALLY STARTED IN**, once it has said so.
+   *
+   * Null while starting, and null afterwards when the output did not carry it.
+   * In `repo` mode this is the box's checkout for the origin, **which is not
+   * necessarily `dir`**: a worktree resolves to the checkout it belongs to, so
+   * a launch aimed at one tree can land in another. This panel's own header
+   * says *"the record that comes back says which directory was used, which is
+   * the half that matters"* — true of the record, and false of this client,
+   * which parsed `dir` and dropped this. Instance 14 in the table in
+   * docs/postmortems/260908b-the-parts-were-all-tested-and-none-of-the-joins-were.md.
+   */
+  startedDir: string | null;
   /** The prompt's size. The server never records the prompt, and neither do we. */
   promptBytes: number;
   requestedAt: string;
@@ -83,6 +120,11 @@ export function parseLaunch(v: unknown): LaunchRecord | null {
     state,
     name: str(v["name"]),
     dir: str(v["dir"]) ?? "",
+    /* Neither word is guessed for a server that sent nothing: the two describe
+       different promises about the tree the agent started in, and defaulting to
+       `repo` would be inventing the safe one. See `LaunchResolution`. */
+    resolution: v["resolution"] === "repo" ? "repo" : v["resolution"] === "dir" ? "dir" : null,
+    startedDir: str(v["startedDir"]),
     promptBytes: typeof v["promptBytes"] === "number" ? v["promptBytes"] : 0,
     requestedAt: str(v["requestedAt"]) ?? "",
     finishedAt: str(v["finishedAt"]),

@@ -941,3 +941,130 @@ export type AttentionFeed =
   | { kind: "checkpoint-unreadable"; why: string }
   /** This server did not look. See above — the default, and never a claim about the box. */
   | { kind: "not-asked" };
+
+/* ------------------------------------------------------------------ *
+ * The whole of `/api/state`.
+ * ------------------------------------------------------------------ */
+
+/**
+ * **WHAT `/api/state` RETURNS AND `/api/live` PUSHES**, declared once so the
+ * three consumers cannot disagree about it.
+ *
+ * Migrated here on 2026-09-08 (v0.8b), and it is the second of the four
+ * endpoints — `QueueView` was the first. The measurement that made it a stage:
+ * `answeringEnabled` and `tmuxServerPid` had been on this payload for a day
+ * and `grep -c` in `web/src/types.ts` found **zero** of either. Both ends were
+ * internally consistent, so nothing could go red; the repair is a type that
+ * makes the drop un-writable, not a check that detects it.
+ * docs/postmortems/260908b, and § Stage v0.8a of the plan.
+ *
+ * ## Two type parameters, and they are exactly the two fields that cannot be shared
+ *
+ * `Row` and `Health` are holes rather than declarations, because **the things
+ * that fill them live in node modules this file may not import** — `FleetRow`
+ * in `collect.ts` (which opens with `node:child_process`) and `HealthReport` in
+ * `health.ts`. The server fills them with its own types; the client fills
+ * `Row` with the JSON *projection* it renders and leaves `Health` as `unknown`,
+ * which is what `HealthPanel` reads it as.
+ *
+ * **`Row` is a hole rather than a shared declaration on purpose, and it is not
+ * a shortcut.** The plan says why at length: `FleetRow.meta` resolves to
+ * `scripts/gjd-remote-tmux.ts`'s `SessionMeta` (all three fields required)
+ * while the client's has all three nullable, and `Session.created` is a `Date`,
+ * which does not survive `JSON.stringify`. So the wire shape of a row is a
+ * projection of the server's type and not the type itself; sharing it verbatim
+ * would be *wrong* rather than merely impossible, and it is left for its own
+ * stage. Everything OUTSIDE those two fields is shared, and that is where all
+ * six dropped fields were.
+ *
+ * ## Adding a field here is the point
+ *
+ * A field added to this type lands in both twins: the server's `FleetState` in
+ * `state.ts` is this type with its holes filled, and the client's in
+ * `web/src/types.ts` is `Omit<>` of it — so a new field is not in the `Omit`,
+ * it lands in the client type, and the parser's object literal stops compiling
+ * until somebody either reads the field or writes its name in the list. Proved
+ * by mutation, both ends red, before this comment was written.
+ *
+ * Adding a field is still **not a `schema` bump**: that rule is `schema`'s own
+ * and it is about consumers that ignore what they do not know.
+ */
+export type FleetState<Row = unknown, Health = unknown> = {
+  /**
+   * The payload's shape, so a stored snapshot can be read back by code that has
+   * moved on. Bump it when a consumer that ignored the change would be WRONG
+   * rather than merely poorer — a removed field, or one whose meaning changed.
+   * Adding a field is not a bump: every consumer here ignores what it does not
+   * know, and a version that changes on every addition is one nobody checks.
+   */
+  schema: 1;
+  /**
+   * The sessions. **Read `collectedAt` first**: an empty `rows` is only ever a
+   * claim about the box when `collectedAt` is non-null, and a freshly restarted
+   * dashboard that says "no sessions are running" about a box with thirty-six
+   * of them is the reading least likely to make anybody look. state.ts § the
+   * empty-but-honest case.
+   */
+  rows: Row[];
+  /** ISO, or null for NEVER COLLECTED — which is not "collected and empty". */
+  collectedAt: string | null;
+  /**
+   * Which tmux server the handles in `rows` belong to. Two snapshots with
+   * different values here describe different worlds, however alike `$1643`
+   * looks in both. Null when it could not be read.
+   */
+  tmuxServerPid: number | null;
+  tookMs: number;
+  /** The last collection's failure, or null. A stale payload keeps its old rows. */
+  error: string | null;
+  health: Health;
+  /** How often the server intends to collect, so the page can say when it is genuinely late. */
+  refreshMs: number;
+  /**
+   * Whether `POST /api/steer/answer` will do anything.
+   *
+   * THE PAGE CANNOT HONESTLY WARN ABOUT A FLAG IT HAS NEVER BEEN TOLD. Without
+   * this, the client either hedges ("answering may be held back") or discovers
+   * the truth by having somebody tap and get a 503 — and the whole point of the
+   * hold is that a person should not tap. Told beats inferred, again.
+   *
+   * That argument was here, correct, and contradicted by a module one directory
+   * away for a day: the client's own `FleetState` did not carry the field, so a
+   * reader tapped and got the 503. The `Omit<>` in web/src/types.ts is what
+   * stops that recurring.
+   */
+  answeringEnabled: boolean;
+  /**
+   * When a collection was last **attempted**, which is a different fact from
+   * `collectedAt`: that one says when data last ARRIVED, and neither it nor
+   * `error` says whether the collector is still trying. A collection that never
+   * settles throws nothing, so `error` stays null and the loop simply stops —
+   * measured at ~30 minutes stale with `error: null`, which reads as a calm,
+   * slightly-quiet box.
+   *
+   * **DO NOT READ THIS FIELD DIRECTLY FROM A PAYLOAD — use `readAttemptClock`**
+   * in state.ts. It was added without a schema bump, so a server that predates
+   * it sends nothing, and a consumer that read "absent" as "never attempted"
+   * would report every old server as permanently wedged.
+   */
+  attemptedAt: string | null;
+  /**
+   * **WHAT NEEDS GREG** — the Overseer's ranked inbox, or the reason there is
+   * no list. A field rather than a second route: one payload, one clock, one
+   * staleness. `not-asked` is what a server that did not look sends, and it
+   * must never be read as *nothing is watching*.
+   */
+  attention: AttentionFeed;
+  /**
+   * **THE SERVER'S OWN CLOCK, AT THE MOMENT IT ANSWERED** — the one field here
+   * that is about us rather than about the box.
+   *
+   * Every age the client draws is `browserNow − Date.parse(aServerTimestamp)`,
+   * so a phone three minutes fast turns a current snapshot into a permanently-on
+   * STALE banner. Neither `collectedAt` nor `attemptedAt` can stand in: the gap
+   * between either of those and receipt is GENUINE SNAPSHOT AGE, and there is no
+   * way to tell that apart from skew. state.ts and web/src/types.ts §
+   * `ClockSkew` argue it in full.
+   */
+  servedAt: string;
+};

@@ -22,32 +22,76 @@
  *    it."
  *
  * THE UNKNOWN-FLAG RULE IS THE POINT. An unknown flag makes the whole reading `unreadable`, because
- * we cannot know its arity, and guessing wrong is not a symmetric mistake: guess that `--foo` takes
- * no value and its value becomes the "first bare word", ending the option region early, so a later
- * `--print` is never seen and a headless run is reported as a steerable interactive session —
- * prose typed into a terminal that will never read it. This is deliberately the OPPOSITE of the
+ * we cannot know its arity, and guessing wrong is not a symmetric mistake. Guess that `--foo` takes
+ * a value and it swallows the `--print` that made the run headless — a process that stopped reading
+ * its terminal at startup, reported as a steerable interactive session, with prose then typed into
+ * it. Guess that it takes none and its value becomes a bare word, which on a `ps`-flattened line is
+ * the thing that makes everything after it unreadable. This is deliberately the OPPOSITE of the
  * general-parser fallback (`yargs-parser` skips an unknown flag and the next bare word after it).
  * That policy is right for a parser that must produce an answer; it is wrong here, where refusing
  * is a legitimate answer and a wrong grant is not.
  *
- * WHERE THE OPTION REGION ENDS: at a bare `--`, or at the first bare word, whichever comes first.
- * These looked like two competing rules and are one. On faithful argv the prompt is a single
- * element, so with no `--` the prompt IS the first bare word and the rules coincide; with a `--` it
- * comes first, which is what the CLI itself does.
+ * ══ WHERE THE OPTION REGION ENDS: AT A BARE `--`, AND NOWHERE ELSE ══
  *
- * ONE RULE IS FIDELITY-DEPENDENT, and it is written down here rather than left to be discovered,
- * because the trap in this area is a rule that is true on one arm and quietly assumed on the other.
- * **`--name` takes exactly one value on a faithful argv and an unknowable number on a `ps`-flattened
- * one**: its value is text a person chose, `new-claude` emits it shell-quoted for that very reason,
- * and flattening turns the spaces inside it into the spaces between arguments. Everything else in
- * the table has the same arity on both arms. See `Arity`'s `one-free-text` and the three endings in
- * `consumeFlag`.
+ * **CLAUDE PERMUTES.** Options are read wherever they appear, until a `--`. Measured 2026-09-08
+ * against `claude` 2.1.263 on this box, because the rule that used to be here was a claim about
+ * somebody else's tool that nobody had ever run:
  *
- * MEASURED 2026-09-08 against `claude --help` (2.1.263) and against the live box: six `claude`
- * processes, all of them `claude --session-id <uuid> [--permission-mode auto] [-- <prompt>]`, all
- * read as `session` with one id.
+ *     claude ordinary-prompt --session-id not-a-uuid --print
+ *       -> Error: Invalid session ID. Must be a valid UUID.     a flag read AFTER a positional
+ *     claude some-prompt-here --version
+ *       -> 2.1.263 (Claude Code), exit 0                        the same
+ *     claude say-only-OK --print --model definitely-not-a-real-model
+ *       -> unrecognized_model, query_source:"sdk", exit 1       --print AND --model, after one
  *
- * KNOWN LIMITATION: a prompt whose first word is a subcommand name is read as a subcommand.
+ * So "the option region ends at the first bare word" — which this module and `harness.ts` both
+ * asserted, and which was itself written as a bug fix — is not a rule about Claude at all. Under it
+ * a later `--print` was silently never seen, and `["claude","","--print"]` read as a steerable
+ * interactive session: the exact false grant the old comment claimed to prevent, reintroduced by the
+ * fix for a different input. Round 2 of Stage A (GPT Sol's ARGV-01) replaced it with the rule the
+ * CLI actually has.
+ *
+ * ══ A POSITIONAL COSTS NOTHING ON `argv` AND EVERYTHING ON `ps-flattened` ══
+ *
+ * This is where the fidelity tag stops being a nicety and becomes the thing that decides the case.
+ * Take one process, `claude --session-id <uuid> "Please add a --print flag"`:
+ *
+ *  - On **faithful argv** the prompt is ONE element, so its `--print` is *inside* an argument and is
+ *    not a flag. Fully decidable, and the reading is **not headless**. Scanning continues past
+ *    positionals, and a dash-led token after one is a flag like any other.
+ *  - On **`ps`-flattened** that same process is byte-identical to `["claude",…,"Please","add","a",
+ *    "--print","flag"]`, which **is** headless. Not decidable. So once an **unconsumed positional**
+ *    has appeared, any later dash-led token before a `--` is `unreadable`, naming the token.
+ *
+ * The same command line, two fidelities, two different **correct** answers — which is precisely what
+ * a tagged input is for, and what a single `string` API could never have expressed.
+ *
+ * **"Unconsumed" is load-bearing.** A bare word a flag ate as its value is not a positional:
+ * `--permission-mode auto --print` must stay readable, and that is the shape our own launcher emits
+ * on nearly every process on the box. Only a bare word that nothing claimed arms the rule.
+ *
+ * A bare `--` after a positional still ends the option region, and stopping there is safe under both
+ * readings of a flattened line: if the prompt really is one element, nothing after it was a flag
+ * anyway; if the words really are separate arguments, the `--` is a real separator. Nothing is lost
+ * by stopping either way.
+ *
+ * ══ A FLAG CAN BE A COMMAND ══
+ *
+ * `--version`/`-v` print and exit — measured, even in front of a `--session-id` value so malformed
+ * that the same line with `--print` errors on it. They are in `TERMINAL_FLAGS` and read as
+ * `subcommand`, because that arm already means exactly what a caller needs to know here: *a command,
+ * not a session; nothing may be typed at it*. All three consumers map `subcommand` to "not a
+ * harness" / "no match" today, so this needed no new arm and no change over there — and a fifth arm
+ * would have bought a distinction that no caller makes. The cost is that `subcommand.name` carries a
+ * flag spelling in this one case, which the arm's own doc says.
+ *
+ * ══ MEASURED AGAINST `claude` 2.1.263, 2026-09-08 ══
+ *
+ * Live box: 5 `claude` processes, all `claude --session-id <uuid> [--permission-mode auto]
+ * [<prompt>]`, all reading as `session` with one id on both arms. None carries `--name`; every one
+ * has a trailing-NUL run of exactly 1.
+ *
+ * KNOWN LIMITATION — a prompt whose first word is a subcommand name is read as a subcommand.
  * How the CLI itself resolves command-versus-prompt is not fully known here, and the measurements
  * on 2026-09-08 did not settle it: `claude mcp` and `claude --session-id <uuid> mcp` both printed
  * the mcp usage, so a preceding option does not stop a dispatch; `claude logs <bad-id>` errored
@@ -57,6 +101,19 @@
  * pane nobody can steer, never a message typed at a process that is not listening. `help` is
  * deliberately NOT in the list — `claude help me fix this` was measured to ANSWER the prompt, so it
  * is not dispatched as a command, and a prompt beginning "help" is a thing people type.
+ *
+ * KNOWN LIMITATION — **the two tables fail in opposite directions, and only one of them fails
+ * loudly** (Sol's ARGV-07). A flag Anthropic adds tomorrow lands in `unreadable`: loud, and safe. A
+ * *subcommand* Anthropic adds tomorrow is just a bare word — it reads as a positional, the line
+ * reads as a `session`, and a caller may then grant prose steering on a process that is a command.
+ * That asymmetry is the wrong way round, and **no hermetic test can see it**: this suite must not
+ * shell out to `claude`, and the drift is a fact about an installed binary rather than about this
+ * code. It is also partly irreducible — a new subcommand `foo` is indistinguishable from a prompt
+ * beginning with the word "foo", which is why `help` is already excluded by hand. The honest
+ * mitigation is a **maintenance check that is allowed to touch the real binary**: diff
+ * `claude --help`'s `Commands:` and `Options:` sections against `SUBCOMMANDS` and `FLAGS`, run when
+ * the CLI updates or in the weekly sweep, never from the unit suite. It is proposed in the plan and
+ * is NOT built; until it is, this paragraph and the version stamp above are the whole defence.
  */
 
 /**
@@ -66,45 +123,69 @@
  * anyone calling it. A caller whose verdict presses Enter in a live pane can accept only the `argv`
  * arm, and the compiler will name anyone who tries to hand it the other one.
  */
-export type ClaudeCommandLine =
-  /** `/proc/<pid>/cmdline`, NUL-split: exactly the argv the kernel holds, quoting intact. */
-  | { fidelity: "argv"; argv: readonly string[] }
-  /** `ps args`, split on whitespace: argv joined with single spaces long before we saw it, so a
-   *  quoted prompt is already several elements and there is no way back. */
-  | { fidelity: "ps-flattened"; argv: readonly string[] };
+export type ClaudeCommandLine = FaithfulCommandLine | FlattenedCommandLine;
+
+/**
+ * THE TWO ARMS ARE NAMED, and that is what makes the tag do anything.
+ *
+ * **This is GPT Sol's ARGV-05, fixed here rather than reported.** `fromProcCmdline` returned the
+ * whole union and both arms were anonymous, so a caller that wanted to accept only the faithful one
+ * had nothing it could ask for and nothing the compiler could refuse — the tag was a label after
+ * all, which is the one thing the doc above says it must not be. Each arm is now its own exported
+ * type and each constructor returns the arm it actually builds. `steer.ts`'s `isClaudeForSession`
+ * takes `FaithfulCommandLine`, and handing it a `fromPsArgs` result is a compile error — checked by
+ * making that error happen, not by assuming it would.
+ *
+ * **WHAT THAT GUARANTEE IS AND IS NOT.** These are structural types, so what they stop is the
+ * *accidental* misuse — passing `fromPsArgs(...)`, or a variable that came from `ps`, to something
+ * that must not have it. That is the mistake which actually happens. They do not stop a deliberate
+ * `{ fidelity: "argv", argv }` written over a flattened array; only a nominal type would (a branded
+ * field, or a class with a private member), and that costs every construction site a factory call
+ * and every test a helper. Judged not worth it: the caller in danger here is one who has not noticed
+ * the distinction, and that caller does not hand-write the tag.
+ */
+
+/** `/proc/<pid>/cmdline`, NUL-split: exactly the argv the kernel holds, quoting intact. */
+export type FaithfulCommandLine = { fidelity: "argv"; argv: readonly string[] };
+
+/** `ps args`, split on whitespace: argv joined with single spaces long before we saw it, so a
+ *  quoted prompt is already several elements and there is no way back. */
+export type FlattenedCommandLine = { fidelity: "ps-flattened"; argv: readonly string[] };
 
 /** What one `claude` command line says, or why it says nothing we can use. */
 export type ClaudeReading =
   /** argv[0]'s basename is not `claude`, or there is no argv[0]. */
   | { kind: "not-claude"; why: string }
-  /** `claude agents`, `claude auth status --json` — a command, not a session, and nothing may be
-   *  typed at it. */
+  /** `claude agents`, `claude auth status --json`, **and `claude --version`** — a command, not a
+   *  session, and nothing may be typed at it. `name` is the subcommand word, or the spelling of the
+   *  terminal flag for the flags that print and exit; see the header. */
   | { kind: "subcommand"; name: string }
   /** A session: interactive, or headless under `--print`. `sessionIds` is EVERY `--session-id`
    *  found before the boundary, in order, so a caller can apply its own duplicate policy. */
   | { kind: "session"; headless: boolean; sessionIds: readonly string[] }
   /** We could not read it: an unknown flag, a flag missing its value, a variadic flag whose values
-   *  have no terminator. Grants nothing and delivers nothing — fail-closed and fail-loud. */
+   *  have no terminator, or a dash-led token that a `ps` flattening left indistinguishable from
+   *  prose. Grants nothing and delivers nothing — fail-closed and fail-loud. */
   | { kind: "unreadable"; why: string };
 
 /**
- * How many values a flag takes, as `claude --help` declares it — plus the one distinction the help
- * page cannot make.
+ * How many values a flag takes, as `claude --help` declares it.
  *
  * `variadic` is `<things...>`: it consumes bare words until the next dash-led token. That is
  * commander's documented behaviour, not a guess — but see the `--` rule in `consumeFlag` for why we
  * still refuse it on a command line with no separator.
  *
- * `one-free-text` IS `one` in the CLI, and is one element in a faithful argv. **It is not one token
- * on the `ps-flattened` arm**, because its value is text a person chose and may contain spaces, and
- * `ps` has already turned every space into the same thing. `--name my session --print` flattens to
- * five tokens; reading it as one-value takes `my`, calls `session` the first bare word, ends the
- * option region there and NEVER SEES `--print` — a headless run reported as a steerable interactive
- * session, which is the false grant this module exists to prevent. So the arity of this kind of
- * flag genuinely depends on the fidelity of the input, which is the whole reason the input carries
- * its fidelity as a type. The rule and what it costs are in `consumeFlag`.
+ * **There used to be a fourth, `one-free-text`, for `--name`, and round 2 deleted it.** It existed
+ * because a multi-word name on a flattened line looked like a flag of unknowable arity, and the
+ * damage it did was ending the option region early. The boundary rule above removes that damage: a
+ * positional ends nothing now, so `--name` can take exactly one token — which is what the CLI itself
+ * takes, measured (`claude --name my mcp` and `claude --name=my mcp` both dispatch `mcp`) — and the
+ * leftover words of a flattened name are simply positionals, handled by the one ambiguity rule
+ * everything else already uses. The special case also had a bug the general rule cannot have:
+ * consuming that run swallowed a subcommand, and the inline `--name=my` swallowed one even though it
+ * had already bounded its own value (Sol's ARGV-03). One rule fewer, and one bug class fewer.
  */
-type Arity = "none" | "one" | "one-free-text" | "variadic";
+type Arity = "none" | "one" | "variadic";
 
 /**
  * The flags this repo produces, and nothing else.
@@ -121,6 +202,11 @@ type Arity = "none" | "one" | "one-free-text" | "variadic";
  * because a person at a terminal types the short one and getting an alias's arity wrong is the same
  * bug as getting the flag's wrong. Their arities come from the same `claude --help` line.
  *
+ * **ARITY IS NOT THE ONLY THING A ROW HAS TO GET RIGHT.** `--version` sat here with arity `none`,
+ * which is correct, and the reading was still wrong — because a flag that prints and exits is not
+ * part of a session at all. The entry criterion admitted the row and nothing asked what it MEANT.
+ * See `TERMINAL_FLAGS`.
+ *
  * DELIBERATELY ABSENT, so they land in `unreadable` rather than being guessed: every flag whose
  * value is OPTIONAL — `--cloud [description]`, `-r, --resume [value]`, `-w, --worktree [name]`,
  * `-d, --debug [filter]`, `--from-pr [value]`, `--remote-control [name]`, `--teleport [session]`,
@@ -132,11 +218,11 @@ const FLAGS: ReadonlyMap<string, Arity> = new Map<string, Arity>([
   // gjd-remote new-claude
   ["--session-id", "one"],
   ["--permission-mode", "one"],
-  // The ONLY free-text value in this table: a display name somebody typed, and `new-claude` emits
-  // it shell-quoted (`--name ${shq(name)}`) precisely because it may contain spaces. Every other
-  // one-value flag here takes a uuid, a number, or a word from a fixed set.
-  ["--name", "one-free-text"],
-  ["-n", "one-free-text"],
+  // A display name somebody typed, and `new-claude` emits it shell-quoted (`--name ${shq(name)}`)
+  // precisely because it may contain spaces. ONE value all the same: that is what the CLI takes, and
+  // on a flattened line the extra words become positionals like any other prose.
+  ["--name", "one"],
+  ["-n", "one"],
   // run-claude buildClaudeArgs
   ["--print", "none"],
   ["-p", "none"],
@@ -158,6 +244,18 @@ const FLAGS: ReadonlyMap<string, Arity> = new Map<string, Arity>([
   ["--version", "none"],
   ["-v", "none"],
 ]);
+
+/**
+ * Flags that make the whole process a one-shot: it prints something and exits, and never becomes a
+ * session at all.
+ *
+ * Measured on 2.1.263: `claude --version --session-id not-a-uuid` prints `2.1.263 (Claude Code)` and
+ * exits 0, while `claude ordinary-prompt --session-id not-a-uuid --print` fails the UUID check. So
+ * the version flag short-circuits even the validation, wherever it appears before a `--`.
+ *
+ * They read as `subcommand` — the header says why that arm rather than a fifth one.
+ */
+const TERMINAL_FLAGS: ReadonlySet<string> = new Set(["--version", "-v"]);
 
 /**
  * The `Commands:` section of `claude --help`, aliases included, and nothing more.
@@ -193,14 +291,21 @@ const SUBCOMMANDS: ReadonlySet<string> = new Set([
 /**
  * A `/proc/<pid>/cmdline` read, which is the faithful one.
  *
- * The kernel writes each argv element followed by a NUL, so the string ends with one and usually
- * splits into a trailing empty. Trailing empties are dropped; INTERIOR ones are kept, because an
- * empty string is a real argv element — `claude --name "" …` is a command line somebody can
- * produce, and silently deleting it would shift every element after it.
+ * The kernel writes each argv element followed by a NUL, so the string ends with one and splits into
+ * exactly one trailing empty. **Exactly one is dropped.** Popping the whole run would delete a real
+ * final element — `claude --name ""` genuinely ends in two NULs — out of a function whose entire
+ * contract is that it hands back faithful argv (Sol's ARGV-06). Interior empties are kept for the
+ * same reason: an empty string is a real argv element, and deleting one shifts every element after
+ * it.
+ *
+ * The rule before this popped the whole run, on the theory that a process which has rewritten its
+ * own argv (setproctitle) leaves padding NULs. Census, 2026-09-08: 5 live `claude` processes, every
+ * one with a trailing-empty run of exactly 1. And a stray trailing empty is harmless downstream now
+ * — it reads as a positional, and positionals no longer end the option region.
  */
-export function fromProcCmdline(raw: string): ClaudeCommandLine {
+export function fromProcCmdline(raw: string): FaithfulCommandLine {
   const argv = raw.split("\0");
-  while (argv.length > 0 && argv[argv.length - 1] === "") argv.pop();
+  if (argv.length > 0 && argv[argv.length - 1] === "") argv.pop();
   return { fidelity: "argv", argv };
 }
 
@@ -213,7 +318,7 @@ export function fromProcCmdline(raw: string): ClaudeCommandLine {
  * seven elements rather than one. Nothing downstream can undo that; the `ps-flattened` tag exists
  * so a caller that must not be fooled by prose can refuse this arm at compile time.
  */
-export function fromPsArgs(args: string): ClaudeCommandLine {
+export function fromPsArgs(args: string): FlattenedCommandLine {
   return { fidelity: "ps-flattened", argv: args.split(/\s+/).filter((t) => t !== "") };
 }
 
@@ -239,59 +344,13 @@ function endOfBareRun(rest: readonly string[], from: number): number {
 }
 
 /**
- * A free-text value on a line `ps` has already flattened.
- *
- * Its words and the words after it are the same kind of token, so where the value ends is a
- * question about its CONTENT — which is exactly what flattening threw away. See the `Arity` doc for
- * what reading it as a single token does instead.
- *
- * TWO ENDINGS ARE SAFE AND ONE IS NOT:
- *  - the run of bare words reaches the END of the command line: nothing follows, so nothing can be
- *    misread as a flag. `claude --session-id <uuid> --permission-mode auto --name my session` is a
- *    shape `new-claude` produces — a named session with no prompt — and it stays readable.
- *  - the run stops at a dash-led token and there IS a `--` ahead: the launcher bounded the prompt
- *    itself, so scanning on cannot walk into prose.
- *  - the run stops at a dash-led token with NO `--` ahead: that is the boundary between a name and
- *    free prose, and which side the token is on cannot be read. Refuse. It costs a refusal on a
- *    `ps` read of `--name my session --print`, and it buys never reading `--session-id <somebody
- *    else's uuid>` out of the sentence that follows a name.
- */
-function consumeFlattenedFreeText(args: {
-  name: string;
-  inline: string | undefined;
-  rest: readonly string[];
-  after: number;
-  hasSeparator: boolean;
-}): FlagScan {
-  const { name, inline, rest, after, hasSeparator } = args;
-  const end = endOfBareRun(rest, after);
-  const taken = (inline === undefined ? 0 : 1) + (end - after);
-  if (taken === 0) {
-    return {
-      ok: false,
-      why: `\`${name}\` expects a value and the next token is a flag or the end of the command line`,
-    };
-  }
-  if (end < rest.length && !hasSeparator) {
-    return {
-      ok: false,
-      why:
-        `\`${name}\` takes free text that may contain spaces, this command line was read from` +
-        ` \`ps\` (which has already lost the quoting), and there is no \`--\` separator — so` +
-        ` whether \`${rest[end]}\` is a flag or part of the name cannot be read`,
-    };
-  }
-  // The value is not returned: it may be several tokens here, and nothing needs it. Only
-  // `--session-id` has its value read, and that one is a uuid.
-  return { ok: true, next: end, value: undefined };
-}
-
-/**
  * Consume one flag and whatever belongs to it, starting at `after` (the index just past the flag
  * token itself).
  *
- * Split out of the scan so the scan reads as the four rules it is — basename, boundary, subcommand,
- * flag — rather than as one long walk.
+ * Split out of the scan so the scan reads as the rules it is — basename, separator, positional,
+ * flag — rather than as one long walk. **Fidelity does not reach in here any more**: the one rule
+ * that depended on it is now the positional rule in the scan itself, which is a better place for it,
+ * because it is a fact about bare words rather than about any particular flag.
  */
 function consumeFlag(args: {
   token: string;
@@ -301,9 +360,8 @@ function consumeFlag(args: {
   rest: readonly string[];
   after: number;
   hasSeparator: boolean;
-  fidelity: ClaudeCommandLine["fidelity"];
 }): FlagScan {
-  const { token, name, inline, arity, rest, hasSeparator, fidelity } = args;
+  const { token, name, inline, arity, rest, hasSeparator } = args;
   const i = args.after;
 
   if (arity === "none") {
@@ -313,31 +371,48 @@ function consumeFlag(args: {
     return { ok: true, next: i, value: undefined };
   }
 
-  if (arity === "one-free-text" && fidelity === "ps-flattened" && inline !== "") {
-    return consumeFlattenedFreeText({ name, inline, rest, after: i, hasSeparator });
-  }
-
+  // THE INLINE SPELLING TAKES A DASH-LED VALUE AND THE SEPARATE ONE REFUSES IT. That looks like an
+  // oversight and is not — do not "fix" it into agreement, which is what an F3 instruction to Stage C
+  // asked for on 2026-09-08 before the implementer checked and refused. The two spellings carry
+  // different amounts of information:
+  //
+  //   --session-id=-x   the value is GLUED to the flag. `-x` is the value, whatever it looks like.
+  //                     Nothing is ambiguous, so nothing needs refusing.
+  //   --session-id -x   the next token is either the value or the next flag, and the command line
+  //                     does not say which. Undecidable, so refuse (below).
+  //
+  // One rule — *never guess where you cannot decide* — applied to two genuinely different inputs.
+  // Making them "agree" would mean either refusing a decidable value or accepting an undecidable
+  // one, and it would put this module back into disagreement with the awk probe in
+  // `scripts/gjd-remote-tmux.ts`, which draws the same line for the same reason. The one thing both
+  // spellings DO agree on is the empty value, because an empty id is not an id either way.
   if (inline !== undefined) {
     // `--session-id=` — the flag is there and the value is not. Refuse rather than record "".
     if (inline === "") return { ok: false, why: `\`${name}\` was given an empty value (\`${token}\`)` };
     return { ok: true, next: i, value: inline };
   }
 
-  // `one-free-text` reaches here only on the faithful arm, where the value is one element and the
-  // distinction does not apply.
-  if (arity === "one" || arity === "one-free-text") {
+  if (arity === "one") {
     const next = rest[i];
+    // The refusing half of the asymmetry documented above: a dash-led NEXT TOKEN could be this
+    // flag's value or the flag after it, and nothing in the command line decides it.
     if (next === undefined || next === "--" || next.startsWith("-")) {
       return {
         ok: false,
         why: `\`${name}\` expects a value and the next token is ${next === undefined ? "the end of the command line" : `\`${next}\``}`,
       };
     }
+    // THE SAME REFUSAL AS THE INLINE FORM, and it has to be: `--session-id ""` and `--session-id=`
+    // are two spellings of one mistake, and only the second was caught — so an empty string went out
+    // as somebody's session id, for `steer.ts` to compare against a live pane's (Sol's ARGV-04).
+    // Stage C's awk refuses the empty value too, and the two must not disagree.
+    if (next === "") return { ok: false, why: `\`${name}\` was given an empty value` };
     return { ok: true, next: i + 1, value: next };
   }
 
-  // Variadic. Bounded only by the next dash-led token, so on a command line with no `--` its values
-  // and the prompt are the same run of words. Refuse rather than eat prose.
+  // Variadic, and `hasSeparator` exists for this rule alone. Bounded only by the next dash-led
+  // token, so on a command line with no `--` its values and the prompt are the same run of words.
+  // Refuse rather than eat prose.
   if (!hasSeparator) {
     return {
       ok: false,
@@ -368,6 +443,84 @@ function refuseNonClaude(argv0: string | undefined): ClaudeReading | undefined {
   };
 }
 
+/**
+ * What one dash-led token turned out to be.
+ *
+ * The scan below is four rules — separator, positional, flag, and the fidelity-dependent refusal —
+ * and this is the third and fourth extracted so the loop stays readable as those four.
+ */
+type FlagStep =
+  | { step: "refuse"; why: string }
+  /** A flag that prints and exits: the whole process is a command. */
+  | { step: "command"; name: string }
+  | { step: "flag"; next: number; headless: boolean; sessionId: string | undefined };
+
+/**
+ * Read one dash-led token and whatever belongs to it.
+ *
+ * `sawPositional` and `fidelity` are here for one rule, the one the module header calls the point of
+ * the fidelity tag: on a `ps`-flattened line, a dash-led token after an unclaimed bare word cannot be
+ * told from a word of the prompt.
+ */
+function readFlagToken(args: {
+  token: string;
+  rest: readonly string[];
+  at: number;
+  hasSeparator: boolean;
+  sawPositional: boolean;
+  fidelity: ClaudeCommandLine["fidelity"];
+}): FlagStep {
+  const { token, rest, at, hasSeparator, sawPositional, fidelity } = args;
+
+  if (sawPositional && fidelity === "ps-flattened") {
+    return {
+      step: "refuse",
+      why:
+        `\`${token}\` follows a bare word on a command line read from \`ps\` (which has already` +
+        ` lost the quoting), so whether it is a flag or a word of the prompt cannot be read`,
+    };
+  }
+
+  // `--name=value` and `--name value` are both real spellings and the CLI takes either.
+  const eq = token.indexOf("=");
+  const name = eq === -1 ? token : token.slice(0, eq);
+  const inline = eq === -1 ? undefined : token.slice(eq + 1);
+
+  const arity = FLAGS.get(name);
+  if (arity === undefined) {
+    return {
+      step: "refuse",
+      why:
+        `\`${name}\` is not one of the flags this repo produces, so how many values it takes is` +
+        ` unknown, and guessing wrong would either swallow the flag after it or leave its own` +
+        ` value looking like one`,
+    };
+  }
+
+  const scanned = consumeFlag({ token, name, inline, arity, rest, after: at + 1, hasSeparator });
+  if (!scanned.ok) return { step: "refuse", why: scanned.why };
+
+  // Checked AFTER the arity rules, so `--version=x` is still a refusal rather than a command.
+  if (TERMINAL_FLAGS.has(name)) return { step: "command", name };
+
+  return {
+    step: "flag",
+    next: scanned.next,
+    headless: name === "--print" || name === "-p",
+    // Only from the option region, and only as an exact token. A `--session-id` after the separator
+    // is prose that says `--session-id`, which is not the same thing at all.
+    //
+    // NO TEST HOLDS THE EXACTNESS OF *THIS* COMPARISON, and the mutation run says so: changing it to
+    // `startsWith` survives, because nothing else in `FLAGS` begins with `--session-id`, so the
+    // lookup above has already refused `--session-idle` before this line runs. It is an equivalent
+    // mutant under today's table and stops being one the day a row like `--session-id-file` is
+    // added. The exactness that IS held by a test is the `FLAGS.get(name)` lookup — mutate that to a
+    // prefix search and two tests go red. The line stays exact because it states the rule where the
+    // rule is read.
+    sessionId: name === "--session-id" ? scanned.value : undefined,
+  };
+}
+
 /** Read a command line. See the module header; the rules live there. */
 export function readClaudeCommandLine(line: ClaudeCommandLine): ClaudeReading {
   const argv = line.argv;
@@ -375,16 +528,19 @@ export function readClaudeCommandLine(line: ClaudeCommandLine): ClaudeReading {
   if (refusal !== undefined) return refusal;
 
   const rest = argv.slice(1);
-  // Is there an explicit end-of-options separator anywhere ahead? Only consulted for variadic
-  // flags: without one, "consume bare words until the next dash-led token" runs straight into the
-  // prompt, and on a `ps`-flattened line a prompt that says `--session-id <other uuid>` would then
-  // be read as an option. With one, the values are bounded by the separator and there is nothing
-  // to guess. `rest.includes` is enough because anything before the scan position was already
-  // consumed as a flag or a value.
+  // Is there an explicit end-of-options separator anywhere ahead? Consulted for VARIADIC flags and
+  // nothing else: without one, "consume bare words until the next dash-led token" runs straight into
+  // the prompt. With one, the values are bounded by the separator and there is nothing to guess.
+  // `rest.includes` is enough because anything before the scan position was already consumed as a
+  // flag or as a value.
   const hasSeparator = rest.includes("--");
 
   const sessionIds: string[] = [];
   let headless = false;
+  // Has a bare word appeared that no flag claimed? On the faithful arm that is only the prompt or a
+  // command word, and it changes nothing. On the flattened arm it is the moment we stop being able
+  // to tell a flag from a word of prose — see the header.
+  let sawPositional = false;
 
   let i = 0;
   while (i < rest.length) {
@@ -395,45 +551,27 @@ export function readClaudeCommandLine(line: ClaudeCommandLine): ClaudeReading {
     if (token === "--") break;
 
     if (!token.startsWith("-")) {
-      // The first bare word. Either the command, or the prompt — and after it nothing is read as a
-      // flag, which is what stops a prompt that MENTIONS `--print` from being read as headless.
-      if (SUBCOMMANDS.has(token)) return { kind: "subcommand", name: token };
-      break;
+      // A positional. The FIRST one is the command word if it is one — and only the first, so that a
+      // prompt using the word "import" three sentences in is still a prompt.
+      if (!sawPositional && SUBCOMMANDS.has(token)) return { kind: "subcommand", name: token };
+      sawPositional = true;
+      i += 1;
+      continue;
     }
 
-    // `--name=value` and `--name value` are both real spellings and the CLI takes either.
-    const eq = token.indexOf("=");
-    const name = eq === -1 ? token : token.slice(0, eq);
-    const inline = eq === -1 ? undefined : token.slice(eq + 1);
-
-    const arity = FLAGS.get(name);
-    if (arity === undefined) {
-      return {
-        kind: "unreadable",
-        why:
-          `\`${name}\` is not one of the flags this repo produces, so how many values it takes is` +
-          ` unknown, and guessing wrong would move where the option region ends`,
-      };
-    }
-
-    const scanned = consumeFlag({
+    const step = readFlagToken({
       token,
-      name,
-      inline,
-      arity,
       rest,
-      after: i + 1,
+      at: i,
       hasSeparator,
+      sawPositional,
       fidelity: line.fidelity,
     });
-    if (!scanned.ok) return { kind: "unreadable", why: scanned.why };
-    i = scanned.next;
-    const value = scanned.value;
-
-    if (name === "--print" || name === "-p") headless = true;
-    // Only from the option region, and only as an exact token. A `--session-id` after the boundary
-    // is prose that says `--session-id`, which is not the same thing at all.
-    if (name === "--session-id" && value !== undefined) sessionIds.push(value);
+    if (step.step === "refuse") return { kind: "unreadable", why: step.why };
+    if (step.step === "command") return { kind: "subcommand", name: step.name };
+    i = step.next;
+    if (step.headless) headless = true;
+    if (step.sessionId !== undefined) sessionIds.push(step.sessionId);
   }
 
   return { kind: "session", headless, sessionIds };

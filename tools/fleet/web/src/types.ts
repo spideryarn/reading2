@@ -39,6 +39,7 @@ import type {
   AttentionItem,
   AttentionKind,
   AttentionList,
+  FleetState as FleetStateWire,
   Pause,
   PauseUnknownCause,
 } from "../../wire.js";
@@ -266,38 +267,98 @@ export type FleetRow = {
   rawQuestion: unknown;
 };
 
-/** The whole payload, and enough about it to know whether to believe it. */
-export type FleetState = {
-  /** ISO, or null when nothing has ever been collected. */
-  collectedAt: string | null;
-  tookMs: number;
-  /** The last refresh failure. The rows beside it may still be good. */
-  error: string | null;
+/**
+ * The whole payload, and enough about it to know whether to believe it.
+ *
+ * **DERIVED FROM THE WIRE TYPE, NOT WRITTEN BESIDE IT** — the same repair
+ * `QueueItemView` in actions-client.ts got, for the same reason and against the
+ * same measurement. This was a hand-written twin of `FleetState` in
+ * `tools/fleet/state.ts` until 2026-09-08, and by then it had silently dropped
+ * two fields the server had been sending for a day: `grep -c answeringEnabled`
+ * and `grep -c tmuxServerPid` in this file both returned **zero**. Neither end
+ * could go red, because each was internally consistent.
+ *
+ * So every field the server sends is in this type unless it is NAMED in the
+ * `Omit<>` below, and `parseFleetState`'s object literal does not compile until
+ * each one is either parsed or named. Dropping a field is now a line somebody
+ * has to write and a reviewer can see.
+ *
+ * **This is a derivation and not an adoption, and the difference is the whole
+ * design.** Several fields are deliberately WEAKER here than on the wire,
+ * because **a server too old to send a field has made no claim** and a parse
+ * that invented `false` or `0` for it would be the exact defect this removes.
+ * The `Omit<>` list is in two halves, and the comment on each is the decision:
+ *
+ *  - **re-typed** — parsed into something this page can honestly draw;
+ *  - **declined** — read at the boundary and not carried, or not read at all,
+ *    with the reason beside it.
+ *
+ * `Row` is filled with this file's own `FleetRow` and `Health` with `unknown`;
+ * wire.ts § `FleetState` says why those two are holes rather than shared
+ * declarations, and why sharing `FleetRow` verbatim would be wrong rather than
+ * merely impossible.
+ *
+ * TWO FIELDS ARE KEPT UNPARSED ON PURPOSE — `rawStatus` and `rawQuestion` on
+ * the rows. See their comments on `FleetRow`.
+ */
+export type FleetState = Omit<
+  FleetStateWire<FleetRow, unknown>,
+  /* Re-typed below, each because this page must be able to say "the server did
+     not tell me" without inventing an answer on its behalf. */
+  | "answeringEnabled"
+  | "refreshMs"
+  | "attention"
+  /* Declined: READ AT THE BOUNDARY AND NOT CARRIED. `schema` decides whether to
+     believe the payload at all (`parseFleetState` refuses anything else), and
+     `servedAt` is consumed into `clockSkew` below — carrying either would be a
+     second copy of a decision already made. */
+  | "schema"
+  | "servedAt"
+  /* Declined: NOT READ, and this is the one entry that is a debt rather than a
+     decision. `attemptedAt` distinguishes "the box is quiet" from "we stopped
+     looking" — the fault it was added for is a collection that never settles,
+     which throws nothing, so `error` stays null and the masthead says calm. To
+     read it honestly a client needs the three arms of `readAttemptClock`
+     (state.ts): absent means EITHER never attempted OR a server too old to
+     report it, and only `collectedAt` separates them. That helper is a runtime
+     value, so it cannot live in wire.ts, and giving both sides one home for it
+     is a decision about a shared runtime module that v0.8b did not make. Named
+     here so the drop is reviewable rather than silent, which is the whole point
+     of this list. */
+  | "attemptedAt"
+> & {
   rows: FleetRow[];
-  /**
-   * Box health. Shape owned by tools/fleet/health.ts, which is being written by
-   * somebody else as this lands — so it is `unknown` here on purpose and
-   * HealthPanel renders whatever arrives without a schema. `null` means the
-   * server had nothing to give, which the panel says out loud rather than
-   * drawing an empty page.
-   */
-  health: unknown;
   /**
    * **How often the server actually collects**, in milliseconds, when it says.
    *
-   * Optional because the server does not send it today. It is read here rather
-   * than waited for because the alternative — a hardcoded staleness threshold —
-   * is what had the masthead crying STALE for most of every cycle: the page
-   * gave up after 30s against a collector that runs every 55–60s, deliberately,
-   * since one collection costs the box about ten seconds of work. A banner that
-   * is on most of the time is a banner nobody reads, which costs this tool the
-   * one signal it is built around.
-   *
    * `null` when absent, and `Header.freshness` then falls back to the cadence
-   * it has watched happen (useFleetState). Whichever it gets, the threshold is
-   * derived from it rather than written down beside it.
+   * it has watched happen (useFleetState). "The server did not say" and "the
+   * server says 60s" are different facts, and only the first should let the
+   * observed cadence win — a hardcoded threshold is what had the masthead
+   * crying STALE for most of every cycle.
    */
   refreshMs: number | null;
+  /**
+   * **Whether tapping an option would do anything**, or the fact that this
+   * server never said.
+   *
+   * Three states rather than two, and the third is why this is not `boolean`:
+   * a server built before the flag existed has made NO CLAIM, and defaulting to
+   * `true` invites the tap the hold exists to prevent while defaulting to
+   * `false` prints a warning nobody has any basis for. `SessionDetail`'s
+   * `HeldBack` draws the difference — the same discipline `parseGate` applies
+   * to `unknown`.
+   */
+  answeringEnabled: boolean | null;
+  /**
+   * **The attention inbox** — what the Overseer says needs Greg, or the reason
+   * there is no such list.
+   *
+   * Widened from the wire's `AttentionFeed` by one arm: a field that is PRESENT
+   * and unreadable is a fact about a payload rather than about the box, so the
+   * server cannot report it and this page must. See `AttentionView`.
+   */
+  attention: AttentionView;
   /**
    * **How many rows in the payload could not be read**, which is a fact about
    * the fleet and not a tidiness note.
@@ -308,17 +369,11 @@ export type FleetState = {
    * carrying a question scraped off a terminal, which is precisely the row the
    * page is opened to see. So the count is carried and the panel says *3 of 41
    * sessions could not be read* rather than showing 38 and looking complete.
+   *
+   * Not on the wire at all: the server has no unreadable rows, only this
+   * parser does.
    */
   unreadableRows: number;
-  /**
-   * **The attention inbox** — what the Overseer says needs Greg, or the reason
-   * there is no such list.
-   *
-   * Never null and never absent, because every one of the five things it can
-   * say is worth saying and two of them are about us rather than about the box.
-   * See `parseAttention`, and `AttentionFeed` in wire.ts.
-   */
-  attention: AttentionView;
   /**
    * **What was done to every server timestamp above, and whether it could be.**
    *
@@ -382,10 +437,16 @@ export const CLOCK_SKEW_UNMEASURED: ClockSkew = {
 /**
  * The skew a payload implies, given when this browser received it.
  *
- * `servedAt − receivedAt` is skew plus network latency, and latency here is
- * milliseconds on a tailnet against thresholds of minutes — which is why
- * `servedAt` exists rather than `collectedAt` or `attemptedAt` being reused.
- * Either of those is up to a full cadence older than the answer, and that
+ * `servedAt − receivedAt` is not the skew alone. With a one-way latency `L`
+ * (box → browser) it is `serverOffset − browserOffset − L`, so the measurement
+ * UNDERSTATES the skew by `L` and the conversion maps server-send onto
+ * browser-receipt — which means every age computed off a shifted timestamp is
+ * short by `L` rather than long. That is fine here and the sign is the reason:
+ * `L` is milliseconds on a tailnet against thresholds of minutes, and it errs
+ * towards calling things fresher, never towards a manufactured alarm.
+ *
+ * It is `servedAt` that is read, and not `collectedAt` or `attemptedAt`, because
+ * either of those is up to a full cadence older than the answer — and that
  * genuine snapshot age cannot be told apart from skew. state.ts § `servedAt`.
  */
 export function readClockSkew(raw: unknown, receivedAt: number): ClockSkew {
@@ -395,21 +456,46 @@ export function readClockSkew(raw: unknown, receivedAt: number): ClockSkew {
       why: "this server does not say what time it answered, so the difference between its clock and this device's cannot be measured",
     };
   }
-  const servedAt = Date.parse(raw["servedAt"]);
-  if (!Number.isFinite(servedAt)) {
+  /* **`iso`, NOT `Date.parse`.** `Date.parse` reads `"0"` as the year 2000,
+     accepts date-only strings, and is allowed to accept anything else an
+     implementation fancies — and each of those would arrive as a `known` skew
+     and shift every timestamp on the page by years, in the direction of "the
+     box's clock is broken". The producer writes `toISOString()` (state.ts §
+     `servedAt`), so that is what this reads, and the same predicate the inbox
+     already refuses its timestamps with. GPT Sol's K6, 2026-09-08. */
+  const servedAt = iso(raw["servedAt"]);
+  if (servedAt === null) {
     return { kind: "unknown", why: "the server sent a time of answering this page could not read" };
   }
-  return { kind: "known", ms: servedAt - receivedAt };
+  return { kind: "known", ms: Date.parse(servedAt) - receivedAt };
 }
 
 /**
  * One server timestamp, in this browser's terms. **The whole of the fix.**
  *
- * Shifts the STRING rather than returning a number, because most of these stay
- * strings all the way to the screen and some of them are read as wall-clock
- * times rather than as ages. Displaying a shifted `pause.resetsAt` is CORRECT
- * for a reader: a phone five minutes fast should show a 06:30 reset as 06:35,
- * because 06:35 is when it will happen by the clock they are looking at.
+ * **SHIFT A VALUE THAT REACHES THE SCREEN THROUGH A LOCAL WALL-CLOCK FORMATTER
+ * OR AS AN AGE. NEVER SHIFT ONE THAT IS PRINTED AS AN ABSOLUTE INSTANT** — that
+ * manufactures a UTC time nothing happened at, and it is still wrong about the
+ * reader's timezone anyway.
+ *
+ * **The rule shipped one round too broad, and this is the corrected version.**
+ * It used to argue only the first half — that a phone five minutes fast should
+ * show a 06:30 reset as 06:35 — which is true of `pause.resetsAt`, because
+ * `PauseLine` renders it through `clockTime()` and the reader is comparing it
+ * against the watch on their wrist. It is false of anything printed as the ISO
+ * string it is: a transcript turn's `at` went to the screen verbatim, so the
+ * shift turned `12:00:00Z` into `12:05:00Z` — not *the phone's wall clock*, but
+ * an assertion about a different absolute instant that nothing happened at.
+ * GPT Sol's K4, 2026-09-08; messages-client.ts § `withClockSkew` holds the
+ * other end, and carries a corrected NUMBER beside the untouched string rather
+ * than moving it.
+ *
+ * Shifts the STRING rather than returning a number, because the values this is
+ * still right for stay strings all the way to their formatter, and one of them
+ * has to stay in the shape `iso` accepts: `parseAttention`'s shifted `writtenAt`
+ * becomes a degraded list's `scannedAt`, which the type promises came out of
+ * `toISOString()`. `shiftMsToBrowserClock` below is the same conversion for the
+ * callers that never had a string.
  *
  * Anything unparseable is returned untouched, for the same reason `startedAt`
  * survives as `""` — this function's job is to move a time, not to decide
@@ -419,7 +505,24 @@ export function shiftToBrowserClock(value: string | null, skew: ClockSkew): stri
   if (value === null || skew.kind === "unknown" || skew.ms === 0) return value;
   const at = Date.parse(value);
   if (!Number.isFinite(at)) return value;
-  return new Date(at - skew.ms).toISOString();
+  return new Date(shiftMsToBrowserClock(at, skew)).toISOString();
+}
+
+/**
+ * The same conversion on a number, for the callers that never had a string.
+ *
+ * **The arithmetic lives here once.** Three places need it — the string form
+ * above, `browserMsOf` in messages-client.ts, and the chart's axis labels in
+ * HealthHistory.tsx, whose samples arrive as epoch milliseconds — and a second
+ * copy of `at - skew.ms` is a second chance to get the sign the wrong way
+ * round. It is the sign, specifically: `skew.ms` is the SERVER's clock minus
+ * this browser's, so a server ahead of us means subtracting to come back.
+ *
+ * An `unknown` skew shifts by zero, which is the whole discipline of the type:
+ * nobody measured it, so nothing is invented.
+ */
+export function shiftMsToBrowserClock(at: number, skew: ClockSkew): number {
+  return skew.kind === "unknown" ? at : at - skew.ms;
 }
 
 /* ------------------------------------------------------------- parsing -- */
@@ -434,6 +537,29 @@ function str(v: unknown): string | null {
 
 function num(v: unknown, fallback: number): number {
   return typeof v === "number" && Number.isFinite(v) ? v : fallback;
+}
+
+/**
+ * A timestamp spelled the one way this fleet spells one.
+ *
+ * The same check `isIsoTimestamp` makes in tools/overseer/store.ts, and
+ * deliberately as strict: every timestamp in the inbox was written by
+ * `toISOString()` and was refused by that function on the way into the
+ * checkpoint, so anything else arriving here did not come from the producer. A
+ * lenient version would accept a string `Date.parse` can read and the age
+ * arithmetic cannot reason about, which is how a duration on screen becomes
+ * confidently wrong rather than absent.
+ *
+ * **It sits up here, with the general helpers, because it now guards two things
+ * and not one.** It was written for the attention inbox and `readClockSkew`
+ * borrowed it (GPT Sol's K6): the two are the same requirement, that a
+ * timestamp came out of `toISOString()` and not out of whatever `Date.parse`
+ * happens to tolerate this month.
+ */
+function iso(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const at = new Date(v);
+  return Number.isNaN(at.getTime()) || at.toISOString() !== v ? null : v;
 }
 
 /**
@@ -777,23 +903,6 @@ export function parseRow(v: unknown, skew: ClockSkew): FleetRow | null {
 }
 
 /* ------------------------------------------------- the attention inbox -- */
-
-/**
- * A timestamp spelled the one way this fleet spells one.
- *
- * The same check `isIsoTimestamp` makes in tools/overseer/store.ts, and
- * deliberately as strict: every timestamp in the inbox was written by
- * `toISOString()` and was refused by that function on the way into the
- * checkpoint, so anything else arriving here did not come from the producer. A
- * lenient version would accept a string `Date.parse` can read and the age
- * arithmetic cannot reason about, which is how a duration on screen becomes
- * confidently wrong rather than absent.
- */
-function iso(v: unknown): string | null {
-  if (typeof v !== "string") return null;
-  const at = new Date(v);
-  return Number.isNaN(at.getTime()) || at.toISOString() !== v ? null : v;
-}
 
 /** A count. Integer and non-negative: `sessionsScanned: 2.5` is not a number of sessions. */
 function count(v: unknown): number | null {
@@ -1169,6 +1278,26 @@ export function parseFleetState(raw: unknown, receivedAt: number): FleetStateRea
       collectedAt: shiftToBrowserClock(str(raw["collectedAt"]), clockSkew),
       tookMs: num(raw["tookMs"], 0),
       error: str(raw["error"]),
+      /* **WHICH TMUX SERVER THESE HANDLES BELONG TO.** Every `$…` and `%…` in
+         `rows` is meaningless without it: two snapshots with different values
+         here describe different worlds, however alike `$1643` looks in both.
+         Read here and drawn in the detail pane beside the handles themselves.
+
+         Absent and unreadable both land on `null`, deliberately merged: the
+         server sends `null` when it could not read the pid, and a server too
+         old to send the field at all leaves the same hole — and in both cases
+         the only honest sentence is *this page cannot tell you which tmux
+         server these are*. There is nothing a reader would do differently. */
+      tmuxServerPid: typeof raw["tmuxServerPid"] === "number" && Number.isFinite(raw["tmuxServerPid"]) ? raw["tmuxServerPid"] : null,
+      /* **TOLD, NOT INFERRED — and `null` is a third answer, not a default.**
+         The server had been sending this for a day and this parser did not read
+         it, so a person tapped an option and got a 503, which is precisely the
+         outcome the field exists to prevent (wire.ts § `answeringEnabled`).
+         `=== true` / `=== false` rather than truthiness: an absent field is a
+         server that has made no claim, and both `true` and `false` would be
+         claims made on its behalf — one invites the tap, the other prints a
+         warning nothing supports. */
+      answeringEnabled: raw["answeringEnabled"] === true ? true : raw["answeringEnabled"] === false ? false : null,
       rows,
       unreadableRows,
       health: raw["health"] ?? null,

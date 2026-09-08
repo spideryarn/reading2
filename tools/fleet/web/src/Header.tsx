@@ -208,7 +208,12 @@ export function Header({
      nothing about them — it exists because a corrected page and a broken clock
      otherwise look identical, and because nothing else will ever tell Greg his
      phone is five minutes fast. Quiet by construction: no colour, no card, and
-     nothing at all under a minute (view.ts § `CLOCK_SKEW_NOTICE_MS`). */
+     nothing at all under a minute (view.ts § `CLOCK_SKEW_NOTICE_MS`).
+
+     Three outcomes, not two: a measured skew worth mentioning, a measured one
+     too small to move a printed number (silence), and a skew that could not be
+     measured at all — which says so rather than passing as the second, because
+     an unmeasured correction and a zero one draw the same page. */
   const clock = state === null ? null : clockNote(state.clockSkew);
 
   return (

@@ -69,6 +69,7 @@ import {
   messagesUrl,
   parseRecentMessages,
   transcriptAge,
+  withClockSkew,
   type MessagesApi,
 } from "../tools/fleet/web/src/messages-client";
 import { makeNewSessionApi, parseLaunch, type NewSessionApi } from "../tools/fleet/web/src/new-session-client";
@@ -76,10 +77,12 @@ import { looksLikeAName, makeRenameApi, renameBody, type RenameApi } from "../to
 import {
   makeSteerApi,
   parseDelivery,
+  parseVerified,
   steerMessageBody,
   type SteerApi,
   type SteerOutcome,
 } from "../tools/fleet/web/src/steer-client";
+import type { HealthSampleView, HistoryApi, HistoryView } from "../tools/fleet/web/src/health-history-client";
 import { readHealthStats } from "../tools/fleet/web/src/health-view";
 import { fetchFleetState } from "../tools/fleet/web/src/transport";
 import type { Transport, TransportSink } from "../tools/fleet/web/src/transport";
@@ -104,6 +107,17 @@ import {
    because server.ts binds ports at import time and can never be imported. */
 import { readAttention } from "../tools/fleet/attention";
 import { statePayload } from "../tools/fleet/state";
+/* **THE PRODUCER'S OWN TYPE, ON THE FIXTURES THAT CLAIM TO BE ITS OUTPUT.**
+   `actionsWire()` in this file once built `{actions: []}` — a flat array the
+   route has never sent — and ~196 tests passed over it while every action
+   button on the real page was invisible, under a doc comment correctly saying
+   the fixture had to be the wire shape. A fixture is a claim about the producer
+   that nothing checks against the producer, unless it is annotated with the
+   producer's type. `Partial<>`, because most of these fixtures are deliberately
+   payloads from an OLDER server; what the annotation buys is that every field
+   they do name is a field the server really sends, spelled the way it spells
+   it. A fixture that is deliberately malformed says so — see `malformed`. */
+import type { FleetState as FleetStateWire } from "../tools/fleet/wire";
 import {
   CONSEQUENCE_RANK,
   CONSEQUENCE_TONE,
@@ -217,6 +231,22 @@ function state(over: Partial<FleetState> = {}): FleetState {
        the page would really build off an older server — and nothing is shifted.
        A fixture that names a skew passes one. */
     clockSkew: CLOCK_SKEW_UNMEASURED,
+    /* **BOTH OF THESE ARRIVED HERE AS COMPILE ERRORS**, which is the whole
+       point of v0.8b: `FleetState` is now `Omit<>` of the wire type, so a field
+       the server sends and this fixture does not mention stops the build.
+       Before that, this object was a hand-written twin and the two fields the
+       server had been sending for a day were simply absent from it — and from
+       the page.
+
+       `null` for `answeringEnabled` rather than `true`, for the same reason
+       `attention` above is `not-asked`: it is what `parseFleetState` produces
+       for a payload that does not carry the field, so a fixture that does not
+       care about the flag gets the page a real older server would draw. A
+       fixture that cares about the hold passes `false` and asserts on the card.
+       `tmuxServerPid` is a real-looking pid because the tmux server on this box
+       is pid 132280 and the detail pane prints it verbatim. */
+    answeringEnabled: null,
+    tmuxServerPid: 132280,
     ...over,
   };
 }
@@ -271,7 +301,25 @@ function manualTransport(): {
  * read fails as itself instead of as a chain of optional accesses that quietly
  * assert nothing.
  */
-function wire(over: Record<string, unknown>): FleetState {
+type WirePayload = { [K in keyof FleetStateWire]?: FleetStateWire[K] | undefined };
+
+function wire(over: WirePayload): FleetState {
+  const read = parseFleetState({ schema: 1, rows: [], ...over }, Date.now());
+  if (!read.ok) throw new Error(`the fixture did not parse: ${read.why}`);
+  return read.state;
+}
+
+/**
+ * **A PAYLOAD THAT IS DELIBERATELY NOT THE WIRE SHAPE**, for the tests that are
+ * about the parser refusing one.
+ *
+ * The escape hatch from `wire()`'s annotation, and it is a separate name rather
+ * than a cast so that reaching for it is visible in the diff: every call is a
+ * test asserting what this page does with a value the server would never send.
+ * `wire()` stays typed, so a fixture that means to be honest cannot be wrong by
+ * accident — which is the failure `actionsWire()` shipped.
+ */
+function malformed(over: Record<string, unknown>): FleetState {
   const read = parseFleetState({ schema: 1, rows: [], ...over }, Date.now());
   if (!read.ok) throw new Error(`the fixture did not parse: ${read.why}`);
   return read.state;
@@ -635,6 +683,89 @@ describe("box health, whose shape belongs to somebody else", () => {
     mount(feed.transport);
     act(() => feed.push(state({ health: { verdict: "fine, probably" } })));
     expect(container.textContent).toContain("fine, probably");
+  });
+});
+
+/**
+ * **THE MASTHEAD SAYS THE TIMES ARE CORRECTED; THE CHART'S LABELS HAVE TO BE.**
+ * GPT Sol's K3, 2026-09-08.
+ *
+ * The 24-hour chart prints clock times — an axis, the worst point of each
+ * series, when a break ended, when the last write worked — and they were
+ * formatted straight off the server's instants. On a phone five minutes fast
+ * those labels disagree with the watch in the reader's hand AND with the line
+ * at the top of the page saying the page is corrected for exactly that.
+ *
+ * **Only the labels.** The chart's geometry and its gap detection are
+ * server-to-server arithmetic and are right untouched; correcting those would
+ * move a fault relative to its own window. HealthHistory.tsx § `timeLabel`.
+ */
+describe("the health chart's own clock", () => {
+  const CADENCE = 73_000;
+  /** A device five minutes fast: the box's `servedAt` reads five minutes behind ours. */
+  const SKEW_MS = 5 * 60_000;
+
+  /** The same wall-clock formatter the chart uses, so this asserts the SHIFT and not the format. */
+  const hhmm = (ms: number): string => new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+  function reading(atMs: number, ratio1: number): HealthSampleView {
+    return {
+      kind: "reading",
+      atMs,
+      nextDueMs: CADENCE,
+      report: {
+        load: { kind: "value", load1: ratio1 * 16, cores: 16, ratio1 },
+        memory: { kind: "value", availableFraction: 0.4 },
+        swap: { kind: "value", usedFraction: 0.4 },
+        swapActivity: { kind: "value", waPercent: 1, activelySwapping: false },
+        verdict: { level: "ok", reasons: [] },
+      },
+    };
+  }
+
+  it("prints the peak's time on the reader's clock rather than on the box's", async () => {
+    /* The PEAK's own timestamp rather than the axis: it is a number this
+       fixture chooses outright, so the assertion does not depend on where
+       `plotHistory` puts the window's edge or on when the render happened. */
+    const nowMs = Date.now();
+    const peakAtMs = nowMs - 3 * 3_600_000;
+    const view: HistoryView = {
+      kind: "history",
+      windowHours: 24,
+      fromMs: nowMs - 24 * 3_600_000,
+      toMs: nowMs,
+      samples: [reading(peakAtMs - CADENCE, 1), reading(peakAtMs, 9.4), reading(peakAtMs + CADENCE, 1)],
+      predecessor: null,
+      holes: [],
+      earliestAtMs: peakAtMs - CADENCE,
+      rotated: false,
+      retention: null,
+      unreadableLines: 0,
+      refreshMs: 60_000,
+      unreadableSamples: 0,
+    };
+
+    window.location.hash = "#health";
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport, historyApi: { window: async () => view } });
+    const servedAt = new Date(Date.now() - SKEW_MS).toISOString();
+    act(() =>
+      feed.push(
+        wire({
+          servedAt,
+          collectedAt: servedAt,
+          health: { verdict: { level: "ok", reasons: [] } },
+        }),
+      ),
+    );
+    await act(async () => {});
+
+    const text = container.textContent ?? "";
+    /* The peak is on screen at all — without this the two assertions below are
+       both satisfied by a chart that failed to load. */
+    expect(text).toContain("peak 9.4");
+    expect(text).toContain(hhmm(peakAtMs + SKEW_MS));
+    expect(text).not.toContain(hhmm(peakAtMs));
   });
 });
 
@@ -1033,7 +1164,10 @@ describe("staleness, against the collector's own cadence", () => {
     expect(wire({ refreshMs: 60_000 }).refreshMs).toBe(60_000);
     expect(wire({}).refreshMs).toBeNull();
     // Not a number, or nonsense: the server did not say, so the page measures.
-    expect(wire({ refreshMs: "soon" }).refreshMs).toBeNull();
+    // `malformed`, because `"soon"` is not a thing this server can send — the
+    // annotation on `wire()` says so, and this test is about what happens when
+    // something else does.
+    expect(malformed({ refreshMs: "soon" }).refreshMs).toBeNull();
     expect(wire({ refreshMs: -1 }).refreshMs).toBeNull();
   });
 });
@@ -1082,7 +1216,19 @@ describe("the box's clock, read with the phone's", () => {
        bytes as the one below minus `servedAt`, which is exactly what a server
        built before this stage sends — so this is the page as it was, red at a
        snapshot the box collected seconds ago. Without this assertion the test
-       underneath passes on a page that draws nothing at all. */
+       underneath passes on a page that draws nothing at all.
+
+       **AND ON THE UNKNOWN PATH THAT PRE-STAGE BEHAVIOUR IS WHAT WE KEEP, ON
+       PURPOSE.** GPT Sol's K1 asked whether an unmeasured skew should suppress
+       this alarm; it should not. Suppressing loses a real staleness signal to
+       avoid a possible false one, and that trade is the wrong way round on the
+       page whose whole job is to say when it has stopped being told anything.
+       So the greenness of this test is NOT a claim that the unknown path is
+       right — it is the deliberate decision that an unknown skew changes no
+       alarm. What v0.4j's follow-up added is that the page stops being SILENT
+       about it: see the clock line asserted two tests below. The branch has
+       essentially no real occupancy either way, because the same process serves
+       this bundle and answers `/api/state`. */
     const feed = manualTransport();
     mount(feed.transport);
     act(() => feed.push(wire(skewed({ servedAt: undefined }))));
@@ -1114,14 +1260,48 @@ describe("the box's clock, read with the phone's", () => {
 
   it("corrects by ZERO, not by a guess, when the server does not say — and does not throw", () => {
     /* An unknown skew is not a small one. `not-asked`'s rule, at the type: an
-       older server made no claim about its clock, so nothing is shifted and the
-       page says nothing about it. */
+       older server made no claim about its clock, so nothing is shifted. What
+       it does NOT do is pass silently — see the test below. */
     const collectedAt = "2026-09-08T12:00:00.000Z";
     const read = parseFleetState({ schema: 1, rows: [], collectedAt }, Date.parse("2026-09-08T12:30:00.000Z"));
     if (!read.ok) throw new Error(read.why);
     expect(read.state.collectedAt).toBe(collectedAt);
     expect(read.state.clockSkew.kind).toBe("unknown");
-    expect(clockNote(read.state.clockSkew)).toBeNull();
+    /* Corrected by zero, and NOT silent about it — the rendered half of this is
+       the test below. */
+    expect(clockNote(read.state.clockSkew)).not.toBeNull();
+  });
+
+  /**
+   * **AN UNMEASURED SKEW MUST NOT RENDER AS A MEASURED ZERO.** GPT Sol's K1.
+   *
+   * A correction of zero and a correction nobody could compute produce a
+   * byte-identical page, with every clock-dependent alarm intact and nothing
+   * saying the check never happened. The alarms stay — suppressing a real one
+   * to avoid a possible false one is the wrong trade here — so the whole of the
+   * fix is that the page stops presenting an unmeasured thing as measured.
+   *
+   * Quiet, in the same furniture as the measured line, because it is a fact
+   * about the payload rather than an alarm about the fleet.
+   */
+  it("says the clock could not be checked, rather than looking exactly like a clock that agrees", () => {
+    const feed = manualTransport();
+    mount(feed.transport);
+    act(() => feed.push(wire(skewed({ servedAt: undefined }))));
+    const text = container.textContent ?? "";
+    expect(text).toContain("this device's clock could not be checked against the box's");
+    expect(text).toContain("the times here are the server's own");
+    /* And it is not the measured sentence wearing a zero. */
+    expect(text).not.toContain("the times here are corrected for it");
+  });
+
+  it("says nothing of the kind once the skew has actually been measured", () => {
+    /* The other half, because "the page says the clock is unchecked" is also
+       what a page that says it on every load would say. */
+    const feed = manualTransport();
+    mount(feed.transport);
+    act(() => feed.push(wire(skewed())));
+    expect(container.textContent ?? "").not.toContain("could not be checked");
   });
 
   it("leaves `heardAge` on the browser's clock, which is the measurement a corrected `useNow` would break", () => {
@@ -1212,6 +1392,28 @@ describe("the box's clock, read with the phone's", () => {
       now,
     );
     expect(skew).toEqual({ kind: "known", ms: 0 });
+  });
+
+  /**
+   * **`Date.parse` IS NOT THE CONTRACT.** GPT Sol's K6, 2026-09-08.
+   *
+   * It reads `"0"` as the year 2000, accepts date-only strings, and is allowed
+   * to accept anything else an implementation fancies — and every one of those
+   * would arrive here as a `known` skew and shift every timestamp on the page by
+   * years, silently, in the direction of "the box's clock is broken". The
+   * producer writes `toISOString()` and nothing else, so this reads exactly that
+   * and calls anything else unmeasured — the same predicate, `iso`, that the
+   * attention inbox already refuses its timestamps with.
+   */
+  it("refuses a `servedAt` that is not the one shape a timestamp has here", () => {
+    const now = Date.parse("2026-09-08T12:00:00.000Z");
+    /* `"0"` first, because it is the one that looks least like a date and
+       parses to the most confident wrong answer. */
+    for (const servedAt of ["0", "2026-09-08", "2026-09-08T12:00:00Z", "8th Sept", "", "12:00:00"]) {
+      expect(readClockSkew({ servedAt }, now), JSON.stringify(servedAt)).toMatchObject({ kind: "unknown" });
+    }
+    /* And the shape the server actually sends is still read. */
+    expect(readClockSkew({ servedAt: "2026-09-08T12:00:00.000Z" }, now)).toEqual({ kind: "known", ms: 0 });
   });
 
   it("puts the server's clock on the payload production actually composes", () => {
@@ -1508,11 +1710,38 @@ function recordingSteer(): {
   const api: SteerApi = {
     message: async (row, text) => {
       calls.push({ op: "message", row, arg: text });
-      return { ok: true, op: "message", sent: [["tmux", "send-keys", "-t", row.paneId ?? "?", "-l", "--", text]] };
+      return {
+        ok: true,
+        op: "message",
+        sent: [["tmux", "send-keys", "-t", row.paneId ?? "?", "-l", "--", text]],
+        /* **THE ADDRESS THE SERVER SAYS IT REACHED, AND IT IS THE ROW'S OWN.**
+           A stub that answered `not-told` would draw nothing and quietly stop
+           exercising the comparison in `Landed`; one that answered a different
+           pane would put every test's page into the mismatch alarm. This is
+           what the real server sends on a send that went where it was aimed. */
+        verified: {
+          kind: "verified",
+          paneId: row.paneId ?? "?",
+          sessionId: row.id,
+          panePid: row.panePid ?? 0,
+          claudePid: 4243,
+        },
+      };
     },
     answer: async (row, index) => {
       calls.push({ op: "answer", row, arg: index });
-      return { ok: true, op: "answer", sent: [["tmux", "send-keys", "-t", row.paneId ?? "?", "1"]] };
+      return {
+        ok: true,
+        op: "answer",
+        sent: [["tmux", "send-keys", "-t", row.paneId ?? "?", "1"]],
+        verified: {
+          kind: "verified",
+          paneId: row.paneId ?? "?",
+          sessionId: row.id,
+          panePid: row.panePid ?? 0,
+          claudePid: 4243,
+        },
+      };
     },
   };
   return { api, calls };
@@ -1696,6 +1925,7 @@ function mountFull(args: {
   rename?: RenameApi;
   actionsApi?: ActionsApi;
   messagesApi?: MessagesApi;
+  historyApi?: HistoryApi;
 }): void {
   act(() =>
     root.render(
@@ -1706,6 +1936,7 @@ function mountFull(args: {
         rename={args.rename ?? fakeRename()}
         actionsApi={args.actionsApi ?? recordingActions().api}
         messagesApi={args.messagesApi ?? recordingMessages().api}
+        {...(args.historyApi === undefined ? {} : { historyApi: args.historyApi })}
         /* An hour, so the poll never fires inside a test. The poll itself is
            tested on its own; leaving it live here would make every other test
            in the file depend on a timer. */
@@ -3161,6 +3392,92 @@ describe("recent messages, on the page", () => {
     /* And the turns are on screen, so this is a rendered pane rather than an
        empty one agreeing with the assertion above. */
     expect(turns().length).toBeGreaterThan(0);
+  });
+
+  /**
+   * **THE HALF OF v0.4j THAT WAS ITSELF THE BUG.** GPT Sol's K4, 2026-09-08.
+   *
+   * A turn's `at` goes to the screen as the ISO string it is (RecentMessages
+   * § `Turn`), so shifting it did not say *the phone's wall clock* — it
+   * asserted a different absolute UTC instant, one that nothing ever happened
+   * at, beside prose describing what was happening at the real one. The rule is
+   * in types.ts § `shiftToBrowserClock`, and this is the case that established
+   * it.
+   *
+   * Five minutes is chosen so the wrong answer is a DIFFERENT STRING rather
+   * than a rounding: 11:59:00Z shifted reads 12:04:00Z.
+   */
+  it("prints a turn's timestamp as the server wrote it, rather than moving it to an instant nothing happened at", async () => {
+    const at = "2026-09-08T11:59:00.000Z";
+    const feed = manualTransport();
+    const messages = recordingMessages(() => messagesWire({ turns: [turnWire({ at })] }));
+    mountFull({ transport: feed.transport, messagesApi: messages.api });
+    /* A phone five minutes fast: the server's `servedAt` reads five minutes
+       behind this browser's own clock. */
+    const servedAt = new Date(Date.now() - 5 * 60_000).toISOString();
+    act(() =>
+      feed.push(
+        wire({
+          servedAt,
+          collectedAt: servedAt,
+          rows: [
+            {
+              id: "$a",
+              name: "a",
+              title: "a session",
+              startedAt: servedAt,
+              status: { kind: "working" },
+              paneId: "%2108",
+              panePid: 4242,
+              claudeSessionId: "117e181a-155b-435a-b95b-e74220678d1a",
+              meta: { version: 1, kind: "claude", repo: "spideryarn/reading2", dir: "/home/greg/code/spideryarn2" },
+            },
+          ],
+        }),
+      ),
+    );
+    openSession("a session");
+    await act(async () => {});
+    const text = container.textContent ?? "";
+    expect(text).toContain(at);
+    /* The minute rather than the whole instant: the fixture's `servedAt` and
+       the parser's `Date.now()` are a millisecond or two apart, so the wrong
+       answer was `12:04:00.001Z` — which an exact-string check would have let
+       through. */
+    expect(text).not.toContain("2026-09-08T12:04");
+  });
+
+  /**
+   * **RAW FOR THE SCREEN, CORRECTED FOR THE ARITHMETIC** — and the pair is also
+   * the answer to K5.
+   *
+   * A transcript is fetched once when the pane opens and never re-fetched, so a
+   * SHIFTED STRING held in component state would keep whatever correction was
+   * live at fetch time for as long as the pane is open, while the rows around it
+   * are re-parsed with a newer one on every poll. Two clocks on one screen,
+   * drifting apart, with nothing saying so. GPT Sol's K5.
+   *
+   * **The fix is that nothing moves it**, which is a stronger guarantee than
+   * correcting it carefully: a value nothing shifts cannot hold a stale shift. A
+   * pre-corrected `atMs` was carried beside it for one commit and then deleted —
+   * nothing read it, and a field with a producer, a test and no consumer is
+   * Class A out of 260908b, built that time while fixing an instance of Class A.
+   * Its warning now lives on `at` itself, where anybody computing an age off a
+   * turn will read it before they reach for it.
+   */
+  it("leaves the turn's own timestamp exactly as the server sent it", async () => {
+    const at = "2026-09-08T11:59:00.000Z";
+    const api: MessagesApi = {
+      recent: async () => parseRecentMessages(messagesWire({ turns: [turnWire({ at })] })),
+    };
+    const view = await withClockSkew(api, () => ({ kind: "known", ms: -5 * 60_000 })).recent(
+      steerable({ id: "$a" }),
+    );
+    if (view.kind !== "found") throw new Error("the fixture did not parse as found");
+    /* A five-minute skew is live and the string is untouched — so what the screen
+       prints is still an instant that happened, rather than one moved onto a
+       clock it was never on. */
+    expect(view.turns[0]?.at).toBe(at);
   });
 
   it("says how many tool results it skipped rather than implying silence", async () => {
@@ -5440,17 +5757,30 @@ describe("the attention inbox, on the page", () => {
     expect(text).toContain("at a time this page could not read");
   });
 
-  it("still absorbs the page's own tick, so a checkpoint written moments before it was served does not flash", () => {
-    /* The slack that is left is not an allowance for a device nobody measured —
-       it is the granularity of this page's own clock. `useNow` ticks once a
-       second, and a render triggered by an arriving payload compares a
-       just-corrected timestamp against a `now` up to a tick old. Without it a
-       healthy fleet would flash *"at a time this page could not read"*, which is
-       the alarm-a-clock-manufactures failure with a different clock in it.
-       AttentionPanel.tsx § `RENDER_SLACK_MS`. */
-    const text = showing(
-      published(attentionList({ items: [], sessionsScanned: 32, scannedAt: agoIso(-2_000) })),
-    );
+  it("does not call a fresh checkpoint unreadable because the page's own clock was asleep", () => {
+    /* **THE SLACK CONSTANT IS GONE, AND THIS IS THE CASE NO VALUE OF IT COULD
+       HAVE COVERED.** It was five seconds, justified by `useNow` ticking once a
+       second — but a phone in a pocket has its timers throttled and then
+       suspended, and iOS hands the tab back by starting a refresh immediately.
+       So the payload below is judged against a `now` a minute old, and a
+       blocked main thread does the same thing without any tab switching. The
+       old constant turned that into *"at a time this page could not read"* on a
+       checkpoint written the instant it was served: the alarm-a-clock-
+       manufactures failure, one clock further in.
+
+       What replaces it is an anchor rather than a tolerance —
+       `Math.max(now, receivedAt)`, a browser-clock reading that cannot be older
+       than the payload it is judging. GPT Sol's K2, 2026-09-08. */
+    const feed = manualTransport();
+    mount(feed.transport);
+    /* A minute asleep. `Date.now` is mocked AFTER the mount, so `useNow`'s
+       state keeps the old reading — which is exactly what a throttled timer
+       does — while `receivedAt` is stamped at the moment the answer arrives. */
+    const wokeAt = Date.now() + 60_000;
+    vi.spyOn(Date, "now").mockReturnValue(wokeAt);
+    const justNow = new Date(wokeAt).toISOString();
+    act(() => feed.push(state({ attention: published(attentionList({ scannedAt: justNow }), justNow) })));
+    const text = container.textContent ?? "";
     expect(text).toContain("nothing is waiting on you");
     expect(text).not.toContain("at a time this page could not read");
   });
@@ -5776,5 +6106,297 @@ describe("the composer production uses turns a checkpoint on disk into a questio
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
+  });
+});
+
+/* ==========================================================================
+   Stage v0.8b — the four fields the server sent and this page dropped.
+
+   Each of these is a LOSSY JOIN: the edge existed, the consumer dropped the
+   value, and both ends were internally consistent so nothing could go red.
+   `FleetState` deriving from `wire.ts` makes the drop un-writable; it cannot
+   make the value get READ, which is what this block is for. Every assertion
+   below is on a sentence a person reads off the page.
+   docs/postmortems/260908b, and § Stage v0.8a of the plan.
+   ========================================================================== */
+
+describe("answeringEnabled, told rather than discovered by tapping", () => {
+  it("keeps 'off' apart from 'this server never said'", () => {
+    expect(wire({ answeringEnabled: true }).answeringEnabled).toBe(true);
+    expect(wire({ answeringEnabled: false }).answeringEnabled).toBe(false);
+    /* THE THIRD ANSWER, and the reason this is not a boolean. A server built
+       before the flag sends nothing, and both `true` and `false` would be
+       claims made on its behalf — one invites the tap the hold exists to
+       prevent, the other prints a warning nothing supports. */
+    expect(wire({}).answeringEnabled).toBeNull();
+    expect(malformed({ answeringEnabled: "yes" }).answeringEnabled).toBeNull();
+  });
+
+  it("says answering is off BEFORE anybody taps, and withholds the buttons", () => {
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport });
+    /* The positive control first, and it is the half that matters: with the
+       flag ON the same row is answerable, so a build that simply stopped
+       offering answers would fail here rather than passing the test below. */
+    act(() =>
+      feed.push(
+        state({
+          answeringEnabled: true,
+          rows: [
+            steerable({
+              id: "$a",
+              title: "an agent asking",
+              status: { kind: "needs-you" },
+              question: question({ gate: { kind: "conversation" } }),
+            }),
+          ],
+        }),
+      ),
+    );
+    openSession("an agent asking");
+    expect(container.querySelectorAll("button.answer").length).toBeGreaterThan(0);
+    expect(container.textContent).not.toContain("Answering is switched off");
+
+    act(() =>
+      feed.push(
+        state({
+          answeringEnabled: false,
+          rows: [
+            steerable({
+              id: "$a",
+              title: "an agent asking",
+              status: { kind: "needs-you" },
+              question: question({ gate: { kind: "conversation" } }),
+            }),
+          ],
+        }),
+      ),
+    );
+    const text = container.textContent ?? "";
+    /* The whole point of the hold is that a person should not tap: the page was
+       being told this and dropping it, so a reader tapped and got a 503. */
+    expect(text).toContain("Answering is switched off on this server");
+    expect(container.querySelectorAll("button.answer")).toHaveLength(0);
+    /* And the composer is untouched — sending a message is unaffected by the
+       hold, which is a distinction the page draws rather than leaving to be
+       discovered. */
+    expect(container.querySelector<HTMLTextAreaElement>("#steer-text")?.disabled).toBe(false);
+  });
+
+  it("still offers the buttons when the server never said, rather than inventing a hold", () => {
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport });
+    act(() =>
+      feed.push(
+        state({
+          answeringEnabled: null,
+          rows: [
+            steerable({
+              id: "$a",
+              title: "an old server's row",
+              status: { kind: "needs-you" },
+              question: question({ gate: { kind: "conversation" } }),
+            }),
+          ],
+        }),
+      ),
+    );
+    openSession("an old server's row");
+    expect(container.querySelectorAll("button.answer").length).toBeGreaterThan(0);
+    expect(container.textContent).not.toContain("Answering is switched off");
+  });
+});
+
+describe("tmuxServerPid, the namespace the handles live in", () => {
+  it("reads it off the payload, and null when it is absent or unreadable", () => {
+    expect(wire({ tmuxServerPid: 132280 }).tmuxServerPid).toBe(132280);
+    expect(wire({ tmuxServerPid: null }).tmuxServerPid).toBeNull();
+    expect(wire({}).tmuxServerPid).toBeNull();
+    expect(malformed({ tmuxServerPid: "132280" }).tmuxServerPid).toBeNull();
+  });
+
+  it("prints it beside the handles it qualifies, so two snapshots can be compared", () => {
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport });
+    act(() => feed.push(state({ tmuxServerPid: 132280, rows: [steerable({ id: "$a", title: "a session" })] })));
+    openSession("a session");
+    expect(container.textContent).toContain("132280");
+
+    /* Absent says so rather than drawing nothing: a reader who cannot see this
+       number would otherwise assume the handles above it are comparable with
+       the ones they wrote down yesterday. */
+    act(() => feed.push(state({ tmuxServerPid: null, rows: [steerable({ id: "$a", title: "a session" })] })));
+    expect(container.textContent).toContain("tmux server unread");
+  });
+});
+
+describe("verified — which pane the keystrokes actually reached", () => {
+  it("refuses half an address rather than filling the missing half in", () => {
+    const whole = { paneId: "%2108", sessionId: "$1643", panePid: 4242, claudePid: 4243 };
+    expect(parseVerified(whole)).toEqual({ kind: "verified", ...whole });
+    expect(parseVerified({ ...whole, paneId: "" })).toEqual({ kind: "not-told" });
+    expect(parseVerified({ ...whole, claudePid: "4243" })).toEqual({ kind: "not-told" });
+    /* A success with no address at all — what a server older than the field
+       sends. `not-told` and never an address with holes in it. */
+    expect(parseVerified(undefined)).toEqual({ kind: "not-told" });
+  });
+
+  it("says where the message landed, and shouts when it is not where you were looking", async () => {
+    const feed = manualTransport();
+    /* A server that says the keys went somewhere else. It should be
+       impossible — `verifyTarget` refuses a claim that does not match live
+       tmux — so reaching this branch means a guard did not hold, which is
+       precisely the thing a green tick must not hide. */
+    const elsewhere: SteerApi = {
+      message: async () => ({
+        ok: true,
+        op: "message",
+        sent: [],
+        verified: { kind: "verified", paneId: "%9999", sessionId: "$9999", panePid: 1, claudePid: 2 },
+      }),
+      answer: async () => ({ ok: true, op: "answer", sent: [], verified: { kind: "not-told" } }),
+    };
+    mountFull({ transport: feed.transport, steer: elsewhere });
+    act(() => feed.push(state({ rows: [steerable({ id: "$a", title: "a session" })] })));
+    openSession("a session");
+    const box = container.querySelector<HTMLTextAreaElement>("#steer-text");
+    if (!box) throw new Error("no message box");
+    typeInto(box, "carry on");
+    await act(async () => {
+      buttonSaying("Send now")?.click();
+    });
+    const text = container.textContent ?? "";
+    expect(text).toContain("IT WENT SOMEWHERE ELSE");
+    expect(text).toContain("%9999");
+  });
+
+  it("names the pane on an ordinary send, rather than only saying 'Sent.'", async () => {
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport, steer: recordingSteer().api });
+    act(() => feed.push(state({ rows: [steerable({ id: "$a", title: "a session", paneId: "%2108" })] })));
+    openSession("a session");
+    const box = container.querySelector<HTMLTextAreaElement>("#steer-text");
+    if (!box) throw new Error("no message box");
+    typeInto(box, "carry on");
+    await act(async () => {
+      buttonSaying("Send now")?.click();
+    });
+    const text = container.textContent ?? "";
+    expect(text).toContain("Sent.");
+    expect(text).toContain("Landed in");
+    expect(text).toContain("%2108");
+    expect(text).not.toContain("IT WENT SOMEWHERE ELSE");
+  });
+});
+
+describe("resolution and startedDir — what new-session actually did", () => {
+  /* The same two gestures the "starting a session" block above uses, and local
+     for the same reason its own are: they are the whole of how this panel is
+     reached, and a helper shared across two describes that both mount the page
+     is a helper that hides which one built the DOM being asserted on. */
+  function openNewSession(): void {
+    const button = buttonSaying("New session");
+    if (!button) throw new Error("there is no New session button");
+    act(() => button.click());
+  }
+
+  function type(id: string, value: string): void {
+    const box = container.querySelector<HTMLTextAreaElement>(`#${id}`);
+    if (!box) throw new Error(`no textarea #${id}`);
+    typeInto(box, value);
+  }
+
+  it("reads both, and refuses to guess `repo` for a server that did not say", () => {
+    const base = { id: "L9", state: "started", dir: "/home/greg/code/spideryarn2" };
+    expect(parseLaunch({ ...base, resolution: "repo", startedDir: "/home/greg/code/other" })).toMatchObject({
+      resolution: "repo",
+      startedDir: "/home/greg/code/other",
+    });
+    expect(parseLaunch({ ...base, resolution: "dir" })?.resolution).toBe("dir");
+    /* The safe-looking word is the one that must not be invented: `repo`
+       promises the setup lock was held, and an older server promised nothing. */
+    expect(parseLaunch(base)?.resolution).toBeNull();
+    expect(parseLaunch({ ...base, resolution: "repository" })?.resolution).toBeNull();
+    expect(parseLaunch(base)?.startedDir).toBeNull();
+  });
+
+  it("draws the directory the box CHOSE when it is not the one that was asked for", async () => {
+    const record = parseLaunch({
+      id: "L10",
+      state: "started",
+      name: "w2-something",
+      dir: "/home/greg/code/spideryarn2/.claude/worktrees/w2",
+      resolution: "repo",
+      startedDir: "/home/greg/code/spideryarn2",
+      promptBytes: 9,
+      requestedAt: "",
+      finishedAt: "",
+      error: null,
+      maybeStarted: false,
+      note: null,
+    });
+    if (record === null) throw new Error("the fixture did not parse");
+
+    const feed = manualTransport();
+    mountFull({
+      transport: feed.transport,
+      newSession: fakeNewSession({
+        start: async () => ({ accepted: true, launch: record }),
+        poll: async () => ({ ok: true, feed: { busy: false, retryAfterMs: 0, launches: [record] } }),
+      }),
+    });
+    act(() => feed.push(state({ rows: [] })));
+    openNewSession();
+    type("new-session-prompt", "start me");
+    await act(async () => {
+      buttonSaying("Start it")?.click();
+    });
+    const text = container.textContent ?? "";
+    /* The panel's own header promises the record says which directory was USED.
+       It was parsing `dir` — what was asked for — and dropping this. */
+    expect(text).toContain("Started in");
+    expect(text).toContain("/home/greg/code/spideryarn2/.claude/worktrees/w2");
+    expect(text).toContain("not the directory that was asked for");
+  });
+
+  it("says out loud when a launch went in through the -d escape hatch", async () => {
+    const record = parseLaunch({
+      id: "L11",
+      state: "started",
+      name: "loose",
+      dir: "/tmp/somewhere",
+      resolution: "dir",
+      startedDir: "/tmp/somewhere",
+      promptBytes: 9,
+      requestedAt: "",
+      finishedAt: "",
+      error: null,
+      maybeStarted: false,
+      note: null,
+    });
+    if (record === null) throw new Error("the fixture did not parse");
+
+    const feed = manualTransport();
+    mountFull({
+      transport: feed.transport,
+      newSession: fakeNewSession({
+        start: async () => ({ accepted: true, launch: record }),
+        poll: async () => ({ ok: true, feed: { busy: false, retryAfterMs: 0, launches: [record] } }),
+      }),
+    });
+    act(() => feed.push(state({ rows: [] })));
+    openNewSession();
+    type("new-session-prompt", "start me");
+    await act(async () => {
+      buttonSaying("Start it")?.click();
+    });
+    const text = container.textContent ?? "";
+    /* `-d` skips the repo's setup status and starts the session outside the
+       setup lock — the thing that once let this dashboard start an agent in a
+       checkout a setup run was rewriting. It is not a plumbing detail. */
+    expect(text).toContain("outside the repo's setup lock");
+    /* And the ordinary path gets no such line, because a caveat drawn on every
+       row is one nobody reads. */
+    expect(text).not.toContain("Started in /home");
   });
 });

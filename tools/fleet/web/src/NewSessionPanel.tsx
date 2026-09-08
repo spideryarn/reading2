@@ -101,6 +101,37 @@ function Launch({ record }: { record: LaunchRecord }): ReactNode {
       {record.note === null ? null : (
         <p className="tw:mt-1 tw:text-[13px] tw:break-words tw:text-ink-soft">{record.note}</p>
       )}
+      {/* **WHERE IT ACTUALLY STARTED, WHEN THAT IS NOT WHERE IT WAS ASKED TO.**
+          The header above promises that "the record that comes back says which
+          directory was used, which is the half that matters" — and until
+          2026-09-08 this client parsed `dir`, the directory that was ASKED for,
+          and dropped `startedDir`, the one the box chose. In repo mode the box
+          resolves a worktree to the checkout it belongs to, so the two really
+          do differ, and the reader was being shown the wrong one under a
+          comment saying it was the right one. Instance 14 in the table in
+          docs/postmortems/260908b-the-parts-were-all-tested-and-none-of-the-joins-were.md.
+
+          Only drawn when they differ: printing the same path twice on every
+          ordinary launch is how a line that matters stops being read. */}
+      {record.startedDir !== null && record.startedDir !== record.dir ? (
+        <p className="tw:mt-1 tw:text-[12px] tw:break-words tw:text-ink-soft">
+          Started in <Mono>{record.startedDir}</Mono>, not the directory that was asked for — the box
+          resolves a repo to its own checkout, and a worktree to the checkout it belongs to.
+        </p>
+      ) : null}
+      {/* **THE ESCAPE HATCH SAYS SO.** `dir` means the launch went in through
+          `-d`, which skips the repo's setup status and starts the session
+          OUTSIDE the setup lock — the thing that once let this dashboard start
+          an agent in a checkout `gjd-remote setup` was rewriting. `repo` is the
+          ordinary path and gets no line, because a caveat drawn on every row is
+          one nobody reads; `null` gets none either, since an older server made
+          no claim. new-session-client.ts § `LaunchResolution`. */}
+      {record.resolution === "dir" ? (
+        <p className="tw:mt-1 tw:text-[12px] tw:break-words tw:text-alarm-ink">
+          Started with <Mono>-d</Mono>: outside the repo's setup lock, and without reading its setup
+          status.
+        </p>
+      ) : null}
       <p className="tw:mt-1 tw:text-[12px] tw:text-ink-faint">
         <Mono>{record.dir}</Mono>
         <span className="tw:px-1">·</span>
