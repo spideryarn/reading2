@@ -117,6 +117,14 @@ shell. In this repo `scripts/run-claude.ts` spawns `bin: 'claude'` through `PATH
 `CLAUDE_CONFIG_DIR` from the child environment, so every dispatched agent would quietly run on the
 default account while your terminal ran on the right one. Nothing would look wrong.
 
+> **Do not generalise that to other repos, and beware the same filename.** MindstoneRebel has its
+> own `coding-agent-instructions/scripts/run-claude.ts` which does the *opposite*: it clones the
+> whole environment (`run-codex.ts`, `const childEnv = {...process.env}`) and deletes only one
+> unrelated key, so an inherited `CLAUDE_CONFIG_DIR` reaches its dispatched agents fine. A GPT
+> reviewer read that file, matched the filename, and reported this paragraph as stale — it is not.
+> The `PATH` script is still the right answer, because it is correct under *both* behaviours
+> without your having to know which repo you are standing in.
+
 A script early on `PATH` survives all of that, because it is re-entered after the environment is
 sanitised and re-derives the answer from the working directory:
 
@@ -337,17 +345,30 @@ On Greg's Mac, as of 2026-09-08:
 
 | Path | What it is |
 |---|---|
-| `~/.claude` | the default account, `greg@rehearsable.ai` (Max) — serves every repo |
-| `~/.claude-spideryarn` | seeded (settings, plugins, the user-scoped MCP server, the repo's trust flag) and **not yet signed in** |
-| `~/.claude-spideryarn/claude-wrapper.zsh` | the routing wrapper, **staged rather than armed** — deliberately not on `PATH` |
+| `~/.claude` | the default account, `greg@rehearsable.ai` (Max) — serves every unrouted repo |
+| `~/.claude-mindstone` | `greg@mindstone.com` (Max, individual). **Signed in and live since 2026-09-09**; seeded with settings (+`forceLoginMethod: claudeai`), plugins, and the repo's 125-file auto-memory. No `.claude.json` copied — login created it. |
+| `~/.claude-spideryarn` | seeded, **still not signed in**, and its route is therefore **parked** (commented out) in `~/.claude-accounts` — `claude-acct-arm` verifies every route, so a live-but-unsigned route would block arming |
+| `~/bin/claude-wrapper.zsh` | the routing wrapper (moved here from `~/.claude-spideryarn/`, which was one account's private dir) |
+| `~/bin/claude` | **armed** — the installed copy of the wrapper; `~/bin` precedes `~/.local/bin` |
 | `~/bin/claude-acct` | look at and switch accounts |
-| `~/bin/claude-acct-arm` | installs the wrapper as `~/bin/claude`, and refuses to until the login exists |
+| `~/bin/claude-acct-arm` | verifies **every** route by email, then installs. `--check` verifies only; `--off` rolls back |
 
-**Two commands finish it**, and until they are run nothing has changed for anybody:
+**It is armed, for the MindstoneRebel tree only.** `/Users/greg/dev/gdconsult_work/mindstone` and
+everything under it (114 worktrees included) bills `greg@mindstone.com`; every other directory on the
+machine is untouched and still bills the default account. Rollback is `claude-acct-arm --off`.
+
+The wrapper was hardened before arming, after two GPT reviews found the original was a *preference,
+not a pin*: it now refuses when a protected tree has no matching route, when the routing table is
+unreadable, when a higher-precedence credential (`ANTHROPIC_API_KEY`, `CLAUDE_CODE_OAUTH_TOKEN`, …)
+would outrank the routed login, and when `CLAUDE_ACCOUNT_DIR` tries to walk a protected tree onto
+another account. The protected-prefix list is compiled into the wrapper rather than read from the
+table, so damaging the table cannot silently un-protect a tree.
+
+Finishing spideryarn is still two commands:
 
 ```bash
-claude-acct login spideryarn   # browser opens; sign in as the account this repo should bill
-claude-acct-arm                # installs ~/bin/claude, which precedes ~/.local/bin on PATH
+claude-acct login spideryarn        # then un-comment its line in ~/.claude-accounts
+claude-acct-arm                     # re-verifies every route before re-installing
 ```
 
 It was left staged on purpose. The wrapper refuses to fall back to the default account, so arming it
