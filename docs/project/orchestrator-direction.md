@@ -12,9 +12,15 @@ sessions.** Until then this page called it "the orchestrator"; the two mean the 
 new name is the one to use. It is the *actor*. The **fleet dashboard** is its face, and the two are
 built by different agents against the seam in [§ Two tenses](#two-tenses-the-seam-between-the-overseer-and-the-dashboard).
 
-Status as of 2026-09-08: **the dashboard is running, the Overseer is not.** `tools/fleet/` serves a
-live page on the box and the tailnet, with per-session status and the pending question for blocked
-sessions. There is no `tools/overseer/`, no store, and nothing that survives a reboot.
+Status as of 2026-09-08 evening: **both exist; one of them has not yet run where it will live.**
+`tools/fleet/` serves a live page on the box and the tailnet, with per-session status and the pending
+question for blocked sessions. `tools/overseer/` is built — the store, the clock, the differ, the
+daemon and the work classifier — and has been run for real against the dashboard's stream, but only
+ever against a scratch store root: `~/.overseer` is still empty, and `systemd` units for both
+services are being installed now. So **nothing yet survives a reboot in practice**, and the sentence
+that will retire this paragraph is *events are accumulating in `~/.overseer/events.jsonl` under a
+unit that is `enabled`.* [260908b](../plans/260908b-overseer-store-and-clock.md) is the plan and holds
+the evidence.
 
 ## What we are going towards
 

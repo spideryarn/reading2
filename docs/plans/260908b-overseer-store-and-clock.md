@@ -1,11 +1,27 @@
 # The Overseer's store, and the clock it gives everything else
 
-**Status 2026-09-08, 09:10: the Overseer runs.** S1, S2, S3, S4 and S6 are landed, reviewed and
-green; S5 (the systemd units) is being built now; S3-03 is the one deferred finding. Evidence:
-`npm run typecheck` reports **0** failures across all four projects, **245 tests pass** across the
-eight Overseer files, `tools/overseer/` plus `scripts/overseer.ts` is 5,830 lines, and the daemon has
-been run against the live dashboard — its `events.jsonl` contains a `tmux-session-gone` for its own
-previous incarnation.
+**Status 2026-09-08, 09:35: the Overseer runs, and has never yet run where it will live.** S1, S2,
+S3, S4 and S6 are landed, reviewed and green; S5 (the systemd units) is being built now; S3-03 and
+two smaller findings are stage S7, in flight. Evidence: `npm run typecheck` reports **0** failures
+across all four projects, **245 tests pass** across the eight Overseer files, and `tools/overseer/`
+plus `scripts/overseer.ts` is 5,830 lines.
+
+**The live run, quoted here because its store was a scratch directory that will be deleted with the
+session.** Against the real dashboard on `:8787`, 2026-09-08 07:30–07:52 UTC, store root
+`scratchpad/overseer-live`: **43 events in 22 minutes — 30 `session-seen`, 8 `session-status`, 5
+`tmux-session-gone`** — and three of those five name the daemon's own earlier incarnations
+(`overseer-live-…`, `overseer-degrade-…`, `overseer-restart-…`), each with `why:
+"absent-from-snapshot"`. Its `daemon.jsonl` holds 3 `daemon-started` and 2 `daemon-stopped`, so one
+run ended without writing a stopping note, which is the `kill -9` the recovery test used.
+
+**And the thing that number does not say, found by checking rather than by remembering:
+`~/.overseer` does not exist.** `overseer status` against the default root reports *"NEVER RUN — no
+checkpoint and no notes"*. Every run so far has been against a scratch root, which was right for a
+test and means the production store is empty and unproven. **Naming the root is part of the claim** —
+"the daemon has been run" and "the daemon has been run where it will live" are different sentences,
+and only the first was ever true. Closing that is S5's acceptance, not a separate task: the unit sets
+`OVERSEER_STORE_DIR=/home/greg/.overseer` explicitly, and the evidence it must produce is events in
+*that* file.
 
 **Both P0s are closed**, one in the differ and one in the store's lock, each after a review round that
 found the first fix insufficient. Every Sol finding is either fixed or refused with reasons in this
