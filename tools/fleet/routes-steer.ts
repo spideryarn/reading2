@@ -41,7 +41,7 @@ import type { IncomingHttpHeaders, IncomingMessage, ServerResponse } from "node:
 import type { Readable } from "node:stream";
 
 import { addressableHost } from "./origin.js";
-import type { OptionKey, PaneOption } from "./pane.js";
+import { classifyConsequence, fingerprintMaterial, type OptionKey, type PaneMaterial, type PaneOption } from "./pane.js";
 import type { FleetStatus } from "./status.js";
 import {
   answerQuestion as realAnswerQuestion,
@@ -385,7 +385,22 @@ export function parseStatus(v: unknown): FleetStatus | null {
     case "unknown": {
       const why = asString(o.why);
       if (why === null) return null;
-      return { kind: "unknown", why };
+      // `cause` IS OVERWRITTEN, NOT VALIDATED, and that is the odd one out in
+      // this function on purpose.
+      //
+      // Every other arm here checks a value the client is in a position to
+      // know, because it describes what the page was showing. `cause` describes
+      // what the BOX observed — and this status did not come from the box, it
+      // came from a browser saying what it had on screen. Writing one of
+      // `sessionState`'s six real causes here would assert that the box
+      // reported a fault when the box was never asked, which is the same lie as
+      // inventing a `collectedAt` for a collection that never happened
+      // (state.ts). So it gets the seventh, which names exactly what is true:
+      // nobody observed this.
+      //
+      // The client's own prose survives in `why`, which is what the refusal
+      // sentence renders, so nothing a person would read is lost.
+      return { kind: "unknown", cause: "client-declared", why };
     }
     default:
       return null;
@@ -425,6 +440,43 @@ export function parseOptionKey(v: unknown): OptionKey | null {
   }
 }
 
+/**
+ * What the dialog was actually asking about — the diff, the command, the path.
+ *
+ * STRICT, AND THE FINGERPRINT IS REBUILT RATHER THAN BELIEVED. The client sends
+ * both the text and its hash, and this recomputes the hash from the text and
+ * refuses if they disagree. Not because a lying client is the threat — a client
+ * that wanted to lie would send a consistent pair — but because a body that can
+ * disagree with itself has two answers to the same question, and something
+ * downstream will eventually read the wrong one. The same reasoning as
+ * `parseOptionKey`, which rebuilds a key rather than accepting one.
+ *
+ * `null` (a 400) on anything malformed, rather than defaulting to `unreadable`.
+ * A default would turn "your client sent nonsense" into "the box could not be
+ * read", which is a different fact with a different remedy.
+ */
+export function parseMaterial(v: unknown): PaneMaterial | null {
+  const o = asRecord(v);
+  if (!o) return null;
+  switch (asString(o.kind)) {
+    case "read": {
+      const text = asString(o.text);
+      const fingerprint = asString(o.fingerprint);
+      if (text === null || fingerprint === null) return null;
+      if (fingerprint !== fingerprintMaterial(text)) return null;
+      return { kind: "read", text, fingerprint };
+    }
+    case "no-material":
+      return { kind: "no-material" };
+    case "unreadable": {
+      const why = asString(o.why);
+      return why === null ? null : { kind: "unreadable", why };
+    }
+    default:
+      return null;
+  }
+}
+
 /** The dialog the client says it is showing. */
 export function parseQuestion(v: unknown): SeenQuestion | null {
   const o = asRecord(v);
@@ -432,6 +484,12 @@ export function parseQuestion(v: unknown): SeenQuestion | null {
   if (asString(o.kind) !== "question") return null;
   const prompt = asString(o.prompt);
   if (prompt === null) return null;
+  // THE FIELD THAT MAKES AN APPROVAL MEAN SOMETHING. Until 2026-09-08 the
+  // question was the sentence and nothing else, so two writes of the same path
+  // with different contents compared equal and an answer meant for one would
+  // have been delivered to the other. See pane.ts's `materialAbove`.
+  const material = parseMaterial(o.material);
+  if (material === null) return null;
   const raw = o.options;
   if (!Array.isArray(raw) || raw.length === 0 || raw.length > 64) return null;
   const options: PaneOption[] = [];
@@ -441,9 +499,15 @@ export function parseQuestion(v: unknown): SeenQuestion | null {
     const label = asString(opt.label);
     const key = parseOptionKey(opt.key);
     if (label === null || key === null) return null;
-    options.push({ label, key });
+    // RECOMPUTED, NOT READ OFF THE WIRE. `consequence` is a pure function of
+    // the label, so accepting the client's copy creates a field that can
+    // disagree with itself — and this is the field that distinguishes "yes,
+    // once" from "yes, and stop asking me", which is the difference between a
+    // decision about one action and a change to the session's permission
+    // posture for everything after it.
+    options.push({ label, key, consequence: classifyConsequence(label) });
   }
-  return { kind: "question", prompt, options };
+  return { kind: "question", prompt, material, options };
 }
 
 /**

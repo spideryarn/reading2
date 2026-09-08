@@ -22,6 +22,7 @@ import { PassThrough } from "node:stream";
 
 import { describe, expect, it, vi } from "vitest";
 
+import { fingerprintMaterial } from "../tools/fleet/pane.js";
 import type { FleetStatus } from "../tools/fleet/status.js";
 import type { SeenQuestion, SteerResult, SteerTarget } from "../tools/fleet/steer.js";
 import {
@@ -61,9 +62,12 @@ function messageBody(over: Record<string, unknown> = {}): Record<string, unknown
 const SEEN: SeenQuestion = {
   kind: "question",
   prompt: "Do you trust the files in this folder?",
+  // A trust prompt genuinely has nothing above it to show — the `no-material`
+  // arm is a real answer here, not a placeholder standing in for one.
+  material: { kind: "no-material" },
   options: [
-    { label: "Yes, proceed", key: { via: "selected" } },
-    { label: "No, exit", key: { via: "arrows", key: "Down", presses: 1 } },
+    { label: "Yes, proceed", key: { via: "selected" }, consequence: "once" },
+    { label: "No, exit", key: { via: "arrows", key: "Down", presses: 1 }, consequence: "decline" },
   ],
 };
 
@@ -242,21 +246,103 @@ describe("carrying the client's claims through", () => {
     expect(calls).toHaveLength(0);
   });
 
-  it("never imports a value from the modules that read the live box", () => {
+  it("never calls anything that reads the live box", () => {
     // The backstop for the whole design, computed a different way from the
     // tests above: they would all still pass if the route called `capturePane`
     // in addition to forwarding the body. This reads the source.
+    //
+    // IT USED TO FORBID ANY VALUE IMPORT from collect/pane/status, and that
+    // was the wrong rule expressed the easy way. The rule is that this file
+    // must not ASK THE BOX ANYTHING — if it re-read the pane at send time,
+    // `verifyTarget` would be comparing the box against itself and every guard
+    // in steer.ts would pass unconditionally. A pure function that hashes a
+    // string or classifies a label does not ask the box anything, and
+    // `classifyConsequence` in particular has to be recomputed here rather than
+    // trusted from the wire.
+    //
+    // So the ban is on the reading functions BY NAME. That is a list somebody
+    // must extend when pane.ts grows another one — which is worse than a
+    // blanket rule and is the price of allowing the two pure ones. The comment
+    // at the top of pane.ts's exports says so.
     const here = path.dirname(fileURLToPath(import.meta.url));
     const src = readFileSync(path.join(here, "..", "tools", "fleet", "routes-steer.ts"), "utf8");
-    const imports = src.match(/^import .*$|^} from ".*";$/gm) ?? [];
-    for (const line of imports) {
-      if (/collect\.js|pane\.js|status\.js/.test(line)) {
-        expect(line, `${line} must be a type-only import`).toMatch(/^import type/);
-      }
+    for (const banned of ["capturePane(", "parsePane(", "collect(", "statusesOf(", "execFile", "realIo("]) {
+      expect(src, `routes-steer.ts must not call ${banned} — it would ask the box instead of the client`).not.toContain(
+        banned,
+      );
     }
-    expect(src).not.toContain("capturePane(");
-    expect(src).not.toContain("execFile");
-    expect(src).not.toContain("realIo(");
+    // The positive half, so this cannot pass by the file having been emptied:
+    // it does still forward what the client claimed.
+    expect(src).toContain("deps.sendMessage(target,");
+    expect(src).toContain("deps.answerQuestion(target,");
+  });
+
+  it("recomputes an option's consequence rather than trusting the client's", async () => {
+    // `consequence` distinguishes "yes, once" from "yes, and stop asking me" —
+    // a decision about one action versus a change to the session's permission
+    // posture for everything after it. A client that sent the wrong one would
+    // otherwise have its word taken, and the wrong word is the dangerous one.
+    const { routes, calls } = harness();
+    const body = answerBody({
+      question: {
+        kind: "question",
+        prompt: "Do you want to create notes.md?",
+        material: { kind: "no-material" },
+        options: [
+          // The label says "don't ask again"; the client claims it is harmless.
+          { label: "Yes, and don't ask again", key: { via: "digit", digit: "2" }, consequence: "once" },
+          { label: "No", key: { via: "digit", digit: "3" }, consequence: "once" },
+        ],
+      },
+      optionIndex: 0,
+    });
+    const r = await post(routes, fakeReq({ url: "/api/steer/answer", body: JSON.stringify(body) }));
+    expect(r.status).toBe(200);
+    const call = calls[0];
+    expect(call?.op).toBe("answer");
+    if (call?.op !== "answer") throw new Error("unreachable");
+    expect(call.seen.options[0]?.consequence).toBe("persistent");
+    // And the honest one was not "corrected" into something else.
+    expect(call.seen.options[1]?.consequence).toBe("decline");
+  });
+
+  it("refuses a material whose fingerprint does not match its own text", async () => {
+    // A body that disagrees with itself has two answers to one question, and
+    // something downstream eventually reads the wrong one. Rebuilding the hash
+    // removes the disagreement rather than choosing a winner.
+    const { routes, calls } = harness();
+    const body = answerBody({
+      question: {
+        kind: "question",
+        prompt: "Do you want to create notes.md?",
+        material: { kind: "read", text: "1 hello", fingerprint: "0".repeat(64) },
+        options: [{ label: "Yes", key: { via: "digit", digit: "1" }, consequence: "once" }],
+      },
+      optionIndex: 0,
+    });
+    const r = await post(routes, fakeReq({ url: "/api/steer/answer", body: JSON.stringify(body) }));
+    expect(r.status).toBe(400);
+    expect(r.json.code).toBe("bad-request");
+    expect(calls).toHaveLength(0);
+  });
+
+  it("accepts a material whose fingerprint is the real hash of its text", async () => {
+    // The other side, so the test above cannot pass by every material being
+    // refused — which would disable answering while looking like a guard.
+    const text = "1 hello";
+    const { routes, calls } = harness();
+    const body = answerBody({
+      question: {
+        kind: "question",
+        prompt: "Do you want to create notes.md?",
+        material: { kind: "read", text, fingerprint: fingerprintMaterial(text) },
+        options: [{ label: "Yes", key: { via: "digit", digit: "1" }, consequence: "once" }],
+      },
+      optionIndex: 0,
+    });
+    const r = await post(routes, fakeReq({ url: "/api/steer/answer", body: JSON.stringify(body) }));
+    expect(r.status).toBe(200);
+    expect(calls).toHaveLength(1);
   });
 });
 
