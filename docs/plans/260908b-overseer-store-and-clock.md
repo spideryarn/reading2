@@ -733,6 +733,59 @@ and has never included the name, which is the same conclusion for the same reaso
 - **Done:** the full torn-write sequence — tear, restart, append, append, read — and a second daemon
   refusing to start. Not "a torn line is skipped".
 
+### Where the hardening stopped, and how we knew
+
+Three review rounds on one mechanism — the types carrying *this snapshot passed the gate* and *this
+may stand as the world*. Round three found the private-field box still hands out the live object, so
+`Object.assign(baseline.snapshot, { tmuxServerPid: null })` compiles with no cast. Rather than fix
+it, this went to **Fable**, per
+[engineering-manager.md](../reusable/engineering-manager.md)'s rule that a P0 surviving round two is
+settled through Fable or Greg rather than past the orchestrator. It was the first time that clause
+was needed.
+
+**The verdict: stop hardening the type.** Take a small honest patch — a result union, one runtime
+assertion, three corrected comments — and decline the deep freeze.
+
+**Why the freeze is a ghost, with evidence rather than intuition.** Round two's hole was real
+*because the spread is this file's own idiom*: `{ ...snapshot, clock: snapshot.clock }` sits at
+`admissible.ts:154`, so an agent forging a brand by spread was doing what the surrounding code does.
+Round three's needs somebody to write `Object.assign` onto a value typed `readonly`. Fable grepped
+`daemon.ts`, `store.ts`, `notes.ts` and `work.ts`: **no production code mutates a snapshot anywhere**,
+and the one realistic site — a test mutating a fixture — cannot leak, because `freshFixture` re-parses
+per call. The freeze also had an unpriced cost: it would freeze structures shared with the store's
+register and walk opaque `question`/`health` JSON, which is more surface than the thing it guards.
+
+**The loop diagnosis, which is the part worth carrying elsewhere:**
+
+> Rounds 2 and 3 are the same finding at increasing resolution. TypeScript's `readonly` was never
+> runtime immutability, so asking a reviewer *"is it sound?"* will always get the next level down.
+> Freeze it and round 4 finds `structuredClone`-then-forge. That is convergence to a known limit, not
+> a chain of misses.
+>
+> — Fable, 2026-09-08
+
+**And the exit, which is a change of question rather than of code.** State the guarantee at its true
+strength in the code, and ask the next review *"is this statement accurate?"* rather than *"is this
+sound?"* — bundling it with the next stage rather than reviewing the mechanism alone. **A comment
+stronger than the code is what misleads the next agent**, which is this stage's own recurring class
+arriving in prose instead of in types. So three comments that overclaimed are being corrected, and
+the uncovered case — a nested `row.status.secondsLeft = 3600` — is **written down as uncovered**
+rather than covered.
+
+The one runtime check that does land is at the use site, not the mint: `diff()` asserts `unplaceable`
+on its `previous` once. **The type makes the guarantee at mint; JavaScript cannot hold a value still
+between mint and use, so the use site checks once.** Sol's exact example becomes a crash rather than
+a bridged reboot — correct-and-unavailable over plausible-and-up, at the one point where a mutation
+could bridge two tmux worlds.
+
+**And the redirection matters more than the ruling.** Fable's closing point is where the hazard now
+actually lives:
+
+> A wrong history is far more likely to come from the daemon's register folding, `goneWhileAway`, and
+> the checkpoint/baseline write ordering than from anyone assigning to a readonly field.
+
+That is where the next review goes.
+
 ### S3's review, and the premise in it that was wrong
 
 [260908b-s3-review-sol.md](260908b-s3-review-sol.md). A P0 and four others; all five dispatched fixes
