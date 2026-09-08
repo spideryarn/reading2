@@ -185,21 +185,66 @@ rather than an exception:
 `docs/project/overseer-direction.md`'s seam table currently enumerates only the daemon's six files
 and does not say why `~/.fleet-health/` is not among them. Stage 5 writes the rule down there.
 
-**Who writes it: the dashboard, deduping on `collectedAt`.** Four reasons, in order of weight:
+**Who writes it: REOPENED on 2026-09-09.** This section first said "the dashboard", and its
+decisive reason was **wrong**. The reason is recorded here rather than deleted, because the way it
+was wrong is the interesting part.
 
-1. **The module seam is one-way and would break.** `tools/overseer/` imports from `tools/fleet/` in
-   eight places; **nothing under `tools/fleet/` imports `tools/overseer/`**. It is enforced by
-   argument, not by a test: `tools/fleet/attention.ts`'s header records that a fleet module
-   importing `readCheckpoint` would close the cycle *and* drag the Overseer's usage/memory/diff/
-   lock/log modules into the process you reach for when something else is broken. A daemon-side
-   writer wanting `projectUsage` — which lives in `tools/fleet/` — is exactly the thing that breaks
-   it.
-2. **A daemon writer would therefore have to store raw**, forfeiting D2.
-3. **It matches the `~/.fleet-health/` precedent**, so there is one shape here rather than two.
-4. **It needs no edit to `daemon.ts`**, owned by `260908f-roadmap-exec-identity` tonight.
+#### The reason that was wrong
 
-The cost: history accrues only while the dashboard is up. That is a **visible gap**, not a wrong
-number, and D6 makes it read as one.
+> "The module seam is one-way and would break. `tools/overseer/` imports from `tools/fleet/` in
+> eight places; nothing under `tools/fleet/` imports `tools/overseer/`. A daemon-side writer wanting
+> `projectUsage` — which lives in `tools/fleet/` — is exactly the thing that breaks it."
+
+**Both halves are false**, verified by grep in this worktree:
+
+- `tools/fleet/health-history.ts:81-82` imports `../overseer/jsonl.js` and `../overseer/lock.js`.
+  Line 531 of the same file says so outright: *"The lock is `tools/overseer/lock.ts`'s, imported,
+  not a copy."* So fleet **does** import overseer.
+- `grep -rn 'from "\.\./fleet/' tools/overseer/` gives ~17 hits — mostly `import type` from
+  `wire.js`, plus **value** imports of `pane.js`, `claude-argv.js`, `attempt-clock.js`. So
+  overseer → fleet is a well-trodden direction, and a daemon importing `projectUsage` breaks
+  nothing.
+
+The real constraint in `tools/fleet/attention.ts`'s header is about **weight, not direction**: a
+fleet module importing `readCheckpoint`/the store would close a cycle *and* drag the Overseer's
+usage/memory/diff/lock/log modules into the process you reach for when something else is broken.
+Pure leaves cross freely both ways — `jsonl.ts` and `lock.ts` are the proof, and they are the exact
+machinery a history store needs.
+
+**How this got in:** it came from the author of the usage card in a message, it was plausible, it
+matched a rule I already half-believed, and I wrote it into a plan as reason #1 without running the
+grep. That is the "an unchecked brief claim becomes a source comment" failure, one message earlier
+in the chain than usual. The lesson is not "distrust peers" — everything else in that message was
+right and several parts were load-bearing — it is that **the claims a decision rests on get checked,
+whoever they came from.**
+
+#### The fork as it actually stands
+
+**Daemon writes** (one line per successful `collectUsage`):
+- **No dedupe key needed at all.** The daemon knows when a reading happened; the dashboard has to
+  infer it. That inference is D4 — and D4 was nearly a bug. A whole class of error disappears.
+- History accrues whenever the *daemon* runs. The daemon is long-lived; the dashboard is restarted.
+- No lock-taking file I/O on the `/api/state` request path.
+- Single writer by construction — there is one daemon on this box by contract.
+- Against: an edit to `daemon.ts` (owned by `260908f-roadmap-exec-identity` tonight — a scheduling
+  cost, not a design one), and it couples the daemon to `UsageSummary`, a fleet-side projection type
+  that reshaped *tonight*.
+
+**Dashboard writes** (deduping on `collectedAt`):
+- Mirrors `~/.fleet-health/` exactly, so this codebase has one shape rather than two.
+- The projection stays in `tools/fleet/`, where it lives and where it changes.
+- Against: needs the dedupe key; request-path I/O; history accrues only while the dashboard is up;
+  and two dashboards on different ports share the directory and race for the lock — which actually
+  happened on this box on 2026-09-08.
+
+**Status: with Fable to arbitrate, and GPT Sol's round-1 review has been asked to check the seam
+independently.** The open question that decides it, and the one I am least sure of: when
+`chooseUsage` republishes an *earlier* pass's report because a fresh scan fell over, does the daemon
+really know "this is a new reading" as cleanly as claimed — or is that a dedupe problem wearing a
+disguise? If it is, the daemon's main advantage collapses and the dashboard wins on the precedent.
+
+Either way, the cost of the dashboard option is that history accrues only while the dashboard is up:
+a **visible gap**, not a wrong number, and D6 makes it read as one.
 
 **The writer is invoked at request rate, not on a loop.** `REFRESH_MS` defaults to `60_000`
 (`server.ts`, override `FLEET_REFRESH_MS`), but `statePayload` calls `readCheckpoint()` on **every
@@ -258,29 +303,40 @@ to widen to the route's 168-hour maximum, and a single cap across both stores is
 explain. Stage 1 asserts the ~6.8 KB line size in a test, so the day a line gets fat the suite says
 so rather than the cap silently shrinking to a day and a half.
 
-**A third argument for storing the projection, which D2 did not have:** a raw hit carries
-`transcriptPath` and `message`. Storing raw would copy transcript paths and API error prose into a
-long-lived file that nothing else prunes. The projection carries neither.
+**A third argument for storing the projection, which D2 did not have — and it is a privacy argument,
+not a size one.** A raw hit carries `transcriptPath` and `message`. Transcript paths carry project
+and worktree names, and `message` is API error prose. Storing raw would copy both into a long-lived
+file that nothing else prunes, for no gain the chart can use. The projection carries neither. This
+is the strongest of the three reasons, and neither this plan nor the card's author had it before the
+measurement.
 
-### Two things the live data contradicted in the plan as first written
+### What the live data changed in the plan as first written
 
-- **There is a third window name.** The live cache carries `nimbus_quill` alongside `five_hour` and
-  `seven_day`, in the `unknown` arm, with `why: "no resets_at, so the utilization (0) cannot be
-  checked for validity — reporting it would be reporting a numbe…"`. So "per known window
-  (`five_hour`, `seven_day`)" is a statement about `KNOWN_USAGE_WINDOWS`, not about what the file
-  contains. **The chart must not silently drop an unrecognised window** — a window we cannot read is
-  exactly the thing a usage tab exists to surface, and dropping it would be D6's flat-line-at-zero
-  failure wearing a different hat. Stage 4 gets a test for an unknown window name, and the design is:
-  render it as a named row in the unknown state, never as a series and never omitted.
-  (Note the 0 in that `why` — an unvalidated `utilizationPercent: 0` is exactly the number that must
-  never reach a chart.)
-- **The live checkpoint predates tonight's cache reshape.** It still carries the single
-  `cache: {kind: "value", accountUuid, windows}` arm; the three-arm
-  `attributed` / `unattributed` / `unknown` shape lands with `260908f-roadmap-usage`. So any fixture
-  captured from the box today is a **schema-2, old-cache** specimen. Stage 1 must not pin the new
-  shape against an old capture — capture fresh fixtures after that branch lands, and keep the old
-  one deliberately as the "line written before the reshape" case, which is precisely what D3's
-  provenance field is for.
+- **"Per known window" is a statement about `KNOWN_USAGE_WINDOWS`, not about what the file
+  contains.** The live cache carries **three** window names beyond the two this plan kept naming:
+  `nimbus_quill`, `spend` and `member_dashboard_available`, all in the `unknown` arm — no
+  `resets_at`, and in the last case the entry is not even an object (`false`).
+
+  I flagged this to the card's author as a probable bug and **it is not one**: `UsageWindowName` is
+  deliberately an open `string` rather than a closed union, because — `wire.ts`'s words — a closed
+  union "lets an exhaustive `switch` compile while silently dropping a real window". Nothing in
+  `tools/fleet/` filters on `isKnownUsageWindow`, the card maps over `cache.windows` as the file
+  gives them, and a browser subagent read all three back off the live card an hour before I asked.
+
+  So this is a **requirement on my chart**, not a defect anywhere: Stage 4 renders an unrecognised
+  window as a named row in the unknown state with its `why`, never as a series and never omitted.
+  Note the `0` in `nimbus_quill`'s `why` — an unvalidated `utilizationPercent: 0` is precisely the
+  number that must never reach a chart, and it is sitting in the live file today waiting for
+  somebody to plot it.
+- **Checkpoint fixtures captured today are valid, and I nearly re-captured them for nothing.** I had
+  conflated two different reshapes. Tonight's change is to `UsageSummary["cache"]` — the *projection
+  output*, a fleet-side type — and **not** to `UsageCacheReading`, the `{kind: "value" | "unknown"}`
+  shape stored inside `StoredUsage`. `tools/overseer/usage.ts` compiles unchanged and there is no
+  schema bump, so today's captures are exactly what `projectUsage` expects to be handed, before and
+  after that branch lands. What *would* need re-capturing is anything saved of the card's output.
+
+  Keep D3's provenance field regardless: it earns its place the moment the checkpoint schema really
+  does move, which is live — `260908g` is working in the scheduler's part of the store.
 
 ## References
 
@@ -370,7 +426,9 @@ one can read the other.
   - [ ] a corrupt/partial trailing line is counted in `unreadableLines`, not thrown
   - [ ] **a line built from a realistic reading is ~6.8 KB and under 10 KB** — so the day a line
         gets fat, the suite says so instead of the 8 MiB cap silently shrinking from 4 days to one
-  - [ ] a line written under the **old** single-arm `cache` shape still reads back (D3 provenance)
+  - [ ] a line whose `checkpointSchema` is **not** the current one still reads back, tagged, rather
+        than being dropped or silently reinterpreted (D3 provenance — the case that matters the day
+        the checkpoint schema moves, which `260908g` makes live)
   - [ ] the lock: a second writer no-ops and reports `lockedOutBy`, **and reads still work** (D9)
   - [ ] a stale lock held by a dead pid is stolen
   - [ ] `FLEET_USAGE_DIR` redirects the whole store
