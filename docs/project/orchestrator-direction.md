@@ -560,6 +560,29 @@ model call. The prose-question case is not: **"has this agent asked Greg somethi
 not a parse**, and it is exactly what the Overseer's short-lived model calls are for. A ranked list
 built on `statusOf` alone would have ranked the wrong sessions, confidently.
 
+**Who builds which half, settled between the two agents on 2026-09-08.** The mechanical half is the
+Overseer's, and *not* as a new arm on `SessionState`:
+
+> **The dashboard reports the pane; the Overseer decides what the work is.** `panePid` is a fact
+> about a pane; "this session is waiting 40 minutes on a paid review" is a judgement about work, and
+> judgements belong on the Overseer's side. Adding a `SessionState` arm would encode a conclusion in
+> a field whose whole job is to report an observation — the exact thing `sessionState` gets right.
+>
+> — agreed between this agent and the fleet dashboard agent, 2026-09-08
+
+So the Overseer takes `panePid` out of the snapshot it already receives and walks the process tree
+itself, inside `tools/overseer/`. No shared contract changes and no coordination cost.
+
+**And the `needs-you` sub-kind, which came out of the same exchange.** *An agent asked me something*
+and *the harness wants a permission* are different work items — and on this box the second is nearly
+always a **launch defect**, since auto mode should have handled it. A live capture on 2026-09-08 had
+the harness saying so in the prompt itself: *"Tip: auto mode handles these prompts for you."* So a
+permission-class dialog is not a queue item for Greg at all: **the action is to fix how that session
+was started**, pointed at a different person entirely. The dashboard agent's phrasing of the rule
+underneath it, from Fable: pane text as executable UI is acceptable when execution means *"a user
+turn"*, and not acceptable when it means *"grant a permission"* — a forged menu can then make Greg
+send a digit to an agent that was already misbehaving, but it cannot mint an approval.
+
 This also sharpens [§ Attention](#attention-and-who-the-overseer-is-really-watching): Fable said the
 expensive agent is the one working confidently on the wrong thing, and never asks. Add to it the
 agent that *did* ask and whose asking is invisible.
