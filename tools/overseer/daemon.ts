@@ -55,11 +55,10 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { readAttemptClock } from "../fleet/state.js";
 import { admissible, type AdmissibleSnapshot } from "./admissible.js";
 import { baselineOf, diff, sessionKey, type Baseline, type OverseerEvent, type SessionIdentity } from "./diff.js";
 import { conditionTracker, describeNote, openNoteLog, type DaemonNote } from "./notes.js";
-import { parseObservation, type JsonValue, type ObservedRow } from "./observation.js";
+import { parseAttempt, parseObservation, type JsonValue, type ObservedRow } from "./observation.js";
 import { fleetSource, type SourceMessage, type SourceOptions, type Transport } from "./source.js";
 import {
   describeOpening,
@@ -171,68 +170,6 @@ export function freshness(input: FreshnessInput): Freshness {
         ? `the dashboard has never given this Overseer a collection, ${seconds}s after it started (the deadline is ${Math.round(deadlineMs / 1000)}s)`
         : `no new collection for ${seconds}s (the deadline is ${Math.round(deadlineMs / 1000)}s)`,
   };
-}
-
-/**
- * When the producer last STARTED a collection, as this daemon needs it.
- *
- * **The inference is not made here.** `readAttemptClock` in
- * `tools/fleet/state.ts` owns it, and the reason it owns it is worth keeping:
- * `attemptedAt` is written BEFORE each attempt, so on any producer that reports
- * it a non-null `collectedAt` implies a non-null attempt clock — a collection
- * cannot have succeeded without having been started. So a payload with data and
- * no attempt clock is provably a producer that does not REPORT trying, rather
- * than one that never tried. That is a consequence of the field's write
- * ordering, not a convention two agents agreed on, which is why it lives in one
- * shared function instead of being re-derived here. **Do not re-derive it.**
- *
- * The field was added on 2026-09-08 without a schema bump — correctly, by the
- * producer's own rule — so an older server simply does not send it, and
- * `not-reported` is a live case rather than a hypothetical: `:8787` was emitting
- * exactly that shape while this was written.
- *
- * Read off the raw payload because `parseObservation` does not carry the field
- * yet. That is the one place in this daemon that touches the raw JSON, and the
- * real fix is for `observation.ts` to parse it — reported as a finding rather
- * than made here, since that file is landed and under review.
- */
-export type Attempt =
-  | { known: false; why: string }
-  | { known: true; attemptedAt: null }
-  | { known: true; attemptedAt: string; atMs: number };
-
-export function readAttempt(json: unknown): Attempt {
-  if (typeof json !== "object" || json === null || Array.isArray(json)) {
-    return { known: false, why: "the payload is not an object" };
-  }
-  const record = json as Record<string, unknown>;
-  const clock = readAttemptClock({
-    attemptedAt: stringOrNull(record["attemptedAt"]),
-    collectedAt: stringOrNull(record["collectedAt"]),
-  });
-  switch (clock.kind) {
-    case "attempted": {
-      const atMs = Date.parse(clock.at);
-      // A non-empty string that is not a date is the producer being wrong about
-      // its own field, which is a "cannot tell" rather than a moment.
-      if (!Number.isFinite(atMs)) return { known: false, why: `attemptedAt is ${JSON.stringify(clock.at)}, which is not a timestamp` };
-      return { known: true, attemptedAt: clock.at, atMs };
-    }
-    case "never-attempted":
-      // Also the both-absent case, merged on purpose upstream: no data has
-      // arrived either way, and the action is the same.
-      return { known: true, attemptedAt: null };
-    case "not-reported":
-      return { known: false, why: clock.why };
-    default: {
-      const never: never = clock;
-      throw new Error(String(never));
-    }
-  }
-}
-
-function stringOrNull(u: unknown): string | null {
-  return typeof u === "string" ? u : null;
 }
 
 export type CollectorVerdict =
@@ -527,16 +464,22 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
    * daemon in one process would share it.
    */
   function take(json: unknown, via: Transport, at: string): boolean {
+    lastPayloadAtMs = now().getTime();
+    const parsed = parseObservation(json);
     // BEFORE THE GATE, and from every payload including the ones it refuses: a
     // failing collector keeps attempting while its snapshots are rejected, and
-    // that pair is precisely what tells a failing source from a stopped one.
-    lastPayloadAtMs = now().getTime();
-    const attempt = readAttempt(json);
-    if (attempt.known && attempt.attemptedAt !== null) {
+    // that pair is precisely what tells a failing source from a stopped one. So
+    // the reading has to survive a payload with no snapshot in it — hence the
+    // fallback, which is the SAME function `parseObservation` fills the field
+    // with rather than a looser second reading of it. Without it, a dashboard
+    // whose rows this version refuses would be reported as a stopped collector,
+    // which is a fault it does not have.
+    const attempt = parsed.ok ? parsed.value.attempt : parseAttempt(json);
+    if (attempt.reported && attempt.attempted) {
       lastAttemptAtMs = Math.max(lastAttemptAtMs ?? attempt.atMs, attempt.atMs);
     }
 
-    const verdict = admissible(accepted, parseObservation(json));
+    const verdict = admissible(accepted, parsed);
     switch (verdict.verdict) {
       case "reject":
         write(conditions.degrade("snapshots", at, verdict.reason));
