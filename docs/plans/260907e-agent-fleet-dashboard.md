@@ -1379,7 +1379,8 @@ readers.
       earning its keep on its author within a morning: a consumer pinned to 1 would `Date.parse` a
       `statusSince` that is now an object, get `NaN`, and render a blank age — **wrong, not merely
       poorer**. Read the constant, do not hardcode the digit from this doc, which has now been stale
-      once already.
+      once already. The bump is S7-04 of
+      [260908b](260908b-overseer-store-and-clock.md), which is where the reasoning lives.
 - [ ] **`statusSince` IS NOT A TIMESTAMP — it is a two-armed reading, and the arm names are for a
       person reading the raw file:**
 
@@ -1406,7 +1407,12 @@ readers.
 - [ ] **Three fields are worth more than the rest, because collection structurally cannot produce
       them.** `statusSince` turns a state into a duration — *blocked* becomes *blocked for forty
       minutes*, which is what triage actually needs and what a present-tense collector has no
-      yesterday to compute. `heartbeat` lets the page say **the Overseer is dead**, which belongs
+      yesterday to compute. **It is a pair, not a timestamp**:
+      `{ kind: "observed" | "lower-bound", at }`. `observed` means the Overseer watched the
+      transition; `lower-bound` means the session was already in that state when it first looked, so
+      the duration is a floor with no upper bound — render the two differently (`overseer status`
+      prints `40m` and `≥13m`). A renderer that shows a floor as a measurement is the 13m bug, which
+      is what S7-04 was. `heartbeat` lets the page say **the Overseer is dead**, which belongs
       where the count would be rather than in a footer, because a quiet page and a healthy fleet are
       the same picture. And `writtenAt` against `lastGoodSnapshotAt` tells *deaf* from *dead* — the
       second is our own `collectedAt`, so a disagreement there is as likely to be about us.
