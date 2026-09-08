@@ -222,20 +222,36 @@ joins the file set** (it is in nobody's claim).
 
 ## Coordination — asked and answered by the Overseer, 2026-09-09 01:40
 
-1. **No third `Speaker` arm.** `SPEAKER_PREFIX` (`actions.ts:522-525`) has `greg` and `overseer`, and
-   neither fits a notice *from the dashboard to the Overseer*: `greg` is a lie (he pressed a button,
-   he did not write the line), and `overseer` would have the Overseer read a message apparently from
-   itself. Adding `"dashboard"` would widen a union in `wire.ts` that `SPEAKER_PREFIX` and
-   `parseSpeaker` must exhaust, turning the delivery-receipts agent's build red. **Ruled out; build
-   the fallback**, which touches nothing shared: compose the line in `tools/fleet/notify-overseer.ts`
-   with its own named prefix constant, call `sendMessage` directly, and test that the composed line
-   (a) begins with an attribution naming the dashboard and disclaiming Greg, (b) is neither existing
-   `SPEAKER_PREFIX`, and (c) survives `checkText` **after** prefixing.
-   **This is a deliberate exception to the shared attribution machinery**, and the reason it is
-   tolerable is that the text is fixed and reviewed — the same ground `renderSpoken`'s `/compact`
-   exception stands on ([overseer.md § gate 1](../project/overseer.md#1-never-hide-who-decided)).
-   If a second such sender ever appears, that is the moment to add the arm rather than a second
-   constant.
+1. **A third `Speaker` arm, `"dashboard"` — reversed twice, and the second reversal is the right one.**
+   `SPEAKER_PREFIX` (`actions.ts:522-525`) has `greg` and `overseer`, and neither fits a notice *from
+   the dashboard to the Overseer*: `greg` is a lie (he pressed a button, he did not write the line),
+   and `overseer` would have the Overseer read a message apparently from itself.
+
+   The Overseer first ruled the arm out on the ground that widening the union turns the
+   delivery-receipts agent's build red, and I planned a private prefix constant instead. **Sol's F5
+   refused that**, and the Overseer withdrew its ruling: a second hand-written attribution mechanism
+   is exactly what gate 1 forbids, and a scheduling conflict is not a reason to create one.
+
+   **The mechanical detail that settles it beyond the principle:** `SPEAKER_PREFIX` is an exhaustive
+   `Record<Speaker, string>`, so a private constant could never have compiled *honestly* — it would
+   have been a second declaration of the same contract with nothing relating the two, which is the
+   `QueueView` twin that cost this project four dropped fields in one night. The arm is two files,
+   `wire.ts` and `actions.ts`.
+
+   **`claude-agents-dashboard` adds it itself**, in a small commit straight after its Stage 4, and
+   sends the Overseer the sha. **Stage D starts then**, and not before.
+
+   **THE ARM IS FOR REPORTS ONLY, AND THIS IS A CONSTRAINT ON EVERY FUTURE USE OF IT.** Its prefix
+   says *a person acted and software is reporting it*. That sentence is true of "somebody started a
+   session from the web UI" and false of anything the receiving agent is meant to act on. So if
+   anything ever sent under this speaker is an **instruction**, the prefix has become a false
+   statement about its own message and **the arm must be split, not reused** — a reporting speaker
+   and an instructing one are two different claims about authority and must not share a label.
+   The Overseer's constraint, 2026-09-09, and it is written here because the next person to reach for
+   this arm will be reaching for a convenient existing thing.
+
+   One thing comes free: `renderMessage` already refuses a slash command from any speaker but `greg`
+   (`actions.ts:578-583`), so the notify line inherits that and cannot smuggle a command.
 2. **`collect.ts` is queued behind `260908f-roadmap-exec-identity`**, which is at suite-plus-review
    now. Merge `origin/dev` after it lands, then add the ~15 additive lines. That session has been told
    directly that I am queued behind it. If it has not landed by the time Stage 0 is reviewed, the
@@ -490,8 +506,77 @@ touch it.
 **The fix is a dependency rather than a patch:** a description is renderable only when the row's
 Execution identity is `verified` and its verified conversation id is the id of the transcript that was
 read; `claimed-only` or `unknown` produces `cannot-tell` and never falls back to `CLAUDE_SESSION_ID`.
-That is `FleetRow.execution`, which `260908f-roadmap-exec-identity` is landing tonight — so Stage B
-was already queued behind it, and now *depends* on it rather than merely sharing a file.
+That is `FleetRow.execution`, which `260908f-roadmap-exec-identity` is landing — so Stage B was
+already queued behind it, and now *depends* on it rather than merely sharing a file.
+
+#### The shape it depends on — verified by reading, not by being told
+
+**Not on `dev` as of 2026-09-09 03:10**: `git show origin/dev:tools/fleet/wire.ts | grep -c
+ConversationReading` prints `0` and `tools/fleet/execution-identity.ts` is absent from `origin/dev`.
+The owning session's gates (full suite, Sol review) are still running and it will not push before they
+are dispositioned, which is right.
+
+**But it is checkable anyway, because we are on one box**, and it was cross-checked rather than taken
+on trust — read directly out of
+`/home/greg/code/spideryarn2/.claude/worktrees/260908f-exec-identity/tools/fleet/wire.ts`:
+
+```ts
+export type ExecutionToken = { boot: string; pid: number; startTicks: number };   // :1523
+
+export type ConversationReading =                                                  // :1545
+  | { kind: "not-claimed" }
+  | { kind: "verified"; id: string }
+  | { kind: "conflicting"; claimed: string; observed: string }
+  | { kind: "unverifiable"; claimed: string; why: string };
+
+export type ExecutionReading =                                                     // :1612
+  | { kind: "verified"; token: ExecutionToken; harness: HarnessKind; conversation: ConversationReading }
+  | { kind: "claimed-only"; conversation: ConversationReading; why: string }
+  | { kind: "unknown"; cause: ExecutionUnknownCause; why: string };
+```
+
+**The separation is the whole point and is exactly F1:** knowing which child process is running does
+not prove which transcript it is writing, so those are two readings rather than one. `conversation.id`
+is the id the live process's own `--session-id` carried, not the tmux claim — and `wire.ts:1551-1555`
+says outright which side is stale: *"the claim is the stale one … `observed` is the conversation
+actually in the pane and `claimed` is what every address in this payload would have sent you to."*
+
+**One thing the cross-check found that its author did not mention, and it is load-bearing:
+`claimed-only` carries a `conversation` too.** So a `conflicting` conversation is reachable from *two*
+execution arms, not one — the process need not be verified for us to know the pane has changed hands.
+That means the loudest and most useful state is detectable in strictly more cases than the
+verified-only predicate would suggest, and the three rendering rules fall out as:
+
+| reading | what the row shows |
+|---|---|
+| `execution.verified` **and** `conversation.verified` **and** the id matches the transcript read | the description, keyed on `boot:pid:startTicks` |
+| `conversation.conflicting`, from **either** execution arm | **"this pane is running a different conversation now"** — never a description |
+| anything else | `cannot-tell`, worded informatively (see the caveat below) |
+
+Three refinements from that session, all taken:
+
+- **Key the cache on the execution token, not merely gate rendering on it.** The token stringifies as
+  `boot:pid:startTicks`. With it in the key, conversation B *misses* the cache and generates its own
+  description, so the stale entry becomes **unreachable** rather than merely unrendered. Gating alone
+  leaves a correct-looking record sitting in the cache waiting for some later code path to find it —
+  the difference between a wrong state being invisible and being unrepresentable, which is the rule
+  this project actually holds itself to. Do both.
+- **`conflicting` gets its own copy, not the grey "cannot tell" arm.** When the conversation reading
+  is `conflicting`, we know a great deal: `observed` is what is actually running in that pane and
+  `claimed` is the stale id every other field on the row still names. That is a *positive* statement —
+  **this pane is running a different conversation now** — and it is the single case F1 is about.
+  Collapsing it into the same arm as `unverifiable` throws away the finding.
+- **Do not import `tools/fleet/execution-identity.ts` from the browser**; it reads `node:fs` at module
+  scope, and `tests/fleet-imports.test.ts` is the guard. Its `identityWriteGate` is server-side only.
+  Narrow inline in the client instead — the shape is declared once in `wire.ts` and the compiler
+  enforces the narrowing, so that is not a hand-written second copy of a contract.
+
+**And the caveat that shapes the copy rather than the code:** a live, working Claude can read as
+`claimed-only` — a session launched before `new-claude` began writing `--` has a prompt running past
+the option region, so `claude-argv.ts` refuses the command line. More importantly, **every row parses
+to `unknown` until both the dashboard and the daemon are restarted on that code**, which is the
+Overseer's to arrange. So `cannot-tell` is the **normal case for a while, not an error**, and its
+wording must be informative rather than apologetic or it will read as a broken page.
 
 **F4, and it is partly self-inflicted.** `routes-new.ts:405-423` already documents this and cites an
 earlier Sol finding: a web launch passes an opaque `web-<clock>` name, which makes gjd-remote run
@@ -533,3 +618,15 @@ that a second attribution path is the thing gate 1 forbids, and the Overseer is 
 scheduling problem. They are not actually in conflict — the answer is to add the arm *after* the
 delivery-receipts work lands, which is a sequencing decision the Overseer owns. Put back to it rather
 than settled here; Stage D does not start until it answers.
+
+### One risk carried from a peer, 2026-09-09
+
+**The cache key is built out of a type another session is still having reviewed.** `ExecutionToken`'s
+three fields (`boot`, `pid`, `startTicks`) are what the description cache is keyed on, and Sol has
+been asked specifically to attack that token design and the differ's sampling gap. Its author thinks
+it much more likely the token survives untouched, and flagged it anyway — correctly, because a silent
+change to those three fields is a cache migration for us rather than a rename.
+
+**So the token is consumed through one stringifier and one place**, not spread through the describer,
+and the plan says so here rather than discovering it later: if the token's shape moves, exactly one
+function changes and every stored record is invalidated by its own key rather than by a migration.
