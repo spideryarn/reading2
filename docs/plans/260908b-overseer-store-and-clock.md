@@ -417,6 +417,38 @@ Evidence: 220 tests across the four affected files; three mutations, all caught,
 The one remaining `typecheck` error is `routes-steer.ts`, handed to its owner deliberately rather
 than swept into a pathspec commit over their uncommitted work.
 
+### S1's review, and the one finding it handed to S2
+
+GPT Sol reviewed the landed stage: **one P2 and nothing else**, with all three of the suspicions
+listed in the review prompt disproved —
+[260908b-s1-code-review-sol.md](260908b-s1-code-review-sol.md). It proved the `statusOf` equivalence
+from the clause ordering rather than accepting the claim (an invalid id and a wait both return before
+`agents` is inspected, so every session reaching the `agents === null` clause necessarily produces
+`agents-unavailable`); confirmed the `Exclude` is a real guard, since adding a union member without
+touching the fixture is a type error and *no* test can stop somebody deliberately editing its own
+assertion; and confirmed nothing load-bearing died with `LISTED_NOTHING`.
+
+**S1-1 (P2) is a real tension and it belongs here rather than there.** `unrecognised-agent-status`
+deliberately drops the status name it found. Sol's objection:
+
+> a future Claude version reports `compacting`, then `waiting-for-input`; both collections produce
+> the same transition key … the intermediate status is permanently lost despite the source having
+> changed. Unlike reworded prose, the reported status token is machine-readable observed data and may
+> encode a real transition.
+
+That is not the same thing as the rule it appears to contradict. *A field a consumer will diff must
+not contain anything that varies for reasons the consumer does not care about* was aimed at **our
+wording**; the status token is **the box's observation**, and it changes only when the box says
+something different. The two arguments were about different objects — "we have one diagnostic
+problem" versus "the session moved" — and both are right about theirs.
+
+The resolution is not to reopen `cause`, which should stay stable, but to carry the token separately
+and decide whether it participates in the canonical key. **That is an S2 decision by construction,
+because S2 is where the canonical key is defined**, and Sol agrees it need not block S1. Recorded so
+it cannot be lost between stages: the near-certain trigger is an ordinary Claude Code upgrade
+introducing a status this version has no arm for, which will happen every few months rather than
+never.
+
 ### S2 — the observation contract and the pure logic
 
 Types and pure functions. No I/O.
