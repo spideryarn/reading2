@@ -163,13 +163,31 @@ writes it; the Overseer lives in `tools/overseer/` and never edits `tools/fleet/
 `page.ts` or the client; and it **imports** `collect.ts` and `status.ts` rather than reimplementing
 them, which is the same discipline `tools/fleet/` applied to `gjd-remote-tmux.ts`.
 
-**One known duplication, with a scheduled death.** A collection costs ~12 seconds of transcript
-grepping, so two collectors on one box is a real cost and not just untidiness — this box hit load
-391 with the OOM killer firing on 2026-09-08. Either the two coexist on staggered ticks and converge
-later, or the Overseer becomes the only collector and the dashboard reads its snapshot. The second is
-better in the end, because the page then outlives the collector and can say the snapshot is stale.
-Whichever is chosen, **the plan must say which one wins and when the other dies** —
-[improve-the-codebase.md](../reusable/improve-the-codebase.md).
+**There is one collector, and it is the dashboard's.** Settled between the two agents on
+2026-09-08. A collection costs ~12 seconds of transcript grepping, so a second one is a real cost
+rather than untidiness — this box hit load 391 with the OOM killer firing that morning. Two options
+were on the table (coexist on staggered ticks; the Overseer collects and the dashboard reads it) and
+the dashboard agent supplied a third that beats both: **the Overseer is a consumer.** It subscribes
+to the dashboard's `/api/live` SSE stream and appends on each `snapshot` event, polls `/api/state` if
+the stream drops, and falls back to its own `collect()` only when the server is unreachable — slowly,
+because a fallback that grazes every 12 seconds on a swapping box is worse than a gap in the history.
+The dashboard collects on a chain (60s from the *end* of each run, 5× backoff after a failure), not
+on a fixed interval, for the same reason.
+
+**The coupling this creates runs the opposite way, and is accepted knowingly:** the Overseer now
+depends on the dashboard being up. Hence two clocks in the state file rather than one — `writtenAt`
+(the Overseer last wrote) and `lastGoodSnapshotAt` (it last heard from the dashboard). They come
+apart exactly when something is wrong, and a single number would hide the case where the Overseer is
+alive but deaf. **A dead dashboard is a fact the Overseer records, not a silence it sits in.**
+
+**Box vitals belong to the dashboard, and are built.** [`tools/fleet/health.ts`](../../tools/fleet/health.ts)
+implements [diagnose-box-resources.md](../reusable/diagnose-box-resources.md) — load against cores,
+available rather than free memory, swap as a cliff, `vmstat` si/so, and memory attributed by process
+kind — with every field a discriminated union that can say *I could not tell* instead of returning a
+zero that reads as healthy. The Overseer stores that object verbatim per event and does not interpret
+it a second time, so a change at the source changes the history's shape rather than drifting from it.
+What the Overseer adds is only the tense the dashboard does not have: **nobody records health over
+time**, so "what was running when the box hit 391" is unanswerable today.
 
 ## The order of work
 
