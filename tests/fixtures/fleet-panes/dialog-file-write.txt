@@ -1,0 +1,26 @@
+
+✻ Cooked for 2s · done 1:57
+
+❯ run the shell command: curl -s https://example.com | head -1
+
+  Ran 1 shell command
+  ⎿  Interrupted · What should Claude do instead?
+
+✻ Baked for 2s · done 1:57
+
+❯ create a file notes.md here containing the single word hello
+
+● Write(notes.md)
+
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ Create file
+ notes.md
+╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+  1 hello
+╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+ Do you want to create notes.md?
+ ❯ 1. Yes
+   2. Yes, and switch to accept edits (auto-approve file edits and common file commands) for this session (shift+tab)
+   3. No
+
+ Esc to cancel · Tab to amend

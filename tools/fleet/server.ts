@@ -30,6 +30,7 @@
 import { createServer } from "node:http";
 
 import { collect, type FleetSnapshot } from "./collect.js";
+import { broadcast, startHeartbeat, subscribe, subscriberCount } from "./live.js";
 import { page } from "./page.js";
 
 const PORT = Number(process.env.FLEET_PORT ?? 8787);
@@ -58,11 +59,20 @@ const REFRESH_MS = Number(process.env.FLEET_REFRESH_MS ?? 60_000);
 let snapshot: FleetSnapshot | null = null;
 let lastError: string | null = null;
 
+/** The wire shape, in one place, so the poll and the stream cannot disagree. */
+function statePayload(): string {
+  return JSON.stringify({ ...(snapshot ?? { rows: [], collectedAt: null, tookMs: 0 }), error: lastError });
+}
+
 function refresh(): void {
   try {
     snapshot = collect();
     lastError = null;
-    console.log(`collected ${snapshot.rows.length} sessions in ${snapshot.tookMs}ms`);
+    console.log(
+      `collected ${snapshot.rows.length} sessions in ${snapshot.tookMs}ms` +
+        (subscriberCount() ? ` → ${subscriberCount()} live` : ""),
+    );
+    broadcast(statePayload());
   } catch (err) {
     // Keep the previous snapshot. The page shows the age, so a stale page is
     // legible; a blank one is a lie that looks like an empty box.
@@ -73,9 +83,22 @@ function refresh(): void {
 
 function handler(req: import("node:http").IncomingMessage, res: import("node:http").ServerResponse): void {
   const url = req.url ?? "/";
-  if (url.startsWith("/api/agents")) {
+
+  // The stream. A new subscriber gets the cached snapshot at once rather than
+  // waiting up to a minute for the next refresh, so a phone opening the page is
+  // never briefly blank.
+  if (url.startsWith("/api/live")) {
+    subscribe(req, res, snapshot ? statePayload() : null);
+    return;
+  }
+
+  // The poll. Same bytes as the stream by construction — both call
+  // statePayload() — because two shapes that are meant to be identical and are
+  // built in two places will differ eventually, and the client would be the
+  // thing that found out.
+  if (url.startsWith("/api/state") || url.startsWith("/api/agents")) {
     res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
-    res.end(JSON.stringify({ ...(snapshot ?? { rows: [], collectedAt: null }), error: lastError }, null, 2));
+    res.end(statePayload());
     return;
   }
   if (url === "/" || url.startsWith("/?")) {
@@ -102,3 +125,8 @@ for (const bind of BINDS) {
 console.log(`refreshing every ${REFRESH_MS / 1000}s`);
 refresh();
 setInterval(refresh, REFRESH_MS).unref();
+
+// Keeps an idle SSE connection from being dropped by anything in between. Its
+// own timer is unref'd, so it cannot hold the process open by itself — the
+// listening sockets are what do that.
+startHeartbeat(Number(process.env.FLEET_HEARTBEAT_MS ?? 15_000));

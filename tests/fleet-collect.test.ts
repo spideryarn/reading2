@@ -10,7 +10,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { toRows, worktreeOf } from "../tools/fleet/collect.js";
+import { panesBySession, toRows, worktreeOf, type FleetRow, type FleetSnapshot } from "../tools/fleet/collect.js";
 import { ageLine, esc, page } from "../tools/fleet/page.js";
 import type { FleetStatus } from "../tools/fleet/status.js";
 import type { Session } from "../scripts/gjd-remote-tmux.js";
@@ -18,8 +18,17 @@ import type { Session } from "../scripts/gjd-remote-tmux.js";
 /** No status derived for anyone — the map `toRows` falls back from. */
 const NO_STATUS = new Map<string, FleetStatus>();
 
-/** A display row, for the tests that render rather than collect. */
-function row(over: Partial<Parameters<typeof page>[0] extends null ? never : NonNullable<Parameters<typeof page>[0]>["rows"][number]> = {}) {
+/**
+ * A display row, for the tests that render rather than collect.
+ *
+ * `FleetRow` is imported and named rather than derived from `page`'s parameter
+ * with a conditional type, which is what this was at first. That version made
+ * every new field optional without saying so, so adding `paneId` and `question`
+ * to the real type left these fixtures silently missing them — and the tests
+ * went on passing against a shape the collector no longer produces. GPT Sol
+ * suspected the trick before it bit; it bit an hour later.
+ */
+function row(over: Partial<FleetRow> = {}): FleetRow {
   return {
     id: "$1",
     name: "n",
@@ -27,12 +36,14 @@ function row(over: Partial<Parameters<typeof page>[0] extends null ? never : Non
     repo: null,
     worktree: null,
     startedAt: "2026-09-08T00:00:00.000Z",
-    status: { kind: "idle" } as FleetStatus,
+    status: { kind: "idle" },
+    paneId: "%1",
+    question: null,
     ...over,
   };
 }
 
-function snapshotOf(rows: ReturnType<typeof row>[]) {
+function snapshotOf(rows: FleetRow[]): FleetSnapshot {
   return { rows, collectedAt: new Date().toISOString(), tookMs: 1 };
 }
 
@@ -91,6 +102,57 @@ describe("toRows", () => {
     // survives the rename `gjd-remote ls` performs. Everything later that acts
     // on a session must use this.
     expect(toRows([session({ id: "$1643", name: "renamed-since" })], NO_STATUS)[0]?.id).toBe("$1643");
+  });
+});
+
+describe("panesBySession", () => {
+  it("maps a session handle to its pane handle", () => {
+    // The two handles look alike and are not interchangeable: `$` addresses a
+    // session, `%` addresses a pane, and only the second can be read or typed into.
+    expect(panesBySession("$1 %10\n$2 %20\n").get("$2")).toBe("%20");
+  });
+
+  it("keeps the first pane when a session has several", () => {
+    expect(panesBySession("$1 %10\n$1 %11\n").get("$1")).toBe("%10");
+  });
+
+  it("omits a malformed line rather than storing half of it", () => {
+    // An empty-string pane id would be accepted as an address downstream, and
+    // a capture against "" is not obviously wrong until you read the output.
+    const m = panesBySession("$1\n\n   \n$2 %20\n");
+    expect(m.has("$1")).toBe(false);
+    expect(m.get("$2")).toBe("%20");
+  });
+});
+
+describe("questionBlock, via page", () => {
+  it("tells 'could not read it' apart from 'nothing there'", () => {
+    // Two different facts about a blocked session, and the whole reason the
+    // question field is nullable rather than defaulting to an empty question.
+    const unread = page(snapshotOf([row({ status: { kind: "needs-you" }, question: null })]), null);
+    const none = page(snapshotOf([row({ status: { kind: "needs-you" }, question: { kind: "none" } })]), null);
+    expect(unread).toContain("could not read");
+    expect(none).toContain("no dialog on screen");
+    expect(unread).not.toContain("no dialog on screen");
+  });
+
+  it("renders the prompt and its options, escaped", () => {
+    const html = page(
+      snapshotOf([
+        row({
+          status: { kind: "needs-you" },
+          question: { kind: "question", prompt: `Trust <b>this</b> folder?`, options: [{ label: "No, exit", key: { via: "selected" } }, { label: "Yes", key: { via: "arrows", key: "Down", presses: 1 } }] },
+        }),
+      ]),
+      null,
+    );
+    expect(html).toContain("Trust &lt;b&gt;this&lt;/b&gt; folder?");
+    expect(html).toContain("No, exit");
+    expect(html).not.toContain("<b>this</b>");
+  });
+
+  it("says nothing about a question for a session that is merely working", () => {
+    expect(page(snapshotOf([row({ status: { kind: "working" } })]), null)).not.toContain("could not read");
   });
 });
 

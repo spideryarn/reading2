@@ -1,0 +1,26 @@
+
+ ▐▛███▛█   Claude Code v2.1.263
+▝▜██████▀  Opus 5 (1M context) · Claude Max
+  ▝▝ ▝▝    /…/-home-greg-code-spideryarn2/490f2556-4e1c-45c5-a5ba-361ee5860c90/scratchpad/wf-pane-probe-dir
+
+
+❯ /loop 7m say hi
+
+
+
+
+
+
+
+
+
+
+
+
+✢ Concocting… (17s · ↓ 212 tokens · thought for 2s)
+                    tmux focus-events off · add 'set -g focus-events on' to ~/.tmux.conf and reattach for focus tracking
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  [Opus 5 (1M context)] scratchpad/wf-pane-probe-dir                                                                 /rc
+  ⏸ manual mode on · ← for agents

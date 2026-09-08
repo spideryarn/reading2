@@ -69,6 +69,27 @@ export function statusLabel(s: FleetStatus): { text: string; cls: string } {
   }
 }
 
+/**
+ * What a blocked session is asking, when we could read it.
+ *
+ * THE THREE CASES ARE DIFFERENT AND MUST LOOK DIFFERENT. A blocked row whose
+ * question we could not read must not render the same as one that turned out
+ * not to be asking anything — "we could not tell" and "nothing there" are the
+ * collapse this whole project keeps writing comments about.
+ *
+ * `options` is what is on the screen, which is not always all of it: a long
+ * menu scrolls. So the heading is "options", never a count.
+ */
+function questionBlock(r: { status: FleetStatus; question: FleetSnapshot["rows"][number]["question"] }): string {
+  if (r.status.kind !== "needs-you") return "";
+  if (r.question === null) return `<div class="q dim">could not read what it is asking</div>`;
+  if (r.question.kind === "none") return `<div class="q dim">blocked, but no dialog on screen</div>`;
+  const opts = r.question.options
+    .map((o) => `<li>${esc(o.label)}</li>`)
+    .join("");
+  return `<div class="q"><div class="qp">${esc(r.question.prompt)}</div><ol class="qo">${opts}</ol></div>`;
+}
+
 export function page(snap: FleetSnapshot | null, error: string | null, now = Date.now()): string {
   // `startedAt` is an ISO string; Date.parse gives NaN rather than throwing on a
   // bad one, and triageSort sorts NaN last rather than anywhere.
@@ -79,7 +100,7 @@ export function page(snap: FleetSnapshot | null, error: string | null, now = Dat
       const title = r.title ? esc(r.title) : "<i>no title yet</i>";
       const where = [r.repo, r.worktree].filter((x): x is string => x !== null).map(esc).join(" · ");
       const st = statusLabel(r.status);
-      return `<li class="${st.cls}"><div class="t">${title}</div><div class="m"><span class="pill">${esc(st.text)}</span>${esc(r.name)}${where ? ` — ${where}` : ""}</div></li>`;
+      return `<li class="${st.cls}"><div class="t">${title}</div><div class="m"><span class="pill">${esc(st.text)}</span>${esc(r.name)}${where ? ` — ${where}` : ""}</div>${questionBlock(r)}</li>`;
     })
     .join("\n");
   // The unknown count is shown WHENEVER it is non-zero, beside the others. An
@@ -122,6 +143,10 @@ export function page(snap: FleetSnapshot | null, error: string | null, now = Dat
   li.work .pill { background:var(--work); color:#fff; }
   li.unk .pill { background:var(--unk); color:#fff; }
   .tally { margin-top:2px; font-size:13px; }
+  .q { margin-top:8px; padding:8px 10px; border-radius:6px; background:var(--pill); font-size:14px; }
+  .q.dim { color:var(--dim); font-style:italic; font-size:13px; }
+  .qp { font-weight:500; }
+  .qo { margin:6px 0 0; padding-left:20px; color:var(--dim); font-size:13px; }
 </style>
 </head><body>
 <header>

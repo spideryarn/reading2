@@ -1,9 +1,13 @@
 # Agent fleet dashboard
 
-**Status as of 2026-09-08: re-sliced, nothing built.** No code, no Tailscale on the box — evidence:
-`ls tools/` returns nothing and `which tailscale` is empty. One claim in an earlier version of this
-plan was **retracted**; see [Evidence](#evidence-what-was-actually-tested), which now records what
-failed as well as what worked.
+**Status as of 2026-09-08: running.** Serving on the box at `127.0.0.1:8787` and on the tailnet at
+`100.92.255.119:8787`, showing ~36 sessions with status, and rendering the pending question for
+blocked ones. Evidence: `tools/fleet/` holds seven modules, 163 tests pass across six files, and
+`curl -sN /api/live` streams a `snapshot` event. Tailscale 1.102.3 is installed and logged in.
+
+**Not yet reachable from the page:** `steer.ts` (no route calls it) and the React client (in
+flight). One claim in an earlier version of this plan was **retracted** — see
+[Evidence](#evidence-what-was-actually-tested), which records what failed as well as what worked.
 
 The standing direction is [orchestrator-direction.md](../project/orchestrator-direction.md); this
 plan is one implementation of it. **Read that first** — it holds the constraints, and it outlives
@@ -195,11 +199,30 @@ this worktree — `tools/fleet/status.ts`, `tools/fleet/pane.ts`, and `infra/het
 Wiring each into `server.ts`/`page.ts` is the orchestrator's job, so those two files have exactly one
 writer.
 
-- ✅ Tailscale installed on the box (1.102.3, `tailscaled` active). `tailscale up` is a human step;
-  the login URL goes to Greg. **The ssh forward stays as the fallback that depends on nothing.**
+- ✅ Tailscale installed, and Greg logged in 2026-09-08. `spideryarn-box`, `100.92.255.119`,
+  MagicDNS `spideryarn-box.taildc3f16.ts.net`. **The ssh forward stays as the fallback that depends
+  on nothing**, which is why the server binds a list of addresses rather than one.
+  `tailscale serve` was NOT used: it wants an HTTPS toggle in the admin console and hung waiting for
+  it. Plain HTTP over the tailnet is what the reference system does, and WireGuard already encrypts it.
 - ✅ [agent-fleet-dashboard.md](../reusable/agent-fleet-dashboard.md) — the carry-elsewhere version.
-- [ ] Wire status and the pending-question parser into the page.
-- [ ] Hot reload, replacing `<meta http-equiv="refresh">` with SSE.
+- ✅ `status.ts` wired in: status per row, blocked first, tally in the header.
+- ✅ `pane.ts` wired in: the pending question and its options, for blocked rows only.
+- ✅ `live.ts` wired in: `/api/live` streams a `snapshot` event; `/api/state` is the same bytes for
+  pollers, built by one function so the two cannot drift.
+- ✅ `health.ts` built — not yet on the page; needs a `health` field in the payload.
+- ✅ `steer.ts` built — deliberately **not** reachable: no route calls it yet.
+- [ ] The React client, and the modes (Sessions / Box health / Orchestrator).
+
+**📔 A hand-launched Claude session is classified as a shell.** Found on 2026-09-08 trying to fake a
+blocked session for testing: `sessionState` keys off the `CLAUDE_SESSION_ID` that `gjd-remote` pins
+into the tmux environment at launch, and off a process matching `claude --session-id <that uuid>`. A
+session made with plain `tmux new-session` running plain `claude` has neither, so it is `shell,
+busy`. Everything on this box comes from `gjd-remote`, so it costs nothing today — but a dashboard
+that claims to show every agent does not, quite.
+
+**📔 End-to-end proof came from a real blocked session, not the probe.** While trying to manufacture
+one, an actual agent hit a genuine question — five options about upload policy — and the parser read
+it correctly, digits and all. Worth more than the fixture it was meant to replace.
 
 ### Stage v0.1 (original scope, for the record)
 
