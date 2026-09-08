@@ -712,6 +712,52 @@ its own arm. But it is the same shape as A27 and as the deaf-Overseer asymmetry 
 **the thing you reach for when something is broken shares a dependency with the thing that broke.**
 Worth naming in 3c, where the review surface will have the same problem.
 
+#### The code review of 3a, and the finding I had already seen and talked myself out of
+
+Sol reviewed the shipped code (`docs/plans/260908g-stage3a-code-review-sol.md`) and blocked it **as a
+reusable protocol for acting rules**, while agreeing the shipped rule is safe today. That distinction
+is the right one and it is the one this plan's ordering already assumed.
+
+**SC-2 is the finding that matters, and I had it in my hands.** Reading the diff I noticed that
+`disposition` is a runtime `switch` rather than a type-level guarantee — and then argued myself out
+of it: *the conditional is on hashed data, so changing it changes the hash and the job is refused.*
+That is wrong, and Sol says why in one line: **`scheduler.ts`, which interprets the hashed
+disposition, was deliberately left out of `RULE_SOURCES`.** So a change that bypasses the switch
+leaves the rule's authorised hash perfectly current. The fingerprint guards the threshold and not the
+thing that decides whether to act on it.
+
+I had even written the suspicion into the review prompt — *"the protocol that decides whether to act
+is arguably more load-bearing than the rule whose threshold it reads"* — and then shipped the
+opposite. **This is a different failure from the day's others**: not an unchecked claim, but a
+checked observation reasoned away. The others were cured by looking; this one needed somebody else.
+
+Four fixes, all of which make a claim true that is currently false:
+
+- **SC-4** — `definitionHash` and `ruleSpecHash` **destructure**, and destructuring is not exhaustive
+  in TypeScript, so a new field is silently outside the fingerprint. This defeats SP-1 directly, and
+  the test named "every knob" enumerates today's fields by hand. Replaced with exact mapped types, so
+  a new key is a compile error until its encoding is supplied.
+- **SC-2's cheap half** — a `runProposingRule` handed only `observe`, so the absence of an actor is
+  structural rather than conditional, and `scheduler.ts` goes into `RULE_SOURCES`.
+- **SC-5** — the round-trip test uses `JSON.parse(line) as OverseerEvent`, so it proves the parse
+  branch *exists* and not that it parses *correctly*. Asserted through `readEvents` instead.
+- **SC-1's live half** — `runRule` returns a hot promise the daemon never awaits, and the shutdown
+  path assumes every job is a separate process. An orderly shutdown can close the store mid-`observe`
+  and lose the settlement, leaving a `started` occurrence with no ending. Nothing acts, so nothing is
+  dangerous; it manufactures exactly the unaccountable-run noise Stage 2 exists to make meaningful.
+
+**Three findings are deferred to 3d with named conditions rather than dropped**, because each is
+about *acting* and 3d is the acting stage: SC-1 in full (an acting rule that dies between action and
+settlement leaves an unpaired intent and becomes eligible again — **this is why 3d cannot be built by
+flipping a disposition**); SC-2's second half (the meaning of `"safe-to-kill"` lives in unpinned
+fleet code, so the policy can change without changing the fingerprint); and SC-3.
+
+**SC-3 deserves its own sentence, because its safety today is luck.** `lastRunOf` ignores every
+occurrence whose definition hash differs, so a re-pin makes a job **immediately due even with an
+old-hash occurrence in flight** — Sol exercised it and got `last: never`, then due. Today's re-pin is
+harmless only because neither standing job has ever run. That is not design, and it is a live trap
+for every later re-pin.
+
 #### SP-11, and a number I sent to somebody else
 
 Sol is right that *"3 of 15"* mixes eight agent sessions with seven shells, and that `working`
