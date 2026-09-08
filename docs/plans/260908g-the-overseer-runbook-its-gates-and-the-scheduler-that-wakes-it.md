@@ -1765,8 +1765,16 @@ behaviour pin still requires a person; the activation command is idempotent and 
 than quietly; `tests/systemd-units.test.ts` is green against both copies of the unit; and
 `overseer status` cannot say `ARMED` about a job that cannot run.
 
-8b: not started. **Nothing is armed by this stage** — `EnvironmentFile` ships with an explicitly
+8b: not started. **No paid work is armed by this stage** — `EnvironmentFile` ships with an explicitly
 disarmed value, and the commands that arm it are Greg's.
+
+> **"Arms nothing" is true of the code and false of the command, and the implementer was right to
+> say so.** `overseer-activate.ts --apply --disarm` **stops the running tmux Overseer and hands the
+> box to systemd.** That is a real change to how the box runs — disruptive rather than inert — even
+> though it starts no job and spends nothing. The sentence above used to read *"nothing is armed by
+> this stage"*, which a person skim-reading before a `sudo` would take as *"this is safe to run
+> without thinking"*. It is safe, but it is not nothing, and the difference is exactly the kind a
+> handoff note must not blur. **Dry run is the default for this reason; run it first.**
 
 #### 8a as built, 2026-09-09
 
