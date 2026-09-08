@@ -169,13 +169,9 @@ that shape.
 The reader returns a **reading**, and each caller keeps its own policy. This is deliberate, and it
 is the answer to "one shared reading that is wrong is worse than two":
 
-```ts
-type ClaudeReading = {
-  headless: boolean;
-  sessionIds: readonly string[];   // every one found in the option region
-  endedBy: "double-dash" | "first-bare-word" | "end-of-argv";
-};
-```
+*(This shape was superseded before it was built — the four-arm `ClaudeReading` below is what
+shipped. The point it makes about policy still stands, and is why the reader returns a reading
+rather than a verdict.)*
 
 - `harness.ts` keeps *ambiguous when two ids **differ***.
 - `steer.ts` keeps *refuse unless exactly one*.
@@ -192,11 +188,18 @@ and wrong about what is inside it, because it assumes **every flag takes at most
 
 - **Variadic flags.** `--add-dir <directories...>`, `--allowedTools, --allowed-tools <tools...>`,
   `--betas <betas...>`. One value is a guess.
-- **Optional-value flags.** `--cloud [description|session_id|url]` — the brackets mean it may take
-  none.
-- **Subcommands.** `Usage: claude [options] [command] [prompt]`, and the list is long: `agents`,
-  `attach`, `auth`, `auto-mode`, `doctor`, `gateway`, `import`, `install`, `logs`, `mcp`, `plugin`,
-  `project`, `respawn`, `rm`. **`claude agents` is a command, not a prompt.**
+- **Optional-value flags — eight of them, not the one this paragraph first named.** `--cloud`,
+  `-r/--resume`, `-w/--worktree`, `-d/--debug`, `--from-pr`, `--remote-control`, `--teleport`,
+  `--prompt-suggestions`. The brackets mean the value may be absent, and **argv cannot say**:
+  `--resume foo` is either *resume foo* or *resume, then the prompt foo*.
+- **Subcommands — twenty-one with aliases, not the fourteen this paragraph first listed.** `agents`,
+  `attach`, `auth`, `auto-mode`, `doctor`, `gateway`, `import`, `install`, `kill`, `logs`, `mcp`,
+  `plugin`, `plugins`, `project`, `respawn`, `rm`, `setup-token`, `stop`, `ultrareview`, `update`,
+  `upgrade`. **`claude agents` is a command, not a prompt.**
+- **But `help` must NOT be treated as one**, though Commander offers it implicitly. Measured:
+  `claude help me fix this` **answers the prompt**. A prompt beginning "help" is a thing people type,
+  so listing it would turn a real session into a `subcommand` — the refusing direction, on a
+  plausible shape.
 
 Measured, because Sol has been wrong before and this changes the design:
 
@@ -287,9 +290,24 @@ revision.
   **every process's flattened argv, prompts and possibly secrets included**, over ssh, to fix a
   labelling bug. Document in the awk that it recognises a launcher-owned shape rather than
   reconstructing argv.
-- **Stage A — the shared reader**, in the `not-claude`/`subcommand`/`session`/`unreadable` shape
-  above, with the fidelity tag, a table of the flags this repo owns, and `unreadable` for everything
-  else.
+- **Stage A — the shared reader. DONE.** `tools/fleet/claude-argv.ts`, a true leaf with **no imports
+  at all**; 48 tests in `tests/fleet-claude-argv.test.ts`; **8 mutants, 0 survivors**. Entry criterion
+  for the flag table: *a producer in this repo emits it*, so nothing's arity is guessed from a help
+  page we do not control. All eight optional-value flags are deliberately absent and land in
+  `unreadable`.
+
+  **Variadic flags are IN the table, with a rule**, and the reasoning is better than leaving them
+  out: `--tools`, `--allowed-tools` and `--add-dir` are what `run-claude.ts` emits, so excluding them
+  would make **every `run-claude` process unreadable** — our own producer, and the shape `work.ts`'s
+  headless recogniser exists for. So a variadic is read greedily **only when the line has a bare
+  `--`**; with no separator it is `unreadable`, naming the flag. `buildClaudeArgs` always emits `--`,
+  so the real population parses, and `claude --add-dir /a tell --session-id <other> to stop` refuses
+  rather than handing over an id it read out of prose.
+
+  Verified independently before commit — the case that killed the old design now reports
+  `headless=true`; `claude agents` is a `subcommand` and `claude help me fix this` is a `session`;
+  an unknown flag is `unreadable` naming itself; and all 5 live processes read as a clean `session`
+  with both fidelities agreeing.
 
   **A shape our own launcher makes, found during Stage C.** `scripts/gjd-remote.ts:2563` emits
   `--name ${shq(name)}` **before** the `--`. On faithful argv that is one element. On the flattened
@@ -302,6 +320,28 @@ revision.
   *type* rather than a label: the same flag can have a known arity on `argv` and an unknowable one on
   `ps-flattened`, and the reading should be able to say so. The awk is immune only because it skips
   unknown tokens rather than assuming arity — the trade this stage rejects.
+
+  **Settled, as a new arity `one-free-text`.** One value on `argv`, unknowable on `ps-flattened`,
+  where the value is a run of bare words. Three endings, and only one is refused:
+  - the run reaches the end of argv → **readable**. This keeps `claude --session-id U
+    --permission-mode auto --name my session` working — a named session with no prompt, which
+    `new-claude` produces. Refusing it was the expensive direction.
+  - the run stops at a dash-led token **with a `--` ahead** → **readable**; the launcher bounded the
+    prompt itself.
+  - the run stops at a dash-led token **with no `--`** → **`unreadable`**, naming the flag and the
+    token. That is `--name my session --print`: nothing says which side of the name that token is
+    on. It also stops `--name my session tell --session-id <B> to stop` handing over `B`.
+
+  `--name` is the only free-text value in the table; every other one-value flag takes a uuid, a
+  number, or a word from a fixed set. That is stated as a **fidelity-dependent property** in three
+  places in the module and has a faithful/flattened contrast pair in the tests.
+
+  **A known limitation, measured and written down rather than guessed.** Subcommand dispatch is not
+  as clean as "`claude agents` is a command": `claude mcp` and `claude --session-id <uuid> mcp` both
+  dispatch, while `claude logs <bad-id>` errors instantly but the same line behind `--session-id` or
+  `--permission-mode auto` produced nothing for 20 seconds. So a prompt *beginning* with a subcommand
+  word may be read as a subcommand. It is fail-closed — `subcommand` grants nothing — and the module
+  header carries the measurements and says plainly that the behaviour is not fully explained.
 - **Stage B — all three TypeScript consumers onto it**, not two: `recogniseClaude`,
   `isClaudeForSession`, **and `RECOGNISERS["claude-headless"]` in `work.ts`** (Sol P1-2 — Stage B as
   first written left D6 alive while claiming to have removed the class). The refusal reasons carry
