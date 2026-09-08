@@ -481,4 +481,50 @@ export type PauseUnknownCause =
   | "transcript-unreadable"
   | "no-conversation-id"
   | "session-store-unreadable"
-  | "rate-limits-not-collected";
+  | "rate-limits-not-collected"
+  /**
+   * A wake-up WAS found and its time could not be worked out — a recurring
+   * expression, a step, a range.
+   *
+   * The seventh arm, and it is a different shape from the other six: those are
+   * all about failing to REACH a source. This one is about reaching it and
+   * finding something we know is pending and cannot put a clock on. It is not
+   * `none`, because something is genuinely waiting; it is not
+   * `transcript-unreadable`, because the transcript read perfectly well.
+   *
+   * Added 2026-09-08 after the reader was built: the module had been mapping
+   * this case onto `transcript-unreadable` through a single named constant,
+   * with the specifics in `why`, and said so rather than editing this type
+   * unilaterally. That was the right way round — the sentence stayed true while
+   * the name was wrong, and one constant meant the repair is one line.
+   */
+  | "schedule-not-parseable";
+
+
+/* ------------------------------------------------------------------ *
+ * What happened to the keystrokes.
+ * ------------------------------------------------------------------ */
+
+/**
+ * **A steering attempt has three outcomes, not two.**
+ *
+ * Astra's A11b. `none` means nothing left this box. `partial` means **the text
+ * landed and the Enter did not**, so it is sitting in that agent's input box
+ * waiting for the next keystroke to submit it — the one case where *"try
+ * again"* is the worst available advice, because a retry appends to the
+ * half-sent text rather than replacing it. `unknown` means the call timed out
+ * or died on a signal and we genuinely cannot say.
+ *
+ * It lives here because it was declared carefully on the server, sent on the
+ * wire, and **thrown away by the browser**, which then rendered every refusal
+ * as *"Nothing was sent."* — false in the most expensive direction, and false
+ * precisely when it matters. That is instance 5 of
+ * docs/postmortems/260908b: the producer said the careful thing and the
+ * consumer had a slot for one fact where there were three.
+ *
+ * The server's own comment beside the field had already named the consumer it
+ * needed: *"it is here rather than only in the log because the person who
+ * pressed the button is the one who needs it, and they are on a phone."*
+ * Nothing related the two declarations, so nothing noticed.
+ */
+export type Delivery = "none" | "partial" | "unknown";

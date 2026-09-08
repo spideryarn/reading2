@@ -1066,6 +1066,8 @@ listed the ordinary way, on that account's shelf, still flagged and still sorted
 ## See also
 
 - [url-state.md](url-state.md) — the query string half of a link, and why position replaces history
+- [feedback.md](feedback.md) — the **Feedback** button, which since 2026-09-08 is a control in this
+  page's own masthead row rather than a fixed corner beside it
 - [260826y-library-sorting.md](../plans/260826y-library-sorting.md) — the plan behind the sort, the chips and the table
 - [web-client.md](web-client.md) — the page the cards lead to
 - [architecture.md](architecture.md) — the pipeline that fills the shelf, and the storage layout

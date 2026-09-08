@@ -144,10 +144,12 @@ six sessions can now build in parallel without a negotiation between them.
    control at all** in v1.
 
 **And one cost finding, which is not engineering — stated with its timestamp, because that turned out
-to matter.** At **13:30** `w2-harness-adapter` found **two orphaned paid `gpt-5.6-sol --effort high`
-reviews running under `ppid 1`**: the Bash-tool shell had been reaped, leaving 45-minute jobs
-reparented to init, attributable to no session and invisible to `work.ts`, which only walks *down*
-from a pane. **At 14:05 there were none** — every `ppid 1` process on the box was a system daemon.
+to matter.** **Every time below is UTC**, which is not pedantry — the box runs BST, and a mislabelled
+hour is the fourth instance of the error this section is about. At **~12:30 UTC** `w2-harness-adapter`
+found **two orphaned paid `gpt-5.6-sol --effort high` reviews running under `ppid 1`**: the Bash-tool
+shell had been reaped, leaving 45-minute jobs reparented to init, attributable to no session and
+invisible to `work.ts`, which only walks *down* from a pane. **At 13:05 UTC there were none** — every
+`ppid 1` process on the box was a system daemon.
 So the finding is **real but transient**: not a leak that accumulates, but a window during which a
 paid job cannot be attributed or stopped. Related to a trap already recorded — a killed codex run
 still writes its `--output` file, so a stale review is indistinguishable from a fresh one and both the
@@ -171,6 +173,36 @@ Nothing was wrong with the first reading. What was wrong was the tense it was ab
 The same fragility applies to *"35 `auto`, 1 `default`"* earlier the same day, and to every count in
 this doc: **the honest form of a fleet measurement is the timestamp**, and a sentence that drops it
 has converted an observation into a claim about the world.
+
+**And knowing the lesson did not prevent it, one paragraph later.** The orphan finding above was
+written as *"two orphaned reviews are running"*, which was false by the time anybody read it — by the
+same author, minutes after writing the rule down. Then the correction repeated the shape a third time:
+two agents walked the process table, both reported zero orphans, and called that corroboration —
+except the walks were at **13:03 and 13:05 UTC**, **two minutes apart**. They looked an hour apart
+because one was quoted in BST and the other in UTC. Two readings two minutes apart are one observation
+with a wide error bar, and the sequence was backwards in the draft as well.
+
+**And a fourth, found by auditing rather than by noticing.** The three-column measurement table
+labelled its last column `13:30 UTC`; the reading was taken between a launch at 13:28 **local** and a
+clock check at 13:32 **local**, so it was **~12:30 UTC** — local time wearing a UTC label. The
+committed files were clean, because those timestamps came from `date -u` beside the capture. **The
+wrong numbers were all in prose**, which is the tell: the machine-produced ones survived and the
+hand-written ones did not.
+
+**So the lesson does not transfer by being remembered, and the reason is that it keeps changing
+clothes**: counting a population, then corroborating a claim, then mistaking co-located readings for
+independent ones, then mislabelling a timezone. Four instances in one stage, two of them *after* the
+rule had been written down by the person who then broke it. The version that catches all four is
+mechanical rather than remembered — **the instant a fleet number was taken travels with the number, in
+one timezone, as a field**, the way `collectedAt`, `scannedAt` and `waitingSince` are fields in every
+type built today rather than habits. The audit is the evidence for that: **every timestamp produced by
+`date -u` beside its capture was right, and every one typed into prose was wrong.** So if the attention
+work ever surfaces fleet counts to Greg, the count and its instant must be one value, not a sentence a
+person assembles. What actually
+settled the orphan question was not a second reading at all but a **mechanism**: an orphan appears
+when a Bash-tool shell is reaped mid-run and leaves when the job ends, so the population is bounded by
+concurrent reviews rather than growing. That argument would hold with zero readings, which is what
+makes it the evidence.
 
 ## Stages
 
@@ -311,6 +343,59 @@ things it has decided not to ask him. It lands when something answers, not when 
 test that feeds it an expired `resets_at` and watches it refuse. And a **positive control** — a probe
 that finds no 429s anywhere must be distinguishable from a probe that is broken
 ([silent-success.md](../reusable/silent-success.md)).
+
+#### The store half is a separate owner, and the two `Checkpoint` fields must land one at a time
+
+The collector is `w2-usage-limits`'s; **writing it into `~/.overseer/current.json` is the Overseer's**,
+because it needs a `Checkpoint` field, a `parseCheckpoint` arm, both construction sites and a cadence
+decision in `daemon.ts`. That session declined to land a schema change in a module somebody else might
+be editing, which was the right call — **`Checkpoint.attention` and `Checkpoint.usage` are in flight at
+the same time**, so the order is: attention lands, then usage on top, one editor of `Checkpoint` at a
+time.
+
+#### The 45-second scan should be paid once, not every pass
+
+The full transcript scan is **45s over 1,770 transcripts, 2.9 GB, 870,799 lines**, and the wide window
+is deliberate: a narrower one can miss a `seven_day` rejection that is still in force. But that is an
+argument for reading the whole history **once**, not for re-reading it. **A `seven_day` rejection found
+at T with a `resetsAt` of T+7d stays in force until that instant whether or not you look again** — it
+is a fact with an expiry, not one that needs re-confirming. So: cold start pays the full scan and
+records the watermark it reached; every pass after it scans only what moved; a known unexpired
+rejection is carried forward from the store, and one whose `resetsAt` has passed is dropped as a
+**positive act with a reason** rather than a silent absence. The cache is read every tick regardless,
+because it is one file and free.
+
+**That is the store earning its keep** — it is what turns an expensive repeated scan into a cheap
+incremental one, which is the Overseer's tense doing the job it exists for. It also supplies a real
+positive control on the incremental path: the watermark plus the count of files whose mtime moved, so
+*"found nothing new"* is distinguishable from *"looked at nothing"*.
+
+**Two ways it could be wrong, named rather than discovered**: a transcript can be *rewritten* rather
+than appended (a compaction), which moves content behind the watermark; and a 429 can land in a file
+whose mtime is then missed if the clock moves. If either is real, the answer is the plain 45 seconds
+on a slow timer — which is a perfectly good design and much better than a clever one that misses a
+live rejection.
+
+**And it must not run inside the tick.** `heartbeat.lastTickAt` is how a reader decides the Overseer is
+dead rather than showing a stale register as current, so a 45-second blocking scan makes every tick
+look 45 seconds late — **A17 exactly, healthy operation spending most of its time alarming**, which
+teaches Greg to ignore the alarm. It goes in as an injected runner with its own interval, one pass at a
+time, a thrown pass becoming an explicit `unknown` rather than silence: the same shape `attention` uses,
+and consistency between the two is worth more than either being individually optimal.
+
+#### A relative time is a rendering, and a rendering must not be quotable as a measurement
+
+The sharpest instance of the timestamp rule, and it was found in the place the rule does not obviously
+reach. `w2-usage-limits`'s *report* was already right — `collectedAt`, `fetchedAtMs`, `resetsAt`,
+`resetsAtMs`, instants as fields all the way from the source, never re-typed. **The CLI renderer was
+the leak**: it printed `cache fetched 73 min ago`, which is true when printed and false when pasted —
+and CLI output on this box gets pasted into messages and plan docs hours later *as evidence*. Now it
+prints the ISO instant with the age in parentheses.
+
+**And one wave-level fact that should govern every timeout anybody sets here**: the same scan over the
+same files took **1.8s and 9.7s two hours apart, purely from ambient load** (measured
+2026-09-08T13:16Z). A 5× variance is the argument against any design whose correctness depends on
+something finishing promptly.
 
 ### Stage C — the Codex/GPT harness adapter, v1
 
@@ -473,16 +558,32 @@ still running. **`work.ts` only ever walks DOWN from a pane, so it cannot see th
 cannot show them, attribute them, or stop them, and nothing bills them to anybody. That is a cost
 question as much as an engineering one, and `claude-agents-dashboard` has it to surface.
 
-**It is a WINDOW, not a leak, and the difference decides what to do about it.** `orchestrator-setup`
-checked at 14:05 and found none; independently re-checked at 13:03 UTC, the two live `codex exec`
-runs (`fleet-dictation`'s and `fleet-approval-binding`'s) both trace up to `sh -c ( npx tsx
-run-codex.ts … )` whose parent is the **tmux server**, so both are ordinary `codex-batch` *panes* —
-the shape `codex-batch-pane.txt` captures — and both are attributable and stoppable. So orphans do
-not accumulate: they appear when a Bash-tool shell is reaped mid-run and they leave when the job
-ends. What is worth fixing is the window during which a paid job cannot be attributed or stopped,
-not a growing population of them. **"Two orphans are running right now" would have been false by the
-time anybody read it** — the same sample-window error as the Codex count above, one paragraph after
-writing it down.
+**It is a WINDOW, not a leak, and the difference decides what to do about it.** The claim rests on the
+**process lifecycle**, not on a count: an orphan is created when a Bash-tool shell is reaped while its
+`run-codex.ts` child is still running, and it ends when that review ends. So the population is bounded
+by the number of concurrent reviews and cannot grow on its own. **That argument would hold with zero
+readings taken**, which is what makes it the load-bearing part. What is worth fixing is the window
+during which a paid job cannot be attributed or stopped — not a growing population of abandoned ones.
+
+Two walks are consistent with it and neither establishes it. At **13:03 UTC** the two live `codex exec`
+runs (`fleet-dictation`'s and `fleet-approval-binding`'s) both traced up to an
+`sh -c ( npx tsx run-codex.ts … )` whose parent is the **tmux server**, so both were ordinary
+`codex-batch` *panes* — the shape `codex-batch-pane.txt` captures — attributable and stoppable;
+`orchestrator-setup` walked every `ppid 1` process at **13:05 UTC** and found none.
+
+**Those two readings are two minutes apart, not an hour**, and an earlier draft of this paragraph
+presented them as independent corroboration because one was written in BST (14:05) and one in UTC
+(13:03) with no note that the box runs UTC+1. Two observations two minutes apart are one observation
+with a wide error bar. **This is the sample-window error for the third time in one stage** — first as
+the Codex count, then as "two orphans are running right now" (which would have been false by the time
+anybody read it), now as a timezone making two near-simultaneous readings look like a trend.
+
+**And the third one is why "I have learned this" is not a defence.** The lesson as written above is
+about *counting a population*; it recurred in the shape of *corroborating a claim*, which is the same
+error wearing different clothes and did not trip the memory of the first one. The version that catches
+both is mechanical rather than remembered, and it is the discipline everything else built today
+already follows: **a fleet number carries the instant it was taken, in one timezone, in the sentence
+itself** — the way `collectedAt` and `scannedAt` are fields rather than habits.
 
 **One `ppid 1` process really is long-lived, and it is the fake.**
 `bash /tmp/fake-codex-qAz9Um/codex -o /tmp/run-codex-gc.txt`, reparented to init **6 days 20 hours**
@@ -571,6 +672,19 @@ walker itself, because a closure walker that sees nothing looks exactly like one
 **Twelve files, ~4,200 lines, and no external package beyond `react`.** That is what a move to its
 own repo would carry, and it is small enough that a person would carry it by hand.
 
+**The closure figures below are GPT Sol's, from an AST walk, not mine.** Mine came from a regex
+walker that had already been wrong once in the flattering direction, so when a second measurement
+disagreed the AST one won on method rather than on being second. The differences are small and none
+of the conclusions moves — but the published numbers were stale and a stale number quoted as
+evidence is the thing this plan keeps arguing against.
+
+| | files | lines |
+|---|---:|---:|
+| `src/web/dictation-upload.ts`, the edge that was cut | 22 | 16,215 |
+| `src/web/useDictation.ts` after the cut | 8 | 2,931 |
+| `src/transcribe.ts`, the server-half candidate | 162 | 118,171 |
+| `src/ai-call.ts`, its smallest useful piece | 21 | 20,505 |
+
 ##### The one edge that had to be cut, and what it was worth
 
 `useDictation.ts` imported `sendForTranscription` from `dictation-upload.ts`, which calls `apiFetch`
@@ -603,10 +717,14 @@ piece, `ai-call.ts`, is 20 files and 20,344 lines. So `tools/fleet/transcribe.ts
 to `POST https://openrouter.ai/api/v1/audio/transcriptions` — still through the gateway, no second
 one — borrowing the three files under `src/` that import nothing at all.
 
-**The honest half of that ruling:** `transcribeWith` *is* free of the database at runtime, because
-`ai-spend.ts` writes through a sink that is `null` unless the product's server installs one. Which
-means going through it **would not have metered this spend either** — no `ai_calls` row, nothing for
-`npm run cost`. The fleet's OpenRouter spend is invisible to the product's ledger whichever shape is
+**The honest half of that ruling:** `transcribeWith` used standalone writes no database row, so
+going through it **would not have metered this spend either** — nothing for `npm run cost` to count.
+
+*And the mechanism is not what this doc first said.* It claimed a process-global sink that is `null`
+until the product's server installs one. There is no such thing: a sink belongs to `collectSpend`'s
+**async scope**, and a call made outside one increments an in-memory unscoped counter, logs a
+warning, and drops the record. GPT Sol's correction. The conclusion is unchanged and the reasoning
+was wrong, which is worth more than the conclusion being right. The fleet's OpenRouter spend is invisible to the product's ledger whichever shape is
 chosen. That is a property of being a separate tool, not a cost of this decision, and it is named
 here rather than discovered later. A dictation is about $0.0005.
 
@@ -695,6 +813,37 @@ button whose failure was indistinguishable from this box having no audio hardwar
 
 There is no audio input device on this box and Chrome's fake-microphone flags do not work headless
 here. Everything past *"Opening the microphone…"* is Greg's to check from his own phone or laptop.
+
+##### The cross-family review, and what came out of it
+
+[260908f-fleet-dictation-code-review-sol-r1-1356.md](260908f-fleet-dictation-code-review-sol-r1-1356.md).
+Its verdict on the first round was **"Stage 1 is not solid yet"**, and it was right — one P1 and six
+P2s, all real, all fixed. Worth listing because the pattern in them is the useful part: **five of the
+seven were rules this repo already writes down, applied to the product and not to the copy.**
+
+| | | |
+|---|---|---|
+| **P1** | Closing the New session panel left the microphone recording behind it — `open` renders the box, it does not unmount the hook | `dictation.md` names this exact shape, about the Feedback dialog. Written by somebody who had read that sentence. `tests/fleet-new-session-mic.test.tsx`, watched failing |
+| P2 | The paid route had no rate or concurrency limit | 1 every 3s per box, 10 a minute across the fleet, `createRateLimiter` reused rather than rewritten |
+| P2 | A caller hanging up did not cancel the paid call | `res.on("close")`, the pattern the product's route has always had |
+| P2 | The outer error boundary interpolated `err.message` | A thrown message on this wire can carry a prefix of the request body, and the request body is somebody talking. A fixed reason now |
+| P2 | The parser rebuilt known fields and silently dropped surplus ones | The "sent, then quietly dropped" class — the one this feature has an eleven-day scar from. Unknown keys refused; and audio must actually be base64, or 60 KB of any string opened a paid call |
+| P2 | The submit rule was on the buttons and not in the handlers | `disabled` stops a pointer, not a programmatic call |
+| P2 | The import walker could be bypassed by `require` or a template-literal dynamic import | Those shapes are now **refused outright** rather than silently unfollowed. An AST walker is the other answer and is the one to reach for if a legitimate dynamic import ever arrives |
+
+Two corrections to this document came out of it too, and both are recorded above rather than quietly
+fixed: the closure figures were stale, and the explanation of why `transcribeWith` writes no row was
+wrong about the mechanism while right about the conclusion.
+
+**Nothing was overruled.** Everything Sol raised was either a defect or a claim of mine that needed
+correcting, and the one thing it flagged as unresolved — the `[mic-…]` codes being one namespace
+across two programs — had been settled concurrently in the direction it recommended.
+
+**A finding it made that this plan had not:** the route now has an injected transcriber, because a
+flood test aimed at the rate limiter reached the real gateway and `tests/setup/provider-guard.ts`
+refused the call. Without that seam the route's handling of a provider failure, and of a caller
+hanging up, could not be tested at all — both are paths that only run after the money would have
+been spent.
 
 ### Stage F — realtime dialog, gated on Stage E
 
