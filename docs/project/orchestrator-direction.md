@@ -486,6 +486,49 @@ Two disciplines keep this honest: every non-Greg answer is **attributed** on del
 Overseer, not Greg") so the agent weights it correctly, and every one is **vetoable after the fact**
 from the log. A veto is just a steering message.
 
+### `idle` is the bug: the vocabulary describes the pane, not the work
+
+**Measured on the live fleet, 2026-09-08, and it invalidates the premise triage was about to be built
+on.** `needs-you` means *Claude Code says a dialog is open*. That is not the question Greg needs
+answering, and there are at least two populations of sessions that are anything but idle while the
+page calls them idle:
+
+- **Sessions that finished a turn by asking Greg something in prose.** Fable read all 38 live panes:
+  **ten of fifteen** sessions genuinely waiting on him had ended their turn handing him a decision in
+  sentences, and **not one of them showed as needing him**. A mechanical check found 1 of 23 by
+  grepping for question marks — because the decisions end in full stops.
+- **Sessions waiting on a Codex subprocess.** **4 running `codex exec`, 0 Codex tmux sessions**: a
+  review runs inside a Claude session's Bash tool, so a session waiting 15–45 minutes on a paid
+  review reads as `idle` for the whole of it.
+
+The dashboard agent's phrasing is the finding, and it is worth keeping exactly:
+
+> our vocabulary describes the pane, and the thing Greg wants to know is about the work.
+>
+> — 2026-09-08
+
+**The two halves need different machinery, and that is the useful part.** Subprocess ancestry is in
+the process table, so the Codex case is *mechanically* detectable and should be — a status arm, not a
+model call. The prose-question case is not: **"has this agent asked Greg something?" is a judgement,
+not a parse**, and it is exactly what the Overseer's short-lived model calls are for. A ranked list
+built on `statusOf` alone would have ranked the wrong sessions, confidently.
+
+This also sharpens [§ Attention](#attention-and-who-the-overseer-is-really-watching): Fable said the
+expensive agent is the one working confidently on the wrong thing, and never asks. Add to it the
+agent that *did* ask and whose asking is invisible.
+
+### Remote Control fails quietly, which is A27's shape again
+
+**8 of 23 live sessions had Remote Control broken**, measured 2026-09-08 — the feature that was
+originally offered as the reason this dashboard might be unnecessary. It is reliable at launch and
+unreliable an hour later, which is exactly when you would reach for it, and **the only evidence
+anywhere is one word at the bottom of a terminal nobody is looking at.**
+
+So the redundancy argument was right about launch and wrong about steady state. Recorded here rather
+than only in the dashboard's plan because it is the same shape as **A27**: a thing that reports fine
+until the moment it is needed, with no signal reaching anyone. Two local heartbeats cannot report the
+box disappearing, and a status bar cannot report its own channel dying.
+
 ### Does the augmentation principle apply?
 
 Partly, and not the obvious part. In reading, the understanding *is* the product, so a summary that
