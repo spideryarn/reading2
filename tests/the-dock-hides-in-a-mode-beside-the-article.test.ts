@@ -114,19 +114,28 @@ describe("the dock, in a mode, in the query where it leaves the screen", () => {
     const guard = block.slice(0, at).lastIndexOf(":root:has(");
     expect(guard, "the guard is not a `:root:has()` any more").toBeGreaterThan(-1);
     const selector = block.slice(guard, at);
+    /* **The exact spelling, `:where()` and all.** Both halves are load-bearing
+       and for different reasons, so a looser `toContain(".band-covers")` would
+       pass over either of them going wrong:
+
+        - `.reader.band-covers` is the condition — the band is the screen.
+        - `:where()` is what holds the guard at the (0,3,0) it has always had.
+          `:has()` takes its most specific *argument*; that argument would be
+          (0,3,0) written plainly, taking the whole selector to (0,4,0), while
+          `:where()` contributes zero and leaves the maximum at
+          `.dock:focus-within`. Nothing competes today, so the number is not
+          protecting anything yet — it is protecting the comment that says what
+          the number is, which is the only record this file has.
+
+       An earlier version of this test counted parentheses to assert "one
+       `:has()` rather than several selectors". GPT Sol pointed out on
+       2026-09-08 that it proves nothing about specificity **and rejects the
+       correct fix**, `:where()` being a second paren. A test that fails the
+       right answer is worse than no test. */
     expect(
       selector,
       "the covering band no longer pins the dock — a phone in portrait is stranded",
-    ).toContain(".reader.band-covers .mode-band");
-    /* One `:has()` with several arguments rather than several selectors, which
-       is what keeps the whole guard at `.dock:focus-within`'s (0,3,0) and so
-       ahead of `:root[data-bars="hidden"]`'s (0,2,0). Written apart, the band
-       branches would tie and win only on source order — the file's own comment
-       says GPT Sol caught that tie on 2026-08-28. */
-    expect(
-      selector.split("(").length - 1,
-      "the guard has been split into several selectors and now ties on specificity",
-    ).toBe(1);
+    ).toContain(":where(.reader.band-covers) .mode-band");
   });
 
   it("still keeps the dock's slide for the case where the reader can scroll it back", () => {

@@ -66,8 +66,14 @@ from a detail into the thing you notice.
 
 ## Measured before the fix
 
-Headless Chrome on the box, this worktree's dev server, the local copy of the article in the report,
-viewport set by hand, scrolled forwards with real wheel events until `data-bars` flipped:
+Headless Chrome on the box, this worktree's dev server, the local copy of the article in the report
+(`after-work-we-ll-have-each-other-spya-we6h75`), viewport set by hand, scrolled forwards with real
+wheel events until `data-bars` flipped. The scripts are `fb2f-portrait.mts` (both orientations,
+three modes), `fb2f-focus.mts` (five modes, reading `document.activeElement` back) and
+`fb2f-verify.mts` (scroll down, scroll back up, focus a field) in this session's scratchpad; each
+drives `signedInBrowser()` from `scripts/browser-sign-in.ts` and reports `--dock-bottom`, the
+dock's measured `top`, and whether `.reader.band-covers` is present, so no row can be satisfied by
+a page that rendered nothing.
 
 | viewport | mode | `data-bars` | `--dock-bottom` | `.dock` top | verdict |
 |---|---|---|---|---|---|
@@ -102,9 +108,18 @@ it is still every phone in portrait.
 **It was going to be two arguments, and a browser threw the second one out** — see § The second
 argument, below, which is the most useful thing this session found.
 
-Both `.reader.band-covers .mode-band` and `.dock:focus-within` are (0,3,0), so the `:has()` keeps
-the specificity it has today and goes on beating `:root[data-bars="hidden"]`'s (0,2,0) outright —
-the tie the file's own comment warns about is not reopened.
+It is spelled `:where(.reader.band-covers) .mode-band`, and the `:where()` is the specificity.
+`:has()` takes its most specific *argument*, and the most specific one in that list is
+`.dock:focus-within` at (0,2,0) — which with the outer `:root` is the (0,3,0) the guard has always
+been. Written plainly the new argument would be (0,3,0) on its own and take the guard to (0,4,0);
+`:where()` contributes zero and leaves it exactly where it was, still beating
+`:root[data-bars="hidden"]`'s (0,2,0) outright.
+
+**The first version of this plan got that arithmetic wrong** — it called `.dock:focus-within`
+(0,3,0), which is the whole old selector rather than the argument, and so claimed a specificity had
+been preserved when it had been raised by one. GPT Sol caught it. Nothing would have broken today;
+what would have broken is the comment that tells the next reader what the number is, which in this
+file is the only record there is.
 
 Two other rules in the same query key on the bare `.mode-band` and have to move with it, or the
 change is half-applied in a way nothing would notice:
@@ -126,12 +141,18 @@ proxy, and a proxy that comes apart the day the layout grows a case.
 ## What this is not, and the simpler thing that was passed over
 
 **Simply deleting the guard** — the dock hides on scroll in every mode, full stop — is one word
-shorter and is wrong. Every band scroller in the app sets `overscroll-behavior: contain`
-(`summary.css`, `ideas.css`, `timeline.css`, `quiz.css`, `debate.css`), so a swipe inside a band
-never chains to the document; and where the band covers the article there is nothing else on the
-screen to swipe. A reader in portrait whose dock had slid away would have no gesture that brings it
-back and no masthead either — `.reader.band-covers:has(.mode-band) .masthead { display: none }`.
-That is Greg's August complaint, restored in a worse form.
+shorter and is wrong. Where the band covers the article there is nothing else on the screen to
+swipe, and several of those panels' scrollers set `overscroll-behavior: contain` (`summary.css`,
+`ideas.css`, `timeline.css`, `quiz.css`, `debate.css`), so a swipe inside one does not chain to the
+document. A reader in portrait whose dock had slid away would have no gesture that brings it back
+and no masthead either — `.reader.band-covers:has(.mode-band) .masthead { display: none }`. That is
+Greg's August complaint, restored in a worse form.
+
+*Several*, not every: this plan said "every band scroller" until GPT Sol checked and found
+`.gloss-list`, `.srch-saved`, `.srch-hits` and `.quotes-list` with no `overscroll-behavior` at all.
+Several is enough for the argument — the guard has to hold for the panels that trap, and holding it
+for the ones that do not costs a bar nobody was going to scroll away — but the stronger sentence was
+false and is the kind that gets quoted back as established later.
 
 **Nothing here touches `--bar-bottom` or the top bar**, which is `-2E` and shipped separately.
 
@@ -203,6 +224,37 @@ Same script, same server, same article, the change applied by HMR:
 `.reader.band-covers` reads `false` in every landscape row and `true` in every portrait one, so the
 switch is the condition doing the work rather than a coincidence of widths.
 
+## What was left alone
+
+**The install hint copies one of the guard's six arms, and always has.** Its rule wants *"the dock
+is off the screen"*; the dock is also pinned by `.dock-drawer`, `.dock:focus-within`,
+`.install-hint:focus-within` and the three dialogs, none of which it excludes — so the bar can be
+home while the hint is still translated away. That predates this change, this change does not widen
+it, and the honest fix is not a longer selector: GPT Sol's answer is an inherited
+`--install-hint-transform` set beside `--dock-bottom` in both rules, so the bar and the hint become
+one cascade decision rather than two lists kept in step by hand. It is a good change and it is not
+this report; building it here would mean shipping an unrequested behaviour change in six untested
+states on the back of a one-line bug fix.
+
+**A measured "the keyboard is up".** § The second argument, above.
+
+## The plan review
+
+`260908e-plan-review-sol.md`, GPT Sol, before the build. Verdict *"build it with changes"*, and it
+independently reached the autofocus finding the browser had already produced — `SearchPanel.tsx`
+and Chat both park focus in their field, so `:focus-within` "recreates the original proxy bug under
+a new name". Two of its findings were real errors and are fixed above (the specificity arithmetic;
+the overstated `overscroll-behavior` claim), one killed an assertion in the test that would have
+rejected the correct fix, and one — the install hint — is recorded as deferred rather than taken.
+
+It also confirmed, against `layout.ts` and `Reader.tsx`, that `.reader.band-covers .mode-band` is
+true exactly when the band covers the prose: `?spine=0` moves the boundary to 688 and is handled,
+`?text=0` cannot break it because a band forces prose on, and Plain and Hierarchy may carry
+`.band-covers` but render no band, so the descendant selector stays false. And it found no
+demonstrated stranded side-by-side state, which is the fix's central safety claim.
+
+Note that it reviewed the plan **as first written**, with the `:focus-within` arm still in it.
+
 ## Stages
 
 1. The failing test, watched go red. ✅ three assertions, all red for the right reason.
@@ -210,6 +262,13 @@ switch is the condition doing the work rather than a coincidence of widths.
 3. Re-measure in the browser at both orientations, in every band mode, and check the portrait case
    is unchanged rather than merely checking the landscape case is fixed. ✅ — and it is what removed
    the second guard argument (§ The second argument).
+
+   ⚠️ **but the measured selector was `.reader.band-covers .mode-band`, and what is now in the file
+   is `:where(.reader.band-covers) .mode-band`.** `:where()` changes specificity and not matching,
+   so the two are the same rule and the table above should still hold — *should*, on the spec,
+   which is exactly the kind of claim this project does not accept from itself
+   ([silent-success.md](../reusable/silent-success.md)). Re-run
+   `fb2f-portrait.mts` / `fb2f-focus.mts` against the new spelling before this lands.
 4. `npm test`, `npm run typecheck`, GPT Sol on the built diff. ⏳ **not done** — `npm test` refused
    to start twice (*"REFUSING TO START: not enough memory on this machine"*, the admission policy in
    `vitest.config.ts`), and Greg asked for the box to be left alone for a few hours. Nothing here is
