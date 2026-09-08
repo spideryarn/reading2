@@ -349,10 +349,31 @@ There is no `--no-stdin` flag. The fix is to close fd 0 — `stdio[0] = 'ignore'
 
 > You will still see `Reading additional input from stdin...` in the log even when fd 0 is closed.
 > That's fine — it prints the message, gets an immediate EOF, and carries on.
->
-> The one exception: if you're *deliberately* feeding a prompt too large for argv through stdin,
-> don't close fd 0 — redirect a **finite** file that EOFs (`codex exec - < prompt.txt`). The bug is
-> an open pipe with no EOF, not stdin as such.
+
+**The wrapper does not close fd 0 any more. It hands codex a file.** `run-codex.ts` writes the
+prompt to a private temp file, opens it, and passes that descriptor as fd 0 with `-` as the only
+positional — so the prompt arrives on stdin and argv carries none of it.
+
+That is one change answering two problems, which is why it is worth knowing rather than just using:
+
+- **The hang.** A regular file EOFs because it *has an end*. A pipe EOFs only when a writer
+  remembers to close it — measured, an unclosed one wedged for a full 60 seconds and was SIGKILLed
+  with no answer file. So "close fd 0" was never the real rule; **"fd 0 must reach EOF"** is, and a
+  complete file satisfies it as well as a closed descriptor does.
+- **The size.** Linux caps a *single* argv element at `MAX_ARG_STRLEN` — 32 pages, 128 KB — so
+  while the prompt was a positional argument, `--prompt-file` died with `spawn E2BIG` on any prompt
+  past that. An ordinary code-review prompt carrying a scoped diff is 138 KB. **There is no such
+  ceiling now**, and nothing to remember about prompt size.
+
+`--prompt` still arrives in the wrapper's *own* argv, so that flag keeps the 128 KB limit and
+cannot be rescued from inside. `--prompt-file` is the interface for anything large.
+
+Two facts about codex worth carrying if you ever build another wrapper. **`-` must be the only
+positional**: pass a prompt *and* pipe stdin and codex appends the latter as a `<stdin>` block, so
+you would send the prompt twice with nothing looking wrong. And **a descriptor carries a file
+offset**: reuse one open fd across two attempts and the second reads nothing, because the first
+child left the offset at EOF. Reopen per attempt.
+docs/plans/260908g-run-codex-sends-a-large-prompt-on-stdin-instead-of-dying-at-execve.md.
 
 ### 2. No hard timeout
 

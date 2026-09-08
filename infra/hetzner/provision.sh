@@ -1066,11 +1066,22 @@ run 30 "test memory reserve" "${AS_USER[@]}" \
   "mkdir -p \$HOME/.config/spideryarn && printf '4\n' > \$HOME/.config/spideryarn/.vitest-memory-reserve-gb.tmp && mv \$HOME/.config/spideryarn/.vitest-memory-reserve-gb.tmp \$HOME/.config/spideryarn/vitest-memory-reserve-gb"
 
 echo "=== mcp servers ==="
-# Pin at provision time rather than resolving @latest on every session
-# launch: that is a supply-chain surface and makes two sessions able to run
-# different code. Re-provision to move them.
-PW_MCP=$(npm view @playwright/mcp version)
-CDT_MCP=$(npm view chrome-devtools-mcp version)
+# Literal versions, reviewed and committed, rather than `npm view … version`.
+#
+# Resolving @latest on every SESSION launch would be worse still -- a supply-chain
+# surface, and two sessions able to run different code -- and avoiding that was
+# the original point here. But asking npm at PROVISION time only narrows the
+# window: the box still installs whatever was latest the day it was built, no
+# diff in this repo records the move, and the evidence someone gathered against
+# the version they measured stops describing the box the moment it is rebuilt.
+# That happened: these two were measured at length on 2026-09-08 and 1.9.0 had
+# shipped that same day, so a rebuild would have silently changed the subject.
+#
+# Bump these deliberately, and run scripts/remote-smoke-mcp-browser.mjs after --
+# it drives both servers concurrently and is the check that a new version still
+# works here.
+PW_MCP=0.0.80
+CDT_MCP=1.8.0
 echo "pinning @playwright/mcp@$PW_MCP and chrome-devtools-mcp@$CDT_MCP"
 
 # --scope user, or they register against /home as a "project" and vanish
@@ -1105,7 +1116,52 @@ add_mcp() {
 # lookup. Both together were measured working on 0.0.79, with
 # PLAYWRIGHT_BROWSERS_PATH pointed at an empty directory.
 add_mcp playwright "npx -y @playwright/mcp@$PW_MCP --headless --isolated --browser chrome --executable-path /usr/bin/google-chrome-stable"
-add_mcp chrome-devtools "npx -y chrome-devtools-mcp@$CDT_MCP --headless"
+# chrome-devtools gets the same four decisions as playwright above, plus three
+# of its own. Measured on 1.8.0 on the box, 2026-09-08:
+#
+#   --isolated            the comment above says this is here because one
+#                         persistent profile supports exactly one browser and
+#                         this box is for parallel sessions -- and that was true
+#                         of BOTH servers while only playwright carried the
+#                         flag. Reproduced: two chrome-devtools started at once
+#                         and the second died with "The browser is already
+#                         running for ~/.cache/chrome-devtools-mcp/chrome-profile.
+#                         Use --isolated". So the second agent to reach for it
+#                         got a hard failure. With the flag, both pass.
+#   --executablePath      as with playwright: it finds system Chrome by channel
+#                         lookup today, and naming the binary removes the lookup
+#                         rather than leaving it to a default that could move.
+#   --no-performanceCrux  defaults TRUE, and it sends URLs from performance
+#                         traces to Google's CrUX API. Agents here drive pages
+#                         holding real reader content; their URLs are not ours
+#                         to send anywhere. AGENTS.md, "Real data belongs to the
+#                         reader".
+#   --no-usageStatistics  defaults TRUE. Data minimisation rather than a
+#                         measured leak -- Google documents this as invocation
+#                         and environment data, not page content. It also runs a
+#                         telemetry watchdog as a separate node process per
+#                         session (visible in tests/fixtures/overseer-process-trees/),
+#                         and this box dies of process count. NOT verified that
+#                         the flag removes the watchdog: 6 were already running
+#                         from other sessions and the measurement could not
+#                         isolate one.
+#   --redactNetworkHeaders  defaults FALSE, and with it false a live
+#                         `authorization: Bearer sbp_…` came back into model
+#                         context verbatim -- measured, against a local server.
+#                         Our tokens ride in that header, so this is the case
+#                         that matters here.
+#
+#                         It is NOT a boundary, and must not be described as
+#                         one. Measured, same run: it redacts by a SAFE-LIST,
+#                         not a list of sensitive names, so it also blanks
+#                         `x-trace-id` and any other custom header you were
+#                         debugging with -- and it does not touch request or
+#                         response BODIES, so a token in a JSON payload still
+#                         comes through. What survives is what debugging
+#                         usually needs: URL, status, timing, body, and the
+#                         header NAMES. An agent that truly needs a header value
+#                         should run a server by hand without the flag.
+add_mcp chrome-devtools "npx -y chrome-devtools-mcp@$CDT_MCP --headless --isolated --executablePath /usr/bin/google-chrome-stable --no-performanceCrux --no-usageStatistics --redactNetworkHeaders"
 
 echo "=== gjd-remote loopback key ==="
 # gjd-remote is written to run FROM the laptop, and resolves the box's address
@@ -1803,16 +1859,33 @@ check "chrome runs"              'timeout 30 su - '"$USER_NAME"' -c "google-chro
 # the package cannot install, if this pinned version rejects the option, or if
 # the server starts and crashes.
 #
-# Nothing here or in `gjd-remote doctor` yet drives the MCP itself.
-# scripts/remote-smoke-browser.mjs imports playwright-core and supplies
-# executablePath directly, so it asserts AD-HOC Playwright capability and says
-# nothing about the MCPs -- an earlier version of this comment claimed
-# otherwise, and GPT Sol was right that it overclaimed. Closing that gap wants
-# an MCP-over-stdio navigation check; docs/project/browser-control.md records it
-# as the known hole.
+# `gjd-remote doctor` DOES drive the MCPs now, as its `browser mcp` check:
+# scripts/remote-smoke-mcp-browser.mjs speaks MCP over stdio to whatever is
+# registered and asserts a marker round-trips out of a real page. (The older
+# `browser` check remains a different subject -- remote-smoke-browser.mjs
+# imports playwright-core and supplies executablePath itself, so it asserts
+# AD-HOC Playwright and says nothing about either server.)
+#
+# That check cannot live HERE. It is a repo script, and provisioning is required
+# to work on a clean /home with no checkout at all, so provisioning gets the
+# weaker assertion and doctor gets the real one.
+#
+# So keep reading these narrowly, and note the rule stated twelve lines below,
+# at the docker check -- assert the EFFECT, not the artefact. These three are
+# artefact checks, knowingly, because the effect is out of reach at this point
+# in the box's life. What they buy is a guard on the specific text that has
+# already gone wrong once: --isolated was missing from chrome-devtools from
+# 2026-08-31 to 2026-09-08, and every check on the box stayed green
+# (docs/postmortems/260908g-a-check-asserted-registration-not-behaviour.md).
 check "playwright mcp uses system chrome" 'timeout 30 su - '"$USER_NAME"' -c "claude mcp get playwright" | grep -q -- "--browser chrome"'
 check "playwright mcp"           'timeout 30 su - '"$USER_NAME"' -c "claude mcp get playwright" | grep -q max-old-space-size'
 check "devtools mcp"             'timeout 30 su - '"$USER_NAME"' -c "claude mcp get chrome-devtools" | grep -q max-old-space-size'
+# Both servers, separately: one persistent profile supports exactly one browser,
+# and this box is for parallel sessions. The reason is stated once above BOTH
+# registrations up in `=== mcp servers ===`, and for eight days only one line
+# carried it -- so this is two checks, not one covering "the browser MCPs".
+check "playwright mcp isolated" 'timeout 30 su - '"$USER_NAME"' -c "claude mcp get playwright" | grep -q -- "--isolated"'
+check "devtools mcp isolated"   'timeout 30 su - '"$USER_NAME"' -c "claude mcp get chrome-devtools" | grep -q -- "--isolated"'
 check "docker daemon runs"       'timeout 30 docker info'
 # Assert the EFFECT, not the artefact. `id -nG | grep docker` would pass on a
 # box where the daemon is dead or the socket unreachable; running a container

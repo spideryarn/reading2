@@ -90,6 +90,11 @@ reference, and is authoritative wherever the two disagree.
   measured constraints: "needs you" is usually a modal dialog rather than a text prompt, `send-keys`
   is the only delivery channel yet proven, `claude agents --json` is fast but incomplete, and Codex
   batch jobs cannot receive keystrokes at all.
+- **[overseer.md](overseer.md)** — the other half, and the one to open if you *are* the Overseer
+  rather than building it: the runbook it reads on waking. The four gates on what it may decide on
+  Greg's behalf, the standing scheduled jobs, the three deterministic rules that are worth more than
+  any amount of judgement, and the traps — a steering message must be one line, `partial` delivery
+  means the text landed and the Enter did not, and a pane can show a prompt that nobody typed.
 - **[changelog.md](changelog.md)** — how a deploy becomes a line on the public `/changelog`: why a
   version *is* a deploy and why Vercel's list rather than git is the only place that knows which shas
   those were, the append-only NDJSON the process writes, and the four stages — a fan-out of small

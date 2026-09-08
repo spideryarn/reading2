@@ -114,8 +114,30 @@ export const sendForTranscription: Transcriber<FleetDictationContext> = async (
       const retryable = res.status === 429 || (res.status >= 500 && res.status !== 503);
       return { ok: false, message, retryable };
     }
-    const json = (await res.json()) as { text?: unknown };
-    return { ok: true, text: typeof json.text === "string" ? json.text : "" };
+    /* **A 200 with no readable `text` is NOT an empty transcript.**
+       This used to fall through to `text: ""`, which is the shape that means *you pressed the
+       button and said nothing* — so a server answering `{}` produced either the misleading
+       "we heard no speech" sentence, or, on Chromium, left the rough live guesses standing as
+       though they were the real transcript. The server already tells those apart and answers
+       `[mic-unreadable]` when OpenRouter does it to us; the client was collapsing the same
+       distinction one hop later. GPT Sol, 2026-09-08 — found by the review that this day's
+       `spawn E2BIG` fix made it possible to send at all. */
+    let json: { text?: unknown };
+    try {
+      json = (await res.json()) as { text?: unknown };
+    } catch {
+      json = {};
+    }
+    if (typeof json.text !== "string") {
+      return {
+        ok: false,
+        /* Retryable: the server was reached and answered, so the next attempt may well be read.
+           Not the same branch as a refusal, which comes back 4xx above. */
+        retryable: true,
+        message: "The transcription service sent back something we could not read. [mic-unreadable]",
+      };
+    }
+    return { ok: true, text: json.text };
   } catch (err) {
     const name = (err as { name?: string } | null)?.name;
     if (name === "AbortError") {

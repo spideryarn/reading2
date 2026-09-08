@@ -4498,7 +4498,7 @@ type Scoreboard = {
  * the box's list and nothing else, and the summary's denominator has to match
  * what was actually asked for.
  */
-const BOX_CHECKS = ["ssh", "mosh", ...TOOLS.map((t) => t.name), "tmux keys", "browser", "provisioning"];
+const BOX_CHECKS = ["ssh", "mosh", ...TOOLS.map((t) => t.name), "tmux keys", "browser", "browser mcp", "provisioning"];
 const REPO_CHECKS = ["setup", "HEAD", "origin", "mcp", "setup status"];
 
 /**
@@ -4626,8 +4626,15 @@ function doctorBox(d: Scoreboard): boolean {
   const keys = bindingsVerdict(ssh(buildBindingsScript(), { check: false }));
   d.check("tmux keys", keys.ok, keys.why);
 
-  const smoke = runBrowserSmoke();
+  const smoke = runBrowserSmoke("remote-smoke-browser.mjs");
   d.check("browser", smoke.ok, smoke.detail);
+
+  // Separate check, separate name: this one drives the two registered MCP
+  // servers rather than playwright-core, and the two fail independently. A box
+  // where ad-hoc Playwright works and the MCPs do not is exactly the state that
+  // went unnoticed from 2026-08-31 to 2026-09-08.
+  const mcpSmoke = runBrowserSmoke("remote-smoke-mcp-browser.mjs", 300_000);
+  d.check("browser mcp", mcpSmoke.ok, mcpSmoke.detail);
 
   // cloud-init's own status is genuinely informational: it reports the FIRST
   // boot and never changes afterwards, so on a box that has been re-provisioned
@@ -5009,16 +5016,24 @@ function waitForCloudInit(seconds: number): void {
 }
 
 /**
- * Run the committed browser smoke test on the box.
+ * Run one of the committed browser smoke tests on the box.
  *
  * Copied on every run rather than trusted to be there. A stale copy is a check
  * that passes for a version of the script nobody has, and it would go on
  * passing after the real one broke.
+ *
+ * Two scripts share this because they prove different things and one cannot
+ * stand in for the other. `remote-smoke-browser.mjs` imports playwright-core and
+ * launches Chrome itself, so it says AD-HOC Playwright works.
+ * `remote-smoke-mcp-browser.mjs` speaks MCP over stdio to the two registered
+ * servers, which is what an agent on the box actually reaches for, and which
+ * nothing checked until 2026-09-08 -- `claude mcp list` reports the handshake,
+ * not a browser.
  */
-function runBrowserSmoke(): { ok: boolean; detail: string } {
-  const local = path.join(REPO, "scripts/remote-smoke-browser.mjs");
+function runBrowserSmoke(script: string, timeoutMs = 120_000): { ok: boolean; detail: string } {
+  const local = path.join(REPO, "scripts", script);
   if (!existsSync(local)) return { ok: false, detail: `missing locally: ${local}` };
-  const remote = `${REMOTE_WORK}/remote-smoke-browser.mjs`;
+  const remote = `${REMOTE_WORK}/${script}`;
   ssh(`mkdir -p ${shq(REMOTE_WORK)}`);
   scpTo(local, remote);
   // scp's exit code says a transfer finished, not that THESE bytes are what is
@@ -5031,8 +5046,10 @@ function runBrowserSmoke(): { ok: boolean; detail: string } {
     return { ok: false, detail: `the copy on the box hashes ${got || "(nothing)"}, not ${want} — not running it` };
   }
   // Chrome starting, two page loads and two screenshots. 20s is the normal
-  // shape; the cap is for a browser that has hung rather than failed.
-  const r = spawnSync("ssh", [...SSH_OPTS, ...sshMasterOpts(), HOST(), `node ${shq(remote)}`], { encoding: "utf8", timeout: 120_000 });
+  // shape; the cap is for a browser that has hung rather than failed. The MCP
+  // script asks for longer: it starts six servers under `npx` and each brings
+  // its own Chrome.
+  const r = spawnSync("ssh", [...SSH_OPTS, ...sshMasterOpts(), HOST(), `node ${shq(remote)}`], { encoding: "utf8", timeout: timeoutMs });
   const out = `${r.stdout ?? ""}${r.stderr ?? ""}`.trim().split("\n").filter(Boolean);
   if (r.status !== 0) return { ok: false, detail: out.at(-1) ?? `no output (exit ${r.status}, signal ${r.signal})` };
   // Exit 0 is not the check. An empty script exits 0, and so does one whose

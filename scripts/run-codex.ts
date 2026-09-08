@@ -5,11 +5,18 @@
  * Why a wrapper rather than calling `codex exec` directly: three failure modes are impossible here
  * *by construction*, so a caller can't forget the gotcha.
  *
- *   1. stdin is closed (`stdio[0] = 'ignore'`) → codex gets an immediate EOF and never wedges on
- *      "Reading additional input from stdin...", which is what a bare `codex exec` does whenever
- *      it inherits an open pipe on fd 0 (i.e. every time an agent shells out to it).
- *   2. The prompt is a positional arg after `--` → a prompt beginning with `-` is never parsed as
- *      a flag, and it never has to travel via stdin.
+ *   1. fd 0 is never inherited → codex gets an immediate EOF and never wedges on "Reading
+ *      additional input from stdin...", which is what a bare `codex exec` does whenever it
+ *      inherits an open pipe on fd 0 (i.e. every time an agent shells out to it). It is either
+ *      closed or a **complete regular file**, and never a pipe: a file EOFs because it has an end,
+ *      where a pipe EOFs only if a writer remembers. Measured — an unclosed pipe wedged for a full
+ *      60 seconds and was SIGKILLed. See `ChildStdin` in subagent-cli.ts.
+ *   2. The prompt travels down fd 0 from that file, and argv ends `-- -` → **there is no size a
+ *      prompt can exceed.** It was a positional argument until 2026-09-08, and Linux caps a single
+ *      argv element at `MAX_ARG_STRLEN` (128 KB), so an ordinary 138 KB review prompt died with
+ *      `spawn E2BIG` before codex started — with no answer file, which is exactly what a *killed*
+ *      run leaves too. The `--` still means a leading `-` is never read as a flag.
+ *      docs/plans/260908g-run-codex-sends-a-large-prompt-on-stdin-instead-of-dying-at-execve.md.
  *   3. Codex's activity log (every command it ran, plus that command's full stdout) is *captured
  *      to a file*, not streamed. A bare `codex exec` floods the calling agent's context with tens
  *      of thousands of tokens of file dumps and grep hits. Pass --stream for a human watching.
@@ -31,17 +38,24 @@
  *   npx tsx scripts/run-codex.ts --prompt "Summarise how src/extract.ts works"
  *   npx tsx scripts/run-codex.ts --sandbox workspace-write --prompt-file /tmp/task.md -o /tmp/a.md
  *
+ * `--prompt-file` is the interface for a prompt of any size. `--prompt` arrives in *this* script's
+ * own argv, so it keeps the 128 KB ceiling — not through anything this wrapper does, and not
+ * fixable from in here.
+ *
  * The default sandbox is `review`: the tree read-only, the test caches writable — see SANDBOXES.
  * See docs/reusable/codex-cli-as-subagent.md for models, auth, and the read-only/write switch.
  */
 
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync, closeSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { isMain } from '../src/is-main.js';
 import {
-  answerIsUsable, elapsedSeconds, formatAnswer, loadRepoEnv, readAnswerForConsole, runChild,
-  sameWriteTarget, sanitisedEnv, type RunResult,
+  answerIsUsable, type ChildStdin, elapsedSeconds, formatAnswer, loadRepoEnv, readAnswerForConsole,
+  runChild, sameWriteTarget, sanitisedEnv, type RunResult,
 } from './subagent-cli.js';
 
 // Re-exported because tests/run-codex.test.ts asserts the truncation rules through this module,
@@ -133,6 +147,11 @@ export function childEnv(
 /** `codex exec`, with the shared spawn's three guarantees: no stdin, a real watchdog, a capture cap. */
 export function runCodex(opts: {
   argv: string[]; timeoutMs: number; stream: boolean; bin?: string; env?: NodeJS.ProcessEnv;
+  /**
+   * Where the prompt comes from. Defaults to closed, which is what every call that has no prompt
+   * wants — the timeout and kill-tree tests, and anything probing the binary.
+   */
+  stdin?: ChildStdin;
 }): Promise<RunResult> {
   return runChild({
     bin: opts.bin ?? 'codex',
@@ -140,6 +159,7 @@ export function runCodex(opts: {
     timeoutMs: opts.timeoutMs,
     stream: opts.stream,
     env: opts.env ?? childEnv(process.env),
+    stdin: opts.stdin ?? { kind: 'closed' },
   });
 }
 
@@ -233,8 +253,26 @@ export function parseArgs(argv: string[]): Args {
 }
 
 /** The one place the codex invocation shape is defined. Exported so it can be asserted on. */
+/**
+ * **The prompt is NOT in here, and that is the fix rather than an omission.**
+ *
+ * It used to be the last element, after `--`. Linux caps a *single* argv element at
+ * `MAX_ARG_STRLEN` — 32 pages, 128 KB — so `--prompt-file` with an ordinary code-review prompt
+ * (measured: 138 KB, 2,993 lines) died with `spawn E2BIG` before codex started. The failure came
+ * with no answer file, which is indistinguishable from a killed run, and the flag's own name
+ * promised the file was what travelled.
+ *
+ * So argv ends with `--`, `-`: the `--` still means "everything after this is positional" and the
+ * `-` is codex's documented sentinel for *read the instructions from stdin*. The prompt goes down
+ * fd 0 from a complete regular file — see {@link ChildStdin} and
+ * docs/plans/260908g-…-execve.md.
+ *
+ * **`-` must be the only positional.** `codex exec --help`: if stdin is piped *and* a prompt is
+ * given, stdin is appended as a `<stdin>` block — so passing both would silently send the prompt
+ * twice. `tests/run-codex.test.ts` asserts argv ends exactly this way.
+ */
 export function buildCodexArgs(o: {
-  model: string; effort: string; sandbox: string; repoDir: string; outFile: string; prompt: string;
+  model: string; effort: string; sandbox: string; repoDir: string; outFile: string;
 }): string[] {
   return [
     'exec',
@@ -255,8 +293,8 @@ export function buildCodexArgs(o: {
     '--cd', resolve(o.repoDir),
     '--skip-git-repo-check',
     '-o', o.outFile,
-    '--',              // ends flag parsing: a prompt starting with `-` stays a prompt
-    o.prompt,
+    '--',              // ends flag parsing, so the `-` below is a positional and not a flag
+    '-',               // codex's sentinel: read the instructions from stdin
   ];
 }
 
@@ -429,7 +467,7 @@ export function authHint(log: string, usedKey = true): string {
  * with a fallback in play the earlier failure was on a credential we have already stopped using,
  * and sending somebody to top that account up would point at the wrong one.
  */
-async function runPlan(args: Args, prompt: string, tmpDir: string, plan: boolean[]): Promise<{
+async function runPlan(args: Args, promptPath: string, tmpDir: string, plan: boolean[]): Promise<{
   run: RunResult; outFile: string; logs: string[]; attempt: number;
 }> {
   const logs: string[] = [];
@@ -441,12 +479,33 @@ async function runPlan(args: Args, prompt: string, tmpDir: string, plan: boolean
     // A fresh -o path per attempt. Sharing one would let a first attempt's partial answer stand in
     // for a retry that produced nothing — indistinguishable, from out here, from the retry working.
     outFile = join(tmpDir, `output-${attempt + 1}.txt`);
-    run = await runCodex({
-      argv: buildCodexArgs({ ...args, outFile, prompt }),
-      timeoutMs: args.timeoutMinutes * 60_000,
-      stream: args.stream,
-      env: childEnv(process.env, args.passEnv, withKey),
-    });
+    /**
+     * **A FRESH FD PER ATTEMPT, and this is the trap in the whole change.**
+     *
+     * An fd carries a file offset, and the child shares it. The first codex reads the prompt to
+     * EOF and leaves the offset there — so a second attempt handed the same fd reads **nothing**,
+     * and codex is asked to review an empty instruction. It would not error; it would answer
+     * something, and the retry that exists to rescue a credential failure would quietly become a
+     * review of no code at all.
+     *
+     * Nothing about that looks wrong from out here: exit 0, an answer file, a plausible reply.
+     * GPT Sol's design review caught it before it was written, and `tests/run-codex.test.ts`
+     * pins it with a two-attempt stand-in that verifies stdin on both.
+     */
+    const promptFd = openSync(promptPath, 'r');
+    try {
+      run = await runCodex({
+        argv: buildCodexArgs({ ...args, outFile }),
+        timeoutMs: args.timeoutMinutes * 60_000,
+        stream: args.stream,
+        env: childEnv(process.env, args.passEnv, withKey),
+        stdin: { kind: 'file', fd: promptFd },
+      });
+    } finally {
+      // `finally`, because a throw here would otherwise leak one fd per attempt for the life of
+      // the process — and the process is a wrapper that may be waiting 45 minutes.
+      closeSync(promptFd);
+    }
     const log = args.stream ? '' : combinedLog(run);
     // Banner every attempt once there is more than one, *even when it printed nothing* — an
     // attempt that failed silently is the one you most want to see listed, and a log holding only
@@ -466,12 +525,39 @@ async function runPlan(args: Args, prompt: string, tmpDir: string, plan: boolean
   return { run, outFile, logs, attempt };
 }
 
+/**
+ * **The prompt, as a file this wrapper owns, whichever flag it arrived on.**
+ *
+ * One shape for both inputs, because two invocation paths would mean two sets of semantics
+ * depending on which flag somebody used — and the rare one is always the one with the latent bug.
+ * GPT Sol's design review: *"retaining a second Codex invocation path buys little"*.
+ *
+ * `--prompt-file` is **copied byte for byte** rather than read and re-written: decoding to a
+ * string and re-encoding would silently normalise anything that is not well-formed UTF-8, and the
+ * one guarantee worth having here is that codex sees the bytes the caller wrote.
+ *
+ * `0600`, and inside the run's own `mkdtemp` directory: a prompt is often the most sensitive thing
+ * in a run — it can carry a diff of unreleased work — and it sits on a box shared by ~27 agent
+ * sessions under one Unix user.
+ */
+function writePromptSnapshot(args: Args, tmpDir: string): string {
+  const path = join(tmpDir, 'prompt.txt');
+  if (args.promptFile) copyFileSync(resolve(args.promptFile), path);
+  else writeFileSync(path, args.prompt!, { encoding: 'utf8', mode: 0o600 });
+  /* `copyFileSync` keeps the SOURCE's mode, which may be world-readable, so the tighten happens
+     after the copy rather than instead of it. */
+  chmodSync(path, 0o600);
+  return path;
+}
+
 async function main(): Promise<void> {
   await loadRepoEnv();
   let args: Args;
   try { args = parseArgs(process.argv.slice(2)); }
   catch (e) { fail((e as Error).message); }
 
+  /* Read for the size check and the dry run only. The bytes that reach codex are the snapshot's,
+     written below — see writePromptSnapshot. */
   const prompt = args.promptFile ? readFileSync(resolve(args.promptFile), 'utf8') : args.prompt!;
   if (args.sandbox === REVIEW_PROFILE && !reviewProfileDefined(args.repoDir)) {
     fail(`--sandbox review needs a [permissions.review] table in ${join(resolve(args.repoDir), '.codex/config.toml')}`
@@ -489,23 +575,30 @@ async function main(): Promise<void> {
   const plan = authPlan(args.auth, Boolean(process.env[CODEX_SECRET]));
 
   if (args.dryRun) {
-    const codexArgs = buildCodexArgs({ ...args, outFile: join(tmpDir, 'output-1.txt'), prompt });
-    // The prompt is the last element, and with --prompt-file it can be arbitrarily large — a third
-    // unbounded path to the caller's stdout, next to --stream and --print. Cap it like the answer.
-    // The command stops being copy-pasteable at that size anyway (argv has its own limit), and
-    // whoever wants the exact text has the file it came from.
-    const shown = [...codexArgs.slice(0, -1), formatAnswer(prompt, args.maxPrintChars, args.promptFile ?? '(--prompt)')];
+    const codexArgs = buildCodexArgs({ ...args, outFile: join(tmpDir, 'output-1.txt') });
+    /* **The command is now the whole command**, because the prompt is not in it — argv ends `-- -`
+       and the prompt arrives on fd 0. So this prints something that genuinely pastes, and says
+       separately where the bytes come from and how many there are.
+
+       It used to `slice(0, -1)` and substitute a capped rendering of the prompt, which was honest
+       about the size but produced a line that could not be run. A dry run whose output is not
+       runnable is a description of a command rather than the command. */
+    const shown = codexArgs;
     // Which credential is a property of the child's environment rather than of the command line,
     // so an argv-only dry run would be silent about the half --auth controls. A comment line, so
     // the thing below it still pastes.
     console.log(`# auth ${args.auth}: ${plan.map(credentialName).join(', then ')}`);
-    console.log(['codex', ...shown].join(' '));
+    /* The `-` at the end reads the prompt from fd 0, so the pasteable form needs a redirect. A
+       file, never a pipe: see ChildStdin for the sixty seconds that cost. */
+    const source = args.promptFile ? resolve(args.promptFile) : '<a temp file this wrapper writes>';
+    console.log(`# stdin: ${source} (${Buffer.byteLength(prompt)} bytes)`);
+    console.log(`${['codex', ...shown].join(' ')} < ${args.promptFile ? resolve(args.promptFile) : 'prompt.txt'}`);
     return;
   }
 
   // Measured, so a timeout error can quote the clock rather than the flag it was given.
   const startedAt = Date.now();
-  const { run, outFile, logs, attempt } = await runPlan(args, prompt, tmpDir, plan);
+  const { run, outFile, logs, attempt } = await runPlan(args, writePromptSnapshot(args, tmpDir), tmpDir, plan);
 
   let logPath: string | undefined;
   if (logs.length) {

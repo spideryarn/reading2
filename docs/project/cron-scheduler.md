@@ -82,6 +82,16 @@ a session cron dies with its session, and the only evidence is a gap in a log no
 loop in [feedback-reports.md](feedback-reports.md) runs that way today and is watched by a person
 for exactly that reason.
 
+**That half is being fixed, and it is not this doc's half.** The Overseer's daemon is growing an
+interval scheduler under `systemd` with `Restart=always`
+([overseer-direction.md § The scheduler](overseer-direction.md#the-scheduler)), and the agent-fleet
+jobs — the feedback sweep, `get-ready-to-deploy`, the weekly codebase trawl — move onto it and off
+the session cron. **It is deliberately not the app's scheduler and must not become one.** It runs on
+the box, it may not depend on anything under `src/` or on the product database, and none of the four
+rows in the table above is reachable from it: they are all about a reader's data, and the box is the
+wrong place to touch that from. The row that says the box *"should not become its scheduler"* in
+[hetzner-remote-server-box.md](hetzner-remote-server-box.md) is unchanged by any of this.
+
 ## See also
 
 - [ingest-queue.md](ingest-queue.md) — the claim, the lease and the attempt token: how work that

@@ -267,6 +267,136 @@ describe.skipIf(!CAN_RUN)("the remote script, actually run", () => {
   });
 
   /**
+   * **THE PROBE'S OWN COMMAND-LINE GRAMMAR.** Every case above this one hands
+   * the awk a well-behaved `claude --session-id <uuid>`, which is exactly why
+   * the substring test it used to be lived here undisturbed. These are the
+   * shapes that tell a substring search apart from a reading of the command
+   * line, and the rule they assert is the one settled in
+   * `docs/plans/260908h-one-shared-reader-for-a-claude-command-line.md`.
+   *
+   * The two directions do not cost the same. A false positive labels a pane
+   * "running but unlisted" — noise. A false negative says there is no agent in
+   * a pane that has one, and that is the one somebody acts on.
+   */
+  describe("reading a claude command line under a pane", () => {
+    /**
+     * One idle pane with one child running `args`, and the probe's verdict for
+     * the session — whose CLAUDE_SESSION_ID is `UUIDS[0]` throughout.
+     *
+     * `busy` is what "not this session's claude" looks like here: something IS
+     * running under the pane, it just is not a claude answering for this id.
+     */
+    function procForChild(args: string) {
+      stubTmux(1);
+      stubPs(["1000 1 3600 bash -l", `2000 1000 60 ${args}`]);
+      stubClaude("[]");
+      return parseSessions(run()).sessions[0]?.proc;
+    }
+
+    /** D3. Word one decides, and `grep` is not `claude` however it is spelled. */
+    it("does not call a grep for the uuid a claude", () => {
+      expect(procForChild(`grep -r --session-id ${UUIDS[0]} logs/`)).toEqual({ kind: "busy" });
+    });
+
+    /**
+     * D3, the other half, and the one that is real on this box: the launcher at
+     * `scripts/gjd-remote.ts` puts the whole prompt into argv, so a sibling
+     * agent briefed to go and look at this conversation carries this uuid in
+     * its own command line.
+     */
+    it("does not let another conversation's prompt claim this session", () => {
+      expect(procForChild(`claude --session-id ${UUIDS[1]} -- read the log for --session-id ${UUIDS[0]}`)).toEqual({
+        kind: "busy",
+      });
+    });
+
+    /**
+     * D4, and the expensive direction. `steer.ts` and `harness.ts` both accept
+     * this spelling; the awk required a literal space and would read a live
+     * agent as an empty pane.
+     */
+    it("accepts the --session-id=<id> spelling", () => {
+      expect(procForChild(`claude --session-id=${UUIDS[0]}`)).toEqual({ kind: "claude" });
+    });
+
+    /** A full path is how the box actually execs it. */
+    it("accepts a claude invoked by absolute path", () => {
+      expect(procForChild(`/home/greg/.nvm/versions/node/v26.8.1/bin/claude --session-id ${UUIDS[0]}`)).toEqual({
+        kind: "claude",
+      });
+    });
+
+    /**
+     * D1. Everything after a bare `--` is positional by definition, and the
+     * launcher emits one before every prompted run. The pane's own id counts
+     * because it is before the `--`; the other one is prose.
+     */
+    it("reads the ids before a bare -- and none of the prose after it", () => {
+      expect(
+        procForChild(`claude --session-id ${UUIDS[0]} -- also look at --session-id ${UUIDS[1]} while you are there`),
+      ).toEqual({ kind: "claude" });
+    });
+
+    /** Exact tokens, not substrings: a uuid with one character glued on is a different uuid. */
+    it("does not match a uuid with a suffix", () => {
+      expect(procForChild(`claude --session-id ${UUIDS[0]}9`)).toEqual({ kind: "busy" });
+    });
+
+    /** And not a prefix either, which is the mistake a `startsWith` fix would make. */
+    it("does not match the first eight characters of the uuid", () => {
+      expect(procForChild(`claude --session-id ${UUIDS[0]?.slice(0, 8)}`)).toEqual({ kind: "busy" });
+    });
+
+    /** A flag with nothing after it has no value, and a missing value is a refusal. */
+    it("refuses a --session-id with no value after it", () => {
+      expect(procForChild("claude --session-id")).toEqual({ kind: "busy" });
+    });
+
+    it("refuses a --session-id whose value is the next flag", () => {
+      expect(procForChild(`claude --session-id --permission-mode acceptEdits ${UUIDS[0]}`)).toEqual({ kind: "busy" });
+    });
+
+    /**
+     * An empty inline value is missing too, and this is the one shape where
+     * saying so changes the answer: a later, real `--session-id` would
+     * otherwise be the first non-empty value seen and would be accepted on its
+     * own. Added after mutation testing — dropping the empty-value refusal was
+     * the only mutant the first draft of this block did not catch.
+     */
+    it("refuses an empty inline value even when a real id follows it", () => {
+      expect(procForChild(`claude --session-id= --session-id ${UUIDS[0]}`)).toEqual({ kind: "busy" });
+    });
+
+    /** D2. Two occurrences of the SAME id converge on one value whichever end the CLI keeps. */
+    it("accepts two occurrences of the same id", () => {
+      expect(procForChild(`claude --session-id ${UUIDS[0]} --session-id ${UUIDS[0]}`)).toEqual({ kind: "claude" });
+    });
+
+    /** D2. Two that differ mean the answer depends on the CLI's parser. We do not guess. */
+    it("refuses two ids that differ", () => {
+      expect(procForChild(`claude --session-id ${UUIDS[0]} --session-id ${UUIDS[1]}`)).toEqual({ kind: "busy" });
+    });
+
+    /**
+     * D2 at three, which is Sol's P2-2: comparing only the first two accepts
+     * `A A B` as `A`. The rule is a set over every occurrence before the
+     * boundary, so the third one still refuses.
+     */
+    it("refuses three ids where two agree and one differs", () => {
+      expect(procForChild(`claude --session-id ${UUIDS[0]} --session-id ${UUIDS[0]} --session-id ${UUIDS[1]}`)).toEqual(
+        { kind: "busy" },
+      );
+    });
+
+    /** The same, with the odd one out first, so neither end is privileged. */
+    it("refuses three ids where the odd one comes first", () => {
+      expect(procForChild(`claude --session-id ${UUIDS[1]} --session-id ${UUIDS[0]} --session-id ${UUIDS[0]}`)).toEqual(
+        { kind: "busy" },
+      );
+    });
+  });
+
+  /**
    * **The eight ghost sessions, told apart.** On 2026-09-05 `gjd-remote ls`
    * showed eight rows reading `shell`; seven were running `npm test` for other
    * agents and one had been an abandoned prompt for fifteen hours, and nothing
