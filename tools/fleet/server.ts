@@ -32,7 +32,7 @@ import { createServer } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { collectWithDeadline, type FleetSnapshot } from "./collect.js";
+import { collect, COLLECT_DEADLINE_MS, type FleetSnapshot } from "./collect.js";
 import { parseBinds } from "./config.js";
 import { collectHealth, type HealthReport } from "./health.js";
 import { type HealthTurn } from "./health-history.js";
@@ -41,7 +41,7 @@ import { applySecurityHeaders } from "./headers.js";
 import { broadcast, startHeartbeat, subscribe, subscriberCount } from "./live.js";
 import { readCheckpointFeeds } from "./overseer-status.js";
 import { drainSharedQueues, handleActionRequest } from "./routes-actions.js";
-import { nextWaitMs, refreshOnce } from "./refresh.js";
+import { nextWaitMs, refreshOnce, singleFlightCollect } from "./refresh.js";
 import { newSessionRoutes } from "./routes-new.js";
 import { renameRoute } from "./routes-rename.js";
 import { handleSteerRequest } from "./routes-steer.js";
@@ -113,6 +113,19 @@ let health: HealthReport | null = null;
  *
  * Separate from `snapshot.collectedAt` on purpose: a collector that has stopped
  * trying and a box that has nothing new to say look identical without it.
+ *
+ * **Written by the latch's `onStart`, not by `refresh()`, and that is the whole
+ * point.** With a single-flight latch a turn can decline to start a child,
+ * because the previous one is still running; setting this at the top of the
+ * turn would have made it mean *the loop took a turn* instead — and five
+ * consumers read it as a child's start time (`web/src/Header.tsx`,
+ * `attempt-clock.ts`, and the Overseer's `daemon.ts`, `observation.ts`,
+ * `notes.ts`). The page would have said *a collection was started 0s ago* over
+ * a child wedged for seven minutes. GPT Sol's P1, 2026-09-08.
+ *
+ * So the field keeps its meaning and the consumers keep working. What a wedged
+ * collector looks like is: this frozen at the wedged child's start, the page
+ * saying *started 7 minutes ago*, and `lastError` saying why. All three true.
  */
 let attemptedAt: string | null = null;
 
@@ -221,12 +234,37 @@ function refreshHealth(): HealthTurn {
  * it can be. tests/fleet-refresh.test.ts drives `refreshOnce` with the real
  * action routes and a fake transport.
  */
+/**
+ * **ONE COLLECTION AT A TIME, AND THE DEADLINE BELONGS TO THIS LOOP.**
+ *
+ * Module scope rather than inside `refresh()`, because a latch built per call
+ * latches nothing. `collectWithDeadline` used to be passed straight in, and it
+ * abandons the *caller* without cancelling the *child* — so a wedged `bash -c`
+ * grepping thirty-five transcripts was met, one backoff later, by a second one.
+ * The latch is in refresh.ts, where a test can drive it; this is the wiring.
+ */
+const collector = singleFlightCollect({
+  run: collect,
+  deadlineMs: COLLECT_DEADLINE_MS,
+  now: Date.now,
+  // BEFORE the child is awaited, and only when one is actually started — see
+  // `attemptedAt` above for why the distinction is load-bearing.
+  onStart: () => {
+    attemptedAt = new Date().toISOString();
+  },
+  // A child that came back after we gave up on it. `console.error` rather than
+  // `lastError`: it is an answer to a question asked minutes ago, and the page
+  // must not go stale twice for one attempt.
+  onLate: (line) => console.error(line),
+});
+
 async function refresh(): Promise<void> {
-  // BEFORE the attempt, not after it, because the whole point of this field is
-  // to be moving while a collection is not.
-  attemptedAt = new Date().toISOString();
+  /* `attemptedAt` is NOT set here. It used to be, on a "before the attempt, not
+     after it" argument that the latch invalidated: a turn is not an attempt any
+     more. The latch's `onStart` sets it, so it still moves exactly when a child
+     is actually started. */
   await refreshOnce({
-    collect: collectWithDeadline,
+    collect: collector.collect,
     keep: (result) => {
       if ("snapshot" in result) {
         snapshot = result.snapshot;

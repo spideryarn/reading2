@@ -1421,6 +1421,49 @@ describe("POST /api/actions/box — the staggered broadcast", () => {
     return { actionId: "resource-broadcast", mode: "run", confirm: true, speaker: "greg", recipients: five, ...over };
   }
 
+  /**
+   * **THE NEGATIVE CONTROL FOR THE `body()` ABOVE, AND IT IS NOT A HYPOTHETICAL
+   * REQUEST.**
+   *
+   * Every test in this block hands the route a body with `recipients` in it,
+   * hand-written here. `boxActionBody` — the only thing that builds this request
+   * in the browser — returns `{actionId, mode, confirm, speaker}` and nothing
+   * else (`web/src/actions-client.ts`), so the body the page actually sends is
+   * the one below and no test in this file had ever put it through the route.
+   * Both halves were right about their own object and had never met: the same
+   * shape as the `kill-test-suites` pair above, where the request the panel
+   * sends is refused by a rule every hand-written fixture satisfies.
+   *
+   * So this asserts the refusal rather than papering over it, for the same
+   * reason the kill one does: an honest 400 in the server's own words is the
+   * true state of this path today, and the repair — the panel carrying the rows
+   * it previewed into the confirmed request — belongs to the roadmap's Box
+   * contracts stage (finding E-actions), not here. Written at the Baseline
+   * stage, 2026-09-08, through `browserFetch` so it is the real serializer
+   * meeting the real route.
+   */
+  it("refuses the body the page really sends, because the browser carries no recipients", async () => {
+    const { routes, sent } = harness();
+    /* **`true`, BECAUSE THE FIRST PRESS IS THE DRY RUN.** `ActionButtons` calls
+       `api.box(action.id, true)` for the preview and only offers Confirm once
+       that came back — so on this path the confirmed request is unreachable, and
+       a test written against `false` would be checking a request no reader can
+       make. The route happens to check recipients before mode, so both spell
+       the same refusal; this one is the press that actually happens. Sol's
+       third P2, 2026-09-08. */
+    const preview = await makeActionsApi(browserFetch(routes)).box("resource-broadcast", true);
+    expect(preview.ok).toBe(false);
+    expect(preview.ok === false && preview.code).toBe("bad-request");
+    expect(preview.ok === false ? preview.why : "").toContain("a broadcast needs recipients");
+
+    // And the confirmed one, which the panel cannot reach because of the above.
+    const confirmed = await makeActionsApi(browserFetch(routes)).box("resource-broadcast", false);
+    expect(confirmed.ok).toBe(false);
+
+    // The point of a negative control: nothing was said to anybody, either time.
+    expect(sent).toEqual([]);
+  });
+
   it("staggers across the recipients it can actually speak to", async () => {
     const { routes, sent } = harness();
     const r = await call(routes, fakeReq({ url: "/api/actions/box", body: body() }));

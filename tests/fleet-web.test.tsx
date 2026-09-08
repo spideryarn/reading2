@@ -34,12 +34,13 @@ import { globSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { act } from "react";
+import { Profiler, act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "../tools/fleet/web/src/App";
 import { freshness } from "../tools/fleet/web/src/Header";
+import { POLL_GIVE_UP_MS, POLL_MS } from "../tools/fleet/web/src/NewSessionPanel";
 import { STATUS_TIPS } from "../tools/fleet/web/src/SessionParts";
 import {
   COLUMN_MIN_PX,
@@ -625,6 +626,51 @@ describe("staleness", () => {
     act(() => feed.push(state({ rows: [row({ id: "$a", title: "back", status: { kind: "working" } })] })));
     expect(container.textContent).not.toContain("STALE");
     expect(container.textContent).toContain("back");
+  });
+
+  /**
+   * **THE COUNTERPART TO `recovers`, AND THE HALF THAT CAN FAIL SILENTLY.**
+   *
+   * The test above proves the banner CLEARS on a success. Nothing proved it
+   * does not clear on the wrong success — and an implementation that cleared
+   * whenever a 200 arrived would pass it perfectly. A stuck collector is served
+   * from the server's own cache, so it answers 200 forever with a snapshot that
+   * never moves: the failure being guarded here is a page that says the fleet
+   * is fine because the server is answering, which is the one lie this header
+   * exists to prevent.
+   *
+   * The `freshness` unit test below asserts the same rule on the function. This
+   * is the rendered pair, because the rule only protects anybody if the value
+   * the page computes is the value the page draws — the join is the half that
+   * has been wrong here before. Added 2026-09-08, Baseline stage of
+   * docs/plans/260908f-overseer-and-fleet-improvement-roadmap.md.
+   */
+  it("does not clear the banner when the snapshot that arrives is itself old", () => {
+    const feed = manualTransport();
+    mount(feed.transport);
+    act(() => feed.fail("gone"));
+    expect(container.textContent).toContain("STALE");
+
+    /* A perfectly happy answer, ten minutes stale. The rows are real and must
+       still be drawn — an unreachable fleet is not an empty one, and neither is
+       a stale one. */
+    act(() =>
+      feed.push(
+        state({
+          collectedAt: new Date(Date.now() - 10 * 60_000).toISOString(),
+          rows: [row({ id: "$a", title: "back", status: { kind: "working" } })],
+        }),
+      ),
+    );
+
+    const text = container.textContent ?? "";
+    expect(text).toContain("back");
+    expect(text).toContain("STALE");
+    /* And it says WHY in the snapshot's own age rather than in the fetch error,
+       which is over: a banner that kept quoting `gone` would be describing a
+       failure that is no longer happening. */
+    expect(text).toContain("10m old");
+    expect(text).not.toContain("gone");
   });
 
   it("is stale when the server answers happily with an old snapshot", () => {
@@ -3615,6 +3661,334 @@ describe("recent messages, on the page", () => {
   });
 });
 
+/**
+ * **WHICH AGENT THIS TRANSCRIPT IS ABOUT, WHEN THE HANDLE DID NOT CHANGE.**
+ *
+ * `useRecentMessages` keyed its read on `row.id` alone — the tmux handle — and
+ * the comment above it explained, correctly, why the row OBJECT must not be the
+ * dependency: a snapshot arrives every sixty seconds and replaces every object,
+ * and a multi-megabyte transcript read on the refresh loop is the one thing
+ * this section must not do. What it got wrong is that `row.id` is not the same
+ * thing as the row's identity. `types.ts` says it in as many words about
+ * `claudeSessionId`: it is *"the only one of the three identifiers that
+ * survives a `gjd-remote resume`, so it is what distinguishes this agent from
+ * the one that replaced it in the same pane."*
+ *
+ * So a pane respawned under the same `$id` — a resume, a relaunch, a `-c` in
+ * the same window — left the previous agent's turns on screen under the new
+ * agent's name and status, indefinitely, with no way to notice from the page.
+ * On a page whose entire job is telling you which session needs you, that is
+ * the same failure `wantedFor` was added to prevent, arriving down the door
+ * that was left open. Roadmap finding E-session; Baseline stage of
+ * docs/plans/260908f-overseer-and-fleet-improvement-roadmap.md.
+ */
+describe("recent messages, when the pane keeps its handle and changes its agent", () => {
+  /** A messages api that records the FULL identity it was asked about. */
+  function watching(): {
+    api: MessagesApi;
+    asked: { id: string; conversation: string | null }[];
+  } {
+    const asked: { id: string; conversation: string | null }[] = [];
+    const api: MessagesApi = {
+      recent: async (row) => {
+        asked.push({ id: row.id, conversation: row.claudeSessionId });
+        return parseRecentMessages(
+          messagesWire({ turns: [turnWire({ text: `a turn from ${row.claudeSessionId}`, uuid: row.claudeSessionId ?? "u" })] }),
+        );
+      },
+    };
+    return { api, asked };
+  }
+
+  function rows(conversation: string): FleetState["rows"] {
+    return [
+      steerable({
+        id: "$a",
+        title: "a session",
+        claudeSessionId: conversation,
+        meta: { version: 1, kind: "claude", repo: "spideryarn/reading2", dir: "/home/greg/code/spideryarn2" },
+      }),
+    ];
+  }
+
+  it("re-reads when the conversation changes under the same handle, and not when nothing changed", async () => {
+    const feed = manualTransport();
+    const messages = watching();
+    mountFull({ transport: feed.transport, messagesApi: messages.api });
+    act(() => feed.push(state({ rows: rows("conv-A") })));
+    openSession("a session");
+    await act(async () => {});
+
+    expect(messages.asked).toEqual([{ id: "$a", conversation: "conv-A" }]);
+    expect(container.textContent ?? "").toContain("a turn from conv-A");
+
+    /* THE HALF THAT MUST NOT REGRESS. A new snapshot every sixty seconds
+       replaces every row object on the page, and none of those is news. If this
+       count moves, a transcript read has landed on the refresh loop. */
+    act(() => feed.push(state({ rows: rows("conv-A") })));
+    await act(async () => {});
+    expect(messages.asked).toHaveLength(1);
+
+    // And now the pane is holding a different agent.
+    act(() => feed.push(state({ rows: rows("conv-B") })));
+    await act(async () => {});
+
+    expect(messages.asked).toEqual([
+      { id: "$a", conversation: "conv-A" },
+      { id: "$a", conversation: "conv-B" },
+    ]);
+    const text = container.textContent ?? "";
+    expect(text).toContain("a turn from conv-B");
+    expect(text).not.toContain("a turn from conv-A");
+  });
+
+  /**
+   * **THE ONE THAT ACTUALLY LOOKS AT WHAT WAS COMMITTED.** GPT Sol's round 2,
+   * 2026-09-08, and the finding is about the test rather than the code.
+   *
+   * The test below asserts on the DOM after `act`, which flushes passive
+   * effects — so it is satisfied by an implementation that renders A's
+   * transcript under B's name and then clears it in a `useEffect`. That is
+   * exactly the implementation round 1 found the paint hazard in, and it passed
+   * this assertion, which means the assertion was not evidence for the repair
+   * it was cited for. React commits the DOM before passive effects run, and the
+   * browser may paint that commit.
+   *
+   * `Profiler`'s `onRender` fires during the commit phase, after the DOM has
+   * been mutated and before effects flush, so reading `container.textContent`
+   * there is the closest a jsdom test gets to *what a person could have seen*.
+   * **Every committed frame is checked, not the final one** — the whole failure
+   * is a frame that exists briefly and is then corrected.
+   */
+  it("never commits a frame with the old agent's turns under the new agent's identity", async () => {
+    const held: { label: string; resolve: () => void }[] = [];
+    const api: MessagesApi = {
+      recent: async (row) => {
+        const label = `${row.claudeSessionId}`;
+        const view = parseRecentMessages(
+          messagesWire({ turns: [turnWire({ text: `a turn from ${label}` })] }),
+        );
+        return new Promise((resolve) => held.push({ label, resolve: () => resolve(view) }));
+      },
+    };
+
+    /** Every frame React committed, in order, as it stood at commit time. */
+    let frames: string[] = [];
+    const feed = manualTransport();
+    act(() =>
+      root.render(
+        <Profiler id="detail" onRender={() => frames.push(container.textContent ?? "")}>
+          <App
+            transport={feed.transport}
+            steer={recordingSteer().api}
+            newSession={fakeNewSession()}
+            rename={fakeRename()}
+            actionsApi={recordingActions().api}
+            messagesApi={api}
+            actionsPollMs={3_600_000}
+          />
+        </Profiler>,
+      ),
+    );
+    act(() => feed.push(state({ rows: rows("conv-A") })));
+    openSession("a session");
+    await act(async () => {
+      held.shift()?.resolve();
+    });
+    // A is genuinely on screen, so what follows is a real transition.
+    expect(container.textContent ?? "").toContain("a turn from conv-A");
+
+    /* From here nothing may commit A's turns again. The identity strip in the
+       detail pane prints the conversation id, so a frame carrying both is the
+       failure in one string. */
+    frames = [];
+    act(() => feed.push(state({ rows: rows("conv-B") })));
+    await act(async () => {});
+
+    expect(frames.length).toBeGreaterThan(0);
+    const bad = frames.filter((f) => f.includes("conv-B") && f.includes("a turn from conv-A"));
+    expect(bad).toEqual([]);
+  });
+
+  it("clears the old agent's turns while the new read is in flight, rather than showing them under the new name", async () => {
+    /* The gap between the identity changing and the answer arriving is the
+       whole window in which the page is lying, and it is seconds long on a
+       multi-megabyte transcript. "Not read yet" is honest; the previous agent's
+       turns are not. */
+    const held: (() => void)[] = [];
+    const api: MessagesApi = {
+      recent: async (row) => {
+        const view = parseRecentMessages(
+          messagesWire({ turns: [turnWire({ text: `a turn from ${row.claudeSessionId}` })] }),
+        );
+        return new Promise((resolve) => held.push(() => resolve(view)));
+      },
+    };
+
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport, messagesApi: api });
+    act(() => feed.push(state({ rows: rows("conv-A") })));
+    openSession("a session");
+    await act(async () => {
+      held.shift()?.();
+    });
+    expect(container.textContent ?? "").toContain("a turn from conv-A");
+
+    act(() => feed.push(state({ rows: rows("conv-B") })));
+    await act(async () => {});
+    const midFlight = container.textContent ?? "";
+    expect(midFlight).not.toContain("a turn from conv-A");
+    expect(midFlight).toContain("Reading the tail of this session's transcript");
+  });
+
+  it("cannot have the old agent's answer land on the new agent's panel", async () => {
+    /* The out-of-order case, which no amount of clearing fixes on its own: A's
+       read is still in flight when B's starts, B answers first, and then A
+       answers. `wantedFor` guarded exactly this for the manual `Read again`
+       button and not for the effect, which had a per-run `alive` flag — and an
+       `alive` flag is per RUN, so it says "this effect was cleaned up", which is
+       the right question only when the cleanup happened. Here it is: the
+       identity changed, so A's run was cleaned up, and this asserts the whole
+       join rather than the flag. */
+    const held: { conversation: string | null; resolve: () => void }[] = [];
+    const api: MessagesApi = {
+      recent: async (row) => {
+        const view = parseRecentMessages(
+          messagesWire({ turns: [turnWire({ text: `a turn from ${row.claudeSessionId}` })] }),
+        );
+        return new Promise((resolve) => held.push({ conversation: row.claudeSessionId, resolve: () => resolve(view) }));
+      },
+    };
+
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport, messagesApi: api });
+    act(() => feed.push(state({ rows: rows("conv-A") })));
+    openSession("a session");
+    await act(async () => {});
+    expect(held.map((h) => h.conversation)).toEqual(["conv-A"]);
+
+    // B starts before A has answered.
+    act(() => feed.push(state({ rows: rows("conv-B") })));
+    await act(async () => {});
+    expect(held.map((h) => h.conversation)).toEqual(["conv-A", "conv-B"]);
+
+    // B answers, then A does — the order that costs something.
+    await act(async () => {
+      held[1]?.resolve();
+    });
+    await act(async () => {
+      held[0]?.resolve();
+    });
+
+    const text = container.textContent ?? "";
+    expect(text).toContain("a turn from conv-B");
+    expect(text).not.toContain("a turn from conv-A");
+  });
+
+  /**
+   * **A→B→A, WHICH IDENTITY EQUALITY CANNOT SEE.** GPT Sol's fifth finding,
+   * 2026-09-08.
+   *
+   * The guard widened from `row.id` to the full identity closes the case where
+   * the two readings are about different agents. It does nothing about two
+   * readings about the SAME agent, because the check it makes is an equality and
+   * an equality has no order in it: hold a manual read of A, let the pane become
+   * B and then A again, and the held answer's identity is once more the current
+   * one — so a reading from before the round trip overwrites one taken after it.
+   * On a page whose job is *is this row telling me the truth*, that is a
+   * transcript from the wrong minute presented as the current one.
+   *
+   * A monotonically increasing token is the fix, and the lesson generalises: a
+   * freshness check written as an equality cannot tell two of the same thing
+   * apart.
+   */
+  it("does not let a held read of A, taken before a round trip through B, overwrite the one taken after", async () => {
+    const held: { label: string; resolve: () => void }[] = [];
+    let nth = 0;
+    const api: MessagesApi = {
+      recent: async (row) => {
+        nth += 1;
+        const label = `${row.claudeSessionId} read ${nth}`;
+        const view = parseRecentMessages(messagesWire({ turns: [turnWire({ text: `a turn from ${label}` })] }));
+        return new Promise((resolve) => held.push({ label, resolve: () => resolve(view) }));
+      },
+    };
+
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport, messagesApi: api });
+    act(() => feed.push(state({ rows: rows("conv-A") })));
+    openSession("a session");
+    // 1: the opening read of A. Let it land so there is something to overwrite.
+    await act(async () => {
+      held.shift()?.resolve();
+    });
+    expect(container.textContent ?? "").toContain("conv-A read 1");
+
+    // 2: a manual read of A, held.
+    act(() => {
+      buttonSaying("Read again")?.click();
+    });
+    // 3: the pane becomes B, and 4: comes back to A. Neither answers yet.
+    act(() => feed.push(state({ rows: rows("conv-B") })));
+    act(() => feed.push(state({ rows: rows("conv-A") })));
+    expect(held.map((h) => h.label)).toEqual(["conv-A read 2", "conv-B read 3", "conv-A read 4"]);
+
+    // The newest answers, and then the one from before the round trip.
+    await act(async () => {
+      held[2]?.resolve();
+    });
+    expect(container.textContent ?? "").toContain("conv-A read 4");
+    await act(async () => {
+      held[0]?.resolve();
+    });
+
+    const text = container.textContent ?? "";
+    expect(text).toContain("conv-A read 4");
+    expect(text).not.toContain("conv-A read 2");
+  });
+
+  it("does not let a manual Read again for the old agent replace the new agent's turns", async () => {
+    /* The same race down the button rather than the effect. `wantedFor` held
+       `row.id`, and `row.id` is the same on both sides of this change — so the
+       guard that exists for exactly this compared two equal strings and let the
+       answer through. */
+    const held: { conversation: string | null; resolve: () => void }[] = [];
+    const api: MessagesApi = {
+      recent: async (row) => {
+        const view = parseRecentMessages(
+          messagesWire({ turns: [turnWire({ text: `a turn from ${row.claudeSessionId}` })] }),
+        );
+        return new Promise((resolve) => held.push({ conversation: row.claudeSessionId, resolve: () => resolve(view) }));
+      },
+    };
+
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport, messagesApi: api });
+    act(() => feed.push(state({ rows: rows("conv-A") })));
+    openSession("a session");
+    await act(async () => {
+      held.shift()?.resolve();
+    });
+    expect(container.textContent ?? "").toContain("a turn from conv-A");
+
+    // Press Read again for A, and let the pane change agent before it answers.
+    act(() => {
+      buttonSaying("Read again")?.click();
+    });
+    expect(held.map((h) => h.conversation)).toEqual(["conv-A"]);
+    act(() => feed.push(state({ rows: rows("conv-B") })));
+    await act(async () => {});
+
+    await act(async () => {
+      for (const h of held) h.resolve();
+    });
+
+    const text = container.textContent ?? "";
+    expect(text).toContain("a turn from conv-B");
+    expect(text).not.toContain("a turn from conv-A");
+  });
+});
+
 describe("starting a session", () => {
   function openNewSession(): void {
     const button = buttonSaying("New session");
@@ -3752,6 +4126,532 @@ describe("starting a session", () => {
     expect(text).toContain("Check the list, and kill it if it is there");
     expect(text).toContain("the launcher timed out after 180s");
     expect(text).not.toContain("Nothing was started");
+  });
+
+  /**
+   * **THE DEADLINE APPLIED TO THE POLLS THAT NEVER ANSWERED.**
+   *
+   * `POLL_GIVE_UP_MS` exists because "a spinner with no end is a lie about
+   * there being progress" — and it was only ever reached down the branch where
+   * the poll SUCCEEDED. `if (stopped || !result.ok) return;` left the interval
+   * running, so the one case the deadline is really for — the server gone, the
+   * tab left open — polled a dead endpoint every three seconds forever, and the
+   * panel went on saying "Starting…" about a launch it had never heard another
+   * word of. Found in the roadmap's own findings table as E-session and fixed
+   * here (docs/plans/260908f-overseer-and-fleet-improvement-roadmap.md,
+   * Baseline).
+   *
+   * Three things this test pins besides the stopping, because each of them is a
+   * way of "fixing" it that would be worse than the bug: the launch record must
+   * still be on screen (it is the only id anybody has for the thing that may be
+   * running), the panel must say it could not ASK rather than repeating the
+   * four-minutes-starting sentence it has no evidence for, and `start` must
+   * have been called exactly once — a page that relaunches because discovery
+   * failed is how you get two agents from one press on a box that OOMs.
+   */
+  it("stops polling when the deadline passes even though every poll failed, and starts nothing a second time", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date());
+      const record = parseLaunch({
+        id: "L5",
+        state: "starting",
+        name: null,
+        dir: "/home/greg/code/spideryarn2",
+        promptBytes: 7,
+        requestedAt: "",
+        finishedAt: null,
+        error: null,
+        maybeStarted: false,
+        note: null,
+      });
+      if (record === null) throw new Error("the fixture did not parse");
+
+      let polls = 0;
+      let starts = 0;
+      const feed = manualTransport();
+      mountFull({
+        transport: feed.transport,
+        newSession: fakeNewSession({
+          start: async () => {
+            starts += 1;
+            return { accepted: true, launch: record };
+          },
+          poll: async () => {
+            polls += 1;
+            return { ok: false, why: "connect ECONNREFUSED 127.0.0.1:8787" };
+          },
+        }),
+      });
+      act(() => feed.push(state({ rows: [] })));
+      openNewSession();
+      type("new-session-prompt", "start me");
+      await act(async () => {
+        buttonSaying("Start it")?.click();
+      });
+      expect(starts).toBe(1);
+      expect(polls).toBeGreaterThan(0);
+
+      /* Well past the deadline, in the panel's own steps. */
+      const steps = Math.ceil(POLL_GIVE_UP_MS / POLL_MS) + 3;
+      for (let i = 0; i < steps; i += 1) {
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(POLL_MS);
+        });
+      }
+      const settled = polls;
+
+      /* And then a further minute in which NOTHING may be asked. This is the
+         assertion the old code fails: the count goes on climbing. */
+      for (let i = 0; i < 20; i += 1) {
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(POLL_MS);
+        });
+      }
+      expect(polls).toBe(settled);
+
+      const text = container.textContent ?? "";
+      expect(text).toContain("stopped asking");
+      // What actually happened, in the transport's own words.
+      expect(text).toContain("connect ECONNREFUSED 127.0.0.1:8787");
+      /* NOT the four-minutes-starting sentence: nothing observed it starting
+         for four minutes, only that nobody could ask. */
+      expect(text).not.toContain("longer than the server's own timeout");
+      // The record is still there, because its id is the only handle anybody has.
+      expect(text).toContain("Starting…");
+      // And no second agent was started to make up for the silence.
+      expect(starts).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  /**
+   * The other ending, kept apart from the one above on purpose. Here the polls
+   * ANSWERED for four minutes and the launch never settled — so the server's
+   * own timeout is the thing to name, and the unreachable sentence would be
+   * false. Splitting `gaveUp` into two arms is only worth anything if both are
+   * exercised; a union with one tested arm is a boolean with extra steps.
+   */
+  it("gives up on a launch that answers for four minutes and never settles, in the server's terms", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date());
+      const record = parseLaunch({
+        id: "L6",
+        state: "starting",
+        name: null,
+        dir: "/home/greg/code/spideryarn2",
+        promptBytes: 7,
+        requestedAt: "",
+        finishedAt: null,
+        error: null,
+        maybeStarted: false,
+        note: null,
+      });
+      if (record === null) throw new Error("the fixture did not parse");
+
+      let polls = 0;
+      const feed = manualTransport();
+      mountFull({
+        transport: feed.transport,
+        newSession: fakeNewSession({
+          start: async () => ({ accepted: true, launch: record }),
+          poll: async () => {
+            polls += 1;
+            return { ok: true, feed: { busy: true, retryAfterMs: 0, launches: [record] } };
+          },
+        }),
+      });
+      act(() => feed.push(state({ rows: [] })));
+      openNewSession();
+      type("new-session-prompt", "start me");
+      await act(async () => {
+        buttonSaying("Start it")?.click();
+      });
+
+      const steps = Math.ceil(POLL_GIVE_UP_MS / POLL_MS) + 3;
+      for (let i = 0; i < steps; i += 1) {
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(POLL_MS);
+        });
+      }
+      const settled = polls;
+      for (let i = 0; i < 20; i += 1) {
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(POLL_MS);
+        });
+      }
+      expect(polls).toBe(settled);
+
+      const text = container.textContent ?? "";
+      expect(text).toContain("longer than the server's own timeout");
+      expect(text).not.toContain("never got a usable status answer");
+      expect(text).toContain("Whether a session exists is a question for the list");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  /**
+   * **THE DEADLINE MUST BE THE CLOCK'S, NOT A POLL'S.** GPT Sol's first finding,
+   * 2026-09-08, against the first version of this repair — and it is the same
+   * bug one level in.
+   *
+   * The first fix moved the give-up out of the success branch, which covers a
+   * poll that FAILS. It does not cover a poll that never answers at all: a
+   * connection accepted by a proxy that then goes quiet leaves a promise pending
+   * forever, and a deadline evaluated after `await` is never evaluated. The
+   * interval went on firing, so requests accumulated at one every three seconds
+   * against a route that answers none of them, and the panel said "Starting…"
+   * indefinitely — the original bug, reached by a different door.
+   *
+   * Two things are asserted, and the second is the one that would have been
+   * easy to leave out: the page gives up, **and it only ever asked once**,
+   * because single-flight is what stops a three-second interval over a
+   * longer-than-three-second request from being a queue.
+   */
+  it("gives up on a poll that never answers at all, and does not stack up requests behind it", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date());
+      const record = parseLaunch({
+        id: "L7",
+        state: "starting",
+        name: null,
+        dir: "/home/greg/code/spideryarn2",
+        promptBytes: 7,
+        requestedAt: "",
+        finishedAt: null,
+        error: null,
+        maybeStarted: false,
+        note: null,
+      });
+      if (record === null) throw new Error("the fixture did not parse");
+
+      let polls = 0;
+      const feed = manualTransport();
+      mountFull({
+        transport: feed.transport,
+        newSession: fakeNewSession({
+          start: async () => ({ accepted: true, launch: record }),
+          poll: () => {
+            polls += 1;
+            // Accepted, and never answered.
+            return new Promise(() => {});
+          },
+        }),
+      });
+      act(() => feed.push(state({ rows: [] })));
+      openNewSession();
+      type("new-session-prompt", "start me");
+      await act(async () => {
+        buttonSaying("Start it")?.click();
+      });
+
+      const steps = Math.ceil(POLL_GIVE_UP_MS / POLL_MS) + 20;
+      for (let i = 0; i < steps; i += 1) {
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(POLL_MS);
+        });
+      }
+
+      const text = container.textContent ?? "";
+      expect(text).toContain("stopped asking");
+      /* Nothing ever answered, so this is the unreachable ending — and it says
+         so in words nobody has to guess at, rather than an empty parenthesis
+         where a server's sentence would be. */
+      expect(text).toContain("never got a usable status answer");
+      expect(text).toContain("no answer ever arrived");
+      expect(text).not.toContain("longer than the server's own timeout");
+      // ONE ask, not eighty. This is the half a give-up alone would not fix.
+      expect(polls).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  /**
+   * **WHICH ARM, AND IT IS DECIDED BY "DID ANYTHING EVER ANSWER".** Sol's second
+   * finding, 2026-09-08.
+   *
+   * Choosing from the final poll alone meant four minutes of healthy `busy:
+   * true` followed by a single `ECONNRESET` printed *"for four minutes it could
+   * not reach the server at all"* — false about all but the last three seconds
+   * of it, and false in the direction that makes a reader distrust a server that
+   * was fine. The last failure is still worth saying; it is a footnote.
+   */
+  it("does not call four good minutes unreachable because the last ask failed", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date());
+      const record = parseLaunch({
+        id: "L8",
+        state: "starting",
+        name: null,
+        dir: "/home/greg/code/spideryarn2",
+        promptBytes: 7,
+        requestedAt: "",
+        finishedAt: null,
+        error: null,
+        maybeStarted: false,
+        note: null,
+      });
+      if (record === null) throw new Error("the fixture did not parse");
+
+      let polls = 0;
+      const feed = manualTransport();
+      mountFull({
+        transport: feed.transport,
+        newSession: fakeNewSession({
+          start: async () => ({ accepted: true, launch: record }),
+          poll: async () => {
+            polls += 1;
+            // Healthy all the way to the deadline, then the connection drops.
+            if (polls <= Math.ceil(POLL_GIVE_UP_MS / POLL_MS)) {
+              return { ok: true, feed: { busy: true, retryAfterMs: 0, launches: [record] } };
+            }
+            return { ok: false, why: "connect ECONNRESET 127.0.0.1:8787" };
+          },
+        }),
+      });
+      act(() => feed.push(state({ rows: [] })));
+      openNewSession();
+      type("new-session-prompt", "start me");
+      await act(async () => {
+        buttonSaying("Start it")?.click();
+      });
+
+      const steps = Math.ceil(POLL_GIVE_UP_MS / POLL_MS) + 5;
+      for (let i = 0; i < steps; i += 1) {
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(POLL_MS);
+        });
+      }
+
+      const text = container.textContent ?? "";
+      expect(text).toContain("longer than the server's own timeout");
+      expect(text).not.toContain("never got a usable status answer");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  /**
+   * **AN HTTP 500 IS NOT AN UNREACHABLE SERVER**, and the copy used to say it
+   * was. Sol's round 2, 2026-09-08.
+   *
+   * `PollOutcome.ok` is false for three different things — a dead socket, an
+   * HTTP error, and a body that is not this API (`new-session-client.ts`) — so a
+   * give-up arm keyed on it could not mean "could not reach the server", and the
+   * sentence it printed contradicted itself inside its own parenthesis: *"could
+   * not reach the server at all (the server answered 500)"*. The arm is now
+   * about getting an answer this page can **use**, which is what it actually
+   * knows. The earlier regression used `ECONNREFUSED` and would never have
+   * caught this.
+   */
+  it("does not call a server that answered 500 for four minutes unreachable", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date());
+      const record = parseLaunch({
+        id: "L10",
+        state: "starting",
+        name: null,
+        dir: "/home/greg/code/spideryarn2",
+        promptBytes: 7,
+        requestedAt: "",
+        finishedAt: null,
+        error: null,
+        maybeStarted: false,
+        note: null,
+      });
+      if (record === null) throw new Error("the fixture did not parse");
+
+      const feed = manualTransport();
+      mountFull({
+        transport: feed.transport,
+        newSession: fakeNewSession({
+          start: async () => ({ accepted: true, launch: record }),
+          // What `makeNewSessionApi` produces for a 500: reached, and useless.
+          poll: async () => ({ ok: false, why: "the server answered 500" }),
+        }),
+      });
+      act(() => feed.push(state({ rows: [] })));
+      openNewSession();
+      type("new-session-prompt", "start me");
+      await act(async () => {
+        buttonSaying("Start it")?.click();
+      });
+      for (let i = 0; i < Math.ceil(POLL_GIVE_UP_MS / POLL_MS) + 3; i += 1) {
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(POLL_MS);
+        });
+      }
+
+      const text = container.textContent ?? "";
+      expect(text).toContain("never got a usable status answer");
+      expect(text).toContain("the server answered 500");
+      /* The sentence that would contradict its own parenthesis. Asserted as
+         absent by its distinctive words rather than by the whole arm, so that
+         rewording the arm cannot quietly retire this check. */
+      expect(text).not.toContain("could not reach the server");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  /**
+   * **A LATE ANSWER MUST NOT UPDATE A PAGE THAT HAS STOPPED ASKING.** Sol's
+   * round 2 P2, and it pins a policy rather than fixing a bug.
+   *
+   * The deadline abandons a poll still in flight — deliberately: at four minutes
+   * the honest statement is *this page has stopped asking*, and the banner says
+   * the session list is the authority. But an abandoned request is not a
+   * cancelled one, and if its answer were still allowed to land, the launch card
+   * would quietly update underneath a banner saying nobody found out. The
+   * never-settling test above cannot see this, because its promise never
+   * settles at all.
+   */
+  it("ignores a poll that answers after the page has already given up", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date());
+      const starting = parseLaunch({
+        id: "L11",
+        state: "starting",
+        name: null,
+        dir: "/home/greg/code/spideryarn2",
+        promptBytes: 7,
+        requestedAt: "",
+        finishedAt: null,
+        error: null,
+        maybeStarted: false,
+        note: null,
+      });
+      const finished = parseLaunch({
+        id: "L11",
+        state: "started",
+        name: "late-arrival",
+        dir: "/home/greg/code/spideryarn2",
+        promptBytes: 7,
+        requestedAt: "",
+        finishedAt: "",
+        error: null,
+        maybeStarted: false,
+        note: null,
+      });
+      if (starting === null || finished === null) throw new Error("the fixture did not parse");
+
+      let release: (() => void) | null = null;
+      const feed = manualTransport();
+      mountFull({
+        transport: feed.transport,
+        newSession: fakeNewSession({
+          start: async () => ({ accepted: true, launch: starting }),
+          poll: () =>
+            new Promise((resolve) => {
+              release = () => resolve({ ok: true, feed: { busy: false, retryAfterMs: 0, launches: [finished] } });
+            }),
+        }),
+      });
+      act(() => feed.push(state({ rows: [] })));
+      openNewSession();
+      type("new-session-prompt", "start me");
+      await act(async () => {
+        buttonSaying("Start it")?.click();
+      });
+      for (let i = 0; i < Math.ceil(POLL_GIVE_UP_MS / POLL_MS) + 3; i += 1) {
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(POLL_MS);
+        });
+      }
+      expect(container.textContent ?? "").toContain("stopped asking");
+
+      // The abandoned request finally answers, with news.
+      await act(async () => {
+        (release as (() => void) | null)?.();
+      });
+
+      const text = container.textContent ?? "";
+      // The banner stands, and the card was not quietly rewritten underneath it.
+      expect(text).toContain("stopped asking");
+      expect(text).toContain("Starting…");
+      expect(text).not.toContain("late-arrival");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  /**
+   * **THE WARNING BELONGS TO A LAUNCH, SO ONLY A LAUNCH MAY RETIRE IT.** Sol's
+   * third finding, 2026-09-08.
+   *
+   * `setGaveUp(null)` sat at the top of `start`, beside the refusal reset — so
+   * pressing Start again cleared the previous launch's warning before anybody
+   * knew whether a new launch would replace it. The box refuses when it is
+   * critical, which is exactly when somebody presses twice, and the result was a
+   * card still saying "Starting…" with the sentence explaining why nobody knows
+   * any more silently gone.
+   */
+  it("keeps the earlier launch's warning when the next Start is refused", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date());
+      const record = parseLaunch({
+        id: "L9",
+        state: "starting",
+        name: null,
+        dir: "/home/greg/code/spideryarn2",
+        promptBytes: 7,
+        requestedAt: "",
+        finishedAt: null,
+        error: null,
+        maybeStarted: false,
+        note: null,
+      });
+      if (record === null) throw new Error("the fixture did not parse");
+
+      let starts = 0;
+      const feed = manualTransport();
+      mountFull({
+        transport: feed.transport,
+        newSession: fakeNewSession({
+          start: async () => {
+            starts += 1;
+            if (starts === 1) return { accepted: true, launch: record };
+            return { accepted: false, why: "the box is critical (load, memory or swap)", status: 503, from: "server" };
+          },
+          poll: async () => ({ ok: false, why: "connect ECONNREFUSED 127.0.0.1:8787" }),
+        }),
+      });
+      act(() => feed.push(state({ rows: [] })));
+      openNewSession();
+      type("new-session-prompt", "start me");
+      await act(async () => {
+        buttonSaying("Start it")?.click();
+      });
+      for (let i = 0; i < Math.ceil(POLL_GIVE_UP_MS / POLL_MS) + 3; i += 1) {
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(POLL_MS);
+        });
+      }
+      expect(container.textContent ?? "").toContain("stopped asking");
+
+      // Press again; the box refuses.
+      type("new-session-prompt", "start another");
+      await act(async () => {
+        buttonSaying("Start it")?.click();
+      });
+
+      const text = container.textContent ?? "";
+      expect(text).toContain("the box is critical");
+      // The first launch is still on screen, and so is the reason nobody knows.
+      expect(text).toContain("Starting…");
+      expect(text).toContain("stopped asking");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("refuses a launch state it has never heard of rather than rounding it to started", () => {

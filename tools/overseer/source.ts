@@ -65,6 +65,10 @@ export type SourceOptions = {
   pollTimeoutMs?: number;
   /** How long an open stream may deliver nothing — not even a heartbeat — before it is dead. */
   streamSilenceMs?: number;
+  /** Most bytes one poll response body may be. */
+  maxPollBytes?: number;
+  /** Most characters one INCOMPLETE SSE frame may reach before the stream is called broken. */
+  maxFrameChars?: number;
   now?: () => number;
 };
 
@@ -115,6 +119,48 @@ export const POLL_TIMEOUT_MS = 20_000;
  */
 export const STREAM_SILENCE_MS = 90_000;
 
+/**
+ * 4 MB, and the number matters less than the fact that there is one.
+ *
+ * `/api/state` is a serialised `FleetSnapshot` — thirty-five rows with pane
+ * titles and statuses, tens of kilobytes — so this is two orders of magnitude
+ * of headroom rather than a limit anybody will meet. It exists for the case
+ * where the thing answering is not the dashboard: a proxy streaming an error
+ * page for ever, or a route that started printing and did not stop. `fetch`'s
+ * own `text()` has no bound at all, and this daemon is meant to run for weeks.
+ */
+export const MAX_POLL_BYTES = 4 * 1024 * 1024;
+
+/**
+ * 4 M characters of a frame that has not been terminated.
+ *
+ * **Characters, not bytes, and deliberately named that way.** The parser holds
+ * decoded text, so this is what it can actually count; a character is at least
+ * one byte, so bounding characters bounds the memory too — as UTF-16 code
+ * units, which is what V8 actually holds. It does NOT bound the UTF-8 wire
+ * bytes to twice this: a BMP character can be three UTF-8 bytes, so the wire
+ * figure is up to 3x. That is fine, because the thing being protected is this
+ * process's heap and not the network. Counting bytes here would mean
+ * re-encoding every chunk to bound a buffer, which costs more than the thing
+ * it protects.
+ *
+ * The bound is on the INCOMPLETE TAIL, not on throughput: a stream may pass
+ * gigabytes through this parser as long as its frames end.
+ */
+export const MAX_FRAME_CHARS = 4 * 1024 * 1024;
+
+/** The sentence for each bound, exported so a test holds the same one the log does. */
+export function pollBodyTooBig(maxBytes: number): string {
+  return `the poll body passed ${maxBytes} bytes without ending, so it was refused rather than buffered`;
+}
+
+export function frameTooBig(maxChars: number): string {
+  return (
+    `an incomplete SSE frame reached ${maxChars} characters with no blank line to close it — ` +
+    `whatever is on the other end is not framing events, so the stream is being dropped rather than buffered`
+  );
+}
+
 /** One `event:`/`data:` pair, reassembled. */
 export type SseFrame = { event: string; data: string };
 
@@ -131,26 +177,85 @@ export type SseFrame = { event: string; data: string };
  * beginning `:` is a comment. `\r\n` is tolerated because a proxy may rewrite
  * line endings and a stray `\r` inside the JSON would be a parse failure with a
  * baffling message.
+ *
+ * **And the tail is bounded.** "Keep it until a blank line closes the frame" is
+ * an unbounded buffer written as a sentence: a producer that never sends the
+ * blank line grows it for ever. `push` THROWS on overflow rather than
+ * returning a flag, because there is exactly one caller and its `catch`
+ * already means *this stream is broken, close it and fall back* — which is the
+ * correct handling, and a flag would be a second way to say it that somebody
+ * could forget to read.
  */
-export function sseFrames(): { push(chunk: string): SseFrame[] } {
+export function sseFrames(maxChars: number = MAX_FRAME_CHARS): { push(chunk: string): SseFrame[] } {
   let buffer = "";
   return {
     push(chunk: string): SseFrame[] {
       buffer += chunk;
+      /**
+       * **THE BOUND IS CHECKED AFTER THE COMPLETE FRAMES ARE TAKEN OUT, and an
+       * earlier draft checked it before.** That draft threw on a single chunk
+       * carrying four small, complete, perfectly valid frames, because their
+       * combined length passed the limit — which is the opposite of the
+       * contract this function documents, and would have killed a healthy
+       * stream the first time two snapshots arrived in one TCP segment. GPT
+       * Sol found it by handing the parser 136 characters of four good frames
+       * under a 64-character limit, 2026-09-08. **A test that pushed each
+       * frame separately could never have seen it.**
+       *
+       * So the rule is per-frame and per-tail, never per-chunk: an individual
+       * frame whose terminator lies beyond the bound is refused below, and
+       * what is left over when every complete frame has been taken is checked
+       * at the end.
+       */
       const frames: SseFrame[] = [];
       for (;;) {
         const end = buffer.indexOf("\n\n");
         const endCrlf = buffer.indexOf("\r\n\r\n");
         const at = end === -1 ? endCrlf : endCrlf === -1 ? end : Math.min(end, endCrlf);
         if (at === -1) break;
+        // One frame, on its own, longer than we are prepared to hold.
+        if (at > maxChars) {
+          buffer = "";
+          throw new Error(frameTooBig(maxChars));
+        }
         const raw = buffer.slice(0, at);
         buffer = buffer.slice(at + (at === endCrlf && endCrlf !== end ? 4 : 2));
         const frame = parseFrame(raw);
         if (frame !== null) frames.push(frame);
       }
+      /* What is left is an INCOMPLETE frame, and this is the only thing the
+         bound is about: a producer that never sends the blank line.
+
+         **Minus whatever of the terminator has already arrived**, because
+         otherwise the SAME BYTES pass or fail according to how TCP split them:
+         a frame whose body is exactly `maxChars` is fine when its `\n\n`
+         lands in the same chunk, and an overflow when the first `\n` arrives
+         and the second has not. GPT Sol probed it at an eight-character limit,
+         2026-09-08. Packetization is not something a producer controls, so it
+         must not decide whether a stream is called broken. */
+      if (buffer.length - partialDelimiter(buffer) > maxChars) {
+        buffer = "";
+        throw new Error(frameTooBig(maxChars));
+      }
       return frames;
     },
   };
+}
+
+/**
+ * How many trailing characters could be the start of a terminator we have not
+ * finished receiving — at most three, from `\r\n\r`.
+ *
+ * A tail ending in `\n` might equally be the end of a `data:` line, and
+ * discounting one character there costs nothing: the bound is four million.
+ */
+function partialDelimiter(buffer: string): number {
+  for (const delimiter of ["\r\n\r\n", "\n\n"]) {
+    for (let n = delimiter.length - 1; n > 0; n -= 1) {
+      if (buffer.endsWith(delimiter.slice(0, n))) return n;
+    }
+  }
+  return 0;
 }
 
 function parseFrame(raw: string): SseFrame | null {
@@ -185,11 +290,13 @@ export async function* fleetSource(options: SourceOptions): AsyncGenerator<Sourc
   const streamRetryAfterMs = options.streamRetryAfterMs ?? STREAM_RETRY_AFTER_MS;
   const pollTimeoutMs = options.pollTimeoutMs ?? POLL_TIMEOUT_MS;
   const streamSilenceMs = options.streamSilenceMs ?? STREAM_SILENCE_MS;
+  const maxPollBytes = options.maxPollBytes ?? MAX_POLL_BYTES;
+  const maxFrameChars = options.maxFrameChars ?? MAX_FRAME_CHARS;
   const base = options.baseUrl.replace(/\/+$/, "");
   const { signal } = options;
 
   while (!signal.aborted) {
-    yield* readStream(`${base}/api/live`, signal, now, streamSilenceMs);
+    yield* readStream(`${base}/api/live`, signal, now, streamSilenceMs, maxFrameChars);
     if (signal.aborted) return;
 
     // THE FALLBACK, and it runs for a bounded time rather than for ever: the
@@ -197,7 +304,7 @@ export async function* fleetSource(options: SourceOptions): AsyncGenerator<Sourc
     // on a poll failure would stay on the fallback all week after one blip.
     const until = now() + streamRetryAfterMs;
     while (!signal.aborted && now() < until) {
-      yield await pollOnce(`${base}/api/state`, signal, now, pollTimeoutMs);
+      yield await pollOnce(`${base}/api/state`, signal, now, pollTimeoutMs, maxPollBytes);
       if (signal.aborted) return;
       await sleep(pollIntervalMs, signal);
     }
@@ -217,6 +324,7 @@ async function* readStream(
   signal: AbortSignal,
   now: () => number,
   silenceMs: number,
+  maxFrameChars: number,
 ): AsyncGenerator<SourceMessage> {
   // A DEADLINE THAT IS PUSHED FORWARD BY EVERY BYTE, rather than one budget for
   // the whole connection: an SSE stream is meant to stay open for weeks, so the
@@ -247,15 +355,31 @@ async function* readStream(
   heard();
   if (!response.ok || response.body === null) {
     clearTimeout(deadline);
-    // Drain, so the socket is released rather than left half-read.
-    await response.text().catch(() => "");
+    /**
+     * **CANCEL, DO NOT DRAIN — and this line used to say `await
+     * response.text()`.**
+     *
+     * The silence deadline is cleared one line above, and the fetch signal has
+     * nothing left to fire, so awaiting a body that never ends parked this
+     * generator for ever: no message, no error, and — because the daemon's
+     * tick loop goes on writing a heartbeat — a checkpoint saying the Overseer
+     * is alive while it was never going to hear anything again. That is the
+     * exact failure overseer-direction.md § Two tenses says must not happen,
+     * one layer down from the one it describes: *a dead dashboard is a fact
+     * the Overseer records, not a silence it sits in.*
+     *
+     * The status line is the whole answer; there is nothing in the body we
+     * were going to read. Cancelling releases the socket without waiting on
+     * whoever is holding it open.
+     */
+    discardBody(response);
     yield { kind: "stream-closed", atMs: now(), why: `the stream answered ${response.status} ${response.statusText}` };
     return;
   }
 
   yield { kind: "stream-opened", atMs: now(), why: `subscribed to ${url}` };
 
-  const parser = sseFrames();
+  const parser = sseFrames(maxFrameChars);
   const decoder = new TextDecoder();
   const reader = response.body.getReader();
   try {
@@ -289,7 +413,13 @@ async function* readStream(
   }
 }
 
-async function pollOnce(url: string, signal: AbortSignal, now: () => number, timeoutMs: number): Promise<SourceMessage> {
+async function pollOnce(
+  url: string,
+  signal: AbortSignal,
+  now: () => number,
+  timeoutMs: number,
+  maxBytes: number,
+): Promise<SourceMessage> {
   // `AbortSignal.timeout` rather than a hand-rolled controller: it is the one
   // that cannot be forgotten in an early return, and its reason is legible.
   const deadline = AbortSignal.timeout(timeoutMs);
@@ -303,15 +433,21 @@ async function pollOnce(url: string, signal: AbortSignal, now: () => number, tim
     return { kind: "poll-failed", atMs: now(), why: timedOut(cause) };
   }
   if (!response.ok) {
-    await response.text().catch(() => "");
+    // Cancel rather than drain, for `readStream`'s reason. Here the deadline
+    // was still live so this was bounded rather than infinite — but it burned
+    // the whole poll timeout waiting for a body whose contents we never look
+    // at, which on the fallback transport is the difference between one late
+    // observation and none.
+    discardBody(response);
     return { kind: "poll-failed", atMs: now(), why: `the poll answered ${response.status} ${response.statusText}` };
   }
   let text: string;
   try {
-    text = await response.text();
+    text = await readBounded(response, maxBytes);
   } catch (cause) {
     // The deadline covers the body as well as the headers: a server that sends
-    // a 200 and then stops is the same hang one layer down.
+    // a 200 and then stops is the same hang one layer down. The size bound
+    // covers the other half — a server that never stops sending.
     return { kind: "poll-failed", atMs: now(), why: deadline.aborted ? timedOut(cause) : `the body did not arrive: ${message(cause)}` };
   }
   return readPayload(text, "poll", now());
@@ -335,6 +471,50 @@ function readPayload(text: string, via: Transport, atMs: number): SourceMessage 
       atMs,
       why: `${message(cause)} — the first 120 characters were ${JSON.stringify(text.slice(0, 120))}`,
     };
+  }
+}
+
+/**
+ * Let go of a body we are never going to read, **without awaiting anything.**
+ *
+ * Not `await body.cancel()`: the whole class of bug this closes is *we waited
+ * on a peer that had stopped answering*, and re-entering it one level down to
+ * be tidy would be the joke version of the fix. `cancel()` destroys the
+ * underlying socket; whether that has finished by the time we yield the
+ * message is nobody's business. The `catch` is there because cancelling a
+ * stream that is already errored rejects, and an unhandled rejection here
+ * takes the daemon down.
+ */
+function discardBody(response: Response): void {
+  void response.body?.cancel().catch(() => undefined);
+}
+
+/**
+ * The whole body as text, or a refusal — never an unbounded `text()`.
+ *
+ * Bytes off the wire rather than characters of the result, because that is
+ * what the memory bound is actually about, and because a multi-byte character
+ * split across a chunk boundary must not be counted twice. `TextDecoder` in
+ * streaming mode holds the split character for us.
+ */
+async function readBounded(response: Response, maxBytes: number): Promise<string> {
+  if (response.body === null) return "";
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let text = "";
+  let bytes = 0;
+  try {
+    for (;;) {
+      const chunk = await reader.read();
+      if (chunk.done) return text + decoder.decode();
+      bytes += chunk.value.byteLength;
+      if (bytes > maxBytes) throw new Error(pollBodyTooBig(maxBytes));
+      text += decoder.decode(chunk.value, { stream: true });
+    }
+  } finally {
+    // Releases the socket on the refusal path, and is a no-op once the body
+    // has ended. Not awaited, for `discardBody`'s reason.
+    void reader.cancel().catch(() => undefined);
   }
 }
 

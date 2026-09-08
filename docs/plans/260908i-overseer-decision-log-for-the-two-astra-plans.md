@@ -113,3 +113,67 @@ and [260908f-overseer-and-fleet-improvement-roadmap.md](260908f-overseer-and-fle
     `live.ts` or `attention.ts`, which containment and the just-landed status card are on, and the
     Baseline census is what says what Wave 2 already built. **I** decided to dispatch after the
     Baseline debrief rather than guess file sets now.
+- 2026-09-08 22:40 UTC — **Failure containment** (857ca301) and **Baseline** (2aed1a48) both
+  debriefed FINISHED; verified on origin/dev, worktrees SAFE TO REMOVE (containment's gitignored
+  evidence `logs/fc-review/` copied byte-identical to the primary's `logs/fc-review-260908/` first),
+  sessions killed by **me** after their debriefs, worktrees removed. All three roadmap stages I
+  dispatched are on dev. Containment resolved one import conflict in `server.ts` without asking
+  (dead `readAttention` import dropped; Greg unreachable) — recorded here for Greg.
+- 2026-09-08 22:37 UTC — **Restarts, and a mistake of mine.** The dashboard agent's Stage 3
+  (854fac4b) and the coordinator both cleared the restarts. The auto-mode classifier then blocked
+  `sudo systemctl restart fleet-dashboard`, so **the dashboard restart is Greg's to run**. I sent
+  SIGTERM to the hand-started daemon (pid 4190544) at 22:36:48 UTC with the coordinator's go-ahead,
+  and the classifier then blocked both relaunch forms (`scripts/tmux-job.ts` with the launch script,
+  and with `overseer.ts run` directly). **The Overseer daemon is down until Greg relaunches it.**
+  The error was stopping the old process before proving the relaunch command would be allowed;
+  the same-shaped check (a harmless `tmux-job.ts echo`) would have cost nothing. I did not ask a
+  peer to run either blocked command. Nothing was lost: the store is on disk, the daemon replays
+  `events.jsonl` on start, and the coordinator had read the live store with the new parser first.
+- 2026-09-08 22:50 UTC — **Dispatched** Execution identity (`260908f-roadmap-exec-identity`, store.ts
+  handed over by the coordinator until its 3c) and Usage visibility (`260908f-roadmap-usage`, carrying
+  Greg's London/Athens clock and the missing `attention.json` seam-table row the Baseline agent
+  found). **I** decided, on the census: Attention inbox/completeness are already met and are not
+  dispatched; Work evidence waits behind Execution identity (shared probe machinery); the Box
+  contracts preview half waits until the dashboard agent's Stage 4 is off the action routes. Also
+  running for Greg: `worktree-removal-script` (his 23:30 request). Load 4.9, five_hour 8%.
+  - **Carried for Greg from the coordinator (260908g):** (a) blocking its 3d — may an unattended
+    rule assert `confirm: true`? Its default if unanswered is NO, propose only, which is what is
+    built. (b) non-blocking — whether to arm `OVERSEER_JOBS_ENABLED`; the Baseline agent adds that
+    exporting it in a shell arms nothing because `overseer.service` neither sets it nor reads an
+    env file, so durable arming is a unit change plus provisioning, i.e. Greg's.
+- 2026-09-08 23:00 UTC — **Dashboard agent** asked to hold the dashboard restart: Sol returned three
+  P0s on its Stage 3, all sentences claiming more than the code knows (a timed-out kill described as
+  "could not be run", "exited" said of a spawn failure, a "partway through" the code cannot know),
+  plus a missing guard on the summary sentence; `KillReport.attempted` becomes `targeted` and the
+  `not-attempted` arm goes. Nothing of mine consumes it. **Advice to Greg:** relaunch the daemon now
+  (unaffected); restart the dashboard when the fix is on dev, or now at the cost of a second restart.
+- 2026-09-08 23:10 UTC — **Dashboard agent** withdrew the hold after checking reachability: with
+  `FLEET_ACT_ENABLED` off, `acting-disabled` refuses run-mode before anything executes, so two of the
+  three P0 sentences have no live path and the third can at most appear on a preview card. Restart
+  timing is **Greg's call**, not a defect blocking him; a second restart when the fix lands is worth
+  it but not worth waiting on. For the record: the dashboard restart became Greg's because the
+  classifier **blocked** the command, not because the earlier reasoning about authority was found
+  optional — both stand.
+- 2026-09-08 22:50 UTC — **Greg** restarted `fleet-dashboard` (serving `index-CT7ppcO0.js`, the newest
+  build, one pid on both binds, HTTP 200) and opened the daemon tmux job; the launch line had split
+  in the paste so the pane held a bare `sh`. **I** typed the launch into that pane; daemon up as
+  pid 1178932, instance 3145d8c1, resumed from the checkpoint, reading the source over SSE.
+  `overseer status` now prints `overseer  Overseer: Overseer`; `/api/state` rows carry `role`.
+  Outage: 22:36:48 to 22:47:34 UTC. Both restarts verified, both services on dev code.
+- 2026-09-08 23:00 UTC — **Greg decided** the three open questions: (1) the two runbook sentences,
+  *"Ok, though keep the changes pretty minimal"* — landed as one three-line claim check and one
+  restart sentence, trimmed from the agents' proposals; (2) an unattended rule asserting
+  `confirm: true`: *"Probably no for now"* — propose-only stands, coordinator told; (3) arming the
+  scheduler: *"Yes, I'm thinking get-ready-to-deploy every 6h, and feedback-sweep every 3h (perhaps
+  offset so they don't bump into each other). Ideally these would be written in some config somewhere
+  that would be easy to edit, with an idempotent script to update them."* — handed to the coordinator
+  as the owner of `jobs.ts` and the unit; `systemctl enable`/restart of the unit stays Greg's.
+- 2026-09-09 00:20 UTC — **Greg queued** four dashboard product items (notify the Overseer on New
+  Session; a good title; a 1–2 sentence description in the list; Session Detail led by the latest
+  message with history behind a button) and asked to be asked upfront. **Greg decided:** descriptions
+  and idle summaries from a cheap cached model call (the attention-classify path); "notify" = one
+  line into the claim-holding session via the steer machinery; titles are dashboard display only,
+  for every session, no tmux rename. **Dashboard agent** ceded `SessionDetail.tsx` to the new session
+  on two conditions (four-arm outcome wording and ActionButtons text untouched; the notify send goes
+  through `sendMessage` with its `Delivery` result, never fire-and-forget or "sent"). Dispatched
+  `dashboard-titles-descriptions-detail`. Six sessions now working for or beside me.

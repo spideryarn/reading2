@@ -1,7 +1,17 @@
 # Make the Overseer and fleet dashboard useful, dependable, and cheaper to run
 
-Status as of 2026-09-08 evening: **implementation started, run by the Overseer** — Overseer status **landed** (5cf9a7ee, session closed); Baseline is with session `260908f-roadmap-baseline`, Failure containment with `260908f-roadmap-failure-containment`; the log is [260908i](260908i-overseer-decision-log-for-the-two-astra-plans.md). Earlier status: researched proposal; implementation had not begun. This is a plan-only
-change. The baseline inspected was `4adcdfd62703b6565a27a03c50f20f8a215f1bd8`; the shared checkout
+Status as of 2026-09-08 late evening: **implementation in progress, run by the Overseer** — landed on `dev`: Baseline (2aed1a48, census table below), Overseer status (5cf9a7ee), Failure containment (857ca301); Delivery uncertainty is with the `claude-agents-dashboard` session (its Stages 1–3: 0b2fee1e, 082d91aa, 854fac4b); dispatched 2026-09-08 22:50 UTC: Execution identity (session `260908f-roadmap-exec-identity`) and Usage visibility (`260908f-roadmap-usage`, which also carries Greg's London/Athens clock). Attention inbox and Attention completeness are **already met** per the census (attention-pass.ts, model-driven detector, AttentionPanel) and will not be dispatched; Work evidence waits for Execution identity because both use the same probe machinery. The log is [260908i](260908i-overseer-decision-log-for-the-two-astra-plans.md). Status as of 2026-09-08 evening: **implementation started, run by the Overseer** — Overseer status
+**landed** (5cf9a7ee, session closed); **Baseline landed** (session `260908f-roadmap-baseline`);
+Failure containment is with `260908f-roadmap-failure-containment`; the log is
+[260908i](260908i-overseer-decision-log-for-the-two-astra-plans.md). Earlier status: researched
+proposal; implementation had not begun.
+
+**Start at [§ Shipped / built-not-wired / proposed](#shipped-built-not-wired-proposed-at-77c7a502)**,
+which Baseline produced — the picture of the code at `77c7a502`, superseding the dated findings table
+wherever the two disagree. Four stages turned out to be finished already, and the scheduler to be
+built and merely disarmed; that section says which, and what it does to the order.
+
+The baseline originally inspected was `4adcdfd62703b6565a27a03c50f20f8a215f1bd8`; the shared checkout
 may advance underneath it. The original reconciliation checked `3e2e3bd4`; the Fable revision also
 checked subsequent dictation integration at `3ba58fc5` (see below). Evidence includes source inspection, two independent subsystem audits,
 a focused test run, a read of the real checkpoint's metadata, and primary technical references.
@@ -147,6 +157,14 @@ new one. `tools/fleet/web/src/` is the browser root, not `src/web/`.
 
 ## Findings that determine the order
 
+**Re-checked at `77c7a502` on 2026-09-08 and kept as history**: E-tests is repaired, E-seam's schema
+disagreement is gone (both ends read `2`), E-confirm is partly repaired, E-stream and E-blocking are
+half repaired, and E-session's two client faults are fixed by the Baseline stage. E-actions, E-work
+and E-queue stand unchanged. The per-row evidence is in
+[§ Shipped / built-not-wired / proposed](#shipped-built-not-wired-proposed-at-77c7a502), which is
+the row to trust where the two disagree. This table stays because the rest of the plan's prose was
+written against it.
+
 These are dated findings, not permanent descriptions. **S** means confirmed by source inspection;
 **T** means exercised in a test/command; **H** means a hypothesis requiring a failing reproduction.
 No real session was steered, killed, launched, or resumed in this investigation.
@@ -263,35 +281,232 @@ usage unless a specific failure promotes it. Launch protocol and recovery are la
 
 ### Stage: Baseline — know which code is actually running
 
-- [ ] Read current direction and both original plans. Compare their remaining checkboxes with
+**Done in the commit that carries this paragraph — session `260908f-roadmap-baseline`, 2026-09-08.**
+The census below replaces
+the dated findings table as the current picture; the findings table stays because it is what the
+rest of the plan's prose was written against. **The headline is that much more has landed than the
+roadmap knows**: the attention inbox is shipped end to end *including* the model-driven prose
+detector, health history is shipped, the scheduler is built and would dispatch real agents if it
+were armed, and the schema disagreement in E-seam is gone. Three of the six deliverables
+turned out to be already done by peers on `dev` — recorded below rather than rebuilt. What was still
+broken and is now fixed: the two client repairs, both red first.
+
+- [x] Read current direction and both original plans. Compare their remaining checkboxes with
   current callers/tests, especially the work classifier and systemd installation. Keep a small
   shipped / built-not-wired / proposed table in this plan; retire contradictory roadmap prose only
   when the replacement is based on evidence.
-- [ ] Record `git rev-parse HEAD`, Node version, installed service ExecStart/WorkingDirectory,
+- [x] Record `git rev-parse HEAD`, Node version, installed service ExecStart/WorkingDirectory,
   process start time, client build revision if available, checkpoint schema and its two clocks.
   Use `systemctl show/status` and bounded logs read-only. Do not print environment files or transcripts.
   If service access is unavailable, say unknown; a file in `infra/` proves no installation.
-- [ ] Reproduce the two baseline freshness failures. Inspect the `state()` fixture and test clock;
+- [x] Reproduce the two baseline freshness failures. Inspect the `state()` fixture and test clock;
   freeze/reset the clock or generate intentionally fresh fixture times. Add a distinct assertion
   that receiving an **old** cached snapshot does not clear the stale banner. Do not increase timeout
   thresholds just to satisfy a stale fixture.
-- [ ] Reuse `browserFetch(routes)` and `makeActionRoutes` in `tests/fleet-actions-route.test.ts`
+  <br>**Already repaired on `dev` before this stage ran** — `tests/fleet-web.test.tsx` § `state()`
+  now computes `collectedAt: new Date().toISOString()` and carries the reasoning ("a fixture that
+  means *fresh* has to be computed from the clock the component reads"); `messagesWire()` got the
+  same repair on `lastModified`. All 312 passed on arrival. The distinct old-snapshot assertion was
+  the part still missing, and is now `staleness › does not clear the banner when the snapshot that
+  arrives is itself old` — the rendered counterpart to `recovers`, which on its own is passed by an
+  implementation that clears whenever a 200 arrives. It is a **guard, not a reproduction**: it was
+  green when written — so it needed evidence that it discriminates, and the first attempt at that
+  was too weak: mutating the fixture's age to 1s fails the test, but the separate `10m old`
+  assertion guarantees that anyway, so it proved nothing about the banner. **The mutation that does
+  is in `freshness` itself** — `stale: true → false` in the age branch — and under it the page still
+  printed `10m old` while `toContain("STALE")` failed. Sol's doubt, and it was right.
+- [x] Reuse `browserFetch(routes)` and `makeActionRoutes` in `tests/fleet-actions-route.test.ts`
   for real client→route tests. That join already exists; do not extract the whole HTTP handler merely
   to repeat it. Composition/URL-prefix checks belong to Access review when needed.
-- [ ] Bring forward two small client repairs, each with a failing regression first. In
+  <br>**Also already on `dev`:** seven `browserFetch` joins, including both halves of the
+  `kill-test-suites` pair (preview, and the confirmed run refused `nothing-to-kill` with the gap
+  named in the test). What was missing was the same treatment for the **broadcast**, whose every
+  existing test hand-writes a `recipients` array the browser never sends — added as
+  `refuses the body the page really sends, because the browser carries no recipients`, asserting the
+  400 rather than papering over it. That is the wrong-request negative control for this stage.
+- [x] Bring forward two small client repairs, each with a failing regression first. In
   `NewSessionPanel`, apply the absolute discovery deadline to failed polls too; preserve the created
   id/manual refresh and never relaunch because discovery failed. In `useRecentMessages`, re-read on
   a changed claimed `claudeSessionId` under the same row id, clear the old view, and prevent an old
   in-flight response from replacing the new view (including manual reads). An unchanged snapshot
   must not trigger another transcript read. This fixes an observable claim change; it does **not**
   prove that an unchanged launch claim still identifies the current execution.
-- [ ] Capture focused suite output and run one deliberate wrong-request negative control. Fix only
+- [x] Capture focused suite output and run one deliberate wrong-request negative control. Fix only
   scoped defects; baseline failures elsewhere are recorded and investigated separately.
+  <br>Full `npm test`: **895 files passed, 2 failed** — `tests/pdf-bundle-trace.test.ts` and
+  `tests/cold-start-lazy-imports.test.ts`, both the fresh-worktree failures `npm run worktree:setup`
+  predicts on the way in (no `api-dist/` until `npm run build`). Neither is in this diff's blast
+  radius. Typecheck clean; lint on the touched files produces only the pre-existing `useLiteralKeys`
+  infos the test files already carried.
+
+**The review round, and what it changed.** GPT Sol reviewed the built code and found **six P1s, five
+of them reproducible bugs in this stage's own repairs** — which is the argument for the second review
+in [engineering-manager.md](../reusable/engineering-manager.md), because a plan-stage review could
+not have found any of them. All five are fixed here, each with a regression **and a mutation check
+that the regression really discriminates**:
+
+1. **The deadline was still a poll's, not the clock's.** Moving the give-up out of the success branch
+   covers a poll that *fails*; a `poll()` whose promise never settles reaches no branch at all, so a
+   deadline evaluated after `await` never runs — the original bug down a different door. The interval
+   now decides, and one ask at a time: without single-flight the mutation check stacked up **81
+   requests** against a route answering none.
+2. **The `unreachable` sentence was chosen from the last poll alone**, so four healthy minutes plus
+   one `ECONNRESET` printed *"for four minutes it could not reach the server at all"*. The
+   discriminator is now *did anything ever answer*; the last failure is a footnote.
+3. **`setGaveUp(null)` at the top of `start` erased the previous launch's warning** before anybody
+   knew whether a new launch would replace it — and the box refuses exactly when somebody presses
+   twice. Only an accepted launch may retire it.
+4. **`setView(null)` in an effect is one commit too late.** React commits, and can paint, the render
+   in which the row is B and the view is still A's; only the test's `act` hid it. The reading now
+   carries the identity it is a reading *of*, so the wrong pairing is refused during render.
+5. **Identity equality is not an ordering.** Widening the guard from `row.id` to the full identity
+   closed the cross-agent door and left A→B→A open: a held read of A, taken before the round trip,
+   overwrote one taken after. A monotonic token fixes it. **The general lesson is worth more than the
+   fix: a freshness check written as an equality cannot tell two of the same thing apart.**
+
+The sixth was this document overclaiming the served revision, corrected above. Sol's P2s are also
+applied: the broadcast negative control now uses the dry-run press the panel can actually reach, and
+the usage and scheduler rows say what is really left.
+
+**Round 2 found three more P1s, and two of them are about the same failure as the code's.** Recorded
+because the pattern is the point:
+
+- **`unreachable` was a name that claimed more than its evidence.** `PollOutcome.ok` is false for a
+  dead socket, an HTTP 500 **and** a body that is not this API, so four minutes of the dashboard
+  answering 500 printed *"could not reach the server at all (the server answered 500)"* — a sentence
+  contradicting itself inside its own parenthesis. The arm is now `no-answer` and the copy says
+  *never got a usable status answer*, which is what the page actually knows. **A name that overclaims
+  is the same bug as a sentence that overclaims, and harder to notice.**
+- **The paint-order regression did not test paint order.** It read the DOM after `act`, which
+  flushes passive effects — so the very implementation round 1 had condemned passed it, and it was
+  therefore not evidence for the repair it was cited for. There is now a `Profiler`-based test that
+  records **every committed frame** and asserts none carries A's turns under B's identity. Under the
+  old implementation it is the only one of the six identity tests that fails.
+- **The runtime headline still said "neither is on `dev`'s tip"** three paragraphs above the text
+  retracting exactly that. Now "neither can be shown to be".
+
+Sol's round-2 P2s are applied too: a test pins that a poll answering **after** the give-up is
+ignored rather than quietly rewriting the card under the banner, and the three flags in the polling
+effect are one, since they were always checked together. Two rounds is the limit, and nothing was
+overruled — every finding in both rounds was reproducible.
 
 **Acceptance:** another agent can distinguish code under test from the serving process; the existing
 client→route harness remains usable, perpetual failed discovery stops, and a changed conversation
 claim cannot retain the old transcript view. Runtime inspection has not restarted anything.
 **Cost ceiling:** one small stage; no instrumentation platform.
+
+#### The runtime record, 2026-09-08 ~21:45 BST
+
+Read-only. Nothing was restarted, no environment file or transcript was printed.
+
+| | |
+|---|---|
+| Primary checkout `HEAD` | `77c7a502` (2026-09-08 21:41:18), `/home/greg/code/spideryarn2` |
+| Node | `v26.8.1` |
+| Dashboard | **systemd, and it is installed and running** — `fleet-dashboard.service` `enabled`/`active`, `MainPID=123208`, `ExecStart=/home/greg/code/spideryarn2/node_modules/.bin/tsx tools/fleet/server.ts`, `WorkingDirectory=/home/greg/code/spideryarn2`, `FragmentPath=/etc/systemd/system/fleet-dashboard.service`, started **21:25:22**. Bound `127.0.0.1:8787` and `100.92.255.119:8787` (tailnet). Not in tmux. |
+| Overseer daemon | **systemd unit installed but `disabled` and `inactive`; the daemon actually running is a hand-started one** — `npm exec tsx scripts/overseer.ts run`, pid 4190432→4190544, cwd `/home/greg/code/spideryarn2`, started **20:51:48**, in tmux session `overseer5-2051-4190361`. |
+| Client build revision | **None is reported anywhere.** The only observable revision is vite's content hash in the filename: the served artifact is `tools/fleet/web/dist/assets/index-CjrhG43M.js`, mtime 21:25, built by the unit's own `ExecStartPre=/usr/bin/npm run build:fleet`. Nothing on the page or in any API says which revision it is. |
+| Checkpoint | `~/.overseer/current.json`, **schema `2`** — matching `STORE_SCHEMA` in `tools/overseer/store.ts` and `KNOWN_SCHEMA` in `tools/fleet/attention.ts`. Twelve top-level fields, all twelve declared in the checked-in `Checkpoint` type, none missing either way. |
+| The two clocks | `writtenAt=2026-09-08T20:45:50.840Z`, `lastGoodSnapshotAt=2026-09-08T20:45:17.152Z` — 33s apart, i.e. alive and hearing. `heartbeat={pid:4190544, instanceId:6bc44a90…, startedAt:19:51:49.970Z, lastTickAt:20:45:50.840Z, ticks:161}`. |
+
+**The finding this stage exists to produce: neither running service reports the revision it is
+running, and neither can be SHOWN to be on `dev`'s tip.** What can honestly be said, after GPT Sol
+pushed back twice on stronger drafts of this paragraph:
+
+- **Neither process records its revision.** That is the fact, and it is the gap the Operational
+  finish stage names.
+- **The primary's `HEAD` at each launch is knowable from the reflog**, which is better evidence than
+  the commit timestamps this paragraph first used: `HEAD` was `b93f45db` from 21:16 to 21:41, and the
+  dashboard started at 21:25:22. The daemon started at 20:51:48, before `7c65318d`, `46a70cc5` and
+  `77c7a502` landed.
+- **The bytes that were loaded are still unknown**, and that is the part the first draft overclaimed.
+  `tsx` and `build:fleet` read the working tree, not `HEAD`, and this is a shared checkout in which
+  several agents have uncommitted edits at any moment. *"It is serving `b93f45db`"* is therefore not
+  something this evidence supports; *"`HEAD` was `b93f45db` when it started, and what it loaded on
+  top of that is unrecorded"* is.
+
+So the only honest answer today to *is this fix live?* is *restart it and see*. Four things would
+change that, and they are cheap: capture `git rev-parse HEAD` **and the dirty state** at service
+start; inject the revision into the client build; expose the server's revision on its own; and write
+the daemon's revision into its checkpoint or start event. Retrospectively, a clean rebuild and a hash
+comparison could identify a likely client commit, but cannot rule out uncommitted source.
+
+**`~/.overseer/` has six files, not five.** The direction doc's seam table lists five; the sixth is
+`attention.json` (`ATTENTION_MEMORY_SCHEMA = 1`, keys `epoch`/`waits`/`verdicts`), the attention
+pass's own memory — it holds each session's first-seen wait time and the model's cached verdict per
+`tailFingerprint`, so a restart neither forgets how long somebody has waited nor pays for the same
+classification twice. It is the daemon's private state in the same sense `last-snapshot.json` is.
+**Not yet added to that table** — `overseer-direction.md` is outside this stage's file set and
+another agent is live in `tools/overseer/`. Adding the row is a signpost rather than a rule change,
+so it needs no approval; it needs an owner.
+
+#### Shipped / built-not-wired / proposed at 77c7a502
+
+Verdicts are about **this tree**, not about the running processes above. *Shipped* means a
+production caller reaches it and, for anything reader-facing, the browser draws it.
+
+**Read the date on this table, and then read this paragraph.** It was taken at `77c7a502`, and by the
+time the stage that produced it was ready to land, `dev` had moved **52 commits** — including
+`5cf9a7ee`, which shipped the whole Overseer status stage and deleted the panel sentence this census
+had just named as its second-most-valuable finding. That row is corrected below and marked; **the
+other rows have not been re-checked against those 52 commits**, so treat this as a picture of
+`77c7a502` plus one correction rather than of `74ee7559`. Saying so is the point: on a trunk with
+three agents on it a census is a photograph, and a photograph presented as a live view is exactly the
+failure this plan is about. **Re-take the rows you are about to depend on; do not re-take all of
+them.**
+
+| Stage | Verdict | Evidence |
+|---|---|---|
+| Baseline | shipped | This section, and the code it landed. `tests/fleet-web.test.tsx` 326 pass; `tests/fleet-actions-route.test.ts` 80 pass. **The rest of this table describes `77c7a502`; this row describes the commit that adds the table** |
+| Execution identity | partial — write path only | `verifyTarget` (`tools/fleet/steer.ts:1067`) returns `{paneId, sessionId, panePid, claudePid}`, parsed as `VerifiedReading`/`not-told` (`web/src/steer-client.ts:172-206`). No verified/claimed reading on fleet rows, and `RegisterEntry` (`tools/overseer/store.ts:336-360`) has no start-ticks or boot token |
+| Box contracts | built-not-wired — server half only | `parseBoxRequest` accepts `pids` and `recipients` (`routes-actions.ts:486-544`); `boxActionBody` still sends four fields (`web/src/actions-client.ts:781`). Both gaps now pinned by browser→route tests (`fleet-actions-route.test.ts`, `nothing-to-kill` and `a broadcast needs recipients`) |
+| Delivery uncertainty | partial | Steering has it: `Delivery = "none" \| "partial" \| "unknown"` (`steer.ts:347`), through route (`routes-steer.ts:139`) to client (`steer-client.ts:129`). The queue does not: no uncertain arm in `drain.ts:218-232`, and ids are still `q${seq}` from 1 per process (`queue.ts:618`) |
+| Failure containment | proposed | `collectWithDeadline` still `Promise.race`s without cancelling the child (`collect.ts:649-663`); no single-flight latch in `collect.ts`/`refresh.ts`. The daemon's half **is** done (`overseer/source.ts:251,288,306`) |
+| Overseer status | **shipped — while this census was being written**; at `77c7a502` it was partial and the panel was factually wrong | At `77c7a502`: no `/api/overseer`, a projection of `attention` only, and `OverseerPanel.tsx:130-141` telling the reader the Overseer *"is not running, and there is nothing on this box that would receive a message"* while a daemon had been writing a checkpoint for an hour. Landed in `5cf9a7ee` and merged here: `tools/fleet/overseer-status.ts` § `readCheckpointFeeds` projects `attention` **and** an `overseer: OverseerStatusFeed` — two clocks, heartbeat, scheduler line and a bounded register projection — out of the same bytes, onto the same payload. Still no separate route, and `wire.ts:1106` now argues for that: *one payload, one clock, one staleness*, and one file read so the inbox and the clock beside it cannot come from two versions of the file. The panel's three false sentences are gone, and `OverseerPanel.tsx:421` marks the spot: *"NOT 'the Overseer is not running', which the evidence does not"* support |
+| Work evidence | built-not-wired | `classifyPaneWork` (`overseer/work.ts:693`) and `probeProcessTable` (`work-probe.ts:58`) have **zero non-test callers**; every hit outside the definitions is `tests/overseer-work.test.ts` or a comment. `RegisterEntry` has no `work` field, which is why the live register has none. **E-work stands unchanged.** Same shape for its sibling `classifyPaneHarness` (`harness.ts:655`) |
+| Attention inbox | **shipped** | `runAttentionPass` (`overseer/attention-pass.ts:128`) → `buildAttentionList` (`attention.ts:220`) → `Checkpoint.attention` (`store.ts:427`); production caller `attentionRunner` (`attention-cli.ts:293`) wired at `scripts/overseer.ts:801` on a 2-minute ticker (`daemon.ts:608-634`); read at the fleet boundary and drawn by `AttentionPanel.tsx` (678 lines) from `App.tsx`. Live checkpoint carries a real item |
+| Attention completeness | **shipped** | The prose detector is model-driven and running: `attention-classify.ts:66`, `openai/gpt-5.6-luna` over OpenRouter, one call per distinct `tailFingerprint`, `DEFAULT_MAX_CALLS = 12`; `attentionRunner` returns `null` with no key so a keyless daemon publishes *not yet run* rather than an empty list. Excerpt drawn behind a disclosure (`AttentionPanel.tsx:673`); `sessionsScanned`/`sessionsUnreadable` carried and rendered. **The roadmap's ordering assumed this was ahead; it is behind us** |
+| Responsive collection | proposed | `execFileSync` still on the request process at `collect.ts:463` (pane capture), `collect.ts:607`, `health.ts:505` |
+| Resource history | **shipped** | Writer `openHealthHistory` composed in `health-wiring.ts:41`, called `server.ts:134`, appended per turn `server.ts:241`; route `/api/health/history` (`routes-health-history.ts:34`) mounted `server.ts:313`; drawn `HealthHistory.tsx` → `HealthPanel.tsx:217`. Live `~/.fleet-health/health.jsonl` 280 KB, `writer.lock` present |
+| Admission visibility | proposed | `vitest-admission.ts` is read only by `vitest.config.ts:12` and two tests; no dashboard or CLI reader |
+| Enforced launch admission | proposed | No admission call in any launcher; the only reservation is the scheduler's occurrence lease, which is not a resource slot |
+| Usage visibility | built-not-wired in the browser | Producer shipped and running: `collectUsage` (`overseer/usage.ts:1336`) on its own 300-second timer (`daemon.ts:380`, wired `scripts/overseer.ts:835`), stored (`store.ts:457`), printed by CLI `usageLines` (`scripts/overseer.ts:512`); live checkpoint carries a full report. Wire types exist (`fleet/wire.ts:206-478`) and **nothing renders them** — the fleet reader drops `usage` by design (`tools/fleet/attention.ts:41`), so the remaining work is a boundary projection, a parser, client state and a panel. The prepared join is dead too: `readPause` takes an optional `rateLimit` (`pause.ts:786`) and `readPauses` never passes one (`collect.ts:771`) |
+| Session continuity | proposed | No draft persistence anywhere in `tools/fleet/web/src/` |
+| Bounded transport | partial | Server unrepaired: `safeWrite` returns the boolean (`live.ts:96`) and `broadcastFrame` discards it (`live.ts:134`), with the "drop, don't queue" rationale stated at `:129`. Daemon repaired |
+| Source ordering | proposed | `fleetState` writes `schema: 1` with no producer instance or sequence (`state.ts:73-93`) |
+| Maintainable seams | partial | Real extraction happened — `wire.ts`, `attempt-clock.ts`, `health-wiring.ts`, `routes-health-history.ts`, `state.ts`. The named targets grew: `ActionButtons.tsx` 1498 lines, `routes-actions.ts` 2031, `actions-client.ts` 1091 |
+| Durable action receipts | proposed | Four `receipt` hits in `tools/fleet/*.ts`, all comments saying there is no receipt for a keystroke. No dashboard-owned journal |
+| Launch protocol | partial — Overseer side only | `schedulerTick` (`overseer/scheduler.ts:196`) does append-`reserved`→fsync→spawn→append-`started`, with a durable lease and a `stuck` sweep. Not shared with any dashboard action; no admission step |
+| Schedule preview | shipped in CLI, proposed in browser | `describeStandingJobs` printed by `overseer status` (`scripts/overseer.ts:334-342`); definitions pinned by `authorisedHash` per tick. Nothing in the browser reads `scheduler` |
+| Scheduled dispatch | **built and wired, disarmed** | `gjdRemoteDispatch` (`overseer/dispatch.ts`) really spawns `gjd-remote new-claude … --no-attach -p -`; handed to the daemon only when `OVERSEER_JOBS_ENABLED === "1"` (`dispatch.ts:50`), and `daemon.ts:563` writes `scheduler.kind = "off"` otherwise — which is exactly the live checkpoint's `{kind:"off", why:"OVERSEER_JOBS_ENABLED is not \"1\"…", definitions: get-ready-to-deploy, feedback-sweep}`. **Arming this dispatches real agents; it is not a display flag.** And `infra/hetzner/systemd/overseer.service:37` neither sets the variable nor reads an env file with it in, so exporting it in a shell and starting the unit arms nothing — durable arming is a unit or drop-in, a reload, a restart, and the same change in provisioning |
+| Recovery inventory | proposed | No `RecoveryCandidate` anywhere |
+| Gradual recovery | proposed | Depends on the above |
+| Work reports and decisions | proposed | Event kinds are only `session-*` and `job-occurrence-*` (`scripts/overseer.ts:246-277`). The decision log that landed in `46a70cc5`/`77c7a502` is documentation, not events |
+| Bounded judgement | partial | The detector and its call budget run, but there is no typed *proposal* with a recipient and no routing to Sol or Fable |
+| Access review | mostly shipped | `applySecurityHeaders` before every response path (`server.ts:283`), `origin.ts`, loopback-only `parseBinds`, `tests/fleet-headers.test.ts`, `tests/fleet-origin.test.ts`. `handler` still binds at import (`server.ts:484-491`), so composition checks stay source-level |
+| Operational finish | partial | `scripts/overseer-watchdog.ts` + its test ship a **local** watchdog, and say so in their own header: closing A27 needs the off-box dead-man, which does not exist. No client build revision anywhere — see the runtime record |
+
+**What this changes about the order.** Four things, all of which move work earlier or delete it:
+
+1. **The attention milestone is already met.** Both attention stages are shipped, prose detector
+   included. The roadmap's "Attention delivery" cut is finished; do not re-plan it. What is left
+   there is enrichment (Work evidence) and the panel's lie below.
+2. ~~**`OverseerPanel` telling the reader there is no Overseer is now a correctness bug, not a stale
+   placeholder**, and it is the cheapest high-value fix on the board.~~ **Fixed by `5cf9a7ee` while
+   this census was being written**, along with the rest of Overseer status. Left visible rather than
+   deleted, because *how quickly it went stale* is the finding: this was written and overtaken inside
+   one evening.
+3. **Usage visibility is boundary wiring and rendering; there is no collection work left.** The
+   report is collected on its own 300-second timer (not every daemon tick) and stored. What is
+   missing is a projection and parser at the fleet boundary — `tools/fleet/attention.ts` drops
+   `usage` deliberately — plus the client state and the panel. Smaller than its 3-effort estimate
+   assumed, but not free, and Sol was right to say the first draft of this line understated it.
+4. **Scheduled dispatch is built; what remains is arming, and arming is not one shell variable.**
+   `gjdRemoteDispatch` really spawns agents. The **hand-started** daemon is one inline
+   `OVERSEER_JOBS_ENABLED=1` away, but `infra/hetzner/systemd/overseer.service` neither sets it nor
+   reads an environment file that would, so durable arming needs a unit or drop-in, a daemon-reload
+   and a restart — **and, per the box's own rule, the same change in provisioning for the next box.**
+   The decision itself is Greg's, about unattended dispatch, not an implementation task.
 
 ### Stage: Execution identity — distinguish a running process from an old launch claim
 
@@ -371,7 +586,7 @@ read-only status wait for them. This is local request binding, not a durable wor
 - [ ] Change response/UI outcomes into operation-specific variants: steering has refused-before-effect, keys-submitted, partial and
   outcome-unknown; process actions distinguish command-exited from effect-observed, plus partial
   and unknown; broadcasts aggregate those per recipient. Do not reintroduce a generic submitted/Done
-  arm that conflates transport with process outcome. Preserve route `delivery` details. Inspect `PlanRun.completed` and actual step results: `killRoute` currently labels intended PIDs as killed even when the run is incomplete. Report attempted versus observed effects explicitly. Never show `Nothing happened` for a
+  arm that conflates transport with process outcome. Preserve route `delivery` details. Inspect `PlanRun.completed` and actual step results: `killRoute` currently labels intended PIDs as killed even when the run is incomplete. *(Corrected 2026-09-08 by the dashboard agent building this stage: `run.completed` is always true on that route, because `planKillProcesses` makes every step best-effort and `judgeStep` never maps best-effort to failed. The real defect was one level down — the intent list was reported while the per-step evidence sat discarded in the same response. Fixed in 854fac4b; do not look for a `completed:false` path.)* Report attempted versus observed effects explicitly. Never show `Nothing happened` for a
   network error or unreadable response. Show per-recipient counts for broadcasts.
 - [ ] Quarantine a queue target after partial/unknown delivery; later items cannot drain into an
   uncertain input buffer. Preserve target generation and the uncertain item for inspection. Manual
@@ -389,18 +604,125 @@ refresh; late error/timeout never invites a blind retry. Test cancel/revive agai
 
 ### Stage: Failure containment — the smallest bounds before richer monitoring
 
-- [ ] Add a single-flight latch around owned collection attempts: a caller deadline does not release
+**Status, 2026-09-08: built, and reviewed by GPT Sol twice.** (An earlier draft of this line claimed the work had landed on
+`dev`, twice, while it was still uncommitted. Sol caught it both times; the second attempt at a
+self-verifying wording — *"in the commit that carries this paragraph"* — names a commit but says
+nothing about whether it was pushed, which is the part that was false. So: no claim here at all, and
+`git log -- tools/fleet/refresh.ts` is the answer.) Four bounds, each with a test that was watched red first — most of them by
+mutating the fix back out and re-running, since the tests were written alongside the code.
+**The running dashboard and daemon still serve the old code until they are restarted**; nothing
+here is live until then.
+
+**Sol's review changed the answer, not just the wording, and the P1 is the thing to read.** The
+first draft destroyed an SSE subscriber the moment `res.write` returned `false`. That is wrong in a
+way no test in this repo could have caught, because every test drove a double that returned `false`
+because it was told to: a real `ServerResponse` has a **16 KB high-water mark** and a fleet snapshot
+is **~59 KB**, so `false` is what a perfectly healthy client returns on its first frame, every time.
+That draft would have disconnected every subscriber on every collection — **the Overseer daemon
+included**, which would have recorded a genuine `sse-stream` degraded edge and dropped to polling for
+sixty seconds, over and over. Sol measured it against a real response object (`writableLength: 60524`
+after one 59 KB write) rather than arguing about it. The lesson is the one
+[silent-success.md](../reusable/silent-success.md) keeps making: *the double agreed with the code
+because it shared the code's assumption.*
+
+- [x] Add a single-flight latch around owned collection attempts: a caller deadline does not release
   the underlying attempt. Repeated refreshes report the stuck child and retain old data, with no
   second child started until the first settles. Test never-settling, late-success and late-failure
   probes; late results must not overwrite a newer observation. Full cancellation follows later.
-- [ ] For SSE, use the simplest bounded policy first: after `write(false)`, close/destroy that
+  <br>`singleFlightCollect` in [`tools/fleet/refresh.ts`](../../tools/fleet/refresh.ts), wired at
+  module scope in `server.ts` (a latch built per call latches nothing). It keeps the child promise,
+  races `collectWithDeadline` over that *same* promise rather than making a second call, and refuses
+  to start a sibling while one is in flight — the caller gets `collectionStillRunning`, which
+  `refreshOnce` puts in `lastError` beside the previous snapshot.
+  **A late child's answer is logged and dropped, whichever way it went** — and the first draft of
+  this got it wrong, which is worth recording. Handing a late SUCCESS to the next caller looks like
+  thrift: it is a real snapshot that cost twelve seconds, and `collectedAt` carries its real age.
+  But `refreshOnce` gives whatever `collect()` resolves with to `drain()`, which aims tmux
+  keystrokes at the panes those rows name and decides *whether to send now* from each row's
+  `status` — and `refresh.ts` already has the rule for that, six lines from the bottom of the file:
+  **stale rows are how the right text reaches the wrong session.** A snapshot that arrived eight
+  minutes after it was asked for is stale rows by construction. Using it for the page but not for
+  the drain would mean teaching `refreshOnce` a third kind of outcome, which is a mechanism, and
+  this stage is the smallest bound rather than a rewrite. Twelve seconds is cheaper than that.
+  So the plan's *"late results must not overwrite a newer observation"* holds in its strongest
+  form — **a late result never reaches an observation at all** — and there is no sequence counter,
+  because there is nothing to sequence. `tests/fleet-refresh.test.ts` asserts it as *a late snapshot
+  never reaches keep, publish or the drain*, and the assertion bites: putting the delivery path back
+  turns it red.
+- [x] For SSE, use the simplest bounded policy first: after `write(false)`, close/destroy that
   subscriber and remove it. The next connection receives the latest cached snapshot. Prove no
   further heartbeat/snapshot writes or retained subscriber remain; do not call false a dropped frame.
-- [ ] Cancel unsuccessful SSE response bodies or keep a short deadline while consuming them, so
+  <br>**Built as written, then corrected: the plan's own instruction was the P1.** *Close/destroy on
+  `write(false)`* is wrong for the reason in the status paragraph above — `false` is the normal case
+  for a 59 KB frame, not a symptom. What landed is the policy that reads Node's contract literally:
+  `writeUnlessFull` in [`tools/fleet/live.ts`](../../tools/fleet/live.ts) marks the subscriber
+  `waitingToDrain` and **writes nothing more until `drain`**, which is the memory bound (at most one
+  outstanding frame per subscriber); `DRAIN_DEADLINE_MS` (30s, two heartbeats) is what turns that
+  from a hope into a bound, destroying a socket that has not moved a byte. `destroy()`, not `end()`:
+  `end` writes a final chunk and waits for it to flush, and the client we are giving up on is the one
+  that is not flushing. It is still true that `writeUnlessFull` is the **one** place a `false` is
+  acted on — `broadcastFrame` and `subscribe` each used to have a path that ignored it.
+  **Measured in three runs, not one — and the third is the one that matters**, because measuring only
+  the wedged case is how the destroy-on-false draft looked good. 5,000 × 59 KB snapshots:
+  **(A)** a wedged socket, as shipped — one frame, **58.9 KB**, then destroyed at the deadline;
+  **(B)** the old skip-and-keep policy — **287.8 MB** and still climbing;
+  **(C)** a *healthy* socket whose `write` returns `false` every single time — **200 of 200 frames
+  delivered, never disconnected.** (C) is the control Sol asked for; under the destroy-on-false draft
+  it delivers one frame and hangs up. (`heapUsed` under-reports (B) badly — V8 keeps the
+  concatenations as rope strings — so `writableLength` is the honest measure.)
+- [x] Cancel unsuccessful SSE response bodies or keep a short deadline while consuming them, so
   error headers plus an unfinished body cannot prevent the Overseer's polling fallback. Bound
   incomplete frame and poll body sizes. Test each with a controlled source and raw Writable.
-- [ ] Surface these conditions through existing error/age UI. Keep the later responsiveness and
+  <br>[`tools/overseer/source.ts`](../../tools/overseer/source.ts): `discardBody` cancels rather
+  than drains on both unsuccessful paths, `readBounded` replaces `response.text()` on the poll
+  (`MAX_POLL_BYTES`, 4 MB), and `sseFrames` now takes a bound and throws on an incomplete frame that
+  passes it (`MAX_FRAME_CHARS`, 4 M characters) — thrown rather than flagged, because its one caller
+  already catches into *this stream is broken, close it and fall back*.
+  **The frame bound was wrong the first time and the test could not have seen it.** It checked the
+  whole newly-appended chunk before extracting complete frames, so four small valid frames arriving
+  in one TCP segment were an "overflow" — while every test in the file pushed one frame per `push`.
+  Sol found it with 136 characters of four good frames under a 64-character limit. The rule is now
+  per-frame and per-tail: a single frame whose terminator lies beyond the bound is refused, and the
+  bound is applied to what is *left over* once every complete frame has been taken out.
+  **The stream half was a genuine indefinite park, and the test shows it:** with a 503 whose body
+  never ends, the fallback was never reached at all — the run took the test's own 5,000 ms abort and
+  produced one message. The silence deadline is cleared one line above that `await`, so nothing was
+  left to fire. The poll half was bounded but wasteful: it burned the whole 3 s poll timeout waiting
+  for a body it never reads, which on the fallback transport is the difference between one late
+  observation and none.
+- [x] Surface these conditions through existing error/age UI. Keep the later responsiveness and
   transport stages for comprehensive lifecycle work; do not turn this small repair into a rewrite.
+  <br>**No new channel, and no new code for this bullet** — which is the intended answer for three
+  of the four, and an honest gap for the fourth.
+  The stuck child becomes `lastError` and renders in the error-and-age UI that already exists. The
+  source's new sentences ride the existing `stream-closed` / `poll-failed` messages, which
+  `daemon.ts` already turns into `sse-stream` / `poll` condition edges carrying `why` verbatim.
+  **`attemptedAt` keeps its meaning, and that took two goes.** The first draft advanced it on every
+  loop turn, on the argument that *the loop is turning and getting nowhere* is worth distinguishing
+  from *the loop has stopped*. Sol's round-2 P1 killed it with the consequence: **five things read
+  that field as the moment a collection began** — `web/src/Header.tsx`, `attempt-clock.ts`, and the
+  Overseer's `daemon.ts`, `observation.ts` and `notes.ts` — so with a child wedged for seven minutes
+  the page would have rendered *a collection was started 0s ago* while `lastError` said the opposite.
+  Changing a field's meaning means migrating its consumers, and those consumers are five files in
+  three ownership areas, which is a bigger change than this whole stage.
+  So the latch got an `onStart` callback and `server.ts` writes `attemptedAt` from that: the field
+  advances exactly when a child actually starts, every existing reader stays correct, and **not one
+  file outside this stage's set had to be touched.** A wedged collector now reads: `attemptedAt`
+  frozen at the wedged child's start, the page saying *started 7 minutes ago*, `lastError` saying
+  why. All three true at once.
+  **The gap, stated precisely on the third attempt:** a subscriber that is *destroyed* is observed
+  downstream perfectly well — the Overseer sees its stream end and opens an `sse-stream` condition
+  like any other closure — but **the backpressure-specific cause is not distinguishable**, and a
+  *pause* that drains within thirty seconds is not surfaced at all. The first draft here claimed it
+  showed in the live count `server.ts` logs (false: `refreshOnce` reads that count *before*
+  `publish()`, the call that can drop one); the second overcorrected to "not surfaced anywhere"
+  (too broad, per Sol's round 2). A short pause does not need surfacing — it is bounded and
+  self-healing — and giving `live.ts` a logger would hand a module with deliberately no import side
+  effects a dependency. What is genuinely missing is only the *why*.
+
+**Not built, deliberately:** cancellation. The latch bounds the *number* of children at one, which
+is the cheap half; killing the wedged one is a later stage, and a `SIGTERM` to a child in
+uninterruptible IO proves nothing anyway (`source.ts`'s own header, 2026-09-08).
 
 **Acceptance:** repeated failure cannot accumulate collectors or unlimited socket/parse buffers,
 and an error stream cannot trap supervision forever. This advances Sol's early priority advice

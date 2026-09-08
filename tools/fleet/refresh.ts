@@ -34,7 +34,7 @@
  *     good collection report as failed, and must not stop the loop: those are
  *     three different ways of turning a delivery problem into a dead dashboard.
  */
-import type { FleetSnapshot } from "./collect.js";
+import { collectWithDeadline, type FleetSnapshot } from "./collect.js";
 import { summariseDrain, type DrainResult } from "./drain.js";
 import type { HealthTurn, SampleStamp } from "./health-history.js";
 
@@ -197,4 +197,193 @@ export async function refreshOnce(deps: RefreshDeps): Promise<RefreshOutcome> {
     // itself down (or report STALE on the page) because a delivery failed.
     return { collected, error: null, drained: null, drainError: why };
   }
+}
+
+/* ==================================================================== *
+ * THE LATCH: one owned collection attempt at a time.
+ * ==================================================================== */
+
+/**
+ * The sentence a person reads when the collector is still wedged.
+ *
+ * Deliberately NOT `collectionAbandoned`'s sentence, which says the attempt
+ * *has been* abandoned and invites the reader to expect a fresh one next
+ * minute. This one says the opposite: the child from last time is still there,
+ * and nothing new can be read until it exits. Exported so a test can hold it.
+ */
+export function collectionStillRunning(forMs: number): string {
+  return (
+    `the previous collection has been running for ${Math.round(forMs / 1000)}s and has not finished — ` +
+    `no second one has been started, because a wedged tmux or bash child does not get better by being ` +
+    `given a sibling; any rows shown are from the last collection that completed`
+  );
+}
+
+type Attempt = {
+  seq: number;
+  startedAtMs: number;
+  /** The child itself, which outlives the caller's deadline. */
+  child: Promise<FleetSnapshot>;
+  /** Set by the child's own handler, whichever way it went. */
+  settled: boolean;
+  /** Set when the caller's deadline expired and the child had NOT settled. */
+  abandoned: boolean;
+};
+
+export type SingleFlightDeps = {
+  /** The real collection. **Uncancellable** — see the header note below. */
+  run(): Promise<FleetSnapshot>;
+  /** How long a CALLER waits. The child is not bound by it. */
+  deadlineMs: number;
+  now(): number;
+  /**
+   * **Called when a child ACTUALLY STARTS**, and not when a caller merely asks.
+   *
+   * It exists so `attemptedAt` can keep meaning what it has always meant. A
+   * turn that the latch refuses does not start a collection, and a field that
+   * advanced anyway would tell the page *a collection was started 0s ago*
+   * while the previous one had been wedged for seven minutes — GPT Sol's P1,
+   * 2026-09-08. Changing the field's meaning instead would mean migrating
+   * every consumer of it (`Header.tsx`, `daemon.ts`, `attempt-clock.ts`,
+   * `observation.ts`, `notes.ts`), which is a bigger change than this whole
+   * stage and belongs to their owners.
+   */
+  onStart?(): void;
+  /** A line about a child that came back after its caller had given up. Optional; logged, not thrown. */
+  onLate?(line: string): void;
+};
+
+export type SingleFlightCollector = {
+  /** Drop-in for `RefreshDeps["collect"]`. */
+  collect(): Promise<FleetSnapshot>;
+};
+
+/**
+ * One collection attempt at a time, and a deadline that belongs to the CALLER
+ * rather than to the child.
+ *
+ * **The bug this closes.** `collectWithDeadline` races the collection against a
+ * timer and rejects when the timer wins — but nothing cancels the child, and
+ * nothing remembers it. So the loop reported a failure, waited its backoff, and
+ * called `collect()` again while the first `bash -c` was still grepping
+ * thirty-five transcripts. On a box that has hit load average 391 with the OOM
+ * killer firing, the *response* to a wedged collector was a second one, then a
+ * third. E-blocking in docs/plans/260908f-….
+ *
+ * **What this does and does not do.** It does not cancel anything: full
+ * cancellation is a later stage, and a `SIGTERM` to a child in uninterruptible
+ * IO proves nothing anyway (source.ts's header, 2026-09-08). It bounds the
+ * *number* of children at one, which is the cheap half and the half that stops
+ * the accumulation.
+ *
+ * **A late child's ANSWER IS DROPPED, whichever way it went** — logged, so the
+ * difference between *the child finally finished* and *it is gone for ever* is
+ * on the record, but never fed to anybody.
+ *
+ * That is a deliberate choice against the tempting one. A late SUCCESS is a
+ * real snapshot that cost twelve seconds, and handing it to the next caller
+ * looks like thrift. But `refreshOnce` gives whatever `collect()` resolves with
+ * to `drain()`, which sends tmux keystrokes at panes named by the snapshot's
+ * rows and decides *whether to send now* from each row's `status` — and this
+ * file already has the rule for that, six lines from the bottom: **stale rows
+ * are how the right text reaches the wrong session.** A snapshot that arrived
+ * eight minutes after it was asked for is stale rows by construction. Using it
+ * for the page but not for the drain would mean teaching `refreshOnce` a third
+ * kind of outcome, which is a mechanism, and this stage is the smallest bound
+ * rather than a rewrite. Twelve seconds is cheaper than that.
+ *
+ * So *a late result cannot overwrite a newer observation* holds in its
+ * strongest form: a late result never reaches an observation at all.
+ *
+ * A late FAILURE is dropped for a second reason as well: it is an answer to a
+ * question asked minutes ago, and turning it into `lastError` would mark the
+ * page stale twice for one child.
+ */
+export function singleFlightCollect(deps: SingleFlightDeps): SingleFlightCollector {
+  let inFlight: Attempt | null = null;
+  let seq = 0;
+
+  function invoke(): Promise<FleetSnapshot> {
+    // A synchronous throw from `run` must look like a rejection, so the one
+    // place that clears `inFlight` is the settle handler below.
+    try {
+      return deps.run();
+    } catch (cause) {
+      return Promise.reject(cause instanceof Error ? cause : new Error(String(cause)));
+    }
+  }
+
+  function start(): Attempt {
+    const child = invoke();
+    const attempt: Attempt = { seq: ++seq, startedAtMs: deps.now(), child, settled: false, abandoned: false };
+    inFlight = attempt;
+    // Here and nowhere else: a turn that never reaches `start` never started a
+    // collection, and nothing downstream may be told that it did.
+    deps.onStart?.();
+    // REGISTERED HERE, BEFORE THE RACE, for two reasons. It is the only handler
+    // that runs whether or not a caller is still waiting — so `inFlight` is
+    // released by the child settling rather than by anyone's patience — and a
+    // child that rejects after its caller gave up would otherwise be an
+    // unhandled rejection that takes the dashboard down.
+    // `.catch` ON THE DERIVED PROMISE, not just on the child. The child's own
+    // rejection is handled by the second argument below — but if `onLate` or
+    // `deps.now` throws, the promise `then` RETURNS rejects with nobody
+    // listening, and an unhandled rejection takes this process down. Probed by
+    // GPT Sol with an `onLate` that throws, 2026-09-08.
+    void child
+      .then(
+        (snapshot) => {
+          attempt.settled = true;
+          inFlight = null;
+          if (!attempt.abandoned) return;
+          // `started`, not `abandoned`: the deadline is when we STOPPED
+          // WAITING, and this clock is measured from when the child began.
+          deps.onLate?.(
+            `the collection started ${Math.round((deps.now() - attempt.startedAtMs) / 1000)}s ago, and since abandoned, ` +
+              `has come back with ${snapshot.rows.length} rows, collected at ${snapshot.collectedAt} — not used, ` +
+              `because the drain would aim keystrokes with statuses that old; the next turn collects afresh`,
+          );
+        },
+        (cause) => {
+          attempt.settled = true;
+          inFlight = null;
+          if (!attempt.abandoned) return;
+          // Dropped on purpose: see the header. The loop has already reported
+          // this attempt as abandoned, and the page must not go stale twice for it.
+          deps.onLate?.(
+            `the collection started ${Math.round((deps.now() - attempt.startedAtMs) / 1000)}s ago, and since abandoned, ` +
+              `has failed: ${cause instanceof Error ? cause.message : String(cause)} — not reported, the attempt was ` +
+              `already given up on`,
+          );
+        },
+      )
+      .catch(() => undefined);
+    return attempt;
+  }
+
+  return {
+    async collect(): Promise<FleetSnapshot> {
+      if (inFlight !== null) {
+        // NO SECOND CHILD. The caller gets a sentence naming the condition,
+        // which `refreshOnce` puts in `lastError` beside the previous
+        // snapshot — the existing error-and-age UI, not a new channel.
+        throw new Error(collectionStillRunning(deps.now() - inFlight.startedAtMs));
+      }
+      const attempt = start();
+      try {
+        // `collectWithDeadline` over the SAME promise rather than a second
+        // call: the race, the timer hygiene and the sentence are already
+        // written and tested there, and the child is ours to keep.
+        return await collectWithDeadline(() => attempt.child, deps.deadlineMs);
+      } catch (cause) {
+        // Asked of the ATTEMPT rather than of `inFlight`, because there are two
+        // ways to arrive here and only one of them is an abandonment: the
+        // deadline won the race (the child is still out there), or the child
+        // itself rejected (it is not). `settled` is the question that
+        // distinguishes them, and it is the child's own handler that answers it.
+        if (!attempt.settled) attempt.abandoned = true;
+        throw cause;
+      }
+    },
+  };
 }
