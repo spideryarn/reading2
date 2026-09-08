@@ -36,7 +36,7 @@ import { execFileSync } from "node:child_process";
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { buildSessionScript, parseSessions, sessionState } from "../scripts/gjd-remote-tmux.js";
 
 /**
@@ -60,6 +60,41 @@ function usable(): boolean {
 }
 
 const CAN_RUN = usable();
+
+/** An absolute path to a binary, or null if this box has not got it. */
+function which(name: string): string | null {
+  try {
+    return execFileSync("which", [name], { encoding: "utf8" }).trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * **The awks this box has, because the probe's grammar must not be one awk's.**
+ *
+ * `claudeForSession` is read by whichever `awk` the box resolves — gawk on this
+ * one, mawk on a Debian that never installed gawk — and the two do not agree
+ * about everything. The one that bit us is `==`: awk compares two values
+ * NUMERICALLY when both look like numbers, and both `-v` and `split()` produce
+ * exactly that kind of value, so `01` and `1` were the same session id in both
+ * implementations. Nothing awk-specific has been found yet, and "we ran it under
+ * one awk and reasoned about the other" is not evidence, so every case in the
+ * grammar block below runs under each of them.
+ *
+ * A box with neither named binary falls back to whatever it calls `awk`, so the
+ * block runs once rather than vanishing: `describe.each([])` registers nothing
+ * and reports nothing, which is the silent skip this file already has one
+ * postmortem about.
+ */
+const AWKS: readonly { name: string; path: string | null }[] = (() => {
+  const found = ["gawk", "mawk"].flatMap((name) => {
+    const p = which(name);
+    return p ? [{ name, path: p }] : [];
+  });
+  return found.length > 0 ? found : [{ name: "whatever this box calls awk", path: null }];
+})();
+
 let dir: string;
 
 beforeAll(() => {
@@ -99,18 +134,42 @@ const UUIDS = [
 ];
 
 /**
+ * Shadow `awk` with one named implementation, or `null` to take the shadow off.
+ *
+ * Every `awk` the script runs goes through this, not only the process probe,
+ * which is the point: the probe is the interesting one but the row-to-pane join
+ * is awk too, and it has never been run under anything but the box's default.
+ * Removing the file matters as much as writing it — the stub directory lives for
+ * the whole file, so a stub left behind by one test is still first on the PATH
+ * for every test after it.
+ */
+function stubAwk(bin: string | null): void {
+  const file = path.join(dir, "bin", "awk");
+  if (bin === null) {
+    rmSync(file, { force: true });
+    return;
+  }
+  stub("awk", `exec ${bin} "$@"`);
+}
+
+/**
  * `tmux ls -F` prints `n` rows; `show-environment` answers per session.
  *
  * The rows carry a real trailing newline, exactly as tmux prints them, because
  * the bug under test is about what happens to that newline.
+ *
+ * `sessionIds` is what `CLAUDE_SESSION_ID` answers, one per session. It is a
+ * parameter rather than always the uuids because the variable is set by hand on
+ * real sessions, and `sessionState` has an arm for that — so the probe has to be
+ * asked what it does with a session id that is not a uuid.
  */
-function stubTmux(n: number, meta: Record<string, string> = {}): void {
+function stubTmux(n: number, meta: Record<string, string> = {}, sessionIds: readonly string[] = UUIDS): void {
   const rows = Array.from({ length: n }, (_, i) => `$${i}|178819033${i}|0|1|session-${i}`).join("\\n");
   const panes = Array.from({ length: n }, (_, i) => `$${i} ${1000 + i}`).join("\\n");
-  // One uuid per line, so the stub can look one up by session index with sed
+  // One id per line, so the stub can look one up by session index with sed
   // rather than this file having to build a shell array.
   const ids = path.join(dir, "ids.txt");
-  writeFileSync(ids, `${UUIDS.join("\n")}\n`);
+  writeFileSync(ids, `${sessionIds.join("\n")}\n`);
   // A variable this stub is not given answers the way tmux answers for one it
   // has never been set: nothing on stdout and a complaint on stderr. That is
   // what every session on the box looked like before the metadata existed.
@@ -163,6 +222,12 @@ function stubClaude(json: string): void {
 }
 
 describe.skipIf(!CAN_RUN)("the remote script, actually run", () => {
+  // Whatever the box calls `awk`, unless a block below asks for a named one.
+  // Undone before every test rather than once, because the grammar block does
+  // shadow it and a stub left in the bin directory outlives the test that wrote
+  // it — the whole directory is shared for the file's lifetime.
+  beforeEach(() => stubAwk(null));
+
   /**
    * THE ONE THAT MATTERS. Two rows in must be two rows out. The old script
    * produced one, and every test in the neighbouring file agreed with it,
@@ -278,16 +343,19 @@ describe.skipIf(!CAN_RUN)("the remote script, actually run", () => {
    * "running but unlisted" — noise. A false negative says there is no agent in
    * a pane that has one, and that is the one somebody acts on.
    */
-  describe("reading a claude command line under a pane", () => {
+  describe.each(AWKS)("reading a claude command line under a pane ($name)", ({ path: awkPath }) => {
+    beforeEach(() => stubAwk(awkPath));
+
     /**
-     * One idle pane with one child running `args`, and the probe's verdict for
-     * the session — whose CLAUDE_SESSION_ID is `UUIDS[0]` throughout.
+     * One idle pane with one child running `args`, and the probe's verdict for a
+     * session whose CLAUDE_SESSION_ID is `id` — `UUIDS[0]` unless a test says
+     * otherwise.
      *
      * `busy` is what "not this session's claude" looks like here: something IS
      * running under the pane, it just is not a claude answering for this id.
      */
-    function procForChild(args: string) {
-      stubTmux(1);
+    function procForChild(args: string, id: string = UUIDS[0] ?? "") {
+      stubTmux(1, {}, [id]);
       stubPs(["1000 1 3600 bash -l", `2000 1000 60 ${args}`]);
       stubClaude("[]");
       return parseSessions(run()).sessions[0]?.proc;
@@ -334,6 +402,21 @@ describe.skipIf(!CAN_RUN)("the remote script, actually run", () => {
     it("reads the ids before a bare -- and none of the prose after it", () => {
       expect(
         procForChild(`claude --session-id ${UUIDS[0]} -- also look at --session-id ${UUIDS[1]} while you are there`),
+      ).toEqual({ kind: "claude" });
+    });
+
+    /**
+     * D1 again, and this is the case the bare-word rule does NOT also cover:
+     * a prompt whose FIRST word is dash-led. `-- "$(cat prompt)"` is what the
+     * launcher emits, and a prompt that begins by quoting a flag reads as a
+     * second, differing id unless the `--` is honoured — a false negative, on a
+     * shape our own launcher produces. Found by mutation: deleting the `--`
+     * boundary changed nothing until this line existed, because the bare-word
+     * rule happened to stop at the same place on every other prompt here.
+     */
+    it("honours a bare -- even when the prompt begins with a flag", () => {
+      expect(
+        procForChild(`claude --session-id ${UUIDS[0]} -- --session-id ${UUIDS[1]} is what the other agent used`),
       ).toEqual({ kind: "claude" });
     });
 
@@ -393,6 +476,158 @@ describe.skipIf(!CAN_RUN)("the remote script, actually run", () => {
       expect(procForChild(`claude --session-id ${UUIDS[1]} --session-id ${UUIDS[0]} --session-id ${UUIDS[0]}`)).toEqual(
         { kind: "busy" },
       );
+    });
+
+    /** Both spellings of the same id are the same id, whichever order they come in. */
+    it("accepts the same id spelled once inline and once separately", () => {
+      expect(procForChild(`claude --session-id=${UUIDS[0]} --session-id ${UUIDS[0]}`)).toEqual({ kind: "claude" });
+    });
+
+    it("refuses a mixed pair that differs", () => {
+      expect(procForChild(`claude --session-id=${UUIDS[0]} --session-id ${UUIDS[1]}`)).toEqual({ kind: "busy" });
+    });
+
+    /**
+     * **THE FALSE NEGATIVE, AND IT IS LIVE ON THIS BOX.** A prompt typed by hand
+     * has no `--` in front of it — the process census on 2026-09-08 found a
+     * `claude --session-id <uuid> <several bare words>` running — so a prompt
+     * that names another conversation's id used to make the pane's own claude
+     * unrecognisable. `busy` is what that reads as on screen: a session with a
+     * live agent in it and nothing said about the agent.
+     */
+    it("reads the id when a bare-word prompt names another id and there is no --", () => {
+      expect(procForChild(`claude --session-id ${UUIDS[0]} Please compare --session-id ${UUIDS[1]} for me`)).toEqual({
+        kind: "claude",
+      });
+    });
+
+    /**
+     * **The other direction of the same rule, and the reason it is asymmetric.**
+     * The awk has no table of which flags take values, so before an id has been
+     * seen a bare word may be an unrecognised flag's value and the scan must
+     * walk through it. Stopping at every bare word — which is what the flattened
+     * TypeScript reader does, and it can, because it has the table — would call
+     * `auto` the prompt and never reach the id.
+     */
+    it("still finds an id behind an unknown flag that took a value", () => {
+      expect(procForChild(`claude --permission-mode auto --session-id ${UUIDS[0]}`)).toEqual({ kind: "claude" });
+    });
+
+    /** Our own launcher's shape: `--name <words>` before the id, quoting long gone. */
+    it("still finds an id behind a multi-word --name", () => {
+      expect(procForChild(`claude --name my long session --session-id ${UUIDS[0]}`)).toEqual({ kind: "claude" });
+    });
+
+    /**
+     * F1a, stated rather than fixed. `["claude","--session-id","",<uuid>]` — an
+     * empty argv element, which only a hand-written launch produces — prints
+     * with a doubled space, and the outer awk rebuilds `$4…$NF` field by field,
+     * so the empty element is gone before the matcher is called. This asserts
+     * what actually happens: the id is read as if the element had never been
+     * there. The comment in the script says the same in words.
+     */
+    it("cannot see an empty argv element, and reads the id either side of it", () => {
+      expect(procForChild(`claude --session-id  ${UUIDS[0]}`)).toEqual({ kind: "claude" });
+    });
+
+    /**
+     * **F2, and it is a property of awk rather than of this code.** `==`
+     * compares NUMERICALLY when both sides look like numbers, and everything
+     * here arrives from `-v` or `split()`, which produce exactly those. So `01`
+     * and `1` were equal and a session whose id had been hand-set to `01` would
+     * answer for a claude carrying `1`.
+     */
+    it("does not call a numeric-looking id equal to a differently-spelled number", () => {
+      expect(procForChild("claude --session-id 1", "01")).toEqual({ kind: "busy" });
+    });
+
+    /** The positive half of the same: a numeric id still matches itself. */
+    it("still matches a numeric-looking id against itself", () => {
+      expect(procForChild("claude --session-id 01", "01")).toEqual({ kind: "claude" });
+    });
+
+    /** And the duplicate check compares as strings too, so `1` and `01` differ there. */
+    it("refuses two numeric ids that differ only in spelling", () => {
+      expect(procForChild("claude --session-id 01 --session-id 1", "01")).toEqual({ kind: "busy" });
+    });
+
+    /**
+     * **F3, and the two spellings are meant to disagree here.** `CLAUDE_SESSION_ID`
+     * is set by hand on real sessions, so a dash-leading id is reachable. Over a
+     * flattened command line `--session-id -x` cannot say whether `-x` is the
+     * value or the next flag — `tools/fleet/claude-argv.ts` refuses exactly that
+     * shape — while `--session-id=-x` is one token and says so. The awk agrees
+     * with the shared reader in both spellings, which is worth more than the two
+     * spellings agreeing with each other.
+     */
+    it("refuses a dash-leading value in the separate spelling", () => {
+      expect(procForChild("claude --session-id -x", "-x")).toEqual({ kind: "busy" });
+    });
+
+    it("accepts a dash-leading value in the inline spelling, where the token says so", () => {
+      expect(procForChild("claude --session-id=-x", "-x")).toEqual({ kind: "claude" });
+    });
+
+    /**
+     * The basename is the whole word, not a substring of it. A weakened test —
+     * `index(w[1], "claude")` — calls both of these a claude.
+     */
+    it("does not call a wrapper whose name merely contains claude a claude", () => {
+      for (const argv0 of ["myclaude", "/tmp/claude-wrapper", "claude.sh"]) {
+        expect(procForChild(`${argv0} --session-id ${UUIDS[0]}`), argv0).toEqual({ kind: "busy" });
+      }
+    });
+
+    /**
+     * The inline prefix is `--session-id=`, all thirteen characters of it.
+     * Widening it to `--session-id` reads the fourteenth character onwards as
+     * the value, which is exactly the id in `--session-id-<uuid>` — so that is
+     * the shape that kills the mutant, and `--session-id-extra=<uuid>` is the
+     * one somebody would write.
+     */
+    it("does not read a flag that merely starts with --session-id", () => {
+      expect(procForChild(`claude --session-id-${UUIDS[0]}`)).toEqual({ kind: "busy" });
+      expect(procForChild(`claude --session-id-extra=${UUIDS[0]}`)).toEqual({ kind: "busy" });
+    });
+
+    /**
+     * And the prefix has to be at the START of the token, not anywhere in it.
+     * A word that embeds the inline spelling — prose about another session,
+     * inside a `--name`, before this line has an id of its own — is not the
+     * flag, and reading it as one loses the real id that follows. Found by
+     * mutation: widening `index(…) == 1` to `> 0` survived everything else.
+     */
+    it("does not read a token that merely contains the inline spelling", () => {
+      expect(procForChild(`claude --name x--session-id=${UUIDS[1]} --session-id ${UUIDS[0]}`)).toEqual({
+        kind: "claude",
+      });
+    });
+
+    /**
+     * **What the bare-word rule does NOT fix, asserted so it stays visible.**
+     *
+     * A prompt that quotes this pane's own uuid, in a claude that carries no id
+     * of its own, is still read as this session's claude: nothing has been seen
+     * yet when the prompt starts, so the scan is still walking. Only an arity
+     * table could tell `read` from a flag's value, and the awk deliberately has
+     * not got one. It is the cheap direction — a pane labelled `claude` that
+     * holds a claude, just not this conversation's — and the process must
+     * already be under this session's pane to be asked at all.
+     */
+    it("still lets a bare-word prompt quoting this uuid claim the session", () => {
+      expect(procForChild(`claude read the log for --session-id ${UUIDS[0]}`)).toEqual({ kind: "claude" });
+    });
+
+    /**
+     * The other price of the same rule: once an id is seen the scan stops at the
+     * first bare word, so a second, differing id BEHIND an unknown flag's value
+     * is never reached and the all-must-agree rule does not fire. Accepting the
+     * first id is the granting direction, on a shape no launcher here produces.
+     */
+    it("stops at the prompt, so a later differing id behind a flag value is not seen", () => {
+      expect(procForChild(`claude --session-id ${UUIDS[0]} --permission-mode auto --session-id ${UUIDS[1]}`)).toEqual({
+        kind: "claude",
+      });
     });
   });
 

@@ -22,7 +22,7 @@ import { AttentionPanel } from "./AttentionPanel";
 import { Dock } from "./Dock";
 import { Header, SHELL, freshness } from "./Header";
 import { HealthPanel } from "./HealthPanel";
-import { OrchestratorPanel } from "./OrchestratorPanel";
+import { OverseerPanel } from "./OverseerPanel";
 import { SessionsPanel } from "./SessionsPanel";
 import { httpActionsApi, type ActionsApi } from "./actions-client";
 import { useDockFit } from "./fit";
@@ -195,9 +195,9 @@ export function App({
             />
           </div>
         ) : null}
-        {mode === "orchestrator" ? (
+        {mode === "overseer" ? (
           <div className="tw:mx-auto tw:max-w-3xl">
-            <OrchestratorPanel actions={actions} rows={rows} />
+            <OverseerPanel actions={actions} rows={rows} />
           </div>
         ) : null}
       </main>

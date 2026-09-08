@@ -155,6 +155,135 @@ describe.each(UNITS)("$file", ({ file, delimiter }) => {
   });
 });
 
+describe("the overseer watchdog service and timer", () => {
+  // Not folded into `UNITS`/`describe.each` above: that block's shared
+  // assertions assume a long-running Restart=always daemon (Restart=always,
+  // WantedBy=multi-user.target in [Install]), and the watchdog is
+  // deliberately the opposite of that -- a oneshot check triggered by its
+  // timer, with no [Install] section of its own. Forcing it through the same
+  // assertions would mean giving it Restart=always, which is exactly the
+  // mistake the service file's own comment warns against: it would fight the
+  // timer over who decides "run this again".
+  const service = unitFromRepo("overseer-watchdog.service");
+  const timer = unitFromRepo("overseer-watchdog.timer");
+
+  it("service is byte-for-byte what provision.sh will install", () => {
+    expect(heredocBody(PROVISION, "OVERSEER_WATCHDOG_SERVICE_UNIT")).toBe(service);
+  });
+
+  it("timer is byte-for-byte what provision.sh will install", () => {
+    expect(heredocBody(PROVISION, "OVERSEER_WATCHDOG_TIMER_UNIT")).toBe(timer);
+  });
+
+  it("service is a SYSTEM unit, not a user one", () => {
+    // Same reasoning as overseer.service: a user unit needs
+    // `loginctl enable-linger`, which nothing in this repo enables, so a
+    // user-level watchdog would be dead exactly when it is needed -- after a
+    // reboot, before anyone has logged in.
+    expect(section(service, "Service")).toContain("User=@USER@");
+  });
+
+  it("service is oneshot and does not fight the timer with its own Restart=", () => {
+    expect(section(service, "Service")).toContain("Type=oneshot");
+    expect(section(service, "Service").some((l) => l.startsWith("Restart="))).toBe(false);
+  });
+
+  it("service has no [Install] section -- only the timer is ever enabled", () => {
+    expect(section(service, "Install")).toEqual([]);
+  });
+
+  it("service runs out of the primary checkout and never a worktree", () => {
+    const lines = section(service, "Service");
+    const execStart = lines.filter((l) => l.startsWith("ExecStart="));
+    expect(execStart).toHaveLength(1);
+    expect(execStart[0]).toMatch(/^ExecStart=\/home\/@USER@\/code\/spideryarn2\/node_modules\/\.bin\/tsx /);
+    expect(lines).toContain("WorkingDirectory=/home/@USER@/code/spideryarn2");
+    expect(service).not.toMatch(/worktrees\//);
+  });
+
+  it("service names an absolute store, because a relative one is refused at startup", () => {
+    expect(section(service, "Service")).toContain("Environment=OVERSEER_STORE_DIR=/home/@USER@/.overseer");
+  });
+
+  it("service's doc comment says what this is NOT -- the off-box dead-man check", () => {
+    // A29/A27 in overseer-direction.md: a local timer disappears with the box
+    // on power loss, and nothing here closes that. The unit file is exactly
+    // the place someone reads once and assumes more coverage than exists.
+    expect(service).toMatch(/NOT THE OFF-BOX DEAD-MAN CHECK/);
+    expect(service).toMatch(/A27/);
+  });
+
+  it("timer is installed by enabling the TIMER, not the service", () => {
+    expect(section(timer, "Install")).toContain("WantedBy=timers.target");
+    expect(section(timer, "Unit")).not.toContain("WantedBy=multi-user.target");
+  });
+
+  it("timer names the service it triggers", () => {
+    expect(section(timer, "Timer")).toContain("Unit=overseer-watchdog.service");
+  });
+
+  it("a missed run is caught by OnBootSec=, and NOT by Persistent=", () => {
+    // GPT Sol's C7: this test used to assert `Persistent=true` and claim it
+    // proved missed-run catch-up. It does not, on this timer. systemd.timer(5):
+    // "Note that this setting only has an effect on timers configured with
+    // OnCalendar=" — and this timer has OnBootSec= and OnUnitActiveSec= and no
+    // OnCalendar= at all. A test that asserts the wrong mechanism goes on
+    // passing while the right one is deleted, which is the whole point of
+    // docs/reusable/silent-success.md.
+    //
+    // So the assertion is the line that actually does the work: a box that was
+    // off across a scheduled tick is checked within two minutes of coming back.
+    const lines = section(timer, "Timer");
+    expect(lines).toContain("OnBootSec=2min");
+    // And the claim is disproved rather than assumed: if somebody adds
+    // OnCalendar= later, `Persistent=` starts meaning something and this
+    // expectation is the place that says so.
+    expect(lines.some((l) => l.startsWith("OnCalendar="))).toBe(false);
+    // `Persistent=true` is still here, and the unit says in as many words that
+    // it is inert — because a bare setting with no comment is one somebody
+    // reads as load-bearing.
+    expect(lines).toContain("Persistent=true");
+    expect(timer).toContain("INERT ON THIS TIMER");
+  });
+
+  it("timer parses as a valid systemd unit, according to systemd itself", () => {
+    // GPT Sol's other half of C7: the test this replaces checked that an
+    // `OnUnitActiveSec=` line exists and called that "parses as a valid unit",
+    // which is a claim about a parser it never ran. `systemd-analyze verify` is
+    // the positive control.
+    //
+    // SKIPPED RATHER THAN FAKED where systemd-analyze is not installed — a
+    // check that quietly degrades into a weaker one is the thing being fixed
+    // here, so this says out loud that it did not run.
+    const analyze = spawnSync("systemd-analyze", ["--version"], { encoding: "utf8" });
+    if (analyze.status !== 0) {
+      expect(section(timer, "Timer").some((l) => l.startsWith("OnUnitActiveSec="))).toBe(true);
+      return;
+    }
+    const dir = mkdtempSync(path.join(tmpdir(), "systemd-units-verify-"));
+    // @USER@ is substituted at install time; systemd-analyze would refuse the
+    // placeholder paths, so it is replaced with a plausible name here. The unit
+    // under test is otherwise byte-for-byte the installed one.
+    writeFileSync(path.join(dir, "overseer-watchdog.timer"), timer.replaceAll("@USER@", "greg"));
+    writeFileSync(
+      path.join(dir, "overseer-watchdog.service"),
+      unitFromRepo("overseer-watchdog.service").replaceAll("@USER@", "greg"),
+    );
+    const verify = spawnSync("systemd-analyze", ["verify", path.join(dir, "overseer-watchdog.timer")], { encoding: "utf8" });
+    // Its complaints about MISSING units and unknown users are not this test's
+    // business: it is verifying syntax, on a machine that is not the box.
+    const complaints = `${verify.stdout}${verify.stderr}`
+      .split("\n")
+      .filter((line) => line.trim() !== "")
+      .filter((line) => !/Unit .* not found|command not found|is not a valid user|Failed to (resolve|create)|Unknown user/i.test(line));
+    expect(complaints).toEqual([]);
+  });
+
+  it("provision.sh enables the watchdog timer, not just installs it", () => {
+    expect(PROVISION).toContain("systemctl enable overseer-watchdog.timer");
+  });
+});
+
 describe("the overseer unit", () => {
   const unit = unitFromRepo("overseer.service");
 

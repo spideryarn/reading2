@@ -517,11 +517,29 @@ export function buildSessionScript(opts: { agents: boolean } = { agents: false }
           # IS THIS PROCESS THE CLAUDE FOR THIS CONVERSATION?
           #
           # This RECOGNISES A LAUNCHER-OWNED SHAPE. It does not reconstruct
-          # argv, and it cannot: ps has already joined the command line with
-          # single spaces and destroyed the quoting, so a prompt containing a
-          # space is indistinguishable from two arguments. What makes it work
-          # anyway is that the shapes are ours -- scripts/gjd-remote.ts writes
-          # almost all of them, and it emits a bare -- before every prompt.
+          # argv, and it cannot: ps has already flattened the command line into
+          # one string and destroyed the quoting, so a prompt containing a space
+          # is indistinguishable from two arguments. What makes it work anyway is
+          # that the shapes are ours -- scripts/gjd-remote.ts writes almost all
+          # of them, and it emits a bare -- before every prompt.
+          #
+          # A HAND-CRAFTED argv CAN DEFEAT IT, and two ways are known. An empty
+          # argv element -- ["claude","--session-id","",<uuid>] -- prints with a
+          # doubled space, and the caller above rebuilds $4..$NF field by field,
+          # so the empty element is gone before this function is called. And an
+          # option value that CONTAINS an option -- ["claude","--name",
+          # "innocent --session-id <uuid>"] -- prints identically to three real
+          # arguments. Neither is reachable from any launcher here; both need
+          # somebody to exec claude by hand with an argv built to fool this.
+          # What that buys them is A MISLABELLED ROW in gjd-remote ls, not a
+          # delivered keystroke: nothing steers on this verdict. Steering reads
+          # faithful /proc argv through tools/fleet/steer.ts, which is a
+          # different reader on a different input for that reason.
+          #
+          # And word one is a CLAIM, not an identity. cp $(which bash)
+          # /tmp/claude and the copy passes this test; argv[0] is whatever the
+          # execing process said it was. The basename check is here to stop a
+          # grep answering for a claude, not to authenticate anything.
           #
           # The authority on the grammar is
           # docs/plans/260908h-one-shared-reader-for-a-claude-command-line.md.
@@ -548,16 +566,61 @@ export function buildSessionScript(opts: { agents: boolean } = { agents: false }
           # is the same non-empty id. Two of the same id converge on one value
           # whichever end the CLI keeps; two that differ mean the answer
           # depends on a parser we do not own, so refuse rather than guess.
+          # "Every occurrence" is every one the scan REACHES -- see the
+          # bare-word rule below, which can end the scan before a later one.
           #
-          # Missing values are refused in the same breath, and mutation testing
-          # says the two halves of that are not worth the same. The EMPTY
-          # inline value earns its line: without it, --session-id= followed by
-          # a real --session-id would leave the real one as the first non-empty
-          # value and be accepted. The dash-leading value is an EQUIVALENT
-          # mutant -- no command line can tell it from its absence, because a
-          # dash token can never equal the uuid we want and the all-must-agree
-          # rule then refuses anyway. It stays because it states the grammar
-          # where the grammar is read, not because a test holds it.
+          # Missing values are refused in the same breath. The EMPTY inline
+          # value earns its line: without it, --session-id= followed by a real
+          # --session-id would leave the real one as the first non-empty value
+          # and be accepted; a test holds that. The dash-leading value in the
+          # SEPARATE spelling is held by a test too -- a session id set by hand
+          # to -x, which sessionState already has an arm for, tells the guard
+          # from its absence. An earlier version of this comment called it an
+          # equivalent mutant that no command line could distinguish. THAT WAS
+          # WRONG: it only holds while every id is a uuid, and CLAUDE_SESSION_ID
+          # is an environment variable a person sets.
+          #
+          # The two spellings deliberately disagree about a dash-leading value,
+          # and they agree with tools/fleet/claude-argv.ts in doing so:
+          # --session-id=-x is ONE token and says the value is -x, while
+          # --session-id -x cannot say whether -x is the value or the next flag,
+          # so the shared reader calls that unreadable and this one refuses.
+          # Agreeing with the other readers is worth more than the two spellings
+          # agreeing with each other.
+          #
+          # STRING COMPARISON, EXPLICITLY, and this is a property of awk rather
+          # than of the grammar. == compares two values NUMERICALLY when both
+          # look like numbers, and both -v and split() produce exactly that kind
+          # of value, so "01" and "1" were the same session id -- in gawk and in
+          # mawk alike. Concatenating "" forces the string comparison the ids
+          # need. Every id comparison below is written that way on purpose.
+          #
+          # WHERE THE OPTION REGION ENDS. At a bare --, or at the first bare
+          # word ONCE AN ID HAS BEEN SEEN. The asymmetry is the point, and it is
+          # what this function has instead of a table of which flags take
+          # values:
+          #  - BEFORE an id, a bare word may be the value of a flag this does
+          #    not recognise (--permission-mode auto --session-id A), so the
+          #    scan walks on. Stopping there would lose the id, which is the
+          #    expensive direction.
+          #  - AFTER one, everything our launcher puts before the prompt is
+          #    already behind us, so a bare word is the prompt. Stopping there
+          #    is what reads claude --session-id A Please compare
+          #    --session-id B correctly, and that shape is real: a prompt typed
+          #    by hand carries no --.
+          # Two things it does NOT fix, both accepting rather than refusing. A
+          # prompt that quotes the uuid of this pane, in a claude carrying no id
+          # of its own, is still read as belonging to this session -- nothing
+          # has been seen yet, so the scan is still walking. And a second,
+          # differing id behind the value of an unknown flag is never reached,
+          # so the all-must-agree rule does not fire on it. The alternative --
+          # an arity table mirroring claude-argv.ts -- would fix both and was
+          # rejected: a second copy of a table that must track a CLI we do not
+          # own, in a language that cannot import it, to sharpen a labelling
+          # probe whose worst outcome is a mislabelled row. Skipping what it
+          # does not recognise is the one advantage this reader has over the
+          # typed ones; an arity it guessed would be the thing that failed
+          # quietly.
           function claudeForSession(a, want,   n, w, i, tok, val, bp, m, seen) {
             if (want == "") return 0
             n = split(a, w, " ")
@@ -574,12 +637,14 @@ export function buildSessionScript(opts: { agents: boolean } = { agents: false }
                 if (val ~ /^-/) return 0
               } else if (index(tok, "--session-id=") == 1) {
                 val = substr(tok, length("--session-id=") + 1)
+              } else if (seen != "" && tok !~ /^-/) {
+                break
               } else continue
               if (val == "") return 0
               if (seen == "") seen = val
-              else if (seen != val) return 0
+              else if ((seen "") != (val "")) return 0
             }
-            return (seen == want)
+            return ((seen "") == (want ""))
           }
           BEGIN { n=split(panes, p, "\\n"); for (i=1; i<=n; i++) if (p[i] != "") pane[p[i]]=1 }
           { a=$4; for (i=5; i<=NF; i++) a = a " " $i; A[$1]=a; E[$1]=$3; P[$1]=$2 }

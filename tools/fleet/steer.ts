@@ -119,6 +119,7 @@ import {
   type PaneDialog,
   type PaneMaterial,
 } from "./pane.js";
+import { fromProcCmdline, readClaudeCommandLine, type FaithfulCommandLine } from "./claude-argv.js";
 import type { FleetStatus } from "./status.js";
 
 /**
@@ -194,6 +195,24 @@ export type RefusalCode =
   | "pane-in-copy-mode"
   /** No live `claude --session-id <expected>` under that pane. */
   | "no-claude-in-pane"
+  /**
+   * A `claude` is under that pane and WE COULD NOT READ ITS COMMAND LINE — an
+   * unknown flag, a flag missing its value. **This is a claim about our parser,
+   * not about the fleet**, and it is its own code for exactly that reason:
+   * collapsing it into `no-claude-in-pane` tells a person their session is gone
+   * when what happened is that `claude` grew a flag we do not know. GPT Sol's
+   * P1-2 on docs/plans/260908h. The sentence names the flag, because
+   * `claude-argv.ts` puts it in the reading's `why`.
+   */
+  | "claude-unreadable"
+  /**
+   * The claude for this conversation is running under `--print`. It read its
+   * prompt once at startup and will never read the tty again, so the text would
+   * sit in the pane unread. Headless beats session identity — D5 in
+   * docs/plans/260908h's settled table, and the same rule
+   * `HARNESS_CAPABILITIES["claude-headless"]` states one level up.
+   */
+  | "claude-headless"
   /** The pane is not showing Claude Code's input box, so free text is not text. */
   | "not-at-input"
   /** The pane is asking a question, and a message typed at one is an answer to it. */
@@ -616,47 +635,60 @@ export function candidatePids(pgrepOut: string): number[] {
 }
 
 /**
- * `/proc/<pid>/cmdline` into argv.
+ * `argvOf` USED TO LIVE HERE and did the NUL split by hand. It was line for
+ * line `claude-argv.ts`'s `fromProcCmdline` minus the fidelity tag — the same
+ * split, the same trailing-empty pop, the same reason for keeping an interior
+ * empty — so it went on 2026-09-08 rather than being kept as a second copy of
+ * one rule. Its edge cases are tested in `tests/fleet-claude-argv.test.ts`.
  *
- * The file is NUL-separated with a trailing NUL, so a plain split leaves an
- * empty last element; a process that has rewritten its own argv (setproctitle)
- * can leave a run of them. Trailing empties are dropped and interior ones are
- * kept, because an empty argument in the middle is a real argument and shifting
- * the ones after it would move a value away from its option.
- *
- * A zero-length read means the process is a kernel thread or died mid-read, and
- * gives `[]` — which `isClaudeForSession` refuses, as it should.
+ * What arrives in its place is a `FaithfulCommandLine`, and that is not
+ * cosmetic: `isClaudeForSession` presses Enter in somebody's live terminal, so
+ * the compiler refuses to hand it a `ps`-flattened line, where the quoting is
+ * already gone and a prompt is indistinguishable from a run of options.
  */
-export function argvOf(cmdline: string): string[] {
-  const parts = cmdline.split("\0");
-  while (parts.length > 0 && parts[parts.length - 1] === "") parts.pop();
-  return parts;
-}
 
 /**
- * Is this argv a live Claude for exactly this conversation?
+ * Is this argv a live Claude for exactly this conversation, and may it be typed
+ * at?
  *
  * THE POINT IS THE WORD "ARGUMENT". The old test asked whether the flattened
  * command line CONTAINED `--session-id <uuid>`, which the initial prompt of a
  * different conversation can satisfy — Sol's F3, and the consequence is a
  * message delivered to the wrong agent, which is the exact failure this whole
- * file exists to prevent. So:
+ * file exists to prevent. The grammar now lives in `claude-argv.ts`, shared with
+ * `tools/overseer/harness.ts` and `tools/overseer/work.ts`, so `claude`'s flag
+ * set is stated once instead of three times: argv[0]'s basename must be
+ * `claude`, everything after a bare `--` is positional, and a flag whose arity
+ * we do not know makes the whole line unreadable rather than being skipped over.
+ * docs/plans/260908h.
  *
- *  - argv[0]'s basename must be `claude`. That is what one looks like on this
- *    box (`claude --session-id 117e181a-… --name adversarial-fixtures`, measured
- *    2026-09-08). A wrapper under another name is refused rather than assumed.
- *  - some element must be exactly `--session-id` with the NEXT element exactly
- *    the uuid, or exactly `--session-id=<uuid>`. Exactly, not by prefix: a uuid
- *    with anything appended is a different uuid.
- *  - the search stops at a bare `--`, because everything after that is
- *    positional by definition. `claude --session-id B -- --session-id A` is a
- *    prompt that says `--session-id A`, and reading it as an option is the bug
- *    in its most literal form.
- *  - there must be EXACTLY ONE `--session-id` before that point. Two of them is
- *    a command line whose meaning depends on which one the CLI's parser keeps,
- *    and guessing "the first" would answer yes to `--session-id <ours>
- *    --session-id <theirs>`, which is a message delivered to `theirs`. We do
- *    not guess; we refuse.
+ * **WHERE THE OPTION REGION ENDS IS THAT MODULE'S QUESTION, NOT THIS ONE'S**,
+ * and it is deliberately not restated here. It was measured on 2026-09-08 that
+ * real `claude` 2.1.263 reads options AFTER a positional — `claude some-prompt
+ * --version` prints the version — so any rule stated in two places would be
+ * wrong in one of them the day the module settles it. This file depends on the
+ * four arms of the reading, not on how they are computed.
+ *
+ * **THIS RETURNS FOUR ANSWERS AND NOT A BOOLEAN**, which is GPT Sol's P1-2 and
+ * the whole reason the shared reader was worth building. A boolean collapses
+ * *we could not read that command line* into *there is no claude here*, and
+ * `verifyTarget` then tells a person their session has gone when what actually
+ * happened is that `claude` grew a flag we do not know. Fail-closed is not the
+ * same as fail-loud; `unreadable` is both, and it carries the flag's name.
+ *
+ * The policy this file keeps, over the reading the module hands back:
+ *
+ *  - **every `--session-id` before the boundary must agree**, and one of them
+ *    must be ours. Two that differ is a command line whose meaning depends on
+ *    which one the CLI's parser keeps, and guessing "the first" would answer yes
+ *    to `--session-id <ours> --session-id <theirs>`, which is a message
+ *    delivered to `theirs`. Two IDENTICAL ids are accepted — whichever the CLI
+ *    keeps, it is the same conversation, so there is nothing to guess. D2 in
+ *    docs/plans/260908h's settled table; this file used to refuse those too.
+ *  - **`--print` beats session identity.** A headless run read its prompt once
+ *    and will never look at the tty again, so a message would sit in the pane
+ *    unread. This file never looked at `--print` before, and what kept that safe
+ *    was a downstream screen check that was not written to defend it. D5.
  *
  * What this still cannot see: which conversation that process is *serving* now.
  * argv is fixed at exec, and `/resume` inside a running Claude changes the
@@ -664,20 +696,44 @@ export function argvOf(cmdline: string): string[] {
  * in this function, and it is the reason `claudeSessionId` is re-read from tmux
  * rather than trusted from the page.
  */
-export function isClaudeForSession(argv: readonly string[], claudeSessionId: string): boolean {
-  const argv0 = argv[0];
-  if (argv0 === undefined) return false;
-  if ((argv0.split("/").pop() ?? "") !== "claude") return false;
+export type ClaudeForSession =
+  /** A live, interactive `claude` for exactly this conversation. */
+  | { match: "yes" }
+  /**
+   * Not this conversation's claude: a different id, no id at all, two that
+   * differ, or not a `claude` in the first place. A fact about the process.
+   */
+  | { match: "no" }
+  /** This conversation's claude, under `--print`. Nothing typed at it is read. */
+  | { match: "headless" }
+  /** We could not read the command line. A fact about OUR PARSER, and `why` names it. */
+  | { match: "unreadable"; why: string };
 
-  const values: (string | undefined)[] = [];
-  for (let i = 1; i < argv.length; i++) {
-    const arg = argv[i];
-    if (arg === undefined || arg === "--") break;
-    if (arg === "--session-id") values.push(argv[i + 1]);
-    else if (arg.startsWith("--session-id=")) values.push(arg.slice("--session-id=".length));
+export function isClaudeForSession(line: FaithfulCommandLine, claudeSessionId: string): ClaudeForSession {
+  const reading = readClaudeCommandLine(line);
+  switch (reading.kind) {
+    case "not-claude":
+      return { match: "no" };
+    // `claude agents` is a command, not a conversation. Nothing is listening,
+    // and it carries no session id, so it can never be ours.
+    case "subcommand":
+      return { match: "no" };
+    case "unreadable":
+      return { match: "unreadable", why: reading.why };
+    case "session": {
+      // A SET OVER EVERY OCCURRENCE, not the first and not the count. `A A` is
+      // one conversation; `A A B` is not, and a rule that looked at the first
+      // two would let that through in the granting direction.
+      const distinct = new Set(reading.sessionIds);
+      if (distinct.size !== 1) return { match: "no" };
+      if (!distinct.has(claudeSessionId)) return { match: "no" };
+      return reading.headless ? { match: "headless" } : { match: "yes" };
+    }
+    default: {
+      const never: never = reading;
+      throw new Error(`unhandled claude reading ${JSON.stringify(never)}`);
+    }
   }
-  if (values.length !== 1) return false;
-  return values[0] === claudeSessionId;
 }
 
 /**
@@ -700,6 +756,44 @@ export function descendsFrom(pid: number, ancestor: number, parents: ReadonlyMap
     cur = next;
   }
   return false;
+}
+
+/**
+ * No claude under this pane that we may type at — and WHICH of the three that
+ * is, because they are three different things to tell a person.
+ *
+ * **THE ORDER IS THE ORDER OF HOW MUCH EACH ONE KNOWS**, and it is not
+ * arbitrary. A headless claude carrying this exact conversation's id is a
+ * positive identification of what is in the pane. An unreadable command line is
+ * our parser saying it cannot tell — a claim about US, and reporting it as
+ * `no-claude-in-pane` would be a false claim about the fleet (GPT Sol's P1-2).
+ * "Nothing here" is what is left when neither of those was seen.
+ *
+ * All three refuse and nothing is ever sent, so the difference is only the
+ * sentence — but the sentence is the product. Split out of `verifyTarget`
+ * because it is three branches that answer one question and the caller has
+ * fifteen of its own.
+ */
+function noUsableClaude(target: SteerTarget, headlessPid: number | undefined, unreadable: string | undefined): SteerFailure {
+  if (headlessPid !== undefined) {
+    return no(
+      "claude-headless",
+      `the claude for session ${target.claudeSessionId} under pane ${target.paneId} is running with` +
+        ` \`--print\`: it read its prompt once at startup and never reads the terminal again, so a` +
+        ` message would sit there unread`,
+    );
+  }
+  if (unreadable !== undefined) {
+    return no(
+      "claude-unreadable",
+      `a claude under pane ${target.paneId} has a command line this cannot read, so whether it is` +
+        ` session ${target.claudeSessionId} is unknown: ${unreadable}`,
+    );
+  }
+  return no(
+    "no-claude-in-pane",
+    `no live claude for session ${target.claudeSessionId} is running under pane ${target.paneId}`,
+  );
 }
 
 /**
@@ -774,6 +868,11 @@ export function verifyTarget(target: SteerTarget, io: SteerIo): { ok: true; veri
   const underPane = candidates.filter((pid) => descendsFrom(pid, pane.panePid, tree));
 
   let claudePid: number | undefined;
+  // WHAT THE OTHER CANDIDATES SAID, kept because a refusal has to name the
+  // right thing. A `yes` ends the loop; anything else is only a candidate for
+  // the sentence we give the person if no `yes` ever arrives.
+  let headlessPid: number | undefined;
+  let unreadable: string | undefined;
   try {
     for (const pid of underPane) {
       const raw = io.cmdline(pid);
@@ -781,21 +880,19 @@ export function verifyTarget(target: SteerTarget, io: SteerIo): { ok: true; veri
       // than a failure. Every other reason to be unable to read an argv is a
       // box we cannot believe, and is thrown.
       if (raw === null) continue;
-      if (isClaudeForSession(argvOf(raw), target.claudeSessionId)) {
+      const verdict = isClaudeForSession(fromProcCmdline(raw), target.claudeSessionId);
+      if (verdict.match === "yes") {
         claudePid = pid;
         break;
       }
+      if (verdict.match === "headless" && headlessPid === undefined) headlessPid = pid;
+      if (verdict.match === "unreadable" && unreadable === undefined) unreadable = verdict.why;
     }
   } catch (e) {
     return no("box-unreadable", `a process's command line could not be read: ${(e as Error).message}`);
   }
 
-  if (claudePid === undefined) {
-    return no(
-      "no-claude-in-pane",
-      `no live claude for session ${target.claudeSessionId} is running under pane ${target.paneId}`,
-    );
-  }
+  if (claudePid === undefined) return noUsableClaude(target, headlessPid, unreadable);
 
   return {
     ok: true,

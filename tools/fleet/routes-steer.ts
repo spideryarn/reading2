@@ -167,6 +167,16 @@ export const REFUSAL_STATUS: Record<RefusalCode, number> = {
   "wrong-pane": 409,
   "pane-in-copy-mode": 409,
   "no-claude-in-pane": 409,
+  // Both 409 and NEITHER of them a 5xx, though one of the two is genuinely our
+  // fault. `claude-unreadable` means `claude` was invoked in a shape our parser
+  // does not know — a flag Anthropic added, most likely — and the useful fact
+  // for the client is still "nothing was delivered and your view may be stale",
+  // which is what every other 409 in this table means. A 500 would be read as
+  // "the dashboard is down" by every retry loop pointed at this, and the box is
+  // fine. The code in the body is what distinguishes them, and the `why` names
+  // the flag.
+  "claude-unreadable": 409,
+  "claude-headless": 409,
   "question-gone": 409,
   "question-changed": 409,
   // Not 403. A 403 says "you may not do this"; this says "this pane is not the

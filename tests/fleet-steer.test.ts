@@ -25,11 +25,11 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import { fromProcCmdline } from "../tools/fleet/claude-argv.js";
 import { paneSurface, parsePane, type OptionKey } from "../tools/fleet/pane.js";
 import type { FleetStatus } from "../tools/fleet/status.js";
 import {
   answerQuestion,
-  argvOf,
   candidatePids,
   checkText,
   describeSend,
@@ -1225,15 +1225,6 @@ describe("reading the box", () => {
     expect(candidatePids("not a pgrep line\n")).toEqual([]);
   });
 
-  it("splits /proc/<pid>/cmdline on NUL, dropping only the trailing empties", () => {
-    expect(argvOf(`claude\0--session-id\0${UUID}\0`)).toEqual(["claude", "--session-id", UUID]);
-    // an empty argument in the MIDDLE is a real argument, and dropping it would
-    // shift a value away from its option
-    expect(argvOf("claude\0--name\0\0--session-id\0x\0")).toEqual(["claude", "--name", "", "--session-id", "x"]);
-    expect(argvOf("claude\0\0\0")).toEqual(["claude"]);
-    expect(argvOf("")).toEqual([]);
-  });
-
   /**
    * SOL'S F3, AS A TEST OF THE THING THAT DECIDES.
    *
@@ -1251,48 +1242,109 @@ describe("reading the box", () => {
    * would have delivered a message meant for A into B.
    *
    * Every case below is a pair: the argv that must be refused, and next to it
-   * the argv that must be accepted. A test made only of `toBe(false)` is
+   * the argv that must be accepted. A test made only of `{match:"no"}` is
    * satisfied by a function that has stopped saying yes to anything.
+   *
+   * **THE ARGV GOES IN THROUGH `fromProcCmdline`, NOT AS A BARE ARRAY**, since
+   * 2026-09-08: `isClaudeForSession` takes a command line tagged with its
+   * fidelity and accepts only the faithful arm, so the compiler refuses to hand
+   * the one verdict that presses Enter in a live pane a `ps`-flattened line.
+   * `argvOf` used to do the NUL split here and was line for line
+   * `fromProcCmdline` minus the tag; its own edge cases live in
+   * `tests/fleet-claude-argv.test.ts` now rather than in a second copy.
    */
+  const faithful = (...argv: string[]) => fromProcCmdline(procCmdline(...argv));
+
   it("identifies a claude by its actual argv, not by bytes in its command line", () => {
-    const real = ["claude", "--session-id", UUID, "--name", "fleet-dashboard-v01"];
-    expect(isClaudeForSession(real, UUID)).toBe(true);
-    expect(isClaudeForSession(["claude", `--session-id=${UUID}`], UUID)).toBe(true);
+    const real = faithful("claude", "--session-id", UUID, "--name", "fleet-dashboard-v01");
+    expect(isClaudeForSession(real, UUID)).toEqual({ match: "yes" });
+    expect(isClaudeForSession(faithful("claude", `--session-id=${UUID}`), UUID)).toEqual({ match: "yes" });
 
     // F3 itself: a DIFFERENT conversation whose initial prompt mentions ours.
     // pgrep would flatten this to a command line containing `--session-id
     // <UUID>`, and the ancestry walk cannot tell the two apart.
-    const impostor = ["claude", "--session-id", OTHER_UUID, `read the notes at --session-id ${UUID} and continue`];
-    expect(isClaudeForSession(impostor, UUID)).toBe(false);
-    expect(isClaudeForSession(impostor, OTHER_UUID)).toBe(true);
-    expect(impostor.join(" ")).toContain(`--session-id ${UUID}`);
-
-    // the prompt as its own argument, with no other option in the way
-    expect(isClaudeForSession(["claude", `--session-id ${UUID}`], UUID)).toBe(false);
-    expect(isClaudeForSession(["claude", "--session-id", UUID], UUID)).toBe(true);
+    const impostorArgv = ["claude", "--session-id", OTHER_UUID, `read the notes at --session-id ${UUID} and continue`];
+    const impostor = faithful(...impostorArgv);
+    expect(isClaudeForSession(impostor, UUID)).toEqual({ match: "no" });
+    expect(isClaudeForSession(impostor, OTHER_UUID)).toEqual({ match: "yes" });
+    expect(impostorArgv.join(" ")).toContain(`--session-id ${UUID}`);
 
     // after a bare `--` everything is positional by definition
-    expect(isClaudeForSession(["claude", "--session-id", OTHER_UUID, "--", "--session-id", UUID], UUID)).toBe(false);
-    expect(isClaudeForSession(["claude", "--session-id", UUID, "--", "go on"], UUID)).toBe(true);
+    expect(isClaudeForSession(faithful("claude", "--session-id", OTHER_UUID, "--", "--session-id", UUID), UUID)).toEqual(
+      { match: "no" },
+    );
+    expect(isClaudeForSession(faithful("claude", "--session-id", UUID, "--", "go on"), UUID)).toEqual({ match: "yes" });
+
+    // THE CASE THAT DISCRIMINATES, and the two above do not: a claude with no
+    // `--session-id` OPTION AT ALL, whose prompt begins with those words. A
+    // reader that walked through the separator would read our uuid out of
+    // somebody else's prompt and hand the pane over. Mutating the `--` rule in
+    // `claude-argv.ts` left both assertions above green and this one red.
+    expect(isClaudeForSession(faithful("claude", "--", "--session-id", UUID), UUID)).toEqual({ match: "no" });
+    // and its pair, so this is not satisfied by a reader that says no to
+    // everything: the same separator with the id in front of it, where it is
+    // genuinely an option
+    expect(isClaudeForSession(faithful("claude", "--session-id", UUID, "--", "--print", "is a flag"), UUID)).toEqual({
+      match: "yes",
+    });
 
     // the expected uuid with something appended is a different uuid, and this
     // is the case the old prefix test was reaching for and had backwards
-    expect(isClaudeForSession(["claude", "--session-id", `${UUID}9`], UUID)).toBe(false);
-    expect(isClaudeForSession(["claude", "--session-id", UUID.slice(0, 8)], UUID)).toBe(false);
-    expect(isClaudeForSession(["claude", "--session-id", UUID], UUID)).toBe(true);
+    expect(isClaudeForSession(faithful("claude", "--session-id", `${UUID}9`), UUID)).toEqual({ match: "no" });
+    expect(isClaudeForSession(faithful("claude", "--session-id", UUID.slice(0, 8)), UUID)).toEqual({ match: "no" });
+    expect(isClaudeForSession(faithful("claude", "--session-id", UUID), UUID)).toEqual({ match: "yes" });
 
     // two of them: we cannot know which one the CLI kept, so we refuse rather
     // than guess "the first", which would answer yes to ours-then-theirs
-    expect(isClaudeForSession(["claude", "--session-id", UUID, "--session-id", OTHER_UUID], UUID)).toBe(false);
-    expect(isClaudeForSession(["claude", "--session-id", OTHER_UUID, "--session-id", UUID], UUID)).toBe(false);
-
-    // the option with no value at all
-    expect(isClaudeForSession(["claude", "--session-id"], UUID)).toBe(false);
+    expect(isClaudeForSession(faithful("claude", "--session-id", UUID, "--session-id", OTHER_UUID), UUID)).toEqual({
+      match: "no",
+    });
+    expect(isClaudeForSession(faithful("claude", "--session-id", OTHER_UUID, "--session-id", UUID), UUID)).toEqual({
+      match: "no",
+    });
 
     // argv[0] must be a claude, by basename, wherever it was installed
-    expect(isClaudeForSession(["grep", "--session-id", UUID], UUID)).toBe(false);
-    expect(isClaudeForSession(["/home/greg/.local/bin/claude", "--session-id", UUID], UUID)).toBe(true);
-    expect(isClaudeForSession([], UUID)).toBe(false);
+    expect(isClaudeForSession(faithful("grep", "--session-id", UUID), UUID)).toEqual({ match: "no" });
+    expect(isClaudeForSession(faithful("/home/greg/.local/bin/claude", "--session-id", UUID), UUID)).toEqual({
+      match: "yes",
+    });
+    expect(isClaudeForSession(faithful(), UUID)).toEqual({ match: "no" });
+  });
+
+  /**
+   * THE THREE ASSERTIONS THAT CHANGED, AND WHY, one line each.
+   *
+   * They were `toBe(false)` above until 2026-09-08. All three still refuse — no
+   * message is delivered in any of them — and what changed is that the refusal
+   * now says which kind it is, which is the whole of GPT Sol's P1-2:
+   * fail-closed is not the same as fail-loud, and `verifyTarget` was reporting
+   * a parser's shrug as a fact about the fleet.
+   */
+  it("says WHY it is refusing, rather than collapsing everything into `no`", () => {
+    // D-P1-2: a flag missing its value. The reading is a statement about our
+    // parser, not about which conversation is in the pane.
+    const noValue = isClaudeForSession(faithful("claude", "--session-id"), UUID);
+    expect(noValue.match).toBe("unreadable");
+    if (noValue.match === "unreadable") expect(noValue.why).toContain("--session-id");
+
+    // D-P1-2: `--session-id <uuid>` as ONE argv element is not the flag, and it
+    // is not a flag we know either. It used to be a bare `false`.
+    const oneToken = isClaudeForSession(faithful("claude", `--session-id ${UUID}`), UUID);
+    expect(oneToken.match).toBe("unreadable");
+
+    // D5: headless beats session identity. This is our conversation's id on a
+    // process that will never read its terminal again, and it used to be `true`
+    // — a send, kept safe only by a downstream screen check.
+    expect(isClaudeForSession(faithful("claude", "--print", "--session-id", UUID), UUID)).toEqual({
+      match: "headless",
+    });
+
+    // D2: two IDENTICAL ids are one conversation. This used to be `false`
+    // (`values.length !== 1`), which cost availability and bought nothing:
+    // whichever occurrence the CLI keeps, it is the same uuid.
+    expect(isClaudeForSession(faithful("claude", "--session-id", UUID, "--session-id", UUID), UUID)).toEqual({
+      match: "yes",
+    });
   });
 
   it("walks ancestry, bounded, and survives a cycle in a table read line by line", () => {
@@ -1310,5 +1362,121 @@ describe("reading the box", () => {
     const deep = new Map<number, number>();
     for (let i = 1; i <= 100; i++) deep.set(i, i + 1);
     expect(descendsFrom(1, 100, deep)).toBe(false);
+  });
+});
+
+/* ---------------------------------------------------------------- *
+ * The shared reader's refusals, all the way out to a caller.
+ * ---------------------------------------------------------------- */
+
+/**
+ * WHAT THE READER COULD NOT READ MUST NOT ARRIVE AS "NOTHING IS THERE".
+ *
+ * `isClaudeForSession` used to return a boolean, so a command line the parser
+ * could not read collapsed into `false` and `verifyTarget` then said *no live
+ * claude for session X is running under pane Y* — a claim about the fleet when
+ * the truth is a claim about our own parser. That is fail-closed and it is not
+ * fail-loud, and the loud half is the entire point of the shared reader. GPT
+ * Sol's P1-2 on docs/plans/260908h.
+ *
+ * Every case here is a PAIR: the argv that must be refused, and beside it the
+ * argv with only the offending token removed, which must send. A refusal on its
+ * own is satisfied by a verifier that has stopped saying yes to anything.
+ */
+describe("a command line we cannot read is refused as such, not as an empty pane", () => {
+  it("names the flag that lost us, and does not claim the pane is empty", () => {
+    // `--dangerously-skip-permissions` is a real claude flag and is deliberately
+    // NOT in the reader's table: nothing in this repo emits it, so its arity is
+    // a guess, and guessing wrong moves where the option region ends. Today's
+    // reader skipped it silently and read the id after it.
+    const { io, sent } = fakeBox({ pgrep: `200 claude --dangerously-skip-permissions --session-id ${UUID}\n` });
+    const result = sendMessage(TARGET, "keep going", WORKING, io);
+    refused(result, sent, "claude-unreadable");
+    if (result.ok) return;
+    expect(result.reason.why).toContain("--dangerously-skip-permissions");
+    // The distinction P1-2 is about: this is not the same sentence as "there is
+    // no claude for this conversation under that pane".
+    expect(result.reason.code).not.toBe("no-claude-in-pane");
+
+    // the pair: the same pane, the same conversation, the unknown flag gone
+    const { io: ok, sent: sentOk } = fakeBox({ pgrep: `200 claude --session-id ${UUID}\n` });
+    expect(sendMessage(TARGET, "keep going", WORKING, ok).ok).toBe(true);
+    expect(sentOk).toHaveLength(2);
+  });
+
+  it("refuses a `--session-id` with no value as unreadable rather than as absent", () => {
+    // A flag missing its value is a command line whose meaning we cannot state,
+    // and the reader says so rather than reporting one fewer session id.
+    const { io, sent } = fakeBox({ pgrep: "200 claude --session-id\n" });
+    refused(sendMessage(TARGET, "keep going", WORKING, io), sent, "claude-unreadable");
+  });
+});
+
+/**
+ * D5, FROM THE PLAN'S SETTLED TABLE: headless beats session identity.
+ *
+ * `isClaudeForSession` never looked at `--print`, so a headless claude carrying
+ * this pane's session id verified as an ordinary steer target. What kept that
+ * safe was a downstream SCREEN check that was not written to defend it — a
+ * coincidence, not a design. The reader now reports `headless` and this path
+ * refuses on it, with a sentence saying which, because "we typed at something
+ * that stopped reading its terminal at startup" and "there is no claude here"
+ * are different things to tell a person.
+ */
+describe("a headless claude carrying this conversation's id is refused, not steered", () => {
+  it("refuses `--print` before the id, and sends when it is not there", () => {
+    for (const flattened of [
+      `200 claude --print --session-id ${UUID}\n`,
+      `200 claude --session-id ${UUID} --print\n`,
+      `200 claude --session-id ${UUID} -p\n`,
+      `200 claude --model opus -p --session-id ${UUID}\n`,
+    ]) {
+      const { io, sent } = fakeBox({ pgrep: flattened });
+      const result = sendMessage(TARGET, "keep going", WORKING, io);
+      refused(result, sent, "claude-headless");
+      if (!result.ok) expect(result.reason.why, flattened).toContain(UUID);
+    }
+
+    // the pair, with only the `--print` taken out
+    const { io: ok, sent: sentOk } = fakeBox({ pgrep: `200 claude --model opus --session-id ${UUID}\n` });
+    expect(sendMessage(TARGET, "keep going", WORKING, ok).ok).toBe(true);
+    expect(sentOk).toHaveLength(2);
+  });
+
+  it("a headless claude for SOMEBODY ELSE is simply not our claude", () => {
+    // The headless refusal is about THIS conversation. A `--print` run carrying
+    // a different id is an ordinary "not the pane we were promised", and saying
+    // otherwise would put a misleading sentence in front of a reader.
+    const { io, sent } = fakeBox({ pgrep: `200 claude --print --session-id ${OTHER_UUID}\n` });
+    refused(sendMessage(TARGET, "keep going", WORKING, io), sent, "no-claude-in-pane");
+  });
+});
+
+/**
+ * D2, FROM THE PLAN'S SETTLED TABLE: every occurrence must agree.
+ *
+ * This file's old rule was `values.length !== 1`, which refused
+ * `--session-id A --session-id A` — a command line whose meaning is not in
+ * doubt whichever occurrence the CLI keeps. Availability without risk, and the
+ * refusal that matters is kept: two that DIFFER is still a no.
+ */
+describe("duplicate --session-id values are accepted only when they agree", () => {
+  it("sends to a pane whose claude names this conversation twice", () => {
+    const { io, sent } = fakeBox({ pgrep: `200 claude --session-id ${UUID} --session-id ${UUID}\n` });
+    expect(sendMessage(TARGET, "keep going", WORKING, io).ok).toBe(true);
+    expect(sent).toHaveLength(2);
+  });
+
+  it("refuses a pane whose claude names two different conversations, in either order", () => {
+    for (const flattened of [
+      `200 claude --session-id ${UUID} --session-id ${OTHER_UUID}\n`,
+      `200 claude --session-id ${OTHER_UUID} --session-id ${UUID}\n`,
+      // three, with the odd one LAST — the ordering that a reader comparing only
+      // the first two lets through, in the granting direction
+      `200 claude --session-id ${UUID} --session-id ${UUID} --session-id ${OTHER_UUID}\n`,
+    ]) {
+      const { io, sent } = fakeBox({ pgrep: flattened });
+      refused(sendMessage(TARGET, "keep going", WORKING, io), sent, "no-claude-in-pane");
+    }
   });
 });

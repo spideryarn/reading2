@@ -47,6 +47,12 @@ The one thing on the box that **is** wrong today is the third reader — see D3/
 | `--session-id=<v>` | accepted | accepted | **not matched** |
 | acts on the verdict | nothing yet — no production caller | **`tmux send-keys`**: prose into a live pane | `gjd-remote ls` labelling |
 
+**The awk column is the state this plan was written against, and Stage C has since changed all three
+of its bold cells**: it checks the basename, it accepts `--session-id=<v>`, and its option region
+ends at a bare `--` or at the first bare word once an id has been seen. The column is left as it was
+because D3 and D4 below are the argument for the stage, and rewriting it would leave them describing
+nothing.
+
 Both TypeScript rules were written for a real bug, which is why neither is simply wrong.
 `recogniseClaude` stops at the first bare word because that word is the user's **prompt**, and a
 prompt is free text: a review found that `claude --session-id abc --print do the thing` had matched
@@ -180,6 +186,164 @@ becomes the thing that resolves the case:
 
 The same command line, two fidelities, two different **correct** answers — which is precisely what a
 tagged input is for, and precisely what a single `string` API could never have expressed.
+
+## Stage A round 2 — what the second review changed
+
+GPT Sol reviewed the shipped module (`e3e50497`) and returned **four P0s**, one of which overturned
+its core rule. This is what round 2 implemented, red-first, on 2026-09-08.
+
+### The rule now
+
+- The option region ends at a bare `--` and **nowhere else**. Positionals do not end it.
+- On the **`argv`** arm the scan keeps going past positionals: a dash-led token before any `--` is a
+  flag. This is decidable because the prompt is one element.
+- On the **`ps-flattened`** arm, once an **unconsumed positional** has appeared, any later dash-led
+  token is `unreadable`, naming the token. "Unconsumed" is load-bearing: a bare word a flag ate as
+  its value is not a positional, or the ordinary launcher shape (`--permission-mode auto --print`)
+  would refuse.
+- Only the **first** unconsumed positional can be a subcommand word, so a prompt using the word
+  "stop" three sentences in is still a prompt.
+
+### `one-free-text` is gone, and that is the surprise
+
+The arity existed because a multi-word `--name` on a flattened line ended the option region early and
+hid a later `--print`. **The new boundary rule removes the damage rather than the ambiguity**: a
+positional ends nothing now, so `--name` can take exactly one token — which is what the CLI itself
+takes, measured — and the leftover words are ordinary positionals handled by the one ambiguity rule
+everything else uses. Two measurements settled it, and both contradict the round-1 analysis above:
+
+```
+claude --name my mcp     -> Usage: claude mcp [options] [command]      one value, then a subcommand
+claude --name=my mcp     -> Usage: claude mcp [options] [command]      the same
+claude --version --session-id not-a-uuid -> 2.1.263 (Claude Code), exit 0
+```
+
+One special case and one bug class fewer. `claude --session-id U --name my session` still reads as a
+session (the cheap case round 1 protected); `--name my session --print` is still refused, but now
+because a dash-led token follows a positional, not because `--name` is special.
+
+**The cost of refusing, counted rather than estimated** (Sol asked for the number before I committed
+to a refusal): a `/proc` census of every live `claude` on the box, 2026-09-08 — **5 processes, 0
+carrying `--name` at all**, so the separate-form question costs nothing today either way. The census
+also answered ARGV-06: every one has a trailing-NUL run of exactly 1, so dropping the whole run was
+never protecting anything real.
+
+### ARGV-02: a flag that prints and exits reads as `subcommand`
+
+`--version`/`-v` are `TERMINAL_FLAGS` and return `{ kind: "subcommand", name: "--version" }`.
+**Why that arm rather than a fifth one**: all three consumers already map `subcommand` to "not a
+harness"/"no match" — which is exactly and completely what a caller needs to know about
+`claude --version` — so this needed no change in `steer.ts`, `harness.ts` or `work.ts`, and a new arm
+would have bought a distinction no caller makes while costing three files a rewrite. The price is
+that `subcommand.name` carries a flag spelling in this one case; the arm's doc says so. The check
+runs **after** the arity rules, so `--version=x` is still `unreadable` rather than a command.
+
+### The one asymmetry that is NOT a defect, written into the module
+
+`--session-id=-x` is accepted and `--session-id -x` is refused, and that reads like an oversight.
+It is not, and an F3 instruction to Stage C to "make them agree" was **wrong and was refused by its
+implementer, correctly**. The inline spelling glues the value to the flag, so a dash-led value is
+still unambiguously the value; the separate spelling leaves the next token as either the value or the
+next flag, which nothing decides. One rule — *never guess where you cannot decide* — over two
+different amounts of information. Making them agree would either refuse something decidable or accept
+something undecidable, and would put the module back into disagreement with the awk probe, which
+draws the same line. Both spellings do agree on the empty value (ARGV-04), because an empty id is not
+an id either way. The reasoning is now a comment at both branches, so the next reader does not
+"fix" it.
+
+### ARGV-07: subcommand drift fails open, and no hermetic check can see it
+
+An unknown **flag** is `unreadable` — loud and safe. An unknown **subcommand** is just a bare word:
+it reads as a positional, the line reads as a `session`, and a caller may grant prose steering on a
+process that is a command. The asymmetry is the wrong way round and it is **partly irreducible**: a
+new subcommand `foo` is indistinguishable from a prompt beginning with the word "foo", which is why
+`help` is already excluded by hand. Proposed rather than invented: **a maintenance check that is
+allowed to touch the real binary** — diff `claude --help`'s `Commands:` and `Options:` sections
+against `SUBCOMMANDS` and `FLAGS`, run when the CLI updates or in the weekly sweep, never from the
+unit suite. **It is not built** (it needs a file outside round 2's boundary); until it is, the
+limitation is written into the module header with the CLI version the tables were measured against,
+and that is the whole defence. A weak hermetic check would have been worse than the honest note.
+
+### Mutation, round 2: 20 mutants, 1 equivalent, 0 real survivors
+
+Each mutation applied in place, suite run, file restored and verified byte-identical. Re-run after
+the `readFlagToken` extraction, so the table describes the code as shipped rather than a draft.
+
+**The harness proves it ran before it reports anything** — Stage C's mutation pass was silently
+measuring nothing for a while (`--reporter=basic` does not exist in vitest 4, so no run started and
+all thirteen mutants "survived"). This one parses the `Tests N failed | M passed (T)` line, aborts
+unless the unmutated baseline is **0 failed of 67**, and treats an anchor that no longer matches the
+source as a skip rather than a survivor. A mutant reported as surviving here is one where a run
+happened and every test passed.
+
+| mutant | tests red |
+|---|---|
+| walk through the bare `--` | 5 |
+| treat an unknown flag as taking no value (guess, do not refuse) | 5 |
+| treat an unknown flag as taking one value (the other wrong guess) | 3 |
+| match `--session-id` by prefix *(at the recording line)* | **0 — equivalent, see below** |
+| look a flag up in `FLAGS` by PREFIX rather than exact token | 2 |
+| drop the subcommand check | 7 |
+| check `SUBCOMMANDS` on every positional, not only the first | 1 |
+| ignore `-p`, keeping only the long spelling | 2 |
+| let a variadic flag run greedily with no `--` | 2 |
+| accept an empty INLINE value | 2 |
+| basename by prefix rather than equality (`claude-wrapper` is a claude) | 1 |
+| **ARGV-01** stop the scan at the first positional (the old, false rule) | 8 |
+| **ARGV-01** drop the flattened ambiguity rule | 4 |
+| **ARGV-01** apply the ambiguity rule on BOTH arms | 4 |
+| **ARGV-01** arm the rule on a bare word a flag consumed as its value | 11 |
+| **ARGV-02** drop the terminal-flag check | 4 |
+| **ARGV-02** check terminal flags before the arity rules | 1 |
+| **ARGV-03** let a `--name` value swallow the run of bare words after it | 5 |
+| **ARGV-04** accept an empty SEPARATE value | 2 |
+| **ARGV-06** pop the whole trailing-empty run | 1 |
+
+**The survivor is an equivalent mutant and round 1 was wrong to count it as killed.** Changing the
+`--session-id` comparison at the *recording* line to `startsWith` changes nothing, because no other
+row in `FLAGS` begins with `--session-id`, so the lookup has already refused `--session-idle` before
+that line runs. The exactness that a test really holds is the `FLAGS.get(name)` lookup — mutate that
+to a prefix search and two tests go red, which is the row above it. Both facts are now in a comment
+at the line, because a guard no test holds should say so.
+
+### Live positive control, after the change
+
+All 5 live `claude` processes, read on both arms: **5 × `session` with one id, both arms agreeing.**
+No regression on real traffic — including the one process whose prompt has no `--` in front of it,
+which stays readable because its prose contains no dash-led word. The captured pane that *does*
+(`--- STAGE 1 …`, a markdown rule inside a brief) is refused, and the refusal now names `---` rather
+than `--name`: same verdict, honest reason, and `tests/overseer-harness.test.ts` says so.
+
+### What the new refusal costs, said plainly
+
+Round 1 ignored a flattened prompt entirely (it stopped at the prompt's first word), so a pane
+launched **without** a `--` was always readable. Round 2 refuses one whose prose contains a dash-led
+token — and that is a real cost, not only a correctness win: `harness.ts` reads the flattened arm, so
+such a pane is `ambiguous` and **the dashboard will not offer prose steering on it**.
+
+**Prompts with no separator are the common case on this box, not the exotic one** — Stage C's own
+positive control found `claude --session-id <uuid> Run get-ready-for-deploy.md, i.e. pull latest …`
+running right now. So the trigger matters: it is not "a prompt with no `--`", it is "a prompt with no
+`--` **that contains a dash-led word**". That process reads as a clean `session` on both arms, and so
+do the other four. What is refused is the captured pane whose brief contains `--- STAGE 1`, and on
+that one the honest answer really is *I cannot read this*.
+
+Three things bound the cost. `new-claude` has emitted `-- "$(cat …)"` before every prompted launch
+since earlier the same day, so the shape is legacy and shrinking; 5 of 5 live processes read cleanly
+today; and `steer.ts`, the one path that actually presses Enter, reads the **faithful** arm, where
+none of this applies. The refusal buys not typing prose into a headless process, which is the failure
+this whole plan exists to prevent.
+
+### Two Stage B tests were rewritten, not deleted
+
+Both encoded the pre-measurement belief and were left green on purpose by Stage B, flagged in place.
+They are now the **pair**, which is the whole point of the fidelity tag: the same command line is a
+steerable session on faithful argv and `unreadable` on the `ps` rendering.
+
+- `tests/overseer-harness.test.ts` — the flattened arm is now `ambiguous`, naming `--print`, plus a
+  new case asserting the faithful reading of the identical command line.
+- `tests/overseer-work.test.ts` — still `null` both times, but the docstring no longer claims the
+  second one is safe by accident, and the reading itself is asserted.
 
 ## The design: the two rules turn out to be one rule *(SUPERSEDED — see above)*
 
@@ -320,18 +484,89 @@ the next word too unless it looks like a flag.
 today, it stands on its own, and it does not depend on the reader design that round 1 sent back for
 revision.
 
-- **Stage C — the awk probe. DONE.** `claudeForSession` in `scripts/gjd-remote-tmux.ts`; 14 new
+- **Stage C — the awk probe. DONE, and then fixed again in round 2.** `claudeForSession` in
+  `scripts/gjd-remote-tmux.ts`; 14 new
   cases in `tests/gjd-remote-tmux-script.test.ts`, **7 of them watched red** against the old
-  substring test. Nine mutants: eight killed, one an equivalent mutant (a dash-leading `--session-id`
-  value — no command line can distinguish it, because a dash token can never equal a uuid and the
-  all-must-agree rule refuses anyway; the line stays because it states the grammar where the grammar
-  is read, and the comment says a test does not hold it). Mutation testing also found a **real gap
+  substring test. Mutation testing found a **real gap
   the first draft had**: without the empty-value refusal, `--session-id= --session-id <real>` left
   the real one as the first non-empty value and was accepted — a test now holds that. Positive
   control: all 6 live `claude` processes, old rule and new rule both yes for their own id, so no
   regression on real traffic. `mawk` agrees with `gawk` on all 15 shapes, so the function is not
   gawk-specific. Verified independently before commit: the basename gate mutated → 7 tests red;
   reverted → 43/43 green.
+
+  **The equivalent-mutant claim in the paragraph above was wrong, and this is the correction.** It
+  said the dash-leading `--session-id` guard was an equivalent mutant — that *no command line can
+  distinguish it from its absence, because a dash token can never equal a uuid*. That reasoning
+  holds only while every session id **is** a uuid, and `CLAUDE_SESSION_ID` is an environment
+  variable a person sets: `sessionState` has a whole arm for the hand-set case
+  (`not-a-session-id`). With the id set by hand to `-x`, `claude --session-id -x` tells the guard
+  from its absence, and a test now does exactly that. The same sentence appeared in the Stage C
+  commit message; it is wrong there too.
+
+  **Round 2 (GPT Sol, "request changes"), and what each finding became.** Three of the checkable
+  ones were reproduced by hand against the real function under **both gawk and mawk** before
+  anything was changed:
+  - **F1c, the false negative, and it is the expensive direction.** `claude --session-id A Please
+    compare --session-id B` — a prompt with **no `--`**, which is what a person types — read as *no
+    claude in this pane*. The shape is live: the process census that day found
+    `claude --session-id <uuid> Run get-ready-for-deploy.md, i.e. pull latest …` running on the box.
+    **The rule taken: stop at the first bare word, but only once an id has been seen.** Before an id
+    a bare word may be the value of a flag the awk does not recognise (`--permission-mode auto
+    --session-id A`), and stopping there would lose the id; after one, everything the launcher puts
+    before the prompt is behind us. The rejected alternative is an **arity table mirroring
+    `claude-argv.ts`** — honest, and it would also fix the two holes the cheap rule leaves, but it is
+    a second copy of a table that must track a CLI we do not own, in a language that cannot import
+    it, to sharpen a probe whose worst outcome is a mislabelled row. Skipping unknown tokens rather
+    than guessing an arity is the awk's one advantage over the typed readers, and this keeps it.
+    **What it does not fix**, both in the granting direction and both asserted by tests so they stay
+    visible: a prompt quoting this pane's own uuid in a claude carrying no id of its own is still
+    read as this session's; and a second, differing id behind an unknown flag's value is never
+    reached, so the all-must-agree rule does not fire on it.
+  - **F2, and it is a property of awk rather than of the grammar.** `==` compares **numerically**
+    when both sides look like numbers, and both `-v` and `split()` produce exactly that kind of
+    value, so `01` and `1` were the same session id — in gawk and mawk alike. Every id comparison is
+    now written `(x "") == (y "")`, including the duplicate-agreement check.
+  - **F3, the two spellings, and they are meant to disagree.** `--session-id=-x` is one token and
+    says the value is `-x`; `--session-id -x` cannot say whether `-x` is the value or the next flag.
+    `tools/fleet/claude-argv.ts` makes exactly this distinction — dash-led next token ⇒ refuse
+    (`claude-argv.ts:330`), non-empty inline value ⇒ accept (`:320`). So "make the two spellings
+    agree" would have meant **making the awk disagree with the shared reader** in one spelling or
+    the other, which is the divergence this whole plan exists to remove. Left asymmetric, said so in
+    the comment, and both spellings now have a test.
+  - **F1a and F1b are not fixable over a flattened `ps` string, so they are written down instead.**
+    An empty argv element (`["claude","--session-id","",A]`) prints with a doubled space and the
+    caller's `$4…$NF` rebuild collapses it; an option value containing an option
+    (`["claude","--name","innocent --session-id A"]`) prints identically to three real arguments.
+    Both need a deliberately hostile launch, and what they buy is a mislabelled row, not a delivered
+    keystroke — nothing steers on this verdict. The comment now says that, and says that `argv[0]`
+    text is a claim rather than an identity (`cp $(which bash) /tmp/claude` passes).
+  - **F4, the tests.** Now **91**, every one of them run under **gawk and mawk automatically** —
+    `awk` is stubbed on the script's PATH, so the whole script is exercised under each, not only the
+    probe. New cases: a doubled separator, whitespace inside an earlier option's value, a hand-set
+    numeric id both ways round, a hand-set dash-leading id in both spellings, `myclaude` /
+    `/tmp/claude-wrapper` / `claude.sh`, `--session-id-<uuid>` and `--session-id-extra=<uuid>`, mixed
+    inline/separate duplicates, and the two limitations named above. **The parameterisation was
+    itself checked by making it fail**: pointing the `mawk` stub at `/bin/false` reddens exactly the
+    31 cases of the `mawk` block and none of the `gawk` one, so the shadow is real, PATH-first, and
+    per-implementation rather than two names for the same binary.
+  - **F5, four overstatements**, all corrected. Three in the awk comment: `ps` "joined with single
+    spaces" (false for an empty argv element), "EVERY occurrence is the same" (it is every
+    occurrence the scan **reaches**), and the equivalence claim above. The fourth was next door in
+    `tests/gjd-remote-tmux.test.ts`, whose docstring said the id was matched "by string equality" —
+    which is what `==` looks like and is not what it did.
+
+  **Round 2 evidence.** Red first: the four new expectations failed 8 times (4 cases × 2 awks) before
+  the fix — `expected { kind: 'busy' } to deeply equal { kind: 'claude' }` for F1c, and the reverse
+  for F2 — then 91/91 green. **Thirteen mutants, thirteen killed, no survivors**; two of them
+  survived the first pass and each earned a test that a real shape motivates: deleting the bare `--`
+  boundary (invisible until a prompt begins with a dash-led word, because the new bare-word rule
+  stops at the same place on every other prompt), and widening the inline prefix match from
+  "starts with" to "contains anywhere". The mutation harness itself lied first — `--reporter=basic`
+  does not exist in vitest 4, so the run never started and all thirteen mutants "survived" with zero
+  failures; it now refuses a run that does not report all 91 tests.
+  Positive control re-run: 5 live `claude` processes, old rule and new rule both yes for their own
+  id under both awks, so the change is durability rather than a repair to live traffic.
 
   Original brief: check the basename of word one,
   scan exact tokens only until a bare `--`, accept both `--session-id ID` and `--session-id=ID`, and
@@ -341,8 +576,10 @@ revision.
   **every process's flattened argv, prompts and possibly secrets included**, over ssh, to fix a
   labelling bug. Document in the awk that it recognises a launcher-owned shape rather than
   reconstructing argv.
-- **Stage A — the shared reader. DONE.** `tools/fleet/claude-argv.ts`, a true leaf with **no imports
-  at all**; 48 tests in `tests/fleet-claude-argv.test.ts`; **8 mutants, 0 survivors**. Entry criterion
+- **Stage A — the shared reader. DONE, and revised in round 2** after a second cross-family review:
+  [what changed](#stage-a-round-2-what-the-second-review-changed). `tools/fleet/claude-argv.ts`, a
+  true leaf with **no imports at all**; 67 tests in `tests/fleet-claude-argv.test.ts`; **20 mutants,
+  1 of them equivalent, 0 real survivors**. Entry criterion
   for the flag table: *a producer in this repo emits it*, so nothing's arity is guessed from a help
   page we do not control. All eight optional-value flags are deliberately absent and land in
   `unreadable`.
@@ -360,6 +597,10 @@ revision.
   an unknown flag is `unreadable` naming itself; and all 5 live processes read as a clean `session`
   with both fidelities agreeing.
 
+  **↳ Round 2 rewrote the boundary rule and deleted `one-free-text`. Everything from here to the end
+  of this bullet is round 1 and is kept for the reasoning; read
+  [Stage A round 2](#stage-a-round-2-what-the-second-review-changed) for what is true now.**
+
   **A shape our own launcher makes, found during Stage C.** `scripts/gjd-remote.ts:2563` emits
   `--name ${shq(name)}` **before** the `--`. On faithful argv that is one element. On the flattened
   arm the quoting is gone, so a **multi-word session name** makes `--name` look like a flag taking
@@ -372,8 +613,12 @@ revision.
   `ps-flattened`, and the reading should be able to say so. The awk is immune only because it skips
   unknown tokens rather than assuming arity — the trade this stage rejects.
 
-  **Settled, as a new arity `one-free-text`.** One value on `argv`, unknowable on `ps-flattened`,
-  where the value is a run of bare words. Three endings, and only one is refused:
+  **Settled, as a new arity `one-free-text` — and UNSETTLED in round 2, twice over.** The three
+  endings below are **not exhaustive and one of them is wrong**: Sol's ARGV-03 found a fourth,
+  `--name my mcp`, where the run swallows a *subcommand* — and the inline `--name=my mcp` swallowed
+  one too, though it had already bounded its own value. The second ending is also false as stated:
+  `claude --name my mcp -- --help` still dispatches `mcp`, so a `--` ahead does not mean the launcher
+  bounded the value. The arity is gone; see round 2. What follows is round 1's reasoning:
   - the run reaches the end of argv → **readable**. This keeps `claude --session-id U
     --permission-mode auto --name my session` working — a named session with no prompt, which
     `new-claude` produces. Refusing it was the expensive direction.
@@ -393,10 +638,73 @@ revision.
   `--permission-mode auto` produced nothing for 20 seconds. So a prompt *beginning* with a subcommand
   word may be read as a subcommand. It is fail-closed — `subcommand` grants nothing — and the module
   header carries the measurements and says plainly that the behaviour is not fully explained.
-- **Stage B — all three TypeScript consumers onto it**, not two: `recogniseClaude`,
+- **Stage B — all three TypeScript consumers onto it. DONE**, and all three: `recogniseClaude`,
   `isClaudeForSession`, **and `RECOGNISERS["claude-headless"]` in `work.ts`** (Sol P1-2 — Stage B as
   first written left D6 alive while claiming to have removed the class). The refusal reasons carry
   *unreadable* distinctly from *no claude here*.
+
+  **`work.ts` was wired, and it was not the awkward fit the brief allowed for.** `WorkRecogniser.args`
+  already accepts `RegExp | ((args: string) => boolean)` and `codex-exec` already uses the function
+  arm, so this is one substitution and D6 closes as a consequence rather than as a special case. The
+  import direction is `tools/overseer/` → `tools/fleet/`, which already existed via `wire.ts`, and
+  `claude-argv.ts` has no imports at all, so nothing widened.
+
+  **`argvOf` really was `fromProcCmdline` minus the tag** — same split, same trailing-empty pop, same
+  reason for keeping an interior empty — checked line by line before deleting it. The one assertion
+  its test held that the shared module's did not (`"claude\0\0\0"` → a RUN of trailing empties) moved
+  into `tests/fleet-claude-argv.test.ts` rather than being dropped.
+
+  **Four refusal codes' worth of behaviour changed, three of them settled below and one not.** D1,
+  D2 and D5 are in the table. The fourth falls out of Stage A's `one-free-text` rule and is worth
+  naming because it is the only one that costs availability: on the `ps`-flattened arm a `--name`
+  whose value runs into a prompt with no `--` is `unreadable`, so the captured
+  `quiet-claude-pane.txt` — a real pane, `--name cheap-postmortem-preventions Build a batch of …` —
+  now classifies `unknown` instead of `claude-code`, and the dashboard would refuse to message it.
+  **The plan's Stage A note that this "costs nothing today (the live sessions … carry no `--name`,
+  or a single-word one)" is wrong about the second half**: a single-word name is exactly as
+  unreadable, because `ps` cannot say it was one word. What actually makes it cost nothing is
+  `scripts/gjd-remote.ts`'s F10 fix earlier the same day — every prompted launch now emits `--`
+  before the prompt, all five live `claude` processes read as a clean `session` on both arms, and
+  that capture predates it. The test carries both halves: the capture as it is, and the same row
+  with the separator the launcher writes today.
+
+  **GPT Sol's ARGV-05 was fixed rather than reported, and it is three lines in `claude-argv.ts`.**
+  `fromProcCmdline` returned the whole `ClaudeCommandLine` union and neither arm had a name, so no
+  caller could ask for the faithful one and the compiler could refuse nobody — the fidelity tag was a
+  label after all, which is the one thing the module header says it must not be. Each arm is now an
+  exported type (`FaithfulCommandLine`, `FlattenedCommandLine`) and each constructor returns the arm
+  it builds. Verified by making the error happen: handing `isClaudeForSession` a `fromPsArgs` result
+  is `TS2345`, seen, then reverted.
+
+  **What Stage B deliberately did NOT encode: where the option region ends.** Measured on 2026-09-08
+  against real `claude` 2.1.263, the CLI PERMUTES — `claude some-prompt --version` prints the
+  version, and `claude say-only-OK --print --model definitely-not-a-real-model` reaches the model
+  check — so options are read anywhere except after a bare `--`, and "the option region ends at the
+  first bare word" is false of the tool. Every test written here depends on the four arms of the
+  reading, never on how they are computed, and each one is either flags-only or `--`-bounded. Two
+  PRE-EXISTING tests do assert the false claim (`tests/overseer-harness.test.ts`'s "a `--print`
+  inside the PROMPT…" and `tests/overseer-work.test.ts`'s "…even when the prompt says --print").
+  They are left green and flagged in place rather than changed, because changing them means deciding
+  the semantics, which is Stage A round 2's job. **A green test there is not evidence.**
+
+  **Round 2 landed its red tests in this tree while Stage B was being written, and its
+  implementation had not.** So `tests/fleet-claude-argv.test.ts` is red — fifteen tests, every one of
+  them round 2's (`--version` as a subcommand, a flag after a positional, an empty `--session-id`
+  value, the trailing-empty rule) and none of them in Stage B's files. Stage B's own three suites
+  are green. That separation is the design working rather than luck: every test written here asserts
+  a consequence of one of the four ARMS — what `HARNESS_CAPABILITIES[…].steerWithProse.can` says,
+  what `verifyTarget` returns — and none asserts how an arm is computed, so the boundary rule can
+  move underneath without any of them having to be rewritten. The two tests that WILL go red when
+  round 2's implementation lands are the two pre-existing ones flagged above, and they should.
+
+  Mutation testing at the end, four mutants, all killed: `unreadable` collapsed back to `no` (3
+  red), the headless refusal dropped (2 red), the first id taken instead of requiring agreement (4
+  red across two suites), and the `--` stop skipped (5 red). The last one found a real gap — it was
+  killed by `harness` and `claude-argv` and **not** by the steer suite, the one file that presses
+  Enter, because both of steer's `--` assertions happened to give the same answer either way. The
+  discriminating case (`claude -- --session-id <ours>`, a claude with no id option at all whose
+  prompt begins with those words, which a walked-through separator would hand over) is now asserted
+  there with its pair.
 
 ### The behaviour choices, settled
 
@@ -424,6 +732,26 @@ the second*, which would have predicted `B A A` to be accepted too. It is not. A
 from the looser description would have tested the wrong ordering and passed.
 | **D5** `--print` | `harness.ts` | Headless beats session identity, and steering is refused. Low urgency, right invariant. Sol: *"not overstated as a correctness rule; it would be overstated only as justification for urgency."* |
 
+**Two of these were live grants, not latent ones, and the red tests are the proof.** The plan says
+of D5 that "a screen check downstream masks it", which was read as *nothing bad happens today*.
+Written as an end-to-end `sendMessage` against the fixture of a working input box — the ordinary
+state of a healthy pane — both of these **sent the message** before Stage B:
+
+```
+FAIL  refuses `--print` before the id, and sends when it is not there
+      Error: expected a refusal, got a send of
+        [["send-keys","-t","%10","-l","--","keep going"],["send-keys","-t","%10","Enter"]]
+
+FAIL  names the flag that lost us, and does not claim the pane is empty
+      Error: expected a refusal, got a send of
+        [["send-keys","-t","%10","-l","--","keep going"],["send-keys","-t","%10","Enter"]]
+```
+
+The second is the unknown-flag case (`claude --dangerously-skip-permissions --session-id <ours>`)
+and is the sharper of the two: the old reader skipped the flag it did not know, read the id after
+it, and granted. The screen check masks D5 only while the pane happens not to be showing an input
+box, which is a coincidence about timing rather than a guard.
+
 ### What the tests must be
 
 Sol's P2-3, taken: **the seven live captures are a seed corpus, not a drift detector.** They contain
@@ -433,6 +761,22 @@ this document. So: real captures as positive fixtures, **plus** constructed adve
 rather than assertions on the parser's return value alone.
 
 ## The library question, and why the answer is "none"
+
+**ROUND 2 CORRECTION, and it is the interesting kind: the decision survives, the criterion that
+produced it does not.** This section shortlisted on *stop at the first non-option argument*, and
+`claude` has no such rule — so the feature every candidate was scored on is one we now do not want,
+and `parseArgs` was condemned below for behaving **exactly as the real CLI behaves**. What actually
+decides it, restated after the measurements:
+
+1. an **explicit arity table** — unchanged, and still the thing frameworks cannot give;
+2. **refuse an unknown flag rather than guess its arity** — no general parser does this, because a
+   parser exists to produce an answer;
+3. **express two fidelities of the same command line and give them different answers** — nothing
+   off the shelf has a concept for it, and it is the rule this module turns on.
+
+Only (1) is a library feature at all. So: still hand-written, now for reasons that are true. The
+research below is kept as it was written — the dividing line it found between `arg` and
+`yargs-parser` is real, and how it was found is worth reading.
 
 Researched against [third-party-library-selection.md](../reusable/third-party-library-selection.md)
 on 2026-09-08. Two requirements decide it: can the parser be told to **stop at the first non-option
@@ -453,6 +797,13 @@ v26.8.1 with `strict:false, allowPositionals:true`, `parseArgs` on
 `--print` read as a real flag from inside the prose. That is the exact false grant `recogniseClaude`
 was fixed to prevent. `tokens:true` does carry enough to stop at the first positional yourself, but
 using it means writing `recogniseClaude`'s walking loop again against a different data shape.
+
+> **Round 2: this paragraph is measured correctly and reasoned backwards.** `parseArgs` permutes
+> because **`claude` permutes**, and on those seven tokens — which is a `ps` rendering — `print:true`
+> is one of the two honest readings, not a false grant. The correct answer there is *unreadable*, and
+> `parseArgs` is disqualified for being unable to say that, not for the value it returned. Left in
+> place because it is a clean specimen of a measurement read through a false premise: the number was
+> right, the sentence after it was not, and the sentence is what got quoted.
 
 **The finding that actually decides it**, and it is in no README:
 
@@ -479,6 +830,13 @@ A third requirement falls out of the same research and belongs in the module's h
 features when the flag set is only partly known.** They interact, and that interaction is what
 disqualified `arg`. Anyone re-running a feature checklist against a parser for a foreign CLI needs
 to test the pair, not the two boxes.
+
+> **Round 2: the general lesson holds, the specific pair is gone.** There is no
+> `stop-at-first-positional` rule in this module any more, so it is not in the header. What replaced
+> it is a pair of the same shape — *where the option region ends* and *what the input's fidelity is*
+> — which interact for the same reason: the arity table is only partly known, so an unreadable token
+> has to be able to stop the whole reading. Checklist features that look independent on a README
+> interact once the grammar is foreign.
 
 ## The simpler option, named
 

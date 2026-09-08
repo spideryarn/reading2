@@ -592,7 +592,7 @@ describe("the modes", () => {
   });
 
   it("opens straight into the mode the hash names", () => {
-    window.location.hash = "#orchestrator";
+    window.location.hash = "#overseer";
     const feed = manualTransport();
     mount(feed.transport);
     expect(container.textContent).toContain("Everything queued, across the fleet");
@@ -879,7 +879,7 @@ describe("the bottom bar", () => {
        just as happily before the change. */
     const feed = manualTransport();
     mount(feed.transport);
-    expect(modeButtons().map((b) => b.textContent)).toEqual(["Sessions", "Box health", "Orchestrator"]);
+    expect(modeButtons().map((b) => b.textContent)).toEqual(["Sessions", "Box health", "Overseer"]);
     expect(container.querySelector("header")?.querySelector(".dock-modes")).toBeNull();
   });
 
@@ -4567,7 +4567,7 @@ describe("the Overseer tab, which no longer says it is empty", () => {
         ],
       }),
     );
-    window.location.hash = "#orchestrator";
+    window.location.hash = "#overseer";
     const feed = manualTransport();
     mountFull({ transport: feed.transport, actionsApi: rec.api });
     act(() => feed.push(state({ rows: [steerable({ id: "$1643", title: "the busy one" })] })));
@@ -4589,7 +4589,7 @@ describe("the Overseer tab, which no longer says it is empty", () => {
         ],
       }),
     );
-    window.location.hash = "#orchestrator";
+    window.location.hash = "#overseer";
     const feed = manualTransport();
     mountFull({ transport: feed.transport, actionsApi: rec.api });
     act(() => feed.push(state({ rows: [] })));
@@ -4601,7 +4601,7 @@ describe("the Overseer tab, which no longer says it is empty", () => {
 
   it("offers the broadcast, and refuses to draw a box that would swallow a message", async () => {
     const rec = recordingActions(() => actionsWire({ actions: [BROADCAST_WIRE] }));
-    window.location.hash = "#orchestrator";
+    window.location.hash = "#overseer";
     const feed = manualTransport();
     mountFull({ transport: feed.transport, actionsApi: rec.api });
     act(() => feed.push(state({ rows: [] })));

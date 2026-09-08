@@ -99,6 +99,7 @@
  * a capture taken off this box. Nothing here runs a command, and nothing at
  * module scope does anything.
  */
+import { fromPsArgs, readClaudeCommandLine } from "../fleet/claude-argv.js";
 import type { Capability, HarnessCapabilities, HarnessKind } from "../fleet/wire.js";
 import {
   indexProcessTable,
@@ -359,81 +360,80 @@ type HarnessMatch =
 /**
  * The Claude invocations we can read, and the refusal for the ones we cannot.
  *
- * ANCHORED TO THE FIRST ARGUMENT throughout, for the reason work.ts gives: a
- * pane's Claude is `claude --session-id <uuid> <the whole prompt>`, the prompt
- * is free text, and an agent's prompt can contain the words `--print` or
- * `--session-id`. Searching the line instead of anchoring to its head would let
- * a task description relabel the session it is describing.
+ * THE GRAMMAR IS NOT HERE ANY MORE. It is `tools/fleet/claude-argv.ts`, shared
+ * with `steer.ts` and `work.ts`, because `claude`'s flag set is a fact about
+ * `claude` and three copies of it drift one flag at a time —
+ * docs/plans/260908h. This function is the POLICY: what a reading means for a
+ * pane somebody may be about to type at. That split is deliberate; the module
+ * over there says why a shared verdict would be worse than three local ones.
+ *
+ * **THE INPUT IS `ps args`, SO IT TAKES THE `ps-flattened` ARM**, and the
+ * reader treats it more carefully than the faithful one for it: quoting is long
+ * gone by the time this sees a command line, so `--name my session --print` and
+ * `--name "my session --print"` are the same five tokens. The reader refuses
+ * that shape rather than picking one, which is a refusal this file could not
+ * previously make because it did not know it had a choice.
+ *
+ * Four readings, four policies:
+ *
+ *  - `session` → `claude-headless` if `--print` (it will never read the tty
+ *    again), else `claude-code` carrying its id. **Every `--session-id` before
+ *    the boundary must agree**: `A A` is one conversation, `A A B` is not. The
+ *    old rule destructured the first two and compared those, so `A A B` came
+ *    back as `claude-code A` — wrong, and in the granting direction. D2.
+ *  - `subcommand` → **null, not a harness**, the same answer `recogniseCodex`
+ *    gives `codex login` and for the same reason. `claude agents` is a command;
+ *    nothing is listening, and it used to be labelled `claude-code` with a null
+ *    id, which the capability table GRANTS prose steering on.
+ *  - `unreadable` → `ambiguous`, carrying the reader's own sentence, which
+ *    names the flag. This is what the `ambiguous-harness` cause was written for.
+ *  - `not-claude` → `ambiguous` as well. `resolveExecutable` has already said
+ *    the basename is `claude`, so this cannot happen; if it ever does, the
+ *    disagreement between the two is worth a grey row and a sentence rather
+ *    than a fall-through that could end up labelling the pane a `shell`.
  */
 function recogniseClaude(args: string): HarnessMatch {
-  const tokens = args.split(/\s+/).filter((t) => t !== "");
-  const sessionIds: string[] = [];
-  let headless = false;
-  let i = 0;
+  // `resolveExecutable` strips argv[0] and the reader needs it, so it goes back
+  // on. Safe to write literally: this is only reached when the resolved
+  // basename was exactly `claude`.
+  const reading = readClaudeCommandLine(fromPsArgs(`claude ${args}`));
 
-  // WALK THE LEADING OPTION REGION AND STOP AT THE PROMPT. Anchoring on the
-  // FIRST argument alone was wrong, and a cross-family review found it:
-  // `claude --session-id abc --print do the thing` matched the `--session-id`
-  // arm, returned `claude-code`, and the capability table then GRANTED prose
-  // steering on a headless run. A false grant is the exact failure this stage
-  // exists to prevent, and it was sitting in the recogniser.
-  //
-  // Stopping at the first bare word is what keeps the opposite mistake away:
-  // a prompt is free text, and `claude --session-id abc Please add a --print
-  // flag to the CLI` must not be read as headless because its PROMPT says
-  // `--print`. The option region ends at `Please`, and nothing after it is
-  // read as a flag.
-  while (i < tokens.length) {
-    const token = tokens[i];
-    if (token === undefined || !token.startsWith("-")) break;
-    i += 1;
+  switch (reading.kind) {
+    case "not-claude":
+      return { found: "ambiguous", why: `a \`claude\` whose own command line does not read as one: ${reading.why}` };
 
-    if (/^(--print|-p)$/.test(token)) {
-      headless = true;
-      continue;
-    }
+    case "subcommand":
+      return null;
 
-    // `--session-id=abc` as well as `--session-id abc`. Both are real argv
-    // spellings and `steer.ts`'s own reader accepts the first, so refusing it
-    // here would put the two readers into disagreement over one command line.
-    const inline = /^--session-id=(.+)$/.exec(token);
-    if (inline?.[1] !== undefined) {
-      sessionIds.push(inline[1]);
-      continue;
-    }
+    case "unreadable":
+      return { found: "ambiguous", why: `a \`claude\` this cannot read: ${reading.why}` };
 
-    if (token === "--session-id") {
-      const value = tokens[i];
-      if (value !== undefined && !value.startsWith("-")) {
-        sessionIds.push(value);
-        i += 1;
+    case "session": {
+      // `--print` beats everything: it is the one flag that decides whether
+      // this process will ever read its terminal again.
+      if (reading.headless) return { found: "claude-headless" };
+
+      // A SET OVER EVERY OCCURRENCE, not the first two. See D2 above.
+      const distinct = [...new Set(reading.sessionIds)];
+      const [only, another] = distinct;
+      if (only !== undefined && another !== undefined) {
+        return {
+          found: "ambiguous",
+          why: `a \`claude\` carrying ${distinct.length} different --session-id values (${distinct.join(", ")}), so which conversation this pane holds cannot be read from its command line`,
+        };
       }
-      continue;
+
+      // A bare `claude`, or one with flags and no session id: interactive, and
+      // there is simply no conversation id to carry. Still steerable in
+      // principle; `steer.ts` is what decides it cannot be ADDRESSED.
+      return { found: "claude-code", claudeSessionId: only ?? null };
     }
 
-    // Any other option: skip it, and skip its value if the next word is one.
-    // Guessing wrong here cannot manufacture a grant — `--print` is matched
-    // above before any value-skipping can swallow it.
-    const next = tokens[i];
-    if (next !== undefined && !next.startsWith("-")) i += 1;
+    default: {
+      const never: never = reading;
+      throw new Error(`unhandled claude reading ${JSON.stringify(never)}`);
+    }
   }
-
-  // `--print` beats everything: it is the one flag that decides whether this
-  // process will ever read its terminal again.
-  if (headless) return { found: "claude-headless" };
-
-  const [first, second] = sessionIds;
-  if (first !== undefined && second !== undefined && first !== second) {
-    return {
-      found: "ambiguous",
-      why: `a \`claude\` carrying two different --session-id values (${first}, ${second}), so which conversation this pane holds cannot be read from its command line`,
-    };
-  }
-
-  // A bare `claude`, or one with flags and no session id: interactive, and
-  // there is simply no conversation id to carry. Still steerable in principle;
-  // `steer.ts` is what decides it cannot be ADDRESSED.
-  return { found: "claude-code", claudeSessionId: first ?? null };
 }
 
 /**
