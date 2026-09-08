@@ -202,9 +202,18 @@ export function DictationControl({
      is also false in the case that actually happens here, and it is not about
      the browser at all: **`navigator.mediaDevices` is `undefined` outside a
      secure context**, and this server is plain HTTP on a tailnet address.
+
+     MEASURED, not read off the spec, because this claim went on to change an
+     architectural argument. One Chrome, one fleet server bound to both
+     addresses, 2026-09-08:
+
+       http://127.0.0.1:8802/       isSecureContext true,  mediaDevices present
+       http://100.92.255.119:8802/  isSecureContext FALSE, mediaDevices ABSENT
+
      `127.0.0.1` and `localhost` are trustworthy by exception, so dictation works
-     over an ssh forward and does not work on a phone reaching
-     `http://100.92.255.119:8787` — which is exactly how Greg reads this page.
+     over Greg's ssh forward. The tailnet address is a CGNAT one (100.64.0.0/10)
+     and is not on anybody's trustworthy list — so on the phone, which is the
+     surface this page exists for, the microphone API is simply not there.
 
      Rendering `null` there would have been the fifth silently-dead feature this
      tool has had in a day: no button, no error, nothing to search for. So the

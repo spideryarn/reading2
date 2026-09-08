@@ -419,6 +419,36 @@ why: there is no Overseer process, so a box there *"would swallow what you typed
 had worked, which is the one thing this page is built not to do"*. A microphone on a box that does
 not exist is not a smaller version of that lie.
 
+##### The finding that decides whether this works at all: the tailnet is not a secure context
+
+**`getUserMedia` requires a secure context, and the address Greg's phone uses is not one.** Measured
+on the box, 2026-09-08 — one Chrome, one fleet server bound to both addresses:
+
+```
+http://127.0.0.1:8802/       isSecureContext true,  navigator.mediaDevices present
+http://100.92.255.119:8802/  isSecureContext FALSE, navigator.mediaDevices ABSENT
+```
+
+`127.0.0.1` and `localhost` are trustworthy by exception, so dictation works over the ssh forward
+Greg uses from his laptop. The tailnet address is CGNAT (100.64.0.0/10) and is on nobody's
+trustworthy list. So on the **phone** — the surface this page exists for — `supported` is false, and
+the first draft of `DictationControl` returned `null`: no button, no error, nothing to search for.
+That would have been the fifth silently-dead feature in this tool in a day. It now says which of the
+two reasons it is, because only one has a fix and **the fix is not code**.
+
+**This changes an argument that is already open.** Whether enabling the systemd unit should widen the
+bind to the tailnet was being weighed as a *security* question. This makes HTTPS on the tailnet —
+`tailscale serve` — a **feature prerequisite**: without it a whole class of browser capability is
+absent on the only surface Greg reads this page on. Passed to `claude-agents-dashboard` and
+`orchestrator-setup`, who own that decision.
+
+A second, smaller one from the same browser pass: `tools/fleet/headers.ts` sent
+`Permissions-Policy: microphone=()` on every response, which blocks the microphone at document level
+independently of any of the above. Its own comment had predicted the change and predicted the wrong
+route to it — *"when it lands, `microphone=(self)` goes here deliberately rather than by discovering
+that the feature does not work"* — and it was discovered the second way, by one console line under a
+button whose failure was indistinguishable from this box having no audio hardware.
+
 ##### What is verified, and what only Greg can verify
 
 | | |
@@ -428,8 +458,10 @@ not exist is not a smaller version of that lie.
 | The bundle carrying dictation and not Supabase | **verified** — `grep -c supabase` on the built JS is 0; `mic-no-tape`, `mic-unplugged` and `api/transcribe` are all present |
 | The import rule holding | **verified** — the test, watched failing |
 | The route's Origin check, size cap and format refusal | **verified** |
+| The tailnet address not being a secure context | **verified** — measured in Chrome at both addresses |
 | **A microphone opening** | **NOT verified, and cannot be from this box** |
 | **A real transcript landing in a real box from real speech** | **NOT verified** |
+| **That any of it works on the phone** | **NOT verified, and today it will not** — see the secure-context finding above |
 
 There is no audio input device on this box and Chrome's fake-microphone flags do not work headless
 here. Everything past *"Opening the microphone…"* is Greg's to check from his own phone or laptop.
