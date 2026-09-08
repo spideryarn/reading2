@@ -363,6 +363,42 @@ And on how to work:
 
 > Get product judgments from Fable primarily, and more of the technical reviews from GPT Sol
 
+## A higher bar for robustness here than elsewhere, and its ceiling
+
+Greg, 2026-09-08, asked for this to be written down:
+
+> We want a higher bar for robustness for this orchestrator work, because the orchestrator needs to
+> be the one that fixes other problems. But at the end of the day, if the orchestrator broke I could
+> just ssh in and use Claude Code in the terminal, so it still wouldn't be the end of the world.
+
+Both halves matter, and the second one stops the first becoming an excuse for gold-plating.
+
+**Why higher than the product's bar.** [CLAUDE.md](../../CLAUDE.md) says this is a beta and speed
+still wins — that a thing being briefly broken is not the end of the world. That is a judgement
+about *readers*, who are few and know what they signed up for. It does not transfer here, because
+**this is the tool you reach for when something else is wrong**. A monitoring tool that fails at the
+same time as the thing it monitors has told you nothing, and worse, has told you nothing in a way
+that looks like good news: a quiet page and a healthy box are the same picture. Every "I could not
+tell" arm in this codebase exists for that reason and they are not decoration.
+
+Concretely, the bar is:
+
+- **A reading that could not be taken must not render as a reading.** Enforced by types, not by
+  care — `unknown` carries a cause, an empty list is meaningless without a clock.
+- **The thing must survive the conditions it reports on.** It runs under `scripts/tmux-job.ts`,
+  because a backgrounded process is OOM-killed on *system* memory pressure — demonstrated
+  2026-09-08, when an orphaned copy died at load 28 while the tmux copy kept collecting.
+- **A write refuses rather than degrades.** There is no second-best action; "sent" and "did nothing"
+  must never be the same response.
+
+**And the ceiling, which is the useful half.** The fallback is `ssh` and a terminal, and it is
+complete: `gjd-remote` does everything this page does and predates it. So this is a **convenience
+with a manual fallback**, not infrastructure — which rules out the expensive answers. No high
+availability, no second box, no state that only this process knows how to reconstruct, and nothing
+that would make the ssh path harder if this were switched off tomorrow. Where a choice is between
+"correct and unavailable" and "plausible and up", take the first: being down is recoverable in one
+command, and being confidently wrong is not.
+
 ## Constraints already established
 
 These were measured on the box, mostly on 2026-09-07, and several cost real time to learn. **Read
