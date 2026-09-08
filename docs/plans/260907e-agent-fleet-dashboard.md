@@ -1,6 +1,18 @@
 # Agent fleet dashboard
 
-**Status as of 2026-09-08 08:30: running, and waiting on one restart that is Greg's.**
+**Status as of 2026-09-08 09:15: important work left — one restart that is Greg's, and one queue
+that nothing drains.**
+
+Two things, in order of how much they cost:
+
+1. **Nothing drains the action queue** —
+   [Stage v0.5f](#-stage-v05f-nothing-drains-the-queue-the-one-thing-that-is-worse-than-not-built).
+   The routes, the client and the queue are all built and tested; no production code path ever calls
+   `queue.next()`. A queued action waits thirty minutes and is dropped. A button that says *queued*
+   and means *never* is worse than no button.
+2. **The live server predates the code** — see the section below. Restarting it is Greg's.
+
+Everything else below is real but optional.
 
 Serving on `127.0.0.1:8787` and on the tailnet at `100.92.255.119:8787`, under
 `scripts/tmux-job.ts` so it survives memory pressure. ~24 sessions with status, the pending question
@@ -614,6 +626,36 @@ not to do.
 - [ ] `~/.claude/projects/<slug>/` is a **slugified cwd and is lossy** — resolve the path from
       `row.meta.dir` plus `row.claudeSessionId`, and say plainly when it cannot be found rather
       than showing an empty conversation.
+
+### 🔴 Stage v0.5f: NOTHING DRAINS THE QUEUE — the one thing that is worse than not built
+
+**The queue accepts items and no code path ever delivers them.** `SteeringQueue` is built, tested and
+routed; `POST /api/actions/session` defaults to `mode: "enqueue"`; the client renders the queue and
+lets you cancel. But `queue.next()` is called from `tests/fleet-actions-route.test.ts` and **from
+nowhere else in the product**. A queued action sits until it goes stale at thirty minutes and is then
+silently dropped.
+
+That is worse than the feature being absent, and it is worse in the specific way this project keeps
+writing about. An absent button teaches you to go to the terminal. A button that says *queued* and
+means *never* is a promise the page cannot keep, and the person who pressed it goes away. It is
+`silent-success.md` arriving inside the product rather than inside a check.
+
+Greg's words are what makes the queue the point rather than a nicety — *"ideally these would
+queue/steer if it's currently running, so that one could press more than one, in combination with
+messages"* — so this is the difference between v0.5 being built and v0.5 working.
+
+- [ ] A drain pass in `server.ts`'s refresh loop: for each session in the fresh snapshot, ask
+      `drainGate(row.status)`, and when it says `now`, lease one item and deliver it.
+- [ ] **One item per session per pass**, not a flush. The point of the queue is that an agent gets a
+      turn between instructions.
+- [ ] It must be handed the SAME `SteeringQueue` instance the routes use — `handleActionRequest`
+      keeps one module-level instance, so the drain goes through the same function or takes it as an
+      argument. Two instances would be two queues, and the one the page shows would be the one
+      nothing delivers from.
+- [ ] A delivered item leaves a receipt the page can render. "It was sent" and "it is still waiting"
+      are the two states the queue exists to distinguish.
+- [ ] **Until this lands, the client should say so** rather than implying delivery — one sentence
+      under the queue, not a silent omission.
 
 ### Stage v0.5: the steering vocabulary
 

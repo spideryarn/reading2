@@ -70,6 +70,18 @@ function kinds(events: readonly OverseerEvent[]): string[] {
 }
 
 /**
+ * Everything the `status-change` pair's own real transition did not produce.
+ *
+ * `$1991` is the session that really changes state between those two files, so a
+ * test constructing a SECOND change on another row has to say which events it is
+ * asserting about. Filtering by handle rather than by kind, so an unexpected
+ * extra event on the constructed row still shows up.
+ */
+function elsewhere(events: readonly OverseerEvent[]): OverseerEvent[] {
+  return events.filter((e) => e.identity.tmuxId !== "$1991");
+}
+
+/**
  * THE RULES THAT ARE TYPES RATHER THAN BEHAVIOUR, so this is the only test here
  * that vitest cannot fail. It goes red under `npm run typecheck`, which is the
  * wrapper that includes tests/ — `tsc` on the app alone never reads this file,
@@ -704,5 +716,215 @@ describe("CONSTRUCTED: a wait that was replaced by a longer one", () => {
     const stillWithin = 900 - Math.ceil((gapMs - tolerance) / 1000);
     expect(waits(900, stillWithin)).toEqual([]);
     expect(kinds(waits(900, stillWithin + 1))).toEqual(["session-wait-restarted"]);
+  });
+});
+
+/**
+ * THE ROW MATERIAL, WHICH THE REGISTER FROZE AT FIRST SIGHT — GPT Sol's S3-03,
+ * widened past the field it was reported on.
+ *
+ * `POST /api/sessions/rename` landed on 2026-09-08, so a name can now change
+ * without the identity moving. `name` is not alone in that position: `entryOf()`
+ * in store.ts copies seven fields off the row and `session-seen` fires once, so
+ * every one of them was stuck at whatever the session looked like the first time
+ * the Overseer saw it — which is the answer a reboot recovery would hand back.
+ *
+ * The capture has no rename in it — the endpoint did not exist when it was taken
+ * — so all of these are CONSTRUCTED from real rows.
+ *
+ * WHY THE FIELDS SPLIT THE WAY THEY DO is in `REGISTER_ROW_FIELDS` and in
+ * `session-pane-replaced`; the short version is that a pane being respawned is a
+ * different fact from a session being renamed, and `title` and `question` move
+ * on their own and are not register material.
+ */
+describe("CONSTRUCTED: the row material changing under a stable identity", () => {
+  test("a rename is an event", () => {
+    const before = freshFixture("status-change-before");
+    // Row 1, not row 0: row 0 is the pair's real status change, and a test that
+    // renamed it would be asserting about two events at once.
+    const after = edited("status-change-after", (p) => {
+      const row = rowsOf(p)[1];
+      if (row) row["name"] = "renamed-by-a-person";
+    });
+
+    const events = elsewhere(diffed(before, after));
+    expect(kinds(events)).toEqual(["session-row-changed"]);
+    const [event] = events;
+    if (event?.kind !== "session-row-changed") throw new Error(`expected a row change, got ${event?.kind}`);
+    expect(event.fields).toEqual(["name"]);
+    expect(event.row.name).toBe("renamed-by-a-person");
+    expect(event.at).toBe(after.snapshot.clock.at);
+    expect(event.tmuxServerPid).toBe(132280);
+  });
+
+  test("every field the register keeps is watched, not only the one that was reported", () => {
+    const before = freshFixture("status-change-before");
+    const after = edited("status-change-after", (p) => {
+      const row = rowsOf(p)[1];
+      if (!row) throw new Error("expected a second row");
+      row["worktree"] = "moved-by-enterworktree";
+      row["meta"] = { version: 1, kind: "claude", repo: "spideryarn/other", dir: "/somewhere/else" };
+      row["repo"] = "spideryarn/other";
+    });
+
+    const [event] = elsewhere(diffed(before, after));
+    if (event?.kind !== "session-row-changed") throw new Error(`expected a row change, got ${event?.kind}`);
+    // In the order `REGISTER_ROW_FIELDS` declares them, so the log reads the
+    // same way twice and a test can compare it without sorting.
+    expect(event.fields).toEqual(["repo", "worktree", "meta"]);
+  });
+
+  test("startedAt is watched even though it should never move", () => {
+    // ADDED AFTER A MUTATION SURVIVED: making `rowFieldMoved("startedAt")`
+    // return `false` passed the whole suite, because every other test here edits
+    // some other field. A field nothing exercises is a field that is not really
+    // watched.
+    //
+    // It should never fire — tmux's `session_created` does not change while the
+    // session lives, and 25 collections of the live fleet agree — but if it does,
+    // the row is not the session we thought it was, and silence would be the
+    // worse outcome.
+    const before = freshFixture("status-change-before");
+    const after = edited("status-change-after", (p) => {
+      const row = rowsOf(p)[1];
+      if (row) row["startedAt"] = "2026-09-08T00:00:00.000Z";
+    });
+    const [event] = elsewhere(diffed(before, after));
+    if (event?.kind !== "session-row-changed") throw new Error(`expected a row change, got ${event?.kind}`);
+    expect(event.fields).toEqual(["startedAt"]);
+  });
+
+  test("the volatile fields the register does not keep are NOT in it", () => {
+    // `title` and `question` move on their own — a question appeared and
+    // disappeared once in 24 minutes of the live fleet — and neither is
+    // reboot-resume material. An arm that fired on any row difference is the
+    // 52k-rows-a-day design this whole module refused.
+    const before = freshFixture("status-change-before");
+    const after = edited("status-change-after", (p) => {
+      const row = rowsOf(p)[1];
+      if (!row) throw new Error("expected a second row");
+      row["title"] = "a title adoptTitles just wrote";
+      row["question"] = { asked: "anything at all" };
+    });
+    expect(elsewhere(diffed(before, after))).toEqual([]);
+  });
+
+  test("a rename and a status change in one collection are two events, not one", () => {
+    // The status arm `continue`s past everything below it, so a session renamed
+    // WHILE it changed state would have had the rename swallowed if the row
+    // check had been put underneath.
+    const before = freshFixture("status-change-before");
+    const after = edited("status-change-after", (p) => {
+      const row = rowsOf(p)[0];
+      if (row) row["name"] = "renamed-while-it-started-working";
+    });
+
+    const events = diffed(before, after);
+    expect(kinds(events)).toEqual(["session-row-changed", "session-status"]);
+    expect(events.every((e) => e.identity.tmuxId === "$1991")).toBe(true);
+  });
+
+  test("a replaced conversation is NOT also a row change", () => {
+    // `session-replaced` already carries the whole new row and the fold rebuilds
+    // the entry from it. Two events for one thing would double-count the log and
+    // say the register had been repaired when it had been replaced.
+    const before = freshFixture("status-change-before");
+    const after = edited("status-change-after", (p) => {
+      const row = rowsOf(p)[1];
+      if (!row) throw new Error("expected a second row");
+      row["claudeSessionId"] = "00000000-1111-2222-3333-444444444444";
+      row["name"] = "and-renamed-too";
+    });
+    expect(kinds(elsewhere(diffed(before, after)))).toEqual(["session-replaced"]);
+  });
+
+  test("a new tmux generation announces sessions rather than renaming them", () => {
+    // The generation rule owns the whole comparison: across it every handle is a
+    // fresh allocation, so there is no identity under which a name was kept.
+    const before = freshFixture("status-change-before");
+    const after = edited("status-change-after", (p) => {
+      p["tmuxServerPid"] = 999_111;
+      const row = rowsOf(p)[1];
+      if (row) row["name"] = "renamed-in-a-world-that-did-not-exist-before";
+    });
+    expect(diffed(before, after).some((e) => e.kind === "session-row-changed")).toBe(false);
+  });
+});
+
+/**
+ * THE PANE, WHICH IS NOT A LABEL.
+ *
+ * `panePid` is the field `tools/fleet/steer.ts` compares before it types, so a
+ * changed one means the pane somebody was looking at has been replaced by
+ * another wearing the same handle. That is a fact about the world rather than
+ * drift in a name, and folding it into the rename arm would put a `name` field
+ * on an event that is really about a pane.
+ *
+ * A NULL IS NOT A CHANGE, in either direction, and that is the whole hazard
+ * here: `paneId` and `panePid` come from a SEPARATE pane listing joined to the
+ * session by handle (`tools/fleet/collect.ts`), so a join miss yields null on a
+ * session that is perfectly alive. An arm that read that as a respawn would fire
+ * twice per miss, forever, on a box where the listing is under load.
+ */
+describe("CONSTRUCTED: a pane respawned under a live session", () => {
+  test("a new pid under the same handle is its own event", () => {
+    const before = freshFixture("status-change-before");
+    const after = edited("status-change-after", (p) => {
+      const row = rowsOf(p)[1];
+      if (!row) throw new Error("expected a second row");
+      row["paneId"] = "%9999";
+      row["panePid"] = 424242;
+    });
+
+    const events = elsewhere(diffed(before, after));
+    expect(kinds(events)).toEqual(["session-pane-replaced"]);
+    const [event] = events;
+    if (event?.kind !== "session-pane-replaced") throw new Error("expected a pane event");
+    expect(event.panePid).toBe(424242);
+    expect(event.paneId).toBe("%9999");
+    expect(event.previousPanePid).not.toBe(424242);
+  });
+
+  test("a pane listing that could not be joined is silence, not a respawn", () => {
+    const before = freshFixture("status-change-before");
+    const after = edited("status-change-after", (p) => {
+      const row = rowsOf(p)[1];
+      if (!row) throw new Error("expected a second row");
+      row["paneId"] = null;
+      row["panePid"] = null;
+    });
+    expect(elsewhere(diffed(before, after))).toEqual([]);
+  });
+
+  test("but learning a pane we did not have IS an event, because the register needs it", () => {
+    // The other direction of the same miss. Silence here would leave a register
+    // that can never name the pane it is meant to steer, and a sustained miss
+    // followed by a recovery is one event rather than a flap — the flapping
+    // direction is the one above, and it is the one held silent.
+    const before = edited("status-change-before", (p) => {
+      const row = rowsOf(p)[1];
+      if (!row) throw new Error("expected a second row");
+      row["paneId"] = null;
+      row["panePid"] = null;
+    });
+    const after = freshFixture("status-change-after");
+
+    const events = elsewhere(diffed(before, after));
+    expect(kinds(events)).toEqual(["session-pane-replaced"]);
+    const [event] = events;
+    if (event?.kind !== "session-pane-replaced") throw new Error("expected a pane event");
+    expect(event.previousPanePid).toBeNull();
+    expect(event.panePid).not.toBeNull();
+  });
+
+  test("a rename and a respawn in one collection are two events", () => {
+    const before = freshFixture("status-change-before");
+    const after = edited("status-change-after", (p) => {
+      const row = rowsOf(p)[1];
+      if (!row) throw new Error("expected a second row");
+      row["name"] = "renamed";
+      row["panePid"] = 424242;
+    });
+    expect(kinds(elsewhere(diffed(before, after)))).toEqual(["session-row-changed", "session-pane-replaced"]);
   });
 });

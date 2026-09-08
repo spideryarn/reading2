@@ -1191,6 +1191,250 @@ trap - EXIT
 # refused in the next.
 rm -f /etc/profile.d/gjd-remote-loopback.sh
 
+echo "=== box services ==="
+# The two long-running box tools, as SYSTEM units so they come back after a
+# reboot: the Overseer (docs/project/orchestrator-direction.md) and the fleet
+# dashboard it reads. Both ran as tmux jobs out of worktrees until 2026-09-08,
+# which meant `git worktree remove` or a reboot took them down silently -- and
+# the reboot case is the bad one, because the tool you would use to notice is
+# the one that is gone.
+#
+# The unit files are the checked-in ones under infra/hetzner/systemd/, spliced
+# in here verbatim because `gjd-remote provision` copies THIS FILE ALONE to the
+# box and nothing else from the repo travels with it. tests/systemd-units.test.ts
+# compares the two copies byte for byte.
+#
+# NEITHER IS STARTED HERE. Provisioning does not create the checkout these units
+# run from and has no business deciding a live box's running state: on a box
+# where the dashboard is already up under some other launcher, starting a second
+# copy means a failed bind and a crash loop on the one page you would use to see
+# it. What provisioning owns is that a reboot brings them back.
+install_unit() {
+  # <unit name>, template on stdin. @USER@ is the only substitution, so the file
+  # on the box and the file in the repo differ in exactly one way.
+  unit_tmp=$(mktemp)
+  sed "s|@USER@|$USER_NAME|g" > "$unit_tmp"
+  install -o root -g root -m 0644 "$unit_tmp" "/etc/systemd/system/$1"
+  rm -f "$unit_tmp"
+}
+
+install_unit overseer.service <<'OVERSEER_UNIT'
+# The Overseer: it subscribes to the fleet dashboard's stream, folds what it
+# sees into ~/.overseer, and is the only thing on this box that remembers what
+# the fleet did yesterday. docs/project/orchestrator-direction.md.
+#
+# A SYSTEM unit with User=@USER@, not a systemd USER unit, and that is the whole
+# reason this file exists. A user unit does not start at boot unless lingering
+# is enabled for the account, and nothing in this repo enables it -- so the box
+# would reboot while Greg was away and the Overseer would stay down until the
+# next login, with Restart= never getting a chance to matter.
+#
+# @USER@ is substituted at install time by infra/hetzner/provision.sh. The
+# checked-in file keeps the placeholder rather than one box's username;
+# tests/systemd-units.test.ts compares these bytes against the heredoc in that
+# script, because two copies of a unit file is exactly how one of them goes
+# stale.
+[Unit]
+Description=Overseer -- records what the agent fleet did, so there is a yesterday
+Documentation=file:///home/@USER@/code/spideryarn2/docs/project/orchestrator-direction.md
+After=network-online.target
+Wants=network-online.target
+
+# The rate limit lives in [Unit], not [Service] -- systemd moved it here in v229
+# and a StartLimitBurst= under [Service] is silently ignored.
+#
+# Ten tries five seconds apart, then systemd gives up and the unit sits in
+# `failed`. A genuinely broken build therefore crash-loops VISIBLY in the
+# journal for about a minute and then stops, rather than restarting for ever on
+# a box that has reached load average 391 once already.
+StartLimitIntervalSec=300
+StartLimitBurst=10
+
+[Service]
+Type=simple
+User=@USER@
+Group=@USER@
+
+# The PRIMARY checkout, never a worktree: `git worktree remove` deletes a
+# worktree, and an ExecStart pointing into one is a service that disappears when
+# somebody tidies up. The cost, stated rather than buried: this runs whatever is
+# in the primary checkout at the moment it starts, including a red dev.
+WorkingDirectory=/home/@USER@/code/spideryarn2
+
+# HOME explicitly, because the store lives under it and a service that inherited
+# a different one would quietly build a second store nobody looks at.
+Environment=HOME=/home/@USER@
+# Absolute on purpose: tools/overseer/store.ts REFUSES a relative store dir,
+# because a relative one resolves differently for systemd and for a person in a
+# worktree, which is two daemons that cannot see each other.
+Environment=OVERSEER_STORE_DIR=/home/@USER@/.overseer
+Environment=OVERSEER_FLEET_URL=http://127.0.0.1:8787
+
+# The checkout's own tsx, not `npx tsx`. npx with no local install goes to the
+# network and fetches SOME tsx; this path either exists or fails loudly, which
+# is the difference between a service that is wrong and one that says so.
+ExecStart=/home/@USER@/code/spideryarn2/node_modules/.bin/tsx scripts/overseer.ts run
+
+# always, not on-failure. On this box the things that send a clean SIGTERM are
+# not the service's owner -- a stray pkill, a tidy-up script, an agent killing
+# what it thinks is its own process -- and on-failure reads every one of those
+# mistakes as a decision. A wrong `always` costs a process you have to stop
+# twice; a wrong `on-failure` costs a service that is silently gone at the
+# moment nobody is watching, and this one's absence is invisible: there is no
+# page to tell you the page is down.
+Restart=always
+RestartSec=5
+
+# scripts/overseer.ts traps SIGTERM, writes its stopping note and releases the
+# lock. Give it room to do that -- a SIGKILL here leaves a lock file the next
+# start has to puzzle over.
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target
+OVERSEER_UNIT
+
+install_unit fleet-dashboard.service <<'FLEET_DASHBOARD_UNIT'
+# The fleet dashboard: the page at :8787 that shows what every agent session on
+# this box is doing. docs/plans/260907e-agent-fleet-dashboard.md.
+#
+# Until 2026-09-08 it ran as a tmux job whose entrypoint was inside a WORKTREE,
+# so `git worktree remove` took the page down and a reboot took it down with the
+# tmux server. Both are why this is a system unit in the primary checkout.
+#
+# INSTALLED BUT NOT ENABLED, on purpose and only for now. The dashboard is up
+# under scripts/tmux-job.ts and its owner asked to read this file before it is
+# ever switched on -- two supervisors on one port is a fight where the loser's
+# failure looks like a crash. `sudo systemctl enable --now fleet-dashboard` once
+# the tmux job is stopped.
+#
+# @USER@ is substituted at install time by infra/hetzner/provision.sh; see the
+# note in overseer.service.
+[Unit]
+Description=Fleet dashboard -- the page showing what every agent session is doing
+Documentation=file:///home/@USER@/code/spideryarn2/docs/project/orchestrator-direction.md
+# tailscaled as well as the network, because FLEET_BIND names a tailnet address
+# as well as loopback, and tools/fleet/server.ts treats a bind it cannot take as
+# FATAL rather than carrying on half-bound.
+After=network-online.target tailscaled.service
+Wants=network-online.target
+
+# Longer and more forgiving than the Overseer's, for one reason: at boot the
+# tailnet address may not exist yet, and every attempt before it does is a
+# legitimate failure to bind. Thirty tries ten seconds apart is five minutes of
+# patience, which is far more than tailscaled needs, and then it gives up
+# loudly instead of restarting for ever.
+StartLimitIntervalSec=900
+StartLimitBurst=30
+
+[Service]
+Type=simple
+User=@USER@
+Group=@USER@
+WorkingDirectory=/home/@USER@/code/spideryarn2
+Environment=HOME=/home/@USER@
+
+# BOTH ADDRESSES, WRITTEN OUT. Loopback alone is the quiet failure: it works
+# perfectly from the box and simply cannot be reached from Greg's phone, which
+# is the only thing the tailnet address is for. So the pair is here rather than
+# only in a file that could be missing.
+#
+# The tension, named rather than hidden: 100.92.255.119 belongs to THIS box, and
+# the next one will have a different one. The env file is how that box corrects
+# it -- provision.sh writes it from `tailscale ip -4` -- and the leading `-`
+# means a box without the file still starts on what is written here.
+Environment=FLEET_BIND=127.0.0.1,100.92.255.119
+EnvironmentFile=-/etc/fleet-dashboard.env
+
+# FLEET_ACT_ENABLED IS DELIBERATELY ABSENT, in every form, including set to
+# false. Enacted actions -- removing a worktree, killing a session -- are gated
+# behind it, and it stays unset until tools/fleet/routes-actions.ts has had a
+# GPT Sol review, which has not happened. A unit that named the variable would
+# be one edit away from enabling it, and a unit file is exactly the sort of file
+# somebody skims and completes.
+
+# BUILD THE CLIENT ON EVERY START. tools/fleet/web/dist is gitignored, so no
+# `git pull` can ever supply it and server.ts exits 2 without it -- a
+# freshly-cloned checkout would otherwise come up dead after every reboot with
+# nobody watching.
+#
+# UNCONDITIONAL, AND THAT IS A REVERSAL. The first two versions tested for
+# dist/index.html first, on the reasoning that Restart=always plus RestartSec=10
+# makes an unconditional build a vite build every ten seconds through a crash
+# loop, on a box that has reached load average 391. Then somebody timed it:
+# `npm run build:fleet` is **1.9 seconds**, and the whole client is one 339 kB
+# bundle. The objection was sized against a build nobody had measured.
+#
+# What the `test` bought was ~2 seconds per start. What it cost is the failure
+# with no alarm anywhere: a `dev` that moves tools/fleet/web/ without a rebuild
+# leaves the old bundle in place, and this unit serves a STALE page against a
+# newer server, silently. A missing build fails loudly; a stale one does not.
+# Rebuilding every start makes the bundle a function of the checkout rather than
+# of who last remembered to run a command.
+#
+# And the conditional version did not even prevent the loop it was named for: a
+# FAILED build never writes dist/index.html, so `test -f` never short-circuits
+# and every retry rebuilds anyway. Found by the fleet dashboard agent,
+# 2026-09-08. Bounded by StartLimitBurst in both versions -- at ~2s a build plus
+# RestartSec=10, thirty starts fit well inside the 900s window, so systemd stops
+# it and says so.
+#
+# No `-` prefix, deliberately: a client that will not build should fail the
+# start loudly rather than quietly serve the previous bundle.
+ExecStartPre=/usr/bin/npm run build:fleet
+ExecStart=/home/@USER@/code/spideryarn2/node_modules/.bin/tsx tools/fleet/server.ts
+
+# Room for that build on a loaded box. The default 90s is one contended vite
+# build away from a start that times out and then starts again, building each
+# time.
+TimeoutStartSec=600
+
+# always, not on-failure -- the reasoning is in overseer.service and applies
+# with more force here, because this page is what you look at to find out that
+# something else is wrong.
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+FLEET_DASHBOARD_UNIT
+
+# The dashboard's bind list. The unit already names both addresses, because a
+# loopback-only dashboard is the quiet failure -- perfect from the box, and
+# simply unreachable from the phone it exists for. This file OVERRIDES that pair
+# with the address tailscaled actually gave THIS machine, which is the half that
+# cannot be right in a checked-in file. A box that has not been `tailscale up`'d
+# gets no file and falls back to what the unit says.
+#
+# Written with mktemp + mv -T, like /etc/gjd-remote-host above, so a failed run
+# cannot leave a half-written env file that the unit would then read.
+fleet_ip=$(tailscale ip -4 2>/dev/null | head -n 1 || true)
+case "$fleet_ip" in
+  100.*)
+    fleet_env_tmp=$(mktemp /etc/.fleet-dashboard.env.tmp.XXXXXX)
+    trap 'rm -f "$fleet_env_tmp"' EXIT
+    printf 'FLEET_BIND=127.0.0.1,%s\n' "$fleet_ip" > "$fleet_env_tmp"
+    chown root:root "$fleet_env_tmp"
+    chmod 0644 "$fleet_env_tmp"
+    mv -f -T "$fleet_env_tmp" /etc/fleet-dashboard.env
+    trap - EXIT
+    echo "fleet dashboard binds 127.0.0.1,$fleet_ip"
+    ;;
+  *)
+    echo "no tailnet address yet -- fleet dashboard binds what the unit says"
+    ;;
+esac
+
+systemctl daemon-reload
+# THE OVERSEER ONLY. The fleet dashboard's unit is installed and deliberately
+# left disabled: the page is up under scripts/tmux-job.ts and its owner asked to
+# read the unit before it is ever switched on. Enabling it here would mean two
+# supervisors racing for :8787 at the next boot, and the loser's failure looks
+# exactly like a crash. Enable it by hand once the tmux job is stopped.
+systemctl enable overseer.service
+echo "overseer enabled; fleet-dashboard installed but NOT enabled (its owner's call)"
+
 echo "=== ssh ==="
 systemctl start apt-daily.timer apt-daily-upgrade.timer 2>/dev/null || true
 # `sshd -t` refuses to validate without its privilege separation directory,
@@ -1511,6 +1755,50 @@ check "docker run as $USER_NAME" 'timeout 120 su - '"$USER_NAME"' -c "docker run
 check "tailscale binary runs"    'timeout 10 su - '"$USER_NAME"' -c "tailscale version"'
 check "tailscaled enabled"       'systemctl is-enabled tailscaled | grep -qx enabled'
 check "tailscaled running"       'systemctl is-active tailscaled | grep -qx active'
+# The box's own services. Deliberately NOT `is-active`: provisioning enables
+# them and does not start them (it does not create the checkout they run from),
+# so a running check would be red on a correctly-provisioned fresh box and would
+# stop being read.
+#
+# THE SYMLINK IS THE POINT. `is-enabled` alone says `enabled` for a systemd USER
+# unit too, and a user unit does not start at boot unless lingering is on --
+# which is the whole failure this stage exists to rule out. The presence of
+# multi-user.target.wants/<unit> is what says a SYSTEM unit will come up on the
+# way to a normal boot, and it is the one thing a user unit could never show.
+check "overseer unit installed"  'test -f /etc/systemd/system/overseer.service'
+check "overseer enabled"         'systemctl is-enabled overseer.service | grep -qx enabled'
+check "overseer starts at boot"  'test -L /etc/systemd/system/multi-user.target.wants/overseer.service'
+check "overseer runs as $USER_NAME" 'systemctl show -p User --value overseer.service | grep -qx '"$USER_NAME"''
+check "overseer restarts always" 'systemctl show -p Restart --value overseer.service | grep -qx always'
+# Ask systemd what it PARSED, not what the file says: a typo in the placeholder
+# substitution above would leave a plausible-looking file and an ExecStart
+# systemd could not use. And no worktree in it, ever -- `git worktree remove`
+# deletes those, which is how the tmux-job predecessors used to vanish.
+check "overseer ExecStart is in the primary checkout" 'out=$(systemctl show -p ExecStart --value overseer.service); case "$out" in *"/home/'"$USER_NAME"'/code/spideryarn2/"*worktrees*) false ;; *"/home/'"$USER_NAME"'/code/spideryarn2/"*) true ;; *) false ;; esac'
+# The dashboard's unit is installed and NOT enabled -- see the comment where it
+# is written. So there is no boot-symlink check here, deliberately: it would be
+# red on a correctly-provisioned box, and a red check nobody expects to be green
+# is how a report stops being read. What is asserted is that systemd can PARSE
+# the file, so the day somebody enables it there is nothing left to discover.
+check "fleet dashboard unit installed" 'test -f /etc/systemd/system/fleet-dashboard.service'
+check "fleet dashboard unit parses"    'systemd-analyze verify /etc/systemd/system/fleet-dashboard.service'
+check "fleet dashboard runs as $USER_NAME" 'systemctl show -p User --value fleet-dashboard.service | grep -qx '"$USER_NAME"''
+check "fleet dashboard restarts always" 'systemctl show -p Restart --value fleet-dashboard.service | grep -qx always'
+check "fleet dashboard ExecStart is in the primary checkout" 'out=$(systemctl show -p ExecStart --value fleet-dashboard.service); case "$out" in *"/home/'"$USER_NAME"'/code/spideryarn2/"*worktrees*) false ;; *"/home/'"$USER_NAME"'/code/spideryarn2/"*) true ;; *) false ;; esac'
+# Never the wildcard, on a box whose firewall is the only other thing in the
+# way. `parseBinds` refuses one at startup; this refuses one at provisioning
+# time, when a person is still reading the output.
+check "fleet dashboard binds no wildcard" '! grep -q "0\.0\.0\.0" /etc/systemd/system/fleet-dashboard.service && { ! test -f /etc/fleet-dashboard.env || ! grep -q "0\.0\.0\.0" /etc/fleet-dashboard.env; }'
+# Loopback alone is the quiet failure: perfect from the box, and simply
+# unreachable from the phone the tailnet address exists for. Asserted against
+# whichever source will win at start time -- the env file if provisioning wrote
+# one, the unit otherwise.
+check "fleet dashboard binds the tailnet too" 'if test -f /etc/fleet-dashboard.env; then grep -q "FLEET_BIND=.*100\." /etc/fleet-dashboard.env; else grep -q "FLEET_BIND=.*100\." /etc/systemd/system/fleet-dashboard.service; fi'
+# FLEET_ACT_ENABLED gates enacted actions -- removing a worktree, killing a
+# session -- and stays unset until routes-actions.ts has had its GPT Sol review.
+# A unit that named it, even as false, is one edit away from enabling it, and a
+# unit file is exactly the sort of file somebody skims and completes.
+check "fleet dashboard does not name FLEET_ACT_ENABLED" '! grep -q FLEET_ACT_ENABLED /etc/systemd/system/fleet-dashboard.service && { ! test -f /etc/fleet-dashboard.env || ! grep -q FLEET_ACT_ENABLED /etc/fleet-dashboard.env; }'
 check "supabase cli pinned"      'timeout 30 su - '"$USER_NAME"' -c "supabase --version" | grep -qx "'"$SUPABASE_VERSION"'"'
 # The editor, in the three places that name it -- because they come apart. The
 # package can be present while $EDITOR still says nothing, and both can be right

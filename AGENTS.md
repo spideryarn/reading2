@@ -180,6 +180,11 @@ and the write-up is worth reading once.
 readership is small and knows what it signed up for, so we go on optimising for how fast we can
 move. It is not the end of the world if something is briefly broken — a database migration that
 lands before the code that matches it, and breaks production for the minutes in between, is fine.
+**But there are three standards, not one** — Greg, 2026-09-08: *"Briefly broken is fine for dev, have
+a slightly higher standard for the orchestrator and its web interface, and a higher standard still
+for keeping things working in prod."* The middle tier is the easy one to miss;
+[orchestrator-direction.md](docs/project/orchestrator-direction.md#a-higher-bar-for-robustness-here-than-elsewhere-and-its-ceiling)
+says why the thing you reach for when something else is broken cannot run on the same licence.
 What we are not trading away is design: write code that will still be good to work with in six
 months. It loosens nothing in **Real data belongs to the reader** below.
 

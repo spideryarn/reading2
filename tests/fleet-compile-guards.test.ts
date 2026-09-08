@@ -36,7 +36,7 @@ import { classifyGate, type PaneGate } from "../tools/fleet/pane.js";
 import { RENAME_STATUS, type RenameErrorCode } from "../tools/fleet/routes-rename.js";
 import { REFUSAL_STATUS } from "../tools/fleet/routes-steer.js";
 import { grantsPermission } from "../tools/fleet/pane.js";
-import type { RefusalCode } from "../tools/fleet/steer.js";
+import { answerQuestion, type RefusalCode, type SteerIo, type SteerResult } from "../tools/fleet/steer.js";
 
 describe("an enacted action is never one-tap", () => {
   /**
@@ -103,6 +103,73 @@ describe("every refusal code has a status, and a new one cannot inherit a guess"
     for (const [code, status] of Object.entries({ ...REFUSAL_STATUS, ...RENAME_STATUS })) {
       expect(status, code).toBeGreaterThanOrEqual(400);
     }
+  });
+});
+
+describe("nothing may come between the check and the send", () => {
+  /**
+   * **`answerQuestion` IS SYNCHRONOUS, AND THAT IS A SAFETY PROPERTY.**
+   *
+   * Checked after Fable's ruling on the Overseer's snapshot guard, which
+   * reframed a question I had been asking wrongly. Mine is not "can a caller
+   * forge or mutate a `SeenQuestion`" — it is whether the guard's result may
+   * outlive the capture it was computed from. Freezing would not touch that: a
+   * frozen object compared at T1 and used at T2 is still a guard about T1.
+   *
+   * Two halves, and only one of them was already safe.
+   *
+   * The keystroke is taken from `now` — the fresh parse — and never from
+   * `seen`, the client's copy. That is bind-at-the-point-of-use and it was
+   * already right. It is also defensive rather than load-bearing, and saying so
+   * is the honest version: once `sameQuestion` has passed, the two agree on
+   * every field the keystroke is derived from, so using `seen` would not
+   * currently be exploitable. It would merely be the shape that becomes
+   * exploitable the first time `sameQuestion` stops comparing a field.
+   *
+   * The load-bearing half is the SYNCHRONY. `steer.ts`'s KNOWN GAPS already
+   * records that a window remains between the last check and the send, because
+   * tmux has no compare-and-send. What it does not say is that the window is
+   * currently *microseconds* only because nothing suspends in it. Make this
+   * function `async` and add one `await` between `sameQuestion` and `fire`, and
+   * that window becomes arbitrarily long — the pane can be answered from the
+   * terminal in the meantime and the digit lands in whatever replaced it. **No
+   * test would go red**, because every test here drives a synchronous fake.
+   *
+   * So the return type is the guard. `SteerResult` and not `Promise<…>` is what
+   * makes "nothing suspends between the check and the send" true, and this is
+   * what makes changing it a compile error rather than a silent widening.
+   */
+  it("refuses to type answerQuestion as returning a promise", () => {
+    // The real signature, asserted by assignment rather than by a literal
+    // written here — the export's own type, not a copy of it.
+    const sync: (...args: Parameters<typeof answerQuestion>) => SteerResult = answerQuestion;
+    expect(typeof sync).toBe("function");
+
+    // @ts-expect-error if this ever compiles, `answerQuestion` has become async
+    // and the check-to-send window is no longer bounded by the event loop.
+    const asAsync: (...args: Parameters<typeof answerQuestion>) => Promise<SteerResult> = answerQuestion;
+    void asAsync;
+
+    // The runtime half, so `npm test` says something: it really does return a
+    // result rather than a thenable. A function returning `Promise<SteerResult>`
+    // would satisfy the assignment above under a structural-only reading.
+    const io: SteerIo = {
+      listPanes: () => "",
+      processParents: () => "",
+      claudeCandidates: () => "",
+      cmdline: () => null,
+      capture: () => "",
+      sendKeys: () => undefined,
+    };
+    const out = answerQuestion(
+      { paneId: "%1", sessionId: "$1", claudeSessionId: "f1ee7000-0000-4000-8000-000000000001", panePid: 1 },
+      { kind: "question", prompt: "?", material: { kind: "no-material" }, options: [], gate: { kind: "conversation" } },
+      0,
+      { kind: "needs-you" },
+      io,
+    );
+    expect(out).not.toBeInstanceOf(Promise);
+    expect(out.ok).toBe(false);
   });
 });
 

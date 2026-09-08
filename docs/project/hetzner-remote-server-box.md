@@ -951,6 +951,63 @@ It was installed by hand on the live box first, on 2026-09-08 — a human ssh se
 close: a box rebuilt from the script alone, before this landed, would have booted with no
 Tailscale and no way to reach it from a phone, and nothing here would have said why.
 
+## The box's own services
+
+Two long-running tools run under **systemd**, not tmux: the **Overseer**, which records what the
+agent fleet did, and the **fleet dashboard** it reads — both
+[orchestrator-direction.md](orchestrator-direction.md).
+
+They are **system units with `User=greg`**, and that is the whole point of them. Both used to be
+`scripts/tmux-job.ts` jobs whose entrypoint was inside a *worktree*, so `git worktree remove` took
+them down, and a reboot took the tmux server and everything in it. A systemd **user** unit would
+not have fixed the reboot either: it does not start at boot unless lingering is enabled for the
+account, and nothing here enables it. The evidence that a unit really will come back is the
+symlink, not the word `enabled`:
+
+```
+systemctl is-enabled overseer                                   # enabled
+ls -l /etc/systemd/system/multi-user.target.wants/overseer.service
+```
+
+At 3am:
+
+```
+systemctl status overseer                # or fleet-dashboard
+journalctl -u overseer -n 50 --no-pager  # -f to follow
+sudo systemctl restart overseer
+sudo systemctl stop overseer             # stays stopped; Restart=always respects a deliberate stop
+```
+
+`Restart=always`, not `on-failure`, because on this box the things that send a clean `SIGTERM` are
+not the service's owner — a stray `pkill`, a tidy-up script, an agent killing what it thinks is its
+own process — and `on-failure` reads every one of those mistakes as a decision. A `StartLimitBurst`
+in `[Unit]` stops a genuinely broken build restarting for ever: it crash-loops visibly in the
+journal for about a minute and then sits in `failed`.
+
+**They run out of the primary checkout, `/home/greg/code/spideryarn2`, never a worktree** — a
+worktree is deleted by normal tidying, and an `ExecStart` inside one is a service that disappears
+when somebody cleans up. Two consequences follow, and both are real rather than theoretical:
+
+- They run **whatever is in the primary checkout when they start**, including a red `dev`. That is
+  deliberate: a dashboard that refuses to boot until somebody fixes `dev` is unavailable exactly
+  when it is needed.
+- Nothing keeps the primary checkout current, and it is often hours behind `origin/dev`. **Updating
+  it is a deploy**: `git merge origin/dev` there, then `npm run build:fleet` if the dashboard's
+  client changed — `tools/fleet/web/dist/` is gitignored, so no pull can supply it, and a stale one
+  is served with no error anywhere.
+
+The unit files are checked in at [`infra/hetzner/systemd/`](../../infra/hetzner/systemd/) and
+installed by [`provision.sh`](../../infra/hetzner/provision.sh), which splices them in verbatim —
+`gjd-remote provision` copies that one file to the box and nothing else travels with it, so the
+units have to live inside it. `tests/systemd-units.test.ts` compares the two copies byte for byte,
+because two copies of a unit file is how one of them goes stale.
+
+**The fleet dashboard's unit is installed and deliberately not enabled** as of 2026-09-08: the page
+is up under a tmux job and its owner asked to read the unit before it is switched on, since two
+supervisors racing for `:8787` produce a loser whose failure looks like a crash. Its bind list is
+`FLEET_BIND` in the unit, overridden per-box by `/etc/fleet-dashboard.env`, which provisioning
+writes from `tailscale ip -4`. It deliberately does not name `FLEET_ACT_ENABLED` in any form.
+
 ## Traps
 
 - **`gjd-remote` will not tell you a session exists when it cannot see the list.** A `tmux ls`

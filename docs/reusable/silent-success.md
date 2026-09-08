@@ -210,6 +210,34 @@ four other guards caught real problems the same night and every one of them was 
 broken check was the one that found nothing.** A guard reporting nothing is the same claim as a
 system reporting nothing, and deserves the same suspicion.
 
+**A number that can honestly be zero needs its positive control asserted by the same run.** A work
+classifier answered *zero*: of 623 agent sessions a dashboard called `idle`, none had child work
+under them. True, useful, and exactly what a silently broken probe returns. So the reading has to
+travel with proof the instrument can still see — and **"recorded beside the number" is the weak form,
+"asserted by the same run" is the strong one.** A control written down once is a snapshot of a probe
+that worked in September; a control the measuring run performs itself cannot go stale without going
+red. Where only the weak form is possible, say which of the two you have. This is the third face of
+this file: after *a check that reports success while doing nothing* and *a guard whose silence is not
+evidence*, **a measurement whose zero cannot be told from blindness.**
+
+**A hazard that is easy to describe and impossible to arrange is telling you a seam is missing.** A
+collector wedged for thirty minutes reporting `error: null`, because a `bash` in uninterruptible IO
+does not die on the `SIGTERM` its timeout sends and the wrapper waited for a process that was never
+coming back. It had no test, and the reason is the rule: *a promise that never settles is the one
+behaviour no real subprocess can arrange.* The practical half is that **being unable to write the
+test is itself the finding** — nobody went looking for a seam, they found they could not write the
+test. "Untestable" is usually this sentence undiscovered.
+
+**And the limit on that one, without which it does harm.** Followed without a boundary it says *add a
+seam for every hazard*, and a seam is a path the test takes and production does not — so a codebase
+that obeys it enthusiastically ends up with a production path no test has ever run, which is a worse
+version of the thing it was avoiding. The boundary is small and mechanical: **the seam's default must
+be the real thing.** `collectWithDeadline(run = collect)` is safe because production calls it with no
+argument and executes the same function body the test does; only the leaf differs. A seam whose
+default is a stub, or which production must be configured to avoid, has moved the untested region
+rather than shrunk it. If injecting the hazard means production stops running the code under test,
+the answer is not a seam — it is that this hazard is one you accept and write down.
+
 **The moment a claim feels most like a finding is the moment to buy the cheap external check.** The
 shape: two instances of one symptom, a plausible mechanism, and no check of where either came from.
 It arrives in two directions and both feel like insight from inside. *A mechanism proposed without

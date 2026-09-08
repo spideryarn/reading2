@@ -16,8 +16,10 @@ import type { SessionMeta, SessionState } from "../scripts/gjd-remote-tmux.js";
 import { admissible } from "../tools/overseer/admissible.js";
 import {
   OBSERVATION_SCHEMA,
+  parseAttempt,
   parseObservation,
   type JsonValue,
+  type ObservedAttemptClock,
   type ObservedStatus,
 } from "../tools/overseer/observation.js";
 import { EVERY_FIXTURE, editableFixture, freshFixture, freshFrom, rawFixture, rowsOf } from "./overseer-fixtures.js";
@@ -631,5 +633,143 @@ describe("CONSTRUCTED: equal clocks with disagreeing bodies", () => {
       p["health"] = { verdict: { level: "calm" } };
     });
     expect(verdict.verdict).toBe("duplicate");
+  });
+});
+
+/**
+ * The attempt clock: when the producer last STARTED a collection.
+ *
+ * A DIFFERENT FACT FROM `collectedAt`, and the pair is the only thing that can
+ * tell **the collector is wedged mid-attempt** from **the dashboard is gone**.
+ * It exists because on 2026-09-08 `/api/state` served a `collectedAt` thirty
+ * minutes stale with `error: null` and nothing anywhere could say so — see
+ * `attemptedAt` in tools/fleet/state.ts.
+ *
+ * THREE OUTCOMES, AND THE ONE THAT MATTERS IS THE FIRST. Read naively, a
+ * producer that does not send the field looks exactly like one that has never
+ * attempted a collection, which is exactly what a wedged collector looks like;
+ * so "this producer cannot say" has to be a separate answer from "this producer
+ * says it has never tried". The daemon's watchdog acts differently on each.
+ *
+ * IT NEVER FAILS A SNAPSHOT, which is the one place this module's usual rule is
+ * suspended on purpose: the field landed as an addition without a schema bump,
+ * so every older dashboard omits it, and refusing those would take the Overseer
+ * off the air over a field it can do without.
+ */
+describe("the attempt clock, which is not the collection clock", () => {
+  /** A real capture with `attemptedAt` set, or removed entirely. */
+  function withAttempt(value: JsonValue | undefined): ReturnType<typeof parseObservation> {
+    const payload = editableFixture("status-change-before");
+    if (value === undefined) delete payload["attemptedAt"];
+    else payload["attemptedAt"] = value;
+    return parseObservation(payload);
+  }
+
+  function attemptOf(parsed: ReturnType<typeof parseObservation>): ObservedAttemptClock {
+    if (!parsed.ok) throw new Error(`the snapshot did not parse: ${parsed.reason}`);
+    return parsed.value.attempt;
+  }
+
+  test("a timestamp is carried through with its milliseconds", () => {
+    // The number is written out rather than computed from the input, so that
+    // getting the parse wrong cannot make the expectation wrong with it.
+    expect(attemptOf(withAttempt("2026-09-08T02:47:20.000Z"))).toEqual({
+      reported: true,
+      attempted: true,
+      at: "2026-09-08T02:47:20.000Z",
+      atMs: 1_788_835_640_000,
+    });
+  });
+
+  test("MALFORMED IS NOT NEVER-ATTEMPTED, and it is not a reason to fail the snapshot either", () => {
+    // The case this whole field exists for, got backwards. A number, or a date
+    // string the producer's `toISOString()` could not have printed, used to
+    // read as `attemptedAt: null` — a POSITIVE claim that the collector has
+    // never started, manufactured out of junk, on a payload full of live rows.
+    // The watchdog then has a fact it can act on and the fact is invented.
+    // `""` is in the list because the producer's own helper reads a non-empty
+    // string and nothing else, so an empty one falls straight through it.
+    for (const bad of [17, "", "yesterday", "2026-09-08", "2026-13-45T00:00:00.000Z", true, [], {}] as JsonValue[]) {
+      const parsed = withAttempt(bad);
+      // The snapshot still stands: the rows are good and this field is not one
+      // the history is built from.
+      expect(parsed.ok, `attemptedAt ${JSON.stringify(bad)} must not fail the snapshot`).toBe(true);
+      const attempt = attemptOf(parsed);
+      expect(attempt.reported, `attemptedAt ${JSON.stringify(bad)} should say nothing can be read`).toBe(false);
+      if (attempt.reported) throw new Error("expected an unreadable attempt clock");
+      expect(attempt.why).toContain("attemptedAt");
+    }
+  });
+
+  test("a producer that omits the field, on a payload that HAS collected, is an old server and not a wedged one", () => {
+    // THE LIVE SPECIMEN: every fixture in the capture is exactly this shape,
+    // because `:8787` predated the field. `attemptedAt` is written BEFORE each
+    // attempt, so a non-null `collectedAt` with no attempt clock is provably a
+    // producer that does not REPORT trying rather than one that never tried.
+    const attempt = attemptOf(withAttempt(undefined));
+    expect(attempt.reported).toBe(false);
+    if (attempt.reported) throw new Error("an old server cannot report an attempt");
+    expect(attempt.why).toContain("before that field");
+  });
+
+  test("nothing collected and nothing attempted is a positive statement, not an absence", () => {
+    // A dashboard that has just started: it tracks attempts and has not made
+    // one. Merged upstream with "an old server that has never collected",
+    // deliberately — no data has arrived either way and the action is the same.
+    for (const value of [null, undefined]) {
+      const payload = editableFixture("status-change-before");
+      payload["collectedAt"] = null;
+      if (value === null) payload["attemptedAt"] = null;
+      const parsed = parseObservation(payload);
+      expect(parsed.ok).toBe(true);
+      expect(attemptOf(parsed)).toEqual({ reported: true, attempted: false });
+    }
+  });
+
+  test("an explicit null beside a real collection is still the old-server answer, not a claim", () => {
+    // `undefined` and `null` are not told apart on purpose — that distinction
+    // dies in the first thing that normalises one to the other — so this lands
+    // where the omitted field lands, which is "cannot say" rather than "never".
+    const payload = editableFixture("status-change-before");
+    payload["attemptedAt"] = null;
+    expect(attemptOf(parseObservation(payload)).reported).toBe(false);
+  });
+
+  test("the payload the producer would really send round-trips through this parser", () => {
+    // Its own constructor, not a hand-made object, so the day the wire name
+    // changes this line stops compiling rather than going quietly wrong — the
+    // same pin the startup placeholder gets above.
+    const state = fleetState(null, null, null, 60_000, false, "2026-09-08T02:47:20.000Z");
+    expect(state.attemptedAt).toBe("2026-09-08T02:47:20.000Z");
+    const payload = JSON.parse(JSON.stringify(state)) as Record<string, JsonValue>;
+    expect(parseAttempt(payload)).toEqual({
+      reported: true,
+      attempted: true,
+      at: "2026-09-08T02:47:20.000Z",
+      atMs: 1_788_835_640_000,
+    });
+  });
+
+  test("something that is not a payload at all can still be asked, and says so", () => {
+    // The daemon reads the attempt clock off payloads the gate has REFUSED, so
+    // this function meets things `parseObservation` would have thrown out.
+    for (const junk of ["not an object", null, 3, []] as JsonValue[]) {
+      expect(parseAttempt(junk).reported, `${JSON.stringify(junk)} cannot report an attempt`).toBe(false);
+    }
+  });
+
+  test("the snapshot's field and the standalone reader are the same reading", () => {
+    // The daemon depends on this: it reads the clock off the parsed snapshot
+    // when the payload parsed and off the raw JSON when it did not, and those
+    // two must never be able to disagree about one payload.
+    for (const value of [undefined, null, "2026-09-08T02:47:20.000Z", 17, "yesterday"] as (JsonValue | undefined)[]) {
+      const payload = editableFixture("status-change-before");
+      if (value === undefined) delete payload["attemptedAt"];
+      else payload["attemptedAt"] = value;
+      const parsed = parseObservation(payload);
+      expect(parsed.ok).toBe(true);
+      if (!parsed.ok) continue;
+      expect(parsed.value.attempt).toEqual(parseAttempt(payload));
+    }
   });
 });

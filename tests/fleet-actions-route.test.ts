@@ -42,7 +42,21 @@ import type { SteerResult, SteerTarget } from "../tools/fleet/steer.js";
 
 const HOST = "100.90.80.70:8787";
 const ORIGIN = `http://${HOST}`;
-const CLAUDE_ID = "117e181a-1111-4222-8333-444455556666";
+/**
+ * DISTINCT FROM `fleet-steer-route.test.ts`'s, AND NOT AN EXEMPTION.
+ *
+ * This file was written by copying that one's fakes, so it copied its uuid too,
+ * and `tests/fixture-ids.test.ts` went red on `dev`. Nothing here inserts a
+ * database row — these are HTTP route tests against fakes — so an entry in that
+ * guard's `NOT_A_ROW` would have been *semantically* right and is still the
+ * wrong fix: it would leave two files sharing one id, and the next fleet route
+ * test copied from either would reach for the same digits again. A distinct id
+ * costs nothing and keeps the guard live for both files.
+ *
+ * The `1111-4222-8333-4444…` shape is the trap rather than the accident: it is
+ * what anyone reaches for, which is exactly why two files reached for it.
+ */
+const CLAUDE_ID = "117e181a-ac71-4092-b3ee-5d0a1e7c9f42";
 const PRIMARY = "/home/greg/fixture-checkout";
 const WORKTREE = `${PRIMARY}/.claude/worktrees/wf-fixture`;
 
