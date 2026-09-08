@@ -750,6 +750,85 @@
    quiz answer box goes readonly *while dictation is running* (QuizPanel.tsx),
    so the type would have jumped size mid-sentence.
 
+   ## `select` is here on WebKit's source, not on a measurement of ours
+
+   Added 2026-09-08, working SPIDERYARN-READING2-2H — the Feedback dialog
+   zooming on an iPhone, which the rest of this rule had already fixed. What it
+   had not fixed was the chat composer's stance picker (ChatPanel.tsx), a native
+   `<select>` measured at **13.28px** in headless Chrome after this rule
+   shipped. `<select>` is named nowhere above, nowhere in
+   docs/plans/260908a-glossary-order-button-not-clickable-on-touch.md and
+   nowhere in its postmortem, so it was unconsidered rather than excluded.
+
+   **Say the weak part out loud: nobody here has watched iOS zoom into a
+   `<select>`.** There is no iOS device on this box and Chromium does not
+   reproduce the zoom at all, for any control. What settles it instead is
+   WebKit's own source, which GPT Sol read on 2026-09-08 rather than quoting the
+   copied `input, select, textarea` recipe:
+
+     - `WKContentViewInteraction.mm` comments that a non-text control such as a
+       `<select>` "can be zoomed immediately" on focus, and then calls the same
+       focused-element zoom path a text field takes. **The wheel picker changes
+       the timing, not whether it zooms** — so the section heading above, "the
+       types that raise a keyboard", is a rationale narrower than the behaviour
+       it is guarding against. The trigger is focus.
+     - `WKWebViewIOS.mm` computes the target scale as `16 / nodeFontSize`. At
+       13.28px that is **1.20×**, which is the "weirdly zoomed in" of the report.
+
+   **The boundary is worth keeping: that scaling is gated to WebKit's
+   small-screen idiom** — an iPhone, effectively, not an iPad. So this rule is
+   load-bearing on a phone and merely harmless on a tablet, and a future reader
+   should not cite it as evidence that an iPad zooms. Still *reasoned* rather
+   than *established*, because nobody has run that Safari build here; a reader
+   with a phone would be confirming or overturning it, not re-deriving it.
+
+   `:not([hidden])` earns its place here for a second reason beyond matching the
+   textarea half. Three rules hold a select under 1rem — `.chat-live-mic select`
+   and `.chat-stance select` (mode-band.css) and `.place-pick select`
+   (dialogs.css) — and each is (0,1,1). A bare `:root select` is **also**
+   (0,1,1): a tie, settled only by narrow-window.css being imported after both
+   files, which is exactly the source-order dependence that made this rule ship
+   applying to nothing twice. The attribute selector takes it to (0,2,1) and
+   wins outright. Measured in Chrome against all three, in their real import
+   order, before it was written.
+
+   Two more selects are styled `font: inherit` rather than with a size of their
+   own — `.chat-live-device-picker select` (mode-band.css) and
+   `.prof-mic-picker select` (profile.css). Both are (0,1,1) and both lose to
+   this too, so the shorthand's font-size component does not survive on a touch
+   device. Neither is in the test's competitor search, which looks for an
+   explicit `rem`; they do not need to be, but that is why the count there is
+   three and the count of selects in the app is six.
+
+   **What it costs, measured in the real composer at 390px rather than on a
+   bare control.** A stripped `<select>` grows 19px → 21px, and that number is
+   misleading: `.chat-stance select` grows **25.8px → 29.8px**, because its
+   padding is in `rem` and its border scales with the box too. So it is 4px, not
+   2px, and the honest number is the one from the page.
+
+   It is absorbed, in both axes, and the reasons are worth keeping because
+   neither is luck:
+
+     - **Height.** The row is `align-items: center` and its height is set by the
+       32px send button. The select never becomes the tallest thing in it, so
+       `.mode-band` measures 378×736 before and after, unchanged.
+     - **Width.** The select grows 132px → 145px, and `.chat-stance` sits on
+       `margin-left: auto` between the talk and send buttons — so the extra
+       width eats slack from that auto margin and extends the box *leftward*.
+       The send button does not move: its left edge is at 350px in both states,
+       to the sub-pixel, and `scrollWidth == clientWidth` throughout.
+
+   **The slack that absorbs it is the same ~4.8px this row has been living on
+   since 2026-09-03** (§ the composer row's own note about having 4px to spare).
+   Nothing here made it tight; this takes a little more of it. A longer stance
+   label — or a translated one — is what runs out of room next, and it will
+   arrive as an overlap rather than a wrap.
+
+   `checkbox`, `radio` and `range` take no height from `font-size` at all, and a
+   `date` input would cost 4px; there are none. The live-conversation mic picker
+   (`.chat-live-mic select`) was **not** measured — it renders only once a live
+   session is open, which needs a microphone this box does not have.
+
    **The utilities layer is out of reach from here**, whatever the specificity:
    `@layer theme, base, app, utilities` in tailwind.css puts every `tw:` class
    after this file. The Tailwind-classed fields carry `tw:any-pointer-coarse:text-base`
@@ -765,6 +844,7 @@
       [type="tel"],
       [type="number"]
     ),
+  :root select:not([hidden]),
   :root textarea:not([hidden]) {
     font-size: 1rem;
   }

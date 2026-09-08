@@ -228,6 +228,10 @@ describe("a text field iOS must not zoom into", () => {
     const parts = selectors(rule?.selector ?? "");
     expect(parts.some((p) => p.includes("input")), "the floor must have an `input` half").toBe(true);
     expect(parts.some((p) => p.includes("textarea")), "and a `textarea` half").toBe(true);
+    /* Added 2026-09-08 with SPIDERYARN-READING2-2H. iOS zooms on FOCUS, not on
+       the keyboard, and a `<select>` takes focus — the composer's stance picker
+       was still 13.28px after the first two halves shipped. */
+    expect(parts.some((p) => p.includes("select")), "and a `select` half").toBe(true);
     expect(rule?.decls ?? "").toMatch(/font-size:\s*1rem/);
   });
 
@@ -256,6 +260,7 @@ describe("a text field iOS must not zoom into", () => {
     const parts = selectors(floorRule()?.selector ?? "");
     const inputHalf = parts.find((p) => p.includes("input")) ?? "";
     const textareaHalf = parts.find((p) => p.includes("textarea")) ?? "";
+    const selectHalf = parts.find((p) => p.includes("select")) ?? "";
 
     /* The heaviest hand-written rule of each kind, **found rather than
        listed** — so a new one that out-weighs the floor turns red here instead
@@ -264,14 +269,24 @@ describe("a text field iOS must not zoom into", () => {
       /\.(gloss-ask-input|srch-input|chat-input|chat-edit-box|cmt-note|cnd-box|crit-text|prof-box-input|quiz-answer|fb-input)\b/;
     const TEXTAREAS =
       /\.(chat-input|chat-edit-box|cmt-note|cnd-box|crit-text|prof-box-input|quiz-answer|fb-input)\b/;
+    /* A `<select>` is styled through its container rather than a class of its
+       own — `.chat-live-mic select`, not `.mic-select` — so it cannot be found
+       by the class list above. Matched on the element instead, which also
+       catches a container nobody has written yet. */
+    const SELECTS = /\bselect\b/;
     let worstInput = { sel: "(none found)", at: [0, 0] as [number, number] };
     let worstTextarea = { sel: "(none found)", at: [0, 0] as [number, number] };
+    let worstSelect = { sel: "(none found)", at: [0, 0] as [number, number] };
     for (const rule of rules(readerCssNoComments())) {
       const size = /font-size:\s*([\d.]+)rem/.exec(rule.decls);
       if (!size || Number(size[1]) >= 1) continue;
       for (const part of selectors(rule.selector)) {
-        if (!FIELDS.test(part)) continue;
         const at = spec(part);
+        if (SELECTS.test(part)) {
+          if (beats(at, worstSelect.at)) worstSelect = { sel: part, at };
+          continue;
+        }
+        if (!FIELDS.test(part)) continue;
         if (TEXTAREAS.test(part)) {
           if (beats(at, worstTextarea.at)) worstTextarea = { sel: part, at };
         } else if (beats(at, worstInput.at)) {
@@ -289,6 +304,17 @@ describe("a text field iOS must not zoom into", () => {
       beats(spec(textareaHalf), worstTextarea.at),
       `the textarea half (${textareaHalf}, ${spec(textareaHalf).join(",")}) must out-specify ` +
         `${worstTextarea.sel} (${worstTextarea.at.join(",")}), the heaviest rule holding a field under 1rem`,
+    ).toBe(true);
+    /* **A tie is a loss here, so this one is checked strictly.** A bare
+       `:root select` is (0,1,1) and so is `.chat-live-mic select` — equal, and
+       decided only by narrow-window.css being imported after mode-band.css.
+       That is the source-order dependence that let this rule ship applying to
+       nothing twice, so the select half carries `:not([hidden])` to win
+       outright, and `beats()` is what refuses the tie. */
+    expect(
+      beats(spec(selectHalf), worstSelect.at),
+      `the select half (${selectHalf}, ${spec(selectHalf).join(",")}) must out-specify ` +
+        `${worstSelect.sel} (${worstSelect.at.join(",")}), the heaviest rule holding a select under 1rem`,
     ).toBe(true);
     /* Named, because it is the one that got past the previous version of this
        test, and a search that stopped finding it would go green over nothing. */
@@ -326,7 +352,11 @@ describe("a text field iOS must not zoom into", () => {
     const offenders: string[] = [];
     for (const sheet of readerSheets()) {
       for (const rule of rules(coarseBlocks(stripComments(sheet.css)))) {
-        if (!/\binput\b|\btextarea\b|-input\b|-box\b|-note\b|-text\b|-answer\b/.test(rule.selector)) {
+        if (
+          !/\binput\b|\btextarea\b|\bselect\b|-input\b|-box\b|-note\b|-text\b|-answer\b/.test(
+            rule.selector,
+          )
+        ) {
           continue;
         }
         const size = /font-size:\s*([\d.]+)rem/.exec(rule.decls);

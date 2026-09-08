@@ -485,8 +485,15 @@ export function PrivacyPage() {
           The <strong className="tw:text-foreground">Archive</strong> button on your shelf takes an
           article off the shelf and out of your library search, and you can bring it back at any
           time under “Show archived”. Nothing is destroyed, and your notes on it are still there.
-          There is no button that really erases an article — undo matters more than tidiness — so if
-          you want one actually gone, email us and we will do it.
+        </p>
+        <p>
+          If you want an article actually gone,{" "}
+          <strong className="tw:text-foreground">Delete permanently</strong> on the article’s own
+          page does that. It erases the article and everything you did with it — your comments,
+          notes, highlights, questions and chats, and everything the models made from it. There is
+          no undo and no copy we can bring back for you, which is why it asks twice. What it cannot
+          reach is a copy already downloaded to a device: a page or an image your browser or
+          somebody else’s has kept is out of our hands.
         </p>
         <p>
           If you had shared an article and then archive it, it stops being listed anywhere public —
@@ -615,8 +622,10 @@ export function PrivacyPage() {
           — and, worse, a second public address saying things about what we do
           that has to stay true alongside this one. The words belong beside "What
           you add is your responsibility" two sections up, which is the same fact
-          told to the other party, and beside "Deleting things", which is already
-          "email us and we will do it by hand". Findability comes from the link
+          told to the other party, and beside "Deleting things", which since
+          2026-09-07 is a button the owner can press rather than an email we
+          answer by hand — for the article. The account is still the email.
+          Findability comes from the link
           rather than from the page's name: nobody has to guess that a rights
           complaint lives under Privacy, because the two places a stranger meets
           a republished article both carry `TAKEDOWN_LINK` pointing straight at

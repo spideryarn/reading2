@@ -171,6 +171,28 @@ Two rules now live there beside the dock's, and both are floors rather than fixe
   password, the shelf's search, Add URL, and the library's in-place title editor — carry
   `tw:any-pointer-coarse:text-base` at their own call sites.
 
+  **`<select>` joined it on 2026-09-08**, working the second report of the same bug
+  (SPIDERYARN-READING2-2H, the Feedback dialog zooming on an iPhone — which the `textarea` half had
+  already fixed). The composer's stance picker was still 13.28px, measured in Chrome after the rule
+  shipped, because `select` was named nowhere in it: the heading above says *the types that raise a
+  keyboard*, and a `<select>` on iOS raises a wheel picker instead. **That framing is narrower than
+  the behaviour** — iOS zooms on *focus*, whatever kind of thing the control opens.
+
+  What establishes that is WebKit's source rather than the widely copied
+  `input, select, textarea` recipe: `WKContentViewInteraction.mm` says a non-text control such as a
+  `<select>` "can be zoomed immediately" on focus and then takes the same zoom path a text field
+  takes, and `WKWebViewIOS.mm` computes the target scale as `16 / nodeFontSize` — **1.20× at
+  13.28px**, which is the size the composer's stance picker actually was. **But that scaling is
+  gated to WebKit's small-screen idiom**, so it is an iPhone claim, not an iPad one; the rule is
+  load-bearing on a phone and harmless on a tablet. Still reasoned rather than measured — nobody
+  here has run that Safari build, this box has no iOS device, and Chromium reproduces the zoom for
+  no control at all.
+
+  It carries `:not([hidden])` for the specificity as well as the semantics: a bare `:root select`
+  **ties** with `.chat-live-mic select` at (0,1,1), and a tie here is settled only by import order,
+  which is the dependence that broke this rule twice. `:disabled` is deliberately **not** excluded —
+  a control changes disabled state, and excluding it would make its type jump size as it did.
+
 [`tests/touch-controls.test.ts`](../../tests/touch-controls.test.ts) holds both, and says in its own
 header what a text scanner can and cannot prove about whether a finger lands on a button.
 

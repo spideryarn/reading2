@@ -3065,7 +3065,10 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
       ? await freeSlug(request.slug, request.url)
       : request.upload
         ? { kind: "minted", slug: slugWithShortId(request.slug) }
-        : { kind: "adopted", slug: request.slug };
+        : /* From the shelf, and the preflight a few lines up has just proved it:
+             this is *"run something on the article I already have"*, and a slug
+             nobody has is refused there rather than reaching this line. */
+          { kind: "adopted", from: "shelf", slug: request.slug };
 
   /* **`request.url`, not the URL read off disk below**, for the reason
      `workKey` gives: it has to be a property of the *request*. Uploads have
@@ -3144,6 +3147,31 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
          unique index on the column — and if none does, the caller releases it
          (src/billing/admission.ts). */
       ...(request.ingestEventId !== undefined && { ingestEventId: request.ingestEventId }),
+      /* **The preflight above, said again where it can be believed.** That check
+         reads `articleExists` on the pool, minutes of nothing in particular
+         later this loop inserts, and a delete committing in between leaves a
+         queued job whose worker calls `lockOrCreateArticle` and **remakes the
+         article the reader destroyed**. The store re-asks it under the article
+         lock. GPT Sol's F4, docs/plans/260906h-delete-an-article-permanently.md.
+
+         **From the allocation, not from the request**, and that is F21 from the
+         same review: `!request.url && !request.upload` misses the paste of an
+         address the shelf already holds, which adopts a real article's slug and
+         looks exactly like the paste that mints. Only the allocation knows,
+         and it is recomputed on every turn of this loop because both repairs
+         reallocate. `insistsOnTheArticle` and `SlugAllocation` have the three
+         cases. */
+      requiresArticle: insistsOnTheArticle(allocation),
+      /* **The two rows this insert leans on**, when it leans on one. Both are
+         the same shape of fact as `requiresArticle` and are closed the same way
+         — a lookup out here, re-asked under a lock in there — and both are what
+         is left of the resurrection race once the article is not the thing
+         being asked about. GPT Sol's F40 and F41,
+         docs/plans/260906h-delete-an-article-permanently.md;
+         `EnqueueTicket` (src/store/jobs.ts) has each one's argument. */
+      ...(request.retryOf !== undefined && { retryOf: request.retryOf }),
+      ...(allocation.kind === "adopted" &&
+        allocation.from === "queue" && { adoptedFromJob: allocation.holder }),
     });
 
     /**
@@ -3215,7 +3243,13 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
       if (request.retryOf) return handBackToARetry(outcome.job, owner, drive);
       allocation = request.url
         ? await freeSlug(request.slug, request.url)
-        : { kind: "adopted", slug: outcome.job.slug };
+        : /* Unreachable, as the paragraph above says — only a request carrying a
+             URL can be told `sourceTaken`. From the *queue* if it ever were: the
+             name comes from another live job of this reader's, which may not
+             have opened a draft, so nothing here may insist on an article — but
+             it must still name the holder, so that the store can insist on
+             *that* instead (F41). It is the job the store just handed back. */
+          { kind: "adopted", from: "queue", slug: outcome.job.slug, holder: outcome.job.id };
       continue;
     }
 
@@ -3450,12 +3484,13 @@ export function sameWork(
 }
 
 /**
- * **A slug, and which of the two things happened to get it.**
+ * **A slug, and which of the three things happened to get it.**
  *
- * *Minted* means this request claimed a new name; *adopted* means it named an
- * article that already exists, or one another request of this reader's is
- * already making. `EnqueueTicket.reservesName` (src/store/jobs.ts) is exactly
- * `kind === "minted"`, and two of the queue's four unique indexes turn on it.
+ * *Minted* means this request claimed a new name. *Adopted* means it landed on a
+ * name something else already has — and `from` says which something, because the
+ * two are not interchangeable. `EnqueueTicket.reservesName` (src/store/jobs.ts)
+ * is exactly `kind === "minted"`, and two of the queue's four unique indexes
+ * turn on it; `EnqueueTicket.requiresArticle` is exactly `from === "shelf"`.
  *
  * **A union rather than a bare string plus a boolean beside it**, because the
  * fact is known at the moment of allocation and *nowhere else*. Every attempt
@@ -3465,10 +3500,57 @@ export function sameWork(
  * sat on the shelf for a month carries a URL exactly as a fresh paste does. The
  * type makes losing the fact a compile error. GPT Sol, 2026-09-02, and
  * docs/plans/260902e-a-per-article-job-queue-that-appends-and-modes-that-start-themselves.md § 1b.
+ *
+ * ## `from`, and the finding that added it
+ *
+ * `requiresArticle` was derived from the *request* — `!request.url &&
+ * !request.upload` — and a URL request is not one shape but three. A paste of an
+ * address already on the shelf adopts that article's slug and is going to run on
+ * an article that exists; a paste that mints, or that adopts from another
+ * request seconds old which has not opened its draft yet, is going to *make*
+ * one. The request looks identical in all three cases, so the classification was
+ * wrong for the first: a delete committing between the shelf lookup and the
+ * insert left a queued job whose worker called `lockOrCreateArticle` and
+ * rebuilt the article the reader had destroyed. GPT Sol's F21,
+ * docs/plans/260906h-delete-an-article-permanently.md;
+ * tests/article-delete-pg.test.ts § *a fresh paste for a URL the shelf is
+ * losing*.
+ *
+ * - `"shelf"` — an `articles` row of this reader's holds this address, or the
+ *   request named the article outright. Durable, and the store may insist on it.
+ * - `"queue"` — a queued or running job of this reader's is minting for this
+ *   address. **Not** durable, and there may be no article row at all yet, so
+ *   insisting would refuse the legitimate double-paste `freeSlug` exists to
+ *   handle.
+ *
+ * ## Why the queue branch carries the holder's id
+ *
+ * Because *"a queue holder was seen"* is a fact about the moment of the lookup
+ * and nothing else, and the insert happens later. GPT Sol's F41 on the same
+ * plan: the holder publishes and finishes, the owner destroys the article, and
+ * the delayed request then inserts on a slug whose article has gone — because
+ * `requiresArticle` is deliberately false for this branch. The store closes
+ * that by re-asking *is **that** job still active* under the article lock, and
+ * it can only ask about a job it has been told the name of. Recovering the
+ * holder later is the same guess `from` itself exists to stop being made.
  */
 export type SlugAllocation =
   | { kind: "minted"; slug: string }
-  | { kind: "adopted"; slug: string };
+  | { kind: "adopted"; from: "shelf"; slug: string }
+  | { kind: "adopted"; from: "queue"; slug: string; holder: string };
+
+/**
+ * **Must the store find an `articles` row before it inserts this job?**
+ *
+ * One line, named, because it is the only place the mapping from provenance to
+ * refusal is written down — and because the version of it that lived inline was
+ * derived from the request instead and was wrong twice over (F20, F21). See
+ * `SlugAllocation` for what each answer means, and `EnqueueTicket.requiresArticle`
+ * (src/store/jobs.ts) for what the store does with it.
+ */
+function insistsOnTheArticle(allocation: SlugAllocation): boolean {
+  return allocation.kind === "adopted" && allocation.from === "shelf";
+}
 
 /**
  * **The slug this URL should use: the one it already has, or a fresh one.**
@@ -3533,11 +3615,37 @@ export type SlugAllocation =
 export async function freeSlug(
   slug: string,
   url: string,
-  alreadyHolding: (urlKey: string) => Promise<string | undefined> = slugAlreadyHolding,
+  alreadyHolding: (urlKey: string) => Promise<SlugHolder | undefined> = slugAlreadyHolding,
 ): Promise<SlugAllocation> {
   const held = await alreadyHolding(urlKey(url));
-  return held === undefined ? { kind: "minted", slug: slugWithShortId(slug) } : { kind: "adopted", slug: held };
+  if (held === undefined) return { kind: "minted", slug: slugWithShortId(slug) };
+  /* The two adoptions are spelled out rather than spread, because they are not
+     the same allocation: a queue adoption carries the holder it adopted from,
+     and the type will not let it be built without one. See `SlugAllocation`. */
+  return held.from === "shelf"
+    ? { kind: "adopted", from: "shelf", slug: held.slug }
+    : { kind: "adopted", from: "queue", slug: held.slug, holder: held.jobId };
 }
+
+/**
+ * **What already has this address, and which of the two kinds of thing it is.**
+ *
+ * The lookup used to answer a bare slug, and the caller could not then tell a
+ * durable article from a job that might be gone a second later — which is
+ * exactly the difference `SlugAllocation.from` exists to carry. Answering the
+ * pair here rather than re-deriving it is the same argument the allocation type
+ * itself makes: the fact is known at the lookup and nowhere afterwards.
+ */
+export type SlugHolder =
+  /** An article this reader owns, published and durable. */
+  | { slug: string; from: "shelf" }
+  /**
+   * A live job of theirs, **and its id** — which the caller needs and cannot
+   * get back afterwards. `SlugAllocation` § *Why the queue branch carries the
+   * holder's id* is the whole argument; the union is what stops the pair coming
+   * apart.
+   */
+  | { slug: string; from: "queue"; jobId: string };
 
 /**
  * **The slug a retry should use**, which is `freeSlug`'s three branches with
@@ -3633,7 +3741,7 @@ export async function slugForRetry(
     /* A published article already holds this address, so it is by definition the
        article this address is, and the one the checkpoints are under. Durable,
        which is what makes adopting it safe — see the header. */
-    if (shelved !== undefined) return { kind: "adopted", slug: shelved };
+    if (shelved !== undefined) return { kind: "adopted", from: "shelf", slug: shelved };
     return { kind: "minted", slug: request.slug };
   }
   /* An upload has no address, so there is nothing to ask and nothing that could
@@ -3644,7 +3752,7 @@ export async function slugForRetry(
      shape already and always landed on the right article — this branch exists so
      that a retry has one allocation rather than two, not because anything about
      it changes. */
-  return { kind: "adopted", slug: request.slug };
+  return { kind: "adopted", from: "shelf", slug: request.slug };
 }
 
 /**
@@ -3659,8 +3767,11 @@ export async function slugForRetry(
  * rows come back and are matched here — see src/store/find-article.ts for what
  * that costs and why it is affordable.
  */
-async function slugAlreadyHolding(key: string): Promise<string | undefined> {
-  return (await slugForUrlKey(key)) ?? (await inFlightSlugForUrlKey(key));
+async function slugAlreadyHolding(key: string): Promise<SlugHolder | undefined> {
+  const shelved = await slugForUrlKey(key);
+  if (shelved !== undefined) return { slug: shelved, from: "shelf" };
+  const inFlight = await inFlightSlugForUrlKey(key);
+  return inFlight === undefined ? undefined : { ...inFlight, from: "queue" };
 }
 
 /**
@@ -3675,11 +3786,19 @@ async function slugAlreadyHolding(key: string): Promise<string | undefined> {
  * (`ACTIVE`, src/store/jobs.ts, and every one of the queue's partial unique
  * indexes is over exactly those two); a cancelled or failed job is not holding
  * anything.
+ *
+ * **The id comes back with the slug** since 2026-09-08, because the caller has
+ * to be able to name the holder again later — `SlugAllocation` § *Why the queue
+ * branch carries the holder's id*. Answering a bare slug meant the adoption
+ * recorded only that *something* had been seen, which is a fact that has
+ * already expired by the time anything acts on it.
  */
-async function inFlightSlugForUrlKey(key: string): Promise<string | undefined> {
+async function inFlightSlugForUrlKey(
+  key: string,
+): Promise<{ slug: string; jobId: string } | undefined> {
   for (const job of await store.list(currentOwnerId())) {
     if (job.status !== "queued" && job.status !== "running") continue;
-    if (job.url && urlKey(job.url) === key) return job.slug;
+    if (job.url && urlKey(job.url) === key) return { slug: job.slug, jobId: job.id };
   }
   return undefined;
 }

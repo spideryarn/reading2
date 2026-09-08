@@ -84,3 +84,35 @@ into a recoverable one.
 Two questions in it are Greg's, not ours: **hard-delete, or `deleted_at` with a 30-day purge** (the
 boring option, and the same shape as `archived_at`); and **what a public link to a deleted article
 should do**.
+
+## What Greg decided, 2026-09-06 — and the one recommendation above he overruled
+
+The plan is
+[260906h-delete-an-article-permanently.md](../plans/260906h-delete-an-article-permanently.md), and
+the section above is the backbone of it: the four failure modes are four of its stages, and the
+metadata-page-only placement, the confirmation naming what goes, and the export offer beside it all
+went in as written. Both of the questions left to Greg came back as **hard delete**, immediately —
+*"Archive is the grace period"*, so a `deleted_at` with a purge would be a second archive under
+another name — and therefore a public link to a deleted article finds nothing, which is what the
+confirmation now says out loud.
+
+**The one thing here that was overruled is the gate.** The recommendation above wanted Delete
+offered *only* over an already-archived article, so that "offer to just archive instead" became
+structural. Greg's call: a gate is a greyed-out control that needs explaining, and it doubles the
+trip for somebody who meant it — while the two-step confirm already buys the safety a mis-tap needs.
+The steering the gate was for is done by **one sentence of copy** instead, in the control itself:
+*If you only want it off the shelf, Archive above does that and can be reversed.*
+
+Worth recording rather than quietly dropping, because the reasoning above is still right about the
+mis-tap: what answers it is not the gate but the placement (metadata page only, never the shelf card,
+whose buttons are hover-revealed and adjacent) plus a confirm button that deliberately does **not**
+appear where the trigger was.
+
+**The storage recommendation was overruled too, and then re-confirmed under challenge.** This note
+said orphaned bucket objects are the safe failure and cross-owner deletion the unsafe one, and Greg
+took the other side on the honesty argument — *"permanently delete" over a PDF still sitting in our
+bucket is a claim the privacy page cannot make honestly.* Both a cross-model review and Fable then
+argued the other way (the page never promised the bytes go, and doing it safely means a blob
+catalogue with locking and a durable queue), and **Greg chose again with that in front of him: build
+the catalogue.** It is Stage E of the plan, last and separately reviewed, for exactly the reason
+given above.

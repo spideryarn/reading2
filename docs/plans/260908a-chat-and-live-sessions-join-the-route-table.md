@@ -678,3 +678,29 @@ every slice and is worth stating rather than absorbing silently.
 
 Complexity: 136 findings against the repo, of which `serveAuthenticatedApi` is now **125** against a
 ceiling of 25 — 153 before this slice.
+
+## Closed, 2026-09-08 04:56
+
+260907b pushed `pathish` and **repointed the control at `/api/comments` themselves**, so the line in
+§ *Stage 3* saying this slice would repoint it is done and was done by them. Their merge found
+`AUTH_ROUTES` at 25 → **37** with no duplicate pair keys, attributed to these commits before the
+count was believed — which is the habit the referee merge taught both sessions.
+
+**The combination none of the three runs had covered was then run here**: their `pathish` fix, this
+slice's two `moved` prefixes, and the move itself, all on `dev` as pushed. **326 of 326.** That
+matters because until `pathish` landed, `/api/chat` and `/api/live` in `moved` were a line that
+could not fail; they are now a line that passes, which is a different fact and the only one worth
+recording.
+
+`/api/comments` is unclaimed by either session. Whoever takes it inherits a control already pointing
+at their own domain, which goes red the moment they move a guard — and
+`POST /api/comments/:slug/:id/answer` needs its oracle written first, for the reason in § *The queue
+after this slice*.
+
+**One footnote on how this section was nearly written.** The first attempt appended it through a
+double-quoted shell string, and the shell ate every unescaped backtick as command substitution — the
+paragraphs landed with `pathish`, `/api/chat` and the rest simply missing, which reads as clumsy
+prose rather than as damage. It is the same class as the escape bug recorded in 260907e § *the
+Python `SyntaxWarning`*: **markup that is punctuation to one language and syntax to another, passed
+through both.** Write the text to a file and have the language read it; do not interpolate prose
+through a shell.
