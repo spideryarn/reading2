@@ -17,10 +17,10 @@
  *  2. **No score, anywhere.** Greg asked for a positive/negative icon and a
  *     red/green scheme *"but without a score"*. A percentage, a bar or a number
  *     hands the reader a verdict on a piece they are in the middle of reading.
- *  3. **`neutral` and `unknown` are drawn as calmly as the rest.** A model that
+ *  3. **`neither` and `cannot-tell` are drawn as calmly as the rest.** A model that
  *     cannot tell whether a page agrees should say so and be believed — the
  *     rule docs/project/timeline.md applies to an undated row.
- *  4. **`relation`, `valence` and `applies` are grouped under "AI
+ *  4. **`relation`, `lean` and `applies` are grouped under "AI
  *     interpretation", and the quotation is not.** They are the model's reading
  *     of a stranger's page; the quotation is characters we located in that
  *     page's own extract. A row that draws them alike is claiming the first is
@@ -49,8 +49,8 @@ import type {
   ClaimDebateRow,
   Debate,
   DebateCounts,
+  DebateLean,
   DebateLosses,
-  DebateValence,
   DirectDebateRow,
   IdentificationLevel,
 } from "../src/types.js";
@@ -67,7 +67,7 @@ import {
 
 const {
   DebatePanel,
-  VALENCE_APPEARANCE,
+  LEAN_APPEARANCE,
   identificationEvidence,
   keptNote,
   leadNote,
@@ -113,7 +113,7 @@ function direct(over: Partial<DirectDebateRow> = {}): DirectDebateRow {
     sourceQuote: "the argument here does not survive its own third section",
     articleReferenceQuote: "Notes on my sourdough starter, week 3",
     relation: "disputes",
-    valence: "negative",
+    lean: "leans-against",
     applies: "It says the piece's third section contradicts its second.",
     /* The evidence that this page is about this piece. A row that earned none
        could not be in this group at all. */
@@ -131,7 +131,7 @@ function claim(over: Partial<ClaimDebateRow> = {}): ClaimDebateRow {
     title: "On starters",
     sourceQuote: "warmer water is what a day-three starter wants",
     relation: "qualifies",
-    valence: "neutral",
+    lean: "neither",
     applies: "It agrees with the claim but only above 22°C.",
     claimQuote: "a starter needs cool water",
     blockId: KNOWN,
@@ -480,11 +480,11 @@ describe("one list, and each row saying what it is", () => {
   });
 });
 
-describe("valence is a direction, never a score", () => {
-  it("has an appearance for every valence and no number in any of them", () => {
-    const keys = Object.keys(VALENCE_APPEARANCE).sort();
-    expect(keys).toEqual(["negative", "neutral", "positive", "unknown"]);
-    for (const [name, look] of Object.entries(VALENCE_APPEARANCE)) {
+describe("the lean is a direction, never a score", () => {
+  it("has an appearance for every lean and no number in any of them", () => {
+    const keys = Object.keys(LEAN_APPEARANCE).sort();
+    expect(keys).toEqual(["cannot-tell", "leans-against", "leans-for", "neither"]);
+    for (const [name, look] of Object.entries(LEAN_APPEARANCE)) {
       expect(look.label, name).not.toMatch(/\d/);
       expect(look.label, name).not.toContain("%");
     }
@@ -496,17 +496,17 @@ describe("valence is a direction, never a score", () => {
     expect(text().toLowerCase()).not.toContain("score");
   });
 
-  /* Rule 3. `unclear` and `unknown` are not failure states, and the way a panel
-     says so is that they get the same furniture as the rest: a named chip with
-     visible words in it, not an absence and not a warning. */
-  it("draws neutral and unknown with the same chip the others get", () => {
-    const four: DebateValence[] = ["positive", "negative", "neutral", "unknown"];
+  /* Rule 3. `unclear` and `cannot-tell` are not failure states, and the way a
+     panel says so is that they get the same furniture as the rest: a named chip
+     with visible words in it, not an absence and not a warning. */
+  it("draws neither and cannot-tell with the same chip the others get", () => {
+    const four: DebateLean[] = ["leans-for", "leans-against", "neither", "cannot-tell"];
     paint(
       owner({
         debate: artefact({
           direct: {
-            rows: four.map((valence, i) =>
-              direct({ id: `spya-d2w4r${"23456789"[i] ?? "2"}`, valence }),
+            rows: four.map((lean, i) =>
+              direct({ id: `spya-d2w4r${"23456789"[i] ?? "2"}`, lean }),
             ),
             counts: counts({ reportedRows: 4, keptRows: 4 }),
           },
@@ -516,32 +516,32 @@ describe("valence is a direction, never a score", () => {
         }),
       }),
     );
-    const chips = [...host.querySelectorAll(".dbt-valence")];
+    const chips = [...host.querySelectorAll(".dbt-lean")];
     expect(chips).toHaveLength(4);
     for (const chip of chips) {
       expect((chip.textContent ?? "").trim().length).toBeGreaterThan(0);
-      /* No chip is drawn as a fault. A dimmed or warning-coloured "unknown"
+      /* No chip is drawn as a fault. A dimmed or warning-coloured "cannot-tell"
          would be the panel disbelieving its own model out loud. */
       expect(chip.className).not.toMatch(/error|warn|fail/);
     }
-    for (const valence of four) {
-      expect(text()).toContain(VALENCE_APPEARANCE[valence].label);
+    for (const lean of four) {
+      expect(text()).toContain(LEAN_APPEARANCE[lean].label);
     }
   });
 });
 
 describe("what the model read, and what we located", () => {
   /* Rule 4, and it is the assertion that stops the two halves of a row being
-     drawn alike. `applies`, `relation` and `valence` are inside the labelled
+     drawn alike. `applies`, `relation` and `lean` are inside the labelled
      block; the quotation is outside it. */
-  it("groups relation, valence and applies under 'AI interpretation'", () => {
+  it("groups relation, lean and applies under 'AI interpretation'", () => {
     paint(owner());
     const read = host.querySelector(".dbt-ai");
     expect(read).not.toBeNull();
     const inside = read?.textContent ?? "";
     expect(inside).toContain("AI interpretation");
     expect(inside).toContain("It says the piece's third section contradicts its second.");
-    expect(inside).toContain(VALENCE_APPEARANCE.negative.label);
+    expect(inside).toContain(LEAN_APPEARANCE["leans-against"].label);
     expect(inside).toContain("disputes");
     /* The positive control: the located quotation is *not* in there. */
     expect(inside).not.toContain("the argument here does not survive its own third section");

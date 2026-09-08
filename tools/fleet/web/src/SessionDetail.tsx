@@ -17,7 +17,8 @@
  *     go in order with everything else pressed.
  *  4. **Waiting to go to it** — the queue, because a queue you cannot see
  *     surprises you an hour later in somebody else's conversation.
- *  5. **Recent messages**, which does not exist yet and says so. See below.
+ *  5. **Recent messages** — the tail of the session's own transcript, drawn for
+ *     every row whatever its status (RecentMessages.tsx). See below.
  *  6. **Where it is**, the identifiers and the directory, last because they are
  *     what you read when two rows look the same rather than what you came for.
  *
@@ -26,17 +27,28 @@
  * never on the list cards, where forty text inputs on a phone would be the
  * whole page. `RenameField` below carries the one rule nobody would guess.
  *
- * ## The slot, and why it is empty rather than plausible
+ * ## The slot that was empty for a day, and the rule it left behind
  *
- * The transcript reader is stage v0.4c and is being built by somebody else.
- * `~/.claude/projects/<slug>/` is a slugified working directory and the
- * slugification is lossy, so the file has to be resolved from `row.meta.dir`
- * plus `row.claudeSessionId` — both of which are on this page, and both of
- * which are printed in the slot so it is obvious the material is here and the
- * reader is not. **An empty panel that says the messages are not wired up is
- * correct; a panel that shows nothing and looks finished is not** — a mocked
- * conversation would be the most expensive lie this tool can tell, for the same
- * reason the Orchestrator tab refuses to draw a fake decision log.
+ * Section 5 held a dashed box saying *"Recent messages are not wired up yet"*
+ * from 2026-09-07 until 2026-09-08, while the reader was built elsewhere. The
+ * argument for leaving it empty is the one worth keeping now that it is full:
+ * **an empty panel that says so is correct; a panel that shows nothing and
+ * looks finished is not** — a mocked conversation would be the most expensive
+ * lie this tool can tell, for the same reason the Orchestrator tab refuses to
+ * draw a fake decision log.
+ *
+ * So the section that replaced it is written to the same rule pointed the other
+ * way: it shows its failures loudly rather than smoothing them into a blank.
+ * `not-found`, `unreadable` and *this page never got an answer* are three
+ * different sentences and none of them renders as an empty conversation; a
+ * transcript last written hours ago against a `working` row says out loud that
+ * it may be the previous occupant of the pane. RecentMessages.tsx carries the
+ * reasoning, and messages-client.ts carries the parse.
+ *
+ * **And the slot's other half is gone deliberately.** It printed `row.meta.dir`
+ * and `row.claudeSessionId` to show the material was here and the reader was
+ * not; both are still on the page, in *Where it is*, where they belong now that
+ * nobody is waiting for them.
  *
  * ## Nothing here decides whether a send will be allowed
  *
@@ -51,9 +63,11 @@
 import { useCallback, useState, type ReactNode } from "react";
 
 import { ActionOutcomeCard, SessionActions, SessionQueue } from "./ActionButtons";
+import { RecentMessages } from "./RecentMessages";
 import { Handles, LaunchMode, QuestionCard, StatusPill, Uptime } from "./SessionParts";
 import { Explain } from "./Tooltip";
-import type { ActionOutcome } from "./actions-client";
+import { hasDeliverable, queueFor, type ActionOutcome } from "./actions-client";
+import type { MessagesApi } from "./messages-client";
 import { NAME_RULE_TEXT, looksLikeAName, type RenameApi, type RenameOutcome } from "./rename-client";
 import type { SteerApi, SteerOutcome } from "./steer-client";
 import type { FleetGate, FleetRow } from "./types";
@@ -286,6 +300,7 @@ export function SessionDetail({
   steer,
   rename,
   actions,
+  messages,
   onRefresh,
   onBack,
 }: {
@@ -295,6 +310,13 @@ export function SessionDetail({
   rename: RenameApi;
   /** The vocabulary, the queues, and the four requests that touch them. */
   actions: ActionsUi;
+  /**
+   * The transcript reader. **A bare api rather than a `…Ui` hook**, because it
+   * is asked once per open and once per press rather than polled — there is no
+   * shared feed to hold, and putting one here is how it would end up on the
+   * refresh loop. RecentMessages.tsx § one session at a time.
+   */
+  messages: MessagesApi;
   /** Ask the box for a fresh snapshot — offered after a 409, which means stale. */
   onRefresh: () => void;
   /** Non-null only when the list is not on screen beside this, i.e. one pane. */
@@ -374,6 +396,49 @@ export function SessionDetail({
    * one gesture into the other would be answering a question nobody asked.
    */
   const [queueOutcome, setQueueOutcome] = useState<ActionOutcome | null>(null);
+
+  /**
+   * **Whether Queue is offered at all**, which on an `idle` session it is not.
+   *
+   * Greg, 2026-09-08: *"I tried using 'Queue' to send a message to an idle
+   * session, and nothing happened [...] if the session is idle, either hide the
+   * Queue button and/or auto-send."* Half of that was the queue having no drain
+   * (v0.5f, drain.ts). The other half is this: a session at a prompt takes the
+   * keystroke immediately, so Queue is the same act about 73 seconds later, and
+   * the page was offering the slow one with nothing said in its favour. Hiding
+   * it beats auto-sending because auto-send makes one button mean two different
+   * acts depending on state you cannot see, and the argument for this whole
+   * tool is that a person can tell what a press will do before pressing it.
+   *
+   * **The condition is the STATUS, not "the queue is empty"** — status is what
+   * the person is reasoning about, and what the pill beside the title is
+   * already showing them. The exception is a session that already has something
+   * waiting: then Queue stays, because ordering is the only thing the queue is
+   * for. queue.ts: *"a message must land after the one that says 'do X' and
+   * before the one that says 'push'"*, and two buttons that both send NOW would
+   * let this one overtake what is already in the line.
+   *
+   * **AND "WAITING" MEANS DELIVERABLE, NOT PRESENT IN THE LIST** — GPT Sol's D2
+   * and D3, 2026-09-08. Two kinds of item sit in the queue and are ahead of
+   * nothing: one the tmux generation has killed (`invalidated`, permanent, and
+   * `next()` now steps past it), and one past `maxAgeMs` that nothing will send
+   * unasked. If the only thing in an idle session's queue is one of those, the
+   * ordering guarantee this exception rests on does not exist, so `items.length`
+   * would offer the slower button for a reason that is not true. `hasDeliverable`
+   * asks the queue's own count rather than deciding here, for the same reason
+   * `stale` is asked rather than recomputed (routes-actions.ts's catalogue).
+   *
+   * **This is not the header's "nothing here decides whether a send will be
+   * allowed".** That rule is about REFUSALS: the server owns `steerableStatus`,
+   * its refusal carries the sentence that explains it, and a second copy here
+   * would be a rule to keep in step. Nothing below claims the box would refuse
+   * a queued message on an idle session — it would accept it, and deliver it a
+   * pass later. This is a claim about which of two accepted gestures is worth
+   * offering, which is a product judgment and belongs on the page.
+   */
+  const waiting = queueFor(actions.feed, row.id);
+  const offerQueue = row.status.kind !== "idle" || hasDeliverable(waiting);
+
   const onQueue = useCallback(async (): Promise<void> => {
     setBusy(true);
     const result = await actions.api.queueMessage(row, text);
@@ -487,19 +552,29 @@ export function SessionDetail({
           <Button variant="loud" onClick={onSend} disabled={busy || text.trim() === "" || unaddressable !== null}>
             {busy ? "Sending…" : "Send"}
           </Button>
-          {/* The second gesture, not a fallback for the first. See `onQueue`. */}
-          <Button onClick={() => void onQueue()} disabled={busy || text.trim() === "" || unaddressable !== null}>
-            Queue it
-          </Button>
+          {/* The second gesture, not a fallback for the first — and absent on
+              an idle session, where it would be the first one, slower. See
+              `offerQueue`. */}
+          {offerQueue ? (
+            <Button onClick={() => void onQueue()} disabled={busy || text.trim() === "" || unaddressable !== null}>
+              Queue it
+            </Button>
+          ) : null}
           {/* The newline rule is the server's and is checked there. It is worth
               saying up front because it is surprising: Claude Code's input box
               submits on Enter, so a two-line message would arrive as two, the
               first of them half a sentence. */}
           <span className="tw:text-[12px] tw:text-ink-faint">One line — a newline would submit it early.</span>
         </div>
+        {/* The delay is said out loud wherever Queue is offered, and in
+            seconds: "shortly" is the word that would make somebody press it and
+            then wait. ~73 seconds is the real cadence of a drain pass — the
+            collection takes about 13 and the loop then waits 60 from the end of
+            it (tools/fleet/drain.ts). */}
         <p className="tw:mt-1 tw:text-[12px] tw:text-ink-faint">
-          Send types it at the pane now. Queue puts it in the line below with anything else you have pressed, in
-          order, to go when the session is next at a prompt.
+          {offerQueue
+            ? "Send types it at the pane now. Queue puts it in the line below with anything else you have pressed, in order, to go when the session is next at a prompt — which is checked about every 73 seconds, so a queued message is never immediate."
+            : "Send types it at the pane now, which is all there is to do here: it is at a prompt, so queueing the same words would send the same keystrokes up to 73 seconds later. Queue comes back when it is working, or when something is already waiting in front of you."}
         </p>
       </Section>
 
@@ -518,25 +593,12 @@ export function SessionDetail({
         />
       </Section>
 
-      {/* ---------------------------------------- 5. the empty slot -- */}
+      {/* ------------------------------------- 5. the conversation -- */}
+      {/* Drawn for EVERY row, whatever its status. A shell has no transcript
+          and the honest answer there is the reader's own sentence, not a
+          section that quietly removed itself. See RecentMessages.tsx. */}
       <Section title="Recent messages">
-        <div className="tw:rounded-lg tw:border tw:border-dashed tw:border-rule-strong tw:p-3 tw:text-[13px] tw:text-ink-soft">
-          <p className="tw:font-medium tw:text-ink">Recent messages are not wired up yet.</p>
-          <p className="tw:mt-1">
-            Nothing on this page has read this session's transcript. Reading the tail of one is stage
-            v0.4c — the whole file is tens of megabytes and grepping it costs ten seconds, which is
-            the thing this tool exists not to do.
-          </p>
-          <p className="tw:mt-1 tw:text-ink-faint">
-            What it will be resolved from, both of which are already here:
-          </p>
-          <p className="tw:mt-1">
-            <Mono>{dir ?? "no directory recorded for this session"}</Mono>
-          </p>
-          <p className="tw:mt-0.5">
-            <Mono>{row.claudeSessionId ?? "no Claude session id"}</Mono>
-          </p>
-        </div>
+        <RecentMessages row={row} now={now} api={messages} />
       </Section>
 
       {/* --------------------------------------------- 6. where it is -- */}

@@ -61,12 +61,12 @@
  *     by the spaced matcher and stored as the *haystack's* spelling rather than
  *     the model's. It is the reader's one-action check.
  *  3. **The model's reading**, fenced off under *AI interpretation*.
- *     `relation`, `valence` and `applies` are what a model made of a stranger's
+ *     `relation`, `lean` and `applies` are what a model made of a stranger's
  *     page, and nothing in the returned evidence verifies any of them. Drawing
  *     them like the quotation would claim the first is as checkable as the
  *     second (the plan's § Attribution, rule 5).
  *
- * ## Valence is a direction with an icon, never a score
+ * ## The lean is a direction with an icon, never a score
  *
  * Greg: *"Maybe we could also apply a positive/negative icon and red/green
  * colour scheme, but without a score, but it is useful to be able to see at a
@@ -75,7 +75,7 @@
  * they are in the middle of reading, which is the summary-shaped failure
  * docs/project/vision.md exists to refuse.
  *
- * And `neutral` and `unknown` are drawn **as calmly as the other two** — same
+ * And `neither` and `cannot-tell` are drawn **as calmly as the other two** — same
  * chip, same size, same words, a quiet colour rather than a warning one. A model
  * that cannot tell whether a page agrees should say so and be believed; the
  * closest thing in this app to that problem is docs/project/timeline.md's rule
@@ -115,7 +115,7 @@ import {
   type BlockId,
   type ClaimDebateRow,
   type DebateCounts,
-  type DebateValence,
+  type DebateLean,
   type DirectDebateRow,
   type IdentificationLevel,
   type IdentificationSignal,
@@ -123,6 +123,7 @@ import {
   identificationLevel,
   identifiesOf,
   lossesOf,
+  readStoredLean,
 } from "../types.js";
 import { BlockRef } from "./BlockRef.js";
 import {
@@ -199,9 +200,9 @@ function referenceOf(row: DebateRow): string | null {
 }
 
 /**
- * **How each valence is drawn, and the record is total.**
+ * **How each lean is drawn, and the record is total.**
  *
- * Four rows because there are four values, and a `Record<DebateValence, …>` so
+ * Four rows because there are four values, and a `Record<DebateLean, …>` so
  * a fifth cannot be added without somebody deciding what it looks like. The
  * *label* is what a reader actually reads — the icon is the glance and the word
  * is the meaning, so a colour-blind reader and a screen reader both get the
@@ -211,26 +212,32 @@ function referenceOf(row: DebateRow): string | null {
  * colours off `--div-rg-*` (docs/project/colour-scales.md, the diverging red↔green
  * scale Greg asked for) plus one quiet grey, and it never reaches for the
  * scale's *middle* step: `--div-rg-4` is the centre of a ramp, and drawing
- * `neutral` there would say *zero on a scale we do not compute*. `neutral` and
- * `unknown` are two different facts — *it takes a side and it is neither* against
+ * `neither` there would say *zero on a scale we do not compute*. `neither` and
+ * `cannot-tell` are two different facts — *it takes a side and it is neither* against
  * *we could not tell* — with two icons and two sentences, and one calm colour,
  * because neither of them is a failure.
  *
- * **The target of the valence is the row's own**, which is why the labels do not
+ * **The target of the lean is the row's own**, which is why the labels do not
  * name it: the article itself on a direct row, the `claimQuote` on a claim row.
  * The row's own chip says which — `RowMark`, which is what the group heading
  * used to do — and the AI-interpretation block spells it out. Sol's F19 —
- * without a stated target "positive" could mean a friendly register, agreement
+ * without a stated target "leans-for" could mean a friendly register, agreement
  * with one claim, or praise for the whole piece.
+ *
+ * **The keys are agreement words and the labels are unchanged**, which is the
+ * whole shape of the 2026-09-08 repair: what the reader sees is exactly what
+ * they saw before, and what the *model* is asked for no longer invites it to
+ * report a passage's polarity toward its own subject. src/types.ts §
+ * `DebateLean`.
  */
-export const VALENCE_APPEARANCE: Record<
-  DebateValence,
+export const LEAN_APPEARANCE: Record<
+  DebateLean,
   { icon: typeof Info; label: string; tone: "for" | "against" | "quiet" }
 > = {
-  positive: { icon: ThumbsUp, label: "Supportive", tone: "for" },
-  negative: { icon: ThumbsDown, label: "Critical", tone: "against" },
-  neutral: { icon: Equal, label: "Neither for nor against", tone: "quiet" },
-  unknown: { icon: CircleHelp, label: "Could not tell", tone: "quiet" },
+  "leans-for": { icon: ThumbsUp, label: "Supportive", tone: "for" },
+  "leans-against": { icon: ThumbsDown, label: "Critical", tone: "against" },
+  neither: { icon: Equal, label: "Neither for nor against", tone: "quiet" },
+  "cannot-tell": { icon: CircleHelp, label: "Could not tell", tone: "quiet" },
 };
 
 /**
@@ -1151,7 +1158,14 @@ function RowMark({ row }: { row: DebateRow }) {
 
 /** One source, and the three things a row keeps apart. See the file header. */
 function Row({ row, onJump }: { row: DebateRow; onJump(id: BlockId): void }) {
-  const look = VALENCE_APPEARANCE[row.valence];
+  /* **`readStoredLean`, never `row.lean`.** This row may have come off JSONB
+     written before the vocabulary changed, where the field is called `valence`
+     and spelled `positive`; the type does not describe that and nothing
+     revalidates it on the way out of the database. Indexing the table with it
+     directly gives `undefined` and the next line crashes the panel — Sol's F68,
+     and `lossesOf`'s story in src/types.ts is the same mistake already made
+     once. */
+  const look = LEAN_APPEARANCE[readStoredLean(row)];
   const Icon = look.icon;
   const claim = claimOf(row);
   return (
@@ -1215,7 +1229,7 @@ function Row({ row, onJump }: { row: DebateRow; onJump(id: BlockId): void }) {
         <p className="dbt-ai-label">AI interpretation</p>
         <p className="dbt-ai-fields">
           <span className="dbt-relation">{row.relation}</span>
-          <span className={`dbt-valence dbt-valence-${look.tone}`}>
+          <span className={`dbt-lean dbt-lean-${look.tone}`}>
             <Icon size={12} aria-hidden="true" />
             {look.label}
           </span>

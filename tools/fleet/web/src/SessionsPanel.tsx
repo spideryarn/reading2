@@ -54,6 +54,7 @@ import { Handles, LaunchMode, QuestionCard, StatusPill, Uptime } from "./Session
 import { Explain } from "./Tooltip";
 import { COLUMN_MIN_PX, chooseColumns, choosePanes, spreadIntoColumns, useContainerWidth } from "./fit";
 import type { NewSessionApi } from "./new-session-client";
+import type { MessagesApi } from "./messages-client";
 import type { RenameApi } from "./rename-client";
 import type { SteerApi } from "./steer-client";
 import type { ActionsUi } from "./useActions";
@@ -273,6 +274,7 @@ export function SessionsPanel({
   steer,
   rename,
   actions,
+  messages,
   newSession,
   onRefresh,
 }: {
@@ -302,6 +304,12 @@ export function SessionsPanel({
   rename: RenameApi;
   /** The action vocabulary and the queues. Only the detail pane uses them. */
   actions: ActionsUi;
+  /**
+   * The transcript reader. **Only the detail pane uses it, and only for the one
+   * open row** — reading a transcript costs disk, and the list must never do it
+   * forty times. SessionDetail's `messages` prop says the rest.
+   */
+  messages: MessagesApi;
   newSession: NewSessionApi;
   onRefresh: () => void;
 }): ReactNode {
@@ -347,6 +355,7 @@ export function SessionsPanel({
         steer={steer}
         rename={rename}
         actions={actions}
+        messages={messages}
         onRefresh={onRefresh}
         onBack={panes === 1 ? () => onSelect(null) : null}
       />

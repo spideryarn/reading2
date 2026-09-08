@@ -215,7 +215,7 @@ interface FixtureRow {
   sourceQuote: string;
   articleReferenceQuote?: string;
   relation?: string;
-  valence?: string;
+  lean?: string;
   applies?: string;
 }
 
@@ -308,7 +308,7 @@ export function fixtureJournal(): DebateJournalEvent[] {
       sourceQuote: QUOTES.inExtract,
       articleReferenceQuote: QUOTES.namesArticle,
       relation: "qualifies",
-      valence: "negative",
+      lean: "leans-against",
       applies: "It accepts the schedule only for cool kitchens.",
     },
     /* 1 — THE RECOVERY CASE. The extract stops before the objection; the page
@@ -318,7 +318,7 @@ export function fixtureJournal(): DebateJournalEvent[] {
       sourceQuote: QUOTES.recoverable,
       articleReferenceQuote: QUOTES.namesArticle,
       relation: "disputes",
-      valence: "negative",
+      lean: "leans-against",
       applies: "It says the rule fails above a temperature the piece never names.",
     },
     /* 2 — recovery, but only in whole-body text: the words are in a comment
@@ -327,7 +327,7 @@ export function fixtureJournal(): DebateJournalEvent[] {
       url: URLS.comments,
       sourceQuote: QUOTES.inCommentsOnly,
       relation: "disputes",
-      valence: "negative",
+      lean: "leans-against",
       applies: "A reader reports the schedule failing.",
     },
     /* 3 — the paraphrase case. Nothing on that page says this. */
@@ -335,7 +335,7 @@ export function fixtureJournal(): DebateJournalEvent[] {
       url: URLS.paraphrase,
       sourceQuote: QUOTES.paraphrase,
       relation: "corroborates",
-      valence: "neutral",
+      lean: "neither",
       applies: "It agrees the method is unmeasured.",
     },
     /* 4 — the diagnostic. The words are on the page, either side of a paragraph
@@ -344,7 +344,7 @@ export function fixtureJournal(): DebateJournalEvent[] {
       url: URLS.blockJoin,
       sourceQuote: QUOTES.acrossBlocks,
       relation: "corroborates",
-      valence: "positive",
+      lean: "leans-for",
       applies: "It restates the schedule.",
     },
     /* 5 — a PDF. `unsupported`, and never counted as a page that lacks the words. */
@@ -352,7 +352,7 @@ export function fixtureJournal(): DebateJournalEvent[] {
       url: URLS.pdf,
       sourceQuote: "we report on a fortnight of twice-daily feeding at four ambient temperatures",
       relation: "extends",
-      valence: "positive",
+      lean: "leans-for",
       applies: "It measures what the piece guesses at.",
     },
     /* 6 — a dead link. `not-found`, and it belongs in `not attempted`. */
@@ -360,7 +360,7 @@ export function fixtureJournal(): DebateJournalEvent[] {
       url: URLS.gone,
       sourceQuote: "a page that used to answer this piece and has since been taken down entirely",
       relation: "disputes",
-      valence: "negative",
+      lean: "leans-against",
       applies: "It answered the piece directly.",
     },
     /* 7 — a URL the search never returned: `uncited` in production, and here
@@ -369,7 +369,7 @@ export function fixtureJournal(): DebateJournalEvent[] {
       url: URLS.uncited,
       sourceQuote: "a quotation attached to an address this run's search never returned at all",
       relation: "disputes",
-      valence: "negative",
+      lean: "leans-against",
       applies: "It is a real-looking address the model supplied itself.",
     },
     /* 8 — two words. Under the floor, so production drops it whatever any page
@@ -378,7 +378,7 @@ export function fixtureJournal(): DebateJournalEvent[] {
       url: URLS.inExtract,
       sourceQuote: QUOTES.belowFloor,
       relation: "corroborates",
-      valence: "positive",
+      lean: "leans-for",
       applies: "It mentions the schedule.",
     },
   ];

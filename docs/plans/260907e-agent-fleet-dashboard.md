@@ -716,6 +716,13 @@ Greg, 2026-09-08 — quoted in full in
 
 ### ✅ Stage v0.4c: recent messages (landed 2026-09-08, `ec05379c`)
 
+**The tick is honest and it was not the whole feature: this landed a *reader*, not something a
+person can see.** `tools/fleet/transcript.ts` and `GET /api/messages?id=` were built, tested and
+correct, and for a day no page called either of them — the detail pane went on drawing *"Recent
+messages are not wired up yet."* while this heading said done. Greg found it by looking at the
+page. The half that was missing is **Stage v0.4f** below;
+the tick stays because the half that landed is real.
+
 The detail pane's "recent messages" needs a source. Transcripts are on disk and are tens of
 megabytes; `gjd-remote ls` greps whole ones and costs 10–12s, which is the thing this tool exists
 not to do.
@@ -927,7 +934,34 @@ capture every pane — only `needs-you` rows. The mode is the one thing a blocke
 tell you (the modal covers the status bar), so a check reusing only the existing captures would have
 fired approximately never.
 
-### 🔵 Stage v0.4f: recent messages, which is half-landed and reads as done
+### ✅ Stage v0.4f: recent messages, which was half-landed and read as done (landed 2026-09-08)
+
+**Done.** `tools/fleet/web/src/messages-client.ts` parses the reply, `RecentMessages.tsx` draws it,
+and `SessionDetail.tsx`'s dashed placeholder is gone. Nothing in `transcript.ts` or `server.ts`
+changed — the route was right, and no bug was found in it.
+
+Four design calls worth keeping:
+
+- **Four arms, not three.** `RecentMessages` has `found` / `not-found` / `unreadable`; the client
+  adds `no-answer` for *this page never got a reply it could read*. Collapsing that into
+  `unreadable` would put the browser's own network trouble on screen in the server's voice, and
+  it is the same distinction `catalogueOffered` draws in actions-client.ts.
+- **`reachedStartOfFile` is `boolean | null`.** A server that did not send it has made no claim,
+  and defaulting it either way invents one — so the page has a third sentence saying it does not
+  know.
+- **`transcriptAge` fires only on `working`, at thirty minutes.** The threshold is a trade: the
+  full gate on this box runs 24 minutes and writes nothing to the transcript, so anything shorter
+  would fire on the healthiest thing a session does. `needs-you` is excluded on purpose — a
+  session parked on a dialog is silent for hours by design, and that is the row Greg opens the
+  page to see.
+- **The read is keyed on `row.id`, never the row object.** A new snapshot replaces every row
+  object each minute; depending on the object would have put a multi-megabyte disk read on the
+  sixty-second refresh loop, which is the one thing this section must not do.
+
+Ten mutations were applied to the finished code and every one was caught by the suite, including
+the brief's named minimum (an `unreadable` payload falling back to an empty `turns` array).
+
+**What was briefed, kept because the diagnosis is the interesting part:**
 
 **Greg, 2026-09-08:** *"Show the recent message(s) for each session when I click on it in `Sessions`
 mode, no matter what status."*
@@ -938,17 +972,17 @@ draws *"Recent messages are not wired up yet."* and points at this stage. So v0.
 and the thing a person can see is absent — which is the same class as the queue that nothing drained,
 caught this time by Greg looking at the page rather than by a check.
 
-- [ ] Call `/api/messages?id=` from the detail pane and render the reply's arms — it is a
+- [x] Call `/api/messages?id=` from the detail pane and render the reply's arms — it is a
       discriminated union with `unreadable` and `not-found` cases, and those are the ones that must
       not collapse into an empty conversation.
-- [ ] **No matter what status**, which is Greg's actual words and the easy thing to get wrong: a
+- [x] **No matter what status**, which is Greg's actual words and the easy thing to get wrong: a
       `shell` or `no-claude` row has no transcript, and the honest answer there is a sentence, not a
       blank panel.
-- [ ] It is agent-authored text from a process that may have handled hostile input. React escapes it;
+- [x] It is agent-authored text from a process that may have handled hostile input. React escapes it;
       nothing may add markup. Same rule as the pane capture.
-- [ ] Fix `OrchestratorPanel.tsx:65`, which calls v0.4c `"next"`, and the ✅ on v0.4c above.
+- [x] Fix `OrchestratorPanel.tsx:65`, which calls v0.4c `"next"`, and the ✅ on v0.4c above.
 
-### 🔵 Stage v0.5g: Queue on an idle session is a worse Send
+### ✅ Stage v0.5g: Queue on an idle session is a worse Send
 
 **Greg, 2026-09-08:** *"I tried using "Queue" to send a message to an idle session, and nothing
 happened, because it's waiting for something - if the session is idle, either hide the Queue button
@@ -959,14 +993,22 @@ queued message now goes out on the next pass. But the rest of the report stands,
 point rather than a bug: on an idle session the two buttons do the same thing, one of them a minute
 later, and the page offers no reason to prefer the slow one.
 
-- [ ] When the row is `idle`, **Send is the only button**. Not "hide Queue if the queue is empty" —
+- [x] When the row is `idle`, **Send is the only button**. Not "hide Queue if the queue is empty" —
       the condition is the status, because that is the condition the person is reasoning about.
-- [ ] When something is already queued for that session, Queue stays, and it stays for the reason
+- [x] When something is already queued for that session, Queue stays, and it stays for the reason
       the queue exists: order. Two buttons that both send *now* would interleave with what is
       waiting.
-- [ ] Say the delay out loud wherever Queue is offered. It is *"within a minute or so"* and the real
+- [x] Say the delay out loud wherever Queue is offered. It is *"within a minute or so"* and the real
       cadence is ~73 seconds, not 60 — the collection itself takes about 13.
-- [ ] The failing test first, and it is a rendering test: an `idle` row shows no Queue button.
+- [x] The failing test first, and it is a rendering test: an `idle` row shows no Queue button.
+
+**Built 2026-09-08.** `offerQueue` in `SessionDetail.tsx` carries the condition and the reason it is
+the status rather than the queue's length, plus the distinction the file's own header would otherwise
+make this look like an exception to: hiding a button is a claim about which of two ACCEPTED gestures
+is worth offering, not a second copy of the server's refusal rules. Both places that mention the
+queue now say ~73 seconds instead of *"within a minute or so"*. Four tests in
+`tests/fleet-web.test.tsx` § *queueing a message*; five mutants, each killed by the test that names
+its rule.
 
 ### 🔵 Stage v0.4g: the session detail view is cluttered
 
@@ -986,6 +1028,36 @@ first and that is not a technical fork.
 - [ ] Ask Fable for the ordering, not for a redesign: *what does a person need to see first on a
       phone at 3am*. The answer is a product call, so anything user-visible beyond ordering and
       density goes to Greg.
+
+### The pane shows text nobody typed, and it reads as an instruction
+
+Found 2026-09-08 while proving the drain end-to-end against a throwaway session. After each turn,
+Claude Code renders a **suggested next prompt** inside its input box — same `❯`, same colour in a
+`capture-pane`, no marker of any kind that distinguishes it from something a person typed and has not
+yet sent. Three of them appeared in a row, each a plausible follow-up to what had just happened:
+*"send another one to confirm it keeps working"*, *"count from 1 to 20 the same way"*, *"send another
+one while you're idle this time"*.
+
+**I read the first one as a message somebody had left in the box, and briefly as an instruction to
+me.** Nobody typed any of them.
+
+**The question parser is not fooled, and it is worth knowing why**, because the reason is a rule and
+not luck: `parseCursorMenu` requires at least two contiguous same-column lines *and* a dialog-like
+footer, so a single ghost line falls out as `{ kind: "none" }` (`pane.ts:849`). That is the tightness
+described in its own comment — *"a multi-line message Greg typed, echoed back into the transcript
+under a `❯`, is exactly this shape minus the footer"* — earning its keep against a case it was not
+written for.
+
+**What it does bear on:**
+
+- **v0.4d**, which will read a *turn* rather than a substring to find a question in prose. A suggested
+  prompt is model-authored text sitting exactly where a person's words go.
+- **Any pane preview on the page.** Rendering the input line under a heading like "waiting to be
+  sent" would be a confident wrong answer about a person's intent.
+- **v0.2d's argument, arriving from a direction it did not anticipate.** That stage is about the
+  dashboard as a privileged renderer of *hostile* content. This is not hostile — it is the harness
+  being helpful — and it is indistinguishable from typed input by anything in a capture. The defence
+  is the same one: never claim provenance you did not read.
 
 ### 🔵 Stage v0.4h: "working" is hiding at least three different things
 
@@ -1036,19 +1108,180 @@ finding worth arguing, not a licence.
 ambiguous, which is the mistake this project made three times in one night. *"No sleep found"* and
 *"could not look"* are different facts. **A `cannot-tell` arm, with a reason, or it is not built.**
 
-- [ ] **Research first, and from evidence.** Two or three subagents at different angles — one reading
-      `proc` on real sessions, one reading pane captures, one reading transcripts. Agents reasoning
-      from the same source reach the same wrong answer confidently.
-- [ ] **Spikes with dummy sessions**, which Greg has explicitly authorised: make your own session,
-      put it in each state, and see what each source says. Do not reason about it. **Your own
-      sessions only** — the rest of the box is other people's work, and it is `capture-pane` only.
+#### What the research found, 2026-09-08 — read this before designing anything
+
+The research pass is done, on the live box, with spikes rather than reading. **Two of the four
+premises above were wrong, and both were mine.**
+
+**The `waiting` arm is narrower than I said, and the correction makes the stage bigger.** I wrote that
+it fires on a foreground `sleep`. It needs three things together (`scripts/gjd-remote-tmux.ts:516–543`):
+a well-formed uuid, the pane process being a `/gjd-remote/jobs/` script, **and** the sleep being that
+pane process's *direct child*. Proved by three spike sessions, not by reading: `sleep 900` under a
+jobs script with a `CLAUDE_SESSION_ID` reads `waits 14m`; the byte-identical tree without the id, and
+a bare `sleep 600` as the pane process, both read `shell busy`. And the `claude` branch is tested
+first regardless, so a live Claude wins unconditionally. In the case Greg means, the real tree is
+
+    sleep 15  ←  /bin/bash -c source …/shell-snapshots/…  ←  claude --session-id …  ←  pane
+
+so the sleep is a **grandchild** and the branch could not fire even if the ordering allowed it.
+
+**The states are mostly hiding under `idle`, not `working`.** A 32KB transcript tail across the 14
+live Claude sessions — 9ms for all of them — found **a pending `CronCreate` wake-up on 8 of the 11
+idle rows**, reactivating in 23 minutes, 203 minutes, and so on. A rate-limited session lands on
+`idle` too: it prints the error, ends its turn and stops. This is v0.4d's finding one level down, and
+it means the stage's value is mostly in splitting `idle`, not `working`.
+
+**The cost objection was against a number nobody had measured.** Live `tookMs` is **3013**, not the
+~13 seconds I quoted; all 20 pane captures cost 147ms; a transcript *tail* is 9ms at 32KB and 116ms at
+512KB. `server.ts:18` warns off transcripts because whole files are 1.5–19MB — **a tail is a
+different act**. Cost gates nothing here.
+
+**Where each state is actually visible:**
+
+| State | Best source | How good | Cost |
+|---|---|---|---|
+| Hit usage limits | Transcript tail — **fully structured**, no regex: `error:"rate_limit"`, `apiErrorStatus:429`, `quotaLimits{status, resetsAt, rateLimitType}` | Exact. 140 such records across `~/.claude/projects` | ~1ms/session |
+| | The pane says `You've hit your session limit · resets 7:30am` | Until it scrolls; the time carries no date | free |
+| | `claude agents --json` | **Blind — no vocabulary for it** | — |
+| Paused on a cron | Transcript tail: a `CronCreate` `tool_use` carrying the expression | Good; needs dedupe on `tool_use.id` and must honour `CronDelete` | ~1ms/session |
+| | Anything else | **Nothing.** The tool's own result says *"Session-only (not written to disk, dies when Claude exits)"* — no store to read | — |
+| Parked in a shell call | `~/.claude/sessions/<pid>.json` → `status:"shell"` + `statusUpdatedAt` | Strong: held `shell` for 6+ minutes while `claude agents --json` said `busy` | 0.9ms for all 14 |
+
+**The find that matters most.** `~/.claude/sessions/<pid>.json` is the store behind `claude agents
+--json`, and **the CLI throws away two fields**: `statusUpdatedAt`, which is dwell time — one row read
+`busy` for 2,293 seconds — and a fourth status value, `shell`, which the CLI normalises to `busy`.
+`get-ready-for-deploy` was `shell` for six minutes with `sleep 10`/`sleep 20` descendants while the
+board said **Working**. That is precisely Greg's complaint, and the fix is a field that already exists
+and is discarded one layer above us.
+
+**Named honestly:** that is an undocumented private file. This repo already depends on that class
+(`transcript.ts`, the `aiTitle` grep), and a Claude Code upgrade can change it under us. The boring
+alternative for dwell time is for the server to remember its own previous snapshot — no private
+dependency, blind before the last restart. `status:"shell"` has no such alternative.
+
+**Overdue is computable, and it is the most actionable thing on the board.** Worked example from that
+morning: `30d04781` hit its limit at 06:02 with `resetsAt` 06:30, and the next record is a human
+typing "Continue" at **08:21** — 111 minutes of a session that could have gone again and nobody told
+it to. *Fired* and *overdue* are told apart by whether any session turn exists after the time.
+
+**The recommended shape, respecting v0.4d — one added fact, no eighth status arm.** The researcher
+looked for an argument against that decision and did not find one: a cron-parked session is genuinely
+`idle` (it is at a prompt, and typing at it works), and so is a rate-limited one. And a correction to
+this doc: there are **five** exhaustive switches on `FleetStatus`, not four — `modeApplicability` in
+`collect.ts:292` is the fifth.
+
+    type Pause =
+      | { kind: "none" }
+      | { kind: "rate-limited"; limit: "five_hour" | "seven_day"; resetsAt: string; overdue: boolean }
+      | { kind: "scheduled-wakeup"; at: string; overdue: boolean; source: "cron" }
+      | { kind: "in-a-shell-call"; sinceMs: number }
+      | { kind: "cannot-tell"; why: string; cause: PauseUnknownCause }
+
+with six distinct `cannot-tell` causes, of which **`tail-window-exhausted` is the one that will
+bite**: we read 32KB without reaching the start of the file, so older evidence may exist above, and
+folding that into `none` is the ambiguous-negative mistake this project made three times in one night.
+`overdue` may be set **only** when `at` was actually read.
+
+**What could not be found out, said plainly rather than papered over:**
+
+- **No live rate-limited session was seen**, and **no pane fixture of one exists anywhere in the
+  repo.** Everything about the pane side of that state is reconstructed from historical transcript
+  records. Quota was deliberately not burned to make one. The cheap honest route is to capture it
+  opportunistically the next time the box hits a limit; the strings are `hit your session limit` and
+  `hit your weekly limit`.
+- `status:"waiting"` was never observed in the session store, because no session was on a dialog. That
+  the store uses the CLI's token is an assumption.
+- The `CronDelete` path was not tested, so a pending cron found in a tail may already have been
+  cancelled.
+- Nothing was measured under the box's load spikes; all timings are from a quiet-ish 10:25.
+
+- [x] **Research first, and from evidence.** Done, 2026-09-08 — three spike sessions, four live
+      process trees, a 32KB tail across 14 sessions, and the session store. Findings above.
+- [x] **Spikes with dummy sessions** — three `v04h-*` sessions, all killed by name afterwards. They
+      are what corrected the `waiting` claim; reading the code alone had produced the wrong answer.
 - [ ] **Fable on the product shape**: how many states a person can hold in their head at a glance,
       and what "overdue" should do to the sort order. That is a product call, not a technical fork.
-- [ ] **The reactivation time, and whether it is overdue** — Greg asked for it specifically. Note
-      that "overdue" is a claim, so it needs the same treatment: an intended time we could not read
-      is not an intended time of zero.
+- [ ] **The reactivation time, and whether it is overdue** — Greg asked for it specifically, and the
+      answer is **yes, exactly, and only from the transcript**: `quotaLimits.resetsAt` is unix epoch
+      seconds and needs no parsing; a cron expression resolves against the record's own `timestamp`
+      (next occurrence at or after — the expression carries no year, so assuming one is a bug). A
+      recurring or non-literal expression (`*/5`) must yield **no** time rather than a wrong one.
+      "Overdue" is a claim: an intended time we could not read is not an intended time of zero.
+#### Fable's product call, 2026-09-08 — and it corrects the premise the stage was written on
+
+**A rate-limited session does not come back by itself, and that changes everything downstream.** The
+stage was framed as three flavours of "paused". Fable's reading, from the research's own evidence: a
+cron, a `sleep` and the launcher's `waiting` arm all resume unaided at time T; a 429'd session **ends
+its turn and stops**, and nothing re-prompts it until a person types *Continue*. So it is not *"back
+at 06:30"*, it is *"can resume from 06:30, and won't unless nudged"* — which means **every
+rate-limited session becomes overdue at `resetsAt`, deterministically.** The 111 minutes measured that
+morning were not an unlucky morning; they are the default outcome.
+
+*(One thing that rests on: that no Claude Code version on this box auto-retries after a reset. The
+research observed that it does not. Worth re-checking before this ships, because the whole argument
+turns on it.)*
+
+**The reader holds three questions, not eleven states** — *does it need me*, *is it moving*, *will it
+come back by itself and when* — and that is the same number of pills as today:
+
+- **needs you** (loud) — a dialog, a question in prose (v0.4d), **or overdue**
+- **working**
+- **paused · back in 23m** — cron, sleep, launcher-wait, all one word with the reason in the detail slot
+- **paused · can resume 06:30** — rate-limited, phrased differently *because the promise is different*
+- **idle** — nothing pending that we could find
+- **unknown**, and the greys, unchanged
+
+`waiting 2h13m` is already "paused" in all but name; merge the rendering rather than adding beside it.
+Which limit it is (5-hour or 7-day) is a fact about the **account**, not the row — say it once in the
+header, not on six rows.
+
+**Overdue goes in the loud colour, and the argument is made against the principle rather than around
+it.** The loud colour means *only a person can move this, and it is one tap*. Overdue is exactly that
+— a user turn, not a permission, and reversible. A badge on a quiet pill is what the loud colour
+exists to save a person from scanning thirty rows for, and a header that said *"0 need you"* over six
+stopped sessions would be a calm page over a wrong one. Two guards so it does not dilute the colour:
+
+1. **Overdue is claimed only when the time was READ, is past, and the transcript shows no activity
+   after it.** A transcript we could not read past T is *"could not tell whether it resumed"* and
+   stays quiet. **The one row we cannot vouch for is the one row that must not shout.**
+2. A few minutes' grace, named in code, because crons fire late on a box that has reached load
+   average 391.
+
+**An unreadable reactivation time is shown, and it costs no line** — it lives in the slot the pill
+already has: `paused · back in 23m` / `paused · scheduled, time unread` / plain `idle`. The shrug
+appears only where a schedule was *found and not parsed*, not beside eight rows in twenty, and it
+carries a real message: *this one can never go loud, so it is yours to glance at*.
+
+**What Fable would drop, and this is the part worth obeying:**
+
+- **"Working but parked in a sleep loop."** `working` is *true*, and the reader's question — does it
+  need me — is answered correctly. Six minutes is noise beside 34.9 hours. **This is the finding I
+  was most pleased with and it is the one to cut**, which is what asking was for.
+- Reason as a visual distinction (cron vs sleep vs limit). One pill; reason in the detail view.
+- Overdue heuristics for the unreadable case. By construction it cannot exist.
+- Anything from `.cachedUsageUtilization` — the direction doc already ruled it untrustworthy, and the
+  transcript's 429 record is the only honest source.
+
+**So the stage ships two things**: `paused` with a readable time, and `overdue` in the top band with a
+one-tap **Continue**. Everything else is detail-view material.
+
+**The overdue row, in Fable's words**, because the wording is the product here:
+
+> Pill **needs you**, loud. Then one line: *"Hit the 5-hour limit at 06:02. Resumable since 06:30 —
+> nothing has run since, 1h 51m late."* And one button, **Continue**, which sends that literal word
+> through the existing steer path and is labelled as a nudge, not an answer.
+
+Four facts, each **read** rather than inferred: what stopped it (the transcript's 429), when it became
+resumable (`resetsAt`), that nothing has happened since (no record after it), and how late. Never
+*"will resume at"*, because it will not. And when the transcript could not be read past `resetsAt`,
+the same row says *"Resumable since 06:30 — could not read whether it went on"* and stays quiet.
+
+**One open question this creates for the Overseer (v0.6b):** *Continue after reset* is a verify-not-
+judge action, so it is the first thing the coordinator should do by itself. The loud row is the
+interim, not the destination.
+
 - [ ] Red test first, mutations after, and a GPT Sol review at the end of the stage, which is
-      obligatory here rather than optional — this touches the type three switches are built on.
+      obligatory here rather than optional — this touches the type five switches are built on.
 
 ### Stage v0.5: the steering vocabulary
 
@@ -1137,12 +1370,40 @@ readers.
       closes a cycle between the two things the seam exists to keep apart. **The file is the
       contract and `readCheckpoint` is one implementation of reading it.** Agreed rather than
       conceded: it is the same rule the client already applies to the server's JSON.
-- [ ] **Check `schema` as a number you know**, not as "not something else", so an unknown schema
+- [ ] **Check `schema` as the number it is, not as "not something else"**, so an unknown schema
       renders as *I cannot read this* rather than as a page with fields quietly missing. That is
-      `parseMeta`'s rule (`web/src/types.ts`) pointed at somebody else's file. **The number is now
-      `2`, not `1`** — bumped 2026-09-08 when `statusSince` changed shape (S7-04 of
-      [260908b](260908b-overseer-store-and-clock.md)), which is this line's own hypothetical arriving
-      a day later.
+      `parseMeta`'s rule (`web/src/types.ts`) pointed at somebody else's file.
+
+      **`STORE_SCHEMA` IS `2` AS OF 2026-09-08, AND IT MOVED WHILE THIS LINE SAID `1`** — inside the
+      hour between the seam being agreed and anything being built against it. That is the rule
+      earning its keep on its author within a morning: a consumer pinned to 1 would `Date.parse` a
+      `statusSince` that is now an object, get `NaN`, and render a blank age — **wrong, not merely
+      poorer**. Read the constant, do not hardcode the digit from this doc, which has now been stale
+      once already. The bump is S7-04 of
+      [260908b](260908b-overseer-store-and-clock.md), which is where the reasoning lives.
+- [ ] **`statusSince` IS NOT A TIMESTAMP — it is a two-armed reading, and the arm names are for a
+      person reading the raw file:**
+
+          type StatusSince =
+            | { kind: "observed";    at: string }
+            | { kind: "lower-bound"; at: string }
+
+      So `less ~/.overseer/current.json` shows `"kind": "lower-bound"` and that says what the number
+      is worth without opening any types. Render it as `40m` against `≥13m`; **sort ignoring the
+      arm**, because a floor can only rank a session too low and can never promote one above a
+      session that deserves attention more.
+
+      **AND `observed` MEANS "BETWEEN TWO OF OUR OBSERVATIONS", NOT "AT THIS INSTANT".** Found by
+      GPT Sol reviewing the fix, and left open rather than fixed because it cannot be fixed in
+      `store.ts`: across a daemon restart the first new snapshot is diffed against a restored
+      baseline, so a state that began and ended during three hours of downtime is recorded as
+      `observed` at the moment the daemon came back. It is the same class as the bug that arm was
+      created to prevent — a number that reads as a measurement — but **bounded by the downtime
+      rather than unbounded**, and `Restart=always` makes restarts routine. `orchestrator-setup`'s
+      recommendation, which I accept: render `observed` as exact and accept one wrong tick per
+      restart, rather than hedging every duration on the page. **Choose it knowing that, rather than
+      inheriting it.**
+
 - [ ] **Three fields are worth more than the rest, because collection structurally cannot produce
       them.** `statusSince` turns a state into a duration — *blocked* becomes *blocked for forty
       minutes*, which is what triage actually needs and what a present-tense collector has no
@@ -1287,10 +1548,145 @@ Agents self-report through a small CLI plus a rule in [AGENTS.md](../../AGENTS.m
 scrape later as the backstop. Ranked by importance then confidence, product-facing counting as more
 important. The dashboard makes decisions *visible*; it does not enforce the thresholds.
 
+### 🔴 Stage v0.8a: the joins, which nothing here has ever checked
+
+**Sixteen times in one day, a part was built, tested, reviewed and ticked while the line joining it
+to anything was missing** — including, for several days, **the dashboard's entire action vocabulary**,
+which never once rendered on the real page because the server sends `actions: {session, box}` and the
+client asked `Array.isArray()`. Neither commit introduced it: the server side landed in `0955fab4`
+and the client side in `18800ff6`, each internally coherent, so no reviewer of either diff could have
+seen the pair. **Ten of the sixteen are lossy joins and six are missing edges, and the lossy half
+holds every expensive one** — which is why the first half of this stage is a type rather than a
+check. The write-up is
+[260908b-the-parts-were-all-tested-and-none-of-the-joins-were.md](../postmortems/260908b-the-parts-were-all-tested-and-none-of-the-joins-were.md);
+this is the rearchitecting it asks for. Filed at the finish line is filed and never done, so it is a
+stage.
+
+**Seven of the sixteen are still live at 11:03 on 2026-09-08, and two of them are safety
+mechanisms.** Fix these two first, whatever happens to the rest of the stage:
+
+- **The attribution prefix reaches nothing.** `renderSpoken()` — which prepends `[Greg, via the
+  fleet dashboard]` or the Overseer's *"NOT Greg, weigh this as a suggestion"* disclaimer — has six
+  test callers and **zero product callers**, because `SessionActionRequest` has no `speaker` field
+  and `drain.ts`'s `sendable()` returns `action.text` raw. Broadcasts carry the attribution;
+  single-session instructions, which is how the Overseer will actually talk to an agent, do not.
+- **The "what would this destroy" preview is empty.** `actions-client.ts`'s `box()` reads
+  `parsed["would"] ?? parsed["result"] ?? null`, and **none of the eleven `respond(res, 200, …)`
+  calls in `routes-actions.ts` sends either name** — the box arms send `steps`, `run`, `candidates`,
+  `killed`, `skipped`, `total`, `recipients`. So `ActionButtons.tsx:969` and `:1021` render
+  `<RawValue value={null}>`, which draws the literal grey word *"null"*, as the confirmation step
+  for `remove-worktree`, `kill-session` and `kill-test-suites`.
+
+The other five live ones: `SteerResponse.verified` (which pane a keystroke actually reached, dropped
+by `steer-client.ts`), `answeringEnabled`/`tmuxServerPid` (absent from the client's `FleetState`),
+`LaunchRecord.resolution`/`startedDir`, `SteeringQueue.clear()`, and `/api/agents`.
+
+**There are two classes here and they want different things, which is the whole design of this
+stage.** Confusing them gets you a linter for a problem the compiler should have refused.
+
+- **A missing join** — `queue.next()`, `/api/messages`, `revive()`, `renderSpoken()`, `clear()`,
+  `/api/agents`. The edge does not exist. The detector is a question about the graph — *who reads
+  this?* — and no type can express "somebody must call this". **Wants a tool.**
+- **A lossy join** — `stale`, `stuck`, `deliverable`, `invalidated`. The edge exists and the
+  consumer drops the value. The detector is a question about one type — *can the consumer express
+  dropping this?* — and the repair makes the mistake un-writable rather than detectable.
+  **Wants a type.**
+
+#### The type half, and it is the item worth doing first
+
+- [ ] **`tools/fleet/wire.ts`, a leaf module with no imports at all**, holding `QueuedItemView`,
+      `QueueView` and the other types that cross the HTTP boundary. **The no-imports rule is forced,
+      not stylistic**: `tools/fleet/web/tsconfig.json` is a separate project with no node types, and
+      every existing home for these types reaches `node:child_process` transitively (`queue.ts` →
+      `steer.ts`; `status.ts` → `scripts/gjd-remote-tmux.js`), so a client `import type` against any
+      of them fails on sight. That is *why* the twins exist — the duplication is structurally
+      forced, which is why four rounds of "keep them in step" have not worked.
+- [ ] **The client imports it and stops declaring its own twin.** `parseQueue` returns the imported
+      type. Then adding a field on the server is a **compile error on the client** until somebody
+      parses it or writes an explicit `Omit<>`, which is a named decision instead of a silence.
+- [ ] **Prove it against the original shape, not a tidied one.** Add `stuck` to the wire type with
+      the client as it stands today and watch `npm run typecheck` go red. A guard proved against the
+      abstraction can pass on the exact shape it was written to block.
+- [ ] **Fix the live lossy joins while you are in there** — `would`/`result` (#11, the safety
+      preview), `verified`, `answeringEnabled`, `tmuxServerPid`, `resolution`, `startedDir`. The
+      queue cluster (`stale`, `stuck`, `deliverable`, `invalidated`) was already repaired by hand on
+      the night of 2026-09-08, four separate times; **that treadmill is the argument for this
+      stage**, not a reason to think the area is now safe.
+- [ ] **`would` is a different failure from the rest and needs a different check.** Both ends are
+      internally consistent and disagree about a *name*, so an "unread field" sweep cannot see it —
+      only a shared type can. Fix it by importing the type, not by renaming one end and moving on.
+- [ ] Beware the spread. `items: s.items.map((i) => ({ ...i, … }))` puts every field of `QueuedItem`
+      on the wire with no line written at the boundary — which is how `invalidated` crossed, and why
+      `git log -S invalidated -- tools/fleet/routes-actions.ts` finds nothing.
+- [ ] **Type the fixtures with the shared type too, and this is not optional.** `actionsWire()` in
+      `tests/fleet-web.test.tsx` built `{actions: []}`, a flat array the route has never sent, and
+      ~196 tests passed over it while **every action button on the real page was invisible** — under
+      a doc comment correctly explaining that the fixture must be the wire shape. *A fixture is a
+      claim about the producer that nothing checks against the producer.* A fixture annotated
+      `: QueueView` (or built by the server's own serialiser) cannot make that claim falsely.
+- [ ] **Prefer a named union to a boolean wherever the client reports on the server.** Two sessions
+      independently reached this repair on the same evening: `catalogueOffered: boolean` became
+      `CatalogueReading = absent | unreadable | read`, and the Overseer's `Checkpoint | null` became
+      `CheckpointRead` taken whole. *Absent* and *present but unreadable* are different sentences to
+      a person, and a boolean cannot hold both — which is how a live daemon came to be reported as
+      `NEVER RUN`.
+
+#### The tool half
+
+- [ ] **A mounted-route-with-no-client-caller check.** Enumerate the paths `server.ts` and the
+      `routes-*.ts` files compare against, grep `tools/fleet/web/src/**` for each, fail on zero.
+      **Measured on this tree: 12 paths, 2 raw candidates, 1 real** (`/api/agents`), and the other
+      was a self-inflicted false positive because `steer-client.ts:51` writes `"api/steer/message"`
+      with no leading slash — so match on substring, not prefix. Small surface, low noise, and it
+      needs a short allowlist for the paths the Overseer and `curl` use honestly. **Gate it**, on
+      `scripts/check.ts`'s own rule: it is green the moment `/api/agents` is resolved.
+- [ ] **Resolve `/api/agents`**: either delete the alias or fix the five places in `live.ts` that
+      still call it "the poll". It is harmless — same handler — and it is the reason the check above
+      is not green on day one.
+- [ ] **`renderSpoken()` reaches the drain.** `speaker` onto `SessionActionRequest`, carried through
+      the queued item, applied in `drain.ts`'s `sendable()`. This is the safety property, so it gets
+      a `@ts-expect-error` guard in `tests/fleet-compile-guards.test.ts` — that file already exists
+      and is exactly the right home — asserting that a spoken action cannot be typed into the
+      transport without a `Speaker`.
+- [ ] **`clear()` gets a route or gets deleted.** Either is fine; leaving a tested method nothing can
+      reach is not.
+
+#### The rule, which is the part that generalises
+
+- [ ] **A file that binds a port may hold dependencies and nothing else.** `refresh.ts` already is
+      this, carved out of `server.ts` in `bc2c3e61` precisely because the missing line was in the one
+      file no test can import — importing `server.ts` binds 8787, and none of the twenty
+      `tests/fleet-*` files imports it. Write the rule down next to `refreshOnce`, and move anything
+      that is still an ordering decision inside `server.ts` out to where a test can drive it.
+- [ ] **Add "who reads this?" to the stage-completion checklist.** For each value a route computes,
+      grep the client for the field name; for each symbol a stage exports, partition the callers into
+      product and tests. That question found five of the ten in an afternoon, after the other five
+      had been found by Greg opening the page.
+
+#### What this does NOT catch, stated so nobody files it as done
+
+- **A field parsed and then not rendered.** The type half forces `parseQueue` to *read* `stale`; it
+  cannot force `ActionButtons.tsx` to draw anything with it. A parser that assigns the field to a
+  property nothing displays compiles perfectly.
+- **A route called by the client on a page nobody can navigate to.** The route check answers "does
+  any client file mention this path", not "can a person reach the component that calls it".
+- **Wrong values.** Both halves are about *whether* a value crosses, never whether it is right.
+- **The other direction** — a field the *client* sends that the server ignores. Same class, opposite
+  arrow; not covered here, and worth a sweep before assuming it is clean.
+- **Anything outside `tools/fleet/`.** `tools/overseer/` has the same shape and the same two
+  tsconfig projects. This stage does not touch it.
+- **`knip` still cannot see any of this.** Adding `tools/**` to `knip.jsonc` is worth doing on its
+  own merits and is **not part of this stage**: it catches none of the ten and arrives with 162
+  findings, and a fresh backlog that size is how the check that would catch the next one gets
+  ignored.
+
 ### Later: the coordinator agent
 
 The orchestrator is eventually a program, not Greg (his call, 2026-09-08). Nothing here builds it,
 but every action above is a typed function before it is a button, so it has something to call.
+**Stage v0.8a's `renderSpoken()` item is a prerequisite rather than a nicety**: until the attribution
+prefix reaches single-session actions, a coordinator's suggestion arrives in an agent's input box
+indistinguishable from Greg's own instruction.
 
 ## Evidence: what was actually tested
 
