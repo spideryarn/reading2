@@ -352,7 +352,7 @@ describe("the list", () => {
     expect(text).toContain("No, tell Claude what to do differently");
     // The keystroke is a HINT, not a button. This page sends nothing, and a
     // control that looked like it would answer and did not is the failure
-    // orchestrator-direction.md § Read-only until a channel is proven is about.
+    // overseer-direction.md § Read-only until a channel is proven is about.
     expect(text).toContain("press 2");
 
     /* **No option is clickable.** This used to be spelled as a count of every

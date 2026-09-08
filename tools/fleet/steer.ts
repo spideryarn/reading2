@@ -3,7 +3,7 @@
  *
  * THIS IS THE ONLY PART OF THE DASHBOARD THAT CAN DO HARM, and it is mostly
  * guards. Everything else here reads. Direction and the measured constraints:
- * docs/project/orchestrator-direction.md § Constraints already established, and
+ * docs/project/overseer-direction.md § Constraints already established, and
  * docs/reusable/agent-fleet-dashboard.md § "Talking to a session", which is the
  * same story with the day it cost attached.
  *
@@ -111,7 +111,7 @@ export type SeenQuestion = Extract<PaneQuestion, { kind: "question" }>;
  *
  *  - `paneId` (`%2108`) is the ADDRESS. tmux's `-t` will happily resolve a
  *    session name instead, and a name is reassigned when a session dies — the
- *    hardest-won rule in orchestrator-direction.md. `pane.ts`'s `isPaneId` makes
+ *    hardest-won rule in overseer-direction.md. `pane.ts`'s `isPaneId` makes
  *    refusing anything else structural rather than a convention.
  *  - `sessionId` (`$1643`) is tmux's own session handle, and it is what the
  *    dashboard row is keyed by. Checking it catches a pane that has been moved

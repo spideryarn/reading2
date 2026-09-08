@@ -5,7 +5,7 @@
  * **There is one collector on this box and it is not ours.** A collection costs
  * ~12s of grepping thirty-five transcripts, and this box has hit load 391 with
  * the OOM killer firing, so a second collector is a real cost rather than
- * untidiness — docs/project/orchestrator-direction.md § Two tenses. This module
+ * untidiness — docs/project/overseer-direction.md § Two tenses. This module
  * therefore *consumes*: it never calls `collect()`, and there is deliberately no
  * local fallback that would (the plan removed it: `FleetSnapshot` has no
  * `health` field, so a local collection would return a different contract and a

@@ -8,7 +8,7 @@ Observed facts:
 
 - The plan correctly denies autonomous steering, killing, credential switching, and broad recovery.
 - It nevertheless instructs implementers how to perform “live delivery proof” with a disposable session. Later stages also call for safe occurrences and service changes.
-- The standing autonomy decision permits unattended scheduled jobs only; it does not authorize an implementation agent’s live steering test ([direction](/home/greg/code/spideryarn2/docs/project/orchestrator-direction.md:121)).
+- The standing autonomy decision permits unattended scheduled jobs only; it does not authorize an implementation agent’s live steering test ([direction](/home/greg/code/spideryarn2/docs/project/overseer-direction.md:121)).
 
 Hypothesis: An average implementer could reasonably read the plan itself as authorization to launch and steer the disposable session.
 

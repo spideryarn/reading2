@@ -7,7 +7,7 @@
  *     npx tsx scripts/overseer.ts events --limit 40   # what the fleet did
  *     npx tsx scripts/overseer.ts notes  --limit 20   # what the Overseer's own day was like
  *
- * Direction: docs/project/orchestrator-direction.md. Stage S4 of
+ * Direction: docs/project/overseer-direction.md. Stage S4 of
  * docs/plans/260908b-overseer-store-and-clock.md.
  *
  * **`status` is not a nicety on top of the daemon; it is the half that makes

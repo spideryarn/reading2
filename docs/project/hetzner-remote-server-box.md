@@ -940,7 +940,7 @@ the build is:
 sudo tailscale up --hostname=spideryarn-box --operator=greg
 ```
 
-**Why the box has it at all**: it is how the [agent fleet dashboard](orchestrator-direction.md)
+**Why the box has it at all**: it is how the [agent fleet dashboard](overseer-direction.md)
 reaches Greg's phone. The dashboard binds the tailnet interface rather than a public one, so
 reachability *is* the access control, and nothing extra has to be built to keep it away from
 strangers.
@@ -991,7 +991,7 @@ Tailscale and no way to reach it from a phone, and nothing here would have said 
 
 Two long-running tools run under **systemd**, not tmux: the **Overseer**, which records what the
 agent fleet did, and the **fleet dashboard** it reads — both
-[orchestrator-direction.md](orchestrator-direction.md).
+[overseer-direction.md](overseer-direction.md).
 
 They are **system units with `User=greg`**, and that is the whole point of them. Both used to be
 `scripts/tmux-job.ts` jobs whose entrypoint was inside a *worktree*, so `git worktree remove` took

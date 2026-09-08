@@ -13,7 +13,7 @@
  * import closure is **161 files and 118,082 lines**, pulling `pg`,
  * `drizzle-orm`, `stripe`, `jsdom`, `@mozilla/readability`, `pino` and the
  * Anthropic SDK into a tool whose entire claim is that it runs on the box with
- * the product's server absent — orchestrator-direction.md § Principles. A
+ * the product's server absent — overseer-direction.md § Principles. A
  * dashboard that needs a Postgres driver installed in order to hear a sentence
  * is not that tool. Even the smallest useful piece of it, `transcribeWith`,
  * still reaches `ai-call.ts` at 20 files and 20,344 lines.

@@ -284,7 +284,7 @@ function header(headers: IncomingHttpHeaders, name: string): string | null {
  * The CSRF check, and it is worth being precise about what it buys.
  *
  * **WHAT IT STOPS.** This server has no authentication — reachability over the
- * tailnet is the whole of the access control (orchestrator-direction.md
+ * tailnet is the whole of the access control (overseer-direction.md
  * § Access). So any page in any browser on any device that is on the tailnet can
  * issue a cross-origin POST at this port, and without this function that POST
  * would type into somebody's agent session. Requiring an `Origin` that matches

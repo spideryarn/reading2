@@ -327,7 +327,7 @@ export type TranscribeResponse = { text: string };
  * The attention inbox. Produced by the Overseer, rendered by the page.
  *
  * The premise it corrects was measured on the live fleet 2026-09-08 and is
- * written up in docs/project/orchestrator-direction.md § `idle` is the bug:
+ * written up in docs/project/overseer-direction.md § `idle` is the bug:
  * `needs-you` means *Claude Code says a dialog is open*, and TEN OF FIFTEEN
  * sessions genuinely waiting on Greg had ended their turn handing him a
  * decision in sentences, with not one of them showing as needing him. A

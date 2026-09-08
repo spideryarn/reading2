@@ -138,7 +138,7 @@ export function OrchestratorPanel({ actions, rows }: { actions: ActionsUi; rows:
         <p className="tw:mt-2 tw:text-[13px] tw:text-ink-faint">
           When it lands it is a daemon, a store and a short-lived session spawned to make a judgement — the store
           first, because ranking by <em>who has needed me longest</em> needs a duration and nothing on this box
-          records one. docs/project/orchestrator-direction.md.
+          records one. docs/project/overseer-direction.md.
         </p>
       </Card>
 

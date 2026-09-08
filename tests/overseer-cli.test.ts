@@ -125,7 +125,7 @@ describe("telling a dead daemon from a quiet one", () => {
     // had been up for eighty minutes and had written `current.json` thirty
     // seconds earlier, in schema 1, which this build correctly refuses.
     //
-    // The direction matters. orchestrator-direction.md names the failure this
+    // The direction matters. overseer-direction.md names the failure this
     // whole project is designed against — the Overseer silently dead while the
     // page says nothing needs you. This is that inverted, and no better: a
     // person who reads NEVER RUN goes and starts a second daemon.

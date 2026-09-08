@@ -7,7 +7,7 @@
  * use your judgment, and anything else you can think of" — plus, for Box
  * Health, "kill anything that's safe to do", "kill all the running tests", and
  * a staggered resource broadcast. Direction:
- * docs/project/orchestrator-direction.md § What Greg asked for on 2026-09-08.
+ * docs/project/overseer-direction.md § What Greg asked for on 2026-09-08.
  * Stages: docs/plans/260907e-agent-fleet-dashboard.md § v0.5 and § v0.5c.
  *
  * WHY THIS IS DATA AND NOT A BUTTON HANDLER. The orchestrator is eventually a

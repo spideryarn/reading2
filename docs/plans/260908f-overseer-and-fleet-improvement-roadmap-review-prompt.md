@@ -17,7 +17,7 @@ its dependency ordering, feasibility, missing high-value work, excessive complex
 instructions and unsupported factual claims. This is a roadmap review, not a hunt for every code bug.
 Cross-check important implementation instructions against current code, not only historical docs.
 
-Start with docs/project/orchestrator-direction.md (ownership, order, autonomy and backlog), then the
+Start with docs/project/overseer-direction.md (ownership, order, autonomy and backlog), then the
 candidate and evidence. Explore any related code/tests needed. Existing foundations must not be
 reimplemented. Especially check recovery preservation across register deletion, action preview/
 commit/outcome contracts, bounded collection, one store writer, admission, and schedule crash windows.

@@ -14,7 +14,7 @@
  *
  * `triageSort` in view.ts puts them in order and `triageBand` says which band a
  * row is in; this file only groups what it is handed. The bands are Greg's, out
- * of docs/project/orchestrator-direction.md, and the reasoning for the two
+ * of docs/project/overseer-direction.md, and the reasoning for the two
  * surprising memberships — a busy shell is not promoted, and `unknown` is not
  * promoted either — is in tools/fleet/status.ts, which is where it belongs.
  *

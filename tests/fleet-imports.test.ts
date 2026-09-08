@@ -2,7 +2,7 @@
  * **What the fleet dashboard depends on from `src/`, pinned so it cannot grow
  * quietly.**
  *
- * docs/project/orchestrator-direction.md § Principles: this tool *"runs on the
+ * docs/project/overseer-direction.md § Principles: this tool *"runs on the
  * box, spans repos, and must not depend on the product database or on anything
  * under `src/`. If it ever earns its own repo, that should be a move, not a
  * rewrite."*

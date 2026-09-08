@@ -15,7 +15,7 @@ Context, in this order:
   safely, which is not the same as appending atomically", § "One daemon, enforced", § "What resume
   actually needs, and what it can never get back", and § "The order, reconsidered", which carries the
   constraint that shaped this stage.
-- `docs/project/orchestrator-direction.md` — § "The store", and § "A higher bar for robustness here
+- `docs/project/overseer-direction.md` — § "The store", and § "A higher bar for robustness here
   than elsewhere, and its ceiling". **The ceiling is the more important half** and it is new.
 - The types it consumes: `tools/overseer/diff.ts` (`OverseerEvent`, `statusKey`),
   `tools/overseer/observation.ts` (`ObservedRow`).

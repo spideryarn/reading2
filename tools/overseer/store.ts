@@ -7,7 +7,7 @@
  * The register in `current.json` is the only copy that survives, which is why
  * `meta.dir` is carried whole rather than reconstructed from a transcript path:
  * that path is a slugified cwd and is lossy, and `repo` is not derivable from
- * it at all. docs/project/orchestrator-direction.md § The store.
+ * it at all. docs/project/overseer-direction.md § The store.
  *
  * ## It lives OUTSIDE the repo, and that is not tidiness
  *
@@ -151,7 +151,7 @@ export { isProcessAlive, type LockHolder };
  * `now - NaN` renders as a blank or a nonsense age rather than as an error —
  * the WRONG half of the rule, not the poorer half. The bump makes that consumer
  * say *I cannot read this*, which is what
- * docs/project/orchestrator-direction.md § The seam is a file tells it to do
+ * docs/project/overseer-direction.md § The seam is a file tells it to do
  * with a schema it does not know.
  *
  * **Nothing is migrated.** An old checkpoint is refused, the log is replayed,

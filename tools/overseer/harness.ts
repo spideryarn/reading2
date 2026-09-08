@@ -3,7 +3,7 @@
  *
  * ## The principle, written down before this file existed
  *
- * `docs/project/orchestrator-direction.md`: *"One adapter per harness, and
+ * `docs/project/overseer-direction.md`: *"One adapter per harness, and
  * honest about what each can do. Claude, Codex and bare shells have genuinely
  * different capabilities; flattening them into one 'message an agent' verb
  * produces a UI that lies."* A session's harness was an assumption everywhere
