@@ -140,6 +140,8 @@ export interface CheckFacts {
   /** Ignored paths recognised as rebuildable. Counted, not listed. */
   disposable: number;
   trunk: TrunkStanding;
+  /** Servers currently listening on a port from inside this directory. */
+  listeners: ListenerScan;
 }
 
 export interface Blocker {
@@ -197,6 +199,23 @@ export function blockers(f: CheckFacts): Blocker[] {
         "up nowhere. The bit is in this worktree's own index, so it goes with the",
         "directory and so does the edit.",
         "clear it:  git update-index --no-assume-unchanged --no-skip-worktree -- <path>",
+      ],
+    });
+  }
+
+  if (f.listeners.kind === "checked" && f.listeners.found.length > 0) {
+    out.push({
+      why: `${f.listeners.found.length} ${plural(f.listeners.found.length, "server is", "servers are")} running out of this directory`,
+      detail: [
+        ...f.listeners.found.map((l) => `${l.addr}  pid ${l.pid}  ${l.command}`),
+        "",
+        "Nothing here is lost by deleting the directory, so this is not the usual",
+        "kind of blocker — but the process does not die with it, and that is worse",
+        "than if it did. A Node server keeps its port and goes on answering, while",
+        "every file it reads per request has gone: the fleet dashboard's",
+        "`serveStatic` calls readFileSync on each request, so it would serve 404s",
+        "from an open port. Anything watching the port would say it was up.",
+        "Move the server, prove the new one answers, then remove this.",
       ],
     });
   }
@@ -807,6 +826,91 @@ function corpusHalf(t: IgnoredTriage, root: string, linked: boolean, p: string):
  * across many worktrees and have already fetched (`fetchTrunkSha`). Omit it and
  * this fetches for itself, which is what the single-tree CLI wants.
  */
+/* --------------------------------------------------- servers still running -- */
+
+export type Listener = { pid: number; addr: string; command: string };
+
+/**
+ * Either the answer, or the reason there isn't one. Never a bare empty list,
+ * because "I found no servers" and "I cannot look for servers" are different
+ * facts and only one of them clears a worktree for removal.
+ */
+export type ListenerScan = { kind: "checked"; found: Listener[] } | { kind: "cannot-tell"; why: string };
+
+/**
+ * **Is anything serving out of this directory right now?**
+ *
+ * The rest of this file asks whether deleting the directory would *lose* data.
+ * This asks a different question, added 2026-09-08 after the `orchestrator-setup`
+ * session pointed out that `worktree:check` would happily clear
+ * `fleet-dashboard-v01` — the worktree the fleet dashboard's `ExecStart`, its
+ * `node_modules` and its served bundle all live inside. Nothing would be lost.
+ * The page would simply stop existing, and this check would have said SAFE.
+ *
+ * Scoped to *listening* processes on purpose. A worktree with an agent's shell
+ * sitting in it is the normal state of this box, and a check that fires on that
+ * fires always, which is the `/logs/` mistake above told a second time. A bound
+ * port is the narrow case that actually matters: something outside this machine
+ * is relying on it.
+ *
+ * **`cannot-tell` is not a blocker**, which is the one place this file does not
+ * fail closed, and it is deliberate. `ss` is Linux-only, so on the Mac the
+ * unknown would be permanent and universal — the same for every tree, every
+ * time. An alarm that can never be cleared is not caution, it is noise, and the
+ * paragraph above about `/logs/` is what noise costs here. It is reported as a
+ * note instead, so the gap is visible rather than silent.
+ */
+export function listenersUnder(root: string, lines?: string): ListenerScan {
+  let out: string;
+  if (lines !== undefined) {
+    out = lines;
+  } else {
+    const r = spawnSync("ss", ["-ltnpH"], { encoding: "utf8", timeout: 10_000 });
+    if (r.error !== undefined || r.status !== 0) {
+      const why = r.error?.message ?? `ss exited ${String(r.status)}`;
+      return { kind: "cannot-tell", why: `could not list listening sockets (${why})` };
+    }
+    out = r.stdout;
+  }
+
+  const prefix = root.endsWith(path.sep) ? root : root + path.sep;
+  const found: Listener[] = [];
+  const seen = new Set<number>();
+
+  for (const line of out.split("\n")) {
+    const addr = line.trim().split(/\s+/)[3] ?? "";
+    for (const m of line.matchAll(/pid=(\d+)/g)) {
+      const pid = Number(m[1]);
+      if (!Number.isInteger(pid) || seen.has(pid)) continue;
+      seen.add(pid);
+      let cwd: string;
+      try {
+        cwd = readlinkSync(`/proc/${pid}/cwd`, "utf8");
+      } catch {
+        // Somebody else's process, or one that exited between `ss` and here.
+        // Neither is ours to block on.
+        continue;
+      }
+      if (cwd !== root && !cwd.startsWith(prefix)) continue;
+      found.push({ pid, addr, command: commandOf(pid) });
+    }
+  }
+  return { kind: "checked", found };
+}
+
+/** A readable argv for a pid, or a shrug. Truncated: some of these are enormous. */
+function commandOf(pid: number): string {
+  try {
+    const argv = readFileSync(`/proc/${pid}/cmdline`, "utf8")
+      .split("\0")
+      .filter((a) => a !== "");
+    const joined = argv.join(" ");
+    return joined.length > 120 ? `${joined.slice(0, 117)}...` : joined;
+  } catch {
+    return "(command unreadable)";
+  }
+}
+
 export function gather(root: string, trunkSha?: string): CheckFacts {
   let linked = false;
   try {
@@ -835,6 +939,7 @@ export function gather(root: string, trunkSha?: string): CheckFacts {
     hidden,
     ...triaged,
     trunk: trunkSha === undefined ? standingAgainstTrunk(root) : standingAgainstSha(root, trunkSha),
+    listeners: listenersUnder(root),
   };
 }
 
@@ -859,6 +964,12 @@ export function report(facts: CheckFacts): Report {
   if (facts.trunk.kind === "landed") lines.push(`  ok   every commit here is on origin/${TRUNK_BRANCH}`);
   if (facts.dirty.length === 0) lines.push("  ok   nothing uncommitted or untracked");
   if (facts.hidden.length === 0) lines.push("  ok   nothing tracked is hidden from git status");
+  if (facts.listeners.kind === "checked" && facts.listeners.found.length === 0) {
+    lines.push("  ok   no server is listening on a port from inside this directory");
+  }
+  if (facts.listeners.kind === "cannot-tell") {
+    lines.push(`  ·    did not check for running servers: ${facts.listeners.why}`);
+  }
   for (const v of facts.verified) lines.push(`  ok   ${v}`);
   if (facts.disposable > 0) {
     lines.push(`  ·    ${facts.disposable} ignored ${plural(facts.disposable, "entry", "entries")} rebuildable (node_modules, dist, …)`);

@@ -664,9 +664,16 @@ describe("the status the caller derived is checked before anything is sent", () 
  * ---------------------------------------------------------------- */
 
 describe("answerQuestion re-reads the dialog before it answers it", () => {
+  /**
+   * Every happy path below answers an `AskUserQuestion` rather than a
+   * permission dialog, and that is not a stylistic choice: since 2026-09-08
+   * `answerQuestion` refuses anything whose `gate` is not `conversation`, so a
+   * permission fixture here would test the refusal instead of the keystrokes.
+   * The refusal has its own tests further down.
+   */
   it("sends the digit, and only the digit, for a numbered dialog", () => {
-    const seen = question("dialog-bash-permission");
-    const { io, sent } = fakeBox({ capture: fixture("dialog-bash-permission") });
+    const seen = question("dialog-ask-user-question");
+    const { io, sent } = fakeBox({ capture: fixture("dialog-ask-user-question") });
     const result = answerQuestion(TARGET, seen, 3, NEEDS_YOU, io);
 
     expect(result.ok).toBe(true);
@@ -680,9 +687,48 @@ describe("answerQuestion re-reads the dialog before it answers it", () => {
    * which anybody attached to that terminal could move the highlight, so the
    * arrows landed on one option and the Enter chose another.
    */
+  /**
+   * A CURSOR MENU THAT IS AN AGENT'S OWN QUESTION, WHICH CLAUDE CODE DOES NOT
+   * CURRENTLY DRAW — and saying so is the point of this comment.
+   *
+   * Every real cursor menu in the corpus is a permission dialog (folder trust),
+   * and every real `AskUserQuestion` is numbered. So since the gate landed, the
+   * arrows branch of `keysFor` is unreachable through `answerQuestion` in
+   * production: nothing that gets past the gate ever needs an arrow key. That
+   * is a fact about today's widgets rather than a guarantee, which is why the
+   * branch stays and why this capture is synthetic — it keeps the keystroke
+   * mechanics tested against the day a widget changes, rather than leaving them
+   * to be discovered untested then. It is the `AskUserQuestion` frame with its
+   * numbers taken off, which is what such a menu would look like.
+   */
+  const CONVERSATION_MENU = [
+    fixture("dialog-ask-user-question").split("\n").find((l) => l.startsWith("─")) ?? "",
+    " ☐ How to finish",
+    "",
+    "│ Three attempts have been killed by box conditions rather than by the code.",
+    "",
+    " ❯ Run it at low concurrency",
+    "   Push now on existing evidence",
+    "   Keep waiting for a quiet box",
+    "",
+    "Enter to select · ↑/↓ to navigate · Esc to cancel",
+    "",
+  ].join("\n");
+
+  function conversationMenu(): SeenQuestion {
+    const q = parsePane(CONVERSATION_MENU);
+    if (q.kind !== "question") throw new Error("the synthetic conversation menu must parse as a question");
+    // The assertion that makes the rest of it mean anything: if this ever came
+    // back `permission` or `unknown`, the two tests below would be testing the
+    // gate rather than the keystrokes and would still be green.
+    expect(q.gate.kind).toBe("conversation");
+    expect(q.options.map((o) => o.key.via)).toEqual(["selected", "arrows", "arrows"]);
+    return q;
+  }
+
   it("sends the arrows and the Enter in a single tmux call, for a cursor menu", () => {
-    const seen = question("dialog-folder-trust");
-    const { io, sent } = fakeBox({ capture: fixture("dialog-folder-trust") });
+    const seen = conversationMenu();
+    const { io, sent } = fakeBox({ capture: CONVERSATION_MENU });
     const result = answerQuestion(TARGET, seen, 1, NEEDS_YOU, io);
 
     expect(result.ok).toBe(true);
@@ -693,8 +739,8 @@ describe("answerQuestion re-reads the dialog before it answers it", () => {
   });
 
   it("sends Enter alone for the option the cursor is already on", () => {
-    const seen = question("dialog-folder-trust");
-    const { io, sent } = fakeBox({ capture: fixture("dialog-folder-trust") });
+    const seen = conversationMenu();
+    const { io, sent } = fakeBox({ capture: CONVERSATION_MENU });
     const result = answerQuestion(TARGET, seen, 0, NEEDS_YOU, io);
 
     expect(result.ok).toBe(true);
@@ -800,11 +846,71 @@ describe("answerQuestion re-reads the dialog before it answers it", () => {
     const { io, sent } = fakeBox({ capture: fixture("dialog-file-write-goodbye") });
     refused(answerQuestion(TARGET, hello, 0, NEEDS_YOU, io), sent, "question-changed");
 
-    // the same dialog on both sides still answers, so the refusal above is the
-    // material and not this pair having stopped working
+    // The control, and it has to be a different one now that the gate exists:
+    // this is a file-write dialog, so the same dialog on both sides gets PAST
+    // `sameQuestion` and is stopped by the gate instead. A different code is
+    // exactly what proves the refusal above was the material — if `sameQuestion`
+    // had stopped believing this pair, both halves would say "question-changed".
     const { io: same, sent: sentSame } = fakeBox({ capture: fixture("dialog-file-write-hello") });
-    expect(answerQuestion(TARGET, hello, 0, NEEDS_YOU, same).ok).toBe(true);
-    expect(sentSame).toHaveLength(1);
+    refused(answerQuestion(TARGET, hello, 0, NEEDS_YOU, same), sentSame, "grants-permission");
+  });
+
+  /**
+   * THE LINE THE WHOLE FEATURE RESTS ON, tested from the outside.
+   *
+   * Fable: pane text as executable UI is acceptable when execution means *a
+   * user turn*, and not when it means *grant a permission*. `classifyGate` is
+   * where that is decided and `tests/fleet-pane.test.ts` is where the decision
+   * is tested; what these two say is that `answerQuestion` **acts on it**, and
+   * acts on the fresh capture rather than on the caller's copy.
+   *
+   * Every permission fixture in the corpus is listed rather than one of them,
+   * because the interesting failure is a classifier that gets four of five
+   * right — and a single-fixture test cannot tell that apart from five of five.
+   */
+  it("refuses every permission dialog in the corpus, and sends nothing", () => {
+    for (const name of [
+      "dialog-bash-permission",
+      "dialog-bash-permission-git-log",
+      "dialog-edit-diff",
+      "dialog-file-write",
+      "dialog-folder-trust",
+    ]) {
+      const seen = question(name);
+      const { io, sent } = fakeBox({ capture: fixture(name) });
+      refused(answerQuestion(TARGET, seen, 0, NEEDS_YOU, io), sent, "grants-permission");
+    }
+  });
+
+  /**
+   * `unknown` is refused WITH `permission`, not allowed with a warning. The two
+   * fixtures here are the harness's own menus — the model selector and a `/loop`
+   * schedule — which are neither a tool approval nor an agent's question, and
+   * which the classifier deliberately does not try to name. Being unable to
+   * tell what a dialog is has to cost the same as knowing it is dangerous, or
+   * "I could not tell" becomes the way through.
+   */
+  it("refuses a dialog it could not classify, exactly as if it were a permission", () => {
+    for (const name of ["dialog-model-selector", "dialog-loop-cloud-schedule"]) {
+      const seen = question(name);
+      expect(seen.gate.kind).toBe("unknown");
+      const { io, sent } = fakeBox({ capture: fixture(name) });
+      refused(answerQuestion(TARGET, seen, 0, NEEDS_YOU, io), sent, "grants-permission");
+    }
+  });
+
+  /**
+   * THE FORGED BODY. A caller that hands over a `seen` claiming `conversation`
+   * for a dialog that is a permission prompt on screen gets nowhere, because
+   * the gate is computed from the capture and never read off the request. This
+   * is the test that would go green on a build that trusted the client, and it
+   * is the reason the check lives in `steer.ts` rather than in the route.
+   */
+  it("ignores a gate the caller claims, and uses the screen", () => {
+    const real = question("dialog-bash-permission");
+    const lying: SeenQuestion = { ...real, gate: { kind: "conversation" } };
+    const { io, sent } = fakeBox({ capture: fixture("dialog-bash-permission") });
+    refused(answerQuestion(TARGET, lying, 0, NEEDS_YOU, io), sent, "grants-permission");
   });
 
   it("refuses an option index that is not in the dialog", () => {
@@ -860,9 +966,9 @@ describe("answerQuestion re-reads the dialog before it answers it", () => {
    * captures this file already has.
    */
   it("captures the dialog AFTER the identity checks, immediately before sending", () => {
-    const seen = question("dialog-bash-permission");
+    const seen = question("dialog-ask-user-question");
     const order: string[] = [];
-    const { io, sent } = fakeBox({ capture: fixture("dialog-bash-permission") });
+    const { io, sent } = fakeBox({ capture: fixture("dialog-ask-user-question") });
     const note = <T>(what: string, read: () => T): T => {
       order.push(what);
       return read();
