@@ -23,12 +23,15 @@ import { Header, SHELL, freshness } from "./Header";
 import { HealthPanel } from "./HealthPanel";
 import { OrchestratorPanel } from "./OrchestratorPanel";
 import { SessionsPanel } from "./SessionsPanel";
+import { httpActionsApi, type ActionsApi } from "./actions-client";
 import { useDockFit } from "./fit";
 import { useHashState } from "./mode";
 import { httpNewSessionApi, type NewSessionApi } from "./new-session-client";
+import { httpRenameApi, type RenameApi } from "./rename-client";
 import { httpSteerApi, type SteerApi } from "./steer-client";
 import type { Transport } from "./transport";
 import { cx } from "./ui";
+import { useActions } from "./useActions";
 import { useFleetState } from "./useFleetState";
 import { useNow } from "./useNow";
 import { parseOrdering, tally } from "./view";
@@ -37,13 +40,25 @@ export function App({
   transport,
   steer = httpSteerApi,
   newSession = httpNewSessionApi,
+  rename = httpRenameApi,
+  actionsApi = httpActionsApi,
+  actionsPollMs,
 }: {
   transport?: Transport;
-  /** The two write paths, injected for the same reason `transport` is. */
+  /** The write paths, injected for the same reason `transport` is. */
   steer?: SteerApi;
   newSession?: NewSessionApi;
+  rename?: RenameApi;
+  actionsApi?: ActionsApi;
+  /** Only a test passes this, to keep a poll off a fake clock. */
+  actionsPollMs?: number;
 }): ReactNode {
   const feed = useFleetState(transport);
+  /* The second feed: the action vocabulary and the queues. A different
+     resource with a different cost and a different clock — see useActions.ts.
+     **It never asks /api/state**, which is what keeps the server's guards from
+     comparing the box with itself. */
+  const actions = useActions(actionsApi, actionsPollMs);
   /* One clock for the whole page, ticking once a second, so that every age on
      screen agrees — and so that "12s ago" keeps counting when the poll has
      died. An age that only moves when data arrives is an age that freezes at
@@ -98,18 +113,20 @@ export function App({
             selectedId={selectedId}
             onSelect={(id) => setParam("sel", id)}
             steer={steer}
+            rename={rename}
+            actions={actions}
             newSession={newSession}
             onRefresh={feed.refresh}
           />
         ) : null}
         {mode === "health" ? (
           <div className="tw:mx-auto tw:max-w-3xl">
-            <HealthPanel health={feed.state?.health ?? null} />
+            <HealthPanel health={feed.state?.health ?? null} actions={actions} />
           </div>
         ) : null}
         {mode === "orchestrator" ? (
           <div className="tw:mx-auto tw:max-w-3xl">
-            <OrchestratorPanel />
+            <OrchestratorPanel actions={actions} rows={rows} />
           </div>
         ) : null}
       </main>

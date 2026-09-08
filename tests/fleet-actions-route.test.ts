@@ -103,7 +103,16 @@ function fakeIo(opts: {
     runStep: (step) => {
       const index = ran.length;
       ran.push({ argv: step.argv, cwd: step.cwd });
-      return Promise.resolve(opts.step ? opts.step(step, index) : OK_STEP);
+      if (opts.step) return Promise.resolve(opts.step(step, index));
+      // The default is "the box is in the state the plan expects", which for an
+      // `exit-zero` step is `OK_STEP` and for a `stdout-has-line` step has to
+      // be the line — an empty stdout is a step that FAILED, not one nobody
+      // arranged. Writing it here rather than in each caller keeps the four
+      // enacted tests about what they are testing; the tests that want the
+      // pairing to fail pass an explicit `step`, and there is one below for
+      // every `stdout-has-line` step in the file.
+      const pass = step.pass;
+      return Promise.resolve(pass.kind === "stdout-has-line" ? { ...OK_STEP, stdout: `${pass.line}\n` } : OK_STEP);
     },
     listProcesses: () =>
       Promise.resolve(
@@ -512,12 +521,37 @@ describe("POST /api/actions/session — enacted", () => {
     expect(r.json.op).toBe("dry-run");
     const steps = r.json.steps as { argv: string[]; cwd: string }[];
     expect(steps.map((s) => s.argv)).toEqual([
+      ["git", "-C", WORKTREE, "rev-parse", "--abbrev-ref", "HEAD"],
       ["npm", "run", "worktree:check"],
       ["npm", "run", "worktree:sweep", "--", "remove", "--branch", "worktree-fixture"],
     ]);
-    expect(steps[0]?.cwd).toBe(WORKTREE);
-    expect(steps[1]?.cwd).toBe(PRIMARY);
+    expect(steps[0]?.cwd).toBe(PRIMARY);
+    expect(steps[1]?.cwd).toBe(WORKTREE);
+    expect(steps[2]?.cwd).toBe(PRIMARY);
     expect(ran).toEqual([]);
+  });
+
+  /**
+   * The pairing step failing, which is what makes its presence mean anything.
+   *
+   * `worktreeDir` and `branch` reach this route as two independent claims off
+   * one rendered row, and nothing downstream puts them back together: the check
+   * runs in the directory, the sweep removes by branch. So a row that has gone
+   * stale — the tree re-made on another branch, the page not refreshed — could
+   * have the check clear one tree and the sweep remove another. Here the
+   * directory turns out to be on `worktree-something-else`, and NOTHING RUNS
+   * after the first step.
+   */
+  it("stops when the directory is not on the branch the page claimed", async () => {
+    const { io, ran } = fakeIo({ step: () => ({ ...OK_STEP, stdout: "worktree-something-else\n" }) });
+    const { routes } = harness({ io });
+    const r = await call(routes, fakeReq({ body: removeBody({ mode: "run" }) }));
+    expect(r.status).toBe(409);
+    expect(r.json.code).toBe("plan-failed");
+    expect(ran.map((x) => x.argv[0])).toEqual(["git"]);
+    const run = r.json.run as { stoppedAt: number; steps: { status: string }[] };
+    expect(run.stoppedAt).toBe(0);
+    expect(run.steps.map((s) => s.status)).toEqual(["failed"]);
   });
 
   it("refuses a directory outside this checkout's worktrees", async () => {
@@ -532,16 +566,19 @@ describe("POST /api/actions/session — enacted", () => {
   });
 
   it("runs the removal in order, and STOPS when worktree:check says no", async () => {
-    const { io, ran } = fakeIo({ step: (_s, i) => (i === 0 ? { ...OK_STEP, code: 1, stdout: "blocked: data/ has 3 files" } : OK_STEP) });
+    const { io, ran } = fakeIo({
+      step: (_s, i) => (i === 1 ? { ...OK_STEP, code: 1, stdout: "blocked: data/ has 3 files" } : { ...OK_STEP, stdout: "worktree-fixture\n" }),
+    });
     const { routes } = harness({ io });
     const r = await call(routes, fakeReq({ body: removeBody({ mode: "run" }) }));
     expect(r.status).toBe(409);
     expect(r.json.code).toBe("plan-failed");
     // THE ASSERTION THIS WHOLE FILE IS FOR: the sweep was never invoked.
-    expect(ran.map((x) => x.argv.join(" "))).toEqual(["npm run worktree:check"]);
+    expect(ran.map((x) => x.argv[0])).toEqual(["git", "npm"]);
+    expect(ran[1]?.argv[2]).toBe("worktree:check");
     const run = r.json.run as { steps: { status: string }[]; stoppedAt: number };
-    expect(run.stoppedAt).toBe(0);
-    expect(run.steps.map((s) => s.status)).toEqual(["failed"]);
+    expect(run.stoppedAt).toBe(1);
+    expect(run.steps.map((s) => s.status)).toEqual(["passed", "failed"]);
   });
 
   it("runs both steps when the check passes", async () => {
@@ -550,7 +587,8 @@ describe("POST /api/actions/session — enacted", () => {
     const r = await call(routes, fakeReq({ body: removeBody({ mode: "run" }) }));
     expect(r.status).toBe(200);
     expect(r.json.op).toBe("ran");
-    expect(ran.map((x) => x.argv[2])).toEqual(["worktree:check", "worktree:sweep"]);
+    expect(ran.map((x) => x.argv[0])).toEqual(["git", "npm", "npm"]);
+    expect(ran.slice(1).map((x) => x.argv[2])).toEqual(["worktree:check", "worktree:sweep"]);
   });
 
   it("will not kill a session whose name no longer means that session", async () => {
@@ -606,7 +644,8 @@ describe("POST /api/actions/session — enacted", () => {
     await call(routes, fakeReq({ url: "/api/actions/cancel", body: { sessionId: "$99001", itemId: id } }));
     const again = await call(routes, fakeReq({ body: removeBody({ mode: "run" }) }));
     expect(again.status).toBe(200);
-    expect(ran.map((x) => x.argv[2])).toEqual(["worktree:check", "worktree:sweep"]);
+    expect(ran.map((x) => x.argv[0])).toEqual(["git", "npm", "npm"]);
+    expect(ran.slice(1).map((x) => x.argv[2])).toEqual(["worktree:check", "worktree:sweep"]);
   });
 
   it("refuses a mode that does not go with the effect", async () => {

@@ -356,6 +356,65 @@ function generationNow(): number | null {
   }
 }
 
+/**
+ * How long one collection gets before a caller stops waiting for it.
+ *
+ * Generous on purpose: a collection takes 8–12 seconds normally, the child
+ * below already has its own 60-second timeout, and this box has hit load
+ * average 391. This is the backstop behind that timeout rather than a second
+ * copy of it.
+ */
+export const COLLECT_DEADLINE_MS = 120_000;
+
+/**
+ * Wait for a collection, or give up on it — but never wait forever.
+ *
+ * **`collect()` CAN FAIL TO SETTLE, AND THAT STOPPED THE SERVER'S LOOP FOR
+ * GOOD.** Its child gets `timeout: 60_000`, which sends SIGTERM, and a `bash`
+ * in uninterruptible IO on a swapping box does not die on SIGTERM.
+ * `promisify(execFile)`'s promise then waits for a process that is not coming
+ * back. In `server.ts` the refresh loop chains from the END of each run, so it
+ * never reached its next iteration — and nothing threw, so `lastError` stayed
+ * `null` while `collectedAt` sat at the last success.
+ *
+ * Observed in the field on 2026-09-08 by the `orchestrator-setup` session:
+ * roughly **thirty minutes stale with `error: null`**, self-healing when the
+ * child finally died. That is `silent-success.md` in its purest form — the
+ * thing that would have reported the fault was the thing that stopped — and it
+ * had no test because there was nothing to call.
+ *
+ * The abandoned promise is NOT cancelled, because there is nothing to cancel it
+ * with; its eventual result is ignored. What matters is that the CALLER is
+ * freed, so the next attempt happens and `attemptedAt` keeps moving even while
+ * `collectedAt` does not.
+ *
+ * `run` is a parameter so a test can hand it a promise that never settles,
+ * which is the one behaviour that cannot be arranged with a real tmux.
+ */
+export async function collectWithDeadline(
+  run: () => Promise<FleetSnapshot> = collect,
+  ms: number = COLLECT_DEADLINE_MS,
+): Promise<FleetSnapshot> {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const deadline = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => reject(new Error(collectionAbandoned(ms))), ms);
+    timer.unref?.();
+  });
+  try {
+    return await Promise.race([run(), deadline]);
+  } finally {
+    if (timer !== null) clearTimeout(timer);
+  }
+}
+
+/** The sentence a person reads when a collection was abandoned. Exported so a test can hold it. */
+export function collectionAbandoned(ms: number): string {
+  return (
+    `the collection did not finish within ${Math.round(ms / 1000)}s and has been abandoned — ` +
+    `a tmux or bash child is probably wedged; any rows shown are from the previous one`
+  );
+}
+
 export async function collect(): Promise<FleetSnapshot> {
   const startedAt = Date.now();
   /**
