@@ -3365,6 +3365,11 @@ Cost of the second arm, measured on a loaded box so read the ratios: `wiki_gdp_t
 1.9s, `ar5iv` 2.8s against 1.5s, `plos_biology` 1.5s against 0.7s. Three fixtures in thirty-five, in
 a batch stage nobody is waiting on.
 
+**The three reviews are kept verbatim** in
+[260904e-c3-reviews-sol.md](260904e-c3-reviews-sol.md), errors included — round three's rule-B
+reproduction does not reproduce as written, and round two blamed Readability for a row our own
+furniture pass deletes.
+
 ###### The pattern across three reviews — as first written, and as Fable corrected it
 
 **The first version of this section said every defect had been in a guard rather than in the feature,
