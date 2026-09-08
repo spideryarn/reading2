@@ -649,6 +649,43 @@ Added 2026-09-08 04:35, closing the one gap both UI and route agents named in th
   an `AskUserQuestion` whose five custom labels all classify conservatively, which is the right
   answer and the one the UI must render as *at least* as alarming as `persistent`.
 
+- **A `claudeSessionId` on a row does NOT mean a Claude exists**, and this surprised everyone who
+  looked at it. `CLAUDE_SESSION_ID` is written into the tmux environment by `tmux new-session -e …`
+  **before Claude runs at all** — so a `gjd-remote new-claude --wait 6h` session carries a
+  conversation uuid for six hours while its pane runs `sleep 21600`. Measured on the live payload
+  2026-09-08 04:45: **30 of 35 rows carry a uuid, and 5 of those are `waiting`** with no process to
+  match. Two consequences:
+  - **Steering is protected twice over, by accident rather than design.** `steerableStatus` refuses
+    `waiting`, and `verifyTarget` independently requires a live `claude --session-id <uuid>`
+    descended from the pane. Either alone would do; it is worth knowing both are load-bearing.
+  - **Anything that reads a transcript by uuid must not treat its absence as "this agent has said
+    nothing".** It usually means the agent has not started.
+- **The id also outlives the conversation, which is the harder half.** The tmux environment is set
+  once and never updated, so if a pane's Claude exits and someone starts a fresh one, the row still
+  names the *first* conversation. A transcript reader keyed on it then returns real, well-formed,
+  correctly-attributed turns from a conversation that is not on screen — the most convincing wrong
+  answer available. `transcript.ts` reports `lastModified` for exactly this: **a transcript last
+  written hours ago on a row the collector calls `working` is this bug**, and the page must say so.
+- **The transcript is not where `meta.dir` says it is, most of the time.** Building the slug from
+  the launch directory found the file for only **7 of 30** sessions with a uuid. Not lossy
+  slugification — `EnterWorktree` writes a `relocated` record and *moves the file* to the worktree's
+  slug while `meta.dir` still names the primary. So the uuid is the identity and the directory is
+  only a hint: try the slug, else scan. Being wrong about the slug then costs milliseconds instead
+  of an answer.
+- **Reading the tail is three orders of magnitude cheaper than the alternative.** Biggest transcript
+  on the box is **33.0 MB**; a 12-turn read takes **262 KB (0.79%) in 4.5 ms**. Across all 35 live
+  rows: 318 ms total, mean 9.1 ms, 13 needing the directory scan. `gjd-remote ls`, which greps whole
+  transcripts, takes 10–12 s.
+- **Tool traffic is ~80% of a transcript by volume** (census of one real 33 MB file: 2718 `tool_use`,
+  2718 `tool_result`, 1353 `thinking`, against 1017 assistant text blocks and 280 typed user turns).
+  Tool *results* are dropped — that is where hostile web content lives — and the count is reported so
+  the page can say "and 40 tool results" rather than implying silence.
+- **Rendering every `role: "user"` record as Greg is wrong more than four times in five.** Measured
+  across two real transcripts: `human` 64, `task-notification` 319, `peer` 4, `auto-continuation` 2.
+  And a peer message carries *both* `isMeta: true` and `origin.kind: "peer"`, so checking `isMeta`
+  first labels every message from another agent "injected" — which the agent building it did, and
+  caught.
+
 - **`spideryarn.com` uses Namecheap nameservers** (`dns1.registrar-servers.com`), serving Vercel at
   `76.76.21.21`. Cloudflare's partial/CNAME zone setup is Business-plan-only ($200/mo), per
   [Cloudflare's own docs](https://developers.cloudflare.com/dns/zone-setups/partial-setup/) — hence

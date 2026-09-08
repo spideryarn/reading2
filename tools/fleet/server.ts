@@ -40,6 +40,7 @@ import { broadcast, startHeartbeat, subscribe, subscriberCount } from "./live.js
 import { newSessionRoutes } from "./routes-new.js";
 import { handleSteerRequest } from "./routes-steer.js";
 import { fleetState } from "./state.js";
+import { readRecentMessages } from "./transcript.js";
 
 /** Where the built React client lives. */
 const DIST = path.join(path.dirname(fileURLToPath(import.meta.url)), "web", "dist");
@@ -222,6 +223,57 @@ function handler(req: import("node:http").IncomingMessage, res: import("node:htt
     res.end(statePayload());
     return;
   }
+  // Recent messages for one session, for the detail pane.
+  //
+  // ADDRESSED THROUGH THE CURRENT SNAPSHOT, NOT THROUGH THE QUERY STRING. The
+  // caller names a tmux handle and we look up the row; it never names a path, a
+  // uuid or a directory. So the worst a crafted URL can do is miss — this route
+  // can only read a conversation the page is already showing, and there is no
+  // traversal question to get wrong because there is no caller-supplied path.
+  //
+  // Read-only, but not harmless: every string it returns is agent-authored text
+  // from a process that may have been handling hostile input. React escapes it;
+  // nothing here adds markup.
+  if (url.startsWith("/api/messages")) {
+    const id = new URL(req.url ?? "/", "http://fleet.invalid").searchParams.get("id");
+    const row = snapshot?.rows.find((r) => r.id === id) ?? null;
+    if (row === null) {
+      res.writeHead(404, { "content-type": "application/json", "cache-control": "no-store" });
+      res.end(
+        JSON.stringify({
+          kind: "not-found",
+          reason: "no-such-session",
+          why: "no session with that handle in the current snapshot",
+        }),
+      );
+      return;
+    }
+    void readRecentMessages({
+      claudeSessionId: row.claudeSessionId,
+      dir: row.meta.version === 1 ? row.meta.dir : null,
+      limit: 12,
+    })
+      .then((payload) => {
+        res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
+        res.end(JSON.stringify(payload));
+      })
+      // `readRecentMessages` is built not to reject — every failure is a `kind`
+      // — so this is for the case where that is itself wrong. Without it the
+      // request hangs until the phone gives up, which is indistinguishable from
+      // the box being down.
+      .catch((err: unknown) => {
+        res.writeHead(500, { "content-type": "application/json", "cache-control": "no-store" });
+        res.end(
+          JSON.stringify({
+            kind: "unreadable",
+            path: null,
+            why: `reading the transcript threw: ${err instanceof Error ? err.message : String(err)}`,
+          }),
+        );
+      });
+    return;
+  }
+
   // THE ONLY WRITE PATH IN THIS TOOL: it types into live agent sessions.
   // Before serveStatic, so that no file which ever lands under web/dist/ can
   // shadow it — a bundle named `api/steer/message` is absurd and is exactly the
