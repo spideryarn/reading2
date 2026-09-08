@@ -392,9 +392,21 @@ export function computeVerdict(input: {
 }): Verdict {
   const reasons: string[] = [];
   let level: HealthLevel = "ok";
+  /**
+   * Every level anything asked for, kept because the final answer needs to know
+   * whether `critical` was ever *measured* — and asking `level` cannot tell it.
+   *
+   * `raise` assigns `level` from inside a closure, so TypeScript's control-flow
+   * analysis still believes `level` is the literal `"ok"` it was initialised to
+   * and calls a later `level === "critical"` impossible. An array of
+   * `HealthLevel` has no such narrowing, and it is the more honest record
+   * anyway: `level` is a summary, this is what was actually observed.
+   */
+  const raised: HealthLevel[] = [];
   const raise = (next: HealthLevel, reason: string) => {
     const order: HealthLevel[] = ["ok", "strained", "critical", "unknown"];
     if (order.indexOf(next) > order.indexOf(level)) level = next;
+    raised.push(next);
     reasons.push(reason);
   };
 
@@ -459,9 +471,23 @@ export function computeVerdict(input: {
   if (!coreReadable) {
     // Load, memory AND swap all failed: there is no basis for any of "ok",
     // "strained" or "critical", so say so rather than default to the first.
-    level = "unknown";
+    //
+    // BUT UNCERTAINTY MAY ADD DOUBT AND MAY NEVER ERASE A BAD READING SOMEBODY
+    // MANAGED TO TAKE. The disk comes from `df`, a different command that can
+    // succeed while all three of these fail — and this used to relabel a
+    // known-critical disk as `unknown`, which the new-session route then read
+    // as "no reason not to start another agent". GPT Sol's F12.
+    //
+    // `measured` is a separate binding rather than a test on `level` because
+    // the two are different questions and were sharing one variable: `level`
+    // holds HOW BAD IT IS, and this block is about WHETHER WE COULD TELL. That
+    // conflation is also why `raise`'s order array puts `unknown` above
+    // `critical` — harmless while nothing raises to unknown, and exactly the
+    // wrong ranking the moment something does.
     reasons.unshift("could not establish the core reading (load, memory and swap all failed) — this is not the same as the box being fine");
-  } else if (reasons.length === 0) {
+    return { level: raised.includes("critical") ? "critical" : "unknown", reasons };
+  }
+  if (reasons.length === 0) {
     reasons.push("load, memory and swap all look fine");
   }
 

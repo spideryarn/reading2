@@ -45,6 +45,7 @@ import { classifyConsequence, fingerprintMaterial, type OptionKey, type PaneMate
 import type { FleetStatus } from "./status.js";
 import {
   answerQuestion as realAnswerQuestion,
+  describeSend,
   sendMessage as realSendMessage,
   type RefusalCode,
   type SeenQuestion,
@@ -108,7 +109,27 @@ export type SteerOp = "message" | "answer";
 /** What the client gets back. `ok:false` always carries a code and a sentence. */
 export type SteerResponse =
   | { ok: true; op: SteerOp; verified: Verified; sent: readonly (readonly string[])[] }
-  | { ok: false; code: RefusalCode | RouteErrorCode; why: string };
+  | {
+      ok: false;
+      code: RefusalCode | RouteErrorCode;
+      why: string;
+      /**
+       * WHAT HAPPENED TO THE KEYSTROKES, when the delivery module got as far as
+       * having an opinion. Absent for anything refused before that.
+       *
+       * A refusal is not one thing, and treating it as one is how a person ends
+       * up sending a message twice. `"none"` means nothing left this box.
+       * `"partial"` means the TEXT LANDED AND THE ENTER DID NOT, so it is
+       * sitting in that agent's input box waiting for the next keystroke to
+       * submit it — the one case where "try again" is the worst available
+       * advice. `"unknown"` means the call timed out or died on a signal and we
+       * genuinely cannot say.
+       *
+       * It is here rather than only in the log because the person who pressed
+       * the button is the one who needs it, and they are on a phone.
+       */
+      delivery?: "none" | "partial" | "unknown";
+    };
 
 /**
  * A refusal's HTTP status.
@@ -141,6 +162,24 @@ export const REFUSAL_STATUS: Record<RefusalCode, number> = {
   "question-gone": 409,
   "question-changed": 409,
   "send-failed": 409,
+  // The session is not at a text input box — a dialog is up, or something has
+  // been shelled out to in the foreground. GPT Sol's F2: a message beginning
+  // "1" arriving at a numbered dialog is an approval, and the route returned
+  // 200 for it. The world moved between the page and the send, so 409.
+  "not-at-input": 409,
+  "pane-is-asking": 409,
+  // THE TWO THAT ARE NOT 5xx AND MUST NOT BE, which is a stronger statement
+  // than the rest of this table.
+  //
+  // `send-partial` means the text landed and the Enter did not, so the message
+  // is SITTING IN THE PERSON'S INPUT BOX waiting for the next keystroke to
+  // submit it. `send-unknown` means we do not know whether it landed. Neither
+  // is retryable, and a 5xx is precisely what every retry loop in the world
+  // retries — which here would submit the half-typed message it was trying to
+  // recover from. So they are 4xx, and the code in the body carries the
+  // distinction for anything that cares.
+  "send-partial": 409,
+  "send-unknown": 409,
 };
 
 /* ------------------------------------------------------------------ *
@@ -861,11 +900,23 @@ export function makeSteerRoutes(overrides: Partial<SteerDeps> = {}): SteerRoutes
     }
 
     if (!result.ok) {
-      deps.log(`steer ${op}: refused pane=${target.paneId} code=${result.reason.code} why=${result.reason.why}`);
+      // `describeSend`, never `result.sent` — THE ARGV IS THE MESSAGE, and this
+      // file's header promises the message is never logged. A refusal that
+      // leaked it into the log would be the promise broken at the one moment
+      // somebody is reading the log to find out what went wrong.
+      deps.log(
+        `steer ${op}: refused pane=${target.paneId} code=${result.reason.code} ` +
+          `delivery=${result.delivery} landed=${describeSend(result.sent)} why=${result.reason.why}`,
+      );
       respond(res, REFUSAL_STATUS[result.reason.code], {
         ok: false,
         code: result.reason.code,
         why: result.reason.why,
+        // Carried to the CLIENT, not just to the log, because the person who
+        // pressed the button is the one who needs it and they are on a phone.
+        // "partial" means their text is sitting in that agent's input box, and
+        // "try again" is the worst available advice.
+        delivery: result.delivery,
       });
       return;
     }

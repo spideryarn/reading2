@@ -53,6 +53,18 @@ export type FleetState = {
   health: HealthReport | null;
   /** How often the server intends to collect, so the page can say when it is genuinely late. */
   refreshMs: number;
+  /**
+   * Whether `POST /api/steer/answer` will do anything.
+   *
+   * THE PAGE CANNOT HONESTLY WARN ABOUT A FLAG IT HAS NEVER BEEN TOLD. Without
+   * this, the client either hedges ("answering may be held back") or discovers
+   * the truth by having somebody tap and get a 503 — and the whole point of the
+   * hold is that a person should not tap. Told beats inferred, again.
+   *
+   * Not a `schema` bump: adding a field is not a change a consumer that ignored
+   * it would be *wrong* about, which is this file's own rule.
+   */
+  answeringEnabled: boolean;
 };
 
 export function fleetState(
@@ -60,6 +72,7 @@ export function fleetState(
   error: string | null,
   health: HealthReport | null,
   refreshMs: number,
+  answeringEnabled: boolean,
 ): FleetState {
   return {
     schema: 1,
@@ -73,5 +86,6 @@ export function fleetState(
     error,
     health,
     refreshMs,
+    answeringEnabled,
   };
 }

@@ -339,6 +339,53 @@ describe("sendMessage refuses anything that is not the session it was promised",
     ]);
   });
 
+  /**
+   * MEASURED ON THIS BOX, 2026-09-08, and it is why the argv check cannot be
+   * skipped when there is only one candidate left.
+   *
+   * `pgrep -a -f -- <uuid>` returns TWO pids for a live agent, because
+   * gjd-remote names its job script after the conversation:
+   *
+   *     82167  claude --session-id 117e181a-… --name adversarial-fixtures …
+   *     645023 bash /home/greg/gjd-remote/jobs/adversarial-fixtures-117e181a-….sh
+   *
+   * The wrapper is the Claude's PARENT, so it is a descendant of the pane and
+   * the ancestry walk says yes to it — and it is a SHELL, which would EXECUTE
+   * the message rather than read it. What actually rejects it is the exact-
+   * argument rule: its argv is `["bash", "<path with the uuid in it>"]`, with
+   * no `--session-id` argument anywhere, so it matched pgrep only through its
+   * filename. The argv[0] rule is the second line and is exercised separately,
+   * by the `grep --session-id <uuid>` case in the unit test below.
+   *
+   * The wrapper is listed first here because pgrep sorts by pid and the wrapper
+   * can perfectly well be the lower one; taking the first ancestry match rather
+   * than the first VERIFIED one would take that one.
+   */
+  it("skips the gjd-remote wrapper shell that pgrep finds under the same pane", () => {
+    const wrapper = `/home/greg/gjd-remote/jobs/fleet-dashboard-${UUID}.sh`;
+    const { io, sent } = fakeBox({
+      pgrep: `150 bash ${wrapper}\n200 claude --session-id ${UUID} --name fleet\n`,
+      parents: ["    1     0", "  100     1", "  150   100", "  200   150", ""].join("\n"),
+      cmdlines: { 150: ["bash", wrapper], 200: ["claude", "--session-id", UUID, "--name", "fleet"] },
+    });
+    const result = sendMessage(TARGET, "rm the worktree when you are done", WORKING, io);
+
+    expect(result.ok).toBe(true);
+    // the Claude, not the shell that would have EXECUTED that sentence
+    if (result.ok) expect(result.verified.claudePid).toBe(200);
+    expect(sent).toHaveLength(2);
+  });
+
+  it("refuses when the only candidate under the pane is that wrapper shell", () => {
+    const wrapper = `/home/greg/gjd-remote/jobs/fleet-dashboard-${UUID}.sh`;
+    const { io, sent } = fakeBox({
+      pgrep: `150 bash ${wrapper}\n`,
+      parents: ["    1     0", "  100     1", "  150   100", ""].join("\n"),
+      cmdlines: { 150: ["bash", wrapper] },
+    });
+    refused(sendMessage(TARGET, "rm the worktree when you are done", WORKING, io), sent, "no-claude-in-pane");
+  });
+
   it("refuses a candidate whose /proc entry has gone, rather than assuming it", () => {
     const { io, sent } = fakeBox({ cmdlines: { 200: null } });
     refused(sendMessage(TARGET, "keep going", WORKING, io), sent, "no-claude-in-pane");
@@ -816,13 +863,17 @@ describe("answerQuestion re-reads the dialog before it answers it", () => {
     const seen = question("dialog-bash-permission");
     const order: string[] = [];
     const { io, sent } = fakeBox({ capture: fixture("dialog-bash-permission") });
+    const note = <T>(what: string, read: () => T): T => {
+      order.push(what);
+      return read();
+    };
     const watched: SteerIo = {
-      listPanes: () => (order.push("panes"), io.listPanes()),
-      processParents: () => (order.push("parents"), io.processParents()),
-      claudeCandidates: (id) => (order.push("pgrep"), io.claudeCandidates(id)),
-      cmdline: (pid) => (order.push("cmdline"), io.cmdline(pid)),
-      capture: (id) => (order.push("capture"), io.capture(id)),
-      sendKeys: (args) => (order.push("send"), io.sendKeys(args)),
+      listPanes: () => note("panes", () => io.listPanes()),
+      processParents: () => note("parents", () => io.processParents()),
+      claudeCandidates: (id) => note("pgrep", () => io.claudeCandidates(id)),
+      cmdline: (pid) => note("cmdline", () => io.cmdline(pid)),
+      capture: (id) => note("capture", () => io.capture(id)),
+      sendKeys: (args) => note("send", () => io.sendKeys(args)),
     };
 
     const result = answerQuestion(TARGET, seen, 3, NEEDS_YOU, watched);
