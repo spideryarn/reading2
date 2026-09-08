@@ -544,6 +544,53 @@ incumbent too — the journalled Skeptical Inquirer row proves it — so the thr
 **preflight, not evidence**. The repeated incumbent-versus-repair comparison stays, and **the
 incumbent must reproduce at least one error** or the run did not exercise the defect.
 
+### E′ — the repair, written out before any output is seen
+
+Declared here, not in a commit, so that F60's *"label before repaired outputs exist"* and F61's
+*"declare the design before seeing output"* are both satisfiable and checkable afterwards. **Three
+changes, one of them a contract change.**
+
+**1. `relation` and `valence` get the same subject and the same target** — F54, in the exact words
+that finding specified, plus the matching move on `valence`. Today `READING` (`src/debate.ts` ~1056)
+scopes `relation` to the outside **page** and `valence` to the **quoted passage**:
+
+    relation  what the outside page does to the thing it is answering:
+    valence   which way the QUOTED PASSAGE leans toward this row's target:
+
+becomes
+
+    relation  what the QUOTED PASSAGE does to this row's target:
+    valence   which way the QUOTED PASSAGE leans toward this row's target:
+
+**If this lands, the same commit changes** `DebateRelation`'s docblock in `src/types.ts` (*"What the
+outside page does to what it is answering"*), the parent plan's § 4, and the panel's explanatory
+prose. Group-one eligibility and `articleReferenceQuote` stay page-level; `applies` and `limits`
+keep their outside-piece meaning. That is F54's scope and it is not being widened.
+
+**2. Group one gets a target binding, because it has none.** Group two says *"Here `valence` is the
+quoted passage's stance toward THE CLAIM you quoted — not toward the article as a whole, and not its
+tone"* (~1168). Group one says nothing; the word *target* is never bound for it, and the only hint is
+a comment inside the answer format, `"applies": "what it says about this article"` (~1125). It gets
+the parallel sentence, naming the article as the target.
+
+**3. Both groups get the negation the failures actually need.** Group two rules out *the article as a
+whole* and *its tone*. **All three recorded errors are stance toward the source's own subject** —
+psi, Geller — and no sentence in either prompt rules that out. One clause, in both groups:
+
+> not toward whatever the outside piece is itself discussing.
+
+**Why this is a spec repair and not an arm.** A missing binding and a missing negation are defects on
+their face; there is no second wording competing with them on taste. That is the argument the whole
+cut rests on, so it is worth being explicit that **change 3 is the one with the least authority
+behind it** — 1 and 2 are F54 and a parallelism the code already has on one side, while 3 is inferred
+from three observations. If the measurement separates them at all, 3 is the one to hold out.
+
+**What must be true before this is written into `src/debate.ts`:** the hand labels exist and are
+committed (D′), the incumbent has been shown to reproduce at least one error (F58), and the raw
+vocabulary check is in place (F62) — because change 1 and change 3 both alter the sentence that
+introduces the answer vocabulary, which is precisely the edit that could turn every row `unknown`
+while looking like a success.
+
 ### Stage B — the free instrument, and one shipped bug
 
 - `evals/debate/score.ts`: loss-reason table, the contingency table and opposite-pair mark,
