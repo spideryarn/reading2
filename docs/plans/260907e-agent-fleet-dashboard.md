@@ -686,6 +686,22 @@ Added 2026-09-08 04:35, closing the one gap both UI and route agents named in th
   first labels every message from another agent "injected" — which the agent building it did, and
   caught.
 
+- **Run the server under `scripts/tmux-job.ts`, not backgrounded from a session — demonstrated
+  rather than argued, 2026-09-08 04:39.** An earlier, orphaned copy of the server that had been
+  started with a plain `&` was OOM-killed while the box was at load 28 with 21 GB of swap in use.
+  The tmux-job copy, on the same box at the same moment, kept collecting. Backgrounded processes are
+  killed on *system* memory pressure rather than their own, so the dashboard would have gone down
+  precisely when it was most worth looking at — and the only evidence would have been a phone
+  showing a connection error indistinguishable from a Tailscale hiccup. Start it with:
+
+  ```
+  npx tsx scripts/tmux-job.ts --name fleet-server env FLEET_BIND=127.0.0.1,$(tailscale ip -4) \
+    npx tsx tools/fleet/server.ts
+  ```
+
+  The `env` prefix matters: the variable does not otherwise reach the child, and the failure is
+  quiet — the server binds loopback only, so it works from the box and not from the phone.
+
 - **`spideryarn.com` uses Namecheap nameservers** (`dns1.registrar-servers.com`), serving Vercel at
   `76.76.21.21`. Cloudflare's partial/CNAME zone setup is Business-plan-only ($200/mo), per
   [Cloudflare's own docs](https://developers.cloudflare.com/dns/zone-setups/partial-setup/) — hence
