@@ -270,6 +270,44 @@ aspirational.
 
 ### Identity, and the three ways a session can stop being there
 
+**CORRECTED 2026-09-08, late: `claudeSessionId` is a claim that decays, not an identity.** Measured
+on the live box by the agent who owns the producer, and it undercuts what the rest of this section
+originally said. Two facts:
+
+- **It is set before Claude runs.** `CLAUDE_SESSION_ID` is written into the tmux environment at
+  `tmux new-session -e …`, so a `--wait 6h` session carries a conversation uuid for six hours while
+  its pane runs `sleep 21600`. On the live payload, **30 of 35 rows carried a uuid and 5 of those
+  were `waiting`**, with no Claude process to match. **A uuid on a row is not evidence a conversation
+  exists.**
+- **It outlives the conversation.** The environment is written once and never updated, so if a pane's
+  Claude exits and a fresh one starts, the row still names the *first* conversation.
+
+> the uuid identifies a conversation, and the tmux environment's claim about which conversation is in
+> a pane is a hint that decays.
+>
+> — the dashboard agent, 2026-09-08
+
+**So the asymmetry is the finding, and it is what goes in the comment: a uuid that changes is real
+evidence of replacement; a uuid that does not change is no evidence at all.** The `session-replaced`
+event therefore fires correctly when it fires and **cannot be trusted by its absence** — which is
+exactly the case it was invented for, so the event is weaker than this plan first claimed.
+
+This is worse than an ordinary stale field, for the reason everything on this page is worse: a reader
+keyed on a stale uuid does not fail. **It returns real, well-formed, correctly-attributed content
+from a conversation that is not on screen** — the most convincing wrong answer available.
+
+The only thing that resolves it is liveness evidence the pair cannot supply: a transcript's
+`lastModified`. **A transcript last written hours ago on a row we call `working` is this bug**, and
+it is the only available signal. That is filesystem I/O, so it belongs in S4 or later, not in S2's
+pure logic; S2's job is to make the uncertainty impossible to overlook rather than to resolve it.
+
+Two related hints, recorded so nobody re-derives them: **`meta.dir` does not locate the transcript**
+— a path built from it finds the file for 7 of 30 sessions, because `EnterWorktree` *moves* the
+transcript to the worktree's slug while `meta.dir` still names the primary, so the rule is try the
+slug then scan. And **reading a transcript tail is affordable after all**: twelve turns cost 262 KB
+of a 33 MB file in 4.5 ms, and all 35 rows come to 318 ms — which reverses the assumption that
+conversation content was too expensive to keep.
+
 **Identity is the pair (tmux handle, `claudeSessionId`), never the handle alone.** The handle is
 immutable and is the right address for a live view, which is why `gjd-remote` uses it. For a
 *history* it is wrong: a tmux session can be resumed into a different conversation — same handle,
