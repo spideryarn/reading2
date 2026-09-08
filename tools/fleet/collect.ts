@@ -52,6 +52,23 @@ export type FleetRow = {
    */
   paneId: string | null;
   /**
+   * The pane's own pid (its shell), when tmux told us. Not an address — it is
+   * the thing that CHANGES when a pane is respawned under the same handle, so
+   * `steer.ts` compares it before typing and refuses if the pane you were
+   * looking at has been replaced by another one wearing its name.
+   */
+  panePid: number | null;
+  /**
+   * The CONVERSATION's uuid — Claude's own `--session-id`, not tmux's `$1643`.
+   *
+   * Carried because it is the only one of the three ids that identifies the
+   * thing a person means by "this agent": a tmux session can be resumed into a
+   * different conversation and keep its handle, its name and its pane. Null for
+   * a session that is not a Claude, and for a legacy one that never pinned it —
+   * and a null here is what makes the steer route refuse rather than guess.
+   */
+  claudeSessionId: string | null;
+  /**
    * What this session is asking, when it is blocked on a dialog — and null
    * otherwise, including for every session that is merely working.
    *
@@ -70,6 +87,9 @@ export type FleetSnapshot = {
   tookMs: number;
 };
 
+/** A pane's address, and the pid that changes when it is respawned under it. */
+export type PaneInfo = { paneId: string; panePid: number | null };
+
 /**
  * Session handle → pane handle, for every pane tmux knows about.
  *
@@ -81,12 +101,17 @@ export type FleetSnapshot = {
  * it does not get an empty string, because "" would be accepted as an address
  * somewhere downstream and `%` is what makes an address recognisable.
  */
-export function panesBySession(listPanesOutput: string): Map<string, string> {
-  const out = new Map<string, string>();
+export function panesBySession(listPanesOutput: string): Map<string, PaneInfo> {
+  const out = new Map<string, PaneInfo>();
   for (const line of listPanesOutput.split("\n")) {
-    const [session, pane] = line.trim().split(/\s+/);
+    const [session, pane, pid] = line.trim().split(/\s+/);
     if (!session || !pane) continue;
-    if (!out.has(session)) out.set(session, pane);
+    // A pid we cannot read is null, not a dropped row: the pane handle is still
+    // the address, and losing the row because a third field was odd would cost
+    // the session its question for no gain. `steer.ts` treats an absent pid as
+    // "no respawn check available" and every other guard still applies.
+    const panePid = pid !== undefined && /^\d{1,10}$/.test(pid) ? Number(pid) : null;
+    if (!out.has(session)) out.set(session, { paneId: pane, panePid });
   }
   return out;
 }
@@ -118,7 +143,7 @@ export function worktreeOf(dir: string): string | null {
 export function toRows(
   sessions: readonly Session[],
   status: ReadonlyMap<string, FleetStatus>,
-  panes: ReadonlyMap<string, string> = new Map(),
+  panes: ReadonlyMap<string, PaneInfo> = new Map(),
 ): FleetRow[] {
   return sessions.map((s) => ({
     id: s.id,
@@ -127,7 +152,9 @@ export function toRows(
     repo: s.meta.version === 1 ? s.meta.repo : null,
     worktree: s.meta.version === 1 ? worktreeOf(s.meta.dir) : null,
     startedAt: s.created.toISOString(),
-    paneId: panes.get(s.id) ?? null,
+    paneId: panes.get(s.id)?.paneId ?? null,
+    panePid: panes.get(s.id)?.panePid ?? null,
+    claudeSessionId: s.claudeId,
     // Filled in below, only for the blocked rows. Null here rather than
     // undefined so the field is always present in the JSON.
     question: null as PaneQuestion | null,
@@ -164,10 +191,10 @@ export function toRows(
  * throwing: not knowing a pane costs a question, while the row itself is still
  * worth showing.
  */
-function panes(): Map<string, string> {
+function panes(): Map<string, PaneInfo> {
   try {
     return panesBySession(
-      execFileSync("tmux", ["list-panes", "-a", "-F", "#{session_id} #{pane_id}"], {
+      execFileSync("tmux", ["list-panes", "-a", "-F", "#{session_id} #{pane_id} #{pane_pid}"], {
         encoding: "utf8",
         timeout: 10_000,
       }),
@@ -198,7 +225,7 @@ export function sessionScript(): string {
  */
 export function snapshotFrom(
   parsed: ReturnType<typeof parseSessions>,
-  panes: ReadonlyMap<string, string>,
+  panes: ReadonlyMap<string, PaneInfo>,
   tookMs: number,
   now = new Date(),
 ): FleetSnapshot {
