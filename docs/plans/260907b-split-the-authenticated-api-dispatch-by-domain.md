@@ -748,6 +748,35 @@ vitest reported three files passing rather than complaining about the fourth. Re
 passed` count against the number of paths you passed; when a test is load-bearing evidence, that
 count is part of the evidence.
 
+### The moved-domains check was vacuous for every regex route
+
+Found 2026-09-08 while answering a peer's question about which prefixes chat spans — so, by luck
+again rather than by method. § *answers the moved domains from the table, not from the chain*
+filtered chain guards with `describeMatch(g.match).includes(prefix)`. `describeMatch` renders a regex
+as `regex /${m.source}/`, and **`source` keeps its escapes**, so `/^\/api\/chat\/…$/` renders with
+`\/` between every segment and the literal substring `/api/chat` never occurs in it. The filter could
+only ever catch a **literal** route left behind — which is why nobody noticed: jobs, uploads and
+billing are literals, and they were the first domains to move.
+
+**Measured rather than reasoned:** adding `/api/chat` to `moved` with all nine `/api/chat` guards
+still in the chain left the suite **green at 326**. Referee and search are entirely regex, so for the
+last two slices that assertion verified nothing while reading in review as though it had.
+
+Fixed with a `pathish(match)` helper that drops the backslashes; the result is only ever searched for
+a prefix, so `\w` → `w` is harmless. The same probe now fails, naming all nine guards.
+
+**And it has a control now, because the assertion passes in two different worlds** — when there is
+nothing to find, and when it *cannot* find anything. The control requires the filter to find at least
+one `/api/chat` guard still in the chain. It is deliberately a landmine: **it fails the moment chat
+moves**, telling whoever moved it to repoint the control at the next unmigrated regex domain. A
+control that never has to be maintained is one nobody checks is still true.
+
+This is the fourth silent success found inside this job's own safety net, after the `const` hole in
+`literalConstants`, the last-match-wins AST extractor, and the grace window that spared a row
+regardless of its lock. The pattern is stable enough to name: **every one was a check that passed for
+a reason unrelated to the thing it claimed to verify**, and every one was found by asking what it
+would take to make it fail — never by reading it.
+
 ### The four slices that need an oracle written before they move
 
 Sol's stage 5 review answered the question stage 5 raised. The **"once, not per domain" ruling holds**

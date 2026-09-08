@@ -770,6 +770,26 @@ const EXPECTED_GUARD_COUNT = 81;
 const describeMatch = (m: MatchSpec): string =>
   m.kind === "literal" ? `literal ${m.path}` : `regex /${m.source}/${m.flags}`;
 
+/**
+ * **A matcher as something a path prefix can be looked for in**, which
+ * `describeMatch` is not.
+ *
+ * A regex's `source` keeps its escapes, so `/^\/api\/chat\/…$/` renders with
+ * `\/` between every segment and the literal substring `/api/chat` never
+ * appears in it. § *answers the moved domains from the table* used
+ * `describeMatch(...).includes(prefix)` and so was **silently vacuous for every
+ * regex route** — it could only ever catch a literal one left behind. Measured
+ * 2026-09-08: adding `/api/chat` to that list while all nine `/api/chat` guards
+ * were still in the chain left the suite green at 326.
+ *
+ * That mattered because referee and search are entirely regex, so the
+ * assertion had verified nothing for either of the last two slices, while
+ * reading in review as though it had. Dropping the backslashes is enough — the
+ * result is only ever searched for a prefix, so `\w` becoming `w` is harmless.
+ */
+const pathish = (m: MatchSpec): string =>
+  m.kind === "literal" ? m.path : m.source.replace(/\\/g, "");
+
 const sorted = (xs: string[]): string[] => [...xs].sort();
 
 /**
@@ -1930,11 +1950,25 @@ describe("the authenticated API's route contract", () => {
         );
       const moved = ["/api/billing", "/api/jobs", "/api/uploads", "/api/referee", "/api/search"];
       expect(
-        parsed.guards.filter(
-          (g) => !g.fromTable && moved.some((p) => describeMatch(g.match).includes(p)),
-        ),
+        parsed.guards.filter((g) => !g.fromTable && moved.some((p) => pathish(g.match).includes(p))),
         "a moved route is still a guard in the chain as well as a row in the table",
       ).toEqual([]);
+
+      /* **The control, because the assertion above passes when it is broken.**
+         It reads every remaining chain guard and finds none under a moved
+         prefix — which is also exactly what it does when the prefix test cannot
+         match the guards at all, as it could not for a regex until `pathish`.
+         So: claim a prefix whose guards are demonstrably *still* in the chain,
+         and require the same filter to find them. `/api/chat` is the honest
+         choice while chat is unmigrated; when chat moves this becomes a real
+         failure and the next unmigrated regex domain takes its place. */
+      const stillInTheChain = parsed.guards.filter(
+        (g) => !g.fromTable && pathish(g.match).includes("/api/chat"),
+      );
+      expect(
+        stillInTheChain.length,
+        "the moved-prefix filter cannot see a regex guard, so the assertion above proves nothing",
+      ).toBeGreaterThan(0);
     });
 
     /**
