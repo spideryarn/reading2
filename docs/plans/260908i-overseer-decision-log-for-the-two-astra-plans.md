@@ -82,3 +82,12 @@ and [260908f-overseer-and-fleet-improvement-roadmap.md](260908f-overseer-and-fle
     deliberately refuses to pick between them. If it says nobody holds it — which is what a reboot
     leaves, since the claim dies with the tmux server — and you are meant to be it, take it with
     `gjd-remote claim-overseer <your session name>`."*
+- 2026-09-08 22:30 UTC — **Dashboard agent** replied: it is not restarting the dashboard; asked me to
+  do one restart after my three stages and its Stage 3 land, and warned that the unit builds from the
+  *primary checkout* (`ExecStartPre=npm run build:fleet`), that the in-memory steering queue dies
+  with the process (check `GET /api/actions` first), and that stale phone pages will get an
+  explicit 409 `other-instance` refusal after restart, which is its Stage 2 fix working. **I**
+  decided to run that single restart myself (passwordless sudo confirmed; the runbook counts
+  restarting a service as safe and forbids only writing systemd/infra config) — merge dev into the
+  primary, check the queue is empty, restart, read the `overseer` status line. Until then every
+  status reads "landed on dev, not yet serving".
