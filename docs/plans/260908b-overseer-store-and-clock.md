@@ -649,6 +649,33 @@ and has never included the name, which is the same conclusion for the same reaso
   history and no local collection.**
 - **Done:** run against the live dashboard and show the log and the checkpoint — real output.
 
+**The staleness threshold is a measured number, not a guessed one, and getting it wrong is the
+failure that teaches Greg to ignore the alarm.** Astra's A17 is that the dashboard's own client calls
+data stale at 30s while collection waits 60s after a ~12s run, so *healthy operation spends most of
+its time alarming*. Measured here over six consecutive collections, 2026-09-08 05:43–05:50 UTC:
+
+- The interval is **65.0s**, very regular — not the ~70s the fixtures README claims, and not the
+  60s `refreshMs` advertises.
+- **One interval in six was 130s** — a collection was simply missed, with no error and no gap in the
+  data. So a missed collection is *ordinary*, and any threshold under about 150s fires on a healthy
+  fleet.
+
+So the watchdog fires on a multiple of the **observed** cadence, and `refreshMs` is a hint rather than
+the contract. A17's real lesson is not the number; it is that an alarm which is usually wrong is worse
+than no alarm, because it is the same picture as a quiet page over a dead box.
+
+**Degradation and restoration are events, and they pair with S2-01's held baseline.** The three ways
+the Overseer can stop knowing things — the SSE dropped, the poll failed, and the generation went
+unreadable so the baseline is held — are different causes with the same symptom, and the whole point
+of this codebase's `unknown`-with-a-cause discipline is that they must not collapse into one silence.
+
+**A read CLI ships with S4, and it is not a nicety.** After S1–S5 Greg has a daemon recording events
+and no way to look at them — which fails his NOW goal, *"staying up-to-date on progress
+automatically"*, while every stage passes. The dashboard owns the page and this stage does not build
+one, so the simplest honest version is a command: what is the Overseer doing, and what has it seen.
+It also makes S4's own "show the log and the checkpoint" criterion something a person can re-run
+rather than something an agent pasted once.
+
 ### S5 — deployment that actually survives a reboot
 
 **A system service with `User=greg`, installed by `infra/hetzner/provision.sh`** — not a user unit
