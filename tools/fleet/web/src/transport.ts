@@ -114,10 +114,21 @@ export async function fetchFleetState(
   } catch (cause) {
     throw new Error(`the server's answer was not JSON: ${describeError(cause)}`);
   }
+  /* **THE BROWSER'S CLOCK, STAMPED AS CLOSE TO THE ANSWER AS THIS FILE CAN GET**
+     — against the payload's `servedAt`, it is the skew every server timestamp is
+     then shifted by (types.ts § `ClockSkew`). Here rather than in
+     `useFleetState`: the hook's `receivedAt` is stamped a React render later
+     and is a different measurement, of how long since this page heard anything,
+     and reusing it would fold that delay into the skew.
+     `Date.parse(servedAt) − this` is the skew MINUS the one-way latency (see
+     types.ts § `readClockSkew`), which is why it is read after the body rather
+     than before the fetch: an early stamp would count the whole round trip as
+     clock error instead of half of one direction of it. */
+  const receivedAt = Date.now();
   /* The reason, not just the refusal. A payload from a schema this build cannot
      read looks exactly like a healthy one on the wire, so the banner has to say
      which of the three things was wrong — types.ts § parseFleetState. */
-  const read = parseFleetState(body);
+  const read = parseFleetState(body, receivedAt);
   if (!read.ok) throw new Error(read.why);
   return read.state;
 }

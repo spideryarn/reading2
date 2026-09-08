@@ -25,18 +25,22 @@
  * docs/project/logging.md.
  */
 import { randomUUID } from "node:crypto";
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { attentionRunner, DEFAULT_MAX_CALLS, runAttentionCommand } from "../tools/overseer/attention-cli.js";
-import { runOverseer, TICK_MS } from "../tools/overseer/daemon.js";
+import { runOverseer, TICK_MS, type DaemonOptions } from "../tools/overseer/daemon.js";
+import { gjdRemoteDispatch, jobsEnabled, JOBS_ENABLED_VAR } from "../tools/overseer/dispatch.js";
+import { describeStandingJobs, standingJobs } from "../tools/overseer/standing-jobs.js";
 import type { AttentionList } from "../tools/fleet/wire.js";
 import type { OverseerEvent } from "../tools/overseer/diff.js";
+import type { AuthorisedJob } from "../tools/overseer/jobs.js";
 import { describeNote, openConditions, readNotes, type DaemonNote } from "../tools/overseer/notes.js";
 import {
   CHECKPOINT_FILE,
   EVENTS_FILE,
+  RECONCILE_FILE,
   STORE_SCHEMA,
   describeRefusal,
   isProcessAlive,
@@ -50,6 +54,18 @@ import { collectUsage, type UsageReport } from "../tools/overseer/usage.js";
 
 /** Where the daemon looks for the dashboard unless told otherwise. */
 export const DEFAULT_FLEET_URL = "http://127.0.0.1:8787";
+
+/**
+ * The checkout this script is part of.
+ *
+ * **From this file's own location, not from `process.cwd()`.** The systemd unit
+ * sets `WorkingDirectory`, and a person running this by hand from anywhere else
+ * would otherwise fingerprint whatever documents happened to be under their cwd
+ * — which is a different job with the same name.
+ */
+export function repoRoot(): string {
+  return join(fileURLToPath(new URL(".", import.meta.url)), "..");
+}
 
 /**
  * How long a live process may go without writing before it is *stalled* rather
@@ -178,6 +194,11 @@ const EVENT_KINDS: Record<OverseerEvent["kind"], true> = {
   "session-wait-restarted": true,
   "session-row-changed": true,
   "session-pane-replaced": true,
+  "job-occurrence-reserved": true,
+  "job-occurrence-started": true,
+  "job-occurrence-finished": true,
+  "job-occurrence-refused": true,
+  "job-occurrence-unknown": true,
 };
 
 /**
@@ -238,6 +259,23 @@ export function describeEvent(event: OverseerEvent): string {
       return `${when}  changed    ${event.row.name} (${event.identity.tmuxId}) — ${event.fields.join(", ")}`;
     case "session-pane-replaced":
       return `${when}  new pane   ${event.identity.tmuxId} — pid ${event.previousPanePid ?? "none"} → ${event.panePid}`;
+    // THE SCHEDULER'S ARMS. A run is addressed by its occurrence id, which
+    // carries the job, the instant and the definition hash, so one line of this
+    // log is enough to find every other line about the same run.
+    case "job-occurrence-reserved":
+      return `${when}  reserved   ${event.occurrenceId} — lease until ${event.leaseUntil}`;
+    case "job-occurrence-started":
+      return `${when}  started    ${event.occurrenceId} — pid ${event.pid}`;
+    case "job-occurrence-finished":
+      return `${when}  finished   ${event.occurrenceId} — ${
+        event.outcome.kind === "exited" ? `exit ${event.outcome.code}` : `failed: ${event.outcome.why}`
+      }`;
+    case "job-occurrence-refused":
+      return `${when}  refused    ${event.occurrenceId} — ${event.why}`;
+    // "unknown" AND NOT "failed", in the log a person reads as well as in the
+    // type: we do not know that it did not run.
+    case "job-occurrence-unknown":
+      return `${when}  unknown    ${event.occurrenceId} — ${event.why}`;
     default: {
       const never: never = event;
       throw new Error(String(never));
@@ -277,6 +315,32 @@ export function statusLines(root: string, nowMs: number = Date.now()): string[] 
     lines.push(
       `source      last collection ${checkpoint.lastGoodSnapshotAt} (${describeAge(nowMs - Date.parse(checkpoint.lastGoodSnapshotAt))} old)`,
     );
+  }
+
+  // THE SCHEDULER, ON ITS OWN LINE AND ALWAYS PRESENT.
+  //
+  // Never inferred from an empty occurrence list, and never read out of this
+  // shell's environment: a person running `overseer status` is not necessarily
+  // in systemd's environment, so the only honest source is what the running
+  // daemon wrote down. Three arms, because "nobody said" is a third fact —
+  // GPT Sol's C1 is exactly the conflation of *off* with *nothing to do*.
+  if (checkpoint === null) {
+    lines.push(
+      read.kind === "unusable"
+        ? "scheduler   unknown — what the daemon said about it is in the checkpoint this build cannot parse"
+        : "scheduler   unknown — no daemon has written a checkpoint to this store yet",
+    );
+  } else {
+    const scheduler = checkpoint.scheduler;
+    lines.push(`scheduler   ${scheduler.kind.toUpperCase()} — ${scheduler.why}`);
+    // AN ARMED SCHEDULER THAT IS HOLDING EVERYTHING LOOKS EXACTLY LIKE A QUIET
+    // ONE, which is why this is its own line rather than a nuance of the one
+    // above. A held ledger means nothing has been dispatched since that start
+    // and nothing will be until somebody clears it.
+    if (checkpoint.occurrenceHistory?.kind === "lost") {
+      lines.push(`            HOLDING EVERY JOB — ${checkpoint.occurrenceHistory.why}`);
+      lines.push("            Clear it with: npx tsx scripts/overseer.ts reconcile-jobs --why '<what you checked>', then restart the daemon");
+    }
   }
 
   const open = openConditions(notes.notes);
@@ -512,6 +576,7 @@ const HELP = [
   "",
   "  npx tsx scripts/overseer.ts run [--url URL] [--tick-ms N] [--no-attention] [--no-usage]",
   "  npx tsx scripts/overseer.ts status",
+  "  npx tsx scripts/overseer.ts reconcile-jobs --why '<what you checked>'",
   "  npx tsx scripts/overseer.ts events [--limit N]",
   "  npx tsx scripts/overseer.ts notes [--limit N]",
   "  npx tsx scripts/overseer.ts usage [--since-hours N] [--max-transcripts N] [--json]",
@@ -523,7 +588,55 @@ const HELP = [
   "`attention` reads every live pane and says what needs Greg. --dry makes no model calls and no",
   "paid pass. It does NOT write the store's memory unless you pass --write: the daemon holds the",
   "lock and this command does not honour it, so two writers is the default you do not want.",
+  "",
+  `THE SCHEDULER IS OFF unless ${JOBS_ENABLED_VAR}=1. Armed, it dispatches the standing jobs in`,
+  "docs/project/overseer.md as real Claude sessions on this box, so turning it on is Greg's",
+  "decision and not a side effect of starting the daemon. `status` says which it is.",
 ].join("\n");
+
+/**
+ * **What the daemon will be given as a scheduler, and whether it is armed.**
+ *
+ * A function rather than four lines inside `case "run"` for one reason: GPT
+ * Sol's C1 was that the shipped CLI passed no `jobs` at all, and a decision made
+ * inline inside a command that starts a daemon is a decision no test can ask
+ * about. This one can be, and `tests/overseer-standing-jobs.test.ts` does.
+ *
+ * **OFF UNLESS SOMEBODY SAID SO OUT LOUD.** Arming it starts real Claude
+ * sessions on a shared box, which is Greg's decision and must not be a side
+ * effect of merging a branch — the same spirit as `FLEET_ACT_ENABLED`, and the
+ * same shape: exactly `"1"`.
+ *
+ * The definitions are built either way, so a disarmed daemon can still say WHAT
+ * it would have run and whether any of it has drifted from its pin. "Off" and
+ * "on with nothing to do" are different states and this returns different
+ * sentences for them.
+ */
+export function schedulerWiring(env: NodeJS.ProcessEnv): {
+  armed: boolean;
+  detail: string;
+  problems: readonly string[];
+  /** What the definitions WOULD be, armed or not — so a disarmed daemon can still say what it is not running. */
+  definitions: readonly AuthorisedJob[];
+  /**
+   * **What `runOverseer` is actually given**, ready to spread — and `undefined`
+   * when disarmed, because an absent `jobs` is what makes the daemon build no
+   * scheduler timer at all. Returning the fragment rather than a boolean is what
+   * lets a test ask the question C1 was about: *does the shipped CLI hand the
+   * daemon anything to run?*
+   */
+  jobs: DaemonOptions["jobs"] | undefined;
+} {
+  const armed = jobsEnabled(env);
+  const built = standingJobs(repoRoot());
+  return {
+    armed,
+    detail: describeStandingJobs({ armed, enableVar: JOBS_ENABLED_VAR, jobs: built }),
+    problems: built.problems,
+    definitions: built.jobs,
+    jobs: armed ? { definitions: built.jobs, spawn: gjdRemoteDispatch({ repoRoot: repoRoot() }) } : undefined,
+  };
+}
 
 function flag(argv: readonly string[], name: string): string | undefined {
   const at = argv.indexOf(name);
@@ -634,6 +747,35 @@ async function main(argv: readonly string[]): Promise<number> {
       else console.log(usageLines(report).join("\n"));
       return 0;
     }
+    case "reconcile-jobs": {
+      // THE ONE WAY OUT OF A HELD SCHEDULER, and it is deliberately a person's
+      // act rather than a setting. A start that could not reconstruct the
+      // occurrence ledger holds every scheduled job — a cold start is not
+      // permission — and carries that verdict forward across restarts, so
+      // without this there would be no way back except deleting the store.
+      //
+      // It writes a file the NEXT start consumes and deletes. Not an env var:
+      // one left set turns "somebody decided this once" into "the protection is
+      // off for ever".
+      const why = flag(argv, "--why");
+      if (why === undefined || why.trim() === "") {
+        console.error(
+          "✗ reconcile-jobs needs --why \"<what you checked>\".\n" +
+            "  This clears a hold that exists because nobody can tell whether some job already ran.\n" +
+            "  Look at the log and at `gjd-remote ls` first, and put what you found in the reason —\n" +
+            "  it is written into the store and read by whoever asks why a job ran twice.",
+        );
+        return 1;
+      }
+      const path = join(root, RECONCILE_FILE);
+      writeFileSync(path, `${JSON.stringify({ at: new Date().toISOString(), why }, null, 2)}\n`, { mode: 0o600 });
+      console.log(
+        `wrote ${path}\n` +
+          "The NEXT Overseer start consumes it and clears the hold — a daemon already running keeps\n" +
+          "holding its jobs until it is restarted (`systemctl restart overseer`).",
+      );
+      return 0;
+    }
     case "run": {
       const controller = new AbortController();
       // SIGTERM is what systemd sends and SIGINT is what a person sends; both
@@ -678,6 +820,10 @@ async function main(argv: readonly string[]): Promise<number> {
       // for ever and look broken.
       const usageOff = argv.includes("--no-usage");
       if (usageOff) console.log("usage: off (--no-usage)");
+
+      const wiring = schedulerWiring(process.env);
+      console.log(`scheduler: ${wiring.armed ? "ARMED" : "OFF"} — ${wiring.detail}`);
+      for (const problem of wiring.problems) console.error(`✗ ${problem}`);
       const outcome = await runOverseer({
         root,
         baseUrl: flag(argv, "--url") ?? process.env["OVERSEER_FLEET_URL"] ?? DEFAULT_FLEET_URL,
@@ -687,6 +833,14 @@ async function main(argv: readonly string[]): Promise<number> {
         ...(tickMs === undefined ? {} : { tickMs: Number(tickMs) }),
         ...(attentionRun === null ? {} : { attention: { run: attentionRun } }),
         ...(usageOff ? {} : { usage: { run: () => collectUsage() } }),
+        // ABSENT rather than present-and-empty when disarmed: an absent `jobs`
+        // is what makes `daemon.ts` build no scheduler timer at all, and it is
+        // also what it reads to decide the checkpoint says OFF.
+        // Absent rather than present-and-undefined, which
+        // `exactOptionalPropertyTypes` makes different things — and here they
+        // genuinely are: absent is what stops `daemon.ts` building a timer.
+        ...(wiring.jobs === undefined ? {} : { jobs: wiring.jobs }),
+        schedulerDetail: wiring.detail,
       });
       switch (outcome.kind) {
         case "refused":

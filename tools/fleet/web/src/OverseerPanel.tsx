@@ -90,7 +90,7 @@ const STATE_CLASS: Record<Step["state"], string> = {
   later: "tw:text-ink-faint",
 };
 
-export function OrchestratorPanel({ actions, rows }: { actions: ActionsUi; rows: readonly FleetRow[] }): ReactNode {
+export function OverseerPanel({ actions, rows }: { actions: ActionsUi; rows: readonly FleetRow[] }): ReactNode {
   /* Handle → title, so a queue can be labelled with the thing a person
      recognises. Built from the latest snapshot; a queue whose session is not in
      it is still drawn, and says so, because an item waiting for a session

@@ -17,6 +17,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 
+import { readClaudeCommandLine } from "../tools/fleet/claude-argv.js";
 import {
   HARNESS_CAPABILITIES,
   capabilitiesOf,
@@ -75,14 +76,61 @@ function reparent(fixture: string, pid: number, newPpid: number): string {
 }
 
 describe("the harness a real captured pane is running", () => {
-  test("a gjd-remote Claude pane is claude-code, and carries its session id", () => {
+  /**
+   * THE ONE REAL CAPTURE WHOSE READING CHANGED ON 2026-09-08, and the reason is
+   * worth more than the assertion.
+   *
+   * This pane's claude is `--session-id <uuid> --name cheap-postmortem-preventions
+   * Build a batch of …` — a prompt with NO `--` in front of it, and `ps` has
+   * already turned every space inside that prompt into the same thing as every
+   * space between arguments. So the prompt's words are indistinguishable from
+   * arguments, and **this brief contains the token `---`**, a markdown rule
+   * between its stages. On this arm nothing says whether that is prose or a
+   * separator, and the tokens after it nothing says are prose or flags. The old
+   * recogniser stopped at the first bare word and never looked; the shared
+   * reader refuses and names the token it could not place.
+   *
+   * The refusal used to name `--name` instead, on the theory that a multi-word
+   * name was the unreadable part. Stage A round 2 measured the CLI and found
+   * `--name` takes exactly one token (`claude --name my mcp` dispatches `mcp`),
+   * so the real ambiguity was never that flag — it is any dash-led token after
+   * a bare word, which is the general rule this capture now exercises.
+   *
+   * **This costs nothing going forward and it is not a regression to live with.**
+   * `scripts/gjd-remote.ts` has emitted `-- "$(cat …)"` before every prompted
+   * launch since GPT Sol's F10 earlier the same day, and all five `claude`
+   * processes live on this box when this landed read as a clean `session` on
+   * both arms. This capture predates that fix. The pair below is the same
+   * command line with the separator the launcher now writes.
+   */
+  test("a gjd-remote Claude pane launched without a `--` cannot be read from `ps` (real capture)", () => {
     const h = classifyPaneHarness(PANE["quiet-claude-pane"], readingOf("quiet-claude-pane"));
+    expect(h.kind).toBe("unknown");
+    if (h.kind !== "unknown") return;
+    expect(h.cause).toBe("ambiguous-harness");
+    expect(h.why).toContain("---");
+    // The consequence, which is the thing that matters: no prose is typed at a
+    // pane we cannot name. Fail-closed, and now fail-loud with it.
+    expect(HARNESS_CAPABILITIES[h.kind].steerWithProse.can).toBe(false);
+  });
+
+  test("the same capture with today's `--` is claude-code, and carries its session id", () => {
+    // ONE TOKEN ADDED to a captured row — the separator `new-claude` writes
+    // today — rather than a command line anybody typed out. That is the same
+    // discipline `reparent` keeps for the codex rows.
+    const bounded = raw("quiet-claude-pane").replace(
+      "--name cheap-postmortem-preventions Build a batch",
+      "--name cheap-postmortem-preventions -- Build a batch",
+    );
+    expect(bounded).not.toBe(raw("quiet-claude-pane"));
+    const h = classifyPaneHarness(PANE["quiet-claude-pane"], readingOfText(bounded));
     expect(h.kind).toBe("claude-code");
     if (h.kind !== "claude-code") return;
     expect(h.claudeSessionId).toBe("404961e7-a9af-47c9-bf9e-38918ba8ffc4");
     expect(h.pid).toBe(412924);
     // Depth 1: the claude is a direct child of the pane's job shell.
     expect(h.depth).toBe(1);
+    expect(HARNESS_CAPABILITIES[h.kind].steerWithProse.can).toBe(true);
   });
 
   test("a pane whose Claude is buried under twenty browser processes is still claude-code", () => {
@@ -274,15 +322,94 @@ describe("a headless Claude is never declared steerable", () => {
     }
   });
 
-  test("a `--print` inside the PROMPT does not make a live session headless (constructed)", () => {
-    // The other direction, and the reason the scan stops at the first bare
-    // word: a prompt is free text, and agents here write about flags all day.
+  /**
+   * THE SAME PROCESS, TWO FIDELITIES, TWO DIFFERENT CORRECT ANSWERS — and this
+   * test asserted a third, which was neither.
+   *
+   * It was written on the belief that `claude` stops reading options at the
+   * first bare word, so a prompt saying `--print` is prose. Measured against
+   * real `claude` 2.1.263 on 2026-09-08, the CLI PERMUTES: `claude some-prompt
+   * --version` prints the version, `claude ordinary-prompt --session-id
+   * not-a-uuid --print` fails the UUID check, and `claude say-only-OK --print
+   * --model definitely-not-a-real-model` reaches the model lookup. Options are
+   * read anywhere except after a bare `--`. The belief was a claim about
+   * somebody else's tool that nobody had run — Stage A round 2 of
+   * docs/plans/260908h, GPT Sol's ARGV-01.
+   *
+   * What is true instead:
+   *
+   *  - on **faithful argv** the prompt is ONE element, so its `--print` really
+   *    is text and the process really is an interactive session;
+   *  - on the **`ps`-flattened** rendering — which is all this file ever gets —
+   *    that process is byte-identical to one whose prompt is six separate
+   *    arguments, and THAT one is headless. So the honest answer here is
+   *    `unreadable`, and the pane is `ambiguous`: unsteerable, with a sentence
+   *    saying which token could not be read.
+   *
+   * `ambiguous` is the cheap direction. The expensive one is what the old
+   * belief bought: prose typed into a process that stopped reading its terminal
+   * at startup.
+   */
+  test("a `--print` inside a flattened PROMPT is unreadable, not a steerable session (constructed)", () => {
     const argv = "claude --session-id 404961e7-a9af-47c9-bf9e-38918ba8ffc4 Please add a --print flag to the CLI";
     const table = `  9001     1   1000 bash -l\n  9002  9001    999 ${argv}\n`;
     const h = classifyPaneHarness(9001, readingOfText(table));
-    expect(h.kind).toBe("claude-code");
-    if (h.kind !== "claude-code") return;
-    expect(h.claudeSessionId).toBe("404961e7-a9af-47c9-bf9e-38918ba8ffc4");
+    expect(h.kind).toBe("unknown");
+    if (h.kind !== "unknown") return;
+    expect(h.cause).toBe("ambiguous-harness");
+    expect(h.why).toContain("--print");
+    expect(HARNESS_CAPABILITIES[h.kind].steerWithProse.can).toBe(false);
+  });
+
+  /**
+   * THE SAME GRANT, ARRIVING BY THE ONE TOKEN THE READER USED TO TRUST.
+   *
+   * GPT Sol's ARGV-P1-01. `--` is a word people write in prose, and on a
+   * flattened line nothing says whether it is the separator or that word. The
+   * reader stopped at it, never reached the `--print` after it, and handed back
+   * `claude-code` — which `HARNESS_CAPABILITIES` grants prose steering on. So
+   * the original bug of this whole plan, reintroduced by a token that had been
+   * reasoned about and judged safe.
+   *
+   * The judgement said: stopping at a `--` after a positional is safe under
+   * both readings, because "if the prompt really is one element, nothing after
+   * it was a flag anyway". That is the half it got wrong — the prompt being one
+   * element does not mean it is the LAST element, and here a real `--print`
+   * follows it. Same class as
+   * docs/postmortems/260908f: a claim of impossibility made against the space
+   * the author had in mind rather than the space the code runs in.
+   */
+  test("a bare `--` inside a flattened PROMPT does not hide the `--print` after it (constructed)", () => {
+    const argv =
+      "claude --session-id 404961e7-a9af-47c9-bf9e-38918ba8ffc4 Please explain -- carefully --print";
+    const table = `  9001     1   1000 bash -l\n  9002  9001    999 ${argv}\n`;
+    const h = classifyPaneHarness(9001, readingOfText(table));
+    expect(h.kind).not.toBe("claude-code");
+    expect(h.kind).toBe("unknown");
+    if (h.kind !== "unknown") return;
+    expect(h.cause).toBe("ambiguous-harness");
+    expect(HARNESS_CAPABILITIES[h.kind].steerWithProse.can).toBe(false);
+  });
+
+  test("the same command line read as faithful argv IS a steerable session (constructed)", () => {
+    // The other half of the pair, and it cannot be asserted through
+    // `classifyPaneHarness`, which only ever has the `ps` rendering. Read the
+    // kernel's own argv and the answer flips — which is the whole reason the
+    // reader's input carries its fidelity as a type rather than a comment.
+    const reading = readClaudeCommandLine({
+      fidelity: "argv",
+      argv: [
+        "claude",
+        "--session-id",
+        "404961e7-a9af-47c9-bf9e-38918ba8ffc4",
+        "Please add a --print flag to the CLI",
+      ],
+    });
+    expect(reading).toEqual({
+      kind: "session",
+      headless: false,
+      sessionIds: ["404961e7-a9af-47c9-bf9e-38918ba8ffc4"],
+    });
   });
 
   test("`--session-id=abc` is read, so this reader and steer.ts do not disagree (constructed)", () => {
@@ -510,5 +637,135 @@ describe("describing a harness", () => {
 
   test("the unknown arm's sentence carries its own why, rather than saying `unknown`", () => {
     expect(describeHarness(UNKNOWN)).toContain("emacs");
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * The grammar, now shared with steer.ts and work.ts.
+ * ------------------------------------------------------------------ */
+
+/**
+ * Every assertion here is a CONSEQUENCE, not a return value.
+ *
+ * `recogniseClaude` is not exported and should not be: what matters is what the
+ * capability table then says a person may do to the pane, and a test on the
+ * parser's own answer would keep passing after the table stopped agreeing with
+ * it. So each case asserts `HARNESS_CAPABILITIES[...].steerWithProse.can`
+ * alongside the kind, which is the pattern the `--print` block above already
+ * uses.
+ */
+function harnessOf(claudeArgs: string): Harness {
+  const table = `  9001     1   1000 bash -l\n  9002  9001    999 claude ${claudeArgs}\n`;
+  return classifyPaneHarness(9001, readingOfText(table));
+}
+
+const A = "404961e7-a9af-47c9-bf9e-38918ba8ffc4";
+const B = "3dbdbfcb-3264-4b23-9243-1c3013826ae9";
+
+describe("the option region ends at a bare `--`, and everything after it is prose", () => {
+  /**
+   * D1 from docs/plans/260908h's settled table: `steer.ts`'s rule wins.
+   *
+   * This recogniser had no `--` rule at all — `"--"` starts with a dash, so the
+   * scan walked straight through it into the prompt. It is not academic:
+   * `scripts/gjd-remote.ts` emits `-- "$(cat …)"` before every prompt it
+   * launches with, so this is the shape of a real launch, and a prompt whose
+   * first word looks like a flag is what a person writing about flags types.
+   */
+  test("a prompt that begins `--session-id <other>` is prose, not a second id (constructed)", () => {
+    const h = harnessOf(`--session-id ${A} -- --session-id ${B} is the one to read`);
+    expect(h.kind).toBe("claude-code");
+    if (h.kind !== "claude-code") return;
+    expect(h.claudeSessionId).toBe(A);
+    expect(HARNESS_CAPABILITIES[h.kind].steerWithProse.can).toBe(true);
+  });
+
+  test("a prompt that begins `--print` does not make a live session headless (constructed)", () => {
+    const h = harnessOf(`--session-id ${A} -- --print takes no value, unlike --model`);
+    expect(h.kind).toBe("claude-code");
+    if (h.kind !== "claude-code") return;
+    expect(h.claudeSessionId).toBe(A);
+    expect(HARNESS_CAPABILITIES[h.kind].steerWithProse.can).toBe(true);
+  });
+});
+
+describe("duplicate --session-id values are read over the whole option region", () => {
+  /**
+   * D2, and the three orderings the plan measured rather than quoted.
+   *
+   * The old rule destructured `const [first, second] = sessionIds` and compared
+   * exactly those, so a third differing id was invisible ONLY when the first
+   * two agreed. `A A B` came back as `claude-code A` — wrong, and in the
+   * granting direction — while `B A A` and `A B A` were already caught. A test
+   * written from "it compares only the first two" would have picked one of the
+   * two orderings that already worked and passed.
+   */
+  test("all three orderings of a differing third id are ambiguous (constructed)", () => {
+    for (const args of [
+      `--session-id ${A} --session-id ${A} --session-id ${B} hello`,
+      `--session-id ${B} --session-id ${A} --session-id ${A} hello`,
+      `--session-id ${A} --session-id ${B} --session-id ${A} hello`,
+    ]) {
+      const h = harnessOf(args);
+      expect(h.kind, args).toBe("unknown");
+      if (h.kind !== "unknown") continue;
+      expect(h.cause, args).toBe("ambiguous-harness");
+      expect(HARNESS_CAPABILITIES[h.kind].steerWithProse.can, args).toBe(false);
+    }
+  });
+
+  test("the same id twice is one conversation, not an ambiguity (constructed)", () => {
+    const h = harnessOf(`--session-id ${A} --session-id ${A} hello`);
+    expect(h.kind).toBe("claude-code");
+    if (h.kind !== "claude-code") return;
+    expect(h.claudeSessionId).toBe(A);
+  });
+});
+
+describe("a claude invocation this repo does not produce is refused rather than guessed", () => {
+  /**
+   * The unknown-flag rule, which is the shared reader's whole point.
+   *
+   * `--dangerously-skip-permissions` is a real flag and is deliberately absent
+   * from the reader's table: nothing here emits it, so its arity is a guess,
+   * and a wrong guess moves where the option region ends — which is how a
+   * `--print` further along goes unseen and a headless run is declared
+   * steerable.
+   */
+  test("an unknown flag is ambiguous, and the sentence names it (constructed)", () => {
+    const h = harnessOf(`--dangerously-skip-permissions --session-id ${A} hello`);
+    expect(h.kind).toBe("unknown");
+    if (h.kind !== "unknown") return;
+    expect(h.cause).toBe("ambiguous-harness");
+    expect(h.why).toContain("--dangerously-skip-permissions");
+    expect(HARNESS_CAPABILITIES[h.kind].steerWithProse.can).toBe(false);
+  });
+
+  /**
+   * `claude agents` is a COMMAND, not a session — and this used to grant prose
+   * steering on it: no `--print` was found, no id was found, and the answer was
+   * `claude-code` with a null id, which the capability table grants. Nothing is
+   * listening.
+   *
+   * It comes back as no harness at all, which is the same answer
+   * `recogniseCodex` gives `codex login` and for the same reason, so the pane
+   * falls through to what it actually is: the shell that ran it.
+   *
+   * The subcommand is argv[1] here, with no options in front of it, which is
+   * the one form that does not depend on where the option region ends.
+   */
+  test("`claude agents` is not a steerable session (constructed)", () => {
+    const h = harnessOf("agents list");
+    expect(h.kind).toBe("shell");
+    expect(HARNESS_CAPABILITIES[h.kind].steerWithProse.can).toBe(false);
+  });
+
+  test("a prompt that BEGINS with an ordinary word is still a session (constructed)", () => {
+    // The pair for the case above: `help` is deliberately not a subcommand, and
+    // `claude help me fix this` was measured to answer the prompt.
+    const h = harnessOf(`--session-id ${A} help me fix this`);
+    expect(h.kind).toBe("claude-code");
+    if (h.kind !== "claude-code") return;
+    expect(h.claudeSessionId).toBe(A);
   });
 });

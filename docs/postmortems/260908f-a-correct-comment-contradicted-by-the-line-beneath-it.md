@@ -57,6 +57,54 @@ That is what separates this class from
 case — prose cannot fail, so nobody checks it. Here the prose **was** checked, by whoever read the
 comment to verify the code, and it passed, and it vouched for the defect underneath it.
 
+### The worst form: a documented absence looks like a decision
+
+The third instance is from later the same day, and it is the same class at its strongest.
+
+Mutation-testing the awk probe in
+[260908h](../plans/260908h-one-shared-reader-for-a-claude-command-line.md) left one survivor. I
+judged it an **equivalent mutant** — no command line can distinguish the guard from its absence —
+kept the line, and wrote into both the commit message and the awk comment that *no test holds this
+line, and here is why it cannot*. GPT Sol produced a command line that distinguishes it in about a
+minute: a hand-set `CLAUDE_SESSION_ID` beginning with a dash, which this very file documents as a
+supported case. I had checked the space I had in mind — valid uuids — and called it the whole space.
+
+**An equivalence claim is a claim about the entire input domain.** But that is not what makes it the
+worst form. A wrong equivalence claim is **self-sealing**: it tells the next reader that the missing
+test is expected, so the one gap it names is the one gap nobody will re-examine. A missing test is an
+absence somebody can notice. *A documented absence looks like a decision.*
+
+Which is uncomfortable, because writing down what a test cannot see is a **good** discipline — the
+dashboard session shipped a guard the same day whose docstring says outright that jsdom cannot see
+the bug it guards against, and that sentence is worth having. The two are the same sentence and only
+one of them is true. So the discipline is not "stop writing them"; it is that **a sentence claiming
+something is untestable has to be earned to a higher standard than the test it replaces**, because it
+is load-bearing precisely to the degree people believe it.
+
+### What all three have in common, stated once
+
+**A judgement about what cannot happen, made against the space you had in mind rather than the space
+the code runs in.**
+
+That is the sentence the whole day converges on, and it covers more than this file:
+
+- *"No command line can distinguish that mutant"* — true of uuids, false of a hand-set
+  `CLAUDE_SESSION_ID`, which the same file has an arm for.
+- *"A `--print` inside the prompt must not be read as headless"* — a claim about a CLI, written as a
+  property, and false: `claude` parses options after a positional, measured.
+- *"D5 is a coincidence, not a design"* — I wrote that a headless pane could not actually be typed at,
+  because a downstream screen check happened to cover it. Two red-first tests then **sent the
+  message** — `send-keys -l -- "keep going"`, then `Enter`. It was not covered at the layer the code
+  runs in.
+
+The third is the worst of them, and not because it is the biggest: it is the only one where the wrong
+answer **had already reached a keyboard**. The other two were waiting.
+
+The remedy is not "be more careful". It is that a claim of impossibility is a claim about a **domain**,
+so it has to name its domain — *no command line **whose id is a uuid*** — and then somebody has to ask
+whether the code is restricted to it. Written that way the mutant claim disproves itself in one
+reading, because `sessionState` has an arm for the ids it excludes.
+
 ## Why the obvious checks could not see it
 
 - **The type system could not.** `AttentionList.sessionsUnreadable` is `number`, and `0` is a

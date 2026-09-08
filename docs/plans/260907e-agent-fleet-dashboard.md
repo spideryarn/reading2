@@ -1773,23 +1773,33 @@ check. The write-up is
 this is the rearchitecting it asks for. Filed at the finish line is filed and never done, so it is a
 stage.
 
-**Seven of the sixteen are still live at 11:03 on 2026-09-08, and two of them are safety
-mechanisms.** Fix these two first, whatever happens to the rest of the stage:
+**Seven of the sixteen were live at 11:03 on 2026-09-08, and two of them were safety mechanisms.
+✅ BOTH OF THOSE TWO ARE NOW FIXED** — during the wave, by other sessions, and this paragraph told
+whoever read it next to go and fix them again. Re-measured on the evening of 2026-09-08 before
+briefing anybody, which is the only reason it was caught:
 
-- **The attribution prefix reaches nothing.** `renderSpoken()` — which prepends `[Greg, via the
-  fleet dashboard]` or the Overseer's *"NOT Greg, weigh this as a suggestion"* disclaimer — has six
-  test callers and **zero product callers**, because `SessionActionRequest` has no `speaker` field
-  and `drain.ts`'s `sendable()` returns `action.text` raw. Broadcasts carry the attribution;
-  single-session instructions, which is how the Overseer will actually talk to an agent, do not.
-- **The "what would this destroy" preview is empty.** `actions-client.ts`'s `box()` reads
-  `parsed["would"] ?? parsed["result"] ?? null`, and **none of the eleven `respond(res, 200, …)`
-  calls in `routes-actions.ts` sends either name** — the box arms send `steps`, `run`, `candidates`,
-  `killed`, `skipped`, `total`, `recipients`. So `ActionButtons.tsx:969` and `:1021` render
-  `<RawValue value={null}>`, which draws the literal grey word *"null"*, as the confirmation step
-  for `remove-worktree`, `kill-session` and `kill-test-suites`.
+- ✅ **The attribution prefix reaches the wire.** `SessionActionRequest` carries a `speaker`
+  (`routes-actions.ts:395`, parsed at `:439`), `Speaker` is in `wire.ts`, and `drain.ts:292` returns
+  `renderSpoken(action, item.speaker)` from `sendable()`. It had six test callers and zero product
+  callers; it now has one, on the path that matters — the single-session instruction, which is how
+  the Overseer talks to an agent.
+- ✅ **The "what would this destroy" preview says so when it cannot.** `routes-actions.ts:1148` sends
+  `result: { steps: built.plan.steps }` on a dry run, so the client's read finds a value. And the
+  empty case no longer draws the literal grey word *"null"* in the shape of an answer: it is a
+  sentence in the alarm colour naming what is missing, **and the Confirm button is not offered at
+  all**. A confirmation that cannot say what it would do no longer looks like one that can.
 
-The other five live ones: `SteerResponse.verified` (which pane a keystroke actually reached, dropped
-by `steer-client.ts`), `answeringEnabled`/`tmuxServerPid` (absent from the client's `FleetState`),
+**The lesson is about this document rather than about that code.** Both entries were true when
+written and false by the evening, and nothing in the repo would have said so — a plan is exactly the
+artefact `260908f` warns about: authored to be trusted later, in a place nobody re-derives. The next
+agent to open this would have briefed a subagent to fix two things that are not broken, and the
+subagent would have found working code and either invented a problem or reported confusion. **Re-grep
+a plan's factual claims before acting on them, especially the ones marked urgent** — urgency is what
+makes a stale claim get acted on without checking.
+
+The other five live ones: `SteerResponse.verified` (which pane the send was aimed at, as the server
+verified it in the moment BEFORE typing — not where the keystrokes ended up; dropped by
+`steer-client.ts`), `answeringEnabled`/`tmuxServerPid` (absent from the client's `FleetState`),
 `LaunchRecord.resolution`/`startedDir`, `SteeringQueue.clear()`, and `/api/agents`.
 
 **There are two classes here and they want different things, which is the whole design of this
@@ -1819,10 +1829,14 @@ stage.** Confusing them gets you a linter for a problem the compiler should have
       because **a server too old to send a field has made no claim**, and returning the wire type
       verbatim would force `parseQueue` to invent `false` or `0` for it. That is instance 16, the
       one this whole stage is about, reintroduced by the fix for it. The form that works is
-      `Omit<QueueViewWire, …the fields it re-types or declines…> & { … }`: a new wire field is not in
-      the `Omit`, so it lands in the client type and the object literal stops compiling, and the
-      escape hatch is **adding a name to a list** — a named, reviewable decision rather than a
-      silence. The twin is derived, not deleted, and that turned out to be the correct end state
+      `Omit<QueueViewWire, …the fields it re-types or declines…> & { … }`: a new **required** wire field
+      is not in the `Omit`, so it lands in the client type and the object literal stops compiling,
+      and the escape hatch is **adding a name to a list** — a named, reviewable decision rather than
+      a silence. *(An OPTIONAL wire field crosses untouched — GPT Sol's M2, 2026-09-08. Both object
+      literals may omit it, so neither end goes red. The mechanism is therefore paired with a
+      compile guard in `tests/fleet-compile-guards.test.ts` that refuses an optional top-level key on
+      the shared wire state; the guarantee is "required fields are carried by construction, optional
+      ones are refused at the door", and this line said the first half only.)* The twin is derived, not deleted, and that turned out to be the correct end state
       rather than an interim one.
 - [x] **Prove it against the original shape, not a tidied one.** Done twice, and the second time by
       hand. Adding one field to `QueueView` in `wire.ts` turns **both** ends red —
@@ -1844,11 +1858,22 @@ stage.** Confusing them gets you a linter for a problem the compiler should have
       leaf (`config.ts`, `origin.ts`) would compile and could put a runtime `const` in the browser
       bundle. A ~30-line test modelled on `tests/client-imports.test.ts` would buy the *error
       message*, not the enforcement.
-- [ ] **The remaining three endpoints.** The module landed with one: queues (`Speaker`,
-      `SpokenActionId`, `SpokenAction`, `QueuedPayload`, `QueuedItem`, `QueuedItemView`,
-      `QueueView`). Left: the actions catalogue, fleet state, and steer/new/messages/rename. About
-      30 twin declarations remain, across 6 client files and ~12 server ones. Split by endpoint, one
-      stage each, each typechecked and its own suite run.
+- [ ] **The remaining two endpoints.** The module landed with queues (`Speaker`, `SpokenActionId`,
+      `SpokenAction`, `QueuedPayload`, `QueuedItem`, `QueuedItemView`, `QueueView`); **`FleetState`
+      followed on 2026-09-08 as v0.8b**, and with it the four fields the client had been dropping.
+      Left: the actions catalogue, and steer/new/messages/rename. Split by endpoint, one stage each,
+      each typechecked and its own suite run.
+      **`FleetState` is generic — `FleetState<Row, Health>` — and whoever does the next one should
+      copy that rather than the queue's shape.** `rows` and `health` are holes because the types that
+      fill them (`collect.ts`'s `FleetRow`, `health.ts`'s `HealthReport`) reach `node:child_process`,
+      which wire.ts may not import; the server fills them with its own types and the client with its
+      projection. Everything outside those two fields is shared, and that is where all six dropped
+      fields were. Proved by mutation: one **required** field added to the wire type turns the server
+      project, the client project *and* the fixtures red, judged by `npm run typecheck`'s exit code.
+      An **optional** one turns none of those red — measured 2026-09-08, and the reason the compile
+      guard above exists. `FleetState<Row, Health>` also lost its `= unknown` defaults that day, so a
+      caller has to say what it is putting in each hole rather than inherit two it may not know are
+      there.
 - [ ] **`FleetRow` will NOT migrate the way the others do, and whoever starts it should know
       first.** `FleetRow.meta` resolves to `scripts/gjd-remote-tmux.ts`'s `SessionMeta` (`kind:
       SessionKind; repo: string; dir: string`) while the client's says all three nullable — and
@@ -1863,23 +1888,43 @@ stage.** Confusing them gets you a linter for a problem the compiler should have
       `w2-fleet-dictation` (the transcribe request/response). `~/.overseer/current.json` is the same
       kind of boundary with none of the protection, and it is the **worse direction**: a wrong read
       draws a wrong page, a wrong write runs — or fails to run — a destructive command.
-- [ ] **Fix the live lossy joins while you are in there** — `would`/`result` (#11, the safety
-      preview), `verified`, `answeringEnabled`, `tmuxServerPid`, `resolution`, `startedDir`. The
-      queue cluster (`stale`, `stuck`, `deliverable`, `invalidated`) was already repaired by hand on
-      the night of 2026-09-08, four separate times; **that treadmill is the argument for this
-      stage**, not a reason to think the area is now safe.
+- [x] **Fix the live lossy joins while you are in there** — `verified`, `answeringEnabled`,
+      `tmuxServerPid`, `resolution`, `startedDir`, **all five read and drawn in v0.8b**, each with a
+      test whose failure was watched by breaking the read. `would`/`result` (#11, the safety
+      preview) was already fixed before that stage started, by whoever wrote
+      `routes-actions.ts:1148` and `actions-client.ts:992` — this line went on naming it as live,
+      which is the third time this document has done that to a reader. The queue cluster (`stale`,
+      `stuck`, `deliverable`, `invalidated`) was repaired by hand on the night of 2026-09-08, four
+      separate times; **that treadmill is the argument for this stage**, not a reason to think the
+      area is now safe.
+      **`attemptedAt` was declined in v0.8b and read in v0.8b's fix pass**, and the reasoning for
+      declining it was wrong rather than merely cautious. It ran: reading it honestly needs
+      `readAttemptClock`'s three arms (absent means either *never attempted* or *a server too old to
+      report it*), that is a runtime value, wire.ts cannot hold a runtime value, so both sides cannot
+      share one. The middle step does not follow — **what the browser project cannot tolerate is a
+      NODE dependency; "no runtime values" is wire.ts's own rule about its own file.** So
+      `tools/fleet/attempt-clock.ts` is a leaf module with no imports, the server, the Overseer
+      daemon and the browser all import the one implementation, and `Header.freshness` says which
+      kind of stale a stale snapshot is: a run that began and hung, or a loop that stopped. GPT Sol's
+      M5.
 - [ ] **`would` is a different failure from the rest and needs a different check.** Both ends are
       internally consistent and disagree about a *name*, so an "unread field" sweep cannot see it —
       only a shared type can. Fix it by importing the type, not by renaming one end and moving on.
 - [ ] Beware the spread. `items: s.items.map((i) => ({ ...i, … }))` puts every field of `QueuedItem`
       on the wire with no line written at the boundary — which is how `invalidated` crossed, and why
       `git log -S invalidated -- tools/fleet/routes-actions.ts` finds nothing.
-- [ ] **Type the fixtures with the shared type too, and this is not optional.** `actionsWire()` in
+- [x] **Type the fixtures with the shared type too, and this is not optional.** `actionsWire()` in
       `tests/fleet-web.test.tsx` built `{actions: []}`, a flat array the route has never sent, and
       ~196 tests passed over it while **every action button on the real page was invisible** — under
       a doc comment correctly explaining that the fixture must be the wire shape. *A fixture is a
       claim about the producer that nothing checks against the producer.* A fixture annotated
       `: QueueView` (or built by the server's own serialiser) cannot make that claim falsely.
+      **Done for the state payload in v0.8b**, and the shape that worked is worth copying: the
+      fixture builder takes `{[K in keyof FleetStateWire]?: FleetStateWire[K] | undefined}` — partial
+      because most of these fixtures deliberately ARE payloads from an older server, and `| undefined`
+      because `exactOptionalPropertyTypes` otherwise refuses the explicit absence they are testing.
+      A fixture that is deliberately malformed goes through a second builder called `malformed()`,
+      so reaching for the escape hatch is visible in the diff rather than hidden in a cast.
 - [ ] **Prefer a named union to a boolean wherever the client reports on the server.** Two sessions
       independently reached this repair on the same evening: `catalogueOffered: boolean` became
       `CatalogueReading = absent | unreadable | read`, and the Overseer's `Checkpoint | null` became
@@ -1899,11 +1944,20 @@ stage.** Confusing them gets you a linter for a problem the compiler should have
 - [ ] **Resolve `/api/agents`**: either delete the alias or fix the five places in `live.ts` that
       still call it "the poll". It is harmless — same handler — and it is the reason the check above
       is not green on day one.
-- [ ] **`renderSpoken()` reaches the drain.** `speaker` onto `SessionActionRequest`, carried through
-      the queued item, applied in `drain.ts`'s `sendable()`. This is the safety property, so it gets
-      a `@ts-expect-error` guard in `tests/fleet-compile-guards.test.ts` — that file already exists
-      and is exactly the right home — asserting that a spoken action cannot be typed into the
-      transport without a `Speaker`.
+- [x] **`renderSpoken()` reaches the drain.** `speaker` onto `SessionActionRequest`
+      (`routes-actions.ts:395`, parsed at `:439`), carried on `QueuedItem`, applied in `drain.ts`'s
+      `sendable()` at `:292`. **The wiring landed during the wave and the guard did not**, which is
+      the half that matters: the property held and nothing stopped it being un-held. Measured on the
+      evening of 2026-09-08 — `tests/fleet-compile-guards.test.ts` had eight `@ts-expect-error`
+      guards and not one mention of `Speaker`. Now it has one, asserting that a `QueuedItem` with no
+      speaker and one with a speaker this build does not know both refuse to compile, with the pair
+      that should compile built beside them as the runtime positive.
+      **Verified by mutation, which on this kind of guard means typecheck rather than vitest**:
+      making `speaker` optional in `wire.ts` turns the directive unused and
+      `npm run typecheck` fails with `TS2578: Unused '@ts-expect-error' directive` — restored
+      byte-identical, zero deletions in the file's diff. The failure it prevents is silent: an item
+      built without a speaker does not throw and does not look wrong, it just reaches an agent as
+      words indistinguishable from Greg's.
 - [ ] **`clear()` gets a route or gets deleted.** Either is fine; leaving a tested method nothing can
       reach is not.
 
@@ -1936,7 +1990,7 @@ stage.** Confusing them gets you a linter for a problem the compiler should have
   findings, and a fresh backlog that size is how the check that would catch the next one gets
   ignored.
 
-### 🔵 Stage v0.4j: the page reads the box's clock with the phone's
+### ✅ Stage v0.4j: the page reads the box's clock with the phone's
 
 **Found by `fleet-health-history` on 2026-09-08, in their own chart, and flagged to
 everyone else.** Their version: `Math.max(serverEdgeMs, Date.now())` on the right-hand edge of the
@@ -1972,25 +2026,64 @@ line.
 
 #### What it needs
 
-- [ ] **A `servedAt` on the state payload**: the server's clock at the moment it answers. Neither
+- [x] **A `servedAt` on the state payload**: the server's clock at the moment it answers. Neither
       `collectedAt` nor `attemptedAt` can stand in — the gap between either of those and receipt is
       *genuine snapshot age*, up to a full cadence, and cannot be told apart from skew. `servedAt`
       minus `receivedAt` is skew plus network latency, and latency here is milliseconds against a
       threshold of minutes.
-- [ ] **One conversion at the parse boundary**, applied to every server timestamp the client reads —
-      `collectedAt`, `startedAt`, `lastModified`, `pause.at`, `pause.resetsAt`. Not to `receivedAt`,
-      which is already the browser's.
-- [ ] **Say it out loud when the skew is large.** A phone minutes off is worth one line on the page,
+- [x] **One conversion at the parse boundary**, applied to every server timestamp the client reads —
+      `collectedAt`, `startedAt`, `lastModified`, `pause.at`, `pause.resetsAt`, and since v0.6f
+      `attention.coordinatorWrittenAt` and `attention.list.scannedAt`. Not to `receivedAt`, which is
+      already the browser's.
+- [x] **Say it out loud when the skew is large.** A phone minutes off is worth one line on the page,
       because it is a fact about the reader's device that nothing else will ever tell them, and
       because it explains any residual oddness. Silence here would make a corrected page and a
       broken clock look identical.
-- [ ] A test that fixes the browser clock some minutes ahead of the server's and asserts the STALE
+- [x] A test that fixes the browser clock some minutes ahead of the server's and asserts the STALE
       banner does **not** appear. Watched failing first: without the correction it appears.
 
-**Not started.** Written up rather than bolted on, because the correction touches every timestamp the
-client parses and the naive version silently breaks a measurement that is currently right.
+**Built 2026-09-08**, and two things came out different from the write-up above.
 
-### 🔴 Stage v0.6f: the attention inbox has a producer and no consumer
+**`lastModified` is not on `FleetState` and never was.** It arrives on `/api/messages`, a second
+boundary with no clock of its own — so it is corrected by the skew `/api/state` measured, applied by
+a `withClockSkew` wrapper around the `MessagesApi` in App.tsx. A `servedAt` on that route too was
+rejected: it is a second measurement of one fact, the two would differ by a few milliseconds of
+latency, and a page whose transcript ages and snapshot ages were corrected by different numbers is
+harder to reason about than one corrected by the same number. The alternative was drilling a `skew`
+prop through four components that have no business knowing about clocks.
+
+**`AttentionPanel`'s tolerance shrank rather than vanishing, and the constant it left behind is a
+different fact.** `CLOCK_SKEW_MS` is deleted as the stage says. What replaces it is
+`RENDER_SLACK_MS = 5_000`, and it is not an allowance for a device: `useNow` ticks once a second, so
+a render triggered by an arriving payload compares a just-corrected timestamp against a `now` up to
+a tick old. With a hard `age < 0` refusal, a checkpoint written moments before it was served flashes
+*"at a time this page could not read"* on a healthy fleet — the alarm-a-clock-manufactures failure
+with a different clock in it. One tick plus room for a slow render, two orders of magnitude below
+the five- and six-minute thresholds it must not swallow.
+
+Every new test carries its own positive control — the same fixture minus `servedAt`, which is
+exactly the pre-stage build — because *no STALE on the page* is also what a blank page says. Two
+mutations were run: disabling the shift reds 4 of them with the intended assertions, and forcing the
+skew to `unknown` reds 5.
+
+#### v0.6f raised the price, and paid a deposit that this stage collects
+
+The attention panel decides whether to say *nothing is waiting on you* by asking how old the scan is,
+so a phone whose clock is minutes ahead can make a live inbox read as a dead one — the same alarm-a-
+clock-manufactures failure as the STALE banner, on the panel the page exists for.
+
+GPT Sol's C2 caught the sharp edge of it: `ageMs` clamped a negative age to zero, so a timestamp
+*ahead* of the browser read as **"0s ago" forever** and suppressed the staleness check permanently.
+That is fixed. What it was fixed WITH is a placeholder: a flat `CLOCK_SKEW_MS = 2 * 60_000`
+allowance, beyond which a timestamp is treated as unreadable rather than fresh. Two minutes is a
+number chosen for being obviously generous, not measured — it is wrong in the safe direction and it
+is still wrong.
+
+**This stage deletes that constant.** Once a server timestamp arrives already in browser-clock
+terms, a future `scannedAt` means a genuinely broken clock rather than an ordinary phone, and the
+panel can say so instead of tolerating a window.
+
+### ✅ Stage v0.6f: the attention inbox has a producer and no consumer
 
 **This is a live instance of the class this whole plan spent 2026-09-08 removing**, and it is mine.
 
@@ -2020,15 +2113,24 @@ internally coherent, each reviewed, joined by an agreement in a conversation rat
 `wire.ts` does not help here and was never going to. It holds the SHAPE across a boundary that
 exists; it has no opinion about a boundary nobody crossed.
 
-- [ ] **The fleet server reads the Overseer's checkpoint.** A reader with a `CheckpointRead`-shaped
-      result — `read` / `absent` / `unreadable{why}` — because a missing or stale `~/.overseer/`
-      must render as *the coordinator is not running*, never as an empty inbox. The Overseer's own
-      store already takes `Checkpoint | null` whole for this reason.
-- [ ] **A route or a field on `/api/state`.** Prefer the field: the inbox is the thing the page
+- [x] **The fleet server reads the Overseer's checkpoint** — `tools/fleet/attention.ts`, its own
+      parser, taking only `schema` / `writtenAt` / `attention`. **Both halves of what this box first
+      said were wrong and the review caught them.** It said "a `CheckpointRead`-shaped result", which
+      meant importing the Overseer's parser and closing a cycle the seam exists to prevent; and it
+      said an absent file renders as *the coordinator is not running*, which is a positive claim an
+      absent file cannot support. The arm is `checkpoint-absent` and it says **no checkpoint has been
+      published here** — the coordinator may be starting, running against another root, or failing
+      before its first write. Never an empty inbox, which was the box's one correct instinct.
+- [x] **A route or a field on `/api/state`.** Prefer the field: the inbox is the thing the page
       exists to show, and a second request for it is a second thing that can be stale on its own.
-- [ ] **The client parse, deriving rather than adopting** — `duplicates` declined to
-      `readonly [...] | null` as agreed, `sessionsUnreadable` defaulted to `0`.
-- [ ] **The render, holding three agreements made with `w2-attention-inbox` and `orchestrator-setup`
+- [x] **The client parse, deriving rather than adopting**, with its own fifth state
+      (`feed-unreadable`) for a field that is present but wrong — because "this server did not look"
+      is false about a server that looked and sent something unreadable. **`sessionsUnreadable` is
+      NOT defaulted to `0`**, which is what this box originally said: a `list` arriving without it
+      degrades to `unknown` with the reason. Zero is a positive claim that every attempted judgement
+      succeeded, and nobody made it. The same default was a live defect in the producer's own parser,
+      found by this review and fixed by `orchestrator-setup` in `290b1ac3`.
+- [x] **The render, holding three agreements made with `w2-attention-inbox` and `orchestrator-setup`
       and written down here so they survive the conversation:**
       **(a)** a `prose` item gets **no answer control at all** in v1 — it is inferred from a pane
       tail, and their `readTurnTail` bug proved a card could quote *Greg's own last message* back as
@@ -2037,11 +2139,80 @@ exists; it has no opinion about a boundary nobody crossed.
       **(c)** `sessionsUnreadable` renders **only when non-zero**, and when it does the count reads
       as a floor — *"AT LEAST 4 need you… (1 could not be judged, so there may be more)"* — because
       a sentence and its retraction in the same block is worse than either.
-- [ ] **A test that fails if nothing imports it.** The lesson of the class is that the join is the
+- [x] **A test that fails if nothing imports it.** The lesson of the class is that the join is the
       thing to check, and the check is *who reads this?*
 
 **Cost of leaving it:** the wave's headline feature is invisible, and it will stay invisible while
 looking finished from either end. Every part has tests and passes them.
+
+#### What the design review changed, and the version we are not building
+
+The first design had the fleet server call `readCheckpoint()` from `tools/overseer/store.ts` and map
+its three arms. **GPT Sol refused it, against documentation this session had not read.**
+[overseer-direction.md § the store](../project/overseer-direction.md) already said the dashboard must
+parse `current.json` itself, and gave the reason: `tools/overseer/` imports `collect.ts` and
+`status.ts` from `tools/fleet/`, so the reverse import closes a cycle between the two things the seam
+exists to keep apart.
+
+The stronger argument turned up while checking that one, and is now written into that paragraph:
+`parseCheckpoint` fails the **whole** checkpoint on one malformed register entry, so the import would
+have rendered an unrelated bad register field on this page as *the coordinator is unreadable* while
+the attention list sat there intact. Independent parsers keep the Overseer's register problems the
+Overseer's. **The file is the contract; the function is one implementation of reading it.**
+
+So `tools/fleet/attention.ts` parses only the projection this tool needs — `schema`, `writtenAt`,
+`attention` — and checks `schema` as a number it knows rather than as "not something else".
+
+Four more findings, each of which changed the shape rather than the code:
+
+- **`no-coordinator` became `checkpoint-absent`.** An absent file proves only that no checkpoint
+  exists at the configured path — not that the coordinator is down. It may be starting, running
+  against another root, or failing before its first write. Same discipline as `Pause`'s `none`.
+- **The reader must be incapable of throwing, root resolution included.** `storeRoot()` throws on a
+  relative `OVERSEER_STORE_DIR`, and `deps.publish()` in `refresh.ts` sits *outside* the try/catch
+  that guards collection — so a throw out of `statePayload()` ends the refresh loop and leaves the
+  dashboard wearing its last good timestamp. The silent stall `attemptedAt` exists to expose.
+- **`fleetState()`'s new parameter is required, not optional.** Optional-to-keep-callers-compiling
+  is precisely the escape hatch that let this bug exist: a production join that can go missing with
+  nothing going red. Backward compatibility belongs at the HTTP parse boundary, where an older
+  *server* omits the field — not in the current server's composition root.
+- **The join test as first written was green by construction.** Hand-wiring
+  `readAttention → fleetState → parseFleetState → App` inside a test stays green after `server.ts`
+  stops calling the reader: the test has rebuilt the missing edge itself. That is shape 4 from
+  [260908e](../postmortems/260908e-a-fixture-that-means-now-decays-into-the-state-it-asserts-against.md),
+  reached while fixing an instance of Class A. The payload composition therefore moves out of
+  `server.ts` into `state.ts`, and the test drives the function production composes through.
+
+#### What the first real pass taught us, which no fixture would have
+
+The Overseer was restarted onto current code at 15:36 and published a real list three minutes later.
+Measured from `~/.overseer/current.json` rather than described:
+
+    items=2 · sessionsScanned=11 · sessionsUnreadable=1 · both items `prose` · both `answerability: phone`
+
+- **`sessionsUnreadable: 1` on the first live pass.** The floor phrasing is exercised against real
+  data on day one instead of against a fixture written to agree with itself — and a wild `0` would
+  have hidden the false-zero defect in the producer's parser (fixed by `orchestrator-setup`,
+  `290b1ac3`) for longer.
+- **The excerpts are 1,116 and 1,736 characters, 17 and 21 lines**, one of them a wrapped table of
+  process states. An unbounded excerpt is a card taller than a phone. **So the card inverts:** the
+  producer's one-sentence `why` is the always-visible headline and the excerpt lives one tap away —
+  Fable's caveat rule, since the excerpt changes what you would *believe* about the inference rather
+  than what you would *do* in the next ten seconds.
+- **The excerpt is selected by position, not by whether it contains the sentence the `why` is
+  about**, which is why a process table is offered as evidence for a claim about what an agent said.
+  The producer's fix, not ours. Ours is to label the disclosure as *the tail of that session's pane*
+  rather than as a quotation — an unlabelled excerpt that does not contain the relevant sentence
+  teaches a reader to distrust a `why` that was correct. Live on the first pass, in the direction
+  that costs us the reader's confidence in the feature.
+- **No live example of two paths**: every item had zero duplicates and none was `needs-a-screen`.
+  Those are written from the type and are untested against reality; say so rather than assuming.
+
+`attention.kind === "unknown"` now arrives from three places — no pass has run yet, a pass ran and
+failed, a stored list was unreadable — each carrying its own `why`. **We do not split the arm.** The
+producer keeps it deliberately as one thing, *nobody can tell you*, and splitting it here would put
+the same reasoning in two places. The `why` is rendered on screen rather than behind a disclosure,
+because "no pass has run yet" means wait and "the pass failed" means go and look.
 
 ### Later: the coordinator agent
 

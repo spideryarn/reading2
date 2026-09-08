@@ -32,6 +32,7 @@ import { createServer } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { readAttention } from "./attention.js";
 import { collectWithDeadline, type FleetSnapshot } from "./collect.js";
 import { parseBinds } from "./config.js";
 import { collectHealth, type HealthReport } from "./health.js";
@@ -45,7 +46,7 @@ import { newSessionRoutes } from "./routes-new.js";
 import { renameRoute } from "./routes-rename.js";
 import { handleSteerRequest } from "./routes-steer.js";
 import { handleTranscribeRequest } from "./routes-transcribe.js";
-import { fleetState } from "./state.js";
+import { statePayload as composePayload } from "./state.js";
 import { readRecentMessages } from "./transcript.js";
 
 /** Where the built React client lives. */
@@ -146,20 +147,28 @@ for (const line of retention.lines.error) console.error(line);
  * `collectedAt` is non-null.
  */
 function statePayload(): string {
-  // The answering flag is read PER PAYLOAD rather than captured once at
-  // startup, for the same reason routes-steer.ts reads it per request: turning
-  // it on should be a restart, and the page should learn about it on its next
-  // refresh rather than on a reload nobody performs.
-  return JSON.stringify(
-    fleetState(
-      snapshot,
-      lastError,
-      health,
-      REFRESH_MS,
-      process.env["FLEET_ANSWER_ENABLED"] !== "0",
-      attemptedAt,
-    ),
-  );
+  /* **THE COMPOSITION ITSELF IS IN state.ts, and only the wiring is here.**
+     This file binds ports at import time, so nothing can import this function
+     and call it — which meant the join test had to rebuild the edge inside
+     itself and stayed green when production stopped making it. `composePayload`
+     is the same function production goes through, and a test drives it.
+
+     Two things are read PER PAYLOAD rather than captured once, and for the same
+     reason routes-steer.ts reads its flag per request. The answering flag:
+     turning it on should be a restart, and the page should learn about it on
+     its next refresh rather than on a reload nobody performs. The attention
+     inbox: `~/.overseer/current.json` is ~10KB and replaced by atomic rename,
+     so a read is cheap and always current, while caching it would put a list
+     regenerated every two minutes on this loop's 55–60s clock. */
+  return composePayload({
+    snapshot,
+    error: lastError,
+    health,
+    refreshMs: REFRESH_MS,
+    answeringEnabled: process.env["FLEET_ANSWER_ENABLED"] !== "0",
+    attemptedAt,
+    readAttention,
+  });
 }
 
 /**

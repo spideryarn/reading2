@@ -16,6 +16,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 
+import { fromPsArgs, readClaudeCommandLine } from "../tools/fleet/claude-argv.js";
 import {
   COMMAND_KEPT,
   RECOGNISERS,
@@ -114,10 +115,43 @@ describe("recognising a command line", () => {
   });
 
   test("the real headless claude command line is recognised", () => {
+    // VERBATIM from tests/fixtures/overseer-process-trees/headless-claude-under-pane.txt,
+    // `--` and prompt included. It was truncated before the `--` until 2026-09-08, and the
+    // truncation mattered: `--tools` is variadic, so where its values end is readable only
+    // because the separator is there. A shortened copy of a real command line is a
+    // constructed case wearing a capture's name.
     const found = recogniseCommand(
-      "claude --print --model haiku --effort high --output-format stream-json --verbose --tools Read,Grep",
+      "claude --print --model haiku --effort high --output-format stream-json --verbose" +
+        " --permission-prompts none --tools Read,Grep,Glob,Bash --restricted --strict-mcp-config" +
+        " -- Reply with the single word: pong",
     );
     expect(found?.id).toBe("claude-headless");
+  });
+
+  /**
+   * D6 from docs/plans/260908h, and `RECOGNISERS["claude-headless"]`'s own
+   * self-declared KNOWN GAP: `claude --model x -p …` was missed, because the
+   * test was a regex anchored to the first argument and `--print` was no longer
+   * there. `harness.ts` caught it and this did not, so `classifyPaneWork` and
+   * `classifyPaneHarness` could disagree about one process in one tick.
+   *
+   * The flag table is what closes it: `--model` is known to take a value, so
+   * the `-p` after it is a flag rather than that flag's value.
+   *
+   * **THE OTHER DIRECTION IS DELIBERATELY NOT ASSERTED HERE.** The obvious pair
+   * would be "a `-p` inside the PROMPT is prose", and on 2026-09-08 that was
+   * measured to be FALSE of real `claude` 2.1.263, which reads options after a
+   * positional: `claude some-prompt --version` prints the version. Whether a
+   * dash-led token following a bare word is a flag is `claude-argv.ts`'s
+   * question and it is being re-settled; a test written from the old
+   * understanding would be a second vote for it. See the report on Stage B.
+   */
+  test("a headless claude behind a flag that takes a value is still headless work", () => {
+    expect(recogniseCommand("claude --model opus -p do the thing")?.id).toBe("claude-headless");
+    expect(recogniseCommand("claude --model opus --print -- do the thing")?.id).toBe("claude-headless");
+    // The pair that does not depend on a boundary rule: a `claude` with no
+    // headless flag anywhere is not headless work.
+    expect(recogniseCommand("claude --model opus --session-id abc -- do the thing")).toBeNull();
   });
 
   test("the real vitest command line is recognised through its node shim", () => {
@@ -143,11 +177,41 @@ describe("recognising a command line", () => {
     expect(recogniseCommand("/usr/bin/nodejs /home/greg/code/x/node_modules/.bin/vitest run")?.id).toBe("vitest");
   });
 
-  test("a pane's own interactive claude is not headless work, even when the prompt says --print", () => {
-    // The whole prompt is argv on this box, so a session asked about `--print`
-    // wears the word. Anchoring to the FIRST argument is what stops that.
-    expect(recogniseCommand("claude --session-id 404961e7-a9af-47c9-bf9e-38918ba8ffc4 --name x Build a batch")).toBeNull();
+  /**
+   * TWO COMMAND LINES THAT BOTH MATCH NOTHING, FOR TWO DIFFERENT REASONS, and
+   * the difference is worth an assertion because until Stage A round 2 of
+   * docs/plans/260908h the second one was *accidentally* safe.
+   *
+   * The old belief was that `claude` stops reading options at the first bare
+   * word, so a prompt saying `--print` was prose. Measured on 2026-09-08
+   * against real `claude` 2.1.263, the CLI PERMUTES — `claude some-prompt
+   * --version` prints the version — so a `ps`-flattened `claude --session-id
+   * abc Please add a --print flag to the CLI` cannot be told apart from a
+   * genuinely headless run, and the honest reading is `unreadable`.
+   *
+   *  - the first line is a `session` that is not headless: no recogniser
+   *    matches, and `null` means "this pane is not running batch work";
+   *  - the second is `unreadable`: no recogniser matches either, because this
+   *    entry asks for `session && headless` and a refusal is neither.
+   *
+   * `null` both times — but a `null` that comes from a refusal is a different
+   * fact about the world, and `classifyPaneHarness` says so out loud (its twin
+   * test in `tests/overseer-harness.test.ts` asserts the `ambiguous` pane).
+   */
+  test("a pane's own interactive claude is not headless work, and an unreadable one is not either", () => {
+    const interactive = "claude --session-id 404961e7-a9af-47c9-bf9e-38918ba8ffc4 --name x Build a batch";
+    expect(recogniseCommand(interactive)).toBeNull();
+    const reading = readClaudeCommandLine(fromPsArgs(interactive));
+    expect(reading.kind).toBe("session");
+    // The id itself is not asserted here — `tests/fixture-ids.test.ts` counts a bare uuid literal
+    // as this file laying claim to a database row, and this uuid belongs to
+    // `tests/overseer-harness.test.ts`. What this test is about is the kind of reading anyway.
+    expect(reading.kind === "session" ? reading.headless : "not a session").toBe(false);
+
     expect(recogniseCommand("claude --session-id abc Please add a --print flag to the CLI")).toBeNull();
+    expect(
+      readClaudeCommandLine(fromPsArgs("claude --session-id abc Please add a --print flag to the CLI")).kind,
+    ).toBe("unreadable");
   });
 
   test("node running a program of its own is not peeled into that program's flags", () => {

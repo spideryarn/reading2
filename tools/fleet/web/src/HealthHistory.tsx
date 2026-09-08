@@ -51,6 +51,7 @@ import {
   type HistoryPlot,
   type SeriesPlot,
 } from "./history-series";
+import { shiftMsToBrowserClock, type ClockSkew } from "./types";
 import { Card, SectionHeading, cx, toneClasses } from "./ui";
 
 /** The window Greg asked for. A selector is a query parameter away when it is wanted. */
@@ -70,8 +71,28 @@ const PLOT_W = 1000;
 const STRIP_H = 22;
 const SERIES_H = 64;
 
-function timeOfDay(ms: number): string {
-  return new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+/**
+ * How this panel prints a moment. **A function threaded as a prop, not a skew.**
+ *
+ * Every clock time on the chart — the axis, each series' worst point, when a
+ * break ended, when the last write worked — is a WALL-CLOCK reading, compared
+ * against the watch in the reader's hand, and the masthead above says the times
+ * on this page are corrected for their device. So the labels are corrected too:
+ * GPT Sol's K3, 2026-09-08, and it is the half of types.ts §
+ * `shiftToBrowserClock`'s rule that permits a shift at all.
+ *
+ * **THE GEOMETRY IS NOT TOUCHED, AND THAT IS THE POINT OF PASSING A
+ * FORMATTER.** Every x coordinate, every gap, every duration on this panel is
+ * one server instant minus another — arithmetic within one clock, correct as it
+ * stands, and shifting both ends would move a fault relative to its own window
+ * for no gain. Handing the components a `TimeLabel` rather than a `ClockSkew`
+ * means none of them is holding a number it could accidentally do that with.
+ */
+export type TimeLabel = (ms: number) => string;
+
+function timeLabel(skew: ClockSkew): TimeLabel {
+  return (ms) =>
+    new Date(shiftMsToBrowserClock(ms, skew)).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
 /* ------------------------------------------------------------------ *
@@ -81,11 +102,21 @@ function timeOfDay(ms: number): string {
 export function HealthHistory({
   api,
   nowMs,
+  skew,
 }: {
   api: HistoryApi;
   /** Passed in rather than read here, so a test can place the right-hand edge. */
   nowMs: number;
+  /**
+   * What this device's clock is out by, for the LABELS only — see `timeLabel`.
+   * `nowMs` and every instant in the samples stay on the server's clock, which
+   * is what keeps the shapes on this chart true.
+   */
+  skew: ClockSkew;
 }): ReactNode {
+  /* Built once here rather than in each component: one formatter means the axis
+     and the sentences under it cannot end up on two different clocks. */
+  const at = timeLabel(skew);
   const [view, setView] = useState<HistoryView | null>(null);
 
   /**
@@ -125,7 +156,7 @@ export function HealthHistory({
     <div className="tw:mt-4">
       <SectionHeading>The last 24 hours</SectionHeading>
       <Card className="tw:p-3">
-        <HistoryBody view={view} nowMs={nowMs} />
+        <HistoryBody view={view} nowMs={nowMs} at={at} />
       </Card>
     </div>
   );
@@ -137,7 +168,7 @@ export function HealthHistory({
  * `null` is *we have not asked yet*, which is not a claim about anything and
  * must not look like one — so it says so rather than drawing an empty day.
  */
-function HistoryBody({ view, nowMs }: { view: HistoryView | null; nowMs: number }): ReactNode {
+function HistoryBody({ view, nowMs, at }: { view: HistoryView | null; nowMs: number; at: TimeLabel }): ReactNode {
   if (view === null) {
     return <p className="tw:text-[13px] tw:text-ink-faint">Reading the last 24 hours…</p>;
   }
@@ -178,19 +209,19 @@ function HistoryBody({ view, nowMs }: { view: HistoryView | null; nowMs: number 
           The dashboard writes one sample per collection, so this fills in as it runs. It is empty after a
           restart, and that is not a claim about how the box has been.
         </Note>
-        <Retention retention={view.retention} />
+        <Retention retention={view.retention} at={at} />
       </div>
     );
   }
 
   return (
     <div>
-      <VerdictStrip plot={plot} />
-      <p className="tw:mt-2 tw:text-[13px] tw:text-ink-soft">{describeGaps(plot, timeOfDay)}</p>
+      <VerdictStrip plot={plot} at={at} />
+      <p className="tw:mt-2 tw:text-[13px] tw:text-ink-soft">{describeGaps(plot, at)}</p>
       {/* **BEFORE THE CHART'S OWN SENTENCES**, because if the writer has
           stopped, every break below it is about the writer rather than about
           the box, and reading them the other way round is the whole failure. */}
-      <Retention retention={view.retention} />
+      <Retention retention={view.retention} at={at} />
       {plot.beforeHistory === null ? null : (
         <p className="tw:mt-1 tw:text-[12px] tw:text-ink-faint">
           {/* NOT a gap, and said in different words on purpose: nothing was
@@ -200,14 +231,14 @@ function HistoryBody({ view, nowMs }: { view: HistoryView | null; nowMs: number 
               exist and were discarded — "collecting since" would be a claim
               about when we started looking, and it would be false. */}
           {plot.retainedOnly ? "Retained data begins" : "Collecting since"}{" "}
-          {timeOfDay(plot.beforeHistory.toMs)} — the{" "}
+          {at(plot.beforeHistory.toMs)} — the{" "}
           {describeDuration(plot.beforeHistory.toMs - plot.beforeHistory.fromMs)} before that is not
           recorded here, which is not the same as the box having been quiet.
         </p>
       )}
 
       {plot.series.map((series) => (
-        <SeriesChart key={series.spec.key} series={series} plot={plot} />
+        <SeriesChart key={series.spec.key} series={series} plot={plot} at={at} />
       ))}
 
       <Legend />
@@ -244,7 +275,7 @@ function describeWindow(hours: number): string {
   return `${Number.isInteger(hours) ? hours : hours.toFixed(1)} hours`;
 }
 
-function VerdictStrip({ plot }: { plot: HistoryPlot }): ReactNode {
+function VerdictStrip({ plot, at }: { plot: HistoryPlot; at: TimeLabel }): ReactNode {
   /* One band per plot unit is far more than any phone has pixels, so the
      collapse happens here at a resolution the SVG can actually show. */
   const bands = collapseVerdict(plot.verdict, plot.fromMs, plot.toMs, 360);
@@ -257,7 +288,7 @@ function VerdictStrip({ plot }: { plot: HistoryPlot }): ReactNode {
           preserveAspectRatio="none"
           className="tw:block tw:h-[22px] tw:w-full tw:rounded-sm"
           role="img"
-          aria-label={`The box's verdict over the last 24 hours. ${describeGaps(plot, timeOfDay)}`}
+          aria-label={`The box's verdict over the last 24 hours. ${describeGaps(plot, at)}`}
         >
           <Hatch />
           <rect x={0} y={0} width={PLOT_W} height={STRIP_H} fill="var(--quiet-wash)" />
@@ -275,7 +306,7 @@ function VerdictStrip({ plot }: { plot: HistoryPlot }): ReactNode {
         </svg>
       </Explain>
       <div className="tw:mt-1 tw:flex tw:justify-between tw:text-[11px] tw:text-ink-faint">
-        <span>{timeOfDay(plot.fromMs)}</span>
+        <span>{at(plot.fromMs)}</span>
         {/* **THE SERVER'S NUMBER, NOT THIS PAGE'S CONSTANT.** The route clamps
             the window, so a request for more than a week comes back narrower —
             and an axis that went on saying "24 hours" over a different span is
@@ -293,7 +324,7 @@ function VerdictStrip({ plot }: { plot: HistoryPlot }): ReactNode {
  * One series.
  * ------------------------------------------------------------------ */
 
-function SeriesChart({ series, plot }: { series: SeriesPlot; plot: HistoryPlot }): ReactNode {
+function SeriesChart({ series, plot, at }: { series: SeriesPlot; plot: HistoryPlot; at: TimeLabel }): ReactNode {
   const { spec } = series;
   /**
    * **A FIXED AXIS, and this is the one thing on the panel that was found by
@@ -361,7 +392,7 @@ function SeriesChart({ series, plot }: { series: SeriesPlot; plot: HistoryPlot }
         <span className="tw:text-[11px] tw:font-semibold tw:tracking-wide tw:text-ink-faint tw:uppercase">
           {spec.label}
         </span>
-        <span className="tw:text-[12px] tw:text-ink-soft">{summarise(series)}</span>
+        <span className="tw:text-[12px] tw:text-ink-soft">{summarise(series, at)}</span>
       </div>
       <Explain tip={tip} placement="bottom" className="tw:block tw:w-full">
         <svg
@@ -369,7 +400,7 @@ function SeriesChart({ series, plot }: { series: SeriesPlot; plot: HistoryPlot }
           preserveAspectRatio="none"
           className="tw:mt-1 tw:block tw:h-16 tw:w-full tw:rounded-sm tw:bg-panel-raised"
           role="img"
-          aria-label={`${spec.label} over the last 24 hours. ${summarise(series)}`}
+          aria-label={`${spec.label} over the last 24 hours. ${summarise(series, at)}`}
         >
           <Hatch />
           {/* The thresholds, behind everything, so a shape is read against them. */}
@@ -462,7 +493,7 @@ function SeriesChart({ series, plot }: { series: SeriesPlot; plot: HistoryPlot }
  * as a shape and obvious as a sentence, and this panel exists to answer a
  * question rather than to be looked at.
  */
-function summarise(series: SeriesPlot): string {
+function summarise(series: SeriesPlot, at: TimeLabel): string {
   /* The boolean fact gets its own clause, always — including when there were no
      readings, because "we could not measure IO wait" and "and it was swapping
      for three hours" are both true and neither replaces the other. */
@@ -482,7 +513,7 @@ function summarise(series: SeriesPlot): string {
      its time, because the sentence already carries a timestamped extreme and two
      of them would read as a range. */
   const now = series.latestIsCurrent && series.latest !== null ? `now ${format(series.latest.value)}${series.spec.unit} · ` : "";
-  return `${now}${direction} ${format(series.worst.value)}${series.spec.unit} at ${timeOfDay(series.worst.atMs)}${marked}`;
+  return `${now}${direction} ${format(series.worst.value)}${series.spec.unit} at ${at(series.worst.atMs)}${marked}`;
 }
 
 function format(value: number): string {
@@ -650,7 +681,7 @@ function stillTrying(retention: RetentionView): boolean {
   return Date.parse(retention.lastAttemptAt) > Date.parse(retention.lastSuccessAt);
 }
 
-function Retention({ retention }: { retention: RetentionView | null }): ReactNode {
+function Retention({ retention, at }: { retention: RetentionView | null; at: TimeLabel }): ReactNode {
   /* Null is "this server did not say", not "fine". No claim either way, and
      nothing to draw — the alternative is a reassurance nothing produced. */
   if (retention === null) return null;
@@ -670,7 +701,7 @@ function Retention({ retention }: { retention: RetentionView | null }): ReactNod
         {trouble}
         {retention.lastSuccessAt === null
           ? " — no sample has been written since this dashboard started."
-          : ` — the last one that worked was ${timeOfDay(Date.parse(retention.lastSuccessAt))}.`}{" "}
+          : ` — the last one that worked was ${at(Date.parse(retention.lastSuccessAt))}.`}{" "}
         {/* **THE PAIR IS THE DIAGNOSIS**, which is the argument `state.ts` makes
             for `attemptedAt`: a writer still trying and failing is a different
             fault from one that has stopped being asked, and the two are

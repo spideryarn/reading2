@@ -213,6 +213,41 @@ And the ordering consequence, which agrees with Astra's A21 and reshapes the sta
 
 **So the deterministic rules come before the judgement.** That is why Stage 3 is what it is.
 
+## Status, 2026-09-08 evening
+
+**Done enough to stop here.** Stages 1, 2 and half of 6 are on `dev`, green, and coherent on their
+own: the Overseer has a runbook with gates, a scheduler with real occurrence identity, a local
+watchdog, and a tab called Overseer. What remains is real and optional — the fleet works today the
+way it worked this morning, and nothing half-built is load-bearing.
+
+| stage | state |
+|---|---|
+| **1** — the runbook and the gates | **done**, `dev`. `docs/project/overseer.md`, four gates, `/overseer` skill. |
+| **2** — the scheduler and the watchdog | **done**, `dev`, after two GPT Sol rounds. **Armed by `OVERSEER_JOBS_ENABLED` and OFF.** |
+| **3** — the three deterministic rules | **not started.** The highest-value stage left, per Fable and Astra both. |
+| **4** — the deferral queue | **not started.** |
+| **5** — reboot revival | **not started.** Needs a new verb: `gjd-remote resume` is `attach`. |
+| **6** — CLI ergonomics, and the rename | **the rename is done**; the CLI is not started. |
+| **7** — gate 4's global budget | **new, and named because it was twice "acknowledged in prose".** |
+
+**The one thing a reader should not miss: the scheduler is off, and turning it on is a decision.**
+`OVERSEER_JOBS_ENABLED=1` starts real `gjd-remote` sessions on a shared box, and **both standing jobs
+fire about thirty seconds after it is armed**, because neither has ever run. The dispatch path has
+never been executed for real — only through an injected spawner — so the first arming is also the
+first live test of it.
+
+### Stage 7 — gate 4's global budget
+
+Split out on 2026-09-08 rather than attempted, because Sol has now twice found it *"acknowledged, not
+answered"*, and a third acknowledgement would be worse than an admission. Gate 4 says the model tick
+is bounded; nothing bounds it. Several components each keeping to a locally sensible number of model
+calls is unbounded in total, and the seam has to be shared across scheduling, question-routing and
+recovery or it is not a budget.
+
+**It becomes load-bearing exactly when the scheduler is armed**, which is why it is next rather than
+later, and why the runbook now says plainly that the gate is not enforced yet instead of implying it
+is.
+
 ## Stages
 
 Each ends committable, green and deployable. Greg asked for many thin stages rather than a few large
@@ -233,10 +268,16 @@ Done when: the doc exists, `tests/doc-links.test.ts` is green, and the direction
 
 Interval jobs in `tools/overseer/daemon.ts`, with the schedule as data. Occurrence identity in the
 store per A25 — a job run gets an id recorded **before** dispatch, so a crash between deciding and
-spawning is visible on restart rather than silently lost or silently repeated. Overlap prevention
-reuses the `attentionRunning` idiom already there. One systemd **system** timer as the dead-man check
-on the Overseer's heartbeat, added to `infra/hetzner/provision.sh` and covered by
-`tests/systemd-units.test.ts`.
+spawning is visible on restart rather than silently lost or silently repeated. One systemd **system**
+timer as the dead-man check on the Overseer's heartbeat, added to `infra/hetzner/provision.sh` and
+covered by `tests/systemd-units.test.ts`.
+
+**This paragraph used to end "Overlap prevention reuses the `attentionRunning` idiom already there",
+which S6 then demolished** — and the implementing agent flagged that the sentence was still standing
+here, contradicting this plan's own § The review two screens further down. It is struck rather than
+quietly deleted, because a plan that silently drops the thing a review corrected is how the next
+reader concludes the review was about something else. **The scheduler path has no in-memory guard at
+all**: overlap is the durable lease, so there is no field that can stay non-null for ever.
 
 Done when: a job with a 60-second interval is watched firing, watched *not* firing while a previous
 run is in flight, and watched catching up after the daemon is killed and restarted across its due
@@ -307,6 +348,55 @@ already exist; what is missing is a session-friendly way to call them, since tod
 over HTTP and from a browser. Then `OrchestratorPanel.tsx` → the Overseer, which Greg approved once
 the wave-2 worktrees had calmed down.
 
+## Two judgement calls the implementation raised, and how they went
+
+**A `stuck` lease RELEASES the job rather than holding it.** The brief said `stuck` must be visible
+and reported, and did not say whether the job may then run again. Holding is S6 wearing a different
+hat — a guard that can only tighten — so the lease releases: the unaccountable run is written down as
+`unknown` permanently, and the *next* run is a different occurrence at a different instant, which
+makes it a new occurrence rather than a retry of the one we cannot account for. That distinction is
+what keeps "never auto-retry `unknown`" true while still letting the job live.
+
+**`Checkpoint.jobs` keeps only the 50 most recent unknowns, and the number is arbitrary.** Flagged
+by the implementer as arbitrary, which it is. It is nevertheless safe in the direction that matters:
+**`events.jsonl` keeps every unknown for ever**, and the checkpoint is a convenience view that exists
+so `current.json` does not grow by one entry per crash. So the bound can lose an *alarm* on a very
+unlucky box, never a *record*. The thing that would make it wrong is an acknowledgement mechanism —
+once somebody can mark an unknown as seen, retention should follow that rather than a count.
+
+**And one it did not have to raise, because the types made it.** `stuck` is not stored. It is
+`started` plus a deadline that has passed, so the same bytes are `in-flight` a minute earlier; a
+stored `stuck: boolean` would go on saying "fine" for exactly as long as the daemon was dead. That is
+the same distinction the direction doc draws for `statusSince` between an observed transition and a
+lower bound, arrived at independently.
+
+## The watchdog is honest and its verdict reaches nobody
+
+Noticed on reading the diff, 2026-09-08, and worth writing down before it becomes the thing we
+congratulate ourselves on. `overseer-watchdog` distinguishes its three failure states properly and
+exits non-zero when the daemon has stopped ticking. **That exit code goes into the journal and
+`systemctl is-failed`, and nothing on this box looks at either.**
+
+Which is the shape of **A27** at a smaller scale, and the same shape as the Remote Control finding
+already on this page: *a thing that reports fine until the moment it is needed, with no signal
+reaching anyone.* A watchdog whose alarm is a line in a log nobody reads has moved the silence, not
+removed it.
+
+**Two things follow, and only the first is in this job.**
+
+- **Write the verdict where something already looks.** The watchdog appends its result to the store,
+  so the dashboard can render *"the watchdog last said the daemon was stale, 40 minutes ago"* on the
+  surface that already exists for exactly this — the direction doc's rule that *"the Overseer was
+  last seen 40 minutes ago"* belongs where the count would be, not in a footer.
+- **Restarting the daemon is the tempting next step and is deliberately not taken yet.** The case the
+  watchdog catches — a process that is alive and not ticking — is precisely the one
+  `Restart=always` cannot see, so a restart is the obviously right action. But `systemctl restart` on
+  a system unit needs root, the watchdog runs as `greg`, and the polkit rule or `sudoers` line that
+  would fix that is **a change to the box, so it is a change to the file that builds the next one**
+  ([hetzner-remote-server-box.md](../project/hetzner-remote-server-box.md#a-change-to-the-box-is-a-change-to-a-file)),
+  and it hands an unattended timer the ability to restart services. That is Greg's call, not a
+  detail to slip into a stage about scheduling.
+
 ## Deliberately not in this job
 
 - **The decision-log web mode.** Greg asked for it; it is the dashboard's tense, and `tools/fleet/`
@@ -318,7 +408,57 @@ the wave-2 worktrees had calmed down.
 - **Configuring the schedule from the web interface.** Greg called it a nice-to-have future stage.
 - **Renaming `docs/plans/260908f-orchestrator-wave-2-….md`.** A dated plan record, mid-flight.
 
-## The review, and what it changed
+## The review OF STAGE 2, and what it changed
+
+**GPT Sol reviewed the built Stage 2 and blocked it: no P0, four P1s.**
+[The full text](260908g-stage2-code-review-sol.md). Its crash-window table passed on all five rows,
+and every P1 was about the same thing from a different angle — **something correct in isolation that
+was not true in operation.** What was done about each:
+
+- **C1 — the scheduler was installed and scheduled nothing.** `scripts/overseer.ts` called
+  `runOverseer` with no `jobs`, so `daemon.ts` built no timer, and there were no definitions and no
+  `SpawnJob` anywhere outside the tests. Now there are:
+  [`tools/overseer/standing-jobs.ts`](../../tools/overseer/standing-jobs.ts) holds the two jobs that
+  are pure documents (`get-ready-to-deploy`, the feedback sweep) and
+  [`dispatch.ts`](../../tools/overseer/dispatch.ts) starts each as `gjd-remote new-claude <name>
+  --no-attach -p -`.
+  **It is off unless `OVERSEER_JOBS_ENABLED=1`**, in the spirit of `FLEET_ACT_ENABLED`, because
+  arming it starts real Claude sessions on a shared box and that is Greg's decision rather than a
+  consequence of merging. `overseer status` prints ARMED or OFF from a field the daemon writes into
+  the checkpoint — not from the reader's own environment, which is a different one, and not inferred
+  from an empty occurrence list, which is what *off* and *nothing to do* both look like.
+- **C2 — the definition hash separated history and did not gate anything, and the effect ran
+  backwards.** An edited definition read as *never run*, `due()` reads *never* as due now, so an edit
+  dispatched the edited job immediately — the opposite of the runbook's gate 3. The authorisation is
+  now a **pin**: a hash constant beside each definition, compared before `due` is asked anything, and
+  a mismatch is its own refusing state. The document's own digest is inside the definition, so
+  editing `get-ready-to-deploy.md` moves the fingerprint even though the prompt did not — which is
+  the only version of this that means anything for jobs that *are* documents.
+- **C3 — a cold recovery discarded the ledger and let jobs run again.** `openStore` deliberately
+  comes up with an empty occurrence map when the log has a hole or exceeds the replay ceiling. That
+  is right for the session register and wrong for a ledger of what has been done. The store now
+  carries `occurrenceHistory`, and a `lost` one holds every job rather than dispatching it.
+- **C5 — only the reservation append was fail-closed.** The four later appends dropped their
+  results, so reports disagreed with durable history. They are reported now (`unrecorded`) or, for
+  the completion that lands after the tick has returned, sent to `onLostRecord` and written into
+  `daemon.jsonl` as `job-record-lost`. None of them throws: losing the record must not also lose the
+  child's outcome.
+- **C6 — the watchdog and the daemon did not share the deadline they thought they shared.** Both
+  called `staleAfterMs`, which prevents formula drift and not input drift: 300,000ms against
+  325,000ms under the documented normal values. The daemon now writes the deadline it is using into
+  the checkpoint and the watchdog reads it.
+- **C7 — `Persistent=true` does not prove missed-run catch-up here.** `systemd.timer(5)`: it only
+  affects `OnCalendar=` timers, and this one has `OnBootSec=`/`OnUnitActiveSec=`. The setting stays
+  (harmless, and correct if the timer ever moves); the comment and the test now name `OnBootSec=2min`
+  as what actually covers a box that was off, and the neighbouring "parses as a valid unit" test runs
+  `systemd-analyze verify` instead of checking that a line exists.
+- **C8 — one watchdog test did not test what its name said.** It compared internal `state` tags and
+  never called `formatVerdict`, so all four rendered messages could have become identical. It renders
+  them now.
+
+**C4 — the global model-call budget — is deliberately not done here.** It is its own stage.
+
+## The review OF THE PLAN, and what it changed
 
 **GPT Sol reviewed this plan at `004a12eb` and blocked it: no P0, eleven P1s.**
 [The full text](260908g-plan-review-sol.md). Its headline is architectural — *"prose gates cannot

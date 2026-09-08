@@ -73,7 +73,7 @@
  * itself a failure here:** a test globs this directory for the string, so the
  * rule is enforced rather than remembered.
  */
-import type { FleetRow, FleetStatus } from "./types";
+import { shiftToBrowserClock, type ClockSkew, type FleetRow, type FleetStatus } from "./types";
 
 export const MESSAGES_URL = "api/messages";
 
@@ -121,6 +121,23 @@ export type MessageToolCall = { name: string; detail: string | null };
 /** One turn, as this page will draw it. `TranscriptTurn` off the wire. */
 export type MessageTurn = {
   speaker: MessageSpeaker;
+  /**
+   * **THE SERVER'S OWN STRING, NEVER SHIFTED**, because RecentMessages prints
+   * it as the absolute instant it is. Moving it would not say *the phone's wall
+   * clock*, it would assert a UTC time nothing happened at — types.ts §
+   * `shiftToBrowserClock` has the rule and `withClockSkew` below has the other
+   * end of it.
+   *
+   * **SO DO NOT SUBTRACT IT FROM A BROWSER CLOCK.** It is on the box's, and
+   * `now - Date.parse(at)` puts the whole device skew into the answer — the
+   * mistake `lastModified` made on this very route before v0.4j. Correct it
+   * first with `shiftMsToBrowserClock`. A pre-corrected `atMs` was carried here
+   * for one commit to make that impossible, and was deleted: nothing read it,
+   * and a field with a producer, a test and no consumer is Class A out of
+   * docs/postmortems/260908b — built, that time, while fixing an instance of
+   * Class A. The warning belongs on the field somebody would actually reach
+   * for, which is this one.
+   */
   at: string | null;
   /**
    * Plain, untrusted, possibly truncated, **never markup**. An assistant turn
@@ -211,6 +228,10 @@ function parseTurn(v: unknown): MessageTurn | null {
   return {
     speaker: speakerOf(v["speaker"]),
     at: str(v["at"]),
+    /* NOT computed here. The wire boundary has no clock to correct against —
+       `withClockSkew` is the only thing that holds one — and a `Date.parse` of
+       the raw string here would be the server's instant wearing a field that
+       promises the browser's. */
     text: typeof v["text"] === "string" ? v["text"] : "",
     truncated: v["truncated"] === true,
     fullChars: num(v["fullChars"]),
@@ -310,6 +331,13 @@ export const STALE_TRANSCRIPT_MS = 30 * 60 * 1000;
  * dialog writes nothing until somebody answers it, which is routinely hours,
  * so including it would put the warning on the very rows Greg opens this page
  * to look at — and a warning that is usually wrong is one nobody reads.
+ *
+ * **`lastModified` MUST ALREADY BE IN BROWSER-CLOCK TERMS**, which is what
+ * `withClockSkew` below is for. This subtracts it from `nowMs` directly, and
+ * before v0.4j the two came off different clocks: a phone half an hour fast put
+ * *"this may not be this session's conversation"* on every working row. The
+ * conversion is not done here because this function is also handed a `null` and
+ * a `"not a date"` and has no business knowing about the wire.
  */
 export type TranscriptAge =
   | { kind: "unstated" }
@@ -376,3 +404,53 @@ export function makeMessagesApi(fetchImpl: typeof fetch = fetch): MessagesApi {
 export const httpMessagesApi: MessagesApi = {
   recent: (row) => makeMessagesApi().recent(row),
 };
+
+/**
+ * **THE SECOND BOUNDARY, WEARING THE FIRST ONE'S CLOCK.**
+ *
+ * `lastModified` is the server's, and `transcriptAge` subtracts it from the
+ * browser's — so before v0.4j a phone thirty minutes fast put *"this may not be
+ * this session's conversation"* on every working row. The threshold is 30
+ * minutes (`STALE_TRANSCRIPT_MS`), which is a lot of skew, but `LastWrote` in
+ * SessionDetail.tsx prints the same subtraction in the header with no threshold
+ * at all, and it was simply wrong by the skew.
+ *
+ * **A WRAPPER RATHER THAN A `servedAt` ON THIS ROUTE TOO.** The route could
+ * carry its own clock and this could measure its own skew, and that was
+ * rejected: it is a second measurement of one fact, the two would disagree by a
+ * few milliseconds of latency, and a page whose transcript ages and snapshot
+ * ages were corrected by different numbers would be harder to reason about than
+ * one corrected by the same number. `/api/state` and `/api/messages` are the
+ * same process on the same box — one skew is the truth about both.
+ *
+ * **A FUNCTION rather than a value**, because the skew is re-measured on every
+ * poll and a wrapper holding the one it was built with would go stale the
+ * moment the page had been open for a cycle. App.tsx reads it out of a ref, so
+ * the correction applied is the freshest one the page has.
+ *
+ * The alternative to all of this was drilling a `skew` prop through
+ * SessionsPanel → SessionDetail → RecentMessages → `Found`, four components
+ * that have no business knowing about clocks, to reach two subtractions.
+ */
+export function withClockSkew(api: MessagesApi, skew: () => ClockSkew): MessagesApi {
+  return {
+    async recent(row): Promise<MessagesView> {
+      const view = await api.recent(row);
+      if (view.kind !== "found") return view;
+      const at = skew();
+      return {
+        ...view,
+        lastModified: shiftToBrowserClock(view.lastModified, at),
+        /* **THE TURNS KEEP THEIR OWN STRINGS.** This shifted them for one
+           round, on the belief that they were printed as wall-clock times.
+           They are not: `Turn` in RecentMessages.tsx prints `turn.at` verbatim,
+           so the shift turned `12:00:00Z` into `12:05:00Z` — not a phone's
+           clock, but an assertion about an absolute instant nothing happened
+           at, and wrong about the reader's timezone either way. GPT Sol's K4.
+           The correction is carried beside it as a number instead, for whatever
+           wants to measure an age from it. */
+      };
+    },
+  };
+}
+

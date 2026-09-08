@@ -369,10 +369,23 @@ rather than untidiness — this box hit load 391 with the OOM killer firing that
 were on the table (coexist on staggered ticks; the Overseer collects and the dashboard reads it) and
 the dashboard agent supplied a third that beats both: **the Overseer is a consumer.** It subscribes
 to the dashboard's `/api/live` SSE stream and appends on each `snapshot` event, polls `/api/state` if
-the stream drops, and falls back to its own `collect()` only when the server is unreachable — slowly,
-because a fallback that grazes every 12 seconds on a swapping box is worse than a gap in the history.
-The dashboard collects on a chain (60s from the *end* of each run, 5× backoff after a failure), not
-on a fixed interval, for the same reason.
+the stream drops. The dashboard collects on a chain (60s from the *end* of each run, 5× backoff
+after a failure), not on a fixed interval, because a collector that grazes every 12 seconds on a
+swapping box is worse than a gap in the history.
+
+**This paragraph used to end *"and falls back to its own `collect()` only when the server is
+unreachable"*, and that has not been true since the plan removed it** — corrected 2026-09-08 after
+the sentence was quoted in a review and then checked against the code.
+[`source.ts`](../../tools/overseer/source.ts) says so in its own header: *"it never calls
+`collect()`, and there is deliberately no local fallback that would"*, because a local collection
+would return a different contract — `FleetSnapshot` has no `health` field — and a second contract
+wearing one name is worse than no fallback.
+
+**So the consequence is sharper than "the Overseer depends on the dashboard".** The `/api/state`
+poll is not a second source; it is the same source down a slower pipe. **When the dashboard is down
+the Overseer has nothing at all**, and the thing that must therefore never be allowed to look healthy
+is a daemon ticking against an empty stream — which is exactly what the two clocks below are for, and
+exactly what a watchdog reading only the heartbeat would bless.
 
 **The coupling this creates runs the opposite way, and is accepted knowingly:** the Overseer now
 depends on the dashboard being up. Hence two clocks in the state file rather than one — `writtenAt`
@@ -451,6 +464,18 @@ implementation of reading it.** Parse it at the boundary the way the client alre
 server's JSON — tolerantly, checking `schema` as a **number it knows** rather than as "not something
 else", so that an unknown schema renders as *I cannot read this* rather than as a page with fields
 quietly missing.
+
+**There is a second reason, and on 2026-09-08 it turned out to be the stronger one.**
+`parseCheckpoint` fails the **whole** checkpoint on one malformed register entry — deliberately, and the four
+refusals in `tools/overseer/store.ts`'s own header argue for it, because a register folded across a
+hole is a plausible history that is wrong about which agents are running. But a dashboard that imported that
+parser would inherit the refusal for a field it never asked about: **an unrelated bad register entry
+would render on the page as *the coordinator is unreadable* while the attention list sat there
+perfectly intact.** Reading only the projection you need — `schema`, `writtenAt`, `attention` — means
+the Overseer's register problems stay the Overseer's register problems. The cycle argument above says
+why the import is wrong in principle; this says what it would have cost on a specific Tuesday. Found
+by GPT Sol reviewing a fleet design that had proposed exactly that import, having not read this
+paragraph.
 
 **The schema is `2`, and the bump happened the day after this was written**, which is the argument
 for that paragraph rather than a footnote to it: `statusSince` changed from a bare timestamp to the
@@ -1267,6 +1292,36 @@ unprefixed-`/` rule would turn one named hole into a general way to speak in his
 dashboard agent, on the dashboard's side of the seam, for a row assigned to the Overseer — which is
 the seam working rather than a boundary being crossed: the prefix belongs where the message is
 delivered, not where it is decided.
+
+### Built, tested, and called from nothing but its own tests
+
+**That is now twice in one day, so it is a class rather than an anecdote**, and it is the one to
+check for on this page's work specifically. `renderSpoken` above was the first. The second, found by
+GPT Sol reviewing the scheduler on 2026-09-08: `tools/overseer/scheduler.ts` implemented occurrence
+identity, leases and the whole crash-window contract, with 36 passing tests — and
+`scripts/overseer.ts` called `runOverseer` without `jobs`, so `daemon.ts` set `jobsTicker` to `null`.
+There were no job definitions and no `SpawnJob` implementation anywhere outside the tests. The
+reviewer's sentence is the one to remember: *"This revision contains a scheduler engine, but the
+installed Overseer schedules nothing."*
+
+**Why it keeps happening here rather than elsewhere is worth naming.** This area is built as a
+library of honest mechanisms — a lease, a prefix, a three-armed reading — each of which is *testable
+in isolation*, and isolation is exactly the condition under which a green suite says nothing about
+whether the thing runs. The tests are not weak; they are answering the narrower question, and both
+times the passing suite was the reason nobody looked.
+
+**Three things catch it, in order of how mechanical they are.** Make the wiring a *type* obligation
+rather than an option, the way `QueuedItem.speaker` was made required so the compiler found 111 sites
+— an optional `jobs` parameter is the whole of this defect in one word. Failing that, **a test that
+exercises the real entry point**, not the engine: the daemon test that pinned "no jobs, no occurrence
+events" was faithfully describing the shipped state and reading as a pass. And failing that, ask of
+every new mechanism *what calls this in production*, and answer it with a grep rather than from
+memory.
+
+**And the reporting rule that follows**: a capability that is off must never render the same as a
+capability that has nothing to do. The scheduler's opt-in exists for that reason as much as for
+safety — *armed and idle* and *not armed* are different sentences, and this page's whole argument is
+that a quiet surface and a healthy one must not be the same picture.
 
 **A5 is CLOSED too, 2026-09-08, and the answer was none of the options.** Astra's row said *"Tailscale's
 default policy is permissive, so verify rather than assume"*, and nobody had verified. Greg's

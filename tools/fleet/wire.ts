@@ -875,3 +875,226 @@ export type PauseUnknownCause =
  * Nothing related the two declarations, so nothing noticed.
  */
 export type Delivery = "none" | "partial" | "unknown";
+
+
+/* ------------------------------------------------------------------ *
+ * Whether this server has an inbox to show, which is a different question
+ * from what is in it.
+ * ------------------------------------------------------------------ */
+
+/**
+ * **WHAT THE FLEET SERVER CAN SAY ABOUT THE ATTENTION INBOX.**
+ *
+ * `AttentionList` above is the Overseer's judgement. This is the envelope it
+ * travels in, and it exists because the dashboard and the Overseer are two
+ * processes with two lifetimes: the page is up whenever the box is, and the
+ * checkpoint that carries the list may not be there at all. Measured
+ * 2026-09-08: the producer had been publishing that file for hours and
+ * `grep -rln "Checkpoint" tools/fleet/` found nothing, so the page could not
+ * have told the two apart even in principle.
+ *
+ * **`checkpoint-absent` must never render as an empty inbox.** *Nothing has
+ * been published, so nothing has been judged* and *nothing needs you* are
+ * opposite facts, and only the second is reassuring. That is the same argument
+ * `AttentionList`'s `unknown` arm makes one level down, and `Pause`'s `none`
+ * arm makes elsewhere in this file: an absence of observation may not be read
+ * as an observation of absence.
+ *
+ * ## Every arm is named after WHAT WAS SEEN, not after what it implies
+ *
+ * The first draft called the second arm `no-coordinator`, and GPT Sol was right
+ * that this claims more than the evidence supports. **A missing
+ * `current.json` proves only that no checkpoint exists at the path we looked
+ * at.** The Overseer may be starting, may have failed before its first write,
+ * may be running against another `OVERSEER_STORE_DIR`. So the arm says what was
+ * observed — no checkpoint here — and the page's copy says the same, rather
+ * than *the coordinator is not running*. Same discipline as `Pause`'s `none`.
+ *
+ * ## Why there is a fourth arm, and why it is the parse default
+ *
+ * `not-asked` means **this server did not look**. It is what an older server
+ * that predates the field sends — the field was added without a schema bump,
+ * per state.ts's rule, so a payload from before it carries no `attention` at
+ * all — and it is therefore what a client's parser must produce when the field
+ * is ABSENT.
+ *
+ * Defaulting to `checkpoint-absent` instead would be a positive claim nobody
+ * made: *we looked at the store and there was nothing there* is a statement
+ * about the box, and a server that has never heard of the file is in no
+ * position to make it. It is the same ambiguous-negative mistake `Pause`'s
+ * `none` arm is built to avoid, and the same one `readAttemptClock` in attempt-clock.ts
+ * exists to unpick for `attemptedAt`.
+ *
+ * A field that is PRESENT and unreadable is a fifth thing, and it is not on
+ * this type: it is a fact about a payload rather than about the box, so it
+ * belongs to whoever is doing the reading. `web/src/types.ts` declares it.
+ *
+ * A renderer draws NOTHING for `not-asked` — there is no fact to report — and a
+ * quiet line for `checkpoint-absent`, because that one is news.
+ */
+export type AttentionFeed =
+  /** A checkpoint was read. `coordinatorWrittenAt` is the checkpoint's clock, NOT the list's. */
+  | { kind: "published"; list: AttentionList; coordinatorWrittenAt: string }
+  /** No checkpoint at the path we looked at. Says nothing about whether the Overseer is alive. */
+  | { kind: "checkpoint-absent" }
+  /** A checkpoint is there and could not be read, parsed, or understood. */
+  | { kind: "checkpoint-unreadable"; why: string }
+  /** This server did not look. See above — the default, and never a claim about the box. */
+  | { kind: "not-asked" };
+
+/* ------------------------------------------------------------------ *
+ * The whole of `/api/state`.
+ * ------------------------------------------------------------------ */
+
+/**
+ * **WHAT `/api/state` RETURNS AND `/api/live` PUSHES**, declared once so the
+ * three consumers cannot disagree about it.
+ *
+ * Migrated here on 2026-09-08 (v0.8b), and it is the second of the four
+ * endpoints — `QueueView` was the first. The measurement that made it a stage:
+ * `answeringEnabled` and `tmuxServerPid` had been on this payload for a day
+ * and `grep -c` in `web/src/types.ts` found **zero** of either. Both ends were
+ * internally consistent, so nothing could go red; the repair is a type that
+ * makes the drop un-writable, not a check that detects it.
+ * docs/postmortems/260908b, and § Stage v0.8a of the plan.
+ *
+ * ## Two type parameters, and they are exactly the two fields that cannot be shared
+ *
+ * `Row` and `Health` are holes rather than declarations, because **the things
+ * that fill them live in node modules this file may not import** — `FleetRow`
+ * in `collect.ts` (which opens with `node:child_process`) and `HealthReport` in
+ * `health.ts`. The server fills them with its own types; the client fills
+ * `Row` with the JSON *projection* it renders and leaves `Health` as `unknown`,
+ * which is what `HealthPanel` reads it as.
+ *
+ * **`Row` is a hole rather than a shared declaration on purpose, and it is not
+ * a shortcut.** The plan says why at length: `FleetRow.meta` resolves to
+ * `scripts/gjd-remote-tmux.ts`'s `SessionMeta` (all three fields required)
+ * while the client's has all three nullable, and `Session.created` is a `Date`,
+ * which does not survive `JSON.stringify`. So the wire shape of a row is a
+ * projection of the server's type and not the type itself; sharing it verbatim
+ * would be *wrong* rather than merely impossible, and it is left for its own
+ * stage. Everything OUTSIDE those two fields is shared, and that is where all
+ * six dropped fields were.
+ *
+ * ## Adding a field here is the point — AND THE GUARANTEE IS NARROWER THAN IT LOOKS
+ *
+ * A field added to this type lands in both twins: the server's `FleetState` in
+ * `state.ts` is this type with its holes filled, and the client's in
+ * `web/src/types.ts` is `Omit<>` of it — so a new field is not in the `Omit`,
+ * it lands in the client type, and the parser's object literal stops compiling
+ * until somebody either reads the field or writes its name in the list. Proved
+ * by mutation, both ends red.
+ *
+ * **That holds for a REQUIRED, top-level field and for nothing else**, and the
+ * first version of this comment claimed it flatly. GPT Sol's M2, and it is
+ * right: add `diagnostic?: string` here and BOTH sides still compile. The
+ * server's object literal in `fleetState()` may omit an optional key, and the
+ * client's parse is an object literal for a type whose key is optional too, so
+ * neither end is forced to notice. A field added optionally is exactly the
+ * lossy join this whole file exists to make un-writable, arriving through the
+ * one door the mechanism does not cover.
+ *
+ * So the mechanism is held to its own claim by a compile guard rather than by
+ * this paragraph: **`tests/fleet-compile-guards.test.ts` refuses an optional
+ * top-level key on this type**, and `npm run typecheck` is what fails. A guard
+ * described as stronger than it is, is this repo's most repeated defect of the
+ * week; the honest version is *required fields are carried by construction, and
+ * optional ones are refused at the door*.
+ *
+ * Nested optionality is not covered and is not meant to be: a `?` inside `Row`
+ * or inside `AttentionFeed` is that type's own business, and the drop this
+ * mechanism is about was always a whole field going missing from the payload.
+ *
+ * Adding a field is still **not a `schema` bump**: that rule is `schema`'s own
+ * and it is about consumers that ignore what they do not know.
+ *
+ * ## No defaults on the two parameters
+ *
+ * `Row = unknown, Health = unknown` used to be written here, and it meant a
+ * caller could name neither and inherit both holes silently — including the
+ * caller who did not realise there were holes. They are the two fields that
+ * cannot be shared and a consumer has to say what it is putting in them, so
+ * every use site now writes both out. `unknown` is still the right answer for
+ * `Health` on the client; it is just no longer the answer nobody chose.
+ */
+export type FleetState<Row, Health> = {
+  /**
+   * The payload's shape, so a stored snapshot can be read back by code that has
+   * moved on. Bump it when a consumer that ignored the change would be WRONG
+   * rather than merely poorer — a removed field, or one whose meaning changed.
+   * Adding a field is not a bump: every consumer here ignores what it does not
+   * know, and a version that changes on every addition is one nobody checks.
+   */
+  schema: 1;
+  /**
+   * The sessions. **Read `collectedAt` first**: an empty `rows` is only ever a
+   * claim about the box when `collectedAt` is non-null, and a freshly restarted
+   * dashboard that says "no sessions are running" about a box with thirty-six
+   * of them is the reading least likely to make anybody look. state.ts § the
+   * empty-but-honest case.
+   */
+  rows: Row[];
+  /** ISO, or null for NEVER COLLECTED — which is not "collected and empty". */
+  collectedAt: string | null;
+  /**
+   * Which tmux server the handles in `rows` belong to. Two snapshots with
+   * different values here describe different worlds, however alike `$1643`
+   * looks in both. Null when it could not be read.
+   */
+  tmuxServerPid: number | null;
+  tookMs: number;
+  /** The last collection's failure, or null. A stale payload keeps its old rows. */
+  error: string | null;
+  health: Health;
+  /** How often the server intends to collect, so the page can say when it is genuinely late. */
+  refreshMs: number;
+  /**
+   * Whether `POST /api/steer/answer` will do anything.
+   *
+   * THE PAGE CANNOT HONESTLY WARN ABOUT A FLAG IT HAS NEVER BEEN TOLD. Without
+   * this, the client either hedges ("answering may be held back") or discovers
+   * the truth by having somebody tap and get a 503 — and the whole point of the
+   * hold is that a person should not tap. Told beats inferred, again.
+   *
+   * That argument was here, correct, and contradicted by a module one directory
+   * away for a day: the client's own `FleetState` did not carry the field, so a
+   * reader tapped and got the 503. The `Omit<>` in web/src/types.ts is what
+   * stops that recurring.
+   */
+  answeringEnabled: boolean;
+  /**
+   * When a collection was last **attempted**, which is a different fact from
+   * `collectedAt`: that one says when data last ARRIVED, and neither it nor
+   * `error` says whether the collector is still trying. A collection that never
+   * settles throws nothing, so `error` stays null and the loop simply stops —
+   * measured at ~30 minutes stale with `error: null`, which reads as a calm,
+   * slightly-quiet box.
+   *
+   * **DO NOT READ THIS FIELD DIRECTLY FROM A PAYLOAD — use `readAttemptClock`**
+   * in attempt-clock.ts, which the server, the Overseer and the browser client
+   * all import. It was added without a schema bump, so a server that predates it
+   * sends nothing, and a consumer that read "absent" as "never attempted" would
+   * report every old server as permanently wedged.
+   */
+  attemptedAt: string | null;
+  /**
+   * **WHAT NEEDS GREG** — the Overseer's ranked inbox, or the reason there is
+   * no list. A field rather than a second route: one payload, one clock, one
+   * staleness. `not-asked` is what a server that did not look sends, and it
+   * must never be read as *nothing is watching*.
+   */
+  attention: AttentionFeed;
+  /**
+   * **THE SERVER'S OWN CLOCK, AT THE MOMENT IT ANSWERED** — the one field here
+   * that is about us rather than about the box.
+   *
+   * Every age the client draws is `browserNow − Date.parse(aServerTimestamp)`,
+   * so a phone three minutes fast turns a current snapshot into a permanently-on
+   * STALE banner. Neither `collectedAt` nor `attemptedAt` can stand in: the gap
+   * between either of those and receipt is GENUINE SNAPSHOT AGE, and there is no
+   * way to tell that apart from skew. state.ts and web/src/types.ts §
+   * `ClockSkew` argue it in full.
+   */
+  servedAt: string;
+};
