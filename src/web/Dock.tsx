@@ -391,6 +391,27 @@ interface Props {
      */
     loaded: boolean;
     loadFailed: boolean;
+    /**
+     * **A refused write, retry or delete** — `useComments`'s `error`, and it is
+     * a different fact from `loadFailed` beside it. `loadFailed` is about the
+     * one fetch that fills the list and is only ever drawn when the list is
+     * empty; this carries every *change* that did not land, including one whose
+     * row has already scrolled off the reader's screen.
+     *
+     * **It is here because the controls bar stopped existing.** It was a chip
+     * in `.controls` on the reading view until 2026-09-08 — and that bar is now
+     * drawn only when it has something in it, so leaving the chip there would
+     * have made a failed delete summon 44px of chrome and push the article
+     * down. It belongs on this button anyway: this is the control the failure is
+     * about. GPT Sol refused deleting it (finding G3 on
+     * docs/plans/260905g-move-the-wordmark-and-feedback-button-into-the-dock.md),
+     * and was right to; docs/plans/260908a-the-top-bar-stops-being-drawn-when-it-has-nothing-in-it.md
+     * § Stage 2.
+     *
+     * `null` when everything has saved. **Not on the visitor arm**, which has no
+     * writes to fail.
+     */
+    error: string | null;
     /** Which panel is open, or null for a shut drawer. From `?panel=`. */
     panel: Panel | null;
     onPanel(next: Panel | null): void;
@@ -996,13 +1017,27 @@ export function fitSignature(
   mode: Mode | undefined,
   onMode: Props["onMode"],
   drawer: Props["drawer"],
-  own: { comments: Comment[] } | null,
+  /**
+   * Structural rather than `Props["drawer"]`'s owner arm, so the tests can pose
+   * one without building a drawer. `error` is optional here for the same
+   * reason: a caller that does not model failed writes should not have to say
+   * it has none.
+   */
+  own: { comments: Comment[]; error?: string | null } | null,
   variant: ExperimentalVariant | null,
   feedback: boolean,
 ): string {
   const shape = mode !== undefined && onMode ? "seg" : "links";
   const modes = visible.map((m) => m.mode).join(",");
-  const count = own ? own.comments.length : "";
+  /**
+   * **The chip in the Comments button, by what it draws rather than by what it
+   * counts.** A failed write replaces the number with a `!` (§ the Comments
+   * button), so `12` → `!` is a real change of width with no change of count,
+   * and a signature that only knew the count would leave the row on the rung it
+   * was measured for. The reverse — an error clearing while a comment arrives —
+   * is the same problem in the other direction.
+   */
+  const count = own ? (own.error ? "!" : own.comments.length) : "";
   /**
    * **Which mode is on, and not only which are drawn.**
    *
@@ -1219,6 +1254,26 @@ export function Dock({
      view already passes it that way. */
   const isVisitor = visitor === true || drawer?.visitor === true;
   const pending = own?.comments.filter((c) => c.status === "pending").length ?? 0;
+  /**
+   * A change that did not save, said on the button it is about — § the Comments
+   * button, and the `error` field's own note on `Props`. Only the owner writes,
+   * so `own` is the only arm that can carry one.
+   *
+   * **`loadFailed` disqualifies it, and that is not defensiveness.**
+   * `useComments` sets `error` **and** `loadFailed` together when the opening
+   * GET fails (useComments.ts § the load), so a load failure arrives here
+   * carrying a perfectly good `error` string — and the first version of this
+   * announced *"a change to your comments didn't save"* over a reader who had
+   * not changed anything, with the drawer then saying it twice, in two
+   * different voices. GPT Sol's P1 reviewing the built code.
+   *
+   * A failed load already has its own answer and does not need this one:
+   * `Questions` draws it from `loadFailed`, which is the flag that exists to
+   * separate *nothing asked yet* from *we could not find out*
+   * (docs/project/web-client.md § Empty is not the same as not asked yet). So
+   * this narrows to what its own doc-comment claims — a refused **write**.
+   */
+  const commentError = own && !own.loadFailed ? own.error : null;
 
   /**
    * The view state the bar's links carry across, so leaving the article to look
@@ -1474,6 +1529,24 @@ export function Dock({
               are gone; there is no state left they could describe.
               docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 3. */}
           <div className="dock-drawer-body">
+            {/* **The failed write, said where a finger can reach it.** The mark
+                on the button is a red `!` and the sentence behind it is in a
+                hover card, which is unreachable by touch and by keyboard — so
+                without this, a touch reader would see that something was wrong
+                and have no way to find out what. A tooltip may never be the
+                only carrier (docs/project/tooltips.md); this is the carrier the
+                mark sends you to.
+
+                Above the list rather than in it, because it is not about any
+                one comment — `error` covers a refused write, retry or delete,
+                and the row it belonged to may not be here at all. `Questions`
+                keeps its own empty-and-failed-to-load states, which are a
+                different fact (§ `error` on `Props`). */}
+            {commentError && (
+              <p className="dock-drawer-error" role="alert">
+                {commentError}
+              </p>
+            )}
             {drawer && (
               <Questions
                 comments={drawer.comments}
@@ -1602,28 +1675,48 @@ export function Dock({
               onPanel={drawer.onPanel}
               icon={MessageSquareText}
               label="Comments"
+              /* **The state, as a description — never in the name.** The name
+                 stays "Comments" whatever has happened to it, which is the rule
+                 § the switch itself states at length and which GPT Sol caught a
+                 breach of there: a name that moves changes the control's
+                 identity, and a reader driving this by voice is asking for the
+                 button called Comments. So the sentence goes where the switch's
+                 goes — an `sr-only` node this button points `aria-describedby`
+                 at. Sol raised the same thing against this stage's plan. */
+              note={commentError ? "A change to your comments didn't save." : undefined}
               className={own ? "" : MARKED}
               /* **One `what` for both, and the ownership in `state`** — the shape
                  the modes use, and it is the shape because the alternative was
                  two descriptions to keep in step and one of them went stale.
-                 `NOT_A_MODE.comments` carries the note. */
+                 `NOT_A_MODE.comments` carries the note.
+
+                 **A failed write outranks the visitor line, and cannot collide
+                 with it**: only the owner writes, so `commentError` is `null`
+                 on every arm that could show the visitor sentence. The ternary
+                 is ordered that way regardless, because `state` is the slot for
+                 *what this control is doing right now* (Tooltip.tsx
+                 § `ControlTip`) and a failure is more that than a footing is.
+
+                 The service's own sentence is passed through rather than
+                 rewritten: it is already reader-facing copy that says whose
+                 problem it is (docs/project/copy.md), and a second paraphrase
+                 here would be a third place for the wording to drift. */
               hover={
                 <ControlTip
                   head="Comments"
-                  state={own ? undefined : NOT_A_MODE.comments.visitor}
+                  state={
+                    commentError
+                      ? `A change to your comments didn't save. ${commentError}`
+                      : own
+                        ? undefined
+                        : NOT_A_MODE.comments.visitor
+                  }
                   what={NOT_A_MODE.comments.what}
                   how={NOT_A_MODE.comments.how}
                 />
               }
             >
-              {/* No count for a visitor — there is nothing to count, and a `0`
-                  would read as "you have none" rather than "these are not
-                  yours". */}
-              {own && own.comments.length > 0 && (
-                <span className={`dock-count${pending ? " pending" : ""}`}>
-                  {own.comments.length}
-                </span>
-              )}
+              <CommentsChip own={own} pending={pending} failed={commentError !== null} />
             </DockTab>
           ) : (
             <DockLink
@@ -2795,12 +2888,61 @@ function DockLink({
   );
 }
 
+/**
+ * **The chip in the Comments button** — how many, or that one did not save.
+ *
+ * Its own component rather than a ternary in the JSX, for the reason
+ * `fitSignature` gives one screen up: `Dock` is over Biome's
+ * cognitive-complexity ceiling already, and this stage arrived with two more
+ * branches for it. It is also the honest shape — the slot holds one of three
+ * things and this is the function that says which.
+ *
+ * **A mark instead of a number, never beside it.** The row is measured to the
+ * pixel (§ the bar's fit ladder) and a second chip here would push a label off
+ * on a width nobody tested. Which comment is unsaved is a question the drawer
+ * answers; this only has to say *go and look*. `fitSignature` sees the swap, or
+ * the row keeps the rung it was measured for.
+ *
+ * **`aria-hidden` on the mark, and that is not it being hidden.** The words are
+ * on the button as `note` (§ the Comments button), so announcing the glyph too
+ * would read it out twice. The mark is one of three carriers: this for a
+ * sighted reader, the `sr-only` description for a screen reader, and the
+ * sentence at the top of the drawer this button opens — which is the only one a
+ * finger can reach, since a hover card is unreachable by touch and may never be
+ * the only place a fact lives (docs/project/tooltips.md).
+ */
+function CommentsChip({
+  own,
+  pending,
+  failed,
+}: {
+  own: { comments: Comment[] } | null;
+  pending: number;
+  failed: boolean;
+}) {
+  if (failed) {
+    return (
+      <span className="dock-count failed" aria-hidden="true">
+        !
+      </span>
+    );
+  }
+  /* No count for a visitor — there is nothing to count, and a `0` would read as
+     "you have none" rather than "these are not yours". Nor for an owner with
+     none, for the same reason in the other direction. */
+  if (!own || own.comments.length === 0) return null;
+  return (
+    <span className={`dock-count${pending ? " pending" : ""}`}>{own.comments.length}</span>
+  );
+}
+
 function DockTab({
   panel,
   current,
   onPanel,
   icon: Icon,
   label,
+  note,
   hover,
   className = "",
   children,
@@ -2810,6 +2952,32 @@ function DockTab({
   onPanel(next: Panel | null): void;
   icon: typeof Info;
   label: string;
+  /**
+   * **What this button is saying right now, for a screen reader** — as a
+   * *description*, never as part of the name.
+   *
+   * The same arrangement as § the switch itself, and for the reason written out
+   * there: the APG allows a moving accessible name **or** a fixed one with the
+   * state carried separately, not both, and a name that changed under a reader
+   * would change the control's identity mid-session — which also breaks driving
+   * the bar by voice. So `aria-label` stays `label` and this goes in an
+   * `sr-only` node the button points `aria-describedby` at.
+   *
+   * **Not the only carrier**, ever: the caller draws something visible as well.
+   * Today its one use is a comment write that failed (§ the Comments button),
+   * which is also a red mark and a sentence in the drawer.
+   *
+   * **It does not cost the card its description**, and an earlier version of
+   * this comment claimed the opposite — that floating-ui takes
+   * `aria-describedby` while the card is open. It is the other way round:
+   * `mergeProps` applies the child's props *last*, so this attribute would have
+   * overwritten the card's id in every state, including the ordinary one where
+   * there is no note, because React puts the key in `props` even for
+   * `undefined`. `Tooltip` now joins the two ids rather than letting either win
+   * — Tooltip.tsx § a trigger that already describes itself. GPT Sol found it
+   * in the built code, 2026-09-08.
+   */
+  note?: string | undefined;
   /**
    * **The card, same as `DockLink` above**, and a card rather than the `title`
    * string this took until 2026-09-07.
@@ -2826,6 +2994,7 @@ function DockTab({
   children?: ReactNode;
 }) {
   const on = current === panel;
+  const noteId = useId();
   return (
     /* `placement="top"` for the reason `DockLink` gives: this bar is at the
        foot of the window, so there is always room above it. The button is a
@@ -2848,8 +3017,18 @@ function DockTab({
         // hidden on a narrow window, and the card is the trigger's *description*
         // (`useRole` wires `aria-describedby`) rather than its name.
         aria-label={label}
+        /* Only when there is one: an `aria-describedby` pointing at an element
+           that is not rendered is a dangling reference, which some screen
+           readers announce as nothing and others as the id. */
+        aria-describedby={note ? noteId : undefined}
         onClick={() => onPanel(on ? null : panel)}
       >
+        {/* The state, where it does not fight the name — `note` above. */}
+        {note && (
+          <span id={noteId} className="sr-only">
+            {note}
+          </span>
+        )}
         <Icon size={15} />
         {/* Same class the modes segment gives its label, so § the bar's fit ladder
             can drop all eighteen of the bar's labels with one rule rather than with

@@ -163,13 +163,31 @@ writes it; the Overseer lives in `tools/overseer/` and never edits `tools/fleet/
 `page.ts` or the client; and it **imports** `collect.ts` and `status.ts` rather than reimplementing
 them, which is the same discipline `tools/fleet/` applied to `gjd-remote-tmux.ts`.
 
-**One known duplication, with a scheduled death.** A collection costs ~12 seconds of transcript
-grepping, so two collectors on one box is a real cost and not just untidiness — this box hit load
-391 with the OOM killer firing on 2026-09-08. Either the two coexist on staggered ticks and converge
-later, or the Overseer becomes the only collector and the dashboard reads its snapshot. The second is
-better in the end, because the page then outlives the collector and can say the snapshot is stale.
-Whichever is chosen, **the plan must say which one wins and when the other dies** —
-[improve-the-codebase.md](../reusable/improve-the-codebase.md).
+**There is one collector, and it is the dashboard's.** Settled between the two agents on
+2026-09-08. A collection costs ~12 seconds of transcript grepping, so a second one is a real cost
+rather than untidiness — this box hit load 391 with the OOM killer firing that morning. Two options
+were on the table (coexist on staggered ticks; the Overseer collects and the dashboard reads it) and
+the dashboard agent supplied a third that beats both: **the Overseer is a consumer.** It subscribes
+to the dashboard's `/api/live` SSE stream and appends on each `snapshot` event, polls `/api/state` if
+the stream drops, and falls back to its own `collect()` only when the server is unreachable — slowly,
+because a fallback that grazes every 12 seconds on a swapping box is worse than a gap in the history.
+The dashboard collects on a chain (60s from the *end* of each run, 5× backoff after a failure), not
+on a fixed interval, for the same reason.
+
+**The coupling this creates runs the opposite way, and is accepted knowingly:** the Overseer now
+depends on the dashboard being up. Hence two clocks in the state file rather than one — `writtenAt`
+(the Overseer last wrote) and `lastGoodSnapshotAt` (it last heard from the dashboard). They come
+apart exactly when something is wrong, and a single number would hide the case where the Overseer is
+alive but deaf. **A dead dashboard is a fact the Overseer records, not a silence it sits in.**
+
+**Box vitals belong to the dashboard, and are built.** [`tools/fleet/health.ts`](../../tools/fleet/health.ts)
+implements [diagnose-box-resources.md](../reusable/diagnose-box-resources.md) — load against cores,
+available rather than free memory, swap as a cliff, `vmstat` si/so, and memory attributed by process
+kind — with every field a discriminated union that can say *I could not tell* instead of returning a
+zero that reads as healthy. The Overseer stores that object verbatim per event and does not interpret
+it a second time, so a change at the source changes the history's shape rather than drifting from it.
+What the Overseer adds is only the tense the dashboard does not have: **nobody records health over
+time**, so "what was running when the box hit 391" is unanswerable today.
 
 ## The order of work
 
@@ -192,6 +210,43 @@ ordering, not an oversight, and it should not be quietly promoted.
 
 So the near-term usage-limit work is **visibility** — how close is the current account, and what
 should stop when it is near — and not rotation.
+
+### What is actually observable about usage limits
+
+Researched and then re-verified by hand on 2026-09-08, because the headline finding is the kind that
+is easy to believe and wrong in a specific way.
+
+- **`~/.claude.json` → `.cachedUsageUtilization`** is the polling target. Per-window `utilization`
+  percentages with an ISO `resets_at` — `five_hour`, `seven_day`, and a set of per-model windows —
+  plus `fetchedAtMs` and the `accountUuid`. Verified present and populated.
+- **It is a CACHE, and a stale entry reads exactly like a current one.** Checked live: the file was
+  48 minutes old and its `five_hour` window had reset 27 minutes earlier, so the `utilization: 70`
+  in it described a window that no longer existed. The file always parses and always yields a
+  plausible number; nothing in it announces that the number is void.
+  **So `resets_at` is not decoration, it is the validity check** — a reading whose `resets_at` is in
+  the past must be reported as *unknown*, never as a percentage. Same shape as everything else in
+  [silent-success.md](../reusable/silent-success.md), and the same rule `health.ts` already follows:
+  a field that can say *I could not tell* beats a zero that reads as healthy.
+- **A real 429 is written into the session's own transcript**, with `"error":"rate_limit"`,
+  `"isApiErrorMessage":true`, `apiErrorStatus: 429`, and a `quotaLimits` object carrying
+  `rateLimitType` (`five_hour` / `seven_day`) and a `resetsAt` unix timestamp. Found in real
+  transcripts on this box, both variants. This is exact, greppable, and carries a machine-readable
+  reset — **the cheapest reliable signal available**, and unlike the cache it cannot be stale.
+- **`claude auth status`** returns JSON non-interactively with `email`, `orgId` and
+  `subscriptionType`; `.oauthAccount` in the same file adds `organizationRateLimitTier`. That is how
+  the Overseer knows *which* account a reading belongs to — which matters the moment there is more
+  than one.
+- **There is no `claude usage` subcommand** (verified: it falls through to top-level help), and no
+  pre-warning text was found in any transcript — only post-hoc 429s. So *"approaching the limit"* has
+  to be derived from the cache, and the cache is the untrustworthy source. **Treat the transcript 429
+  as the ground truth and the cache as a hint**, not the other way round.
+
+**Multiple accounts on one box is mechanically possible.** `CLAUDE_CONFIG_DIR` isolates config,
+credentials and the projects directory — verified empirically by pointing it at a scratch directory
+(`loggedIn:false`, isolated `projectsDirectory`, real credentials confirmed untouched). Running two
+accounts *concurrently*, each logged in under its own config dir, follows from that but has **not**
+been tested. Recorded because it is what a medium-term rotation would be built on; it is not a reason
+to build one now.
 
 ## The four capabilities, and what each really needs
 

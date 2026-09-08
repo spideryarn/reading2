@@ -15,6 +15,45 @@ import { blockRow } from "./rows.js";
 import { safeAreaInsets } from "./safe-area.js";
 
 /**
+ * **Our controls bar, and never an article's.**
+ *
+ * `document.querySelector(".controls")` is not a safe question and stopped
+ * being a harmless one on 2026-09-08. An author's prose may contain
+ * `<p class="controls">`: `src/sanitize-policy.ts` strips six class names it
+ * reserves and `controls` is not among them, and running the sanitiser over
+ * `<div id="root"><div class="reader"><p class="controls">` returns it
+ * **byte-for-byte** — checked that way rather than by reading the allowlist,
+ * which is how the `thead` decoy in tests/mobile-chrome.test.ts was checked
+ * too.
+ *
+ * That was latent while the bar was always drawn, because ours is earlier in
+ * document order and a bare `querySelector` therefore always found it. It stops
+ * being latent the moment the bar is *conditional* (layout.ts
+ * § `barHasContent`): with ours absent, an unscoped query returns the
+ * publisher's paragraph, and `stickyOffset` measures a piece of prose as the
+ * chrome every deep link, `?at=` reading and arrow-key step has to clear.
+ * Nothing errors and the number is plausible — docs/reusable/silent-success.md.
+ *
+ * **Two steps, not `document.querySelector(".reader > .controls")`**, and the
+ * difference is the whole of the scoping. That one selector matches a forged
+ * `<div class="reader"><p class="controls">` inside the prose as readily as the
+ * real pair. This takes the **first** `.reader` in document order — which is
+ * ours, because ours is the outermost element on the page and any forgery is
+ * necessarily inside it — and then asks only for its own direct children. The
+ * article's markup is never a direct child of `.reader`; it is inside a `<td>`.
+ *
+ * The durable fix is for `controls` to join the reserved-class list in
+ * `src/sanitize-policy.ts`, which is a **defence** — so this session did not
+ * touch it. It is written up in
+ * docs/plans/260908a-the-top-bar-stops-being-drawn-when-it-has-nothing-in-it.md
+ * § What this leaves for Greg.
+ */
+export function controlsBar(): HTMLElement | null {
+  const reader = document.querySelector(".reader");
+  return reader?.querySelector<HTMLElement>(":scope > .controls") ?? null;
+}
+
+/**
  * Height of the fixed bar along the bottom — Dock.tsx.
  *
  * The counterpart to `stickyOffset`, and it exists for the same reason: a line
@@ -90,7 +129,7 @@ export function dockOffset(): number {
  */
 export function stickyOffset(): number {
   const safeTop = safeAreaInsets().top;
-  const bar = document.querySelector<HTMLElement>(".controls");
+  const bar = controlsBar();
   /* **`safeTop`, not `0`, when there is no bar.** There is a fixed opaque
      `.reader::before` of exactly the inset's height painting the strip under
      the clock (styles.css `.reader::before`), so a destination has to clear it
@@ -211,7 +250,7 @@ export function stickyOffset(): number {
  */
 export function stickyDestination(): number {
   const safeTop = safeAreaInsets().top;
-  const bar = document.querySelector<HTMLElement>(".controls");
+  const bar = controlsBar();
   if (!bar) return safeTop;
   const rect = bar.getBoundingClientRect();
   if (rect.bottom <= 0) return safeTop; // gone, and no further to go
@@ -424,7 +463,7 @@ export function watchBarVisibility(): () => void {
   const startMoving = () => {
     stopMoving(); // a reversal mid-slide restarts the window rather than extending it
     document.documentElement.dataset.barMoving = "";
-    bar = document.querySelector<HTMLElement>(".controls");
+    bar = controlsBar();
     bar?.addEventListener("transitionend", arrived);
     settle = window.setTimeout(stopMoving, BAR_MOVE_MAX_MS);
   };
@@ -496,7 +535,7 @@ export function watchBarVisibility(): () => void {
   const onFocusShift = (e: FocusEvent) => {
     if (!hidden) return;
     if (!(e.target instanceof Node)) return;
-    if (!document.querySelector(".controls")?.contains(e.target)) return;
+    if (!controlsBar()?.contains(e.target)) return;
     startMoving();
   };
 
