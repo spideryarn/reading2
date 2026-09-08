@@ -250,10 +250,29 @@ No model calls. Each is a scheduled job from Stage 2 over primitives that alread
 - **Launch-mode drift.** A session whose last `permission-mode` checkpoint is `default` will stall at
   its next unapprovable call. Measured cost: 34.9 agent-hours since one Sunday. Read
   `permission-mode`, not `auto_mode` — the direction doc says why.
-- **Wedged work.** A `shell` pane whose own command line has not changed in hours. The finding that
-  motivates it — `npx playwright install webkit`, running 5h43m, in all 40 samples, noticed by
-  nobody — needs no new recogniser, because for a shell pane the command line already says what it
-  is doing.
+- **Wedged work.** A `shell` pane whose own command line has not changed in hours. It needs no new
+  recogniser, because for a shell pane the command line already says what it is doing.
+
+  **There is a live specimen, and it is the same one**, which is the finding: the direction doc
+  recorded `npx playwright@1.62.1 install webkit` at 5h43m on 2026-09-08. Measured again at 16:19
+  the same day it was at **14h58m** (`etimes` 53,910, pid 2282035, pane `%2091`, session
+  `wk-install-0116-2281848`). Two things make it the right specimen rather than merely a good story.
+  Its `/proc/<pid>/cwd` reads
+  `/home/greg/code/spideryarn2/.claude/worktrees/glossary-order-touch (deleted)` — **the worktree was
+  removed out from under it and it kept running**, which is the orphan test
+  [diagnose-box-resources.md](../reusable/diagnose-box-resources.md) names. And it has no
+  descendants, 0.0% CPU and 2.9 MB resident, so **it costs nothing**, which is exactly why nine hours
+  of extra wedging passed with the fleet's own direction doc naming it and nobody acting.
+
+  That last point sharpens the rule: **the trigger is age and a dead cwd, not resource consumption.**
+  A rule that fired on cost would never have fired on this one, and this one is the case we have.
+
+  **It is deliberately still alive.** Greg, 2026-09-08: *"Yes, let's leave it as a test case for
+  later."* So pid 2282035 / session `wk-install-0116-2281848` is a **fixture, not litter** — anybody
+  running [diagnose-box-resources.md](../reusable/diagnose-box-resources.md) over this box will find
+  it and it will look exactly like the thing that doc says to clean up. Leave it until Stage 3 has
+  fired against it, then kill it and record that it was the first thing the rule caught. Its cost for
+  as long as it stands is 2.9 MB and one tmux session.
 - **Box pressure and usage proximity.** Vitals already exist in `health.ts`; usage already exists in
   `usage.ts`. The action is the existing staggered `resource-broadcast`, **and then the half that is
   always forgotten: check later that they woke up.** Greg asked for this explicitly. A pause that
