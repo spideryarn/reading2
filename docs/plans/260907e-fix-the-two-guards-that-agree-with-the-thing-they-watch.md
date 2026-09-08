@@ -589,3 +589,84 @@ It is visible as a cluster only because the verdict now names its evidence.
   a real question and a separate one.
 - **The first true firing of either guard** is still unrecorded, because neither has
   had one. A guard never seen to fire truly is unproven, and both remain so.
+
+---
+
+## One day later: the constraint moved, it did not go away
+
+Re-measured 2026-09-08, with the fix on `dev` and running from a tree that has it.
+
+**The floor is honest now.** Verdicts name their signal, the values are real, and the
+`2.1 h` residue predicted above did age out. Two brand-new trees are held by the floor
+*alone*, which is exactly what it is for.
+
+**And almost nothing became removable, for a reason this plan put out of scope.**
+Of eighteen trees, all but two carry a non-floor blocker, and on eleven of them it is
+the same one:
+
+```
+FAIL 1 ignored path git has no copy of
+     logs/
+```
+
+`logs/` is where `scripts/tmux-job.ts` writes, and CLAUDE.md tells every agent to use
+`tmux-job.ts` for long jobs. **So the prescribed tooling generates the thing that
+blocks teardown**, on every tree that has ever run a test suite or a review. The age
+floor was never the binding constraint; it was merely the one that fired first and
+hid the next one.
+
+The disk went the wrong way meanwhile — 14G over 16 worktrees on 2026-09-07, **15G
+over 19** now, with 20G free. Roughly three worktrees a day arriving and none leaving.
+
+That is not an argument against this change: an honest floor is a precondition for
+anything else, and until it landed the second blocker was invisible behind the first.
+It does mean the *goal* — reclaiming finished worktrees — needs one more decision, and
+it is a product call rather than an engineering one:
+
+> **Should build and test logs count as work that blocks removal?**
+
+They are rebuildable by definition, and `worktree-check.ts` already has the concept —
+`disposable`, for ignored paths it recognises as regenerable, which are counted rather
+than listed. Adding `logs/` to that set is a small change to one classifier. What makes
+it Greg's call and not mine is that it is a *safety* classifier: the argument for the
+current behaviour is that "rebuildable" is a claim about the future, and the file that
+refuses to guess is the one that has never lost anybody's work.
+
+A second, smaller residue: a tree running a checkout from before this fix still stamps
+every worktree it sweeps, so a synchronised cluster can reappear (`6.0 h` on six trees
+today). Self-limiting as worktrees turn over, and harmless while `logs/` holds
+everything anyway.
+
+## First removals, 2026-09-08 — and they did not go through the tool
+
+Greg asked for the unneeded worktrees to be swept. Four were removed, ~3G reclaimed:
+`feedback-comment-chip`, `feedback-long-article-sluggish`, `feedback-cap-admin`,
+`agent-a8b787452ea1b7081` — genuinely idle 60–131 h, landed, no dirty files, no live
+process with a cwd inside them.
+
+**By hand, not by `worktree:sweep -- remove`, which refused.** Worth recording plainly,
+because it is a bypass of the guard this plan just fixed:
+
+- The **age floor** refused on a `7.2 h` stamp that six trees shared to the second —
+  another agent running the pre-fix code from a tree that has not updated. Their
+  genuine idle times were 35–169 h. So the fix stops *this* tree stamping, but not
+  other trees, and the floor stays contaminated until every worktree turns over — which
+  it cannot do while the floor blocks removal. That circle is the finding.
+- The **ignored-path blocker** refused on `data/_ai-calls.test.jsonl` (25 KB here
+  against 39 MB in the primary — a test byproduct) and `logs/`.
+
+What was checked before overriding, beyond what the tool checks: no process anywhere
+on the box had a cwd inside any of them (`/proc/*/cwd`), and their `.env.local` files
+hold **no key the primary lacks** — they are stale copies missing keys added since,
+so the "differs from the primary's copy" blocker was a false alarm in these four.
+Compared by key name only.
+
+Two candidates were **kept** on the tool's judgement, which was right:
+`worktree-corners-into-dock` has an uncommitted edit to a planning doc, and the
+detached tree has uncommitted edits to `setup-dev.md` and a test.
+
+The four branches are fully in `origin/dev` and were left in place; `removeOne` would
+have deleted them, and tidying them is a separate small call.
+
+**So the sweep still has no true firing of its own.** It has now been overridden once,
+with evidence, which is not the same thing and should not be counted as one.

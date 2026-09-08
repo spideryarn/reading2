@@ -1,0 +1,41 @@
+  ├────────────────────────────────┼──────────────────────────────────┼──────────────────────────────────────────────────────────────────────────┤
+  │ B. Only take focus when the    │ mouse users unaffected, keyboard │ most code                                                                │
+  │ keyboard opened it             │  users get in                    │                                                                          │
+  ├────────────────────────────────┼──────────────────────────────────┼──────────────────────────────────────────────────────────────────────────┤
+  │ C. Reuse the existing focus    │ reuses what's already there      │ pulls the caret into a card that appeared under your moving mouse — I'd  │
+  │ manager                        │                                  │ not ship this                                                            │
+  └────────────────────────────────┴──────────────────────────────────┴──────────────────────────────────────────────────────────────────────────┘
+
+  My recommendation: A. I confirmed in Chrome that it works in both directions with zero focus code. The only risk left is visual, and that's one
+  browser pass to settle. If it looks fine, that's the whole fix.
+
+  But there's a prior question, and it's the one I'd actually ask you: do you want readers Tabbing into these cards at all? A defensible alternative
+  is to leave the card mouse-only and make it keyboard-inert — you'd not be able to open it with a keyboard either, so nothing is half-reachable.
+  That's less correct by the accessibility rule, but it doesn't add a Tab stop to every link in the article. I've not built either.
+
+  ---
+
+  3. A small one, while you're deciding
+
+  If a reader types half an annotation and then deliberately closes Annotate — should the draft survive? Right now it's lost. I noticed it while
+  working on Escape and left it alone, because "deliberately closed" arguably means "meant to discard". Yes/no; either is a small change.
+
+  ---
+
+  Everything else that could be done without you is done and pushed.
+
+✻ Worked for 33s · done 1:30 AM
+
+❯ let's stop here. push and remove the worktree
+
+● Inspecting the logs directory
+  ⎿  $ mv logs /tmp/claude-1000/-home-greg-code-spideryarn2/76667309-a22a-477c-af3b-4f16d1ce0cf0/scratchpad/a5-worktree-logs
+
+✽ Warping… (54s · ↓ 1.6k tokens)
+  ⎿  Tip: Use /btw to ask a quick side question without interrupting Claude's current work
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── arch-a5-mode-surface ─
+❯ 
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  [Opus 5 (1M context)] worktrees/a5-mode-surface (worktree-a5-mode-surface) ⑂ a5-mode-surface · ░░░░░░░░░░ 7%                                   /rc
+  ⏵⏵ auto mode on (shift+tab to cycle) · ← for agents

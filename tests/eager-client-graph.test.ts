@@ -522,6 +522,16 @@ const SHARED_WITH_READER = [
   "src/web/lib/utils.ts",
   "src/web/library-columns.tsx",
   "src/web/log-buffer.ts",
+  /* Arrived 2026-09-07 by the *first* of the two zero-cost routes this list's
+     header predicts: a lazy route starting to use something the reader already
+     downloads. `HomeLogo` and `Dock` both call `useLogoAnimation`, so the
+     wordmark's thirteen hover animations and their picker were in every
+     reader's startup before `/design` had heard of them — what is new is only
+     that `/design` draws the whole set in a gallery, which is the one way a
+     dozen animations that fire one at a time at random can be compared
+     (DesignPage.tsx § LogoAnimations). Costs the reader nothing: it is a leaf
+     whose only imports are React's own. */
+  "src/web/logo-animation.ts",
   "src/web/monitoring.ts",
   "src/web/offline.ts",
   "src/web/page-title.ts",

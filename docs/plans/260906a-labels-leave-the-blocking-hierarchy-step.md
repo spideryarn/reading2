@@ -1,6 +1,6 @@
 # The labels leave the blocking step
 
-**Status: stage 1 landed and reviewed; the stamp question settled ([below](#two-steps-one-stamp)); stage 2 building.** Written 2026-09-06, out of
+**Status: every stage landed. 2c went through two rounds of review and was rebuilt twice, and two states are *documented rather than closed* ([below](#stage2c-review)); stage 3 measured it without spending anything and recommends **not** buying the paid book rerun ([below](#stage3)).** Written 2026-09-06, out of
 [260904d](260904d-deepen-fat-sections.md) § *Question 5*, where a measured run found that the thing
 blowing the ingest deadline was not the feature that plan was building.
 
@@ -350,14 +350,17 @@ Sol's Q7 answer, with its stamp pre-stage deleted for the reason above.
   `generateHierarchy` into the new runner, after the candidate merged tree and before any `ready`
   write; `assertEveryBlockLabelled` and `assertInsideCoverageFloor` stay inside `generateLabels` and
   defer for free with it. Publication atomically enqueues the free successor job (F10), with **no
-  `ingest_event_id` and no second slot** (F9). Legacy articles get `labels` receipts so the scheduler
+  `ingest_event_id` and no second slot** (F9) — that half is stage 2b, [below](#stage2b), and the
+  step itself is [stage 2a](#stage2a). Legacy articles get `labels` receipts so the scheduler
   does not re-buy every one of them (F4). **`mergeLabels` keeps replacement semantics** — it
   correctly removes stale labels after a structure change, and A′ never legitimately hands it a
   partial map (F7).
 - **Stage 3 — measure it.** A deterministic test that the ingest job publishes while a deliberately
   delayed label executor is still running, and that partial output never replaces the tree. Step
   timings showing `hierarchy` no longer carries the label wall time. Then, if Greg approves the
-  spend, one paid book rerun.
+  spend, one paid book rerun — **and the answer is not to buy it**, for the reason in
+  [what stage 3 measured](#stage3), which is also where the timings turned the plan's own 79.5–92%
+  into a worst case rather than a typical one.
 
 Checkpoint rows survive the split unchanged — `batchFingerprint` contains no step or job identity —
 **provided the checkpoint namespace stays `hierarchy-labels`.** Renaming it would invalidate every
@@ -657,6 +660,494 @@ unremarked. The narrowing the note warns about therefore happens **today**, and 
 because not one of those suites asks the manifest anything but its stamp. The sentence now says no
 `src/` reader opens the directory and names the helper that does, since the point of the note is that
 the next person can trust it.
+
+## What stage 2b landed <a id="stage2b"></a>
+
+Built 2026-09-07. **The successor exists and the loop closes**: an article ingested today publishes
+`pending`, queues a free `labels` job in the same transaction, and the browser drives it.
+
+- **The enqueue is in `publishRevisionIn`** ([`pg-revisions.ts`](../../src/store/pg-revisions.ts)),
+  after the pointer moves, on any publication whose revision says `pending` — so the standalone
+  `publishRevision` wrapper and a script that calls it get it too, not only the pipeline. Its `=== "pending"`
+  rather than `!== "ready"` is a decision: a revision whose labels already **failed** does not
+  silently re-buy the job.
+- **`enqueueSuccessorIn(tx, …)`** — in [`pg-jobs.ts`](../../src/store/pg-jobs.ts) when 2b landed, and
+  moved to [`pg-successor.ts`](../../src/store/pg-successor.ts) by 2c below. Thirty lines on the
+  caller's transaction. `steps: ["labels"]`, `queued`, `reservesName: false`, `urlKey: null`, **no
+  `ingestEventId`, no `profile`, no `url`**, `workKey` from the canonical `workKeyFor`, and
+  `onConflictDoNothing` so two publications for one article are one successor. `PublishRevisionResult`
+  gained `successorJobId`, which `logPublication` prints and nothing decides on.
+- **`workKeyFor` moved from [`jobs.ts`](../../src/jobs.ts) to
+  [`store/jobs.ts`](../../src/store/jobs.ts)**, and the move was forced. `src/jobs.ts` binds
+  `const store: JobStore = pgJobStore` at module scope, so a store file importing back from it is a
+  cycle whose failure mode is a TDZ `ReferenceError` on whichever entry point loads the store first —
+  not a compile error. `sameWork` stays where it is; `tests/jobs.test.ts` still holds the two
+  together.
+- **The `publish` projection gained `navLabelStatus`** ([`pg.ts`](../../src/store/pg.ts)), in
+  `REVISION_PROJECTIONS` and in the column policy above it. The projection is a named list precisely
+  so this had to be decided rather than inherited.
+- **Failure: `markNavLabelsFailedIn`** ([`pg-revisions.ts`](../../src/store/pg-revisions.ts)), called
+  from `settleIn`'s failing branch when `unfinished === "labels"` and the ending is `error`. It marks
+  the draft's **base**, not the discarded draft, and only while the base is still current and still
+  `pending`. Stage 1 built `failed`; this is what writes it.
+- **Nothing drives the successor from the server**, deliberately — see
+  [Who actually runs the successor](#who-drives). `pump` is only ever called by `enqueue`, and
+  reaching it from `pg-revisions.ts` would be the same cycle as `workKeyFor`.
+
+### Three things the brief had wrong, found by building it <a id="stage2b-corrections"></a>
+
+**The accident's symptom is not *"Too many articles already called X"*.** The groundwork above says
+copying the parent's `ingestEventId` surfaces that way, because
+`jobs_ingest_event_unique` sends `enqueue`'s allocation loop round twenty times. That is true of
+`enqueue`; it is **not** true of `enqueueSuccessorIn`, which has no loop and an
+`onConflictDoNothing`. Measured by writing the accident: the insert is swallowed and **no successor
+exists at all** — the article keeps saying *"Paragraph labels are still arriving"* for ever, with
+nothing logged and nothing thrown. Safe, silent, and worse to diagnose than the sentence the
+groundwork predicted. Both accidental-charge cases go red on it.
+
+**`drive()`/`pump` has no outside to stay outside of.** The brief says it *"stays outside the
+transaction"*, which reads as though a caller would call it. No caller can: `pump` lives in
+`src/jobs.ts` and every publication path is in `src/store/`. So the successor is driven by the
+browser and by nothing else, which is what [§ who-drives](#who-drives) already measured — but it
+means `npm run add` on a laptop leaves the labels queued rather than running them.
+
+**`onConflictDoNothing` is right, and the reasoning behind it is narrower than it looks.** A second
+publication collapsing onto a queued successor is correct because a *queued* successor will pick up
+whatever the article is serving when it finally claims. It is only correct at all because
+`jobs_one_running_per_slug` means a publication cannot land while a successor is **running** — a
+publication comes from a running job on the same slug. A standalone `publishRevision` from a script
+sidesteps that, and would leave the newer revision waiting on a job whose base has moved. Narrow, and
+written down rather than closed.
+
+## What the stage 2b review found, and how stage 2c closed it <a id="stage2b-review"></a>
+
+GPT Sol, 2026-09-07, at `high`, against commit `021ff146`. **It would not ship it unchanged.** No
+billing, transaction, cross-article dedupe or connection-pool defect — the three things the stage was
+most at risk of — and one real hole in the failure path.
+
+### F1 — P1, **closed 2026-09-07**. A labels job that runs out of lease leaves the article saying *"still arriving"* for ever
+
+`markNavLabelsFailedIn` is reached **only** from the session settlement path
+([`pg-session.ts`](../../src/store/pg-session.ts):518). A claimant that exhausts its requeue budget
+does not go through there: `settleExpired` ends the job itself
+([`pg-jobs.ts`](../../src/store/pg-jobs.ts):1278), setting `status = 'error'` and clearing
+`draft_revision_id`, and it never touches `nav_label_status`. The job ends; the published revision
+goes on promising labels that nobody is buying, with no successor queued.
+
+**This is the likeliest failure this feature has**, which is why it matters more than its severity
+suggests. The labels pass is the slowest thing in the app — 682 s measured against a 740 s claimant
+deadline — so it is precisely the step that runs out of lease. A manual Retry recovers the article,
+which is what keeps it a P1 rather than a P0, and the committed tests exercise `settleJob` and not
+terminal expiry, so nothing would have caught it.
+
+**The fix, and the two things it had to work around.** `settleExpired` now snapshots the lapsed rows
+that hold a draft **before** either of its `UPDATE`s, keeps the ones whose *running* step is `labels`,
+takes their article locks in `slug` order, and calls `markNavLabelsFailedIn` on the ones the
+settlement ended as `error` — never `cancelled`, the rule `settleIn` already follows.
+
+- **The lock order is absolute**, and it is why the snapshot exists at all. *Article lock before job
+  lock, everywhere* ([`pg-revisions.ts`](../../src/store/pg-revisions.ts) § `openOrBeginJobDraft`), so
+  marking after the `UPDATE`s would have inverted it against `publishRevisionIn` and `failRevisionIn`.
+  The snapshot is a plain `SELECT` — no `FOR UPDATE`, so it takes no row lock and does not touch the
+  order — and the locks go through a new `lockArticlesInSlugOrder`, which refuses rows handed to it
+  out of order so that two concurrent sweeps cannot deadlock against each other.
+- **The import cycle was broken rather than reversed.** `pg-revisions.ts` imported
+  `enqueueSuccessorIn` from `pg-jobs.ts`, so importing the marker back would have been a cycle that
+  `npm run cycles` refuses. `enqueueSuccessorIn` moved to a new leaf,
+  [`pg-successor.ts`](../../src/store/pg-successor.ts) — `pg-jobs.ts` never called it — and `ACTIVE`
+  moved down to [`store/jobs.ts`](../../src/store/jobs.ts) with it, re-exported so nothing that
+  already imported it had to move. `npm run cycles` is clean.
+
+**And one thing the brief did not know, found by building it.** `markNavLabelsFailedIn` reaches the
+article through `ownedSlug`, whose default owner is the **ambient** one — and `settleExpired`'s global
+sweep runs inside whichever reader's request happened to make it, over every owner's jobs
+([`jobs.ts`](../../src/jobs.ts) § `advanceJobWith`). So the ambient owner there is usually a stranger,
+the lookup would have matched no article, and the marker would have returned `null`: a silent nothing,
+indistinguishable from *there was nothing to do*, on the commonest of the two doors. The owner is now
+passed from the job row. Case 12 of the test is the one that catches it, and it is red with the
+argument dropped while case 11 — the reader's own poll, under their own owner — stays green.
+
+**What the snapshot cannot promise, said rather than papered over.** `leaseIsOver` compares against
+`clock_timestamp()`, which advances inside a transaction, so a row can enter the lapsed set between
+the snapshot and the settlement. Such a row is absent from the subset and is not marked — the same
+outcome as before this existed, and never a wrong write.
+
+### F2 — P2, **closed 2026-09-07**. The dedupe can bind a new publication to a successor that belongs to an older base
+
+Broader than the plan admitted. Not only a *running* successor: a `queued` one that kept its
+`draft_revision_id` through a deadline pause or a lease requeue does it too. The unconditional
+collapse at [`pg-jobs.ts`](../../src/store/pg-jobs.ts):298 then queues nothing for the new revision,
+and the old job's exact-base guard correctly refuses to touch the newer one — so that revision is
+left `pending` with no active successor. Confined to out-of-band publication, because ordinary
+pipeline publication is serialised per slug. Case 9 of the test builds this state and stops at
+*"the newer revision is still pending"* without asserting that a successor exists.
+
+**The honest fix is to classify the conflict** rather than swallow every one of them: collapse only
+onto a holder with no draft, refuse when the holder has one. That closes F3 as well.
+
+**Built as a 409, and the 409 came back out a day later.** The full story is under
+[the 2c review](#stage2c-review): the claim it rested on — that ordinary pipeline publication cannot
+land while a successor holds a draft — is **false**, and this state is now **written down and
+audible** rather than closed. What survives from the first attempt is the *classification*: the
+conflict is read back and its three answers are distinguished, which is what makes the gap sayable at
+all.
+
+**Case 9 could not simply be finished, and the reason is worth keeping.** It used to build the F4
+state — a newer revision current while the job's draft is based on an older one — by *publishing*
+through the standalone wrapper. So it split: case 9 is what the publication does when it lands on a
+draft-holding successor, and case 9b keeps the F4 guard, with the pointer moved directly and a note
+saying why. That guard is defence in depth against `db:import`, direct pointer moves and older
+deployed code rather than a live path — a thing to know before anybody deletes it as dead.
+
+### F3 — P2, **closed 2026-09-07**. A broad `onConflictDoNothing` swallows more than the dedupe
+
+`enqueueSuccessorIn` mints an id once and reads *any* unique conflict as "somebody already queued
+this". Today the unintended one is `jobs_pkey`, which is improbable but not impossible over a
+771-million-value id space — and the real cost is the future: it will silently absorb any unique
+index somebody adds later, and publication will commit with `successorJobId = null` and no labels
+job. `tryEnqueue` already classifies exactly this ambiguity ([`pg-jobs.ts`](../../src/store/pg-jobs.ts):409)
+and says why in its own comment.
+
+**Closed by the same read F2 needed**: no active row holding `(owner_id, slug, work_key)` means the
+conflict was not the dedupe, and it throws with a `status` so `guardDbStore` lets the sentence out.
+Watched red the only way it can be — `mintId` is mocked for that one case, pass-through everywhere
+else, because waiting for a genuine `jobs_pkey` collision is not a test.
+
+### F4 — P2, **closed 2026-09-07**, and it is my error rather than the builder's
+
+**`pg-glossary.ts` does not call `publishRevisionIn`.** I asserted it did, in the stage brief, without
+checking; it went into a source comment at [`pg-revisions.ts`](../../src/store/pg-revisions.ts):2057,
+into this plan, into [hierarchy.md](../project/hierarchy.md) and into the test's header. What
+`pg-glossary.ts` actually says is the opposite, at length: it *"mutates a published revision, which
+nothing else here does"*, deliberately not opening a draft.
+
+The **argument** survives — there really is a second entry path, the standalone `publishRevision`
+wrapper at [`pg-revisions.ts`](../../src/store/pg-revisions.ts):1833, and a guard living in one
+caller is still a guard the next caller forgets. Only the named example was wrong, and it is now
+wrong in four places. The lesson is the one this plan keeps relearning: **a claim in a brief is
+repeated verbatim by whoever builds from it**, so an unchecked one propagates further than it would
+have as a thought.
+
+All four corrected on 2026-09-07 — and the stage 2c brief carried one of its own, which the builder
+caught: see the ambient-owner paragraph under F1.
+
+### What it confirmed rather than found
+
+- **Billing.** No path spends a reader slot: `ingest_event_id` is null, settlement returns early,
+  retries read the same null provenance, admission is never entered, and the usage views count
+  `ingest_events` rather than jobs. Worth keeping its distinction, though — the successor *is*
+  quota-free, and it is **not** cost-free: it takes a global execution slot while it runs and its
+  model spend lands in the AI ledger like anything else.
+- **The transaction.** Pointer move and insert share one `tx`, rollback removes both, no second
+  pooled connection, no lock-order inversion against the claim path.
+- **`workKeyFor`'s move.** The cycle argument is right, the sweep is complete, and `sameWork` still
+  agrees with the moved hash on the exercised grid.
+
+## What the stage 2c review found, and what is now documented rather than closed <a id="stage2c-review"></a>
+
+GPT Sol, 2026-09-07, at `high`, against the built stage 2c. **It would not ship it**: *"Two
+concurrency assumptions are still false, including an ordinary pipeline route to the new 409."* Six
+findings, all real, all checked against the code before acting. Every one is now closed **except** the
+first, which is closed as a *decision* rather than as a fix, and that difference is the point of this
+section.
+
+### F1 — P0. There is an ordinary route into the 409, so the 409 goes
+
+`blockedByAnother` ([`pg-jobs.ts`](../../src/store/pg-jobs.ts)) orders claims on `(created_at, id)`
+and sees only **committed** rows. A job can take an earlier application timestamp, pause before its
+insert becomes visible, and commit after the successor has already claimed and opened a draft — the
+successor was never ordered against it. The successor then requeues **keeping its draft**, which
+`settleExpired`'s requeue branch does deliberately, and the now-visible older job claims and publishes
+straight into the refusal. Cross-instance clock skew reaches the same ordering by a second road.
+
+**So the refusal is gone**, and the stage brief had named this exact fallback in advance: *"If you
+find any path where an ordinary ingest reaches the throw, do not keep the throw: log a warning and
+return `null`."* A failed publication for a paying reader is strictly worse than the gap it would be
+replacing, and the gap is a `P2` nobody has ever observed.
+
+**Documented rather than closed, and this is the sentence that matters.** F2 of the 2b review moves
+from *"written down rather than closed"* to *"written down, and now audible"*. `enqueueSuccessorIn`
+returns a three-way `SuccessorOutcome` instead of an id-or-null — the null was carrying *all is well*
+and *this revision will never get its labels* as one value, which is exactly how the second stayed
+invisible — and `publishRevisionIn` puts the holder's id on `PublishRevisionResult`, where
+`logPublication` warns about it **after** the commit. It is not fixed. An article can still reach the
+shelf saying *"Paragraph labels are still arriving"* with nothing queued to make it stop; the only
+change is that there is now a line in the log saying so, and the remedy it names is a `labels` re-run
+against the article rather than a retried publication — which the base-lineage guard would refuse.
+Sol's F6, that the 409's own advice was wrong, disappears with the 409.
+
+### F2 — P0. A missing article row could restore the forbidden lock order
+
+`lockArticlesInSlugOrder` silently took no lock for a slug it could not find and let the caller carry
+on. The sweep then locked job rows, and `markNavLabelsFailedIn` re-took that article lock itself —
+**after** the job lock, which is the inversion the snapshot exists to prevent. If the slug has been
+recreated in between, that second lock is real, and a stale claimant holding the replacement article
+in `openOrBeginJobDraft` while waiting on the swept job row closes the cycle.
+
+**Fixed by failing closed**: the helper now returns the rows it actually locked, and the sweep marks
+only those. Skipping the mark for an article that is not there is the right outcome anyway.
+
+⟨One correction to the finding, from checking it against the schema. The route Sol describes — the
+article **deleted** — cannot produce a snapshot row at all: `article_revisions.article_id` cascades
+and `jobs.draft_revision_id` is `on delete set null`, so deleting an article nulls the job's pointer
+and the row falls out of the `WHERE` before any lock is attempted. The reachable shape is an **owner
+mismatch**: every article read goes through `ownedSlug`, so a job row whose owner is not the article's
+locks nothing. Same defect, same fix; a different way in.⟩
+
+### F3 — P1. "Nothing holds it" did not prove a non-dedupe conflict
+
+Between `on conflict do nothing` and the classifying `SELECT`, the holder can be cancelled, set
+`cancelling`, or terminally swept — none of which needs the article lock the publication is holding.
+The `SELECT` then found nothing and threw a 500 over what really was the ordinary de-duplication, with
+the index now free. `tryEnqueue` documents this same two-statement race and answers it by asking
+again; so does this now — **one retry with a freshly minted id** (fresh because the conflict may have
+been `jobs_pkey`), and the throw only if that conflicts too with still nothing holding it.
+
+### F4 — P1. The step condition was too narrow, and it was mine
+
+The snapshot kept a row only if its `steps` array already carried `labels` as `running`. A claimant
+that died after claiming but before `runStep` persisted that status — or inside `stepIsDone`, which
+runs before the write — ended `error` and marked nothing, which is the bug the sweep exists to fix in
+a shape one line narrower.
+
+What the filter actually protects against is a job re-running some *other* step marking labels failed
+while a separate labels successor still sits in the queue, and a job whose step list does not contain
+`labels` at all is **half** of that. So the condition became `steps.some(s => s.name === "labels")` —
+and that widening turned out to be the P1 of the *next* review, because membership is not ownership.
+See [G1](#stage2c-round3) below; the membership test stays, with the missing fact beside it.
+
+**The residual, documented rather than closed.** A claimant that died before `openOrBeginJobDraft`
+holds no `draft_revision_id`, so there is no base to look up and the row is still skipped. That window
+is the milliseconds between `claim` and the draft being opened, against a model call measured at
+682 s, and only on a *first* claim — every requeue afterwards keeps the draft. Widening
+`markNavLabelsFailedIn` to accept a null draft would mean guessing which revision a job that never
+started was about, and that is a worse trade.
+
+### F5 — P2. Locks taken by rows that could never use them
+
+`buyingLabels` was built without looking at `requeues`, the budget or `cancelling`, so rows about to
+be **requeued** — which is what the first expiries normally do — and rows that settle **cancelled**
+took article locks they could never use, and the sweep held the earlier ones while waiting for the
+later ones. The pre-lock set is now `not(cancelling) and requeues >= requeueBudget`: the requeue
+`UPDATE`'s own predicate inverted, read off the same two values, so the sets cannot drift. At the
+default budget of zero that is every lapsed row, which is the shape the sweep had before.
+
+### F6 — P2. Wrong recovery advice
+
+Gone with the 409; see F1.
+
+### What it confirmed
+
+The owner is correctly threaded on both the pre-lock and the marker; `ownedSlug(slug, ownerId)` is the
+right identity, since jobs carry no article id and slugs are globally unique. For rows the sweep does
+pre-lock, no interleaving marks a requeued job, the wrong revision, or marks twice. `status: 500`
+passes `guardDbStore` and the message carries no slug, title, URL or prose. The move is clean:
+`ACTIVE` has one definition, its re-export is compatible, and no stale functional imports remain.
+
+## The second 2c review, and the last seven <a id="stage2c-round3"></a>
+
+GPT Sol, 2026-09-07, at `high`, against the rebuilt stage. *"There is no remaining P0, but the widened
+expiry filter can make a wrong reader-visible write."* Two rounds of Sol per stage is the rule, so
+this is where it stops. **Two of the seven are corrections to things we told the reviewer**, and both
+are recorded here rather than quietly fixed, because the value of this file is that it says which way
+each argument went.
+
+### G1 — P1. Membership is not ownership, and that widening was mine
+
+The round-2 brief told the builder to filter the sweep on *the step list contains `labels`*. Sol found
+the ordering that breaks it:
+
+1. Job A, `["hierarchy","labels"]`, queues behind running job C.
+2. C publishes a `pending` revision and queues successor B, `["labels"]`.
+3. A predates B, so A claims first and opens its draft from that revision.
+4. A dies inside `hierarchy`.
+5. Membership says mark the base `failed` — **while B is still queued to make exactly those labels**,
+   and B then runs and they arrive.
+
+So `pending` is not the protection the widening assumed, and a wrong sentence that heals itself is the
+kind nobody reports and everybody sees. **The question the filter has been groping towards is
+ownership**: was this job *the* thing carrying the article's pending-label promise? The missing fact is
+now asked after the settlement — no *other* active, non-`cancelling` job on this owner and slug whose
+steps name `labels` — and a candidate that fails it is skipped, because that other job will be marked
+at its own ending if it dies too.
+
+**This filter has now been wrong twice in two different directions**, first too narrow (F4) and then
+too wide, which is why the framing rather than the predicate is what went into the comment.
+
+### G2 — P2. Our correction to the deleted-article route was itself too narrow
+
+In round 2 we told Sol that deletion could not reach the missing-article route, because the cascade and
+`on delete set null` take the row out of the snapshot. **That is wrong.** The snapshot is materialised
+into JavaScript *before* the locks are taken, so a deletion after that read leaves our copy of the row
+intact — deletion-then-recreation was a live route under the old code after all. The fix already closes
+both doors; only the wording was too narrow, and both doors are now named in the plan and in the test.
+
+### G3 — P2. Two different orders, and a collation could have stopped the reaper
+
+The snapshot ordered in Postgres (`ORDER BY slug`, under the cluster's collation) and
+`lockArticlesInSlugOrder` asserted in JavaScript (`<`, code-point). Sol demonstrated those disagreeing
+under `en_GB.utf8` for valid slugs with hyphens and digits — and the helper *throws*, inside the
+sweep's transaction, so a locale setting would have become an outage of the queue's only reaper before
+any job settled. Fixed by making them one order rather than by loosening the assertion: the snapshot
+now orders `collate "C"`. The argument that byte order is code-point order holds because `isSlug`
+([`src/ingest.ts`](../../src/ingest.ts)) is `/^[a-z0-9][a-z0-9-]*$/` — pure ASCII — and that
+assumption is written where the assertion is, since it is the thing that would silently stop being
+true.
+
+### G4 — P2. The retry's words claimed more than its bound
+
+Two attempts close the race against *one* holder leaving between the insert and the read. They do not
+prove a third conflict would have been something else: two different holders can each arrive and leave
+across the two pairs. The bound is right — unbounded retrying inside a transaction holding an article
+lock is worse — so the comment and the error message were trimmed to claim a bound rather than a
+proof.
+
+### G5 — P2. Two nullable fields were a union in disguise
+
+`PublishRevisionResult` carried `successorJobId` and `successorBoundToOlderBase`, nothing stopped both
+being set, and the two ternaries that filled them would have mapped a future fourth `SuccessorOutcome`
+arm to two nulls in silence. It now carries the outcome itself, and `logPublication` switches over it
+with a `never` default — so a fourth arm is a compile error at the one place that has to decide what
+to say about it. CLAUDE.md § *Let the types catch it*.
+
+### G6 — P2. The retreat's only mitigation had no test
+
+Since the 409 came out, a line in the log is the **only** thing that says an article has reached the
+shelf promising labels nothing will buy — and deleting that branch left the suite green. It is now
+asserted through a captured logger, and red with the branch removed. Sol was also right that the
+message was not actionable: an unforced `npm run labels -- <slug>` de-duplicates straight onto the
+bound older job, drives it to its lineage failure and exits, so the operator has to ask twice. The line
+now says *once that job ends, re-run labels*.
+
+**It is best-effort and stays so**, which is the honest note to end on: process death between the
+commit and the next line, or the logger's deliberately swallowed destination failure, produces the
+state with nothing said about it.
+
+### G7 — P3. A header that denied its own feature
+
+[`src/labels.ts`](../../src/labels.ts) still said, in the present tense, that there is no
+`npm run labels` and no `labels` step. Both came back in stage 2a. Corrected, with the old reasoning
+kept as a marker rather than deleted, because *why* the step had been retired is why its return needed
+a plan. Its neighbour in [setup-dev.md](../project/setup-dev.md) had already been corrected.
+
+## What stage 3 measured <a id="stage3"></a>
+
+Built 2026-09-08. **Nothing was spent**: no pipeline run, no `npm run labels`, no model call. The
+tests replace exactly one function — `generateLabels` — and the timings come out of the local
+database, which already held everything the question needed.
+
+### The two orderings, in one file
+
+[`tests/labels-land-after-the-shelf.test.ts`](../../tests/labels-land-after-the-shelf.test.ts), four
+cases over the real Postgres session, the real `publishRevisionIn`, the real `writeArtefacts` and the
+real `STEPS.labels.run`. The **only** thing faked below the job runner is the paid model call, wired
+to a deferred promise the test resolves — so the window between the ingest publishing and the labels
+landing is held open for as long as the assertions take, rather than raced against a `setTimeout`.
+
+1. **An ingest publishes while nothing has bought the labels.** The job's step list is
+   `DEFAULT_INGEST_STEPS` minus the three that reach the network, *derived from that constant rather
+   than written out*, so putting `labels` back into it puts it into this job. The article reaches the
+   shelf — `current_revision_id` moves and `pgArticleReader.loadArticle` serves the prose — reading
+   `pending` over a tree with no label on any leaf, with a free successor queued and the label
+   executor never entered. Then the executor is released and the labels land, `ready`, on a second
+   revision, with the blocks unchanged.
+2. **A run that produces batches and then throws changes nothing.** It writes a real row into
+   `spideryarn.checkpoints` first — asserted *before* the tree is, because without it "the tree is
+   unchanged" would pass just as well over a run that did nothing
+   ([silent-success.md](../reusable/silent-success.md)) — and then fails. The shelf does not move, the
+   stored tree is byte-for-byte what it was, and the published revision goes `pending` → `failed`.
+3. **A run that comes back with half the article labelled is refused.** This is the reachable half of
+   *partial output never replaces the tree*, and it is a different question from case 2: a run that
+   throws returns nothing for `run()` to write, so the tree is safe by the shape of the code; a run
+   that **returns** short is handed to `mergeLabels`, which replaces rather than overlays. What stops
+   it is the one line stage 2 moved — `checkCoverage` in `STEPS.labels.run` — and deleting that line
+   publishes a half-labelled tree reading `ready`.
+
+**Red-first, with the mutation named beside every case.** Six one-line mutations of production code,
+each quoted in the file as it actually came out: `unrun = false` in `writeArtefacts`
+(`expected 'ready' to be 'pending'`); its receipt deletion disabled (`expected { …(10) } to be
+undefined` — the assertion that stops case 1's second half being vacuous, because a carried `labels`
+receipt makes the successor's step **skip**); `"labels"` back in `DEFAULT_INGEST_STEPS`
+(`expected 'error' to be 'done'`, plus the premise case by name); the successor enqueue deleted
+(`no labels successor was queued`); `markNavLabelsFailedIn` deleted (`expected 'pending' to be
+'failed'`); and `checkCoverage` deleted (`a half-labelled run was accepted`, then — with that
+assertion taken out so the rest could be reached — `a half-labelled run published a revision`).
+
+One assertion has no mutation behind it and says so: the read taken inside the held-open window.
+Nothing can make it red without inventing a second writer of the tree.
+
+**What the file stands in for, and it is written at the top of it.** `fetch` reaches the network and
+`hierarchy` is a paid structure call, so the base revision carries `extracted_html` and `fetch`/
+`extract` receipts the way
+[`tests/pg-session-real-step.test.ts`](../../tests/pg-session-real-step.test.ts) does, and
+`hierarchy` is a fake whose product is assembled from the **real** `buildTree`, `mergeLabels`,
+`hashBlocks` and `structureHash` — so what the session is handed is a `PendingLabelsFile` rather than
+something shaped like one. `blocks` and `labels` are the real steps.
+
+### The timings, and the plan's own figure is a worst case rather than a typical one
+
+Read out of `spideryarn.revision_step_runs` and `spideryarn.ai_calls` on the local database,
+2026-09-08. **Nothing was re-run to get them.**
+
+**The plan's headline numbers reproduce, exactly.** The 602 s call is
+`duration_ms = 601917` at `reported_input_tokens = 173583` — the figure in
+[§ the straggler](#the-straggler) to the token. Joining each pre-split `hierarchy` run to the
+`labels` calls inside its window reproduces two of that section's three rows within half a point:
+
+| run | `hierarchy` wall | label span | share | longest call |
+|---|---|---|---|---|
+| `m1-kuhn-spya-a2zrjb` — **a real ingest, not an eval** | **727.2 s** | 568.5 s | **78.2%** | 425.7 s at 196,896 tok |
+| `evaldeepen-e5aq8o9s-book` | 576.2 s | 456.8 s | **79.3%** (plan: 79.5%) | 372.8 s |
+| `evaldeepen-e5aq8o9s-book` | 518.1 s | 468.4 s | **90.4%** (plan: 90.7%) | 389.8 s |
+
+The third row of the plan's table (`spya-fm4y2w`, 682 s, ≥92%) has no `revision_step_runs` row —
+that eval invocation did not go through the step bookkeeping — so it cannot be checked from this end.
+Its 602 s call is in `ai_calls`, which is the half that mattered.
+
+**And the honest correction.** Over every pre-split `hierarchy` run longer than five seconds that
+made any label call at all, the label share is **median 22%, min 9%, max 90%** — n = 28 runs,
+deduplicated on `(article, started_at, finished_at)` because several `revision_step_runs` rows share
+one run's timings; over the raw 67 rows the median is 23%, so the dedupe does not move it. The
+79.5–92% band is real and is what the deadline was blown by, but it is the **fat-section case**, not
+the ordinary article — a typical ingest spends
+under a quarter of `hierarchy` on labels. The plan's § *The number this exists for* reads as a
+general claim and should be read as a worst-case one. It does not weaken the argument: the run that
+came within **13 seconds** of the 740 s deadline was a real reader's article, `m1-kuhn`, and 78% of
+it was labels.
+
+**What cannot be measured from here.** There are **two** post-split `hierarchy` runs on this
+database and **two** successful `labels` runs (17.4 s and 21.6 s), all four from one afternoon and
+all on ordinary short articles. That is far too few to say anything, and it would be dressing up a
+sample of two to call it evidence. So the claim *"`hierarchy` no longer carries the label wall time"*
+is settled **by construction rather than by timing**: `generateHierarchy` does not call
+`generateLabels`, and `labels` is not in `DEFAULT_INGEST_STEPS`. A timing that proved it would only be
+re-measuring a call the code can no longer make.
+
+**And the first half of that was not actually pinned**, which stage 3 found while writing the
+sentence above. Everything asserted a *neighbour* of it — `checkCoverage` had moved, the step was not
+scheduled, a structure-only tree carries no labels — and none of those is the claim. A
+`generateHierarchy` that started calling `generateLabels` again would have satisfied every test in
+the tree while putting the whole 600 s back inside the blocking step, and the only symptom would have
+been the clock. There are now two cases in
+[`tests/hierarchy-leaves-the-labels.test.ts`](../../tests/hierarchy-leaves-the-labels.test.ts) reading
+the function's own source, comments stripped — because the paragraph src/hierarchy.ts leaves where the
+call used to be *names* `generateLabels`, so a check over the raw source would go red on the
+documentation of the removal.
+
+### The paid book rerun: not worth asking for
+
+What it would buy is one number — the post-split `hierarchy` wall clock on a 2,569-block book — and
+we can already say what it will be: the pre-split `hierarchy` minus the label span, which for the two
+recorded Moby-Dick passes is **119 s and 50 s** against a 740 s deadline. It would cost roughly the
+same as the passes it is replaying — the three recorded passes cost **$2.54, $2.96 and $3.49** in
+structure and labels together — and it would not answer the question that is actually open, which is
+whether the **973-child sibling set** still takes 600 s and $1.30 in the successor job. That one is not in doubt either — the plan says so
+in [§ the straggler](#the-straggler): *"lazy labelling does not remove this call; it moves it."*
+
+So the recommendation is **don't spend it**. The rerun that *would* be worth buying is a different
+one: a book run after [260904d](260904d-deepen-fat-sections.md)'s cascade reaches `n0831` and the
+973-child set stops existing, because that is the change whose effect nobody can predict from the
+data we have. Asking for this one now would buy a confirmation and spend the budget that one needs.
 
 ## Groundwork for stage 2, established before any code <a id="stage2-groundwork"></a>
 

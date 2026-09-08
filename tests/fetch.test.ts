@@ -303,7 +303,85 @@ describe("uploadedDocumentKind", () => {
     expect(uploadedDocumentKind("p.html", mentions)).toBe("html");
   });
 
+  /**
+   * **The page with no `<body>`, because HTML does not require one.**
+   *
+   * Greg uploaded one of our own tutorial pages on 2026-09-07 and got
+   * `[up-pdf]` — the sentence this feature had just reworded, from the check
+   * this feature had just written. **Two independent things refused it and
+   * either alone was enough**, which is why both are pinned in one case rather
+   * than two:
+   *
+   *  1. It has no `<!doctype>`, no `<html>`, no `<head>` and no `<body>`
+   *     **anywhere in 108 KB**. That is not a malformed file: tag omission is
+   *     in the HTML spec, all three of those start tags are optional, and every
+   *     browser builds the same tree from it. `DOCUMENT_MARKUP` was a list of
+   *     the tags a document *may* carry, written as though they were the tags
+   *     it *must*.
+   *  2. Its first tag is at byte 4106, behind a comment holding the request the
+   *     page was written from. The old raw window was 1030 bytes and the old
+   *     decoded window 4096 — so the marker sat ten bytes past the end of the
+   *     only slice that could have seen it.
+   *
+   * The fixture keeps both properties. Its own `<title>` lands at 4111 rather
+   * than the real file's 4106 — the assertion below is what makes it past the
+   * old window, not the exact number, which nothing should depend on.
+   * docs/postmortems/260907c-a-heuristic-promoted-to-a-gate.md.
+   */
+  it("reads a page that omits html, head and body, as the spec allows", () => {
+    const noWrapper =
+      `<!--\n  Request (Greg, 2026-09-07, verbatim):\n  ${"a request, quoted at length. ".repeat(140)}\n-->` +
+      "<title>Agent Communication and Orchestration</title>" +
+      '<meta name="description" content="How sessions find and message each other.">' +
+      "<style>:root { --ink: #1a1a1a; }</style>" +
+      "<main><h1>Agent communication</h1><p>Prose.</p></main>";
+    /* The guard that keeps this case about the *marker* and not only the
+       window: move the comment and the assertion below still passes for the
+       wrong reason. */
+    expect(noWrapper.indexOf("<title")).toBeGreaterThan(4096);
+    expect(uploadedDocumentKind("tutorial.html", enc.encode(noWrapper))).toBe("html");
+  });
+
+  /**
+   * **Every HTML file this repo actually holds**, rather than one this file's
+   * author wrote.
+   *
+   * The countermeasure from
+   * docs/postmortems/260907c-a-heuristic-promoted-to-a-gate.md, mechanised
+   * rather than left as advice. Every fixture above began
+   * `<!doctype html><html><head>`, because that is the picture of an HTML file
+   * the person writing the check had in their head — so the suite proved the
+   * check agreed with its author about what a document looks like, which is
+   * docs/reusable/silent-success.md and not evidence.
+   *
+   * `docs/tutorials/` is the corpus because nobody wrote it for this test, and
+   * one of its six files is the one that was refused in production. Reading the
+   * repo from a unit test is unusual and deliberate: a detector needs input its
+   * author did not choose, and this is the cheapest source of it we have.
+   *
+   * **If this goes red on a tutorial you just added**, the tutorial is probably
+   * fine and the detector is probably wrong — that is the direction this failed
+   * in last time. Read the file before you touch the regex.
+   */
+  it("reads every HTML file this repo already holds", async () => {
+    const { readdir, readFile } = await import("node:fs/promises");
+    const dir = new URL("../docs/tutorials/", import.meta.url);
+    const names = (await readdir(dir)).filter((n) => n.endsWith(".html"));
+    /* A corpus that quietly became empty would make this test pass forever
+       while checking nothing. */
+    expect(names.length).toBeGreaterThan(0);
+    for (const name of names) {
+      const bytes = new Uint8Array(await readFile(new URL(name, dir)));
+      expect(uploadedDocumentKind(name, bytes), name).toBe("html");
+    }
+  });
+
   it("refuses what the bytes do not support, whatever it is called", () => {
+    /* A fragment: real markup, no document-level element, and still not a
+       document. The loosening above reaches `<title>` and `<meta>`, which only
+       a document carries; it must not reach `<div>`, or `sniffKind`'s JSON case
+       below goes with it. */
+    expect(uploadedDocumentKind("part.html", enc.encode("<div><p>Just a fragment.</p></div>"))).toBeNull();
     expect(uploadedDocumentKind("notes.html", enc.encode(`prose, ${"x".repeat(400)}`))).toBeNull();
     expect(uploadedDocumentKind("movie.html", new Uint8Array(3000).fill(7))).toBeNull();
     expect(uploadedDocumentKind("paper.pdf", enc.encode("PK this is a zip"))).toBeNull();

@@ -11,8 +11,13 @@ concurrency test, green on its own. Typecheck clean; checked in a browser at 128
 
 **Stage 2 landed the same day**, on Greg's *"follow up with the three non-mode buttons"*: Comments,
 Tweets and Metadata carry cards too now, and the `title` arm of `DockLink`'s `hover` union went with
-them — § Stage 2 at the foot of this file. Two buttons in the bar still take a `title`, `DockHome`
-and `DockCommands`, and neither of them comes through `DockLink`.
+them — § Stage 2 at the foot of this file.
+
+**Stage 3, 2026-09-08**, on *"proceed with any followups if valuable"*: the three things stage 2
+named as left. `DockHome` and `DockCommands` took cards, so **no button in the bar row carries a `title`
+now** — one survives in `Dock.tsx`, on the drawer's Close, and § Stage 3 says why it stays; the `readers-own` VisitorGap variant and the message behind it were deleted; and
+`Metadata.tsx`'s stale header — the source of two of stage 2's wrong sentences — was corrected where
+it lives. § Stage 3 at the foot.
 
 The fourteen mode buttons already open a card. What the card says is **one sentence**, and that
 sentence is `MODE_CATALOG[mode].description` — the same words the command bar draws inline beside
@@ -334,7 +339,9 @@ covered only the `DockTab` arm, and the drawerless arm takes its footing from a 
 (`isVisitor`, not `own`) — which is exactly the seam both previous Comments copy bugs slipped
 through.
 
-### What is still not done
+### What stage 2 did not do
+
+All three of these were done on 2026-09-08 — § Stage 3 below.
 
 `DockHome` and `DockCommands` carry `title` attributes. Neither goes through `DockLink`, so neither
 was in the union that emptied, and neither is one of the three Greg named. Same argument as before:
@@ -343,6 +350,188 @@ worth doing, each needs its own verified sentence, named here so it is not lost.
 `Metadata.tsx`'s header sentence — *"Nothing here is generated and nothing here is a model call"* —
 is the stale one this change inherited from. It should be corrected where it lives; that is somebody
 else's file this week and a one-line fix when it is not.
+
+`COMMENTS_GAP` and the `readers-own` variant in [`visitor.ts`](../../src/web/visitor.ts) — the
+source of the retired sentence, described under § The find above. Dead apart from its test, and
+saying something that is no longer true, which is the pairing that put the stale sentence on a
+button in the first place.
+
+## Stage 3 — the three things stage 2 left
+
+Greg, 2026-09-08: *"proceed with any followups if valuable, then push."* All three of § What is
+still not done, which is now a list of things that were done rather than a list of things that were
+not. What follows is what each turned out to be once opened, which in two of three cases was not
+what the note said.
+
+### `DockHome` and `DockCommands`, and why the wordmark needed a prop
+
+Both took a `ControlTip` and dropped their `title`. **No button in the bar row carries a `title`
+now**, which was the point of the whole plan and took three stages to reach because the row is
+a row of five different kinds of button, and it is not the same length twice —
+what is in it varies with the experimental switch, with ownership and with being
+signed in.
+
+One `title` is left in `Dock.tsx` and it is staying: the drawer's Close, `.dock-close`, which is
+inside `.dock-drawer-head` rather than in the row. A `ControlTip` there would be a card whose first
+paragraph is *closes this* and whose second is nothing — the shape this plan exists to stop, arrived
+at from the other direction. Written down because *no button carries a `title`* was the first
+version of the sentence above, and the next reader to grep `title=` in that file would have found
+one and had no way to tell which of us was wrong.
+
+`DockCommands` joined the `TooltipGroup` the three non-mode buttons are in. It is the fourth thing at
+that end of the row that is not a mode — its own docblock already argued three ways that it is not a
+fifteenth one — and the group is a context provider that renders no element, so the move changed
+nothing on the page. Its card is the only surface in the app that can teach ⌘K: § The glyph is
+`Command` decided the label should say *what the button opens* rather than *how else to open it*, and
+the `title` it replaced never appeared on the phone the button was built for. That clause is the one
+piece of wording this file's tests pin, and the test says why.
+
+`DockHome` is at the other end with the whole radiogroup between it and the nearest other card, so it
+is in **no** group: there is nothing to scrub to.
+
+**It took a `signedIn` prop, and that is the finding rather than the detail.** *Back to your library*
+is true for the owner and false for a signed-out stranger, who has no library — signed out, `/` is
+the landing page (`App.tsx` § the signed-out routes). That is the same shape as the Comments bug
+stage 2 found the day before: a sentence true for whoever added the article, read out to the visitor,
+on a button the visitor can see. **Twice in two days, in one bar.** The pattern is
+not tooltips; it is that this app has two readers and only one of them is the person writing the
+copy.
+
+**And the first version of the prop had the bug in it the other way round.** It was
+`experimental.signedIn`, a bare boolean; Sol pointed out that the store opens on
+`{loaded: false, signedIn: false}` and writes `loaded: true` only when its auth callback lands
+(`experimental-store.ts` § `base`). So for that frame an *owner* would have been told there was no
+library to return to — the same false sentence, aimed at the other reader. The prop is
+`knownSignedOut` now and the call site asks `loaded && !signedIn`, with *unknown* falling to the
+owner's sentence, since a stranger's unknown window is one callback long and the store then says so
+outright. There is a test on the unknown frame, and I reintroduced the bug to watch it fail.
+
+The name is the point as much as the condition. `feedback` a few lines up is the same boolean today
+and is not the same question — *is there a Feedback button in this row*, which the fit measurement
+needs because it is a button's width. Three questions were sharing one field: whether a button is
+drawn, whether a reader has a library, and whether we have found out yet. Two of them now have their
+own names.
+
+### The `readers-own` variant, and a deletion that had already been decided
+
+`COMMENTS_GAP`, the `readers-own` member of `VisitorGap`, and `readersOwnWork` in `messages.ts` are
+gone. `FIXED_BY_AN_ACCOUNT` stayed a map rather than collapsing to `return true`, and its docblock
+says why: the rule it encodes is not *the offer always applies*, it is *each kind of gap decides
+whether the offer applies*, and collapsing it would delete the question rather than answer it.
+
+Two things worth keeping from this one.
+
+**This was not my decision to make and I did not make it.** 260904c had already made it: *"the
+member has no producer and goes"*, with a note that Sol had argued for keeping it and that the
+argument was conditional on a consent flag Greg declined. So the drawer's comment saying *both the
+gap and the union member behind it are gone* was not wrong about the intent — it was written by
+somebody describing a decision that had been taken and then not carried out. It was false about the
+code for four days and true about the plan the whole time, which is the more interesting way for a
+comment to be wrong, and not one a reader can tell apart.
+
+**The resurrection condition travelled with it**, which was the thing most at risk of being lost:
+260904c says to bring `readers-own` back if a consent flag ever ships. That instruction is now in
+two more places — the tombstone in `messages.ts` and `FIXED_BY_AN_ACCOUNT`'s docblock — because the
+one place it was in is a plan from four days ago that nobody deleting a union member would think to
+open. My first draft of the tombstone had the history backwards, saying the sentence *"went wrong by
+being answered"*; the flag was refused, not granted. Sol caught it.
+
+**A message with no caller is not inert — it is a sentence waiting to be copied.** It had been false
+since 2026-09-04 and unreachable since the same day. Precisely: `COMMENTS_GAP`'s only live consumer
+was `tests/visitor-gaps.test.ts`, and `readersOwnWork` still had a real caller in `visitorSentence`
+— reachable only through the dead variant, which is a distinction worth keeping because it is what a
+grep for callers would have shown, and it would have looked alive. On 2026-09-07 the Comments button
+was written from half of it. Dead code with a live test looks maintained; that is exactly what made
+it available.
+
+### `Metadata.tsx`'s header, which had gone wrong twice over
+
+The sentence was *"Nothing here is generated and nothing here is a model call."* It now says
+**opening it** generates nothing and makes no model call, because the page shows the hierarchy's
+`gist` and `summary`, and since 2026-09-07 it can start a run of its own from § Generate it again.
+
+The file was already arguing with itself. The author of 260907d added a paragraph to this same
+docblock explaining that *Generate it again* claims nothing about whether you need a re-run — and
+left the sentence eleven lines above it saying the page makes no model call. Neither is a careless
+author; the header is long and the two paragraphs are not adjacent.
+
+Corrected here **and** in `docs/project/comments.md`, which carried the other half of stage 2's
+inheritance: *the block id is the half of the anchor that cannot drift*. Stage 3 carries an id by
+matching block **text**, so a block whose words changed can be re-minted. What keeps a comment is
+that it is stored against the article rather than a revision. Facts right, causation wrong — the
+version that reads most like an explanation.
+
+### What the review found, and the one thing it changes about how this went
+
+Six findings, all of which checked out. Three were reader-facing sentences, which is now the
+established pattern of this plan; the other three are the interesting ones.
+
+- **`experimental.signedIn === false` does not mean signed out**, above. A real bug, caught by
+  reading a store I had not opened.
+- ***"It is a link and nothing else"* is false.** Holding the wordmark down plays a logo animation
+  and suppresses the navigation (`logo-animation.ts` § the long press). The claim that mattered was
+  only ever about cost, so the sentence now makes only that one: *following it makes no model call
+  and spends nothing.* I had written the broader thing because it read better.
+- **The card does not reach a phone**, and I had claimed the opposite as an argument *for* the
+  change: that replacing a `title` gave the phone something to teach ⌘K with. An uncontrolled card
+  opens on hover, and the tap that would reveal it is the tap that presses the button; reading one
+  on touch needs the controlled variant and a *tap again* hint, which the spine has and this does
+  not. `DockLink`'s own comment had the same error — *reachable by a finger and by focus* — and had
+  had it for a while. Both now say what is true, and the ⌘K decision survives on a better argument:
+  the chord is taught where a keyboard is, which is the only place it works.
+- **Deleting a union member falsified six comments elsewhere**, none of them in the diff: three
+  counts in `visitor.ts`, *the first of the three* in `messages.ts`, and two docblocks in
+  `PublicChrome.tsx` still naming gaps an account cannot fix. The counts are gone rather than
+  decremented — the number has changed four times and a count in prose goes stale silently. And
+  `ControlTip` said *three callers* when there were four, which predates this change.
+- **A stale count I made, and a family I joined.** `shared-inventory.ts` said its three buckets
+  existed *because `VisitorGap` already distinguishes three* — my deletion made that two, and the
+  buckets are right for a different reason, so the reason is now written down instead of the
+  coincidence. Sol then found the wider family: `structure` shipped as a fifteenth mode on
+  2026-09-07 and every *fourteen* in this plan's own prose went stale inside a day. The
+  present-tense ones are gone rather than incremented, here and in `visitor.ts`, because a count
+  that cannot go stale is one that is not written down. The historical ones — this file describing
+  what stage 1 did — stay.
+- **The ⌘ test proved less than its name.** It asserted the character, which passes on a card saying
+  *press ⌘* with the `K` missing and says nothing about the reader who has no Mac. It asserts both
+  complete forms now.
+- **`comments.md` still overreached** in the sentence *before* the one I had come to fix: *a comment
+  whose quote has been re-extracted away still has somewhere to show*, true only while its block
+  keeps its id — which the paragraph I added immediately goes on to qualify. I had corrected the
+  claim and left its setup standing.
+
+And a second pass on the corrections themselves found six more, which is the part of this worth
+recording. Three were places the first pass had not reached: the `generates` marker described as
+more certain than `modeGenerates` claims to be (its own docblock says it **over-warns** on purpose),
+the same block-id myth still live in a reader-facing tooltip on the metadata page, and *every number
+on it is read off the artefacts* — overbroad in the same breath as a correction, since read time
+divides by a flat `WPM` this repo chose.
+
+**Two were repairs that went wrong.** The `comments.md` fix replaced a false mechanism with a
+different false mechanism: *what keeps the comment is not the id at all* denies the id a role it
+does have — the anchor is `comments_identity_fk` into `block_identities`, which are never deleted,
+so the id is exactly what does it and the point is that identities outlive revisions. And the rule I
+wrote into `ControlTip`'s docblock, that `state` is for a control that *looks different*, is true of
+three callers and false of the fourth: the microphone selector can read `Auto` while `state` reports
+the placement actually resolved. The conclusion it was written to support — that `DockHome` should
+vary `what` — survives; the rule did not.
+
+That is the shape to watch for. A correction arrives with the authority of the thing it corrects,
+and nobody re-checks it, because it has just been checked.
+
+**The thing worth taking from this stage is where the errors were.** Stage 1's were in the copy.
+Stage 2's were inherited from stale docs. Stage 3's were mostly neither: they were in the
+*justifications* — the comments explaining why the change was right, which no reader ever sees and
+no test can reach. Two of them argued for the change from a fact that was false. Those are the
+sentences a future author trusts most, because they read as the reasoning rather than the claim.
+
+### What is still not done
+
+`HomeLogo.tsx` carries `title="Spideryarn — back to the library"`, the same string `DockHome` just
+dropped. It is the corner wordmark on every page that is not the reading view, so it wants the same
+`signedIn` question asked of it and a look at which of those pages a signed-out reader can reach at
+all. Named rather than done: a different component on different surfaces is a different change, and
+this one was three follow-ups, not four.
 
 ---
 

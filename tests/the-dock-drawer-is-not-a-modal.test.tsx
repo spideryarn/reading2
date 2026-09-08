@@ -58,6 +58,7 @@ function DrawerHarness() {
         comments: [],
         loaded: true,
         loadFailed: false,
+        error: null, // nothing has failed to save; this file is about focus
         panel,
         onPanel: setPanel,
         onOpenComment: () => {},
