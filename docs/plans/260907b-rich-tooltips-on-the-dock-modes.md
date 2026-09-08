@@ -17,7 +17,9 @@ them — § Stage 2 at the foot of this file.
 named as left. `DockHome` and `DockCommands` took cards, so **no button in the bar row carries a `title`
 now** — one survives in `Dock.tsx`, on the drawer's Close, and § Stage 3 says why it stays; the `readers-own` VisitorGap variant and the message behind it were deleted; and
 `Metadata.tsx`'s stale header — the source of two of stage 2's wrong sentences — was corrected where
-it lives. § Stage 3 at the foot.
+it lives. Landed on `dev` as `725bcd76` and `38efcda3` — two commits because a second
+cross-family pass found six more, two of them in the first pass's own repairs. § Stage 3 at the
+foot.
 
 The fourteen mode buttons already open a card. What the card says is **one sentence**, and that
 sentence is `MODE_CATALOG[mode].description` — the same words the command bar draws inline beside
