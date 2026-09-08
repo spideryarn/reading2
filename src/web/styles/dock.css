@@ -440,6 +440,30 @@
   background: var(--highlight);
   color: var(--page);
 }
+/* **A change did not save.** In the count's own slot rather than beside it, so
+   the row's width barely moves — Dock.tsx § the Comments button, and
+   `fitSignature`, which has to see the swap.
+
+   Red because this is the only thing in this bar that is *wrong*, and the
+   reader has to be able to tell it from `.pending`, which is the same shape in
+   orange and means *working*. Text in `--page` on the fill for the reason
+   `.pending` gives: the fill is bright, and an ink token on it would be very
+   nearly its own background. The chip is one glyph, so nothing about its width
+   is load-bearing beyond the `min-width` above.
+
+   **`var(--destructive, …)` with the fallback spelled out, because
+   `--destructive` is defined nowhere in this app.** Six references in
+   search.css and mode-band.css carry the same literal for the same reason, and
+   diagram-sketch.css says in as many words what happens without it: bare, the
+   declaration is invalid at computed-value time and is simply dropped — a chip
+   with no fill and white text on the bar's own background, with nothing
+   reporting an error. `tests/css-tokens.test.ts` is the tripwire that catches
+   the bare spelling; this is what it wants instead. */
+.dock-count.failed {
+  background: var(--destructive, oklch(0.65 0.2 25));
+  color: var(--page);
+  font-weight: 700;
+}
 
 .dock-chev {
   opacity: 0.5;
@@ -619,6 +643,25 @@
 .dock-drawer-body {
   overflow-y: auto;
   padding: 0.9rem 1.1rem 1.1rem;
+}
+
+/* **A change to the comments that did not save**, above the list — Dock.tsx
+   § the drawer. It is the third carrier of what the red `!` on the Comments
+   button means, and the only one a finger can reach.
+
+   `--ink` rather than the red, with the mark on the button carrying the alarm:
+   this is a whole sentence sitting at the top of a panel the reader has just
+   opened, and a paragraph of red is shouting where the button has already
+   shouted. The rule under it separates it from the list without making it a
+   box. */
+.dock-drawer-error {
+  margin: 0 0 0.7rem;
+  padding-bottom: 0.7rem;
+  border-bottom: 1px solid var(--rule);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 0.85rem;
+  line-height: 1.5;
 }
 
 .dock-empty {

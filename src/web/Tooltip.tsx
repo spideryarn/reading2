@@ -217,11 +217,46 @@ export function Tooltip({
   const childRef = (children.props as { ref?: Ref<HTMLElement> }).ref;
   const ref = useMergeRefs<HTMLElement>([refs.setReference, childRef ?? null]);
 
+  /**
+   * **A trigger that already describes itself keeps that description, and gains
+   * the card's rather than losing it.**
+   *
+   * `mergeProps` in `@floating-ui/react` applies the *user's* props last for
+   * every key that is not an `on…` handler (`.concat(userProps)` into the
+   * reduce), so anything in `children.props` **overwrites** what `useRole`
+   * generated. That is right for `className` and wrong for this one attribute,
+   * which is a list and not a value — and it is wrong in a way nothing reports:
+   * the card still opens, still animates, and is simply no longer the trigger's
+   * accessible description.
+   *
+   * Worse, React puts the key in `props` even when the JSX wrote `undefined`,
+   * so a trigger that describes itself only *sometimes* — `DockTab`'s `note`,
+   * which is a comment write that failed — suppressed the card's id in **every**
+   * state, including the ordinary one where it has no note at all. That is the
+   * regression GPT Sol caught in the built code, 2026-09-08.
+   *
+   * So the child's own value is taken out before the merge and put back after,
+   * joined with whatever `useRole` produced. Both survive, in that order —
+   * card first, because it is the description the reader asked for by hovering,
+   * and the standing note second. `undefined` when there is neither, rather than
+   * an empty string, which is a dangling reference in some screen readers.
+   *
+   * This also repairs § the switch itself, which has set its own
+   * `aria-describedby` beside a card since the day the cards landed and has been
+   * losing the card's ever since.
+   */
+  const { "aria-describedby": ownDescribedBy, ...childProps } = children.props as {
+    "aria-describedby"?: string | undefined;
+  };
+  const merged = getReferenceProps({ ...childProps, ref });
+  const describedBy =
+    [merged["aria-describedby"], ownDescribedBy].filter(Boolean).join(" ") || undefined;
+
   return (
     <>
       {/* `ref` last: it must win over any `ref` already in children.props,
           which the merged one already includes. */}
-      {cloneElement(children, getReferenceProps({ ...children.props, ref }))}
+      {cloneElement(children, { ...merged, "aria-describedby": describedBy })}
       {isMounted && (
         <FloatingPortal>
           <div
