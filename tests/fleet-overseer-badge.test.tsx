@@ -64,8 +64,7 @@ function stateOf(rows: Record<string, unknown>[], over: Record<string, unknown> 
     {
       schema: 1,
       rows,
-      ...over,
-      collectedAt: "collectedAt" in over ? over["collectedAt"] : "2026-09-08T20:05:00.000Z",
+      collectedAt: "2026-09-08T20:04:50.000Z",
       attemptedAt: "2026-09-08T20:05:00.000Z",
       servedAt: "2026-09-08T20:05:00.000Z",
       tmuxServerPid: 1,
@@ -75,6 +74,10 @@ function stateOf(rows: Record<string, unknown>[], over: Record<string, unknown> 
       refreshMs: 60_000,
       answeringEnabled: true,
       attention: { kind: "not-asked" },
+      // LAST, so an override actually overrides. It sat above these defaults for
+      // one commit and `error: null` quietly won, which made two tests about a
+      // failed collection pass against a healthy payload.
+      ...over,
     },
     Date.parse("2026-09-08T20:05:00.000Z"),
   );
@@ -84,11 +87,26 @@ function stateOf(rows: Record<string, unknown>[], over: Record<string, unknown> 
 
 const NOW = Date.parse("2026-09-08T20:05:00.000Z");
 
-const header = (state: FleetState): string => {
-  // The real `freshness`, not a stub: the masthead's age tooltip is built from
-  // it, and a hand-made object with the wrong shape crashes the render in a way
-  // that has nothing to do with what these tests are about.
-  const fresh = freshness({ state, receivedAt: NOW, error: null, failures: 0, now: NOW });
+/**
+ * The masthead, with the REAL `freshness` rather than a stub.
+ *
+ * `over` is what the page's own transport would be reporting — a failed refresh,
+ * or nothing having arrived for a while — because the Overseer line reads the
+ * same freshness the STALE banner does, and a hand-made object with the wrong
+ * shape crashes the render for reasons that have nothing to do with these tests.
+ */
+const header = (
+  state: FleetState,
+  over: { receivedAt?: number; error?: string | null; failures?: number; now?: number } = {},
+): string => {
+  const now = over.now ?? NOW;
+  const fresh = freshness({
+    state,
+    receivedAt: over.receivedAt ?? now,
+    error: over.error ?? null,
+    failures: over.failures ?? 0,
+    now,
+  });
   draw(<Header state={state} fresh={fresh} onRefresh={() => {}} />);
   return host.textContent ?? "";
 };
@@ -138,6 +156,55 @@ describe("the header says who the Overseer is", () => {
     const text = header(stateOf([wireRow({ id: "$1", name: "alpha" })]));
     expect(text).toContain("Overseer unknown");
     expect(text).not.toContain("no Overseer session");
+  });
+
+  /* ------------------------------------------------------------------ *
+   * The page can be STALE and confident at the same time. It must not be.
+   * GPT Sol, second review: the first version of this line read only the row
+   * count, so the masthead could say STALE in one breath and `Overseer: alpha`
+   * in the next about a session that died an hour ago.
+   * ------------------------------------------------------------------ */
+
+  const HOLDER = [{ id: "$1", name: "alpha", role: { kind: "overseer" } }].map((r) =>
+    wireRow({ id: r.id, name: r.name, role: r.role }),
+  );
+
+  it("names the holder only while the reading describes NOW", () => {
+    expect(header(stateOf(HOLDER))).toContain("Overseer: alpha");
+  });
+
+  it("A COLLECTION THAT FAILED CANNOT NAME A HOLDER — its rows are the last good ones", () => {
+    const text = header(stateOf(HOLDER, { error: "tmux went away" }));
+    expect(text).toContain("Overseer unknown");
+    expect(text).not.toContain("Overseer: alpha");
+  });
+
+  it("nor can a snapshot the page has decided is stale", () => {
+    // Ten minutes past the last thing that arrived, against a ~60s cadence.
+    const text = header(stateOf(HOLDER), { receivedAt: NOW, now: NOW + 10 * 60_000 });
+    expect(text).toContain("Overseer unknown");
+    expect(text).not.toContain("Overseer: alpha");
+  });
+
+  it("nor can one whose last refresh failed in the browser", () => {
+    const text = header(stateOf(HOLDER), { error: null, failures: 3, receivedAt: NOW });
+    // `freshness` treats a failed refresh as stale however new the payload is.
+    const stale = header(stateOf(HOLDER), { error: "fetch failed", failures: 3, receivedAt: NOW });
+    expect(stale).toContain("Overseer unknown");
+    // ...and the same page with no failures still names it, so the assertion
+    // above is about the failure rather than about the fixture.
+    expect(text).toContain("Overseer: alpha");
+  });
+
+  it("TWO HOLDERS IN A STALE SNAPSHOT ARE NOT REPORTED AS TWO HOLDERS NOW", () => {
+    const both = [
+      wireRow({ id: "$1", name: "alpha", role: { kind: "overseer" } }),
+      wireRow({ id: "$2", name: "beta", role: { kind: "overseer" } }),
+    ];
+    expect(header(stateOf(both))).toContain("2 sessions claim to be the Overseer");
+    const text = header(stateOf(both, { error: "tmux went away" }));
+    expect(text).toContain("Overseer unknown");
+    expect(text).not.toContain("2 sessions claim");
   });
 });
 

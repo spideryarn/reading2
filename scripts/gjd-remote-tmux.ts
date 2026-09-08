@@ -595,29 +595,34 @@ export function buildSessionScript(opts: { agents: boolean } = { agents: false }
       mkind=$(tmux show-environment -t "$sid" ${META.kind} 2>/dev/null | cut -d= -f2-)
       mrepo=$(tmux show-environment -t "$sid" ${META.repo} 2>/dev/null | cut -d= -f2-)
       mdir=$(tmux show-environment -t "$sid" ${META.dir} 2>/dev/null | cut -d= -f2-)
-      # THE ROLE IS READ FROM THE WHOLE SESSION ENVIRONMENT, not by name, and
-      # that is the one difference that matters. \`show-environment -t X VAR\`
-      # exits 1 both when the variable is absent AND when the session is gone,
-      # so a by-name read cannot tell "this session holds no claim" from "this
-      # session could not be asked" — and the first is a fact while the second
-      # is an absence. GPT Sol's P0-1 on the plan. Dumping the session's own
-      # environment exits 0 iff the session is still there, so the two come
-      # apart: '?' means we could not look, and anything else is an answer.
-      if renv=$(tmux show-environment -t "$sid" 2>/dev/null); then
-        rlines=$(printf '%s\\n' "$renv" | sed -n 's/^${SESSION_ROLE_ENV}=//p')
-        # MORE THAN ONE MATCH MEANS THE VALUE HAS A NEWLINE IN IT, and tmux has
-        # printed it as several lines that are indistinguishable from several
-        # variables. Verified on a disposable socket: a value of
-        # "overseer\\n${SESSION_ROLE_ENV}=evil" prints as two lines and a naive
-        # \`head -1\` reads the first as a perfectly good claim. Nothing here
-        # WRITES such a value — setRoleCommand validates the token — so this can
-        # only arrive by hand, and the honest answer to it is that we could not
-        # read the role, not a guess at which line was meant.
-        if [ "$(printf '%s' "$rlines" | grep -c '')" -gt 1 ]; then
-          mrole='${ROLE_UNREADABLE}'
+      # THE ROLE IS THE ONE FIELD THAT DISTINGUISHES *ABSENT* FROM *UNASKABLE*,
+      # and it takes two tmux calls to do it. GPT Sol's P0-1, twice.
+      #
+      # \`show-environment -t X VAR\` exits 1 both when the variable is not set and
+      # when the session has gone, so its status alone cannot tell "this session
+      # holds no claim" from "this session could not be asked" — and the first is
+      # a fact while the second is an absence. So a failed read asks
+      # \`has-session\`, AFTERWARDS rather than before: a session that died between
+      # the two makes has-session fail too, which is the answer we want. That is
+      # a second round trip for every session that holds no role, which is nearly
+      # all of them — a few milliseconds against the ~1.85s the script takes.
+      #
+      # THE OUTPUT SHAPE IS VALIDATED, not just the status. A value containing a
+      # newline prints as several lines that look exactly like several variables
+      # — verified on a disposable socket — so anything but exactly one line
+      # beginning \`VAR=\` is a role we could not read. An earlier version read the
+      # whole session environment and grepped it, which was worse twice over: it
+      # accepted \`overseer\\njunk\` as a claim, and another variable whose value
+      # contained a \`GJD_ROLE=\` line could answer for this one.
+      if renv=$(tmux show-environment -t "$sid" ${SESSION_ROLE_ENV} 2>/dev/null); then
+        rval=\${renv#${SESSION_ROLE_ENV}=}
+        if [ "$(printf '%s' "$renv" | grep -c '')" -eq 1 ] && [ "$rval" != "$renv" ]; then
+          mrole=$(printf '%s' "$rval" | base64 -w0)
         else
-          mrole=$(printf '%s' "$rlines" | base64 -w0)
+          mrole='${ROLE_UNREADABLE}'
         fi
+      elif tmux has-session -t "$sid" 2>/dev/null; then
+        mrole=''
       else
         mrole='${ROLE_UNREADABLE}'
       fi
@@ -1230,6 +1235,26 @@ export function decideRelease(list: readonly Session[], target: string): RoleCha
     };
   }
   return { kind: "release", id: found.session.id, name: found.session.name };
+}
+
+/**
+ * Did a release actually take? **Asked of the target, and `cannot-tell` is not a
+ * yes.**
+ *
+ * The first version asked `role.kind !== "overseer"`, which a target whose role
+ * could not be read satisfies — so the command printed a green success without
+ * knowing whether anything had happened. GPT Sol, second review. There are
+ * exactly two ways for a release to have worked:
+ *
+ *  - the session is no longer in the listing, because dying releases the claim;
+ *  - it is there and its role is now, positively, `none`.
+ *
+ * A role we could not read is neither, and `other` is not either — a release
+ * that turned the role into some other word did not do what was asked.
+ */
+export function releaseSucceeded(list: readonly Session[], id: string): boolean {
+  const target = list.find((s) => s.id === id);
+  return target === undefined || target.role.kind === "none";
 }
 
 /**

@@ -68,12 +68,28 @@ export type SessionRole =
   | { kind: "other"; name: string }
   | { kind: "cannot-tell"; why: string };
 
-/** What a whole snapshot says about the claim. See the header for why `none` and `contested` matter. */
+/**
+ * What a whole snapshot says about the claim. See the header for why `none` and
+ * `contested` matter.
+ *
+ * **The `id` is a tmux handle, and tmux handles are only meaningful within one
+ * tmux server generation** — `$7` after a reboot is a different session from `$7`
+ * before it, which this repo has already been bitten by. A caller that ACTS on
+ * this id must check it against the same snapshot's `tmuxServerPid`, or resolve
+ * it again; this type carries the answer, not a licence to type into a pane.
+ */
 export type OverseerClaim =
   | { kind: "none" }
   | { kind: "one"; name: string; id: string }
   | { kind: "contested"; names: string[] }
-  | { kind: "cannot-tell"; why: string };
+  /**
+   * `holder` is who we DID see holding it, when there was one — carried as a
+   * field rather than folded into `why` because `why` is printed into terminals
+   * and a session name is agent-authored text that can contain control
+   * characters. Its presence does not weaken the arm: this is still *we cannot
+   * say who the Overseer is*, and `holder` is the address, not the answer.
+   */
+  | { kind: "cannot-tell"; why: string; holder?: { name: string; id: string } };
 
 /** The least a row has to be for this file to have an opinion about it. */
 export type RoleBearing = { id: string; name: string; role: SessionRole };
@@ -115,7 +131,7 @@ export function parseRole(v: unknown): SessionRole {
 }
 
 /**
- * Whether the reading this claim is computed from was complete.
+ * Whether the reading this claim is computed from can be leant on, and how far.
  *
  * **A ROW LIST IS NOT A SNAPSHOT.** The dashboard drops rows it cannot parse and
  * counts them; it serves the last good rows after a collection fails; and before
@@ -123,11 +139,20 @@ export function parseRole(v: unknown): SessionRole {
  * sessions. Any of those can hide the holder, so the caller has to say what it
  * is handing over rather than let a short list pass as a complete one.
  *
- * `ok: false` does not mean the answer is thrown away — a `contested` reading is
- * still `contested`, because two known holders are two known holders however
- * much else went missing. It means a *quiet* answer cannot be trusted.
+ * **TWO KINDS OF DOUBT, AND THEY ARE NOT INTERCHANGEABLE** — GPT Sol's second
+ * P0, against a version that had only one.
+ *
+ *  - `rows` — this list is missing some sessions, but it describes NOW. Two
+ *    known holders are still two known holders; more rows could only make it
+ *    worse, so `contested` survives.
+ *  - `moment` — this reading may not describe now at all: a stale snapshot, one
+ *    whose collection failed, a page that has lost its connection. **Nothing
+ *    survives this**, `contested` included, because two holders in an old
+ *    snapshot do not prove two holders now — one of them may have been killed,
+ *    which is precisely what somebody staring at a contested box would have
+ *    done about it.
  */
-export type ReadingCompleteness = { ok: true } | { ok: false; why: string };
+export type ReadingCompleteness = { ok: true } | { ok: false; scope: "rows" | "moment"; why: string };
 
 /** Nothing was dropped and nothing is stale. The default for a caller that holds every row. */
 export const COMPLETE: ReadingCompleteness = { ok: true };
@@ -157,22 +182,38 @@ export function overseerClaim(
   completeness: ReadingCompleteness = COMPLETE,
 ): OverseerClaim {
   const holders = rows.filter((r) => r.role.kind === "overseer");
+  const held = holders[0];
+
+  /* THE MOMENT IS CHECKED BEFORE ANYTHING ELSE, `contested` included. A reading
+     that may not describe now cannot support any claim about now — see
+     `ReadingCompleteness`. The holder, if we saw one, still travels, so a caller
+     is told who it WAS rather than left with nothing. */
+  if (!completeness.ok && completeness.scope === "moment") {
+    return {
+      kind: "cannot-tell",
+      why: completeness.why,
+      ...(held === undefined ? {} : { holder: { name: held.name, id: held.id } }),
+    };
+  }
+
   if (holders.length > 1) return { kind: "contested", names: holders.map((r) => r.name).sort() };
 
-  const held = holders[0];
-  /* The known holder's name is carried into every `cannot-tell` below, so a
-     caller that only wants somebody to prod keeps the address. What it has lost
-     is the guarantee that there is nobody else, which is the thing in doubt. */
-  const but = held === undefined ? "nobody visibly holds the claim, but" : `${held.name} holds the claim, but`;
+  /* The known holder travels on every `cannot-tell` below, so a caller that only
+     wants somebody to prod keeps the address. What it has lost is the guarantee
+     that there is nobody else, which is the thing in doubt. It is a FIELD rather
+     than words in `why` because these strings are printed into terminals and a
+     session name is agent-authored text — see `describeClaim`. */
+  const holder = held === undefined ? {} : { holder: { name: held.name, id: held.id } };
 
-  if (!completeness.ok) return { kind: "cannot-tell", why: `${but} ${completeness.why}` };
+  if (!completeness.ok) return { kind: "cannot-tell", why: completeness.why, ...holder };
 
   const murky = rows.filter((r) => r.role.kind === "cannot-tell");
   const first = murky[0];
   if (first !== undefined && first.role.kind === "cannot-tell") {
     return {
       kind: "cannot-tell",
-      why: `${but} ${murky.length} session(s) could not be read (${first.role.why})`,
+      why: `${murky.length} session(s) could not be read (${first.role.why})`,
+      ...holder,
     };
   }
 
@@ -210,15 +251,31 @@ export function claimFromSnapshot(
   if (snapshot["schema"] !== 1) {
     return no(`the snapshot says schema ${JSON.stringify(snapshot["schema"])} and this build reads schema 1`);
   }
-  if (typeof snapshot["error"] === "string" && snapshot["error"] !== "") {
-    // The rows in a payload carrying an error are the LAST GOOD ones, not
-    // current ones — which is the whole trap.
-    return no(`the dashboard's last collection failed (${snapshot["error"]}), so its rows are not current`);
+  // **ONLY `error: null` ESTABLISHES A GOOD COLLECTION.** A missing field and an
+  // error that is not a string are both *this payload is not the one this
+  // function was written against*, and reading either as "no error" is how a
+  // malformed authority field becomes a confident answer. GPT Sol found all
+  // three of these accepted. The rows in a payload carrying an error are the
+  // LAST GOOD ones, not current ones — that is the whole trap.
+  const error = snapshot["error"];
+  if (error !== null) {
+    return no(
+      typeof error === "string"
+        ? `the dashboard's last collection failed (${error}), so its rows are not current`
+        : `the snapshot's error field is ${JSON.stringify(error)} rather than null or a message, so it cannot be read`,
+    );
   }
   const collectedAt = snapshot["collectedAt"];
   if (typeof collectedAt !== "string") return no("the dashboard has never completed a collection");
   const age = opts.nowMs - Date.parse(collectedAt);
   if (!Number.isFinite(age)) return no(`the snapshot's collectedAt is not a time (${String(collectedAt)})`);
+  // A FUTURE TIMESTAMP IS NOT A FRESH ONE. `age > maxAgeMs` alone accepts a
+  // snapshot stamped next year as the freshest possible reading. Clock skew
+  // between two processes on one box is seconds at most, so anything further
+  // ahead than that is a payload to disbelieve rather than to trust hardest.
+  if (age < -FUTURE_SKEW_MS) {
+    return no(`the snapshot is stamped ${Math.round(-age / 1000)}s in the future, which is not a clock this reading can use`);
+  }
   if (age > opts.maxAgeMs) {
     return no(`the snapshot is ${Math.round(age / 1000)}s old, past the ${Math.round(opts.maxAgeMs / 1000)}s this reading will trust`);
   }
@@ -240,7 +297,10 @@ export function claimFromSnapshot(
     const record = row as Record<string, unknown>;
     const id = record["id"];
     const name = record["name"];
-    if (typeof id !== "string" || id === "" || typeof name !== "string") {
+    // THE ID IS CHECKED FOR TMUX'S OWN SHAPE, because a caller acts on it. A
+    // string that is not `$<digits>` did not come from tmux, and addressing a
+    // session by it would address whatever tmux considers current.
+    if (typeof id !== "string" || !TMUX_SESSION_ID.test(id) || typeof name !== "string") {
       dropped++;
       continue;
     }
@@ -249,9 +309,21 @@ export function claimFromSnapshot(
 
   return overseerClaim(
     bearing,
-    dropped === 0 ? COMPLETE : { ok: false, why: `${dropped} of ${rows.length} rows in the snapshot could not be read` },
+    dropped === 0
+      ? COMPLETE
+      : { ok: false, scope: "rows", why: `${dropped} of ${rows.length} rows in the snapshot could not be read` },
   );
 }
+
+/** tmux's own session handle. Spelled here rather than imported: this file stays leaf. */
+const TMUX_SESSION_ID = /^\$\d+$/;
+
+/**
+ * How far ahead of us a snapshot's clock may be before we stop believing it.
+ *
+ * Two processes on one box, so this is skew and scheduling, not time zones.
+ */
+const FUTURE_SKEW_MS = 60_000;
 
 /**
  * One line of prose, so the terminal and the page say the same sentence.
@@ -259,17 +331,28 @@ export function claimFromSnapshot(
  * No colour and no markup: each caller decides how loud to draw it, and the two
  * that shout — `contested` and `cannot-tell` — are told apart by `kind`, not by
  * reading the string.
+ *
+ * **`safe` IS NOT OPTIONAL FOR A TERMINAL.** Session names are agent-authored
+ * text and may contain control characters; `gjd-remote`'s table has had
+ * `escapeName` for exactly that reason since before this existed, and GPT Sol
+ * found three new paths here that printed a name raw. A caller writing to a
+ * terminal passes `escapeName`; a caller rendering into React passes nothing,
+ * because React escapes on the way into the DOM. This module cannot import
+ * `escapeName` itself — it must stay leaf, see the header.
  */
-export function describeClaim(claim: OverseerClaim): string {
+export function describeClaim(claim: OverseerClaim, safe: (name: string) => string = (n) => n): string {
   switch (claim.kind) {
     case "one":
-      return `Overseer: ${claim.name}`;
+      return `Overseer: ${safe(claim.name)}`;
     case "none":
       return "no Overseer session";
     case "contested":
-      return `${claim.names.length} sessions claim to be the Overseer: ${claim.names.join(", ")}`;
+      return `${claim.names.length} sessions claim to be the Overseer: ${claim.names.map(safe).join(", ")}`;
     case "cannot-tell":
-      return `Overseer unknown — ${claim.why}`;
+      return (
+        `Overseer unknown — ${claim.why}` +
+        (claim.holder === undefined ? "" : ` (${safe(claim.holder.name)} was holding it)`)
+      );
     default: {
       const never: never = claim;
       return never;

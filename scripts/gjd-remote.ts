@@ -69,6 +69,7 @@ import {
   escapeName,
   overseerClaim,
   parseSessions,
+  releaseSucceeded,
   printableName,
   resolveSession,
   sessionRepo,
@@ -2176,9 +2177,17 @@ function claimLine(claim: OverseerClaim): string {
     case "none":
       return dim("no session holds the overseer claim");
     case "contested":
-      return red(`${claim.names.length} sessions claim to be the overseer: ${claim.names.join(", ")}`);
+      // ESCAPED, because a session name is agent-authored text and this line
+      // goes to a terminal. The table above has escaped its NAME column since
+      // before any of this existed; the summary lines had not caught up.
+      return red(
+        `${claim.names.length} sessions claim to be the overseer: ${claim.names.map((n) => printableName(n)).join(", ")}`,
+      );
     case "cannot-tell":
-      return red(`overseer: ${claim.why}`);
+      return red(
+        `overseer: ${claim.why}` +
+          (claim.holder === undefined ? "" : ` (${printableName(claim.holder.name)} was holding it)`),
+      );
     default: {
       const never: never = claim;
       return never;
@@ -2189,12 +2198,18 @@ function claimLine(claim: OverseerClaim): string {
 /**
  * Mark one live session as the Overseer, or let go of the claim.
  *
- * **THE READ AFTERWARDS IS NOT DECORATION.** The refusal is decided against a
- * listing taken a moment ago and then carried out by a second tmux call, so two
- * claims racing can both pass it — see `decideClaim`. Re-reading turns that from
- * a silent double-claim into a sentence on screen, which is the whole of what
- * this design promises: not that a race cannot happen, but that it cannot happen
- * quietly.
+ * **THE READ AFTERWARDS IS NOT DECORATION, AND IT IS NOT A LOCK EITHER.** The
+ * refusal is decided against a listing taken a moment ago and carried out by a
+ * second tmux call, so two claims racing can both pass it and the loser's write
+ * can land *after* this read — see `decideClaim`, which spells the sequence out.
+ * What this catches is the ordinary case; what actually holds the line is that
+ * every reader reports two holders as a fault rather than picking one, so a
+ * double claim is visible on the next quiet read.
+ *
+ * The two verbs are verified differently: a claim promises *this session and no
+ * other*, so it is checked against the whole box, and a release promises only
+ * *this session no longer holds it* — `releaseSucceeded`, which does not accept
+ * a role it could not read as a yes.
  */
 function cmdRole(action: "claim" | "release", name: string | undefined): void {
   if (!name) die(`usage: gjd-remote ${action}-overseer <name>`);
@@ -2225,7 +2240,7 @@ function cmdRole(action: "claim" | "release", name: string | undefined): void {
       const wanted =
         verdict.kind === "claim"
           ? after.kind === "one" && after.id === verdict.id
-          : list.find((s) => s.id === verdict.id)?.role.kind !== "overseer";
+          : releaseSucceeded(list, verdict.id);
       // Reported as a warning rather than a success, and non-zero, because the
       // interesting case is somebody else claiming it in the same second.
       if (!wanted) {
@@ -2248,7 +2263,10 @@ function cmdLs(): void {
   const { list: raw, agents, agentsWhy } = fleet({ agents: true });
   const list = adoptTitles(raw);
   if (list.length === 0) {
-    console.log(dim("no sessions. `gjd-remote new-claude` to start one."));
+    // The Overseer line is promised on every `ls`, and this branch used to be
+    // the exception — which is exactly the box where the answer matters most,
+    // since a tmux server with no sessions is what a reboot leaves behind.
+    console.log(dim("no sessions, and so no overseer. `gjd-remote new-claude` to start one."));
     return;
   }
 

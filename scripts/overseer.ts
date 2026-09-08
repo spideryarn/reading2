@@ -37,6 +37,7 @@ import { RULES_ENABLED_VAR, ruleWork, rulesEnabled } from "../tools/overseer/rul
 import { describeRuleOutcome } from "../tools/overseer/rules.js";
 import type { ProposingRuleWork } from "../tools/overseer/scheduler.js";
 import { describeStandingJobs, standingJobs } from "../tools/overseer/standing-jobs.js";
+import { escapeName } from "./gjd-remote-tmux.js";
 import type { AttentionList } from "../tools/fleet/wire.js";
 import { type OverseerClaim, claimFromSnapshot, describeClaim } from "../tools/fleet/overseer-claim.js";
 import type { OverseerEvent } from "../tools/overseer/diff.js";
@@ -324,7 +325,12 @@ export async function readOverseerClaim(
 ): Promise<OverseerClaim> {
   const fetchImpl = opts.fetchImpl ?? fetch;
   try {
-    const response = await fetchImpl(`${baseUrl}/api/state`);
+    // A DEADLINE, because a dashboard that accepts the connection and never
+    // answers would otherwise hang `overseer status` for ever — and this command
+    // is the thing somebody runs when they already suspect the dashboard is
+    // unwell. A timeout lands in the catch below as `cannot-tell`, which is the
+    // right answer.
+    const response = await fetchImpl(`${baseUrl}/api/state`, { signal: AbortSignal.timeout(CLAIM_FETCH_TIMEOUT_MS) });
     if (!response.ok) {
       return { kind: "cannot-tell", why: `the dashboard answered ${response.status} for /api/state` };
     }
@@ -353,6 +359,9 @@ export async function readOverseerClaim(
  * killed since is unlikely to still be named.
  */
 export const CLAIM_MAX_SNAPSHOT_AGE_MS = 5 * 60_000;
+
+/** How long to wait for the dashboard to answer at all. It is on localhost. */
+export const CLAIM_FETCH_TIMEOUT_MS = 5_000;
 
 export function statusLines(root: string, nowMs: number = Date.now(), claim?: OverseerClaim): string[] {
   requireAbsoluteRoot(root);
@@ -416,7 +425,10 @@ export function statusLines(root: string, nowMs: number = Date.now(), claim?: Ov
   lines.push(
     claim === undefined
       ? "overseer    not asked — this reading did not query the dashboard"
-      : `overseer    ${describeClaim(claim)}`,
+      // ESCAPED: a session name is agent-authored text and this line goes to a
+      // terminal. `describeClaim` cannot escape on its own — it must stay a leaf
+      // module the browser can compile — so the terminal caller supplies it.
+      : `overseer    ${describeClaim(claim, escapeName)}`,
   );
 
   const open = openConditions(notes.notes);

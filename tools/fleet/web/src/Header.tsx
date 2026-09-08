@@ -32,7 +32,7 @@ import type { ReactNode } from "react";
 import { Explain, type Tip } from "./Tooltip";
 import { Button, cx } from "./ui";
 import { type FleetState, overseerClaim } from "./types";
-import { COMPLETE } from "../../overseer-claim.js";
+import { COMPLETE, type ReadingCompleteness } from "../../overseer-claim.js";
 import { clockNote, collectedAge, formatDuration, tally } from "./view";
 
 /**
@@ -235,6 +235,26 @@ function Count({ n, label, className }: { n: number; label: string; className?: 
 export const SHELL = "tw:mx-auto tw:w-full tw:max-w-[96rem] tw:px-[calc(0.75rem+var(--safe-left))]";
 
 /**
+ * How much of this payload the Overseer reading may lean on. See `OverseerLine`.
+ *
+ * `fresh.stale` already folds together the snapshot's age, a failed refresh and
+ * a lost connection, and it is the same reading the STALE banner is drawn from —
+ * so the two can never disagree, which they would if this recomputed staleness
+ * from the timestamps itself.
+ */
+function completeness(state: FleetState, fresh: Freshness): ReadingCompleteness {
+  if (fresh.stale) return { ok: false, scope: "moment", why: "this page's data is stale" };
+  if (state.error !== null) {
+    return { ok: false, scope: "moment", why: `the last collection failed (${state.error}), so these rows are not current` };
+  }
+  if (state.collectedAt === null) return { ok: false, scope: "rows", why: "no collection has finished yet" };
+  if (state.unreadableRows > 0) {
+    return { ok: false, scope: "rows", why: `${state.unreadableRows} session row(s) in this payload could not be read` };
+  }
+  return COMPLETE;
+}
+
+/**
  * The Overseer line: which session holds the claim, or that none does.
  *
  * **FOUR STATES AND NONE OF THEM IS BLANK.** *No Overseer session* is not the
@@ -244,22 +264,24 @@ export const SHELL = "tw:mx-auto tw:w-full tw:max-w-[96rem] tw:px-[calc(0.75rem+
  * the alarm colour: picking one of them is how two sessions both go on believing
  * they are it.
  */
-function OverseerLine({ state }: { state: FleetState }): ReactNode {
-  /* **THE ROWS ARE NOT THE WHOLE STORY, and a short list must not pass as a
-     complete one.** Two things can hide the holder from this page: a payload
-     from before the first collection has no rows at all, which is not a box with
-     no Overseer; and `parseFleetState` DROPS rows it cannot read and counts
-     them, and the malformed row is as likely as any to be the holder's. Both go
-     in as incompleteness so the answer degrades to *unknown* rather than to a
-     confident *no Overseer session*. GPT Sol's P0-2. */
-  const claim = overseerClaim(
-    state.rows,
-    state.collectedAt === null
-      ? { ok: false, why: "no collection has finished yet" }
-      : state.unreadableRows > 0
-        ? { ok: false, why: `${state.unreadableRows} session row(s) in this payload could not be read` }
-        : COMPLETE,
-  );
+function OverseerLine({ state, fresh }: { state: FleetState; fresh: Freshness }): ReactNode {
+  /* **THE ROWS ARE NOT THE WHOLE STORY, AND NEITHER IS THE ROW COUNT.** Two
+     kinds of doubt reach this line, and `ReadingCompleteness` keeps them apart
+     because they are not equally bad:
+
+     `moment` — this page may not be describing NOW. A stale snapshot, a
+     collection that failed (whose rows are the last good ones, not current
+     ones), or a transport that has stopped. Nothing survives it, `contested`
+     included: two holders in an old snapshot do not prove two holders now, since
+     killing one is exactly what somebody would have done about it. The page can
+     otherwise say STALE and `Overseer: alpha` in the same breath about a session
+     that died an hour ago — GPT Sol, second review.
+
+     `rows` — the list is short: a payload from before the first collection has
+     no rows at all, which is not a box with no Overseer, and `parseFleetState`
+     DROPS rows it cannot read and counts them, any of which could be the
+     holder's. */
+  const claim = overseerClaim(state.rows, completeness(state, fresh));
   switch (claim.kind) {
     case "one":
       return (
@@ -358,7 +380,7 @@ export function Header({
             and it is drawn as loudly as the other three rather than as an empty
             space. Suppressed only before the first payload arrives, where every
             answer would be a guess. */}
-        {state === null ? null : <OverseerLine state={state} />}
+        {state === null ? null : <OverseerLine state={state} fresh={fresh} />}
 
         {/* Its own row rather than another item in the wrap above, so that on a
             phone it never lands between the tally and the age and pushes the

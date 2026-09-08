@@ -42,6 +42,7 @@ import {
   overseerClaim,
   parseSessionLine,
   parseSessions,
+  releaseSucceeded,
   setRoleCommand,
 } from "../scripts/gjd-remote-tmux.js";
 import {
@@ -52,6 +53,7 @@ import {
   overseerClaim as wireClaim,
   parseRole as parseWireRole,
 } from "../tools/fleet/overseer-claim.js";
+import { readOverseerClaim } from "../scripts/overseer.js";
 
 const b64 = (t: string) => Buffer.from(t, "utf8").toString("base64");
 
@@ -161,8 +163,33 @@ describe("who holds the claim", () => {
     expect(claim.kind).toBe("cannot-tell");
     // ...and it still says WHO, so a caller that only wants somebody to prod
     // keeps the address. What it has lost is the guarantee, not the name.
+    //
+    // Asserted on the FIELD, not on the sentence. This read `why.toContain("b")`
+    // for one commit, which passes on the word "be" in "could not be read" — a
+    // check that could not have failed, in a file about checks that cannot.
     if (claim.kind !== "cannot-tell") return;
-    expect(claim.why).toContain("b");
+    expect(claim.holder).toEqual({ name: "b", id: "$2" });
+  });
+
+  it("and when nobody was seen holding it, there is no holder to report", () => {
+    const list = sessionsOf([row({ sid: "$1", name: "a", role: "Over Seer!" })]);
+    const claim = overseerClaim(list);
+    expect(claim.kind).toBe("cannot-tell");
+    if (claim.kind !== "cannot-tell") return;
+    expect(claim.holder).toBeUndefined();
+  });
+
+  it("A READING THAT MAY NOT DESCRIBE NOW BEATS EVEN `contested`", () => {
+    // Two holders in an old snapshot do not prove two holders now — killing one
+    // is exactly what somebody would have done about it. GPT Sol, second review,
+    // against a version where `contested` short-circuited first.
+    const list = sessionsOf([
+      row({ sid: "$1", name: "a", role: OVERSEER_ROLE }),
+      row({ sid: "$2", name: "b", role: OVERSEER_ROLE }),
+    ]);
+    expect(wireClaim(list, { ok: false, scope: "moment", why: "this reading is stale" }).kind).toBe("cannot-tell");
+    // ...whereas a merely SHORT list leaves two known holders two known holders.
+    expect(wireClaim(list, { ok: false, scope: "rows", why: "a row was dropped" }).kind).toBe("contested");
   });
 
   it("TWO KNOWN HOLDERS BEAT AN INCOMPLETE READING — more rows could only make it worse", () => {
@@ -310,6 +337,94 @@ describe("reading a claim off a dashboard snapshot", () => {
   it("says none for a fresh, complete snapshot in which nobody holds it", () => {
     expect(read(snapshot({ rows: [{ id: "$1", name: "alpha", role: { kind: "none" } }] }))).toEqual({ kind: "none" });
   });
+
+  // FOUR MALFORMED AUTHORITY FIELDS, all of which the first version accepted as
+  // `{kind:"one"}`. GPT Sol confirmed each against the function before reporting
+  // it, which is why they are here as four cases rather than one.
+  it("only `error: null` establishes a good collection — an ABSENT error does not", () => {
+    const { error: _dropped, ...withoutError } = snapshot();
+    expect(read(withoutError).kind).toBe("cannot-tell");
+  });
+
+  it("nor does an error that is not a message", () => {
+    expect(read(snapshot({ error: { message: "failed" } })).kind).toBe("cannot-tell");
+  });
+
+  it("A SNAPSHOT STAMPED IN THE FUTURE IS NOT THE FRESHEST POSSIBLE ONE", () => {
+    expect(read(snapshot({ collectedAt: "2027-09-08T20:04:30.000Z" })).kind).toBe("cannot-tell");
+  });
+
+  it("a row whose id is not tmux's own shape is dropped and counted, not acted on", () => {
+    expect(read(snapshot({ rows: [{ id: "not-a-tmux-handle", name: "alpha", role: { kind: "overseer" } }] })).kind).toBe(
+      "cannot-tell",
+    );
+  });
+});
+
+describe("whether a release actually took", () => {
+  // The first version asked `role.kind !== "overseer"`, which a target whose
+  // role could not be read satisfies — so the command printed a green success
+  // without knowing whether anything had happened. GPT Sol, second review.
+  it("a target that is gone counts as released, because dying releases the claim", () => {
+    expect(releaseSucceeded(sessionsOf([row({ sid: "$1", name: "a" })]), "$999")).toBe(true);
+  });
+
+  it("a target whose role is now positively NONE counts", () => {
+    expect(releaseSucceeded(sessionsOf([row({ sid: "$1", name: "a" })]), "$1")).toBe(true);
+  });
+
+  it("A TARGET WHOSE ROLE COULD NOT BE READ DOES NOT COUNT", () => {
+    const list = sessionsOf([row({ sid: "$1", name: "a" }).replace(/[^|]*$/, ROLE_UNREADABLE)]);
+    expect(releaseSucceeded(list, "$1")).toBe(false);
+  });
+
+  it("nor does one that still holds it", () => {
+    expect(releaseSucceeded(sessionsOf([row({ sid: "$1", name: "a", role: OVERSEER_ROLE })]), "$1")).toBe(false);
+  });
+});
+
+describe("asking the dashboard over HTTP", () => {
+  const NOW = Date.parse("2026-09-08T20:05:00.000Z");
+  const body = {
+    schema: 1,
+    collectedAt: "2026-09-08T20:04:30.000Z",
+    error: null,
+    rows: [{ id: "$1", name: "alpha", role: { kind: "overseer" } }],
+  };
+  /** A `fetch` that answers once, without a network. */
+  const answering = (status: number, payload: unknown): typeof fetch =>
+    (async () =>
+      ({
+        ok: status >= 200 && status < 300,
+        status,
+        json: async () => payload,
+      }) as Response) as unknown as typeof fetch;
+
+  it("names the holder when the dashboard answers well", async () => {
+    const claim = await readOverseerClaim("http://x", { nowMs: NOW, fetchImpl: answering(200, body) });
+    expect(claim).toEqual({ kind: "one", name: "alpha", id: "$1" });
+  });
+
+  it("a non-200 is CANNOT-TELL, never 'no Overseer'", async () => {
+    const claim = await readOverseerClaim("http://x", { nowMs: NOW, fetchImpl: answering(503, body) });
+    expect(claim.kind).toBe("cannot-tell");
+  });
+
+  it("A DASHBOARD THAT CANNOT BE REACHED IS NOT A BOX WITH NO OVERSEER", async () => {
+    const throwing = (async () => {
+      throw new Error("ECONNREFUSED");
+    }) as unknown as typeof fetch;
+    const claim = await readOverseerClaim("http://x", { nowMs: NOW, fetchImpl: throwing });
+    expect(claim.kind).toBe("cannot-tell");
+    if (claim.kind !== "cannot-tell") return;
+    expect(claim.why).toContain("ECONNREFUSED");
+  });
+
+  it("and the payload's own refusals travel through it", async () => {
+    const failed = { ...body, error: "tmux went away" };
+    const claim = await readOverseerClaim("http://x", { nowMs: NOW, fetchImpl: answering(200, failed) });
+    expect(claim.kind).toBe("cannot-tell");
+  });
 });
 
 describe("the wire side", () => {
@@ -381,16 +496,20 @@ describe.runIf(usable())("when tmux lists a session it can no longer be asked ab
 
   beforeAll(() => {
     dir = mkdtempSync(path.join(tmpdir(), "overseer-claim-stub-"));
-    // `ls` answers; `show-environment -t X VAR` answers; the DUMP —
-    // `show-environment -t X` with no variable — fails, which is what a session
-    // that has gone looks like.
+    // `ls` still lists the session, and every read of it fails — which is what a
+    // session that ended between the listing and the lookup looks like. The
+    // OTHER variables answer normally, so the row is a perfectly good record
+    // whose ROLE alone is unknowable; a stub that failed everything would be
+    // testing a broken tmux instead.
     writeFileSync(
       path.join(dir, "tmux"),
       [
         "#!/bin/sh",
         'if [ "$1" = "ls" ]; then printf \'$7|1757000000|0|1|gone-session\\n\'; exit 0; fi',
         'if [ "$1" = "list-panes" ]; then exit 0; fi',
+        'if [ "$1" = "has-session" ]; then exit 1; fi',
         'if [ "$1" = "show-environment" ]; then',
+        '  if [ "$4" = "GJD_ROLE" ]; then exit 1; fi',
         '  if [ $# -ge 4 ]; then printf \'%s=\\n\' "$4"; exit 0; fi',
         "  exit 1",
         "fi",
@@ -495,18 +614,41 @@ describe.runIf(usable())("against a real tmux server", () => {
     expect(v.why).toContain("alpha");
   });
 
-  it("A ROLE WITH A NEWLINE IN IT IS UNREADABLE, not a claim", () => {
-    // tmux prints such a value as SEVERAL LINES, indistinguishable from several
-    // variables, so a naive read of the first one accepts
-    // "overseer\nGJD_ROLE=evil" as a perfectly good claim. Nothing here writes a
-    // value like that — `setRoleCommand` validates the token — so it can only
-    // arrive by hand, and the honest answer is that the role could not be read.
-    tmux("set-environment", "-t", "beta", "GJD_ROLE", "overseer\nGJD_ROLE=evil");
+  // tmux prints a multi-line value as SEVERAL LINES, indistinguishable from
+  // several variables, so a naive read of the first one accepts them as a
+  // perfectly good claim. Nothing here writes such a value — `setRoleCommand`
+  // validates the token — so it can only arrive by hand, and the honest answer
+  // is that the role could not be read.
+  //
+  // **BOTH SHAPES, because the first fix only caught the first one.** A version
+  // that counted lines matching `^GJD_ROLE=` rejected `overseer\nGJD_ROLE=evil`
+  // and cheerfully accepted `overseer\njunk`, and the test written with it
+  // proved only "two matching lines are rejected". GPT Sol found that by trying
+  // the other value.
+  for (const [label, value] of [
+    ["a second line that looks like another variable", "overseer\nGJD_ROLE=evil"],
+    ["a second line that looks like nothing", "overseer\njunk"],
+    ["a leading newline", "\noverseer"],
+  ] as const) {
+    it(`A ROLE WITH ${label} IS UNREADABLE, not a claim`, () => {
+      tmux("set-environment", "-t", "beta", "GJD_ROLE", value);
+      try {
+        expect(list().find((s) => s.name === "beta")?.role.kind).toBe("cannot-tell");
+        expect(overseerClaim(list()).kind).not.toBe("one");
+      } finally {
+        tmux("set-environment", "-u", "-t", "beta", "GJD_ROLE");
+      }
+    });
+  }
+
+  it("another variable carrying a GJD_ROLE= line cannot answer for the real one", () => {
+    // The reason the role is read BY NAME rather than out of a dump of the whole
+    // session environment.
+    tmux("set-environment", "-t", "beta", "INNOCENT", "x\nGJD_ROLE=overseer");
     try {
-      expect(list().find((s) => s.name === "beta")?.role.kind).toBe("cannot-tell");
-      expect(overseerClaim(list()).kind).not.toBe("one");
+      expect(list().find((s) => s.name === "beta")?.role).toEqual({ kind: "none" });
     } finally {
-      tmux("set-environment", "-u", "-t", "beta", "GJD_ROLE");
+      tmux("set-environment", "-u", "-t", "beta", "INNOCENT");
     }
   });
 
