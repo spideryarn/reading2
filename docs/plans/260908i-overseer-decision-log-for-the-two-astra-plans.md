@@ -91,3 +91,11 @@ and [260908f-overseer-and-fleet-improvement-roadmap.md](260908f-overseer-and-fle
   restarting a service as safe and forbids only writing systemd/infra config) — merge dev into the
   primary, check the queue is empty, restart, read the `overseer` status line. Until then every
   status reads "landed on dev, not yet serving".
+- 2026-09-08 22:45 UTC — Restart script hardened on the **dashboard agent's** advice: after the
+  restart it checks one pid on :8787, HTTP 200, served `index-*.js` equals the newest built asset,
+  and the `overseer` status line reports roles; the empty-queue guard prints every queued item and
+  can be overridden only with an explicit `--discard-queue`, because a stuck lease would otherwise
+  block every restart for ever. **Second runbook proposal pending Greg** (rule text, so not
+  committed): in the gates, one sentence after "restart a dead service" — *"Restarting a live
+  service to deploy what the primary now holds is the Overseer's call for the dashboard and the
+  daemon alone, once the steering queue has been read; anything else waits for Greg."*
