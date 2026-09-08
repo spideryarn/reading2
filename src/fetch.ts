@@ -1196,6 +1196,61 @@ export function charsetFromContentType(contentType: string | null): string | nul
   return null;
 }
 
+/* ------------------------------------------------------------------ *
+ * What the document starts with
+ * ------------------------------------------------------------------ *
+ *
+ * **One reading of the bytes, two thresholds over it.** Settled 2026-09-08 in
+ * docs/plans/260908a-match-the-documents-leading-tokens-instead-of-searching-for-markup.md,
+ * after a substring search over the first 16 KB — which is what lived here
+ * until then — was measured accepting JSON, an Atom feed, an RSS feed and an
+ * SVG as web pages, and each of them went on to become a publishable article.
+ *
+ * The two callers are asking **different questions**, which is why they do not
+ * share an answer:
+ *
+ *  - `sniffKind` on a vague content type asks *is there positive evidence this
+ *    is HTML?* Nobody has claimed anything, so we need a reason to say yes.
+ *  - `uploadedDocumentKind` asks *is there positive evidence this is something
+ *    else?* The reader has already told us what the file is, and a false
+ *    negative there is a legal file refused with copy that says sending it
+ *    again will not help.
+ *
+ * **They differ in how much evidence they demand and in nothing else.** That
+ * sentence is the whole of round 2 ⟨Sol F11–F14⟩: the first cut let the two
+ * predicates disagree about *what the bytes said*, in both directions — a
+ * browser-closed comment or a long UTF-16 comment made the fetched path say
+ * `null` and the upload path say `html`, while a processing instruction or a
+ * doctype'd feed did the reverse. Every one of those was the same structural
+ * fault. Wherever the walk gave up, the veto read *"nothing proven against it"*
+ * and accepted while the positive predicate read *"no evidence for it"* and
+ * refused, so the filename decided the meaning of the bytes — which is the
+ * body-wins rule, the one thing this module is for, inverted.
+ *
+ * So there is exactly one place that reads the bytes — `documentEvidence` —
+ * producing three facts, and the two public functions are thresholds over those
+ * facts and hold no byte logic of their own. `tests/fetch.test.ts` pins the
+ * invariant directly: **evidence the fetched path found may never be
+ * contradicted by a filename.**
+ *
+ * **What is the standard's and what is ours.** From the WHATWG MIME Sniffing
+ * Standard's pattern-matching algorithm we take the **positional rule**:
+ * signatures are matched at the leading position, never searched for later in
+ * the resource. That is what makes `{"template":"<p>hello</p>"}` stop being a
+ * web page, and it fixes the old `/<\s*html/` defect that let `< html>` through
+ * for free, because there is no longer a search that can land mid-string.
+ * Skipping BOMs, comments and an XML declaration, and taking a narrower
+ * evidence set than the spec's table, are **ours** — the spec treats a leading
+ * `<!--` as positive HTML evidence rather than as something to look past, and
+ * classifies `<?xml` as XML rather than asking what its root element is.
+ * Conflating the two is how the version before this one went wrong: it took the
+ * spec's tag *list*, kept our own substring *semantics*, and cited the spec for
+ * both. ⟨Sol F7⟩ Where the two standards disagree about a *skippable* thing we
+ * follow the **HTML parsing** spec rather than the sniffing one, because what
+ * we are really asking is what a browser would build: `--!>` closes a comment
+ * and `<?…>` is a bogus comment, and both are cited where they are used.
+ */
+
 /**
  * A PDF header, as the format actually defines it: `%PDF-` and a version.
  *
@@ -1207,110 +1262,550 @@ export function charsetFromContentType(contentType: string | null): string | nul
 const PDF_HEADER = /%PDF-\d\.\d/;
 
 /**
- * **A document-level HTML marker**, which is the only kind worth believing.
+ * **A sequence of code units, read one at a time, without copying it.**
  *
- * Matching `<p>` or `<div>` would classify `{"template":"<p>hello</p>"}` as a
- * web page. Named rather than inlined because `uploadedDocumentKind` has to ask
- * the same question of *decoded text* — a UTF-16 page's markup is invisible to
- * the Latin-1 scan `sniffKind` does — and two spellings of this regex would be
- * two answers to one question.
+ * Two implementations: the bytes themselves, and — for UTF-16, whose markup is
+ * `<\0!\0d\0o…` and invisible to any byte scan — a 16-bit view over those same
+ * bytes. One walker over an accessor is what stops those being two walkers that
+ * drift, and it is what keeps ⟨Sol F6⟩ satisfied: **nothing file-sized is ever
+ * materialised** to answer a question about the first tag. Out-of-range reads
+ * answer `-1`, which matches nothing, so no caller needs a bounds check.
  *
- * **The head-level tags since 2026-09-07**, and the reason is that the four
- * this started with were wrong about HTML. `<html>`, `<head>` and `<body>` are
- * **optional start tags** — tag omission is in the spec, browsers infer all
- * three, and a page can perfectly legally begin at `<title>`. So this was a
- * list of the tags a document *may* carry, written as though they were the tags
- * it *must*, and it refused one of our own tutorial pages
- * (docs/postmortems/260907c-a-heuristic-promoted-to-a-gate.md).
+ * **The view replaced a decoded 16 KB prefix**, which is ⟨Sol F11⟩: decoding
+ * gave UTF-16 a horizon nothing else had, and a page whose first tag sat behind
+ * a 9,000-character comment fell off it — visible to the upload path, invisible
+ * to the fetched one. A view has no horizon, so `MARKUP_WINDOW` is gone rather
+ * than enlarged, and the question "how far in do we look for the first tag" now
+ * has one answer for every encoding: as far as the file goes.
+ */
+interface CodeUnits {
+  readonly length: number;
+  unit(index: number): number;
+}
+
+function overBytes(bytes: Uint8Array): CodeUnits {
+  return { length: bytes.length, unit: (index) => bytes[index] ?? -1 };
+}
+
+/**
+ * The same bytes read two at a time, which is all UTF-16 decoding amounts to
+ * for the ASCII markup this asks about.
  *
- * **Which tags to add is not our guess.** The WHATWG MIME Sniffing Standard
- * has a normative pattern table for exactly this question, and
- * `whatwg-mimetype/lib/sniff.js` — already in node_modules under jsdom — is a
- * faithful implementation of it. Its HTML rows are:
+ * `start` steps over the BOM, so index 0 is the first real character and every
+ * caller can stay encoding-blind.
+ */
+function overUtf16(bytes: Uint8Array, littleEndian: boolean, start: number): CodeUnits {
+  const length = Math.max(0, (bytes.length - start) >> 1);
+  return {
+    length,
+    unit: (index) => {
+      if (index < 0 || index >= length) return -1;
+      const at = start + index * 2;
+      const low = bytes[littleEndian ? at : at + 1] ?? 0;
+      const high = bytes[littleEndian ? at + 1 : at] ?? 0;
+      return low | (high << 8);
+    },
+  };
+}
+
+/**
+ * **The bytes, read in whatever encoding they are actually in** — and the index
+ * of the first character after any BOM.
+ *
+ * `html-encoding-sniffer` is the spec's own algorithm and jsdom's
+ * implementation of it: BOM first, then the transport layer's charset, then a
+ * `<meta charset>` prescan. We consult it for one thing only — is this UTF-16,
+ * and which way round — because **UTF-16 is the entire set of encodings a byte
+ * scan cannot read.** Every other encoding the WHATWG standard admits is
+ * ASCII-compatible, so `<` is `0x3C` in all of them and the byte view is right;
+ * and a page declaring `<meta charset="utf-16">` is required by the same spec
+ * to be treated as UTF-8, so the prescan cannot mislead us here.
+ *
+ * A prefix is enough: the BOM is three bytes and the prescan is defined over
+ * the first kilobyte. Nothing is decoded, which is what lets the walk stay
+ * uncapped.
+ */
+function unitsFor(bytes: Uint8Array, contentType: string | null): { units: CodeUnits; start: number } {
+  const label = charsetFromContentType(contentType);
+  const encoding = sniffHTMLEncoding(bytes.subarray(0, 1024), {
+    defaultEncoding: "windows-1252",
+    ...(label === null ? {} : { transportLayerEncodingLabel: label }),
+  });
+  if (encoding === "UTF-16LE") {
+    return { units: overUtf16(bytes, true, bytes[0] === 0xff && bytes[1] === 0xfe ? 2 : 0), start: 0 };
+  }
+  if (encoding === "UTF-16BE") {
+    return { units: overUtf16(bytes, false, bytes[0] === 0xfe && bytes[1] === 0xff ? 2 : 0), start: 0 };
+  }
+  const utf8Bom = bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf;
+  return { units: overBytes(bytes), start: utf8Bom ? 3 : 0 };
+}
+
+/** The five bytes the MIME sniffing standard calls whitespace. */
+function isSpaceUnit(unit: number): boolean {
+  return unit === 0x09 || unit === 0x0a || unit === 0x0c || unit === 0x0d || unit === 0x20;
+}
+
+/**
+ * What may follow a tag name: whitespace, `>`, or the `/` of a self-closing tag.
+ *
+ * Wider than the spec's tag-terminating byte, which is space or `>` only, and
+ * deliberately so — `<html\n  lang="en">` is an ordinary page and the spec's
+ * own table would miss it. The mask arithmetic in `whatwg-mimetype`'s table
+ * (`0xE1`) is in fact looser still, matching every even byte in `0x20–0x3E`;
+ * that is an artefact of expressing "space or `>`" as a bitmask, not an
+ * intention worth copying.
+ */
+function isTagEnd(unit: number): boolean {
+  return isSpaceUnit(unit) || unit === 0x3e || unit === 0x2f;
+}
+
+/** ASCII case-insensitive compare of a lowercase literal at `at`. */
+function matchesLiteral(units: CodeUnits, at: number, literal: string): boolean {
+  for (let i = 0; i < literal.length; i++) {
+    const unit = units.unit(at + i);
+    const lower = unit >= 0x41 && unit <= 0x5a ? unit + 0x20 : unit;
+    if (lower !== literal.charCodeAt(i)) return false;
+  }
+  return true;
+}
+
+/** Exact compare, for the one token whose case the standard actually fixes. */
+function matchesExactly(units: CodeUnits, at: number, literal: string): boolean {
+  for (let i = 0; i < literal.length; i++) {
+    if (units.unit(at + i) !== literal.charCodeAt(i)) return false;
+  }
+  return true;
+}
+
+/** Index of the first unit that is not skippable, and whether XML was declared. */
+interface LeadingToken {
+  at: number;
+  /** An `<?xml … ?>` **declaration** was skipped — not merely a `<?…>` of some kind. */
+  xmlProlog: boolean;
+}
+
+/**
+ * **Where the document really begins**, and whether it announced itself as XML
+ * on the way there.
+ *
+ * Skips, in a loop because they nest in any order: whitespace, comments, and
+ * `<?…>`. The comment skipping is not a nicety — the tutorial page that caused
+ * docs/postmortems/260907c-a-heuristic-promoted-to-a-gate.md carries 4102 bytes
+ * of quoted request in front of its first tag, and
+ * docs/reusable/write-tutorial.md prescribes exactly that shape, so it is the
+ * template being followed rather than a one-off.
+ *
+ * **A comment ends at `-->` or at `--!>`, whichever comes first** ⟨Sol F12⟩.
+ * The second is an *incorrectly-closed comment*: the HTML parser raises a parse
+ * error and closes the comment anyway, so every browser reads the document
+ * behind it and so must we. Taking the earliest of the two matters as much as
+ * knowing both — a `--!>` sitting inside a normally-closed comment would
+ * otherwise swallow the document after it.
+ * https://html.spec.whatwg.org/multipage/parsing.html#parse-error-incorrectly-closed-comment
+ *
+ * **`<?xml` is a declaration only when it is spelled exactly that way and
+ * followed by whitespace** ⟨Sol F13⟩. A case-insensitive prefix match calls
+ * `<?xml-stylesheet href="x.css"?>` a declaration, which set the XML flag on a
+ * perfectly ordinary styled page and had the two predicates answer oppositely.
+ * Any other `<?…>` is a processing instruction, which the HTML parser treats as
+ * a bogus comment ending at the first `>` — so it is skipped too, and the
+ * document behind it is still the document.
+ * https://html.spec.whatwg.org/multipage/parsing.html#parse-error-disallowed-processing-instruction-target
+ *
+ * **There is no prefix cap here**, which is ⟨Sol F6⟩ answered: a licence header
+ * or an unterminated comment pushes the first tag past any window we would pick,
+ * and the input is already bounded by the 32 MB fetch cap and the 50 MB upload
+ * cap. The walk is linear and stops at the first non-skippable unit, so the
+ * common case reads a handful of them.
+ *
+ * `from` exists so the XML root check can carry on walking from behind a
+ * doctype; the BOM is already behind us, because the view chose it.
+ */
+/**
+ * **Where a comment ends** — the index just past its `>`, or `-1` if it never
+ * closes. `at` is the index of the opening `<`.
+ *
+ * **A three-character window, slid one unit at a time, reading every byte of
+ * the comment exactly once.** That is deliberately not the obvious thing, and
+ * it took three rounds of review to arrive at, so here is the whole argument.
+ *
+ * `Buffer.indexOf` looks like the right tool and is a trap in two directions,
+ * both measured on this box:
+ *
+ *  - **It costs about 300 ns per call whatever the size of the haystack.** So
+ *    any design that makes one call per comment, or per terminator candidate,
+ *    loses on a file made of many small comments — 1.8 M of them is 16 MiB of
+ *    perfectly ordinary bytes and cost about a second.
+ *  - **It degrades to 151 ms per 16 MiB when the haystack repeats the needle's
+ *    prefix** — searching for `-->` through a run of `-` is its bad case.
+ *
+ * Every native-search variant we tried therefore had *some* stuffing character
+ * that punished it, and each round found the next one: searching for `-->` and
+ * `--!>` separately was quadratic on empty comments ⟨F17⟩; scanning for `>` and
+ * looking backwards cost 2.4 s on 16 MiB of `>` ⟨F23⟩; bounding the second
+ * search by the first fixed that and cost 689 ms on 16 MiB of `-`.
+ *
+ * **A `unit()` read is 6.6 ns and does not care what the byte is.** This loop
+ * measures 64–145 ms per 16 MiB across dashes, `>`, ordinary text and a million
+ * small comments alike — worse than a native scan at its best and better than
+ * any of them at their worst, which is the trade a server wants. Its cost is a
+ * function of length alone, so **there is no input that makes it slower**, and
+ * that is worth more here than the 50× the native scan wins on a benign 16 MiB
+ * comment nobody has ever sent us. The ceiling tests in tests/fetch.test.ts
+ * hold both shapes.
+ *
+ * **Which `>` closes a comment is the HTML parser's answer rather than a
+ * guess.** `-->` always does, and the window is seeded with the opener's own
+ * two dashes so that it may close immediately: that is exactly the spec's
+ * *abrupt closing of an empty comment*, which is why `<!-->` and `<!--->` close
+ * without either being special-cased ⟨Sol F18⟩. `--!>` — an *incorrectly-closed
+ * comment*, a parse error that closes anyway — may not reach back that far: it
+ * closes only when its `--` is comment *data*, which is the whole difference
+ * between `<!--!>`, which a browser never closes, and `<!-->`, which it does.
+ * https://html.spec.whatwg.org/multipage/parsing.html#comment-start-state
+ */
+function commentEnd(units: CodeUnits, at: number): number {
+  const first = at + 4;
+  let back3 = -1;
+  let back2 = units.unit(at + 2);
+  let back1 = units.unit(at + 3);
+  for (let i = first; i < units.length; i++) {
+    const unit = units.unit(i);
+    if (unit === 0x3e) {
+      if (back1 === 0x2d && back2 === 0x2d) return i + 1;
+      if (back1 === 0x21 && back2 === 0x2d && back3 === 0x2d && i - 3 >= first) return i + 1;
+    }
+    back3 = back2;
+    back2 = back1;
+    back1 = unit;
+  }
+  return -1;
+}
+
+/**
+ * **Where a `<?…>` ends** — the index just past its `>`, or `-1`.
+ *
+ * Walked rather than searched, for the reason `commentEnd` argues at length: a
+ * file of `<?a?>` is a file of tiny constructs, and a native call each is the
+ * cost that keeps coming back.
+ *
+ * **The first `>` ends it, declaration or not** — which is the HTML parser's
+ * rule: everything opening `<?` is a *bogus comment* to it, and that is what
+ * skips `<?xml-stylesheet href="x.css"?>` and leaves the document behind it
+ * still the document ⟨Sol F13⟩.
+ * https://html.spec.whatwg.org/multipage/parsing.html#parse-error-disallowed-processing-instruction-target
+ *
+ * **XML would end a declaration at `?>` instead, and that branch was written
+ * and then removed**, because it cannot be reached by any real file: the only
+ * things a declaration may contain are a version, an encoding name and
+ * `standalone`, none of which can hold a `>`. It also disagreed with stage 2 —
+ * `new JSDOM(html)` runs the HTML parser — which is the same reason the DTD
+ * lexer went. A branch with no reachable case is a branch whose behaviour
+ * nothing pins, so it is better not written than written and mutated at.
+ */
+function instructionEnd(units: CodeUnits, at: number): number {
+  for (let i = at + 2; i < units.length; i++) if (units.unit(i) === 0x3e) return i + 1;
+  return -1;
+}
+
+function leadingToken(units: CodeUnits, from: number): LeadingToken {
+  let at = from;
+  let xmlProlog = false;
+  for (;;) {
+    while (at < units.length && isSpaceUnit(units.unit(at))) at++;
+    if (matchesLiteral(units, at, "<!--")) {
+      const end = commentEnd(units, at);
+      if (end === -1) return { at: units.length, xmlProlog };
+      at = end;
+      continue;
+    }
+    if (units.unit(at) === 0x3c && units.unit(at + 1) === 0x3f) {
+      const declaration = matchesExactly(units, at, "<?xml") && isSpaceUnit(units.unit(at + 5));
+      if (declaration) xmlProlog = true;
+      const end = instructionEnd(units, at);
+      if (end === -1) return { at: units.length, xmlProlog };
+      at = end;
+      continue;
+    }
+    return { at, xmlProlog };
+  }
+}
+
+/**
+ * **The positive predicate: a document-level tag, at the leading position.**
+ *
+ * The list is the WHATWG MIME Sniffing Standard's HTML rows — read out of
+ * `node_modules/whatwg-mimetype/lib/sniff.js`, which is a faithful
+ * implementation of the table and is already in the tree under jsdom — minus
+ * its body-level and component-level rows, plus three of ours. The full table
+ * is:
  *
  * > `<!DOCTYPE HTML` `<HTML` `<HEAD` `<SCRIPT` `<IFRAME` `<H1` `<DIV` `<FONT`
  * > `<TABLE` `<A` `<STYLE` `<TITLE` `<B` `<BODY` `<BR` `<P` `<!--`
  *
- * **We take a subset of it, deliberately.** The spec is answering *"is there
- * any HTML here"* for a browser that has already decided to render something;
- * we are answering *"is this a document"* about a file, and `<A`, `<B`, `<P`,
- * `<DIV`, `<BR`, `<TABLE`, `<FONT`, `<H1` and `<!--` are all short enough to
- * turn up inside JSON, templates and prose — which is the false positive the
- * paragraph above exists to prevent, and `sniffKind`'s own suite pins. So this
- * adds only the elements that a **document head** carries: `title`, `meta`,
- * `style`, `script`, `link`, `base`. Three of those are the spec's; `meta`,
- * `link` and `base` are ours, on the same argument and with the same shape.
+ * **What we drop, and why it is not the old subset's reason.** The old code
+ * dropped `<A`, `<B`, `<P`, `<DIV`, `<BR` and friends because they are short
+ * enough to turn up inside JSON and templates — an argument about *searching*,
+ * which anchoring has now retired. The reason now is different and narrower:
+ * `<div>`, `<p>`, `<h1>`, `<table>`, `<a>`, `<b>`, `<br>`, `<font>` and
+ * `<iframe>` open a **fragment** just as readily as a document, and this
+ * predicate runs where nothing has claimed anything, so a fragment is not a
+ * reason to say yes.
  *
- * **And the library is not adopted wholesale**, which was weighed rather than
- * skipped: `computedMIMEType`'s step 1 returns a declared `text/html` without
- * sniffing at all, which is the opposite of this module's rule that the body
- * wins — so it would silently stop catching the Cloudflare-challenge-page-as-
- * `application/pdf` case that `sniffKind`'s comment says it was built for.
- * A spec-blessed *list* is worth having; the spec's *precedence* is not ours.
+ * **`<script>` and `<style>` went the same way in round 2** ⟨Sol F9⟩: they are
+ * how a Svelte or Vue component file opens, and Sol put one through
+ * `readArticle` and got 7,209 characters with no refusal — a source file
+ * published as an article. This is where the two-predicate design earns itself:
+ * removing them costs the **upload** path nothing at all, because a component
+ * named `.html` is not provably another format and reaches stage 2 through the
+ * veto regardless. Narrowing the positive set is free where a claim exists and
+ * only binds where there is no claim, which is exactly where it should.
+ *
+ * **`<!--` is dropped for a third reason**: we look *past* a comment rather
+ * than counting it, which is what tells `<!-- generated --><feed>` apart from
+ * `<!-- saved from url --><!doctype html>`. ⟨Sol F3⟩
+ *
+ * **`meta`, `link` and `base` are ours**, on the same argument as the spec's
+ * `title`: they are what a document *head* carries, and a page that opens at
+ * `<meta charset>` is ordinary. Nothing else on this list belongs to any other
+ * vocabulary.
  */
-const DOCUMENT_MARKUP =
-  /<\s*(!doctype\s+html|html[\s>]|head[\s>]|body[\s>]|title[\s>]|meta[\s>]|link[\s>]|base[\s>]|style[\s>]|script[\s>])/i;
+const HTML_LEADING_TAGS = ["html", "head", "body", "title", "meta", "link", "base"];
+
+function startsHtmlDocument(units: CodeUnits, at: number): boolean {
+  if (units.unit(at) !== 0x3c) return false;
+  if (startsDoctypeHtml(units, at)) return true;
+  for (const tag of HTML_LEADING_TAGS) {
+    if (matchesLiteral(units, at + 1, tag) && isTagEnd(units.unit(at + 1 + tag.length))) return true;
+  }
+  return false;
+}
+
+/** `<!doctype html`, with the run of whitespace the spec's fixed pattern cannot express. */
+function startsDoctypeHtml(units: CodeUnits, at: number): boolean {
+  if (!matchesLiteral(units, at + 1, "!doctype")) return false;
+  let i = at + 9;
+  if (!isSpaceUnit(units.unit(i))) return false;
+  while (isSpaceUnit(units.unit(i))) i++;
+  return matchesLiteral(units, i, "html") && isTagEnd(units.unit(i + 4));
+}
 
 /**
- * **How far in we will look for that marker**, and it is not the PDF window.
+ * **After an XML declaration, does the document declare itself HTML** — by its
+ * root element, or by its doctype?
  *
- * Two questions with two justifications, which is why this is not the 1030
- * below. A PDF header belongs on the first line and a few junk bytes in front
- * of it is the whole tolerance the format needs. A document's first tag can sit
- * behind an arbitrarily long comment — a licence header, or in the file that
- * caused this, 4102 bytes of the request the page was written from.
+ * **A doctype's name *is* the vocabulary, and that is the whole of it.** This
+ * function briefly did more: ⟨Sol F14⟩ pointed out that answering `yes` on a
+ * doctype never looked at the root, so `<?xml?><!doctype html><feed>` passed,
+ * and the fix skipped the doctype — subset, quoted literals and all — to reach
+ * the first element. That went again a day later, and the reasons are worth
+ * keeping because they are why this is the last word rather than a stopping
+ * point.
  *
- * **16 KB rather than the spec's 1445**, and the asymmetry is the reason. A
- * browser sniffs only when the server shrugged, and being wrong costs it a
- * re-render; we are deciding whether a file **the reader deliberately chose**
- * is worth reading, and being wrong costs them a refusal they can do nothing
- * about. A false negative here is unrecoverable and a false positive is a
- * sentence from stage 2 saying there is no article in it, so the window is
- * sized for the expensive mistake.
+ *  1. **The line it defended is not one the design holds.** `<!doctype html>
+ *     <feed>` with no prolog is accepted on both paths, and always has been —
+ *     `<!doctype html` is sufficient positive evidence by itself. Adding a
+ *     prolog is 21 bytes and must not reverse the answer: one document, one
+ *     reading, whatever is in front of it.
+ *  2. **Skipping a doctype properly means parsing a DTD**, and that is a
+ *     treadmill rather than a task. The version that shipped tracked quoted
+ *     literals and one level of `[`; a nested bracket defeated it, and so did
+ *     an apostrophe in an English comment inside the subset — *can't* opened a
+ *     literal that never closed, and a perfectly ordinary hand-written entity
+ *     subset was refused outright. Nesting-depth would not have fixed the
+ *     second: comments and processing instructions inside a subset are not
+ *     declarations, and telling them apart is a DTD parser.
+ *  3. **It modelled a grammar nothing downstream applies.** Stage 2 is
+ *     `new JSDOM(html)` with no content type, so the **HTML** parser runs, and
+ *     its rule for `<!DOCTYPE html [` is to end at the first `>` and let `]>`
+ *     fall into the body text. We were being stricter than the thing that
+ *     actually reads the file.
+ *
+ * The neighbours are not the same shape and are not on the same treadmill:
+ * `commentEnd` and the processing-instruction skip each find **one delimiter**
+ * and cite the HTML parsing spec for it. This one was reading the *inside* of a
+ * construct, which is why it alone kept producing findings.
+ *
+ * So the veto's rule now reads: **an XML prolog whose document does not declare
+ * itself HTML, by root or by doctype, is another vocabulary.** `<?xml?><rss>`
+ * and `<?xml?><!DOCTYPE svg …>` are still refused, because neither says `html`.
  */
-const MARKUP_WINDOW = 16_384;
+function xmlRootIsHtml(units: CodeUnits, at: number): boolean {
+  if (units.unit(at) !== 0x3c) return false;
+  if (startsDoctypeHtml(units, at)) return true;
+  return matchesLiteral(units, at + 1, "html") && isTagEnd(units.unit(at + 5));
+}
+
+/** How much of a resource the MIME sniffing standard looks at: its resource header. */
+const RESOURCE_HEADER = 1445;
 
 /**
- * HTML, PDF, or something we can't read — decided by the bytes first.
+ * **The standard's own answer to *is this text at all*.**
  *
- * Header and body disagree often enough that one of them has to win, and the
- * body wins. A PDF served as `application/octet-stream` is still a PDF; a
- * Cloudflare challenge page served as `application/pdf` is still HTML.
+ * A binary data byte is any of `0x00–0x08`, `0x0B`, `0x0E–0x1A`, `0x1C–0x1F`,
+ * as `distinguishTextOrBinary` in `whatwg-mimetype/lib/sniff.js` defines it.
+ *
+ * **One rule, not a list of formats**, and that is the whole point of choosing
+ * it: read as bytes, PNG, JPEG, GIF, ZIP and everything built on ZIP (docx,
+ * epub), gzip, MP4, WebM, legacy Office and a renamed video are all caught
+ * without anybody enumerating them. An enumeration is the open-ended blocklist
+ * this design rejected — the next format nobody thought of needs another entry,
+ * and nobody adds it until a reader is refused, which is the shape of the bug
+ * being fixed here.
+ *
+ * **"Read as bytes" is load-bearing in that sentence** ⟨Sol, round 2⟩. Behind a
+ * UTF-16 BOM the same file is read two bytes at a time, so `07 41` is the
+ * perfectly ordinary character `U+4107` and binary data can pass this rule. It
+ * is a narrow hole and a shallow one: such a file has no leading HTML evidence
+ * either, so all it buys is a trip to stage 2 and a sentence saying there is no
+ * article in it. Widening the rule to catch it would mean guessing which code
+ * points are "really" text, which is the open-ended list again.
+ *
+ * **We skip a BOM rather than stopping at one, which the spec does not**
+ * ⟨Sol F16⟩. The standard returns *text* the moment it sees any BOM and looks
+ * no further; that is right for a browser choosing how to render, and wrong for
+ * the claim in the paragraph above, because three bytes in front of a PNG
+ * defeated it. So this runs over the units *after* the BOM — and for UTF-16
+ * over decoded code units, which asks the same question in the units that file
+ * is made of, rather than exempting the rest of the bytes wholesale. That is
+ * also what reads a real BOM'd UTF-16 page, whose every other byte is `0x00`.
+ *
+ * The other side of it: **BOM-less UTF-16 is refused on the upload path**,
+ * decided rather than discovered — nothing names its encoding, so it is read as
+ * bytes, and its `0x00`s are indistinguishable from binary. Pinned by a test.
  */
-export function sniffKind(contentType: string | null, bytes: Uint8Array): DocumentKind | null {
-  const mime = mimeType(contentType);
+function hasBinaryDataUnit(units: CodeUnits, from: number): boolean {
+  const end = Math.min(units.length, from + RESOURCE_HEADER);
+  for (let i = from; i < end; i++) {
+    const unit = units.unit(i);
+    if (unit <= 0x08 || unit === 0x0b || (unit >= 0x0e && unit <= 0x1a) || (unit >= 0x1c && unit <= 0x1f)) {
+      return true;
+    }
+  }
+  return false;
+}
 
+/**
+ * **What the bytes say, read once**, for two callers that demand different
+ * amounts of it.
+ *
+ * Three facts off one walk over one encoding-aware view. Both public functions
+ * are thresholds over these and contain no byte logic of their own, which is
+ * the structural answer to ⟨Sol F11–F14⟩ rather than four separate patches: the
+ * old code let each caller reach its own conclusion about the same file, and
+ * four different ways of giving up became four disagreements.
+ */
+interface DocumentEvidence {
+  /** The leading token is a document-level HTML tag, and nothing contradicts it. */
+  leadingHtml: boolean;
+  /** An XML declaration whose root element is not `<html>`. */
+  otherVocabulary: boolean;
+  /** The WHATWG binary-data test, over the units the encoding actually implies. */
+  binary: boolean;
+}
+
+function documentEvidence(bytes: Uint8Array, contentType: string | null): DocumentEvidence {
+  const { units, start } = unitsFor(bytes, contentType);
+  const token = leadingToken(units, start);
+  const otherVocabulary = token.xmlProlog && !xmlRootIsHtml(units, token.at);
+  return {
+    /* A document that has declared itself another vocabulary has no HTML
+       evidence *either*. Without this the two predicates could still answer
+       oppositely about one file — `<?xml?><!doctype html><feed>` being exactly
+       that — and "they differ in how much evidence they demand, not in what the
+       bytes say" would be a comment rather than a property. */
+    leadingHtml: !otherVocabulary && startsHtmlDocument(units, token.at),
+    otherVocabulary,
+    binary: hasBinaryDataUnit(units, start),
+  };
+}
+
+/**
+ * **The whole reading of one file, done once** — the kind, and the evidence
+ * behind it.
+ *
+ * ⟨Sol F21.⟩ `uploadedDocumentKind` used to call `sniffKind` and then compute
+ * the evidence over again, so every upload walked its own bytes twice — which
+ * is also what doubled the cost of the P0 above it. Sharing one result is the
+ * point of this type: the public functions differ in what they *do* with the
+ * evidence, never in what they read.
+ */
+interface Classified {
+  kind: DocumentKind | null;
+  evidence: DocumentEvidence;
+}
+
+function classify(contentType: string | null, bytes: Uint8Array): Classified {
   /* 1030 rather than 1024, so a header starting at byte 1021 isn't cut in half
      by the window it is being looked for in. */
   const head = latin1(bytes.subarray(0, 1030));
   const pdfAt = PDF_HEADER.exec(head)?.index ?? -1;
-
-  /* The spec puts the header on the first line. Real files sometimes carry a
-     little junk in front, so a header further in is still believed — unless the
-     server said HTML, in which case a `%PDF-1.7` in the middle of the page is
-     far more likely to be text about PDFs than a PDF. */
-  const declaredHtml = mime === "text/html" || mime === "application/xhtml+xml";
-  if (pdfAt === 0 || (pdfAt > 0 && !declaredHtml)) return "pdf";
-
-  if (declaredHtml) return "html";
-
-  /* No usable header, or a server shrugging with octet-stream: believe the
-     markup, but only a **document-level** marker. Matching `<p>` or `<div>`
-     would classify `{"template":"<p>hello</p>"}` as a web page.
-
-     **Its own window, not `head`.** `head` is 1030 bytes because that is what a
-     PDF header needs; a document's first tag can sit behind a long comment, and
-     scanning for it in the PDF's window was half of why a valid page was
-     refused on 2026-09-07. `MARKUP_WINDOW` argues the size. */
-  const looksLikeHtml = DOCUMENT_MARKUP.test(latin1(bytes.subarray(0, MARKUP_WINDOW)));
-  const mimeIsVague =
-    mime === null || mime === "text/plain" || mime === "application/octet-stream" || mime === "application/pdf";
-  if (looksLikeHtml && mimeIsVague) return "html";
-  return null;
+  const evidence = documentEvidence(bytes, contentType);
+  return { kind: kindFrom(mimeType(contentType), pdfAt, evidence), evidence };
 }
 
 /**
- * **The same question, asked of a file somebody uploaded** — html, pdf, or
+ * **The order of these four answers is the detector's contract**, and two
+ * rounds of review found it wrong in two different places.
+ *
+ * ⟨Sol F5⟩ `%PDF-` used to be consulted and returned before any HTML evidence,
+ * so `sniffKind(null, "<!doctype html>…About %PDF-1.7 files…")` came back
+ * `"pdf"` and an ordinary page went to the transcriber. The suite was green
+ * over it because the one test that asked passed `"text/html"`, which
+ * short-circuits two lines above the branch it meant to check: a test sharing
+ * an assumption with the code (docs/reusable/silent-success.md).
+ *
+ * ⟨Sol F10⟩ Fixing that by putting the HTML claim in front of `pdfAt > 0`
+ * inverted the rule this module exists for: `\n%PDF-1.7\n1 0 obj…` named
+ * `.html` came back `"html"`, so a claim beat bytes the detector had already
+ * recognised. Both mistakes cost money in opposite directions — an empty
+ * article, or a transcription bill for a web page.
+ *
+ * So: **byte zero is unconditional**, because that is where the format puts its
+ * header and nothing else legitimately starts there; a `%PDF-` further in is
+ * beaten by leading HTML evidence and by nothing else, a claim included.
+ */
+function kindFrom(mime: string | null, pdfAt: number, evidence: DocumentEvidence): DocumentKind | null {
+  if (pdfAt === 0) return "pdf";
+  if (pdfAt > 0) return evidence.leadingHtml ? "html" : "pdf";
+  if (mime === "text/html" || mime === "application/xhtml+xml") return "html";
+  /* No usable header, or a server shrugging with octet-stream: believe what the
+     document starts with. A feed served honestly as `application/rss+xml` is
+     refused here without the bytes being consulted at all, which is the
+     narrowing the plan relies on. */
+  const mimeIsVague =
+    mime === null || mime === "text/plain" || mime === "application/octet-stream" || mime === "application/pdf";
+  return mimeIsVague && evidence.leadingHtml ? "html" : null;
+}
+
+/**
+ * HTML, PDF, or something we can't read.
+ *
+ * **How much the bytes decide depends on how much the header committed to**,
+ * and the shorter slogan this docstring used to carry — *the body wins* — was
+ * too broad to be a rule ⟨Sol, round 2⟩. Overstating it is how F14 was reviewed
+ * and approved, so what it actually does, in the order `kindFrom` does it:
+ *
+ *  - **`%PDF-` at byte zero wins over everything.** A PDF served as
+ *    `application/octet-stream` is still a PDF.
+ *  - **A `%PDF-` further in loses only to leading HTML evidence** — a page that
+ *    talks about PDFs — and beats every claim, header and filename alike.
+ *  - **An explicit `text/html` or `application/xhtml+xml` is believed.** The
+ *    body does *not* win here: a server that committed to HTML is trusted, and
+ *    the only thing that overrides it is the PDF header above. This is why a
+ *    Cloudflare challenge page served as `application/pdf` is caught (that
+ *    header is vague, not a commitment) and an Atom feed served honestly as
+ *    `text/html` is not.
+ *  - **A vague or absent header is decided by the bytes alone**, which is the
+ *    branch everything below this comment exists for.
+ */
+export function sniffKind(contentType: string | null, bytes: Uint8Array): DocumentKind | null {
+  return classify(contentType, bytes).kind;
+}
+
+/**
+ * **The same two kinds, asked of a file somebody uploaded** — html, pdf, or
  * nothing we can read.
  *
  * Here rather than in src/source.ts, which is otherwise the upload module and
@@ -1319,70 +1814,52 @@ export function sniffKind(contentType: string | null, bytes: Uint8Array): Docume
  * `npm run cycles` is a gate. Both halves of stage 1 are stage 1, and this is
  * where the byte-level primitives already are.
  *
- * **Two questions, and they are genuinely two.**
+ * **It is not the same question as `sniffKind`, and that is the change of
+ * 2026-09-08.** An upload carries no `Content-Type`; the only claim is a
+ * filename the reader chose, and this branch is not a tiebreaker over a rare
+ * case — it is the whole decision, on every file, for somebody holding a file
+ * with no other way in. Reusing a fall-through heuristic in that position is
+ * the class named in
+ * docs/postmortems/260907c-a-heuristic-promoted-to-a-gate.md: *a check keeps
+ * its old standard of evidence when it is moved to a position that demands a
+ * new one*. So the standard changes with the position — look for evidence
+ * **for** HTML when the header is missing, and evidence **against** it when the
+ * reader has already told you what the file is.
  *
- *  1. **Which of the two kinds?** — `sniffKind(claimed, bytes)`. An upload
- *     carries no `Content-Type`, so the filename is the only claim there is,
- *     and `sniffKind` weighs it exactly as it weighs a server's header: the
- *     bytes win, and the claim only breaks a tie. That tie is real and costs
- *     money. `%PDF-` at byte zero is a PDF whatever anybody says, but `%PDF-`
- *     further in is a PDF only when nothing has declared HTML — so without the
- *     claim, a saved web page that merely *mentions* `%PDF-` in its first
- *     kilobyte would go to the transcriber as a PDF.
- *  2. **Is there byte evidence at all?** — because the answer above believes a
- *     declared `text/html` outright, and here the "declaration" is nothing but
- *     the reader's own file extension. Without this a `.html` suffix would
- *     admit a renamed video, and the principle this whole path rests on is that
- *     the name is a **claim** and the bytes are the fact.
+ * **Positive evidence is checked first, and that ordering is load-bearing.**
+ * It says a file the fetched path would call a web page is one here too,
+ * whatever it is named — the invariant round 2 was refused for breaking. It is
+ * also what reads a BOM'd UTF-16 page: half its bytes are `0x00`, so the veto
+ * below would refuse it on evidence that is really an artefact of its encoding.
  *
- * A `"pdf"` answer needs no second check: `sniffKind` returns it only when
- * `PDF_HEADER` actually matched, which is the evidence.
- *
- * **The HTML check is asked of the raw bytes first and the decoded text
- * second**, and the second half is not belt and braces — it is the whole of
- * ⟨Sol, 2026-09-07⟩. `sniffKind` scans bytes as Latin-1, and a UTF-16 page's
- * markup is `<\0!\0d\0o…`, which no Latin-1 scan can match. So a perfectly good
- * UTF-16LE file that `decodeHtml` reads flawlessly was refused as *"not a PDF
- * or a web page"*. Reproduced, then fixed: when the raw scan sees nothing, ask
- * the decoder, which is the thing that knows about encodings. A head slice is
- * enough — `DOCUMENT_MARKUP` matches in the first tag — so the fallback does
- * not decode 50 MB to answer a question about the first line.
- *
- * **Both slices are `MARKUP_WINDOW` since 2026-09-07**, and they were 1030 and
- * 4096 — two numbers, neither of them this question's. The file that made the
- * point carries its first tag at byte 4106, which is past both: ten bytes past
- * the larger, so a `.html` a browser renders came back as *"not a PDF or a web
- * page"*. Where the marker may sit is one fact, so it gets one constant, and
- * the raw and decoded scans have to agree about it or the fallback is looking
- * somewhere the first pass already refused.
- *
- * **What it deliberately lets through** is a `.html` file that parses as markup
- * and holds no article. Stage 2 refuses that, with a sentence about the thing
- * that is actually wrong with it, at no cost and with the reader's slot
- * released. Guessing at the article from the bytes is stage 2's job.
+ * **What it deliberately lets through** is far more than the old check did: a
+ * `<div>` fragment, a page of prose, a Svelte component, a custom-element root,
+ * a prolog-less feed. Stage 2 refuses those with a sentence about the thing
+ * that is actually wrong with them, at no cost and with the reader's slot
+ * released. Guessing at the article from the bytes is stage 2's job, and
+ * pretending otherwise is what refused one of our own tutorial pages in
+ * production.
  */
 export function uploadedDocumentKind(filename: string, bytes: Uint8Array): DocumentKind | null {
   const claimed = uploadContentType({ name: filename, type: "", size: bytes.byteLength });
-  const kind = sniffKind(claimed, bytes);
-  /* `null`, or a PDF that `PDF_HEADER` proved. Neither wants a second opinion. */
+  const { kind, evidence } = classify(claimed, bytes);
+  /* `null`, or a PDF the bytes carry. Neither wants a second opinion. */
   if (kind !== "html") return kind;
-  const head = bytes.subarray(0, MARKUP_WINDOW);
-  if (DOCUMENT_MARKUP.test(latin1(head))) return "html";
-  return DOCUMENT_MARKUP.test(decodeHtml(head, null).text) ? "html" : null;
+  if (evidence.leadingHtml) return "html";
+  return evidence.otherVocabulary || evidence.binary ? null : "html";
 }
 
 /**
  * Bytes as characters, one for one. Only ever used to look at markup, never to
  * keep.
  *
- * **`Buffer`, not a `String.fromCharCode` loop**, since `MARKUP_WINDOW` made
- * this 16 times longer. Measured on the box — `sniffKind`, 2000 calls after a
- * warm-up, over the real 106 KB upload that caused all this:
- * **30 µs** with the loop at 1030 bytes, **509 µs** with the loop at
- * 16 KB, **13 µs** with this. The 17× was all in the concatenation and none of
- * it in the regex — so the wider window is now *cheaper* than the narrow one
- * used to be, and the worst case that exists (64 KB with no markup at all, so
- * the scan runs to the end and fails) is 34 µs.
+ * **`Buffer`, not a `String.fromCharCode` loop.** Measured on the box —
+ * `sniffKind`, 2000 calls after a warm-up, over the real 106 KB upload that
+ * caused all this: **30 µs** with the loop at 1030 bytes, **509 µs** with the
+ * loop at 16 KB, **13 µs** with this. Since 2026-09-08 the only caller is the
+ * 1030-byte PDF head — everything else reads the buffer in place and builds no
+ * string at all — so the wide case no longer arises, and the measurement is
+ * kept because it is what would be re-derived if somebody widened it again.
  *
  * **Node's `latin1` is the one-for-one mapping this needs**, and that is not a
  * given: the WHATWG encoding standard makes the labels `latin1` and

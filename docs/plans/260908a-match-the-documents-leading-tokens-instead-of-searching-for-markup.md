@@ -242,6 +242,68 @@ in three places.
   `uploadedDocumentKind` — each with a test that was red first, and the docstrings' claim is true
   rather than aspirational.
 
+### What Stage 1 actually landed, and where it departed
+
+Built 2026-09-08, **uncommitted at the time of writing** and awaiting Sol's end-of-stage review. Three
+departures from the plan above, all of which stand, and one measurement that corrects it.
+
+1. **The fetched evidence set is a *subset* of the WHATWG table**, not the whole of it — `<A`, `<B`,
+   `<P`, `<DIV`, `<BR`, `<H1`, `<TABLE`, `<FONT`, `<IFRAME` and `<!--` are dropped. **The plan
+   contradicted itself here**: it says "the anchored WHATWG signature table, and nothing else" and
+   also requires a `<div>` fragment to stay `null` on the fetched path, and `<DIV TT` is in the
+   table. The subset wins, and the *reason* has changed rather than survived — it is no longer
+   "short strings turn up in JSON", which anchoring retired, but "a body-level tag opens a fragment
+   as readily as a document".
+2. **The XML veto accepts a leading `<!doctype html>` as well as `<html`.** The plan's rule was
+   "root is not `<html`", and real XHTML is `<?xml?><!DOCTYPE html PUBLIC …><html>` — which the same
+   plan lists as a must-pass. Pinned both ways.
+3. **The XML veto is asked of the decoded text as well as the raw bytes**, or a BOM'd UTF-16 Atom
+   feed named `.html` walks through — the same *the scan cannot see markup it should* class this
+   whole thread is about.
+
+**And the plan's performance instruction was wrong — twice, and the second correction supersedes the
+first.** F6 said walk with a cursor rather than materialise a Latin-1 string; a hand-written cursor
+walk over a 50 MB unterminated comment measured **838 ms**, an order of magnitude *worse* than the
+~79 ms the string materialisation cost. `Buffer.indexOf` over a **view** fixed that at **7.9 ms** —
+and then produced F17 and F23 in turn.
+
+**The settled answer is that no native search belongs here at all**, and the measurement that
+establishes it:
+
+| | measured |
+|---|---|
+| `Buffer.indexOf`, per call, any size | ~300 ns |
+| `indexOf("-->")` over 16 MiB of `-` | 151 ms — the repeated-prefix worst case |
+| `indexOf("-->")` over 16 MiB of `>` or `x` | 2 ms |
+| one `unit()` closure read | 6.6 ns |
+
+That explains all four review rounds at once. The per-call cost punishes documents of many small
+constructs; the repeated-prefix cost punishes dash runs; so **every native-search design has some
+filler character that defeats it** — the first version's was empty comments, the `>`-scan's was `>`,
+and the bounded search I specified after F23 has `-` (16 MiB of dashes: 4 ms → 689 ms, and many tiny
+comments 830 ms → 2965 ms; built and measured rather than reasoned about).
+
+`commentEnd` is therefore **a three-character window slid one unit at a time**, reading each byte of
+the comment exactly once, and `CodeUnits.indexOf` is deleted — which removes the UTF-16
+needle-straddling bug class rather than guarding against it. At 16 MiB it measures 78–90 ms across
+every shape, against 4–2965 ms for the native designs depending on filler. Slower than a native scan
+at its best and faster than all of them at their worst, with **no repeated-prefix or candidate-density
+bad case** — Sol's wording, and better than the "a function of length alone" this doc first claimed,
+since branch frequency and encoding do move the constant.
+
+**One test outside the two scoped files had to change**, found by running them rather than by
+reading: `tests/an-uploaded-html-file-becomes-an-article.test.ts` had *"refuses a file that is
+neither"* built on prose named `notes.html` — exactly what the new predicate deliberately accepts.
+It also guards that the refusal reaches `uploads.reason`, so it was re-pointed at PNG-plus-binary
+rather than deleted, and a sibling now pins that prose passes stage 1.
+
+**Worth knowing about the mutation testing.** Nine mutants, all killed — but the harness reported all
+nine surviving on its first run, because it grepped for vitest's `FAIL` lines, which only appear on a
+TTY. Piped, vitest prints `×`. Silent success inside the tool built to detect it. And one mutant
+genuinely survived at first: deleting the raw `EF BB BF` skip changed nothing, because the decoded
+fallback strips the BOM itself and answered for it — so there is now a case only the byte walk can
+pass (a BOM followed by a 20 KB comment, past the decoded cap).
+
 ### Stage 2 — the sentence an upload gets when there is no article in it
 
 **A copy bug that exists today**, found by Fable while arbitrating F4, and made much more visible by
@@ -280,6 +342,64 @@ written**. IDs continue from the review of the superseded fix.
 | F3 | P2 | Combined regression test passes if `<!--` is treated as evidence rather than skipped | Accepted; three split tests plus a real BOM fixture, in Stage 1. |
 | F4 | P1 | **No fixed leading-tag list can prove documenthood in either direction** | Accepted. Settled as two predicates over one tokenizer — see § Why two predicates and not one. |
 | F8 | P1 | Stage 2's refusals say "the page that was fetched" and "the address it came from", which an upload does not have | Found by Fable, verified in `src/messages.ts`. Now Stage 2 of this plan. |
+| F9–F16 | P1/P2 | Round 1 on the Stage 1 code — `<script>` admitting components, PDF precedence, UTF-16, `--!>`, `<?xml-stylesheet`, the doctype root, test gaps, a BOM excusing binary | All fixed in round 2; each reproduced by me before and after. |
+| F17 | **P0** | Repeated comments made detection quadratic — 6.5 s of blocked event loop at 128 KiB, reachable from any upload | **Caused by my own round-2 brief** ("take the earliest valid terminator"), which is why it is recorded here and not only in the postmortem. Fixed; 9 ms at 128 KiB. |
+| F18 | P1 | `<!-->` is an abrupt close a browser honours; we refused it fetched and accepted it uploaded | Closed *by* F17's fix rather than patched onto it. |
+| F19 | P1 | Valid XHTML internal subsets refused | Superseded by F22 — the first fix was incomplete. |
+| F20 | P2 | The property test skipped every fixture whose fetched answer was `null`, so it could not see missed evidence — which is why F18 and F19 both passed it | Fixed: an expected answer per fixture, corpus 19 → 25. |
+| F21 | P2 | Uploads walked the bytes twice | Fixed: one `classify()`. |
+| F22 | P1 | A `]` inside a DTD comment inside a doctype's internal subset ends the doctype early | **Closed by deleting the DTD lexer** — see below. |
+| F23 | P1 | One native search per `>` candidate: 2.7 s of blocked event loop at 32 MiB, inside the 50 MiB upload cap | The P0's fix was incomplete, again my algorithm rather than the implementation. Fixed — but **not** by the bounded search I specified; see below. 32 MiB of `>` is now 242 ms. |
+| F14 | P1 | The XML veto accepted a doctype without checking the root | **Overruled 2026-09-08, on Fable's arbitration** — see below. |
+
+### F22 and F14: the DTD lexer is deleted rather than fixed
+
+Four review rounds each found another edge case in what had become a hand-written HTML/XML lexer. The
+instinct at that point is to fix the next one; the arbitration says the treadmill is the finding, and
+that it lives in exactly one function.
+
+**Three things settle it, each measured rather than argued.**
+
+1. **F22 has an easier sibling on a real authoring path.** `<!DOCTYPE html [<!ENTITY nbsp
+   "&#160;"><!-- we can't use one here -->]>` is refused on both paths: the quote tracking sees the
+   apostrophe in *can't*, opens a literal that never closes, and returns `-1`. An entity subset is the
+   canonical reason to hand-write one in XHTML, and an English comment beside it is ordinary. **The
+   nesting-depth fix we were about to build would not have fixed this** — the real gap is that
+   comments and PIs *inside* the subset are lexed as declarations.
+2. **`doctypeEnd` imitates a parser this pipeline never runs.** Stage 2 is `new JSDOM(html)` with no
+   content type — the HTML parser, always — and its rule for `<!DOCTYPE html [` is bogus-DOCTYPE
+   state, ending at the first `>`, so `]>` leaks into the body text either way. We were modelling an
+   XML grammar nothing downstream applies. That is why this one function was a treadmill and
+   `commentEnd` and the PI skip are not: those find **one delimiter** and cite a spec line; this
+   parsed the *inside* of a construct.
+3. **The root-after-doctype check defended a line the design does not hold**:
+
+   ```
+   fetch upload  input
+   html  html    <!doctype html><feed>                 (no prolog)
+   null  null    <?xml?><!doctype html><feed>          (the same document, plus 21 bytes)
+   ```
+
+   Without a prolog, `<!doctype html` was already sufficient positive evidence on both paths — in the
+   round-2 snapshot, unobjected to. One document must not get two answers over a prolog.
+
+So `xmlRootIsHtml` becomes *the first token after the prolog is `<html` or `<!doctype html`*, and
+`doctypeEnd` goes. `<?xml?><!DOCTYPE svg …>` and `<?xml?><rss>` stay refused, checked.
+
+**What it costs, stated because it is a real loosening on the fetched path**, where the plan's
+principle is *positive evidence, because we are guessing*: a doctype that lies —
+`<?xml?><!doctype html><feed>` from a vague-mime server — now becomes a junk article. The counters
+are that the same document minus its prolog already got that treatment, that the harm is the bounded
+one this plan already recorded and proceeded over, and that a false doctype is adversarial rather
+than authored. **Sol pinned the opposite in F14 and is overruled**, per
+[engineering-manager.md](../reusable/engineering-manager.md)'s two-rounds-then-settle rule. If Sol
+re-objects on the narrow check, the objection is noted and overruled on the reasoning above.
+
+**And the reason this was arbitrated rather than decided by me:** my own instinct was that F22 needed
+XHTML *with* a subset *with* a comment *with* `]`, and was therefore unreachable. That is the same
+sentence as "a tutorial page with no doctype and a 4 KB comment is unreachable", which is the mistake
+[260907c](../postmortems/260907c-a-heuristic-promoted-to-a-gate.md) exists to record. It was wrong
+again, and it took five minutes to disprove.
 | F5 | P1 | `PDF_HEADER` pre-empts the detector; a page mentioning `%PDF-1.7` is classified `pdf` | Accepted, verified independently, now its own section. Live bug, predates this work. |
 | F6 | P1 | The window is still load-bearing; don't materialise a file-sized Latin-1 string | Accepted; the design section now says walk the capped input with a cursor. |
 | F7 | P3 | The plan over-claimed WHATWG authorship of the whole approach | Accepted; the paragraph now separates the spec's positional rule from our policy. |
