@@ -112,8 +112,27 @@ carries its worker count, written and self-checked by `infra/hetzner/provision.s
 ## Verification
 
 - The memory table above, reproducible with `scripts/spike-vitest-workers.py`.
-- A red-first test for the admission arithmetic: fed a synthetic low-memory snapshot it must refuse,
-  and the refusal must be the thing that goes red if the comparison is inverted.
-- `tests/vitest-worker-caps.test.ts` extended, keeping its existing habit of asserting what **vitest
-  resolves** rather than what the config object says, and of cross-checking the number
-  `provision.sh` writes against the number it verifies.
+- **The refusal tests were watched red.** Widening `capacity < 1` to `capacity < -999` in
+  `vitest-admission.ts` turns exactly three of the fourteen red — the cliff case, the boundary case,
+  and the one asserting the message says `NO TESTS RAN` — and reverting turns them green. A test
+  that has never been red proves nothing, and this one had to be seen.
+- **The refusal was watched happen**, not just unit-tested, by temporarily forcing a low snapshot
+  into `workersForThisRun()`. Vitest reports it under `Startup Error` with the whole message intact
+  and exits 1:
+
+      Error: REFUSING TO START: not enough memory on this machine for a test run.
+        MemAvailable 1.70 GB, and swap 32.00 GB of 32.00 GB used.
+        ...
+        NO TESTS RAN AND NOTHING WAS VERIFIED — this is resource pressure, not a test failure.
+
+  One wart worth knowing: vitest prints `failed to load config from …` on the line above, which
+  reads like a syntax error until you get to the next line. The message survives intact, so this is
+  filed rather than fixed.
+- `provision.sh` writes and self-checks both files; `tests/vitest-memory-admission.test.ts` reads
+  the numbers back out of the script, checks the write and the verify agree, puts the value through
+  the real parser, and asserts an idle box is still admitted — the existing habit from
+  `tests/vitest-worker-caps.test.ts`, which continues to assert what **vitest resolves** rather than
+  what the config object says.
+- `npm run check`: all gates green, including the full suite.
+- Applied to the live box on 2026-09-08 and read back with the exact `grep -qx` the provisioning
+  self-check uses.
