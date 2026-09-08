@@ -56,6 +56,13 @@
  *    eliminated.
  */
 import { descendsFrom } from "./steer.js";
+/* The vocabulary's own shapes live in wire.ts, because the browser renders the
+   buttons from what this file describes and cannot import a module that reaches
+   node:child_process. Re-exported so every existing `from "./actions.js"`
+   import keeps working. */
+import type { Speaker, SpokenAction, SpokenActionId } from "./wire.js";
+
+export type { Speaker, SpokenAction, SpokenActionId } from "./wire.js";
 
 /* ------------------------------------------------------------------ *
  * The vocabulary.
@@ -68,66 +75,13 @@ export type ActionScope =
   /** The box. Needs no session, and affects everybody. */
   | "box";
 
-export type SpokenActionId =
-  | "continue"
-  | "compact"
-  | "pull"
-  | "push"
-  | "run-checks"
-  | "report-status"
-  | "ease-off"
-  | "sleep-1h"
-  | "sleep-3h"
-  | "sleep-5h"
-  | "sleep-10h"
-  | "ask-fable"
-  | "ask-sol"
-  | "wrap-up"
-  | "stop-and-ask";
+/* `SpokenActionId` and `SpokenAction` are in wire.ts and re-exported above. */
 
 export type EnactedActionId = "remove-worktree" | "kill-session" | "kill-test-suites" | "kill-safe-processes";
 
 export type BroadcastActionId = "resource-broadcast";
 
 export type ActionId = SpokenActionId | EnactedActionId | BroadcastActionId;
-
-/**
- * A sentence delivered to one session's input box.
- *
- * `text` is ONE LINE, always, and that is a hard constraint rather than a house
- * style: `checkText` in steer.ts refuses a message containing a newline,
- * because Claude Code's input box submits on Enter and a two-line message is
- * two messages, the first of them half a sentence. So these read as dense
- * paragraphs. tests/fleet-actions.test.ts asserts every one of them survives
- * `checkText`, which is the check that would otherwise be made at the moment
- * somebody presses the button.
- */
-export type SpokenAction = {
-  effect: "spoken";
-  id: SpokenActionId;
-  scope: "session";
-  /** What the button says. */
-  label: string;
-  /** One line, for a tooltip or a coordinator's log. */
-  summary: string;
-  /**
-   * The exact words. **This is a prompt a real agent will act on**, not a
-   * label, so it is written to be acted on: it says what to do, names the
-   * mechanism where the mechanism is the part that goes wrong on this box, and
-   * asks for an answer back where the answer is the point.
-   */
-  text: string;
-  /**
-   * `slash-command` means Claude Code EXECUTES it rather than the agent
-   * judging it, so it happens even to an agent that would have pushed back.
-   * `/compact` is the only one today. Kept as a field rather than a comment
-   * because the confirmation a UI should show is different: an agent can
-   * decline a sentence, and cannot decline a slash command.
-   */
-  form: "prose" | "slash-command";
-  /** Should the UI ask twice? True where the effect is hard to undo. */
-  needsConfirm: boolean;
-};
 
 /**
  * An effect outside the conversation: a directory deleted, a process signalled.
@@ -560,8 +514,10 @@ export function boxActions(): readonly Action[] {
  * a coordinator's proposal and Greg's instruction are indistinguishable unless
  * the text says which it is. A model's recommendation must not mint its own
  * approval.
+ *
+ * The type itself is in wire.ts and re-exported at the top of this file; the
+ * prefixes below are the runtime half and stay here.
  */
-export type Speaker = "greg" | "overseer";
 
 const SPEAKER_PREFIX: Record<Speaker, string> = {
   greg: "[Greg, via the fleet dashboard] ",
@@ -577,6 +533,56 @@ export function renderSpoken(action: SpokenAction, speaker: Speaker): string {
   // whose text contains no instruction to be weighed, so the cost is small.
   if (action.form === "slash-command") return action.text;
   return SPEAKER_PREFIX[speaker] + action.text;
+}
+
+/**
+ * Whether a free-text message would reach Claude Code as a command rather than
+ * as words to weigh. Leading whitespace is trimmed first because Claude Code
+ * does the same.
+ */
+export function isSlashCommandText(text: string): boolean {
+  return text.trimStart().startsWith("/");
+}
+
+/**
+ * What actually goes to `sendMessage` for a FREE-TEXT message — or why nothing
+ * does.
+ *
+ * The attribution rule is about who is speaking, and it does not care whether
+ * the words came from the reviewed vocabulary or from a text box. A free-text
+ * message is in fact the more dangerous half: `SPOKEN`'s sentences were read by
+ * Greg before they were ever an action, and this text was not read by anybody.
+ *
+ * **The slash-command hole is NOT widened to arbitrary text, and that is the
+ * one decision in here.** `renderSpoken` names a real hole — a slash command
+ * must be first on the line, so `/compact` cannot carry a prefix — and its cost
+ * is small precisely because `COMPACT_TEXT` is a fixed, reviewed string with no
+ * instruction in it. Free text has neither property: `/loop 5m <anything>` is
+ * a slash command whose argument is prose, so letting any speaker send an
+ * unprefixed `/…` would turn a named exception into a general way to speak in
+ * Greg's voice. So a slash command is unprefixed when GREG is speaking, and
+ * refused when anybody else is.
+ *
+ * **The retreat, for a coordinator that needs one:** the vocabulary is where a
+ * slash command belongs. `/compact` is already in it and goes out unprefixed
+ * under the exception above; a second one is a reviewed entry in `SPOKEN`, not
+ * a string assembled at the call site.
+ *
+ * This is not an authentication boundary and must not be read as one — anything
+ * that can reach the dashboard can claim to be Greg. It stops an HONEST
+ * automated caller acquiring Greg's authority by omission or by accident, which
+ * is the failure A12 names; the boundary that stops a dishonest one is the
+ * Tailscale-only bind, and it is somewhere else.
+ */
+export function renderMessage(text: string, speaker: Speaker): { ok: true; text: string } | { ok: false; why: string } {
+  if (isSlashCommandText(text)) {
+    if (speaker === "greg") return { ok: true, text };
+    return {
+      ok: false,
+      why: "a message beginning with '/' is a command to Claude Code rather than words to weigh, and it cannot carry the line saying who is speaking — only Greg may send one, and an automated caller should use an action from the vocabulary instead",
+    };
+  }
+  return { ok: true, text: SPEAKER_PREFIX[speaker] + text };
 }
 
 /**

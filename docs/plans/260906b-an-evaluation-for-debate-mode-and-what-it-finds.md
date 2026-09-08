@@ -243,6 +243,16 @@ is not extended, `RELATIONS.has` / `VALENCES.has` fall through and **every row s
 
 ## The corpus
 
+> **The three runs we actually paid for are committed, at
+> [`evals/debate/corpus/`](../../evals/debate/corpus/README.md)** — `cargocult`, `writes` and
+> `claudes-constitution`, 2026-09-06. They were in `output/debate-runs/`, which is gitignored scratch,
+> which meant they existed in exactly one place: a worktree about to be deleted. `npm run
+> worktree:check` caught it on 2026-09-08. Every number in this plan comes out of those files and
+> nothing can produce them again — the searches cost money, the web has moved, and the answers are
+> stochastic. The `-check` runs are **not** committed: `run.ts` writes those from a synthetic fixture
+> and they are regenerable, and counting twelve replays of one fixture as twelve pieces of evidence is
+> a mistake this plan has already made once.
+
 **Four of the five roles I first assigned were wrong**, and the corrections came from hand-verified
 web research rather than from assumption. Verified means: fetched the page and read the sentence in
 which it names the article.
@@ -557,6 +567,13 @@ incumbent must reproduce at least one error** or the run did not exercise the de
 
 ### E′ — the repair, written out before any output is seen
 
+> **Superseded, and kept because it was declared in advance.** § E″ below is what shipped. All three
+> changes here survived in substance — but the *order* is different, because the measurement that
+> came after this was written found that all three known errors are in group **two**, which already
+> had the target-binding sentence change 2 was going to add to group one. So the change with the most
+> evidence behind it is change 3, which this section ranked last and called the one to hold out.
+> § E″ also adds the vocabulary rename, which is not here at all.
+
 Declared here, not in a commit, so that F60's *"label before repaired outputs exist"* and F61's
 *"declare the design before seeing output"* are both satisfiable and checkable afterwards. **Three
 changes, one of them a contract change.**
@@ -602,92 +619,129 @@ vocabulary check is in place (F62) — because change 1 and change 3 both alter 
 introduces the answer vocabulary, which is precisely the edit that could turn every row `unknown`
 while looking like a success.
 
-### E″ — and then the free evidence said E′ was fixing the wrong thing, 2026-09-08
+### E″ — I re-made the claim F35 refused, and this is the second reversal, 2026-09-08
 
-**E′ above is a prompt repair. The defect is in the schema, and the evidence for that was already on
-disk.** Two crosstabs, both free, both read-only, settle it. The first is over the 26 raw reported
-rows in the three real journalled runs — *real* meaning the `-check` runs are excluded, because those
-replay one synthetic `bakingreview.example` fixture twelve times and a fixture repeated is not
-evidence repeated:
+**Round one of this plan claimed `disputes`+`positive` and `corroborates`+`negative` are
+contradictions. Sol's F35 refused it. On 2026-09-08 I claimed it again — as a schema defect this
+time, with a discriminated union to make the pairs unspellable — and Sol's F65 refused it again,
+citing this plan's own § 4 back at me.** Recorded as a reversal rather than quietly removed, exactly
+as the first one was.
+
+§ 4's two honest examples are still honest, and they are the answer:
+
+- *"The stated 10% is wrong; it is at least 30%, which makes the warning stronger."* — truthfully
+  `disputes` + supportive.
+- *"The reported figures are right, but the conclusion drawn from them is indefensible."* — truthfully
+  `corroborates` + critical.
+
+A type that cannot spell those forbids honest rows to forbid three wrong ones. **`lean` stays on
+every relation**, `unclear` included — F66 is right that a passage can plainly support a conclusion
+while the extract leaves its argumentative move genuinely unclear, and the plan already insists
+`unclear` and `unknown` are two different facts.
+
+And F65's charge of circularity is fair: I called three rows errors, then used the other 32 to argue
+that a divergence *is* an error. The crosstabs below show **association, not entailment**, over a
+corpus of two or three articles, and that is all they were ever entitled to show.
+
+#### What survives, and it is the part that matters
+
+**The three bad rows are still bugs.** Neither § 4 example fits them: both of those turn on a
+part-versus-whole gap — dispute the detail, support the conclusion — and the psi and Skeptical
+Inquirer rows have no such gap. Their target is one atomic `claimQuote`, and the stance recorded is
+toward the source's own subject instead.
+
+**And here is the fact that reorders the repair. All three errors are in group *two*.** The spike
+revision's `direct` group is empty; all seven rows are `claims`. Group two is the group that already
+carries an explicit target binding:
+
+> Here "valence" is the quoted passage's stance toward THE CLAIM you quoted — not toward the article
+> as a whole, and not its tone.
+
+**So the instruction was present and was not followed.** That kills the comfortable reading — that
+this is a missing sentence — and leaves the mechanism Fable named:
+
+> **Sentiment collapse.** `positive | negative` is sentiment-analysis vocabulary, so the cheapest
+> reading of a passage is its polarity toward *its own* subject. A page negative about Geller is
+> negative; that it therefore *agrees with* Feynman is a second hop, and the model skipped it.
+
+Note what that sentence does and does not rule out. It rules out the article as a whole, and it rules
+out tone. **It does not rule out the source's own subject** — which is the one thing all three rows
+did. The negation is incomplete, and completing it is the change with the most evidence behind it.
+
+#### The repair, revised
+
+1. **Complete the negation, in both groups** — *"not toward whatever the outside piece is itself
+   discussing."* The only change aimed squarely at the observed failure.
+2. **Rename the values from sentiment words to agreement words** —
+   `leans-against | neither | leans-for | cannot-tell`. Sol and Fable independently endorse this, and
+   it is the only change that addresses the mechanism rather than the instructions. Needs the legacy
+   seam at F68, below.
+3. **Bind the target in group one**, which today binds it nowhere — its only hint is the comment
+   `"applies": "what it says about this article"` inside the answer format. A real gap, and worth
+   closing, but it did **not** cause these three: group one returned no rows at all.
+4. **Give `relation` and `valence` the same subject** — F54. Today `relation` is scoped to the
+   outside *page* and `valence` to the *quoted passage*.
+5. **The legacy seam, F68.** Every stored row has `valence` and none has `lean`, and
+   `isDebateDocument` validates only that the two `rows` are arrays — row fields are never
+   re-checked, and the panel indexes an appearance table directly. Rename the values without a seam
+   and every old row reaches the renderer `undefined` and crashes on `look.icon`. One normalisation
+   accessor, not a fix in each consumer, and a test over a pre-change artefact carrying all four
+   legacy values.
+6. **Soften the docblock rather than delete it.** *"Orthogonal … and the two must stay that way"*
+   overstates: the data shows strong association. But § 4 is right that they are different questions —
+   an argumentative move and an overall stance toward a possibly composite target. The honest sentence
+   is *strongly associated in practice, not functionally dependent.*
+
+**And the worked example in the prompt is deliberately not from the corpus.** The first draft
+explained the mistake with the psychic-and-sceptic case, because it is the clearest one — which would
+have written the answer to the Cargo Cult article's three known rows into the prompt itself, and
+contaminated every future measurement on the one article in the corpus that exercises the bug. It
+says supplements and trials instead. The structure is identical and no packet we hold is named.
+
+#### What this does not fix, said plainly
+
+**F67 is the finding to keep.** The type only ever removed disagreement between two stored
+categorical fields; it could never make *"the chip contradicts the row"* impossible, because
+`relation` and `applies` are model judgements that no type relates to the source. And if the
+mechanism really is sentiment collapse, **the error can migrate into `relation`** once the stance
+field stops offering it a home. Any future scoring must therefore judge `relation` against the source
+and the target, not merely check that the chip follows the relation.
+
+**And this repair is not verified.** F70: replaying the three known packets exercises the parser and
+the renderer, never the revised prompt, so it is a regression test and not evidence. Showing that
+wrong-target interpretation actually fell needs labelled, repeated generation concentrated on
+polarity-inverting sources — sceptic-versus-believer articles, of which the corpus has one — and that
+costs money and is Greg's call. F62's raw-vocabulary gate stays necessary regardless, and F63's live
+smoke stays necessary as an integration check that the fenced answer still parses.
+
+**The bug is content-conditional and still stochastic** (F69). A source population whose own polarity
+opposes its stance toward the article creates the *opportunity*; sampling decides whether it lands.
+The aggregate `3/22` hides that stratum, so it should be reported separately rather than averaged
+away. My earlier "article-conditional, not stochastic" was too strong.
+
+#### The crosstabs, at the strength they actually support
+
+Over the 26 raw reported rows in the three real journalled runs — *real* meaning the `-check` runs
+are excluded, because those replay one synthetic `bakingreview.example` fixture twelve times, and a
+fixture repeated is not evidence repeated:
 
 |  | positive | negative | neutral | unknown |
 |---|---|---|---|---|
 | `disputes` | 0 | 12 | 0 | 0 |
-| `qualifies` | 0 | **3** | **4** | 0 |
+| `qualifies` | 0 | 3 | 4 | 0 |
 | `extends` | 2 | 0 | 0 | 0 |
 | `corroborates` | 5 | 0 | 0 | 0 |
 | `unclear` | 0 | 0 | 0 | 0 |
 
-The second is over the 35 kept rows in `article_revisions.debate`, which is where the three bad rows
-live: `disputes` 9 negative and **2 positive**, `qualifies` 10 neutral, `extends` 5 positive,
-`corroborates` 6 positive and **1 negative**, `unclear` 2 unknown. **The three highlighted cells are
-the three bugs, and they are the only divergences in the entire corpus.**
+And over the 35 kept rows in `article_revisions.debate`: `disputes` 9 negative and 2 positive,
+`qualifies` 10 neutral, `extends` 5 positive, `corroborates` 6 positive and 1 negative, `unclear` 2
+unknown. Two articles, four of six revisions near-identical re-runs, so the independent count is
+about thirteen.
 
-**So `valence` is two facts wearing one name.** On `disputes`, `corroborates` and `unclear` it is
-*entailed* by `relation` — 0 of 32 real rows where it says anything `relation` had not already said.
-On `qualifies` it is *open*, and the model uses the freedom correctly: `hamtyped` accepts a schedule
-only for cool kitchens and leans against; `windowsontheory` praises parts while questioning others
-and is neither. `extends` is 7 rows, all positive, and sits with the entailed group on thin evidence.
-
-**The docblock's central claim is refuted by the data.** `src/types.ts` says of `DebateRelation`:
-*"Orthogonal to `DebateValence` below, and the two must stay that way."* They were never orthogonal.
-That sentence is what hid the overlap, and it has to go.
-
-#### What this changes about the fix
-
-A wording repair can only lower a rate that a type can set to zero. The three bad rows are
-`disputes`+`positive` and `corroborates`+`negative` — **combinations that are contradictions under
-§ 4's own definition of the two fields**, not judgement calls. So:
-
-> `lean` exists only on the relations where it is open. On the others it cannot be spelled, so the
-> row that produced the red *Critical* chip over a supportive source **does not typecheck**.
-
-Concretely: `relation` keeps its five values; a `lean` rides only on `qualifies` and `extends`; the
-chip is derived for the entailed three and read from `lean` for the open ones. **What the reader sees
-barely moves** — every one of the 32 correct rows draws exactly the chip it draws today, and the
-three wrong ones become impossible. Greg's *"(+1, -1, neutral, unknown)"* chip is untouched.
-
-And the values get renamed from sentiment words to agreement words. That is not cosmetic: Fable's
-reading of the failures is **sentiment collapse** — `positive | negative` is sentiment-analysis
-vocabulary, and the cheapest reading of a passage is its polarity toward *its own* subject. A page
-negative about Geller is negative; that it therefore *agrees with* Feynman is a second hop, and the
-model skipped it. Which also explains why the bug is not stochastic after all: **it is
-article-conditional.** It needs a source population whose own polarity is opposite to its stance
-toward the article — believer pages disputing a sceptic. Feynman has one; the Constitution article
-does not, and scored 0/15. *"3/22, stochastic"* was the wrong frame.
-
-#### Why this is not the derived valence two reviews already refused
-
-F9 refused deriving the icon from `relation`; F35 refused treating an opposite pair as a
-contradiction. Both were about a **rendering** rule that silently overrides a field the model is
-still asked for — a chip that disagrees with the stored data. This is the opposite: the type stops
-asking for a stance where the stance is entailed, so there is nothing to override and nothing to
-disagree with. *Coercion is "the model said positive and we drew red". This is "on `disputes` there
-is no lean field."*
-
-F9's counter-example — an author's own later post correcting their earlier piece — does not survive
-contact with § 4 either. Under the spec's own definition that author **is** negative toward the
-earlier claim. What F9 wanted protected is that the row not read as *hostile*, and that is
-**provenance**, which the same docblock already says must not be folded into `relation`. It was never
-in `valence` to lose.
-
-#### The simpler options passed over
-
-- **E′ alone, the prompt repair.** Keeps a field that is entailed on 32 of 35 rows, and buys a paid
-  sweep to lower a rate a type sets to zero. Its wording changes 2 and 3 are still worth having as
-  free hygiene, so they ride along here; change 1 is superseded.
-- **Delete `valence` entirely.** Removes the bug by construction too, and it was the leading option
-  for about an hour. It loses the one region that carries information to fix a bug in the region that
-  carries none. Rejected on the `qualifies` column above — and it is the fallback if the union proves
-  more disruptive than it looks.
-
-#### And it removes the paid work
-
-This is the part that matters for the cut. The failure class becomes **a compile error, not a rate**,
-so C′'s repetition harness, D′'s hand-labelling and F63's live smoke run are no longer what stands
-between us and the fix. The red-then-green test is the three known packets, replayed free. The
-instruments already built stay — they are what would catch the next regression — but they stop being
-on the critical path.
+What that is good for: `qualifies` is the one relation where the field visibly varies, and all seven
+of its rows are correctly labelled on inspection — `hamtyped` accepts a schedule only for cool
+kitchens and leans against, `windowsontheory` praises parts while questioning others and is neither.
+What it is **not** good for is declaring the other relations entailed. That was the error.
 
 ### Stage B — the free instrument, and one shipped bug
 
@@ -1359,3 +1413,131 @@ genuinely journalled, every inspected citation has a non-empty `url`, `title` an
 prompt reading is confirmed: group two binds the claim, group one never binds *target*, neither rules
 out the source's own subject, and `relation` and `valence` have different scopes.
 
+
+## Review ledger — GPT Sol, round 5, on the schema repair, 2026-09-08
+
+Prompt: [260906b-schema-repair-review-prompt.md](260906b-schema-repair-review-prompt.md).
+Answer: [260906b-schema-repair-review-sol.md](260906b-schema-repair-review-sol.md).
+
+**Verdict: refuse the discriminated union.** Two established P1s. I asked Sol to defend F9 and F35
+rather than concede them, and it did — F65 is the finding, and it is this plan quoted back at me.
+All five statements I offered were graded: **S1 false, S2 false, S3 partly true, S4 false, S5 false.**
+Sol independently re-derived the 26-row crosstab from `output/debate-runs/` and confirmed it, and ran
+`tests/debate.test.ts` green at 55/55, so the numbers held even where the argument did not.
+
+- **F65 — P1, established. Accepted, and it is the whole verdict.** The union contradicts § 4 of this
+  same plan, which already gives two honest opposite pairs and already records F35's refusal of the
+  identical claim from round one. *"Calling the three divergences errors before using the remaining 32
+  to establish entailment is circular."* Also right. The crosstabs show association, not entailment.
+- **F66 — P1, reasoned. Accepted.** `unclear` does not entail `cannot-tell`: a passage can plainly
+  support a conclusion while the extract leaves its argumentative move unclear. `lean` stays on every
+  relation, `unclear` included.
+- **F67 — P1, reasoned. Accepted, and it is the most valuable one for what comes next.** The type only
+  ever removed disagreement between two stored categorical fields. It cannot make *"the chip
+  contradicts the row"* impossible, because `relation` and `applies` are model judgements no type
+  relates to the source — and if the mechanism is sentiment collapse, **the error can migrate into
+  `relation`** once the stance field stops offering it a home.
+- **F68 — P1, established. Accepted.** I had found the same hole independently before the review
+  landed; Sol made it concrete — a renamed vocabulary without a compatibility seam sends every legacy
+  row to the renderer `undefined`, and `look.icon` crashes. One normalisation accessor, and a test
+  over a pre-change artefact carrying all four legacy values.
+- **F69 — P2, established. Accepted.** Content-conditional is not the same as non-stochastic. A
+  polarity-inverting source population is an *opportunity*; sampling decides whether it lands. My
+  "article-conditional, not stochastic" overstated it in the other direction from "3/22, stochastic".
+- **F70 — P2, reasoned. Accepted.** Replaying the three known packets tests the parser and the
+  renderer, never the revised prompt. It is a regression test, not evidence. F62's raw-vocabulary gate
+  and F63's live integration smoke both survive.
+
+**What I found while checking the findings, which changes the repair's order.** All three bad rows are
+in group **two** — the spike's `direct` group is empty and all seven rows are `claims`. Group two is
+the group that *already* carries an explicit target binding. So the instruction was present and was
+not followed, which demotes "bind the target in group one" from the fix to a separate real gap, and
+promotes completing the negation and renaming the vocabulary. Written up under § E″.
+
+**And the process lesson, which is the expensive part.** The refutation of my argument was already in
+this document, six hundred lines above where I wrote it, under a heading that says so. I read the
+plan, wrote a contradicting section into the same file, and sent it for review without noticing —
+`docs/reusable/silent-success.md`'s shape, in a document rather than in code: the check I ran shared
+its assumption with the thing being checked, because I wrote both. What caught it was the
+cross-family review, which is the one check that did not.
+
+## Review ledger — GPT Sol, round 6, on the code, 2026-09-08
+
+Prompt: [260906b-lean-rename-code-review-prompt.md](260906b-lean-rename-code-review-prompt.md).
+Answer: [260906b-lean-rename-code-review-sol.md](260906b-lean-rename-code-review-sol.md).
+Candidate: `6b5e99a1`.
+
+**No P0. Four findings, all accepted, and two of them are defects in claims I had written down as
+true.** This is the round that earns the rule about weighting a code review above a plan review: a
+plan review cannot find a docblock that promises something the code does not do.
+
+Sol also confirmed, independently and by running things: the label-sheet blinding is intact, all four
+mapped types really are exhaustiveness guards over one union, Referee mode's unrelated `valence` was
+untouched, and both mutation claims hold. 346 tests over 13 files, and every TypeScript project.
+
+- **F71 — P1, established. Accepted, and I verified it myself before fixing it.** `readStoredLean`
+  protects the panel and nothing else: `vocabularyReport` and `replayJournal` read only `lean`, so
+  every row written before the rename reads as absent. Measured over the three real journals —
+  **6/6, 10/10 and 10/10 off-vocabulary, spelling `(absent)`.** So all 26 historical rows became
+  unscorable and Layer 1 silently replayed their stance as `cannot-tell`, while the accessor's own
+  docblock claimed it was *"called by every consumer"*. It was not.
+
+  What makes this worse than an oversight: `vocabularyReport` is **the instrument built to catch a
+  prompt change that destroys a field while looking like a repair**, and it was blind to the one
+  vocabulary change that has actually happened to it. The fix keeps Sol's distinction — an adapter at
+  the stored-artefact boundary, and the **live** parser still strict, so a model answering
+  `supportive` today is still off-vocabulary and still fails the gate. Superseded rows are a **third
+  category**, counted and labelled apart from both the rows we understand and the rows we do not:
+  folding them into the off-vocabulary count makes a journal recorded last week read as a broken
+  prompt, and folding them into the known counts says nothing at all. Measured after: 26/26
+  superseded, `offVocabularyLeans` back to 0, and the real stances recovered — 7 `leans-for`, 15
+  `leans-against`, 4 `neither`, where every one of them had been `cannot-tell`.
+
+  **And a correction to my own framing of this finding, found while checking it.** `vocabularyReport`
+  is not merely blind — **it has no caller outside its own tests.** `evals/debate/run.ts` imports
+  `replayJournal` and `replayLines`, and nothing from `score.ts` but `LEAN_VALUES`. So the gate that
+  would have caught this was never wired into the runner in the first place, which is a larger gap
+  than the one Sol found and is **not fixed here**. Whoever wires it should also decide whether the
+  superseded count belongs in `vocabularyProblems` — the list a caller fails on — where it is now. It
+  is there deliberately: this function cannot know *when* its rows were written, so its sentence
+  carries both readings, and a count kept quietly out of the list is the shape the whole file exists
+  against. But that is a call better made with a real caller in front of you than invented for a
+  hypothetical one.
+- **F72 — P1, reasoned. Accepted, and my wording was self-contradictory.** The new negation said the
+  lean is *"not about whatever the outside piece is itself discussing"* — directly beside the
+  sentence binding the target to the article. But a group-one page is admissible **precisely because
+  it discusses this article**, so the clause forbade the answer it was asking for. What it must
+  exclude is a *different* subject the passage is also about. Reworded in both groups, with the old
+  phrasing now asserted **absent** so it cannot come back.
+
+  Also accepted: *"relation and lean answer that same question"* was wrong. They share a subject and
+  a target and ask different things — one names the move, the other says which way it points.
+- **F73 — P2, established. Accepted, and C4 was overstated.** The prompt test proved phrases were
+  present, not what the prompt said about them. Sol named the exact surviving mutation: change an
+  answer example to `"lean": "supportive"` and leave the vocabulary list alone, and it passes — which
+  is **F62's failure in miniature**, because every row copying that example coerces to `cannot-tell`.
+  Fixed by extracting the values actually attached to `"lean"` and `"relation"` and checking each
+  against the vocabulary. Sol's mutation now fails, run and watched.
+- **The guard test I specified was itself a silent success**, and the implementer caught it rather
+  than writing what it was told. My brief asked for a test proving the adapter does not swallow a
+  *live* off-vocabulary lean, and specified `lean: "supportive"` with no `valence` — which **passes
+  under the very mutation it was meant to catch**, because a widened adapter has no `valence` to
+  reach for. The real guard needs both fields present. That is this plan's own recurring lesson
+  arriving in a test written to enforce it, and it is the second time today a check has shared an
+  assumption with the thing it checked.
+- **F74 — P3. Accepted.** `DebateRelation` still opened *"What the outside page does to what it is
+  answering"* after the rescope; two parser comments still named `unknown`; the CSS still described
+  `neutral` and `unknown`. Fixed, plus one more the sweep found. C3's *"did not miss a Debate one"*
+  was not literally true.
+
+**And a note on the gate, because the failure is not what it looks like.** `npm run check` returned
+`✗ test` on this work with seven failures — four of them the prompt tests above and three the
+red-first tests for F71. Every one is a **torn read**: the run started at 11:11 and measured a tree
+still being edited at 11:33, so it paired the new test files with the old `src/debate.ts`. The
+failure output proves it — the prompt it printed still contains the pre-fix wording. Re-run on a
+still tree, which is what the ledger below records.
+
+Worth naming, because it will happen again on this box: **a long check measures the tree as it was
+while it ran, not as it is when you read the result.** A twenty-minute gate over a tree that two
+agents are editing reports on a commit that no longer exists. Read the failure before believing it,
+and re-run before acting on it.

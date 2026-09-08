@@ -26,6 +26,10 @@
  *    quotable by one reporting a problem.
  */
 import { readableDay } from "./billing-plan.js";
+/* **The one module this file may take an origin from**, and its header says
+   why: this one is inside the browser client's type closure, and src/source.ts
+   — where the fact belongs — reaches src/fetch.ts's untyped packages. */
+import type { DocumentOrigin } from "./document-origin.js";
 import type { Mode } from "./modes.js";
 import type { DateRejection, EmbeddingReason, StepName } from "./types.js";
 import { MAX_PAGES, MAX_UPLOAD_BYTES } from "./uploads.js";
@@ -410,6 +414,18 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      rather than `jb-no-article`'s because a code names a branch — there the
      library found nothing at all, here it found too little. */
   "jb-too-little-text": "blocked",
+  /* **The same two findings about a file off a reader's disk**, 2026-09-08.
+     Same `kind` and the same step, and separate codes because they are separate
+     *sentences*: the fetched pair send the reader to the address the page came
+     from, and an upload has none. See `documentHasNoArticle` for why that was
+     a live copy bug rather than a tidy-up, and docs/project/copy.md for the
+     rule that made two codes compulsory once the sentences differed. */
+  "jb-file-no-article": "blocked",
+  "jb-file-too-little-text": "blocked",
+  /* Stage 3's own, and the one the first sweep missed: it is reachable from an
+     uploaded *scan*, where a PDF's only text is a publisher record that
+     `renderHtml` withholds. ⟨GPT Sol, F24⟩ See `articleHadNoText`. */
+  "jb-file-no-text": "blocked",
   "jb-no-text": "blocked",
   "jb-no-sketch": "blocked",
   "jb-sketch-stale": "blocked",
@@ -1102,27 +1118,88 @@ export const SOURCE_DOCUMENT_DAMAGED: ReaderFacingFailure = {
     "rather than by you. [jb-source-damaged]",
 };
 
-export const PAGE_HAS_NO_ARTICLE: ReaderFacingFailure = {
-  kind: "blocked",
-  /* **It does not say "Readability"**, which is the name of a library the
-     reader has never heard of and the whole reason this sentence exists — the
-     diagnostic keeps that word, for the log. And it names the three usual
-     causes rather than guessing between them: they call for the same move. */
-  message:
-    "There was no article to find on the page that was fetched. That is usually a login wall, an " +
-    "error page, or a page whose words only appear once its own scripts have run — and this step " +
-    "would be handed the same page again, so it is the address it came from that needs looking " +
-    "at. [jb-no-article]",
-};
+/**
+ * **The page opened and there was no article in it** — `ReadabilityRefused`'s
+ * sentence, in the two framings the reader can actually be in.
+ *
+ * **It does not say "Readability"**, which is the name of a library the reader
+ * has never heard of and the whole reason this sentence exists — the diagnostic
+ * keeps that word, for the log. And it names the usual causes rather than
+ * guessing between them: they call for the same move.
+ *
+ * **A factory over the origin since 2026-09-08, and it was a constant written
+ * for a fetched page.** Uploading a web page became possible on 2026-09-07
+ * (docs/plans/260907b-upload-an-html-file-and-a-url-for-a-pdf.md) and this
+ * sentence went on saying *"the page that was fetched"* and *"it is the address
+ * it came from that needs looking at"* to somebody who had handed us a file off
+ * their disk. There is no address. It sent them to look at something that does
+ * not exist, and it withheld the one move that does work — saving the page
+ * again from the browser it still opens in.
+ *
+ * Found by Fable while arbitrating a *different* question, and made much more
+ * visible the same day: stage 1 stopped asking uploads *"is this a document"*
+ * and started asking *"is this provably something else"*, so far more odd files
+ * now reach this stage
+ * (docs/plans/260908a-match-the-documents-leading-tokens-instead-of-searching-for-markup.md).
+ *
+ * **One function rather than two constants**, so the pair is one fact: a third
+ * framing, or a change to the causes, has one place to go and cannot land in
+ * half of them. The origin is decided by `cameFromAnUpload` (src/fetch.ts) at
+ * the throw site — the same evidence the masthead uses to say *"you uploaded
+ * this"* — rather than by a flag of this module's own.
+ *
+ * **Its own code for the uploaded branch**, which departs from the plan that
+ * asked for this and follows docs/project/copy.md instead: *"what must never
+ * happen is two different sentences sharing a code"*, checked by
+ * tests/messages.test.ts. `[jb-no-article]` keeps its meaning — a fetched page
+ * with no article in it — so no support conversation that quoted it is
+ * orphaned, and the new code tells whoever is helping that this was a file
+ * before they ask.
+ */
+export function documentHasNoArticle(origin: DocumentOrigin): ReaderFacingFailure {
+  if (origin === "upload") {
+    return {
+      kind: "blocked",
+      /* **The causes are the ones an upload usually has.** Somebody *can* save
+         a login wall or an error page to disk — the sentence is not claiming
+         otherwise, and "usually" is doing that work — but neither is a common
+         way to arrive here, and a list of five is a list nobody finishes. A
+         page saved mid-script and a fragment of a page are what actually turn
+         up. ⟨GPT Sol, F27: the first draft of this comment said "nobody
+         uploads one on purpose", which is too absolute.⟩
+
+         The move is the [up-pdf] refusal's move, in the same words, because it
+         is the same move: this file cannot become a different file, and the
+         browser that still renders the page can write one. **"the original
+         page", not "the page"**, which would leave the reader wondering whether
+         we mean the file they just sent. ⟨Sol, F27⟩ */
+      message:
+        "There was no article to find in the file you uploaded. That is usually a page saved " +
+        "before its own scripts had filled it in, or a piece of a page rather than a whole one. " +
+        "Sending the same file again cannot change that. If you can still open the original page " +
+        "in a browser, saving it again from there usually produces a copy this app can read. " +
+        "[jb-file-no-article]",
+    };
+  }
+  return {
+    kind: "blocked",
+    message:
+      "There was no article to find on the page that was fetched. That is usually a login wall, an " +
+      "error page, or a page whose words only appear once its own scripts have run — and this step " +
+      "would be handed the same page again, so it is the address it came from that needs looking " +
+      "at. [jb-no-article]",
+  };
+}
 
 /**
- * **The page came back, and there was not enough of it to read** — the
+ * **The document came back, and there was not enough of it to read** — the
  * capability floor's sentence, and the count is in it deliberately.
  *
- * A factory rather than a constant for that one reason: *"there was no article"*
- * is a verdict the reader can only take on trust, where *"185 characters"* is a
- * fact they can check against the page they were looking at. It is also the
- * fastest way for somebody reporting this to say which page they meant.
+ * A factory rather than a constant for that reason before it took an origin:
+ * *"there was no article"* is a verdict the reader can only take on trust,
+ * where *"185 characters"* is a fact they can check against the page they were
+ * looking at. It is also the fastest way for somebody reporting this to say
+ * which page they meant.
  *
  * **It says "usually", and it never says this is an error page.** The rule that
  * produced it does not know that: it reads no markup and makes no claim about
@@ -1130,29 +1207,48 @@ export const PAGE_HAS_NO_ARTICLE: ReaderFacingFailure = {
  * anything from, which is equally true of a genuinely tiny real page
  * (src/extract.ts § `capabilityFloor`). So the causes are named as the usual
  * ones and the short-honest-page case is named beside them, because a reader
- * whose genuinely 300-character page was refused must not be told they were shown a wall.
+ * whose genuinely 300-character page was refused must not be told they were
+ * shown a wall.
  *
- * **Its own code rather than `jb-no-article`'s**, on the rule the two failures
- * either side of it already follow: a code names a branch, and a reader quoting
- * four characters should land whoever is helping on the right one. The move is
- * the same for all three; the finding is not.
+ * **Its own code rather than `documentHasNoArticle`'s**, on the rule the
+ * failures either side of it already follow: a code names a branch, and a
+ * reader quoting four characters should land whoever is helping on the right
+ * one. The move is the same for all of them; the finding is not. Both of this
+ * one's codes carry `too-little-text` for that reason, and they differ in the
+ * half that changes what to do — see `documentHasNoArticle` for the origin
+ * split and why the uploaded branch is not the same string with a word swapped.
  *
  * The floor is Readability's own constant, not ours —
  * docs/plans/260904e-extraction-repair-evals-and-llm-post-processing.md § C1a.
  */
-export function pageHadTooLittleText(chars: number): ReaderFacingFailure {
+export function documentHadTooLittleText(
+  origin: DocumentOrigin,
+  chars: number,
+): ReaderFacingFailure {
+  /* **The threshold is not in either sentence, only the count.** The reader has
+     no use for our number and cannot act on it — and `tests/messages.test.ts`
+     reads any bare 400-599 in a sentence as a leaked HTTP status, which 500
+     is. The count is the fact about *their* page; the threshold is ours. */
+  if (origin === "upload") {
+    return {
+      kind: "blocked",
+      message:
+        `There was not enough in the file you uploaded to build an article from — only ${chars} ` +
+        "characters of it could be read as article text. That is usually a page saved before its " +
+        "own scripts had filled it in, or a piece of a page rather than a whole one, though a " +
+        "genuinely very short page ends the same way. Sending the same file again cannot change " +
+        "the count. If you can still open the original page in a browser, saving it again from " +
+        "there usually produces a copy this app can read. [jb-file-too-little-text]",
+    };
+  }
   return {
     kind: "blocked",
-    /* **The threshold is not in the sentence, only the count.** The reader has
-       no use for our number and cannot act on it — and `tests/messages.test.ts`
-       reads any bare 400-599 in a sentence as a leaked HTTP status, which 500
-       is. The count is the fact about *their* page; the threshold is ours. */
+    /* **"could be read as article text", not "of text"**, which the reader
+       would hear as the whole page. It is the count of what the extractor got
+       out of it: Medium's 404 shell has 249 characters visible and this
+       reports 185, and a sentence that conflated the two would send somebody
+       to count words on a page. GPT Sol, 2026-09-06. */
     message:
-      /* **"could be read as article text", not "of text"**, which the reader
-         would hear as the whole page. It is the count of what the extractor got
-         out of it: Medium's 404 shell has 249 characters visible and this
-         reports 185, and a sentence that conflated the two would send somebody
-         to count words on a page. GPT Sol, 2026-09-06. */
       `There was not enough on the page that was fetched to build an article from — only ${chars} ` +
       "characters of it could be read as article text. That is usually a login wall, an error " +
       "page, or a page whose words only appear once its own scripts have run, though a genuinely " +
@@ -1161,18 +1257,71 @@ export function pageHadTooLittleText(chars: number): ReaderFacingFailure {
   };
 }
 
-export const ARTICLE_HAD_NO_TEXT: ReaderFacingFailure = {
-  kind: "blocked",
-  /* The next failure along from `PAGE_HAS_NO_ARTICLE` and deliberately its own
-     sentence: there the page gave up no article at all, here one was extracted
-     and had no text in it. The reader's move is the same, but a shared sentence
-     would need a shared code, and a code names a branch. */
-  message:
-    "The page was read, and there was no article text in it to build from. A paywall, an error " +
-    "page, or a page whose words only appear once its own scripts have run all end this way, and " +
-    "this step would read the same extracted page again — so it is the address the article came " +
-    "from that needs looking at. [jb-no-text]",
-};
+/**
+ * **The document was read, an article came out of it, and it had no text in
+ * it** — one branch further along than `documentHasNoArticle`, in stage 3
+ * rather than stage 2, and deliberately its own sentence: there the page gave
+ * up no article at all, here one was extracted and there was nothing in it. The
+ * reader's move is the same; a shared sentence would need a shared code, and a
+ * code names a branch.
+ *
+ * **It was a constant with the address ending, and the sweep that split its two
+ * neighbours missed it.** ⟨GPT Sol, F24, 2026-09-08 — found independently on
+ * both sides, and the reproduction is Sol's.⟩ It is reachable from an uploaded
+ * **PDF**, which is the shape neither of us was looking for: a scan whose only
+ * text is a `publisher` record passes the extractor, `renderHtml` in
+ * src/pdf-read.ts then withholds that record on purpose, and stage 3 is handed
+ * a document with no prose in it. So the reader who uploaded a scan was sent to
+ * look at the address it came from.
+ *
+ * That is the same defect as the one this stage exists to fix, one step later,
+ * and it is written up here rather than only in the plan because the *lesson*
+ * is about sweeps: mine was `src/messages.ts` grepped for "address", which
+ * found this line, and I had it filed as out of scope on a guess about
+ * reachability. The guess is the thing
+ * docs/postmortems/260907c-a-heuristic-promoted-to-a-gate.md is about.
+ *
+ * The causes differ by origin the same way `documentHasNoArticle`'s do, with
+ * one addition: for an upload this is very often a **scan of a page** — an
+ * image with no text layer — which is a real thing to tell somebody, and has no
+ * fetched equivalent worth naming.
+ */
+export function articleHadNoText(origin: DocumentOrigin): ReaderFacingFailure {
+  if (origin === "upload") {
+    return {
+      kind: "blocked",
+      /* **Two causes, and they do not share a remedy** — which is why this one
+         sentence has two, where its neighbours have one. ⟨GPT Sol, F28⟩ The
+         first draft named the scan and then offered the *saved page's* way out,
+         *"open the original in a browser and save it again"*, which for an
+         image-only PDF produces the identical image-only PDF. Telling somebody
+         to do the thing that cannot work is docs/project/copy.md § rule 2, and
+         it is worse here than saying nothing, because the advice sounds
+         plausible enough to try twice.
+
+         **"an image of the words rather than the words themselves"** does the
+         explaining that "scan" alone does not: a reader who can *see* text on
+         every page has no reason to guess that none of it is text, and without
+         that clause "try a copy whose words can be selected" reads as nonsense
+         about a document they are looking at the words of. */
+      message:
+        "The file you uploaded was read, and there was no article text in it to build from. That " +
+        "is usually a scan or a photograph of a page — an image of the words rather than the " +
+        "words themselves — or a page saved before its own scripts had filled it in. Sending the " +
+        "same file again cannot change that. For a scan, a copy whose words can be selected or " +
+        "searched is what goes through; for a saved page, letting the original finish loading and " +
+        "saving it again usually produces one this app can read. [jb-file-no-text]",
+    };
+  }
+  return {
+    kind: "blocked",
+    message:
+      "The page was read, and there was no article text in it to build from. A paywall, an error " +
+      "page, or a page whose words only appear once its own scripts have run all end this way, and " +
+      "this step would read the same extracted page again — so it is the address the article came " +
+      "from that needs looking at. [jb-no-text]",
+  };
+}
 
 /**
  * **The three ways painting the argument refuses**, one sentence each.

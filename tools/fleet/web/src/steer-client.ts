@@ -84,11 +84,18 @@ export function steerTargetBody(row: FleetRow): SteerTargetBody {
   };
 }
 
-export type SteerMessageBody = SteerTargetBody & { text: string };
+/**
+ * `speaker` for the same reason `actions-client.ts` sends one: this route hands
+ * the text straight to a pane, and the server's prefix is what tells the agent
+ * whether it is reading Greg or an automated coordinator. An absent field
+ * defaults to the weaker claim, so leaving it out would label every message a
+ * person typed as the Overseer's.
+ */
+export type SteerMessageBody = SteerTargetBody & { text: string; speaker: "greg" };
 export type SteerAnswerBody = SteerTargetBody & { question: unknown; optionIndex: number };
 
 export function steerMessageBody(row: FleetRow, text: string): SteerMessageBody {
-  return { ...steerTargetBody(row), text };
+  return { ...steerTargetBody(row), text, speaker: "greg" };
 }
 
 export function steerAnswerBody(row: FleetRow, optionIndex: number): SteerAnswerBody {
@@ -104,9 +111,52 @@ export function steerAnswerBody(row: FleetRow, optionIndex: number): SteerAnswer
  * so a reader can tell "the box moved under you" from "this browser could not
  * reach the dashboard", which are different problems with the same shape.
  */
+/**
+ * WHAT BECAME OF THE KEYSTROKES, as four arms rather than a missing field.
+ *
+ * The server sends `delivery` only when the delivery module got as far as
+ * having an opinion; a request refused before that carries none. **Those are
+ * four facts, not three plus a hole**, and the fourth one — *the server did not
+ * say* — must not read as `none`. `none` is a claim that nothing left this box,
+ * and a page that made that claim on silence would be making it exactly when it
+ * has least basis to.
+ *
+ * A discriminated union rather than `Delivery | null`, so a renderer has to
+ * name the case it is drawing. This field existed on the wire, correctly, for
+ * as long as the page had been throwing it away.
+ */
+export type DeliveryReading =
+  | { kind: "none" }
+  | { kind: "partial" }
+  | { kind: "unknown" }
+  | { kind: "not-told" };
+
 export type SteerOutcome =
   | { ok: true; op: "message" | "answer"; sent: string[][] }
-  | { ok: false; code: string; why: string; status: number | null; from: "server" | "client" };
+  | {
+      ok: false;
+      code: string;
+      why: string;
+      status: number | null;
+      from: "server" | "client";
+      /** See `DeliveryReading`. Never absent — `not-told` is the arm for that. */
+      delivery: DeliveryReading;
+    };
+
+/**
+ * The server's `delivery`, or the arm that says it sent none.
+ *
+ * A value this build does not recognise is `not-told` rather than `none`, for
+ * the same reason absence is: the page has been given something it cannot
+ * interpret, and the safe reading of that is *I do not know what happened to
+ * the keystrokes*, never *nothing happened*.
+ */
+export function parseDelivery(v: unknown): DeliveryReading {
+  if (v === "none") return { kind: "none" };
+  if (v === "partial") return { kind: "partial" };
+  if (v === "unknown") return { kind: "unknown" };
+  return { kind: "not-told" };
+}
 
 /** The seam. Two typed actions, so a coordinator has something to call that is not a click. */
 export type SteerApi = {
@@ -173,6 +223,12 @@ async function post(
       why: `this browser could not reach the dashboard: ${describe(cause)}`,
       status: null,
       from: "client",
+      /* THE REQUEST MAY WELL HAVE ARRIVED. A fetch that throws has failed to
+         read a RESPONSE; it has not established that nothing was sent. A phone
+         that loses signal after the keystrokes land and before the answer comes
+         back arrives here, and calling that `none` would be the exact wrong
+         advice. */
+      delivery: { kind: "unknown" },
     };
   }
 
@@ -186,6 +242,8 @@ async function post(
       why: `the server answered ${response.status} and the body was not JSON: ${describe(cause)}`,
       status: response.status,
       from: "client",
+      // Same argument as above: an unreadable body says nothing about the pane.
+      delivery: { kind: "unknown" },
     };
   }
 
@@ -203,6 +261,7 @@ async function post(
     why: why ?? `the server answered ${response.status} without saying why`,
     status: response.status,
     from: why === null ? "client" : "server",
+    delivery: parseDelivery(isRecord(parsed) ? parsed["delivery"] : undefined),
   };
 }
 

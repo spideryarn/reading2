@@ -1059,8 +1059,9 @@ export function publicationDate(raw: Maybe): string | undefined {
  *
  * The message stays what it was, because the log is still where it is read and
  * tests/job-failure.test.ts still asserts a diagnostic that names the library.
- * What the reader is shown is `PAGE_HAS_NO_ARTICLE` in src/messages.ts, which
- * says none of this.
+ * What the reader is shown is `documentHasNoArticle` in src/messages.ts, which
+ * says none of this — and which is a *pair* of sentences, because a reader who
+ * uploaded the file has no address to be sent back to.
  */
 export class ReadabilityRefused extends Error {
   constructor() {
@@ -1091,7 +1092,7 @@ export class ReadabilityRefused extends Error {
  * back out of prose is the shape this file has already paid for once.
  *
  * The message is for the log. What the reader is shown is
- * `pageHadTooLittleText` in src/messages.ts, which says none of this.
+ * `documentHadTooLittleText` in src/messages.ts, which says none of this.
  */
 export class TooLittleTextToRead extends Error {
   /** Readability's own measure of the page — see `visibleLength`. */

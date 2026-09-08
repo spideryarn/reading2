@@ -47,6 +47,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   FEEDBACK_SHAPE,
+  FEEDBACK_TRIGGER_SELECTOR,
   FeedbackHost,
   FeedbackTrigger,
   type FeedbackVariant,
@@ -78,11 +79,20 @@ let root: Root;
 
 /** Which shape is on screen, set by `mount` and read by `theButton`. */
 let variant: FeedbackVariant = "corner";
-/** The class the trigger wears in each shape. */
-const SELECTOR: Record<FeedbackVariant, string> = {
-  corner: ".fb-button",
-  dock: ".dock-feedback",
-};
+/**
+ * The class the trigger wears in each shape.
+ *
+ * **Read off `FEEDBACK_SHAPE.hook` rather than typed out again**, since the
+ * third shape arrived on 2026-09-08. A hand-written map was exhaustive by type
+ * — the compiler did refuse a missing row — but the *values* were a second copy
+ * of the class names, and nothing would have caught one that had drifted from
+ * the `button` string it is supposed to be part of. Now the source of both is
+ * one field, and § the shapes below asserts that the hook really is in the
+ * class list.
+ */
+const SELECTOR: Record<FeedbackVariant, string> = Object.fromEntries(
+  Object.entries(FEEDBACK_SHAPE).map(([v, shape]) => [v, `.${shape.hook}`]),
+) as Record<FeedbackVariant, string>;
 
 /**
  * Render one shape, inside its host.
@@ -258,5 +268,149 @@ describe("the Feedback button, in the bar", () => {
     mount("dock");
     expect(theButton().getAttribute("aria-label")).toBe("Feedback");
     expect(theButton().getAttribute("title")).toBeNull();
+  });
+});
+
+/**
+ * **The same button in the shelf's masthead row**, since 2026-09-08.
+ *
+ * Greg reported the corner button as missing from the logged-in homepage while
+ * it was drawn there at every width with nothing painted over it
+ * (SPIDERYARN-READING2-2C). What it was not was *findable*: a bare grey glyph
+ * fixed to the **window**, while the shelf's own `Profile`/`Admin` links sat in
+ * a cluster a hand's width away. This shape puts it in that cluster.
+ *
+ * So the assertions are about **belonging to the row**, and the failure they
+ * are aimed at is the one the bar's block above names: a variant that reused
+ * `.fb-button` would keep `position: fixed; top; right; width:
+ * var(--feedback-w)` and paint in the corner again — and inside a right-aligned
+ * row that is the *least* obvious place for it to be wrong, because the corner
+ * is roughly where the row ends anyway.
+ *
+ * The one thing this shape does that neither other one does is **keep its word
+ * at every width**, and that is not decoration: losing the label below 731px is
+ * half of what made the corner button unfindable on the phone Greg was holding.
+ */
+describe("the Feedback button, in the shelf masthead", () => {
+  it("wears its neighbours' classes and none of the corner's", () => {
+    mount("masthead");
+    const btn = theButton();
+    /* The `Profile` and `Admin` links' own class string (Library.tsx).
+       Asserted rather than left to the eye because the whole point of this
+       shape is to be indistinguishable from them: this control should not be
+       able to drift into looking like its own kind of thing. */
+    for (const cls of [
+      "tw:inline-flex",
+      "tw:items-center",
+      "tw:gap-1.5",
+      "tw:text-xs",
+      "tw:text-ink-faint",
+    ])
+      expect(btn.classList.contains(cls), `missing ${cls}`).toBe(true);
+    /* **`p-0` is the one that is not copied from the neighbours**, and the one
+       most likely to be dropped as redundant. It is not: the global button
+       reset in tailwind.css takes a `<button>`'s border, background and font
+       and leaves the UA's `padding: 1px 6px`, which the `<a>`s beside this have
+       none of. Measured in Chrome on 2026-09-08 — without it the button is 18px
+       tall against their 16 and carries 6px of dead space at each end, so the
+       last gap in a `gap-4` row reads as 22px. jsdom has no layout and cannot
+       see any of that, which is exactly why the class is pinned here. */
+    expect(btn.classList.contains("tw:p-0"), "the UA button padding is back").toBe(true);
+    /* **What `p-0` then owes a finger.** The corner trigger this replaces was
+       38x44 on a phone; the row's natural height is 16, so without a floor the
+       move would have answered a report filed *from* a phone with a smaller
+       target than the one being complained about. 2.5rem is the dock's floor
+       since 2026-08-28, and `pointer-coarse` rather than `any-pointer-coarse`
+       is narrow-window.css § a coarse pointer's convention: sizes follow the
+       primary pointer, so a trackpad-equipped iPad is not given 40px of chrome
+       it will never touch. Verified at 40px in Chrome with `hasTouch`,
+       `isMobile` and a 3x scale factor set together, where `(pointer: coarse)`
+       genuinely matches; docs/project/browser-testing-playwright.md says
+       `hasTouch` on its own is enough, which was not separately tested here.
+       GPT Sol, P2. */
+    expect(
+      btn.classList.contains("tw:pointer-coarse:min-h-10"),
+      "a phone control back under the touch floor",
+    ).toBe(true);
+    /* The failure mode, exactly as in the bar: `.fb-button` carries
+       `position: fixed` and the top-right corner of the window with it. */
+    expect(btn.classList.contains("fb-button")).toBe(false);
+    expect(host.querySelector(".fb-button")).toBeNull();
+    expect(btn.classList.contains("dock-btn")).toBe(false);
+  });
+
+  it("keeps its word at every width, unlike both other shapes", () => {
+    mount("masthead");
+    const word = theButton().querySelector("span");
+    expect(word?.textContent).toBe("Feedback");
+    /* **An empty class is the assertion**, not an oversight. `.fb-button-text`
+       is hidden by the 731px query and `.dock-btn-label` by the bar's fit
+       ladder; wearing neither is what makes this label survive. A refactor that
+       "tidied" this into one of those would take the word away on a phone,
+       which is the defect this shape exists to fix. */
+    expect(word?.className).toBe("");
+  });
+
+  /** Its card's geometry, against the table — see the bar's block for why. */
+  it("is declared to open downwards, and not to flip", () => {
+    expect(FEEDBACK_SHAPE.masthead.placement).toBe("bottom");
+    /* The row is right-aligned and this is its last control, so a 22rem card
+       that cannot centre would flip onto the cross axis and land over the
+       shelf's own heading — the corner button's reason, one page over. */
+    expect(FEEDBACK_SHAPE.masthead.keepSide).toBe(true);
+  });
+
+  it("carries the same name and no title, exactly as the other two do", () => {
+    mount("masthead");
+    expect(theButton().getAttribute("aria-label")).toBe("Feedback");
+    expect(theButton().getAttribute("title")).toBeNull();
+  });
+
+  it("matches its neighbours' glyph size rather than the chrome shapes'", () => {
+    /* `Profile` and `Admin` draw at 13; the corner and the bar at 15. Same
+       argument as the classes: this glyph belongs to the row, not to the
+       feature. The other two are here so this is a difference rather than a
+       number somebody once typed. */
+    expect(FEEDBACK_SHAPE.masthead.icon).toBe(13);
+    expect(FEEDBACK_SHAPE.corner.icon).toBe(15);
+    expect(FEEDBACK_SHAPE.dock.icon).toBe(15);
+  });
+});
+
+/**
+ * **`hook` is what a count of triggers is written against, so it has to be true
+ * of the rendered element** — and that is not something the compiler can say,
+ * because `hook` and `button` are two independent strings.
+ *
+ * The rule it protects is *never two Feedback buttons on one screen*, counted
+ * in tests/dock-corner-controls.test.tsx through `FEEDBACK_TRIGGER_SELECTOR`. A
+ * shape whose `hook` was not actually in its own `button` class list would be
+ * **uncountable**: the count would come back one lower than the truth, and the
+ * assertion it feeds would go *green* on a page with two buttons on it. That is
+ * the shape docs/reusable/silent-success.md is about, so it is checked by
+ * rendering every variant rather than by reading the table.
+ */
+describe("every shape is countable", () => {
+  it("renders an element carrying its own hook class", () => {
+    for (const v of Object.keys(FEEDBACK_SHAPE) as FeedbackVariant[]) {
+      mount(v);
+      const el = host.querySelector(`.${FEEDBACK_SHAPE[v].hook}`);
+      expect(el, `${v} renders nothing matching its own hook`).not.toBeNull();
+      expect(el?.tagName).toBe("BUTTON");
+    }
+  });
+
+  it("is named by FEEDBACK_TRIGGER_SELECTOR, whatever shapes exist", () => {
+    for (const v of Object.keys(FEEDBACK_SHAPE) as FeedbackVariant[]) {
+      mount(v);
+      /* The selector the route walk counts with, asked of one shape at a time.
+         Adding a fourth variant and forgetting that file makes *this* go red,
+         which is the point — the alternative was a hand-listed selector that
+         went on passing while silently covering one page fewer. */
+      expect(
+        host.querySelectorAll(FEEDBACK_TRIGGER_SELECTOR),
+        `${v} is invisible to the one-trigger-per-page count`,
+      ).toHaveLength(1);
+    }
   });
 });

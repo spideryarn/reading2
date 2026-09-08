@@ -1005,6 +1005,34 @@ systemctl is-enabled overseer                                   # enabled
 ls -l /etc/systemd/system/multi-user.target.wants/overseer.service
 ```
 
+**Editing a unit in the repo does NOT change the box, and nothing tells you.** There are three
+copies of each unit — the readable one under `infra/hetzner/systemd/`, the heredoc inside
+`provision.sh`, and the one in `/etc/systemd/system/` that actually runs.
+`tests/systemd-units.test.ts` compares the first two byte for byte; **nothing compares either to the
+third.** Measured 2026-09-08: `overseer.service` matched, and `fleet-dashboard.service` on the box was
+**53 lines different** from the repo — still carrying a hardcoded tailnet address that no other box
+could bind, two revisions after that was fixed.
+
+So the install step is part of every unit change, not an occasional chore:
+
+```
+# after ANY edit to infra/hetzner/systemd/*.service — before enabling, restarting, or believing it
+sudo install -m 0644 -o root -g root \
+  <(sed 's/@USER@/greg/g' infra/hetzner/systemd/overseer.service) \
+  /etc/systemd/system/overseer.service
+sudo systemctl daemon-reload
+```
+
+**This is not a check for a good reason.** A test asserting the installed file matches the repo would
+go red the moment anyone edits a unit and stay red until somebody ran `sudo` — which agents on this
+box cannot do. A red trunk with no agent-reachable fix is worse than the drift it detects, because a
+shared red gate hides its own additional causes. So it is a step you take and a thing you verify by
+hand, and `diff` is the whole of the verification:
+
+```
+diff <(sed 's/@USER@/greg/g' infra/hetzner/systemd/overseer.service) /etc/systemd/system/overseer.service
+```
+
 At 3am:
 
 ```

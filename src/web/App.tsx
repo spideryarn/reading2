@@ -47,6 +47,32 @@ const loadChangelog = () =>
 
 
 /**
+ * **Does this reader, at this address, get the shelf?**
+ *
+ * Two ways in, and the second is easy to forget: the address itself, and *any*
+ * administrator-only address reached by somebody who is not the administrator —
+ * `SignedIn` answers those with the shelf rather than a refusal, deliberately
+ * (docs/project/admin.md § why the shelf and not the 404 page).
+ *
+ * **It is a function because two places have to agree, and for one day they did
+ * not.** When the Feedback trigger moved into the shelf's masthead on
+ * 2026-09-08, the corner trigger's condition was written as
+ * `route.kind !== "library"` — true of `/design`, which for an ordinary reader
+ * *is* the shelf. So those two addresses drew a masthead trigger and a corner
+ * one: two Feedback buttons on one screen, the exact thing
+ * tests/dock-corner-controls.test.tsx exists to forbid, and green in every suite
+ * because neither address was in its walk. GPT Sol found it in review.
+ *
+ * The lesson is in the signature rather than in a comment: the question a
+ * corner control has to ask is **what page is this**, which depends on the
+ * reader, and not **what route is this**, which does not. Anything that renders
+ * the shelf must come through here.
+ */
+function drawsShelf(route: Exclude<Route, { kind: "callback" }>, user: User): boolean {
+  return route.kind === "library" || (adminOnly(route) && !isAdmin(user.id));
+}
+
+/**
  * Which page you are on, and nothing else.
  *
  * The path says which article (`/read/<slug>`) and which of its three views
@@ -235,11 +261,37 @@ export function App() {
      the three visitor stand-ins all mount a `Dock` and draw the trigger there
      (Dock.tsx). `ArticlePage`'s four branches that have no `Dock` — loading,
      error, not-shared and reauth-required — each draw the corner trigger
-     themselves, so nothing that has one today loses it. */
+     themselves, so nothing that has one today loses it.
+
+     **And every page that draws the shelf, since 2026-09-08**, for the same
+     reason one route further down. The shelf draws its own trigger in its
+     masthead row, beside `Profile` and `Admin` (Library.tsx), because a fixed
+     corner button next to a cluster of identically-styled chrome is a second
+     top-right rather than the page's one — Greg reported the corner button as
+     missing while looking straight at it, SPIDERYARN-READING2-2C.
+     `FEEDBACK_SHAPE.masthead` in FeedbackButton.tsx carries the whole story,
+     and docs/plans/260908e-feedback-button-in-the-shelf-masthead.md the
+     reasoning.
+
+     **`drawsShelf` and not `route.kind !== "library"`, and that distinction was
+     bought.** The shelf has two ways in — its own address, and an
+     administrator's address opened by somebody who is not the administrator —
+     so a route-only test drew both triggers on `/design` and `/admin` for an
+     ordinary reader. See `drawsShelf` above, which has the whole story; the
+     short version is that this condition has to ask what *page* is on screen,
+     and that depends on who is reading.
+
+     **Both exclusions are written here rather than in the pages that replace
+     them**, so that "which page draws the corner one" is a single expression
+     somebody can read, instead of a rule you can only reconstruct by opening
+     four files. What stops the two halves drifting into none-at-all or two-at-
+     once is tests/dock-corner-controls.test.tsx, which walks the routes and
+     counts — including, since the bug above, the two addresses that reach the
+     shelf sideways. */
   return (
     <FeedbackHost>
       <SignedIn route={route} user={user} />
-      {route.kind !== "read" && <FeedbackTrigger variant="corner" />}
+      {route.kind !== "read" && !drawsShelf(route, user) && <FeedbackTrigger variant="corner" />}
     </FeedbackHost>
   );
 }
@@ -293,8 +345,7 @@ function SignedIn({
 
      `key` for the same reason the shelf below carries one — this is the same
      component, reached a different way. */
-  if (adminOnly(route) && !isAdmin(user.id))
-    return <Library key={user.id} readerId={user.id} />;
+  if (drawsShelf(route, user)) return <Library key={user.id} readerId={user.id} />;
 
   /* The shelf is home, so it gets no way-home logo — a link to the page you
      are already on is a dead control, and Library.tsx names the app in its own
@@ -313,6 +364,8 @@ function SignedIn({
      key removes the frame by removing the instance. GPT Sol's review of
      docs/plans/260903g-faster-shelf-load-and-tidier-homepage-controls.md
      § Stage 5, 2026-09-03. */
+  /* The shelf proper. `drawsShelf` above has already answered the sideways way
+     in, so this is the address itself. */
   if (route.kind === "library") return <Library key={user.id} readerId={user.id} />;
   // The corner logo, because this is not home and the reader may have arrived
   // straight here from a bookmarklet with no shelf behind them.

@@ -132,6 +132,12 @@ substitute for it: momentum, rubber-banding and stopping on a line are all exact
 and only the sideways axis is refused. Everything below still holds — no gesture of ours reads a
 drag over the prose, and nothing alters its rate or duration.
 
+**A tap on it does one thing, since 2026-09-08: it selects that block**, which is how a finger says
+which row the gutter should draw its controls beside
+([§ the gutter, and the row a finger is on](#the-gutter-and-the-row-a-finger-is-on)). That is inside
+the decision rather than an exception to it — a tap is not a drag, nothing moves, and the reader who
+only ever scrolls never learns the surface is there. What it costs is written in that section.
+
 NN/g's [Scrolljacking 101](https://www.nngroup.com/articles/scrolljacking-101/) found the most severe
 usability damage in one specific case: pages that altered the rate and duration of scrolling **while
 also requiring the reader to read text**. Participants were disoriented; some read it as a bug and
@@ -370,6 +376,71 @@ all and a tap that landed looked exactly like one that missed.
 **The rest of the band is still pointer-sized**: the threshold slider is 16px tall, and half a dozen
 buttons are between 19 and 28. Nothing generalises the rule; each control gets it when somebody
 notices.
+
+## The gutter, and the row a finger is on
+
+> On a touch device, only show the icons to the left of the blocks in the vertical gutter when I
+> select a block.
+>
+> — Greg, 2026-09-07, reading on an iPad (SPIDERYARN-READING2-2G)
+
+**The block gutter's grammar is that at rest it shows *state* and on hover it shows *affordances*.**
+The bookmark and the blue chat mark are facts about the article and are always there; the permalink,
+the chat door, the "?" and the "…" wait to be asked for. A finger has no hover, so on 2026-09-04 the
+whole set was given `opacity: 0.653` inside `@media (hover: none)` — which fixed a shut door by
+**removing the gate rather than replacing it**. Every row of the article drew its affordances,
+permanently: 14 icons on a 390 × 844 screenful, 23 on an 820 × 1180 one.
+
+That is the same class as the glossary order button above, from the other end — a control
+unreachable on a finger, and a control unavoidable on one — and it is worth naming as a pair,
+because the second was created by the fix for the first.
+
+**The reveal is now `:where(tr.row-active)`, and a tap on the prose is what sets that.** Three
+things about it are worth carrying to the next rule of this shape:
+
+- **`:where()` is load-bearing, not tidiness.** It contributes no specificity, so the whole reveal
+  stays at (0,1,0): it beats the bare hidden state on source order and **loses naturally** to
+  `.block-chat.has`, `.blk-gutter[data-open] > *`, `.blk-permalink.failed` and the four
+  `:focus-visible` reveals, each of which is (0,2,0). Written as a plain `tr.row-active` prefix it
+  would outrank all five and each would have needed restating underneath it — five corrective rules,
+  in a stylesheet whose recorded failure mode is a wrong *opacity* on an element that is present and
+  correct. GPT Sol's plan review, 2026-09-07.
+- **`tr:hover` went behind `@media (hover: hover)` at the same time, and had to.** iOS leaves
+  `:hover` on whatever was last tapped, which would be a second gate on the same controls — and not
+  the same one: a tap the hover card swallows at document capture never reaches the selection
+  handler, so the gutter would open at full strength on a row nothing selected.
+- **And so did the JavaScript half, which is the finding worth carrying furthest.** A tap fires the
+  compatibility mouse events, `mouseenter` among them, so the row's `onMouseEnter` was writing the
+  selected row on every tap regardless of what the tap landed on — the exclusion list above governed
+  the `click` path while a second, ungated path wrote the same state. **It was measured rather than
+  feared**: on the commit before any of this, a Chromium tap set `row-active` and held it, and
+  `onMouseEnter` was the only writer that existed. Both hover writers now ask
+  `matchMedia("(hover: hover)")`, so there is one writer per kind of device. The general lesson is
+  the one this file already teaches about *"a lift fires the hover events too"*: **a touch rule that
+  only guards the CSS has guarded half of it.**
+- **The opacity is a measurement against the row's own ground, not a constant.** It is 0.705, which
+  is 3:1 over `--page`, over the `--panel` a selected row is painted, and over the `--muted` an
+  opaque figure row is painted — and `.opaque` beats `.row-active`, so that last one is the case
+  that decides the number. 0.653 was right while every row was lit (3:1 over `--page`, with a tinted
+  row a corner case you had to be hovering); the moment the selected row became the only lit row,
+  the corner case became the whole thing. `tests/gutter-touch-contrast.test.ts` computes it from the
+  tokens rather than trusting the comment.
+
+**The cost is accepted rather than solved.** The permalink, the chat door and the "?" have no route
+anywhere else in the app, so each is now two taps instead of one, and nothing teaches a reader that
+untapped prose is hiding anything — a `--panel` wash confirms a tap after it happens; it cannot
+advertise one. Shipped on the administrator's own request, with no first-visit hint, and recorded
+here so the next person measures rather than rediscovers.
+
+**A hybrid iPad is untouched by any of this**, and that hole is pre-existing: with a Magic Keyboard
+it reports `hover: hover`, so neither the blanket reveal nor the gated one ever applied to it.
+`(any-pointer: coarse)` is the semantically right query — an interaction rule should ask whether a
+coarse pointer exists, not which one is primary, exactly as the text-field rule above does — but the
+swap is not one token, because on a hybrid a mouse hover and a persisted touch selection need to be
+separate state and `hoveredRow` is one value carrying both.
+
+[260908e-gutter-icons-on-touch-only-when-a-block-is-selected.md](../plans/260908e-gutter-icons-on-touch-only-when-a-block-is-selected.md)
+has the reproduction, the arbitration about which marks are state, and the version that was refused.
 
 ## What the Enter key promises
 

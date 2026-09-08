@@ -1,27 +1,33 @@
 # The Overseer's store, and the clock it gives everything else
 
-**Status 2026-09-08, 09:35: the Overseer runs, and has never yet run where it will live.** S1, S2,
-S3, S4 and S6 are landed, reviewed and green; S5 (the systemd units) is being built now; S3-03 and
-two smaller findings are stage S7, in flight. Evidence: `npm run typecheck` reports **0** failures
-across all four projects, **245 tests pass** across the eight Overseer files, and `tools/overseer/`
-plus `scripts/overseer.ts` is 5,830 lines.
+**Status 2026-09-08, 11:15: the Overseer is recording into `~/.overseer` right now, and one command
+away from surviving a reboot.** S1–S7 are landed, reviewed and green. Evidence: `npm run typecheck`
+reports **0** failures across all four projects, **326 tests pass across nine Overseer files**, and
+the daemon has been running against its production store since 09:35 — 79 events, 21 sessions, at a
+measured **156 MB RSS and 2 seconds of CPU over 363 seconds**, roughly half of that `tsx` starting up.
 
-**The live run, quoted here because its store was a scratch directory that will be deleted with the
-session.** Against the real dashboard on `:8787`, 2026-09-08 07:30–07:52 UTC, store root
-`scratchpad/overseer-live`: **43 events in 22 minutes — 30 `session-seen`, 8 `session-status`, 5
-`tmux-session-gone`** — and three of those five name the daemon's own earlier incarnations
-(`overseer-live-…`, `overseer-degrade-…`, `overseer-restart-…`), each with `why:
-"absent-from-snapshot"`. Its `daemon.jsonl` holds 3 `daemon-started` and 2 `daemon-stopped`, so one
-run ended without writing a stopping note, which is the `kill -9` the recovery test used.
+**What is done that was not done this morning.** `~/.overseer` exists and is being written to; every
+earlier run used a scratch root that dies with its session. `kill -9` recovery was proved against that
+real store — the lock reclaimed, a crash note written, and the restart producing two events rather
+than twenty-four, which is the whole point of the persisted baseline.
 
-**And the thing that number does not say, found by checking rather than by remembering:
-`~/.overseer` does not exist.** `overseer status` against the default root reports *"NEVER RUN — no
-checkpoint and no notes"*. Every run so far has been against a scratch root, which was right for a
-test and means the production store is empty and unproven. **Naming the root is part of the claim** —
-"the daemon has been run" and "the daemon has been run where it will live" are different sentences,
-and only the first was ever true. Closing that is S5's acceptance, not a separate task: the unit sets
-`OVERSEER_STORE_DIR=/home/greg/.overseer` explicitly, and the evidence it must produce is events in
-*that* file.
+**The one thing standing between here and a reboot-proof fleet is a command no agent may run.**
+`sudo systemctl enable` is refused for agents on this box, by two different mechanisms, in two
+different sessions. Neither agent hand-wrote the symlink to get around it, which was right: a
+criterion satisfied by circumventing the thing stopping you is not satisfied. § The four commands that
+finish S5 has the sequence, and the installed `overseer.service` has been verified byte-identical to
+the repo copy, so it is safe as written.
+
+**Four P1s were found *after* this plan's own review said it was done**, three by a second
+cross-family review and one by running the tool and reading its output as a stranger would. All four
+are fixed. They are worth reading as a set, in § S7's own review, because three of the four are the
+same defect wearing different clothes: **a producer that said the careful thing and a consumer that
+flattened it.**
+
+**And two of the four traced back to claims in briefs I wrote** — one asserting a mechanism that
+cannot happen, one compressing a design with a reason into a constant without one. Both are recorded
+where they happened rather than only here, because a brief is the one artefact in this workflow that
+nothing reviews.
 
 **Both P0s are closed**, one in the differ and one in the store's lock, each after a review round that
 found the first fix insufficient. Every Sol finding is either fixed or refused with reasons in this
@@ -1134,6 +1140,48 @@ side of [orchestrator-direction.md](../project/orchestrator-direction.md)'s rule
 *correct and unavailable* to *plausible and up* — except that here we get correct **and** up, just not
 yet remote.
 
+#### There is a THIRD copy of each unit, and nothing checks it
+
+`tests/systemd-units.test.ts` compares the readable file under `infra/hetzner/systemd/` against the
+heredoc spliced into `provision.sh`, byte for byte, and that check is live — verified 2026-09-08 by
+adding a single trailing space and watching it go red. **It compares the two copies in the repo. The
+copy that actually runs is in `/etc/systemd/system/`, and nothing compares anything to that.**
+
+Measured 2026-09-08, 11:10, on this box:
+
+| unit | installed vs repo |
+|---|---|
+| `overseer.service` | **identical** |
+| `fleet-dashboard.service` | **differs — 53 lines, including the `100.` fallback address and the conditional build**, both of which are the P1 above |
+
+So the installed fleet unit is the design we abandoned, and enabling it without reinstalling would
+start exactly the thing two reviews and two agents agreed to remove. Found by the fleet dashboard
+agent while preparing the cutover, not by any check.
+
+**Why this is the drift test's own class, one step out.** The test exists because two copies of a fact
+is how one goes stale, and the stale one is invisible. There were never two copies — there were
+three, and the third is the only one with any effect. A test that guards the two you can see, while
+the one that runs is unguarded, is a check that measures where the light is.
+
+**Deliberately NOT made a gate, and the reason is worth keeping.** The obvious fix — a test asserting
+that `/etc/systemd/system/<name>.service` matches the repo whenever it exists — would go red on this
+box the moment anyone edits a unit, and **stay red until somebody runs `sudo`, which agents here
+cannot do.** That is a red trunk with no agent-reachable fix, which
+[open-questions.md's Q12 discussion](../project/orchestrator-direction.md) established is worse than
+the thing it detects: a shared red gate hides its own additional causes. So this is a **step in the
+procedure and a known uncovered case**, not a check.
+
+**Therefore the install step is part of every unit change**, and it is written into
+[hetzner-remote-server-box.md](../project/hetzner-remote-server-box.md) as such:
+
+```
+# after ANY edit to infra/hetzner/systemd/*.service, before enabling or restarting:
+sudo install -m 0644 -o root -g root \
+  <(sed 's/@USER@/greg/g' infra/hetzner/systemd/<name>.service) \
+  /etc/systemd/system/<name>.service
+sudo systemctl daemon-reload
+```
+
 #### The four commands that finish S5, and why they are Greg's
 
 **`sudo systemctl enable` is refused for agents on this box, and it was refused twice by different
@@ -1150,7 +1198,16 @@ the thing that was stopping you is not satisfied.
 So, in this order, and the order matters:
 
 ```
-# 1. Stop the hand-run daemon FIRST. It holds ~/.overseer/overseer.lock, and the unit
+# 0. PULL THE PRIMARY FIRST, and this step was missing until 11:20.
+#    The unit's WorkingDirectory and ExecStart are /home/greg/code/spideryarn2 — the
+#    PRIMARY checkout, not this worktree — so the service runs whatever is sitting
+#    there when it starts. Measured 2026-09-08 11:18: the primary was at d0588a63
+#    while dev was eleven commits further on, so enabling without this step would
+#    start the Overseer on code without S7-04, S7-F1 or S7-F2 — every P1 fixed today,
+#    unfixed in the thing that actually runs.
+cd /home/greg/code/spideryarn2 && git merge origin/dev && npm install
+
+# 1. Stop the hand-run daemon. It holds ~/.overseer/overseer.lock, and the unit
 #    will refuse to start while it does — correctly, and it names the file when it does.
 tmux kill-session -t s5-overseer2-0935-2399531
 
@@ -1166,6 +1223,49 @@ npx tsx scripts/overseer.ts status
 # 4. And the one that proves Restart=always does its job, which nothing has yet observed:
 sudo systemctl kill -s KILL overseer.service && sleep 8 && systemctl status overseer.service
 ```
+
+**Measured again at 12:15, and it is worse than "stale" — the primary is MIXED, and the mismatch is
+in the store's schema.** The primary had picked up `observation.ts` and `diff.ts` by then, but
+`tools/overseer/store.ts` there still reads `STORE_SCHEMA = 1` while the live `~/.overseer` is
+schema 2. So this is not a version behind; it is a build that disagrees with the data on disk about
+what the data is.
+
+**What that build actually does was run rather than reasoned about**, against a copy of the live store:
+
+```
+cd /home/greg/code/spideryarn2 && OVERSEER_STORE_DIR=<copy> npx tsx scripts/overseer.ts status
+```
+
+It printed a **complete, confident, entirely plausible report** — `daemon RUNNING`, 20 sessions in the
+register, 128 events, durations against every row — and **said nothing at all about the checkpoint it
+could not parse.** `parseCheckpoint` rejected it on the schema line, `openStore` did the designed
+thing and rebuilt the register by replaying `events.jsonl` from byte 0, and the old renderer had
+nowhere to put the fact. Not one `≥` appears in its output, because `StatusSince` does not exist in
+that build: every duration that is a floor prints as a measurement, which is S7-F4 exactly, silently
+back.
+
+**And that is the general lesson, not a detail of this deployment: the arm that reports the problem is
+part of what has not been deployed.** The current build answers the same question with *"CANNOT TELL —
+there IS a current.json and this build cannot parse it"*, because the renderer was changed to take
+`CheckpointRead` whole. Grep the two: the primary's `scripts/overseer.ts` has **zero** cannot-parse
+paths and the current one has three. **A stale build cannot report its own staleness**, so "is the
+deployed copy current?" is never answerable from the deployed copy's own output — which is why step 0
+is a gate rather than hygiene, and why the check that verifies it (`diff` against the repo,
+[hetzner-remote-server-box.md](../project/hetzner-remote-server-box.md)) has to run from outside.
+
+**Step 0 is the one that would have embarrassed us**, and it was found by the other agent preparing
+its own cutover rather than by anyone reviewing this plan. **"Updating the primary checkout is a deploy
+step nobody owns"** is the general form, and it applies to both services for the same reason: putting
+`ExecStart` in the primary was a deliberate choice — a worktree can be removed out from under a
+service — and the cost of that choice is that **the primary is now a deployment target with no
+deployment process.** Nothing pulls it, nothing watches it, and its staleness is invisible from
+inside the unit.
+
+Worth noting what makes this survivable: the failure is **loud and immediate** rather than silent. A
+daemon running old code writes a schema-1 checkpoint that the current CLI refuses by name, which is
+the `CANNOT TELL` arm doing exactly its job. That is the difference between a stale service and a
+stale *bundle* — the fleet dashboard's equivalent mistake serves an old page with no error anywhere,
+which is why that one needed a rebuild on every start and this one does not.
 
 **Step 4 is the one worth actually running**, because it is the only assertion in this stage that is
 currently backed by a file rather than by a behaviour. `Restart=always` is asserted by the unit, by
@@ -1454,6 +1554,144 @@ found unless you insist on the summary line — and were re-run alone.
 
 *(The commit message for `5627f6c1` says 526 comparisons; the finished run says 516. The larger
 number was read off a partial capture and the smaller one is right.)*
+
+#### S7-04, as built: a pair, a schema bump, and one field the reviews disagreed about
+
+**The shape.** `statusSince` is now a discriminated pair rather than a timestamp:
+
+```ts
+export type StatusSince =
+  | { readonly kind: "observed"; readonly at: string }
+  | { readonly kind: "lower-bound"; readonly at: string };
+```
+
+The arm names are the **reader's** rather than the producer's — not `first-seen`/`transition` — because
+the seam is a file and somebody running `less ~/.overseer/current.json` has to know what the number is
+worth without opening `store.ts`. `"kind": "lower-bound"` says that on its own; `"kind": "first-seen"`
+would need this document.
+
+There are exactly two producers and they were already two places in the code. `entryOf()` mints
+`lower-bound`, which covers `session-seen` **and** `session-replaced` — a replacement is a new
+conversation in an old tmux session, so its status was never watched starting either. The
+`session-status` fold mints `observed`. **`session-wait-restarted` mints `observed` too**, and the
+brief's expectation was checked rather than trusted: diff.ts emits that event only after comparing the
+previous deadline with the current one, so the daemon did watch the wait restart. `session-row-changed`
+and `session-pane-replaced` still do not touch the field, and the tests that say so are unchanged.
+
+**`STORE_SCHEMA` goes 1 → 2.** The constant's own rule is *bump when a reader that ignored the change
+would be WRONG rather than merely poorer*, and this is the wrong half: a consumer written against
+schema 1 does `Date.parse(entry.statusSince)`, gets `NaN` on the new shape, and renders a blank or a
+nonsense age — not an error. With the bump it says *I cannot read this*, which is what
+[orchestrator-direction.md](../project/orchestrator-direction.md) § The seam is a file already tells
+it to do. **The hypothetical in that paragraph came true the day after it was written**, which is the
+argument for having written it.
+
+**Nothing is migrated, and the old checkpoint is refused twice over.** `parseCheckpoint` rejects
+schema 1 outright; `parseStatusSince` separately refuses a bare string **naming the field**, for the
+hand-edited file that gets past the first gate. Refusing costs a replay of the log, and the log holds
+events rather than durations — so the rebuild produces honest arms rather than inheriting an ambiguity
+a migration would have had to guess at. Guessing would mean choosing `observed`, which is the 13m bug
+manufactured inside the recovery path, where a wrong number survives longest and is questioned least.
+
+**The renderer.** `overseer status` prints `40m` for an observed transition and `≥13m` for a floor,
+with a legend line under the block whenever a floor is on screen, so the mark means something to
+somebody who has never read any of this. **The sort still ignores the arm**: a floor is the best
+estimate available and can only rank a session too low, whereas ranking floors above readings would be
+guessing about the part we cannot see. Against a copy of the live store, rewritten to the new shape:
+
+```
+sessions    19 in the register: 12 idle, 4 shell:true, 3 working
+            working      ≥60m  get-ready-for-deploy ($2000)
+            shell:true    57m  s5-overseer2-0935-2399531 ($2356)
+            ≥ is a floor: the daemon found it already in that state and cannot see when it began
+```
+
+**Mutations: 15 tried, 15 caught, no survivors.** `entryOf` minting the exact arm; the
+`session-status` fold minting the floor; `session-wait-restarted` minting the floor;
+`session-row-changed` promoting a floor to a measurement; `parseRegisterEntry` accepting a bare
+string; `parseStatusSince` accepting any `kind`; the same accepting any string as the timestamp; the
+schema left at 1; the schema moved to 3; `paneId` reclassified as a clock field; the renderer printing
+both arms identically; the attention list unsorted; the attention list sorted backwards; an unreadable
+checkpoint reported as `never-run` again; the unreadable detail no longer naming either schema. Each
+was applied textually and reverted from the string held in memory rather than from git, with the
+file's sha256 checked after every restore, because other agents' uncommitted work is in this tree.
+
+**The red-first test** is *"a session already running when the daemon starts reports a floor, not a
+measurement"*, and it asserts on the **arm** rather than on the number — the number was never wrong,
+which is why the old test asserting it passed throughout.
+
+**One correction to a comment, from the reviews rather than the code.** Two cross-family reviews
+disagreed about `ENTRY_FIELD_OWNERS`: one called it *"a forcing prompt, not the compile-time guarantee
+claimed"*, the other called `satisfies Record<keyof RegisterEntry, …>` a genuine compile-time census.
+Both are half right, and the comment overclaimed by not separating them. A **missing** field is a
+compile error; a **misclassified** one is not, and goes stale silently — the census-only mutation
+`paneId: "pane" → "clock"` survived the suite. The comment now says exactly that, and the gap is half
+closed rather than described: `row` was already pinned to `REGISTER_ROW_FIELDS` and the fold, and a new
+test pins `pane` by comparing the census against the fields a `session-pane-replaced` really moves
+(that mutation is now caught). **`identity` against `clock` is pinned by nothing** and is recorded in
+the comment as a known uncovered case rather than left reading as guarded.
+
+**The same defect, one screen away, found by running it rather than reading it.** With the schema
+bumped, `overseer status` against the live `~/.overseer` said this while the daemon was up, on pid
+2400163, and had written `current.json` thirty seconds earlier:
+
+```
+daemon      NEVER RUN — notes but no checkpoint: the Overseer started and never got as far as a first collection
+            the checkpoint is unusable (checkpoint-malformed): schema 1 is not 2
+source      nothing has been collected yet
+```
+
+**Every word of the headline is false**, and the second line carries the truth — so the information
+survived the parse and died in the presentation. `daemonStanding` took `Checkpoint | null`, and
+flattening `readCheckpoint`'s three outcomes into that `null` made *I cannot read this* and *nothing
+was ever written here* the same fact. It is this stage's own defect pointed at this stage: a floor
+rendered as a measurement, and *unreadable* rendered as *never happened*. And it is the worst
+direction for this tool in particular — [orchestrator-direction.md](../project/orchestrator-direction.md)
+is built against the Overseer being silently dead while the page says nothing needs you; this is that
+inverted, and a person who reads `NEVER RUN` goes and starts a second daemon beside a live one.
+
+So `StandingInput` now takes the reader's outcome **whole** (`CheckpointRead`), and there is a sixth
+arm, `cannot-tell`, which is a **refusal to guess**: it says the file exists, why this build could not
+parse it, which schema each side speaks, that the Overseer may well be running and nothing here can
+tell, and that the thing to do is wait for the next checkpoint rather than start a second daemon. The
+two other lines that lied for the same reason — *nothing has been collected yet*, and a register block
+that simply vanished — now say `unknown` and say why. It reads:
+
+```
+daemon      CANNOT TELL — there IS a current.json and this build cannot parse it (checkpoint-malformed:
+            schema 1 is not 2); this build reads schema 2. The Overseer may well be running — nothing here
+            can tell, and the daemon's own notes are below. Wait for the next checkpoint rather than
+            starting a second one.
+source      unknown — the collection clock is in the checkpoint this build cannot parse
+sessions    unknown — the register is in that checkpoint too, but the event log below is still readable
+events      77 in the log (32 KB)
+```
+
+**What the first restart does to the real store, measured rather than predicted.** Against a copy of
+`~/.overseer` taken 2026-09-08 10:55 (the copy, because the live daemon holds the lock and two writers
+is the thing the lock exists to prevent): the checkpoint is refused at the schema check, and the store
+comes up **`rebuilt`, not cold** — 77 events and 33 KB replayed, **18 sessions** back in the register,
+`10 observed, 8 lower-bound`. Nothing is lost: the register is a fold of a log that holds events rather
+than durations, the daemon restores `last-snapshot.json` as its differ baseline because the start was
+not cold, and so the fleet is not re-announced. The arms it comes back with are honest — the sessions
+whose transitions the old daemon recorded are `observed`, and the ones it only ever sighted are floors.
+
+**Open after S7-04: `observed` is looser than it sounds across a restart** (GPT Sol, reviewing this
+change; P1, and not fixed here). The daemon restores the persisted snapshot as its baseline and diffs
+the first new snapshot against it, so *"between two of our observations"* can bracket the whole
+downtime rather than one tick. A wait that ended and restarted during three hours of downtime is
+recorded as `observed` at the moment we came back, and rendered as `0s`. Same class as the 13m bug,
+bounded by the downtime rather than unbounded. **It is not fixable inside store.ts**: the fold cannot
+see it. Closing it means either the `session-status` event carrying the previous snapshot's
+`collectedAt` — so the arm can hold the whole bracket — or the daemon marking the first diff after a
+restored baseline, and both live in diff.ts and daemon.ts. It is written into the `StatusSince` comment
+as well, because the dashboard should know before it builds on `observed`.
+
+**Decided against.** A migration of old checkpoints, for the reason above. A `statusSince` that also
+carried the *previous* state's end, which is a second clock nobody has asked for. Ranking floors ahead
+of readings in the attention list. Reading `overseer.lock` to turn `cannot-tell` into a pid the reader could check — real
+evidence, and the next thing to add if the arm proves too vague, but a lock can be stale and the
+brief for this arm was *do not guess in either direction*.
 
 #### S7-03, as built, and the difference that mattered
 

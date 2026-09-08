@@ -2203,8 +2203,9 @@ ruler's five recorded preconditions, which are conditions on **how stage C may u
   the already-fetched bytes and cannot help — a real JS challenge blocks every header set, so an
   alternative fetcher is a stage-1 project, named here and not built.
 
-  Most of the machinery exists: `PAGE_HAS_NO_ARTICLE` in [`src/messages.ts`](../../src/messages.ts) is
-  already `kind: "blocked"` and already says the right thing, and
+  Most of the machinery exists: `documentHasNoArticle` in [`src/messages.ts`](../../src/messages.ts)
+  (`PAGE_HAS_NO_ARTICLE` when this was written; it became a pair on 2026-09-08, because an upload has
+  no address to be sent back to) is already `kind: "blocked"` and already says the right thing, and
   [`src/pipeline.ts`](../../src/pipeline.ts) already maps a typed refusal onto it. **The detector is a
   registry of conclusive typed markup**, not a confidence score — the challenge document's own markup,
   or a provider-specific machine-readable error state tied to its host. The discriminated reason
@@ -2273,7 +2274,7 @@ ruler's five recorded preconditions, which are conditions on **how stage C may u
   ##### What landed, 2026-09-06 — **C1a is done, and the seam it was warned about was the real work**
 
   `MIN_ARTICLE_CHARS`, `visibleLength`, `capabilityFloor` and `TooLittleTextToRead` in
-  [`src/extract.ts`](../../src/extract.ts); `pageHadTooLittleText` and `[jb-too-little-text]` in
+  [`src/extract.ts`](../../src/extract.ts); `documentHadTooLittleText` and `[jb-too-little-text]` in
   [`src/messages.ts`](../../src/messages.ts); the `instanceof` arm beside `ReadabilityRefused` in
   [`src/pipeline.ts`](../../src/pipeline.ts); `Candidate.refused` in
   [`arms.mts`](../../evals/extraction/arms.mts); the ladder in

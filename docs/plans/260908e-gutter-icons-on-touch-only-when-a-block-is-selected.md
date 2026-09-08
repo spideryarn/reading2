@@ -1,6 +1,6 @@
 # The gutter waits to be asked on a finger too
 
-Status as of 2026-09-08: **reviewed, not yet built.** GPT Sol's plan review returned three P0s and changed the design materially — read § What the plan review changed before § What gets built, which is superseded in three places and marked where.
+Status as of 2026-09-08: **built and reviewed twice.** Read § What the plan review changed, § What was actually built, and § What the code review changed, in that order; § What gets built is the pre-review draft, kept because the reviews are easier to follow against it, and superseded throughout. **The most useful finding in the whole job is F10**, and it is in the last of those: the exclusion list this design is built around was ornamental for one commit, because a touch tap fires `mouseenter` and a second, ungated writer was setting the same state — and this doc had measured that a tap does exactly that, three sections earlier, without either of us noticing.
 
 From [SPIDERYARN-READING2-2G](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-2G),
 2026-09-07 17:42 UTC, `build_commit=c0fb04a4`:
@@ -106,7 +106,16 @@ calls it *"this is the row you are on"*). Two candidates were refused:
   a tap on the prose does not set it, so it does not even match the gesture Greg named;
 - **a third notion of "the current row"**, beside hover and `at`.
 
-**And it is set explicitly, not inherited from an emulated `mouseenter`.** One
+**And it is set explicitly, not inherited from an emulated `mouseenter`.**
+
+> **Superseded twice, and the second time is the important one.** The `<tr>` became the prose cell
+> plus a named predicate (§ What the plan review changed, P0 #3), and then the emulated `mouseenter`
+> turned out **not** to have been ruled out at all: `onMouseEnter` was still on the row, unguarded,
+> writing the same state on every tap. The paragraph below is right about what it wants and wrong
+> about having got it — see § What the code review changed, F10, which is the finding this whole job
+> turns on.
+
+One
 `onClick={() => setHoveredRow(row)}` on the `<tr>`: `click` fires for a tap and not for a scroll
 drag, and it is deterministic on every engine — including the one this box cannot run.
 [touch.md](../project/touch.md) records that the compatibility-mouse path is exactly where this app
@@ -116,14 +125,22 @@ exercise — the silent-success shape, and this stylesheet has shipped it twice.
 
 ## Discoverability, which is the cost being accepted
 
-An iPad reader who has never tapped a paragraph now sees an empty margin. That is accepted, and the
-reason it is cheap here is that **the tap that reveals the column is a tap they were making anyway**,
-and it already has visible feedback: `tr.row-active td.text` paints `--panel`, so the icons appear
-*inside* a wash that says the row is selected. That is more than a pointer device offers, where
-nothing announces that a row is hoverable at all.
+An iPad reader who has never tapped a paragraph now sees an empty margin. **This is a cost being
+accepted, not a cost being solved**, and the distinction is GPT Sol's — the first draft of this
+section claimed the reveal was cheap because *"the tap that reveals the column is a tap they were
+making anyway"*, which is unsupported: [touch.md](../project/touch.md):16 has a finger on the prose
+doing ordinary scrolling, not tapping. The `--panel` wash confirms a tap *after* it happens; it
+cannot teach a reader that untapped prose is hiding anything.
 
-The real price is that chat and the "?" become two taps instead of one, and three on a one-line
-paragraph (tap, "…", "?"). That is what was asked for. No first-visit hint is being built.
+**The reason to accept it anyway is that the administrator asked for this specific behaviour**, in
+these words, having read on the device in question. That is the whole warrant, and it is enough for
+a v1 — but it is the warrant, not an argument that the cost is small.
+
+The price is real and the reproduction sharpened it: chat, the "?" and the permalink have **no route
+anywhere in the app except that gutter icon** — no menu, no keyboard command, no text alternative —
+so this makes each of them two taps instead of one, and three on a one-line paragraph (tap, "…",
+"?"), with no fallback. No first-visit hint is being built; if the column turns out to be
+undiscoverable, that is the thing to revisit first.
 
 **One narrow loss, named rather than found later.** On a one-line paragraph the container query
 gives the gutter a single slot, which the "…" takes even when there is a note
@@ -447,3 +464,277 @@ but it also says the swap is not one token: on a hybrid, mouse hover and a persi
 need separate state, and `hoveredRow` is already carrying two meanings once a click can write it.
 That is a bigger change than this report, so the conclusion is **narrowed** instead: this fixes the
 device Greg reported from, and § What is still open says a Magic Keyboard iPad is untouched by it.
+
+## What was actually built
+
+Two files, and between them about thirty lines that are not comment.
+
+### `gutter.css`
+
+```css
+@media (hover: none) {
+  :where(tr.row-active) .blk-permalink,
+  :where(tr.row-active) .block-chat,
+  :where(tr.row-active) .blk-help,
+  :where(tr.row-active) .blk-more { opacity: 0.705; pointer-events: auto; }
+}
+```
+
+and, above it, the reveal list split three ways: the four `tr:hover` selectors into
+`@media (hover: hover)` together with `tr:hover .blk-permalink { opacity: 0.6 }`, the four
+`:focus-visible` reveals and `.block-chat.has` left unconditional, and the three duplicated
+`tr:hover` selectors deleted. Nothing was restated: `.block-chat.has`,
+`.blk-gutter[data-open] > *`, `.blk-permalink.failed` and the four focus reveals all win where they
+should, because `:where()` has no weight and the whole touch block is (0,1,0).
+
+### `TableView.tsx`
+
+An exported `isBlockSelectionTap` beside a `NOT_A_BLOCK_SELECTION` list, and one `onClick` on the
+prose cell — `td.text`, not the `<tr>`, which is the P0 above. The list is `a[href]`, `mark`,
+`button`, `[role="button"]`, `.blk-gutter`, `[role="doc-noteref"]`, `.footnote-ref`; gist cells are
+excluded by the surface rather than by a rule, since the handler is not on the row. `detail !== 0`
+refuses a click no pointer produced.
+
+**Tapping the blank gutter selects the row, and that is worth naming rather than discovering.** A
+closed gutter is `pointer-events: none`, so a tap on the strip beside a paragraph never has
+`.blk-gutter` as its target — it falls through to the cell, exactly as *hovering* blank gutter still
+reveals the icons on a pointer. So the margin itself is a second way in, which is the nearest thing
+this change has to a discoverability answer: a reader who prods the empty column gets the controls.
+The `.blk-gutter` entry in the list is therefore about the **open** "…" panel, which takes its
+hit-testing back on purpose because it is opaque and the paragraph behind it must not be pressable
+through it. The first draft of the test asserted the closed case and passed, because jsdom does not
+implement `pointer-events` — a green assertion about a state a browser cannot produce.
+
+### The number, and a correction to the review
+
+**0.705, and the review's own figure for the case it was arguing about was wrong.** Sol quoted
+gutter.css:584's **2.77:1** as what 0.653 measures on a selected row. That line covers two grounds
+in one sentence and 2.77 belongs to the other one: `td.text.opaque`'s `--muted`. Over the `--panel`
+a selected row is painted, 0.653 is **2.95:1**. The P0 stands — 2.95 is still short, and the
+argument that a documented corner case became the normal path is untouched — but the shortfall was
+smaller than the review said, and this doc should not repeat a number it can compute.
+
+It can compute it, which is the second correction. This doc said `--sidebar` "is not written
+anywhere in `src/`, so this is a browser measurement rather than an arithmetic one". True and
+misleading: it is written in the repo-root `styles/tokens.css`, which is a sheet the client loads
+and `allSheets()` resolves. I had grepped one directory and reported the result as the world.
+
+| ground | what paints it | 0.653 | 0.705 |
+|---|---|---|---|
+| `--page`  | an ordinary paragraph | 3.00:1 | 3.32:1 |
+| `--panel` | `tr.row-active td.text` | 2.95:1 | 3.23:1 |
+| `--muted` | `td.text.opaque` — and it beats `row-active`, same specificity, written later | 2.77:1 | 3.00:1 |
+
+So the binding case is a **selected figure row**, which nobody would have thought to open, and 0.705
+is the value that clears all three. The ceiling is unchanged in kind and recomputed: the bookmark
+stops leading the column at 0.866 over `--page`, and its lead at 0.705 is 1.35:1 plus a hue the
+affordances have none of. This retires the second of the stylesheet's two recorded shortfalls;
+the 1x stroke-width one stands and is explicitly **not** re-measured at the new value, because it is
+a rendered number and the table above cannot predict it.
+
+### The tests
+
+- **`tests/gutter-touch-contrast.test.ts`** is new. It reads the four tokens out of the sheets the
+  client actually loads, asserts the alias chain (`--panel` → `--sidebar`, `--ink-faint` →
+  `--muted-foreground`, …) so a re-pointed alias fails here rather than in the reading view, and
+  computes the ratio on all three grounds. It fails naming which ground and by how much.
+- **`tests/gutter-target-size.test.ts`** gained the gate. Its two touch assertions could not tell a
+  permanent reveal from a conditional one — they asked whether `.blk-help` was in the block with a
+  pressable opacity, and both answer yes — which is why the 2026-09-04 change shipped. Now: every
+  selector in the block must match `:where(tr.row-active) .<class>` (that is the specificity
+  invariant written as a shape, not the phrase "it is safe"), the hover reveal must be inside
+  `@media (hover: hover)`, and the focus reveal must be inside neither query.
+- **`tests/block-selection-by-tap.test.tsx`** is new and mounts the real `TableView`, because the
+  cheap version — asserting that a click on the row sets it active — goes green while every
+  propagation failure in the P0 remains. That was the review's exact warning about which abstraction
+  to pin.
+- The brace-counting `@media` block reader moved into `tests/helpers/stylesheets.ts` as
+  `mediaBlock()`, now that two files ask for it.
+
+**Each was mutated and watched go red**: the opacity lowered to 0.653 (two grounds fail), the
+`:where()` dropped (six tests fail), the `(hover: hover)` guard removed (the hover assertion fails).
+
+### A bug found on the way and deliberately not fixed
+
+`tr:hover .blk-permalink { opacity: 0.6 }` is (0,2,1) and `.blk-permalink:hover { opacity: 1 }` is
+(0,2,0), and pointing at the permalink matches both — so **the permalink never brightens when you
+point at it**; it takes the `color: var(--highlight)` from that rule and keeps the recessive 0.6,
+against a comment two lines up that says "full when it is the thing you are pointing at". It is
+exactly the class this file documents at `.blk-permalink.failed`, and it is pre-existing: moving the
+rule into `@media (hover: hover)` changes neither weight nor order.
+
+Not fixed here, and the reason is the licence rather than the effort. It is a visible change to
+desktop hover inside a report about touch, and the clean fix — `:where(tr:hover)` on the recessive
+rule, which would also retire the `tr:hover .blk-permalink.failed` workaround — needs the permalink
+taken out of the (0,2,1) reveal list, which is a third change to a heavily-argued selector list. One
+line in a plan doc is the right size for it; a follow-up is not filed because this doc is the file.
+
+## What the code review changed
+
+GPT Sol reviewed the built code (`8d351e48`) as round two; prompt and answer in the session
+scratchpad as `fb2g-sol-code-prompt.md` / `fb2g-sol-code-answer-r2.md`, exit 0. Verdict: **refuse
+`8d351e48` as written** — *"The CSS gate, cascade, and contrast arithmetic are sound; the
+touch-selection policy is not."* It ran all three test files itself (5/5, 22/22, 7/7) and
+independently reproduced the contrast numbers to four decimal places, which is the half it cleared.
+
+The two P1s are both about the **selection** half, and the first is the one that matters.
+
+### F10 — the exclusion list was ornamental, and my own evidence said so
+
+`onMouseEnter={() => setHoveredRow(row)}` was left unconditional, on the argument — written into
+the source as a comment — that a finger fires no `mouseenter`. **That is exactly backwards, and this
+doc had already measured it.** § Reproduction records that on the commit *before* any click handler
+existed, a real Chromium tap set `row-active` and held it through a scroll. The only writer in that
+build was `onMouseEnter`. So a tap fires it, and every tap wrote the row **before** the click
+predicate got a chance to refuse — a tap on a link, a mark, a picture or a gutter control all
+selected the row through the other door.
+
+The whole point of the P0 that produced the predicate was that selection should be policy rather
+than propagation. It was still propagation; there were simply two paths and I had written a policy
+for one of them.
+
+> The seven component tests dispatch only a bare `MouseEvent("click")`, so they omit the event that
+> defeats them.
+
+**Both hover writers now ask `canHover()`** — `window.matchMedia("(hover: hover)").matches`, the same
+capability the stylesheet asks about — so there is one writer per kind of device: hover on a pointer,
+the predicate on a finger. Asked at event time rather than cached, which follows a mouse being
+plugged into an iPad and is the only version a test can exercise. It also closes the third of the
+four open questions below: `mouseleave` cannot clear a finger's selection, because on a finger
+nothing is listening.
+
+The test for it dispatches the compatibility `mouseover` React synthesises `mouseenter` from, with
+`(hover: hover)` stubbed both ways, and asserts both halves — no selection on a finger, unchanged
+selection on a pointer.
+
+### F11 — the picture is the other zoom surface
+
+The list excluded `button.zoom-btn` and not the picture. `TableView.tsx`'s delegated handler says
+*"a picture is its own button"* and opens the lightbox for a bare `<img>` or `<svg>` inside a
+`.zoomable` wrapper, with no ⤢ involved — so tapping a photograph selected the row on the way past
+and opened the overlay over a freshly-painted wash. Fixed with **that handler's own selector,
+verbatim**, so the two cannot drift; a picture inside a link is caught by `a[href]` in both places,
+which is how the handler treats it too.
+
+### F12, F13 — two tests that answered a weaker question than they stated
+
+- **The shape assertion capped the weight and said nothing about the contents.** Deleting only
+  `:where(tr.row-active) .block-chat,` leaves every remaining selector matching the pattern, the
+  reachability check satisfied and all three files green — while a plain chat button stays shut on
+  the selected row, which is the iPad bug that started this. The exact selector set is asserted now,
+  and each rule's body with it.
+- **The contrast assertion rounded a failing ratio up to passing.** It compared
+  `Number(drawn.toFixed(3))`, so `0.7039` gives 2.99982 over `--muted`, rounds to 3.000 and passes a
+  test whose message says *at least 3:1*. The rounding belongs in the message, never in the
+  comparison. Both mutations were run and both now go red.
+
+### F14 — a claim stronger than the layout makes
+
+I stated the contract as *an affordance is visible iff its row is active*. False, and not because of
+a defect: the container query decides how many controls a row draws at all, so a one-line paragraph
+shows the "…" alone whether or not it is selected. This rule sets `opacity` and `pointer-events` and
+never `display`. Two mechanisms, one column; the stylesheet now says so where the gate is written.
+
+### F15 — held, and recorded rather than built
+
+A trusted tap on `mark.cmt` / `mark.chat` acts on `mouseup`, which can reannotate and replace the
+marked DOM before the browser dispatches `click`. Sol grades it **reasoned, not established** — no
+wrong outcome demonstrated — and the honest position is that jsdom cannot answer it and a Playwright
+pass would have to. F10's fix removes the mechanism that made it most likely to bite, since the
+`mouseenter` path no longer writes anything on a finger. Named in § What is still open.
+
+## What a real browser says, on the built code
+
+Playwright against system Chrome on the box, `hasTouch: true, isMobile: true`, signed in as the
+owner, **`matchMedia` verified in the page rather than assumed** — `(hover: none)` true,
+`(hover: hover)` false, `(any-pointer: coarse)` true. The whole flow driven with `.tap()` and never
+a `.click()`, for the reason in § The measurement trap.
+
+Two passes, because the first one measured the wrong tree. Pass one ran against `8d351e48`, before
+the F10 fix; pass two re-checked the things that fix could have broken, against `d871d947`.
+
+### The headline, from pass one
+
+| viewport | affordances visible **before any tap** | on the old code |
+|---|---|---|
+| 390 × 844 | **0** of 388 | 14 per screenful |
+| 820 × 1180 | **0** of 388 | 23 per screenful |
+
+`.block-chat.has` is untouched at `opacity: 1` in `oklch(0.72 0.12 235)` — the blue, not a grey — and
+stays that way through selection, which is the trap § the touch reveal's comment names. On a pointer
+device in the same run, `.blk-help` is still 1 and `.blk-permalink` still 0.6: the desktop half did
+not move.
+
+**Chrome serialises `opacity: 0.705` as `0.70399997…` at 390 and as `0.705` at 820**, from the same
+rule. That is float32 round-tripping in `getComputedStyle`, not two values; worth writing down
+because it looks exactly like a bug in a table of measurements.
+
+### Pass two: the question F10's fix opened
+
+Gating `onMouseEnter` on `(hover: hover)` makes the click predicate **the only thing that can select
+a row on touch**, and that path had only ever run in jsdom. If a real browser had swallowed or
+retargeted the click, the feature would have been dead on the device it was written for and nothing
+in the suite would have said so. So it was checked before landing, on rows deliberately distinct from
+the current selection:
+
+| | |
+|---|---|
+| tap plain prose | **selects exactly that row**; `.blk-permalink` / `.blk-help` / `.blk-more` at 0.705 on it, 0 everywhere else |
+| tap a second paragraph | selection moves; exactly one active row |
+| tap a **link** on another row | selection unchanged |
+| tap a **`mark.cmt`** on another row | selection unchanged |
+| tap a **picture** (a bare `<img>`/`<svg>` in `.zoomable`, not the ⤢) on another row | selection unchanged **and** the lightbox opens — both halves of F11 |
+| tap the blank gutter strip of an unselected row | selects that row |
+| a pointer device | `.blk-help` 1, `.blk-permalink` 0.6, unchanged |
+
+Two things about how that was got, because both are the kind of detail that makes a green result
+mean less than it looks:
+
+- **The link and mark rows were chosen distinct from the selected one on purpose.** Pass one reported
+  "selection unchanged" for a link and it was not possible to tell whether the policy had worked or
+  the link had simply been on the row that was already selected. A check that cannot fail is not a
+  check.
+- **The fixture had no `<mark>` at all.** This article was re-ingested locally, so its block ids differ
+  from production's and its glossary never ran — zero `glossary_lookups` rows. Rather than report the
+  case inconclusive, the agent made a real bookmark on a real block (the free path, no model call)
+  and tapped the `mark.cmt` that produced. The *setup* used a synthetic `mouseup`; the assertion used
+  `.tap()`.
+
+### What the browser could not settle
+
+**The 390 × 844 viewport cannot show Structure mode's paragraphs at all.** `MODE_MIN + PROSE_MIN` is
+about 832px, so below that the mode band covers the whole window (`fit.modeW === 0` →
+`.reader.band-covers`) and intercepts every tap. The rows and their gutter CSS are in the DOM and
+correct; nothing can reach them. **Pre-existing and unrelated to this change**, and it is why the
+390 column above is a count of what is painted rather than a tap. The row-tap checks at that width
+were run in Plain mode, against the same `TableView` and the same stylesheet. Greg reported from
+`mode=structure` on a device wide enough not to be in this, which is consistent with an iPad.
+## What is still open
+
+- **A hybrid iPad is untouched by this.** The whole fix lives inside `@media (hover: none)`, and an
+  iPad with a Magic Keyboard reports `hover: hover`, so neither today's blanket reveal nor tomorrow's
+  gated one applies to it — a finger on that machine reveals nothing at all. That hole is
+  **pre-existing**, and this report is evidence Greg's own device is not in it: he is complaining
+  that he sees too many icons, which only happens where the block applies. The semantically right
+  query is `(any-pointer: coarse)` — interaction rules should ask whether a coarse pointer exists,
+  not which one is primary — but the swap is not one token, because on a hybrid a mouse hover and a
+  persisted touch selection need to be separate state. See the next point.
+- **`hoveredRow` is carrying two meanings, but only one at a time.** It is both *the row the pointer
+  is over* and *the row the reader chose*, which are the same thing on a mouse and different things
+  on a finger — one clears on `mouseleave`, the other must not. The F10 fix makes that harmless
+  rather than fixing it: both hover writers now ask `(hover: hover)`, so on any given device exactly
+  one of the two meanings is ever written, and there is nothing to disagree. **A hybrid is where it
+  would bite**, which is the same machine as the point above and the same reason the
+  `(any-pointer: coarse)` move needs this split first. Named by GPT Sol; deliberately not done for a
+  report this size.
+- **A trusted tap on `mark.cmt` / `mark.chat` after reannotation is unverified.** Those act on
+  `mouseup`, which can replace the marked DOM before the browser dispatches `click`, so where that
+  click is *targeted* afterwards is a browser question jsdom cannot answer — the test dispatches a
+  `click` at a mark that is still there. GPT Sol graded it reasoned rather than established, and no
+  wrong outcome has been demonstrated; F10's fix removes the path that made it most likely to bite,
+  because on a finger the `mouseenter` writer is gone. A Playwright pass is what would settle it.
+- **`:active` on iOS has not been checked for these controls**, exactly as the sibling report left
+  it. A tap that lands and a tap that misses may look identical. Same remedy if it turns out to
+  matter: one `touchstart` no-op listener at the root, not one per control.
+- **The orphaned note on a one-line paragraph**, from § Discoverability above — invisible until the
+  row is tapped. Accepted; recorded so the next person measures rather than rediscovers.

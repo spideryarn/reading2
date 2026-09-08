@@ -52,7 +52,7 @@ function row(id: string, identifies: IdentificationSignal[]): DirectDebateRow {
     sourceQuote: "the third section does not survive its own second",
     articleReferenceQuote: "Notes on my sourdough starter, week 3",
     relation: "disputes",
-    valence: "negative",
+    lean: "leans-against",
     applies: "It says the piece contradicts itself.",
     identifies,
   };

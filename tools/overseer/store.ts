@@ -91,7 +91,6 @@
  * awkward. Refusing concurrent writers is preferable to adopting SQLite in
  * order to tolerate them.
  */
-import { randomUUID } from "node:crypto";
 import {
   closeSync,
   existsSync,
@@ -101,10 +100,9 @@ import {
   openSync,
   readFileSync,
   readSync,
-  statSync,
   unlinkSync,
 } from "node:fs";
-import { homedir, hostname } from "node:os";
+import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
 
 import type { SessionKind, SessionMeta } from "../../scripts/gjd-remote-tmux.js";
@@ -118,7 +116,26 @@ import {
   type StatusKey,
 } from "./diff.js";
 import { truncateToLastLine, writeAll, writeAtomically, type JsonlRepair } from "./jsonl.js";
+import {
+  isProcessAlive,
+  readLock,
+  releaseLock,
+  stillOurs,
+  takeLock,
+  type HeldLock,
+  type LockHolder,
+  type LockRefusal,
+} from "./lock.js";
 import type { ObservedRow, ParseResult } from "./observation.js";
+
+/**
+ * Re-exported because this file was where they lived until 2026-09-08, and a
+ * moved symbol that also disappears from its old home costs every caller a
+ * change for no reason. The lock itself is [`lock.ts`](./lock.js) now — a leaf,
+ * so the fleet dashboard's health retention can hold the same discipline
+ * instead of writing a simpler third copy of it.
+ */
+export { isProcessAlive, type LockHolder };
 
 /**
  * The checkpoint's schema.
@@ -127,8 +144,22 @@ import type { ObservedRow, ParseResult } from "./observation.js";
  * merely poorer — the producer's own rule, adopted here so the two files use
  * one meaning of the word. Adding a field is not a bump; a version that changes
  * on every addition is one nobody checks.
+ *
+ * **2 (2026-09-08): `statusSince` became a `StatusSince` pair.** The rule above
+ * decides this rather than taste. A consumer written against schema 1 does
+ * `Date.parse(entry.statusSince)`, which on the new shape is `NaN`, and
+ * `now - NaN` renders as a blank or a nonsense age rather than as an error —
+ * the WRONG half of the rule, not the poorer half. The bump makes that consumer
+ * say *I cannot read this*, which is what
+ * docs/project/orchestrator-direction.md § The seam is a file tells it to do
+ * with a schema it does not know.
+ *
+ * **Nothing is migrated.** An old checkpoint is refused, the log is replayed,
+ * and the register comes back with honest arms — the log holds events rather
+ * than durations, so a rebuild cannot inherit the ambiguity a migration would
+ * have had to guess at.
  */
-export const STORE_SCHEMA = 1;
+export const STORE_SCHEMA = 2;
 
 export const EVENTS_FILE = "events.jsonl";
 export const CHECKPOINT_FILE = "current.json";
@@ -146,23 +177,17 @@ export const LOCK_FILE = "overseer.lock";
  */
 const REPLAY_CEILING_BYTES = 64 * 1024 * 1024;
 
-/** How many times a start will retry after clearing a lock left by a dead process. */
-const STALE_LOCK_ATTEMPTS = 3;
-
-/** Who holds the lock, in terms somebody reading it over ssh can act on. */
-export type LockHolder = { pid: number; instanceId: string; hostname: string; startedAt: string };
-
 /**
  * Why the store would not open. Never a thrown string: a launcher has to print
  * a sentence saying what a person should do, and an exception gives it nothing
  * to print that is not also a stack trace.
+ *
+ * **Four of the five arms are `LockRefusal`'s**, declared once in
+ * [`lock.ts`](./lock.js) rather than restated here — a superset by
+ * construction, so `describeRefusal` below still has to be exhaustive and the
+ * compiler still says so if the lock grows an arm.
  */
-export type StoreRefusal =
-  | { reason: "already-running"; holder: LockHolder }
-  | { reason: "lock-unreadable"; detail: string }
-  | { reason: "lost-the-race"; holder: LockHolder | null }
-  | { reason: "relative-store-dir"; path: string }
-  | { reason: "unusable-directory"; detail: string };
+export type StoreRefusal = LockRefusal | { reason: "relative-store-dir"; path: string };
 
 /** Why there was no checkpoint to resume from. Seven arms because seven different things go wrong. */
 export type ColdReason =
@@ -207,6 +232,70 @@ export type StoreOpening = {
 };
 
 /**
+ * WHEN THE STATUS BEGAN — and whether that is a reading or a floor.
+ *
+ * **The bug this shape exists to make impossible.** `statusSince` used to be a
+ * bare timestamp, taken from the `at` of whichever event created the entry, and
+ * `overseer status` printed this the first time it was run against a real
+ * store:
+ *
+ *     working  13m  fb2f-dock-always-visible-landscape
+ *     working  13m  fb2g-gutter-icons-on-touch
+ *     working  13m  get-ready-for-deploy
+ *     working  13m  html-ingestion-post-processing-evals
+ *
+ * The daemon had been up for thirteen minutes. Those sessions had been working
+ * for hours. For a session already running when the daemon starts, the event
+ * that creates its entry is `session-seen` — **first observation, not the
+ * transition** — so the number was the earliest moment we can prove rather than
+ * the moment it began: two different quantities with the same units, and
+ * nothing in the shape to tell them apart.
+ *
+ * **It is worst exactly when it matters.** `Restart=always` makes a restart
+ * routine, and after one every session's duration resets to zero *together*, so
+ * the agent genuinely blocked for three hours ranks equal-last with one blocked
+ * for thirty seconds — on the surface whose whole job is that ranking.
+ *
+ * So: two arms, and the point is that this is not a better comment. A renderer
+ * that reaches `.at` has had to walk past the `kind` to get there, and can at
+ * worst choose to ignore it.
+ *
+ *  - `observed` — the state changed BETWEEN TWO OF OUR OBSERVATIONS, in a
+ *    `session-status` or a `session-wait-restarted`. On a running daemon those
+ *    two are one tick apart, so the age is a measurement: short by at most a
+ *    tick, and never long.
+ *  - `lower-bound` — the state was already in progress when we first saw it, so
+ *    this says only *"in this state at least since"*. It has no upper bound at
+ *    all: the true duration may be minutes or days.
+ *
+ * **One case where `observed` is looser than it sounds, named rather than
+ * papered over** (GPT Sol, 2026-09-08, reviewing this change). After a restart
+ * the daemon restores `last-snapshot.json` as its differ baseline and diffs the
+ * first new snapshot against it, so *"between two of our observations"* brackets
+ * the whole downtime rather than one tick. A wait that ended and restarted
+ * during three hours of downtime is recorded as `observed` at the moment we came
+ * back, and rendered as `0s`. It is the same class of error as the 13m bug and
+ * it is bounded by the downtime rather than unbounded, which is why it is a
+ * lesser one — but it is not zero.
+ *
+ * **It is not fixable here**, and that is the reason it is written down instead:
+ * the fold cannot see it. Closing it means either the `session-status` event
+ * carrying the PREVIOUS snapshot's `collectedAt`, so the arm can hold the whole
+ * bracket, or the daemon marking the first diff after a restored baseline — and
+ * both of those live in diff.ts and daemon.ts. Recorded in
+ * docs/plans/260908b-overseer-store-and-clock.md § S7-04 for whoever takes that
+ * stage; the dashboard should know before it builds on `observed`.
+ *
+ * The names are the READER'S rather than the producer's, because the seam is a
+ * file: somebody running `less ~/.overseer/current.json` sees
+ * `"kind": "lower-bound"` and knows what the number is worth without opening
+ * this one.
+ */
+export type StatusSince =
+  | { readonly kind: "observed"; readonly at: string }
+  | { readonly kind: "lower-bound"; readonly at: string };
+
+/**
  * One session, as the register holds it. **This is the reboot-resume
  * material**, and every field in it is here because it cannot be recovered
  * afterwards from anywhere else.
@@ -244,8 +333,13 @@ export type RegisterEntry = {
   readonly lastSeenAlive: string;
   /** The canonical key, never the status object: `waiting.secondsLeft` changes every collection. */
   readonly lastStatusKey: StatusKey;
-  /** When it entered that state — the duration attention triage ranks by. */
-  readonly statusSince: string;
+  /**
+   * When it entered that state — the duration attention triage ranks by, and a
+   * PAIR rather than a timestamp, because for a great many entries it is a
+   * floor rather than a reading. `StatusSince` above has the four identical
+   * `13m` rows that are the whole story.
+   */
+  readonly statusSince: StatusSince;
 };
 
 /**
@@ -376,33 +470,6 @@ export function storeRoot(env: NodeJS.ProcessEnv = process.env): string {
     );
   }
   return trimmed;
-}
-
-/**
- * Whether a pid is running, asked of the kernel rather than of a file.
- *
- * `EPERM` is TRUE, not false: it means the process exists and belongs to
- * somebody else, and reading it as "gone" would let a second daemon take a live
- * lock. `ESRCH` is the only proof of absence.
- *
- * **PID REUSE IS ACCEPTED, KNOWINGLY.** Linux hands pids out again after
- * wrapping, so a lock left by a dead Overseer whose pid has since been reused
- * by anything at all reads as held, and the next start refuses instead of
- * taking over. That is the safe direction — a refusal is one `rm` away from
- * fixed and says exactly which file to remove, where a wrongly-taken lock is
- * two writers producing a plausible history. The opposite mistake, a genuinely
- * live Overseer whose lock we steal, is what the check prevents and is the one
- * worth spending a false refusal on. `hostname` and `startedAt` in the record
- * are there so a person can tell the two apart by hand.
- */
-export function isProcessAlive(pid: number): boolean {
-  if (!Number.isInteger(pid) || pid <= 0) return false;
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (cause) {
-    return (cause as NodeJS.ErrnoException).code === "EPERM";
-  }
 }
 
 function isRecord(u: unknown): u is Record<string, unknown> {
@@ -758,6 +825,42 @@ function parseEvent(u: unknown): ParseResult<OverseerEvent> {
 }
 
 /**
+ * `statusSince`, parsed — **and a bare string is refused rather than adopted.**
+ *
+ * Every `current.json` written before 2026-09-08 has a bare timestamp here, so
+ * this is a real input rather than a hypothetical. Accepting one would have to
+ * decide which arm it is, and there is no honest answer: the two quantities are
+ * indistinguishable in the old shape, and the reading that looks best —
+ * `"observed"` — is the one that manufactures the 13m bug inside the recovery
+ * path, which is where a wrong number survives longest and is questioned least.
+ *
+ * Refusing costs a replay of the log, which is cheap and produces the honest
+ * arms. `STORE_SCHEMA` means the refusal normally happens one level up, at the
+ * schema check; this is the same decision for the file somebody has edited by
+ * hand, and it names the field so the person reading `overseer status` after a
+ * cold start knows which shape change did it.
+ */
+function parseStatusSince(u: unknown): ParseResult<StatusSince> {
+  if (typeof u === "string") {
+    return {
+      ok: false,
+      reason:
+        "statusSince is a bare timestamp, which is the pre-schema-2 shape: it cannot say whether " +
+        "the daemon watched the transition or merely found the session already in that state. " +
+        "Replaying the log rebuilds it.",
+    };
+  }
+  if (!isRecord(u)) return { ok: false, reason: "statusSince is not an object" };
+  const at = u["at"];
+  if (!isIsoTimestamp(at)) return { ok: false, reason: "statusSince.at is not an ISO timestamp" };
+  const kind = u["kind"];
+  if (kind !== "observed" && kind !== "lower-bound") {
+    return { ok: false, reason: `statusSince.kind ${JSON.stringify(kind)} is neither observed nor lower-bound` };
+  }
+  return { ok: true, value: { kind, at } };
+}
+
+/**
  * One register entry, parsed strictly from `unknown`.
  *
  * **The whole checkpoint fails if any entry does** — see `parseCheckpoint`.
@@ -799,8 +902,8 @@ function parseRegisterEntry(u: unknown): ParseResult<RegisterEntry> {
   }
   const lastSeenAlive = u["lastSeenAlive"];
   if (!isIsoTimestamp(lastSeenAlive)) return { ok: false, reason: "lastSeenAlive is not an ISO timestamp" };
-  const statusSince = u["statusSince"];
-  if (!isIsoTimestamp(statusSince)) return { ok: false, reason: "statusSince is not an ISO timestamp" };
+  const statusSince = parseStatusSince(u["statusSince"]);
+  if (!statusSince.ok) return { ok: false, reason: statusSince.reason };
   const lastStatusKey = u["lastStatusKey"];
   if (typeof lastStatusKey !== "string" || lastStatusKey === "") {
     return { ok: false, reason: "lastStatusKey is not a status key" };
@@ -821,7 +924,7 @@ function parseRegisterEntry(u: unknown): ParseResult<RegisterEntry> {
       tmuxServerPid,
       lastSeenAlive,
       lastStatusKey: lastStatusKey as StatusKey,
-      statusSince,
+      statusSince: statusSince.value,
     },
   };
 }
@@ -950,144 +1053,6 @@ function readSlice(path: string, from: number): Buffer {
   }
 }
 
-type LockRead =
-  | { kind: "absent" }
-  | { kind: "held"; holder: LockHolder }
-  | { kind: "unreadable"; detail: string };
-
-function readLock(path: string): LockRead {
-  if (!existsSync(path)) return { kind: "absent" };
-  let text: string;
-  try {
-    text = readFileSync(path, "utf8");
-  } catch (cause) {
-    return { kind: "unreadable", detail: String(cause) };
-  }
-  let json: unknown;
-  try {
-    json = JSON.parse(text);
-  } catch (cause) {
-    return { kind: "unreadable", detail: String(cause) };
-  }
-  if (!isRecord(json)) return { kind: "unreadable", detail: "the lock is not an object" };
-  const { pid, instanceId, hostname: host, startedAt } = json;
-  if (!isPidLike(pid) || typeof instanceId !== "string" || typeof host !== "string" || typeof startedAt !== "string") {
-    return { kind: "unreadable", detail: "the lock does not name a pid and an instance" };
-  }
-  return { kind: "held", holder: { pid, instanceId, hostname: host, startedAt } };
-}
-
-/** The lock, held as an open file descriptor: the fd is the claim, the record inside it is the diagnosis. */
-type HeldLock = { holder: LockHolder; fd: number };
-
-/**
- * Whether this process still holds the lock — **both the file and the record**.
- *
- * Two checks because there are two ways to lose it, and each check is blind to
- * the other's case. The INODE catches a competitor that unlinked our lock and
- * created its own: the contents may be byte-identical and it is still not our
- * file. The RECORD catches a lock overwritten in place, which keeps the inode
- * and changes who it says is running. `dev` as well as `ino`, because inode
- * numbers are unique only within a filesystem.
- */
-function stillOurs(lock: HeldLock, path: string): boolean {
-  let onDisk: ReturnType<typeof statSync>;
-  try {
-    onDisk = statSync(path);
-  } catch {
-    return false;
-  }
-  const ours = fstatSync(lock.fd);
-  if (onDisk.ino !== ours.ino || onDisk.dev !== ours.dev) return false;
-  const read = readLock(path);
-  return read.kind === "held" && read.holder.instanceId === lock.holder.instanceId;
-}
-
-/**
- * Take the lock, or refuse.
- *
- * **`openSync(path, "wx")` is the whole design**: `O_CREAT|O_EXCL` either
- * creates the file or fails, in one syscall, with the kernel deciding. Nothing
- * built out of read-then-write can do this — a check before a write is a TOCTOU
- * check by construction, which is what GPT Sol's S3-01 is about.
- *
- * A lock left by a **provably dead** process is removed and the claim retried.
- * That removal is the one step this cannot make atomic without a lock primitive
- * Node does not expose, so the residual race is named rather than hidden: two
- * starts that both prove the same corpse dead can both unlink and both create,
- * and one of them ends up holding a file that is no longer at the path. That is
- * why `stillOurs` is consulted before the log is repaired, before the append
- * handle is opened, and before every write — the loser stops at its next step
- * rather than writing beside the winner. It costs a `stat` per tick.
- *
- * A lock that cannot be parsed is not proof of anything, so it refuses and
- * names the file: a stale unreadable lock is one `rm` away from fixed, and
- * stealing one is two daemons away from a history nobody can tell is wrong.
- */
-function acquireLock(
-  root: string,
-  now: () => Date,
-  beforeClaim?: () => void,
-): { ok: true; lock: HeldLock } | { ok: false; refusal: StoreRefusal } {
-  const path = join(root, LOCK_FILE);
-  for (let attempt = 0; attempt < STALE_LOCK_ATTEMPTS; attempt += 1) {
-    beforeClaim?.();
-    let fd: number;
-    try {
-      fd = openSync(path, "wx");
-    } catch (cause) {
-      if ((cause as NodeJS.ErrnoException).code !== "EEXIST") {
-        return { ok: false, refusal: { reason: "unusable-directory", detail: String(cause) } };
-      }
-      const existing = readLock(path);
-      if (existing.kind === "unreadable") {
-        return { ok: false, refusal: { reason: "lock-unreadable", detail: existing.detail } };
-      }
-      if (existing.kind === "held") {
-        if (isProcessAlive(existing.holder.pid)) {
-          return { ok: false, refusal: { reason: "already-running", holder: existing.holder } };
-        }
-        clearStaleLock(path, existing.holder);
-      }
-      // `absent` means it went away between the failed create and the read, so
-      // the next attempt simply tries again.
-      continue;
-    }
-
-    const holder: LockHolder = {
-      pid: process.pid,
-      instanceId: randomUUID(),
-      hostname: hostname(),
-      startedAt: now().toISOString(),
-    };
-    try {
-      writeAll(fd, `${JSON.stringify(holder)}\n`);
-      fsyncSync(fd);
-    } catch (cause) {
-      closeSync(fd);
-      try {
-        unlinkSync(path);
-      } catch {
-        /* Leaving an empty lock is a refusal next time, which is the safe direction. */
-      }
-      return { ok: false, refusal: { reason: "unusable-directory", detail: String(cause) } };
-    }
-    return { ok: true, lock: { holder, fd } };
-  }
-  return { ok: false, refusal: { reason: "lost-the-race", holder: null } };
-}
-
-/** Remove a lock we have just proved dead — and only if it is still the same dead record. */
-function clearStaleLock(path: string, expected: LockHolder): void {
-  const again = readLock(path);
-  if (again.kind !== "held" || again.holder.instanceId !== expected.instanceId) return;
-  try {
-    unlinkSync(path);
-  } catch {
-    /* Somebody else cleared it first, which is the outcome we wanted. */
-  }
-}
-
 /**
  * Which sessions the log says are there.
  *
@@ -1129,7 +1094,17 @@ export function foldEvents(
         // fields a reboot needs are only on `session-seen`.
         const was = into.get(event.key);
         if (was !== undefined) {
-          into.set(event.key, { ...was, lastSeenAlive: event.at, lastStatusKey: event.to, statusSince: event.at });
+          // OBSERVED: the differ produced this by comparing two collections it
+          // made, so the transition happened between them and `at` is a
+          // measurement rather than a floor. This arm and `entryOf` are the
+          // only two producers of a `statusSince`, which is what keeps the
+          // distinction to one line each.
+          into.set(event.key, {
+            ...was,
+            lastSeenAlive: event.at,
+            lastStatusKey: event.to,
+            statusSince: { kind: "observed", at: event.at },
+          });
         }
         break;
       }
@@ -1138,7 +1113,13 @@ export function foldEvents(
         // a new wait, so a triage view ranking by "waiting longest" must start
         // again here rather than report an hour that ended.
         const was = into.get(event.key);
-        if (was !== undefined) into.set(event.key, { ...was, lastSeenAlive: event.at, statusSince: event.at });
+        // OBSERVED, for the same reason as `session-status` and worth checking
+        // rather than assuming: diff.ts emits this only after comparing the
+        // previous deadline with this one, so the daemon watched the wait
+        // restart. A wait that restarted is a new wait, and the clock with it.
+        if (was !== undefined) {
+          into.set(event.key, { ...was, lastSeenAlive: event.at, statusSince: { kind: "observed", at: event.at } });
+        }
         break;
       }
       case "session-row-changed": {
@@ -1189,7 +1170,12 @@ function entryOf(row: ObservedRow, at: string, tmuxServerPid: number | null, key
     tmuxServerPid,
     lastSeenAlive: at,
     lastStatusKey: key,
-    statusSince: at,
+    // A LOWER BOUND, always. Everything that reaches here — `session-seen` and
+    // `session-replaced` — is a FIRST SIGHTING: the session was in this state
+    // when we looked, and how long it had been there is not something this
+    // process can know. Minting `"observed"` here is the 13m bug, and it is one
+    // word away at all times.
+    statusSince: { kind: "lower-bound", at },
   };
 }
 
@@ -1223,11 +1209,25 @@ function rowMaterialOf(row: ObservedRow): Pick<RegisterEntry, RegisterRowField> 
 /**
  * WHO IS ALLOWED TO MOVE EACH FIELD OF A REGISTER ENTRY.
  *
- * A census rather than a mechanism, and it earns its place by being TOTAL: the
- * `satisfies` below makes a field added to `RegisterEntry` a compile error until
- * somebody says which of the four it is. That is the forcing function S3-03
- * asked for — `name` was only ever the instance somebody noticed, and the class
- * is a register field that nothing keeps current.
+ * A census rather than a mechanism, and it is worth being exact about what that
+ * buys, because two cross-family reviews read this comment in opposite ways and
+ * each was half right.
+ *
+ * **A MISSING field is a compile error.** `satisfies Record<keyof
+ * RegisterEntry, …>` is total, so a field added to `RegisterEntry` does not
+ * compile until somebody says which of the four it is. That much is the forcing
+ * function S3-03 asked for — `name` was only ever the instance somebody
+ * noticed, and the class is a register field that nothing keeps current.
+ *
+ * **A MISCLASSIFIED field is not.** Writing `"clock"` beside a field the row
+ * material owns compiles perfectly, and the field then goes stale silently:
+ * the original defect, wearing the census as cover. Two of the four arms are
+ * pinned by tests instead — `row` against `REGISTER_ROW_FIELDS` and the fold,
+ * `pane` against what a `session-pane-replaced` really moves, both in
+ * `tests/overseer-store.test.ts`. **`identity` against `clock` is pinned by
+ * nothing**, and is recorded here as a KNOWN UNCOVERED CASE rather than left
+ * reading as guarded: swapping those two survives the suite. A census is a
+ * prompt to think, and the thinking is still the reader's.
  *
  *  - `identity` — the pair the register is keyed on, plus the tmux generation
  *    those handles belong to. It cannot change without the entry being a
@@ -1372,7 +1372,7 @@ class Store implements OverseerStore {
    * than remembered.
    *
    * Checked before EVERY write, which is once a tick and costs a `stat`. It is
-   * the backstop for the one step `acquireLock` cannot make atomic — clearing a
+   * the backstop for the one step `takeLock` cannot make atomic — clearing a
    * dead process's lock — and it turns "two daemons writing forever" into "the
    * loser stops at its next tick and says why". It is a second line and not the
    * first: a check before a write is a TOCTOU check, which is exactly why the
@@ -1493,7 +1493,7 @@ function replay(path: string, from: number, size: number, ceiling: number): Repl
  * Open the store, taking the lock, repairing the log and rebuilding the
  * register — in that order, because each step needs the one before it.
  *
- * Everything after `acquireLock` is inside a `try` that releases the lock: a
+ * Everything after `takeLock` is inside a `try` that releases the lock: a
  * throw between taking it and returning a store would otherwise leave a lock
  * with a live pid on it, held by a process that has forgotten it exists, and
  * that is the deadlock this whole area is supposed to be immune to.
@@ -1525,18 +1525,11 @@ export function openStore(options: OpenStoreOptions = {}): OpenStoreResult {
     return { ok: false, refusal: { reason: "unusable-directory", detail: String(cause) } };
   }
 
-  const acquired = acquireLock(root, now, options.beforeClaim);
+  const lockPath = join(root, LOCK_FILE);
+  const acquired = takeLock(lockPath, now, options.beforeClaim);
   if (!acquired.ok) return { ok: false, refusal: acquired.refusal };
   const lock = acquired.lock;
-  const lockPath = join(root, LOCK_FILE);
-  const release = (): void => {
-    try {
-      if (stillOurs(lock, lockPath)) unlinkSync(lockPath);
-    } catch {
-      /* Nothing better to do. */
-    }
-    closeSync(lock.fd);
-  };
+  const release = (): void => releaseLock(lock, lockPath);
 
   try {
     const eventsPath = join(root, EVENTS_FILE);

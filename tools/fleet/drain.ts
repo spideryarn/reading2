@@ -75,9 +75,9 @@
  * test drives the whole pass with fabricated rows and no tmux. There are ~35
  * live agent sessions on this box doing other people's work.
  */
-import type { SpokenAction } from "./actions.js";
+import { renderMessage, renderSpoken, type SpokenAction } from "./actions.js";
 import type { FleetRow, FleetSnapshot } from "./collect.js";
-import { nothingWasSent, type QueuedItem, type QueuedPayload, type SteeringQueue } from "./queue.js";
+import { nothingWasSent, type QueuedItem, type SteeringQueue } from "./queue.js";
 import type { RefusalCode, SteerTarget, sendMessage as realSendMessage } from "./steer.js";
 
 /**
@@ -102,9 +102,67 @@ import type { RefusalCode, SteerTarget, sendMessage as realSendMessage } from ".
 export const MAX_SENDS_PER_PASS = 3;
 export const DRAIN_BUDGET_MS = 5_000;
 
+/**
+ * WHERE THE PASS STARTS, AND WHY IT IS NOT ALWAYS THE TOP OF THE SNAPSHOT.
+ *
+ * `MAX_SENDS_PER_PASS` is what stops the page hanging, and a slot is spent by
+ * an ATTEMPT rather than by a delivery — a refused send costs the same six
+ * `execFileSync` timeouts as a delivered one. Walk the rows in the same order
+ * every pass and those two facts combine into starvation: three sessions whose
+ * sends are refused-unsent go back to the head of their own queues, are
+ * candidates again next pass, and spend all three slots again, so a fourth row
+ * is **never attempted at all** until its item goes stale at thirty minutes.
+ * That is this stage's own bug arriving one level up — a page that says
+ * *queued* about something nothing will ever try. GPT Sol's D1, 2026-09-08.
+ *
+ * So the pass remembers the last row it spent a slot on and the next one starts
+ * AFTER it, wrapping. Every queued row then gets a turn within a bounded number
+ * of passes, and the send bound is untouched.
+ *
+ * **THE STATE IS INJECTED, NOT A MODULE-LEVEL `let`.** `drainOnce` is otherwise
+ * a pure function of `(snapshot, deps)`, and a module-level cursor would be
+ * shared by every test in a file — the shape that made the original hole
+ * invisible to the suite, and the same reason `SteeringQueue` is a class rather
+ * than a module of `Map`s. One of these is built beside the queue in
+ * `makeActionRoutes`, so it lives exactly as long as the queue it rotates over
+ * and there is exactly one per server.
+ */
+export type DrainCursor = {
+  /** The session the previous pass stopped after, or null before the first one. */
+  after(): string | null;
+  /** Called for every row that spends a send slot, whatever the outcome. */
+  advanceTo(sessionId: string): void;
+};
+
+export function createDrainCursor(): DrainCursor {
+  let last: string | null = null;
+  return {
+    after: () => last,
+    advanceTo: (sessionId) => {
+      last = sessionId;
+    },
+  };
+}
+
+/**
+ * The rows, beginning after the cursor.
+ *
+ * A cursor naming a session that is no longer in the snapshot falls back to the
+ * top rather than to nothing: a session can end between passes, and "the row I
+ * stopped after has gone" is not a reason to deliver nothing at all.
+ */
+function rotated(rows: readonly FleetRow[], after: string | null): FleetRow[] {
+  if (after === null) return [...rows];
+  const at = rows.findIndex((r) => r.id === after);
+  if (at < 0) return [...rows];
+  return [...rows.slice(at + 1), ...rows.slice(0, at + 1)];
+}
+
 export type DrainDeps = {
   /** The one queue per server. It MUST be the one the routes filled. */
   queue: SteeringQueue;
+  /** Where this pass starts. State, owned by whoever owns the queue — see above. */
+  cursor: DrainCursor;
   /**
    * The delivery module, injected so this file's tests prove what it passes
    * down without a single keystroke going out.
@@ -207,9 +265,16 @@ type Sendable = { ok: true; text: string; what: string } | { ok: false; why: str
  * whether the drain may deliver it, rather than inheriting a yes or, worse, a
  * silent no.
  */
-function sendable(payload: QueuedPayload): Sendable {
+function sendable(item: QueuedItem): Sendable {
+  const payload = item.payload;
   if (payload.kind === "message") {
-    return { ok: true, text: payload.text, what: `message (${payload.text.length} characters)` };
+    // RENDERED HERE, at the moment of the send, from the speaker the item has
+    // carried since the request. Everything a person or a coordinator says to
+    // one session comes through this function, so this is the line that decides
+    // whether the agent can tell whose instruction it is reading.
+    const rendered = renderMessage(payload.text, item.speaker);
+    if (!rendered.ok) return { ok: false, why: rendered.why };
+    return { ok: true, text: rendered.text, what: `message (${payload.text.length} characters)` };
   }
   const action = payload.action;
   // The annotation is the guard, and it is where the compile error lands: widen
@@ -221,8 +286,10 @@ function sendable(payload: QueuedPayload): Sendable {
   switch (effect) {
     case "spoken":
       // The action's OWN words, which is the whole reason `SpokenAction.text`
-      // exists as a reviewed sentence rather than being assembled from a label.
-      return { ok: true, text: action.text, what: `action ${action.id}` };
+      // exists as a reviewed sentence rather than being assembled from a label,
+      // behind the line that says who is asking for them. `renderSpoken` keeps
+      // the one named exception: a slash command must be first on the line.
+      return { ok: true, text: renderSpoken(action, item.speaker), what: `action ${action.id}` };
     default: {
       const never: never = effect;
       return { ok: false, why: `'${String(never)}' is not something the drain knows how to type` };
@@ -243,7 +310,7 @@ function held(sessionId: string, reason: DrainHoldReason, item: QueuedItem | nul
  * nothing else inside it.
  */
 function deliverOne(row: FleetRow, address: { paneId: string; claudeSessionId: string }, item: QueuedItem, deps: DrainDeps): DrainOutcome {
-  const words = sendable(item.payload);
+  const words = sendable(item);
   if (!words.ok) {
     // Settled `refused` rather than left leased: it will never become
     // deliverable, so leaving it would be exactly the promise this stage exists
@@ -356,7 +423,10 @@ export function drainOnce(snapshot: FleetSnapshot, deps: DrainDeps): DrainResult
     deps.log(`drain: tmux server is ${generation} now — ${invalidated} queued item(s) can no longer be delivered and are marked on the page`);
   }
 
-  for (const row of rows) {
+  // NOT `rows` — see `DrainCursor`. The first pass of a server's life reads
+  // exactly like the snapshot; every later one begins after the row the
+  // previous pass last spent a send slot on.
+  for (const row of rotated(rows, deps.cursor.after())) {
     try {
       // `size()` rather than `next()` for the empty case: a fleet of thirty-six
       // rows is mostly rows with nothing queued, and `next()` is also what
@@ -430,6 +500,10 @@ export function drainOnce(snapshot: FleetSnapshot, deps: DrainDeps): DrainResult
           // ten-second timeouts as a delivered one, and it is the SPENDING that
           // the bound is about, not the success.
           sends += 1;
+          // MOVED FOR THE SAME REASON THE SLOT IS SPENT, and before the send
+          // rather than after it: a send that throws has still cost the pass its
+          // time, so the next pass must not start on this row again.
+          deps.cursor.advanceTo(row.id);
           outcomes.push(deliverOne(row, { paneId, claudeSessionId }, next.item, deps));
           break;
         default: {

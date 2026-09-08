@@ -24,6 +24,7 @@ import { DictationButton, DictationStrip } from "./DictationStrip.js";
 import { type Mark, PlaceOnCriterion } from "./PlaceOnCriterion.js";
 import { Tooltip } from "./Tooltip.js";
 import { parseRoute } from "./router.js";
+import { sendForTranscription } from "./dictation-upload.js";
 import { useDictationField } from "./useDictationField.js";
 import { useEscapeToClose } from "./useEscapeToClose.js";
 import { keyboardInsetStyle, useVisualViewport } from "./useVisualViewport.js";
@@ -133,6 +134,7 @@ export function CommentDialog({
     onChange: setFollowUp,
     box: followUpBox,
     context: route.kind === "read" ? { kind: "article", slug: route.slug } : { kind: "profile" },
+    transcribe: sendForTranscription,
   });
 
   /* On screen for as long as it is mounted — this dialog has no shut state of

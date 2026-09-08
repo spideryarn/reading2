@@ -121,12 +121,12 @@ import { STEP_ORDER } from "./step-order.js";
 import { articleFingerprint, hashBlocks } from "./source-hash.js";
 import { hashProfile, profileIsStale } from "./profile.js";
 import {
-  ARTICLE_HAD_NO_TEXT,
+  articleHadNoText,
+  documentHadTooLittleText,
+  documentHasNoArticle,
   ILLUSTRATE_NO_SKETCH,
   ILLUSTRATE_SKETCH_PROFILE,
   ILLUSTRATE_SKETCH_STALE,
-  PAGE_HAS_NO_ARTICLE,
-  pageHadTooLittleText,
   pdfTooManyPages,
   type ReaderFacingFailure,
   SOURCE_DOCUMENT_DAMAGED,
@@ -1959,7 +1959,13 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
            them — cleanly, and by a rule it already had. A document carrying its
            own `<base href>` resolves correctly with no help from us, because
            that is what `document.baseURI` is. */
-        const url = cameFromAnUpload(manifest) ? null : requireUrl(ctx);
+        /* **Named, and read twice**: the same evidence decides whether there is
+           a URL to resolve relative links against *and* which of two sentences
+           this step refuses with below. They were two independent readings
+           until 2026-09-08, and the second one did not exist — so an upload got
+           a refusal telling it to go and look at "the address it came from". */
+        const origin = cameFromAnUpload(manifest) ? "upload" : "url";
+        const url = origin === "upload" ? null : requireUrl(ctx);
         /* `TextDecoder`, and no encoding branch: `writeRaw` stores the
            *decoded* string for an HTML page, so these bytes are already UTF-8
            whatever the publisher served. The manifest records the original
@@ -2029,8 +2035,11 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
              ⟨Sol, 2026-09-03⟩ */
           if (err instanceof ReadabilityRefused) {
             throw stageFailure(
-              PAGE_HAS_NO_ARTICLE,
-              "Readability found no article in the fetched page.",
+              documentHasNoArticle(origin),
+              /* "the document stage 1 stored" rather than "the fetched page":
+                 this is the log's sentence and it was wrong in the same way the
+                 reader's was, for an upload there is nothing fetched. */
+              "Readability found no article in the document stage 1 stored.",
             );
           }
           /* **The same shape, one branch along** — and `blocked` for the same
@@ -2044,7 +2053,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
              diagnostic can keep the library's name for the log. */
           if (err instanceof TooLittleTextToRead) {
             throw stageFailure(
-              pageHadTooLittleText(err.chars),
+              documentHadTooLittleText(origin, err.chars),
               "Readability returned less than its own threshold of text; the parse it disowned " +
                 "is what stage 2 used to publish.",
             );
@@ -2224,16 +2233,39 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
            not true**, and was written in good faith on the day the two
            audiences were split apart. `NoBlocksProduced`'s message goes to the
            log; what a reader saw was `stepGaveUp`'s generic `blocked` copy.
-           `ARTICLE_HAD_NO_TEXT` is now what they get, and it keeps the one
-           useful thing that message had to say — the usual causes, and that it
-           is the fetch rather than this step that needs looking at.
+           `articleHadNoText` is now what they get, and it keeps the one useful
+           thing that message had to say — the usual causes, and that it is the
+           fetch rather than this step that needs looking at. Since 2026-09-08
+           it is a *pair*: "the address the article came from" is not something
+           an upload has, and this branch is reachable from one.
 
            `{ authored }`: `NoBlocksProduced` (src/blocks.ts) is fixed prose
            around `slug`, which docs/project/logging.md permits by name and
            `captureFailure` already sends to Sentry as a tag. Its header carries
            the constraint that keeps that true. */
         if (err instanceof NoBlocksProduced) {
-          throw stageFailure(ARTICLE_HAD_NO_TEXT, { authored: err.message });
+          /* **Stage 1's manifest, read here and nowhere else in this step** —
+             the same evidence `extract` uses, so the two steps cannot tell one
+             reader two different stories about where their document came from.
+             It is read *inside the catch* because this is the only line that
+             wants it: a step that reads an artefact it needs on one branch in
+             a thousand should pay for it on that branch.
+
+             **`"url"` is the fallback, and it is named rather than inherited.**
+             A missing or unreadable manifest here means stage 1's product is
+             gone, which is a different failure that this catch is not entitled
+             to report — so it falls back to the sentence that shipped, which is
+             right for every fetched document and was the only one until today.
+             Getting the *wording* wrong on a document whose manifest has
+             vanished is the smallest thing going wrong at that point.
+
+             Reachable from an uploaded **PDF**: a scan whose only text is a
+             publisher record passes stage 2, `renderHtml` (src/pdf-read.ts)
+             withholds that record on purpose, and this step is handed a
+             document with no prose. ⟨GPT Sol, F24, with the reproduction⟩ */
+          const raw = await store.read(ctx.slug, "fetch", "raw").catch(() => null);
+          const origin = raw !== null && cameFromAnUpload(raw) ? "upload" : "url";
+          throw stageFailure(articleHadNoText(origin), { authored: err.message });
         }
         throw err;
       }

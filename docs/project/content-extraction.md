@@ -246,14 +246,37 @@ slot rather than spending it, since only `done` charges
 ([`src/store/pg-session.ts`](../../src/store/pg-session.ts), [billing.md](billing.md)).
 
 - **`ReadabilityRefused`** — the library looked at the page and found no article at all. The reader
-  gets `PAGE_HAS_NO_ARTICLE`, `[jb-no-article]`.
+  gets `documentHasNoArticle`, `[jb-no-article]`.
 - **`TooLittleTextToRead`** — the **capability floor**, since 2026-09-06. Readability *did* return
   something, having already concluded its own parse failed: below `DEFAULT_CHAR_THRESHOLD` (500
   characters of collapsed text) it pushes each pass onto `_attempts`, drops a flag, tries again, and
   when it runs out of flags hands back the longest of its failures. Stage 2 used to publish that.
   `medium_about.html` became an article titled *"Medium"* with 185 characters in it, and it spent a
   paying reader's slot. The floor is us **not overriding the library's own verdict**; the reader gets
-  `pageHadTooLittleText`, `[jb-too-little-text]`, with the count in the sentence.
+  `documentHadTooLittleText`, `[jb-too-little-text]`, with the count in the sentence.
+
+**Each of those refusals is two sentences, chosen by where the document came from**, since
+2026-09-08. Both were written for a fetched page, and both told a reader who had *uploaded* a file
+that *"it is the address it came from that needs looking at"* — of a file that has no address. An
+upload gets its own wording and its own code, because two different sentences may not share one code
+([copy.md](copy.md)):
+
+| finding | fetched | uploaded |
+|---|---|---|
+| `ReadabilityRefused` | `[jb-no-article]` | `[jb-file-no-article]` |
+| `TooLittleTextToRead` | `[jb-too-little-text]` | `[jb-file-too-little-text]` |
+| `NoBlocksProduced` — **stage 3, not this stage** | `[jb-no-text]` | `[jb-file-no-text]` |
+
+The origin comes from `cameFromAnUpload` ([`src/fetch.ts`](../../src/fetch.ts)), the same evidence
+the masthead uses, and the split arrived with the stage-1 rewrite that sends far more odd files here
+in the first place —
+[260908a](../plans/260908a-match-the-documents-leading-tokens-instead-of-searching-for-markup.md).
+
+**The third row is stage 3's**, listed here because it is the same defect and was missed by the sweep
+that fixed the first two: an article *was* extracted and had no prose in it. It is reachable from an
+uploaded **scan** — a PDF whose only text is a publisher record, which `renderHtml`
+([`src/pdf-read.ts`](../../src/pdf-read.ts)) withholds on purpose — so its uploaded sentence names a
+picture of a page rather than a login wall. Found by GPT Sol reviewing the fix for the other two.
 
 **It decides nothing about what the page is** — no markup is read and no wall is diagnosed, so it
 fires on a genuinely tiny real page too, and the message says *usually*. Recognising a bot wall by

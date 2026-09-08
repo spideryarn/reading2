@@ -459,6 +459,27 @@ const IMG_URL_STORED = "https://noemamag.imgix.net/fig.png?w=1200&amp;s=3a2bee";
 /** A URL nothing in these manifests names. */
 const OTHER_URL = "https://content.wolfram.com/uploads/plot.png";
 
+/**
+ * **The corpus's first real `<picture>`**, and the one the reader complained
+ * about — block `spya-zvpebu` of `after-work-we-ll-have-each-other`, verbatim
+ * from `revision_blocks.html` bar the srcset candidates trimmed to two apiece.
+ *
+ * Kept whole, `<figure>` and `<figcaption>` and all, because the shape is the
+ * point: the AVIF `<source>` comes first and therefore wins, and the working
+ * PNG sits underneath it where nothing will ever reach it.
+ */
+const ASTERISK = "https://asteriskmag.com/media/pages/issues/15/after-work-we-ll-have-each-other";
+const MONKEYS_STEM = `${ASTERISK}/8b873bdfd6-1784554053/collier02_david_teniers`;
+const MONKEYS_SRC = `${MONKEYS_STEM}-300x.png`;
+const MONKEYS_FIGURE =
+  `<figure id="spya-zvpebu">\n  <picture>\n` +
+  `        <source srcset="${MONKEYS_STEM}-600x-q64-sharpen50.avif 600w, ${MONKEYS_STEM}-1920x-q64-sharpen50.avif 1920w"` +
+  ` sizes="(min-width: 768px) 750px, 100vw" type="image/avif">\n` +
+  `    <img src="${MONKEYS_SRC}" alt="illustration"` +
+  ` srcset="${MONKEYS_STEM}-600x-sharpen50.png 600w, ${MONKEYS_STEM}-1920x-sharpen50.png 1920w"` +
+  ` sizes="(min-width: 768px) 750px, 100vw">\n      </picture>\n\n` +
+  `    <figcaption>\n    David Teniers the Younger (–1690), S<em>moking and drinking monkeys, </em>c. 1660, oil on panel.      </figcaption>\n  </figure>`;
+
 function imageBlock(id: string, html: string, text = "Some prose."): Block {
   return { id: id as BlockId, tag: "p", kind: "text", text, html } as Block;
 }
@@ -608,8 +629,14 @@ describe("the article's own images", () => {
   /**
    * **A `<picture>`'s `<source>` beats the `<img>` outright**, so rewriting the
    * `src` and leaving the siblings is the same silent hot-link one element
-   * further out. The corpus has no `<picture>` at all (260829b § What the corpus
-   * cannot tell us), which is exactly why this fixture is synthetic.
+   * further out.
+   *
+   * This fixture is synthetic because the corpus had no `<picture>` in it when
+   * the guard was written (260829b § What the corpus cannot tell us). **It has
+   * one now**, and the test below is it — a real article whose real publisher
+   * really breaks, in a way that is worse than hot-linking. Two fixtures rather
+   * than one replacing the other: this one carries two `<source>` types and the
+   * real one carries the failure.
    */
   it("removes the sibling <source> of a picture it rewrites", async () => {
     apiFetch.mockResolvedValue(okPng());
@@ -633,6 +660,59 @@ describe("the article's own images", () => {
     expect(html).not.toContain("<source");
     expect(html).toMatch(/src="blob:/);
     expect(html).not.toMatch(/\bnoemamag\b/);
+  });
+
+  /**
+   * **The real one, and the reason the guard above is not paranoia.**
+   *
+   * Markup copied out of `after-work-we-ll-have-each-other`, an Asterisk
+   * Magazine essay ingested on 2026-09-07 — 97 blocks, three `<figure>`s, each a
+   * `<picture>` whose first child is an AVIF `<source>`. It is the corpus's
+   * first `<picture>`, and it arrived carrying the failure the guard was
+   * invented for:
+   *
+   * `asteriskmag.com` serves those `.avif` variants as `content-type:
+   * text/plain` with `x-content-type-options: nosniff`. The bytes are a valid
+   * AVIF (`ftypavif`); the label is wrong and `nosniff` makes the label binding,
+   * so Chrome refuses them. And **`<picture>` has no way back** — the `<source>`
+   * won on `type` before any byte moved, so the perfectly good PNG in the `<img>`
+   * beneath it is never reached. The reader gets a blank box, we get no error,
+   * and Sentry gets nothing at all: SPIDERYARN-READING2-2B,
+   * docs/plans/260908a-the-monkeys-illustration-did-not-load.md.
+   *
+   * So the assertion that matters is `not.toContain("<source")` on the **first**
+   * draw. Serving our own copy is not what fixes this article — deleting the
+   * publisher's mislabelled `<source>` is, and a version that only did it where
+   * the blob lands would leave the reader looking at the same blank box until
+   * the bytes arrived.
+   */
+  it("removes a real publisher's mislabelled <source> on the first draw", async () => {
+    apiFetch.mockResolvedValue(okPng());
+    const article = articleWithImages(
+      [imageBlock("spya-zvpebu", MONKEYS_FIGURE, "David Teniers the Younger (–1690)")],
+      [storedImage(MONKEYS_SRC, SHA)],
+    );
+
+    const blank = (await firstDraw(article, "a-piece", "owned")).blocks[0]?.html ?? "";
+    expect(blank, "the mislabelled AVIF must be gone before the reader sees anything").not.toContain(
+      "<source",
+    );
+    expect(blank).not.toContain(".avif");
+    /* The `<img>`'s own `srcset` is PNG and would have worked — it goes anyway,
+       because a `srcset` left beside a rewritten `src` is the hot-link this
+       whole file's first test is about. */
+    expect(blank).not.toContain("srcset");
+
+    const html = (await finalDraw(article, "a-piece", "owned")).blocks[0]?.html ?? "";
+    expect(html).not.toContain("<source");
+    expect(html).toMatch(/src="blob:/);
+    /* Through `renderedText`, because the publisher's own markup splits the
+       title as `S<em>moking and drinking monkeys, </em>` and the raw html
+       therefore does not contain the phrase a reader can see. */
+    expect(
+      renderedText(html),
+      "the caption is the reader's only handle on the picture",
+    ).toContain("Smoking and drinking monkeys");
   });
 
   /**
@@ -681,6 +761,99 @@ describe("the article's own images", () => {
     expect(out.blocks[0]).toBe(article.blocks[0]);
     expect(out.blocks[0]?.html).toContain(IMG_URL_STORED);
     expect(created, "a failed fetch must mint nothing").not.toHaveBeenCalled();
+  });
+
+  /**
+   * **…but the publisher's `<picture>` must not come all the way back**, and
+   * this is the case the sentence above got wrong.
+   *
+   * *Leave it alone* is the right answer for a bare `<img>`: the publisher's URL
+   * is what the reader had before any of this existed. It is the wrong answer
+   * for a `<picture>`, because putting the markup back verbatim puts the
+   * `<source>` back with it — and a `<source>` is chosen before a byte moves and
+   * never reconsidered, so an image whose delivery failed goes back to a picture
+   * that may not be able to work at all. That is not a hypothetical: it is
+   * SPIDERYARN-READING2-2B, where the publisher's AVIF is refused
+   * (`net::ERR_BLOCKED_BY_ORB`) and the working PNG underneath it is unreachable.
+   *
+   * So a delivery failure keeps the publisher's `src` and **nothing else that
+   * can load** — not the `<source>`, and not the `<img>`'s own `srcset` either.
+   *
+   * **The `srcset` is the same bug one level down**, which is the part this test
+   * was written the wrong way round first time. The step that fetched and
+   * sniffed this image read `img[src]`; the responsive candidates went unlooked
+   * at, exactly like the `<source>`. And they are not a fallback: a `srcset`
+   * with `w` descriptors takes `src` out of the candidate list altogether, so a
+   * candidate that will not load has nothing beneath it. Measured in Chrome on
+   * this fixture's own attributes — `600w, 1920w` unreachable gives
+   * `naturalWidth: 0` with `currentSrc` on the broken candidate; with the
+   * `srcset` gone the `src` draws.
+   *
+   * `imageSources` absorbing one image's failure is the ordinary path here, not
+   * an exotic one: a 500 from our own asset route, or the `IMAGE_WAIT_MS`
+   * deadline on a slow connection, reaches exactly this branch. GPT Sol found
+   * the branch reviewing the plan and the `srcset` reviewing the code,
+   * 2026-09-08.
+   */
+  it("leaves the verified src as the only candidate when delivery fails", async () => {
+    apiFetch.mockResolvedValue({ ok: false, status: 500 });
+    const article = articleWithImages(
+      [imageBlock("spya-zvpebu", MONKEYS_FIGURE, "David Teniers the Younger (–1690)")],
+      [storedImage(MONKEYS_SRC, SHA)],
+    );
+
+    const out = await finalDraw(article, "a-piece", "owned");
+    const html = out.blocks[0]?.html ?? "";
+    expect(html, "the source we could not check must not come back").not.toContain("<source");
+    expect(html).not.toContain(".avif");
+    /* The publisher is still serving this image — that is the whole point of the
+       fallback — so the one URL we did fetch and sniff stays. */
+    expect(html).toContain(MONKEYS_SRC);
+    /* …and it is reachable, which it is not while anything else is offered. */
+    expect(html, "an unchecked srcset outranks the src rather than backing it up").not.toContain(
+      "srcset",
+    );
+    expect(html, "sizes is meaningless once its srcset is gone").not.toContain("sizes=");
+    expect(created, "a failed fetch must mint nothing").not.toHaveBeenCalled();
+  });
+
+  /**
+   * **The `wanted.images` guard, in the case where getting it wrong would be
+   * invisible** — an article with one image we hold and one we do not, where the
+   * one we do not is a `<picture>`.
+   *
+   * `unverified` is only for an image we *meant* to serve: we fetched its `src`,
+   * so we know that URL is a real image and can safely make it the only
+   * candidate. An image the pipeline never looked at gets none of that — we have
+   * no idea whether its `src` works, and stripping the `<source>` a publisher
+   * offered could take away the only variant that does.
+   *
+   * Every other failure test here contains no stored image at all, so
+   * `rehostImages` returns before the callback and the guard is never asked.
+   * This one asks it. GPT Sol, reviewing the code, 2026-09-08.
+   */
+  it("leaves a picture we hold no copy of completely alone", async () => {
+    apiFetch.mockResolvedValue(okPng());
+    const untouched = `<p><picture><source srcset="${OTHER_URL}.webp" type="image/webp"><img src="${OTHER_URL}" srcset="${OTHER_URL} 900w" alt=""></picture>More prose.</p>`;
+    const article = articleWithImages(
+      [
+        imageBlock("spya-img009", `<p><img src="${IMG_URL_STORED}" alt="">Some prose.</p>`),
+        imageBlock("spya-img010", untouched, "More prose."),
+      ],
+      /* Only the first is ours. The second is not in the manifest at all. */
+      [storedImage(IMG_URL, SHA)],
+    );
+
+    for (const drawn of [
+      await firstDraw(article, "a-piece", "owned"),
+      await finalDraw(article, "a-piece", "owned"),
+    ]) {
+      expect(
+        drawn.blocks[1]?.html,
+        "an image we never fetched keeps every candidate the publisher gave it",
+      ).toBe(untouched);
+      expect(drawn.blocks[1], "and is the very same block object").toBe(article.blocks[1]);
+    }
   });
 
   /** A visitor's copies come off the public route, with no token. */

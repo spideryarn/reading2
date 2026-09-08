@@ -44,6 +44,7 @@ import {
   ENTRY_FIELD_OWNERS,
   EVENTS_FILE,
   LOCK_FILE,
+  STORE_SCHEMA,
   describeOpening,
   describeRefusal,
   foldEvents,
@@ -52,6 +53,7 @@ import {
   readCheckpoint,
   storeRoot,
   type OverseerStore,
+  type RegisterEntry,
 } from "../tools/overseer/store.js";
 
 const opened: OverseerStore[] = [];
@@ -682,6 +684,38 @@ describe("one daemon, enforced", () => {
     expect(isProcessAlive(aDefinitelyDeadPid())).toBe(false);
   });
 
+  /**
+   * **`EPERM` means alive, and until 2026-09-08 nothing checked it.**
+   *
+   * Found by mutation rather than by reading: replacing the `EPERM` branch with
+   * a flat `return false` left all 102 tests green. The two cases above only
+   * exercise the success path (our own pid) and `ESRCH` (a dead pid), so the
+   * one branch that decides whether a *live process belonging to somebody else*
+   * reads as running had no test at all — and reading it as "gone" is what lets
+   * a second writer take a live lock.
+   *
+   * pid 1 is the foreign process every Linux box has. The `getuid` guard is the
+   * test's own positive control: as root, `kill(1, 0)` succeeds and this would
+   * pass without touching the branch, so it says so out loud rather than
+   * reporting a check it did not make.
+   */
+  test("isProcessAlive treats EPERM as alive, not as gone", () => {
+    const uid = process.getuid?.();
+    if (uid === 0) {
+      expect(isProcessAlive(1)).toBe(true);
+      return; // Ran as root: kill(1, 0) succeeds, so the EPERM branch was NOT exercised.
+    }
+    // The branch is only under test if pid 1 really does refuse us.
+    let code: string | undefined;
+    try {
+      process.kill(1, 0);
+    } catch (cause) {
+      code = (cause as NodeJS.ErrnoException).code;
+    }
+    expect(code).toBe("EPERM");
+    expect(isProcessAlive(1)).toBe(true);
+  });
+
   test("a write refuses once the lock has been taken from under it", () => {
     const root = tempRoot();
     const store = mustOpen(root);
@@ -870,6 +904,117 @@ describe("a half-written current.json", () => {
     expect(keysIn(second)).toEqual([sessionKey(identityOf(rowA))]);
   });
 
+  test("a checkpoint from yesterday's daemon is refused by name rather than migrated", () => {
+    // A REAL INPUT, not a hypothetical: every `current.json` written before
+    // 2026-09-08 has `statusSince` as a bare timestamp string, and a bare
+    // string cannot say whether the daemon watched the transition or merely
+    // found the session already in that state. Accepting one would have to
+    // guess, and the guess that reads best — "observed" — is the one that
+    // manufactures the 13m bug in the recovery path, where it survives longest.
+    //
+    // Failing WHOLE is the established behaviour here and is the point: the
+    // register comes back out of the log instead, which is cheap and correct.
+    const root = tempRoot();
+    const row = observedRow();
+    const first = mustOpen(root);
+    first.append([seenEvent(row, "2026-09-08T10:00:00.000Z")]);
+    first.checkpoint({ lastGoodSnapshotAt: "2026-09-08T10:00:00.000Z", tick: true });
+    first.close();
+
+    const parsed = JSON.parse(readFileSync(join(root, CHECKPOINT_FILE), "utf8")) as {
+      register: Record<string, unknown>[];
+    };
+    const [entry] = parsed.register;
+    if (entry === undefined) throw new Error("expected one register entry");
+    entry["statusSince"] = "2026-09-08T10:00:00.000Z";
+    writeFileSync(join(root, CHECKPOINT_FILE), JSON.stringify(parsed));
+
+    const read = readCheckpoint(root);
+    expect(read.kind).toBe("unusable");
+    if (read.kind !== "unusable") throw new Error("expected an unusable checkpoint");
+    // NAMING THE FIELD, because the person reading this line is looking at a
+    // daemon that came up cold and needs to know it was the shape change.
+    expect(read.detail).toContain("statusSince");
+
+    const second = mustOpen(root);
+    expect(second.opening.start).toEqual({ kind: "rebuilt", why: "checkpoint-malformed" });
+    // And the rebuild produces the honest arm: the log holds events, not
+    // durations, so replaying it cannot inherit yesterday's ambiguity.
+    expect([...second.register.values()][0]?.statusSince).toEqual({
+      kind: "lower-bound",
+      at: "2026-09-08T10:00:00.000Z",
+    });
+  });
+
+  test("a statusSince whose kind or timestamp is junk is refused like any other bad entry", () => {
+    // The bare-string refusal is the migration case; these two are the file
+    // somebody edited, or a future arm this build does not know. Without them,
+    // weakening either check inside `parseStatusSince` leaves the suite green —
+    // and a `NaN` from a bad `at` renders as an age rather than as an error,
+    // which is the shape of every bug in this stage.
+    const root = tempRoot();
+    const first = mustOpen(root);
+    first.append([seenEvent(observedRow(), "2026-09-08T10:00:00.000Z")]);
+    first.checkpoint({ lastGoodSnapshotAt: "2026-09-08T10:00:00.000Z", tick: true });
+    first.close();
+    const path = join(root, CHECKPOINT_FILE);
+    const good = readFileSync(path, "utf8");
+
+    const withStatusSince = (statusSince: unknown): string => {
+      const parsed = JSON.parse(good) as { register: Record<string, unknown>[] };
+      const [entry] = parsed.register;
+      if (entry === undefined) throw new Error("expected one register entry");
+      entry["statusSince"] = statusSince;
+      return JSON.stringify(parsed);
+    };
+
+    writeFileSync(path, withStatusSince({ kind: "guessed", at: "2026-09-08T10:00:00.000Z" }));
+    const unknownArm = readCheckpoint(root);
+    expect(unknownArm.kind).toBe("unusable");
+    if (unknownArm.kind !== "unusable") throw new Error("expected an unusable checkpoint");
+    expect(unknownArm.detail).toContain("statusSince.kind");
+
+    writeFileSync(path, withStatusSince({ kind: "observed", at: "2026-09-08" }));
+    const badTimestamp = readCheckpoint(root);
+    expect(badTimestamp.kind).toBe("unusable");
+    if (badTimestamp.kind !== "unusable") throw new Error("expected an unusable checkpoint");
+    // A date with no time is a fact nobody measured — the same round-trip rule
+    // every other timestamp in this file is held to.
+    expect(badTimestamp.detail).toContain("statusSince.at");
+  });
+
+  test("the two arms survive the round trip, and say which they are in the file", () => {
+    // A checkpoint that flattened the arm on the way out would restore a floor
+    // as a measurement, and a RESTART is exactly the moment that matters —
+    // `Restart=always` makes it routine, and after one every duration would
+    // reset together.
+    const root = tempRoot();
+    const already = observedRow();
+    const watched = observedRow({ id: "$1992", claimedConversationId: "0e5ee0a5-0005-4000-8000-0000000000a5" });
+    const first = mustOpen(root);
+    first.append([seenEvent(already, "2026-09-08T10:00:00.000Z"), seenEvent(watched, "2026-09-08T10:00:00.000Z")]);
+    first.append([statusEvent(watched, "2026-09-08T10:05:00.000Z", { kind: "waiting", secondsLeft: 3600 })]);
+    first.checkpoint({ lastGoodSnapshotAt: "2026-09-08T10:05:00.000Z", tick: true });
+    first.close();
+
+    // THE BYTES, because the seam is a file: somebody reading `current.json`
+    // with `less` has to be able to tell the two apart without the types.
+    const text = readFileSync(join(root, CHECKPOINT_FILE), "utf8");
+    expect(text).toContain('"kind": "lower-bound"');
+    expect(text).toContain('"kind": "observed"');
+
+    const second = mustOpen(root);
+    expect(second.opening.start.kind).toBe("resumed");
+    expect(second.register.get(sessionKey(identityOf(already)))?.statusSince).toEqual({
+      kind: "lower-bound",
+      at: "2026-09-08T10:00:00.000Z",
+    });
+    expect(second.register.get(sessionKey(identityOf(watched)))?.statusSince).toEqual({
+      kind: "observed",
+      at: "2026-09-08T10:05:00.000Z",
+    });
+  });
+
   test("a relative meta.dir discards the checkpoint — a resume would land in the wrong tree", () => {
     const root = tempRoot();
     const rowA = observedRow();
@@ -935,6 +1080,21 @@ describe("a half-written current.json", () => {
     expect(store.opening.start).toEqual({ kind: "cold", why: "checkpoint-malformed" });
   });
 
+  test("the shape change came with a schema bump, so a reader pinned to 1 stops rather than misreads", () => {
+    // The seam is a FILE, and orchestrator-direction.md tells the dashboard to
+    // check `schema` as a number and render "I cannot read this" for anything
+    // else. That advice is worth nothing unless a change to a field's shape
+    // moves the number: a consumer that checked `schema === 1` and then read
+    // `statusSince` as a string is precisely the failure the bump turns into a
+    // refusal, and `statusSince` is the field that consumer was waiting for.
+    //
+    // `toBe(2)`, not `not.toBe(1)`: the looser form stays green on a 2 → 3 that
+    // would break every reader correctly pinned to 2, which is the same class of
+    // hole one number along. A change here is a change to a published contract
+    // and should have to be typed twice.
+    expect(STORE_SCHEMA).toBe(2);
+  });
+
   test("readCheckpoint says which of absent, unusable and present it found", () => {
     const root = tempRoot();
     expect(readCheckpoint(root).kind).toBe("absent");
@@ -963,13 +1123,70 @@ describe("the fold, which is what makes the checkpoint disposable", () => {
     // The KEY, not the status object: `secondsLeft` counts down every minute
     // and a register full of it is a register nothing can compare.
     expect(entry.lastStatusKey).toBe("waiting");
-    expect(entry.statusSince).toBe("2026-09-08T10:01:00.000Z");
+    expect(entry.statusSince).toEqual({ kind: "observed", at: "2026-09-08T10:01:00.000Z" });
     expect(entry.lastSeenAlive).toBe("2026-09-08T10:01:00.000Z");
     // The reboot-resume material, which is not recoverable from anywhere else.
     expect(entry.meta).toEqual(rowA.meta);
     expect(entry.name).toBe(rowA.name);
     expect(entry.tmuxId).toBe(rowA.id);
     expect(entry.claimedConversationId).toBe(rowA.claimedConversationId);
+  });
+
+  test("a session already running when the daemon starts reports a floor, not a measurement", () => {
+    // THE 13m BUG, and the only defect in this file that a green suite and
+    // three reviews all walked past. `overseer status` printed four identical
+    // `13m` durations against sessions that had been working for hours,
+    // because the daemon had been up for thirteen minutes: `session-seen` is a
+    // FIRST SIGHTING, and the state it sights was already in progress.
+    //
+    // NOT an assertion about the number. The number is right — it is the
+    // earliest moment we can prove — and asserting it is what the old test did.
+    // The assertion is that the shape SAYS which quantity it is, so a renderer
+    // cannot show a floor as a measurement without choosing to.
+    const row = observedRow({ status: { kind: "working" } });
+
+    const register = foldEvents([seenEvent(row, "2026-09-08T10:00:00.000Z")], new Map());
+
+    const entry = register.get(sessionKey(identityOf(row)));
+    if (entry === undefined) throw new Error("expected the session");
+    expect(entry.statusSince).toEqual({ kind: "lower-bound", at: "2026-09-08T10:00:00.000Z" });
+  });
+
+  test("a session whose transition the daemon watched reports a measurement", () => {
+    // The other arm, and the pair is the whole point: one fold produces both,
+    // and a mutation that mints one arm everywhere fails one of these two.
+    const row = observedRow();
+
+    const register = foldEvents(
+      [
+        seenEvent(row, "2026-09-08T10:00:00.000Z"),
+        statusEvent(row, "2026-09-08T10:20:00.000Z", { kind: "waiting", secondsLeft: 3600 }),
+      ],
+      new Map(),
+    );
+
+    const entry = register.get(sessionKey(identityOf(row)));
+    if (entry === undefined) throw new Error("expected the session");
+    expect(entry.statusSince).toEqual({ kind: "observed", at: "2026-09-08T10:20:00.000Z" });
+  });
+
+  test("a replacement in the same tmux session is a first sighting too", () => {
+    // `session-replaced` is a NEW conversation in an old tmux session, so the
+    // entry is new and its status was never watched starting. It goes through
+    // `entryOf` like `session-seen`, and that is deliberate rather than
+    // incidental: a new conversation that opens already working could have
+    // been working for a minute before we looked.
+    const was = observedRow();
+    const now = observedRow({ claimedConversationId: "0e5ee0a4-0004-4000-8000-0000000000a4" });
+
+    const register = foldEvents(
+      [seenEvent(was, "2026-09-08T10:00:00.000Z"), replacedEvent(was, now, "2026-09-08T10:01:00.000Z")],
+      new Map(),
+    );
+
+    const entry = register.get(sessionKey(identityOf(now)));
+    if (entry === undefined) throw new Error("expected the replacement");
+    expect(entry.statusSince).toEqual({ kind: "lower-bound", at: "2026-09-08T10:01:00.000Z" });
   });
 
   test("a restarted wait starts the clock again without changing the state", () => {
@@ -995,7 +1212,7 @@ describe("the fold, which is what makes the checkpoint disposable", () => {
     if (entry === undefined) throw new Error("expected the waiting session");
     expect(entry.lastStatusKey).toBe("waiting");
     // A NEW wait, so the duration a triage view reports starts again here.
-    expect(entry.statusSince).toBe("2026-09-08T10:01:00.000Z");
+    expect(entry.statusSince).toEqual({ kind: "observed", at: "2026-09-08T10:01:00.000Z" });
   });
 
   test("a rename reaches the register AND leaves the status clock alone", () => {
@@ -1020,9 +1237,28 @@ describe("the fold, which is what makes the checkpoint disposable", () => {
     expect(entry.name).toBe("after-the-rename");
     // Forty minutes of waiting, still forty minutes of waiting.
     expect(entry.lastStatusKey).toBe("waiting");
-    expect(entry.statusSince).toBe("2026-09-08T10:01:00.000Z");
+    expect(entry.statusSince).toEqual({ kind: "observed", at: "2026-09-08T10:01:00.000Z" });
     // The row was seen, so this DOES move — it means "alive at least this recently".
     expect(entry.lastSeenAlive).toBe("2026-09-08T10:41:00.000Z");
+  });
+
+  test("a rename does not promote a floor into a measurement", () => {
+    // The rename test above starts from a watched transition, so a fold that
+    // rewrote every `statusSince` to `observed` would pass it — the value would
+    // be right for the wrong reason. This one starts from a session the daemon
+    // only ever SIGHTED, which is the case that loses its `≥`.
+    const was = observedRow({ name: "before-the-rename" });
+    const now = observedRow({ name: "after-the-rename" });
+
+    const register = foldEvents(
+      [seenEvent(was, "2026-09-08T10:00:00.000Z"), rowChangedEvent(now, "2026-09-08T10:41:00.000Z", ["name"])],
+      new Map(),
+    );
+
+    const entry = register.get(sessionKey(identityOf(now)));
+    if (entry === undefined) throw new Error("expected the renamed session");
+    expect(entry.name).toBe("after-the-rename");
+    expect(entry.statusSince).toEqual({ kind: "lower-bound", at: "2026-09-08T10:00:00.000Z" });
   });
 
   test("every field the differ watches actually reaches the register", () => {
@@ -1091,7 +1327,7 @@ describe("the fold, which is what makes the checkpoint disposable", () => {
     if (entry === undefined) throw new Error("expected the session");
     expect([entry.paneId, entry.panePid]).toEqual(["%99", 999_999]);
     expect(entry.name).toBe(was.name);
-    expect(entry.statusSince).toBe("2026-09-08T10:01:00.000Z");
+    expect(entry.statusSince).toEqual({ kind: "observed", at: "2026-09-08T10:01:00.000Z" });
     expect(entry.lastSeenAlive).toBe("2026-09-08T10:41:00.000Z");
   });
 
@@ -1111,6 +1347,35 @@ describe("the fold, which is what makes the checkpoint disposable", () => {
       .filter(([, owner]) => owner === "row")
       .map(([field]) => field);
     expect([...rowOwned].sort()).toEqual([...REGISTER_ROW_FIELDS].sort());
+  });
+
+  test("a pane replacement moves exactly the fields the census calls the pane's", () => {
+    // THE CENSUS'S OTHER FAILURE MODE, and the one `satisfies` cannot see: a
+    // field put in the WRONG arm compiles perfectly, and then goes stale
+    // silently — the original defect wearing the census as cover. `row` is
+    // pinned by `REGISTER_ROW_FIELDS` in the test above; this pins `pane`, by
+    // comparing the census against what a fold really moved.
+    //
+    // `lastSeenAlive` is expected beside them because EVERY arm moves it, which
+    // is what makes it a clock field rather than a pane one.
+    const was = observedRow();
+    const now = observedRow({ paneId: "%99", panePid: 999_999 });
+    const before = foldEvents([seenEvent(was, "2026-09-08T10:00:00.000Z")], new Map()).get(
+      sessionKey(identityOf(was)),
+    );
+    const after = foldEvents(
+      [seenEvent(was, "2026-09-08T10:00:00.000Z"), paneReplacedEvent(was, now, "2026-09-08T10:41:00.000Z")],
+      new Map(),
+    ).get(sessionKey(identityOf(now)));
+    if (before === undefined || after === undefined) throw new Error("expected the session on both sides");
+
+    const fields = Object.keys(ENTRY_FIELD_OWNERS) as (keyof RegisterEntry)[];
+    const moved = fields.filter((field) => JSON.stringify(before[field]) !== JSON.stringify(after[field]));
+    const paneOwned = Object.entries(ENTRY_FIELD_OWNERS)
+      .filter(([, owner]) => owner === "pane")
+      .map(([field]) => field);
+
+    expect([...moved].sort()).toEqual([...paneOwned, "lastSeenAlive"].sort());
   });
 
   test("a row change for a session the register has never seen is dropped", () => {

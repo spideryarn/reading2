@@ -55,6 +55,9 @@ function row(over: Partial<FleetRow> = {}): FleetRow {
     worktree: null,
     meta: { version: "legacy" },
     startedAt: "2026-09-08T00:00:00.000Z",
+    /* The arm the collector produces before `readPauses` has run. Not `none`:
+       a fixture is in no position to claim we looked everywhere. */
+    pause: { kind: "cannot-tell", why: "the fixture did not say", cause: "rate-limits-not-collected" },
     status: IDLE,
     paneId: PANE,
     panePid: PANE_PID,
@@ -169,6 +172,10 @@ describe("one refresh turn", () => {
       panePid: PANE_PID,
       status: { kind: "idle" },
       mode: "enqueue",
+      // AS THE PAGE POSTS IT. Every body the dashboard sends says who is
+      // speaking; an absent `speaker` is read as the weaker claim, so a fixture
+      // without it would be a test of the default rather than of the button.
+      speaker: "greg",
       text: "merge origin/dev before you push",
     });
     expect(status).toBe(200);
@@ -180,7 +187,10 @@ describe("one refresh turn", () => {
 
     // THE WHOLE ADDRESS, not just that something was sent.
     expect(sent).toHaveLength(1);
-    expect(sent[0]?.text).toBe("merge origin/dev before you push");
+    // ATTRIBUTED, and the prefix is rendered at DELIVERY — so this turn is
+    // where it has to appear. The words are the person's; the line in front of
+    // them is what tells the agent whose they are.
+    expect(sent[0]?.text).toBe("[Greg, via the fleet dashboard] merge origin/dev before you push");
     expect(sent[0]?.target).toEqual({ paneId: PANE, sessionId: SESSION, claudeSessionId: CONVO, panePid: PANE_PID });
     expect(sent[0]?.declaredStatus).toEqual(IDLE);
     // And it has left the waiting state rather than merely having been read.

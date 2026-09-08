@@ -18,9 +18,25 @@
      the family of bug it belongs to.
 
      No `@/` alias. The product's client has one because shadcn generates
-     imports against it; this tool has none deliberately, since the only thing
-     the alias could reach is `src/`, and a tool that must run with the
-     product's server absent has no business importing from there. */
+     imports against it; this tool has none deliberately.
+
+     THAT USED TO SAY "since the only thing the alias could reach is `src/`, and
+     a tool that must run with the product's server absent has no business
+     importing from there", AND SINCE 2026-09-08 THE SECOND HALF IS NO LONGER
+     TRUE. Greg asked for the product's voice dictation to be **reused** rather
+     than copied, and there are ~3,000 lines of browser audio machinery behind it
+     that took a day of debugging to make believable. So the principle is
+     narrowed rather than dropped: only LEAF, BROWSER-ONLY, PRODUCT-AGNOSTIC
+     modules may be imported from `src/`, nothing that reaches the database, an
+     auth session, a slug, an article or a route. `tests/fleet-imports.test.ts`
+     walks the whole transitive graph and fails on the twelfth file; the list is
+     the cost of the move if this tool ever earns its own repo, and it is meant
+     to be reviewed rather than extended.
+
+     The alias stays absent all the same, because relative paths make the reach
+     into `src/` visible at every use site, which is exactly what a narrowed rule
+     wants. `../../../../src/web/useDictation.js` is meant to look like what it
+     is. */
   "extends": "../../../tsconfig.base.json",
   "compilerOptions": {
     "module": "ESNext",
