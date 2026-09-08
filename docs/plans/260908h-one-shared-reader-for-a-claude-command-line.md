@@ -135,11 +135,53 @@ box into TypeScript over the `ps` blob it already ships back.
 - **Stage C — the awk probe.** The only live defect. Decide between teaching the awk and moving the
   decision into TypeScript, and say why in this doc.
 
-Library choice for the parsing itself: **pending** — research running against
-[third-party-library-selection.md](../reusable/third-party-library-selection.md). The requirement
-that will decide it is whether a candidate can be told to **stop at the first non-option argument**
-and be given an **explicit table of which flags take values**; a parser that guesses either is the
-bug class we are removing.
+## The library question, and why the answer is "none"
+
+Researched against [third-party-library-selection.md](../reusable/third-party-library-selection.md)
+on 2026-09-08. Two requirements decide it: can the parser be told to **stop at the first non-option
+argument**, and can it be given an **explicit table of which flags take values**. Weekly downloads
+and last-publish dates were checked, because "lots of pretraining data" is the first criterion.
+
+| candidate | stops at first positional | flag table | verdict |
+|---|---|---|---|
+| `node:util.parseArgs` | **no** | yes | disqualified — see below |
+| `arg` | `stopAtPositional` | yes | disqualified — see below |
+| `yargs-parser` | `halt-at-non-option` | yes | passes technically; buys nothing |
+| `minimist` / `mri` | `stopEarly` / absent | yes | unmaintained (2023-02, 2021-09) |
+| `commander` / `citty` | no bare primitive | wrong shape | frameworks for authoring a CLI, not reading one |
+
+**Node's built-in is disqualified by measurement, not by argument.** Run live on this box's Node
+v26.8.1 with `strict:false, allowPositionals:true`, `parseArgs` on
+`['--session-id','abc','Please','add','a','--print','flag']` returns **`values.print === true`** —
+`--print` read as a real flag from inside the prose. That is the exact false grant `recogniseClaude`
+was fixed to prevent. `tokens:true` does carry enough to stop at the first positional yourself, but
+using it means writing `recogniseClaude`'s walking loop again against a different data shape.
+
+**The finding that actually decides it**, and it is in no README:
+
+> "Unknown flag consumes the next bare word" is the load-bearing default. It is what lets an
+> unrecognised *future* Anthropic flag not derail a stop-at-first-positional scan — and it is a
+> genuine dividing line: `yargs-parser` has it, `arg` does not, though both advertise an
+> equivalent-sounding feature. It only shows up by reading the parsing loop.
+
+So `arg`'s `stopAtPositional`, the one purpose-built primitive for this exact class, **fails**: in
+permissive mode it pushes an unknown flag to positionals without eating its value, so a future
+value-taking flag makes the scan halt on that value and never reach the session id. `yargs-parser`
+survives all four criteria — and adopting it means writing out `boolean:['print'],
+string:['session-id'], alias:{p:'print'}`, which *is* Claude's grammar restated in yargs-parser's
+vocabulary. It also ships no types of its own, and `@types/yargs-parser` is pinned a major version
+behind the current API, which is poor company for a `strict` codebase.
+
+**Decision: hand-written, in this repo, with an explicit flag table.** The existing
+`recogniseClaude` heuristic — skip an unknown flag, and skip the next word too unless it looks like
+a flag — turns out to be the same policy `yargs-parser` implements for the same reason. That is
+worth knowing: the code was right, it just was not shared, named, or tested as a grammar.
+
+A third requirement falls out of the same research and belongs in the module's header: **the
+`stop-at-first-positional` rule and the `which-flags-take-values` table are not independent
+features when the flag set is only partly known.** They interact, and that interaction is what
+disqualified `arg`. Anyone re-running a feature checklist against a parser for a foreign CLI needs
+to test the pair, not the two boxes.
 
 ## The simpler option, named
 
