@@ -55,6 +55,7 @@ import {
   makeActionsApi,
   parseAction,
   parseActionsFeed,
+  parseBoxEffect,
   parseQueue,
   sessionActions,
   boxActions,
@@ -1887,7 +1888,11 @@ function recordingActions(
     },
     box: async (actionId, dryRun) => {
       calls.push({ op: "box", arg: actionId, second: dryRun });
-      return { ok: true, dryRun, dryRunStated: true, result: [], why: null };
+      /* `effect: null` is *this answer described no per-row effect*, which is
+         what an empty `result` means. It is REQUIRED rather than optional for
+         `delivery`'s reason: a fixture that could omit it would let the
+         renderer pick a default, and picking a default is the defect. */
+      return { ok: true, dryRun, dryRunStated: true, result: [], why: null, effect: null };
     },
     ...over,
   };
@@ -4155,6 +4160,8 @@ describe("the action buttons, which are the server's vocabulary", () => {
            260908j the card no longer reads it as one. The other three arms are
            next door, in "what became of an ACTION". */
         delivery: { kind: "none" },
+        // No plan ran, so there is no run to describe. See `parsePlanRun`.
+        run: null,
       }),
     });
     openWith([CONTINUE_WIRE], { api: rec });
@@ -4728,7 +4735,78 @@ describe("the box, which says what it would do before it does it", () => {
       { op: "box", arg: "kill-test-suites", second: true },
       { op: "box", arg: "kill-test-suites", second: false },
     ]);
+    // The stub's answer describes no per-row effect, so "Done." is all there
+    // is to say. The two tests below are the answers that do describe one.
     expect(container.textContent).toContain("Done.");
+  });
+
+  it("will not say Done over a kill whose plan stopped before it signalled anything", async () => {
+    /* **A KILL THAT SIGNALLED NOTHING READ EXACTLY LIKE ONE THAT SIGNALLED
+       EVERYTHING.** The heading came off `dryRun` alone, and the pids were in
+       `RawValue` underneath, where a list of three objects looks the same
+       whatever the `observation` on each says. `parseBoxEffect` is the real
+       one, so the counts are read from the answer rather than asserted about
+       a shape nothing produces. */
+    const result = {
+      run: { action: "kill-test-suites", steps: [], planned: 3, completed: false, stoppedAt: 0 },
+      kill: {
+        attempted: [5001, 5002, 5003],
+        planCompleted: false,
+        observed: [
+          { pid: 5001, observation: "not-attempted", why: "the plan stopped before this one" },
+          { pid: 5002, observation: "not-attempted", why: "the plan stopped before this one" },
+          { pid: 5003, observation: "not-attempted", why: "the plan stopped before this one" },
+        ],
+      },
+    };
+    openBox([KILL_SUITES_WIRE], {
+      box: async (_id, dryRun) => ({
+        ok: true,
+        dryRun,
+        dryRunStated: true,
+        result,
+        why: null,
+        effect: parseBoxEffect(result),
+      }),
+    });
+    await act(async () => {});
+    await clickSaying("Kill test suites");
+    await clickSaying("Yes — kill test suites");
+
+    expect(container.textContent).toContain("Signal accepted for 0 of 3 pids.");
+    expect(container.textContent).toContain("never signalled: the plan stopped first");
+    expect(container.textContent).toContain("the pids after it were never signalled at all");
+    expect(container.textContent).not.toContain("Done.");
+  });
+
+  it("shows a half-landed broadcast as half-landed rather than as a refusal", async () => {
+    const result = {
+      total: 3,
+      recipients: [
+        { paneId: "%1", sessionId: "$1", minutes: 5, outcome: "keys-submitted", code: null, why: null },
+        { paneId: "%2", sessionId: "$2", minutes: null, outcome: "held", code: null, why: "it is working" },
+        { paneId: "%3", sessionId: "$3", minutes: 33, outcome: "partial", code: "send-failed", why: "the Enter did not go" },
+      ],
+    };
+    openBox([BROADCAST_WIRE], {
+      box: async (_id, dryRun) => ({
+        ok: true,
+        dryRun,
+        dryRunStated: true,
+        result,
+        why: null,
+        effect: parseBoxEffect(result),
+      }),
+    });
+    await act(async () => {});
+    await clickSaying("Broadcast: ease off, staggered");
+    await clickSaying("Yes — broadcast: ease off, staggered");
+
+    expect(container.textContent).toContain("Keys submitted to 1 of 3 rows.");
+    // The row that is holding half a message, said in words rather than left
+    // as a state name in a JSON dump.
+    expect(container.textContent).toContain("PART of the message went, and the rest is unaccounted for");
+    expect(container.textContent).not.toContain("Done.");
   });
 
   it("offers no Confirm at all when the dry run could not answer", async () => {
@@ -4741,6 +4819,8 @@ describe("the box, which says what it would do before it does it", () => {
         from: "server",
         // The dry run never sends anything, so the route has no delivery to state.
         delivery: { kind: "not-told" },
+        // And `ps` failed before any plan was built, so there is no run either.
+        run: null,
       }),
     });
     await act(async () => {});
@@ -4758,7 +4838,7 @@ describe("the box, which says what it would do before it does it", () => {
     /* The worst thing this panel could get wrong: believing our own request
        instead of the reply, and reporting a kill as a question. */
     openBox([KILL_SUITES_WIRE], {
-      box: async () => ({ ok: true, dryRun: false, dryRunStated: true, result: ["killed 4"], why: null }),
+      box: async () => ({ ok: true, dryRun: false, dryRunStated: true, result: ["killed 4"], why: null, effect: null }),
     });
     await act(async () => {});
     await clickSaying("Kill test suites");
@@ -4774,7 +4854,7 @@ describe("the box, which says what it would do before it does it", () => {
        failure this panel exists to prevent is somebody pressing *kill* on the
        strength of an answer that said nothing. */
     const rec = openBox([KILL_SUITES_WIRE], {
-      box: async () => ({ ok: true, dryRun: true, dryRunStated: true, result: null, why: null }),
+      box: async () => ({ ok: true, dryRun: true, dryRunStated: true, result: null, why: null, effect: null }),
     });
     await act(async () => {});
     await clickSaying("Kill test suites");
@@ -4791,7 +4871,7 @@ describe("the box, which says what it would do before it does it", () => {
        run and reported as "Done." — the reassuring half of a contradiction, and
        the page could tell, because the answer says which it was. */
     openBox([KILL_SUITES_WIRE], {
-      box: async () => ({ ok: true, dryRun: true, dryRunStated: true, result: ["would kill 5001"], why: null }),
+      box: async () => ({ ok: true, dryRun: true, dryRunStated: true, result: ["would kill 5001"], why: null, effect: null }),
     });
     await act(async () => {});
     await clickSaying("Kill test suites");
@@ -4804,7 +4884,7 @@ describe("the box, which says what it would do before it does it", () => {
 
   it("will not claim a dry run when the server never said it was one", async () => {
     openBox([KILL_SUITES_WIRE], {
-      box: async () => ({ ok: true, dryRun: true, dryRunStated: false, result: [], why: null }),
+      box: async () => ({ ok: true, dryRun: true, dryRunStated: false, result: [], why: null, effect: null }),
     });
     await act(async () => {});
     await clickSaying("Kill test suites");

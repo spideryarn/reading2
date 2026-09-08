@@ -102,7 +102,7 @@ import {
   type RouteErrorCode,
 } from "./routes-steer.js";
 import type { FleetStatus } from "./status.js";
-import { sendMessage as realSendMessage, type RefusalCode, type SteerResult, type SteerTarget } from "./steer.js";
+import { sendMessage as realSendMessage, type Delivery, type RefusalCode, type SteerResult, type SteerTarget } from "./steer.js";
 
 /* ------------------------------------------------------------------ *
  * Limits. Exported so a test can drive them rather than sleeping.
@@ -295,36 +295,38 @@ export const ACTION_ERROR_STATUS: Record<ActionErrorCode, number> = {
  * compile error in `parseQueue` until somebody reads it or names it in that
  * file's `Omit<>`. docs/postmortems/260908b.
  */
-import type { QueueView } from "./wire.js";
+import type {
+  BroadcastRecipientOutcome,
+  KillAttempt,
+  KillObservation,
+  KillReport,
+  PlanRunView,
+  PlanStepStatus,
+  PlanStepView,
+  QueueView,
+} from "./wire.js";
 
 export type { QueuedItemView, QueueView } from "./wire.js";
+export type { KillAttempt, KillObservation, KillReport } from "./wire.js";
 
-/** One step, after it ran. */
-export type StepStatus = "passed" | "failed" | "failed-ignored";
-
-export type StepOutcome = {
-  argv: readonly string[];
-  cwd: string;
-  /** The step's own reason for existing, from the plan. */
-  why: string;
-  status: StepStatus;
-  /** Why it got that status — the gate, in words. */
-  verdict: string;
-  code: number | null;
-  timedOut: boolean;
-  spawnError: string | null;
-  /** The tail of what it said, bounded, for a person. */
-  tail: string;
-};
-
-export type PlanRun = {
-  action: ActionId;
-  steps: StepOutcome[];
-  /** True when every step ran and none failed a gate it was not allowed to fail. */
-  completed: boolean;
-  /** The index of the step that stopped the plan, or null. */
-  stoppedAt: number | null;
-};
+/**
+ * A step and a run, after they ran — **declared in `./wire.js` and aliased
+ * here**, for `QueueView`'s reason above rather than for tidiness.
+ *
+ * The browser has to read these now: a `plan-failed` refusal carries the whole
+ * run, and `actions-client.ts` used to drop it on the floor and render *this
+ * page cannot tell whether the action took effect* over a body that said
+ * exactly what had taken effect. A second declaration over there would rot the
+ * way `QueueView`'s twin did.
+ *
+ * `PlanRunView` is parameterised so this side keeps the closed `ActionId` union
+ * — a run of an action nobody offers should not typecheck here — while the
+ * client reads a plain string, which is what a parse of somebody else's JSON
+ * honestly yields.
+ */
+export type StepStatus = PlanStepStatus;
+export type StepOutcome = PlanStepView;
+export type PlanRun = PlanRunView<ActionId>;
 
 /** One candidate for a kill, with the named rule that licensed it. */
 export type KillCandidate = {
@@ -338,16 +340,82 @@ export type KillCandidate = {
   etimeSeconds: number;
 };
 
-/** What became of one recipient of a broadcast. */
+/**
+ * What became of one recipient of a broadcast.
+ *
+ * **`outcome` IS THE WHOLE DELIVERY READING, NOT A SUMMARY OF ONE.** It used
+ * to carry `sent | refused | …`, and `refused` was the answer for three
+ * different fates: a `Delivery` of `none`, a `Delivery` of `partial`, and a
+ * throw out of the delivery module. `sendMessage` had already distinguished
+ * them and this row threw the distinction away — the same Class B collapse
+ * Stage 1 fixed on the *failure* half of an action, one arm over.
+ *
+ * The vocabulary lives in `wire.js` so the browser reads the same words. There
+ * is deliberately no second `delivery` field beside this one: two fields that
+ * can disagree is how the next one of these gets written.
+ */
 export type BroadcastOutcome = {
   paneId: string;
   sessionId: string;
   /** The pause this recipient was asked for, or null when nothing was sent. */
   minutes: number | null;
-  outcome: "sent" | "refused" | "held" | "blocked" | "not-reached";
+  outcome: BroadcastRecipientOutcome;
   code: RefusalCode | null;
   why: string | null;
 };
+
+/**
+ * `Delivery` → the recipient word, and the mapping is total and lossless.
+ *
+ * A `Record` over steer.ts's closed union rather than a chain of `if`s, so a
+ * fifth `Delivery` arm stops this file compiling instead of quietly taking the
+ * last branch — the same trick as `ACTION_ERROR_STATUS` above.
+ */
+const DELIVERY_OUTCOME: Record<Delivery, BroadcastRecipientOutcome> = {
+  none: "refused-before-effect",
+  partial: "partial",
+  unknown: "outcome-unknown",
+};
+
+/**
+ * One `kill -TERM` step's outcome, as evidence about the pid.
+ *
+ * **THE THREE FAILURES ARE NOT ONE FAILURE.** `kill` exiting non-zero means the
+ * process was not there, or is not ours — nothing happened to it, and that is a
+ * settled fact. A `kill` that could not be spawned, timed out, or died on a
+ * signal settles nothing: the signal may have gone first. Reading the second as
+ * the first is how a page tells somebody a process survived when it did not.
+ */
+function killObservation(step: StepOutcome | undefined): KillObservation {
+  if (step === undefined) return "not-attempted";
+  if (step.spawnError !== null || step.timedOut || step.code === null) return "not-established";
+  return step.code === 0 ? "signal-accepted" : "signal-refused";
+}
+
+/**
+ * A finished kill plan, as **intent and evidence side by side**.
+ *
+ * Exported and pure because the state that matters most here is the one the
+ * route cannot currently reach: every step of a kill plan is `best-effort`, so
+ * `judgeStep` never returns `failed` and `runPlan` never returns
+ * `completed: false` for a kill. A stricter plan would, `PlanRun` allows it,
+ * and a run that stopped leaves the tail of `pids` **unsignalled** — which must
+ * never render as a completed kill. A test drives this directly for exactly
+ * that reason.
+ *
+ * The steps are one per pid, in order, by construction in `planKillProcesses`.
+ */
+export function killReport(pids: readonly number[], run: PlanRun): KillReport {
+  const observed: KillAttempt[] = pids.map((pid, i) => {
+    const step = run.steps[i];
+    return {
+      pid,
+      observation: killObservation(step),
+      why: step?.verdict ?? "the plan stopped before this one, so no signal was sent to it",
+    };
+  });
+  return { attempted: [...pids], observed, planCompleted: run.completed };
+}
 
 export type ActionResponse =
   | { ok: true; op: "catalogue"; schema: 1; actions: { session: readonly Action[]; box: readonly Action[] }; queues: QueueView[]; acting: { enabled: boolean; why: string }; now: number }
@@ -382,7 +450,15 @@ export type ActionResponse =
    * `kill-test-suites` rendered the word "null" for it.
    */
   | { ok: true; op: "dry-run"; action: ActionId; dryRun: true; result: { steps: readonly Step[]; candidates?: KillCandidate[]; scanned?: number; unreadable?: number } }
-  | { ok: true; op: "ran"; action: ActionId; dryRun: false; result: { run: PlanRun; killed?: number[]; skipped?: { pid: number; why: string }[] } }
+  /*
+   * `kill` RATHER THAN `killed`, and the rename is the fix rather than a
+   * tidy-up. `killed: number[]` was the list of pids the route INTENDED to
+   * signal, in the past tense, sitting in the same body as the step outcomes
+   * that could contradict it — so a `kill` that found nothing there answered
+   * `killed: [5001, 5002]` and the page had no way to know better. `KillReport`
+   * keeps the intent and the evidence as two fields; see wire.js.
+   */
+  | { ok: true; op: "ran"; action: ActionId; dryRun: false; result: { run: PlanRun; kill?: KillReport; skipped?: { pid: number; why: string }[] } }
   | { ok: true; op: "broadcast-preview"; action: ActionId; dryRun: true; result: { total: number; recipients: BroadcastOutcome[]; sample: string | null } }
   | { ok: true; op: "broadcast"; action: ActionId; dryRun: false; result: { total: number; recipients: BroadcastOutcome[] } }
   | {
@@ -732,10 +808,10 @@ export async function runPlan(plan: Plan, io: ActionIo, timeoutMs: number = STEP
       tail: tailOf(r.stderr) || tailOf(r.stdout),
     });
     if (j.status === "failed") {
-      return { action: plan.action.id, steps, completed: false, stoppedAt: i };
+      return { action: plan.action.id, steps, planned: plan.steps.length, completed: false, stoppedAt: i };
     }
   }
-  return { action: plan.action.id, steps, completed: true, stoppedAt: null };
+  return { action: plan.action.id, steps, planned: plan.steps.length, completed: true, stoppedAt: null };
 }
 
 /* ------------------------------------------------------------------ *
@@ -1754,8 +1830,17 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
 
     deps.log(`action box: KILLING action=${action.id} pids=${pids.join(",")}`);
     const run = await runPlan(built.plan, deps.io);
-    deps.log(`action box: ${run.completed ? "DONE" : "STOPPED"} action=${action.id} steps=${run.steps.length}`);
-    respond(res, 200, { ok: true, op: "ran", action: action.id, dryRun: false, result: { run, killed: pids, skipped } });
+    /* WHAT CAME BACK, PID BY PID, and the log says the same thing the body
+       does. A line reading `killed=3` beside a body naming two refusals is the
+       version of this defect that survives in the journal after the page has
+       been closed. */
+    const report = killReport(pids, run);
+    const accepted = report.observed.filter((o) => o.observation === "signal-accepted").length;
+    deps.log(
+      `action box: ${run.completed ? "DONE" : "STOPPED"} action=${action.id} steps=${run.steps.length} ` +
+        `signal-accepted=${accepted}/${report.attempted.length}`,
+    );
+    respond(res, 200, { ok: true, op: "ran", action: action.id, dryRun: false, result: { run, kill: report, skipped } });
   }
 
   /**
@@ -1808,7 +1893,12 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
             // The SAME function the send will call, with the same arguments, so
             // the preview cannot promise a spread the delivery does not keep.
             minutes: staggerMinutes(index, total, action.stagger),
-            outcome: "sent",
+            /* `would-send` RATHER THAN `sent`. A preview and a delivery used
+               the same word, so a row of a dry run was indistinguishable from
+               a row of a real fan-out by anything but the envelope around it —
+               and the envelope is exactly what got misread the day this panel
+               reported every dry run as "Done." */
+            outcome: "would-send",
             code: null,
             why: "it is at a prompt and would be told to pause for this long",
           });
@@ -1854,7 +1944,9 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
     lastBroadcastAt = at;
 
     let index = 0;
-    let sent = 0;
+    /* `submitted`, NOT `sent`. It counts the rows whose tmux calls all
+       completed, which is the strongest thing this route can count. */
+    let submitted = 0;
     for (const rec of r.recipients) {
       const gate = gates.get(rec.target.paneId);
       if (gate?.kind !== "now") {
@@ -1884,25 +1976,42 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
       try {
         result = deps.sendMessage(rec.target, text, rec.declaredStatus);
       } catch (e) {
+        /* **A THROW IS THE CASE WITH THE LEAST EVIDENCE BEHIND IT**, and it
+           answered `refused` — the reading that says nothing reached them.
+           `fire()` throws from the middle of a sequence of tmux calls and the
+           exception carries no `Delivery`, so the honest arm is the one that
+           claims nothing either way. */
         outcomes.push({
           paneId: rec.target.paneId,
           sessionId: rec.target.sessionId,
           minutes,
-          outcome: "refused",
+          outcome: "outcome-unknown",
           code: null,
-          why: `the delivery module threw: ${(e as Error).message}`,
+          why:
+            `the delivery module threw partway through the send: ${(e as Error).message}. ` +
+            "Nothing here can tell whether any of it reached the pane.",
         });
         continue;
       }
       if (result.ok) {
-        sent += 1;
-        outcomes.push({ paneId: rec.target.paneId, sessionId: rec.target.sessionId, minutes, outcome: "sent", code: null, why: null });
-      } else {
+        submitted += 1;
         outcomes.push({
           paneId: rec.target.paneId,
           sessionId: rec.target.sessionId,
           minutes,
-          outcome: "refused",
+          outcome: "keys-submitted",
+          code: null,
+          why: null,
+        });
+      } else {
+        /* THE READING `sendMessage` ALREADY MADE, kept rather than flattened.
+           `partial` is not `refused`: the text is in that agent's input box
+           and the next Enter anybody presses submits it. */
+        outcomes.push({
+          paneId: rec.target.paneId,
+          sessionId: rec.target.sessionId,
+          minutes,
+          outcome: DELIVERY_OUTCOME[result.delivery],
           code: result.reason.code,
           why: result.reason.why,
         });
@@ -1914,8 +2023,13 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
     }
     // Counts and minutes, never a word of what was said.
     const unreached = outcomes.filter((x) => x.outcome === "not-reached").length;
+    /* THE AMBIGUOUS ROWS GET THEIR OWN NUMBER IN THE JOURNAL. `told=30/36`
+       over six sessions holding half a message is the line somebody reads a
+       week later, and it must not be the only line. */
+    const unsure = outcomes.filter((x) => x.outcome === "partial" || x.outcome === "outcome-unknown").length;
     deps.log(
-      `action box: BROADCAST action=${action.id} speaker=${r.speaker} told=${sent}/${total} of ${r.recipients.length} rows` +
+      `action box: BROADCAST action=${action.id} speaker=${r.speaker} keys-submitted=${submitted}/${total} of ${r.recipients.length} rows` +
+        (unsure > 0 ? ` (${unsure} may or may not have landed)` : "") +
         (unreached > 0 ? ` (ran out of time before ${unreached})` : ""),
     );
     respond(res, 200, { ok: true, op: "broadcast", action: action.id, dryRun: false, result: { total, recipients: outcomes } });
