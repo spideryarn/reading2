@@ -1,0 +1,258 @@
+{
+ "schema": 1,
+ "rows": [
+  {
+   "id": "$2082",
+   "name": "fb2c-feedback-button-on-homepage",
+   "title": null,
+   "repo": "spideryarn/reading2",
+   "worktree": null,
+   "meta": {
+    "version": 1,
+    "kind": "claude",
+    "repo": "spideryarn/reading2",
+    "dir": "/home/greg/code/spideryarn2"
+   },
+   "startedAt": "2026-09-08T00:00:35.000Z",
+   "paneId": "%2085",
+   "panePid": 2149043,
+   "claudeSessionId": "913bc3ec-f5b3-4f25-903c-b7270474386d",
+   "question": null,
+   "status": {
+    "kind": "waiting",
+    "secondsLeft": 807
+   }
+  },
+  {
+   "id": "$2079",
+   "name": "fb2d-command-bar-commands-and-place",
+   "title": null,
+   "repo": "spideryarn/reading2",
+   "worktree": null,
+   "meta": {
+    "version": 1,
+    "kind": "claude",
+    "repo": "spideryarn/reading2",
+    "dir": "/home/greg/code/spideryarn2"
+   },
+   "startedAt": "2026-09-07T23:59:46.000Z",
+   "paneId": "%2082",
+   "panePid": 2140738,
+   "claudeSessionId": "497d6703-e8ef-44e7-8190-87fbb4527598",
+   "question": null,
+   "status": {
+    "kind": "waiting",
+    "secondsLeft": 758
+   }
+  },
+  {
+   "id": "$2077",
+   "name": "fb2f-dock-always-visible-landscape",
+   "title": null,
+   "repo": "spideryarn/reading2",
+   "worktree": null,
+   "meta": {
+    "version": 1,
+    "kind": "claude",
+    "repo": "spideryarn/reading2",
+    "dir": "/home/greg/code/spideryarn2"
+   },
+   "startedAt": "2026-09-07T23:58:56.000Z",
+   "paneId": "%2080",
+   "panePid": 2130833,
+   "claudeSessionId": "968beaba-352a-489f-a202-5e1c87403920",
+   "question": {
+    "kind": "question",
+    "prompt": "Bash command Tip: auto mode handles these prompts for you — choose \"switch to auto mode\" below git log -S'.mode-band' --oneline --date=short --pretty='%h %ad %s' -- src/web/styles/narrow-window.css | head -20 History of mode-band in narrow-window.css This command requires approval Do you want to proceed?",
+    "material": {
+     "kind": "read",
+     "text": " Bash command\n Tip: auto mode handles these prompts for you — choose \"switch to auto mode\" below\n\n     git log -S'.mode-band' --oneline --date=short --pretty='%h %ad %s' -- src/web/styles/narrow-window.css | head -20\n   History of mode-band in narrow-window.css\n\n This command requires approval\n\n Do you want to proceed?",
+     "fingerprint": "9641007da86652f5726eff78bc4b406538074aa51e12206bccfda34050401bc7"
+    },
+    "options": [
+     {
+      "label": "Yes",
+      "key": {
+       "via": "digit",
+       "digit": "1"
+      },
+      "consequence": "once"
+     },
+     {
+      "label": "Yes, and don’t ask again for: git log *",
+      "key": {
+       "via": "digit",
+       "digit": "2"
+      },
+      "consequence": "persistent"
+     },
+     {
+      "label": "Yes, and switch to auto mode · auto mode handles these prompts for you",
+      "key": {
+       "via": "digit",
+       "digit": "3"
+      },
+      "consequence": "persistent"
+     },
+     {
+      "label": "No",
+      "key": {
+       "via": "digit",
+       "digit": "4"
+      },
+      "consequence": "decline"
+     }
+    ]
+   },
+   "status": {
+    "kind": "needs-you"
+   }
+  },
+  {
+   "id": "$2080",
+   "name": "fb2g-gutter-icons-on-touch",
+   "title": null,
+   "repo": "spideryarn/reading2",
+   "worktree": null,
+   "meta": {
+    "version": 1,
+    "kind": "claude",
+    "repo": "spideryarn/reading2",
+    "dir": "/home/greg/code/spideryarn2"
+   },
+   "startedAt": "2026-09-08T00:00:12.000Z",
+   "paneId": "%2083",
+   "panePid": 2145109,
+   "claudeSessionId": "30d04781-3d44-411f-b9ae-a18ec4fb4861",
+   "question": null,
+   "status": {
+    "kind": "waiting",
+    "secondsLeft": 783
+   }
+  },
+  {
+   "id": "$1991",
+   "name": "html-upload-file-type-validation",
+   "title": "HTML upload file type validation",
+   "repo": "spideryarn/reading2",
+   "worktree": null,
+   "meta": {
+    "version": 1,
+    "kind": "claude",
+    "repo": "spideryarn/reading2",
+    "dir": "/home/greg/code/spideryarn2"
+   },
+   "startedAt": "2026-09-07T19:56:19.000Z",
+   "paneId": "%1994",
+   "panePid": 396205,
+   "claudeSessionId": "a851bc19-53da-4f23-8b70-acc5d942fd39",
+   "question": null,
+   "status": {
+    "kind": "idle"
+   }
+  },
+  {
+   "id": "$2088",
+   "name": "wk-install-0116-2281848",
+   "title": null,
+   "repo": "spideryarn/reading2",
+   "worktree": "glossary-order-touch",
+   "meta": {
+    "version": 1,
+    "kind": "shell",
+    "repo": "spideryarn/reading2",
+    "dir": "/home/greg/code/spideryarn2/.claude/worktrees/glossary-order-touch"
+   },
+   "startedAt": "2026-09-08T00:16:12.000Z",
+   "paneId": "%2091",
+   "panePid": 2282033,
+   "claudeSessionId": null,
+   "question": null,
+   "status": {
+    "kind": "shell",
+    "busy": true
+   }
+  }
+ ],
+ "tmuxServerPid": 132280,
+ "collectedAt": "2026-09-08T05:47:13.081Z",
+ "tookMs": 3885,
+ "error": null,
+ "health": {
+  "load": {
+   "kind": "value",
+   "load1": 3.25,
+   "load5": 4.03,
+   "load15": 4.49,
+   "cores": 16,
+   "ratio1": 0.203125
+  },
+  "memory": {
+   "kind": "value",
+   "totalBytes": 32859295744,
+   "availableBytes": 18879561728,
+   "availableFraction": 0.5745577103991143
+  },
+  "swap": {
+   "kind": "value",
+   "totalBytes": 34359730176,
+   "usedBytes": 15859171328,
+   "usedFraction": 0.4615627435595378,
+   "areas": 2
+  },
+  "disk": {
+   "kind": "value",
+   "totalKiB": 314660132,
+   "usedKiB": 148595168,
+   "availableKiB": 153248308,
+   "usePercent": 50
+  },
+  "swapActivity": {
+   "kind": "value",
+   "siKBs": 52,
+   "soKBs": 0,
+   "waPercent": 0,
+   "activelySwapping": true
+  },
+  "attribution": {
+   "kind": "value",
+   "groups": [
+    {
+     "kind": "other",
+     "procs": 558,
+     "rssKiB": 10536528
+    },
+    {
+     "kind": "chrome",
+     "procs": 186,
+     "rssKiB": 4848212
+    },
+    {
+     "kind": "vite",
+     "procs": 9,
+     "rssKiB": 1790124
+    },
+    {
+     "kind": "vitest",
+     "procs": 5,
+     "rssKiB": 1259084
+    },
+    {
+     "kind": "node",
+     "procs": 165,
+     "rssKiB": 432344
+    }
+   ]
+  },
+  "verdict": {
+   "level": "strained",
+   "reasons": [
+    "actively swapping (si 52, so 0 KB/s)"
+   ]
+  },
+  "collectedAt": "2026-09-08T05:47:14.225Z",
+  "tookMs": 1143
+ },
+ "refreshMs": 60000,
+ "answeringEnabled": false
+}

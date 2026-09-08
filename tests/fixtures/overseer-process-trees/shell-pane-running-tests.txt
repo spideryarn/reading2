@@ -1,0 +1,5 @@
+1234211  132280    1282 sh -c ( 'npx' 'vitest' 'run' '--maxWorkers=2' ) > '/home/greg/code/spideryarn2/.claude/worktrees/changelog-toc-and-opensource/logs/tmux-jobs/clog-suite4-0624-1234197.log' 2>&1; printf 'EXIT=%s\n' "$?" >> '/home/greg/code/spideryarn2/.claude/worktrees/changelog-toc-and-opensource/logs/tmux-jobs/clog-suite4-0624-1234197.log'
+1234213 1234211    1282 npm exec vitest run --maxWorkers=2
+1234339 1234213    1281 sh -c 'vitest' run --maxWorkers=2
+1234340 1234339    1281 node /home/greg/code/spideryarn2/.claude/worktrees/changelog-toc-and-opensource/node_modules/.bin/vitest run --maxWorkers=2
+1370862 1234340       3 /usr/bin/node --experimental-import-meta-resolve --require /home/greg/code/spideryarn2/.claude/worktrees/changelog-toc-and-opensource/node_modules/vitest/suppress-warnings.cjs --conditions node --conditions development /home/greg/code/spideryarn2/.claude/worktrees/changelog-toc-and-opensource/node_modules/vitest/dist/workers/forks.js
