@@ -794,6 +794,31 @@ the symlink is present in `multi-user.target.wants` — which is precisely the e
 about, since the whole finding was that a *user* unit would show none of those. The reboot itself
 stays outstanding and is named as outstanding.
 
+**`Restart=always`, not `Restart=on-failure`** — the fleet dashboard agent's argument, 2026-09-08,
+and it is the ssh-ceiling argument turned round:
+
+> `on-failure` means a clean `SIGTERM` is treated as intent, and on this box the things that send a
+> clean SIGTERM are not the service's owner: a stray `pkill`, an OOM reaper that got there politely,
+> a tidy-up script, an agent killing what it thinks is its own process. Every one of those is a
+> *mistake* being read as a *decision*.
+>
+> The asymmetry is what settles it. A wrong `always` costs a process you have to stop twice —
+> annoying, thirty seconds, and the second stop is `systemctl stop`, which `always` respects. A wrong
+> `on-failure` costs a service that is silently gone at exactly the moment nobody is watching, and
+> the failure mode of *this* service is that its absence is invisible: **there is no page to tell you
+> the page is down.** Take the loud failure over the quiet one.
+
+With it, a `RestartSec` of a few seconds and a `StartLimitBurst`, so a genuinely broken build
+crash-loops visibly in the journal instead of hammering a box that has already reached load 391 once.
+
+**And the unit must not gate on a green `dev`**, which is the same agent correcting me:
+
+> A dashboard that boots from a red `dev` and is wrong about two rows is still the thing you use to
+> find out why `dev` is red; a dashboard that refuses to boot until somebody fixes `dev` is
+> unavailable exactly when it is needed. Correct-and-unavailable beats plausible-and-up **for the
+> data**, not for the process — being down is one command from recoverable only if you can see that
+> it is down.
+
 **Reboot-resume of the sessions themselves is O4, a later stage.** This one only makes it possible.
 
 ### S6 — work, not panes: the Codex subprocess arm
