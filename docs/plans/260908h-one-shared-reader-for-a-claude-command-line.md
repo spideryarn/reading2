@@ -130,7 +130,58 @@ per-session `proc` token is printed. So moving the decision home would mean **wi
 carry every process's flattened argv — prompts and possibly secrets included — over ssh**, to fix a
 labelling bug. Teaching the awk it is. (Done: Stage C.)
 
-## The design: the two rules turn out to be one rule
+## STOP — the boundary rule is wrong about Claude, and it was never checked
+
+**Measured 2026-09-08, against `claude` 2.1.263 on this box, after Sol's Stage A review (ARGV-01):**
+
+```
+claude ordinary-prompt --session-id not-a-uuid --print
+  -> Error: Invalid session ID. Must be a valid UUID.          a flag read AFTER a positional
+
+claude some-prompt-here --version
+  -> 2.1.263 (Claude Code), exit 0                             the same
+
+claude say-only-OK --print --model definitely-not-a-real-model
+  -> unrecognized_model, query_source:"sdk", exit 1            --print AND --model, after a positional
+```
+
+**Claude permutes.** Options are parsed anywhere on the command line **except after a bare `--`**.
+So "the option region ends at the first bare word" is not a rule about Claude at all.
+
+The consequence is worse than a wrong rule, because the wrong rule was itself a bug fix. The comment
+at `harness.ts:374` says:
+
+> Stopping at the first bare word is what keeps the opposite mistake away: a prompt is free text, and
+> `claude --session-id abc Please add a --print flag to the CLI` must not be read as headless because
+> its PROMPT says `--print`.
+
+**That process is headless.** Claude reads the `--print`. So `recogniseClaude` reports `claude-code`,
+the capability table grants prose steering, and that is the *exact false grant* the comment says it
+prevents — reintroduced by the fix, for a different input. **A claim about somebody else's tool,
+written down as a property, never run.** Same class as
+[the postmortem from earlier today](../postmortems/260908f-a-correct-comment-contradicted-by-the-line-beneath-it.md):
+an artefact authored to be trusted later, in a place nobody re-derives.
+
+### What survives, and what this vindicates
+
+**`steer.ts` was simply right and `harness.ts` was simply wrong.** The option region ends at `--` and
+nowhere else. My "two rules are one rule with one half missing each" was a tidy symmetry over an
+unchecked premise — see the superseded section below, kept because being wrong in an interesting way
+is worth reading.
+
+**And this is the strongest possible argument for the fidelity tag**, which stops being a nicety and
+becomes the thing that resolves the case:
+
+- On **faithful argv**, `["claude","--session-id",A,"Please add a --print flag"]` has the prompt as
+  **one element**, so `--print` is *inside* an argument and is not a flag. Decidable. Not headless.
+- On **`ps`-flattened**, that same process is byte-identical to
+  `["claude",…,"Please","add","a","--print","flag"]`, which **is** headless. Not decidable, so it must
+  fail closed as `unreadable`.
+
+The same command line, two fidelities, two different **correct** answers — which is precisely what a
+tagged input is for, and precisely what a single `string` API could never have expressed.
+
+## The design: the two rules turn out to be one rule *(SUPERSEDED — see above)*
 
 The two readers end the option region differently — one at the first bare word, one at `--` — and
 that looked like a conflict to arbitrate. It is not. **On faithful argv both rules are correct, and
