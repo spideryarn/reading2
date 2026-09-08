@@ -44,7 +44,14 @@ export type HealthSampleView =
       nextDueMs: number;
       report: Record<string, unknown>;
     }
-  | { kind: "collector-failed"; atMs: number; nextDueMs: number; why: string };
+  | { kind: "collector-failed"; atMs: number; nextDueMs: number; why: string }
+  /**
+   * A reading was taken and could not be kept — its serialised form was over the
+   * store's per-record limit. Drawn like a collector failure, because from the
+   * chart's point of view it is the same fact: **we looked, and there is no
+   * number.** It exists as its own arm so the reason on screen is the true one.
+   */
+  | { kind: "sample-omitted"; atMs: number; nextDueMs: number; why: string };
 
 /** What the server says about its own ability to write the history down. */
 export type RetentionView = {
@@ -127,10 +134,10 @@ export function parseSample(raw: unknown): HealthSampleView | null {
   const nextDueMs = num(raw["nextDueMs"]);
   if (nextDueMs === null || nextDueMs <= 0) return null;
 
-  if (raw["kind"] === "collector-failed") {
+  if (raw["kind"] === "collector-failed" || raw["kind"] === "sample-omitted") {
     const why = raw["why"];
     return {
-      kind: "collector-failed",
+      kind: raw["kind"],
       atMs,
       nextDueMs,
       why: typeof why === "string" && why !== "" ? why : "the collector failed and gave no reason",
@@ -149,8 +156,17 @@ export function parseSample(raw: unknown): HealthSampleView | null {
  * existed makes no claim about whether it is still writing, and inventing a
  * healthy one here would put a reassurance on the page that nothing produced.
  */
-function parseRetention(raw: unknown): RetentionView | null {
-  if (!isRecord(raw)) return null;
+function parseRetention(raw: unknown): RetentionView | null | "malformed" {
+  /* `null` is a real answer — this server does not report retention — and is
+     the only absence allowed. Anything else that is not an object is a payload
+     shape this page does not understand, and constructing an apparently healthy
+     status out of it would put a reassurance on the page that nothing produced.
+     GPT Sol's second round. */
+  if (raw === null) return null;
+  if (!isRecord(raw)) return "malformed";
+  for (const field of ["lastAttemptAt", "lastSuccessAt", "failure", "poisoned", "lockedOutBy"]) {
+    if (!(field in raw)) return "malformed";
+  }
   const failure = raw["failure"];
   const lockedOutBy = raw["lockedOutBy"];
   return {
@@ -168,9 +184,41 @@ function parseRetention(raw: unknown): RetentionView | null {
  * left holding a null would have to write that sentence itself and there would
  * then be two of them.
  */
-export function parseHistory(raw: unknown): HistoryView {
+/**
+ * Everything about a payload that can make it UNREADABLE, in one place.
+ *
+ * Split out of `parseHistory` because the refusals and the building are two
+ * jobs, and interleaved they measured 30 cognitive complexity — over the limit,
+ * and over the point at which a reader can hold "which of these returns early"
+ * in their head. **Every branch here ends the answer**; nothing below it does.
+ *
+ * Returns the refusal, or `null` when the envelope is sound.
+ */
+function refuseEnvelope(raw: unknown): HistoryView | null {
   if (!isRecord(raw)) {
     return { kind: "no-answer", why: "the dashboard server answered something that is not this API" };
+  }
+  /**
+   * **THE SCHEMA IS CHECKED FIRST, BEFORE ANY ARM.** A payload stamped
+   * `schema: 2` was accepted and drawn as current history, and an `unreadable`
+   * envelope of an unknown version got past even after the first fix, because
+   * that arm was handled above the check. Both GPT Sol's. The whole point of a
+   * version on the wire is that a server which changed what a field MEANS is not
+   * rendered by a build that predates the change, and an arm read before the
+   * version is an arm read without it.
+   *
+   * `state.ts`'s rule: bump when a consumer that ignored the change would be
+   * WRONG rather than merely poorer. So an unknown schema refuses and says which
+   * one it saw.
+   */
+  const schema = raw["schema"];
+  if (schema !== 1) {
+    return {
+      kind: "no-answer",
+      why:
+        `this page can read version 1 of the history API and the server sent ${JSON.stringify(schema)}. ` +
+        "Refusing to draw it rather than guessing what changed — reload, or rebuild the client.",
+    };
   }
   if (raw["kind"] === "unreadable") {
     const why = raw["why"];
@@ -183,28 +231,6 @@ export function parseHistory(raw: unknown): HistoryView {
     return { kind: "no-answer", why: "the dashboard server answered something that is not this API" };
   }
 
-  /**
-   * **THE SCHEMA IS CHECKED, AND IT WAS NOT.** A payload stamped `schema: 2` was
-   * accepted and drawn as current history — GPT Sol verified it. That is the
-   * whole point of putting a version on the wire: a server that has changed what
-   * a field MEANS, rather than merely added one, must not be rendered by a build
-   * that predates the change. The failure would be silent and plausible, which
-   * is the only kind that matters here.
-   *
-   * `state.ts`'s rule is the one being followed: bump when a consumer that
-   * ignored the change would be WRONG rather than merely poorer. So an unknown
-   * schema refuses, and says which one it saw.
-   */
-  const schema = raw["schema"];
-  if (schema !== 1) {
-    return {
-      kind: "no-answer",
-      why:
-        `this page can read version 1 of the history API and the server sent ${JSON.stringify(schema)}. ` +
-        "Refusing to draw it rather than guessing what changed — reload, or rebuild the client.",
-    };
-  }
-
   const fromMs = num(raw["fromMs"]);
   const toMs = num(raw["toMs"]);
   if (fromMs === null || toMs === null || toMs <= fromMs) {
@@ -214,7 +240,65 @@ export function parseHistory(raw: unknown): HistoryView {
     return { kind: "no-answer", why: "the history came back without a usable window to plot it against" };
   }
 
-  const rawSamples = raw["samples"];
+  /**
+   * **EVERY FIELD THE HONESTY DEPENDS ON IS REQUIRED, NOT DEFAULTED.**
+   *
+   * Defaulting looks harmless one field at a time and is not, because each of
+   * these is the thing that keeps a silence from reading as calm. GPT Sol
+   * enumerated the concrete failures, and each is a renamed field away:
+   *
+   *  - `predecessor` absent → a window with no samples produces no gaps, and the
+   *    panel prints "empty after a restart" about a dashboard down for a day;
+   *  - `holes` absent → the line reconnects across corruption;
+   *  - `retention` absent, or `lockedOutBy` renamed inside it → a writer that
+   *    has stopped looks healthy;
+   *  - `earliestAtMs`/`rotated` absent → "collecting since" claims a start time
+   *    that a rotation makes false.
+   *
+   * So a payload missing any of them is refused, in one place, naming the field.
+   * A field the server genuinely has no value for sends `null` — which is a
+   * claim — and that is what `nullable` allows.
+   */
+  const required = ["samples", "predecessor", "holes", "earliestAt", "rotated", "retention", "unreadableLines", "refreshMs"];
+  const missing = required.filter((field) => !(field in raw));
+  if (missing.length > 0) {
+    return {
+      kind: "no-answer",
+      why:
+        `the history came back without ${missing.join(", ")} — a payload this page cannot read, ` +
+        "rather than a day with nothing in it. The server is probably a different build from this page.",
+    };
+  }
+  if (parseRetention(raw["retention"]) === "malformed") {
+    return {
+      kind: "no-answer",
+      why: "the history's retention block is not a shape this page understands, and a writer that has stopped must not look healthy",
+    };
+  }
+
+  return null;
+}
+
+/**
+ * The reply, whatever it is. **Never throws and never returns null** — an answer
+ * it cannot classify is `no-answer` with a sentence saying so, because a caller
+ * left holding a null would have to write that sentence itself and there would
+ * then be two of them.
+ *
+ * The refusals live in `refuseEnvelope` above; what is left here is the
+ * building, which is allowed to assume the shape.
+ */
+export function parseHistory(raw: unknown): HistoryView {
+  const refusal = refuseEnvelope(raw);
+  if (refusal !== null) return refusal;
+  /* `refuseEnvelope` has established every one of these; the cast is the
+     narrowing TypeScript cannot carry across a function boundary. */
+  const payload = raw as Record<string, unknown>;
+  const fromMs = num(payload["fromMs"]) ?? 0;
+  const toMs = num(payload["toMs"]) ?? 0;
+  const retention = parseRetention(payload["retention"]) as RetentionView | null;
+
+  const rawSamples = payload["samples"];
   /**
    * **A MISSING `samples` KEY IS NOT AN EMPTY DAY.** Renaming or dropping the
    * field produced a perfectly valid "the box recorded nothing for 24 hours" —
@@ -260,8 +344,8 @@ export function parseHistory(raw: unknown): HistoryView {
   }
 
   const holes: { afterAtMs: number | null; beforeAtMs: number | null }[] = [];
-  if (Array.isArray(raw["holes"])) {
-    for (const item of raw["holes"]) {
+  if (Array.isArray(payload["holes"])) {
+    for (const item of payload["holes"]) {
       if (!isRecord(item)) continue;
       holes.push({ afterAtMs: msFrom(item["afterAt"]), beforeAtMs: msFrom(item["beforeAt"]) });
     }
@@ -273,19 +357,19 @@ export function parseHistory(raw: unknown): HistoryView {
 
   return {
     kind: "history",
-    windowHours: num(raw["windowHours"]) ?? (toMs - fromMs) / 3_600_000,
+    windowHours: num(payload["windowHours"]) ?? (toMs - fromMs) / 3_600_000,
     fromMs,
     toMs,
     samples,
-    predecessor: parseSample(raw["predecessor"]),
+    predecessor: parseSample(payload["predecessor"]),
     holes,
-    earliestAtMs: msFrom(raw["earliestAt"]),
-    rotated: raw["rotated"] === true,
-    retention: parseRetention(raw["retention"]),
-    unreadableLines: num(raw["unreadableLines"]) ?? 0,
+    earliestAtMs: msFrom(payload["earliestAt"]),
+    rotated: payload["rotated"] === true,
+    retention,
+    unreadableLines: num(payload["unreadableLines"]) ?? 0,
     /* A server that did not say falls back to the poll's own default rather
        than to zero — a zero would make every interval look overdue. */
-    refreshMs: num(raw["refreshMs"]) ?? 60_000,
+    refreshMs: num(payload["refreshMs"]) ?? 60_000,
     unreadableSamples,
   };
 }

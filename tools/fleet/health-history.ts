@@ -179,7 +179,17 @@ export type HealthSample =
       kind: "reading";
       report: StoredReport;
     }
-  | { schema: 1; at: string; nextDueMs: number; kind: "collector-failed"; why: string };
+  | { schema: 1; at: string; nextDueMs: number; kind: "collector-failed"; why: string }
+  /**
+   * **A reading was taken and could not be kept.** Written in place of a sample
+   * whose serialised form exceeded `MAX_LINE_BYTES`.
+   *
+   * Its own arm rather than an error code, because it is a real record of a real
+   * event, and because the alternative — an in-memory flag the next success
+   * clears — let a critical turn be erased with nothing anywhere to say a sample
+   * had been dropped. It breaks the line where the reading would have been.
+   */
+  | { schema: 1; at: string; nextDueMs: number; kind: "sample-omitted"; why: string };
 
 /**
  * The longest `why` that goes on disk.
@@ -262,10 +272,10 @@ export function parseSampleLine(line: string): HealthSample | null {
        boundary, and the honest type for what came off it is the loose one. */
     return { schema: 1, at, nextDueMs, kind: "reading", report };
   }
-  if (parsed["kind"] === "collector-failed") {
+  if (parsed["kind"] === "collector-failed" || parsed["kind"] === "sample-omitted") {
     const why = parsed["why"];
     if (typeof why !== "string") return null;
-    return { schema: 1, at, nextDueMs, kind: "collector-failed", why };
+    return { schema: 1, at, nextDueMs, kind: parsed["kind"], why };
   }
   return null;
 }
@@ -474,12 +484,37 @@ export function openHealthHistory(dir: string = DEFAULT_HISTORY_DIR, options: Op
   const live = join(dir, LIVE_FILE);
   const { lock, lockedOutBy } = lockRefusalFor(dir);
 
+  const lockPath = join(dir, LOCK_FILE);
   let repaired: JsonlRepair = { torn: false };
   if (lock !== null) {
+    /**
+     * **`stillOurs` AROUND THE REPAIR, AND THE LOCK GIVEN BACK IF IT FAILS.**
+     *
+     * Two separate faults, both GPT Sol's second round. The repair is a write,
+     * so it needs the same ownership check every append got — the stale-lock
+     * race can leave two claimants, and the loser must not cut the winner's
+     * file back. And if the repair throws, returning `refused` while still
+     * holding the lock **leaves a lock file naming a process that then does
+     * nothing**, so the next opener is locked out by a writer that does not
+     * exist. Reproduced with `health.jsonl` as a directory.
+     *
+     * `openStore` in tools/overseer/store.ts has the same shape for the same
+     * reason: release on every post-claim failure.
+     */
+    const giveUp = (why: string): OpenedHistory => {
+      releaseLock(lock, lockPath);
+      return { kind: "refused", why };
+    };
+    if (!stillOurs(lock, lockPath)) {
+      return giveUp(`another writer took ${lockPath} between claiming it and repairing ${live}`);
+    }
     try {
       repaired = truncateToLastLine(live);
     } catch (err) {
-      return { kind: "refused", why: `could not repair ${live}: ${err instanceof Error ? err.message : String(err)}` };
+      return giveUp(`could not repair ${live}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    if (!stillOurs(lock, lockPath)) {
+      return giveUp(`another writer took ${lockPath} while ${live} was being repaired`);
     }
   }
 
@@ -542,6 +577,72 @@ function makeStore(
   let failure: string | null = null;
   let poisoned = false;
 
+  /**
+   * One line onto the end of the live file. The only place bytes are written.
+   *
+   * Extracted so the oversized-sample path can put its own small
+   * `sample-omitted` record down through exactly the same discipline — the
+   * `O_APPEND` fd, `writeAll`'s short-write loop, and the poison-on-partial
+   * rule. A second inline copy of those three would be a second place to get
+   * them wrong, and the whole reason they exist is that they were got wrong
+   * elsewhere first.
+   */
+  const writeLine = (line: string): void => {
+    const fd = openSync(live, "a", 0o600);
+    try {
+      write(fd, line);
+    } catch (err) {
+      poisoned = true;
+      throw err;
+    } finally {
+      closeSync(fd);
+    }
+  };
+
+  /**
+   * **THE REASONS THIS WRITER MAY NOT WRITE**, in one place and ahead of the
+   * writing, so `append` is about appending.
+   *
+   * None of them is silent: every one is visible through `status()` and reaches
+   * the page, because a writer that has quietly stopped grows a hole in the
+   * chart that reads as the box having gone down — an outage manufactured by the
+   * monitoring rather than observed by it.
+   */
+  const mayNotWrite = (): boolean => {
+    /* **DO NOT OVERWRITE `failure` HERE.** It holds the ORIGINAL cause — the
+       `EACCES`, the `ENOSPC` — and replacing it with this refusal's own
+       boilerplate would leave the page saying "an earlier write may have been
+       partial" over a problem that was really a permission bit. The refusal is
+       carried by `poisoned`; the reason is carried by `failure`, and they are
+       two different facts. Found by making the file read-only on a running
+       server and reading the payload. */
+    if (poisoned) return true;
+
+    /**
+     * **STILL OURS?** — asked of the filesystem, before every write.
+     *
+     * `takeLock` at startup is not a claim that survives the process. The
+     * stale-lock race `lock.ts` names — two starts that both prove the same
+     * corpse dead, both unlink, both create — leaves one of them holding a file
+     * that is no longer at the path, and without this check that loser appends
+     * beside the winner for ever, silently, producing a history with two sample
+     * densities and no way to tell. `stillOurs` compares dev+ino AND the record
+     * inside, so it catches both a competitor that replaced the file and one
+     * that overwrote it in place. One `stat` per ~73 seconds.
+     */
+    if (held !== null && !stillOurs(held, join(dir, LOCK_FILE))) {
+      held = null;
+      lockedOutBy =
+        `the writer lock at ${join(dir, LOCK_FILE)} is no longer this process's — another writer took it. ` +
+        "This dashboard is reading the history but has stopped adding to it.";
+    }
+    if (lockedOutBy !== null) {
+      failure = lockedOutBy;
+      return true;
+    }
+    return false;
+  };
+
   return {
     dir,
 
@@ -574,44 +675,7 @@ function makeStore(
 
     append(turn, stamp): void {
       lastAttemptAt = stamp.at;
-      /* THE TWO REFUSALS. Neither is silent: both are visible through
-         `status()` and both reach the page, because a writer that has quietly
-         stopped grows a hole in the chart that reads as the box having gone
-         down — an outage manufactured by the monitoring. */
-      /* **DO NOT OVERWRITE `failure` HERE.** It holds the ORIGINAL cause — the
-         `EACCES`, the `ENOSPC` — and replacing it with this refusal's own
-         boilerplate would leave the page saying "an earlier write may have been
-         partial" over a problem that was really a permission bit. The refusal
-         is already carried by `poisoned`; the reason is carried by `failure`,
-         and they are two different facts. Found by making the file read-only on
-         a running server and reading the payload. */
-      if (poisoned) return;
-
-      /**
-       * **STILL OURS?** — asked of the filesystem, before every write.
-       *
-       * `takeLock` at startup is not a claim that survives the process. The
-       * stale-lock race `lock.ts` names — two starts that both prove the same
-       * corpse dead, both unlink, both create — leaves one of them holding a
-       * file that is no longer at the path, and without this check that loser
-       * appends beside the winner for ever, silently, producing a history with
-       * two sample densities and no way to tell. `stillOurs` compares dev+ino
-       * AND the record inside, so it catches both a competitor that replaced
-       * the file and one that overwrote it in place. It costs one `stat` per
-       * ~73 seconds. GPT Sol's finding 2.
-       */
-      if (held !== null && !stillOurs(held, join(dir, LOCK_FILE))) {
-        held = null;
-        lockedOutBy =
-          `the writer lock at ${join(dir, LOCK_FILE)} is no longer this process's — another writer took it. ` +
-          "This dashboard is reading the history but has stopped adding to it.";
-        failure = lockedOutBy;
-        return;
-      }
-      if (lockedOutBy !== null) {
-        failure = lockedOutBy;
-        return;
-      }
+      if (mayNotWrite()) return;
 
       const sample: HealthSample =
         turn.kind === "reading"
@@ -625,12 +689,37 @@ function makeStore(
       const lineBytes = Buffer.byteLength(line, "utf8");
 
       if (lineBytes > MAX_LINE_BYTES) {
-        /* NOT poisoned — nothing was written and the file is intact — and not
-           silent either: an oversized sample is a hole in the chart, and a hole
-           with no explanation is what this whole panel refuses. */
-        failure =
+        /**
+         * **AN OMISSION HAS TO GO ON DISK, or it is not an omission — it is a
+         * gap that closes behind itself.**
+         *
+         * The first version set an in-memory `failure` and returned. GPT Sol
+         * reproduced what that costs: healthy sample, oversized CRITICAL sample,
+         * healthy sample. The next success clears `failure`, the two healthy
+         * lines are 146 seconds apart — inside the coverage allowance — and the
+         * chart joins them. **The one turn the box was in trouble is erased, and
+         * nothing anywhere says a sample was dropped.**
+         *
+         * So a `sample-omitted` line is written in its place: small, bounded,
+         * and carrying the size it refused. It is a real record of a real event
+         * (we looked, and could not keep what we saw), which makes it the fourth
+         * arm rather than an error code — and it breaks the line where the
+         * reading would have been.
+         */
+        const why =
           `a sample serialised to ${lineBytes} bytes, over the ${MAX_LINE_BYTES}-byte per-record limit, ` +
-          "so it was not written. The rotation cap can only bound the file if a record has a size.";
+          "so the reading was taken but not kept";
+        failure = why;
+        try {
+          writeLine(
+            sampleLine({ schema: 1, at: stamp.at, nextDueMs: stamp.nextDueMs, kind: "sample-omitted", why }),
+          );
+        } catch (err) {
+          /* If even the small line will not go down, the ordinary failure path
+             owns it — and `poisoned` is not set, because nothing partial can
+             have been written by a failure to open. */
+          failure = err instanceof Error ? err.message : String(err);
+        }
         return;
       }
 
@@ -675,15 +764,7 @@ function makeStore(
          * the permission bit was put back, which is a self-inflicted outage in
          * the record.
          */
-        const fd = openSync(live, "a", 0o600);
-        try {
-          write(fd, line);
-        } catch (err) {
-          poisoned = true;
-          throw err;
-        } finally {
-          closeSync(fd);
-        }
+        writeLine(line);
         failure = null;
         lastSuccessAt = stamp.at;
       } catch (err) {
@@ -693,6 +774,40 @@ function makeStore(
     },
 
     read(options): HistoryRead {
+      /**
+       * **A ROTATION UNDER A READER'S FEET LOSES A WHOLE FILE, ONCE.**
+       *
+       * The two files are read by pathname, so a read-only dashboard can take
+       * the old `prev`, the owner can then rename `live → prev` and start a new
+       * `live`, and the reader ends up with the old `prev` and the new, nearly
+       * empty `live` — the entire just-rotated file missing, drawn as a large
+       * false break for one poll. Rare (a rotation is roughly weekly) and
+       * self-healing on the next poll, but "a large false break" is the one
+       * thing this panel must not produce, so it is worth ten lines. GPT Sol's
+       * second round.
+       *
+       * Detect rather than lock: if `prev`'s identity changed while we were
+       * reading, the snapshot was torn, so take it again. Once — a second
+       * rotation inside two consecutive reads is not a thing that happens, and
+       * an unbounded retry on a filesystem that keeps changing is worse than a
+       * stale answer.
+       */
+      const identity = (path: string): string => {
+        try {
+          const stat = statSync(path);
+          return `${stat.dev}:${stat.ino}:${stat.size}`;
+        } catch {
+          return "absent";
+        }
+      };
+      const before = identity(prev);
+      const first = readOnce(options);
+      if (identity(prev) === before) return first;
+      return readOnce(options);
+    },
+  };
+
+  function readOnce(options: ReadOptions): HistoryRead {
       const readFile = options.readFile ?? ((path: string) => readFileSync(path, "utf8"));
       /* Previous file first: it holds the older half, and `samples` must come
          out oldest first. */
@@ -713,8 +828,7 @@ function makeStore(
         scanLines(scan, text);
       }
       return finishScan(scan, existsSync(prev), files);
-    },
-  };
+  }
 }
 
 /* ------------------------------------------------------------------ *
@@ -820,6 +934,10 @@ function finishScan(scan: Scan, rotated: boolean, files: number): HistoryRead {
  *
  * It is never silent: `unreadableLines` rides on every read and reaches the page.
  */
-export const UNREADABLE_LINE_POLICY =
-  "counted and reported, not fatal — a time series has no fold, and refusing a window over one " +
-  "torn byte blanks a chart, which reads as the box being down";
+/* There used to be an exported `UNREADABLE_LINE_POLICY` const here, holding
+   that paragraph again as a string. Nothing read it — not the product, not a
+   test — and an exported constant whose only content is prose is a comment
+   wearing code's clothes: it looks like something the program depends on, so a
+   reader spends time working out who consumes it, and the answer is nobody.
+   Found by running 260908b's own Class A check ("who calls this?") over this
+   feature before pushing it. */

@@ -150,15 +150,50 @@ describe("the window", () => {
 });
 
 describe("the writer's condition off the wire", () => {
-  it("is null when the server did not say — never a healthy default", () => {
+  it("an explicit null is a claim — 'this server does not report it' — and is kept", () => {
+    /* A server that HAS the field and has nothing to say sends null. That is a
+       real answer, and the panel draws no banner for it: no claim either way,
+       rather than a reassurance nothing produced. */
+    const view = parseHistory(payload({ retention: null }));
+    if (view.kind !== "history") throw new Error("expected a history");
+    expect(view.retention).toBeNull();
+  });
+
+  it("a MISSING retention block is a payload this page cannot read", () => {
+    /* Different from an explicit null: the field is not there at all, so the
+       server is a different build, and drawing a day from a payload we cannot
+       fully read is how the silent-plausible-wrong failures happen. */
     const raw = payload();
     delete raw["retention"];
     const view = parseHistory(raw);
-    if (view.kind !== "history") throw new Error("expected a history");
-    /* A server built before the field existed makes no claim about whether it
-       is still writing, and inventing a healthy one puts a reassurance on the
-       page that nothing produced. */
-    expect(view.retention).toBeNull();
+    expect(view.kind).toBe("no-answer");
+    if (view.kind !== "no-answer") return;
+    expect(view.why).toContain("retention");
+  });
+
+  it("refuses a retention block with a field renamed, rather than constructing a healthy one", () => {
+    /* The dangerous one: rename `lockedOutBy` and a writer that has stopped
+       looks perfectly well. GPT Sol's second round. */
+    const view = parseHistory(
+      payload({ retention: { lastAttemptAt: AT, lastSuccessAt: AT, failure: null, poisoned: false, lockedOut: null } }),
+    );
+    expect(view.kind).toBe("no-answer");
+  });
+
+  it("refuses when any field the honesty depends on is missing", () => {
+    for (const field of ["predecessor", "holes", "earliestAt", "rotated", "unreadableLines", "refreshMs"]) {
+      const raw = payload();
+      delete raw[field];
+      const view = parseHistory(raw);
+      expect(view.kind, `deleting ${field} should be refused`).toBe("no-answer");
+      if (view.kind === "no-answer") expect(view.why).toContain(field);
+    }
+  });
+
+  it("refuses an `unreadable` envelope of an unknown schema too", () => {
+    /* That arm used to be handled ABOVE the version check, so it got past it —
+       an arm read before the version is an arm read without it. */
+    expect(parseHistory({ schema: 2, kind: "unreadable", why: "x" }).kind).toBe("no-answer");
   });
 
   it("carries a lock-out as its own field", () => {

@@ -238,6 +238,12 @@ const STRIP_TIP: Tip = {
   how: "Where several readings share one pixel the WORST one wins, never an average: a one-minute spike at 4am is the thing you opened this to find. Hatched means nothing was recorded at all.",
 };
 
+/** "24 hours", "6 hours", "7 days" — whatever the server actually gave us. */
+function describeWindow(hours: number): string {
+  if (hours >= 48) return `${Math.round(hours / 24)} days`;
+  return `${Number.isInteger(hours) ? hours : hours.toFixed(1)} hours`;
+}
+
 function VerdictStrip({ plot }: { plot: HistoryPlot }): ReactNode {
   /* One band per plot unit is far more than any phone has pixels, so the
      collapse happens here at a resolution the SVG can actually show. */
@@ -270,7 +276,13 @@ function VerdictStrip({ plot }: { plot: HistoryPlot }): ReactNode {
       </Explain>
       <div className="tw:mt-1 tw:flex tw:justify-between tw:text-[11px] tw:text-ink-faint">
         <span>{timeOfDay(plot.fromMs)}</span>
-        <span>24 hours</span>
+        {/* **THE SERVER'S NUMBER, NOT THIS PAGE'S CONSTANT.** The route clamps
+            the window, so a request for more than a week comes back narrower —
+            and an axis that went on saying "24 hours" over a different span is
+            a label describing something that is not on screen. Found by running
+            260908b's own Class B check over my wire fields before pushing:
+            `windowHours` was parsed and read by nothing. */}
+        <span>{describeWindow(plot.windowHours)}</span>
         <span>now</span>
       </div>
     </div>
@@ -331,7 +343,16 @@ function SeriesChart({ series, plot }: { series: SeriesPlot; plot: HistoryPlot }
   const tip: Tip = {
     head: spec.label,
     what: `${spec.label} over the last 24 hours, in ${spec.unit}.`,
-    how: `Amber past ${format(spec.bands.strained)} and red past ${format(spec.bands.critical)} — the same cutoffs the tiles above use, imported from one place so they cannot drift apart. A break in the line means nothing was recorded; violet means the reading could not be taken, which is never drawn as zero.${extra === "" ? "" : ` ${extra}`}`,
+    /* **A SERIES WITH NO RED NEEDS ITS OWN SENTENCE**, and the generic one
+       formatted `Number.POSITIVE_INFINITY` literally: "red past Infinity",
+       beside a claim that the tiles use the same cutoff, which for IO wait they
+       do not. GPT Sol's second round. The band being invisible was correct and
+       the prose describing it was not. */
+    how: `${
+      Number.isFinite(spec.bands.critical)
+        ? `Amber past ${format(spec.bands.strained)} and red past ${format(spec.bands.critical)} — the same cutoffs the tiles above use, imported from one place so they cannot drift apart.`
+        : `Amber past ${format(spec.bands.strained)}. There is no red band here: the collector calls this critical only in combination with pages actually moving to or from swap, and a band on one axis cannot say that — so the combined judgement stays in the strip at the top, which is the collector's own verdict.`
+    } A break in the line means nothing was recorded; violet means the reading could not be taken, which is never drawn as zero.${extra === "" ? "" : ` ${extra}`}`,
   };
 
   return (
@@ -611,6 +632,24 @@ function Swatch({
  * healthy load is a line nobody reads, and one nobody reads is one nobody
  * notices changing.
  */
+/**
+ * Is the writer still being ASKED, or has the loop that asks it stopped?
+ *
+ * `lastAttemptAt` moves every turn whatever the outcome; `lastSuccessAt` only
+ * on a write that worked. Apart, they separate two faults that look identical
+ * from the outside — the same distinction `state.ts` draws between `attemptedAt`
+ * and `collectedAt`, and it catches the same thing: a loop that has quietly
+ * stopped, wearing the last good timestamp.
+ *
+ * Absent (a server that does not report it) reads as "still trying", because
+ * that is the weaker claim: it adds no alarm the payload did not support.
+ */
+function stillTrying(retention: RetentionView): boolean {
+  if (retention.lastAttemptAt === null) return true;
+  if (retention.lastSuccessAt === null) return true;
+  return Date.parse(retention.lastAttemptAt) > Date.parse(retention.lastSuccessAt);
+}
+
 function Retention({ retention }: { retention: RetentionView | null }): ReactNode {
   /* Null is "this server did not say", not "fine". No claim either way, and
      nothing to draw — the alternative is a reassurance nothing produced. */
@@ -632,6 +671,15 @@ function Retention({ retention }: { retention: RetentionView | null }): ReactNod
         {retention.lastSuccessAt === null
           ? " — no sample has been written since this dashboard started."
           : ` — the last one that worked was ${timeOfDay(Date.parse(retention.lastSuccessAt))}.`}{" "}
+        {/* **THE PAIR IS THE DIAGNOSIS**, which is the argument `state.ts` makes
+            for `attemptedAt`: a writer still trying and failing is a different
+            fault from one that has stopped being asked, and the two are
+            indistinguishable from `lastSuccessAt` alone. This field crossed the
+            wire and was read by nothing until 260908b's Class B check went
+            looking. */}
+        {stillTrying(retention)
+          ? "It is still trying every turn. "
+          : "Nothing has attempted a write since then either, so the loop itself may have stopped. "}
         {/* **NOT "any break after that is this, not the box".** That was the
             wording here, and it is unknowable: if writing failed and the box
             then crashed, both happened — and the sentence would have talked a

@@ -29,6 +29,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { HealthReport } from "../tools/fleet/health.js";
 import {
   MAX_FILE_BYTES,
+  MAX_LINE_BYTES,
   MAX_WHY_CHARS,
   openHealthHistory,
   sampleLine,
@@ -580,14 +581,38 @@ describe("bounding a record", () => {
     });
     store.append({ kind: "reading", report: huge }, { at: "2026-09-08T12:00:00.000Z", nextDueMs: 73_000 });
 
-    /* Not written, not poisoned — nothing was written and the file is intact —
-       and NOT silent: a dropped sample is a break in the chart, and a break with
-       no explanation is what this whole panel refuses. */
+    /* Not poisoned — the reading was never written, so the file is intact. */
     expect(store.status().poisoned).toBe(false);
     expect(store.status().failure).toMatch(/per-record limit/);
+
+    /* **AND AN OMISSION GOES ON DISK.** The first version set an in-memory
+       failure and returned, which the next success cleared: healthy, oversized
+       CRITICAL, healthy, and the two healthy samples are close enough that the
+       chart joins them — the one turn the box was in trouble erased, with
+       nothing anywhere saying a sample had been dropped. */
     const read = store.read({ sinceMs: 0 });
     if (read.kind !== "read") throw new Error(read.why);
-    expect(read.samples).toEqual([]);
+    expect(read.samples).toHaveLength(1);
+    const sample = read.samples[0];
+    if (sample?.kind !== "sample-omitted") throw new Error("expected an omission record");
+    expect(sample.why).toMatch(/not kept/);
+    /* Small enough that the record of an oversized record is not itself one. */
+    expect(sampleLine(sample).length).toBeLessThan(MAX_LINE_BYTES);
+  });
+
+  it("an omission survives a later success, so the break cannot close behind it", () => {
+    const { store } = withStore();
+    const huge = report({ verdict: { level: "critical", reasons: ["y".repeat(200_000)] } });
+    store.append({ kind: "reading", report: report() }, { at: "2026-09-08T12:00:00.000Z", nextDueMs: 73_000 });
+    store.append({ kind: "reading", report: huge }, { at: "2026-09-08T12:01:13.000Z", nextDueMs: 73_000 });
+    store.append({ kind: "reading", report: report() }, { at: "2026-09-08T12:02:26.000Z", nextDueMs: 73_000 });
+
+    const read = store.read({ sinceMs: 0 });
+    if (read.kind !== "read") throw new Error(read.why);
+    expect(read.samples.map((s) => s.kind)).toEqual(["reading", "sample-omitted", "reading"]);
+    /* The in-memory failure IS cleared by the later success — that is correct,
+       the writer is working again — and the durable record is what remains. */
+    expect(store.status().failure).toBeNull();
   });
 
   it("measures the record in BYTES, not in UTF-16 code units", () => {

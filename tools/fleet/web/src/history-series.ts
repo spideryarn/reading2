@@ -83,6 +83,84 @@ export function gapAfterMs(sample: HealthSampleView): number {
   return sample.nextDueMs + slack;
 }
 
+/**
+ * **HOW LONG A SAMPLE MAY BE TREATED AS COVERAGE — which is not how long the
+ * writer intended to wait.**
+ *
+ * `nextDueMs` is the wait the loop was about to take, and after a *fleet*
+ * collection failure that is five times the cadence even though the health
+ * reading itself succeeded. Treating the whole of it as "we were watching" was
+ * the last of GPT Sol's objections to keeping health on the fleet loop, and the
+ * objection is right: if the dashboard vanishes for six minutes inside a
+ * five-minute backoff and returns, the line joins up and the page says there
+ * were no breaks. **`nextDueMs` is a schedule, and a schedule is not an
+ * observation.**
+ *
+ * So coverage is capped at twice the nominal cadence plus the usual slack.
+ * Beyond that the writer had *scheduled itself not to look*, and a stretch
+ * nobody was watching is drawn as what it is — a break — rather than as a line.
+ * The error this leaves is in the safe direction: a fleet backoff shows a small
+ * break, which is true, where the alternative hid a real outage inside it.
+ *
+ * The real fix is still to give health its own cadence, and it is still a
+ * follow-up — but the chart no longer *claims* the backoff as observation while
+ * that is outstanding.
+ */
+export function coverageMs(sample: HealthSampleView, refreshMs: number): number {
+  const ceiling = refreshMs * 2;
+  const claimed = Math.min(sample.nextDueMs, ceiling);
+  const slack = Math.min(Math.max(claimed * (GAP_SLACK - 1), GAP_FLOOR_MS), GAP_SLACK_CAP_MS);
+  return claimed + slack;
+}
+
+/* ------------------------------------------------------------------ *
+ * Span algebra. Small, dull, and the reason two layers cannot disagree.
+ * ------------------------------------------------------------------ */
+
+/** Overlapping or touching spans into one, sorted. */
+export function mergeSpans(spans: Span[]): Span[] {
+  const sorted = [...spans].sort((a, b) => a.fromMs - b.fromMs || a.toMs - b.toMs);
+  const out: Span[] = [];
+  for (const span of sorted) {
+    const tail = out[out.length - 1];
+    if (tail !== undefined && span.fromMs <= tail.toMs) tail.toMs = Math.max(tail.toMs, span.toMs);
+    else out.push({ ...span });
+  }
+  return out;
+}
+
+/** `spans` with every part of `cuts` removed. Both may overlap freely. */
+export function subtractSpans(spans: Span[], cuts: Span[]): Span[] {
+  let out = spans.map((span) => ({ ...span }));
+  for (const cut of mergeSpans(cuts)) {
+    const next: Span[] = [];
+    for (const span of out) {
+      if (cut.toMs <= span.fromMs || cut.fromMs >= span.toMs) {
+        next.push(span);
+        continue;
+      }
+      if (cut.fromMs > span.fromMs) next.push({ fromMs: span.fromMs, toMs: cut.fromMs });
+      if (cut.toMs < span.toMs) next.push({ fromMs: cut.toMs, toMs: span.toMs });
+    }
+    out = next;
+  }
+  return out;
+}
+
+/** Everything in `[fromMs, toMs)` that `spans` does not cover. */
+export function complementSpans(spans: Span[], fromMs: number, toMs: number): Span[] {
+  const out: Span[] = [];
+  let cursor = fromMs;
+  for (const span of mergeSpans(spans)) {
+    if (span.toMs <= cursor) continue;
+    if (span.fromMs > cursor) out.push({ fromMs: cursor, toMs: Math.min(span.fromMs, toMs) });
+    cursor = Math.max(cursor, span.toMs);
+    if (cursor >= toMs) break;
+  }
+  if (cursor < toMs) out.push({ fromMs: cursor, toMs });
+  return out.filter((span) => span.toMs > span.fromMs);
+}
+
 /* ------------------------------------------------------------------ *
  * One reading, three ways.
  * ------------------------------------------------------------------ */
@@ -168,7 +246,9 @@ function readingFrom(
   fromValue: (value: Record<string, unknown>) => Reading,
   absentArms: Record<string, string> = {},
 ): Reading {
-  if (sample.kind === "collector-failed") return { kind: "unknown", why: sample.why };
+  /* A turn on which no command ran, or one whose reading could not be kept:
+     either way there is one `why` and it belongs to every series. */
+  if (sample.kind !== "reading") return { kind: "unknown", why: sample.why };
   const reading = record(sample.report[field]);
   if (reading === null) {
     return { kind: "unknown", why: `the sample had no ${field} reading in it` };
@@ -362,6 +442,8 @@ export type VerdictBand = Span & { tone: Tone; level: string };
 export type HistoryPlot = {
   fromMs: number;
   toMs: number;
+  /** What the SERVER said the window was, after its own clamp — not what we asked for. */
+  windowHours: number;
   series: SeriesPlot[];
   verdict: VerdictBand[];
   gaps: Gap[];
@@ -387,7 +469,11 @@ const LEVEL_TONE: Record<string, Tone> = {
 const LEVEL_RANK: Record<string, number> = { ok: 0, unknown: 1, strained: 2, critical: 3 };
 
 function levelOf(sample: HealthSampleView): string {
-  if (sample.kind === "collector-failed") return "unknown";
+  /* `!== "reading"` rather than a list of the other arms: adding a fourth kind
+     of sample should not silently start reporting `ok` for it, and this is the
+     spelling that cannot. The compiler caught the list version the moment
+     `sample-omitted` was added, which is the point of narrowing this way. */
+  if (sample.kind !== "reading") return "unknown";
   const verdict = record(sample.report["verdict"]);
   const level = verdict?.["level"];
   return typeof level === "string" ? level : "unknown";
@@ -403,74 +489,110 @@ function levelOf(sample: HealthSampleView): string {
  */
 export function plotHistory(view: Extract<HistoryView, { kind: "history" }>, nowMs: number): HistoryPlot {
   const { samples, fromMs } = view;
-  /* The axis runs to NOW rather than to the payload's `toMs`, so that time
-     passing since the fetch shows as the right-hand edge moving rather than as
-     the chart quietly ending early. Never earlier than `toMs`, so a browser
-     clock behind the server's cannot crop the newest samples off. */
-  const toMs = Math.max(view.toMs, nowMs);
-
-  const gaps: Gap[] = [];
-
-  /* THE LEFT EDGE, which no pair of in-window samples can classify. A window
-     that opens in the middle of a four-hour break has its first sample hours
-     from `fromMs`, and without the sample BEFORE the window there is no way to
-     tell that emptiness from where the record begins. `predecessorAtMs` is that
-     sample. GPT Sol's finding 1. */
-  const first = samples[0];
-  if (view.predecessor !== null && first !== undefined) {
-    if (first.atMs - view.predecessor.atMs > gapAfterMs(view.predecessor)) {
-      gaps.push({ fromMs: Math.max(view.predecessor.atMs, fromMs), toMs: first.atMs, ongoing: false });
-    }
-  }
-
-  for (let i = 0; i + 1 < samples.length; i++) {
-    const here = samples[i];
-    const next = samples[i + 1];
-    if (here === undefined || next === undefined) continue;
-    if (next.atMs - here.atMs > gapAfterMs(here)) {
-      gaps.push({ fromMs: here.atMs, toMs: next.atMs, ongoing: false });
-    }
-  }
-
-  /* A CORRUPT LINE IS A POSITIONAL BARRIER, not a number in a footnote.
-     Dropping it and reporting a count lets the line reconnect straight across
-     the place the record is broken, which is the same reconnection a gap must
-     never get. GPT Sol's finding 6. */
-  for (const hole of view.holes) {
-    const from = hole.afterAtMs ?? fromMs;
-    const to = hole.beforeAtMs ?? toMs;
-    if (to > from) gaps.push({ fromMs: Math.max(from, fromMs), toMs: to, ongoing: false });
-  }
   /**
-   * THE GAP THAT IS HAPPENING NOW, which no sample can record because it is the
-   * one that has not arrived. Without this the chart draws a line that stops
-   * partway across and looks merely finished.
+   * **THE SERVER'S RIGHT-HAND EDGE, NOT THE PHONE'S CLOCK.**
    *
-   * **`?? view.predecessor` is the case that was missing**, and it is the worst
-   * one on this page: if the newest sample in the store is just OUTSIDE the
-   * window and nothing has been written since, `samples` is empty, no gap was
-   * produced, and the panel took its empty-window branch — *"Nothing recorded in
-   * the last 24 hours … it is empty after a restart"* — about a dashboard that
-   * has been silent for over a day. The most alarming state the record can hold,
-   * rendered as the most reassuring sentence on the page. GPT Sol's finding 4.
+   * This used to be `Math.max(view.toMs, nowMs)`, so that time passing since the
+   * fetch showed as the edge moving. But `nowMs` is the browser's `Date.now()`,
+   * and a phone an hour fast turned a current server sample into a one-hour
+   * ongoing break — an outage manufactured by a clock. The route stamps the
+   * window deliberately with the server's own clock, and throwing that away one
+   * layer later was the mistake. The edge advances at the next poll, sixty
+   * seconds at worst. `nowMs` is kept in the signature because a test still
+   * places it and because the phone's clock is the right thing to *format*
+   * times with; it is no longer allowed to decide what is missing.
+   * GPT Sol's finding 7.
    */
-  const last = samples[samples.length - 1] ?? view.predecessor;
-  if (last !== null && last !== undefined && toMs - last.atMs > gapAfterMs(last)) {
-    gaps.push({ fromMs: Math.max(last.atMs, fromMs), toMs, ongoing: true });
+  void nowMs;
+  const toMs = view.toMs;
+
+  /* ---------------------------------------------------------------- *
+   * ONE NORMALISED COVERAGE TIMELINE, and everything derives from it.
+   * ---------------------------------------------------------------- */
+
+  /**
+   * What each sample SPEAKS FOR: from its own timestamp until the earlier of the
+   * next sample and the end of the interval it said to expect.
+   *
+   * **The two previous attempts both left the layers overlapping**, and GPT Sol
+   * caught each. First the spans ran to the next sample, so an unknown reading
+   * before a four-hour break painted the break violet. Then I clamped the spans
+   * but left the GAPS starting at the sample's timestamp — so a gap `[t0, t0+4h]`
+   * and an unknown span `[t0, t0+182.5s]` overlapped, the hatch hid a known
+   * collector failure, and the prose overstated the silence by three minutes.
+   *
+   * Clamping one side of an overlap is not the fix; having one source is. Every
+   * drawable layer now comes from these spans, so two of them cannot disagree
+   * about the same instant.
+   */
+  const covers: Span[] = [];
+  const addCover = (sample: HealthSampleView, nextAtMs: number | undefined): void => {
+    const until = Math.min(nextAtMs ?? Number.POSITIVE_INFINITY, sample.atMs + coverageMs(sample, view.refreshMs), toMs);
+    if (until > Math.max(sample.atMs, fromMs)) covers.push({ fromMs: Math.max(sample.atMs, fromMs), toMs: until });
+  };
+  /* The predecessor speaks for the start of the window too — it is how the left
+     edge is classified when the newest sample predates the window entirely. */
+  if (view.predecessor !== null) addCover(view.predecessor, samples[0]?.atMs);
+  for (let i = 0; i < samples.length; i++) {
+    const sample = samples[i];
+    if (sample !== undefined) addCover(sample, samples[i + 1]?.atMs);
   }
 
-  const merged = mergeGaps(gaps);
+  /**
+   * A corrupt record REMOVES coverage rather than adding a separate band.
+   *
+   * A count in a footnote lets the line reconnect across the place the record is
+   * broken; a second overlapping band lets two layers disagree. Subtracting it
+   * makes the hole part of the same timeline as everything else.
+   */
+  const holes: Span[] = view.holes
+    .map((hole) => ({ fromMs: Math.max(hole.afterAtMs ?? fromMs, fromMs), toMs: Math.min(hole.beforeAtMs ?? toMs, toMs) }))
+    .filter((hole) => hole.toMs > hole.fromMs);
 
-  /* Which samples a segment must be cut AFTER: the one before each gap, and the
-     one before each corrupt run. Built from the UNMERGED list, because merging
-     is about how the silence is counted and drawn, not about where the line has
-     to stop — a cut point swallowed by a wider gap is still a cut point. */
-  const isGapStart = new Set(gaps.filter((g) => !g.ongoing).map((g) => g.fromMs));
+  /* Nothing was ever recorded before the record began, so that stretch is its
+     own region rather than a silence — see `beforeHistory` below. */
+  const earliest = view.earliestAtMs;
+  const beforeHistory =
+    earliest === null
+      ? { fromMs, toMs }
+      : earliest > fromMs
+        ? { fromMs, toMs: Math.min(earliest, samples[0]?.atMs ?? earliest) }
+        : null;
+  const silenceFrom = beforeHistory === null ? fromMs : beforeHistory.toMs;
+
+  const covered = subtractSpans(mergeSpans(covers), holes);
+  const gaps: Gap[] = complementSpans(covered, silenceFrom, toMs).map((span) => ({
+    ...span,
+    /* The one at the right-hand edge is happening NOW, which no sample can
+       record because it is the sample that has not arrived. */
+    ongoing: span.toMs >= toMs,
+  }));
+
+  const merged = gaps;
+  /** Is the newest instant covered at all? The half of "now" that is not about values. */
+  const endCovered = covered.some((span) => span.toMs >= toMs && span.fromMs < toMs);
+
+  /* Which samples a segment must be cut AFTER: any whose coverage stops before
+     the next sample begins, and any bracketing a hole. */
+  const isGapStart = new Set<number>();
+  for (let i = 0; i < samples.length; i++) {
+    const sample = samples[i];
+    const next = samples[i + 1];
+    if (sample === undefined) continue;
+    const until = Math.min(next?.atMs ?? Number.POSITIVE_INFINITY, sample.atMs + coverageMs(sample, view.refreshMs));
+    if (next !== undefined && until < next.atMs) isGapStart.add(sample.atMs);
+    if (holes.some((hole) => hole.fromMs <= sample.atMs && sample.atMs < hole.toMs)) isGapStart.add(sample.atMs);
+  }
+  for (const hole of view.holes) {
+    if (hole.afterAtMs !== null) isGapStart.add(hole.afterAtMs);
+  }
   for (const hole of view.holes) {
     if (hole.afterAtMs !== null) isGapStart.add(hole.afterAtMs);
   }
 
-  const series: SeriesPlot[] = SERIES.map((spec) => plotSeries(spec, samples, isGapStart, toMs));
+  const series: SeriesPlot[] = SERIES.map((spec) =>
+    plotSeries(spec, samples, isGapStart, toMs, view.refreshMs, endCovered),
+  );
 
   const verdict: VerdictBand[] = samples.map((sample, i) => {
     const level = levelOf(sample);
@@ -486,20 +608,10 @@ export function plotHistory(view: Extract<HistoryView, { kind: "history" }>, now
     };
   });
 
-  /* "Nothing was recorded before this" — its own region, never a gap.
-     `earliestAtMs` is the oldest sample the STORE holds, window or not, so a
-     store older than the window covers it and this is null. */
-  const earliest = view.earliestAtMs;
-  const beforeHistory =
-    earliest === null
-      ? { fromMs, toMs }
-      : earliest > fromMs
-        ? { fromMs, toMs: Math.min(earliest, first?.atMs ?? earliest) }
-        : null;
-
   return {
     fromMs,
     toMs,
+    windowHours: view.windowHours,
     series,
     verdict,
     gaps: merged,
@@ -586,6 +698,9 @@ function plotSeries(
   /** Sample timestamps after which the line must be cut — a gap, or a corrupt record. */
   isGapStart: ReadonlySet<number>,
   toMs: number,
+  refreshMs: number,
+  /** Whether the right-hand edge is covered at all, from the one normalised timeline. */
+  endCovered: boolean,
 ): SeriesPlot {
   const segments: Point[][] = [];
   const unknowns: (Span & { why: string })[] = [];
@@ -630,7 +745,7 @@ function plotSeries(
      * A sample covers the interval it said to expect, and no further. Beyond
      * that the record is silent, and silence belongs to the gap layer.
      */
-    const coversUntil = Math.min(sample.atMs + gapAfterMs(sample), toMs);
+    const coversUntil = Math.min(sample.atMs + coverageMs(sample, refreshMs), toMs);
     const until = Math.min(samples[i + 1]?.atMs ?? coversUntil, coversUntil);
 
     /* OUTSIDE the value branch: a mark is a fact about the sample, not about
@@ -678,7 +793,14 @@ function plotSeries(
   flush();
   /* Current only if this series' newest VALUE covers the right-hand edge — the
      same "how far does one sample speak for" rule the spans use. */
-  const latestIsCurrent = latest !== null && latestCoveredUntil !== null && latestCoveredUntil >= toMs;
+  /* **AND the timeline agrees the edge is covered.** `latestCoveredUntil` alone
+     could not see a trailing corrupt record: a value at t0 followed by a
+     rejected sample left the card saying "now 1.0x cores" on a page that was
+     simultaneously admitting the record after it was unreadable. GPT Sol's
+     second-round finding 2 — currentness has to come from the same normalised
+     spans as everything else. */
+  const latestIsCurrent =
+    latest !== null && latestCoveredUntil !== null && latestCoveredUntil >= toMs && endCovered;
   return { spec, segments, unknowns, absences, peak, worst, latest, latestIsCurrent, overCeiling, marks, markedMs };
 }
 

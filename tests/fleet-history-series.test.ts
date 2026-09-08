@@ -19,6 +19,7 @@ import type { HealthSampleView, HistoryView } from "../tools/fleet/web/src/healt
 import {
   GAP_SLACK,
   GAP_SLACK_CAP_MS,
+  coverageMs,
   SERIES,
   collapseVerdict,
   describeDuration,
@@ -209,47 +210,57 @@ describe("what counts as a break", () => {
     expect(plot.gaps).toHaveLength(0);
   });
 
-  it("takes the expectation from the SAMPLE, so a legitimate backoff is not a break", () => {
-    /* The loop waits 5x after a failed collection. Comparing against one
-       assumed cadence would draw every backed-off turn as a five-minute
-       outage. */
+  it("A SCHEDULE IS NOT AN OBSERVATION: a fleet backoff is drawn as a break", () => {
+    /* THIS TEST HAS BEEN INVERTED, and the inversion is the finding. It used to
+       assert that a 313s backoff produced NO break — the loop really was
+       waiting, so drawing one felt like an alarm that is usually wrong. But
+       `nextDueMs` is what the writer INTENDED, and after a fleet-collection
+       failure it is five times the cadence even though the health reading
+       succeeded. Treating the whole of it as coverage meant that if the
+       dashboard vanished for six minutes inside that window and came back, the
+       line joined up and the page said there were no breaks.
+
+       Nobody was watching for those five minutes. That is a break, and it is
+       true. The error now runs in the safe direction. GPT Sol, second round. */
     const backedOff = reading(T0, {}, 313_000);
-    const samples = [backedOff, reading(T0 + 320_000)];
-    const plot = plotHistory(view(samples), T0 + 400_000);
-    expect(plot.gaps).toHaveLength(0);
-    /* Still tolerant of the backoff itself… */
-    expect(gapAfterMs(backedOff)).toBeGreaterThan(313_000);
+    const plot = plotHistory(view([backedOff, reading(T0 + 320_000)]), T0 + 400_000);
+    expect(plot.gaps).toHaveLength(1);
+    /* And the break begins where the coverage ends, not at the sample. */
+    expect(plot.gaps[0]?.fromMs).toBe(T0 + coverageMs(backedOff, 60_000));
   });
 
-  it("caps the slack, so a long backoff does not buy minutes of blindness", () => {
-    /* THIS ASSERTION USED TO PIN THE BUG. It required the allowance to be 2.5x
-       the expected interval, which for a 313s fleet backoff is 12.5 MINUTES —
-       so a genuine seven-minute silence inside it was drawn as continuous and
-       described as "a sample was recorded throughout". A multiplier compounds
-       somebody else's backoff into our blindness; the slack is capped now. */
+  it("caps what a sample may claim, whatever it intended to wait", () => {
     const short = reading(T0, {}, 73_000);
     const backedOff = reading(T0, {}, 313_000);
-    expect(gapAfterMs(short) - 73_000).toBeLessThanOrEqual(GAP_SLACK_CAP_MS);
+    /* A normal turn claims its own interval plus slack… */
+    expect(coverageMs(short, 60_000)).toBe(73_000 + 109_500);
+    /* …and a backed-off one claims no more than twice the nominal cadence,
+       rather than five times it. */
+    expect(coverageMs(backedOff, 60_000)).toBeLessThan(313_000);
+    expect(coverageMs(backedOff, 60_000)).toBe(120_000 + 120_000);
+    /* `gapAfterMs` still describes the writer's own expectation, which is what
+       a sample SAYS; coverage is what a chart may CLAIM from it. */
     expect(gapAfterMs(backedOff) - 313_000).toBe(GAP_SLACK_CAP_MS);
     expect(gapAfterMs(backedOff)).toBeLessThan(313_000 * GAP_SLACK);
-
-    /* Concretely: a backed-off sample now covers 313s + 120s ≈ 7.2 min, where
-       the multiplier gave it 13. A ten-minute silence used to be drawn as
-       continuous and is now a break. */
-    const caught = plotHistory(view([backedOff, reading(T0 + 10 * 60_000)]), T0 + 11 * 60_000);
-    expect(caught.gaps).toHaveLength(1);
-    /* And the backoff itself, six minutes, still is not — the loop really was
-       waiting, and an alarm that is usually wrong is worse than no alarm. */
-    const tolerated = plotHistory(view([backedOff, reading(T0 + 6 * 60_000)]), T0 + 7 * 60_000);
-    expect(tolerated.gaps).toHaveLength(0);
   });
 
   it("marks a break that is still going at the right-hand edge", () => {
     /* The one no sample can record, because it is the sample that has not
-       arrived. Without it the line stops partway and looks merely finished. */
-    const plot = plotHistory(view([reading(T0)]), T0 + 3 * 3_600_000);
+       arrived. Without it the line stops partway and looks merely finished.
+       The window's edge comes from the SERVER now, so the test states it —
+       a browser clock is no longer allowed to decide what is missing. */
+    const plot = plotHistory(view([reading(T0)], { toMs: T0 + 3 * 3_600_000 }), T0 + 3 * 3_600_000);
     expect(plot.gaps).toHaveLength(1);
     expect(plot.gaps[0]?.ongoing).toBe(true);
+  });
+
+  it("does NOT let a fast phone clock manufacture a break", () => {
+    /* The route stamps the window with the server's clock deliberately; this
+       used to throw that away with `Math.max(view.toMs, nowMs)`, so a phone an
+       hour fast turned a current sample into a one-hour outage. GPT Sol's
+       second-round finding 7. */
+    const plot = plotHistory(view([reading(T0)]), T0 + 3_600_000);
+    expect(plot.gaps).toHaveLength(0);
   });
 
   it("does not count one silence twice when a corrupt line sits inside a real break", () => {
@@ -289,8 +300,12 @@ describe("what counts as a break", () => {
       T0 + 8 * 3_600_000,
     );
     expect(plot.gaps).toHaveLength(2);
+    /* The first break ends where the sample begins, and the second begins where
+       that sample's COVERAGE ends — not at the sample itself. That difference is
+       the overlap GPT Sol found twice: a break must not start inside the stretch
+       a reading speaks for. */
     expect(plot.gaps[0]?.toMs).toBe(only.atMs);
-    expect(plot.gaps[1]?.fromMs).toBe(only.atMs);
+    expect(plot.gaps[1]?.fromMs).toBe(only.atMs + coverageMs(only, 60_000));
     expect(plot.gaps[1]?.ongoing).toBe(true);
   });
 
@@ -402,7 +417,10 @@ describe("describeGaps", () => {
     const plot = plotHistory(view(samples), T0 + 3 * 3_600_000 + 2 * CADENCE);
     const sentence = describeGaps(plot, () => "03:00");
     expect(sentence).toMatch(/1 break/);
-    expect(sentence).toMatch(/3\.0 h/);
+    /* 2.9 h rather than 3.0: the first sample speaks for three minutes after
+       itself, and the silence starts where that stops. Overstating a break by
+       the coverage of the reading before it was the overlap bug. */
+    expect(sentence).toMatch(/2\.9 h/);
     expect(sentence).toMatch(/03:00/);
   });
 
@@ -559,6 +577,75 @@ describe("how far one sample speaks for", () => {
   });
 });
 
+describe("the layers are mutually exclusive", () => {
+  /* **THE INVARIANT, ASSERTED DIRECTLY.** Both earlier attempts at this passed
+     tests that checked a clamp and a gap count, and both still overlapped: a
+     gap `[t0, t0+4h]` sat under an unknown span `[t0, t0+182.5s]`, so the hatch
+     hid a known collector failure and the prose overstated the silence. A count
+     cannot see an overlap; only the overlap can. */
+  const overlaps = (a: { fromMs: number; toMs: number }, b: { fromMs: number; toMs: number }): boolean =>
+    a.fromMs < b.toMs && b.fromMs < a.toMs;
+
+  it("no gap overlaps any reading's span, in the four-hour failure case", () => {
+    const plot = plotHistory(
+      view([failed(T0), reading(T0 + 4 * 3_600_000)]),
+      T0 + 4 * 3_600_000 + CADENCE,
+    );
+    expect(plot.gaps.length).toBeGreaterThan(0);
+    for (const series of plot.series) {
+      for (const span of [...series.unknowns, ...series.absences, ...series.marks, ...series.overCeiling]) {
+        for (const gap of plot.gaps) {
+          expect(overlaps(gap, span)).toBe(false);
+        }
+      }
+    }
+  });
+
+  it("no gap overlaps a verdict band, or the before-the-record region", () => {
+    const plot = plotHistory(
+      view([reading(T0, { level: "critical" }), reading(T0 + 4 * 3_600_000)], { earliestAtMs: T0 }),
+      T0 + 4 * 3_600_000 + CADENCE,
+    );
+    for (const gap of plot.gaps) {
+      for (const band of plot.verdict) expect(overlaps(gap, band)).toBe(false);
+      if (plot.beforeHistory !== null) expect(overlaps(gap, plot.beforeHistory)).toBe(false);
+    }
+  });
+
+  it("no two gaps overlap each other", () => {
+    const plot = plotHistory(
+      view([reading(T0), reading(T0 + 4 * 3_600_000)], {
+        holes: [{ afterAtMs: T0, beforeAtMs: T0 + 4 * 3_600_000 }],
+        toMs: T0 + 9 * 3_600_000,
+      }),
+      T0 + 9 * 3_600_000,
+    );
+    for (let i = 0; i < plot.gaps.length; i++) {
+      for (let j = i + 1; j < plot.gaps.length; j++) {
+        const a = plot.gaps[i];
+        const b = plot.gaps[j];
+        if (a !== undefined && b !== undefined) expect(overlaps(a, b)).toBe(false);
+      }
+    }
+  });
+
+  it("does not say `now` when a rejected sample trails the newest value", () => {
+    /* A value at t0 followed by a sample this page could not read left the card
+       saying "now 1.0x cores" on a page that was simultaneously admitting the
+       record after it was unreadable. Currentness has to come from the same
+       spans as everything else. GPT Sol's second-round finding 2. */
+    const plot = plotHistory(
+      view([reading(T0, { load: 1.2 })], {
+        holes: [{ afterAtMs: T0, beforeAtMs: null }],
+        toMs: T0 + 60_000,
+      }),
+      T0 + 60_000,
+    );
+    expect(seriesOf(plot, "load").latest?.value).toBe(1.2);
+    expect(seriesOf(plot, "load").latestIsCurrent).toBe(false);
+  });
+});
+
 describe("a window with no samples in it", () => {
   it("is an ONGOING break when the record predates the window", () => {
     /* The worst state the record can hold — a dashboard silent for over a day —
@@ -606,6 +693,20 @@ describe("collapseVerdict interval arithmetic", () => {
   it("clips a band that starts before the window", () => {
     const out = collapseVerdict([band(T0 - 3_600_000, T0 + 60_000)], T0, T0 + 3_600_000, 360);
     expect(out[0]?.fromMs).toBeGreaterThanOrEqual(T0);
+  });
+});
+
+describe("fields that crossed the wire and were read by nothing", () => {
+  /* Found by running 260908b's own Class B check over this feature before
+     pushing it: for each field the route puts on the wire,
+     `grep -rn '\\bfield\\b' tools/fleet/web/src/`. Two came back with one hit —
+     the parse site — and a field parsed and never rendered is the producer
+     saying the careful thing and the consumer dropping it. */
+  it("carries the SERVER's window through to the plot, not this page's constant", () => {
+    /* The route clamps, so asking for 10,000 hours returns 168 — and an axis
+       still labelled "24 hours" would describe something not on screen. */
+    const plot = plotHistory(view([reading(T0)], { windowHours: 168 }), T0 + CADENCE);
+    expect(plot.windowHours).toBe(168);
   });
 });
 
