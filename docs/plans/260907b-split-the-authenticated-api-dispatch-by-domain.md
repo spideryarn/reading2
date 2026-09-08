@@ -986,8 +986,26 @@ cheap external check, precisely when it feels least necessary. This is the same 
 [silent-success.md](../reusable/silent-success.md) from the author's side rather than the check's:
 that file says a check can share an assumption with the code; this says an author shares one with
 themselves. **Whether it graduates into that file is Greg's call**, since `docs/reusable/` wording is
-a rule and edits there go one approved set at a time — it is being carried to a debrief as a
-proposal, not landed.
+a rule and edits there go one approved set at a time. It is parked as
+[open-questions.md § Q13](../project/open-questions.md#q13), which is the version to approve or
+reject; the working is here, the proposal is there, and that entry is meant to be **deleted** once
+decided rather than left to accumulate.
+
+**And the counterpoint, which belongs next to all of this rather than under it.** Every real problem
+found on the night of 2026-09-08 was caught by **a guard somebody had written earlier, for a different
+reason**: `fixture-ids` caught the uuid collision; `doc-links` caught a line-number citation *inside
+the entry about not repeating facts you have not checked*; the exhaustive `Record` in
+`REFUSAL_STATUS` caught four new refusal codes; and this plan's own contract test caught the control
+that chat's move had invalidated. The sessions mostly did **attribution**, not detection.
+
+The one that should worry us is the guard that found *nothing*: 66 tests that passed with
+`sameMaterial` stubbed out. A guard reporting a problem is a guard working. A guard reporting nothing
+is the two states this plan spent five sections learning to tell apart — and it is the only one of
+the night's checks that was actually broken.
+
+> The guards did the work; we mostly did the attribution.
+>
+> — `claude-agents-dashboard`, 2026-09-08
 
 ### The normaliser should refuse, not rely on a hand check
 
