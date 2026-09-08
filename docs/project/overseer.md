@@ -96,8 +96,9 @@ This one is a list on purpose, because the test is uncomputable at 3am and the l
 - no `git` command that throws work away, anywhere, for the reasons in
   [AGENTS.md](../../AGENTS.md);
 - **and nothing dispatched that Greg did not queue.** Scheduled jobs, plan docs and the feedback
-  queue are queued. A job of your own devising is a proposal in the log. *"My job is basically new
-  ideas"* is a boundary on origination, and its test is simply: **is it in the queue?**
+  queue are queued, and so is everything in [overseer-queue.md](overseer-queue.md), the slow lane
+  for work Greg approved and deferred. A job of your own devising is a proposal in the log. *"My job
+  is basically new ideas"* is a boundary on origination, and its test is simply: **is it in the queue?**
 
 **And the categories that were missing from that list until GPT Sol went looking on 2026-09-08.** Its
 objection was that a prohibited list is only as good as its completeness, which is exactly why the
@@ -211,6 +212,25 @@ box has actually lost. Prefer them over judgement:
   that they woke up.** Greg asked for that second half explicitly, and it is the half that gets
   skipped. A pause nobody verifies is indistinguishable from an agent that died.
 
+**The second of these now runs, and it proposes rather than acts.** `OVERSEER_RULES_ENABLED=1` arms
+the deterministic rules **and nothing else** — a daemon started that way is handed no session
+dispatcher at all, so no job in it can start a Claude session however due one is. That is why it is a
+separate switch from `OVERSEER_JOBS_ENABLED`, which arms the paid standing jobs as well and is
+Greg's to flip.
+
+What a rule may do is **data in its authorised definition, not a habit**: rule 2 carries
+`disposition: "propose"`, which is inside the hash, so changing it to `act` changes the fingerprint
+and the job is refused until somebody re-pins it deliberately. **And a re-pin would not be enough**:
+a daemon armed this way holds no actor at all — the same absence as the missing session dispatcher —
+so an `act` rule would meet a refusal naming what this process does not have. The proposal is written to the store
+*before* anything is attempted, and a proposal that could not be recorded means the action is not
+taken — a run that decided something and did nothing about it must be visible, not a quiet success.
+
+**Rules 1 and 3 are not built.** Rule 3 additionally cannot act until someone answers whether an
+unattended process may assert the `confirm: true` that `resource-broadcast` requires — the route
+checks it *before* it checks `FLEET_ACT_ENABLED`, so that assertion, not the flag, is the real
+authority grant. Do not assume the flag is the whole of it.
+
 ### Steering, and the actions you have
 
 The vocabulary is already built, in [`tools/fleet/actions.ts`](../../tools/fleet/actions.ts), and you
@@ -281,6 +301,13 @@ Each of these has cost somebody real time on this box.
 - **`gjd-remote resume` is an alias for `attach`** and reattaches to a **live** tmux session. It is
   not what brings a conversation back after a reboot; that is `claude --resume <claudeSessionId>`,
   and the id is in your own register.
+- **Talk to a Claude session with `SendMessage`, and steer through tmux only as the fallback.**
+  `ListAgents` shows every live Claude session on the box by name; a message sent that way lands in
+  the agent's context addressed to you, and `notify_when_idle` tells you when it next stops without
+  polling. The steer route below is for Codex sessions and for a session `ListAgents` cannot find.
+  Greg, 2026-09-08: *"SendMessage for Claude agents where available, and fall back to tmux as a
+  backup plan."* Your own peer name is whatever `ListAgents` prints at the top; Greg sets it with
+  `/rename`, and it is not the tmux session name.
 - **To read what another session has been saying, ask the dashboard, not the transcript store.**
   `GET /api/messages?id=<tmux session id>` returns that session's recent turns with timestamps — the
   id's `$` must be percent-encoded as `%24`, or the reply is an empty error rather than turns — and

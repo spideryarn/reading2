@@ -1,0 +1,58 @@
+# The Overseer's queue
+
+Up: [overseer.md](overseer.md), whose gate 3 ends *"nothing dispatched that Greg did not queue"*. This
+file is the queue's slow lane: work Greg has approved in principle but deferred, kept here so a lull
+has something to fill it with and so a good idea does not have to be re-found. Being on this list is
+the authorisation gate 3 asks for; being *near the top* is not an instruction to start — the Overseer
+still checks the box, the usage window and what is already running before it dispatches anything, and
+still asks Greg about anything that outlives the branch.
+
+> Let's defer the Spideryarn product improvements for now. Write an overseer-queue.md (or similar)
+> as a kind of todo list for future work (when there's a lull) … Focus for now on improvements to the
+> Overseer and overseer-web-dashboard.
+>
+> — Greg, 2026-09-08
+
+**How to use it.** Take an item only when the current focus has nothing dispatchable — every live
+stage is either running or blocked on Greg — and the box and usage window have room. Move the item to
+[the decision log](../plans/260908i-overseer-decision-log-for-the-two-astra-plans.md) when it is
+dispatched, with the session name. Items are grouped by the plan that holds their detail; this file
+holds the one-line reason and the product question each one is waiting on, not the stages.
+
+## Deferred on 2026-09-08: the Spideryarn product plan
+
+All sixteen clusters of
+[260908f-prioritised-spideryarn-codebase-improvements.md](../plans/260908f-prioritised-spideryarn-codebase-improvements.md),
+deferred whole by Greg so the fleet can focus on the Overseer and dashboard. The plan's own order
+and its first-batch recommendation (A, the first B stage, C, D, P) still stand when this is picked up.
+Four clusters wait on a product answer as well as a lull; the Overseer put the defaults to Greg on
+2026-09-08 and he chose to defer rather than decide, so **ask again before dispatching those four**.
+
+| Cluster | One line | Waiting on |
+|---|---|---|
+| A — opening reads overwriting later actions | gate Run/Find/Save until the opening read settles, or reconcile | Greg: submit gate vs reconciliation |
+| B — contain failures in independently mounted modes | wrap Debate first, then an honest inventory of the rest | a lull |
+| C — carry a glossary question into chat | "Ask in chat" opens an editable question about the term | Greg: fresh conversation vs existing draft |
+| D — Knip without a fresh build | stop `vite.api.config.ts` evaluating the client shell at load | a lull; no product question |
+| E — stream the glossary's two lookups | stream the unsaved answer first, then the saved one | a lull |
+| F — figures at a readable resolution | trial a ~1,280px `srcset` candidate under the existing caps | Greg: trial it, or defer F |
+| G — finish the route-table migration | Comments slice next, with its stream-lifetime oracle first | a lull; coordinate with the slice's owner |
+| H — one binary-response writer | six header set-sites, six deliberate differences to keep | a relevant route slice |
+| I — retire the obsolete revision alias | 13 test imports to repoint, then delete | a lull; XS |
+| J — one retry predicate for Search and criteria | share the decision, not the row | the next retry-rule edit |
+| K — one missing-key check for seven readers | leave the five distinct contracts alone | the next gateway edit |
+| L — unknown-throw mapper investigation | XS, may end with no change | a lull |
+| M — keyboard access to a passage's terms | try jumping to the glossary row before building a list | Greg: which interaction, or defer M |
+| N — retain PDF item boundaries through scoring | fidelity experiment before any heuristic change | a lull; L-sized |
+| O — operate abandoned-draft retention | per-article sweep on step start; no remote run without asking | a lull; the remote run is Greg's |
+| P — reader study protocol | doc only; Greg runs the study | a lull |
+
+## Improvements the Overseer noticed but may not originate
+
+Gate 3 says a job of the Overseer's own devising is a proposal, not a dispatch. These are proposals.
+Greg promotes one by saying so, and then it moves up into a plan.
+
+- **A real decision log** in the store, written by a CLI, rendered by the dashboard's assumptions
+  page — gate 1 is kept by hand until then ([overseer.md § gate 1](overseer.md#1-never-hide-who-decided)).
+- **Local-time display in the usage and status commands.** Greg moves between London and Athens, so
+  a reset time printed only in UTC is a subtraction he has to do at midnight; print both zones.

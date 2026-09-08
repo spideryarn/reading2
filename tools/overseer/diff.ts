@@ -62,6 +62,7 @@ import type { SessionMeta, SessionState } from "../../scripts/gjd-remote-tmux.js
 import type { AdmissibleSnapshot } from "./admissible.js";
 import type { DefinitionHash, JobOutcome, OccurrenceId } from "./jobs.js";
 import type { FreshSnapshot, ObservedRow, ObservedStatus } from "./observation.js";
+import type { RuleFinding, RuleId, RuleOutcome } from "./rules.js";
 
 /**
  * A snapshot that has become the world the next one is compared against.
@@ -607,13 +608,59 @@ export type JobEvent =
     };
 
 /**
+ * **WHAT A DETERMINISTIC RULE DECIDED, AND THEN WHAT BECAME OF IT.**
+ *
+ * Two arms and they are in this order for a reason that is the whole of the
+ * design: the intent is appended and fsynced **before** the action is taken,
+ * and the action happens only if that append landed. Gate 1 wants the decision
+ * recorded before delivery, fail-closed — *"a broadcast followed by a failed
+ * append produces an unlogged action"* (GPT Sol's SP-2) — and that is an
+ * ordering nothing but the ordering can give you.
+ *
+ * It is the same shape `job-occurrence-reserved` already has for spawning, one
+ * layer in: reserve, act, acknowledge. `scheduler.ts` writes both pairs.
+ *
+ * **A rule with nothing to say appends only `rule-settled`.** There was no
+ * intent, so there is nothing to fail closed on, and inventing an intent event
+ * to keep the pairs symmetrical would put a decision in the log that was never
+ * taken.
+ */
+export type RuleEvent =
+  | {
+      kind: "rule-intended";
+      at: string;
+      /** The run this belongs to. A rule's findings hang off its occurrence, so one grep finds the reservation, the intent and the ending. */
+      occurrenceId: OccurrenceId;
+      ruleId: RuleId;
+      /** The sentence a person reads. Written down before anything is done about it. */
+      what: string;
+      /** The numbers behind that sentence, so a later reader can check the arithmetic rather than take it. */
+      finding: RuleFinding;
+    }
+  | {
+      kind: "rule-settled";
+      at: string;
+      occurrenceId: OccurrenceId;
+      ruleId: RuleId;
+      /** Off, nothing-to-do, proposed, refused and failed are five endings and never one. */
+      outcome: RuleOutcome;
+    };
+
+/**
  * Everything the Overseer's log holds.
  *
- * One union over two families, so `store.ts` has one parser, one append and one
- * fold entry point — and so a new arm in either family is a compile error in
+ * One union over three families, so `store.ts` has one parser, one append and
+ * one fold entry point — and so a new arm in any family is a compile error in
  * every consumer rather than a line the fold quietly steps over.
+ *
+ * **Except in one place, and it is named because it is the trap.**
+ * `store.ts`'s `parseEvent` casts to `SessionEvent["kind"]` after branching on
+ * the job family, so a family whose runtime parser is missing appends
+ * perfectly and is refused on replay, with nothing failing to compile. That is
+ * why `isRuleKind` exists beside `isJobKind` rather than a comment asking
+ * somebody to remember.
  */
-export type OverseerEvent = SessionEvent | JobEvent;
+export type OverseerEvent = SessionEvent | JobEvent | RuleEvent;
 
 /**
  * The row fields the register keeps, in the order an event lists them.
