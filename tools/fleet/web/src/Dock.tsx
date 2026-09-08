@@ -44,7 +44,7 @@ import { cx } from "./ui";
 const MODE_ICONS: Record<Mode, LucideIcon> = {
   sessions: ListChecks,
   health: Gauge,
-  orchestrator: Network,
+  overseer: Network,
 };
 
 const MODE_TIPS: Record<Mode, Tip> = {
@@ -58,8 +58,8 @@ const MODE_TIPS: Record<Mode, Tip> = {
     what: "Load, memory, swap and disk, with a verdict over them.",
     how: "The verdict is the collector's own, and it has a fourth level — a reading nobody could take never renders as a healthy zero.",
   },
-  orchestrator: {
-    head: "Orchestrator",
+  overseer: {
+    head: "Overseer",
     what: "What this tool is meant to become: a coordinator agent rather than a person with a mouse.",
     how: "It is a roadmap, not a feature. Nothing on that panel is live, and it says so.",
   },

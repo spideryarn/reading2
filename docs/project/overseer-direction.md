@@ -369,10 +369,23 @@ rather than untidiness — this box hit load 391 with the OOM killer firing that
 were on the table (coexist on staggered ticks; the Overseer collects and the dashboard reads it) and
 the dashboard agent supplied a third that beats both: **the Overseer is a consumer.** It subscribes
 to the dashboard's `/api/live` SSE stream and appends on each `snapshot` event, polls `/api/state` if
-the stream drops, and falls back to its own `collect()` only when the server is unreachable — slowly,
-because a fallback that grazes every 12 seconds on a swapping box is worse than a gap in the history.
-The dashboard collects on a chain (60s from the *end* of each run, 5× backoff after a failure), not
-on a fixed interval, for the same reason.
+the stream drops. The dashboard collects on a chain (60s from the *end* of each run, 5× backoff
+after a failure), not on a fixed interval, because a collector that grazes every 12 seconds on a
+swapping box is worse than a gap in the history.
+
+**This paragraph used to end *"and falls back to its own `collect()` only when the server is
+unreachable"*, and that has not been true since the plan removed it** — corrected 2026-09-08 after
+the sentence was quoted in a review and then checked against the code.
+[`source.ts`](../../tools/overseer/source.ts) says so in its own header: *"it never calls
+`collect()`, and there is deliberately no local fallback that would"*, because a local collection
+would return a different contract — `FleetSnapshot` has no `health` field — and a second contract
+wearing one name is worse than no fallback.
+
+**So the consequence is sharper than "the Overseer depends on the dashboard".** The `/api/state`
+poll is not a second source; it is the same source down a slower pipe. **When the dashboard is down
+the Overseer has nothing at all**, and the thing that must therefore never be allowed to look healthy
+is a daemon ticking against an empty stream — which is exactly what the two clocks below are for, and
+exactly what a watchdog reading only the heartbeat would bless.
 
 **The coupling this creates runs the opposite way, and is accepted knowingly:** the Overseer now
 depends on the dashboard being up. Hence two clocks in the state file rather than one — `writtenAt`

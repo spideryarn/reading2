@@ -307,6 +307,33 @@ already exist; what is missing is a session-friendly way to call them, since tod
 over HTTP and from a browser. Then `OrchestratorPanel.tsx` → the Overseer, which Greg approved once
 the wave-2 worktrees had calmed down.
 
+## The watchdog is honest and its verdict reaches nobody
+
+Noticed on reading the diff, 2026-09-08, and worth writing down before it becomes the thing we
+congratulate ourselves on. `overseer-watchdog` distinguishes its three failure states properly and
+exits non-zero when the daemon has stopped ticking. **That exit code goes into the journal and
+`systemctl is-failed`, and nothing on this box looks at either.**
+
+Which is the shape of **A27** at a smaller scale, and the same shape as the Remote Control finding
+already on this page: *a thing that reports fine until the moment it is needed, with no signal
+reaching anyone.* A watchdog whose alarm is a line in a log nobody reads has moved the silence, not
+removed it.
+
+**Two things follow, and only the first is in this job.**
+
+- **Write the verdict where something already looks.** The watchdog appends its result to the store,
+  so the dashboard can render *"the watchdog last said the daemon was stale, 40 minutes ago"* on the
+  surface that already exists for exactly this — the direction doc's rule that *"the Overseer was
+  last seen 40 minutes ago"* belongs where the count would be, not in a footer.
+- **Restarting the daemon is the tempting next step and is deliberately not taken yet.** The case the
+  watchdog catches — a process that is alive and not ticking — is precisely the one
+  `Restart=always` cannot see, so a restart is the obviously right action. But `systemctl restart` on
+  a system unit needs root, the watchdog runs as `greg`, and the polkit rule or `sudoers` line that
+  would fix that is **a change to the box, so it is a change to the file that builds the next one**
+  ([hetzner-remote-server-box.md](../project/hetzner-remote-server-box.md#a-change-to-the-box-is-a-change-to-a-file)),
+  and it hands an unattended timer the ability to restart services. That is Greg's call, not a
+  detail to slip into a stage about scheduling.
+
 ## Deliberately not in this job
 
 - **The decision-log web mode.** Greg asked for it; it is the dashboard's tense, and `tools/fleet/`
