@@ -306,6 +306,192 @@ export function ChatDialog({
   useEscapeToClose(onClose);
 
   /**
+   * ## The dialog gives the keyboard back
+   *
+   * The same modeless lifecycle `CommentDialog` has (§ *The dialog takes focus,
+   * and gives it back*) and the Comments drawer before it, and it is here for
+   * the same reason: **this box takes focus and then unmounts the element
+   * holding it.** The `draft` arm focuses its composer (`focusNonce={1}`), so
+   * closing the dialog drops the reader on `<body>` and their next Tab starts
+   * again from the top of the article.
+   *
+   * **The opener is a real control and it is always gone**, which is stronger
+   * than `CommentDialog`'s case rather than weaker. A chat draft is opened from
+   * the block gutter's Help button (`reader/Reader.tsx § helpAboutBlock`, wired
+   * to `BlockGutter`'s `onHelp`), and that handler calls `setOpen(false)`
+   * **before** `onHelp(id)` — so the disclosure collapses and takes the pressed
+   * button with it. `isConnected` is therefore not defensive tidiness here, it
+   * is the ordinary path, and the fallback is what actually runs.
+   *
+   * **The fallback is the passage's own "…", not a dock button.** There is no
+   * Chat button in the dock to fall back to — checked, the dock's labels are
+   * Commands, Comments, Metadata, Tweets and Spideryarn, and Chat is a *mode* in
+   * the radiogroup rather than a panel. Falling back to a mode switch would put
+   * the reader somewhere they never were. The row's `.blk-more` is where they
+   * actually were, it is always rendered rather than only while the disclosure
+   * is open, and it is where `BlockGutter` itself restores focus on Escape. The
+   * row is remembered at mount, because by cleanup the button that names it has
+   * gone.
+   *
+   * **No trap and no `aria-modal`**, unchanged — the prose behind stays live,
+   * which is the whole point of a modeless dialog and is argued at length in
+   * `CommentDialog`.
+   *
+   * GPT Sol F42, 2026-09-07. Its sibling finding about `AnnotateDialog` was
+   * **not** built, and the reason is written in the plan: Annotate is reachable
+   * only through `onMouseUp` after a drag across the prose, and a drag across
+   * non-focusable text has already blurred to `<body>` — measured in Chrome —
+   * so it opens from body and returns to body, losing nothing.
+   */
+  /**
+   * **Captured during the first render, not in an effect**, and that is the one
+   * subtle thing here. React runs a child's effects before its parent's, and the
+   * composer inside this panel focuses itself on mount — so a parent effect
+   * asking `document.activeElement` gets *the composer*, not the control the
+   * reader pressed. It recorded the panel as its own opener and restored focus
+   * to a textarea that was being deleted. A test caught it; the lazy
+   * initialiser below runs before any of that.
+   *
+   * `CommentDialog` does not hit this because it takes focus in the same effect
+   * that records the opener, so the read happens first by construction.
+   */
+  const [opened] = useState(() => {
+    const at = typeof document === "undefined" ? null : document.activeElement;
+    const opener = at instanceof HTMLElement ? at : null;
+    /* The row is remembered now too, while the button that names it is still in
+       the document — by cleanup the disclosure has collapsed and taken it. */
+    return { opener, row: opener?.closest("tr[data-block]") ?? null };
+  });
+  /**
+   * **Which arm the dialog opened in, frozen at mount.**
+   *
+   * `target` changes underneath a mounted dialog — a draft becomes a thread the
+   * moment the first question is sent — so anything keyed on the *current* kind
+   * would fire then. That is precisely the moment focus must not move: the
+   * reader has just typed, and the composer is where they are.
+   */
+  const [openedAs] = useState(() => target.kind);
+  /** The panel itself, so the cleanup can ask whether the focus it is about to destroy was inside it. */
+  const box = useRef<HTMLElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
+
+  /**
+   * ## Opening an existing conversation lands the keyboard somewhere
+   *
+   * The `draft` arm focuses its composer (`focusNonce={1}`); the `thread` arm
+   * passes `{0}` and focused **nothing at all**, so arriving at `?thread=` left
+   * the reader wherever they had been — the same shape as the gap GPT Sol found
+   * in the Dock drawer, which A2 fixed there and not here.
+   *
+   * **The composer is deliberately not the target**, and passing `{1}` here
+   * would be undoing a decision rather than filling a gap. Greg, 2026-08-26:
+   * *"when a new chat is started, move focus to the input box"* — and
+   * `ChatPanel`'s own note says that is *"the only time it is right"*, because a
+   * focused textarea turns ↑ / ↓ from "step through the article" into "move the
+   * cursor" with nothing on screen to say why (docs/project/keyboard.md).
+   *
+   * So it is the close control: it exists in every state this dialog can open
+   * in — thread, loading, and the conversation-has-gone case — where a heading
+   * may not; it is already a tab stop and already the reader's way out; and it
+   * is what `CommentDialog` does, so this is the established pattern rather than
+   * a second one. GPT Sol F44 and its follow-up, 2026-09-07.
+   */
+  useEffect(() => {
+    if (openedAs !== "thread") return;
+    closeRef.current?.focus();
+  }, [openedAs]);
+
+  /**
+   * ## Sending the first question does not cost the reader the caret
+   *
+   * `target` changes underneath this dialog: the moment a draft is sent it
+   * becomes a thread, and the draft arm's composer is **unmounted by the swap** —
+   * before the dialog closes at all. So the reader presses Enter and focus falls
+   * to `<body>`, mid-conversation, with the panel still open in front of them.
+   *
+   * **This was recorded as a known gap and left alone, and that was the wrong
+   * call.** The argument for leaving it was that choosing a destination changes
+   * what happens after Enter, which is product. GPT Sol's answer on the stage-5a
+   * review is the one that settles it: *"If the outgoing composer held focus,
+   * moving focus to its semantic replacement preserves an existing interaction;
+   * it does not apply the disputed policy."* The disputed policy is "focus every
+   * reopened thread's composer", which this is not — the condition below is
+   * exactly that the reader was already typing.
+   *
+   * So: only when focus was in the composer that is going away, and only on the
+   * draft → thread transition. A reader who sent from the keyboard shortcut with
+   * focus elsewhere is left where they are, and `?thread=` opened cold still
+   * lands on the close control above.
+   */
+  const wasDraft = useRef(target.kind === "draft");
+  /**
+   * Read **on the swapping render itself**, which is the only moment the answer
+   * exists: the outgoing composer is still focused and still in the document,
+   * and React has not committed the replacement yet. A first attempt sampled on
+   * the previous *draft* render instead and was always false, because the reader
+   * had not started typing when that render happened — the test said so.
+   */
+  const swapping = wasDraft.current && target.kind === "thread";
+  const caretWasInside =
+    swapping && typeof document !== "undefined"
+      ? box.current?.contains(document.activeElement) === true
+      : false;
+  useEffect(() => {
+    wasDraft.current = target.kind === "draft";
+    if (!caretWasInside) return;
+    box.current?.querySelector<HTMLTextAreaElement>("textarea")?.focus();
+  }, [target.kind, caretWasInside]);
+  useEffect(() => {
+    const panel = box.current;
+    const back = opened.opener;
+    const row = opened.row;
+    return () => {
+      /* **"Is the focus we are about to destroy ours?"** — not "has focus gone
+         to the body", which was the first attempt and is wrong here: React runs
+         this cleanup *before* it detaches the subtree, so the composer is still
+         the active element at this point and the body test never fires. A test
+         caught it. `CommentDialog` keeps a `dialogRef` to ask the same question.
+
+         The distinction is the one `EditableTitle` makes (TitleEditor.tsx § the
+         pencil and the input swap): a reader who has already clicked something
+         real must be left on it. Here "real" means anything outside this
+         panel. */
+      const at = document.activeElement;
+      const ours = at === null || at === document.body || panel?.contains(at) === true;
+      if (!ours) return;
+      /**
+       * **Deferred, because a cleanup is not proof of an unmount.**
+       *
+       * `main.tsx` wraps the app in `<StrictMode>`, which runs every effect
+       * setup → cleanup → setup on mount. So this cleanup fires once while the
+       * dialog is perfectly well mounted, and restoring there put focus back on
+       * the Help button and left a reader who had just opened a draft with no
+       * caret in the composer — a regression introduced *by* this fix, and
+       * invisible to any test that does not use StrictMode. GPT Sol found it on
+       * the stage-5a review; `tests/chat-dialog-gives-focus-back.test.tsx`
+       * § under StrictMode is the test that proved it.
+       *
+       * `isConnected` cannot be asked *now*: React runs cleanups before it
+       * detaches the subtree, so the panel is still in the document either way —
+       * which is the same fact that made the `body` test wrong above. Asked one
+       * microtask later it separates them cleanly: a real unmount has detached
+       * by then, StrictMode's synthetic cycle has not.
+       *
+       * The `activeElement` question stays synchronous, because by the microtask
+       * focus has already fallen to `<body>` and the answer would be useless.
+       */
+      queueMicrotask(() => {
+        if (panel?.isConnected !== false) return;
+        if (back?.isConnected) {
+          back.focus();
+          return;
+        }
+        if (row?.isConnected) row.querySelector<HTMLButtonElement>(".blk-more")?.focus();
+      });
+    };
+  }, [opened]);
+
+  /**
    * The answer currently arriving, if one is.
    *
    * `pending` on the **last** message only. A `pending` row anywhere else is a
@@ -455,13 +641,21 @@ export function ChatDialog({
    * one, or a first answer would have had no way to stop at all.
    */
   const stopControl = (
-    <button type="button" className="chat-dialog-close" onClick={onClose} title="Close (Esc)" aria-label="Close">
+    <button
+      ref={closeRef}
+      type="button"
+      className="chat-dialog-close"
+      onClick={onClose}
+      title="Close (Esc)"
+      aria-label="Close"
+    >
       <X size={15} />
     </button>
   );
 
   return (
     <aside
+      ref={box}
       className="chat-dialog"
       /* `.cmt-dialog`'s geometry and `.cmt-dialog`'s problem: pinned to the
          bottom of the layout viewport, which on iOS is behind the keyboard —

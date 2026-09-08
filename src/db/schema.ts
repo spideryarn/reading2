@@ -3843,10 +3843,15 @@ export const checkpoints = spideryarn.table(
       .notNull()
       .references(() => articles.id, { onDelete: "cascade" }),
     /**
-     * Which checkpoint this is. **Deliberately not a `StepName`** — `labels` is
-     * not a step (the `revision_step_runs_step` CHECK rejects it, and the plan
-     * has already been bitten once by that), and two different checkpoints
-     * under one step name would share a key space for no reason. A closed set,
+     * Which checkpoint this is. **Deliberately not a `StepName`**, and the
+     * reason has changed rather than gone away. It used to be that `labels` was
+     * not a step at all and `revision_step_runs_step` rejected the name; stage
+     * 2a of docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md
+     * brought the step back, so that CHECK now accepts it. What still holds is
+     * the other half: `hierarchy` writes **two** kinds of checkpoint
+     * (`hierarchy-structure` and `hierarchy-deepen`), so a namespace keyed on
+     * the step name would share one key space between them for no reason. A
+     * closed set,
      * with the CHECK below, for the same reason `revision_step_runs_step` is
      * closed: a typo would otherwise open a namespace nothing ever reads.
      */

@@ -780,6 +780,21 @@ the route still knows what was asked for.
 | `POST /api/jobs {slug, steps}` — a glossary, ideas, a quiz | free |
 | `POST /api/jobs/:id/retry` of a re-run | free |
 | `POST /api/uploads` | asks, reserves nothing — refuses at the door so nobody transfers 11 MB to be told no |
+| the free `labels` job a publication queues for itself | free, and never sees a route at all |
+
+**The last row is the only job in the app that no request asked for**, and it is worth reading the
+table again with it in mind. `publishRevisionIn` ([`src/store/pg-revisions.ts`](../../src/store/pg-revisions.ts))
+queues a `{ steps: ["labels"] }` job inside the publication's own transaction whenever the revision
+reaches the shelf with `nav_label_status = 'pending'` —
+[hierarchy.md § Two passes](hierarchy.md#two-passes). It spends nothing, and **by omission
+rather than by a guard**: `enqueueSuccessorIn` ([`src/store/pg-successor.ts`](../../src/store/pg-successor.ts))
+has no `ingestEventId` and no parameter for one, so `settleReservation`'s first line —
+`if (!ingestEventId) return` — makes every ending of it a no-op. There are exactly two ways to
+charge it by accident: route it through a request body carrying a `url`, or copy the parent's
+`ingestEventId` onto it. Both are named in the titles of cases in
+[`tests/publication-enqueues-the-labels-successor.test.ts`](../../tests/publication-enqueues-the-labels-successor.test.ts),
+because the second one's natural failure is `jobs_ingest_event_unique` — safe, and completely
+unintelligible to whoever hits it.
 
 **Retry is a second front door.** It never passes through the `POST /api/jobs` handler — straight to
 `retryJob` → `enqueue()` — so a check bolted onto that handler alone leaves a failed ingest

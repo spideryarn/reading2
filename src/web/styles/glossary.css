@@ -55,7 +55,19 @@
   font-size: 0.84rem;
   cursor: pointer;
 }
-.gloss-sort-btn:hover { color: var(--ink); background: var(--surface-raised); }
+/* **Behind `(hover: hover)`, and pressed feedback beside it.** The wash and the
+   `.on` state below paint almost the same box, so on iOS — where a tap leaves
+   the hover state stuck on whatever was last touched — an unpressed order could
+   sit there looking pressed, which is a control lying about what the list is
+   sorted by. `:active` is the half a finger *does* get, and without it a tap
+   that landed and a tap that missed looked identical.
+
+   Both spellings live in quotes.css too, and the two rows must not drift; see
+   § a coarse pointer in narrow-window.css and tests/touch-controls.test.ts. */
+@media (hover: hover) {
+  .gloss-sort-btn:hover { color: var(--ink); background: var(--surface-raised); }
+}
+.gloss-sort-btn:active { color: var(--ink); background: var(--surface-raised); }
 .gloss-sort-btn.on {
   border-color: var(--rule-strong);
   background: var(--surface-raised);

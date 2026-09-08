@@ -1,0 +1,28 @@
+  Swap has sat at exactly 20 GB for 27 minutes. That's not pressure that's still building — it's pages the crisis pushed out that will stay out until
+  the processes owning them exit. My "swap under half" line is a proxy that may never clear on this box, so continuing to wait on it is waiting on the
+  wrong number. The metric that actually predicts an OOM is available RAM and whether swap is growing; both are steady.
+
+  I've started nothing, and I'd rather you pick than have me quietly overrule a gate I set an hour ago.
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ ☐ How to finish
+
+│ The 260907f work is committed and unpushed, waiting on one clean full-suite run. Three attempts have now been killed or blocked by box conditions
+│ rather than by anything in the code. How do you want to close it out?
+
+❯ 1. Run it at low concurrency (Recommended)
+     `npx vitest run --maxWorkers=2` in tmux — the neighbourly version. Far less memory than the default fan-out that caused the pile-up, so it can
+     run on a box 18 agents share without being the thing that tips it. Slower (maybe 25–40 min rather than 15), but it is a real full-suite pass
+     rather than an argument for skipping one.
+  2. Push now on existing evidence
+     Typecheck clean across all three projects; every file the diff touches green when run individually (changelog-page 32, site-footer 17,
+     build-description 8, styles-entry 6, logo-animation 25, plus changelog-file and command-match); the pre-merge run reached 810 passed with all
+     three failures explained and fixed. dev builds nothing, so nothing reaches readers — the full suite matters most before `npm run deploy`, which
+     is yours to run.
+  3. Keep waiting for a quiet box
+     Arm another wake-up and try again later, gating on available RAM and load rather than on the stuck swap figure. Safest for the other agents, but
+     the work stays unpushed and invisible to the other machine for however long that takes — and the box has not been quiet all night.
+  4. Type something.
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  5. Chat about this
+
+Enter to select · ↑/↓ to navigate · Esc to cancel

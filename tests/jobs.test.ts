@@ -115,7 +115,6 @@ import {
   orderSteps,
   sameWork,
   unrunnableStepPlan,
-  workKeyFor,
 } from "../src/jobs.js";
 import type { SlugHolder } from "../src/jobs.js";
 import {
@@ -128,7 +127,7 @@ import {
 import type { ConvertedProduct } from "../src/pipeline.js";
 import { isSlug, urlKey } from "../src/ingest.js";
 import type { ArtifactKind, ArtifactParts } from "../src/store/artifacts.js";
-import { mintAttempt } from "../src/store/jobs.js";
+import { mintAttempt, workKeyFor } from "../src/store/jobs.js";
 import { pgJobStore } from "../src/store/pg-jobs.js";
 import { jobWorthRetrying } from "../src/job-failure.js";
 import { parseJobRequest } from "../src/routes.js";

@@ -192,8 +192,12 @@ export function VisitorBand({ gap, signedIn }: { gap: VisitorGap; signedIn: bool
 }
 
 /**
- * The same sentence, for the two places that are not a mode band: the drawer
- * where the owner's comments would be, and the tweets page.
+ * The same sentence, for the place that is not a mode band: the tweets page.
+ *
+ * It served two until 2026-09-04, the other being the drawer where the owner's
+ * comments would be. A shared link carries those comments now, so there is no
+ * gap there to describe, and the `readers-own` variant this drew for it was
+ * deleted on 2026-09-08 (visitor.ts § `FIXED_BY_AN_ACCOUNT`).
  */
 export function VisitorNotice({ gap, signedIn }: { gap: VisitorGap; signedIn: boolean }) {
   return (
@@ -208,11 +212,16 @@ export function VisitorNotice({ gap, signedIn }: { gap: VisitorGap; signedIn: bo
  * **Whether to put the offer in front of this particular reader**, which is two
  * questions and not one.
  *
- * `anAccountWouldHelp` asks whether an account is the fix *for this gap* — it
- * is not, for an artefact waiting on slice 1b or for somebody else's comments.
- * This adds the second: whether the reader has one already. Both have to be
- * true, and they fail for different reasons — the first would be a promise we
- * break, the second an offer of something they are holding.
+ * `anAccountWouldHelp` asks whether an account is the fix *for this gap*. Today
+ * it always is — the two kinds that it was not for are both gone, one with
+ * slice 1b and one on 2026-09-08 — so the branch that still decides something
+ * here is the second: whether the reader has an account already. Both have to
+ * be true, and they fail for different reasons — the first would be a promise
+ * we break, the second an offer of something they are holding.
+ *
+ * The first is kept rather than dropped for the reason visitor.ts §
+ * `FIXED_BY_AN_ACCOUNT` gives: a gap kind an account cannot fix is a thing that
+ * can come back, and 260904c names the flag that would bring one.
  *
  * Note what is NOT gated on `signedIn`: the sentence. The reason a control is
  * unavailable is shown to everybody, because it is a fact about the page rather

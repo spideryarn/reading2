@@ -99,8 +99,8 @@ function article(): Article {
 }
 
 const STAGES = [
-  { step: "fetch", label: "Fetching the page", outputs: ["raw/a.html"], done: true, ranAt: null, bytes: null },
-  { step: "extract", label: "Reading the text out", outputs: ["output/a.html"], done: false, ranAt: null, bytes: null },
+  { step: "fetch", label: "Fetching the page", outputs: ["raw/a.html"], done: true, ranAt: null, startedAt: null, bytes: null },
+  { step: "extract", label: "Reading the text out", outputs: ["output/a.html"], done: false, ranAt: null, startedAt: null, bytes: null },
 ];
 
 let host: HTMLDivElement;

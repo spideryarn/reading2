@@ -54,7 +54,6 @@ import { artefactsIn, artefactsOf } from "../src/web/public-artefacts.js";
 import { MODES, type Mode } from "../src/web/params.js";
 import {
   anAccountWouldHelp,
-  COMMENTS_GAP,
   markedModes,
   notBuiltGap,
   visitorGap,
@@ -177,12 +176,6 @@ describe("what a visitor is told, mode by mode", () => {
     expect(visitorSentence(visitorGap("referee", EVERYTHING_BUILT) as VisitorGap)).toBe(
       ownersOnly("Referee"),
     );
-  });
-
-  /** The owner's own annotations, which sharing an article does not share. */
-  it("keeps the comments with whoever added the article", () => {
-    expect(COMMENTS_GAP.kind).toBe("readers-own");
-    expect(anAccountWouldHelp(COMMENTS_GAP)).toBe(false);
   });
 
   /**
@@ -361,13 +354,10 @@ describe("the sentences themselves", () => {
   const ALL: VisitorGap[] = [
     visitorGap("glossary", NOTHING_BUILT) as VisitorGap,
     visitorGap("chat", NOTHING_BUILT) as VisitorGap,
-    COMMENTS_GAP,
   ];
 
   it("covers every kind the union has", () => {
-    expect(new Set(ALL.map((g) => g.kind))).toEqual(
-      new Set(["not-built", "owners-only", "readers-own"]),
-    );
+    expect(new Set(ALL.map((g) => g.kind))).toEqual(new Set(["not-built", "owners-only"]));
   });
 
   it("says something different for each kind", () => {
@@ -397,18 +387,25 @@ describe("the sentences themselves", () => {
   });
 
   /**
-   * **The offer is withheld where it would not be kept.**
+   * **Both kinds are fixed by an account, and there is no longer a third that
+   * is not.**
    *
-   * Comments belong to whoever added the article, and an account does not
-   * change that until docs/plans/260827ai-public-read-only-access.md § Stage 3. The two
-   * entries that used to be withheld for the other reason — *we are the ones
-   * who have not shipped it* — went with their union members in slice 1b, which
-   * is why there is one `false` here and there were three.
+   * This test had three `false`s once, then one, and now none. Two went with
+   * their union members in slice 1b; the last, `readers-own`, went on
+   * 2026-09-08, because *a shared link carries the piece, never anybody's notes
+   * about it* stopped being true on 2026-09-04 (260904c § Stage 3).
+   *
+   * **It is not vacuous now that the map answers `true` twice.** The values are
+   * data rather than types, and the thing worth catching is somebody flipping
+   * one: a `false` here withholds the sign-up offer from a signed-out visitor
+   * at exactly the moment they have found the thing an account would give them
+   * (PublicChrome.tsx § `offerAnAccount`). What the compiler covers instead is
+   * a *new* kind, which cannot be added without deciding — visitor.ts §
+   * `FIXED_BY_AN_ACCOUNT` says why the map was not collapsed to `return true`.
    */
-  it("offers an account only where an account is the fix", () => {
+  it("offers an account for every gap a visitor can meet", () => {
     expect(anAccountWouldHelp(visitorGap("glossary", NOTHING_BUILT) as VisitorGap)).toBe(true);
     expect(anAccountWouldHelp(visitorGap("chat", NOTHING_BUILT) as VisitorGap)).toBe(true);
-    expect(anAccountWouldHelp(COMMENTS_GAP)).toBe(false);
   });
 });
 

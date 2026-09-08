@@ -1824,6 +1824,34 @@ export interface StageState {
    */
   ranAt: string | null;
   /**
+   * When that same run **began**, ISO — `started_at` on the one
+   * `revision_step_runs` row. `null` when nothing recorded one.
+   *
+   * Here so the page can say *how long it took*, which is a subtraction and not
+   * a field: Greg asked for it on 2026-09-07
+   * (docs/plans/260908a-exact-time-and-duration-on-the-metadata-step-rows.md).
+   *
+   * **This is not the `started_at` fallback `ranAt` refuses**, and the
+   * distinction is the whole reason both can exist. That refusal is about which
+   * stamp answers *when did this stage last run* — a run that began and wrote
+   * nothing must not put a timestamp on that question. This field answers a
+   * different one, only ever alongside a `ranAt`, and it goes to `null` on its
+   * own rather than standing in for anything.
+   *
+   * **The pair always describes one run.** `beginStepRun` writes `started_at`
+   * and blanks `finished_at` in the same `values`; `finishStepRun` only updates
+   * a row still `running` under its own attempt token; `beginDraftIn` carries
+   * both columns forward together. So there is no path that leaves a start from
+   * one run beside a finish from another — which there would have to be for the
+   * subtraction to lie. See src/store/pg-revisions.ts.
+   *
+   * A **carried-forward** row therefore reports the run that happened in the
+   * revision this one was drafted from. That is exactly what `ranAt` already
+   * does, and the row's sentence is *"when this stage last finished"* rather
+   * than *"during this revision"* for that reason.
+   */
+  startedAt: string | null;
+  /**
    * What those outputs weigh, in bytes, added up. `null` where there are no
    * files to weigh — every Postgres row, and a stage that has written nothing.
    *

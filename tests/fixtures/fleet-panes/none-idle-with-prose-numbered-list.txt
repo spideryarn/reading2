@@ -1,0 +1,41 @@
+  And one mistake of mine that a subagent caught. Re-stamping the migration during the merge, I rebuilt its snapshot by hand and checked the wrong key
+  for check constraints, silently dropping 'labels' from a constraint the database has had for days.
+
+  Technical health
+
+  Good, and better than when this started. The migration-watermark hazard is closed properly rather than worked around. The cascade test is now
+  derived from the schema, so a fifteenth foreign key goes red instead of passing silently. The one piece of debt I'm carrying deliberately is
+  deleteTerminalJobs inheriting an exposure that trimFinished has always had — a terminal job with an unsettled reservation is possible in the
+  database even though no application path produces one. I've asked for a cheap guard, with instructions to stop and report rather than build it if it
+  needs a schema change.
+
+  What's left, and what it costs
+
+  1. The two fix passes now running, then a narrowly scoped third check on each — not general discovery, which closed at round two.
+  2. npm run check on a settled tree. The last run was red on two gates and couldn't attribute the failure, because three agents had uncommitted work
+     in the tree.
+  3. Push to dev. Half a day, most of it review latency rather than typing.
+  4. Not the routes.ts immutable cache-header item, and not the "Not shared" wording a deleted article's URL shows its own owner. Both recorded for
+     you.
+
+  Cost/benefit
+
+  Still clearly worth it — and the shape of the spend has been reviews, not construction. A–D delivers what a reader recognises: the article is gone,
+  the shelf is right, the bill is right.
+
+  Stage E remains most of the remaining cost and none of the visible value. You confirmed it once with the cost visible, so I'm not reopening it — but
+  it wants its own plan doc rather than being the tail of this one. I'll give you the full explanation of why it's a lot of work when A–D is pushed,
+  as you asked.
+
+✻ Waiting for 2 background agents to finish
+
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  [Opus 5 (1M context)] worktrees/delete-article-permanently (worktree-delete-article-permanently*) ⑂ delete-article-permanently · ██░░░░░░░░ 29%
+  ⏵⏵ auto mode on · 11 shells, 1 monitor · ← for agents
+                                                                                                                                          /rc failed
+
+  ● main
+  ◯ general-purpose  Tailing dap-check2 log for EXIT                                                                       51m 48s · ↓ 192.5k tokens
+  ◯ general-purpose  Re-running article-delete-pg.test.ts three times                                                      51m 23s · ↓ 239.7k tokens

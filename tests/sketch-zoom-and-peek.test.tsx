@@ -770,3 +770,94 @@ describe("the paths a passing test was not reaching", () => {
     }
   });
 });
+
+/**
+ * **The backdrop of the full-screen overlay — the one way out of it nothing
+ * tested.**
+ *
+ * Five native `<dialog>`s in this app close on a press outside them, all five
+ * by the same three lines — an `onClick` on the dialog and, here,
+ * `if (e.target === dialog.current) setFull(false)`. Until 2026-09-07 not one
+ * test anywhere dispatched a click whose target was the dialog;
+ * tests/feedback-dialog.test.tsx § *the backdrop* is the first of the five and
+ * carries the measurement of how much of it was really unprotected.
+ *
+ * **Why the target comparison is the whole mechanism.** A modal `<dialog>`'s
+ * `::backdrop` is not a separate element: a press on the dimmed area arrives
+ * with the dialog itself as the target, while a press on anything the dialog
+ * contains arrives with that child and bubbles up through the same handler. So
+ * one equality test separates "outside" from "inside" — and losing it makes
+ * every press on the enlarged picture put it away, which is the opposite of
+ * what Enlarge is for: the whole reason to be here is that the band renders the
+ * text at about five pixels and this does not.
+ *
+ * jsdom has no `showModal` and no `::backdrop`, and neither is needed here: the
+ * handler compares targets and nothing else. That a real backdrop press does
+ * target the dialog is the platform's contract, which is why these assert on
+ * the target rather than on a pixel. `SketchView.tsx`'s own docblock records
+ * that the backdrop press was driven for real in a browser pass; what was never
+ * pinned is that it goes on working.
+ *
+ * The overlay is entered by pressing Enlarge, because `full` is this
+ * component's own state and there is no prop to nail open — so `setFull(false)`
+ * really has to run for anything below to pass. The picture is mounted **only
+ * while open**, so `.sk-in-full` is the second, independent witness that `full`
+ * itself moved rather than the dialog closing under a band that still says the
+ * picture is full screen.
+ */
+describe("the backdrop of the full-screen overlay", () => {
+  /** Enlarge, and hand back the `<dialog>` that is now open. */
+  async function enlarge(): Promise<HTMLDialogElement> {
+    const dialog = host.querySelector<HTMLDialogElement>("dialog.sk-full");
+    expect(dialog, "no overlay to enlarge into").not.toBeNull();
+    /* jsdom implements neither, and a `<dialog>` without them never reports
+       open — the same per-element stand-in tests/illustrated-view.test.tsx
+       uses for its twin of this overlay. */
+    if (dialog) {
+      dialog.showModal = function showModal(this: HTMLDialogElement) {
+        this.setAttribute("open", "");
+      };
+      dialog.close = function close(this: HTMLDialogElement) {
+        this.removeAttribute("open");
+        this.dispatchEvent(new Event("close"));
+      };
+    }
+    const zoom = host.querySelector<HTMLButtonElement>(".sk-zoom");
+    expect(zoom, "no Enlarge to press").not.toBeNull();
+    await act(async () => {
+      zoom?.click();
+    });
+    expect(dialog?.hasAttribute("open"), "Enlarge did not open the overlay").toBe(true);
+    return dialog as HTMLDialogElement;
+  }
+
+  it("closes on a press whose target is the dialog itself", async () => {
+    serving();
+    await mount();
+    const dialog = await enlarge();
+
+    await act(async () => {
+      dialog.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(dialog.hasAttribute("open")).toBe(false);
+    expect(host.querySelector(".sk-in-full"), "`full` is still true behind a closed dialog").toBeNull();
+  });
+
+  it("stays open when the press lands on something inside it", async () => {
+    serving();
+    await mount();
+    const dialog = await enlarge();
+
+    const inside = dialog.querySelector(".sk-in-full");
+    expect(inside, "nothing inside the overlay to press").not.toBeNull();
+    await act(async () => {
+      inside?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    /* Without the comparison, a press anywhere on the enlarged picture would
+       collapse it back into the band. */
+    expect(dialog.hasAttribute("open")).toBe(true);
+    expect(host.querySelector(".sk-in-full")).not.toBeNull();
+  });
+});

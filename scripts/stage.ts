@@ -209,6 +209,50 @@ async function drive(job: Job): Promise<Job> {
  * `step failed:` log line this process has already printed to stdout, with the
  * stack in it (src/jobs.ts § `errorFields`), so the pointer is what this adds.
  */
+/**
+ * The one thing this command cannot finish, said where somebody will read it.
+ *
+ * **A `hierarchy` that ran leaves the paragraph labels unbought**, and that is
+ * by construction rather than by luck: the step writes a `PendingLabelsFile`
+ * and the store deletes the article's `labels` receipt in the same transaction
+ * (src/store/artifacts-pg.ts). Publication queues a free job to finish them —
+ * and in a browser that is the end of it, because `jobEngine` drives every
+ * queued job the signed-in owner has, from any page
+ * (docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md § Who
+ * actually runs the successor).
+ *
+ * **There is no browser here.** `drive` above advances *its own* job and only
+ * its own, so a terminal run publishes a readable article and exits with the
+ * labels still queued. Nothing on the server picks them up either: `pump` lives
+ * in src/jobs.ts and every publication path is in src/store/, and reaching
+ * across is the import cycle that moved `workKeyFor`. Greg chose to leave it
+ * that way on 2026-09-07 rather than have this command spend the label time —
+ * so what it owes the operator is the next command, not a fix.
+ *
+ * **`done` and not `skipped`**, which is the whole precision of it: a skipped
+ * `hierarchy` wrote no manifest and took no receipt, so its article's labels are
+ * whatever they already were. Saying otherwise on every run is how a hint stops
+ * being read.
+ *
+ * **Not exported and not tested, deliberately.** This file runs its CLI at
+ * module top level, so importing it to reach this function would run the
+ * command — and adding an `import.meta` guard to a script several agents share,
+ * to cover two lines of `console.log`, is a worse trade than leaving it
+ * uncovered. What could actually go stale is the invariant underneath, and that
+ * *is* pinned: tests/labels-receipt-invalidation.test.ts holds `hierarchy` to
+ * writing a pending manifest and taking the receipt with it. If that test ever
+ * changes shape, this sentence is the other thing to correct.
+ */
+function labelsHint(job: Job): string[] {
+  const ran = job.steps.find((s) => s.name === "hierarchy" && s.status === "done");
+  if (!ran) return [];
+  return [
+    "  Paragraph labels are queued, not generated — this command drives only its own job.",
+    `  \`npm run labels -- ${job.slug}\` generates them now.`,
+    "",
+  ];
+}
+
 function reportAndExit(job: Job, extra: string[] = []): never {
   for (const s of job.steps) {
     const note = s.detail ?? s.error ?? "";
@@ -216,6 +260,7 @@ function reportAndExit(job: Job, extra: string[] = []): never {
   }
   console.log("");
   for (const line of extra) console.log(line);
+  for (const line of labelsHint(job)) console.log(line);
   console.log(`Article:   ${job.slug}`);
   console.log(`Job:       ${job.status}`);
   if (job.status === "done") process.exit(0);

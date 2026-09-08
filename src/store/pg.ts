@@ -754,8 +754,15 @@ const REVISION_READ_POLICY: Record<
      The `article` grant is not optional: without it every reader gets a run of
      blank leaf cells the moment stage 2 starts writing `pending`, which is the
      regression this whole stage exists to prevent (src/web/nav-labels.ts). It is
-     one short text value on a read that already pulls every block. */
-  navLabelStatus: { article: "value" },
+     one short text value on a read that already pulls every block.
+
+     **The `publish` grant is the enqueue**, and it is the whole of what decides
+     it. `publishRevisionIn` (src/store/pg-revisions.ts) queues the free `labels`
+     successor for a revision that publishes `pending` and for no other — so
+     without the column on this read, either every publication buys a job or none
+     does, and the projection is a named list of columns precisely so that
+     question has to be answered rather than inherited. */
+  navLabelStatus: { article: "value", publish: "value" },
   requestedUrl: {},
   /* **Not on any read**, and deliberately not on `rawSource`. It is the
      *origin's* Content-Type header, and the response's is decided from
@@ -1000,6 +1007,12 @@ export const REVISION_PROJECTIONS = {
     basedOnRevisionId: articleRevisions.basedOnRevisionId,
     tree: articleRevisions.tree,
     excerpt: articleRevisions.excerpt,
+    /* Not a publication *gate* — nothing here refuses a `pending` revision, and
+       stage 1's whole point is that publishing without the labels is fine. It is
+       what tells the publication to queue the free `labels` successor, which is
+       the only thing that ever makes a `pending` revision stop being one. See
+       the policy entry above, and `publishRevisionIn` in src/store/pg-revisions.ts. */
+    navLabelStatus: articleRevisions.navLabelStatus,
   },
   /* **All six of these carry `FINGERPRINT_COLUMNS`, and none of them did until
      2026-08-31 except `arc`** (which had all four) and `ideas`/`sketch` (which
@@ -2827,6 +2840,13 @@ const rawPgArticleReader: ArticleReader = {
            No `bytes`: there are no files here, and a row count or a jsonb
            length would be a different measurement wearing the same label. */
         ranAt: run?.finishedAt?.toISOString() ?? null,
+        /* **The start of the same run, and it is not the fallback above.** The
+           refusal is about `ranAt`; this is its own field, sent so the page can
+           subtract, and it is `null` on its own rather than standing in for a
+           missing finish. `beginStepRun` writes the two together and
+           `finishStepRun` only closes a row it holds, so they cannot come from
+           two different runs — src/types.ts § `StageState.startedAt`. */
+        startedAt: run?.startedAt?.toISOString() ?? null,
         bytes: null,
       };
     });

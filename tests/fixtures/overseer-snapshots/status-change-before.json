@@ -1,0 +1,252 @@
+{
+ "schema": 1,
+ "rows": [
+  {
+   "id": "$1991",
+   "name": "html-upload-file-type-validation",
+   "title": "HTML upload file type validation",
+   "repo": "spideryarn/reading2",
+   "worktree": null,
+   "meta": {
+    "version": 1,
+    "kind": "claude",
+    "repo": "spideryarn/reading2",
+    "dir": "/home/greg/code/spideryarn2"
+   },
+   "startedAt": "2026-09-07T19:56:19.000Z",
+   "paneId": "%1994",
+   "panePid": 396205,
+   "claudeSessionId": "a851bc19-53da-4f23-8b70-acc5d942fd39",
+   "question": null,
+   "status": {
+    "kind": "idle"
+   }
+  },
+  {
+   "id": "$1643",
+   "name": "adversarial-fixtures-four-postmortems",
+   "title": null,
+   "repo": "spideryarn/reading2",
+   "worktree": null,
+   "meta": {
+    "version": 1,
+    "kind": "claude",
+    "repo": "spideryarn/reading2",
+    "dir": "/home/greg/code/spideryarn2"
+   },
+   "startedAt": "2026-09-06T21:42:25.000Z",
+   "paneId": "%1646",
+   "panePid": 645023,
+   "claudeSessionId": "117e181a-155b-435a-b95b-e74220678d1a",
+   "question": null,
+   "status": {
+    "kind": "idle"
+   }
+  },
+  {
+   "id": "$1207",
+   "name": "arch-a10-style-ownership",
+   "title": null,
+   "repo": "spideryarn/reading2",
+   "worktree": null,
+   "meta": {
+    "version": 1,
+    "kind": "claude",
+    "repo": "spideryarn/reading2",
+    "dir": "/home/greg/code/spideryarn2"
+   },
+   "startedAt": "2026-09-06T06:42:28.000Z",
+   "paneId": "%1210",
+   "panePid": 2679467,
+   "claudeSessionId": "b703205c-2c22-4c3d-a0e2-6f189f410f4b",
+   "question": null,
+   "status": {
+    "kind": "idle"
+   }
+  },
+  {
+   "id": "$1208",
+   "name": "arch-a5-mode-surface",
+   "title": null,
+   "repo": "spideryarn/reading2",
+   "worktree": null,
+   "meta": {
+    "version": 1,
+    "kind": "claude",
+    "repo": "spideryarn/reading2",
+    "dir": "/home/greg/code/spideryarn2"
+   },
+   "startedAt": "2026-09-06T06:42:47.000Z",
+   "paneId": "%1211",
+   "panePid": 2685057,
+   "claudeSessionId": "76667309-a22a-477c-af3b-4f16d1ce0cf0",
+   "question": null,
+   "status": {
+    "kind": "idle"
+   }
+  },
+  {
+   "id": "$1574",
+   "name": "bottom-bar-modes-tooltips-and-new-mode",
+   "title": "Bottom-bar modes tooltips and new-mode.md",
+   "repo": "spideryarn/reading2",
+   "worktree": null,
+   "meta": {
+    "version": 1,
+    "kind": "claude",
+    "repo": "spideryarn/reading2",
+    "dir": "/home/greg/code/spideryarn2"
+   },
+   "startedAt": "2026-09-06T20:03:31.000Z",
+   "paneId": "%1577",
+   "panePid": 3921071,
+   "claudeSessionId": "e9ec435f-7e67-4046-a657-924bdff46e17",
+   "question": null,
+   "status": {
+    "kind": "idle"
+   }
+  },
+  {
+   "id": "$1992",
+   "name": "changelog-redesign-and-open-source-page",
+   "title": "Changelog redesign and open source page",
+   "repo": "spideryarn/reading2",
+   "worktree": null,
+   "meta": {
+    "version": 1,
+    "kind": "claude",
+    "repo": "spideryarn/reading2",
+    "dir": "/home/greg/code/spideryarn2"
+   },
+   "startedAt": "2026-09-07T20:00:02.000Z",
+   "paneId": "%1995",
+   "panePid": 430640,
+   "claudeSessionId": "3dbdbfcb-3264-4b23-9243-1c3013826ae9",
+   "question": {
+    "kind": "question",
+    "prompt": "\u2610 How to finish The 260907f work is committed and unpushed, waiting on one clean full-suite run. Three attempts have now been killed or blocked by box conditions rather than by anything in the code. How do you want to close it out?",
+    "options": [
+     {
+      "label": "Run it at low concurrency (Recommended)",
+      "key": {
+       "via": "digit",
+       "digit": "1"
+      }
+     },
+     {
+      "label": "Push now on existing evidence",
+      "key": {
+       "via": "digit",
+       "digit": "2"
+      }
+     },
+     {
+      "label": "Keep waiting for a quiet box",
+      "key": {
+       "via": "digit",
+       "digit": "3"
+      }
+     },
+     {
+      "label": "Type something.",
+      "key": {
+       "via": "digit",
+       "digit": "4"
+      }
+     },
+     {
+      "label": "Chat about this",
+      "key": {
+       "via": "digit",
+       "digit": "5"
+      }
+     }
+    ]
+   },
+   "status": {
+    "kind": "needs-you"
+   }
+  }
+ ],
+ "tmuxServerPid": 132280,
+ "collectedAt": "2026-09-08T02:41:07.661Z",
+ "tookMs": 13414,
+ "error": null,
+ "health": {
+  "load": {
+   "kind": "value",
+   "load1": 37.19,
+   "load5": 34.3,
+   "load15": 31.4,
+   "cores": 16,
+   "ratio1": 2.324375
+  },
+  "memory": {
+   "kind": "value",
+   "totalBytes": 32859295744,
+   "availableBytes": 9667727360,
+   "availableFraction": 0.2942159027180397
+  },
+  "swap": {
+   "kind": "value",
+   "totalBytes": 34359730176,
+   "usedBytes": 25422589952,
+   "usedFraction": 0.7398949241387663,
+   "areas": 2
+  },
+  "disk": {
+   "kind": "value",
+   "totalKiB": 314660132,
+   "usedKiB": 148155036,
+   "availableKiB": 153688440,
+   "usePercent": 50
+  },
+  "swapActivity": {
+   "kind": "value",
+   "siKBs": 16,
+   "soKBs": 1308,
+   "waPercent": 0,
+   "activelySwapping": true
+  },
+  "attribution": {
+   "kind": "value",
+   "groups": [
+    {
+     "kind": "other",
+     "procs": 703,
+     "rssKiB": 12239044
+    },
+    {
+     "kind": "vitest",
+     "procs": 38,
+     "rssKiB": 12130400
+    },
+    {
+     "kind": "chrome",
+     "procs": 256,
+     "rssKiB": 3920144
+    },
+    {
+     "kind": "node",
+     "procs": 186,
+     "rssKiB": 2062088
+    },
+    {
+     "kind": "vite",
+     "procs": 14,
+     "rssKiB": 844892
+    }
+   ]
+  },
+  "verdict": {
+   "level": "strained",
+   "reasons": [
+    "load average 37.2 is over 2x the 16 cores (ratio 2.3)",
+    "actively swapping (si 16, so 1308 KB/s)"
+   ]
+  },
+  "collectedAt": "2026-09-08T02:41:08.925Z",
+  "tookMs": 1263
+ },
+ "refreshMs": 60000
+}

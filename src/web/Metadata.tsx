@@ -16,9 +16,28 @@
  * (docs/plans/260825c-bottom-bar.md#why-the-bottom), and a page has no such problem
  * because it is not beside anything.
  *
- * **Nothing here is generated and nothing here is a model call.** This is the
- * page you open when something looks wrong, so every number on it is read off
- * the artefacts.
+ * **Opening it generates nothing and makes no model call.** This is the page
+ * you open when something looks wrong, so its statistics are computed from
+ * artefacts already written.
+ *
+ * *Statistics*, and not *every number on it*, which was the draft and is
+ * overbroad in the same breath as a correction — the read-time stat divides by
+ * a flat `WPM` this repo chose (reading-time.ts), and a rerun confirmation
+ * quotes a fixed wait. Neither comes from an artefact. GPT Sol, 2026-09-08.
+ *
+ * That is narrower than *nothing here is generated*, which is what this line
+ * said until 2026-09-08 and which had stopped being true twice over: the page
+ * shows the hierarchy's `gist` and `summary` (§ In one sentence), and since
+ * 2026-09-07 it can start a run of its own (§ Generate it again, below, one
+ * button per step). Neither happens on arrival, and *on arrival* is the half a
+ * reader here is trusting.
+ *
+ * It is worth saying why the old sentence is worth this much space. It was
+ * copied out of this docblock into the Metadata button's hover card on
+ * 2026-09-07, where a reader would have read it — the card was corrected before
+ * it shipped, but only because a cross-family review went looking
+ * (docs/plans/260907b-rich-tooltips-on-the-dock-modes.md § Stage 2). A stale
+ * header is not a private matter between a file and its next author.
  *
  * ## The second pass, 2026-08-25: what came back from the original
  *
@@ -248,7 +267,7 @@ import { cameOffADisk, SourceLink, webSource } from "./SourceLink.js";
 import { articleStats } from "./stats.js";
 import { EditableTitle, useArticleRename } from "./TitleEditor.js";
 import { TipNote, Tooltip, TooltipGroup } from "./Tooltip.js";
-import { timeAgo } from "./relative-time.js";
+import { howLong, timeAgo } from "./relative-time.js";
 import { useNow } from "./useNow.js";
 import { SLOW_AFTER_MS } from "./useSlow.js";
 import { useExperimental } from "./useExperimental.js";
@@ -853,7 +872,16 @@ export function Metadata({
                 icon={Blocks}
                 label="Blocks"
                 value={stats.blocks.toLocaleString()}
-                tip="Paragraphs, headings, quotes and images. Each has a permanent id, which is how a comment or a summary stays attached to the right passage even after we re-read the article."
+                /* **Not *a permanent id*, which this said until 2026-09-08.**
+                   Stage 3 carries an id over by matching block text
+                   (block-ids.md § Surviving stage 2), so a block whose words
+                   changed can be re-minted. What survives the re-read is the
+                   *identity*: `comments_identity_fk` points at
+                   `block_identities`, which are never deleted, so the comment
+                   outlives the revision either way. Same correction as
+                   comments.md § the gutter, and the same myth the Comments
+                   tooltip had. GPT Sol. */
+                tip="Paragraphs, headings, quotes and images. Each carries an id that a re-read preserves wherever its words are unchanged — and a comment on one survives that re-read regardless, because it is anchored to an identity we never delete rather than to this version of the article."
               />
               <Stat
                 icon={BookOpen}
@@ -3367,20 +3395,28 @@ function StageRow({ stage, generator }: { stage: StageState; generator: string |
         {done && (
           <span className="tw:min-w-0 tw:font-mono tw:break-all">{outputs.join(" · ")}</span>
         )}
-        <Wrote at={stage.ranAt} bytes={stage.bytes} done={done} />
+        <Wrote at={stage.ranAt} began={stage.startedAt} bytes={stage.bytes} done={done} />
       </div>
     </div>
   );
 }
 
 /**
- * When this stage last wrote, and what it left behind — relative, exact on hover.
+ * When this stage last wrote, how long it took, and what it left behind —
+ * relative on the row, exact on hover.
  *
  * Greg, 2026-08-27, asked for *"extra metadata (e.g. exact date times), perhaps
  * in tooltips"*, and this is where most of it landed. It is deliberately the
  * same shape as `Fetched` at the top of the page: the relative time is what you
  * want to know, and the exact stamp is what you want the moment the relative
  * one surprises you.
+ *
+ * **The duration joined on 2026-09-08**, on a second ask — *"a tooltip for
+ * exactly when it happened … And also, how long it took"* — of which only the
+ * second half was missing, and missing from the wire rather than the database
+ * (docs/plans/260908a-exact-time-and-duration-on-the-metadata-step-rows.md). It
+ * is in the card rather than on the row because the row already carries a path,
+ * a state pill and a relative time, sixteen times over.
  *
  * **The tooltip says what the number is not.** A file's timestamp records when
  * it was written, never what it was written *from* — a copy, a `touch` or a
@@ -3393,17 +3429,29 @@ function StageRow({ stage, generator }: { stage: StageState; generator: string |
  * Renders nothing when the store cannot say — Postgres has no files, so it has
  * no size, and a stage that has written nothing has neither.
  */
-function Wrote({ at, bytes, done }: { at: string | null; bytes: number | null; done: boolean }) {
+function Wrote({
+  at,
+  began,
+  bytes,
+  done,
+}: {
+  at: string | null;
+  began: string | null;
+  bytes: number | null;
+  done: boolean;
+}) {
   if (!at) return null;
   const t = Date.parse(at);
   if (Number.isNaN(t)) return null;
   const when = new Date(t);
+  const took = tookFor(began, t);
   return (
     <Tooltip
       placement="top"
       content={
         <TipNote>
           {exactly(when)}
+          {took !== null && ` · took ${took}`}
           {bytes !== null && ` · ${weight(bytes)} on disk`}
           <br />
           {/* The caveat is about **files**, so it is only told where there are
@@ -3446,6 +3494,42 @@ function Wrote({ at, bytes, done }: { at: string | null; bytes: number | null; d
  */
 function exactly(when: Date): string {
   return when.toLocaleString(undefined, { dateStyle: "full", timeStyle: "long" });
+}
+
+/**
+ * How long that run took, or `null` if we cannot honestly say.
+ *
+ * Three ways it declines, and each is a different kind of not-knowing that a
+ * `0` would have flattened into the same lie:
+ *
+ *  - **no start recorded** — every row written by `recordStepRun` without one,
+ *    and every row older than the `started_at` column. `StageState.startedAt`
+ *    is `null` and there is nothing to subtract.
+ *  - **an unparseable start** — `Date.parse` gives `NaN`, and `NaN` compares
+ *    false in both directions, so it has to be tested for rather than compared
+ *    (the trap `timeAgo` in relative-time.ts is arranged around).
+ *  - **the finish is before the start** — two clocks disagreeing, not a fact
+ *    about the article. `timeAgo` clamps a future stamp to "just now" for the
+ *    same reason; here there is nothing to clamp *to*, because "took 0s" is a
+ *    claim and not an absence, so this draws nothing at all.
+ *
+ * **All three decline before `howLong` sees the number**, which is what keeps
+ * that function's `an unknown time` — right on the Tweets page it was written
+ * for — off this card, where it would sit beside a timestamp we are certain of
+ * and read as doubt about the whole line. The formatting is
+ * `howLong` in relative-time.ts; deciding whether there is anything to format
+ * is this function, and that is the whole split between them.
+ *
+ * Exported for its own test. Takes the finish as a parsed number because the
+ * caller has already parsed it and had to, to decide whether to render at all.
+ */
+export function tookFor(began: string | null, finished: number): string | null {
+  if (!began) return null;
+  const start = Date.parse(began);
+  if (Number.isNaN(start)) return null;
+  const ms = finished - start;
+  if (ms < 0) return null;
+  return howLong(ms);
 }
 
 /**

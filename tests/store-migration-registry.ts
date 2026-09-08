@@ -581,6 +581,26 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "Already on Postgres via a hoisted flag and `scratchArticleInPg` — its docstring is the one " +
       "the other converted suites cite for why the flag must be set in `vi.hoisted`.",
   },
+  "tests/chat-thread-delete-route.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["fixture-loader"],
+    /* **`static-only`, and it has to be.** `evidence: "dynamic"` claims the
+       instrumented run watched this file execute something, and that witness is
+       a dated measurement from 2026-09-03 — five days before this file existed.
+       The default is `dynamic`, so leaving the field off would have made a claim
+       no witness backs, which is what § `keeps evidence honest about which
+       witness backs each verdict` refused. */
+    evidence: "static-only",
+    reason:
+      "**Not a conversion.** Written 2026-09-08, after the filesystem store was deleted, as the " +
+      "red-first oracle for `DELETE /api/chat/:slug/:threadId` before the chat guards moved into " +
+      "`AUTH_ROUTES` (docs/plans/260908a-chat-and-live-sessions-join-the-route-table.md). It has " +
+      "an entry here because the import graph can reach a condemned module through " +
+      "`scratchArticleInPg`, and a file the graph reaches with no verdict is a hole rather than a " +
+      "clean file — so this is the verdict: the seeder's copy step, and nothing else. It is " +
+      "deliberately absent from `STORE_CONVERSIONS`, which records conversions that happened; " +
+      "adding it there would be a historically false claim (GPT Sol, 260908a stage 1 review § F4).",
+  },
   "tests/chat-spoken-route.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["fixture-loader"],
@@ -1179,6 +1199,27 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "`MissingRawObject`, which is the proof that a wrong hash is loud rather than empty. The " +
       "coverage claim is unchanged; only the store under it is.",
   },
+  /**
+   * **Written 2026-09-07, after the witness ran**, so `static-only` for the
+   * ordinary reason the header gives. It was born on Postgres — there is no
+   * filesystem half to finish moving — so it is collateral rather than a
+   * `database-integration`.
+   */
+  "tests/referee-stream-lifetime.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "The three streaming referee routes held open mid-stream, so that moving them into " +
+      "`AUTH_ROUTES` cannot quietly turn an awaited handler into a launched one. It seeds through " +
+      "`scratchArticleInPg` and that copy step is the only condemned module it reaches: all three " +
+      "generators are stubbed, so no model is called and no ledger row is written. Watched red " +
+      "three times against the unmoved routes — dropping the guard's `await`, deleting " +
+      "`refereeing.delete(key)`, and releasing the lock before the stream finishes — each failing " +
+      "on its own assertion. The second of those is the one that matters: an earlier draft of the " +
+      "file stayed green under it, because a freshly begun row is spared by `sweepPending`'s age " +
+      "guard whether or not the lock holds it.",
+  },
   "tests/remember-route.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["ledger-redirect", "fixture-loader"],
@@ -1550,21 +1591,6 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "and not a rewrite. What was not true is that it needed no database: the substrate it wrapped " +
       "was chosen by the flag, so five of its seven cases went red the moment the flag went. The " +
       "article is `scratchArticleInPg` now instead of a copied `example/` directory.",
-  },
-  "tests/streaming-route-request-lifetime.test.ts": {
-    category: "shared-mechanism-collateral",
-    mechanisms: ["fixture-loader"],
-    evidence: "static-only",
-    reason:
-      "**Written 2026-09-07, after the witness ran**, which is why the evidence is static: it is " +
-      "on this list only because `scratchArticleInPg` reaches the fixture loader, and it names no " +
-      "condemned module of its own. Its subject is a request's *lifetime* rather than a store — " +
-      "`POST /api/referee/criteria/:slug` driven through `handleApi` with the model call paused, " +
-      "so that the response, the `refereeing` lock and the caller's promise can each be asked " +
-      "whether they are still where the guard left them. It needs Postgres because its whole " +
-      "oracle is whether the GET's sweep buries a backdated `pending` row, which is the only way " +
-      "a caller can see that lock at all. Stage 4a of " +
-      "docs/plans/260907b-split-the-authenticated-api-dispatch-by-domain.md.",
   },
   "tests/term-lookup.test.ts": {
     category: "database-integration",
@@ -2364,6 +2390,19 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      bucket: no model is called and the article comes out of the committed
      corpus. */
   "tests/chat-spoken-route.test.ts": "private-postgres",
+  /* Written 2026-09-08 for the chat slice of the `AUTH_ROUTES` migration
+     (docs/plans/260908a-chat-and-live-sessions-join-the-route-table.md). It
+     seeds two conversations under a slug of its own and asserts, after the
+     route deletes one, that the store kept **exactly** the other — an exact
+     list rather than a membership check, which a neighbouring run writing to
+     `chat_threads` under the same slug could falsify. No model is called, so no
+     ledger row — but it does reach the Storage bucket, through
+     `scratchArticleInPg` → `loadArticleIntoPg` → `storeRawSource` for the
+     fixture's `raw.json`. That does not change the lane: the write is
+     content-addressed and nothing here asserts on bucket state. (An earlier
+     draft of this comment said Storage was untouched, copied from the neighbour
+     above without checking; GPT Sol, 260908a stage 1 review § F6.) */
+  "tests/chat-thread-delete-route.test.ts": "private-postgres",
   "tests/checkpoints-durable-resume.test.ts": "private-postgres",
   "tests/claim-session-postgres.test.ts": "private-postgres",
   "tests/comment-referee-mark.test.ts": "private-postgres",
@@ -2478,6 +2517,7 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      two concurrent runs would be two walks over one article's line. Everything
      it does is inside a transaction it rolls back; the article itself is
      suffixed per run and cleaned up in `afterAll`. */
+  "tests/labels-land-after-the-shelf.test.ts": "private-postgres",
   "tests/labels-receipt-invalidation.test.ts": "private-postgres",
   "tests/library-log-volume.test.ts": "private-postgres",
   "tests/list-reconciles-expired.test.ts": "private-postgres",
@@ -2533,6 +2573,10 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/pg-session-real-step.test.ts": "private-postgres",
   "tests/pipeline-slug-claim.test.ts": "private-postgres",
   "tests/plans-match-tiers.test.ts": "private-postgres",
+  /* Stage 2b of 260906a: publication queues the free `labels` job. Postgres
+     throughout — it publishes real revisions, claims a real job and inserts a
+     real `ingest_events` row to prove the successor never settles one. */
+  "tests/publication-enqueues-the-labels-successor.test.ts": "private-postgres",
   /* The lane's own negative control, and it has to be *in* the lane to be one:
      it asks Postgres which database this worker landed in after a
      `vi.resetModules()`, which is a question only a worker with a minted
@@ -2569,6 +2613,11 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/referee-mirror-route.test.ts": "private-postgres",
   "tests/referee-routes-postgres.test.ts": "private-postgres",
   "tests/referee-scan-route.test.ts": "private-postgres",
+  /* Three streaming referee routes held open mid-stream. Private rather than
+     shared because it backdates `attempt_started_at` and `created_at` on this
+     article's rows to reach the sweep's age branch, which a peer suite reading
+     the same table at the same moment would see. */
+  "tests/referee-stream-lifetime.test.ts": "private-postgres",
   /* Converted in the hinge, 2026-09-05: its child wrote a JSONL ledger through
      `fsCostStore`, which `costStore` chose because the flag was unset. The rows
      are `spideryarn.ai_calls` now, and the child reaches the private database
@@ -2693,13 +2742,6 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      the flag was unset, and it is `pgChatStore`/`pgSearchStore` now. */
   "tests/store-wiring.test.ts": "private-postgres",
   "tests/store-writes-land-in-postgres.test.ts": "private-postgres",
-  /* Landed 2026-09-07 with stage 4a of
-     docs/plans/260907b-split-the-authenticated-api-dispatch-by-domain.md. It
-     drives `POST /api/referee/criteria/:slug` through `handleApi` with the
-     model call paused, and its whole oracle is a `pending` row a sweep may or
-     may not bury — so it needs a database, and it needs one nobody else is
-     sweeping. */
-  "tests/streaming-route-request-lifetime.test.ts": "private-postgres",
   /* Converted in stage B, 2026-09-04. It seeds one corpus article under a
      throwaway slug with an extra glossary entry the text never matches, and
      then asks `lookUpTerm` — built by `src/store/index.ts` out of whichever

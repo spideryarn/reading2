@@ -124,6 +124,14 @@ const NOT_A_ROW: Record<string, string> = {
     "so there is no row to insert and none to delete. Deliberately one id rather than two, for " +
     "the reason the `…c0de` entry above gives: these fixtures are the same reader looking at the " +
     "same page, and a second uuid would say they differ when they do not.",
+  "f1ee7000-0000-4000-8000-000000000001":
+    "the claude session id on the fleet dashboard's `Session` fixture, shared by " +
+    "`fleet-collect.test.ts` and `fleet-status.test.ts` because both build the same in-memory " +
+    "session out of the same helper and neither imports a store or a database module. It names " +
+    "a claude session, not a row — the distinction the `3c67234f-…` tmux entry above draws. " +
+    "The pair wrote `11111111-1111-1111-1111-111111111111` until 2026-09-08; that one is " +
+    "`db-schema.test.ts`'s `OWNER` and a real `auth.users` row, so they were moved off it " +
+    "rather than exempted onto it.",
 };
 
 function parse(file: string, source: string): Claim[] {

@@ -37,8 +37,9 @@
  *
  * Since stage 3a the dispatch is written two ways. Most of it is still
  * `if (matcher && req.method === "VERB")` in the chain; the bottom of that chain
- * — billing's four routes, and since stage 3b the nine jobs and uploads guards
- * that stood immediately above them — are rows of `AUTH_ROUTES`, a static ordered
+ * — billing's four routes, the nine jobs and uploads guards that stood
+ * immediately above them since stage 3b, and referee's eight above those since
+ * 260907e — are rows of `AUTH_ROUTES`, a static ordered
  * table of closures that `serveAuthenticatedApi` consults after every remaining
  * guard and before its 404. The reader below normalises both into the same
  * `(method, match)` pair, so
@@ -50,11 +51,19 @@
  * The table half brings three properties the chain did not have, and each is
  * checked where it lives rather than assumed: the entries are **literals**, so
  * building the table at import calls nothing (§ `building the table has no
- * effects to have`); the dispatcher **awaits** every handler, so a streaming
- * route cannot outlive the request that is waiting on it (`assertHandlersAwaited`,
- * at module scope); and a `g` or `y` pattern is refused at registration, by
+ * effects to have`); the dispatcher **awaits** every handler
+ * (`assertHandlersAwaited`, at module scope); and a `g` or `y` pattern is refused at registration, by
  * src/routes.ts itself, because a table's regexes are shared across requests
  * where the chain's are rebuilt per request.
+ *
+ * **`assertHandlersAwaited` is not enough on its own, and saying so is the
+ * point.** It reads `dispatchAuthRoute`'s syntax, so it sees whether the
+ * *dispatcher* awaits a handler — not whether a handler launches its own work
+ * and resolves without it. `void withSpendAttribution(…)` in a moved closure
+ * passes this file entirely and ends the request mid-stream with a live-run lock
+ * still held; measured on 260907e, where it turned
+ * tests/referee-stream-lifetime.test.ts red and nothing here. A streaming domain
+ * therefore needs a behavioural lifetime test as well as this one.
  *
  * ## Why a parser, and why it refuses rather than skips
  *
@@ -224,6 +233,55 @@
  *     domain that is not a contiguous suffix — would have to be taught here,
  *     deliberately.
  *
+ * ### Stage 4b, 2026-09-07 — the eight referee guards become table rows
+ *
+ * Green unmutated at **325**. `EXPECTED_AUTH_ROUTES` was not touched — the block
+ * is still byte-identical to stage 1c's (md5 `c36bdcb…`) — and neither was the
+ * lifetime oracle, which is the point of that file and the condition stage 4a
+ * set for this one.
+ *
+ * **The oracle named below is `tests/referee-stream-lifetime.test.ts` now.**
+ * This slice was built twice, in parallel, by two worktrees that each took it
+ * off the same plan on `dev` — 260907b here and 260907e there — and 260907e
+ * landed first. Its lifetime test covers the same property across all three
+ * streaming referee routes rather than criteria alone, so it is the one that
+ * survived; `tests/streaming-route-request-lifetime.test.ts` was removed in the
+ * merge. The transcripts below were recorded against the removed file and are
+ * left as they were run, because a log that is quietly rewritten to name a
+ * different file is a log that cannot be checked.
+ *
+ * **The order expectation was written and watched red first**, which is what
+ * stage 3b could not claim. With the eight referee pair-keys prepended to §
+ * `keeps the table in the chain's order` and *no* source change yet: **1
+ * failed**, and the diff was exactly the eight rows missing from the head of the
+ * received array and nothing else — *expected [ 'GET literal /api/jobs', …(12) ]
+ * to deeply equal [ …(21) ]*. Only then were the guards moved.
+ *
+ * 17. **A table row deleted** — the `DELETE /api/referee/criteria/:slug/:id`
+ *     entry removed. **4 failed:** *contract rows with no guard in
+ *     src/routes.ts*, the canary (*expected 80 to be 81*), § `answers the moved
+ *     domains from the table` and § `keeps the table in the chain's order`. The
+ *     matcher set stayed green, correctly — `ONE_CRITERION_PATTERN`'s other row
+ *     still names it.
+ * 18. **A table row's method changed** — `GET /api/referee/scan/:slug` made
+ *     `PUT`. **4 failed:** the pair set (*guards in src/routes.ts that no
+ *     contract row allows*), both table cases, and the negative matrix refusing
+ *     to send `PUT /api/referee/scan/w1` because the source now answers it.
+ * 19. **Two moved rows reordered** — `GET /api/referee/claims/:slug` lifted
+ *     above `DELETE /api/referee/criteria/:slug/:id`. **1 failed**, and only
+ *     one: § `keeps the table in the chain's order`, the expectation written red
+ *     first above. Same honest reach as mutation 15.
+ * 20. **A moved handler stopped awaiting its own work** — the criteria POST
+ *     row's `await withSpendAttribution(…)` made `void withSpendAttribution(…)`,
+ *     which is the mutation Sol said `assertHandlersAwaited` cannot see because
+ *     the dispatcher's syntax does not change. It could not: **this file stayed
+ *     green at 325**, and `tests/streaming-route-request-lifetime.test.ts` went
+ *     **2 failed** — *the request is still in flight: expected 'resolved' to be
+ *     'pending'* and *the rejection reached serveApi's catch: expected +0 to be
+ *     500*, the same two that file recorded against the arm before the move.
+ *     That pair, now travelling through `dispatchAuthRoute`, is what discharges
+ *     the dispatcher half of P2-LIFETIME-BEHAVIOUR.
+ *
  * The disjointness check has a **control rather than a mutation**: a real
  * overlap cannot be introduced into `src/routes.ts` without also failing the
  * pair-set comparison, so `would notice if two guards did overlap` feeds two
@@ -251,7 +309,7 @@ import { loadEnvLocal } from "../src/env.js";
 import { isPublicNamespace } from "../src/public/routes.js";
 import { handleApi } from "../src/routes.js";
 import { acceptAny, AUTHED_HEADERS, TEST_SUB } from "./helpers/authed.js";
-import { type AstNode, lineOf, parseSource } from "./helpers/ts-ast.js";
+import { type AstNode, lineOf, parseSource, walkAst } from "./helpers/ts-ast.js";
 
 loadEnvLocal();
 
@@ -715,6 +773,26 @@ const EXPECTED_GUARD_COUNT = 82;
  */
 const describeMatch = (m: MatchSpec): string =>
   m.kind === "literal" ? `literal ${m.path}` : `regex /${m.source}/${m.flags}`;
+
+/**
+ * **A matcher as something a path prefix can be looked for in**, which
+ * `describeMatch` is not.
+ *
+ * A regex's `source` keeps its escapes, so `/^\/api\/chat\/…$/` renders with
+ * `\/` between every segment and the literal substring `/api/chat` never
+ * appears in it. § *answers the moved domains from the table* used
+ * `describeMatch(...).includes(prefix)` and so was **silently vacuous for every
+ * regex route** — it could only ever catch a literal one left behind. Measured
+ * 2026-09-08: adding `/api/chat` to that list while all nine `/api/chat` guards
+ * were still in the chain left the suite green at 326.
+ *
+ * That mattered because referee and search are entirely regex, so the
+ * assertion had verified nothing for either of the last two slices, while
+ * reading in review as though it had. Dropping the backslashes is enough — the
+ * result is only ever searched for a prefix, so `\w` becoming `w` is harmless.
+ */
+const pathish = (m: MatchSpec): string =>
+  m.kind === "literal" ? m.path : m.source.replace(/\\/g, "");
 
 const sorted = (xs: string[]): string[] => [...xs].sort();
 
@@ -1833,7 +1911,7 @@ describe("the authenticated API's route contract", () => {
 
     it("answers the moved domains from the table, not from the chain", () => {
       /* Otherwise everything above could be green because the parser is still
-         reading thirteen `if`s and the move never happened — the two forms are
+         reading twenty-one `if`s and the move never happened — the two forms are
          normalised to the same pair, which is the whole idea and also the way
          this could pass while proving nothing.
 
@@ -1843,6 +1921,33 @@ describe("the authenticated API's route contract", () => {
       expect(sorted(parsed.guards.filter((g) => g.fromTable).map((g) => pairKey(g.method, g.match))))
         .toEqual(
           sorted([
+            // chat and the live sessions, 260908a
+            "GET regex /^\\/api\\/chat\\/([\\w.%-]+)$/",
+            "POST regex /^\\/api\\/chat\\/([\\w.%-]+)$/",
+            "POST regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)\\/cancel$/",
+            "POST regex /^\\/api\\/chat\\/([\\w.%-]+)\\/live-tool$/",
+            "POST regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)\\/live$/",
+            "POST regex /^\\/api\\/live\\/([\\w-]+)\\/connected$/",
+            "POST regex /^\\/api\\/live\\/([\\w-]+)\\/usage$/",
+            "POST regex /^\\/api\\/live\\/([\\w-]+)\\/close$/",
+            "POST regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)\\/spoken$/",
+            "POST regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)\\/stop$/",
+            "PATCH regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
+            "DELETE regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
+            // search, 260907b stage 5
+            "GET regex /^\\/api\\/search\\/([\\w.%-]+)$/",
+            "POST regex /^\\/api\\/search\\/([\\w.%-]+)$/",
+            "PATCH regex /^\\/api\\/search\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
+            "DELETE regex /^\\/api\\/search\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
+            // referee, 260907e
+            "GET regex /^\\/api\\/referee\\/criteria\\/([\\w.%-]+)$/",
+            "POST regex /^\\/api\\/referee\\/criteria\\/([\\w.%-]+)$/",
+            "PATCH regex /^\\/api\\/referee\\/criteria\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
+            "DELETE regex /^\\/api\\/referee\\/criteria\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
+            "GET regex /^\\/api\\/referee\\/claims\\/([\\w.%-]+)$/",
+            "POST regex /^\\/api\\/referee\\/claims\\/([\\w.%-]+)$/",
+            "GET regex /^\\/api\\/referee\\/scan\\/([\\w.%-]+)$/",
+            "POST regex /^\\/api\\/referee\\/mirror\\/([\\w.%-]+)$/",
             // jobs and uploads, stage 3b
             "GET literal /api/jobs",
             "POST literal /api/uploads",
@@ -1860,13 +1965,44 @@ describe("the authenticated API's route contract", () => {
             "GET literal /api/billing/usage",
           ]),
         );
-      const moved = ["/api/billing", "/api/jobs", "/api/uploads"];
+      /* **Two prefixes for one slice, and `chatLive` belongs to the first.**
+         `/api/chat/:slug/:threadId/live` is a chat path whose last segment
+         happens to read like the other namespace; sorting these twelve by the
+         word "live" would put it in the wrong list and the filter would then
+         pass while a guard was still in the chain. Nine under `/api/chat`,
+         three under `/api/live`. 260907b flagged it before the slice was cut. */
+      const moved = [
+        "/api/billing",
+        "/api/jobs",
+        "/api/uploads",
+        "/api/referee",
+        "/api/search",
+        "/api/chat",
+        "/api/live",
+      ];
       expect(
-        parsed.guards.filter(
-          (g) => !g.fromTable && moved.some((p) => describeMatch(g.match).includes(p)),
-        ),
+        parsed.guards.filter((g) => !g.fromTable && moved.some((p) => pathish(g.match).includes(p))),
         "a moved route is still a guard in the chain as well as a row in the table",
       ).toEqual([]);
+
+      /* **The control, because the assertion above passes when it is broken.**
+         It reads every remaining chain guard and finds none under a moved
+         prefix — which is also exactly what it does when the prefix test cannot
+         match the guards at all, as it could not for a regex until `pathish`.
+         So: claim a prefix whose guards are demonstrably *still* in the chain,
+         and require the same filter to find them. When that domain moves this
+         becomes a real failure, and the next unmigrated regex domain takes its
+         place — which is the point: a control nobody ever has to maintain is
+         one nobody checks is still true. It has been repointed once already,
+         from `/api/chat` to `/api/comments`, when 260907e moved chat on
+         2026-09-08. */
+      const stillInTheChain = parsed.guards.filter(
+        (g) => !g.fromTable && pathish(g.match).includes("/api/comments"),
+      );
+      expect(
+        stillInTheChain.length,
+        "the moved-prefix filter cannot see a regex guard, so the assertion above proves nothing",
+      ).toBeGreaterThan(0);
     });
 
     /**
@@ -1893,6 +2029,34 @@ describe("the authenticated API's route contract", () => {
         parsed.guards.filter((g) => g.fromTable).map((g) => pairKey(g.method, g.match)),
         "the table's rows are the bottom of the chain in the order it had them; a domain is prepended, never appended, and the interleave inside jobs/uploads is not to be tidied",
       ).toEqual([
+        // chat and the live sessions, 260908a
+        "GET regex /^\\/api\\/chat\\/([\\w.%-]+)$/",
+        "POST regex /^\\/api\\/chat\\/([\\w.%-]+)$/",
+        "POST regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)\\/cancel$/",
+        "POST regex /^\\/api\\/chat\\/([\\w.%-]+)\\/live-tool$/",
+        "POST regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)\\/live$/",
+        "POST regex /^\\/api\\/live\\/([\\w-]+)\\/connected$/",
+        "POST regex /^\\/api\\/live\\/([\\w-]+)\\/usage$/",
+        "POST regex /^\\/api\\/live\\/([\\w-]+)\\/close$/",
+        "POST regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)\\/spoken$/",
+        "POST regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)\\/stop$/",
+        "PATCH regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
+        "DELETE regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
+        // search, 260907b stage 5
+        "GET regex /^\\/api\\/search\\/([\\w.%-]+)$/",
+        "POST regex /^\\/api\\/search\\/([\\w.%-]+)$/",
+        "PATCH regex /^\\/api\\/search\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
+        "DELETE regex /^\\/api\\/search\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
+        // referee, 260907e
+        "GET regex /^\\/api\\/referee\\/criteria\\/([\\w.%-]+)$/",
+        "POST regex /^\\/api\\/referee\\/criteria\\/([\\w.%-]+)$/",
+        "PATCH regex /^\\/api\\/referee\\/criteria\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
+        "DELETE regex /^\\/api\\/referee\\/criteria\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
+        "GET regex /^\\/api\\/referee\\/claims\\/([\\w.%-]+)$/",
+        "POST regex /^\\/api\\/referee\\/claims\\/([\\w.%-]+)$/",
+        "GET regex /^\\/api\\/referee\\/scan\\/([\\w.%-]+)$/",
+        "POST regex /^\\/api\\/referee\\/mirror\\/([\\w.%-]+)$/",
+        // jobs and uploads, 260907b stage 3b
         "GET literal /api/jobs",
         "POST literal /api/uploads",
         "DELETE regex /^\\/api\\/uploads\\/([\\w-]+)$/",
@@ -1902,11 +2066,89 @@ describe("the authenticated API's route contract", () => {
         "DELETE regex /^\\/api\\/jobs\\/([\\w.%-]+)$/",
         "POST regex /^\\/api\\/jobs\\/([\\w.%-]+)\\/(cancel|retry)$/",
         "POST regex /^\\/api\\/jobs\\/([\\w.%-]+)\\/advance$/",
+        // billing, stage 3a
         "POST literal /api/billing/checkout",
         "POST literal /api/billing/portal",
         "POST literal /api/billing/confirm",
         "GET literal /api/billing/usage",
       ]);
+    });
+
+    /**
+     * **One `requireUser` call, and it is above the handoff.**
+     *
+     * docs/project/security-map.md names *the one `requireUser` call* as a place
+     * a defence physically lives. "The one" is the load-bearing half: a split
+     * that ended with two call sites would have broken the property the map
+     * relies on even with every route still guarded, because the claim it lets
+     * you make — *everything behind the gate is behind this line* — stops being
+     * checkable by reading one statement.
+     *
+     * Nothing enforced it. It was true by the fact that nobody had added a
+     * second, which is how it would have stopped being true. Added while moving
+     * referee into the table (260907e): that slice does not go near the gate,
+     * and the point of writing it down now is that the next one might.
+     *
+     * **AST rather than a text count** (GPT Sol, stage 1 review). `requireUser`
+     * appears in this file as an import and in six comments; a regex would have
+     * to strip both and would misfire the first time somebody wrote the word in
+     * a new comment — a check that goes red for a sentence is a check people
+     * learn to edit. `walkAst` sees a `CallExpression` whose callee is the
+     * identifier, and comments are not nodes.
+     */
+    it("calls requireUser exactly once, inside serveApi and above the handoff", () => {
+      const program = parseSource(readFileSync(ROUTES_PATH, "utf8")).program;
+
+      /** Every `name(...)` call under `root`, by line. */
+      const callsTo = (root: unknown, name: string): number[] => {
+        const lines: number[] = [];
+        walkAst(root, (node) => {
+          if (node.type !== "CallExpression") return;
+          const callee = node.callee as AstNode | undefined;
+          if (callee?.type === "Identifier" && callee.name === name) lines.push(lineOf(node));
+        });
+        return lines;
+      };
+
+      let found: AstNode | null = null;
+      walkAst(program, (node) => {
+        if (node.type !== "FunctionDeclaration") return;
+        if ((node.id as AstNode | undefined)?.name === "serveApi") found = node;
+      });
+      const serveApi: AstNode | null = found;
+      /* **Refused rather than skipped.** If `serveApi` stops being a function
+         declaration, every assertion below would look at an empty subtree and
+         pass — the failure this whole case exists to prevent. */
+      expect(serveApi, "serveApi is no longer a function declaration in src/routes.ts").not.toBe(
+        null,
+      );
+      if (serveApi === null) return;
+
+      expect(
+        callsTo(program, "requireUser").length,
+        "src/routes.ts must call requireUser exactly once — docs/project/security-map.md § where the defences live names 'the one requireUser call', and two call sites break that claim even if both are correct",
+      ).toBe(1);
+
+      const gate = callsTo(serveApi, "requireUser");
+      expect(gate.length, "the one requireUser call is not inside serveApi").toBe(1);
+
+      /* **The handoff is found as a call node, not as a string.** It used to be
+         `source.indexOf("serveAuthenticatedApi(user")`, which returns `-1` the
+         moment that text is reformatted or the parameter renamed — and `slice(0,
+         -1)` then makes the "handoff" the end of the file, so the ordering
+         assertion passes while checking nothing. A rail that can quietly stop
+         holding is docs/reusable/silent-success.md, and this one guards the gate.
+         GPT Sol's review of the built move, P1. */
+      const handoff = callsTo(serveApi, "serveAuthenticatedApi");
+      expect(
+        handoff.length,
+        "serveApi does not hand off to serveAuthenticatedApi exactly once, so there is nothing to order the gate against",
+      ).toBe(1);
+
+      expect(
+        gate[0],
+        "the requireUser call is not above the serveAuthenticatedApi handoff — a single call below it would satisfy the count and guard nothing",
+      ).toBeLessThan(handoff[0] ?? 0);
     });
 
     it("gives every contract row at least one method and one honest witness", () => {
