@@ -281,6 +281,26 @@ export type LandingCheck =
       unchecked: LandingField[];
     };
 
+/**
+ * **`claudePid` IS DELIBERATELY NOT A FOURTH COMPARISON, and the reason is a
+ * distinction worth keeping.**
+ *
+ * `session`, `pane` and `pane pid` are CLAIMS THE CLIENT MADE — it tapped a row
+ * that said `$1643`, `%2108`, pid N — and `verifyTarget` checks the box against
+ * them. That is what makes agreement mean something.
+ *
+ * `claudePid` is not a claim anybody made. The client never knew it;
+ * `verifyTarget` DISCOVERS it while walking the process table. Putting it on the
+ * wire so the client could send it back would have the client echo a value the
+ * server told it, and the server then check that value against itself — failure
+ * mode 5 in routes-steer.ts's own header, and the reason that file imports no
+ * value from collect.ts. It would read as a fourth check and be worth nothing.
+ *
+ * So it stays an OUTPUT: *this is the process we found and typed at*, useful in a
+ * log and to a person reconstructing what happened. Settled 2026-09-08 with
+ * `orchestrator-setup`, who own `steer.ts`; the question was mine and the
+ * distinction is theirs.
+ */
 export function checkLanding(verified: VerifiedReading, target: SentTarget): LandingCheck {
   if (verified.kind === "not-told") return { kind: "not-told" };
   const compared: LandingField[] = [];

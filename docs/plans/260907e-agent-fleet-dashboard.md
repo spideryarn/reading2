@@ -1940,10 +1940,19 @@ stage.** Confusing them gets you a linter for a problem the compiler should have
       was a self-inflicted false positive because `steer-client.ts:51` writes `"api/steer/message"`
       with no leading slash — so match on substring, not prefix. Small surface, low noise, and it
       needs a short allowlist for the paths the Overseer and `curl` use honestly. **Gate it**, on
-      `scripts/check.ts`'s own rule: it is green the moment `/api/agents` is resolved.
-- [ ] **Resolve `/api/agents`**: either delete the alias or fix the five places in `live.ts` that
+      `scripts/check.ts`'s own rule — but note that `/api/agents` was resolved by keeping the alias
+      and fixing the prose (next entry), so **it is an allowlist entry rather than a zero**: the one
+      real finding on this tree is a deliberate exception now, and the check has to be able to say so
+      or it will be turned off the first time it fires.
+- [x] **Resolve `/api/agents`**: either delete the alias or fix the five places in `live.ts` that
       still call it "the poll". It is harmless — same handler — and it is the reason the check above
-      is not green on day one.
+      is not green on day one. **Resolved the second way, 2026-09-08: the prose changed and the alias
+      stayed.** Deleting a working endpoint to tidy a name is the worse trade — it costs one clause,
+      and a note or a bookmark outside this repo may still hold it. All five occurrences in `live.ts`
+      now say `/api/state`, with a paragraph at the top of that file and a comment at the mount in
+      `server.ts` saying that `/api/agents` is the original name, retained as an alias, called by
+      nothing here. **Which means the route check above still needs its allowlist** — this entry did
+      not make it green, it made the reason for the exception written down.
 - [x] **`renderSpoken()` reaches the drain.** `speaker` onto `SessionActionRequest`
       (`routes-actions.ts:395`, parsed at `:439`), carried on `QueuedItem`, applied in `drain.ts`'s
       `sendable()` at `:292`. **The wiring landed during the wave and the guard did not**, which is
@@ -1958,8 +1967,18 @@ stage.** Confusing them gets you a linter for a problem the compiler should have
       byte-identical, zero deletions in the file's diff. The failure it prevents is silent: an item
       built without a speaker does not throw and does not look wrong, it just reaches an agent as
       words indistinguishable from Greg's.
-- [ ] **`clear()` gets a route or gets deleted.** Either is fine; leaving a tested method nothing can
-      reach is not.
+- [x] **`clear()` gets a route or gets deleted.** Either is fine; leaving a tested method nothing can
+      reach is not. **It got a route** (`POST /api/actions/clear`, `routes-actions.ts`) and a button
+      (*Clear the queue*, in `SessionQueue`), 2026-09-08. Two things came out of building it that the
+      box did not anticipate. **`keptInFlight` is the feature, not a return value**: `clear()`
+      deliberately keeps a leased item, so both the confirmation and the result name what will NOT
+      go, by its words — a page that said only "cleared" would be the ambiguous negative this
+      postmortem is about. And **the body carries the item ids the reader was looking at**, frozen at
+      the tap, so an item queued by the Overseer between the preview being drawn and the tap is
+      refused (`stale-view`, 409) rather than destroyed unread; `{sessionId}` alone, which is all
+      `clear()` needs, cannot express *the list I read*. Verified by mutation: removing the route's
+      call to `clear()` reddens `expected [] to deeply equal [ 'q2', 'q3' ]` in
+      `tests/fleet-actions-route.test.ts`, which drives the real client over the real handler.
 
 #### The rule, which is the part that generalises
 

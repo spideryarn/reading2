@@ -28,9 +28,9 @@
  * refused, see below; queue.ts's own header says a
  * queue you cannot see *"surprises you an hour later, which here means a
  * sentence arriving in a conversation that has moved on"*. So the list is
- * ordered, numbered, cancellable, and carries the server's persistence warning
- * verbatim — the queue lives in the fleet server's memory and a restart
- * discards it.
+ * ordered, numbered, cancellable one at a time or all at once, and carries the
+ * server's persistence warning verbatim — the queue lives in the fleet server's
+ * memory and a restart discards it.
  *
  * ## What the confirmation must say, and why it is not `window.confirm`
  *
@@ -134,32 +134,89 @@ const QUEUE_OP_BODY: Record<QueueOp, string> = {
     "That recalled nothing: if the delivery got as far as the pane, the message is in that agent's input box. What it did do is free the rest of this session's queue.",
 };
 
+/**
+ * The two sentences for one successful press.
+ *
+ * **A `switch` with a `never` rather than the chain of ternaries this was.**
+ * The chain ended in an `else` that meant `accepted`, so a fifth arm on
+ * `ActionOutcome` would have inherited "The server took it." in silence —
+ * which is the shape of every bug in docs/postmortems/260908b: a consumer with
+ * nowhere to put a new fact, quietly rounding it to an old one. Adding
+ * `queue-cleared` is exactly that fifth arm, so the chain went first.
+ *
+ * The cleared arm names **which item stayed, in the sentence itself**, because
+ * that is the fact a person acts on: `clear()` keeps an item already leased,
+ * and a card saying only "cleared" would leave them believing nothing more is
+ * going out while one instruction still is.
+ */
+function successCopy(outcome: Extract<ActionOutcome, { ok: true }>): { head: string; body: string } {
+  switch (outcome.kind) {
+    case "queued":
+      return {
+        head: outcome.position === null ? "Queued." : `Queued — number ${outcome.position} in the line.`,
+        body: "It has not been sent. It goes when the session is next at a prompt, and until then it can be cancelled below.",
+      };
+    case "delivered":
+      return { head: "Sent now.", body: "The session's own reply lands in its terminal, not here." };
+    case "queue-changed":
+      return { head: QUEUE_OP_HEAD[outcome.op], body: QUEUE_OP_BODY[outcome.op] };
+    case "queue-cleared": {
+      const kept = outcome.keptInFlight;
+      return {
+        head:
+          outcome.removed.length === 1
+            ? "One item taken out of the queue."
+            : `${outcome.removed.length} items taken out of the queue.`,
+        body:
+          kept === null
+            ? "Nothing was on its way out, so this session's queue is now empty."
+            : `One was NOT taken out, because it had already been handed over for delivery: “${itemName(kept)}”. Cancelling could not recall it and nor could this — there is no receipt for a keystroke — so treat it as sent.`,
+      };
+    }
+    case "accepted":
+      return {
+        head: "The server took it.",
+        body: "It did not say whether that means typed at the pane or added to the queue. The queue below is what to believe.",
+      };
+    default: {
+      const never: never = outcome;
+      return never;
+    }
+  }
+}
+
 export function ActionOutcomeCard({ outcome, onRefresh }: { outcome: ActionOutcome; onRefresh: () => void }): ReactNode {
   if (outcome.ok) {
-    const head =
-      outcome.kind === "queued"
-        ? outcome.position === null
-          ? "Queued."
-          : `Queued — number ${outcome.position} in the line.`
-        : outcome.kind === "delivered"
-          ? "Sent now."
-          : outcome.kind === "queue-changed"
-            ? QUEUE_OP_HEAD[outcome.op]
-            : "The server took it.";
-    const body =
-      outcome.kind === "queued"
-        ? "It has not been sent. It goes when the session is next at a prompt, and until then it can be cancelled below."
-        : outcome.kind === "delivered"
-          ? "The session's own reply lands in its terminal, not here."
-          : outcome.kind === "queue-changed"
-            ? QUEUE_OP_BODY[outcome.op]
-            : "It did not say whether that means typed at the pane or added to the queue. The queue below is what to believe.";
+    const { head, body } = successCopy(outcome);
     return (
       <div className="tw:mt-2 tw:rounded-lg tw:border tw:border-work/40 tw:bg-work-wash tw:p-3 tw:text-[13px]">
         <p className="tw:font-medium tw:text-work-ink">{head}</p>
         <p className="tw:mt-1 tw:text-ink-soft">{body}</p>
         {outcome.kind === "queued" && outcome.why !== null ? (
           <p className="tw:mt-1 tw:break-words tw:text-ink">{outcome.why}</p>
+        ) : null}
+        {/* THE RECEIPT. The queue this was read from is gone by the time this
+            card is drawn, so the words that were in it are the only record left
+            of what a person just destroyed. */}
+        {outcome.kind === "queue-cleared" ? (
+          <>
+            <ul className="tw:mt-1 tw:list-disc tw:pl-5 tw:text-ink">
+              {outcome.removed.map((item) => (
+                <li key={item.id} className="tw:break-words">
+                  {itemLine(item).what}
+                  {itemLine(item).detail === null ? null : (
+                    <span className="tw:text-ink-soft"> — {itemLine(item).detail}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+            {outcome.unreadable > 0 ? (
+              <p className="tw:mt-1 tw:text-[12px] tw:text-alarm-ink">
+                {outcome.unreadable} more {outcome.unreadable === 1 ? "item was" : "items were"} taken out and could
+                not be read, so the list above is short by that many.
+              </p>
+            ) : null}
+          </>
         ) : null}
         {outcome.kind === "delivered" && outcome.sent.length > 0 ? (
           <p className="tw:mt-1 tw:text-ink-soft">
@@ -684,6 +741,20 @@ function itemLine(item: QueueItemView): { what: string; detail: string | null } 
 }
 
 /**
+ * One item named inside a sentence, rather than drawn as a row.
+ *
+ * **`what` alone will not do here.** Every queued message renders as *"Your
+ * message"*, so a sentence saying *"this one stays: Your message"* over a queue
+ * that held three of them identifies nothing — and the sentence exists
+ * precisely so a person knows WHICH instruction is still on its way out. The
+ * words are what tell them apart, so the words are in it.
+ */
+function itemName(item: QueueItemView): string {
+  const line = itemLine(item);
+  return line.detail === null ? line.what : `${line.what} — ${line.detail}`;
+}
+
+/**
  * WHAT THIS ITEM'S STATE IS, IN ONE ORDERED ANSWER.
  *
  * Four of the five states are things the queue has decided and sent — the page
@@ -828,6 +899,14 @@ function QueueItem({
  * that is a bug"* — quiet loss is exactly the failure silent-success.md is
  * about, and a queue that vanished when somebody restarted the dashboard would
  * otherwise look like a queue that drained.
+ *
+ * **Clear the queue is the fourth gesture and the only destructive one**, and it
+ * is here because `SteeringQueue.clear()` was written, bounded and tested and no
+ * route or button could reach it — instance 9 of docs/postmortems/260908b,
+ * *"`revive()`'s shape exactly"*. It has the treatment every destructive thing
+ * in this file has: a preview naming what would go, no Confirm when the page
+ * cannot say what would go, and — the part specific to this one — a sentence
+ * naming what would NOT go. See `pendingClear`.
  */
 export function SessionQueue({
   sessionId,
@@ -846,6 +925,27 @@ export function SessionQueue({
 }): ReactNode {
   const [busy, setBusy] = useState(false);
   const [outcome, setOutcome] = useState<ActionOutcome | null>(null);
+  /**
+   * **WHAT THE PERSON IS LOOKING AT, FROZEN AT THE TAP** — or null when nobody
+   * has asked to clear anything.
+   *
+   * Held rather than recomputed from `queue` on every render, and that is the
+   * safety property rather than a rendering preference. This panel is on a poll:
+   * a list computed live would change under somebody mid-read, and they would
+   * then confirm the destruction of a list they had not seen — which is the one
+   * thing a bulk delete must not do. So the ids sent are the ids drawn, and if
+   * the queue has moved on the server refuses `stale-view` and says to look
+   * again. A refusal is the correct outcome there; a silent best effort is not.
+   *
+   * `unreadable` rides along because it is a fact about the same reading: a
+   * queue holding items this page could not parse cannot be previewed honestly,
+   * and the strip then withholds Confirm entirely.
+   */
+  const [pendingClear, setPendingClear] = useState<{
+    drop: QueueItemView[];
+    keep: QueueItemView[];
+    unreadable: number;
+  } | null>(null);
   const queue = queueFor(feed, sessionId);
 
   /**
@@ -869,6 +969,18 @@ export function SessionQueue({
   const cancel = useCallback((itemId: string) => act(api.cancel, itemId), [act, api]);
   const revive = useCallback((itemId: string) => act(api.revive, itemId), [act, api]);
   const abandon = useCallback((itemId: string) => act(api.abandon, itemId), [act, api]);
+
+  const clear = useCallback(
+    async (itemIds: readonly string[]): Promise<void> => {
+      setBusy(true);
+      const result = await api.clear(sessionId, itemIds);
+      setOutcome(result);
+      setBusy(false);
+      setPendingClear(null);
+      onChanged();
+    },
+    [api, onChanged, sessionId],
+  );
 
   /* BEFORE THE EMPTY-QUEUE SENTENCE, because it is a different fact. A queue
      whose item list this page could not read is not a queue with nothing in it,
@@ -924,6 +1036,93 @@ export function SessionQueue({
           not be read, so the list above is short by that many.
         </p>
       ) : null}
+
+      {/*
+        EMPTYING THE WHOLE QUEUE, WHICH IS DESTRUCTIVE AND GETS THE HOUSE
+        TREATMENT FOR THAT: a preview of what would go, named, and no Confirm at
+        all when the page cannot say what would go — the same shape as
+        `BoxActions` in front of a kill, for the same reason.
+
+        Offered only when something is actually droppable. A leased item is not,
+        and a queue holding nothing but one of those has a per-item Abandon
+        instead: a "Clear" that removed nothing would be a button whose only
+        possible outcome is a refusal.
+      */}
+      {queue.items.some((i) => i.leasedAt === null) && pendingClear === null ? (
+        <p className="tw:mt-2">
+          <Button
+            disabled={busy}
+            onClick={() =>
+              setPendingClear({
+                drop: queue.items.filter((i) => i.leasedAt === null),
+                keep: queue.items.filter((i) => i.leasedAt !== null),
+                unreadable: queue.unreadableItems,
+              })
+            }
+          >
+            Clear the queue
+          </Button>
+        </p>
+      ) : null}
+
+      {pendingClear === null ? null : (
+        <div
+          role="group"
+          aria-label="Confirm clearing the queue"
+          className="tw:mt-2 tw:rounded-lg tw:border tw:border-alarm/40 tw:border-l-4 tw:border-l-alarm tw:bg-alarm-wash tw:p-3 tw:text-[13px]"
+        >
+          <p className="tw:font-medium tw:text-alarm-ink">
+            {pendingClear.drop.length === 1
+              ? "Take this one thing out of the queue?"
+              : `Take these ${pendingClear.drop.length} things out of the queue?`}
+          </p>
+          <ul className="tw:mt-1 tw:list-disc tw:pl-5 tw:text-ink">
+            {pendingClear.drop.map((item) => (
+              <li key={item.id} className="tw:break-words">
+                {itemLine(item).what}
+                {itemLine(item).detail === null ? null : <span className="tw:text-ink-soft"> — {itemLine(item).detail}</span>}
+              </li>
+            ))}
+          </ul>
+          {/*
+            **WHAT WILL NOT GO IS AS LOAD-BEARING AS WHAT WILL.** `clear()` keeps
+            an item already handed over for delivery, on purpose: the keystrokes
+            may be on their way and there is no receipt for a keystroke. A
+            confirmation that listed only the casualties would be read as "the
+            queue will be empty afterwards", which would be false in exactly the
+            case that matters.
+          */}
+          {pendingClear.keep.map((item) => (
+            <p key={item.id} className="tw:mt-1 tw:break-words tw:text-ink">
+              This one stays, because it has already been handed over for delivery: “{itemName(item)}”. Nothing here
+              can recall it.
+            </p>
+          ))}
+          {/*
+            THE EMPTY-PREVIEW CASE, COPIED FROM `BoxActions` RATHER THAN
+            REINVENTED. A queue with items this page could not read cannot be
+            previewed, and a Confirm over a partial list would destroy things
+            that were never on screen.
+          */}
+          {pendingClear.unreadable > 0 ? (
+            <p className="tw:mt-2 tw:font-medium tw:text-alarm-ink">
+              {pendingClear.unreadable} {pendingClear.unreadable === 1 ? "item in this queue is" : "items in this queue are"}{" "}
+              unreadable by this page, so the list above is not what would go and there is no Confirm below. Cancel
+              them one at a time, or restart the dashboard server, which discards every queue.
+            </p>
+          ) : null}
+          <div className="tw:mt-2 tw:flex tw:flex-wrap tw:gap-1.5">
+            {pendingClear.unreadable > 0 ? null : (
+              <Button variant="danger" disabled={busy} onClick={() => void clear(pendingClear.drop.map((i) => i.id))}>
+                {busy ? "Working…" : "Yes, clear them"}
+              </Button>
+            )}
+            <Button disabled={busy} onClick={() => setPendingClear(null)}>
+              Keep them
+            </Button>
+          </div>
+        </div>
+      )}
       {/* The server's own sentence about its own volatility. */}
       <p className="tw:mt-2 tw:text-[12px] tw:break-words tw:text-ink-faint">{queue.warning}</p>
       {outcome === null ? null : <ActionOutcomeCard outcome={outcome} onRefresh={onChanged} />}
