@@ -921,7 +921,21 @@ Vitest runs files in parallel against one database, so whichever tears down firs
 fixture and every test in it 404s — **while passing when run alone**. Real, not contention: it fails
 identically run by itself, and it is a static read of the test sources, which a loaded box cannot
 affect. It arrived in `44f60619`, from `worktree-fleet-dashboard-v01`. Reported to that session and
-left untouched.
+left untouched; its owner fixed it at `6f603772`, and `dev` was green again 25 minutes after the gate
+went red.
+
+**The tempting generalisation was wrong**, which is worth recording because three sessions nearly
+acted on it. This was the *second* uuid collision of the night from the fleet tests, so 260907e read
+the pair as a method — ids minted by hand from a small pool — and I repeated that to the session
+running a deploy as though it were established. The owner checked where each id actually came from
+instead, and **the two had different causes.** The earlier `11111111-…` was a counting-block id
+colliding with a real `auth.users` row, genuinely destructive. Tonight's two are real Claude
+conversation uuids captured off live sessions, shared across three files **on purpose** because those
+files describe one agent being steered, queued for and rendered — colliding with no row at all, since
+`tools/fleet/` imports nothing under `src/`. `NOT_A_ROW` was the right answer rather than a
+workaround, and acting on my version would have given four fixtures four distinct ids, asserting they
+differ when they deliberately do not. Two instances of one symptom, a plausible mechanism, and no
+check of provenance is the exact state in which a wrong claim feels most like a finding.
 
 **What this is evidence of, and what it is not** — 260907e's distinction, and they were right that I
 had blurred it. This red is evidence about **the join**: every branch that composes `dev` tonight was
