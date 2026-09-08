@@ -97,15 +97,12 @@ import {
   existsSync,
   fstatSync,
   fsyncSync,
-  ftruncateSync,
   mkdirSync,
   openSync,
   readFileSync,
   readSync,
-  renameSync,
   statSync,
   unlinkSync,
-  writeSync,
 } from "node:fs";
 import { homedir, hostname } from "node:os";
 import { isAbsolute, join } from "node:path";
@@ -120,6 +117,7 @@ import {
   type SessionKey,
   type StatusKey,
 } from "./diff.js";
+import { truncateToLastLine, writeAll, writeAtomically, type JsonlRepair } from "./jsonl.js";
 import type { ObservedRow, ParseResult } from "./observation.js";
 
 /**
@@ -129,15 +127,26 @@ import type { ObservedRow, ParseResult } from "./observation.js";
  * merely poorer — the producer's own rule, adopted here so the two files use
  * one meaning of the word. Adding a field is not a bump; a version that changes
  * on every addition is one nobody checks.
+ *
+ * **2 (2026-09-08): `statusSince` became a `StatusSince` pair.** The rule above
+ * decides this rather than taste. A consumer written against schema 1 does
+ * `Date.parse(entry.statusSince)`, which on the new shape is `NaN`, and
+ * `now - NaN` renders as a blank or a nonsense age rather than as an error —
+ * the WRONG half of the rule, not the poorer half. The bump makes that consumer
+ * say *I cannot read this*, which is what
+ * docs/project/orchestrator-direction.md § The seam is a file tells it to do
+ * with a schema it does not know.
+ *
+ * **Nothing is migrated.** An old checkpoint is refused, the log is replayed,
+ * and the register comes back with honest arms — the log holds events rather
+ * than durations, so a rebuild cannot inherit the ambiguity a migration would
+ * have had to guess at.
  */
-export const STORE_SCHEMA = 1;
+export const STORE_SCHEMA = 2;
 
 export const EVENTS_FILE = "events.jsonl";
 export const CHECKPOINT_FILE = "current.json";
 export const LOCK_FILE = "overseer.lock";
-
-/** How much of a torn line is kept for the log message. The bytes count is exact regardless. */
-const DROPPED_TEXT_CAP = 4096;
 
 /**
  * How many bytes of log a start is willing to replay before it gives up and
@@ -179,8 +188,6 @@ export type ColdReason =
   | "log-has-holes"
   | "log-too-large-to-replay";
 
-export type LogRepair = { torn: false } | { torn: true; droppedBytes: number; droppedText: string };
-
 /**
  * How this daemon came up, in the three ways that are actually different.
  *
@@ -197,7 +204,7 @@ export type StoreStart =
 
 export type StoreOpening = {
   start: StoreStart;
-  repair: LogRepair;
+  repair: JsonlRepair;
   /** Events folded at open: the tail past the checkpoint's cursor, or the whole log for a rebuild. */
   eventsReplayed: number;
   /** Lines in the scanned range the reader could not use. One is enough to force a cold start. */
@@ -212,6 +219,70 @@ export type StoreOpening = {
    */
   bytesScanned: number;
 };
+
+/**
+ * WHEN THE STATUS BEGAN — and whether that is a reading or a floor.
+ *
+ * **The bug this shape exists to make impossible.** `statusSince` used to be a
+ * bare timestamp, taken from the `at` of whichever event created the entry, and
+ * `overseer status` printed this the first time it was run against a real
+ * store:
+ *
+ *     working  13m  fb2f-dock-always-visible-landscape
+ *     working  13m  fb2g-gutter-icons-on-touch
+ *     working  13m  get-ready-for-deploy
+ *     working  13m  html-ingestion-post-processing-evals
+ *
+ * The daemon had been up for thirteen minutes. Those sessions had been working
+ * for hours. For a session already running when the daemon starts, the event
+ * that creates its entry is `session-seen` — **first observation, not the
+ * transition** — so the number was the earliest moment we can prove rather than
+ * the moment it began: two different quantities with the same units, and
+ * nothing in the shape to tell them apart.
+ *
+ * **It is worst exactly when it matters.** `Restart=always` makes a restart
+ * routine, and after one every session's duration resets to zero *together*, so
+ * the agent genuinely blocked for three hours ranks equal-last with one blocked
+ * for thirty seconds — on the surface whose whole job is that ranking.
+ *
+ * So: two arms, and the point is that this is not a better comment. A renderer
+ * that reaches `.at` has had to walk past the `kind` to get there, and can at
+ * worst choose to ignore it.
+ *
+ *  - `observed` — the state changed BETWEEN TWO OF OUR OBSERVATIONS, in a
+ *    `session-status` or a `session-wait-restarted`. On a running daemon those
+ *    two are one tick apart, so the age is a measurement: short by at most a
+ *    tick, and never long.
+ *  - `lower-bound` — the state was already in progress when we first saw it, so
+ *    this says only *"in this state at least since"*. It has no upper bound at
+ *    all: the true duration may be minutes or days.
+ *
+ * **One case where `observed` is looser than it sounds, named rather than
+ * papered over** (GPT Sol, 2026-09-08, reviewing this change). After a restart
+ * the daemon restores `last-snapshot.json` as its differ baseline and diffs the
+ * first new snapshot against it, so *"between two of our observations"* brackets
+ * the whole downtime rather than one tick. A wait that ended and restarted
+ * during three hours of downtime is recorded as `observed` at the moment we came
+ * back, and rendered as `0s`. It is the same class of error as the 13m bug and
+ * it is bounded by the downtime rather than unbounded, which is why it is a
+ * lesser one — but it is not zero.
+ *
+ * **It is not fixable here**, and that is the reason it is written down instead:
+ * the fold cannot see it. Closing it means either the `session-status` event
+ * carrying the PREVIOUS snapshot's `collectedAt`, so the arm can hold the whole
+ * bracket, or the daemon marking the first diff after a restored baseline — and
+ * both of those live in diff.ts and daemon.ts. Recorded in
+ * docs/plans/260908b-overseer-store-and-clock.md § S7-04 for whoever takes that
+ * stage; the dashboard should know before it builds on `observed`.
+ *
+ * The names are the READER'S rather than the producer's, because the seam is a
+ * file: somebody running `less ~/.overseer/current.json` sees
+ * `"kind": "lower-bound"` and knows what the number is worth without opening
+ * this one.
+ */
+export type StatusSince =
+  | { readonly kind: "observed"; readonly at: string }
+  | { readonly kind: "lower-bound"; readonly at: string };
 
 /**
  * One session, as the register holds it. **This is the reboot-resume
@@ -251,8 +322,13 @@ export type RegisterEntry = {
   readonly lastSeenAlive: string;
   /** The canonical key, never the status object: `waiting.secondsLeft` changes every collection. */
   readonly lastStatusKey: StatusKey;
-  /** When it entered that state — the duration attention triage ranks by. */
-  readonly statusSince: string;
+  /**
+   * When it entered that state — the duration attention triage ranks by, and a
+   * PAIR rather than a timestamp, because for a great many entries it is a
+   * floor rather than a reading. `StatusSince` above has the four identical
+   * `13m` rows that are the whole story.
+   */
+  readonly statusSince: StatusSince;
 };
 
 /**
@@ -765,6 +841,42 @@ function parseEvent(u: unknown): ParseResult<OverseerEvent> {
 }
 
 /**
+ * `statusSince`, parsed — **and a bare string is refused rather than adopted.**
+ *
+ * Every `current.json` written before 2026-09-08 has a bare timestamp here, so
+ * this is a real input rather than a hypothetical. Accepting one would have to
+ * decide which arm it is, and there is no honest answer: the two quantities are
+ * indistinguishable in the old shape, and the reading that looks best —
+ * `"observed"` — is the one that manufactures the 13m bug inside the recovery
+ * path, which is where a wrong number survives longest and is questioned least.
+ *
+ * Refusing costs a replay of the log, which is cheap and produces the honest
+ * arms. `STORE_SCHEMA` means the refusal normally happens one level up, at the
+ * schema check; this is the same decision for the file somebody has edited by
+ * hand, and it names the field so the person reading `overseer status` after a
+ * cold start knows which shape change did it.
+ */
+function parseStatusSince(u: unknown): ParseResult<StatusSince> {
+  if (typeof u === "string") {
+    return {
+      ok: false,
+      reason:
+        "statusSince is a bare timestamp, which is the pre-schema-2 shape: it cannot say whether " +
+        "the daemon watched the transition or merely found the session already in that state. " +
+        "Replaying the log rebuilds it.",
+    };
+  }
+  if (!isRecord(u)) return { ok: false, reason: "statusSince is not an object" };
+  const at = u["at"];
+  if (!isIsoTimestamp(at)) return { ok: false, reason: "statusSince.at is not an ISO timestamp" };
+  const kind = u["kind"];
+  if (kind !== "observed" && kind !== "lower-bound") {
+    return { ok: false, reason: `statusSince.kind ${JSON.stringify(kind)} is neither observed nor lower-bound` };
+  }
+  return { ok: true, value: { kind, at } };
+}
+
+/**
  * One register entry, parsed strictly from `unknown`.
  *
  * **The whole checkpoint fails if any entry does** — see `parseCheckpoint`.
@@ -806,8 +918,8 @@ function parseRegisterEntry(u: unknown): ParseResult<RegisterEntry> {
   }
   const lastSeenAlive = u["lastSeenAlive"];
   if (!isIsoTimestamp(lastSeenAlive)) return { ok: false, reason: "lastSeenAlive is not an ISO timestamp" };
-  const statusSince = u["statusSince"];
-  if (!isIsoTimestamp(statusSince)) return { ok: false, reason: "statusSince is not an ISO timestamp" };
+  const statusSince = parseStatusSince(u["statusSince"]);
+  if (!statusSince.ok) return { ok: false, reason: statusSince.reason };
   const lastStatusKey = u["lastStatusKey"];
   if (typeof lastStatusKey !== "string" || lastStatusKey === "") {
     return { ok: false, reason: "lastStatusKey is not a status key" };
@@ -828,7 +940,7 @@ function parseRegisterEntry(u: unknown): ParseResult<RegisterEntry> {
       tmuxServerPid,
       lastSeenAlive,
       lastStatusKey: lastStatusKey as StatusKey,
-      statusSince,
+      statusSince: statusSince.value,
     },
   };
 }
@@ -931,69 +1043,6 @@ function keyFor(tmuxId: string, claimedConversationId: string | null): string {
 }
 
 /**
- * Truncate the log to its last complete line, **on disk**, before anything
- * appends to it.
- *
- * Scanning backwards in chunks rather than reading the file, because this runs
- * at every start and the file only grows. A file with no newline at all
- * truncates to empty — that is a single torn line and there is nothing in it to
- * keep.
- */
-function repairEventLog(path: string): LogRepair {
-  if (!existsSync(path)) return { torn: false };
-  const fd = openSync(path, "r+");
-  try {
-    const size = fstatSync(fd).size;
-    if (size === 0) return { torn: false };
-
-    const CHUNK = 64 * 1024;
-    let end = size;
-    let lastNewline = -1;
-    while (end > 0) {
-      const start = Math.max(0, end - CHUNK);
-      const buffer = Buffer.alloc(end - start);
-      readSync(fd, buffer, 0, buffer.length, start);
-      const index = buffer.lastIndexOf(0x0a);
-      if (index !== -1) {
-        lastNewline = start + index;
-        break;
-      }
-      end = start;
-    }
-    if (lastNewline === size - 1) return { torn: false };
-
-    const keep = lastNewline + 1;
-    const droppedBytes = size - keep;
-    const dropped = Buffer.alloc(Math.min(droppedBytes, DROPPED_TEXT_CAP));
-    readSync(fd, dropped, 0, dropped.length, keep);
-    ftruncateSync(fd, keep);
-    fsyncSync(fd);
-    return { torn: true, droppedBytes, droppedText: dropped.toString("utf8") };
-  } finally {
-    closeSync(fd);
-  }
-}
-
-/**
- * Write every byte, because `writeSync` does not promise to.
- *
- * It returns a COUNT, and a short write on a regular file is rare rather than
- * impossible — a signal, a full disk. Trusting the count without looking at it
- * would produce exactly the torn line this module opens by repairing, except
- * with nothing having gone wrong at the time and no error anywhere. The loop
- * costs nothing and removes the class.
- */
-function writeAll(fd: number, text: string): void {
-  const buffer = Buffer.from(text, "utf8");
-  let written = 0;
-  while (written < buffer.length) {
-    const wrote = writeSync(fd, buffer, written, buffer.length - written);
-    if (wrote <= 0) throw new Error(`wrote ${wrote} of ${buffer.length - written} remaining bytes`);
-    written += wrote;
-  }
-}
-
-/**
  * Read a file from a byte offset, and only from there.
  *
  * `readFileSync` then `subarray` allocates the whole file to hand back its
@@ -1017,37 +1066,6 @@ function readSlice(path: string, from: number): Buffer {
     return buffer.subarray(0, read);
   } finally {
     closeSync(fd);
-  }
-}
-
-/**
- * Write, flush, then rename over the target.
- *
- * The `fsync` before the rename is what makes the new file's CONTENT durable;
- * the directory `fsync` after it is what makes the rename itself durable, and
- * it is best-effort because opening a directory for reading is a Linux
- * affordance rather than a portable one. The temp file is a sibling on purpose:
- * a rename across filesystems is not atomic and is not even the same syscall.
- */
-function writeAtomically(path: string, directory: string, text: string): void {
-  const temp = `${path}.tmp-${process.pid}-${randomUUID()}`;
-  const fd = openSync(temp, "w");
-  try {
-    writeAll(fd, text);
-    fsyncSync(fd);
-  } finally {
-    closeSync(fd);
-  }
-  renameSync(temp, path);
-  try {
-    const dir = openSync(directory, "r");
-    try {
-      fsyncSync(dir);
-    } finally {
-      closeSync(dir);
-    }
-  } catch {
-    /* Not every platform lets you fsync a directory. The rename still happened. */
   }
 }
 
@@ -1230,7 +1248,17 @@ export function foldEvents(
         // fields a reboot needs are only on `session-seen`.
         const was = into.get(event.key);
         if (was !== undefined) {
-          into.set(event.key, { ...was, lastSeenAlive: event.at, lastStatusKey: event.to, statusSince: event.at });
+          // OBSERVED: the differ produced this by comparing two collections it
+          // made, so the transition happened between them and `at` is a
+          // measurement rather than a floor. This arm and `entryOf` are the
+          // only two producers of a `statusSince`, which is what keeps the
+          // distinction to one line each.
+          into.set(event.key, {
+            ...was,
+            lastSeenAlive: event.at,
+            lastStatusKey: event.to,
+            statusSince: { kind: "observed", at: event.at },
+          });
         }
         break;
       }
@@ -1239,7 +1267,13 @@ export function foldEvents(
         // a new wait, so a triage view ranking by "waiting longest" must start
         // again here rather than report an hour that ended.
         const was = into.get(event.key);
-        if (was !== undefined) into.set(event.key, { ...was, lastSeenAlive: event.at, statusSince: event.at });
+        // OBSERVED, for the same reason as `session-status` and worth checking
+        // rather than assuming: diff.ts emits this only after comparing the
+        // previous deadline with this one, so the daemon watched the wait
+        // restart. A wait that restarted is a new wait, and the clock with it.
+        if (was !== undefined) {
+          into.set(event.key, { ...was, lastSeenAlive: event.at, statusSince: { kind: "observed", at: event.at } });
+        }
         break;
       }
       case "session-row-changed": {
@@ -1290,7 +1324,12 @@ function entryOf(row: ObservedRow, at: string, tmuxServerPid: number | null, key
     tmuxServerPid,
     lastSeenAlive: at,
     lastStatusKey: key,
-    statusSince: at,
+    // A LOWER BOUND, always. Everything that reaches here — `session-seen` and
+    // `session-replaced` — is a FIRST SIGHTING: the session was in this state
+    // when we looked, and how long it had been there is not something this
+    // process can know. Minting `"observed"` here is the 13m bug, and it is one
+    // word away at all times.
+    statusSince: { kind: "lower-bound", at },
   };
 }
 
@@ -1324,11 +1363,25 @@ function rowMaterialOf(row: ObservedRow): Pick<RegisterEntry, RegisterRowField> 
 /**
  * WHO IS ALLOWED TO MOVE EACH FIELD OF A REGISTER ENTRY.
  *
- * A census rather than a mechanism, and it earns its place by being TOTAL: the
- * `satisfies` below makes a field added to `RegisterEntry` a compile error until
- * somebody says which of the four it is. That is the forcing function S3-03
- * asked for — `name` was only ever the instance somebody noticed, and the class
- * is a register field that nothing keeps current.
+ * A census rather than a mechanism, and it is worth being exact about what that
+ * buys, because two cross-family reviews read this comment in opposite ways and
+ * each was half right.
+ *
+ * **A MISSING field is a compile error.** `satisfies Record<keyof
+ * RegisterEntry, …>` is total, so a field added to `RegisterEntry` does not
+ * compile until somebody says which of the four it is. That much is the forcing
+ * function S3-03 asked for — `name` was only ever the instance somebody
+ * noticed, and the class is a register field that nothing keeps current.
+ *
+ * **A MISCLASSIFIED field is not.** Writing `"clock"` beside a field the row
+ * material owns compiles perfectly, and the field then goes stale silently:
+ * the original defect, wearing the census as cover. Two of the four arms are
+ * pinned by tests instead — `row` against `REGISTER_ROW_FIELDS` and the fold,
+ * `pane` against what a `session-pane-replaced` really moves, both in
+ * `tests/overseer-store.test.ts`. **`identity` against `clock` is pinned by
+ * nothing**, and is recorded here as a KNOWN UNCOVERED CASE rather than left
+ * reading as guarded: swapping those two survives the suite. A census is a
+ * prompt to think, and the thinking is still the reader's.
  *
  *  - `identity` — the pair the register is keyed on, plus the tmux generation
  *    those handles belong to. It cannot change without the entry being a
@@ -1654,7 +1707,7 @@ export function openStore(options: OpenStoreOptions = {}): OpenStoreResult {
     }
     // BEFORE the append handle is opened, so nothing can land after the torn
     // bytes. This is the whole of design call 1.
-    const repair = repairEventLog(eventsPath);
+    const repair = truncateToLastLine(eventsPath);
     if (!stillOurs(lock, lockPath)) {
       closeSync(lock.fd);
       return { ok: false, refusal: { reason: "lost-the-race", holder: null } };

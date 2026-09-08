@@ -40,6 +40,7 @@
 import type { IncomingHttpHeaders, IncomingMessage, ServerResponse } from "node:http";
 import type { Readable } from "node:stream";
 
+import { renderMessage, type Speaker } from "./actions.js";
 import { addressableHost } from "./origin.js";
 import {
   classifyConsequence,
@@ -386,6 +387,55 @@ function asString(v: unknown): string | null {
 }
 
 /**
+ * Who is speaking, defaulting to the WEAKER claim.
+ *
+ * `overseer` rather than `greg` when the field is missing, and the asymmetry is
+ * the point: a coordinator that forgets to say who it is gets the prefix that
+ * says "weigh this as a peer's suggestion", and a caller that wants Greg's
+ * authority has to ask for it in as many words. The other default would let a
+ * model mint its own approval by omission — A12 in actions.ts's own header.
+ *
+ * **A DEFAULT RATHER THAN A REFUSAL, decided again on 2026-09-08 when the field
+ * was added to the session route and to this one.** Requiring it was the other
+ * candidate, and the argument for it is good — "who is speaking" is not
+ * something a caller of THIS mechanism may decline to say. It loses on two
+ * counts. The failure it prevents is not a failure: an omitted claim already
+ * gets the weaker prefix, so silence can never buy Greg's authority, and the
+ * worst it can do is over-attribute Greg's own message to a coordinator.
+ * Against that, a 400 on a body that forgot the field is a message that does
+ * not arrive, and half of what reaches these two routes is queued rather than
+ * typed — so the refusal would surface minutes later as a delivery that never
+ * happened. Two routes, one rule, one place to change it: this function.
+ *
+ * The page does not rely on the default and says `speaker: "greg"` in every
+ * body, which is the form the comment above asks for.
+ *
+ * **THIS IS NOT AN AUTHENTICATION BOUNDARY.** Anything that can reach the
+ * dashboard can put `"greg"` in a body. It stops an honest automated caller
+ * acquiring Greg's authority by omission or accident, which is the failure A12
+ * names; what stops a dishonest one is the Tailscale-only bind.
+ */
+/**
+ * Send the attributed words, or refuse — the two arms of `renderMessage`, as a
+ * `SteerResult`.
+ *
+ * A function rather than an `if` at the call site so that the refusal has one
+ * shape and one code: `bad-text` is what `checkText` refuses with, and this is
+ * the same class of thing — words that cannot be typed at a pane as they stand.
+ */
+function spoken(rendered: { ok: true; text: string } | { ok: false; why: string }, send: (text: string) => SteerResult): SteerResult {
+  if (rendered.ok) return send(rendered.text);
+  return { ok: false, reason: { code: "bad-text", why: rendered.why }, delivery: "none", sent: [] };
+}
+
+export function parseSpeaker(v: unknown): Parsed<Speaker> {
+  if (v === undefined || v === null) return { ok: true, value: "overseer" };
+  const s = asString(v);
+  if (s === "greg" || s === "overseer") return { ok: true, value: s };
+  return bad(`speaker must be 'greg' or 'overseer', not ${JSON.stringify(v)}`);
+}
+
+/**
  * Every `FleetStatus` kind, as a compile-time list.
  *
  * A `Record` keyed by the union, so an eighth `SessionState` arm fails to
@@ -598,7 +648,17 @@ export function parseTarget(o: Record<string, unknown>): Parsed<SteerTarget> {
   return { ok: true, value: { paneId, sessionId, claudeSessionId, panePid: rawPid } };
 }
 
-export type MessageRequest = { target: SteerTarget; text: string; declaredStatus: FleetStatus };
+/**
+ * `POST /api/steer/message` — the THIRD door into an agent's context, and it
+ * types immediately rather than queuing.
+ *
+ * `speaker` is here for the reason it is on `SessionActionRequest`: this route
+ * hands arbitrary text straight to `sendMessage`, so without it an automated
+ * caller's sentence arrives as an ordinary user turn indistinguishable from
+ * Greg's. actions.ts § `Speaker` (A12) is the rule; `renderMessage` applies it,
+ * and is the same function the queue's drain calls.
+ */
+export type MessageRequest = { target: SteerTarget; text: string; declaredStatus: FleetStatus; speaker: Speaker };
 export type AnswerRequest = {
   target: SteerTarget;
   seen: SeenQuestion;
@@ -618,7 +678,15 @@ export function parseMessageBody(raw: unknown): Parsed<MessageRequest> {
   if (declaredStatus === null) {
     return bad("status is missing or is not a status; send the one the row you tapped was showing");
   }
-  return { ok: true, value: { target: target.value, text, declaredStatus } };
+  const speaker = parseSpeaker(o.speaker);
+  if (!speaker.ok) return speaker;
+  // REFUSED HERE, WHILE SOMEBODY IS LOOKING AT IT, for the reason `checkText`
+  // is called at enqueue next door: a message this speaker may not send should
+  // fail as an answer to the request that sent it. The render below is done
+  // again at the send — this one is the courtesy, that one is the guard.
+  const rendered = renderMessage(text, speaker.value);
+  if (!rendered.ok) return bad(rendered.why);
+  return { ok: true, value: { target: target.value, text, declaredStatus, speaker: speaker.value } };
 }
 
 /** `POST /api/steer/answer`'s body. */
@@ -926,9 +994,16 @@ export function makeSteerRoutes(overrides: Partial<SteerDeps> = {}): SteerRoutes
 
     let result: SteerResult;
     try {
+      // ATTRIBUTED AT THE MOMENT OF THE SEND. `request.text` must never reach
+      // `sendMessage` on its own: it is the raw thing a caller typed, and the
+      // prefix is what tells the receiving agent whether it is reading Greg or
+      // an automated coordinator. The parse already asked and refused the
+      // request if the answer was no, so the `false` arm below is unreachable —
+      // and it is written out rather than asserted away because the readable
+      // failure for an unreachable case is a refusal, not a bare send.
       result =
         "text" in request
-          ? deps.sendMessage(target, request.text, request.declaredStatus)
+          ? spoken(renderMessage(request.text, request.speaker), (text) => deps.sendMessage(target, text, request.declaredStatus))
           : deps.answerQuestion(target, request.seen, request.optionIndex, request.declaredStatus);
     } catch (e) {
       // Only a bug reaches here: every expected failure is a `Refusal`. So this

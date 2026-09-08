@@ -50,10 +50,11 @@ import type { ReactNode } from "react";
 
 import { NewSessionPanel } from "./NewSessionPanel";
 import { MissingSession, SessionDetail } from "./SessionDetail";
-import { Handles, QuestionCard, StatusPill, Uptime } from "./SessionParts";
+import { Handles, LaunchMode, QuestionCard, StatusPill, Uptime } from "./SessionParts";
 import { Explain } from "./Tooltip";
 import { COLUMN_MIN_PX, chooseColumns, choosePanes, spreadIntoColumns, useContainerWidth } from "./fit";
 import type { NewSessionApi } from "./new-session-client";
+import type { MessagesApi } from "./messages-client";
 import type { RenameApi } from "./rename-client";
 import type { SteerApi } from "./steer-client";
 import type { ActionsUi } from "./useActions";
@@ -137,6 +138,14 @@ function SessionCard({
       {label.detail !== null ? (
         <p className={cx("tw:mt-1 tw:text-[13px] tw:break-words", tone.ink)}>{label.detail}</p>
       ) : null}
+
+      {/* Above the identifiers and below the title, because a session that did
+          not launch in auto mode is a fact about the session rather than
+          something you do to it — and it has to be visible on the LIST, since
+          the point is to catch it inside a minute rather than to find it after
+          you have already opened the session to wonder why it is quiet. Silent
+          on a healthy row: see `LaunchMode`. */}
+      <LaunchMode mode={row.permissionMode} detail={false} />
 
       {/* **The path is the disambiguation, and it exists nowhere else.**
           `row.worktree` is only the last segment of the directory, and this box
@@ -265,6 +274,7 @@ export function SessionsPanel({
   steer,
   rename,
   actions,
+  messages,
   newSession,
   onRefresh,
 }: {
@@ -294,6 +304,12 @@ export function SessionsPanel({
   rename: RenameApi;
   /** The action vocabulary and the queues. Only the detail pane uses them. */
   actions: ActionsUi;
+  /**
+   * The transcript reader. **Only the detail pane uses it, and only for the one
+   * open row** — reading a transcript costs disk, and the list must never do it
+   * forty times. SessionDetail's `messages` prop says the rest.
+   */
+  messages: MessagesApi;
   newSession: NewSessionApi;
   onRefresh: () => void;
 }): ReactNode {
@@ -339,6 +355,7 @@ export function SessionsPanel({
         steer={steer}
         rename={rename}
         actions={actions}
+        messages={messages}
         onRefresh={onRefresh}
         onBack={panes === 1 ? () => onSelect(null) : null}
       />

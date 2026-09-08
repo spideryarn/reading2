@@ -27,6 +27,13 @@ diagram actually looked at in a browser rather than trusted from the markup.
   How Claude Code sessions discover, message, watch, wake and stop each other, measured live rather
   than recalled — the registry and sockets underneath it, the three ways addressing fails silently,
   reading a peer's context use straight off disk, and what all that means for an Orchestrator.
+- [260908a-two-claude-subscriptions-on-one-machine.html](../tutorials/260908a-two-claude-subscriptions-on-one-machine.html)
+  — also about the machine rather than the product: how Claude Code decides which subscription to
+  bill, why the answer turns out to be a *directory*, and how to pin one repo to one account. The
+  interesting half is the failure modes, all of which are silent — a shell function that only the
+  person typing can see, a settings key that is ignored, a tilde that hashes to a different Keychain
+  box. The rules are in
+  [claude-subscriptions.md](../reusable/claude-subscriptions.md).
 
 ## Naming
 

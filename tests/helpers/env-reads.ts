@@ -39,10 +39,17 @@
  *    they originate outside the pinned node. The instance is
  *    `src/vercel-health.ts`'s `value`: its pin freezes the reporter, but the
  *    names it reads are supplied by its **callers**, which the pin does not
- *    cover — so a caller can hand it a name this sweep never sees, and
- *    `sweep.names` would not have it. Stage 3's `ReportedEnvName` branding is
- *    what closes that, by making `value("NEW_ONE")` a type error rather than a
- *    thing a walker has to notice. Until then the seam is open and named.
+ *    cover — so a caller could hand it a name this sweep never sees, and
+ *    `sweep.names` would not have it.
+ *
+ *    **That one is closed, and not by anything in this file.** `value`'s
+ *    argument is `ReportedEnvName`, a union derived from `EXPECTED` itself, so
+ *    `value("NEW_ONE")` is a compile error — caught by `npm run typecheck`, and
+ *    by nothing this sweep does. Which is the honest shape of it: a type reaches
+ *    the callers a pin cannot, and reaches nothing else. It does not stop the
+ *    annotation being widened back to `string`, and it says nothing about any
+ *    other pinned region — the general narrowing above still holds, and the next
+ *    pin whose names come from outside it will need its own answer.
  *
  * The remaining positional work is a byte-range containment test — is this
  * refusal inside that pinned region — and a flat scan for a declaration with a
@@ -353,9 +360,13 @@ const PINS: Pin[] = [
     file: "src/vercel-health.ts",
     kind: "function",
     name: "value",
-    checksum: "dbe16bbe3e6dc3d4",
+    checksum: "7bd0403c2b7b9212",
     yields: [],
-    why: "the reporter indexing process.env while iterating EXPECTED, whose names are its own",
+    why:
+      "the reporter indexing process.env while iterating EXPECTED, whose names are its own. Its " +
+      "argument is branded `ReportedEnvName`, derived from EXPECTED, so a caller cannot hand it a " +
+      "name the table does not declare — and this pin is what notices if that annotation is " +
+      "widened back to `string`",
   },
   {
     file: "src/jsdom-lazy.ts",

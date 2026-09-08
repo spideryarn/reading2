@@ -37,7 +37,8 @@ import { parseBinds } from "./config.js";
 import { collectHealth, type HealthReport } from "./health.js";
 import { applySecurityHeaders } from "./headers.js";
 import { broadcast, startHeartbeat, subscribe, subscriberCount } from "./live.js";
-import { handleActionRequest } from "./routes-actions.js";
+import { drainSharedQueues, handleActionRequest } from "./routes-actions.js";
+import { refreshOnce } from "./refresh.js";
 import { newSessionRoutes } from "./routes-new.js";
 import { renameRoute } from "./routes-rename.js";
 import { handleSteerRequest } from "./routes-steer.js";
@@ -160,41 +161,41 @@ function refreshHealth(): void {
   }
 }
 
+/**
+ * One turn of the loop: collect, take the vitals, publish, deliver.
+ *
+ * **THE ORDER LIVES IN refresh.ts, NOT HERE**, and this function is only the
+ * wiring — the module state it writes, the real collector, the real broadcaster,
+ * and `drainSharedQueues`, which is the routes' own queue and cannot be anything
+ * else. Nothing in this file can be imported by a test (importing it binds port
+ * 8787), and the missing line that this whole stage exists to fix was a missing
+ * line in exactly this function, so what is left in it is as close to nothing as
+ * it can be. tests/fleet-refresh.test.ts drives `refreshOnce` with the real
+ * action routes and a fake transport.
+ */
 async function refresh(): Promise<void> {
   // BEFORE the attempt, not after it, because the whole point of this field is
   // to be moving while a collection is not.
   attemptedAt = new Date().toISOString();
-  try {
-    snapshot = await collectWithDeadline();
-    lastError = null;
-    console.log(
-      `collected ${snapshot.rows.length} sessions in ${snapshot.tookMs}ms` +
-        (subscriberCount() ? ` → ${subscriberCount()} live` : ""),
-    );
-    // Cheap next to the fleet collection (~200ms without the vmstat sample,
-    // which is the one command with a real wait).
-    refreshHealth();
-    broadcast(statePayload());
-  } catch (err) {
-    // Keep the previous snapshot. The page shows the age, so a stale page is
-    // legible; a blank one is a lie that looks like an empty box.
-    lastError = err instanceof Error ? err.message : String(err);
-    console.error(`collection failed: ${lastError}`);
-    // AND BROADCAST THE FAILURE. This used to return without one, so a stream
-    // subscriber saw nothing at all when a collection failed — silence, which
-    // is exactly what a healthy quiet box looks like. A poller could see
-    // `error` in the payload and a subscriber could not, which is the two
-    // shapes disagreeing after the trouble was taken to build them from one
-    // function. The Overseer (tools/overseer/, another session) consumes this
-    // stream to record fleet history, so a failure it cannot see is a gap in
-    // that history with no explanation in it.
-    //
-    // AND TAKE A HEALTH READING ANYWAY. A collection fails when the box is in
-    // trouble, so this is the moment the vitals are most worth having — and
-    // until 2026-09-08 it was the one moment they were not taken.
-    refreshHealth();
-    broadcast(statePayload());
-  }
+  await refreshOnce({
+    collect: collectWithDeadline,
+    keep: (result) => {
+      if ("snapshot" in result) {
+        snapshot = result.snapshot;
+        lastError = null;
+      } else {
+        // Keep the previous snapshot. The page shows the age, so a stale page
+        // is legible; a blank one is a lie that looks like an empty box.
+        lastError = result.error;
+      }
+    },
+    refreshHealth,
+    publish: () => broadcast(statePayload()),
+    drain: drainSharedQueues,
+    log: (line) => console.log(line),
+    logError: (line) => console.error(line),
+    subscribers: subscriberCount,
+  });
 }
 
 /**

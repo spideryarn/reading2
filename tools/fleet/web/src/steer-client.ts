@@ -84,11 +84,18 @@ export function steerTargetBody(row: FleetRow): SteerTargetBody {
   };
 }
 
-export type SteerMessageBody = SteerTargetBody & { text: string };
+/**
+ * `speaker` for the same reason `actions-client.ts` sends one: this route hands
+ * the text straight to a pane, and the server's prefix is what tells the agent
+ * whether it is reading Greg or an automated coordinator. An absent field
+ * defaults to the weaker claim, so leaving it out would label every message a
+ * person typed as the Overseer's.
+ */
+export type SteerMessageBody = SteerTargetBody & { text: string; speaker: "greg" };
 export type SteerAnswerBody = SteerTargetBody & { question: unknown; optionIndex: number };
 
 export function steerMessageBody(row: FleetRow, text: string): SteerMessageBody {
-  return { ...steerTargetBody(row), text };
+  return { ...steerTargetBody(row), text, speaker: "greg" };
 }
 
 export function steerAnswerBody(row: FleetRow, optionIndex: number): SteerAnswerBody {

@@ -8,7 +8,7 @@
  * specification is that plan's **F60**:
  *
  * > label every evaluable row, show the labeller only target, quote and evidence
- * > — `relation`, `valence` and `applies` hidden — and label before any repaired
+ * > — `relation`, `lean` and `applies` hidden — and label before any repaired
  * > output exists.
  *
  * ## Why the hiding is the whole point
@@ -54,7 +54,7 @@ import path from "node:path";
 
 import type { DebatePassKind } from "../../src/debate-journal.js";
 import type { FrozenPacket, JournalRowsReport, ReportedPass } from "./journal-rows.js";
-import { VALENCE_VALUES } from "./score.js";
+import { LEAN_VALUES } from "./score.js";
 
 /**
  * The default shuffle seed — a constant, so an unparameterised regeneration
@@ -68,8 +68,8 @@ export const ORDER_STRATEGY = "stratified round-robin across run and pass, shuff
 
 /**
  * **The answers the sheet asks for, generated from the type rather than typed
- * out** — `VALENCE_VALUES` is `Object.values` of a total mapping over the union,
- * so a member added to or removed from `DebateValence` reaches this sentence
+ * out** — `LEAN_VALUES` is `Object.values` of a total mapping over the union,
+ * so a member added to or removed from `DebateLean` reaches this sentence
  * without anybody remembering it.
  *
  * The first draft of this file wrote the four options out by hand and got one of
@@ -80,7 +80,7 @@ export const ORDER_STRATEGY = "stratified round-robin across run and pass, shuff
  * with the code that accepts it, and that goes for its prose as much as its
  * tables. Same class as this morning's `RELATIONS` fix in `src/debate.ts`.
  */
-const OPTIONS_LINE = VALENCE_VALUES.map((value) => `\`${value}\``).join(", ");
+const OPTIONS_LINE = LEAN_VALUES.map((value) => `\`${value}\``).join(", ");
 
 /**
  * **What the row is about**, and the only thing about it a labeller is told
@@ -88,7 +88,7 @@ const OPTIONS_LINE = VALENCE_VALUES.map((value) => `\`${value}\``).join(", ");
  *
  * A union rather than a bag of optionals: a group-one row's target is the
  * article, a group-two row's target is one claim in it, and there is no third
- * shape. `src/types.ts` § `DebateValence` is where the two targets are defined.
+ * shape. `src/types.ts` § `DebateLean` is where the two targets are defined.
  */
 export type LabelTarget =
   | {

@@ -16,8 +16,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  coerceLean,
   coerceRelation,
-  coerceValence,
   coercedRows,
   contingencyLines,
   contingencyTable,
@@ -26,21 +26,22 @@ import {
   goldUrlHits,
   keptPerReturned,
   keptPerReturnedLine,
+  LEAN_VALUES,
   lossReasonLines,
   lossReasonTable,
   normaliseGoldUrl,
   oppositePairs,
   RELATION_VALUES,
   type ScorableRow,
-  VALENCE_VALUES,
+  SUPERSEDED_LEANS,
   vocabularyLines,
   vocabularyProblems,
   vocabularyReport,
   zeroLosses,
 } from "../evals/debate/score.js";
-import type { DebateLosses, DebateRelation, DebateValence } from "../src/types.js";
+import { type DebateLean, type DebateLosses, type DebateRelation, readStoredLean } from "../src/types.js";
 
-const row = (relation: string, valence: string): ScorableRow => ({ relation, valence });
+const row = (relation: string, lean: string): ScorableRow => ({ relation, lean });
 
 /** A `DebateLosses` with one reason set, so a test does not have to spell nine zeros. */
 function losses(over: Partial<DebateLosses>): DebateLosses {
@@ -59,12 +60,12 @@ describe("the raw vocabulary, read before any coercion", () => {
    */
   it("tells an arm that honestly could not tell from an arm whose words we stopped recognising", () => {
     const honest = [
-      { relation: "unclear", valence: "unknown" },
-      { relation: "unclear", valence: "unknown" },
+      { relation: "unclear", lean: "cannot-tell" },
+      { relation: "unclear", lean: "cannot-tell" },
     ];
     const rewritten = [
-      { relation: "contradicts", valence: "supportive" },
-      { relation: "agrees-with", valence: "critical" },
+      { relation: "contradicts", lean: "supportive" },
+      { relation: "agrees-with", lean: "critical" },
     ];
 
     /* Identical, and that is the point: no figure computed off the coerced
@@ -81,54 +82,54 @@ describe("the raw vocabulary, read before any coercion", () => {
 
   it("counts every distinct raw spelling, known and unknown alike", () => {
     const report = vocabularyReport([
-      { relation: "disputes", valence: "supportive" },
-      { relation: "disputes", valence: "supportive" },
-      { relation: "disputes", valence: "positive" },
-      { relation: "contradicts", valence: "critical" },
+      { relation: "disputes", lean: "supportive" },
+      { relation: "disputes", lean: "supportive" },
+      { relation: "disputes", lean: "leans-for" },
+      { relation: "contradicts", lean: "critical" },
     ]);
     expect(report.rows).toBe(4);
     expect(report.relations).toEqual([
       { label: "disputes", count: 3, known: true },
       { label: "contradicts", count: 1, known: false },
     ]);
-    expect(report.valences).toEqual([
+    expect(report.leans).toEqual([
       { label: "supportive", count: 2, known: false },
       { label: "critical", count: 1, known: false },
-      { label: "positive", count: 1, known: true },
+      { label: "leans-for", count: 1, known: true },
     ]);
     expect(report.offVocabularyRelations).toBe(1);
-    expect(report.offVocabularyValences).toBe(3);
+    expect(report.offVocabularyLeans).toBe(3);
     /* Three rows, not four: row 4 is off-vocabulary on both fields and is one row. */
     expect(report.offVocabularyRows).toBe(3);
   });
 
   it("names the unknown words in the problem sentence, so a caller can fail on it", () => {
     const problems = vocabularyProblems(
-      vocabularyReport([{ relation: "disputes", valence: "supportive" }]),
+      vocabularyReport([{ relation: "disputes", lean: "supportive" }]),
     );
     expect(problems).toHaveLength(1);
     expect(problems[0]).toContain("supportive");
-    expect(problems[0]).toContain("unknown");
+    expect(problems[0]).toContain("cannot-tell");
   });
 
   it("keeps absent, empty and not-a-string apart, where production's str() cannot", () => {
     const report = vocabularyReport([
       { relation: "disputes" },
-      { relation: "disputes", valence: "" },
-      { relation: "disputes", valence: 3 },
-      { relation: "disputes", valence: null },
+      { relation: "disputes", lean: "" },
+      { relation: "disputes", lean: 3 },
+      { relation: "disputes", lean: null },
     ]);
-    expect(report.valences.map((v) => v.label).sort()).toEqual([
+    expect(report.leans.map((v) => v.label).sort()).toEqual([
       "(absent)",
       "(empty)",
       "(not a string)",
     ]);
-    expect(report.valences.find((v) => v.label === "(not a string)")?.count).toBe(2);
-    expect(report.offVocabularyValences).toBe(4);
+    expect(report.leans.find((v) => v.label === "(not a string)")?.count).toBe(2);
+    expect(report.offVocabularyLeans).toBe(4);
   });
 
   it("counts a row that is not an object at all rather than skipping it", () => {
-    const report = vocabularyReport(["not a row", null, { relation: "disputes", valence: "positive" }]);
+    const report = vocabularyReport(["not a row", null, { relation: "disputes", lean: "leans-for" }]);
     expect(report.rows).toBe(3);
     expect(report.unreadableRows).toBe(2);
     expect(report.offVocabularyRows).toBe(2);
@@ -140,10 +141,11 @@ describe("the raw vocabulary, read before any coercion", () => {
     expect(report).toEqual({
       rows: 0,
       relations: [],
-      valences: [],
+      leans: [],
       offVocabularyRelations: 0,
-      offVocabularyValences: 0,
+      offVocabularyLeans: 0,
       offVocabularyRows: 0,
+      supersededLeans: 0,
       unreadableRows: 0,
     });
     expect(vocabularyProblems(report)).toEqual([]);
@@ -152,11 +154,90 @@ describe("the raw vocabulary, read before any coercion", () => {
 
   it("prints the coerced destination beside every unknown word", () => {
     const text = vocabularyLines(
-      vocabularyReport([{ relation: "contradicts", valence: "supportive" }]),
+      vocabularyReport([{ relation: "contradicts", lean: "supportive" }]),
     ).join("\n");
     expect(text).toContain("OFF-VOCABULARY");
     expect(text).toContain('coerced to "unclear"');
-    expect(text).toContain('coerced to "unknown"');
+    expect(text).toContain('coerced to "cannot-tell"');
+  });
+
+  /* ------------------------------------------------------------------------
+     The vocabulary that was superseded, rather than the vocabulary that broke
+     ---------------------------------------------------------------------- */
+
+  /**
+   * **A journal recorded before 2026-09-08 is not a prompt failure**, and until
+   * this test it was counted as one — every one of the 26 rows in the three
+   * captured journals reads `valence` and no `lean`, so the instrument built to
+   * notice a destroyed field reported all of them destroyed and could not have
+   * noticed a real one underneath.
+   */
+  it("reads a row from before the rename as superseded, not as an off-vocabulary answer", () => {
+    const report = vocabularyReport([
+      { relation: "disputes", valence: "negative" },
+      { relation: "corroborates", valence: "positive" },
+    ]);
+    expect(report.supersededLeans).toBe(2);
+    expect(report.offVocabularyLeans).toBe(0);
+    expect(report.offVocabularyRows).toBe(0);
+    /* Visible, and visibly from the older vocabulary — not folded into
+       `(absent)`, where a reader would have to know the rename to guess why. */
+    const labels = report.leans.map((v) => v.label);
+    expect(labels).not.toContain("(absent)");
+    expect(labels.sort()).toEqual([
+      "(valence: negative \u2014 superseded)",
+      "(valence: positive \u2014 superseded)",
+    ]);
+    expect(report.leans.every((v) => v.superseded === true)).toBe(true);
+    /* Said out loud, because an account quietly short of what was produced is
+       the failure this whole file is against. */
+    expect(vocabularyProblems(report).some((p) => p.includes("valence"))).toBe(true);
+    expect(vocabularyLines(report).join("\n")).toContain("superseded");
+  });
+
+  /**
+   * **The one that stops the adapter over-reaching**, and it matters more than
+   * the test above it. `supportive` today is a prompt that has stopped emitting
+   * what we asked for, whatever else is on the row.
+   */
+  it("still counts a live off-vocabulary lean as off-vocabulary, valence beside it or not", () => {
+    const report = vocabularyReport([
+      { relation: "disputes", lean: "supportive" },
+      { relation: "disputes", lean: "supportive", valence: "positive" },
+    ]);
+    expect(report.supersededLeans).toBe(0);
+    expect(report.offVocabularyLeans).toBe(2);
+    expect(report.offVocabularyRows).toBe(2);
+    expect(
+      vocabularyProblems(report).some((p) => p.includes("does not know") && p.includes("supportive")),
+    ).toBe(true);
+  });
+
+  it("refuses a valence spelling this build never had, rather than reading it forward", () => {
+    const report = vocabularyReport([{ relation: "disputes", valence: "supportive" }]);
+    expect(report.supersededLeans).toBe(0);
+    expect(report.offVocabularyLeans).toBe(1);
+    expect(report.leans.map((v) => v.label)).toEqual(["(absent)"]);
+  });
+
+  /**
+   * The two mappings are written out twice — here and in `readStoredLean`
+   * (src/types.ts), which the panel reads stored rows through — because sharing
+   * one would make production import from `evals/`. This is what stops them
+   * disagreeing: a change to either that the other does not follow is red here.
+   */
+  it("agrees with production's readStoredLean about every superseded spelling", () => {
+    for (const [valence, lean] of Object.entries(SUPERSEDED_LEANS)) {
+      expect(readStoredLean({ valence })).toBe(lean);
+    }
+    /* And the other direction: a spelling production reads forward that this
+       list has never heard of would be invisible above. */
+    expect(Object.keys(SUPERSEDED_LEANS).sort()).toEqual([
+      "negative",
+      "neutral",
+      "positive",
+      "unknown",
+    ]);
   });
 
   it("mirrors production's coercion, including its trimming", () => {
@@ -164,9 +245,9 @@ describe("the raw vocabulary, read before any coercion", () => {
     expect(coerceRelation("supportive")).toBe("unclear");
     expect(coerceRelation(undefined)).toBe("unclear");
     expect(coerceRelation(7)).toBe("unclear");
-    expect(coerceValence(" positive ")).toBe("positive");
-    expect(coerceValence("supportive")).toBe("unknown");
-    expect(coerceValence(null)).toBe("unknown");
+    expect(coerceLean(" leans-for ")).toBe("leans-for");
+    expect(coerceLean("supportive")).toBe("cannot-tell");
+    expect(coerceLean(null)).toBe("cannot-tell");
   });
 });
 
@@ -174,59 +255,59 @@ describe("the raw vocabulary, read before any coercion", () => {
    The contingency table
    ========================================================================== */
 
-describe("the relation × valence contingency table", () => {
+describe("the relation × lean contingency table", () => {
   it("has every one of the twenty cells, with zeros, over no rows at all", () => {
     const table = contingencyTable([]);
     expect(table.total).toBe(0);
     expect(table.classified).toBe(0);
     expect(RELATION_VALUES).toHaveLength(5);
-    expect(VALENCE_VALUES).toHaveLength(4);
+    expect(LEAN_VALUES).toHaveLength(4);
     for (const relation of RELATION_VALUES) {
-      for (const valence of VALENCE_VALUES) {
-        expect(table.cells[relation][valence]).toBe(0);
+      for (const lean of LEAN_VALUES) {
+        expect(table.cells[relation][lean]).toBe(0);
       }
     }
-    /* `unclear` and `unknown` are cells like any other and are never filtered out. */
-    expect(table.cells.unclear.unknown).toBe(0);
+    /* `unclear` and `cannot-tell` are cells like any other and are never filtered out. */
+    expect(table.cells.unclear["cannot-tell"]).toBe(0);
   });
 
   it("fills every cell when every cell is occupied", () => {
     const rows: ScorableRow[] = [];
     for (const relation of RELATION_VALUES) {
-      for (const valence of VALENCE_VALUES) rows.push(row(relation, valence));
+      for (const lean of LEAN_VALUES) rows.push(row(relation, lean));
     }
     const table = contingencyTable(rows);
     expect(table.total).toBe(20);
     expect(table.classified).toBe(20);
     for (const relation of RELATION_VALUES) {
       expect(table.byRelation[relation]).toBe(4);
-      for (const valence of VALENCE_VALUES) expect(table.cells[relation][valence]).toBe(1);
+      for (const lean of LEAN_VALUES) expect(table.cells[relation][lean]).toBe(1);
     }
-    for (const valence of VALENCE_VALUES) expect(table.byValence[valence]).toBe(5);
+    for (const lean of LEAN_VALUES) expect(table.byLean[lean]).toBe(5);
   });
 
   it("keeps an all-unclear arm visible rather than empty", () => {
     const table = contingencyTable([
-      row("unclear", "unknown"),
-      row("unclear", "unknown"),
-      row("unclear", "neutral"),
+      row("unclear", "cannot-tell"),
+      row("unclear", "cannot-tell"),
+      row("unclear", "neither"),
     ]);
-    expect(table.cells.unclear.unknown).toBe(2);
-    expect(table.cells.unclear.neutral).toBe(1);
+    expect(table.cells.unclear["cannot-tell"]).toBe(2);
+    expect(table.cells.unclear.neither).toBe(1);
     expect(table.byRelation.unclear).toBe(3);
     expect(table.total).toBe(3);
   });
 
   it("carries an off-vocabulary row rather than dropping it, and still counts it in the total", () => {
-    const table = contingencyTable([row("disputes", "negative"), row("contradicts", "supportive")]);
+    const table = contingencyTable([row("disputes", "leans-against"), row("contradicts", "supportive")]);
     expect(table.total).toBe(2);
     expect(table.classified).toBe(1);
-    expect(table.offVocabulary).toEqual([{ relation: "contradicts", valence: "supportive" }]);
+    expect(table.offVocabulary).toEqual([{ relation: "contradicts", lean: "supportive" }]);
     expect(contingencyLines(table).join("\n")).toContain("contradicts/supportive");
   });
 
   it("says 'none' rather than nothing when every row was classified", () => {
-    const text = contingencyLines(contingencyTable([row("disputes", "negative")])).join("\n");
+    const text = contingencyLines(contingencyTable([row("disputes", "leans-against")])).join("\n");
     expect(text).toContain("off-vocabulary: none, over 1 row(s)");
   });
 });
@@ -238,14 +319,14 @@ describe("the relation × valence contingency table", () => {
 describe("the opposite-pair mark", () => {
   it("counts both cells and reports N over all rows", () => {
     const mark = oppositePairs([
-      row("disputes", "positive"),
-      row("corroborates", "negative"),
-      row("disputes", "negative"),
-      row("corroborates", "positive"),
+      row("disputes", "leans-for"),
+      row("corroborates", "leans-against"),
+      row("disputes", "leans-against"),
+      row("corroborates", "leans-for"),
     ]);
     expect(mark).toEqual({
-      disputesPositive: 1,
-      corroboratesNegative: 1,
+      disputesLeansFor: 1,
+      corroboratesLeansAgainst: 1,
       pairs: 2,
       total: 4,
       rate: 0.5,
@@ -255,22 +336,22 @@ describe("the opposite-pair mark", () => {
 
   /**
    * The reward-for-answering-less failure, closed. Ten rows, two opposite
-   * pairs, five of them `unclear`/`unknown`. Against a classified-only
+   * pairs, five of them `unclear`/`cannot-tell`. Against a classified-only
    * denominator this arm would score 2/5; the mark scores it 2/10, which is
    * what it is.
    */
   it("puts every row in the denominator, so an unclear-everywhere arm cannot look better", () => {
     const rows = [
-      row("disputes", "positive"),
-      row("corroborates", "negative"),
-      row("disputes", "negative"),
-      row("qualifies", "neutral"),
-      row("extends", "positive"),
-      row("unclear", "unknown"),
-      row("unclear", "unknown"),
-      row("unclear", "unknown"),
-      row("unclear", "unknown"),
-      row("unclear", "unknown"),
+      row("disputes", "leans-for"),
+      row("corroborates", "leans-against"),
+      row("disputes", "leans-against"),
+      row("qualifies", "neither"),
+      row("extends", "leans-for"),
+      row("unclear", "cannot-tell"),
+      row("unclear", "cannot-tell"),
+      row("unclear", "cannot-tell"),
+      row("unclear", "cannot-tell"),
+      row("unclear", "cannot-tell"),
     ];
     const mark = oppositePairs(rows);
     expect(mark.total).toBe(10);
@@ -279,7 +360,7 @@ describe("the opposite-pair mark", () => {
   });
 
   it("scores an arm that answered unclear everywhere as zero over its full count, not as unmeasured", () => {
-    const mark = oppositePairs(Array.from({ length: 6 }, () => row("unclear", "unknown")));
+    const mark = oppositePairs(Array.from({ length: 6 }, () => row("unclear", "cannot-tell")));
     expect(mark.pairs).toBe(0);
     expect(mark.total).toBe(6);
     expect(mark.rate).toBe(0);
@@ -296,17 +377,17 @@ describe("the opposite-pair mark", () => {
   });
 
   it("says in its own printed line that it is not an error count", () => {
-    expect(formatOppositePairs(oppositePairs([row("disputes", "positive")]))).toContain(
+    expect(formatOppositePairs(oppositePairs([row("disputes", "leans-for")]))).toContain(
       "not an error count",
     );
   });
 
   it("ignores the other fourteen cells, including the ones that merely look odd", () => {
     const mark = oppositePairs([
-      row("qualifies", "positive"),
-      row("extends", "negative"),
-      row("unclear", "positive"),
-      row("corroborates", "neutral"),
+      row("qualifies", "leans-for"),
+      row("extends", "leans-against"),
+      row("unclear", "leans-for"),
+      row("corroborates", "neither"),
     ]);
     expect(mark.pairs).toBe(0);
     expect(mark.total).toBe(4);
@@ -444,7 +525,7 @@ describe("gold-URL hits", () => {
    ========================================================================== */
 
 describe("the vocabularies", () => {
-  it("holds every relation and valence the types admit", () => {
+  it("holds every relation and lean the types admit", () => {
     /* If a new member is added to either union, the mapping in score.ts stops
        compiling — this is the runtime half of the same claim. */
     const relations: DebateRelation[] = [
@@ -454,8 +535,8 @@ describe("the vocabularies", () => {
       "corroborates",
       "unclear",
     ];
-    const valences: DebateValence[] = ["positive", "negative", "neutral", "unknown"];
+    const leans: DebateLean[] = ["leans-for", "leans-against", "neither", "cannot-tell"];
     expect([...RELATION_VALUES].sort()).toEqual([...relations].sort());
-    expect([...VALENCE_VALUES].sort()).toEqual([...valences].sort());
+    expect([...LEAN_VALUES].sort()).toEqual([...leans].sort());
   });
 });

@@ -434,14 +434,62 @@ export type OverseerEvent =
    * process now wears its handle. Putting that on an event with a `name` field
    * would describe a rename when what happened was a respawn.
    *
-   * **A NULL IS NOT A CHANGE, and this is the whole hazard.** `paneId` and
-   * `panePid` are joined onto the session from a SEPARATE pane listing by handle
-   * (`tools/fleet/collect.ts`), so a join miss yields null on a session that is
-   * perfectly alive. An arm that read that as a respawn would fire twice per
-   * miss, forever, on the box this tooling exists for. So a pid going null is
-   * silence; a pid ARRIVING is an event, because a register that never learns
-   * the pane cannot steer it, and a sustained miss followed by a recovery is one
-   * event rather than a flap.
+   * **A NULL IS NOT A CHANGE, ON EITHER SIDE, and this is the whole hazard.**
+   * `paneId` and `panePid` are joined onto the session from a SEPARATE pane
+   * listing by handle (`tools/fleet/collect.ts`), so a join miss yields null on
+   * a session that is perfectly alive. So this arm fires on exactly one shape:
+   * **non-null → non-null → differing**. Everything with a null at either end is
+   * silence.
+   *
+   * **THE DEFECT THAT BOUGHT THE SECOND HALF OF THAT RULE.** An earlier version
+   * emitted on `null → pid` too, on the reasoning that a register which never
+   * learns the pane cannot steer it. `42 → null → 42` then wrote
+   * `session-pane-replaced, null → 42` into a permanent history on the recovery
+   * — **false, not merely noisy: nothing was replaced**, the session sat on pid
+   * 42 throughout — once every two collections, per session, for as long as the
+   * listing was under load. Two independent cross-family reviews reached it
+   * separately on 2026-09-08.
+   *
+   * **A stateless differ cannot tell "learned" from "recovered".** Both are
+   * `null → 42` between two snapshots, and the differ has only those two
+   * snapshots; the register knows which it is, and the differ deliberately
+   * cannot see the register. Carrying the last known non-null pid forward in the
+   * baseline would separate them and is architecturally forbidden: a `Baseline`
+   * answers *what did the producer last SAY*, and one holding a value the
+   * producer did not say in that snapshot breaks the contract every other stage
+   * rests on. `BaselineBox` exists to make that impossible.
+   *
+   * **WHAT IT COSTS, AND IT IS A REAL UNCOVERED CASE rather than one that cannot
+   * happen.** A session whose FIRST observation had a join miss keeps
+   * `panePid: null` in the register until the daemon cold-starts (which rebuilds
+   * every entry from the row) or tmux's generation changes. Nothing in between
+   * fills it in. That is the right side to be wrong on — a null pane pid is
+   * honest (*we do not know*) where a stale one is an address
+   * `tools/fleet/steer.ts` types keystrokes into, and the thing wearing that pid
+   * may be whatever now occupies the slot — and the measured join-miss rate was
+   * **0 of 551 row observations** over 24 minutes of the live fleet, so it is
+   * rare as well as survivable. `tests/overseer-diff.test.ts` asserts the gap
+   * rather than describing it, so buying the learn case back goes red here.
+   *
+   * ## THE BETTER ANSWER, WHICH IS UPSTREAM AND IS NOT WHAT THIS ARM DOES
+   *
+   * > `not observed` and `observed to be absent` are different facts, and the
+   * > differ has one slot for both.
+   *
+   * That is the defect in one line, and it names why the rule above is a
+   * compensation rather than a fix. `panePid: null` on an `ObservedRow` means
+   * EITHER "the pane join found no row for this session" OR "there is a pane and
+   * it has no readable pid", and by the time the value reaches this module it is
+   * one `null`. **The Overseer cannot tell them apart; only the producer can.**
+   * A differ that could would emit on `absent → 42` (a genuinely new pane) and
+   * stay silent on `not-observed → 42` (a recovery), and would need neither this
+   * rule nor its uncovered case.
+   *
+   * The repair is a discriminated pane reading in `tools/fleet/collect.ts` —
+   * found-with-pid / found-without-pid / not-found — carried through
+   * `ObservedRow`. It is **deliberately not being done now**: it is a contract
+   * change on `/api/state` and that stage is mid-cutover (2026-09-08). Whoever
+   * picks it up should expect to narrow `previousPanePid` at the same time.
    *
    * `paneId` is not watched independently: it comes off the same join as
    * `panePid` and moves with it, so it rides along rather than triggering.
@@ -453,7 +501,17 @@ export type OverseerEvent =
       key: SessionKey;
       identity: SessionIdentity;
       previousPaneId: string | null;
-      /** Null when the previous collection could not join a pane onto this session. */
+      /**
+       * NEVER NULL IN AN EVENT THIS MODULE PRODUCES, and typed as nullable
+       * anyway — the one place the two disagree, on purpose.
+       *
+       * A null previous pid means the last collection could not join a pane, so
+       * comparing across it is what produced the false replacement described
+       * above; the arm now refuses that pair. The type stays wide because
+       * store.ts must go on READING events written before 2026-09-08, and an
+       * event log is permanent. Narrowing it is a change to the parser in
+       * store.ts and belongs with the upstream repair named above, not here.
+       */
       previousPanePid: number | null;
       paneId: string | null;
       /** NEVER NULL: a pid that went away is a join miss and does not produce this event. */
@@ -614,6 +672,16 @@ export type DiffOutcome =
  * snapshot's row order, then everything else in the next snapshot's row order.
  * A `session-seen` for a handle that a `tmux-session-gone` in the same batch
  * refers to is therefore always the later of the two.
+ *
+ * **ONE ROW CAN NOW PRODUCE THREE EVENTS**, and their order within the row is
+ * part of the same contract: `session-row-changed`, then
+ * `session-pane-replaced`, then at most one of `session-wait-restarted` or
+ * `session-status`. The row material first because the last two carry the
+ * status clock and the first two must not disturb it — a fold that saw them the
+ * other way round would still be right, and the fixed order is so that two
+ * readings of one afternoon are the same afternoon. A row that was REPLACED
+ * produces one event and stops: `session-replaced` already carries the whole new
+ * row, so a row change beside it would double-count.
  *
  * ## THE BLIND SPOT THIS CANNOT COVER, stated because absence is invisible
  *
@@ -778,10 +846,14 @@ export function diff(previous: Baseline | null, next: AdmissibleSnapshot): DiffO
         row,
       });
     }
-    // A NULL IS NOT A CHANGE. `row.panePid === null` is a pane listing that
-    // could not be joined onto a live session, not a pane that went away — see
-    // `session-pane-replaced`.
-    if (row.panePid !== null && row.panePid !== was.panePid) {
+    // A NULL IS NOT A CHANGE, ON EITHER SIDE. A null `panePid` is a pane
+    // listing that could not be joined onto a live session, not a pane that went
+    // away, and it is unreadable in BOTH positions: `was.panePid === null` means
+    // the last collection could not see the pane, which says nothing about what
+    // was under the session then, so the pid arriving now is not evidence that
+    // anything changed. Comparing across it turns one join miss into a false
+    // `session-pane-replaced` on recovery. See the arm's own doc comment.
+    if (was.panePid !== null && row.panePid !== null && row.panePid !== was.panePid) {
       events.push({
         kind: "session-pane-replaced",
         at,
