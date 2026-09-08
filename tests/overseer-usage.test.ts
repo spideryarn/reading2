@@ -1774,3 +1774,38 @@ describe("parseUsageReport", () => {
     expect(JSON.stringify(a)).toBe(JSON.stringify(b));
   });
 });
+
+describe("parseUsageReport — collectedAt must be a date, not merely a string", () => {
+  const base = (): UsageReport => {
+    const cache = parseUsageCache(fxJson("claude-json-real.json"), NOW_REAL);
+    const scan = summariseRateLimitScan([], emptyCoverage({ transcriptsOpened: 2, linesScanned: 40, sinceMs: null }));
+    return {
+      account: realAccount(),
+      cache,
+      rateLimits: scan,
+      verdict: computeUsageVerdict({ account: realAccount(), cache, rateLimits: scan, nowMs: NOW_REAL }),
+      collectedAt: new Date(NOW_REAL).toISOString(),
+      tookMs: 5,
+    };
+  };
+
+  it("refuses a collectedAt that will not parse, so no age comparison ever sees a NaN", () => {
+    // The consumer's age bound asks whether a stored report is too old to
+    // supersede a fresh one. `Date.parse("not a timestamp")` is NaN, and NaN
+    // fails every comparison — so the obvious age check keeps such a report for
+    // ever. Refusing it here means the comparison never happens.
+    for (const bad of ["not a timestamp", "", "2026-13-45T99:99:99Z", "yesterday"]) {
+      const r = JSON.parse(JSON.stringify(base())) as Record<string, unknown>;
+      r["collectedAt"] = bad;
+      expect(parseUsageReport(r), JSON.stringify(bad)).toBeNull();
+    }
+  });
+
+  it("still accepts the instants the collector actually writes", () => {
+    for (const good of [new Date(NOW_REAL).toISOString(), "2026-09-08T12:00:00Z", "2026-09-15T04:59:59.790550+00:00"]) {
+      const r = JSON.parse(JSON.stringify(base())) as Record<string, unknown>;
+      r["collectedAt"] = good;
+      expect(parseUsageReport(r), good).not.toBeNull();
+    }
+  });
+});

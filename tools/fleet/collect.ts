@@ -2,7 +2,7 @@
  * v0.1 of the fleet dashboard: what is running on this box, as display rows.
  *
  * READ-ONLY BY CONSTRUCTION. Nothing here can write to a session, and that is
- * the point of the slice — see docs/project/orchestrator-direction.md, which
+ * the point of the slice — see docs/project/overseer-direction.md, which
  * holds the direction and the measured constraints, and
  * docs/plans/260907e-agent-fleet-dashboard.md for the stages.
  *

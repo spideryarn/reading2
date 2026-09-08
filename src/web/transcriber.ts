@@ -17,7 +17,7 @@
  *
  * That mattered when the fleet dashboard (`tools/fleet/`) wanted the same
  * microphone. It is a box utility that must run with the product's server
- * absent — docs/project/orchestrator-direction.md § Principles — so it could not
+ * absent — docs/project/overseer-direction.md § Principles — so it could not
  * import the product's authenticated fetch to record a sentence, and copying a
  * state machine that took a day of debugging to make believable would have been
  * worse. Cutting this one edge made every other file importable.

@@ -203,7 +203,7 @@ and all ~36 sessions in a single stroke. There are **no systemd units on this bo
 existed. Both facts checked 2026-09-08.
 
 That matters more than it looks, because
-[orchestrator-direction.md](../project/orchestrator-direction.md) leans on *"if the orchestrator
+[overseer-direction.md](../project/overseer-direction.md) leans on *"if the orchestrator
 broke I could just ssh in and use Claude Code in the terminal"* as the reason a high robustness bar
 still has a ceiling. After a reboot there is no page to fall back **from** — and, worse, nothing to
 tell you the fleet is gone, because the thing that would have told you went with it. The ssh
@@ -225,7 +225,7 @@ covered by the licence `dev` gets. The unit still boots whatever is on `dev`, be
 refuses to start until somebody fixes the trunk is unavailable exactly when it is most worth having;
 what the middle tier buys is that a fault here is worth stopping for, where the same fault on `dev`
 would not be. The decision lives in `AGENTS.md` under *This is a beta, and speed still wins* and in
-[orchestrator-direction.md § A higher bar](../project/orchestrator-direction.md).
+[overseer-direction.md § A higher bar](../project/overseer-direction.md).
 
 **The failure that standard points at is a stale client, not a red one.** The unit's `ExecStartPre`
 builds only when `tools/fleet/web/dist/index.html` is *missing* — deliberately, because with
@@ -237,7 +237,7 @@ arriving through the deployment door. Making it impossible in the unit costs mor
 the fix belongs here and it is to make the staleness **visible**: see
 [Stage v0.7a](#stage-v07a-the-page-says-which-code-it-is).
 
-The standing direction is [orchestrator-direction.md](../project/orchestrator-direction.md); this
+The standing direction is [overseer-direction.md](../project/overseer-direction.md); this
 plan is one implementation of it. **Read that first** — it holds the constraints, and it outlives
 this file.
 
@@ -394,7 +394,7 @@ cost nothing and make that class of bug impossible to miss.
 
 **Re-sliced on 2026-09-08 at Greg's request** — "let's use engineering-manager to slice this into
 many many very thin stages that we can iterate through quickly. But get to the v0.1 first and stop."
-The direction these serve is [orchestrator-direction.md](../project/orchestrator-direction.md).
+The direction these serve is [overseer-direction.md](../project/overseer-direction.md).
 
 Each slice must be **visible in a browser** and must **not need the next one to be worth having**.
 The earlier A–G staging is superseded; what it got right survives in the direction doc.
@@ -767,7 +767,7 @@ boundary was never reachability alone. We copied the half we liked.
 ### ✅ Stage v0.4b: Sessions becomes master–detail (landed 2026-09-08, `44f60619`)
 
 Greg, 2026-09-08 — quoted in full in
-[orchestrator-direction.md](../project/orchestrator-direction.md#what-greg-asked-for-on-2026-09-08-in-his-own-words).
+[overseer-direction.md](../project/overseer-direction.md#what-greg-asked-for-on-2026-09-08-in-his-own-words).
 
 - [ ] Left column: every session, with orderings — how long it has been running, **status
       (default)**, and whatever else earns its place.
@@ -1507,7 +1507,7 @@ sessions in the same run and left the probe alone.
       implementation of "say this to everybody" and not two.
 
 **The Overseer's history is read through a file, and the shape is already decided** —
-[orchestrator-direction.md § The seam is a file, not a function](../project/orchestrator-direction.md),
+[overseer-direction.md § The seam is a file, not a function](../project/overseer-direction.md),
 written by `orchestrator-setup` on 2026-09-08 so that neither of us negotiates it at the moment of
 building. Four files under `OVERSEER_STORE_DIR` (default `~/.overseer`); one writer, lock-free
 readers.

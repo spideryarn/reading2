@@ -15,7 +15,7 @@
  * because steer.ts refuses a shell on purpose. Reusing the tool is what makes
  * the thing we start visible to the page that started it, and killable with
  * `gjd-remote kill`. It is also the house rule:
- * docs/project/orchestrator-direction.md § Principles, "Reuse `gjd-remote`,
+ * docs/project/overseer-direction.md § Principles, "Reuse `gjd-remote`,
  * don't fork it".
  *
  * **THE PROMPT IS PROSE, NOT AN ARGUMENT — AND THAT TOOK TWO FIXES, NOT ONE.**
@@ -43,7 +43,7 @@
  * `webProvisionalName`.
  *
  * **NO AUTHENTICATION, SO THE ORIGIN IS THE CSRF DEFENCE.** Reachability over
- * the tailnet is the whole access control (orchestrator-direction.md § Access),
+ * the tailnet is the whole access control (overseer-direction.md § Access),
  * which is fine for a page you have to be on the tailnet to load, and not fine
  * at all for a *form post* — any page in any tab of a browser that can reach
  * this server could otherwise start Claude sessions on this box forever. So a

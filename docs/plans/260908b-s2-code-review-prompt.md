@@ -17,7 +17,7 @@ The stage:
 Context, in this order:
 - `docs/plans/260908b-overseer-store-and-clock.md` — the plan. Read § "Identity, and the three ways a
   session can stop being there" and the `claudeSessionId` correction above it.
-- `docs/project/orchestrator-direction.md` — the direction and the constraints.
+- `docs/project/overseer-direction.md` — the direction and the constraints.
 - `scripts/gjd-remote-tmux.ts` — `SessionState`, `SessionUnknownCause`, `reportedStatus`.
 - The producer being consumed: `tools/fleet/collect.ts`, `tools/fleet/state.ts`, `tools/fleet/server.ts`.
 

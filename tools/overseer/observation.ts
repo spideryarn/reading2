@@ -2,7 +2,7 @@
  * The Overseer's copy of the dashboard's wire contract, parsed from `unknown`.
  *
  * THE OVERSEER OWNS THE PAST TENSE and the dashboard owns the present
- * (docs/project/orchestrator-direction.md § Two tenses). So this file never
+ * (docs/project/overseer-direction.md § Two tenses). So this file never
  * collects: it takes whatever came back from `GET /api/state` or off the
  * `/api/live` SSE stream and decides whether it is a snapshot at all. Nothing
  * here does I/O, and nothing at module scope does anything.

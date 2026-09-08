@@ -83,7 +83,7 @@ reference, and is authoritative wherever the two disagree.
   against the box: the server is disposable and the volume is not, `push-env` builds from an
   allowlist rather than copying your `.env.local`, and every pause you will notice is an ssh
   handshake.
-- **[orchestrator-direction.md](orchestrator-direction.md)** — where the agent fleet dashboard is
+- **[overseer-direction.md](overseer-direction.md)** — where the agent fleet dashboard is
   going: a page that shows every session on the box, what it is blocked on, and eventually the
   decisions agents made without asking — with a coordinator agent, not a person, driving the
   steering. Read it before writing anything that talks to a running session, because it holds the

@@ -1502,6 +1502,17 @@ export function parseUsageReport(u: unknown): UsageReport | null {
   if (verdict === null) return null;
   const collectedAt = str(r["collectedAt"]);
   if (collectedAt === null) return null;
+  // AND IT MUST BE A DATE, not merely a string. The store's carry-forward
+  // decides whether a stored report is too old to supersede a fresh one by
+  // parsing this — and `Date.parse("not a timestamp")` is `NaN`, which fails
+  // EVERY comparison, so an age bound written the obvious way keeps such a
+  // report for ever. The age hole reopening through a broken clock rather than
+  // an old one. `orchestrator-setup` found and guarded it on its side on
+  // 2026-09-08; this is the same guard at the boundary that produced the field,
+  // so a report whose timestamp is unreadable never reaches a comparison at
+  // all. Same shape as `resets_at` in the cache: a comparison against a number
+  // that is not a number answers silently, and in the reassuring direction.
+  if (!Number.isFinite(Date.parse(collectedAt))) return null;
   const tookMs = num(r["tookMs"]);
   if (tookMs === null) return null;
   return { account, cache, rateLimits, verdict, collectedAt, tookMs };
