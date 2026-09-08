@@ -354,12 +354,54 @@ function Found({ view, row, now }: { view: MessagesView & { kind: "found" }; row
  */
 export type MessagesReading = { view: MessagesView | null; busy: boolean; read: () => void };
 
+/**
+ * **WHICH AGENT A READING IS ABOUT — the handle AND the conversation.**
+ *
+ * `row.id` is tmux's `$1643`, and a pane keeps it across a respawn: a
+ * `gjd-remote resume`, a relaunch, a second `claude` started in the same
+ * window. `types.ts` § `claudeSessionId` says what the other half is for in as
+ * many words — *"the only one of the three identifiers that survives a
+ * `gjd-remote resume`, so it is what distinguishes this agent from the one that
+ * replaced it in the same pane."* A transcript belongs to the conversation, not
+ * to the window it happens to be running in, so anything asking *is this
+ * reading still the right one?* has to ask about the pair.
+ *
+ * A string rather than an object because it is compared, not read, and because
+ * both consumers below need a value a `useEffect` dependency array can compare
+ * with `Object.is`. `\u0000` cannot occur in either half.
+ *
+ * `null` is a real value here and not a wildcard: a row with no conversation id
+ * is a shell or a legacy session, and two of those under one handle are still
+ * the same reading — there is nothing to tell them apart with, and inventing a
+ * difference would re-read on every snapshot.
+ */
+function identityOf(row: FleetRow): string {
+  return `${row.id}\u0000${row.claudeSessionId ?? ""}`;
+}
+
+/**
+ * A reading, and **the identity it is a reading OF**, held together.
+ *
+ * The two cannot be separate pieces of state. `setView(null)` in an effect
+ * happens after React has already committed — and possibly painted — the render
+ * in which the row is B and the view is still A's. That frame is short and it is
+ * exactly the lie this whole section is about: one agent's turns, and its "last
+ * wrote" number, under another agent's name. Storing the identity with the view
+ * turns the question into one the RENDER can answer, so the wrong pairing never
+ * reaches the screen at all rather than being corrected a tick later. GPT Sol's
+ * fourth finding, 2026-09-08 — and it is the reason the test that "passed" did
+ * so: `act` flushes effects before anything looks at the DOM, so the frame a
+ * person would see is the one a test cannot.
+ */
+type Held = { identity: string; view: MessagesView };
+
 export function useRecentMessages(api: MessagesApi, row: FleetRow): MessagesReading {
-  const [view, setView] = useState<MessagesView | null>(null);
+  const [held, setHeld] = useState<Held | null>(null);
   const [busy, setBusy] = useState(false);
+  const identity = identityOf(row);
 
   /**
-   * WHICH SESSION THE ANSWER IN FLIGHT IS ABOUT.
+   * WHICH READ IS THE NEWEST ONE ANYBODY STARTED. Only it may write.
    *
    * **A read that lands after the reader has moved on must not be drawn.**
    * `Read again` on session A, then a tap on session B, and A's answer arrives
@@ -369,50 +411,81 @@ export function useRecentMessages(api: MessagesApi, row: FleetRow): MessagesRead
    * perfectly: real turns, well formed, correctly parsed, attached to the wrong
    * row.
    *
-   * The effect below has always been safe — it holds a per-run `alive` flag
-   * closed over by its own cleanup. This is the manual path, which had none.
    * `fleet-health-history` flagged the general shape on 2026-09-08 (two
    * overlapping polls of one endpoint resolving out of order); here it is not
    * two polls of one thing but one poll of two different things, which is
    * worse, because the stale answer is not merely old — it is about somebody
    * else.
+   *
+   * **This was an identity comparison and identity is not an ordering**, which
+   * is the shape of the bug twice over. It began as `row.id`, and a pane that
+   * changed agent without changing handle compared `"$a"` with `"$a"`, agreed,
+   * and let the previous agent's turns through — the failure the guard existed
+   * to prevent, arriving down the one door it did not cover (roadmap finding
+   * E-session). Widening it to the full identity closes that door and leaves
+   * A→B→A open: hold a manual read of A, let the pane become B and then A
+   * again, and the held answer's identity equals the current one, so it
+   * overwrites a newer reading of the same conversation. Only a number that
+   * goes up can order two reads. **GPT Sol's fifth finding, 2026-09-08, and the
+   * general lesson is worth more than the fix: a freshness check written as an
+   * equality is a check that cannot tell two of the same thing apart.**
    */
-  const wantedFor = useRef(row.id);
-  wantedFor.current = row.id;
-
-  const read = useCallback(async (): Promise<void> => {
-    const askedFor = row.id;
-    setBusy(true);
-    const answer = await api.recent(row);
-    if (wantedFor.current !== askedFor) return;
-    setView(answer);
-    setBusy(false);
-  }, [api, row]);
+  const newest = useRef(0);
 
   /**
-   * **The ROW'S HANDLE IS THE DEPENDENCY, NOT THE ROW OBJECT, and that is the
+   * Start one read and let only the newest answer land.
+   *
+   * `identityOf(row)` rather than `identity`: this is called from a closure that
+   * may be older than the current render, and the identity that matters is the
+   * one the row being ASKED about had.
+   */
+  const begin = useCallback(
+    (asked: FleetRow): void => {
+      newest.current += 1;
+      const token = newest.current;
+      const askedFor = identityOf(asked);
+      setBusy(true);
+      void api.recent(asked).then((answer) => {
+        if (newest.current !== token) return;
+        setHeld({ identity: askedFor, view: answer });
+        setBusy(false);
+      });
+    },
+    [api],
+  );
+
+  /**
+   * **THE ROW'S IDENTITY IS THE DEPENDENCY, NOT THE ROW OBJECT, and that is the
    * whole design of this section.** A new snapshot arrives every sixty seconds
    * and replaces every row object on the page; depending on the object would
    * re-run this effect on each one and put a disk read of a multi-megabyte
    * transcript on the refresh loop — the one thing this section must not do.
-   * The handle changing IS the session changing, which is the only event that
-   * should cause a fresh read.
+   * `identity` is a string built from two primitives, so an unchanged snapshot
+   * produces an equal value and re-reads nothing.
+   *
+   * **What changed on 2026-09-08 is which change counts as the session
+   * changing.** This read on `row.id` alone, and the sentence here used to say
+   * "the handle changing IS the session changing" — which is false in exactly
+   * the case `claudeSessionId` exists for. See `identityOf`.
+   *
+   * There is no `setHeld(null)` here and that is deliberate: the old reading is
+   * hidden by the identity check below, during the very render in which the row
+   * changed, rather than cleared by this effect one commit later. See `Held`.
    */
-  // biome-ignore lint/correctness/useExhaustiveDependencies: see above — depending on `row` rather than `row.id` would put the transcript read on the sixty-second refresh loop.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: see above — depending on `row` rather than on `identity` would put the transcript read on the sixty-second refresh loop.
   useEffect(() => {
-    let alive = true;
-    setBusy(true);
-    void api.recent(row).then((answer) => {
-      if (!alive) return;
-      setView(answer);
-      setBusy(false);
-    });
-    return () => {
-      alive = false;
-    };
-  }, [api, row.id]);
+    begin(row);
+  }, [begin, identity]);
 
-  return { view, busy, read: () => void read() };
+  /**
+   * **THE PAIRING IS CHECKED HERE, WHERE IT IS DRAWN.** A reading of somebody
+   * else is not a reading of this row, whatever state holds it, so it is never
+   * handed out. `busy` is not gated the same way: a read really is in flight,
+   * and the panel says so.
+   */
+  const view = held !== null && held.identity === identity ? held.view : null;
+
+  return { view, busy, read: () => begin(row) };
 }
 
 export function RecentMessages({
