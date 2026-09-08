@@ -457,6 +457,13 @@ function reply(url: string, method: string): Response {
   if (url.startsWith("/api/comments/")) return json({ comments: [] });
   if (url.startsWith("/api/chat/")) return json({ threads: storedChats });
   if (url.startsWith("/api/glossary/")) return json({ status: "none", glossary: null });
+  /* **404, the ordinary case** — most articles have no quotes, and it is the
+     branch `useQuotesRead` is written around. Answered explicitly rather than
+     left to the `json({})` fallthrough at the foot of this function, which would
+     take the hook down its `catch` and make this file's subject — *which
+     requests happen, in what order* — depend on an exception path. The read is
+     mounted for every owner since 2026-09-08 (see `READING_VIEW`). */
+  if (url.startsWith("/api/quotes/")) return new Response(null, { status: 404 });
   /* **Nobody has built this one**, for the owner control at the foot of this
      file: pressing a mode whose artefact is missing is what starts a job, and
      with every artefact answered `{}` there is no such mode on the page. */
@@ -675,11 +682,31 @@ const ARRIVAL: Shape[] = [
   POST(`/api/library/${SLUG}/open`),
 ];
 
-/** The three hooks the reading view mounts for its owner, plus `useArc`. */
+/**
+ * The four hooks the reading view mounts for its owner, plus `useArc`.
+ *
+ * **`/api/quotes/` is the fourth, and it is new on 2026-09-08.** Greg asked for
+ * the quotes to be marked in the prose in every mode
+ * (docs/plans/260908i-quotes-marked-in-the-prose-in-every-mode.md), so a reader
+ * who never opens the band still needs the list — which makes the opening read
+ * `OwnedReader`'s, exactly as the glossary's became on 2026-08-27 when the
+ * underlines started being drawn outside glossary mode.
+ *
+ * **One request per article view, and that is the whole price of the feature.**
+ * It appears **once** rather than twice for `/api/glossary`'s reason: the read
+ * goes through `useOrderedRead`, so `QuotesBand`'s own mount `reload()` joins it
+ * rather than issuing a second. If this line ever doubles, that de-duplication
+ * has broken.
+ *
+ * It sits between the glossary's and the arc's because that is the order
+ * `OwnedReader` calls the hooks in — recorded rather than sorted away, like the
+ * orderings in `CHAT` below.
+ */
 const READING_VIEW: Shape[] = [
   GET(`/api/comments/${SLUG}`),
   GET(`/api/chat/${SLUG}?summary=1`),
   GET(`/api/glossary/${SLUG}`),
+  GET(`/api/quotes/${SLUG}`),
   GET(`/api/arc/${SLUG}`),
   GET(`/api/comments/${SLUG}`),
   GET(`/api/chat/${SLUG}?summary=1`),
@@ -714,6 +741,7 @@ const CHAT: Shape[] = [
   GET(`/api/comments/${SLUG}`),
   GET(`/api/chat/${SLUG}?summary=1`),
   GET(`/api/glossary/${SLUG}`),
+  GET(`/api/quotes/${SLUG}`),
   GET(`/api/arc/${SLUG}`),
   GET(`/api/chat/${SLUG}`),
   GET(`/api/comments/${SLUG}`),

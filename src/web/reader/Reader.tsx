@@ -29,6 +29,7 @@ import { addressWithout, useAddress } from "../router.js";
 import { IdeasBand, VisitorIdeasBand } from "../modes/ideas/IdeasMode.js";
 import { TimelineBand, VisitorTimelineBand } from "../modes/timeline/TimelineMode.js";
 import { QuotesBand, VisitorQuotesBand } from "../modes/quotes/QuotesMode.js";
+import { useQuoteMarks } from "./useQuoteMarks.js";
 import { DebateBand } from "../modes/debate/DebateMode.js";
 import { GlossaryBand, VisitorGlossaryBand } from "../modes/glossary/GlossaryMode.js";
 import { SearchBand, VisitorSearchBand } from "../modes/search/SearchMode.js";
@@ -111,7 +112,7 @@ import { useRenderCount } from "../perf.js";
 import { FEEDBACK_BLOCK_IDS, setFeedbackArticleContext } from "../feedback-context.js";
 import { useWindowWidth, useRootFontPx } from "./measure.js";
 import { useReadingPosition } from "./useReadingPosition.js";
-import { selectPassages } from "./passages.js";
+import { proseFound, selectPassages } from "./passages.js";
 
 /**
  * The owner's `marked` map: nothing is marked, and it is one object for the
@@ -801,18 +802,28 @@ export function Reader({
    */
   const [ideaFound, setIdeaFound] = useState<Found[]>([]);
   const [openOccurrence, setOpenOccurrence] = useState<string | null>(null);
-  /* **A third state rather than a third writer of `found`**, for the reason the
-     comment above gives about the second: two modes sharing one state clear each
-     other on the way out, and the mode arriving second wins by accident of
-     effect ordering.
-
-     **And an `openKey` of its own since 2026-09-05.** This said quotes needed
-     none — *a quote is exactly one passage, so there is nothing to step between
-     and nothing to leave open* — which was true while the prose marked only the
-     selected quote. Now it marks every quote the panel is showing, and the ring
-     is the only thing on the page saying which of them the reader pressed. */
-  const [quoteFound, setQuoteFound] = useState<Found[]>([]);
-  const [quoteOpenKey, setQuoteOpenKey] = useState<string | null>(null);
+  /**
+   * **The quotes, and they are not a state at all** — since 2026-09-08.
+   *
+   * Every other slot on this page is a `useState` a band writes into, because a
+   * band holds the fetch and `Reader` holds the prose. The quotes stopped
+   * working that way when Greg asked for them to be marked *"even if we're not
+   * in quotes mode"* (SPIDERYARN-READING2-2P): marks published by a band live
+   * exactly as long as the band, and everything the quote marks are made of —
+   * the artefact, `?quote=`, `?rank=`, `?bar=`, the blocks — is state this
+   * component already holds. So there was nothing for the band to tell us.
+   *
+   * The publication protocol went with it: no `setQuoteFound`, no
+   * `setQuoteOpenKey`, and no `derived` arm on `usePassageLifecycle`, whose only
+   * caller this was. What that arm bought — the marks and the ring landing in
+   * one commit, so no paint can show the ring on one quote and the washes of
+   * another set — a memo has by construction.
+   * docs/plans/260908i-quotes-marked-in-the-prose-in-every-mode.md.
+   */
+  const quotes = useQuoteMarks(
+    article.blocks,
+    capability.kind === "owner" ? capability.quotes.quotes : (artefacts?.quotes ?? null),
+  );
   /* **A fourth state, for the reason the second and third have their own**, and
      not because Timeline needs anything ideas do not: two modes sharing one
      `Found[]` clear each other on the way out, and which one wins is an
@@ -862,11 +873,24 @@ export function Reader({
      reader/passages.ts. */
   const { found: passages, openKey: openPassage } = selectPassages(mode, {
     ideas: { found: ideaFound, openKey: openOccurrence },
-    quotes: { found: quoteFound, openKey: quoteOpenKey },
+    quotes,
     timeline: { found: timelineFound, openKey: openTimelineKey },
     referee: { found: refereeFound, openKey: openRefereeKey },
     search: { found, openKey: openHit },
   });
+  /**
+   * **The marks under the phrases are the open mode's passages PLUS the
+   * quotes; the three block-level projections below are the open mode's
+   * alone.**
+   *
+   * This is the one place the two questions differ, and `proseFound` in
+   * reader/passages.ts carries the argument — briefly: a quote has no
+   * `confidence`, so `blockStrength` would paint its paragraph's bar at full
+   * over a hedged search's, and every quote has `slot: 0`, which is the first
+   * saved search's colour. In quotes mode the two are the same array and
+   * `proseFound` hands it straight back.
+   */
+  const proseMarked = useMemo(() => proseFound(passages, quotes.found), [passages, quotes.found]);
   /* **One ramp for the whole of Referee mode**, read here because this is where
      the marks are built. `?refscale=` and not `referee_criteria.scale`: the two
      ramps put red at opposite ends of the truth, so a per-criterion choice
@@ -878,8 +902,8 @@ export function Reader({
      carries a valence and the scale is never consulted. */
   const [refScale] = useQueryState("refscale", refScaleParam);
   const hitMarks = useMemo(
-    () => buildHitMarks(passages, openPassage, refScale),
-    [passages, openPassage, refScale],
+    () => buildHitMarks(proseMarked, openPassage, refScale),
+    [proseMarked, openPassage, refScale],
   );
   const hitStrength = useMemo(() => blockStrength(passages), [passages]);
   const hitHues = useMemo(() => blockHues(passages), [passages]);
@@ -1617,25 +1641,14 @@ export function Reader({
             )}
           </FeatureBoundary>
         );
+      /* **Neither band publishes anything any more.** The marks are
+         `useQuoteMarks` above, drawn in every mode; what is left down here is
+         the panel, its three controls and — for the owner — the job machinery
+         that must not be mounted anywhere else. QuotesMode.tsx. */
       case "quotes":
-        if (owner)
-          return (
-            <QuotesBand
-              slug={slug}
-              blocks={article.blocks}
-              onJump={jumpTo}
-              onFound={setQuoteFound}
-              onOpenKey={setQuoteOpenKey}
-            />
-          );
+        if (owner) return <QuotesBand slug={slug} read={owner.quotes} onJump={jumpTo} />;
         return artefacts?.quotes ? (
-          <VisitorQuotesBand
-            quotes={artefacts.quotes}
-            blocks={article.blocks}
-            onJump={jumpTo}
-            onFound={setQuoteFound}
-            onOpenKey={setQuoteOpenKey}
-          />
+          <VisitorQuotesBand quotes={artefacts.quotes} onJump={jumpTo} />
         ) : null;
       /* **The owner/visitor pair the ideas and the quotes have, since
          2026-09-04.** It was one branch until then, and the comment here said

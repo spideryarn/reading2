@@ -1868,6 +1868,14 @@ function recordingActions(
       calls.push({ op: "abandon", arg: sessionId, second: itemId });
       return { ok: true, kind: "queue-changed", op: "abandoned" };
     },
+    /* The ids are joined into `second` so the recorder keeps its one shape.
+       WHAT THE PAGE SENDS is the whole safety argument for clearing — the server
+       refuses a list that is not what the queue holds — so a test that only
+       counted the calls would miss the thing worth asserting. */
+    clear: async (sessionId, itemIds) => {
+      calls.push({ op: "clear", arg: sessionId, second: itemIds.join(",") });
+      return { ok: true, kind: "queue-cleared", removed: [], keptInFlight: null, unreadable: 0 };
+    },
     box: async (actionId, dryRun) => {
       calls.push({ op: "box", arg: actionId, second: dryRun });
       return { ok: true, dryRun, dryRunStated: true, result: [], why: null };
@@ -4373,6 +4381,134 @@ describe("the queue, which is the feature and so is on screen", () => {
     expect(container.textContent).toContain("1 more item is in this queue and could not be read");
     // And the one it could read is still there — it is short, not empty.
     expect(container.textContent).toContain("hello");
+  });
+
+  /* ---------------------------------------------------------------- *
+   * Clearing the whole queue. `SteeringQueue.clear()` had two callers and
+   * both were tests — instance 9 of docs/postmortems/260908b — so these are
+   * the assertions about the half that was missing: the button, what it says
+   * before it acts, and what it says afterwards.
+   * ---------------------------------------------------------------- */
+
+  const GOING_OUT = itemWire({
+    id: "q3",
+    payload: { kind: "message", text: "already on its way out" },
+    leasedAt: 1_757_000_001_000,
+  });
+
+  it("offers no clear when everything in the queue is already going out", async () => {
+    // There would be nothing for it to remove: `clear()` keeps a leased item,
+    // so the button's only possible outcome would be a refusal.
+    openQueue([GOING_OUT]);
+    await act(async () => {});
+    expect(buttonLabels()).not.toContain("Clear the queue");
+  });
+
+  it("names what would go AND what would stay, before anything is cleared", async () => {
+    const rec = openQueue([
+      itemWire({ id: "q1", payload: { kind: "message", text: "look at the eval corpus" } }),
+      itemWire({ id: "q2", payload: { kind: "action", action: { ...CONTINUE_WIRE } } }),
+      GOING_OUT,
+    ]);
+    await act(async () => {});
+    await clickSaying("Clear the queue");
+
+    const text = container.textContent ?? "";
+    expect(text).toContain("Take these 2 things out of the queue?");
+    expect(text).toContain("look at the eval corpus");
+    expect(text).toContain(CONTINUE_WIRE.label);
+    /* THE HALF THAT IS EASY TO LEAVE OUT, and the reason this gesture needed a
+       design at all: a confirmation listing only the casualties reads as "the
+       queue will be empty afterwards", which is false in exactly the case that
+       matters. It names the survivor by its words, because every queued message
+       draws as "Your message" and three of them would be indistinguishable. */
+    expect(text).toContain("This one stays, because it has already been handed over for delivery");
+    expect(text).toContain("already on its way out");
+    // And nothing has happened yet. A preview that acted would not be one.
+    expect(rec.calls.filter((c) => c.op === "clear")).toHaveLength(0);
+  });
+
+  it("clears exactly the ids it drew, and never the one in flight", async () => {
+    const rec = openQueue([
+      itemWire({ id: "q1", payload: { kind: "message", text: "hello" } }),
+      itemWire({ id: "q2", payload: { kind: "message", text: "and then this" } }),
+      GOING_OUT,
+    ]);
+    await act(async () => {});
+    await clickSaying("Clear the queue");
+    await clickSaying("Yes, clear them");
+
+    /* The ids are the request's whole safety argument — the server refuses a
+       list that is not what its queue holds — so what is asserted is the list,
+       not the fact of a call. `q3` is absent because it is leased. */
+    expect(rec.calls.filter((c) => c.op === "clear")).toEqual([{ op: "clear", arg: "$1643", second: "q1,q2" }]);
+  });
+
+  it("offers no Confirm when it cannot say what would go", async () => {
+    /* The empty-preview rule, which this page already applies in front of a
+       kill: a queue holding items this build cannot parse cannot be previewed,
+       and a Confirm over a partial list would destroy things that were never on
+       screen. The alarm sentence names the gap instead. */
+    openQueue([itemWire({ id: "q1", payload: { kind: "message", text: "hello" } }), { id: "q2" }]);
+    await act(async () => {});
+    await clickSaying("Clear the queue");
+
+    expect(container.textContent).toContain("there is no Confirm below");
+    expect(buttonLabels()).not.toContain("Yes, clear them");
+    // The way out is still offered.
+    expect(buttonLabels()).toContain("Keep them");
+  });
+
+  it("says afterwards which item stayed behind, in a reply read off the wire", async () => {
+    /*
+     * **THE `keptInFlight` CASE, AND THE OUTCOME IS PARSED RATHER THAN BUILT.**
+     * A hand-made `ActionOutcome` here would be a claim about the route that
+     * nothing checks against the route — the fixture mistake this whole
+     * postmortem turns on — so the fake `fetch` answers with the wire shape and
+     * the page reads it through `makeActionsApi`, exactly as the browser does.
+     */
+    const wire = {
+      ok: true,
+      op: "cleared",
+      removed: [itemWire({ id: "q1", payload: { kind: "message", text: "hello" } })],
+      keptInFlight: GOING_OUT,
+    };
+    const impl = (async () => ({ ok: true, status: 200, statusText: "", json: async () => wire }) as Response) as unknown as typeof fetch;
+    const rec = recordingActions(
+      () =>
+        actionsWire({
+          actions: [CONTINUE_WIRE],
+          queues: [queueWire({ items: [itemWire({ id: "q1", payload: { kind: "message", text: "hello" } }), GOING_OUT] })],
+        }),
+      { clear: makeActionsApi(impl).clear },
+    );
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport, actionsApi: rec.api });
+    act(() => feed.push(state({ rows: [ROW] })));
+    openSession("the one with a queue");
+    await act(async () => {});
+
+    await clickSaying("Clear the queue");
+    await clickSaying("Yes, clear them");
+
+    const text = container.textContent ?? "";
+    expect(text).toContain("One item taken out of the queue.");
+    // The whole point: "cleared" on its own would be an ambiguous negative.
+    expect(text).toContain("One was NOT taken out, because it had already been handed over for delivery");
+    expect(text).toContain("already on its way out");
+    expect(text).toContain("treat it as sent");
+  });
+
+  it("says the queue is empty afterwards only when nothing was going out", async () => {
+    // The other reading of the same card, and it has to be a different
+    // sentence: this one really is a promise that nothing more is coming.
+    const rec = openQueue([itemWire({ id: "q1", payload: { kind: "message", text: "hello" } })]);
+    await act(async () => {});
+    await clickSaying("Clear the queue");
+    await clickSaying("Yes, clear them");
+
+    expect(container.textContent).toContain("Nothing was on its way out, so this session's queue is now empty.");
+    expect(rec.calls.filter((c) => c.op === "clear")).toHaveLength(1);
   });
 });
 

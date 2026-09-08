@@ -1,9 +1,10 @@
 /**
  * **The three rules every passage producer follows, in one place.**
  *
- * Six components resolve passages and hand them up to `Reader`, which owns the
- * prose: `useIdeasMode`, `useTimelineMode`, `useQuotesMode`, `useSearchMode`,
- * `CriteriaBand` and `ClaimsBand`. Until 2026-09-06 each held its own copy of
+ * Five components resolve passages and hand them up to `Reader`, which owns the
+ * prose: `useIdeasMode`, `useTimelineMode`, `useSearchMode`, `CriteriaBand` and
+ * `ClaimsBand`. (There were six until 2026-09-08 — see the table below for
+ * where Quotes went.) Until 2026-09-06 each held its own copy of
  * the same three effects, and the copies said so — *"a fix to one of these
  * belongs in all three"*, written when there were two and left standing when
  * there were six. Every one of the three rules had been got wrong once in one
@@ -54,27 +55,30 @@
  *
  * ## Three shapes, because there really are three
  *
- * | `kind` | Producers | Inbound key | Publishes a key | Rule 2 |
- * |---|---|---|---|---|
- * | `keyed` | Ideas, Timeline, Search, Criteria | yes, from `Reader` | no | yes |
- * | `derived` | Quotes | no — computed from `?quote=` | yes, in the same effect | no |
- * | `unkeyed` | Claims | no | no | no |
+ * | `kind` | Producers | Inbound key | Rule 2 |
+ * |---|---|---|---|
+ * | `keyed` | Ideas, Timeline, Search, Criteria | yes, from `Reader` | yes |
+ * | `unkeyed` | Claims | no | no |
  *
- * `derived` is not `keyed` with a flag. Quotes must write `found` and `openKey`
- * in **one** layout effect, so no paint can ever show the ring on one quote and
- * the washes of another set; and it must have no rule 2, because its key is
- * recomputed rather than remembered — a quote whose block the article has lost
- * resolves to a key matching no mark, which is the honest answer, and rule 2
- * would null it.
+ * **There was a third, `derived`, and Quotes was its only caller.** It let one
+ * producer publish `found` and `openKey` in the *same* layout effect, so no
+ * paint could show the ring on one quote and the washes of another set. It went
+ * on 2026-09-08, when the quotes stopped being published at all: `Reader`
+ * computes them from state it already holds (reader/useQuoteMarks.ts), because
+ * they are now marked in every mode and marks pushed up by a band live exactly
+ * as long as the band. A memo has that atomicity by construction — one render
+ * produces both values and a commit carries both or neither — so the shape had
+ * nothing left to buy.
+ * docs/plans/260908i-quotes-marked-in-the-prose-in-every-mode.md.
  *
  * ## What this hook deliberately does not absorb
  *
  * All of it per-mode product policy with an argument written where it lives:
  * opening the first passage automatically (Ideas and Timeline do; `CriteriaBand`
  * refuses in a comment because several criteria can be on at once; Search has no
- * concept of it; Quotes derives instead); the `wantsJump` intention (Ideas and
+ * concept of it); the `wantsJump` intention (Ideas and
  * Timeline, and only on selecting, never on clearing); the *other* triggers that
- * clear a key (Search's matcher, find, solo and toggle-all; Quotes' bar);
+ * clear a key (Search's matcher, find, solo and toggle-all);
  * Glossary's `termSelections`, which is a different currency with no push-up and
  * no cleanup; and the band-level prop names, `openHit`/`onOpenHit` included.
  *
@@ -111,14 +115,6 @@ export type PassageLifecycle =
       onOpenKey(key: string | null): void;
     }
   | {
-      /** Quotes — the key is computed from `?quote=` and pushed up beside the marks. */
-      kind: "derived";
-      found: Found[];
-      openKey: string | null;
-      onFound(next: Found[]): void;
-      onOpenKey(key: string | null): void;
-    }
-  | {
       /** Claims — no key at all; the unmount clears `found` and nothing else. */
       kind: "unkeyed";
       found: Found[];
@@ -141,18 +137,12 @@ export function usePassageLifecycle(input: PassageLifecycle): void {
   const onFound = input.onFound;
   const openKey = input.kind === "unkeyed" ? null : input.openKey;
   const onOpenKey = input.kind === "unkeyed" ? NO_KEY_TO_SET : input.onOpenKey;
-  /* Only `derived` publishes a key, and only `derived` may put one in the
-     publication effect's dependencies — a `keyed` producer that republished its
-     marks every time the reader pressed a different row would be doing work for
-     nothing. */
-  const publishedKey = kind === "derived" ? openKey : null;
-
-  /* Rule 1. Both halves in one effect for `derived`, so no paint can show the
-     ring on one passage and the washes of another set. */
+  /* Rule 1. No producer publishes a key any more — a `keyed` producer that
+     republished its marks every time the reader pressed a different row would be
+     doing work for nothing, and `derived`, which did, is gone. */
   useLayoutEffect(() => {
     onFound(found);
-    if (kind === "derived") onOpenKey(publishedKey);
-  }, [kind, found, publishedKey, onFound, onOpenKey]);
+  }, [found, onFound]);
 
   /* Rule 2. Passive, and keyed on absence from `found`. */
   useEffect(() => {

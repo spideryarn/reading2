@@ -283,9 +283,14 @@ mark.hit[data-wash] {
    observation and not the theory: **in this Chrome, on a wrapped quote that is
    also a hit, the band renders the same either way; in Firefox and Safari it is
    untested.** If a wrapped quote-over-search ever looks wrong there, this line
-   is the first suspect. It is not reachable in the reader today — one mode's
-   marks are on the page at a time — which is why it is recorded rather than
-   engineered around. */
+   is the first suspect.
+
+   **And it IS reachable in the reader since 2026-09-08**, which this comment
+   used to say it was not: the quotes are marked in every mode now, so a search
+   hit and a quote share a fragment whenever they share a phrase
+   (docs/plans/260908i-quotes-marked-in-the-prose-in-every-mode.md). Still
+   recorded rather than engineered around — the observation has not changed, only
+   the number of people who can meet it. */
 mark.hit[data-quote] {
   --quote-stroke-width: 1px;
   --quote-edge-top: 0 calc(-1 * var(--quote-stroke-width)) 0 0 var(--quote-stroke-color);

@@ -223,7 +223,7 @@ vi.mock("../src/web/Dock.js", () => ({ Dock: () => null }));
 
 const { useIdeas } = await import("../src/web/useIdeas.js");
 const { useGlossary, useGlossaryRead } = await import("../src/web/useGlossary.js");
-const { useQuotes } = await import("../src/web/useQuotes.js");
+const { useQuotes, useQuotesRead } = await import("../src/web/useQuotes.js");
 const { useTimeline } = await import("../src/web/useTimeline.js");
 const { useQuiz } = await import("../src/web/useQuiz.js");
 const { useArc } = await import("../src/web/useArc.js");
@@ -262,7 +262,10 @@ function GlossaryHarness({ slug }: { slug: string }): ReactElement {
 }
 
 function QuotesHarness({ slug }: { slug: string }): ReactElement {
-  const all = useQuotes(slug);
+  /* Both halves, as `GlossaryHarness` above mounts both of its own: the read is
+     what races, and the band is what asks it to `refresh` when a job lands. */
+  const read = useQuotesRead(slug);
+  const all = useQuotes(slug, read);
   return createElement("aside", null, all.quotes?.quotes.map((q) => q.text).join(",") ?? all.status);
 }
 
