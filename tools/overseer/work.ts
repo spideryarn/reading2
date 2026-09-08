@@ -325,6 +325,15 @@ const LAUNCHERS: ReadonlySet<string> = new Set(["node", "nodejs"]);
  * recogniser names a tool installed on the box; a `codex` in a scratch directory
  * that exists for the length of one test is not that tool.
  *
+ * **THE SPECIMEN IS STILL RUNNING, WHICH IS WHY THIS IS NOT HYPOTHETICAL.**
+ * `bash /tmp/fake-codex-qAz9Um/codex -o /tmp/run-codex-gc.txt` was reparented to
+ * init by a test run on 2026-09-01 and was still there on 2026-09-08, **six days
+ * and twenty hours later**, at 1.7 MB and costing nothing. It is the only
+ * long-lived `ppid 1` process on this box carrying the word `codex`. Both guards
+ * decline it - a shell is never peeled, and nothing under `/tmp` is an installed
+ * tool - so it has never once been reported as a paid review, which is the whole
+ * point. Anyone loosening either rule can watch it become one.
+ *
  * **THIS CHECKS THE SPELLING OF argv[0], NOT WHERE THE BINARY ACTUALLY IS**, and
  * the difference is not pedantry: a process launched as `./codex exec` with a
  * cwd of `/tmp/fake-codex-X` has argv[0] `./codex` and passes this. Closing that

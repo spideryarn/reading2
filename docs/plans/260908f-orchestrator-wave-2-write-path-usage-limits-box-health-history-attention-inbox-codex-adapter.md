@@ -124,7 +124,7 @@ six sessions can now build in parallel without a negotiation between them.
 |---|---|---|
 | **A** attention | the five types, verbatim, in `wire.ts` (`4d5cc454`) | the classifier, and the evaluation that justifies it |
 | **B** usage | the dashboard's `Pause` contract (`f1c34e96`) | the collector and the 429 ground truth |
-| **C** harness | shape agreed with the dashboard; two live findings (below) | `harness.ts`, and moving `steer.ts`'s refusal to read it |
+| **C** harness | **DONE** (`5c2e31cb`) — six arms, one `can: true`, Sol-reviewed | nothing; the `steer.ts` inline change is queued behind `fleet-approval-binding` |
 | **D** health | seam agreed (`refreshOnce`, not `server.ts`); `lock.ts` extracted for it | retention and the drawing |
 | **E/F** dictation | file split agreed with the dashboard | all of it |
 | **A5** | **closed**, no code | nothing |
@@ -143,12 +143,51 @@ six sessions can now build in parallel without a negotiation between them.
    union in Stage A is load-bearing rather than fastidious, and why a `prose` item gets **no answer
    control at all** in v1.
 
-**And one cost finding, which is not engineering:** `w2-harness-adapter` found **two orphaned paid
-`gpt-5.6-sol --effort high` reviews running under `ppid 1`**, attributable to no session, which
-nothing on the dashboard can see or stop. Related to a trap already recorded — a killed codex run
+**And one cost finding, which is not engineering — stated with its timestamp, because that turned out
+to matter.** At **13:30** `w2-harness-adapter` found **two orphaned paid `gpt-5.6-sol --effort high`
+reviews running under `ppid 1`**: the Bash-tool shell had been reaped, leaving 45-minute jobs
+reparented to init, attributable to no session and invisible to `work.ts`, which only walks *down*
+from a pane. **At 14:05 there were none** — every `ppid 1` process on the box was a system daemon.
+So the finding is **real but transient**: not a leak that accumulates, but a window during which a
+paid job cannot be attributed or stopped. Related to a trap already recorded — a killed codex run
 still writes its `--output` file, so a stale review is indistinguishable from a fresh one and both the
 exit code and file-exists pass. An orphan whose output path is later reused is that trap with a long
 fuse.
+
+The one genuinely long-lived orphan is `bash /tmp/fake-codex-qAz9Um/codex`, reparented **6 days 20
+hours** ago at 1.7 MB. That is the **fake** codex from a test harness — the same one whose existence
+shaped the decision not to peel shells in `work.ts` — leaked from a test run last week. Harmless, and
+a live specimen of what the recogniser is built to refuse.
+
+### "There are none" is a reading, not a property
+
+The sharpest thing Stage C produced, and it generalises past Codex. At **11:58** the honest answer was
+zero Codex panes, exactly as the brief predicted — a Codex here is always a Claude session's child.
+By **12:15** there were three, two of them a bare interactive `codex` TUI under a `bash -l`. The
+module nearly shipped a comment asserting that an interactive Codex had never existed on this box,
+**minutes before two did**.
+
+Nothing was wrong with the first reading. What was wrong was the tense it was about to be written in.
+The same fragility applies to *"35 `auto`, 1 `default`"* earlier the same day, and to every count in
+this doc: **the honest form of a fleet measurement is the timestamp**, and a sentence that drops it
+has converted an observation into a claim about the world.
+
+**And knowing the lesson did not prevent it, one paragraph later.** The orphan finding above was
+written as *"two orphaned reviews are running"*, which was false by the time anybody read it — by the
+same author, minutes after writing the rule down. Then the correction repeated the shape a third time:
+two agents walked the process table and reported zero orphans **two minutes apart** (13:03 and 13:05
+UTC — the box runs BST, so 14:05 and 13:03 are two minutes, not an hour), and called that
+corroboration. It is one observation with a wide error bar.
+
+**So the lesson does not transfer by being remembered, and the reason is that it keeps changing
+clothes**: first counting a population, then corroborating a claim, then mistaking co-located readings
+for independent ones. The version that catches all three is mechanical rather than remembered — **the
+instant a fleet number was taken travels with the number, as a field**, the way `collectedAt`,
+`scannedAt` and `waitingSince` are fields in every type built today rather than habits. What actually
+settled the orphan question was not a second reading at all but a **mechanism**: an orphan appears
+when a Bash-tool shell is reaped mid-run and leaves when the job ends, so the population is bounded by
+concurrent reviews rather than growing. That argument would hold with zero readings, which is what
+makes it the evidence.
 
 ## Stages
 
@@ -450,6 +489,40 @@ been reaped, leaving a 45-minute `gpt-5.6-sol --effort high` run reparented to i
 still running. **`work.ts` only ever walks DOWN from a pane, so it cannot see these** — the dashboard
 cannot show them, attribute them, or stop them, and nothing bills them to anybody. That is a cost
 question as much as an engineering one, and `claude-agents-dashboard` has it to surface.
+
+**It is a WINDOW, not a leak, and the difference decides what to do about it.** The claim rests on the
+**process lifecycle**, not on a count: an orphan is created when a Bash-tool shell is reaped while its
+`run-codex.ts` child is still running, and it ends when that review ends. So the population is bounded
+by the number of concurrent reviews and cannot grow on its own. **That argument would hold with zero
+readings taken**, which is what makes it the load-bearing part. What is worth fixing is the window
+during which a paid job cannot be attributed or stopped — not a growing population of abandoned ones.
+
+Two walks are consistent with it and neither establishes it. At **13:03 UTC** the two live `codex exec`
+runs (`fleet-dictation`'s and `fleet-approval-binding`'s) both traced up to an
+`sh -c ( npx tsx run-codex.ts … )` whose parent is the **tmux server**, so both were ordinary
+`codex-batch` *panes* — the shape `codex-batch-pane.txt` captures — attributable and stoppable;
+`orchestrator-setup` walked every `ppid 1` process at **13:05 UTC** and found none.
+
+**Those two readings are two minutes apart, not an hour**, and an earlier draft of this paragraph
+presented them as independent corroboration because one was written in BST (14:05) and one in UTC
+(13:03) with no note that the box runs UTC+1. Two observations two minutes apart are one observation
+with a wide error bar. **This is the sample-window error for the third time in one stage** — first as
+the Codex count, then as "two orphans are running right now" (which would have been false by the time
+anybody read it), now as a timezone making two near-simultaneous readings look like a trend.
+
+**And the third one is why "I have learned this" is not a defence.** The lesson as written above is
+about *counting a population*; it recurred in the shape of *corroborating a claim*, which is the same
+error wearing different clothes and did not trip the memory of the first one. The version that catches
+both is mechanical rather than remembered, and it is the discipline everything else built today
+already follows: **a fleet number carries the instant it was taken, in one timezone, in the sentence
+itself** — the way `collectedAt` and `scannedAt` are fields rather than habits.
+
+**One `ppid 1` process really is long-lived, and it is the fake.**
+`bash /tmp/fake-codex-qAz9Um/codex -o /tmp/run-codex-gc.txt`, reparented to init **6 days 20 hours**
+ago by a test run last week, 1.7 MB, costing nothing. It is a live specimen of exactly what the
+recogniser is built not to be fooled by — still on the box, still carrying `codex` as a basename,
+still correctly not recognised, because shells are never peeled and nothing under `/tmp` is an
+installed tool.
 
 **The process table cannot say which process is reading the tty, and that is now closed rather than
 open.** Measured across all 22 panes: `tpgid` equalled the pane's own `pgid` on 21 of them, and **0
