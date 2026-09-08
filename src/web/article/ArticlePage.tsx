@@ -28,6 +28,7 @@ import { Tweets } from "../Tweets.js";
 import { useSlow } from "../useSlow.js";
 import { useArc } from "../useArc.js";
 import { useGlossaryRead } from "../useGlossary.js";
+import { useQuotesRead } from "../useQuotes.js";
 import type { SavedSearch } from "../useSearch.js";
 import { useLastView } from "../last-view.js";
 import { useComments } from "../useComments.js";
@@ -378,7 +379,8 @@ function OwnedArticle({
 /**
  * **Where the private hooks are mounted, and the only place they are.**
  *
- * `useComments`, `useChatAnchors` and `useGlossaryRead` each fetch on mount
+ * `useComments`, `useChatAnchors`, `useGlossaryRead` and `useQuotesRead` each
+ * fetch on mount
  * against an authenticated endpoint. A `readOnly` prop on `Reader` could not
  * have kept them out — React forbids calling a hook conditionally — so the
  * condition is this component existing, which is the point of the capability
@@ -419,6 +421,20 @@ function OwnedReader({
    */
   const glossary = useGlossaryRead(slug);
   /**
+   * **The quotes, for the same reason and by the same split** — since
+   * 2026-09-08, when they started being marked in the prose in every mode
+   * rather than only while the band is open
+   * (docs/plans/260908i-quotes-marked-in-the-prose-in-every-mode.md).
+   *
+   * `useQuotesRead` is the opening GET and nothing else. `QuotesBand` layers
+   * `useStepJob` and `useAutoRun` on top of it — and those two stay down there
+   * deliberately, not incidentally: a job subscriber mounted here would hold the
+   * job engine to its idle cadence for every reader of every article, and an
+   * activation owner mounted here could spend a Quotes press after the reader
+   * had already left the band. src/web/useQuotes.ts § QuotesRead.
+   */
+  const quotes = useQuotesRead(slug);
+  /**
    * **The arc, and the request for one if there is none.** Here rather than in
    * `Reader` for the same reason the three above are: it can POST, and the
    * acceptance test for public reading is that a signed-out browser issues no
@@ -431,7 +447,7 @@ function OwnedReader({
     <Reader
       slug={slug}
       article={article}
-      capability={{ kind: "owner", comments, chatAnchors, glossary, arc }}
+      capability={{ kind: "owner", comments, chatAnchors, glossary, quotes, arc }}
       onRenamed={onRenamed}
     />
   );

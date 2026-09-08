@@ -672,6 +672,148 @@ describe("abandoning a lease nobody settled", () => {
 });
 
 /* ================================================================== *
+ * Emptying a queue. Instance 9 of docs/postmortems/260908b: `clear()` was
+ * written, bounded and tested, and nothing in the product could reach it.
+ * ================================================================== */
+
+describe("clearing a whole session's queue", () => {
+  /** Three items, the first of them leased — which is the case the whole design is about. */
+  function loaded(h: ReturnType<typeof harness>): { leased: string; waiting: string[] } {
+    for (const id of ["continue", "pull", "run-checks"] as const) {
+      h.queue.enqueueAction({ sessionId: "$99001", claudeSessionId: CLAUDE_ID }, id, "greg");
+    }
+    const out = h.queue.next("$99001", IDLE_CTX);
+    if (out.kind !== "ready") throw new Error("expected a lease");
+    return {
+      leased: out.item.id,
+      waiting: h.queue.snapshot("$99001").items.filter((i) => i.leasedAt === null).map((i) => i.id),
+    };
+  }
+
+  it("drops what was waiting, keeps what is going out, and says which is which — through the client", async () => {
+    /*
+     * **THE TEST THAT FAILS IF NOTHING CALLS `clear()`.** That is the detector
+     * for this whole class (docs/postmortems/260908b § Class A: *who calls this,
+     * on a path a person can reach?*), and it is why this drives
+     * `makeActionsApi` over `browserFetch` rather than calling the method: the
+     * method had 2 test call sites and 0 product ones and looked perfectly
+     * healthy. What is asserted is the real `SteeringQueue` afterwards, and the
+     * answer the browser's own parser made of the response.
+     */
+    const h = harness();
+    const { leased, waiting } = loaded(h);
+    expect(waiting).toHaveLength(2);
+
+    const outcome = await makeActionsApi(browserFetch(h.routes)).clear("$99001", waiting);
+
+    if (!outcome.ok) throw new Error(`expected a clear, got ${outcome.why}`);
+    if (outcome.kind !== "queue-cleared") throw new Error(`expected queue-cleared, got ${outcome.kind}`);
+    expect(outcome.removed.map((i) => i.id)).toEqual(waiting);
+    // The safety property, on the wire and off it: the leased item survived and
+    // is NAMED, so nothing can report this as "the queue is empty now".
+    expect(outcome.keptInFlight?.id).toBe(leased);
+    expect(h.queue.snapshot("$99001").items.map((i) => i.id)).toEqual([leased]);
+  });
+
+  it("says nothing stayed when nothing was going out", async () => {
+    // The other half of the same claim. `keptInFlight: null` is a positive
+    // answer — the queue really is empty — and it has to be distinguishable
+    // from the arm above rather than both reading as "cleared".
+    const h = harness();
+    h.queue.enqueueAction({ sessionId: "$99001", claudeSessionId: CLAUDE_ID }, "pull", "greg");
+    const ids = h.queue.snapshot("$99001").items.map((i) => i.id);
+
+    const outcome = await makeActionsApi(browserFetch(h.routes)).clear("$99001", ids);
+
+    if (!outcome.ok || outcome.kind !== "queue-cleared") throw new Error("expected a clear");
+    expect(outcome.keptInFlight).toBeNull();
+    expect(h.queue.snapshot("$99001").items).toEqual([]);
+  });
+
+  it("refuses to drop an item that was not on the list the person read", async () => {
+    // The point of sending ids at all. Something the reader never saw arrived
+    // between the confirmation being drawn and the tap; destroying it silently
+    // is the one thing a bulk delete must not do.
+    const h = harness();
+    h.queue.enqueueAction({ sessionId: "$99001", claudeSessionId: CLAUDE_ID }, "pull", "greg");
+    const read = h.queue.snapshot("$99001").items.map((i) => i.id);
+    h.queue.enqueueAction({ sessionId: "$99001", claudeSessionId: CLAUDE_ID }, "push", "greg");
+    const arrived = h.queue.snapshot("$99001").items.map((i) => i.id).filter((id) => !read.includes(id));
+
+    const r = await call(h.routes, fakeReq({ url: "/api/actions/clear", body: { sessionId: "$99001", itemIds: read } }));
+
+    expect(r.status).toBe(409);
+    expect(r.json.code).toBe("stale-view");
+    expect(String(r.json.why)).toContain(arrived[0] ?? "");
+    // And NOTHING was dropped. A partial clear would be the worst of both.
+    expect(h.queue.snapshot("$99001").items).toHaveLength(2);
+  });
+
+  it("refuses a list naming something that is no longer waiting", async () => {
+    const h = harness();
+    h.queue.enqueueAction({ sessionId: "$99001", claudeSessionId: CLAUDE_ID }, "pull", "greg");
+    const ids = h.queue.snapshot("$99001").items.map((i) => i.id);
+
+    const r = await call(
+      h.routes,
+      fakeReq({ url: "/api/actions/clear", body: { sessionId: "$99001", itemIds: [...ids, "q999"] } }),
+    );
+
+    expect(r.status).toBe(409);
+    expect(r.json.code).toBe("stale-view");
+    expect(String(r.json.why)).toContain("q999");
+    expect(h.queue.snapshot("$99001").items).toHaveLength(1);
+  });
+
+  it("will not clear a queue whose only item is already going out", async () => {
+    // `clear()` would keep it and remove nothing, and answering 200 to that
+    // would be a "cleared" that cleared nothing.
+    const h = harness();
+    h.queue.enqueueAction({ sessionId: "$99001", claudeSessionId: CLAUDE_ID }, "pull", "greg");
+    const out = h.queue.next("$99001", IDLE_CTX);
+    expect(out.kind).toBe("ready");
+
+    const r = await call(h.routes, fakeReq({ url: "/api/actions/clear", body: { sessionId: "$99001", itemIds: [] } }));
+
+    expect(r.status).toBe(404);
+    expect(r.json.code).toBe("no-such-item");
+    expect(h.queue.snapshot("$99001").items).toHaveLength(1);
+  });
+
+  it("refuses a body that does not say which items, rather than clearing sight unseen", async () => {
+    const h = harness();
+    h.queue.enqueueAction({ sessionId: "$99001", claudeSessionId: CLAUDE_ID }, "pull", "greg");
+
+    const r = await call(h.routes, fakeReq({ url: "/api/actions/clear", body: { sessionId: "$99001" } }));
+
+    expect(r.status).toBe(400);
+    expect(r.json.code).toBe("bad-request");
+    expect(h.queue.snapshot("$99001").items).toHaveLength(1);
+  });
+
+  it("is a write, so a GET at it may not act", async () => {
+    const h = harness();
+    h.queue.enqueueAction({ sessionId: "$99001", claudeSessionId: CLAUDE_ID }, "pull", "greg");
+    const r = await call(h.routes, fakeReq({ url: "/api/actions/clear", method: "GET", headers: { "content-type": "" } }));
+    expect(r.status).toBe(405);
+    expect(h.queue.snapshot("$99001").items).toHaveLength(1);
+  });
+
+  it("refuses a cross-origin clear, the same as every other write", async () => {
+    const h = harness();
+    h.queue.enqueueAction({ sessionId: "$99001", claudeSessionId: CLAUDE_ID }, "pull", "greg");
+    const ids = h.queue.snapshot("$99001").items.map((i) => i.id);
+    const r = await call(
+      h.routes,
+      fakeReq({ url: "/api/actions/clear", headers: { origin: "http://evil.example" }, body: { sessionId: "$99001", itemIds: ids } }),
+    );
+    expect(r.status).toBe(403);
+    expect(r.json.code).toBe("forbidden-origin");
+    expect(h.queue.snapshot("$99001").items).toHaveLength(1);
+  });
+});
+
+/* ================================================================== *
  * The plan runner. The property here is the expensive one.
  * ================================================================== */
 

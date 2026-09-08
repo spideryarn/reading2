@@ -1,12 +1,24 @@
 /**
  * Server-Sent Events for the fleet dashboard: the server pushes a new
  * snapshot as soon as `collect()` produces one, instead of the client polling
- * `/api/agents` every few seconds.
+ * `/api/state` every few seconds.
  *
  * Direction: docs/project/overseer-direction.md. This is scaffolding for
  * v0.1 ("it should auto-update … hopefully we can come up with something
  * smarter", Greg, 2026-09-08), not a new capability of its own — the payload
- * is the same `FleetSnapshot` the poll already fetches from `/api/agents`.
+ * is the same `FleetSnapshot` the poll already fetches from `/api/state`.
+ *
+ * **THE POLL IS `/api/state`, AND THIS FILE USED TO SAY `/api/agents` FIVE
+ * TIMES.** `/api/agents` is the endpoint's original name, still mounted in
+ * `server.ts` as an alias answering identical bytes, and called by nothing in
+ * this repo: the browser polls `/api/state` (`web/src/transport.ts`) and so does
+ * the Overseer (`tools/overseer/source.ts`). The alias stays — it costs one clause,
+ * and something outside this repo may have it in a note or a bookmark — but the
+ * prose here had to change, because this is the file somebody reads to learn how
+ * the live stream works, and it was naming an endpoint no client uses as "the
+ * poll". Instance 10 of docs/postmortems/260908b: the join was not missing, the
+ * description was, which is the same class as a wrong comment above the code it
+ * describes.
  *
  * NO IMPORT SIDE EFFECTS, same reason as status.ts: nothing here binds a port
  * or starts a timer at module scope. `server.ts` owns both — it creates the
@@ -19,7 +31,7 @@
  * `EventSource`. Two named events:
  *
  *   - `snapshot` — data is `JSON.stringify(FleetSnapshot & { error: string | null })`,
- *     the same shape `/api/agents` already returns. Sent once immediately on
+ *     the same shape `/api/state` already returns. Sent once immediately on
  *     connect (from whatever the server currently has cached — never blocks on
  *     a fresh collection) and again on every subsequent broadcast.
  *   - `ping` — a heartbeat, sent on an interval so a reverse proxy or phone
@@ -34,7 +46,7 @@
  * `2.5 * <heartbeat interval>` (comfortably more than one missed beat), treat
  * the stream as dead — show the page as no-longer-live (e.g. "reconnecting…"
  * or "showing a stale copy, last updated <age>") and fall back to polling
- * `/api/agents` until a fresh `open` event arrives. THIS IS THE PART THAT
+ * `/api/state` until a fresh `open` event arrives. THIS IS THE PART THAT
  * MATTERS MOST: a live view that has silently stopped updating but still
  * looks current is exactly the failure mode docs/project/overseer-direction.md
  * and this whole project keep hitting (see also silent-success.md) — never
@@ -126,7 +138,7 @@ function broadcastFrame(data: string): void {
 /**
  * Push a fresh snapshot to every connected subscriber.
  *
- * `payload` is whatever `server.ts` already builds for `/api/agents` —
+ * `payload` is whatever `server.ts` already builds for `/api/state` —
  * `{ ...snapshot, error }` — passed as a pre-serialised JSON string so this
  * module does not need to know `FleetSnapshot`'s shape (and can't drift from
  * it: there is exactly one place that assembles the wire object).

@@ -290,12 +290,64 @@ describe("a tap that already means something else does not select the block", ()
     const loaded = await readArticleFromDir(DIR);
     const marked = plainBlocks(loaded)[2];
     if (!marked) throw new Error("the fixture has too few plain-prose blocks");
-    /* A real search hit, drawn by the real annotator: the element under the
-       click is the markup a search would have produced, not a stand-in. */
-    const hit: Mark = { id: "search-1", start: 0, end: 8 };
+    /* Drawn by the real annotator, so the element under the click is markup the
+       app would really have produced rather than a stand-in.
+
+       **It is a comment mark, not a search hit, and the label used to say
+       otherwise.** `annotateHtml` defaults an absent `kind` to `"cmt"`
+       (annotate.ts § `covering`), so this has always exercised `mark.cmt` — which
+       is a fine subject for "a tap on a mark does not select the row" and is not
+       the one the old comment claimed. Caught by GPT Sol, 2026-09-08, while the
+       exclusion list below it was being narrowed; a search hit gets its own
+       coverage in the quote-over-hit case further down. */
+    const hit: Mark = { id: "cmt-1", start: 0, end: 8 };
     await draw(propsFor(articleFrom(loaded), new Map([[marked.id, [hit]]])));
 
     await tap(inProse(marked.id, "mark"));
+    expect(selectedRows()).toEqual([]);
+  });
+
+  it("SELECTS the row when the tap lands on a quote, which is the one mark nothing acts on", async () => {
+    /* **The exception to the rule above, and this change is what created it.**
+       Since 2026-09-08 the quotes are marked in the prose in *every* mode
+       (docs/plans/260908i-quotes-marked-in-the-prose-in-every-mode.md), so up to
+       32 of an article's best sentences are wearing a `<mark>` while the reader
+       is in Plain. Every other mark is excluded because a tap on it already
+       means something — a comment opens, a term's card is up, a hit belongs to a
+       search the reader is reading. Nothing whatever acts on a quote.
+
+       So a blanket exclusion would make those sentences dead zones for the tap
+       that selects a paragraph, which is the only way a finger reaches the
+       gutter and therefore the only way a reader annotates (docs/project/touch.md).
+       The reader would find that the best lines in the piece were the ones they
+       could not comment on.
+
+       GPT Sol found it reviewing the plan: "there is no handler on a quote mark"
+       was true, and "therefore nothing changes" was the wrong conclusion. */
+    const loaded = await readArticleFromDir(DIR);
+    const marked = plainBlocks(loaded)[2];
+    if (!marked) throw new Error("the fixture has too few plain-prose blocks");
+    const quote: Mark = { id: "quote-1", start: 0, end: 8, kind: "hit", quoteTier: 1 };
+    await draw(propsFor(articleFrom(loaded), new Map([[marked.id, [quote]]])));
+
+    await tap(inProse(marked.id, "mark[data-quote]"));
+    expect(selectedRows()).toEqual([marked.id]);
+  });
+
+  it("leaves the selection alone when a quote is ALSO something a tap means", async () => {
+    /* The other half, and the half that keeps the exception honest. A quote
+       lying over a search hit is still a search hit, and the reader tapping it
+       in search mode is reaching for the hit. The narrowing is "a quote and
+       nothing else", not "any mark carrying `data-quote`". */
+    const loaded = await readArticleFromDir(DIR);
+    const marked = plainBlocks(loaded)[2];
+    if (!marked) throw new Error("the fixture has too few plain-prose blocks");
+    const quote: Mark = { id: "quote-1", start: 0, end: 8, kind: "hit", quoteTier: 1 };
+    const hit: Mark = { id: "search-1", start: 0, end: 8, kind: "hit", strength: 0.5 };
+    await draw(propsFor(articleFrom(loaded), new Map([[marked.id, [quote, hit]]])));
+
+    const both = inProse(marked.id, "mark[data-quote][data-wash]");
+    await tap(both);
     expect(selectedRows()).toEqual([]);
   });
 

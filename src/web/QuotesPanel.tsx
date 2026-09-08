@@ -41,9 +41,12 @@
  *
  * ## What this panel does NOT own
  *
- * The marks in the prose and the lane in the rail. `QuotesBand` in App.tsx
- * resolves the selected quote into `Found[]` and pushes it up, for the same
- * reason `SearchBand` and `IdeasBand` do.
+ * The marks in the prose and the lane in the rail. **And since 2026-09-08 nor
+ * does the band** — `useQuoteMarks` in src/web/reader/useQuoteMarks.ts resolves
+ * them in `Reader`, because they are drawn in every mode and marks published by
+ * a band live exactly as long as the band. What keeps this panel and the prose
+ * agreeing is that both call `markedQuotes` below.
+ * docs/plans/260908i-quotes-marked-in-the-prose-in-every-mode.md.
  */
 import { useState, type ReactElement } from "react";
 import { Info, Quote as QuoteIcon, RotateCcw, Sparkles, TriangleAlert } from "lucide-react";
@@ -525,9 +528,10 @@ export function QuotesPanel({
   const rank = effectiveRank(all, chosenRank);
   /* **`markedQuotes` and not `rankQuotes(all, rank, bar)`**, although the two
      compute the same list from the same three lines. The prose marks this list
-     now, and it reaches it from the band rather than from here — so the two
-     have to call one function or they are two expressions that agree until
-     somebody edits one. `bar` and `rank` above are still needed on their own,
+     now — in every mode, since 2026-09-08 — and it reaches it from
+     `useQuoteMarks` in `Reader` rather than from here, so the two have to call
+     one function or they are two expressions that agree until somebody edits
+     one. `bar` and `rank` above are still needed on their own,
      by the slider and by the RankBar's pressed state. */
   const shown = quotes ? markedQuotes(all, chosenRank, chosenBar) : [];
   /* From the LIST, not from the owner hook — so the sentence appears for a

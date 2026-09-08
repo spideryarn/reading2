@@ -35,6 +35,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { StepName } from "../src/types.js";
 import { cascadeForce } from "../src/jobs.js";
 import type { GlossaryRead } from "../src/web/useGlossary.js";
+import type { QuotesRead } from "../src/web/useQuotes.js";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -102,6 +103,19 @@ const READ: GlossaryRead = {
   patchEntry: () => {},
 };
 
+/** The same, for the quotes — `OwnedReader`'s read, posed. src/web/useQuotes.ts. */
+const QUOTES_READ: QuotesRead = {
+  status: "none",
+  quotes: null,
+  stale: false,
+  outdated: false,
+  profiled: false,
+  profileChanged: false,
+  error: null,
+  reload: async () => {},
+  refresh: async () => {},
+};
+
 let ideas: ReturnType<typeof useIdeas> | null = null;
 let glossary: ReturnType<typeof useGlossary> | null = null;
 let quotes: ReturnType<typeof useQuotes> | null = null;
@@ -112,7 +126,7 @@ let quiz: ReturnType<typeof useQuiz> | null = null;
 function Surfaces(): ReactElement {
   ideas = useIdeas("constitution");
   glossary = useGlossary("constitution", READ);
-  quotes = useQuotes("constitution");
+  quotes = useQuotes("constitution", QUOTES_READ);
   timeline = useTimeline("constitution");
   sketch = useSketch("constitution", []);
   quiz = useQuiz("constitution");

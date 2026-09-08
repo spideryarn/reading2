@@ -442,6 +442,19 @@ separate state and `hoveredRow` is one value carrying both.
 [260908e-gutter-icons-on-touch-only-when-a-block-is-selected.md](../plans/260908e-gutter-icons-on-touch-only-when-a-block-is-selected.md)
 has the reproduction, the arbitration about which marks are state, and the version that was refused.
 
+**A quote is the one `<mark>` a tap falls through**, and it is the exception that keeps the rule
+above worth having. `NOT_A_BLOCK_SELECTION` in [TableView.tsx](../../src/web/TableView.tsx) excludes
+every mark from the tap that selects a paragraph, on the grounds that a tap on one already means
+something else — a comment opens, a term's card is up, a hit belongs to a search the reader is
+reading. **Nothing whatever acts on a quote**, and since 2026-09-08 up to 32 of them are on the page
+in *every* mode ([quotes.md](quotes.md)). A blanket exclusion would therefore have made the best
+sentences in the piece the only ones a finger could not select — and selecting is how a finger
+reaches the gutter, so they would have been the only ones a reader could not annotate. The exclusion
+is narrowed to "a quote and nothing else": a quote that *also* carries a comment, a chat anchor, a
+term or a search's wash keeps it. Found by GPT Sol reviewing
+[260908i](../plans/260908i-quotes-marked-in-the-prose-in-every-mode.md), whose plan had recorded
+*"nothing clicks a quote mark"* as a reason there was nothing to worry about.
+
 ## What the Enter key promises
 
 > The keyboard on mobile devices should have a Done/Send button where

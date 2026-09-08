@@ -1,5 +1,17 @@
 # The real request trace of Plain, Ideas and Chat, before and after the extraction
 
+**Later feature change, 2026-09-08:**
+[quotes marked in every mode](260908i-quotes-marked-in-the-prose-in-every-mode.md) adds
+**one `GET /api/quotes/a-piece`** to *every* owned reading view, in every mode — the read moved into
+`OwnedReader` because the quotes are now drawn in the prose whether or not the band is open, exactly
+as `useGlossaryRead` moved on 2026-08-27 for the underlines. It lands **between `/api/glossary` and
+`/api/arc`**, which is the order `OwnedReader` calls its hooks in, and it appears **once**, not
+twice: the read goes through `useOrderedRead`, so `QuotesBand`'s own mount `reload()` joins it rather
+than issuing a second. If it ever doubles, that de-duplication has broken. Plain is now 13 requests,
+Ideas 17, Chat 19. The lists in `tests/the-ideas-extraction-changed-no-requests.test.tsx` were
+updated after watching this assertion fail — which is the file working as intended, and the reason
+that request is a line in a plan rather than a surprise in production.
+
 **Later feature change, 2026-09-06:** [the realtime repair](260906f-repair-realtime-chat.md)
 adds the composer to a loaded empty Chat list so Live can start the first conversation. Its
 profile checkbox calls `useHasProfile`, adding two `GET /api/reader?slug=a-piece` requests

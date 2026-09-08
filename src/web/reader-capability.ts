@@ -35,6 +35,7 @@ import type { Comment, Glossary, ThreadSummary } from "../types.js";
 import type { SavedSearch } from "./useSearch.js";
 import type { PublicArtefactSet, PublicArtefacts } from "../public-types.js";
 import type { GlossaryRead } from "./useGlossary.js";
+import type { QuotesRead } from "./useQuotes.js";
 import type { ChatAnchorsApi } from "./useChatAnchors.js";
 import type { ClientComment, CommentsApi } from "./useComments.js";
 import type { UseArc } from "./useArc.js";
@@ -48,6 +49,16 @@ export type ReaderCapability =
       chatAnchors: ChatAnchorsApi;
       /** The opening glossary read, shared with the band. `useGlossaryRead`. */
       glossary: GlossaryRead;
+      /**
+       * The opening quotes read, shared with the band. `useQuotesRead`.
+       *
+       * Here for the reason `glossary` is: since 2026-09-08 the quotes are
+       * marked in the prose in **every** mode, so the list is a standing
+       * property of the article rather than something quotes mode fetches for
+       * itself. A visitor's arrives in `artefacts.quotes` below, exactly as
+       * their glossary does.
+       */
+      quotes: QuotesRead;
       /**
        * The arc, and whether one is being written right now. `useArc`.
        *

@@ -39,24 +39,39 @@ transitive closure under DOM-only libs, so one `import type` makes the typecheck
 endpoint of four is migrated; see Stage v0.8a for what is left and for the two corrections the plan
 doc needed.
 
-**What is left, in order.** v0.4g and v0.4h are both **landed** since the previous version of this
-list; what remains is smaller and mostly not this session's.
+**What is left, in order.** Rewritten on the evening of 2026-09-08, against the code rather than
+against the previous version of this list. **Four stages landed since it was last written** — v0.6f
+(the attention inbox joined end to end), v0.4j (the phone's clock), v0.8b (the fleet-state endpoint
+behind the shared type, and four dropped fields read) and v0.8c (the last two live missing joins) —
+each with a cross-family review and a fix round after it.
 
-1. **Two finished branches, unpushed.** `worktree-fleet-approval-binding` (nine commits: A9 ticked,
-   A10's prose half built — `sendMessage` now refuses a pane whose input box has anything in it,
-   proved end to end against a live session) and `worktree-attention-inbox`. Both waiting on their
-   own reviews. Nothing to build; somebody has to land them.
-2. **The rest of v0.8a** — three endpoints, ~30 twin declarations, and one (`FleetRow`) that cannot
-   migrate the same way at all. About a day, and the value is now measured rather than argued.
+*This list is the part of the doc most likely to be acted on without checking, which is exactly what
+happened earlier today: two items marked as urgent safety work had already been fixed during the
+wave and the paragraph still said they were live. Re-grep before briefing anybody off it.*
+
+1. **The rest of v0.8a — two endpoints, not three.** The actions catalogue, and
+   steer/new/messages/rename. Fleet state is done (v0.8b). `FleetRow` still cannot migrate the same
+   way at all and the reason is written into `wire.ts` beside the generic hole it leaves.
+2. **v0.9a — the broadcast cannot reach the sessions that caused the load.** Found by
+   `spideryarn2-b6`, written up below, and **deliberately waiting on evidence**: a 24-hour sampler is
+   running, and a series showing reachability recovering on its own kills the stage. It is two
+   changes rather than one, because a box-wide action is *forbidden* from queueing on a stated
+   ground that has to be answered rather than deleted.
 3. **The systemd cutover**, which is Greg's to run — `sudo systemctl enable` is refused for agents on
    this box. Script prepared 2026-09-08 12:00, unrun. **Step 3 is a decision, not a check**: it is
    the moment the dashboard becomes tailnet-reachable, and `w2-fleet-dictation` measured that
    `navigator.mediaDevices` is *absent* (not degraded) at the tailnet address, so HTTPS there is a
    feature prerequisite rather than a nicety.
-4. **v0.4j — the phone's clock**, written up 2026-09-08 and not started. Two alarms on this page can
-   be manufactured by a browser clock a few minutes fast.
-5. **v0.2c's other half** — delivery receipts and action ids. The browser now reads `delivery`; the
-   five states and the repeat-retrieves-the-receipt rule are not built.
+4. **v0.2c's other half** — delivery receipts and action ids. The browser now reads `delivery`; the
+   five states and the repeat-retrieves-the-receipt rule are not built. **The related overclaim is
+   fixed**: the page no longer says a keystroke *landed*, because `verifyTarget` runs before the send
+   and nothing looks at the pane afterwards.
+
+**Done since this list was last written, so nobody fixes them twice:** the attention inbox has a
+consumer; every server timestamp is converted into the browser's clock at the parse boundary;
+`answeringEnabled`, `tmuxServerPid`, `verified` and `resolution`/`startedDir` are read; `clear()` has
+a route and a button; `/api/agents` is an alias whose description was the thing that was wrong; and
+`renderSpoken`'s compile guard — the half of that safety item that never landed — exists.
 
 **Two product questions are Greg's and are not blocked on anything.** Whether the cutover should
 widen the bind at all, and what to do about a card that draws **five identical full-width
@@ -1940,10 +1955,19 @@ stage.** Confusing them gets you a linter for a problem the compiler should have
       was a self-inflicted false positive because `steer-client.ts:51` writes `"api/steer/message"`
       with no leading slash — so match on substring, not prefix. Small surface, low noise, and it
       needs a short allowlist for the paths the Overseer and `curl` use honestly. **Gate it**, on
-      `scripts/check.ts`'s own rule: it is green the moment `/api/agents` is resolved.
-- [ ] **Resolve `/api/agents`**: either delete the alias or fix the five places in `live.ts` that
+      `scripts/check.ts`'s own rule — but note that `/api/agents` was resolved by keeping the alias
+      and fixing the prose (next entry), so **it is an allowlist entry rather than a zero**: the one
+      real finding on this tree is a deliberate exception now, and the check has to be able to say so
+      or it will be turned off the first time it fires.
+- [x] **Resolve `/api/agents`**: either delete the alias or fix the five places in `live.ts` that
       still call it "the poll". It is harmless — same handler — and it is the reason the check above
-      is not green on day one.
+      is not green on day one. **Resolved the second way, 2026-09-08: the prose changed and the alias
+      stayed.** Deleting a working endpoint to tidy a name is the worse trade — it costs one clause,
+      and a note or a bookmark outside this repo may still hold it. All five occurrences in `live.ts`
+      now say `/api/state`, with a paragraph at the top of that file and a comment at the mount in
+      `server.ts` saying that `/api/agents` is the original name, retained as an alias, called by
+      nothing here. **Which means the route check above still needs its allowlist** — this entry did
+      not make it green, it made the reason for the exception written down.
 - [x] **`renderSpoken()` reaches the drain.** `speaker` onto `SessionActionRequest`
       (`routes-actions.ts:395`, parsed at `:439`), carried on `QueuedItem`, applied in `drain.ts`'s
       `sendable()` at `:292`. **The wiring landed during the wave and the guard did not**, which is
@@ -1958,8 +1982,18 @@ stage.** Confusing them gets you a linter for a problem the compiler should have
       byte-identical, zero deletions in the file's diff. The failure it prevents is silent: an item
       built without a speaker does not throw and does not look wrong, it just reaches an agent as
       words indistinguishable from Greg's.
-- [ ] **`clear()` gets a route or gets deleted.** Either is fine; leaving a tested method nothing can
-      reach is not.
+- [x] **`clear()` gets a route or gets deleted.** Either is fine; leaving a tested method nothing can
+      reach is not. **It got a route** (`POST /api/actions/clear`, `routes-actions.ts`) and a button
+      (*Clear the queue*, in `SessionQueue`), 2026-09-08. Two things came out of building it that the
+      box did not anticipate. **`keptInFlight` is the feature, not a return value**: `clear()`
+      deliberately keeps a leased item, so both the confirmation and the result name what will NOT
+      go, by its words — a page that said only "cleared" would be the ambiguous negative this
+      postmortem is about. And **the body carries the item ids the reader was looking at**, frozen at
+      the tap, so an item queued by the Overseer between the preview being drawn and the tap is
+      refused (`stale-view`, 409) rather than destroyed unread; `{sessionId}` alone, which is all
+      `clear()` needs, cannot express *the list I read*. Verified by mutation: removing the route's
+      call to `clear()` reddens `expected [] to deeply equal [ 'q2', 'q3' ]` in
+      `tests/fleet-actions-route.test.ts`, which drives the real client over the real handler.
 
 #### The rule, which is the part that generalises
 
@@ -2213,6 +2247,101 @@ failed, a stored list was unreadable — each carrying its own `why`. **We do no
 producer keeps it deliberately as one thing, *nobody can tell you*, and splitting it here would put
 the same reasoning in two places. The `why` is rendered on screen rather than behind a disclosure,
 because "no pass has run yet" means wait and "the pass failed" means go and look.
+
+### 🔵 Stage v0.9a: the broadcast cannot reach the sessions that caused the load
+
+**Found by `spideryarn2-b6` on 2026-09-08 while building the Overseer's resource rules**, handed over
+rather than patched, and every claim below was re-measured here before it was written down.
+
+`broadcastRoute` keeps only recipients whose `drainGate` is `{kind: "now"}`
+(`routes-actions.ts:1705-1707`). A shell — where the text would be *executed* — and a session that is
+*working* are both left out. For a person pressing **Ease off**, that is defensible and the comment
+above it says so.
+
+**For a rule that fires *because* the box is under pressure, it inverts.** The more sessions are
+working, the fewer the broadcast reaches.
+
+**The first two numbers in this paragraph were wrong, both in the direction that favoured the stage,
+and the correction came from the person whose stage it was.** GPT Sol caught it reviewing their plan;
+`spideryarn2-b6` passed it on unprompted.
+
+- *"3 of 15"* mixed **8 agent sessions with 7 shells**. A shell was never eligible to be spoken to,
+  so counting shells in the denominator overstates what the route is missing. The honest reading of
+  20:25 is **3 of 8 agent sessions deliverable, 5 held because working, 7 shells never eligible** —
+  and the first reading off the corrected sampler is **4 of 7**.
+- *"the 5 it excluded were the ones consuming the box"* was **an inference nobody had earned**.
+  `working` describes a Claude pane's state; it does not establish that those sessions were
+  consuming the machine. Attributing load to sessions needs `health.ts`'s own attribution evidence,
+  which this dashboard has and that argument was not using.
+
+**What survives is the structural claim, and it is the part this stage rests on**: every working row
+is excluded by construction, and an all-working fleet makes the route refuse rather than degrade.
+That does not depend on any denominator. What the numbers were doing was saying how *often* the
+exclusion bites — which is the question the sampler exists to answer, and which was being
+overstated.
+
+**The sharp end is `total === 0`** (`:1710`). When every agent is working — the exact condition the
+action exists for — the route refuses the whole call with *"none of the rows you sent is at a prompt
+right now, so there is nobody to tell"*. It does not degrade. It declines, and it declines hardest at
+maximum need.
+
+#### The cooldown does not protect the path that fires under load
+
+`lastBroadcastAt = at` is stamped at `:1769`, **after** the `total === 0` refusal returns at `:1712`
+and after the dry-run branch. So a refused call never spends the cooldown: an unattended caller is
+refused, the clock is never started, and it may re-fire immediately. There is no *send* loop, because
+nothing is delivered — there is an unthrottled *refusal* loop, on a box already under pressure.
+
+**That is a constraint on every automated caller today**, not a future one, and it is why
+`spideryarn2-b6`'s rule carries its own interval and treats a refusal as the end of an attempt rather
+than the start of a retry.
+
+#### Why the obvious fix is wrong, and what the real one costs
+
+`drainGate` returns `{kind: "later"}` for a working session, and `queue.ts` and `drain.ts` already
+exist to hold and deliver exactly that. But `broadcastText` carries *"arm a wake-up ~N minutes from
+now"* and `renderBroadcast` computes N **at send time on purpose** — a slow fan-out must not hand out
+stale minute counts. Queue a broadcast for a session that reaches a prompt forty minutes later and it
+arrives telling the agent to wake at a time that has passed. **Worse than not arriving.**
+
+So the fix is to render at delivery rather than at enqueue — and it is **two changes, not one**:
+
+1. **A box-wide action would have to become queueable per session**, which means ANSWERING the
+   refusal at `:505` rather than deleting it: *"a box-wide action cannot be queued against one
+   session"*, because there is no single session whose order it belongs to. The argument not yet
+   made is that a broadcast wants a **held delivery in each of many** rather than a position in one
+   session's order, and that those are separable. That looks obvious, which is the reason to be
+   careful with it.
+2. **Then render `index`/`total` at delivery**, which is idiomatic here rather than novel:
+   `drain.ts`'s `sendable()` already renders the attribution at delivery for the same reason, and
+   says so — *a sentence written twenty minutes before it is typed has decayed by the time anybody
+   reads it*.
+
+#### Not started, and deliberately waiting on evidence
+
+Crossing a deliberate refusal needs better evidence than *it would reach more sessions*.
+`spideryarn2-b6` is sampling **both denominators** — agent sessions and total rows — with the full
+status histogram and the load ratio, every 30 seconds for 24 hours, recording an unreadable snapshot
+**as unreadable rather than as zero rows**. Reading it against agents rather than rows is the
+correction above; the series will allow either framing to be judged rather than requiring anybody to
+take one.
+
+**The early readings do not obviously support the stage.** Load `ratio1` has fallen to 0.26 and the
+agent count is dropping as sessions finish, which is the *recovers on its own* case — the one that
+kills this stage. One reading is not that result, but it was reported alongside the ones that
+favoured the fix rather than instead of them, which is the only reason it is worth anything.
+
+**A series showing reachability recovering on its own kills this stage**, which is the cheaper
+outcome and the one to hope for.
+
+- [ ] Answer or overturn the `:505` refusal, in writing, before any code.
+- [ ] Render `index`/`total` at delivery, following `sendable()`.
+- [ ] Say on the page what the route already answers: *"sent to 3 of 15 — 5 were working, 7 are
+      shells"*. The per-recipient outcomes are already in `result` and already drawn, but as a JSON
+      dump a reader scrolls past rather than a sentence they read. **Not a missing join** — checked —
+      a presentation gap.
+- [ ] A test that a refused call does not stamp the cooldown, so the behaviour above is a decision
+      rather than an accident. Whichever way it is decided, it should be decided.
 
 ### Later: the coordinator agent
 
