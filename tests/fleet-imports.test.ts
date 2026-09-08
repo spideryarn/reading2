@@ -95,6 +95,35 @@ function specifiers(src: string): string[] {
   return out;
 }
 
+/**
+ * **The shapes this walker cannot follow, refused outright rather than missed.**
+ *
+ * A regex walker reads `import … from "x"`, a bare `import "x"` and
+ * `import("x")` with a literal. It cannot read `require("x")`, an
+ * `import(\`…\`)` built from a template, or one built from a variable — so a
+ * `src/` import written any of those ways would pass this file in silence, and
+ * the architectural rule would be conventional rather than real. GPT Sol's
+ * review of the built code, finding 7.
+ *
+ * The honest options were an AST walker or this. This is chosen because the
+ * shapes are ones no file here has any reason to use: the fleet is ESM
+ * throughout and every one of its imports is static. **So they are banned rather
+ * than parsed**, which is a rule somebody can read in one line, and the failure
+ * says which file and which shape rather than silently under-reporting.
+ *
+ * If a legitimate dynamic import ever arrives, this is the line to revisit —
+ * deliberately, with an AST walker, rather than by widening the pattern.
+ */
+function unfollowableImports(src: string, file: string): string[] {
+  const bad: string[] = [];
+  if (/\brequire\s*\(/.test(src)) bad.push(`${file}: require(), which this walker cannot follow`);
+  /* `import(` not immediately followed by a quote: a template literal, a
+     variable, or a concatenation. */
+  if (/\bimport\(\s*[^"')\s]/.test(src))
+    bad.push(`${file}: a dynamic import whose specifier is not a string literal`);
+  return bad;
+}
+
 function resolve(from: string, spec: string): string | null {
   if (!spec.startsWith(".")) return null;
   let p = path.resolve(path.dirname(from), spec);
@@ -141,6 +170,16 @@ describe("what the fleet dashboard imports from src/", () => {
     const found = specifiers(readFileSync(path.join(ROOT, "src/web/useDictation.ts"), "utf8"));
     expect(found).toContain("./mic-devices.js");
     expect(found).toContain("react");
+  });
+
+  it("refuses the import shapes it cannot follow, rather than missing them", () => {
+    /* A walker that silently skips a shape reports the same clean result as one
+       that found nothing to report. So the shapes it cannot read are banned. */
+    const offenders: string[] = [];
+    for (const f of filesUnder(FLEET)) {
+      offenders.push(...unfollowableImports(readFileSync(f, "utf8"), path.relative(ROOT, f)));
+    }
+    expect(offenders).toEqual([]);
   });
 
   it("reaches exactly the leaf modules the rule allows, and no others", () => {

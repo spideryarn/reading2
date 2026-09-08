@@ -163,7 +163,38 @@ export function NewSessionPanel({ api }: { api: NewSessionApi }): ReactNode {
     context: { kind: "new-session" },
   });
 
+  /**
+   * **CLOSING THE PANEL MUST STOP THE MICROPHONE, because closing it unmounts
+   * nothing.**
+   *
+   * `open` only decides whether the box and its controls are *rendered*; this
+   * component stays mounted either way, so `useDictation`'s cleanup never runs
+   * and a dictation started before Close carries on recording behind a panel
+   * with no Stop button on it. There is no way back to it: the toggle is inside
+   * the branch that just disappeared.
+   *
+   * The product hit this exact shape in its Feedback dialog, and
+   * docs/project/dictation.md names it — *"if the box lives in a component that
+   * stays mounted when it disappears… closing it unmounts nothing"*. GPT Sol
+   * found it here as a P1 on 2026-09-08, in code written by somebody who had
+   * read that sentence and not applied it.
+   *
+   * `dictation.toggle`, not the field wrapper's `toggle`, which would put the
+   * focus back into a box that is no longer on screen.
+   */
+  const armed = dictate.dictation.armed;
+  const stopMic = dictate.dictation.toggle;
+  useEffect(() => {
+    if (!open && armed) stopMic();
+  }, [open, armed, stopMic]);
+
   const start = useCallback(async () => {
+    /* **The guard lives here as well as on the button**, because `disabled` is a
+       property of a rendered element and this is the action. A programmatic
+       call, or a keyboard path somebody adds later, would otherwise start an
+       agent on the rough live guesses — or, on Safari and Firefox, on nothing
+       that was said at all. GPT Sol's review of the built code, finding 6. */
+    if (dictate.sendBlocked) return;
     setBusy(true);
     setRefusal(null);
     setGaveUp(false);

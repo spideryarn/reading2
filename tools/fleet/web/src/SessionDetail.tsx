@@ -415,6 +415,12 @@ export function SessionDetail({
     box,
     context: { kind: "session", sessionId: row.id },
   });
+  /* Read at the moment of sending rather than captured in a closure: a
+     `useCallback` listing `dictate` would rebuild on every render, and this hook
+     re-renders while somebody is talking. The question is always "is it blocked
+     NOW", which is what a ref answers. */
+  const blocked = useRef(dictate.sendBlocked);
+  blocked.current = dictate.sendBlocked;
   const [outcome, setOutcome] = useState<SteerOutcome | null>(null);
   /**
    * The server's own sentence, once it has told us answering is switched off.
@@ -478,7 +484,15 @@ export function SessionDetail({
     [row, send, steer],
   );
 
+  /* **The submit rule at the action boundary, not only on the button.**
+     `disabled` stops a pointer; it does not stop a programmatic call, and it
+     does not stop a keyboard path somebody adds later. The invariant is that a
+     message never leaves this box while the microphone is on or the transcript
+     is still in flight — on Safari and Firefox the box holds nothing that was
+     said until the transcript lands. GPT Sol's review of the built code,
+     finding 6. */
   const onSend = useCallback(() => {
+    if (blocked.current) return;
     void send(() => steer.message(row, text), true);
   }, [row, send, steer, text]);
 
@@ -542,6 +556,8 @@ export function SessionDetail({
   const offerQueue = row.status.kind !== "idle" || hasDeliverable(waiting);
 
   const onQueue = useCallback(async (): Promise<void> => {
+    /* Same guard, same reason. See `onSend`. */
+    if (blocked.current) return;
     setBusy(true);
     const result = await actions.api.queueMessage(row, text);
     setQueueOutcome(result);
