@@ -6,7 +6,7 @@
  * `jobs.ts`, and for the same reason: a rule that decides to propose killing
  * four processes on a shared box is a decision somebody will want to reproduce
  * exactly, from the numbers it saw, months later. The impure halves live in
- * `rule-work.ts` (looking) and `scheduler.ts` (the ordering, and the runners).
+ * `rule-work.ts` (looking) and `rule-protocol.ts` (the ordering, and the runners).
  *
  * ## Why every knob is in here rather than in the code that runs it
  *
@@ -23,9 +23,12 @@
  * is what it hashes). Move the threshold from 4 hours to 4 minutes and the job
  * refuses to dispatch until a person re-pins it. **And the implementation is
  * pinned too**, as `documents` entries: this file, `rule-work.ts` and
- * `scheduler.ts`, digested, exactly as a standing job pins the document it is an
- * instruction to follow. See `rule-jobs.ts` for which files and why those — the
- * third was left out first time round, and GPT Sol's SC-2 is why that was wrong.
+ * `rule-protocol.ts`, digested, exactly as a standing job pins the document it
+ * is an instruction to follow. See `rule-jobs.ts` for which files and why those
+ * — the protocol was left out first time round, and GPT Sol's SC-2 is why that
+ * was wrong; 3a then pinned the whole of `scheduler.ts`, which was too broad,
+ * and 3b split the protocol into its own file so that the pin covers what
+ * decides and not what merely reports.
  *
  * ## `disposition` is the gate, and it is data
  *

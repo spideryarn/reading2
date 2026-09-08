@@ -1205,6 +1205,50 @@ survive, and rule 2 must act rather than propose. Today n=1. **The events rule 2
 rate gets measured**, so the observation is not merely a record, it is the instrument that decides
 the next version.
 
+#### What 3b part 1 landed: the protocol has its own file, and the pin follows it
+
+`tools/overseer/rule-protocol.ts` now holds the whole of what decides *whether and how a rule
+acts* — `startRule`'s disposition switch, `runProposingRule` and `runActingRule`, the shared
+`intend` (append-fsync-then-act), `settleRule`, and the fail-closed `record`. `scheduler.ts`'s rule
+arm is now one line: a call into it. `RULE_SOURCES` swapped `tools/overseer/scheduler.ts` for
+`tools/overseer/rule-protocol.ts`; `JobSpawn` and `SpawnJob` moved to `jobs.ts`, which already owns
+`JobOutcome`, so the pinned file need not import the unpinned one.
+
+**Re-pinned: `6a62bed1e623` → `95485a7dbe6f`.** Nothing the rule decides changed and no knob in the
+spec moved — one document in the list was swapped for another, and two of the three files had their
+prose corrected to name the new one.
+
+**The pair, demonstrated rather than asserted.** A test that only proves *editing the protocol
+disarms the rules* would also pass if `RULE_SOURCES` named the whole repository, so
+`tests/overseer-rules.test.ts` § "what a rule's pin covers, and what it deliberately does not"
+asserts both directions over a real temporary checkout that is really edited, and checks each is
+non-vacuous first (`describeReport` and `sweep` are confirmed to be in `scheduler.ts`; the ordering
+and the disposition switch are confirmed to be in `rule-protocol.ts`). Both were watched red before
+the move — the first on its assertion, the second because the file did not yet exist.
+
+Then the same three mutations against the live tree, with `npx tsx scripts/overseer-pins.ts` as the
+oracle:
+
+| mutation | pin |
+| --- | --- |
+| `describeReport`'s `dispatched` sentence reworded | **unchanged** — the false trip is gone |
+| `sweep`'s signature edited | **unchanged** |
+| `startRule`'s `switch (spec.disposition)` weakened to `as string` | **stale**, `95485a7dbe6f` → `9342726da4d6` |
+
+**And a near-miss worth more than the result.** The first attempt at mutation one used `sed`, and
+the `grep -c` that was meant to prove the edit had landed answered `0` because its pattern was wrong
+— so for one command I had "the mutation did nothing AND the pin is current", which is exactly the
+shape of the no-op mutation 3a shipped. What saved it was checking the file with `cat -A` rather
+than believing the grep. **The mutation harness now asserts on the file's own bytes before and
+after, and prints its sha256**; a mutation check whose landing is verified by a second fallible
+pattern is two chances to be told nothing.
+
+**What the split does NOT fix, said out loud.** The three pinned files are still shared by every
+rule, so adding rule 1 in part 2 re-pinned rule 2: `rules.ts` holds both rules' arithmetic and
+`rule-work.ts` both observers. It is a far smaller version of the problem — rules change rarely,
+log sentences change constantly — and the note is at `RULE_SOURCES`. Splitting the per-rule halves
+into per-rule files is the move if a third rule makes it bite.
+
 ### Stage 4 — the deferral queue
 
 Work the box cannot take now is written to the queue with its dispatch intent, and drained when

@@ -31,21 +31,35 @@
  * job does. Turning the observer into something that acted would otherwise
  * leave every pin valid, which is SP-1 word for word.
  *
- * **`scheduler.ts` is in too, and it was left out first time round.** The
- * argument for leaving it out was `standing-jobs.ts`'s: it is shared machinery,
- * every job goes through it, and a tripwire that mostly fires falsely teaches
- * whoever meets it to re-pin without reading. GPT Sol's SC-2 is that the
- * argument falls the wrong way *here*, because `scheduler.ts` is the code that
- * **interprets the hashed `disposition`** — so a change that bypassed its
- * dispatch left the rule's authorised hash perfectly current, and the
+ * **`rule-protocol.ts` is in too, and getting to it took two goes.** The
+ * argument for leaving the protocol out was `standing-jobs.ts`'s: it is shared
+ * machinery, every job goes through it, and a tripwire that mostly fires
+ * falsely teaches whoever meets it to re-pin without reading. GPT Sol's SC-2 is
+ * that the argument falls the wrong way *here*, because the protocol is the
+ * code that **interprets the hashed `disposition`** — so a change that bypassed
+ * its dispatch left the rule's authorised hash perfectly current, and the
  * fingerprint guarded the threshold while not guarding the thing that decides
  * whether to act on it. **The protocol that decides whether to act is more
  * load-bearing than the threshold it reads.**
  *
- * The cost is real and is accepted with its eyes open: an edit to the sweep, or
- * to a report's wording, disarms every rule until somebody re-pins. That is the
- * price of the guarantee, and `npx tsx scripts/overseer-pins.ts` prints the
- * number to copy.
+ * Stage 3a answered that by pinning the whole of `scheduler.ts`, which was
+ * right in principle and far too broad in practice: that file also carries
+ * session dispatch, the sweep and `describeReport`'s wording, so **every rule's
+ * authorisation was hostage to a file that changes for reasons having nothing
+ * to do with rules.** It re-pinned twice in one session. 3b moved the protocol
+ * into `rule-protocol.ts` and pins that instead — same guarantee, far fewer
+ * false trips — and `tests/overseer-rules.test.ts` § "what a rule's pin covers"
+ * asserts both directions over a real checkout, because a test proving only
+ * that the protocol is covered would also pass if this list named the whole
+ * repository.
+ *
+ * **The residual cost, said out loud rather than left to be discovered.** These
+ * three files are shared by every rule, so adding rule 1 re-pinned rule 2 —
+ * `rules.ts` holds both rules' arithmetic and `rule-work.ts` both observers. It
+ * is a far smaller version of what 3b fixed (rules change rarely; log sentences
+ * change constantly), and splitting the per-rule halves into per-rule files is
+ * the next move if a third rule makes it bite. `npx tsx scripts/overseer-pins.ts`
+ * prints the number to copy.
  */
 import { definitionHash, type AuthorisedRuleJob, type DefinitionHash, type JobDocument, type RuleJobDefinition } from "./jobs.js";
 import type { RuleId, RuleSpec } from "./rules.js";
@@ -95,31 +109,40 @@ export const RULE_LEASE_MS = 2 * 60_000;
 export const WEDGED_WORK_WHAT =
   "Propose, and never take, kills for work wedged on this box: the dashboard's own safe-kill dry run, filtered by age.";
 
-/** The implementation this job's authority covers. See the header for why `scheduler.ts` is one of them, and why leaving it out was wrong. */
-export const RULE_SOURCES = ["tools/overseer/rules.ts", "tools/overseer/rule-work.ts", "tools/overseer/scheduler.ts"] as const;
+/**
+ * The implementation every rule's authority covers: what it decides
+ * (`rules.ts`), how it looks (`rule-work.ts`), and the protocol that reads its
+ * hashed `disposition` (`rule-protocol.ts`).
+ *
+ * **`scheduler.ts` is deliberately NOT here**, and that is 3b's whole first
+ * half — see the header, and `rule-protocol.ts` for where the line is drawn.
+ */
+export const RULE_SOURCES = ["tools/overseer/rules.ts", "tools/overseer/rule-work.ts", "tools/overseer/rule-protocol.ts"] as const;
 
 export type RuleJobId = RuleId;
 
 /**
  * THE AUTHORISED FINGERPRINTS.
  *
- * Re-pinned 2026-09-08 against `rules.ts`, `rule-work.ts` and `scheduler.ts` as
- * they stood after GPT Sol's code review of stage 3a: `210968a360b9` →
- * `6a62bed1e623`. **Nothing the rule decides changed.** Three things moved it,
- * and all three are the mechanism working: `scheduler.ts` joined the pinned
- * documents (SC-2), `rule-work.ts` lost its actor so the shipped process holds
- * no acting capability (SC-2), and `rules.ts` encodes the spec through a mapped
- * type instead of a destructure, which relabelled the first line of the
- * canonical form (SC-4). The standing jobs did NOT move — the definition
- * encoding is byte-identical to the destructured one.
+ * Re-pinned 2026-09-08 for 3b part 1: `6a62bed1e623` → `95485a7dbe6f`.
+ * **Nothing the rule decides changed, and nothing about the spec changed** —
+ * one document in the list was swapped for another. `scheduler.ts` left
+ * `RULE_SOURCES` and `rule-protocol.ts` took its place, which is the whole of
+ * the split: the protocol that interprets the hashed `disposition` is still
+ * inside the fingerprint, and the sweep, the session dispatch and
+ * `describeReport`'s wording are no longer.
  *
- * Editing any of those files, or any knob in the spec below, moves this again
- * and the job stops dispatching until somebody has read what changed and copied
- * the new hash. `npx tsx scripts/overseer-pins.ts` prints it, and
- * `overseer status` says when it is stale.
+ * The pin before that was `210968a360b9` → `6a62bed1e623`, on 3a's code review:
+ * `scheduler.ts` joined the pinned documents (SC-2), `rule-work.ts` lost its
+ * actor (SC-2), and `rules.ts` moved to a mapped-type spec encoding (SC-4).
+ *
+ * Editing any pinned file, or any knob in a spec below, moves these again and
+ * the job stops dispatching until somebody has read what changed and copied the
+ * new hash. `npx tsx scripts/overseer-pins.ts` prints it, and `overseer status`
+ * says when it is stale.
  */
 export const AUTHORISED_RULE_HASHES: Readonly<Record<RuleJobId, string>> = {
-  "wedged-work": "6a62bed1e623",
+  "wedged-work": "95485a7dbe6f",
 };
 
 /** The spec, as it is authorised. Every knob, and `disposition: "propose"` is the one gate 3 turns on. */

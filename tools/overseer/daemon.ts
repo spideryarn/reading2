@@ -59,9 +59,10 @@ import type { AttentionList, StoredUsage, UsageReport } from "../fleet/wire.js";
 import { chooseUsage } from "./usage-carry.js";
 import { admissible, type AdmissibleSnapshot } from "./admissible.js";
 import { baselineOf, diff, sessionKey, type Baseline, type OverseerEvent, type SessionIdentity } from "./diff.js";
-import type { AuthorisedJob } from "./jobs.js";
+import type { AuthorisedJob, SpawnJob } from "./jobs.js";
 import { conditionTracker, describeNote, openNoteLog, type DaemonNote } from "./notes.js";
-import { describeReport, schedulerTick, type LostRecord, type ProposingRuleWork, type RuleRun, type SpawnJob } from "./scheduler.js";
+import type { ProposingRuleWork } from "./rule-protocol.js";
+import { describeReport, schedulerTick, type LostRecord, type RuleRun } from "./scheduler.js";
 import { parseAttempt, parseObservation, type JsonValue, type ObservedAttemptClock, type ObservedRow } from "./observation.js";
 import { fleetSource, type SourceMessage, type SourceOptions, type Transport } from "./source.js";
 import {

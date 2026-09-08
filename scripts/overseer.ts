@@ -35,7 +35,7 @@ import { gjdRemoteDispatch, jobsEnabled, JOBS_ENABLED_VAR } from "../tools/overs
 import { describeRuleJobs, ruleJobs } from "../tools/overseer/rule-jobs.js";
 import { RULES_ENABLED_VAR, ruleWork, rulesEnabled } from "../tools/overseer/rule-work.js";
 import { describeRuleOutcome } from "../tools/overseer/rules.js";
-import type { ProposingRuleWork } from "../tools/overseer/scheduler.js";
+import type { ProposingRuleWork } from "../tools/overseer/rule-protocol.js";
 import { describeStandingJobs, standingJobs } from "../tools/overseer/standing-jobs.js";
 import type { AttentionList } from "../tools/fleet/wire.js";
 import type { OverseerEvent } from "../tools/overseer/diff.js";

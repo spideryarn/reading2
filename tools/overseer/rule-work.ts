@@ -2,7 +2,7 @@
  * **The impure half of a rule: how it looks at the box, and what it is allowed
  * to do about what it sees.**
  *
- * `rules.ts` is the arithmetic and `scheduler.ts` is the ordering. This file is
+ * `rules.ts` is the arithmetic and `rule-protocol.ts` is the ordering. This file is
  * the one function those two are given — deliberately small, because everything
  * a person would want to argue with afterwards is in the pure half.
  *
@@ -25,8 +25,8 @@
  *
  * There is **no actor in this file**. `ruleWork` hands the daemon `observe` and
  * a pid, so the process holds no capability to act on a proposal, and a spec
- * carrying `disposition: "act"` meets a refusal from `scheduler.ts` naming the
- * actor it does not have. That replaced a `refusingActor` which answered
+ * carrying `disposition: "act"` meets a refusal from `rule-protocol.ts` naming
+ * the actor it does not have. That replaced a `refusingActor` which answered
  * `refused` politely: GPT Sol's SC-2 is that such a thing is a runtime
  * conditional wearing the clothes of a boundary.
  *
@@ -36,7 +36,7 @@
  * which is Greg's to make and nobody else's.
  */
 import type { ActionId, KillPolicy } from "../fleet/actions.js";
-import type { ProposingRuleWork } from "./scheduler.js";
+import type { ProposingRuleWork } from "./rule-protocol.js";
 import type { RuleObservation, RuleSpec, WedgedProcess } from "./rules.js";
 
 /** The env var that arms the deterministic rules ALONE. See `scripts/overseer.ts` § schedulerWiring for why that is a separate switch. */
@@ -184,8 +184,8 @@ export function fleetObserver(options: ObserverOptions): ProposingRuleWork["obse
  * conditional in the clothes of a boundary: the process held the capability and
  * one edit stood between it and a kill. The refusal is now structural. A daemon
  * given this object has no `act` to call, and a spec carrying
- * `disposition: "act"` meets a `refused` from `scheduler.ts` naming the missing
- * actor, exactly as a session job does in a process with no `spawn`.
+ * `disposition: "act"` meets a `refused` from `rule-protocol.ts` naming the
+ * missing actor, exactly as a session job does in a process with no `spawn`.
  *
  * SP-7 is why there is nothing to put here: *an unattended process asserting the
  * `confirm: true` a kill route demands is the authority grant itself*, and that

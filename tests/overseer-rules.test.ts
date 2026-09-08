@@ -21,7 +21,7 @@
  * observer is a function the test supplies, which is the seam that exists so
  * this file does not need a dashboard.
  */
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { appendFileSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -452,14 +452,15 @@ describe("the shipped rule job, and its pin", () => {
     if (job === undefined) throw new Error("expected the wedged-work rule");
     expect(job.definition.id).toBe("wedged-work");
     expect(job.definition.documents.map((d) => d.path)).toEqual([...RULE_SOURCES]);
-    // AND `scheduler.ts` IS ONE OF THEM. It was deliberately left out on the
-    // argument that shared machinery in a tripwire mostly fires falsely; GPT
-    // Sol's SC-2 is that this falls the wrong way, because `scheduler.ts` is
-    // what interprets the hashed `disposition` — so a change bypassing the
-    // switch used to leave the rule's authorised hash perfectly current. The
-    // protocol that decides whether to act is more load-bearing than the
-    // threshold it reads.
-    expect([...RULE_SOURCES]).toContain("tools/overseer/scheduler.ts");
+    // AND `rule-protocol.ts` IS ONE OF THEM. The protocol was deliberately left
+    // out on the argument that shared machinery in a tripwire mostly fires
+    // falsely; GPT Sol's SC-2 is that this falls the wrong way, because the
+    // protocol is what interprets the hashed `disposition` — so a change
+    // bypassing the switch used to leave the rule's authorised hash perfectly
+    // current. The protocol that decides whether to act is more load-bearing
+    // than the threshold it reads. Which file it is in is the other half, and
+    // the describe below asserts both directions of it.
+    expect([...RULE_SOURCES]).toContain("tools/overseer/rule-protocol.ts");
     // GATE 3. Not a comment: the field is hashed, so this is also what stops it
     // being changed quietly.
     expect(job.definition.work.rule.disposition).toBe("propose");
@@ -496,6 +497,80 @@ describe("the shipped rule job, and its pin", () => {
     expect(off).toContain(RULES_ENABLED_VAR);
     expect(armed).not.toContain(RULES_ENABLED_VAR);
     for (const sentence of [off, armed]) expect(sentence).toContain("wedged-work");
+  });
+});
+
+/**
+ * **WHAT THE PIN COVERS, AND WHAT IT DELIBERATELY DOES NOT — and the pair is
+ * the whole point.**
+ *
+ * A test asserting only that editing the protocol disarms the rules proves
+ * nothing about over-breadth: adding the entire repository to `RULE_SOURCES`
+ * would pass it. The finding these two tests exist for is the OTHER half —
+ * `scheduler.ts` also carries session dispatch, the sweep and `describeReport`'s
+ * wording, so pinning all of it made every rule's authorisation hostage to a
+ * file that changes for reasons having nothing to do with rules. It re-pinned
+ * twice in one session, and with three rules an edit to a log sentence would
+ * disarm all three.
+ *
+ * So both directions are asserted, over a real checkout that is really edited,
+ * and each is checked to be non-vacuous first: the sentence and the sweep are
+ * confirmed to live in `scheduler.ts`, and the ordering is confirmed to live in
+ * the file that IS pinned.
+ */
+describe("what a rule's pin covers, and what it deliberately does not", () => {
+  const PROTOCOL = "tools/overseer/rule-protocol.ts";
+  const SCHEDULER = "tools/overseer/scheduler.ts";
+
+  /** A checkout holding only the files a pin reads, plus the one it must not. */
+  function checkout(): string {
+    const root = tempRoot();
+    mkdirSync(join(root, "tools", "overseer"), { recursive: true });
+    for (const path of [...RULE_SOURCES, SCHEDULER]) copyFileSync(join(REPO, path), join(root, path));
+    return root;
+  }
+
+  function hashOf(root: string): string {
+    const job = ruleJobs(root).jobs[0];
+    if (job === undefined) throw new Error(`no rule job was built from ${root}`);
+    return definitionHash(job.definition);
+  }
+
+  /** An edit a person would actually make, and it is asserted to have landed — a no-op edit would make either test green for nothing. */
+  function edit(root: string, path: string, line: string): void {
+    const before = readFileSync(join(root, path), "utf8");
+    appendFileSync(join(root, path), line);
+    expect(readFileSync(join(root, path), "utf8")).not.toBe(before);
+  }
+
+  test("EDITING THE SCHEDULER'S REPORTING DISARMS NOTHING — the false trips this split exists to stop", () => {
+    // NON-VACUOUS FIRST. The claim is about `describeReport` and the sweep, so
+    // this asserts they are in the file the next line says is unpinned.
+    const scheduler = readFileSync(join(REPO, SCHEDULER), "utf8");
+    expect(scheduler).toContain("export function describeReport");
+    expect(scheduler).toContain("function sweep(");
+    expect([...RULE_SOURCES]).not.toContain(SCHEDULER);
+
+    const root = checkout();
+    const before = hashOf(root);
+    edit(root, SCHEDULER, "\n// a report sentence, reworded\n");
+    expect(hashOf(root)).toBe(before);
+  });
+
+  test("EDITING THE PROTOCOL DISARMS EVERY RULE — the guarantee SC-2 asked for, kept", () => {
+    // NON-VACUOUS FIRST, in the same way: the append-before-act ordering and the
+    // disposition switch have to be in the file that is pinned, or this test is
+    // asserting something about an empty file.
+    const protocol = readFileSync(join(REPO, PROTOCOL), "utf8");
+    expect(protocol).toContain('kind: "rule-intended"');
+    expect(protocol).toContain("runProposingRule");
+    expect(protocol).toContain("spec.disposition");
+    expect([...RULE_SOURCES]).toContain(PROTOCOL);
+
+    const root = checkout();
+    const before = hashOf(root);
+    edit(root, PROTOCOL, "\n// the ordering changed\n");
+    expect(hashOf(root)).not.toBe(before);
   });
 });
 
