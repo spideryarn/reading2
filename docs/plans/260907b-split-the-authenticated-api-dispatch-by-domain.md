@@ -3,10 +3,17 @@
 Status as of 2026-09-07: **the expensive part is behind us; what remains is mechanical.** Stages 1,
 1b, 1c, 2, 3a, 3b, 3c, 4a, 4b and 5 are landed and reviewed. `AUTH_ROUTES` holds **25 of the 81
 guards** (billing, jobs/uploads, referee, search); **56 remain**, and **chat is the next slice — and
-it is claimed by 260907e**, which takes it on waking at 05:17. Check `ListAgents` and ask before
-starting any slice: referee was built twice, in parallel, eleven minutes apart, because both plans
-queued it and neither session announced. Biome on `serveAuthenticatedApi`: **244 → 234 → 183 → 164 →
-153**.
+it is claimed by 260907e** (`docs/plans/260908a-chat-and-live-sessions-join-the-route-table.md`).
+Check `ListAgents` and ask before starting any slice: referee was built twice, in parallel, eleven
+minutes apart, because both plans queued it and neither session announced. Biome on
+`serveAuthenticatedApi`: **244 → 234 → 183 → 164 → 153**.
+
+**Four holes were found inside this plan's own safety net, and all four are fixed** — the `const`
+hole in `literalConstants` (stage 3c), the last-match-wins AST extractor (the merge), the referee
+grace window that spared a row regardless of its lock (stage 4a), and the leftover-guard filter that
+could not see a regex route (below). None was found by reading; every one was found by asking what it
+would take to make the check fail. That is the transferable result of this job, more than the
+migration is.
 
 **This supersedes an earlier "done enough to stop here."** That recommendation rested on a cost
 estimate that was wrong — see § *Fable settles the end-state, and corrects the price*. The remaining
@@ -748,7 +755,7 @@ vitest reported three files passing rather than complaining about the fourth. Re
 passed` count against the number of paths you passed; when a test is load-bearing evidence, that
 count is part of the evidence.
 
-### The moved-domains check was vacuous for every regex route
+### The leftover-guard filter could not see a regex route, and so never fired
 
 Found 2026-09-08 while answering a peer's question about which prefixes chat spans — so, by luck
 again rather than by method. § *answers the moved domains from the table, not from the chain*
@@ -759,8 +766,16 @@ only ever catch a **literal** route left behind — which is why nobody noticed:
 billing are literals, and they were the first domains to move.
 
 **Measured rather than reasoned:** adding `/api/chat` to `moved` with all nine `/api/chat` guards
-still in the chain left the suite **green at 326**. Referee and search are entirely regex, so for the
-last two slices that assertion verified nothing while reading in review as though it had.
+still in the chain left the suite **green at 326**.
+
+**Scope, precisely** (260907e's correction — an earlier draft here overstated it). The *whole* test is
+not vacuous: the exact `toEqual` above it, the complete set of table pair keys, is real, does bite,
+and is the part a stage edits. **Only the `moved` prefix filter below it was dead.** But within its
+own remit it was worse than "weak": since a regex route can never match, the filter has been unable
+to catch **the one failure it exists for** — a route that is in the table *and* still in the chain —
+for **every slice since jobs and uploads**. Referee and search each passed a review in which that
+assertion could not have failed. Recorded in those terms because the next sweep will otherwise read
+"a leftover check has guarded this since stage 3a" as coverage, and it was not.
 
 Fixed with a `pathish(match)` helper that drops the backslashes; the result is only ever searched for
 a prefix, so `\w` → `w` is harmless. The same probe now fails, naming all nine guards.
