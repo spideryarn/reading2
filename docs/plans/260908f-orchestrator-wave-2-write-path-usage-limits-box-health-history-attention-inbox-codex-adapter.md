@@ -124,7 +124,7 @@ six sessions can now build in parallel without a negotiation between them.
 |---|---|---|
 | **A** attention | the five types, verbatim, in `wire.ts` (`4d5cc454`) | the classifier, and the evaluation that justifies it |
 | **B** usage | the dashboard's `Pause` contract (`f1c34e96`) | the collector and the 429 ground truth |
-| **C** harness | shape agreed with the dashboard; two live findings (below) | `harness.ts`, and moving `steer.ts`'s refusal to read it |
+| **C** harness | **DONE** (`5c2e31cb`) — six arms, one `can: true`, Sol-reviewed | nothing; the `steer.ts` inline change is queued behind `fleet-approval-binding` |
 | **D** health | seam agreed (`refreshOnce`, not `server.ts`); `lock.ts` extracted for it | retention and the drawing |
 | **E/F** dictation | file split agreed with the dashboard | all of it |
 | **A5** | **closed**, no code | nothing |
@@ -143,12 +143,66 @@ six sessions can now build in parallel without a negotiation between them.
    union in Stage A is load-bearing rather than fastidious, and why a `prose` item gets **no answer
    control at all** in v1.
 
-**And one cost finding, which is not engineering:** `w2-harness-adapter` found **two orphaned paid
-`gpt-5.6-sol --effort high` reviews running under `ppid 1`**, attributable to no session, which
-nothing on the dashboard can see or stop. Related to a trap already recorded — a killed codex run
+**And one cost finding, which is not engineering — stated with its timestamp, because that turned out
+to matter.** **Every time below is UTC**, which is not pedantry — the box runs BST, and a mislabelled
+hour is the fourth instance of the error this section is about. At **~12:30 UTC** `w2-harness-adapter`
+found **two orphaned paid `gpt-5.6-sol --effort high` reviews running under `ppid 1`**: the Bash-tool
+shell had been reaped, leaving 45-minute jobs reparented to init, attributable to no session and
+invisible to `work.ts`, which only walks *down* from a pane. **At 13:05 UTC there were none** — every
+`ppid 1` process on the box was a system daemon.
+So the finding is **real but transient**: not a leak that accumulates, but a window during which a
+paid job cannot be attributed or stopped. Related to a trap already recorded — a killed codex run
 still writes its `--output` file, so a stale review is indistinguishable from a fresh one and both the
 exit code and file-exists pass. An orphan whose output path is later reused is that trap with a long
 fuse.
+
+The one genuinely long-lived orphan is `bash /tmp/fake-codex-qAz9Um/codex`, reparented **6 days 20
+hours** ago at 1.7 MB. That is the **fake** codex from a test harness — the same one whose existence
+shaped the decision not to peel shells in `work.ts` — leaked from a test run last week. Harmless, and
+a live specimen of what the recogniser is built to refuse.
+
+### "There are none" is a reading, not a property
+
+The sharpest thing Stage C produced, and it generalises past Codex. At **11:58** the honest answer was
+zero Codex panes, exactly as the brief predicted — a Codex here is always a Claude session's child.
+By **12:15** there were three, two of them a bare interactive `codex` TUI under a `bash -l`. The
+module nearly shipped a comment asserting that an interactive Codex had never existed on this box,
+**minutes before two did**.
+
+Nothing was wrong with the first reading. What was wrong was the tense it was about to be written in.
+The same fragility applies to *"35 `auto`, 1 `default`"* earlier the same day, and to every count in
+this doc: **the honest form of a fleet measurement is the timestamp**, and a sentence that drops it
+has converted an observation into a claim about the world.
+
+**And knowing the lesson did not prevent it, one paragraph later.** The orphan finding above was
+written as *"two orphaned reviews are running"*, which was false by the time anybody read it — by the
+same author, minutes after writing the rule down. Then the correction repeated the shape a third time:
+two agents walked the process table, both reported zero orphans, and called that corroboration —
+except the walks were at **13:03 and 13:05 UTC**, **two minutes apart**. They looked an hour apart
+because one was quoted in BST and the other in UTC. Two readings two minutes apart are one observation
+with a wide error bar, and the sequence was backwards in the draft as well.
+
+**And a fourth, found by auditing rather than by noticing.** The three-column measurement table
+labelled its last column `13:30 UTC`; the reading was taken between a launch at 13:28 **local** and a
+clock check at 13:32 **local**, so it was **~12:30 UTC** — local time wearing a UTC label. The
+committed files were clean, because those timestamps came from `date -u` beside the capture. **The
+wrong numbers were all in prose**, which is the tell: the machine-produced ones survived and the
+hand-written ones did not.
+
+**So the lesson does not transfer by being remembered, and the reason is that it keeps changing
+clothes**: counting a population, then corroborating a claim, then mistaking co-located readings for
+independent ones, then mislabelling a timezone. Four instances in one stage, two of them *after* the
+rule had been written down by the person who then broke it. The version that catches all four is
+mechanical rather than remembered — **the instant a fleet number was taken travels with the number, in
+one timezone, as a field**, the way `collectedAt`, `scannedAt` and `waitingSince` are fields in every
+type built today rather than habits. The audit is the evidence for that: **every timestamp produced by
+`date -u` beside its capture was right, and every one typed into prose was wrong.** So if the attention
+work ever surfaces fleet counts to Greg, the count and its instant must be one value, not a sentence a
+person assembles. What actually
+settled the orphan question was not a second reading at all but a **mechanism**: an orphan appears
+when a Bash-tool shell is reaped mid-run and leaves when the job ends, so the population is bounded by
+concurrent reviews rather than growing. That argument would hold with zero readings, which is what
+makes it the evidence.
 
 ## Stages
 
@@ -307,6 +361,194 @@ process tree, because **4 sessions were running it and 0 showed as anything but 
 
 **Done looks like**: the fleet can say *this is a Codex job and you cannot type at it* as a typed
 fact rather than a special case buried in `steer.ts`.
+
+#### What landed, 2026-09-08 (`w2-harness-adapter`)
+
+- **`HarnessKind`, `Capability`, `HarnessCapabilities` in [`tools/fleet/wire.ts`](../../tools/fleet/wire.ts)** —
+  types only, because that file is compiled a second time under the browser's DOM-only project and
+  may hold no runtime value and no import. Placement decided by `claude-agents-dashboard`, which owns
+  the row type; it landed `wire.ts` itself twenty minutes before this stage needed it.
+- **`Harness`, `HarnessUnknownCause`, `classifyPaneHarness`, `describeHarness` and the
+  `HARNESS_CAPABILITIES` table in [`tools/overseer/harness.ts`](../../tools/overseer/harness.ts)** —
+  the table is the `const`, so it lives here rather than on the wire. `Record<HarnessKind, …>` makes
+  a new arm that declares nothing a build failure; `describeHarness` is an exhaustive switch with a
+  `never`.
+- **Six arms, not four**: `claude-code`, `claude-headless`, `codex-batch`, `codex-interactive`,
+  `shell`, `unknown`. Two more than the plan asked for, and both earned their place — see below.
+- **31 tests in `tests/overseer-harness.test.ts`**, all written red first, plus two new real fixtures.
+  Five mutations of the finished code were each caught by the test that names them.
+- **`steer.ts` got a header pointer only**, deliberately: see *What the plan got wrong*, item 4.
+
+**Nothing renders it yet, and that is the stage boundary rather than an omission.** `classifyPaneHarness`
+and `capabilitiesOf` are called by their tests and by nothing else on `dev`. Putting a harness on a
+row means editing `collect.ts` / `status.ts` / `web/`, which are `claude-agents-dashboard`'s files;
+the wire types are in `wire.ts` precisely so it can do that without a second declaration. The
+Overseer's own consumer (a harness on a stored observation) is a later stage and is not smuggled in
+here. If this sits unrendered for a week, that is a coordination failure worth noticing — not
+evidence the type was wrong.
+
+#### What the plan got wrong
+
+**1. "Half of this exists" understated it, and "what does not exist is the type" was exactly right.**
+No complaint — this was the most accurate sentence in the stage.
+
+**2. Four arms would have produced the UI that lies the principle warns about.** The plan says "a
+`Harness` discriminated union"; four kinds are not enough to be honest with. The reviewer was asked
+outright whether six was over-built and which two it would cut, and answered the other way:
+
+> I would keep all six union arms. `claude-headless` and `codex-batch` are precisely the two arms
+> that prevent "same executable means same capability"; cutting either recreates the lie this stage
+> is intended to remove.
+>
+> — GPT Sol, 2026-09-08
+
+That is a better argument for the extra arms than the one they were added on, which was only "it
+matched zero panes today, keep it anyway". Concretely:
+
+- `claude --print` is a Claude that **cannot** take a keystroke — it read its prompt once at startup
+  and never reads the tty again. Folded into `claude-code`, the page draws a "send" on it.
+- A Codex **batch** job is refused because there is no stdin at all (`scripts/subagent-cli.ts` spawns
+  with `fd 0 = 'ignore'`, "the load-bearing anti-hang guarantee"). An **interactive** Codex is
+  refused because *nobody here has ever tried it* — unproven, not impossible. One `why` string
+  cannot say both, and the difference is what decides whether a later stage should attempt it.
+
+**3. The measurement changed under the stage, twice, and that is the finding.**
+
+| | 11:58 UTC | 12:15 UTC |
+|---|---|---|
+| panes | 22 | 26 |
+| `claude-code` | 15 | 17 |
+| `shell` | 7 | 6 |
+| `codex-batch` | **0** | **1** |
+| `codex-interactive` | **0** | **2** |
+| `unknown` | 0 | 0 |
+
+At 11:58 the honest answer was the one the brief predicted: *no Codex session has ever been a fleet
+row on this box; a `codex exec` is always a Claude session's child or an orphan.* Seventeen minutes
+later that was false — one pane was `tmux-job.ts` running `run-codex.ts` directly, and **two were a
+bare interactive `codex` TUI under a `bash -l`**, verified against their raw command lines and
+captured as `codex-batch-pane.txt` and `codex-interactive-pane.txt`. Neither reading was wrong.
+**"There are none" is a reading, not a property**, and a design that had hard-coded the 11:58 answer
+would have shipped an arm marked dead code that was live before the commit landed.
+
+**4. "Move steer.ts's Codex refusal so it reads the capability" describes something that was never
+in `steer.ts` as code.** What is there is (i) a header bullet asserting the fact in prose and (ii)
+`verifyTarget`'s `no-claude-in-pane`, which refuses Codex, bare shells and dead panes *incidentally*,
+by requiring a live `claude --session-id <uuid>` descendant. Making `verifyTarget` genuinely consult
+a harness capability would need a full command table it does not read — a new `io` call on the send
+path — which buys nothing in a stage where every non-Claude kind refuses anyway. So: the header
+bullet now names `HARNESS_CAPABILITIES` as the owner of the fact and forbids restating it, and the
+inline refusal sentence is **left for a follow-up**, by agreement with `fleet-approval-binding`
+(restructuring that file the same afternoon) and `claude-agents-dashboard`. Nothing behavioural
+waits on it.
+
+#### The cross-family review, and what it changed
+
+GPT Sol, one round, high effort — prompt in
+[260908f-stage-c-code-review-prompt.md](260908f-stage-c-code-review-prompt.md), answer in
+[260908f-stage-c-code-review-sol-r1b.md](260908f-stage-c-code-review-sol-r1b.md). It found **no P0**
+and confirmed the stage adds no delivery path. It found four real defects, all fixed, and each fix
+was then mutated back to check the new test catches it:
+
+1. **P1, a false capability grant.** `claude --session-id abc --print do the thing` classified as
+   `claude-code`, and the table then granted prose steering on a headless run — the exact lie the
+   stage exists to prevent, sitting in the recogniser, because it anchored on the *first* argument
+   only. The parser now walks the whole leading option region; `--print` wins; and it stops at the
+   first bare word so a *prompt* containing `--print` cannot flip a live session to headless.
+2. **P1, Codex mode read from the wrong end of the line.** `codex --help` gives
+   `codex [OPTIONS] <COMMAND>`, so global options come *before* the subcommand and
+   `codex --model x review the diff` is a non-interactive review — which the anchored test called
+   interactive, and which `work.ts` missed entirely. **A test in this repo pinned that wrong answer**;
+   it is replaced. `parseCodexInvocation` now skips the option region, and refuses to eat a known
+   subcommand as a flag's value. It also stops calling `codex mcp-server` / `codex login` an
+   interactive Codex: utility subcommands are not a harness at all.
+3. **P2, a malformed tree could return a *steerable* Claude.** Selection returned at the first level
+   with a hit, so a cycle elsewhere was never reached. Structure is now validated over the whole
+   reachable subtree *before* anything is selected — including before the depth-0 check, which used
+   to answer for a self-parented pane without walking anything.
+4. **P2, `why` could be empty.** A probe that failed without a sentence produced
+   `{cause: "process-table-unreadable", why: ""}` — a greyed-out button with no reason beside it.
+   Every `unknown` now goes through one constructor that refuses a blank.
+
+Plus two contract corrections: `shell.command` is now actually truncated (the type promised it and
+the code did not), and two comments that claimed more than the data supports were narrowed — the
+`/tmp` guard checks the *spelling* of argv[0], not where the binary is, and `shell` is a claim about
+argv[0]'s basename, not about the executable's identity.
+
+**Deferred rather than fixed, with reasons:**
+
+- **Sol's P3, a seventeenth hand-written join: `recogniseClaude` here and `isClaudeForSession` in
+  `steer.ts` both read Claude's argv, and disagreed.** Sol is right, and the narrower half is fixed
+  (this parser now reads `--session-id=abc`, which steer.ts accepted and it did not). Extracting one
+  shared parser waits for `fleet-approval-binding`'s restructure, which Sol itself recommended.
+- **Reading `/proc/<pid>/cmdline` for NUL-separated argv.** The right fix for the quoting problem,
+  and refused for v1: it is a syscall per candidate against a process that may exit mid-read, which
+  is a different design for the probe rather than a better parser. The cost is bounded and now has a
+  test naming it — `codex 'review this diff'`, an interactive session with one prompt argument,
+  arrives flattened and identical to a batch `codex review this diff` and is reported as batch. In
+  v1 both answers refuse steering, so the cost is a wrong label rather than a wrong action.
+
+**Sol's warning about the stage after this one, kept because it is the trap:** if
+`codex-interactive` is ever flipped to `can: true`, this sequence sends prose to a *shell* —
+classify `bash -l → codex`; the Codex exits; the shell takes the tty back; a stale capability
+authorises `tmux send-keys`. **Do not implement that stage by changing one boolean.** It needs a
+send-time identity check, or better, a session-addressed Codex control channel instead of tty
+injection.
+
+#### Two findings that are not this stage's to fix
+
+**A paid Codex review can end up belonging to no session at all.** At 11:58, two of the three running
+`codex exec` processes had an `npm exec` with `ppid 1`: the Bash-tool shell that launched them had
+been reaped, leaving a 45-minute `gpt-5.6-sol --effort high` run reparented to init. They were in
+`fb2c-feedback-button-on-homepage` and `command-bar-commands-and-place`. At 12:15 one orphan was
+still running. **`work.ts` only ever walks DOWN from a pane, so it cannot see these** — the dashboard
+cannot show them, attribute them, or stop them, and nothing bills them to anybody. That is a cost
+question as much as an engineering one, and `claude-agents-dashboard` has it to surface.
+
+**It is a WINDOW, not a leak, and the difference decides what to do about it.** The claim rests on the
+**process lifecycle**, not on a count: an orphan is created when a Bash-tool shell is reaped while its
+`run-codex.ts` child is still running, and it ends when that review ends. So the population is bounded
+by the number of concurrent reviews and cannot grow on its own. **That argument would hold with zero
+readings taken**, which is what makes it the load-bearing part. What is worth fixing is the window
+during which a paid job cannot be attributed or stopped — not a growing population of abandoned ones.
+
+Two walks are consistent with it and neither establishes it. At **13:03 UTC** the two live `codex exec`
+runs (`fleet-dictation`'s and `fleet-approval-binding`'s) both traced up to an
+`sh -c ( npx tsx run-codex.ts … )` whose parent is the **tmux server**, so both were ordinary
+`codex-batch` *panes* — the shape `codex-batch-pane.txt` captures — attributable and stoppable;
+`orchestrator-setup` walked every `ppid 1` process at **13:05 UTC** and found none.
+
+**Those two readings are two minutes apart, not an hour**, and an earlier draft of this paragraph
+presented them as independent corroboration because one was written in BST (14:05) and one in UTC
+(13:03) with no note that the box runs UTC+1. Two observations two minutes apart are one observation
+with a wide error bar. **This is the sample-window error for the third time in one stage** — first as
+the Codex count, then as "two orphans are running right now" (which would have been false by the time
+anybody read it), now as a timezone making two near-simultaneous readings look like a trend.
+
+**And the third one is why "I have learned this" is not a defence.** The lesson as written above is
+about *counting a population*; it recurred in the shape of *corroborating a claim*, which is the same
+error wearing different clothes and did not trip the memory of the first one. The version that catches
+both is mechanical rather than remembered, and it is the discipline everything else built today
+already follows: **a fleet number carries the instant it was taken, in one timezone, in the sentence
+itself** — the way `collectedAt` and `scannedAt` are fields rather than habits.
+
+**One `ppid 1` process really is long-lived, and it is the fake.**
+`bash /tmp/fake-codex-qAz9Um/codex -o /tmp/run-codex-gc.txt`, reparented to init **6 days 20 hours**
+ago by a test run last week, 1.7 MB, costing nothing. It is a live specimen of exactly what the
+recogniser is built not to be fooled by — still on the box, still carrying `codex` as a basename,
+still correctly not recognised, because shells are never peeled and nothing under `/tmp` is an
+installed tool.
+
+**The process table cannot say which process is reading the tty, and that is now closed rather than
+open.** Measured across all 22 panes: `tpgid` equalled the pane's own `pgid` on 21 of them, and **0
+of 15 `claude` processes had a process group of their own** — the job shell, the `claude`, and
+everything Claude shells out to share one group, because a non-interactive `bash script.sh` does no
+job control. The 22nd pane is the positive control: the one interactive `bash -l`, where a
+foreground child *does* get its own group, which is how we know the reading works.
+`fleet-approval-binding` measured the same thing independently on three panes the same morning. So
+**`HARNESS_CAPABILITIES` is a declaration about how a session was launched, not a verified fact about
+who holds the terminal**, and it cannot be made into one at this seam. Named in `harness.ts`'s module
+comment rather than left to be discovered.
 
 ### Stage D — box-health history (`fleet-health-history`)
 

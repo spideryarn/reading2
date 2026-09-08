@@ -3,14 +3,58 @@
 The **Feedback** button, the dialog behind it, and the two places a bug report ends up. Part of
 [dev-and-deployment-overview.md](dev-and-deployment-overview.md).
 
-**One dialog, two buttons, since 2026-09-06.** The dialog is mounted once, at the signed-in `App`
-level, and hands `open()` down through a context — otherwise a bar that unmounts takes a half-written
-report with it. The button is in the window's top-right corner on most pages and at the right-hand
-end of the bottom bar on the three that mount a `Dock` — the article, its metadata page and its
-tweets page, each in an owner's and a visitor's shape
-([260905g](../plans/260905g-move-the-wordmark-and-feedback-button-into-the-dock.md)). On a phone that
-costs it being always-visible: the bar's row already scrolls, and this button is at the end you have
-to drag to. Taken deliberately — if reports from phones fall off, that is the first place to look.
+**One dialog, three shapes of button, since 2026-09-08.** The dialog is mounted once, at the
+signed-in `App` level, and hands `open()` down through a context — otherwise a bar that unmounts
+takes a half-written report with it. The button is at the right-hand end of the bottom bar on the
+three pages that mount a `Dock` — the article, its metadata page and its tweets page, each in an
+owner's and a visitor's shape
+([260905g](../plans/260905g-move-the-wordmark-and-feedback-button-into-the-dock.md)); in the shelf's
+own masthead row on the homepage (§ below); and fixed in the window's top-right corner everywhere
+else. On a phone the bar's copy costs it being always-visible: that row already scrolls, and this
+button is at the end you have to drag to. Taken deliberately — if reports from phones fall off, that
+is the first place to look.
+
+**The rule behind those three is "the page's own chrome cluster, and the corner only if there
+isn't one."** The corner is the fallback, not the convention: it was every page's until the reading
+view grew a bar, and it stopped being the shelf's when the shelf's masthead turned out to be where
+readers actually look. `FEEDBACK_SHAPE` in [`FeedbackButton.tsx`](../../src/web/FeedbackButton.tsx)
+is the whole table, and `App.tsx` carries the two exclusions in one expression.
+
+### The shelf's button is in its masthead, since 2026-09-08
+
+> Show the Feedback button in the top right of the logged in Homepage
+>
+> — Greg, 2026-09-07 (SPIDERYARN-READING2-2C)
+
+**It was in the top right of the logged-in homepage when he wrote that**, at every width, with
+nothing painted over it — and a test had asserted so since 2026-08-31. What it was not was
+*findable*: a bare `--ink-faint` speech-bubble glyph fixed to the **window**, its label given up
+entirely below the 731px query, while the shelf's own `Profile` and `Admin` links sat in a cluster
+of identically-coloured icon-and-label controls about 130px to its left. Two top-rights, and the one
+a reader looks at is the page's.
+
+So the trigger takes a third shape, wearing its neighbours' classes verbatim rather than getting a
+`fb-` rule of its own — the point of that row is that this control should not be distinguishable
+from `Profile` beside it, and a stylesheet rule would be a second place for the two to drift apart.
+It is last in the row and so right-most, nearest the corner it came from. **Nothing about a report
+changed**: `FeedbackHost` has always sent `slug: null` from every page that is not an article, and
+the `url` tag is what makes such a report actionable.
+
+**A report is what made the shelf's `<main>` honour `--safe-top`, too**, and that is a precondition
+rather than a tidy-up. Every other signed-in page adds the inset; the shelf's bare `pt-10` did not,
+so on an installed iPhone its own `<h1>` sat at y=40 inside a 59px notch. `.fb-button` was
+`top: var(--safe-top)` and cleared the notch under its own power — a control in the masthead row
+inherits whatever `<main>` says, so the move without that line would have put the button under the
+status bar on the very device the report came from.
+[260908e](../plans/260908e-feedback-button-in-the-shelf-masthead.md).
+
+**How the "never two buttons" rule survives a new shape.** It is counted, in
+`tests/dock-corner-controls.test.tsx`, and it used to be counted with a hand-written list of the
+classes that existed when it was written — so a third shape would not have *broken* that test, it
+would have made it cover one page fewer, silently. Each shape now carries a `hook` class,
+`FEEDBACK_TRIGGER_SELECTOR` is derived from that column, and a second test renders every variant to
+check its hook is genuinely on the element — the half a type cannot state, since `hook` and `button`
+are two independent strings. [silent-success.md](../reusable/silent-success.md).
 
 ## One box, since 2026-09-02
 
@@ -253,7 +297,7 @@ which *is* the verified account id.
 
 | what | file |
 |---|---|
-| the dialog's host, the two triggers, their hover card, and who sees them | [`src/web/FeedbackButton.tsx`](../../src/web/FeedbackButton.tsx) |
+| the dialog's host, the three shapes of trigger, their hover card, and who sees them | [`src/web/FeedbackButton.tsx`](../../src/web/FeedbackButton.tsx) |
 | the dialog | [`src/web/FeedbackDialog.tsx`](../../src/web/FeedbackDialog.tsx) |
 | the microphone on its box | [dictation.md](dictation.md), and two guards this dialog needs that the others do not — see its header |
 | the diagnostics allowlist, shared by both halves | [`src/feedback-payload.ts`](../../src/feedback-payload.ts) |
