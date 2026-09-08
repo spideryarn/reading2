@@ -52,35 +52,50 @@
 import type { FreshSnapshot, ObservedRow, ObservedSnapshot, ParseResult } from "./observation.js";
 
 /**
- * The brand, declared and never exported, so the shape below cannot be written
- * anywhere but in this file.
- *
- * `declare` because it is a type-level marker with no runtime existence: there
- * is no such property on any snapshot, and nothing ever reads one.
- */
-declare const ADMISSIBLE: unique symbol;
-
-/**
  * A snapshot this function accepted, and the only thing `diff()` will take.
  *
- * THE BRAND IS THE GATE, and the comment it replaces was not one. `FreshSnapshot`
- * used to say "`admissible()` is the only thing that mints one" while being an
- * ordinary intersection type any caller could build with a spread — so the
- * clock's monotonicity and `error === null`, both decided here, were promises
- * rather than facts by the time `diff()` read them. GPT Sol's S2-07, and the
- * brand it recommends spending instead of the one on `claimedConversationId`,
- * which validated nothing.
+ * **A WRAPPER, NOT A BRAND, AND THE SECOND ATTEMPT AT THIS.** The first was
+ * `FreshSnapshot & { [ADMISSIBLE]: … }`, an intersection — and an intersection
+ * brand rides along on a spread. `{ ...accepted, error: "boom" }` kept the
+ * brand, needed no cast, and produced a snapshot claiming a gate had approved
+ * it while carrying the one field that gate exists to refuse; `diff()` would
+ * then turn a failed collection into a fleet's worth of false disappearances.
+ * Mutating `accepted.error` did the same thing without even a spread. GPT Sol
+ * found both, 2026-09-08, after the brand was already in.
  *
- * What the brand asserts, exactly: this snapshot parsed, its producer had
- * really collected, its last collection did not fail, and its clock is at or
- * beyond the last one accepted. What it does NOT assert is that its contents
- * are true about the box — nothing at this stage can know that.
+ * The box closes both. `#snapshot` is an ECMAScript private field, which
+ * TypeScript treats NOMINALLY: no object literal, no spread, and no other class
+ * is assignable to this type, because none of them has that declaration. The
+ * class itself is not exported, so no other module can `new` one — only the
+ * type escapes. And `snapshot` hands back a `FreshSnapshot` whose own fields
+ * are `readonly`, so the copy a caller reads cannot be edited into a lie
+ * either.
  *
- * A cast can still forge one, as a cast can forge anything. The difference is
- * that a forgery has to be written down as a cast, in a module whose every
- * other line is `import type`, where it is one grep away.
+ * What it asserts, exactly: this snapshot parsed, its producer had really
+ * collected, its last collection did not fail, and its clock is at or beyond
+ * the last one accepted. What it does NOT assert is that its contents are true
+ * about the box — nothing at this stage can know that. Nor does it assert that
+ * the snapshot may become HISTORY: that is `Baseline` in diff.ts, a separate
+ * type for a separate permission, because "safe to compare against" and "safe
+ * to keep as the world" are not the same claim.
+ *
+ * A cast still forges one, as a cast forges anything. The point is that it now
+ * takes a cast rather than an object literal.
  */
-export type AdmissibleSnapshot = FreshSnapshot & { readonly [ADMISSIBLE]: "admissible" };
+class AdmissibleBox {
+  readonly #snapshot: FreshSnapshot;
+
+  constructor(snapshot: FreshSnapshot) {
+    this.#snapshot = snapshot;
+  }
+
+  /** What was accepted. Readonly throughout, so reading it cannot un-accept it. */
+  get snapshot(): FreshSnapshot {
+    return this.#snapshot;
+  }
+}
+
+export type AdmissibleSnapshot = AdmissibleBox;
 
 /**
  * The verdict, with the sentence that goes in the log beside it.
@@ -130,18 +145,19 @@ export function admissible(previous: AdmissibleSnapshot | null, next: ParseResul
     };
   }
 
-  // The narrowing above is what makes the `FreshSnapshot` half cast-free:
-  // `clock.collected` is true, so the snapshot satisfies it. THE CAST IS THE
-  // BRAND AND NOTHING ELSE — the one place in the Overseer where an
-  // `AdmissibleSnapshot` comes into existence, after every rule above has run.
-  const bless = (fresh: FreshSnapshot): AdmissibleSnapshot => fresh as AdmissibleSnapshot;
+  // The narrowing above is what makes this cast-free: `clock.collected` is
+  // true, so the snapshot satisfies `FreshSnapshot`. THE `new` IS THE GATE —
+  // the one place in the Overseer where an `AdmissibleSnapshot` comes into
+  // existence, after every rule above has run, and unreachable from any other
+  // module because `AdmissibleBox` is not exported.
+  const bless = (fresh: FreshSnapshot): AdmissibleSnapshot => new AdmissibleBox(fresh);
   const fresh: FreshSnapshot = { ...snapshot, clock: snapshot.clock };
 
   if (previous === null) {
     return { verdict: "accept", reason: "the first collection this Overseer has seen", snapshot: bless(fresh) };
   }
 
-  if (fresh.clock.atMs === previous.clock.atMs) {
+  if (fresh.clock.atMs === previous.snapshot.clock.atMs) {
     // EQUAL CLOCKS ARE ONLY A DUPLICATE IF THE PAYLOAD AGREES, and until
     // 2026-09-08 this arm did not look (GPT Sol's S2-05). A successful payload
     // wearing a `collectedAt` is a copy of one collection — the SSE cache and a
@@ -151,7 +167,7 @@ export function admissible(previous: AdmissibleSnapshot | null, next: ParseResul
     // the only evidence of it there will ever be. Calling that a duplicate
     // throws the evidence away and goes quiet, which is this codebase's worst
     // failure shape rather than its safest one.
-    const disagreement = collectionDisagreement(previous, fresh);
+    const disagreement = collectionDisagreement(previous.snapshot, fresh);
     if (disagreement !== null) {
       return {
         verdict: "reject",
@@ -176,12 +192,12 @@ export function admissible(previous: AdmissibleSnapshot | null, next: ParseResul
   // It is also self-clearing: once the producer's clock passes the high-water
   // mark, snapshots are accepted again, whereas calling it a duplicate stalls
   // the history for as long as the skew lasts, silently.
-  if (fresh.clock.atMs < previous.clock.atMs) {
+  if (fresh.clock.atMs < previous.snapshot.clock.atMs) {
     return {
       verdict: "reject",
       reason:
         `the dashboard's clock went backwards: this collection says ${fresh.clock.at} ` +
-        `and the last one accepted said ${previous.clock.at}`,
+        `and the last one accepted said ${previous.snapshot.clock.at}`,
     };
   }
 

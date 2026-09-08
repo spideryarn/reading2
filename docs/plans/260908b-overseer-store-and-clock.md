@@ -733,6 +733,62 @@ the Overseer can stop knowing things — the SSE dropped, the poll failed, and t
 unreadable so the baseline is held — are different causes with the same symptom, and the whole point
 of this codebase's `unknown`-with-a-cause discipline is that they must not collapse into one silence.
 
+**A third failure mode, found the hard way on 2026-09-08: the collector can simply stop.** The
+Overseer's own sweep caught `/api/state` serving a `collectedAt` **30 minutes old with `error:
+null`**. The dashboard agent found the cause and it is worth writing down in full, because the shape
+recurs:
+
+`collect()`'s child had `timeout: 60_000`, which sends **SIGTERM** — and a `bash` in uninterruptible
+IO on a swapping box does not die on SIGTERM. `promisify(execFile)` then waited for a process that
+was never coming back. The refresh loop chains from the *end* of each run, so it never reached its
+next iteration. **Nothing threw**, so `error` stayed `null` and the last good `collectedAt` simply
+stood.
+
+So the source was **neither down nor lying — it had stopped**, and it was invisible for the reason
+this area keeps rediscovering: *the thing that would have reported the failure was the thing that had
+stopped.* A wedged collector and a quiet box were the same picture.
+
+The producer now carries **`attemptedAt`** ([`tools/fleet/state.ts`](../../tools/fleet/state.ts)) —
+when a collection was last *started*, as against when data last *arrived*, and set **before** the
+attempt precisely so that it moves while a collection does not. Three readings:
+
+| `attemptedAt` | `collectedAt` | what it means |
+|---|---|---|
+| fresh | stale | the source is failing — `error` usually says how |
+| stale | stale | **the collector is down or wedged** — the case that was invisible |
+| null / absent | — | never attempted, **or a producer too old to say** |
+
+**That last cell is the trap.** `attemptedAt` is an added field rather than a schema bump, so a server
+predating the fix sends nothing — and reading absent as *never attempted* would make an old server
+look permanently wedged, which is the always-wrong alarm A17 warns about. **Absent must mean "this
+producer cannot tell me".**
+
+**This reversed a design call, and the reversal is instructive.** The S4 agent argued — and I agreed,
+on the evidence then available — that *"the collector wedged"* and *"the payload is old"* are one
+measurement from the consumer's side, and that splitting them would be two names for one number.
+**With one clock that was right. With two clocks it is wrong**, because a failing source recovers or
+reports while a wedged collector does neither, and they want different actions. The lesson is not
+that the reasoning was bad; it is that a conclusion drawn from the fields that happen to exist is
+only as durable as that set of fields.
+
+**And the general rule the bug hands us**, in the dashboard agent's words, which now governs both
+programs' tests:
+
+> A promise that never settles is the one behaviour no real tmux can arrange — which is precisely why
+> this had no test.
+
+The failures worth defending against here are exactly the ones the real dependency **cannot be
+persuaded to perform**. They must be injected, or they will not be tested, and "untestable" is
+usually this sentence undiscovered.
+
+**Blocked, and not an agent's to unblock: the live dashboard is running stale code.** Probed
+2026-09-08 08:26 — the payload on `:8787` has no `attemptedAt`, so the process predates today's
+fixes, including the collector fix and the two-column dialog parser. So the `needs-you` count on the
+live page is still an undercount and **the `idle` re-measurement cannot be taken yet**. Restarting it
+is Greg's. Noting rather than working around it, because a number taken now would be a number about
+yesterday's code — and this is itself the argument for S5: with a unit, a restart is routine rather
+than a decision.
+
 **A read CLI ships with S4, and it is not a nicety.** After S1–S5 Greg has a daemon recording events
 and no way to look at them — which fails his NOW goal, *"staying up-to-date on progress
 automatically"*, while every stage passes. The dashboard owns the page and this stage does not build

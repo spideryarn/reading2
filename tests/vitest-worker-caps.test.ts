@@ -34,7 +34,7 @@ import type { InlineConfig as ViteInlineConfig } from "vite";
 import { afterAll, afterEach, beforeEach, expect, test, vi } from "vitest";
 import { createVitest, resolveConfig } from "vitest/node";
 
-import { MACHINE_WORKERS_FILE, resolveParallelWorkers } from "../vitest.config.js";
+import { MACHINE_WORKERS_FILE, resolveParallelWorkers } from "../vitest-admission.js";
 
 const HALF_OF_THIS_MACHINE = Math.max(2, Math.floor(availableParallelism() / 2));
 
