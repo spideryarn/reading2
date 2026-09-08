@@ -357,6 +357,14 @@ This is the third face of the failure that file is about — after *a check that
 doing nothing*, and *a guard whose silence is not evidence*. The answer is the same each time: make
 the instrument prove it can still see, in a place that travels with the reading.
 
+**"Beside the number" is the weak form and "asserted by the same run" is the strong one**, and the
+difference is worth spelling out because only the second survives. A control recorded once is a
+snapshot of a probe that worked in September; a control the measuring run performs itself cannot go
+stale without going red. S6 already does the strong version — it names the suite fixtures that keep
+the control true, next to the zero — and that is the shape to describe, because the weak version
+decays into a paragraph nobody re-runs. Where the strong version is impossible, say which of the two
+you have.
+
 **2. A hazard that is easy to describe and impossible to arrange is telling you a seam is missing.**
 The dashboard's collector wedged for thirty minutes and reported `error: null`, because a `bash` in
 uninterruptible IO does not die on the `SIGTERM` its timeout sends, and `promisify(execFile)` waited
@@ -370,6 +378,16 @@ test is itself the finding.** They did not go looking for a seam and then write 
 they could not write the test. So when a hazard is easy to describe and impossible to arrange, stop
 and add the parameter — the difficulty is the design telling you something, not the test being
 awkward. "Untestable" is usually this sentence undiscovered.
+
+**And the limit, without which this rule does harm.** Followed without one it says *add a seam for
+every hazard*, and a seam is a path the test takes and production does not — so a codebase that
+obeys it enthusiastically ends up with a production path no test has ever run, which is a worse
+version of the thing it was avoiding. The boundary is small and mechanical: **the seam's default
+must be the real thing.** `collectWithDeadline(run = collect)` is safe because production calls it
+with no argument and executes the same function body the test does; only the leaf differs. A seam
+whose default is a stub, or which production must be configured to avoid, has moved the untested
+region rather than shrunk it. If injecting the hazard means production stops running the code under
+test, the answer is not a seam — it is that this hazard is one you accept and write down.
 
 Both raised with `claude-agents-dashboard`, which is pointing at this entry rather than duplicating
 it. This entry is meant to be **deleted** once decided.
