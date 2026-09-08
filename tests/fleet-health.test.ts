@@ -299,6 +299,29 @@ describe("computeVerdict", () => {
     expect(v.reasons[0]).toContain("not the same as the box being fine");
   });
 
+  it("does not let `unknown` erase a critical it managed to measure — Sol's F12", () => {
+    // The disk comes from `df`, a different command from the three that make up
+    // the core reading, so it can succeed while all of them fail. This line used
+    // to relabel a KNOWN-CRITICAL disk as `unknown` — and the new-session route
+    // then read `unknown` as "no reason not to start another agent".
+    //
+    // The asymmetry is the point: `unknown` is what we say when we found
+    // nothing, not a value that outranks something we found. Uncertainty may
+    // add doubt; it may never subtract a bad reading.
+    const v = computeVerdict({
+      load: { kind: "unknown", why: "uptime failed" },
+      memory: { kind: "unknown", why: "free failed" },
+      swap: { kind: "unknown", why: "swapon failed" },
+      disk: { kind: "value", totalKiB: 100, usedKiB: 99, availableKiB: 1, usePercent: 99 },
+      swapActivity: { kind: "unknown", why: "vmstat failed" },
+    });
+    expect(v.level).toBe("critical");
+    // And the doubt is still reported rather than swallowed by the critical —
+    // both facts are true and the person needs both.
+    expect(v.reasons[0]).toContain("not the same as the box being fine");
+    expect(v.reasons.some((r) => r.includes("99% full"))).toBe(true);
+  });
+
   it("stays readable from partial data: one core reading known is enough to avoid `unknown`", () => {
     const v = computeVerdict({
       load: { kind: "unknown", why: "uptime failed" },

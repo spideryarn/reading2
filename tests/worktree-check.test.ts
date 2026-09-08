@@ -20,7 +20,7 @@
  * three real-worktree cases below.
  */
 import { execFileSync } from "node:child_process";
-import { appendFileSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -35,6 +35,7 @@ import {
   corpusStrays,
   gather,
   hiddenFromStatus,
+  logStrays,
   report,
   standingAgainstTrunk,
 } from "../scripts/worktree-check.js";
@@ -166,6 +167,12 @@ describe("classifyIgnored", () => {
     expect(classifyIgnored(".claude/settings.local.json")).toBe("copied-from-primary");
   });
 
+  it("sends logs/ for a look too, because git will not say what is in it", () => {
+    expect(classifyIgnored("logs/")).toBe("logs");
+    /* Only the one at the top. A `src/…/logs/` would be somebody else's. */
+    expect(classifyIgnored("src/logs/")).toBe("unexplained");
+  });
+
   it("sends the corpus halves for a file-by-file look", () => {
     expect(classifyIgnored("data/")).toBe("corpus-half");
     expect(classifyIgnored("output/")).toBe("corpus-half");
@@ -246,6 +253,162 @@ describe("corpusStrays", () => {
 
   it("does not mind a fixture the worktree never materialised", () => {
     expect(corpusStrays(root, "data")).toEqual([]);
+  });
+});
+
+/**
+ * The class, guarded where it happens.
+ *
+ * `worktree-check.ts` landed at a743c5de on 2026-09-02 at 15:40. `/logs/` was
+ * added to `.gitignore` at d0141d13 three hours later, by a commit about the
+ * sweep loop, and nobody gave it a verdict. Fail-closed did the rest: from that
+ * afternoon, **every worktree where a job had been run refused to be removed**,
+ * for ever, and the only symptom was an agent arguing with a refusal.
+ *
+ * Two files have to agree and nothing held them together — the shape in
+ * docs/reusable/silent-success.md, where the wrong answer has no error message.
+ * This is the thread between them: adding a line to `.gitignore` now means
+ * saying which kind of thing it is, at the moment of adding it.
+ *
+ * It does not weaken the runtime default. An ignored path nobody has classified
+ * still blocks; this only moves the noticing from three weeks later to now.
+ *
+ * **Two gaps, said out loud rather than left to be discovered** (GPT Sol,
+ * 2026-09-08, on an earlier draft that claimed more than it delivered):
+ *
+ * - **The root `.gitignore` only.** `supabase/.gitignore` and
+ *   `infra/hetzner/.gitignore` exist too, and a `.terraform/` left in a worktree
+ *   would block for ever exactly as `logs/` did. That is the right answer today
+ *   — `*.tfvars` beside it holds real values and *should* block — and if a
+ *   nested entry becomes the everyday false alarm, widen this to walk them
+ *   rather than adding a second allowlist somewhere else.
+ * - **Literal paths only.** A glob names no single path, so a directory rule
+ *   with a star in it is skipped here, and the directories it matches would be
+ *   unexplained for ever. Every ignore rule in the root file is literal today
+ *   except the two `.env` and `.activity.log` globs, which have cases above.
+ *
+ * So this catches the way `/logs/` actually arrived, not every way one could.
+ */
+describe("the repo's own .gitignore", () => {
+  /**
+   * Ignore rules that are *meant* to have no verdict, so they go on blocking.
+   *
+   * `uploads/` is `gjd-remote upload` — somebody handing a screenshot or a log
+   * to the agent working here, which may be the only copy of it. A worktree
+   * holding one should absolutely refuse to be deleted quietly.
+   *
+   * `.claude/worktrees/` is where worktrees live. In the primary that is every
+   * peer's whole checkout, and the primary is refused on its own blocker; a
+   * *worktree* containing worktrees is strange enough to be worth a human look.
+   */
+  const BLOCKS_ON_PURPOSE = new Set(["uploads", ".claude/worktrees"]);
+
+  it("gives every directory it names a verdict, or says it blocks on purpose", () => {
+    const body = readFileSync(new URL("../.gitignore", import.meta.url), "utf8");
+    const undecided: string[] = [];
+
+    for (const raw of body.split("\n")) {
+      const line = raw.trim();
+      if (line === "" || line.startsWith("#") || line.startsWith("!")) continue;
+      /* A glob names no single path, so there is nothing to look up. `.env*`
+         and `*.activity.log` are covered by cases above instead. */
+      if (/[*?[\]]/.test(line)) continue;
+
+      const bare = line.replace(/^\//, "").replace(/\/$/, "");
+      if (BLOCKS_ON_PURPOSE.has(bare)) continue;
+
+      /* A rule ending in `/` can only ever match a directory, and git reports a
+         wholly-ignored directory *with* the trailing slash — so only the slashed
+         spelling counts. Accepting either let a hypothetical `/.env.local/`
+         pass on the verdict belonging to the file `.env.local`, while the
+         runtime spelling `.env.local/` stayed unexplained for ever (GPT Sol,
+         2026-09-08). A rule without a slash can match either, so it may use
+         either: `.gitignore` writes `.vercel`, git reports `.vercel/`, and
+         `DISPOSABLE_IGNORED` holds the latter. */
+      const spellings = line.endsWith("/") ? [`${bare}/`] : [`${bare}/`, bare];
+      if (spellings.some((sp) => classifyIgnored(sp) !== "unexplained")) continue;
+      undecided.push(line);
+    }
+
+    expect(undecided, "give it a verdict in classifyIgnored, or add it to BLOCKS_ON_PURPOSE above").toEqual([]);
+  });
+});
+
+describe("logStrays", () => {
+  let root: string;
+
+  beforeEach(() => {
+    root = mkdtempSync(path.join(tmpdir(), "spideryarn-wtlogs-"));
+    mkdirSync(path.join(root, "logs", "tmux-jobs"), { recursive: true });
+    writeFileSync(path.join(root, "logs", "tmux-jobs", "chk-0311-2679167.log"), "786 files\n");
+  });
+
+  afterEach(() => rmSync(root, { recursive: true, force: true }));
+
+  it("says nothing about a directory of job logs", () => {
+    writeFileSync(path.join(root, "logs", "tmux-jobs", "sol-0729-2534237.log"), "review\n");
+    expect(logStrays(root)).toEqual([]);
+  });
+
+  /* `dev-server` was allowlisted for a day and a GPT Sol review took it out:
+     nothing in the repo writes it, so the name was a guess about a writer. */
+  it("blocks on a logs/ subtree nothing in the repo writes", () => {
+    mkdirSync(path.join(root, "logs", "dev-server"), { recursive: true });
+    writeFileSync(path.join(root, "logs", "dev-server", "260903-0705.log"), "listening\n");
+    expect(logStrays(root)).toEqual(["logs/dev-server/  (1 file, and nothing here knows what they are)"]);
+  });
+
+  it("does not mind a tree that has never run a job", () => {
+    expect(logStrays(mkdtempSync(path.join(tmpdir(), "spideryarn-wtnolo-")))).toEqual([]);
+  });
+
+  /* The reason `logs/` is not simply disposable: `/logs/` was gitignored *for*
+     these, at d0141d13, and a dated report is the only record that the loop ran. */
+  it("catches a loop's reports, which exist nowhere else", () => {
+    mkdirSync(path.join(root, "logs", "loops", "get-ready-to-deploy"), { recursive: true });
+    writeFileSync(path.join(root, "logs", "loops", "get-ready-to-deploy", "260908.md"), "# found\n");
+    expect(logStrays(root)).toEqual(["logs/loops/  (1 file, and nothing here knows what they are)"]);
+  });
+
+  it("catches a loose file somebody redirected into logs/", () => {
+    writeFileSync(path.join(root, "logs", "notes.txt"), "what I was doing\n");
+    expect(logStrays(root)).toEqual(["logs/notes.txt"]);
+  });
+
+  /* The `.DS_Store-important` lesson, one directory down: an exact segment
+     match, never a prefix. Watched red against a `startsWith` version of the
+     allowlist test, which called this directory captured stdout. */
+  it("does not let a lookalike name inherit the allowlist", () => {
+    mkdirSync(path.join(root, "logs", "tmux-jobs-keep"), { recursive: true });
+    writeFileSync(path.join(root, "logs", "tmux-jobs-keep", "the-good-one.log"), "keep me\n");
+    expect(logStrays(root)).toEqual(["logs/tmux-jobs-keep/  (1 file, and nothing here knows what they are)"]);
+  });
+
+  /* The allowlisted name buys an inspection, not a pass. Without this, the only
+     copy of anything could be parked inside `logs/tmux-jobs/` and skipped along
+     with the directory — GPT Sol, 2026-09-08. Watched red against the version
+     that `continue`d on the directory name alone. */
+  it("blocks on something that is not a job log hiding among the job logs", () => {
+    writeFileSync(path.join(root, "logs", "tmux-jobs", "notes.md"), "the only copy\n");
+    expect(logStrays(root)).toEqual(["logs/tmux-jobs/notes.md  (not a job log, and nothing here knows what it is)"]);
+  });
+
+  it("blocks on a directory nested inside the job logs", () => {
+    mkdirSync(path.join(root, "logs", "tmux-jobs", "kept"), { recursive: true });
+    expect(logStrays(root)).toEqual(["logs/tmux-jobs/kept  (not a job log, and nothing here knows what it is)"]);
+  });
+
+  it("blocks on a symlink wearing a job log's name", () => {
+    symlinkSync("../../../elsewhere/real.log", path.join(root, "logs", "tmux-jobs", "pretend.log"));
+    expect(logStrays(root)).toEqual(["logs/tmux-jobs/pretend.log  (not a job log, and nothing here knows what it is)"]);
+  });
+
+  /* A symlink named `tmux-jobs` would otherwise be walked into as if it were
+     the directory it is pretending to be. */
+  it("does not follow a symlink wearing an allowlisted name", () => {
+    rmSync(path.join(root, "logs", "tmux-jobs"), { recursive: true });
+    symlinkSync("../../elsewhere/real-work", path.join(root, "logs", "tmux-jobs"));
+    expect(logStrays(root)).toEqual(["logs/tmux-jobs  (symlink)"]);
   });
 });
 
@@ -374,7 +537,7 @@ describe("gather, in a real linked worktree", () => {
 
     git(["init", "--quiet", "-b", "dev", origin], root);
     identify(origin);
-    commit(origin, ".gitignore", "/data/\n/output/\n.env*\nnode_modules/\n", "ignore what the real repo ignores");
+    commit(origin, ".gitignore", "/data/\n/output/\n/logs/\n.env*\nnode_modules/\n", "ignore what the real repo ignores");
     commit(origin, `${CORPUS_ROOT}/data/slug/blocks.json`, "[]\n", "the committed fixture corpus");
 
     git(["clone", "--quiet", origin, primary], root);
@@ -417,6 +580,47 @@ describe("gather, in a real linked worktree", () => {
     const facts = gather(worktree);
     expect(facts.dirty).toEqual([]);
     expect(facts.unexplained.join("\n")).toContain(".env.local — DIFFERS");
+    expect(report(facts).safe).toBe(false);
+    /* The blocker names the file and never its contents — and the resolution it
+       points at is the docs, not a raw `diff`, which would put both secrets on
+       stdout and from there into a transcript (GPT Sol, 2026-09-08). */
+    expect(facts.unexplained.join("\n")).not.toContain("MY_WORKTREE_ONLY_SETTING");
+    expect(facts.unexplained.join("\n")).not.toContain("diff ");
+  });
+
+  /* A worktree that has merely fallen *behind* the primary still blocks, and
+     that is the settled answer rather than a gap. A line-subset test looked
+     like it could clear this case and was reverted: a worktree that *deleted* a
+     key is a subset too, so "nothing here is only here" cannot be read off two
+     current snapshots. See the comment in copiedFromPrimary. */
+  it("blocks on an .env.local the primary has moved on from, rather than guessing", () => {
+    appendFileSync(path.join(primary, ".env.local"), "ADDED_SINCE_THE_COPY=1\n");
+    const facts = gather(worktree);
+    expect(facts.unexplained.join("\n")).toContain(".env.local — DIFFERS");
+    expect(report(facts).safe).toBe(false);
+  });
+
+  /* The complaint this whole change came from: `npm run tmux-job` writes into
+     `logs/tmux-jobs/`, so *every* tree where a suite or a review has been run
+     printed DO NOT REMOVE at a directory holding nothing but captured stdout —
+     13 of the box's 19 worktrees on 2026-09-08, all of them on this one line.
+     Watched red before the `logs` verdict existed. */
+  it("does not block on a tmux job's captured stdout", () => {
+    mkdirSync(path.join(worktree, "logs", "tmux-jobs"), { recursive: true });
+    writeFileSync(path.join(worktree, "logs", "tmux-jobs", "chk-0311-2679167.log"), "786 files, 2 red\n");
+    const facts = gather(worktree);
+    expect(facts.unexplained).toEqual([]);
+    expect(report(facts).safe).toBe(true);
+  });
+
+  /* And the half that must survive it. `/logs/` was gitignored for a loop's
+     dated reports, which are the only record that the loop ran. */
+  it("still blocks on a loop's report under logs/", () => {
+    mkdirSync(path.join(worktree, "logs", "loops", "get-ready-to-deploy"), { recursive: true });
+    writeFileSync(path.join(worktree, "logs", "loops", "get-ready-to-deploy", "260908.md"), "# what it found\n");
+    const facts = gather(worktree);
+    expect(facts.dirty).toEqual([]);
+    expect(facts.unexplained.join("\n")).toContain("logs/loops");
     expect(report(facts).safe).toBe(false);
   });
 

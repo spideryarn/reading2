@@ -109,7 +109,13 @@ let health: HealthReport | null = null;
  * `collectedAt` is non-null.
  */
 function statePayload(): string {
-  return JSON.stringify(fleetState(snapshot, lastError, health, REFRESH_MS));
+  // The answering flag is read PER PAYLOAD rather than captured once at
+  // startup, for the same reason routes-steer.ts reads it per request: turning
+  // it on should be a restart, and the page should learn about it on its next
+  // refresh rather than on a reload nobody performs.
+  return JSON.stringify(
+    fleetState(snapshot, lastError, health, REFRESH_MS, process.env["FLEET_ANSWER_ENABLED"] === "1"),
+  );
 }
 
 /**

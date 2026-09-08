@@ -46,7 +46,12 @@ const EVERY_STATUS: readonly FleetStatus[] = [
   { kind: "shell", busy: false },
   { kind: "shell", busy: true },
   { kind: "shell", busy: null },
-  { kind: "unknown", why: "the box could not be asked" },
+  // `agents-unavailable` rather than `client-declared`: this list stands in for
+  // statuses the COLLECTOR produced, which is what the queue actually sees, and
+  // `client-declared` is only ever stamped on a status that arrived from a
+  // browser. Picking the wrong one here would be a fixture quietly asserting
+  // that the queue is fed by the network.
+  { kind: "unknown", cause: "agents-unavailable", why: "the box could not be asked" },
 ];
 
 /** A queue with a clock you move by hand. Nothing here waits for real time. */

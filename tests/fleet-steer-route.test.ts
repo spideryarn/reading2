@@ -497,6 +497,11 @@ describe("returning the discriminated result honestly", () => {
     const { routes } = harness({
       ok: false,
       reason: { code: "question-changed", why: "pane %99001 is asking something else now" },
+      // A refusal now has to say what happened to the keystrokes, and the
+      // compiler insists — `SteerFailure` requires both. `none` is the honest
+      // value for this one: the dialog had changed, so nothing was sent.
+      delivery: "none",
+      sent: [],
     });
     const r = await post(routes, fakeReq({ url: "/api/steer/answer", body: JSON.stringify(answerBody()) }));
     expect(r.status).toBe(409);
@@ -505,6 +510,12 @@ describe("returning the discriminated result honestly", () => {
       ok: false,
       code: "question-changed",
       why: "pane %99001 is asking something else now",
+      // Reaches the CLIENT, not only the log. A refusal is not one thing, and
+      // the difference between "nothing was sent" and "your text is sitting in
+      // their input box" is the difference between "try again" being right and
+      // being the worst available advice — and it is the person on the phone
+      // who has to know which.
+      delivery: "none",
     });
   });
 
@@ -707,7 +718,12 @@ describe("the rate limiter", () => {
     // three tmux commands with ten-second timeouts, whatever it returned. That
     // is the cost the allowance exists to bound.
     let clock = 1_000_000;
-    const refused: SteerResult = { ok: false, reason: { code: "pane-gone", why: "no such pane" } };
+    const refused: SteerResult = {
+      ok: false,
+      reason: { code: "pane-gone", why: "no such pane" },
+      delivery: "none",
+      sent: [],
+    };
     const { routes, calls } = harness(refused, { now: () => clock });
     const first = await post(routes, fakeReq({ body: JSON.stringify(messageBody()) }));
     expect(first.status).toBe(409);
