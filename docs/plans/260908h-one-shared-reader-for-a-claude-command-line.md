@@ -969,6 +969,44 @@ to test the pair, not the two boxes.
 > has to be able to stop the whole reading. Checklist features that look independent on a README
 > interact once the grammar is foreign.
 
+## Status — 2026-09-08, end of the run
+
+**Done enough to stop here.** All three stages are on `dev`, each has had a cross-family review and a
+round two, and what remains is optional.
+
+| stage | state | evidence |
+|---|---|---|
+| **A** — `tools/fleet/claude-argv.ts` | landed, 2 rounds | 20 mutants, 1 equivalent, 0 real survivors |
+| **B** — the three consumers | landed, 2 rounds | 9 mutants, 9 killed; 2 red tests were **live grants** |
+| **C** — the awk probe | landed, 2 rounds | 13 mutants, 13 killed |
+
+Live positive control at the end: **6 `claude` processes, both fidelities, all a clean `session`.**
+Full suite `EXIT=0`; typecheck exit 0.
+
+### What the job turned out to be about
+
+Not the duplication. **Nobody had checked what the CLI does.** `claude` permutes its options — it
+parses them after a positional, measured three ways — so the boundary rule both TypeScript readers
+rested on was not a rule about `claude` at all, and the `harness.ts` comment asserting it was a bug
+fix that reintroduced the bug it described. Three separate routes to the same false grant were closed
+in one day: a substring search (C), a bare-word boundary (A), and a `--` inside a flattened prompt
+(B round 2).
+
+### What is left, and what leaving it costs
+
+- **The subcommand table will rot, and nothing would notice.** An unknown *flag* is loud
+  (`unreadable`); an unknown *subcommand* is a bare word and reads as an ordinary `session` — it fails
+  **open**. Partly irreducible, because a new subcommand is indistinguishable from a prompt beginning
+  with that word (which is why `help` is excluded by hand, measured). A maintenance check diffing
+  `claude --help`'s `Commands:`/`Options:` against `SUBCOMMANDS`/`FLAGS` is designed and **not built**;
+  it needs a home outside the hermetic suite. Cost of leaving it: the day Anthropic adds a subcommand,
+  a pane running it is labelled steerable. Small, and it is the one gap that gets worse with time.
+- **The pid-reuse splice**, documented in `steer.ts`'s KNOWN GAPS with its domain named. Deliberately
+  not fixed; the reasoning is in the round-2 commit.
+- **The awk keeps two holes an arity table would close**, both in the granting direction, both now
+  asserted by tests so they stay visible: a prompt quoting this pane's uuid in a `claude` carrying no
+  id of its own, and a differing second id behind an unknown flag's value.
+
 ## The simpler option, named
 
 Do nothing. Zero disagreements on the live box today, and the shapes that diverge are rare. The
