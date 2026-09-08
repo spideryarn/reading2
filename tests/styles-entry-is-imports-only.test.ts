@@ -175,14 +175,33 @@ const MANIFEST = [
   "quiz.css",
   "feedback.css",
   "site.css",
-  /* Last, and indifferent to being so: two rules, both selecting
-     `.changelog-release > summary`, which nothing else in the tree mentions.
-     `/changelog` is chrome rather than reading view, so it sits beside the
-     marketing sheet above it. docs/project/website-text.md § The open-source
+  /* Indifferent to its position, unlike the sheet below it: two rules, both
+     selecting `.changelog-release > summary`, which nothing else in the tree
+     mentions. `/changelog` is chrome rather than reading view, so it sits beside
+     the marketing sheet above it. docs/project/website-text.md § The open-source
      page is the neighbouring work; the sheet's own header says why two lines of
      CSS need a file at all (we import no preflight, so a `<summary>` still
-     arrives with the browser's disclosure triangle). */
+     arrives with the browser's disclosure triangle).
+
+     **It said "last" until it met `logo-animations.css` at a merge**, where both
+     sheets had been appended to the end of the manifest on separate branches.
+     Only one of them had a reason to be there, so this one moved — the whole
+     value of writing this list by hand is that a position is a claim somebody
+     made, and two sheets cannot both be last. */
   "changelog.css",
+  /* **Last, and the position is the point.** The wordmark's hover animations
+     have to beat `.logo`, `.logo-home` and `.dock-home`, which are set in
+     dock.css and dock-fit.css far above — so loading last is what lets a
+     one-class animation rule win against them without an `!important` or a
+     specificity war.
+
+     It is also what made the base rule's first draft wrong, which is the
+     "check what the sheets either side override" this message asks for:
+     `.spya-anim { position: relative }` and `.logo-home { position: fixed }`
+     have identical specificity, so loading second meant the corner wordmark
+     left the corner for as long as a reader pointed at it. The rule is now
+     `.spya-anim:not(.logo-home)`. docs/project/design-logo.md § The traps. */
+  "logo-animations.css",
 ];
 
 /**

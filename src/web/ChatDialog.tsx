@@ -400,6 +400,47 @@ export function ChatDialog({
     if (openedAs !== "thread") return;
     closeRef.current?.focus();
   }, [openedAs]);
+
+  /**
+   * ## Sending the first question does not cost the reader the caret
+   *
+   * `target` changes underneath this dialog: the moment a draft is sent it
+   * becomes a thread, and the draft arm's composer is **unmounted by the swap** —
+   * before the dialog closes at all. So the reader presses Enter and focus falls
+   * to `<body>`, mid-conversation, with the panel still open in front of them.
+   *
+   * **This was recorded as a known gap and left alone, and that was the wrong
+   * call.** The argument for leaving it was that choosing a destination changes
+   * what happens after Enter, which is product. GPT Sol's answer on the stage-5a
+   * review is the one that settles it: *"If the outgoing composer held focus,
+   * moving focus to its semantic replacement preserves an existing interaction;
+   * it does not apply the disputed policy."* The disputed policy is "focus every
+   * reopened thread's composer", which this is not — the condition below is
+   * exactly that the reader was already typing.
+   *
+   * So: only when focus was in the composer that is going away, and only on the
+   * draft → thread transition. A reader who sent from the keyboard shortcut with
+   * focus elsewhere is left where they are, and `?thread=` opened cold still
+   * lands on the close control above.
+   */
+  const wasDraft = useRef(target.kind === "draft");
+  /**
+   * Read **on the swapping render itself**, which is the only moment the answer
+   * exists: the outgoing composer is still focused and still in the document,
+   * and React has not committed the replacement yet. A first attempt sampled on
+   * the previous *draft* render instead and was always false, because the reader
+   * had not started typing when that render happened — the test said so.
+   */
+  const swapping = wasDraft.current && target.kind === "thread";
+  const caretWasInside =
+    swapping && typeof document !== "undefined"
+      ? box.current?.contains(document.activeElement) === true
+      : false;
+  useEffect(() => {
+    wasDraft.current = target.kind === "draft";
+    if (!caretWasInside) return;
+    box.current?.querySelector<HTMLTextAreaElement>("textarea")?.focus();
+  }, [target.kind, caretWasInside]);
   useEffect(() => {
     const panel = box.current;
     const back = opened.opener;
@@ -418,11 +459,35 @@ export function ChatDialog({
       const at = document.activeElement;
       const ours = at === null || at === document.body || panel?.contains(at) === true;
       if (!ours) return;
-      if (back?.isConnected) {
-        back.focus();
-        return;
-      }
-      if (row?.isConnected) row.querySelector<HTMLButtonElement>(".blk-more")?.focus();
+      /**
+       * **Deferred, because a cleanup is not proof of an unmount.**
+       *
+       * `main.tsx` wraps the app in `<StrictMode>`, which runs every effect
+       * setup → cleanup → setup on mount. So this cleanup fires once while the
+       * dialog is perfectly well mounted, and restoring there put focus back on
+       * the Help button and left a reader who had just opened a draft with no
+       * caret in the composer — a regression introduced *by* this fix, and
+       * invisible to any test that does not use StrictMode. GPT Sol found it on
+       * the stage-5a review; `tests/chat-dialog-gives-focus-back.test.tsx`
+       * § under StrictMode is the test that proved it.
+       *
+       * `isConnected` cannot be asked *now*: React runs cleanups before it
+       * detaches the subtree, so the panel is still in the document either way —
+       * which is the same fact that made the `body` test wrong above. Asked one
+       * microtask later it separates them cleanly: a real unmount has detached
+       * by then, StrictMode's synthetic cycle has not.
+       *
+       * The `activeElement` question stays synchronous, because by the microtask
+       * focus has already fallen to `<body>` and the answer would be useless.
+       */
+      queueMicrotask(() => {
+        if (panel?.isConnected !== false) return;
+        if (back?.isConnected) {
+          back.focus();
+          return;
+        }
+        if (row?.isConnected) row.querySelector<HTMLButtonElement>(".blk-more")?.focus();
+      });
     };
   }, [opened]);
 

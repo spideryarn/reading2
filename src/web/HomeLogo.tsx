@@ -83,13 +83,20 @@
  * rewritten rather than merely narrowed. `ArticlePage`'s final branch is where
  * it stopped being drawn.
  *
- * The class names are the original app's, so its fifteen CSS-only logo
- * animations can be dropped in later as one file — see
- * docs/project/original-version/design-system.md, and the argument there for
- * not doing that yet.
+ * ## The hover animations
+ *
+ * The class names are the original app's, which is what made 2026-09-07 cheap:
+ * `useLogoAnimation` puts one more class on this link and
+ * src/web/styles/logo-animations.css keys its keyframes off `.logo-letter` and
+ * `.logo-image`, both of which are already here. `DockHome` spreads the same
+ * hook, so the two copies of the wordmark cannot drift into two behaviours.
+ * docs/project/design-logo.md.
  */
+import { cn } from "@/lib/utils";
+
 import { buildDescription } from "./build-stamp.js";
 import { Link } from "./Link.js";
+import { useLogoAnimation } from "./logo-animation.js";
 import { LIBRARY_HREF } from "./router.js";
 
 /**
@@ -107,21 +114,32 @@ import { LIBRARY_HREF } from "./router.js";
 const HOME_TITLE = "Spideryarn — back to the library";
 
 export function HomeLogo() {
+  const anim = useLogoAnimation();
   const build = buildDescription();
   return (
     <Link
       href={LIBRARY_HREF}
-      className="logo logo-home"
+      className={cn("logo", "logo-home", anim.className)}
       /* Two lines rather than an em dash chain: the second is for the one
          reader in a hundred who wants to know which copy they have, and it
          should not push the sentence that matters onto a second line by
-         itself. `title` renders a newline as a newline. */
+         itself. `title` renders a newline as a newline.
+
+         **The tooltip and the hover animation both live on this element, and
+         they met at a merge.** They do not interact — one is an attribute the
+         browser reads, the other a class and a set of pointer handlers — but
+         both are about what happens when a reader points at the wordmark, so if
+         one of them ever has to give way it should be a decision rather than a
+         collision. docs/project/design-logo.md is the animation's. */
       title={build === null ? HOME_TITLE : `${HOME_TITLE}\n(${build})`}
+      {...anim.handlers}
     >
       {/* `alt=""` and not "Spideryarn": the wordmark beside it already says the
           name, and a screen reader reading it twice is how a decorative image
           becomes noise. The link's own text is the accessible name. */}
-      <img className="logo-image" src="/spideryarn-logo.png" alt="" width={20} height={20} />
+      <span className="logo-mark">
+        <img className="logo-image" src="/spideryarn-logo.png" alt="" width={20} height={20} />
+      </span>
       <span className="logo-text">
         {"Spideryarn".split("").map((ch, i) => (
           // biome-ignore lint/suspicious/noArrayIndexKey: fixed string, rebuilt whole

@@ -245,6 +245,9 @@ will eventually have to decide whether they are a system or an accident:
   be allowed to wrap; the reading view's columns are given up in JavaScript rather than at a
   breakpoint; and `env(safe-area-inset-*)`, every value of which is `0px` on every machine we
   develop on.
+- **[design-logo.md](design-logo.md)** — the thirteen animations the wordmark plays when you point
+  at it or hold it down, how they were picked from about 140 ideas, and the four ways a fourteenth
+  can silently do nothing.
 - **[marketing-pages.md](marketing-pages.md)** — `/` and `/features`: the `site-*` block in
   [`styles/site.css`](../../src/web/styles/site.css) and the four rules in it, how to shoot a product screenshot that shows what it
   claims to, and the two ways a full-page capture of these pages lies to you.

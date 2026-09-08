@@ -1197,6 +1197,50 @@ parameters, and a provider's carries its own words.
 *`Too many articles already called "x"` is a different sentence and stays.* It is the retry budget
 running out inside slug allocation, which is a fault rather than a queue state.
 
+### One job in the app was asked for by nobody
+
+Since 2026-09-07 a **publication can queue a job**. When a revision reaches the shelf saying
+`nav_label_status = 'pending'` — a freshly ingested article, whose paragraph labels are no longer
+part of `hierarchy` ([hierarchy.md](hierarchy.md#two-passes)) — `publishRevisionIn`
+([`src/store/pg-revisions.ts`](../../src/store/pg-revisions.ts)) queues a `{ steps: ["labels"] }` job
+for the article's owner **on the publication's own transaction**, through `enqueueSuccessorIn`
+([`src/store/pg-successor.ts`](../../src/store/pg-successor.ts)).
+
+Four things about it are worth knowing before touching this area, because it is the first time the
+queue has had a row that no HTTP request produced:
+
+- **It is not `enqueueOrGet`.** That opens a second pooled connection, which is exactly what
+  `DATABASE_POOL_MAX = 5` and the billing lock made a rule against — but the rule is about *calling
+  it while holding a lock*, not about inserting on an executor you already hold. `enqueueSuccessorIn`
+  is thirty lines on the caller's `tx`, so the pointer and the job commit together or neither does.
+- **It spends no quota slot**, by omission —
+  [billing.md](billing.md#which-requests-spend-a-slot-and-why-the-wall-is-at-the-routes).
+- **The conflict is classified, not swallowed.** The insert is `on conflict do nothing`, which covers
+  every unique index on the table — so the row that already holds `(owner_id, slug, work_key)` is read
+  back and its state decides, the way `tryEnqueue` decides its own three. A holder with **no draft** is
+  the de-duplication and is collapsed onto: a queued successor picks up whatever the article is serving
+  when it finally claims. A holder that **owns a draft** is working from an earlier base and can never
+  finish this revision, so the publication goes ahead and **says so** — see below. And **no holder at
+  all** means the conflict was not the dedupe: the insert is retried once with a fresh id, because the
+  holder can leave the active set between the insert and the read, and only a second conflict with
+  still nothing holding it throws. GPT Sol, F2 and F3 of the stage 2b review and F3 of the 2c one.
+- **A publication that lands on a draft-holding successor is a gap we can hear, not one we refuse.**
+  That revision reaches the shelf saying *"Paragraph labels are still arriving"* with nothing queued to
+  make it stop being true, and `logPublication` warns after the commit with the holder's job id. It
+  **refused** with a 409 for one day, on the argument that no ordinary ingest could reach it — the
+  article's FIFO order rule keeping every publisher younger than a successor holding a draft. That
+  argument is false: `blockedByAnother` orders on `(created_at, id)` and sees only *committed* rows, so
+  a job whose row takes an earlier timestamp and becomes visible later is never ordered against, and
+  cross-instance clock skew reaches the same ordering by a second road. Failing a paying reader's
+  publication is worse than the gap, which has never been observed. The remedy is a `labels` re-run
+  against the article, not a retried publication — the base-lineage guard would refuse that. GPT Sol,
+  F1 and F6 of the stage 2c review.
+- **Nothing on the server drives it.** `pump` is a no-op under `VERCEL` and is only ever called from
+  `enqueue`. What runs the successor is the browser: `jobEngine` drives every queued job the
+  signed-in owner has, from any page. An owner who never signs in again leaves it queued for ever —
+  measured, with the three cases, in
+  [the plan](../plans/260906a-labels-leave-the-blocking-hierarchy-step.md#who-drives).
+
 **No queue positions, and that is Greg's call.** A waiting job shows as waiting, in the card it
 already has — `displayJob` says *Waiting to continue.* beside a Stop button. The reason a job is
 waiting is **logged** at the claim rather than carried to the client, which is where *"why did this

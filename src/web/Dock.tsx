@@ -222,7 +222,9 @@ import { shownBehindTheSwitch } from "./experimental-visibility.js";
    on, already degraded by `diagramInSearch`. */
 import type { DiagramKind } from "./diagram.js";
 import { DEFAULT_MODE, diagramInSearch, type Mode, type Panel } from "./params.js";
+import { cn } from "@/lib/utils";
 import { Link } from "./Link.js";
+import { useLogoAnimation } from "./logo-animation.js";
 /* The trigger only — the dialog and the `open` state stay mounted at the
    signed-in `App` level, where a `Dock` unmounting cannot destroy a draft.
    FeedbackButton.tsx § One dialog, two triggers. */
@@ -2269,16 +2271,25 @@ function DockModeLinks({
  * in: that class is hidden by the 731px query, which would be a second and
  * invisible authority over a word the ladder is supposed to own. The
  * `.logo-letter` spans inside are kept, because they are what the original
- * app's CSS-only logo animations key on and dropping that file in later is the
- * point of them — docs/project/original-version/design-system.md. Anything
- * animating `.logo-text .logo-letter` will need this element's selector adding.
+ * app's CSS-only logo animations key on, and **since 2026-09-07 that is no
+ * longer a bet on the future**: `useLogoAnimation` is spread onto this link
+ * exactly as it is onto `HomeLogo`'s, so hovering or long-pressing either copy
+ * runs the same random animation from src/web/styles/logo-animations.css.
+ *
+ * That stylesheet is written against `.logo-letter` and `.logo-image` and
+ * **never against `.logo-text`**, which is the whole reason it can be one file
+ * serving both copies — docs/project/design-logo.md § Two mount points. A rule
+ * added there that reaches for `.logo-text` works in the corner and silently
+ * does nothing here.
  */
 function DockHome() {
+  const anim = useLogoAnimation();
   return (
     <Link
       href={LIBRARY_HREF}
-      className="logo dock-home"
+      className={cn("logo", "dock-home", anim.className)}
       title="Spideryarn — back to the library"
+      {...anim.handlers}
       /* Explicit, for the reason `DockLink` gives: the ladder hides the visible
          word, and an accessible name computed from the text would go with it —
          leaving `title`, which is the long sentence rather than the name. */
@@ -2287,7 +2298,9 @@ function DockHome() {
       {/* `alt=""` and not "Spideryarn": the wordmark beside it already says the
           name, and a screen reader reading it twice is how a decorative image
           becomes noise. HomeLogo.tsx says the same in the corner. */}
-      <img className="logo-image" src="/spideryarn-logo.png" alt="" width={20} height={20} />
+      <span className="logo-mark">
+        <img className="logo-image" src="/spideryarn-logo.png" alt="" width={20} height={20} />
+      </span>
       <span className="dock-btn-label">
         {"Spideryarn".split("").map((ch, i) => (
           // biome-ignore lint/suspicious/noArrayIndexKey: fixed string, rebuilt whole

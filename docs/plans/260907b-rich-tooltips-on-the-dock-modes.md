@@ -344,6 +344,11 @@ worth doing, each needs its own verified sentence, named here so it is not lost.
 is the stale one this change inherited from. It should be corrected where it lives; that is somebody
 else's file this week and a one-line fix when it is not.
 
+`COMMENTS_GAP` and the `readers-own` variant in [`visitor.ts`](../../src/web/visitor.ts) — the
+source of the retired sentence, described under § The find above. Dead apart from its test, and
+saying something that is no longer true, which is the pairing that put the stale sentence on a
+button in the first place.
+
 ---
 
 Up: [plans.md](../project/plans.md)

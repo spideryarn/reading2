@@ -1,0 +1,838 @@
+/* ---------------------------------------------- the wordmark's animations --
+   One animation is picked at random whenever the reader hovers or long-presses
+   the Spideryarn wordmark. src/web/logo-animation.ts is the picker and the
+   trigger; docs/project/design-logo.md is the design and the reasoning for each
+   effect below.
+
+   ## The rules this file lives under
+
+   **Select on `.logo-letter` and `.logo-image`, never on `.logo-text`.** The
+   wordmark is drawn twice with different inner wrappers — `.logo-text` in the
+   corner (HomeLogo.tsx), `.dock-btn-label` in the bottom bar (Dock.tsx § The
+   word, and which mechanism takes it away) — and only the two classes above are
+   in both. A rule that reaches for `.logo-text` works in the corner and
+   silently does nothing on the reading view, which is the copy most readers see
+   most often.
+
+   **Nothing here may change the element's box.** The dock copy sits in a flex
+   row that reflows if the wordmark's width moves, and the corner copy is
+   `position: fixed` over pages that have not reserved space for it. So:
+   `transform`, `opacity`, `filter`, `mask`, `text-shadow`, `color`, and
+   absolutely-positioned pseudo-elements. Not `margin`, `width`, `font-size` or
+   `letter-spacing` on a live element.
+
+   **Drive everything off the class, never off `:hover`.** The hook adds
+   `.spya-anim` plus the animation's id and takes them away again; `:hover` is
+   only one of the three ways that happens. A rule written as `.logo:hover` is
+   dead on a long press (a finger is not a hover) and dead on `/design`, which
+   applies the classes directly so all dozen can be looked at side by side.
+
+   **And therefore: keep every keyframe animation near its resting state, and
+   end it there.** Class removal is instantaneous, and a keyframe animation cut
+   off by it snaps home from whatever frame it was on — there is no exit to be
+   transitioned, because a transition cannot start from a value an animation was
+   supplying (measured; see the note on `.logo-image` below, which is the one
+   exception and is a transition rather than a keyframe). An animation that
+   ends at neutral and never travels far from it cannot snap visibly, whenever
+   the pointer happens to leave. That is the whole of the requirement; the
+   *start* of a keyframe set is free, because nothing is ever left showing it.
+
+   **Know what a reduced-motion reader is actually left looking at, and say so
+   in the block.** The global guard (src/web/tailwind.css) flattens
+   `animation-duration` to 0.01ms and `animation-iteration-count` to 1 under
+   `prefers-reduced-motion: reduce`. It does **not** freeze the first frame, and
+   this header said it did for a day: delays are untouched, then the shortened
+   animation *finishes*, and `animation-fill-mode` — which the guard also leaves
+   alone — decides whether the element is left showing the underlying style or
+   the 100% frame. A transition, meanwhile, snaps to the hovered value.
+
+   So there are three things to get right rather than one, and the useful
+   contract is the **underlying style** plus **explicit fill behaviour**: the
+   base style must be a wordmark you would ship, any `forwards` 100% frame must
+   be too, and any transitioned pose must be as well. Each block below names
+   which of the three it lands on. A blanket "start *and* end at rest" is not
+   the rule and never was — `spya-register` starts with displaced plates,
+   `spya-type` starts dim, the cursor's blink starts visible, and the seam's
+   thread ends extended. Every one of those is fine, because none of them is
+   what the reader is left with.
+
+   The guard is also why there is no `@media (prefers-reduced-motion)` block in
+   this file. There is one, globally, and it already covers everything here.
+   GPT Astra corrected this section, 2026-09-07.
+
+   **Tokens, never hex.** `--highlight` is the wordmark's own orange,
+   `--highlight-ink` the same orange lifted with white; `--ink`, `--panel` and
+   `--rule` are the surfaces around it. The app is dark only and unconditionally
+   so (styles/tokens.css:9), which means a glow or an additive blend can be used
+   freely here — but it is still a token that has to say so, because a hex would
+   survive a palette change looking exactly as wrong as it did before.
+
+   **`animation-fill-mode: forwards` only where the 100% frame is a wordmark you
+   would be happy to ship as a still.** This file said "never `forwards`" for an
+   afternoon and that was too strong: `forwards` is exactly how an animation
+   holds a pose for as long as the reader points at it. What it costs is that
+   the guard's flattened single iteration lands on 100% rather than on the base
+   style — so the 100% frame becomes a second resting state, and it has to be a
+   legitimate one. Exactly **two** things here rely on it: `spya-register`,
+   whose 100% is zero offset and transparent, which is the base style by another
+   route, and the seam's thread, whose 100% is the drawn thread. (`spya-i` and
+   `spya-settle` hold their poses too, but they are *transitions*, which the
+   guard collapses to the hovered value by a different route entirely.) A
+   `forwards` whose 100% is mid-gesture is the "letter left rotated" failure,
+   and that is the thing actually being forbidden.
+
+   **Write `opacity` on the children, not on `.logo`.** Both `.logo-home:hover`
+   and `.dock-home:hover` already run `opacity: 0.85 → 1` (styles/dock.css,
+   styles/dock-fit.css). An animation that also writes `opacity` on the anchor
+   fights a transition it cannot see and produces a flicker on entry.
+
+   **`<img>` is a replaced element and takes no pseudo-elements.** Anything that
+   recolours the spider paints a box and masks it to the PNG's alpha —
+   `mask-image: url(/spideryarn-logo.png)` — rather than reaching for
+   `.logo-image::before`, which never renders.
+
+   ## The word is often not there
+
+   `.logo-text` is `display: none` below 731px (styles/narrow-window.css) and
+   `.dock-btn-label` goes at the bar's tightest rungs (styles/dock-fit.css §
+   the fit ladder). **On a phone, both copies of the wordmark are the 20px
+   spider and nothing else.** An animation that lives entirely in the ten
+   letters is therefore invisible to every reader on a small screen, which is
+   not a rounding error — so the set as a whole has to keep enough
+   mark-only animations that a random draw is still worth something there.
+   Recorded in docs/project/design-logo.md § What a phone sees. */
+
+/* The base every animation gets for free, applied by the hook as a second class
+   alongside the animation's own id. See logo-animation.ts § className. */
+/* So a pseudo-element can be positioned against the whole wordmark: `.logo` is
+   `inline-flex` with no positioning of its own, so an absolutely-positioned
+   `::before` would otherwise resolve against the page.
+
+   **`:not(.logo-home)` is load-bearing and this rule was wrong without it.**
+   The corner copy is `position: fixed` (styles/dock.css § the way home), and
+   `.logo-home` and a bare `.spya-anim` have identical specificity — so with
+   this sheet imported last, a plain `.spya-anim { position: relative }` wins on
+   source order alone and the wordmark drops out of the corner and into the
+   normal flow for exactly as long as the reader hovers it. It is also already a
+   containing block, so it needs nothing from this rule. The dock copy is
+   statically positioned and does; so is the bare `.logo` that `/design` draws
+   in its gallery. */
+.spya-anim:not(.logo-home) {
+  position: relative;
+}
+
+.spya-anim .logo-letter {
+  /* `transform` does not apply to a non-replaced inline box, so without this
+     every per-letter animation in this file would be a no-op. The letters are
+     rendered from an array with no whitespace between the spans (HomeLogo.tsx),
+     so inline-block introduces no gaps and the word's width does not move. */
+  display: inline-block;
+  /* Each letter animates about its own centre unless it says otherwise. */
+  transform-origin: 50% 50%;
+  /* **Every letter, not only the three that host a pseudo-element today.**
+     Three animations here hang a `::before` or `::after` off one letter — the
+     seam's thread, the cursor after the `n`, the abseil line — and all three
+     were written without this, which does not error and does not look obviously
+     wrong: the pseudo silently resolves against the whole 136px anchor instead,
+     so `left: 100%` lands 28px past the end of the word rather than beside the
+     letter it belongs to. Found in the browser on 2026-09-07, on one of the
+     three; the other two would have been found one at a time, later, by
+     somebody else. Declaring it once for all ten letters costs a line and
+     retires the class of bug. docs/project/design-logo.md § The traps. */
+  position: relative;
+}
+
+.spya-anim .logo-image {
+  transform-origin: 50% 50%;
+}
+
+
+/* The ten-letter index, so every stagger below is one line rather than ten.
+   `--i` is not set in the JSX and deliberately is not: both components build
+   the letters from `"Spideryarn".split("")` and adding an inline style per
+   letter would put a presentational number in two files to save ten lines in
+   this one. `:nth-child` is a complete index over a fixed ten-letter word.
+
+   Fable checked the alternative and found it was not one: neither component
+   sets `--i` today, so any rule written as `calc(var(--i) * …)` without this
+   block resolves to an invalid value and the whole declaration is dropped —
+   silently, which is the failure this file keeps having to design around. */
+.spya-anim .logo-letter:nth-child(1)  { --i: 0; }
+.spya-anim .logo-letter:nth-child(2)  { --i: 1; }
+.spya-anim .logo-letter:nth-child(3)  { --i: 2; }
+.spya-anim .logo-letter:nth-child(4)  { --i: 3; }
+.spya-anim .logo-letter:nth-child(5)  { --i: 4; }
+.spya-anim .logo-letter:nth-child(6)  { --i: 5; }
+.spya-anim .logo-letter:nth-child(7)  { --i: 6; }
+.spya-anim .logo-letter:nth-child(8)  { --i: 7; }
+.spya-anim .logo-letter:nth-child(9)  { --i: 8; }
+.spya-anim .logo-letter:nth-child(10) { --i: 9; }
+
+/* **`.logo-mark` is a box that is exactly the spider**, and it exists so that
+   the two animations which draw something *at* the mark can say `inset: 0`
+   instead of guessing where it is.
+
+   This replaced a `--logo-pad` token that held the anchor's left padding for
+   each of the four boxes the wordmark is drawn in, on the assumption that the
+   image starts at the padding. **That assumption is false on a touch device**,
+   which is where the mark-only animations matter most, because the word is
+   hidden there. Under `pointer: coarse` (styles/narrow-window.css) the dock's
+   wordmark takes `flex: 1 0 auto`, `min-width: 2.5rem` and
+   `justify-content: center` — so on a tablet with room to spare the spider
+   moves right and sits centred in a grown box while a padding-derived offset
+   stays at the left edge. `spya-radius` painted a second, offset spider beside
+   the real one and `spya-dragline` hung its thread in clear air. It was wrong
+   by 2.8px even at rung 3's icon-only minimum, with no growth at all.
+   GPT Astra, 2026-09-07.
+
+   Four declarations, a default, and a class of bug all go away by wrapping the
+   `<img>` in one span (HomeLogo.tsx, Dock.tsx § DockHome, DesignPage.tsx §
+   LogoGlyph). Every layout that can move the mark moves the wrapper with it,
+   because the wrapper *is* the flex item. */
+.spya-anim .logo-mark { position: relative; }
+
+/* **A soft landing for The Settle, and only for it.** That is a correction: an
+   earlier draft of this comment claimed it eased the mark home "from wherever
+   an animation left it", and it does no such thing. Measured on 2026-09-07 —
+   pause `spya-dragline` at 44%, remove both classes, sample — the computed
+   transform is `none` in the same frame and every frame after, with this
+   `transition-duration: 0.22s` sitting right there on the element. **A
+   transition does not start from a value an animation was supplying.** When
+   the animation goes, the value goes with it.
+
+   So this rule serves `spya-settle`, which is a transition in both directions
+   and eases back along this gentler curve on the way out, and it serves nothing
+   else. Every keyframe animation here ends the frame the pointer leaves, from
+   whatever frame it was on — which is not a defect but the reason for the "start
+   and end at the resting state" rule above: an animation that never travels far
+   from rest cannot snap visibly.
+
+   It is outside `.spya-anim` because the hook removes both classes at once, so
+   anything scoped to the animating state has stopped applying by the time an
+   exit would need it. `transform` is never otherwise set on this image, so the
+   rule costs nothing at rest. */
+.logo-image {
+  transition: transform 220ms cubic-bezier(0.33, 0, 0.67, 1);
+}
+
+/* ==========================================================================
+   The thirteen.
+
+   Picked as a *set* rather than one at a time, by Fable on 2026-09-07, out of
+   roughly 140 ideas across eight longlists — the arbitration, the diversity
+   table it is scored against, and the near-misses to reach for if one of these
+   disappoints are in docs/plans/260907f-logo-animations-shortlist.md. The
+   design and the reasoning for the feature as a whole are in
+   docs/project/design-logo.md.
+
+   Each block states what the reader sees, and what a reduced-motion reader is
+   left looking at. The order matches the registry in logo-animation.ts.
+   ========================================================================== */
+
+/* -- 1. The Settle -------------------------------------------------------
+   The spider rises a hair and leans a pixel toward the corner it links to,
+   overshoots by a fraction, and settles: a thing with mass arriving. The word
+   does not move.
+
+   **A transition, not a keyframe**, and it is the only mechanism that gives an
+   exit as considered as the entrance — adding the class animates in, removing
+   it animates out, with the gentler resting curve above doing the second half.
+   The lean is toward the library this link goes to, which is the one piece of
+   information the control has to give.
+
+   Reduced motion: snaps to the lifted pose, which is a legitimate still. */
+.spya-settle .logo-image {
+  transform: translate(-1px, -1.5px);
+  transition: transform 260ms cubic-bezier(0.22, 1.32, 0.36, 1);
+}
+
+/* -- 2. Pluck the Thread -------------------------------------------------
+   The ten letters are a taut string. A bump runs S → n lifting each letter 2px
+   as it passes, then a smaller one, then a smaller one still, and it settles.
+   The spider does not move: it plucked, and it is listening.
+
+   **The decay is the whole idea.** Three bumps of falling height in one
+   keyframe is what separates this from the staggered wave every site has had
+   since 2014, and it costs two extra keyframe steps. The flat 75–100% is the
+   rest between plucks — without it the word hums rather than being plucked.
+
+   Reduced motion: base style. */
+.spya-pluck .logo-letter {
+  animation: spya-pluck 1.4s ease-in-out infinite;
+  /* 34ms × 9 = 306ms across the word, so the `S` is on its second swing while
+     the `n` starts its first and the row visibly skews. The first version
+     staggered 28ms under a 600ms bump, which is a bump twenty-one letters wide:
+     every letter rose at once and what you saw was the whole word bobbing at
+     2.6Hz — the tired micro-interaction this entry was written to avoid. */
+  animation-delay: calc(var(--i) * 34ms);
+}
+/* A plucked string does not send a bump along its length; it oscillates about
+   rest on *both* sides and decays. Five swings of falling height at a half
+   period of about 160ms — a tremble rather than a bounce — then 530ms of rest
+   so it re-plucks. The +1px below the baseline is inside the dock's clip. */
+@keyframes spya-pluck {
+  0%, 62%, 100% { transform: none; }
+  8% { transform: translateY(-2px); }
+  20% { transform: translateY(1px); }
+  31% { transform: translateY(-1px); }
+  42% { transform: translateY(0.5px); }
+  52% { transform: translateY(-0.3px); }
+}
+
+/* -- 3. Stronger Than Steel ----------------------------------------------
+   The row takes a weight: the middle letters drop about 3px and the ends barely
+   at all, in the smooth catenary a hanging line makes. It holds the load, then
+   springs back level with a faint overshoot, as if it was never going to break.
+
+   **No stagger, and that is what makes it a curve rather than a wave.** All ten
+   letters run the same keyframe at the same instant; the shape comes entirely
+   from ten constants. A stagger here would turn a catenary into a ripple, which
+   is animation 2's job.
+
+   Reduced motion: base style — 0% is exactly neutral, on purpose. */
+.spya-sag .logo-letter:nth-child(1),
+.spya-sag .logo-letter:nth-child(10) { --sag: 0; }
+.spya-sag .logo-letter:nth-child(2),
+.spya-sag .logo-letter:nth-child(9) { --sag: 0.45; }
+.spya-sag .logo-letter:nth-child(3),
+.spya-sag .logo-letter:nth-child(8) { --sag: 0.78; }
+.spya-sag .logo-letter:nth-child(4),
+.spya-sag .logo-letter:nth-child(7) { --sag: 0.96; }
+.spya-sag .logo-letter:nth-child(5),
+.spya-sag .logo-letter:nth-child(6) { --sag: 1; }
+.spya-sag .logo-letter {
+  animation: spya-sag 1.6s cubic-bezier(0.33, 0, 0.15, 1) 1;
+}
+@keyframes spya-sag {
+  0%, 100% { transform: none; }
+  30%, 50% { transform: translateY(calc(var(--sag) * 3px)); }
+  70% { transform: translateY(calc(var(--sag) * -0.6px)); }
+}
+
+/* -- 4. Misregistration --------------------------------------------------
+   Two ghost impressions of the word — one cool, one warm — sit a pixel and a
+   half off the real one and slide into perfect register, disappearing under it.
+   The word ends exactly as it started, only now you have seen it assembled from
+   plates.
+
+   **Always toward register, never away**, which is the entire difference
+   between a printing reference and a glitch effect. Nothing geometric moves:
+   two `text-shadow` copies converge on zero, so the letters never leave their
+   boxes and the row cannot reflow.
+
+   `--chat-mark` is a borrow and worth declaring: elsewhere it means *a
+   conversation's mark* (styles/tokens.css). It is used here for its colour
+   alone — the one cool hue in a warm palette, which is what a cyan plate has to
+   be. If that ever grates, the fix is a token of this file's own, not a hex.
+
+   Reduced motion: `forwards` holds 100%, which is zero offset and transparent —
+   the base style by another route. */
+.spya-register .logo-letter {
+  /* **`both`, so the plates are all present at hover-in and only the *lock*
+     travels.** `forwards` fills nothing during the delay, so each letter drew
+     nothing for up to 180ms and then its two plates *appeared* 1.5px apart — a
+     wave of plates arriving S → n, which is the glitch reading this entry
+     exists to avoid. */
+  animation: spya-register 640ms cubic-bezier(0.16, 1, 0.3, 1) 1 both;
+  animation-delay: calc(var(--i) * 20ms);
+}
+@keyframes spya-register {
+  from {
+    text-shadow:
+      -1.5px -0.5px 0 var(--chat-mark),
+      1.5px 0.5px 0 var(--highlight-ink);
+  }
+  to {
+    text-shadow:
+      0 0 0 transparent,
+      0 0 0 transparent;
+  }
+}
+
+/* -- 5. Warm Drift -------------------------------------------------------
+   Almost nothing. The spider's orange drifts a few degrees warmer and back, and
+   a very soft glow the shape of its legs breathes in and out around it. You
+   would not be able to describe it afterwards; you would notice the corner felt
+   alive.
+
+   **`drop-shadow` rather than `box-shadow` is the point**: it follows the PNG's
+   alpha, so the glow is leg-shaped rather than a 20px square with a bright
+   rectangle inside it.
+
+   Eight degrees is a ceiling, not a taste. `hue-rotate()` is a linear-RGB
+   matrix rather than a rotation in any perceptual space, and this orange goes
+   muddy somewhere past twelve.
+
+   Reduced motion: base style. */
+.spya-warm .logo-image {
+  animation: spya-warm 3.2s ease-in-out infinite;
+}
+@keyframes spya-warm {
+  0%, 100% {
+    filter: hue-rotate(0deg) drop-shadow(0 0 0 transparent);
+  }
+  50% {
+    filter: hue-rotate(-8deg)
+      drop-shadow(0 0 3px color-mix(in oklab, var(--highlight) 55%, transparent));
+  }
+}
+
+/* -- 6. The Seam Opens ---------------------------------------------------
+   The word splits where it really is a compound — between the `r` and the `y` —
+   with `Spider` sliding 3px left and `yarn` 3px right, and a single thread
+   stretching taut across the gap. It holds while you point at it.
+
+   **Two mechanisms in one animation, because a pseudo-element cannot transition
+   into existence.** The letters use transitions, so they part on the way in and
+   close on the way out. The thread is created along with the class and has no
+   previous value to transition from, so it is a keyframe with `forwards` — and
+   100% is the drawn thread, which is the pose this animation is *for* and a
+   perfectly good still.
+
+   **It parts smoothly and closes abruptly**, which the first draft of this note
+   claimed otherwise. The letters' `transition` declaration lives on
+   `.spya-seam`, so it goes with the class: on the way out there is nothing left
+   to transition and the word snaps shut. Only `spya-settle` eases both ways
+   (§ the note on `.logo-image`). At 3px a snap is unremarkable, which is why
+   this is a correction rather than a change.
+
+   The thread hangs off the sixth letter's own box rather than off a measured
+   coordinate, which is what lets one rule serve two different typefaces
+   (Trebuchet in the corner, Geist in the bar).
+
+   Six pixels of total gap is the ceiling. At eight the word reads as broken
+   rather than as parted.
+
+   Reduced motion: snaps to the parted pose with the thread drawn. */
+.spya-seam .logo-letter {
+  transition: transform 300ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.spya-seam .logo-letter:nth-child(-n + 6) { transform: translateX(-3px); }
+.spya-seam .logo-letter:nth-child(n + 7) { transform: translateX(3px); }
+.spya-seam .logo-letter:nth-child(6)::after {
+  content: "";
+  position: absolute;
+  left: 100%;
+  /* **Just above the baseline, not at x-height**, which is where a straight
+     line between two letters would sit and be read as a hyphen. Measured at 1×
+     after the sag was added: the curve stops it being misread as an en dash,
+     but at native resolution it is close to invisible at x-height, so it drops
+     to where a stitch would be and reads as one. Fable's own fallback, taken on
+     the browser check's evidence, 2026-09-07. */
+  top: 68%;
+  width: 6px;
+  height: 3px;
+  /* **A curved hairline, not a straight one, and the curve is the whole
+     point.** A flat 6px rule at x-height between two letters is an en dash:
+     the wordmark read "Spider–yarn" and a reader would have taken it for
+     punctuation. Only the bottom edge is drawn, bent by the radius into a 2px
+     sag — which is a shape no glyph in either face makes. */
+  border-bottom: 1px solid var(--highlight);
+  border-radius: 0 0 50% 50% / 0 0 100% 100%;
+  opacity: 0.6;
+  /* Safe without this, and stated anyway. `both` fills backwards through the
+     180ms delay, so the guard's flattened run does land on `scaleX(0)` — but
+     only as a side effect of a fill mode chosen for a different reason, and the
+     two threads that shipped drawn-at-rest were the same shape of accident.
+     Declaring it makes the resting state a property of this rule rather than of
+     one word in the line below it. */
+  transform: scaleX(0);
+  transform-origin: left;
+  animation: spya-seam-thread 240ms 180ms cubic-bezier(0.2, 0.8, 0.2, 1) 1 both;
+}
+@keyframes spya-seam-thread {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+/* -- 7. The Spider Strains -----------------------------------------------
+   The spider leans hard to the left, legs braced and visibly stretching, as if
+   trying to haul the word off the screen — and the word does not budge. After a
+   beat it gives up, springs upright, and the letters brighten a shade, as
+   though acknowledging they were never going anywhere. Then it tries again.
+
+   The one animation here that is an argument: the text does not move, whatever
+   the tool does to it (docs/project/vision.md § Principles). The `scaleX(1.1)`
+   is what sells the effort — without it the lean reads as the icon simply being
+   crooked.
+
+   Reduced motion: base style. */
+.spya-strain .logo-image {
+  transform-origin: 60% 50%;
+  animation: spya-strain 1.8s ease-in-out infinite;
+}
+/* **It shudders, and that is what makes it effort rather than a tilt.** The
+   first version leaned 10° over 684ms into a 250ms *static* hold, which on a
+   20px silhouette is indistinguishable from the icon simply being crooked —
+   the risk this entry named. Arriving sooner, leaning further and trembling
+   twice in the hold is what a thing straining against a weight does.
+
+   The dock's budget: 15° about `60% 50%` moves a corner ≤3.5px vertically
+   against 10px of headroom, `scaleX(1.16)` is 23.2px wide against a 6.4px gap,
+   and −3.5px is inside the 9.6px padding. */
+@keyframes spya-strain {
+  0%, 84%, 100% { transform: none; }
+  26% { transform: translateX(-3px) rotate(-14deg) scaleX(1.12); }
+  34% { transform: translateX(-3.5px) rotate(-15deg) scaleX(1.16); }
+  42% { transform: translateX(-3px) rotate(-14deg) scaleX(1.12); }
+  50% { transform: translateX(-3.5px) rotate(-15deg) scaleX(1.16); }
+  58% { transform: translateX(-3px) rotate(-14deg) scaleX(1.12); }
+  70% { transform: rotate(5deg); }
+}
+.spya-strain .logo-letter {
+  animation: spya-strain-hold 1.8s ease-in-out infinite;
+}
+/* After it lets go (58%), not during the hold — which is the beat the note
+   above describes, and was the one thing the first version had out of order. */
+@keyframes spya-strain-hold {
+  0%, 56%, 100% { color: var(--highlight); }
+  68%, 82% { color: var(--highlight-ink); }
+}
+
+/* -- 8. Only the i -------------------------------------------------------
+   One letter — the `i`, third in the word — rises a single pixel with a tiny
+   overshoot and stays up. Nothing else moves at all.
+
+   Restraint as narrowness of scope rather than as low amplitude: a full-sized
+   gesture confined to a tenth of the wordmark. The overshoot is not decoration.
+   A letter sitting off its baseline is a typographic fault unless it is
+   unmistakably in motion getting there, and 0.3px of overshoot is the whole
+   difference between a gesture and a bug.
+
+   Reduced motion: snaps to the raised `i`. */
+.spya-i .logo-letter:nth-child(3) {
+  transform: translateY(-1px);
+  transition: transform 200ms cubic-bezier(0.22, 1.3, 0.36, 1);
+}
+
+/* -- 9. Dawn Rebuild -----------------------------------------------------
+   A soft edge sweeps right to left across the whole control and everything
+   behind it is gone — mark and word both eaten — and at once a second edge
+   sweeps left to right and puts it back, the word arriving a shade brighter and
+   cooling to its usual orange. Eaten one way, respun the other. Once.
+
+   An orb weaver eats its web at dawn and builds a new one the same day, which
+   is the least sentimental available statement of what re-reading something is.
+
+   **The asymmetry is load-bearing.** The eat is quick and `ease-in`, the respin
+   slower and `ease-out`. Tune that out in a later polish pass and this becomes
+   the previous app's Highlight Sweep, which is precisely what the brief said
+   not to rebuild.
+
+   The mask is masking, not colour: `#000` here is an alpha of 1 in a gradient
+   whose other stop is `transparent`, and no palette could want it to be
+   anything else. With a 250%-wide mask, `mask-position: 0` puts the opaque 40%
+   exactly over the element — so the resting and finishing state is fully
+   revealed by construction rather than by a keyframe remembering to say so.
+
+   Reduced motion: base style, mask at 0 — the wordmark, whole. */
+.spya-dawn {
+  -webkit-mask-image: linear-gradient(90deg, #000 0 40%, transparent 60% 100%);
+  mask-image: linear-gradient(90deg, #000 0 40%, transparent 60% 100%);
+  -webkit-mask-size: 250% 100%;
+  mask-size: 250% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  animation: spya-dawn 1.3s 1;
+}
+@keyframes spya-dawn {
+  0% {
+    -webkit-mask-position: 0 0;
+    mask-position: 0 0;
+    animation-timing-function: cubic-bezier(0.4, 0, 1, 1);
+  }
+  42% {
+    -webkit-mask-position: 100% 0;
+    mask-position: 100% 0;
+    animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
+  }
+  100% {
+    -webkit-mask-position: 0 0;
+    mask-position: 0 0;
+  }
+}
+.spya-dawn .logo-letter {
+  animation: spya-dawn-glow 2.1s ease-out 1;
+}
+@keyframes spya-dawn-glow {
+  0%, 50% { color: var(--highlight); }
+  62% { color: var(--highlight-ink); }
+  100% { color: var(--highlight); }
+}
+
+/* -- 10. Retype ----------------------------------------------------------
+   The word drops to a faint ghost and types itself back in from the left at the
+   cadence of a fast typist; once it is whole, a block cursor sits after the `n`
+   and blinks at the unhurried rate of a shell prompt for as long as you point
+   at it.
+
+   **From a ghost, never from nothing**, and that is the defence rather than a
+   flourish: for two thirds of a second the app's own name is incomplete, and on
+   a slow first paint a blank one would be indistinguishable from a font that
+   has not loaded.
+
+   Every timing function is `steps()`. A character does not fade in.
+
+   The cursor is a pseudo-element on the last letter rather than an element in
+   the flex row, so it cannot add to the wordmark's width — the corner box has
+   about 18px spare after the word and the cursor is 5.5px of it.
+
+   Reduced motion: the guard flattens durations but **not delays**, so the word
+   sits faint for up to 670ms and then arrives whole. A dim word is not a broken
+   one — but this is the one animation here whose reduced state is a compromise
+   rather than a still, and it is named so nobody has to rediscover it. The
+   version that shipped for an hour was worse than a compromise: see the note on
+   `backwards` below. */
+.spya-type .logo-letter {
+  /* **`backwards`, not `both`, and the reason is an observation rather than an
+     explanation.** With `both`, under the motion guard, four of the ten letters
+     were left stuck at `opacity: 0.3` indefinitely — a permanently half-faded
+     "Spideryarn" (browser check, 2026-09-07, confirmed two ways and sustained
+     past four seconds). **Nothing in the fill-mode rules accounts for that**:
+     these keyframes end at `opacity: 1`, so an ordinary forwards fill would
+     leave the letter lit. An earlier version of this comment asserted a
+     mechanism it did not have, which GPT Astra caught. Treat it as an
+     unexplained browser result.
+
+     `backwards` is the right thing regardless, and would be even if the fault
+     had never appeared: it fills only the delay, so once the active phase is
+     over the letter reverts to its *base* style — the fully lit word — and the
+     resting state stops depending on an animation having reported itself
+     finished at all. */
+  animation: spya-type 60ms steps(1, end) 1 backwards;
+  animation-delay: calc(var(--i) * 55ms + 120ms);
+}
+@keyframes spya-type {
+  from { opacity: 0.3; }
+  to { opacity: 1; }
+}
+.spya-type .logo-letter:nth-child(10)::after {
+  content: "";
+  position: absolute;
+  left: calc(100% + 0.1em);
+  /* 4.7px → 13.9px of the box in both faces, which is cap height down to the
+     baseline. The first version spanned 1.6px → 12.7px: a cursor floating
+     3.4px above the caps and stopping short of the baseline, which is the one
+     thing a terminal cursor never does. */
+  top: 0.36em;
+  height: 0.7em;
+  width: 0.42em;
+  background: currentColor;
+  opacity: 0;
+  /* Explicit, so the "every animated pseudo-element declares a resting
+     transform" test can be a flat rule rather than one with an exception in
+     it. This one animates `opacity`; the rest animate `transform`. */
+  transform: none;
+  animation: spya-blink 1.06s steps(1, end) infinite;
+  animation-delay: 700ms;
+}
+@keyframes spya-blink {
+  0%, 50% { opacity: 1; }
+  50.01%, 100% { opacity: 0; }
+}
+
+/* -- 11. Abseil ----------------------------------------------------------
+   The final `n` lets go of the word and drops on a single thread of yarn,
+   bobbing on the line's springiness, hangs a moment eight pixels below the
+   baseline, and is reeled smoothly back up to rejoin the word as though nothing
+   had happened.
+
+   **Eight pixels is the ceiling, and it is nearer the edge than three separate
+   estimates said.** Measured in the bar itself (2026-09-07), which is the only
+   place that can answer it: the dock is 40px and `overflow-y: hidden`
+   (styles/dock.css § .dock), and this drop's spring easing **overshoots to
+   8.78px** around 320ms before settling to the flat 8. At that peak the
+   letter's box bottom is 0.55px above the clip.
+
+   Two earlier notes here said 1.8px and five. Both were arithmetic from the
+   keyframe's plateau, and neither accounted for the overshoot the easing curve
+   puts in front of it — which is the whole reason this number now cites a
+   measurement instead. What clips is rendered pixels rather than boxes, and the
+   `n` has no descender, so the visible ink has considerably more room than
+   0.55px. Do not raise this without measuring it in the dock again.
+
+   The thread is anchored 8px above the letter's own top and rides down with it,
+   so it is pinned to where the letter *was* rather than to a coordinate that
+   would have to be recomputed for the other typeface.
+
+   Reduced motion: base style — the letter in the word, the thread at zero
+   length. */
+.spya-abseil .logo-letter:nth-child(10) {
+  animation: spya-abseil 2s infinite;
+}
+@keyframes spya-abseil {
+  0% {
+    transform: none;
+    animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  28%, 58% {
+    transform: translateY(8px);
+    animation-timing-function: ease-in-out;
+  }
+  84%, 100% { transform: none; }
+}
+.spya-abseil .logo-letter:nth-child(10)::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  /* **From the top of the `n` as it was to the top of the `n` as it is.** The
+     letter's *box* is 20.3px tall — `body`'s line-height reaches the letters —
+     and the glyph starts about half an em below the box top (7px in Trebuchet,
+     6px in Geist). Anchored at the box top instead, the yarn stopped 7px above
+     the letter hanging from it and the two read as unrelated marks. */
+  top: calc(0.5em - 8px);
+  width: 1px;
+  height: 8px;
+  background: var(--highlight);
+  opacity: 0.6;
+  /* **The resting state, and it is not decoration.** The guard runs this
+     animation for 0.01ms with no fill, so the pseudo reverts to *this* — and
+     without it that is a thread at full 8px length beside a letter sitting at
+     rest, for as long as the reader points. Two of the three threads in this
+     file shipped without it. */
+  transform: scaleY(0);
+  /* **`bottom`, and `top` was wrong in a way only the mid-frames show.** The
+     pseudo rides inside the letter, so it moves down with it; scaling from the
+     top pins the thread's *upper* end to a point that is itself descending, and
+     halfway through the drop the thread ran from 4px above the original glyph
+     top to the original glyph top — a 4px gap above a letter already 4px below
+     it. At the full hang the endpoints happened to coincide, which is why the
+     hang looked right and the descent did not. Scaling from the bottom pins the
+     lower end to the letter and lets the upper end stay at the anchor.
+     GPT Astra, 2026-09-07. */
+  transform-origin: bottom;
+  animation: spya-abseil-thread 2s infinite;
+}
+@keyframes spya-abseil-thread {
+  0% {
+    transform: scaleY(0);
+    animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  28%, 58% {
+    transform: scaleY(1);
+    animation-timing-function: ease-in-out;
+  }
+  84%, 100% { transform: scaleY(0); }
+}
+
+/* -- 12. Dragline Drop ---------------------------------------------------
+   The spider drops straight down out of its slot, paying out a hairline thread
+   from where it was, hangs for a beat swinging a degree or two, then climbs
+   briskly back up and the thread retracts into nothing.
+
+   The single most recognisable thing a spider does, and the reason it is worth
+   the only hard-coded geometry in this file: a dragline is a spider's undo. It
+   never lets go of where it came from, which is the citation promise
+   (docs/project/vision.md § Principles) drawn rather than stated.
+
+   The thread hangs from `.logo-mark`, the wrapper that is exactly the image's
+   box — so it finds the spider's centre wherever a layout has put it, including
+   the centred, grown box a tablet gives the dock's wordmark. The image inside
+   is what moves; the wrapper does not, which is what makes the wrapper the
+   right anchor for a line the spider is descending *from*.
+
+   Reduced motion: base style. */
+.spya-dragline .logo-image {
+  animation: spya-dragline 1.6s ease-in-out infinite;
+}
+@keyframes spya-dragline {
+  0%, 100% { transform: none; }
+  30% { transform: translateY(8px) rotate(2deg); }
+  44% { transform: translateY(8px) rotate(-2deg); }
+  58% { transform: translateY(8px) rotate(1deg); }
+  84% { transform: none; }
+}
+.spya-dragline .logo-mark::before {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  /* Half a pixel back from the middle, so a 1px line lands on the centre
+     rather than beside it. */
+  left: calc(50% - 0.5px);
+  top: 0;
+  width: 1px;
+  height: 8px;
+  background: var(--highlight);
+  opacity: 0.7;
+  /* The resting state — see the note on `spya-abseil`'s thread. Without it the
+     dragline hangs at full length under a spider that is not on it. */
+  transform: scaleY(0);
+  transform-origin: top;
+  animation: spya-dragline-thread 1.6s ease-in-out infinite;
+}
+@keyframes spya-dragline-thread {
+  0%, 100% { transform: scaleY(0); }
+  30%, 58% { transform: scaleY(1); }
+  84% { transform: scaleY(0); }
+}
+
+/* -- 13. Radius Sweep ----------------------------------------------------
+   A paler band of orange travels round the spider like a hand on a clock face,
+   lighting each of its six legs in turn as it passes, while the rest of the
+   mark stays its ordinary orange. Nothing moves; the light goes round.
+
+   The spider at the hub keeps a leg on every radius and polls them all, which
+   is the closest this mark comes to *attending to one thing at a time*. It is
+   also the only one of these that treats the mark as the radial object it is.
+
+   **Two things make this the expensive one.** An `<img>` is a replaced element
+   and takes no pseudo-element, so the sweep is a painted box masked to the
+   PNG's own alpha and laid over the real image — which is what `.logo-mark`
+   exists for: `inset: 0` on the wrapper is the image's box exactly, in every
+   layout. And the `from` angle of a `conic-gradient` cannot be interpolated at
+   all without a registered custom property, so `@property` is load-bearing
+   rather than convenient.
+
+   **It degrades to a still rather than to nothing.** The overlay is painted the
+   same orange as the mark everywhere except the lit band, so it sits over the
+   real image without hiding it: where `@property` is unsupported the local
+   `--spya-angle: 0deg` keeps the gradient valid and the reader gets a static
+   two-tone spider, which looks deliberate. Where `mask-image` is unsupported
+   the `@supports` gate means the pseudo is never created and the reader gets
+   the plain mark.
+
+   `linear`, and not by oversight: a sweep is a clock, and easing a clock is a
+   lie about its timebase.
+
+   Reduced motion: **a permanent two-tone spider**, not a momentary one. Only
+   the angle's animation is flattened; the pseudo-element, its mask and its
+   gradient are static declarations on the class and stand for as long as the
+   reader points at it. That is a legitimate still — the same one a browser
+   without `@property` gets — but it is a different claim from "for the 0.01ms
+   it runs", which is what this line said until GPT Astra read it. */
+@property --spya-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+/* The gradient form rather than `url("")`: an empty URL is an odd thing to ask
+   a browser about, and the gradient is the probe the build spike verified. */
+@supports (mask-image: linear-gradient(#000, #000)) or
+  (-webkit-mask-image: linear-gradient(#000, #000)) {
+  .spya-radius .logo-mark::after {
+    content: "";
+    position: absolute;
+    pointer-events: none;
+    inset: 0;
+    /* This one animates `--spya-angle`, whose resting value is the line below,
+       and it never transforms at all. The declaration is here so the "every
+       animated pseudo-element declares a resting transform" test can be a flat
+       rule with no exception written into it — the same reason the block cursor
+       carries one. It is convention, not mechanism. */
+    transform: none;
+    --spya-angle: 0deg;
+    background: conic-gradient(
+      from var(--spya-angle),
+      var(--highlight) 0turn,
+      var(--highlight-ink) 0.16turn,
+      var(--highlight) 0.4turn,
+      var(--highlight) 1turn
+    );
+    -webkit-mask: url(/spideryarn-logo.png) center / 20px 20px no-repeat;
+    mask: url(/spideryarn-logo.png) center / 20px 20px no-repeat;
+    animation: spya-radius 2.4s linear infinite;
+  }
+}
+@keyframes spya-radius {
+  to { --spya-angle: 360deg; }
+}
