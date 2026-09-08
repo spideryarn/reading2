@@ -577,6 +577,10 @@ when someone says the list is too long.
 **The two browser servers are provisioned.** `playwright` and `chrome-devtools`, at *user* scope,
 pinned and heap-capped by [`provision.sh`](provision.sh) — see its `=== mcp servers ===` block, and
 [browser-control.md](../../docs/project/browser-control.md) for what they can and cannot prove.
+Open `playwright` unless you are profiling; they launch separate browsers and cannot share a page.
+**Registered is not working**, and this is one of the places that distinction has already cost us:
+provisioning asserts the registration *text*, which passes even if the package cannot install.
+`doctor`'s `browser mcp` check is the one that drives them.
 
 **The three service servers travel in git**, in [`.mcp.json`](../../.mcp.json) at the repo root, so a
 new box gets them from `gjd-remote clone` and no provisioning code has to know about them:
