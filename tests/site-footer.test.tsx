@@ -73,7 +73,7 @@ afterEach(() => {
  */
 function footerAt(
   pathname: string,
-  here?: "library" | "features" | "privacy" | "contact" | "changelog",
+  here?: "library" | "features" | "privacy" | "contact" | "changelog" | "opensource",
 ): string[] {
   history.replaceState(null, "", pathname);
   act(() => root.render(<SiteFooter {...(here ? { here } : {})} />));
@@ -88,32 +88,48 @@ const PRICING = "Pricing → /pricing";
 const PRIVACY = "Privacy → /privacy";
 const CONTACT = "Contact → /contact";
 const CHANGELOG = "What’s new → /changelog";
+/* The one entry with a mark before its label (SiteFooter.tsx § `icon`). The
+   mark is `aria-hidden` inline SVG, so `textContent` reads the label alone and
+   this constant has the same shape as the five above it. */
+const OPENSOURCE = "Open source → /opensource";
 
 describe("the site footer", () => {
   it("carries the whole row on a page that is not one of its own", () => {
     // The control: if this ever stops holding, every "is missing" assertion
     // below would pass over a footer that rendered nothing at all.
-    expect(footerAt("/profile")).toEqual([HOME, FEATURES, PRICING, PRIVACY, CONTACT, CHANGELOG]);
+    expect(footerAt("/profile")).toEqual([
+      HOME,
+      FEATURES,
+      PRICING,
+      PRIVACY,
+      CONTACT,
+      CHANGELOG,
+      OPENSOURCE,
+    ]);
   });
 
   it("drops Home on the shelf, which is also the landing page", () => {
-    expect(footerAt("/")).toEqual([FEATURES, PRICING, PRIVACY, CONTACT, CHANGELOG]);
+    expect(footerAt("/")).toEqual([FEATURES, PRICING, PRIVACY, CONTACT, CHANGELOG, OPENSOURCE]);
   });
 
   it("drops Features on the features page", () => {
-    expect(footerAt("/features")).toEqual([HOME, PRICING, PRIVACY, CONTACT, CHANGELOG]);
+    expect(footerAt("/features")).toEqual([HOME, PRICING, PRIVACY, CONTACT, CHANGELOG, OPENSOURCE]);
   });
 
   it("drops Privacy on the privacy page", () => {
-    expect(footerAt("/privacy")).toEqual([HOME, FEATURES, PRICING, CONTACT, CHANGELOG]);
+    expect(footerAt("/privacy")).toEqual([HOME, FEATURES, PRICING, CONTACT, CHANGELOG, OPENSOURCE]);
   });
 
   it("drops Contact on the contact page", () => {
-    expect(footerAt("/contact")).toEqual([HOME, FEATURES, PRICING, PRIVACY, CHANGELOG]);
+    expect(footerAt("/contact")).toEqual([HOME, FEATURES, PRICING, PRIVACY, CHANGELOG, OPENSOURCE]);
   });
 
   it("drops What's new on the changelog page", () => {
-    expect(footerAt("/changelog")).toEqual([HOME, FEATURES, PRICING, PRIVACY, CONTACT]);
+    expect(footerAt("/changelog")).toEqual([HOME, FEATURES, PRICING, PRIVACY, CONTACT, OPENSOURCE]);
+  });
+
+  it("drops Open source on the open-source page", () => {
+    expect(footerAt("/opensource")).toEqual([HOME, FEATURES, PRICING, PRIVACY, CONTACT, CHANGELOG]);
   });
 
   it("carries no email address anywhere in the row", () => {
@@ -121,7 +137,16 @@ describe("the site footer", () => {
        Greg, 2026-09-06: *"Remove the hello@spideryarn.com from the footer —
        just keep the Contact page, which already points to that."* Every entry
        in this row is now a page, which is what SiteFooter.tsx § `LINKS` says. */
-    for (const at of ["/", "/features", "/pricing", "/privacy", "/contact", "/changelog", "/profile"]) {
+    for (const at of [
+      "/",
+      "/features",
+      "/pricing",
+      "/privacy",
+      "/contact",
+      "/changelog",
+      "/opensource",
+      "/profile",
+    ]) {
       for (const link of footerAt(at)) expect(link).not.toContain("mailto:");
     }
   });
@@ -145,6 +170,7 @@ describe("the site footer", () => {
       PRIVACY,
       CONTACT,
       CHANGELOG,
+      OPENSOURCE,
     ]);
   });
 
@@ -262,7 +288,7 @@ describe("the pages that mount it", () => {
       .sort(),
   );
 
-  it("is exactly the nine pages that have a bottom, once each", () => {
+  it("is exactly the pages that have a bottom, once each", () => {
     expect(Object.fromEntries(mounts)).toEqual({
       /* `/changelog`, since 2026-09-06 — docs/project/changelog.md. */
       "ChangelogPage.tsx": 1,
@@ -271,6 +297,9 @@ describe("the pages that mount it", () => {
       "FeaturesPage.tsx": 1,
       "LandingPage.tsx": 1,
       "Library.tsx": 1,
+      /* `/opensource`, since 2026-09-07 —
+         docs/plans/260907f-changelog-table-of-contents-collapsible-versions-version-numbers-and-an-opensource-page.md. */
+      "OpenSourcePage.tsx": 1,
       /* `/pricing`, since 2026-09-03. Its first draft hand-wrote the row by
          copying the features page, which is the duplication this component was
          extracted to stop — and this assertion is what caught it. */

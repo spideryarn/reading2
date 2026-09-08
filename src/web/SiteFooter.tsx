@@ -115,6 +115,7 @@
  */
 import type { ReactNode } from "react";
 
+import { GitHubMark } from "./GitHubMark.js";
 import { Link } from "./Link.js";
 import { Wordmark } from "./SiteBits.js";
 import {
@@ -123,6 +124,7 @@ import {
   CONTACT_HREF,
   FEATURES_HREF,
   LIBRARY_HREF,
+  OPENSOURCE_HREF,
   PRICING_HREF,
   PRIVACY_HREF,
   useRoute,
@@ -149,7 +151,7 @@ import {
  */
 type FooterPage = Extract<
   Route["kind"],
-  "library" | "features" | "privacy" | "pricing" | "contact" | "changelog"
+  "library" | "features" | "privacy" | "pricing" | "contact" | "changelog" | "opensource"
 >;
 
 /**
@@ -159,7 +161,22 @@ type FooterPage = Extract<
  * it is the shelf, signed out it is the landing page, and on either of them a
  * link labelled Home would point at the page under the reader's feet.
  */
-const LINKS: readonly { href: string; label: string; here: FooterPage }[] = [
+const LINKS: readonly {
+  href: string;
+  label: string;
+  here: FooterPage;
+  /**
+   * A mark drawn before the label, and exactly one entry has one.
+   *
+   * Greg asked for the open-source link *"using GitHub logo to indicate"*, and
+   * the mark is doing work the word cannot: in a row of six identical grey
+   * words, it is the only thing that says *this one leaves the site and goes
+   * somewhere you already know how to read*. `aria-hidden` inside `GitHubMark`,
+   * because the label beside it is the accessible name and an icon read aloud
+   * as well is noise.
+   */
+  icon?: ReactNode;
+}[] = [
   { href: LIBRARY_HREF, label: "Home", here: "library" },
   { href: FEATURES_HREF, label: "Features", here: "features" },
   /* Added 2026-09-03 with `/pricing`, and this array is the whole edit — which
@@ -180,8 +197,25 @@ const LINKS: readonly { href: string; label: string; here: FooterPage }[] = [
   /* Added 2026-09-06 with `/changelog` — same claim, same array-is-the-edit.
      "What's new" rather than "Changelog": the latter is the internal name for
      the process that writes the page (docs/project/changelog.md), and a
-     reader has never heard of it. */
+     reader has never heard of it.
+
+     **The label is `CHANGELOG_LABEL` rather than the words**, since 2026-09-07:
+     the command bar offers this page too, so the string had four homes and three
+     comments promising they matched. router.ts § `CHANGELOG_LABEL`. */
   { href: CHANGELOG_HREF, label: CHANGELOG_LABEL, here: "changelog" },
+  /* Added 2026-09-07 with `/opensource` — and, like the three entries above it,
+     this array is the whole edit. The first entry to carry an icon; see `icon`
+     above for why this one and not the others.
+     docs/plans/260907f-changelog-table-of-contents-collapsible-versions-version-numbers-and-an-opensource-page.md.
+
+     Its label is still the words, unlike the row above — router.ts
+     § `OPENSOURCE_HREF` says why, and that it should not stay that way for long. */
+  {
+    href: OPENSOURCE_HREF,
+    label: "Open source",
+    here: "opensource",
+    icon: <GitHubMark size={11} />,
+  },
 ];
 
 /**
@@ -339,8 +373,20 @@ export function SiteFooter({
           aria-label="Site"
           className="tw:flex tw:flex-wrap tw:gap-x-5 tw:gap-y-2"
         >
+          {/* **One entry carries a mark, and it is why this is not a bare
+              `{l.label}`.** Greg asked for the open-source link *"using GitHub
+              logo to indicate"* — see `icon` on `LINKS`. `inline-flex` only when
+              there is one, so every other link stays the plain inline text this
+              row's spacing was measured against. */}
           {links.map((l) => (
-            <Link key={l.href} href={l.href} className={LINK_CLASS}>
+            <Link
+              key={l.href}
+              href={l.href}
+              className={
+                l.icon ? `${LINK_CLASS} tw:inline-flex tw:items-center tw:gap-1.5` : LINK_CLASS
+              }
+            >
+              {l.icon}
               {l.label}
             </Link>
           ))}

@@ -1,27 +1,40 @@
 # Agent fleet dashboard
 
-**Status as of 2026-09-08 05:00: running, and done enough to stop here.**
+**Status as of 2026-09-08 09:15: important work left — one restart that is Greg's, and one queue
+that nothing drains.**
+
+Two things, in order of how much they cost:
+
+1. **Nothing drains the action queue** —
+   [Stage v0.5f](#-stage-v05f-nothing-drains-the-queue-the-one-thing-that-is-worse-than-not-built).
+   The routes, the client and the queue are all built and tested; no production code path ever calls
+   `queue.next()`. A queued action waits thirty minutes and is dropped. A button that says *queued*
+   and means *never* is worse than no button.
+2. **The live server predates the code** — see the section below. Restarting it is Greg's.
+
+Everything else below is real but optional.
 
 Serving on `127.0.0.1:8787` and on the tailnet at `100.92.255.119:8787`, under
-`scripts/tmux-job.ts` so it survives memory pressure. ~36 sessions with status, the pending question
-for blocked ones, Box Health, and a master–detail Sessions view with steering. Evidence:
-`tools/fleet/` holds fourteen modules; **580 tests pass across fifteen files**; both typecheck
-projects are clean; a browser check reports zero CSP violations, zero console errors and zero
-horizontal overflow at 390px and 1280px, light and dark.
+`scripts/tmux-job.ts` so it survives memory pressure. ~24 sessions with status, the pending question
+for blocked ones, Box Health, a master–detail Sessions view with steering, rename, and the action
+vocabulary. Evidence: **1006 tests pass** across the fleet, overseer and worktree suites; all four
+typecheck projects are clean; a browser check at 390px reports one expected console error, no
+horizontal overflow, and the dialog card rendering its refusal rather than a button.
 
 **Verified end to end, not at the call site.** A message sent from the client's own body-builder,
 through the real server, arrives in the target pane and nowhere else — nonce generated inside the
 script and written only to a file. Starting a session through `POST /api/sessions/new` produces a
-real Claude that answers.
+real Claude that answers. A rename held through a real `gjd-remote ls` that renamed two *other*
+sessions in the same run.
 
-**Two things are deliberately switched off**, and both are decisions rather than defects:
+**Answering a dialog is back on, narrowed rather than blanket-off** — see
+[Stage v0.2e](#-stage-v02e-what-answering-a-dialog-does-decides-whether-it-may-be-answered-landed-2026-09-08).
+What answering *does* now decides whether it may be answered, and `unknown` is refused with
+`permission`.
 
-- **Answering a dialog** returns 503 with a sentence saying why. Two cross-family reviews found that
-  the captured question did not include *what was being approved*; that is now fixed, but a second
-  finding is not fixable — pane text is not provenance. See **Stage v0.2b** below,
-  and the question for Greg in **Stage v0.4d**.
-- **The action buttons and the queue** are built and tested (`actions.ts`, `queue.ts`) but not wired
-  to a route. That is [Stage v0.5](#stage-v05-the-steering-vocabulary).
+**One thing is still switched off:** enacted actions need `FLEET_ACT_ENABLED=1`. The catalogue, the
+queues and the dry runs are live; removing a worktree and killing a session are not. That default is
+right until Greg has looked at what the buttons say they will do.
 
 **Read Stage v0.4d first.** Fable read all 38 live panes and broke this plan's premise: the sessions actually waiting
 on Greg are hiding under `idle`, and the dialog-answering this write path was built for is a
@@ -30,6 +43,25 @@ rounding error. That reframing is worth more than anything below it.
 Two claims in earlier versions of this plan were **retracted** — the inbox socket, and "no shell
 anywhere" in the launch path. Both are in
 [Evidence](#evidence-what-was-actually-tested), which records what failed as well as what worked.
+
+## The running server is older than this code, and only Greg can restart it
+
+The process on 8787 has been up since 04:34 and predates `routes-actions.ts` and `PaneGate`. The
+client is built and live; the server is not. Two visible consequences, both correct behaviour rather
+than breakage:
+
+- `GET /api/actions` **404s**, once per ten-second poll. `useActions` keeps the last good feed and
+  shows the error beside it, so the page does not break — but the action buttons, the queues and Box
+  Health's controls have nothing to render from.
+- Every dialog reads **"Not offered: I could not tell what this is — this server did not say what
+  answering this dialog would do."** That is `parseGate` failing towards `unknown`, which is the
+  designed answer for a server too old to send the field, and it means answering is currently
+  offered for nothing at all.
+
+**The fix is one restart, and it is Greg's to make** — the standing instruction here is not to
+restart or kill the live server. The job runs under `scripts/tmux-job.ts`; restart it the same way it
+was started, with `FLEET_BIND=127.0.0.1,100.92.255.119`. Once it is up, `curl -s localhost:8787/api/actions | head -c 200`
+answering with JSON rather than a 404 is the whole check.
 
 ## Do not remove this worktree while the dashboard is running
 
@@ -594,6 +626,36 @@ not to do.
 - [ ] `~/.claude/projects/<slug>/` is a **slugified cwd and is lossy** — resolve the path from
       `row.meta.dir` plus `row.claudeSessionId`, and say plainly when it cannot be found rather
       than showing an empty conversation.
+
+### 🔴 Stage v0.5f: NOTHING DRAINS THE QUEUE — the one thing that is worse than not built
+
+**The queue accepts items and no code path ever delivers them.** `SteeringQueue` is built, tested and
+routed; `POST /api/actions/session` defaults to `mode: "enqueue"`; the client renders the queue and
+lets you cancel. But `queue.next()` is called from `tests/fleet-actions-route.test.ts` and **from
+nowhere else in the product**. A queued action sits until it goes stale at thirty minutes and is then
+silently dropped.
+
+That is worse than the feature being absent, and it is worse in the specific way this project keeps
+writing about. An absent button teaches you to go to the terminal. A button that says *queued* and
+means *never* is a promise the page cannot keep, and the person who pressed it goes away. It is
+`silent-success.md` arriving inside the product rather than inside a check.
+
+Greg's words are what makes the queue the point rather than a nicety — *"ideally these would
+queue/steer if it's currently running, so that one could press more than one, in combination with
+messages"* — so this is the difference between v0.5 being built and v0.5 working.
+
+- [ ] A drain pass in `server.ts`'s refresh loop: for each session in the fresh snapshot, ask
+      `drainGate(row.status)`, and when it says `now`, lease one item and deliver it.
+- [ ] **One item per session per pass**, not a flush. The point of the queue is that an agent gets a
+      turn between instructions.
+- [ ] It must be handed the SAME `SteeringQueue` instance the routes use — `handleActionRequest`
+      keeps one module-level instance, so the drain goes through the same function or takes it as an
+      argument. Two instances would be two queues, and the one the page shows would be the one
+      nothing delivers from.
+- [ ] A delivered item leaves a receipt the page can render. "It was sent" and "it is still waiting"
+      are the two states the queue exists to distinguish.
+- [ ] **Until this lands, the client should say so** rather than implying delivery — one sentence
+      under the queue, not a silent omission.
 
 ### Stage v0.5: the steering vocabulary
 

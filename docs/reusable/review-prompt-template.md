@@ -81,6 +81,40 @@ it, and then the ledger can link to it rather than re-transcribing long findings
 number new ones above the highest already issued. Otherwise round two's first finding is another
 `F1`, the ledger has two of them, and "every ID appears exactly once" stops meaning anything.
 
+## Give the question a floor
+
+**A reviewer given an unbounded question will always find something, and finding something always
+looks like progress.** The five rules above are about the prompt's mechanics; this one is about what
+you are asking, and it is the difference between a chain that converges and one that runs to round
+seven.
+
+Three rounds on one mechanism, each finding the previous fix insufficient — a logic bug, then a real
+hole, then `Object.assign` defeating `readonly`. Fable's arbitration, 2026-09-08:
+
+> Rounds 2 and 3 are the same finding at increasing resolution. TypeScript's `readonly` was never
+> runtime immutability, so asking a reviewer *"is it sound?"* will always get the next level down.
+> Freeze it and round 4 finds `structuredClone`-then-forge. That is convergence to a known limit, not
+> a chain of misses.
+
+**So state the guarantee at its true strength and ask *"is this statement accurate?"* rather than
+*"is this sound?"*.** The first has a floor; the second does not. See
+[name-is-evidence.md](name-is-evidence.md) for why this particular limit is a property of labels
+rather than of that code.
+
+**And aim it at the right end.** The same stage's P0 was that a function returning no baseline did
+not stop a caller advancing one. The reviewer's real contribution was not the fix — it was noticing
+that the question had been *what does this function hand back* when it should have been *what does
+the caller already hold*. A review answered narrowly can be right and useless, so **hand the reviewer
+the call sites, not only the function.**
+
+**The counterweight, so this is not read as licence to dismiss findings.** Every round above found
+something real, and round three's hole genuinely exists — it is now written down as uncovered rather
+than covered. The rule is not *stop reviewing*; it is *bound the question, and when a finding
+arrives, check its premise as carefully as its logic*. A finding arrives already framed as a defect
+with a fix implied, which makes **a wrong premise harder to see than wrong code**. One finding that
+night named a real gap and the wrong repair — and taking the gap while refusing the repair is not the
+same as overruling it.
+
 ## The template
 
 ```markdown

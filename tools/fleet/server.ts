@@ -32,7 +32,7 @@ import { createServer } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { collect, type FleetSnapshot } from "./collect.js";
+import { collectWithDeadline, type FleetSnapshot } from "./collect.js";
 import { parseBinds } from "./config.js";
 import { collectHealth, type HealthReport } from "./health.js";
 import { applySecurityHeaders } from "./headers.js";
@@ -104,6 +104,14 @@ let lastError: string | null = null;
 let health: HealthReport | null = null;
 
 /**
+ * When the loop last STARTED a collection — see `attemptedAt` in state.ts.
+ *
+ * Separate from `snapshot.collectedAt` on purpose: a collector that has stopped
+ * trying and a box that has nothing new to say look identical without it.
+ */
+let attemptedAt: string | null = null;
+
+/**
  * The wire shape, in one place, so the poll and the stream cannot disagree.
  *
  * The shape itself lives in state.ts, where it can be tested without binding a
@@ -117,7 +125,14 @@ function statePayload(): string {
   // it on should be a restart, and the page should learn about it on its next
   // refresh rather than on a reload nobody performs.
   return JSON.stringify(
-    fleetState(snapshot, lastError, health, REFRESH_MS, process.env["FLEET_ANSWER_ENABLED"] === "1"),
+    fleetState(
+      snapshot,
+      lastError,
+      health,
+      REFRESH_MS,
+      process.env["FLEET_ANSWER_ENABLED"] !== "0",
+      attemptedAt,
+    ),
   );
 }
 
@@ -146,8 +161,11 @@ function refreshHealth(): void {
 }
 
 async function refresh(): Promise<void> {
+  // BEFORE the attempt, not after it, because the whole point of this field is
+  // to be moving while a collection is not.
+  attemptedAt = new Date().toISOString();
   try {
-    snapshot = await collect();
+    snapshot = await collectWithDeadline();
     lastError = null;
     console.log(
       `collected ${snapshot.rows.length} sessions in ${snapshot.tookMs}ms` +

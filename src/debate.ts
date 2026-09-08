@@ -320,20 +320,44 @@ export async function readDebate(dir: string): Promise<Debate | null> {
 
 /* ------------------------------------------------------------- the counters -- */
 
-const RELATIONS: ReadonlySet<string> = new Set<DebateRelation>([
-  "disputes",
-  "qualifies",
-  "extends",
-  "corroborates",
-  "unclear",
-]);
+/**
+ * **The answer vocabularies, total by construction.**
+ *
+ * These were `new Set<DebateRelation>([…])`, which constrains every element to
+ * be a member and never asks whether every member is present. Deleting
+ * `"extends"` from the list compiled clean and the whole suite stayed green —
+ * measured 2026-09-08, not reasoned about — and the consequence is silent:
+ * `parsePass` coerces anything the set does not hold to `unclear` / `unknown`,
+ * so every `extends` row would have gone grey with nothing reporting a failure.
+ * That is the shape docs/reusable/silent-success.md is about, and the same one
+ * `lossesOf` (src/types.ts) was written to close for the loss reasons.
+ *
+ * A mapped type over the union is total: omit a member and it is a compile
+ * error at the object literal, before any test has to notice. The `Object.keys`
+ * round-trip is only to get a runtime set out of it — the type is the guard.
+ *
+ * The eval's `RELATION_KEYS` / `VALENCE_KEYS` (evals/debate/score.ts) use the
+ * same shape deliberately, because an instrument that measures a vocabulary
+ * must not be able to disagree with the code that accepts it.
+ */
+const RELATION_MEMBERS: { [K in DebateRelation]: true } = {
+  disputes: true,
+  qualifies: true,
+  extends: true,
+  corroborates: true,
+  unclear: true,
+};
 
-const VALENCES: ReadonlySet<string> = new Set<DebateValence>([
-  "positive",
-  "negative",
-  "neutral",
-  "unknown",
-]);
+const VALENCE_MEMBERS: { [K in DebateValence]: true } = {
+  positive: true,
+  negative: true,
+  neutral: true,
+  unknown: true,
+};
+
+const RELATIONS: ReadonlySet<string> = new Set(Object.keys(RELATION_MEMBERS));
+
+const VALENCES: ReadonlySet<string> = new Set(Object.keys(VALENCE_MEMBERS));
 
 export function emptyLosses(): DebateLosses {
   return {

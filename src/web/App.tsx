@@ -7,6 +7,7 @@ import { LandingPage } from "./LandingPage.js";
 import { NotFoundPage } from "./NotFoundPage.js";
 import { PrivacyPage } from "./PrivacyPage.js";
 import { ContactPage } from "./ContactPage.js";
+import { OpenSourcePage } from "./OpenSourcePage.js";
 import { FeaturesPage } from "./FeaturesPage.js";
 import { PublicLibraryPage } from "./PublicLibraryPage.js";
 import { PricingPage } from "./PricingPage.js";
@@ -181,6 +182,11 @@ export function App() {
        Lazy for the reason `design` is below: the parsed file is 210 KB.
        LazyPage.tsx. */
     if (route.kind === "changelog") return <LazyPage load={loadChangelog} routeKey="changelog" />;
+    /* Since 2026-09-07, and signed out for a stronger reason than any of them:
+       somebody deciding whether to trust us with what they read is exactly the
+       person who wants to know the code is public, and they have not signed up
+       yet. Not lazy — it is four paragraphs, not 210 KB. OpenSourcePage.tsx. */
+    if (route.kind === "opensource") return <OpenSourcePage />;
     /* **The sixth, since 2026-09-03, and the only one that is not a page
        somebody was sent.** A stranger at an address nobody minted is exactly
        the reader this gate's default fails: the pitch at `/asdf` is a plausible
@@ -383,6 +389,13 @@ function SignedIn({
       <>
         <HomeLogo />
         <LazyPage load={loadChangelog} routeKey="changelog" />
+      </>
+    );
+  if (route.kind === "opensource")
+    return (
+      <>
+        <HomeLogo />
+        <OpenSourcePage />
       </>
     );
   if (route.kind === "pricing")

@@ -394,6 +394,16 @@ type RuleStyle = "none" | "solid" | "dashed";
 type Line = {
   /** Decorations replaced by spaces, so indent is unchanged and comparable. */
   text: string;
+  /**
+   * The same line before decorations were blanked, ANSI aside.
+   *
+   * Kept because blanking is lossy in one place that matters: a box border is
+   * the only thing that marks a second column on an option line, and once it is
+   * a space it is indistinguishable from padding. `text` and `raw` are the same
+   * length up to `text`'s trailing trim — `DECORATION` replaces one character
+   * with one space — so an index found in `raw` is valid in `text`.
+   */
+  raw: string;
   /** Non-`none` when the raw line held nothing but decoration and whitespace. */
   rule: RuleStyle;
 };
@@ -413,7 +423,7 @@ export function cleanLines(capture: string): Line[] {
       const text = raw.replace(DECORATION, " ").replace(/\s+$/, "");
       const isRule = text.trim() === "" && raw.trim() !== "";
       const rule: RuleStyle = !isRule ? "none" : DASHED_RULE.test(raw) ? "dashed" : "solid";
-      return { text, rule };
+      return { text, raw, rule };
     });
 }
 
@@ -466,17 +476,57 @@ type NumberedLine = {
 
 const NUMBERED = /^(\s*)(❯|↑|↓)?\s*(\d+)\.\s+(\S.*)$/;
 
-function numberedLine(text: string, index: number): NumberedLine | null {
+/**
+ * Where a second column starts on this line, or -1. **Asked of the RAW line.**
+ *
+ * A wide `AskUserQuestion` draws a preview box to the RIGHT of its options, so
+ * an option line holds two unrelated things and a naive read glues them
+ * together. Option 2 came out as
+ * `Write a PendingLabelsFile    │ - "structureHash": "847fa44562a719b9",`,
+ * and that is what a person would have read on their phone.
+ *
+ * The signal is **a run of two or more spaces followed by a box border**, which
+ * is the only thing that can open a second column. It has to be read off `raw`,
+ * because `cleanLines` blanks that border to a space and a blanked border is
+ * indistinguishable from padding — which is exactly the distinction this needs.
+ *
+ * That precision is what keeps the MODEL SELECTOR intact. It is also drawn in
+ * two columns — `Fable` and then, seventeen spaces later, `Fable 5.1 · Most
+ * capable for…` — but there is no border between them, because that column is
+ * the option's own description rather than a panel beside it. A width-based
+ * rule (cut at 3+ spaces, say) would have truncated `Sonnet` and `Fable` and
+ * left `Default (recommended)` alone, mangling one dialog to fix another. The
+ * gaps are measured: 2, 4, 17, 18 in the model selector, against a border in
+ * the two-column question.
+ *
+ * Wrong in the safe direction anyway: a label that really did contain two
+ * spaces and then a `│` loses its tail, which is a shorter label. The failure
+ * it prevents is a longer one that is partly somebody else's text.
+ */
+const SECOND_COLUMN = /\s{2,}[─-╿]/;
+
+function secondColumnAt(raw: string): number {
+  const at = SECOND_COLUMN.exec(raw);
+  return at === null ? -1 : at.index;
+}
+
+function numberedLine(text: string, index: number, raw: string): NumberedLine | null {
   const m = NUMBERED.exec(text);
   if (!m) return null;
   const digitCol = text.indexOf(`${m[3]}.`);
+  const labelCol = text.length - (m[4] ?? "").length;
+  const cut = secondColumnAt(raw);
+  // `text` and `raw` share indices up to the trailing trim, so a cut found in
+  // one is valid in the other. A cut at or before the label is ignored: that is
+  // the dialog's own left border, not a column to the right of the label.
+  const label = cut > labelCol ? text.slice(labelCol, cut) : (m[4] ?? "");
   return {
     index,
     n: Number(m[3]),
     digitCol,
-    labelCol: text.length - (m[4] ?? "").length,
+    labelCol,
     cursor: m[2] === "❯",
-    label: (m[4] ?? "").trim(),
+    label: label.trim(),
   };
 }
 
@@ -692,10 +742,34 @@ function toOption(label: string, key: OptionKey): PaneOption {
  * Are the lines between two options continuation text rather than a new thing?
  *
  * The `/loop` menu puts a description under its first option, indented to the
- * label column. Anything shallower than that is not part of the menu, and a run
- * that spans it is a run we made up.
+ * label column. Anything at or left of the menu's own left edge is not part of
+ * the menu, and a run that spans it is a run we made up.
+ *
+ * **THE TEST IS `digitCol`, NOT `labelCol`, AND THAT CHANGED ON 2026-09-08.**
+ * The old rule required a continuation to reach the LABEL column, which was a
+ * proxy for "inside the menu" — and a proxy the widget itself does not respect.
+ * In a wide pane `AskUserQuestion` lays its options out in two columns and
+ * indents a wrapped label to `digitCol + 2`, which on a `❯ 1. ` marker is
+ * `labelCol - 1`: one column short. The run was cut, the dialog reported
+ * `none`, and **a blocked session showed as not blocked** — the dashboard blind
+ * to the one thing it is for. A live capture is
+ * `tests/fixtures/fleet-panes/dialog-ask-user-question-two-column.txt`.
+ *
+ * The loosening is bounded and the bound is the real rule: a continuation must
+ * be indented STRICTLY deeper than the marker, because a new top-level thing
+ * starts at or left of it. That is one column of slack, not a free-for-all, and
+ * `parseNumbered`'s other guards are untouched — the numbers must still count
+ * down one at a time to 1, and the tail must still look like a dialog.
+ *
+ * A note on the direction of this file's bias, which this does soften. It was
+ * calibrated when parsing and answering were the SAME decision, so a generous
+ * parse was a generous approval. They are two decisions now: `classifyGate`
+ * decides what may be tapped, and `steer.ts` enforces it on a fresh capture. So
+ * the parse can be tuned for *does the page show this session as blocked*,
+ * where a false negative is a session nobody goes to help, and a false positive
+ * is a card that says "asking" beside a menu — visible, and harmless.
  */
-function gapsAreContinuations(lines: readonly Line[], opts: readonly { index: number; labelCol: number }[]): boolean {
+function gapsAreContinuations(lines: readonly Line[], opts: readonly { index: number; digitCol: number }[]): boolean {
   for (let i = 1; i < opts.length; i++) {
     const prev = opts[i - 1];
     const cur = opts[i];
@@ -703,7 +777,7 @@ function gapsAreContinuations(lines: readonly Line[], opts: readonly { index: nu
     for (let j = prev.index + 1; j < cur.index; j++) {
       const text = lines[j]?.text ?? "";
       if (text.trim() === "") continue;
-      if (text.length - text.replace(/^\s*/, "").length < prev.labelCol) return false;
+      if (text.length - text.replace(/^\s*/, "").length <= prev.digitCol) return false;
     }
   }
   return true;
@@ -731,7 +805,7 @@ function arrowKey(index: number, cursorAt: number): OptionKey {
  * itself into an answer.
  */
 function parseNumbered(lines: readonly Line[]): PaneQuestion {
-  const all = lines.map((l, i) => numberedLine(l.text, i)).filter((x): x is NumberedLine => x !== null);
+  const all = lines.map((l, i) => numberedLine(l.text, i, l.raw)).filter((x): x is NumberedLine => x !== null);
   if (all.length < 2) return { kind: "none" };
 
   // Walk back from the end while the numbers count down 1 at a time to 1.
