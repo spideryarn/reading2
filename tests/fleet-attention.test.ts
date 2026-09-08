@@ -30,9 +30,9 @@
  * tests/fleet-web.test.tsx, which drives the same `statePayload` production
  * composes through.
  */
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { afterEach, describe, expect, it } from "vitest";
@@ -436,9 +436,83 @@ describe("readAttention", () => {
  * in behind it, and it holds the Overseer's own opinion about what a bad
  * checkpoint means.
  */
-const OVERSEER_MODULES_FLEET_MAY_IMPORT = ["jsonl.js", "lock.js"];
+const OVERSEER_MODULES_FLEET_MAY_IMPORT = ["jsonl.ts", "lock.ts"];
 
 /** Every `.ts`/`.tsx` file under a directory, recursively. Build output excluded. */
+/**
+ * Every `tools/overseer/` file reachable from a starting directory, by name.
+ *
+ * Extracted from the guard below so that the WALKER itself can be tested on a
+ * synthetic tree. That matters more than it looks: the guard's whole value is
+ * the transitive case, and the obvious demonstration — add an import to
+ * `tools/overseer/lock.ts` and watch it fail — means mutating a file another
+ * session owns in a tree we share, where a peer committing by pathspec during
+ * those seconds would commit the mutation into their file. A fixture proves the
+ * same property and touches nobody.
+ *
+ * `seen` comes back too, because a walker that resolved nothing would report an
+ * empty `reached` and look exactly like a clean bill of health.
+ */
+function overseerClosure(fromDir: string, overseerDir: string): { reached: Set<string>; seen: Set<string> } {
+  const reached = new Set<string>();
+  const seen = new Set<string>();
+  const queue = sourceFiles(fromDir);
+  while (queue.length > 0) {
+    const path = queue.pop();
+    if (path === undefined || seen.has(path)) continue;
+    seen.add(path);
+    if (path.startsWith(overseerDir)) reached.add(basename(path));
+    for (const specifier of relativeImports(readFileSync(path, "utf8"))) {
+      const resolved = resolveSource(dirname(path), specifier);
+      if (resolved !== null) queue.push(resolved);
+    }
+  }
+  return { reached, seen };
+}
+
+/**
+ * Relative import specifiers, ignoring anything inside a comment.
+ *
+ * **Comment lines are skipped, and that is not fussiness.** These files carry
+ * long headers that name modules in prose — this very file does — and a raw
+ * regex over the whole text reads `"../overseer/store.js"` in a docstring as an
+ * import, which would fail the guard over a sentence. Sol raised it on
+ * re-review. Line-oriented rather than a parser: a specifier only counts on a
+ * line that is not comment-led, which is every real import in this tree.
+ */
+function relativeImports(source: string): string[] {
+  const found: string[] = [];
+  for (const line of source.split("\n")) {
+    const trimmed = line.trimStart();
+    if (trimmed.startsWith("*") || trimmed.startsWith("//") || trimmed.startsWith("/*")) continue;
+    for (const match of line.matchAll(/(?:from|import)\s*\(?\s*["'](\.[^"']+)["']/g)) {
+      const specifier = match[1];
+      if (specifier !== undefined) found.push(specifier);
+    }
+  }
+  return found;
+}
+
+/**
+ * A specifier to a file on disk, or null when it does not name one here.
+ *
+ * ESM spells a TypeScript import `./jsonl.js`, so the extension has to be put
+ * back before the file exists. Anything that does not resolve — a bare package,
+ * a `.css`, a path this walk does not care about — is null rather than a throw:
+ * the walk is a bound on what is REACHED, and a specifier that reaches nothing
+ * in this repo reaches no Overseer module either.
+ */
+function resolveSource(fromDir: string, specifier: string): string | null {
+  const base = resolve(fromDir, specifier);
+  const candidates = base.endsWith(".js")
+    ? [`${base.slice(0, -3)}.ts`, `${base.slice(0, -3)}.tsx`, base]
+    : [base, `${base}.ts`, `${base}.tsx`];
+  for (const candidate of candidates) {
+    if (existsSync(candidate) && statSync(candidate).isFile()) return candidate;
+  }
+  return null;
+}
+
 function sourceFiles(dir: string): string[] {
   const found: string[] = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -482,25 +556,73 @@ describe("the seam between the two tools", () => {
      * also a change worth seeing, and the list above carries the reason each is
      * permitted, so a diff that extends it is a diff that answers for it.
      *
-     * A text scan rather than a graph walk — tests/fleet-imports.test.ts owns
-     * the transitive walking — and the specifier is matched by its tail
-     * (`(../)+overseer/x`) because `web/src/` sits two directories deeper and
-     * would spell the same import differently.
+     * **A CLOSURE, NOT A SCAN OF WHAT IS WRITTEN IN THESE FILES — and the first
+     * version was the scan.** It collected only specifiers spelled inside
+     * `tools/fleet/`, so the day `lock.js` grew an import of `usage.js` the store
+     * would have become reachable from the dashboard while this test stayed
+     * green: a guard on the first hop of the very thing it exists to bound.
+     * `tests/fleet-imports.test.ts` cannot cover it either — that walker starts
+     * from everything under `tools/`, not from this directory. GPT Sol's C6 on
+     * re-review, after his C6 on the first pass had already replaced a denylist
+     * here. The finding survived its own fix, which is the reason a fix gets
+     * re-reviewed rather than marked closed.
+     *
+     * So: start at every file under `tools/fleet/`, follow every relative import
+     * INCLUDING through the Overseer modules reached, and assert the set of
+     * `tools/overseer/*` files in that closure. Two hops or twenty, it is the
+     * same question — what can this tool reach.
      */
-    const dir = fileURLToPath(new URL("../tools/fleet/", import.meta.url));
-    const imported = new Set<string>();
-    const specifier = /["'](?:\.\.\/)+overseer\/([^"']+)["']/g;
-    for (const path of sourceFiles(dir)) {
-      for (const match of readFileSync(path, "utf8").matchAll(specifier)) {
-        const module = match[1];
-        if (module !== undefined) imported.add(module);
-      }
-    }
+    const fleetDir = fileURLToPath(new URL("../tools/fleet/", import.meta.url));
+    const overseerDir = fileURLToPath(new URL("../tools/overseer/", import.meta.url));
+    const { reached: imported, seen } = overseerClosure(fleetDir, overseerDir);
     /* The scan is only evidence while it is still finding the files: a rename of
        the directory, or a walker that silently returned nothing, would leave an
        empty set that passes nothing and looks like a clean bill of health. */
-    expect(sourceFiles(dir).length).toBeGreaterThan(20);
+    expect(sourceFiles(fleetDir).length).toBeGreaterThan(20);
+    /* The walk is only evidence while it is still following edges. A resolver
+       that quietly returned null for everything would visit the fleet's own
+       files, reach no Overseer module, and report a clean bill of health — so
+       assert it crossed into `tools/overseer/` at all, and that it went deeper
+       than the files it started from. */
+    expect(seen.size).toBeGreaterThan(sourceFiles(fleetDir).length);
+    expect(imported.size).toBeGreaterThan(0);
     expect([...imported].sort()).toEqual([...OVERSEER_MODULES_FLEET_MAY_IMPORT].sort());
+  });
+
+  it("follows a hop THROUGH an allowed module, which is the case it was rewritten for", () => {
+    /* The first version of this guard collected only specifiers written inside
+       `tools/fleet/`, so a forbidden module reached VIA a permitted one stayed
+       invisible. That is the shape the rewrite exists to catch, and asserting it
+       against the real tree proves nothing: the real tree does not have the
+       problem, and would pass either way. So build the shape.
+
+           fleet/entry.ts  ->  ../overseer/lock.js  ->  ./store.js
+
+       A direct-import scan sees `lock.js` and stops. A closure sees both, and
+       the guard above then fails on the set — which is the behaviour that keeps
+       `tools/fleet/` from reaching the Overseer's store through a side door. */
+    const root = mkdtempSync(join(tmpdir(), "closure-"));
+    const fleet = join(root, "fleet");
+    const overseer = join(root, "overseer");
+    mkdirSync(fleet);
+    mkdirSync(overseer);
+    writeFileSync(join(fleet, "entry.ts"), 'import { hold } from "../overseer/lock.js";\nexport { hold };\n');
+    writeFileSync(join(overseer, "lock.ts"), 'import { append } from "./store.js";\nexport const hold = append;\n');
+    writeFileSync(join(overseer, "store.ts"), "export const append = 1;\n");
+
+    const { reached } = overseerClosure(fleet, overseer);
+    expect([...reached].sort()).toEqual(["lock.ts", "store.ts"]);
+
+    /* And the comment-blindness, in the same tree: a docstring naming the module
+       is prose, not an edge. Without this the guard could fail over a sentence —
+       which is how a guard gets deleted rather than fixed. */
+    writeFileSync(
+      join(fleet, "prose.ts"),
+      '/** See "../overseer/usage.js" for why. */\n// import { x } from "../overseer/diff.js";\nexport const n = 1;\n',
+    );
+    expect([...overseerClosure(fleet, overseer).reached].sort()).toEqual(["lock.ts", "store.ts"]);
+
+    rmSync(root, { recursive: true, force: true });
   });
 });
 
