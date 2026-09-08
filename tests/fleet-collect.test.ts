@@ -26,7 +26,7 @@ import {
   type FleetSnapshot,
 } from "../tools/fleet/collect.js";
 import { parseBinds } from "../tools/fleet/config.js";
-import { fleetState } from "../tools/fleet/state.js";
+import { fleetState, readAttemptClock } from "../tools/fleet/state.js";
 import type { FleetStatus } from "../tools/fleet/status.js";
 import { buildSessionScript, type Session } from "../scripts/gjd-remote-tmux.js";
 
@@ -318,6 +318,60 @@ describe("fleetState — the one wire shape", () => {
     expect(trying.error).toBeNull();
     expect(trying.attemptedAt).toBe(now);
     expect(trying.attemptedAt).not.toBe(trying.collectedAt);
+  });
+
+  /**
+   * THE OLD SERVER MUST NOT LOOK WEDGED, which is the trap that comes with
+   * adding a field rather than bumping the schema.
+   *
+   * Raised by the `orchestrator-setup` session as soon as `attemptedAt` landed,
+   * and it is right: their watchdog reads this payload, a server predating the
+   * field sends no such key, and "absent" read as "never attempted" reports
+   * every old server as permanently stopped — the exact fault the field exists
+   * to detect, manufactured by the detector.
+   *
+   * The ambiguity is recoverable rather than merely declared, and that is the
+   * point of the helper. `attemptedAt` is written BEFORE each attempt, so a
+   * collection cannot have succeeded without one — data plus no attempt clock
+   * therefore means *this producer does not report it*, never *this producer
+   * never tried*.
+   */
+  it("does not mistake a server too old to report attempts for a stopped one", () => {
+    const old = {
+      collectedAt: "2026-09-08T03:00:00.000Z",
+      rows: [],
+      // No `attemptedAt` key at all, which is what a pre-2026-09-08 server sends.
+    };
+    const read = readAttemptClock(old);
+    expect(read.kind).toBe("not-reported");
+    expect(read.kind === "not-reported" ? read.why : "").toContain("before that field");
+
+    // The three that must NOT collapse into it.
+    expect(readAttemptClock({ attemptedAt: "2026-09-08T03:31:00.000Z", collectedAt: "2026-09-08T03:00:00.000Z" })).toEqual({
+      kind: "attempted",
+      at: "2026-09-08T03:31:00.000Z",
+    });
+    // A new server, up but not yet round the loop: reports the field as null and
+    // has no data. "Never attempted" is the true reading and is not a fault.
+    expect(readAttemptClock({ attemptedAt: null, collectedAt: null })).toEqual({ kind: "never-attempted" });
+    // A new server whose first attempt failed: attempted, no data. This is the
+    // arm that would be lost if the helper keyed off `collectedAt` first.
+    expect(readAttemptClock({ attemptedAt: "2026-09-08T03:31:00.000Z", collectedAt: null }).kind).toBe("attempted");
+  });
+
+  it("reads a payload this file actually produced, rather than a hand-built one", () => {
+    // The round trip, because the helper's whole inference rests on the ORDER
+    // `fleetState` writes these in — and a test that only ever saw hand-written
+    // objects would keep passing if that ordering assumption stopped holding.
+    const live = JSON.parse(
+      JSON.stringify(fleetState(snap, null, null, 60_000, true, "2026-09-08T03:31:00.000Z")),
+    ) as Record<string, unknown>;
+    expect(readAttemptClock(live).kind).toBe("attempted");
+
+    // And the same payload with the field stripped, which is the old server's
+    // bytes exactly.
+    const { attemptedAt: _dropped, ...withoutField } = live;
+    expect(readAttemptClock(withoutField).kind).toBe("not-reported");
   });
 
   it("says NEVER COLLECTED with a null clock rather than an empty box", () => {

@@ -90,6 +90,12 @@ export type FleetState = {
    *
    * Null until the first attempt, for the same reason `collectedAt` is: a
    * timestamp invented here would be a claim nobody made.
+   *
+   * **DO NOT READ THIS FIELD DIRECTLY FROM A PAYLOAD — use `readAttemptClock`.**
+   * It was added without a schema bump, so a server that predates it sends no
+   * such field, and a consumer that read "absent" as "never attempted" would
+   * report every old server as permanently wedged. That distinction is
+   * recoverable and the helper below recovers it.
    */
   attemptedAt: string | null;
 };
@@ -117,4 +123,75 @@ export function fleetState(
     refreshMs,
     answeringEnabled,
   };
+}
+
+/* ------------------------------------------------------------------ *
+ * Reading the attempt clock, on the consumer's side.
+ * ------------------------------------------------------------------ */
+
+/**
+ * What a payload can tell you about whether the collector is still trying.
+ *
+ * Three arms because there are three genuinely different situations, and the
+ * one that would otherwise be lost is the third.
+ */
+export type AttemptClock =
+  /** The producer said when it last started a collection. */
+  | { kind: "attempted"; at: string }
+  /** The producer tracks this and has not started one yet — a fresh process. */
+  | { kind: "never-attempted" }
+  /**
+   * The producer does not report this at all, so nothing can be concluded about
+   * whether it is still trying. **Not a fault, and not a wedge.**
+   */
+  | { kind: "not-reported"; why: string };
+
+/**
+ * Read `attemptedAt` without mistaking an old server for a wedged one.
+ *
+ * `attemptedAt` landed on 2026-09-08 as an added field rather than a schema
+ * bump — state.ts's own rule, since a consumer that ignores it is poorer rather
+ * than wrong. But that leaves an ambiguity for anyone who *does* use it: a
+ * payload with no `attemptedAt` is either a producer that has never attempted a
+ * collection, or one built before the field existed. Read naively, the second
+ * looks exactly like a collector that has stopped trying — which is the very
+ * fault the field was added to detect. Raised by the `orchestrator-setup`
+ * session, whose freshness watchdog consumes this.
+ *
+ * **The ambiguity is recoverable, and `collectedAt` is what recovers it.**
+ * `attemptedAt` is set BEFORE every attempt, so on any producer that reports it,
+ * a non-null `collectedAt` implies a non-null `attemptedAt` — a collection
+ * cannot have succeeded without having been started. So a payload carrying data
+ * but no attempt clock is not a producer that never tried; it is a producer that
+ * does not report trying. That is an inference from the field's own ordering
+ * rather than a convention two programs have agreed to, which is why it belongs
+ * here as code rather than in a message between us.
+ *
+ * When BOTH are absent the two cases stay merged — never attempted, or an old
+ * server that has never collected — and that is fine: no data has ever arrived
+ * either way, and a consumer does the same thing about it.
+ *
+ * Deliberately does not look at `undefined` versus `null`. A producer that has
+ * the field and has not attempted sends `null`, and one without it sends
+ * nothing, so in raw JSON the two ARE distinguishable — but that distinction
+ * dies in the first parser, ORM or round trip that normalises one to the other,
+ * and a guard that survives only until somebody reasonable touches the pipe is
+ * not a guard.
+ */
+export function readAttemptClock(state: {
+  attemptedAt?: string | null;
+  collectedAt?: string | null;
+}): AttemptClock {
+  if (typeof state.attemptedAt === "string" && state.attemptedAt !== "") {
+    return { kind: "attempted", at: state.attemptedAt };
+  }
+  if (typeof state.collectedAt === "string" && state.collectedAt !== "") {
+    return {
+      kind: "not-reported",
+      why:
+        "this payload has rows and a collection time but no attempt clock, so it comes from a " +
+        "server built before that field — whether it is still collecting cannot be told from here",
+    };
+  }
+  return { kind: "never-attempted" };
 }
