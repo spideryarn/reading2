@@ -124,6 +124,30 @@ A snapshot that fails any of these produces a `source-degraded` event, not silen
 dashboard is a fact the Overseer records, not a silence it sits in** — the coupling created by
 consuming someone else's stream is only acceptable if its failure is visible.
 
+### Identity is the tmux handle AND the Claude session id, never the handle alone
+
+The obvious key is the tmux handle (`$1643`) — it is immutable, it survives renames, and
+`gjd-remote` addresses everything by it for good reasons. **For a live view that is right; for a
+history it is wrong.**
+
+A tmux session can be resumed into a *different conversation*: same handle, same name, same pane, new
+Claude session id. Keying a timeline on the handle alone would silently splice two conversations
+together and present them as one agent working continuously — the worst kind of wrong, because the
+result is plausible and nothing about it looks broken. Handed to us by the dashboard agent on
+2026-09-08, along with the fields to fix it: `FleetRow` now carries `claudeSessionId` and `panePid`
+beside `paneId`, from the same `list-panes -a` call.
+
+So the store's identity is the **pair**, and a handle whose `claudeSessionId` changes is a
+`session-replaced` event — neither a death nor a birth, and distinct from both. That is the third
+case in a distinction this plan previously had only two of:
+
+- the tmux session was killed → `session-gone`
+- its Claude exited, tmux still there → a status change, not a disappearance
+- the handle was reused by a new conversation → `session-replaced`
+
+**All three look identical if you key on the handle**, which is exactly why the plan review was asked
+whether `session-gone` was the right concept.
+
 ### Two clocks in `current.json`, never one
 
 `writtenAt` (the Overseer last wrote) and `lastGoodSnapshotAt` (it last successfully heard from the
