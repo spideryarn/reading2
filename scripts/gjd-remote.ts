@@ -2546,9 +2546,21 @@ async function cmdNewClaude(
     startMarkerCommand(REMOTE_WORK, sessionId, name),
     // --name only when Greg chose one: passing a placeholder would stop Claude
     // generating a title of its own, which is the thing we actually want.
+    //
+    // --permission-mode auto because nobody is sitting in front of these. Without
+    // the flag the mode is whatever the CLI happens to pick, and it is not stable:
+    // on 2026-09-07 three sessions started 22 seconds apart in the same checkout
+    // came up `auto`, `auto` and `default`, and 8 of the 23 then running had
+    // launched in `default`. A `default` session stops at the first Bash or MCP
+    // call it cannot pre-approve and waits for a person who is not there — nine
+    // such stalls since 2026-09-01 cost 41.6 agent-hours, one of them 5h45m on a
+    // single Sentry read. Sessions that launched in `auto` lost nothing this way.
+    // This does not widen what an agent may do: the deny and ask rules in
+    // .claude/settings.json still apply. It only settles whether it stops to ask.
     [
       "claude",
       `--session-id ${sessionId}`,
+      `--permission-mode auto`,
       provisional ? "" : `--name ${shq(name)}`,
       opts.prompt ? `"$(cat -- ${promptPath})"` : "",
     ]
