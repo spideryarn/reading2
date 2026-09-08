@@ -1052,6 +1052,51 @@ crash-loops visibly in the journal instead of hammering a box that has already r
 
 **Reboot-resume of the sessions themselves is O4, a later stage.** This one only makes it possible.
 
+#### The four commands that finish S5, and why they are Greg's
+
+**`sudo systemctl enable` is refused for agents on this box, and it was refused twice by different
+mechanisms.** The building agent hit it, and so did the orchestrator afterwards from a different
+session — so this is a standing property of how agents run here, not one session's quirk. Recorded
+because the alternative reading (*"that agent's environment was odd, try again"*) would cost somebody
+an hour.
+
+**Neither of us created the symlink by hand with `ln -s`, and that was deliberate.** It would have
+produced the exact evidence the criterion asks for — a link in `multi-user.target.wants` — while
+working around the denial rather than around a false positive. A criterion satisfied by circumventing
+the thing that was stopping you is not satisfied.
+
+So, in this order, and the order matters:
+
+```
+# 1. Stop the hand-run daemon FIRST. It holds ~/.overseer/overseer.lock, and the unit
+#    will refuse to start while it does — correctly, and it names the file when it does.
+tmux kill-session -t s5-overseer2-0935-2399531
+
+# 2. Enable and start. `--now` does both.
+sudo systemctl enable --now overseer.service
+
+# 3. The three things that say it is real. `is-enabled` alone is not enough:
+#    the symlink is what a reboot actually reads.
+systemctl is-enabled overseer.service
+ls -l /etc/systemd/system/multi-user.target.wants/ | grep overseer
+npx tsx scripts/overseer.ts status
+
+# 4. And the one that proves Restart=always does its job, which nothing has yet observed:
+sudo systemctl kill -s KILL overseer.service && sleep 8 && systemctl status overseer.service
+```
+
+**Step 4 is the one worth actually running**, because it is the only assertion in this stage that is
+currently backed by a file rather than by a behaviour. `Restart=always` is asserted by the unit, by
+`systemd-analyze verify`, by `systemctl show` and by a killed mutant in the test — and **nothing has
+watched systemd restart it**. The daemon's own recovery from `kill -9` *has* been observed, twice;
+what has not is systemd noticing and bringing it back. Those are different claims and only one of
+them is evidenced.
+
+**The fleet dashboard unit stays disabled**, separately and on purpose: `:8787` is currently served by
+a `tmux` job, and two supervisors for one port is a fight where the loser's failure looks like a
+crash. Its owning agent has asked to read the unit before it is switched on, and has agreed to hand
+over when it is.
+
 #### S5 as built, 2026-09-08
 
 Two units, checked in at [`infra/hetzner/systemd/`](../../infra/hetzner/systemd/) and spliced
@@ -1177,11 +1222,145 @@ a collector wedged for thirty minutes reported `error: null`. `observation.ts` d
 not a copy of it.**
 
 **S7-03 — one append-only-log discipline, implemented twice.** `notes.ts` carries a comment admitting
-it: *"`store.ts` keeps its `repairEventLog` private, so this is a duplicate of a subtle rule rather
+it: *"`store.ts` keeps its private repair function to itself, so this is a duplicate of a subtle rule rather
 than a reuse of one."* Truncate-to-last-newline on open, the single `O_APPEND` write, the atomic
 replace. **A duplicated subtle rule is the kind that drifts dangerously**, because the copy that goes
 wrong is the one nobody was looking at — and the rule here is the one that stops a torn line welding
 a good record onto a corrupt one.
+
+**S7-04 — `statusSince` is a lower bound wearing a measurement's clothes.** Found 2026-09-08 by
+looking at the Overseer's own output the first time it ran against `~/.overseer`, not by reasoning:
+
+```
+working  13m  fb2f-dock-always-visible-landscape
+working  13m  fb2g-gutter-icons-on-touch
+working  13m  get-ready-for-deploy
+working  13m  html-ingestion-post-processing-evals
+```
+
+Every row said 13m. **The daemon had been up for 13 minutes.** Those sessions had been working for
+hours.
+
+`statusSince` is set from the `at` of whichever event created the register entry, and for a session
+already running when the daemon starts, that event is `session-seen` — first *observation*, not the
+transition. Its doc comment says *"when it entered that state"*, which is true only for entries
+created by a `session-status` transition the daemon actually watched. For every other entry it means
+*"the earliest moment we can prove it was in this state"* — a different quantity with the same units
+and no way to tell them apart.
+
+**Three things make this worse than an off-by-something.** It is worst exactly when it matters:
+`Restart=always` makes a daemon restart routine, and after one, every session's duration resets to
+zero *together*, so the agent genuinely blocked for three hours ranks equal-last with one blocked for
+thirty seconds — on the surface whose entire job is to rank by that. It is **silent**: nothing in the
+shape distinguishes the two cases, so a renderer cannot tell and will present a floor as a fact. And
+it is the seam's **headline claim** — [orchestrator-direction.md](../project/orchestrator-direction.md)
+says `statusSince` is what turns a state into a duration and is what collection structurally cannot
+produce, which is exactly the sentence that made the dashboard agent want to build on it.
+
+**The fix is to make the distinction unrepresentable-away**, not to document it: `statusSince` becomes
+a discriminated pair — one arm for a transition the daemon observed, one for the first sighting of a
+state already in progress — so a renderer *cannot* accidentally show a floor as a measurement and can
+at worst choose to. Same move as every "I could not tell" arm in `health.ts`, pointed at the one field
+that had escaped it. The dashboard has been told not to build a renderer on the current shape.
+
+**And note how it was found**, because it argues for a habit rather than a rule: the code was correct
+against its tests, the type was right, and three reviews had been through this file. What exposed it
+was **running the thing and reading its output as a stranger would** — four identical numbers in a
+column, which no test asserts about and no reviewer sees.
+
+#### S7-01, as built: two arms, and the measurement that decided the split
+
+**The measurement, because the hazard here is an arm that fires every collection forever.** 25
+collections of the live fleet from `GET /api/state`, one a minute over 24 minutes (2026-09-08
+08:22–08:46 UTC), 20–25 sessions per snapshot, **516 same-identity row comparisons** — pairs of
+consecutive snapshots in which `tmuxId` and `claimedConversationId` both held still:
+
+| field | changes in 516 comparisons |
+|---|---|
+| `name` | 0 |
+| `repo` | 0 |
+| `worktree` | 0 |
+| `meta` | 0 |
+| `startedAt` | 0 |
+| `paneId` | 0 |
+| `panePid` | 0 |
+| `title` | 0 |
+| `question` | **4** |
+
+**What that does and does not prove, said plainly, because it is easy to read the wrong way round.**
+24 minutes is long enough to rule out FLAPPING and far too short to observe the events these arms
+exist to catch — nobody renamed a session or ran `EnterWorktree` inside the window. So the arm's
+safety rests on the **source** argument, with the measurement only closing the volume question:
+`repo`, `worktree` and `meta` derive from tmux session environment variables set at creation, and a
+partial reading fails the whole listing rather than degrading a row, so they cannot move while the
+session lives. The numbers say the log will not fill; the source says the fields are real.
+
+`question` is the control, and it is the reason the arm is not "any row difference": it appeared and
+disappeared twice inside 24 minutes, on two sessions, and neither is reboot-resume material.
+
+**Q13's `repo` claim does not reproduce, and that is a correction rather than a null result.**
+[open-questions.md § Q13](../project/open-questions.md#q13) records `repo` arriving as the repo,
+`null`, the literal string `"unknown"`, and a different repo, all within one snapshot. Across **551
+row observations** here it took exactly two values — `spideryarn/reading2` (526) and
+`spideryarn/hellozenno` (25) — with no `null`, no `"unknown"`, and no version-1 `meta` carrying a
+null repo. Two repos in one snapshot is not the finding; it is two sessions in two checkouts, which
+is correct. So whatever produced that observation was not this field on this endpoint, and the Q13
+bullet should be re-checked before it is written into a `docs/reusable/` note as evidence.
+
+**Two arms, not one, and the split is the source's rather than mine.**
+
+- `session-row-changed` carries `name`, `repo`, `worktree`, `meta`, `startedAt` — the ordered
+  `REGISTER_ROW_FIELDS` in diff.ts — plus the whole row and a **typed** list of which of them moved.
+- `session-pane-replaced` carries the pane on its own, because `panePid` changing is the thing
+  `tools/fleet/steer.ts` compares before it types: the pane somebody was looking at has been
+  respawned and another process wears its handle. That is a fact about the world, not drift in a
+  label, and putting it on an event with a `name` field would describe a rename.
+
+**A null pane is not a change, in either direction as far as silence goes.** `paneId` and `panePid`
+are joined onto the session from a separate pane listing, so a join miss yields null on a session
+that is perfectly alive — 0 misses in 551 observations here, which bounds the frequency without
+removing the case. A pid going away is silence; a pid arriving or changing is an event, because a
+register that never learns the pane cannot steer it.
+
+**`statusSince` is the trap, and the fold does not touch it.** `entryOf(event.row, …)` is the
+tempting one-liner for the new arm and it rebuilds the whole entry, so a session renamed after forty
+minutes of waiting comes back as having waited none — and every triage view that ranks by "waiting
+longest" silently reorders. It is invisible to a test that checks the name, so there is a test for it
+and a mutation that reintroduces it.
+
+**The forcing function, which is what S3-03 was really asking for.** `ENTRY_FIELD_OWNERS` in store.ts
+is a `satisfies Record<keyof RegisterEntry, …>` census: a field added to the register is a compile
+error until somebody says whether it is identity, row material, pane or clock. `rowMaterialOf`
+returns `Pick<RegisterEntry, RegisterRowField>`, and a test ties the census's row half back to the
+list the differ watches. One name added in one place cannot pass all three.
+
+**Mutations: 19 tried, 19 caught — and one of them only after it survived.**
+`rowFieldMoved("startedAt")` returning `false` passed the entire suite, because every other test
+edited some other field, so a watched field nothing exercises is not really watched; the test that
+closes it says so. **Four first-round runs were VOID rather than caught** — a vitest killed under
+load on this box exits non-zero with a log full of ticks, which is indistinguishable from a mutant
+found unless you insist on the summary line — and were re-run alone.
+
+*(The commit message for `5627f6c1` says 526 comparisons; the finished run says 516. The larger
+number was read off a partial capture and the smaller one is right.)*
+
+#### S7-03, as built, and the difference that mattered
+
+`tools/overseer/jsonl.ts` now holds truncate-to-last-line, the `O_APPEND` single write and
+`writeAtomically`, used by store.ts and notes.ts. **The two copies had already drifted**, which is the
+argument for the extraction rather than against it, and every divergence resolved towards store.ts:
+
+- notes.ts's append loop was `while (written < n) written += writeSync(…)` with **no check that the
+  count was positive**. `writeSync` returning 0 is the rare case the loop exists for, and there it is
+  an infinite loop inside the daemon rather than a torn line.
+- notes.ts did not `fsync` after truncating, so a machine dying between the repair and the first
+  append came back to the torn line the last start thought it had removed.
+- notes.ts kept `droppedBytes` and threw the dropped text away.
+
+`LogRepair` and `NoteRepair` are one `JsonlRepair`. Two names for one fact is how the rule came to be
+written twice. No test was edited; five mutations on the extracted module were all caught, and the
+one that reports a torn file as clean fails in the **notes** suite as well as the store's, so both
+callers really are exercised through it.
 
 **What this stage is deliberately not.** It is not new capability. Nothing here makes the Overseer do
 anything it could not do this morning; it closes three gaps between what the code does and what the

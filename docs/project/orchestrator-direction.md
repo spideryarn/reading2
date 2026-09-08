@@ -709,6 +709,30 @@ This also sharpens [§ Attention](#attention-and-who-the-overseer-is-really-watc
 expensive agent is the one working confidently on the wrong thing, and never asks. Add to it the
 agent that *did* ask and whose asking is invisible.
 
+**And the measurement that turns that last sentence into a number, 2026-09-08.** The fleet dashboard
+agent investigated which permission mode sessions actually start in, and the answer was a coin flip:
+**28 auto, 7 default across `gjd-remote` launches since 09-06** — two sessions launched 25 seconds
+apart from identical generated job scripts came up in opposite modes. A `default`-mode session runs
+normally until its first unapprovable call — a `git fetch`, a `git log`, `npm run worktree:setup`, an
+MCP read, so within the first minute of almost any brief here — and then waits for somebody who is
+asleep. **Longest single stalls: 7.38h, 6.34h, 5.75h, 5.35h, 5.33h, 4.30h — 34.9 agent-hours since
+Sunday**, independently reproducing an earlier finding of 41.6 agent-hours since 09-01. The longest
+stall in *any* always-auto session over three days is **21 minutes**.
+
+**Nothing on this box notices**: `gjd-remote log` lists a stalled session as `running`, identical to a
+healthy one. So this is the sharpest available instance of *the agent that did ask and whose asking is
+invisible* — and unlike most of this page it comes with a rate rather than an anecdote.
+
+**A candidate Overseer arm, deliberately not built in O1**, because it is new capability rather than a
+gap between the code and the plan. Two notes for whoever does build it. **Read `permission-mode`, not
+`auto_mode`** — the latter is a per-*turn* attachment, so its absence means "no turn ever ran in auto
+mode", which reads identically for a session that entered auto mode late and misreports every session
+converted mid-life; `permission-mode` is a checkpoint written at every turn boundary and is
+authoritative. And note what the two sides see: a pane-status substring answers *"is this session
+showing a prompt right now"*, while `permission-mode` answers *"will this session stall the next time
+it does anything"* — **a prediction rather than an observation**, which is the more valuable of the
+two and the reason to build it properly rather than quickly.
+
 ### Remote Control fails quietly, which is A27's shape again
 
 **8 of 23 live sessions had Remote Control broken**, measured 2026-09-08 — the feature that was
