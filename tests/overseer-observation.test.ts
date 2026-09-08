@@ -13,12 +13,17 @@ import { describe, expect, test } from "vitest";
 import { fleetState } from "../tools/fleet/state.js";
 import type { SessionMeta, SessionState } from "../scripts/gjd-remote-tmux.js";
 import { admissible } from "../tools/overseer/admissible.js";
-import { OBSERVATION_SCHEMA, parseObservation, type JsonValue } from "../tools/overseer/observation.js";
+import {
+  OBSERVATION_SCHEMA,
+  parseObservation,
+  type JsonValue,
+  type ObservedStatus,
+} from "../tools/overseer/observation.js";
 import { EVERY_FIXTURE, editableFixture, freshFixture, freshFrom, rawFixture, rowsOf } from "./overseer-fixtures.js";
 
 describe("the real captured snapshots", () => {
-  test("all eight parse, and carry the fields the register needs", () => {
-    expect(EVERY_FIXTURE).toHaveLength(8);
+  test("all ten parse, and carry the fields the register needs", () => {
+    expect(EVERY_FIXTURE).toHaveLength(10);
     for (const name of EVERY_FIXTURE) {
       const parsed = parseObservation(rawFixture(name));
       expect(parsed.ok ? null : parsed.reason).toBeNull();
@@ -294,5 +299,300 @@ describe("admissibility", () => {
     const payload = editableFixture("status-change-before");
     payload["collectedAt"] = null;
     expect(() => freshFrom(payload, "constructed placeholder")).toThrow(/not a collection/);
+  });
+
+  /**
+   * S2-07. `diff()` takes an `AdmissibleSnapshot`, a type only `admissible()`
+   * can mint, so this helper is the only route into a differ that any test has
+   * — and it runs every rule. The old `FreshSnapshot` could be built from a
+   * parse result with a spread and no cast, which is what made its "only
+   * `admissible()` mints one" comment untrue.
+   */
+  test("freshFrom refuses a payload whose collection failed, for the same reason", () => {
+    const payload = editableFixture("status-change-before");
+    payload["error"] = "could not read this box's tmux sessions";
+    expect(() => freshFrom(payload, "constructed failure")).toThrow(/tmux sessions/);
+  });
+});
+
+/**
+ * S2-02: THE NUMERIC DOMAINS, none of which is "finite".
+ *
+ * Every case here parsed before 2026-09-08 and every one of them is a payload
+ * the producer cannot emit — each number in this envelope comes from a bounded
+ * digit string or from arithmetic on `Date.now()`. The first is the one with
+ * teeth: an impossible generation reads as a different tmux server, which
+ * closes the whole fleet and re-announces it.
+ */
+describe("CONSTRUCTED: numbers the producer could not have printed", () => {
+  function withField(edit: (payload: Record<string, JsonValue>) => void): ReturnType<typeof parseObservation> {
+    const payload = editableFixture("status-change-before");
+    edit(payload);
+    return parseObservation(payload);
+  }
+
+  function rowField(field: string, value: JsonValue): ReturnType<typeof parseObservation> {
+    return withField((p) => {
+      const row = rowsOf(p)[0];
+      if (row) row[field] = value;
+    });
+  }
+
+  test("a fractional tmux generation is not a generation", () => {
+    // 132280.5 is finite, so the old check passed it — and `generationRelation`
+    // then reads it as a DIFFERENT tmux server from 132280, which is six
+    // closures and six arrivals manufactured from a typo.
+    const parsed = withField((p) => {
+      p["tmuxServerPid"] = 132280.5;
+    });
+    expect(parsed.ok).toBe(false);
+    if (!parsed.ok) expect(parsed.reason).toContain("not a process id");
+  });
+
+  test("a generation that is zero, negative or beyond a safe integer is refused too", () => {
+    for (const bad of [0, -1, 1e30, Number.MAX_SAFE_INTEGER + 2]) {
+      const parsed = withField((p) => {
+        p["tmuxServerPid"] = bad;
+      });
+      expect(parsed.ok, `tmuxServerPid ${bad} should not parse`).toBe(false);
+    }
+    // Null stays legitimate: it is the producer saying it could not read one.
+    expect(
+      withField((p) => {
+        p["tmuxServerPid"] = null;
+      }).ok,
+    ).toBe(true);
+  });
+
+  test("a pane pid is a pid or nothing", () => {
+    for (const bad of [0, -12, 4136799.5]) {
+      expect(rowField("panePid", bad).ok, `panePid ${bad} should not parse`).toBe(false);
+    }
+    expect(rowField("panePid", null).ok).toBe(true);
+    expect(rowField("panePid", 4136799).ok).toBe(true);
+  });
+
+  test("a refresh interval of zero or less would poison the freshness watchdog S4 depends on", () => {
+    // A cadence of zero is a deadline that is always missed; a negative one is
+    // a deadline that never is. Neither would say anything about itself, and
+    // both would be read as facts about the box.
+    for (const bad of [0, -60_000, 60_000.5]) {
+      const parsed = withField((p) => {
+        p["refreshMs"] = bad;
+      });
+      expect(parsed.ok, `refreshMs ${bad} should not parse`).toBe(false);
+    }
+  });
+
+  test("a collection cannot have taken a negative or fractional number of milliseconds", () => {
+    for (const bad of [-1, 13414.5]) {
+      const parsed = withField((p) => {
+        p["tookMs"] = bad;
+      });
+      expect(parsed.ok, `tookMs ${bad} should not parse`).toBe(false);
+    }
+    // Zero IS legitimate: `fleetState()` substitutes it when there is no
+    // collection to report a duration for.
+    expect(
+      withField((p) => {
+        p["tookMs"] = 0;
+      }).ok,
+    ).toBe(true);
+  });
+
+  test("a countdown is whole seconds and never negative", () => {
+    for (const bad of [-1, 899.5]) {
+      expect(rowField("status", { kind: "waiting", secondsLeft: bad }).ok, `secondsLeft ${bad}`).toBe(false);
+    }
+    expect(rowField("status", { kind: "waiting", secondsLeft: 0 }).ok).toBe(true);
+  });
+});
+
+/**
+ * S2-04: the reported status token and its cause travel together.
+ *
+ * The producer sets the token at exactly one site and that site's cause is
+ * `unrecognised-agent-status`. `statusKey` puts the token in the transition
+ * key, so a payload that pairs it with any other cause manufactures status
+ * transitions out of rows the box could not have produced.
+ *
+ * The type-level half of this finding cannot be tested here — vitest strips
+ * types — so `ObservedUnknownStatus` is enforced by `npm run typecheck` and the
+ * assignment below is what would go red.
+ */
+describe("CONSTRUCTED: reportedStatus on a cause that never carries one", () => {
+  function withStatus(status: JsonValue): ReturnType<typeof parseObservation> {
+    const payload = editableFixture("status-change-before");
+    const row = rowsOf(payload)[0];
+    if (row === undefined) throw new Error("fixture has no rows");
+    row["status"] = status;
+    return parseObservation(payload);
+  }
+
+  test("a token on `agents-unavailable` fails the snapshot", () => {
+    const parsed = withStatus({
+      kind: "unknown",
+      cause: "agents-unavailable",
+      why: "the box could not say",
+      reportedStatus: "a",
+    });
+    expect(parsed.ok).toBe(false);
+    if (!parsed.ok) expect(parsed.reason).toContain("never sets it for");
+  });
+
+  test("every other cause refuses it too, and the one that carries it requires it", () => {
+    for (const cause of ["not-a-session-id", "running-but-unlisted", "no-status-derived", "client-declared"]) {
+      const parsed = withStatus({ kind: "unknown", cause, why: "…", reportedStatus: "compacting" });
+      expect(parsed.ok, `${cause} should not carry a reportedStatus`).toBe(false);
+    }
+    const missing = withStatus({ kind: "unknown", cause: "unrecognised-agent-status", why: "…" });
+    expect(missing.ok).toBe(false);
+    if (!missing.ok) expect(missing.reason).toContain("the box saw a status token");
+  });
+
+  test("the shape the producer really emits still parses, and keeps its token", () => {
+    const parsed = withStatus({
+      kind: "unknown",
+      cause: "unrecognised-agent-status",
+      why: "Claude Code calls this 'compacting', which this version does not know",
+      reportedStatus: "compacting",
+    });
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    const status: ObservedStatus | undefined = parsed.value.rows[0]?.status;
+    // The narrowed union is what the parser hands back, and it is assignable to
+    // the producer's own type — this line is the compile-time half of S2-04.
+    const asProducerType: SessionState | undefined = status;
+    expect(asProducerType).toMatchObject({ reportedStatus: "compacting" });
+  });
+});
+
+/**
+ * S2-06: the two fields kept for reboot recovery, held to the producer's own
+ * rules.
+ *
+ * `row.repo` and `row.worktree` are display strings and stay loose — the
+ * capture has them as the repo, as null, and as the literal `"unknown"`.
+ * `meta.repo` and `meta.dir` are the register, and a value the producer would
+ * have refused is one no resumer can act on.
+ */
+describe("CONSTRUCTED: recovery metadata the producer would not have minted", () => {
+  function withMeta(edit: (meta: Record<string, JsonValue>) => void): ReturnType<typeof parseObservation> {
+    const payload = editableFixture("status-change-before");
+    const meta = rowsOf(payload)[0]?.["meta"] as Record<string, JsonValue>;
+    edit(meta);
+    return parseObservation(payload);
+  }
+
+  test("a relative dir is refused, because a resumer would use whatever directory it is standing in", () => {
+    const parsed = withMeta((meta) => {
+      meta["dir"] = "relative/path";
+    });
+    expect(parsed.ok).toBe(false);
+    if (!parsed.ok) expect(parsed.reason).toContain("not an absolute path");
+  });
+
+  test("a dir longer than the producer's bound is refused", () => {
+    expect(
+      withMeta((meta) => {
+        meta["dir"] = `/${"x".repeat(4096)}`;
+      }).ok,
+    ).toBe(false);
+    expect(
+      withMeta((meta) => {
+        meta["dir"] = `/${"x".repeat(4094)}`;
+      }).ok,
+    ).toBe(true);
+  });
+
+  test("a repo value that is not a slug is refused, and `unknown` is not one of those", () => {
+    for (const bad of ["Not A Slug", "a/b/c", "../escape", "owner/..", "owner/name/", ""]) {
+      expect(
+        withMeta((meta) => {
+          meta["repo"] = bad;
+        }).ok,
+        `meta.repo ${JSON.stringify(bad)} should not parse`,
+      ).toBe(false);
+    }
+    // The producer's own admission that a session belongs to no repo.
+    expect(
+      withMeta((meta) => {
+        meta["repo"] = "unknown";
+      }).ok,
+    ).toBe(true);
+  });
+
+  test("the row's display repo is NOT held to that rule, because it is not the register", () => {
+    // Measured in the capture: `repo` was variously the slug, null, the literal
+    // "unknown", and `spideryarn/hellozenno`. Tightening this one would fail
+    // whole snapshots over a field nothing recovers from.
+    const payload = editableFixture("status-change-before");
+    const row = rowsOf(payload)[0];
+    if (row === undefined) throw new Error("fixture has no rows");
+    row["repo"] = "Some Display Text";
+    expect(parseObservation(payload).ok).toBe(true);
+  });
+});
+
+/**
+ * S2-05: two payloads wearing one clock, which is only a duplicate if they say
+ * the same thing.
+ */
+describe("CONSTRUCTED: equal clocks with disagreeing bodies", () => {
+  /** The real duplicate's clock, on a body that has been changed. */
+  function sameClockAs(first: ReturnType<typeof freshFixture>, edit: (payload: Record<string, JsonValue>) => void) {
+    const payload = editableFixture("duplicate-second");
+    edit(payload);
+    expect(payload["collectedAt"]).toBe(first.clock.at);
+    return admissible(first, parseObservation(payload));
+  }
+
+  test("the real byte-identical pair is still a duplicate", () => {
+    // The case that must not break: SSE pushes its cached snapshot on
+    // reconnect while a poll runs between collections, so this is the ordinary
+    // event rather than a fault.
+    const verdict = sameClockAs(freshFixture("duplicate-first"), () => {});
+    expect(verdict.verdict).toBe("duplicate");
+  });
+
+  test("a different tmux generation under the same clock is a contract failure, not a repeat", () => {
+    const verdict = sameClockAs(freshFixture("duplicate-first"), (p) => {
+      p["tmuxServerPid"] = 999_111;
+    });
+    expect(verdict.verdict).toBe("reject");
+    expect(verdict.reason).toContain("same clock");
+    // The sentence has to name the inconsistency: "duplicate" was the silence
+    // this finding is about, and a reject nobody can act on is the next one.
+    expect(verdict.reason).toContain("132280");
+    expect(verdict.reason).toContain("999111");
+  });
+
+  test("a changed row under the same clock names the row", () => {
+    const verdict = sameClockAs(freshFixture("duplicate-first"), (p) => {
+      const row = rowsOf(p)[1];
+      if (row) row["status"] = { kind: "working" };
+    });
+    expect(verdict.verdict).toBe("reject");
+    expect(verdict.reason).toContain("$1207");
+  });
+
+  test("a dropped row under the same clock is caught before any comparison of rows", () => {
+    const verdict = sameClockAs(freshFixture("duplicate-first"), (p) => {
+      p["rows"] = rowsOf(p).slice(1) as unknown as JsonValue;
+    });
+    expect(verdict.verdict).toBe("reject");
+    expect(verdict.reason).toContain("6 sessions and the other 5");
+  });
+
+  test("a changed `health` is STILL a duplicate, because it is not part of the collection", () => {
+    // Deliberate, and the one place this rule gives ground. `health` is
+    // re-probed on its own and is carried verbatim by this module precisely
+    // because it is not interpreted here; rejecting a duplicate over it would
+    // stall the history over a field the Overseer has declared it does not
+    // read — the same silence, arrived at from the other side.
+    const verdict = sameClockAs(freshFixture("duplicate-first"), (p) => {
+      p["health"] = { verdict: { level: "calm" } };
+    });
+    expect(verdict.verdict).toBe("duplicate");
   });
 });

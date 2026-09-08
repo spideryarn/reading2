@@ -38,6 +38,11 @@
  * world and starts the new one fresh. It is not a variant of "replaced"; it is
  * a rule about when not to compare.
  *
+ * **And when the generation cannot be READ, a snapshot with sessions in it is
+ * held rather than diffed** — see `DiffOutcome`. "I could not tell which world
+ * this is" is not "the same world", and treating it as one lets a reboot slip
+ * through between two unreadable readings.
+ *
  * ## The canonical key, and why status objects are never compared structurally
  *
  * Measured over the real capture in `tests/fixtures/overseer-snapshots/`: **51
@@ -54,7 +59,8 @@
  * its own argument for being one.
  */
 import type { SessionState } from "../../scripts/gjd-remote-tmux.js";
-import type { ClaimedConversationId, FreshSnapshot, ObservedRow } from "./observation.js";
+import type { AdmissibleSnapshot } from "./admissible.js";
+import type { ObservedRow, ObservedStatus } from "./observation.js";
 
 /** Which session, in the best terms available — one of which is not a fact. */
 export type SessionIdentity = {
@@ -64,9 +70,10 @@ export type SessionIdentity = {
    * What the tmux environment claims is running in the pane. Null for a shell,
    * a `setup`, and a legacy session that never pinned one — and stale for any
    * pane whose Claude has been replaced since launch. Not an identity; see
-   * `ObservedRow.claimedConversationId`.
+   * `ObservedRow.claimedConversationId`, which also says why this is a plain
+   * string rather than a branded one.
    */
-  claimedConversationId: ClaimedConversationId | null;
+  claimedConversationId: string | null;
 };
 
 /**
@@ -126,7 +133,9 @@ export function statusKey(status: SessionState): StatusKey {
       return status.kind as StatusKey;
     // `secondsLeft` IS DELIBERATELY ABSENT. It counts down on every collection,
     // and including it is the single mistake that would make this log useless
-    // — see the module comment for the measurement.
+    // — see the module comment for the measurement. What that costs is a wait
+    // RESTARTED between two collections, which this key cannot see and
+    // `session-wait-restarted` catches with an implied deadline instead.
     case "waiting":
       return "waiting" as StatusKey;
     // `busy` is in, because it is the difference between a shell grinding
@@ -243,7 +252,74 @@ export type OverseerEvent =
       previous: SessionIdentity;
       previousKey: SessionKey;
       row: ObservedRow;
+    }
+  /**
+   * A NEW WAIT, on a session that was already waiting — the transition the
+   * canonical key cannot see.
+   *
+   * `statusKey` maps every wait to `"waiting"`, which is right and is what
+   * keeps the log from filling with countdowns, but it means `secondsLeft: 60`
+   * followed by `secondsLeft: 3600` is one key and the history reads as a
+   * single uninterrupted wait when what really happened is that a wait ended
+   * and an hour-long one began. GPT Sol's S2-03.
+   *
+   * DEADLINES, NOT KEY MATERIAL. Putting `secondsLeft` in the key would bring
+   * back the fifty-one events the measurement above is about. What separates
+   * the two cases is the IMPLIED DEADLINE — when the observation was taken,
+   * plus what was left — which an ordinary countdown holds roughly still and a
+   * restarted wait shoves later. See `WAIT_DEADLINE_TOLERANCE_MS` for how much
+   * "roughly" is.
+   *
+   * A deadline that moves EARLIER is silent. That is a countdown, a wait
+   * shortened by hand, or jitter; none of it is a new wait, and the wait's end
+   * will announce itself when the status changes.
+   */
+  | {
+      kind: "session-wait-restarted";
+      at: string;
+      tmuxServerPid: number | null;
+      key: SessionKey;
+      identity: SessionIdentity;
+      /** What the wait was going to end at, as implied by the previous snapshot. */
+      previousDeadline: string;
+      /** What it is going to end at now. Later than the one above by more than the tolerance. */
+      deadline: string;
+      /** The waiting status itself, so the log can say how long the new wait is. */
+      status: SessionState;
     };
+
+/**
+ * How far an implied deadline may drift later before it is a new wait.
+ *
+ * **COLLECTION JITTER IS NOT THE TERM, and assuming it was is how this constant
+ * was nearly set twenty times too large.** The obvious reasoning — collections
+ * are ~65 s apart, so the tolerance must exceed that — is wrong, because the
+ * two halves of the deadline move TOGETHER: the producer derives `secondsLeft`
+ * from a real deadline rather than sampling it independently, so a later
+ * collection carries a proportionally smaller countdown and the sum does not
+ * move. Measured on the live box, 2026-09-08 05:43–05:49 UTC: five consecutive
+ * collections, three `waiting` sessions, **implied deadline stable to 72 ms
+ * across all three sessions over five and a half minutes** — which is the
+ * rounding of a whole-second countdown and nothing else. The real pair in
+ * `tests/fixtures/overseer-snapshots/waiting-{first,second}.json` is two of
+ * those five collections, and `tests/overseer-diff.test.ts` re-measures it.
+ *
+ * What CAN move it is the gap between the two moments inside one collection:
+ * the countdown is read off the pane early in the run and `collectedAt` is
+ * stamped when the run ends, so a slow collection following a fast one shifts
+ * the implied deadline by the difference in their durations. That capture ran
+ * 3.81–3.90 s (95 ms of spread); the earlier one in the fixtures README ran
+ * 12.3–14.4 s, and the README's observed range of 5.7–11.0 s puts the worst
+ * case around 5 s. Ten seconds is about twice that.
+ *
+ * The cost is stated rather than hidden — **a wait extended by less than ten
+ * seconds is invisible** — and it is the right side to err on: a false positive
+ * is a fabricated event in the history, which is this module's worst outcome,
+ * while the smallest restart worth recording is minutes long. A two-minute
+ * tolerance, by contrast, would have hidden a wait restarted from 60 s to
+ * 120 s, which is exactly the defect S2-03 is about.
+ */
+export const WAIT_DEADLINE_TOLERANCE_MS = 10_000;
 
 /**
  * How two snapshots' tmux generations relate.
@@ -264,6 +340,37 @@ export function generationRelation(before: number | null, after: number | null):
 }
 
 /**
+ * Why a snapshot was not diffed, as a token the daemon can switch on.
+ *
+ * A union of one, deliberately: a second reason is a compile error at every
+ * caller that thought there was only one, which is the point of naming it at
+ * all rather than returning a bare sentence.
+ */
+export type HoldReason = "generation-unreadable";
+
+/**
+ * What `diff()` did — and, crucially, whether the baseline may move.
+ *
+ * A DISCRIMINATED UNION RATHER THAN AN ARRAY, so that "we could not safely
+ * compare these" is a thing the caller has to answer for. The next snapshot is
+ * reachable as `baseline` only on the `diffed` arm, so a daemon cannot advance
+ * past a snapshot this module refused to diff — the compiler stops it, rather
+ * than a comment asking it not to. GPT Sol's S2-01.
+ *
+ * **A hold is not silence, and it must not become silence.** "Correct and
+ * unavailable" and "nothing is happening" look identical in an event log, and
+ * telling them apart is most of why the Overseer exists. So the `held` arm
+ * carries both a token to switch on and the sentence to write down, and the
+ * daemon stage is expected to record it. A degradation EVENT would have been
+ * the other way to do this; it is not, because every arm of `OverseerEvent` is
+ * about one session and this is about the Overseer's own condition — an arm
+ * with no session in it would be the first thing to make that union incoherent.
+ */
+export type DiffOutcome =
+  | { kind: "diffed"; events: OverseerEvent[]; baseline: AdmissibleSnapshot }
+  | { kind: "held"; why: HoldReason; reason: string };
+
+/**
  * The events between two accepted snapshots.
  *
  * `previous` is null for the first snapshot after a cold start, which yields a
@@ -275,12 +382,59 @@ export function generationRelation(before: number | null, after: number | null):
  * snapshot's row order, then everything else in the next snapshot's row order.
  * A `session-seen` for a handle that a `tmux-session-gone` in the same batch
  * refers to is therefore always the later of the two.
+ *
+ * ## THE BLIND SPOT THIS CANNOT COVER, stated because absence is invisible
+ *
+ * A session that starts after one snapshot and exits before the next is not in
+ * either of them, so it appears in no event and the history says it never ran.
+ * No pure differ can do better: there is no evidence in the two payloads from
+ * which to derive one. It is a SAMPLING limit rather than a bug — the window is
+ * one collection interval, about 70 s — and it is worth knowing about for the
+ * same reason as the stale-claim asymmetry on `session-replaced`: the log's
+ * silence about a session is not a statement that nothing happened. The only
+ * fixes are outside this module (a shorter interval, or the producer telling us
+ * what it saw between collections), and neither is worth buying yet. GPT Sol's
+ * S2-08. Also in tests/fixtures/overseer-snapshots/README.md, under what the
+ * fixtures do not cover.
  */
-export function diff(previous: FreshSnapshot | null, next: FreshSnapshot): OverseerEvent[] {
+export function diff(previous: AdmissibleSnapshot | null, next: AdmissibleSnapshot): DiffOutcome {
   const at = next.clock.at;
 
+  // BEFORE ANYTHING IS COMPARED, AND BEFORE THE BASELINE COULD MOVE. A snapshot
+  // with sessions in it and no readable generation cannot be placed in a world:
+  // if tmux restarted between it and the last one, its `$7` is a fresh
+  // allocation wearing an old number, and diffing it produces either silence
+  // (handle, claim and status happen to coincide) or a status transition
+  // attributed to a session that no longer exists. `100 → null → 200` used to
+  // be two `unverifiable` steps, both diffed, which is how a reboot could pass
+  // through this module leaving no trace. Holding keeps the baseline at the
+  // last snapshot whose world is known, so the reboot is found — as a
+  // generation CHANGE — the moment a readable generation arrives.
+  //
+  // AN EMPTY FLEET IS EXEMPT, and not as a convenience: there are no handles to
+  // equate, so there is nothing a wrong guess about the world could
+  // mis-attribute. A drained box with an unreadable generation is still
+  // evidence, and refusing it would stall the history over a payload that
+  // cannot mislead anyone.
+  //
+  // ONLY `next` IS CHECKED, and `previous` needs no check for a reason worth
+  // writing down: a baseline can only come from a `diffed` result, and this
+  // guard is what a `diffed` result has passed — so a `previous` with rows and
+  // no generation is unreachable. Checking it anyway would be worse than
+  // useless: there is no escape from it, so a baseline restored from an older
+  // store could stall the history for good rather than for one collection.
+  if (next.tmuxServerPid === null && next.rows.length > 0) {
+    return {
+      kind: "held",
+      why: "generation-unreadable",
+      reason:
+        `the collection at ${at} lists ${next.rows.length} sessions and no tmux generation, ` +
+        `so its handles cannot be told apart from the ones already recorded`,
+    };
+  }
+
   if (previous === null) {
-    return next.rows.map((row) => seen(row, at, next.tmuxServerPid));
+    return { kind: "diffed", events: next.rows.map((row) => seen(row, at, next.tmuxServerPid)), baseline: next };
   }
 
   const relation = generationRelation(previous.tmuxServerPid, next.tmuxServerPid);
@@ -291,10 +445,14 @@ export function diff(previous: FreshSnapshot | null, next: FreshSnapshot): Overs
       // handle in `next` is a fresh allocation that may reuse the same number.
       // The alternative — matching them up — produces a burst of replacements
       // that reads as a plausible afternoon and describes a reboot.
-      return [
-        ...previous.rows.map((row) => gone(row, at, previous.tmuxServerPid, "tmux-server-changed")),
-        ...next.rows.map((row) => seen(row, at, next.tmuxServerPid)),
-      ];
+      return {
+        kind: "diffed",
+        events: [
+          ...previous.rows.map((row) => gone(row, at, previous.tmuxServerPid, "tmux-server-changed")),
+          ...next.rows.map((row) => seen(row, at, next.tmuxServerPid)),
+        ],
+        baseline: next,
+      };
     case "same":
     case "unverifiable":
       break;
@@ -341,6 +499,24 @@ export function diff(previous: FreshSnapshot | null, next: FreshSnapshot): Overs
       });
       continue;
     }
+    // THE ONE THING THE CANONICAL KEY DELIBERATELY CANNOT SEE. Both statuses
+    // key as `waiting`, so without this a wait that ended and was replaced by a
+    // longer one is one unbroken wait in the history. See
+    // `session-wait-restarted`.
+    const restarted = waitRestart(was.status, previous.clock.atMs, row.status, next.clock.atMs);
+    if (restarted !== null) {
+      events.push({
+        kind: "session-wait-restarted",
+        at,
+        tmuxServerPid: next.tmuxServerPid,
+        key: sessionKey(identityOf(row)),
+        identity: identityOf(row),
+        previousDeadline: restarted.previousDeadline,
+        deadline: restarted.deadline,
+        status: row.status,
+      });
+      continue;
+    }
     const from = statusKey(was.status);
     const to = statusKey(row.status);
     // THE ONE LINE THE MEASUREMENT IS ABOUT. `from === to` on two structurally
@@ -358,7 +534,30 @@ export function diff(previous: FreshSnapshot | null, next: FreshSnapshot): Overs
     });
   }
 
-  return events;
+  return { kind: "diffed", events, baseline: next };
+}
+
+/**
+ * The two implied deadlines, when a wait was pushed materially later.
+ *
+ * Null when either status is not a wait — a wait that ENDED is an ordinary
+ * status transition and is already recorded as one — and null when the deadline
+ * held still or came closer, which is what a countdown does.
+ */
+function waitRestart(
+  before: ObservedStatus,
+  beforeAtMs: number,
+  after: ObservedStatus,
+  afterAtMs: number,
+): { previousDeadline: string; deadline: string } | null {
+  if (before.kind !== "waiting" || after.kind !== "waiting") return null;
+  const previousDeadlineMs = beforeAtMs + before.secondsLeft * 1000;
+  const deadlineMs = afterAtMs + after.secondsLeft * 1000;
+  if (deadlineMs - previousDeadlineMs <= WAIT_DEADLINE_TOLERANCE_MS) return null;
+  return {
+    previousDeadline: new Date(previousDeadlineMs).toISOString(),
+    deadline: new Date(deadlineMs).toISOString(),
+  };
 }
 
 function seen(row: ObservedRow, at: string, tmuxServerPid: number | null): OverseerEvent {
