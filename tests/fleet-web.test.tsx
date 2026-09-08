@@ -4352,6 +4352,54 @@ describe("what became of the keystrokes, which is three answers and not two", ()
   });
 });
 
+describe("absent is not empty, on the two payloads that say what is waiting", () => {
+  /* A HAND-WRITTEN PARSE OF AN `unknown` IS WHERE wire.ts CANNOT REACH. The
+     compiler holds the shape on both sides of the boundary; it has no opinion
+     about what a parser does with a key that is not there. So the rule has to
+     be kept by hand at exactly this point, and the direction is always the
+     same: a payload this page cannot read must not become a confident claim
+     about the box.
+
+     Flagged by `fleet-health-history` on 2026-09-08, who hit it in their own
+     parser — a renamed `samples` key produced a perfectly valid EMPTY DAY. This
+     file had the identical defect one field along from a long comment about the
+     identical defect. */
+
+  it("does not say 'Nothing is waiting' about a queue whose items it could not read", () => {
+    const parsed = parseQueue({ sessionId: "$a", warning: "volatile", deliverable: 0 });
+    expect(parsed).not.toBeNull();
+    expect(parsed?.itemsUnreadable).toBe(true);
+    /* The list is empty because there was nothing readable to put in it — which
+       is exactly why `items.length === 0` must not be what the page reasons
+       from. */
+    expect(parsed?.items).toEqual([]);
+  });
+
+  it("reads a real queue as readable, so the flag is not simply always on", () => {
+    const parsed = parseQueue({ sessionId: "$a", items: [], warning: "volatile", deliverable: 0 });
+    expect(parsed?.itemsUnreadable).toBe(false);
+    // And a genuinely empty queue is still genuinely empty.
+    expect(parsed?.items).toEqual([]);
+  });
+
+  it("tells the reader it cannot say, rather than that nothing is waiting", async () => {
+    const feed = manualTransport();
+    const rec = recordingActions(() => ({
+      actions: { session: [], box: [] },
+      // A queue with no `items` key at all — the shape a rename produces.
+      queues: [{ sessionId: "$1", warning: "volatile", deliverable: 0 }],
+    }));
+    mountFull({ transport: feed.transport, actionsApi: rec.api });
+    act(() => feed.push(state({ rows: [steerable({ id: "$1", title: "the one with an unreadable queue" })] })));
+    openSession("the one with an unreadable queue");
+    await act(async () => {});
+
+    const text = container.textContent ?? "";
+    expect(text).toContain("no list of items this page can read");
+    expect(text).not.toContain("Nothing is waiting.");
+  });
+});
+
 describe("the fixtures' own clock", () => {
   /* THIS EXISTS BECAUSE THE SAME BUG SHIPPED TWICE IN ONE DAY, IN THIS FILE,
      AND THREE SEPARATE SESSIONS TRIPPED OVER THE SECOND ONE.

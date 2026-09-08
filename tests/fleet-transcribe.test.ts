@@ -20,7 +20,12 @@ import { PassThrough } from "node:stream";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { MAX_AUDIO_BASE64 } from "../src/dictation-limits.js";
-import { handleTranscribeRequest, orderForContext } from "../tools/fleet/routes-transcribe.js";
+import {
+  fleetTranscribeLimiter,
+  handleTranscribeRequest,
+  orderForContext,
+  type TranscribeDeps,
+} from "../tools/fleet/routes-transcribe.js";
 import { type FleetTranscription, forgetOpenRouterKey, transcribeForFleet } from "../tools/fleet/transcribe.js";
 import { FLEET_TERMS, fleetVocabulary } from "../tools/fleet/vocabulary.js";
 
@@ -28,8 +33,20 @@ const HOST = "100.90.80.70:8787";
 const ORIGIN = `http://${HOST}`;
 const KEY = "sk-or-test-not-a-real-key";
 
-/** Long enough to clear the "nothing was said" floor, and not real audio. */
-const AUDIO = "A".repeat(60_000);
+/**
+ * Long enough to clear the "nothing was said" floor, and **beginning like a real
+ * webm**, because the route checks the container's magic bytes now.
+ *
+ * It is still not audio — the first four bytes are EBML and the rest is
+ * padding — and that is the honest limit of what a unit test can assert here.
+ * What it stops is the previous fixture, 60 KB of `"A"`, which was valid base64
+ * of nothing and would have opened a paid call.
+ */
+const WEBM_MAGIC = Buffer.from([0x1a, 0x45, 0xdf, 0xa3]);
+const AUDIO = Buffer.concat([WEBM_MAGIC, Buffer.alloc(45_000, 0x42)]).toString("base64");
+
+/** Valid base64, correct length, and not a container anybody records in. */
+const NOT_AUDIO = "A".repeat(60_000);
 
 /* ------------------------------------------------------------------ *
  * Fakes.
@@ -62,6 +79,16 @@ type FakeRes = {
   body: string;
   done: Promise<void>;
   headers: Record<string, string>;
+  /** Whether the caller has gone. Writes after this are counted, not ignored. */
+  closed: boolean;
+  /**
+   * **Writes to a socket nobody is holding.**
+   *
+   * The first version of this fake accepted them silently, so a route that wrote
+   * a 500 into a closed response passed. GPT Sol reproduced exactly that and it
+   * is finding 2 of round 2 — so the fake counts them and a test asserts zero.
+   */
+  writesAfterClose: number;
   /** Pretend the caller hung up. See the route's `res.on("close")`. */
   hangUp(): void;
 };
@@ -82,15 +109,22 @@ function fakeRes(): { res: import("node:http").ServerResponse; seen: FakeRes } {
     status: null,
     body: "",
     headers: {},
-    done: new Promise<void>((r) => (settle = r)),
+    done: new Promise<void>((resolve) => {
+      settle = resolve;
+    }),
+    closed: false,
+    writesAfterClose: 0,
     hangUp() {
+      seen.closed = true;
       for (const fn of listeners.close ?? []) fn();
     },
   };
   const res = {
     headersSent: false,
     on(event: string, fn: () => void) {
-      (listeners[event] ??= []).push(fn);
+      const forEvent = listeners[event] ?? [];
+      forEvent.push(fn);
+      listeners[event] = forEvent;
       return res;
     },
     setHeader(name: string, value: string) {
@@ -98,12 +132,19 @@ function fakeRes(): { res: import("node:http").ServerResponse; seen: FakeRes } {
       return res;
     },
     writeHead(status: number) {
+      if (seen.closed) seen.writesAfterClose += 1;
       seen.status = status;
+      res.headersSent = true;
       return res;
     },
     end(chunk?: string) {
+      if (seen.closed) seen.writesAfterClose += 1;
       seen.body = chunk ?? "";
       settle();
+      return res;
+    },
+    off(event: string, fn: () => void) {
+      listeners[event] = (listeners[event] ?? []).filter((f) => f !== fn);
       return res;
     },
   };
@@ -129,16 +170,26 @@ function fakeReq(opts: { body?: string; headers?: Record<string, string>; method
  * said so, which is that guard doing exactly its job: a suite that quietly
  * spends is one nobody notices until the invoice.
  */
-function fakeTranscribe(over: Partial<{ result: FleetTranscription; hang: boolean }> = {}) {
-  const calls: { vocabulary: readonly string[]; signal: AbortSignal | undefined }[] = [];
-  const deps = {
-    async transcribe(args: { vocabulary: readonly string[]; signal?: AbortSignal }) {
-      calls.push({ vocabulary: args.vocabulary, signal: args.signal });
+function fakeTranscribe(over: Partial<{ result: FleetTranscription; hang: boolean; throws: boolean }> = {}) {
+  /* **Every argument is kept, not just the two an assertion happened to want.**
+     The first version recorded `vocabulary` and `signal` only, so a route that
+     sent the wrong audio or the wrong container would have passed every test
+     here. GPT Sol's round 2: a fake that discards what it is handed conceals the
+     wiring it exists to check. */
+  const calls: Parameters<TranscribeDeps["transcribe"]>[0][] = [];
+  const deps: TranscribeDeps = {
+    /* **Its own allowance, so tests are not order-dependent.** A shared limiter
+       meant a flood test spending the whole burst left every test after it
+       looking rate-limited — which is a fact about the fixture, not the code. */
+    limiter: fleetTranscribeLimiter(),
+    async transcribe(args) {
+      calls.push(args);
       if (over.hang === true) {
         /* Resolve only when the caller's signal aborts, which is what a real
            in-flight call does when somebody navigates away. */
         await new Promise<void>((r) => args.signal?.addEventListener("abort", () => r(), { once: true }));
       }
+      if (over.throws === true) throw new Error("the transcriber blew up");
       return over.result ?? ({ ok: true, text: "hello" } as FleetTranscription);
     },
   };
@@ -481,29 +532,129 @@ describe("POST /api/transcribe", () => {
 
        Driven through the route rather than the limiter, because a limiter that
        is correct and not wired in looks exactly like this test passing. */
-    const body = JSON.stringify({
-      audio: AUDIO,
-      format: "webm",
-      context: { kind: "session", sessionId: "flood-test" },
-    });
-    const { deps } = fakeTranscribe();
-    let last: FakeRes | null = null;
+    /* **A DIFFERENT KEY EACH TIME, which is the whole point of this test.** The
+       first version sent twelve requests under one session id at one instant, so
+       requests 2-12 were refused by the three-second per-key FLOOR and the
+       fleet-wide burst ceiling was never reached — a green test that proved the
+       wrong half. GPT Sol reproduced it in round 2. Twelve distinct boxes cannot
+       hit each other's floor, so the only thing left to refuse them is the
+       ceiling. */
+    const { deps, calls } = fakeTranscribe();
+    const statuses: (number | null)[] = [];
     for (let i = 0; i < 12; i++) {
+      const body = JSON.stringify({
+        audio: AUDIO,
+        format: "webm",
+        context: { kind: "session", sessionId: `flood-${i}` },
+      });
       const { res, seen } = fakeRes();
       handleTranscribeRequest(fakeReq({ body }), res, () => SESSIONS, deps);
       await seen.done;
-      last = seen;
+      statuses.push(seen.status);
+      if (seen.status === 429) {
+        expect(seen.body).toContain("[ai-busy]");
+        /* Retry-After, so a client is told how long rather than left to guess
+           and hammer. The sentence says the same; the header is what a machine
+           reads. */
+        expect(seen.headers["retry-after"]).toBeDefined();
+      }
     }
-    expect(last?.status).toBe(429);
-    expect(last?.body).toContain("[ai-busy]");
-    /* Retry-After, so a client is told how long rather than left to guess and
-       hammer. The sentence says the same thing; the header is what a machine
-       reads. */
-    expect(last?.headers["retry-after"]).toBeDefined();
+    /* Ten accepted, then refused — the ceiling, not the floor. */
+    expect(statuses.filter((x) => x === 200)).toHaveLength(10);
+    expect(statuses.at(-1)).toBe(429);
+    /* And the refusals cost nothing: exactly the accepted ones reached the
+       transcriber. */
+    expect(calls).toHaveLength(10);
   });
 });
 
 describe("POST /api/transcribe, continued", () => {
+  it("does not spend a paid slot on a recording that costs nothing", async () => {
+    /* `transcribeForFleet` answers a recording below the floor with an empty
+       transcript and never reaches the gateway — somebody pressing the button
+       and letting go. Recording a slot for that refused the next real dictation
+       three seconds later for a request that had spent nothing. GPT Sol's round
+       2, finding 3, reproduced: upstream calls 0, first 200, second 429. */
+    const tiny = Buffer.concat([WEBM_MAGIC, Buffer.alloc(8, 0x42)]).toString("base64");
+    /* The REAL transcriber, which is what decides the recording is too short —
+       injecting a fake here would test the test. It never reaches a provider,
+       and `tests/setup/provider-guard.ts` is what says so. One limiter across
+       the three presses, because the point is that press 2 is not refused. */
+    const realTranscribe: TranscribeDeps["transcribe"] = (args) => transcribeForFleet(args);
+    const limiter = fleetTranscribeLimiter();
+    const body = JSON.stringify({ audio: tiny, format: "webm", context: { kind: "session", sessionId: "free-exit" } });
+    for (const expected of [200, 200, 200]) {
+      const { res, seen } = fakeRes();
+      /* No `deps`: the REAL transcriber, which is what decides the recording is
+         too short. Injecting a fake here would test the test. It never reaches a
+         provider, and `tests/setup/provider-guard.ts` is what says so. */
+      handleTranscribeRequest(fakeReq({ body }), res, () => SESSIONS, { transcribe: realTranscribe, limiter });
+      await seen.done;
+      expect(seen.status).toBe(expected);
+      expect(seen.body).toBe(JSON.stringify({ text: "" }));
+    }
+  });
+
+  it("refuses bytes that do not begin like the container they claim", async () => {
+    /* **Valid base64 is not audio.** `"A".repeat(60_000)` passes every alphabet
+       and length check there is, and was this file's own fake recording until
+       GPT Sol pointed out that the comment claiming it stopped nonsense opening
+       a paid call was false. A magic number is what makes the claim true. */
+    const { deps, calls } = fakeTranscribe();
+    const { res, seen } = fakeRes();
+    handleTranscribeRequest(
+      fakeReq({
+        body: JSON.stringify({ audio: NOT_AUDIO, format: "webm", context: { kind: "new-session" } }),
+      }),
+      res,
+      () => SESSIONS,
+      deps,
+    );
+    await seen.done;
+    expect(seen.status).toBe(400);
+    expect(calls).toHaveLength(0);
+  });
+
+  it("refuses a surplus field inside the context, not only at the top level", async () => {
+    /* Sol found the top-level case tested and this one not. Same class. */
+    const { res, seen } = fakeRes();
+    handleTranscribeRequest(
+      fakeReq({
+        body: JSON.stringify({
+          audio: AUDIO,
+          format: "webm",
+          context: { kind: "new-session", sessionId: "smuggled" },
+        }),
+      }),
+      res,
+      () => SESSIONS,
+      fakeTranscribe().deps,
+    );
+    await seen.done;
+    expect(seen.status).toBe(400);
+  });
+
+  it("writes nothing to a socket whose caller has gone, even when the call throws", async () => {
+    /* The ordinary abort path returns cleanly. This is the other one: the
+       transcriber REJECTS after the caller has hung up, and `headersSent` is
+       false on a response nothing has answered — so the outer boundary wrote a
+       500 into a closed socket. GPT Sol reproduced it through the seam in round
+       2 and this is that reproduction, kept. */
+    const { deps } = fakeTranscribe({ hang: true, throws: true });
+    const { res, seen } = fakeRes();
+    handleTranscribeRequest(
+      fakeReq({ body: JSON.stringify({ audio: AUDIO, format: "webm", context: { kind: "new-session" } }) }),
+      res,
+      () => SESSIONS,
+      deps,
+    );
+    await new Promise((r) => setTimeout(r, 10));
+    seen.hangUp();
+    /* Let the rejection propagate through the boundary. */
+    await new Promise((r) => setTimeout(r, 10));
+    expect(seen.writesAfterClose).toBe(0);
+  });
+
   it("cancels the paid call when the caller hangs up", async () => {
     /* Without this the browser aborts its fetch — on a navigation, an unmount,
        or a second press — and the transcription carries on being billed for an
@@ -523,6 +674,12 @@ describe("POST /api/transcribe, continued", () => {
     expect(calls[0]?.signal?.aborted).toBe(false);
     seen.hangUp();
     expect(calls[0]?.signal?.aborted).toBe(true);
+    /* And the handler settles without answering. Sol's round 2: the first
+       version of this test neither awaited settlement nor asserted that nothing
+       was written, so a route that answered a closed socket would have passed. */
+    await new Promise((r) => setTimeout(r, 10));
+    expect(seen.writesAfterClose).toBe(0);
+    expect(seen.status).toBeNull();
   });
 
   it("primes the call with this session's own name first", async () => {
