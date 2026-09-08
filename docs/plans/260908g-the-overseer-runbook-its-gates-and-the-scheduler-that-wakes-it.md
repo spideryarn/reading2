@@ -655,13 +655,40 @@ The second is the one at a prompt, and its pause is not `background-work` — it
 between them at all. `background-work` is real and does occur (observed at 20:25 with
 `sinceMs: 326418`); what is unproven is that it *coincides* with being reachable.
 
-**One reading of two rows is not a refutation**, and it is recorded here as an open question rather
+**One reading of two rows is not a refutation**, and it stays recorded as an open question rather
 than an answer: the overnight series says how often the two coincide, and `joins_disagree` makes the
-misses visible instead of leaving them to be inferred from a total. If they rarely coincide the
-cheap fix is cheap and nearly useless rather than cheap and sufficient. **The likeliest error is
-mine** — the column treats Claude's own `idle` as at-a-prompt-and-messageable, and if `idle` there
-can also mean something a broadcast should not interrupt, the column measures something looser than
-reachability.
+misses visible instead of leaving them to be inferred from a total.
+
+**The cause was found within minutes, and it is one line.** I had flagged the likeliest error as
+mine — that the column might be treating Claude's own `idle` as reachable when `idle` could mean
+something a broadcast should not interrupt. It does not. `status` is computed as
+`baseStatus === "idle" && hasUnfinishedLocalBash ? "shell" : baseStatus`, read out of the 2.1.263
+binary and verified against it, so **`shell` is a subset of `idle` rather than something beside
+it**, and both mean the turn has ended. The column measures reachability, and if anything
+conservatively.
+
+The error was in `pause.ts`'s `readShellState`:
+
+```ts
+if (entry.status !== "shell") return { kind: "not-background-work" };
+```
+
+The store's `idle` — the *direct* evidence of being at a prompt — is read and then collapsed into a
+negative, so `background-work` names only the `shell` subset. That is why my two working rows came
+back with the **identical `cannot-tell` reason string**: the collapse showing through. The proposed
+cheap fix named a field that could not pick out the rows it was meant to pick out.
+
+Its author calls it *"the lossy-join half of `260908b` occurring inside the fix for it"* — the
+producer said the careful thing and the consumer threw it away, in a module written that morning to
+close exactly that class. The cheap fix survives as a different change: stop reducing the store's
+status to a boolean about background work.
+
+**What did the catching is worth more than what was caught.** The disagreement was found because a
+second join was built *so that it could contradict the first*, after an ancestry join had returned
+zero unknowns and the wrong answer. **Two joins that disagree are a measurement; one join that
+agrees with itself is a fixture** — the same animal as a test that shares an assumption with the code
+it checks, and a sharper statement of it, because the ancestry join was not weak. It answered a
+different question competently.
 
 #### The Overseer sees less of the fleet than the fleet sends, and the rules should not fix that by widening the differ
 
