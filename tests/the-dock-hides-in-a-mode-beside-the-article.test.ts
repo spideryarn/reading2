@@ -87,19 +87,63 @@ function dockQuery(): string {
  * two of the five modes — the defect this file exists to catch, wearing a
  * different selector. The narrow-window.css comment has the measurement.
  */
-function bandMentions(block: string): string[] {
-  return [...block.matchAll(/[^{};]*\.mode-band[^{};]*/g)].map((m) => m[0].trim());
+const QUALIFIER = ":where(.reader.band-covers) ";
+
+/**
+ * **Per occurrence of `.mode-band`, not per rule** — and that distinction is
+ * the whole strength of this check.
+ *
+ * The first version of this function returned the whole selector around each
+ * mention and asked whether *it* contained `band-covers`. That passes on
+ *
+ * ```css
+ * :root:has(:where(.reader.band-covers) .dock-drawer, .mode-band) { … }
+ * ```
+ *
+ * — the bug back in full, in a selector that satisfies the assertion because
+ * some *other* argument carries the qualifier. A guard is a list, and a list is
+ * only as good as its worst entry, so each entry is asked separately: what are
+ * the characters immediately before this `.mode-band`?
+ */
+function unqualifiedBands(block: string): string[] {
+  const out: string[] = [];
+  for (const m of block.matchAll(/\.mode-band/g)) {
+    const at = m.index;
+    if (block.slice(Math.max(0, at - QUALIFIER.length), at) === QUALIFIER) continue;
+    /* Enough either side to name the offender in the failure message. */
+    out.push(block.slice(Math.max(0, at - 60), at + 10).replace(/\s+/g, " ").trim());
+  }
+  return out;
+}
+
+/**
+ * The declaration block containing `needle`, from its `{` to its `}`.
+ *
+ * Located by a declaration rather than by a selector throughout this file: the
+ * selectors are the thing under test, so finding a rule *by* one would be
+ * asking the file to confirm itself.
+ */
+function ruleAround(block: string, needle: string): string {
+  const at = block.indexOf(needle);
+  expect(at, `nothing in § a small device declares \`${needle}\` any more`).toBeGreaterThan(-1);
+  const open = block.lastIndexOf("{", at);
+  const close = block.indexOf("}", at);
+  expect(open, "unbalanced rule").toBeGreaterThan(-1);
+  expect(close, "unbalanced rule").toBeGreaterThan(-1);
+  return block.slice(open, close + 1);
 }
 
 describe("the dock, in a mode, in the query where it leaves the screen", () => {
   it("never asks merely whether a mode is open", () => {
-    const mentions = bandMentions(dockQuery());
-    expect(mentions.length, "no rule in § a small device mentions the band at all").toBeGreaterThan(
-      0,
-    );
-    const bare = mentions.filter((m) => !m.includes("band-covers"));
+    const block = dockQuery();
+    /* The block must actually mention the band, or an empty result would read
+       as "nothing unqualified" — the vacuous pass this whole file is against. */
     expect(
-      bare,
+      [...block.matchAll(/\.mode-band/g)].length,
+      "no rule in § a small device mentions the band at all",
+    ).toBeGreaterThan(0);
+    expect(
+      unqualifiedBands(block),
       "a rule here holds the dock down for any open mode, including one with the article beside it",
     ).toEqual([]);
   });
@@ -148,6 +192,47 @@ describe("the dock, in a mode, in the query where it leaves the screen", () => {
       m[0].trim(),
     );
     expect(rules.length, "expected exactly one rule to kill the dock's transition").toBe(1);
-    expect(rules[0]).toContain("band-covers");
+    expect(rules[0]).toContain(QUALIFIER + ".mode-band");
+  });
+
+  it("moves the bar, the hint and the hint's room as one state", () => {
+    /* **The three declarations, in both rules, or not at all.**
+     *
+     * The dock leaving is three facts, not one: the bar goes, the install hint
+     * that stands *on* the bar goes with it, and the room the hint was
+     * reserving stops being reserved — `.mode-band` and the table's overflow
+     * fade both sit at `<the bar's current position> + <the hint>`, so a hint
+     * that has gone while its height has not leaves the band stopping 56px
+     * above the bottom of the screen with nothing in the gap.
+     *
+     * They were three rules with three conditions until 2026-09-08, two of them
+     * hand-negating a six-armed guard, and both halves of that went wrong in
+     * one afternoon: the first submitted fix moved the hint and forgot its
+     * room (56px of nothing), and the second moved both but only for a
+     * covering band — so a dialog, or `.install-hint:focus-within`, brought the
+     * bar home and left the hint off-screen. GPT Sol found each in turn.
+     *
+     * A static gate cannot see 56px. What it can see is the three declarations
+     * parting company again, which is the only way this comes back.
+     */
+    const block = dockQuery();
+    const decls = ["--dock-bottom", "--hint-now", "--install-hint-transform"];
+
+    /* The hidden state and the guard, located by what they set the bar to
+       rather than by their selectors. */
+    const hidden = ruleAround(block, "--dock-bottom: 0px");
+    const guard = ruleAround(block, "--dock-bottom: var(--dock-space)");
+    for (const d of decls) {
+      expect(hidden, `the bar leaves without taking ${d} with it`).toContain(`${d}:`);
+      expect(guard, `whatever brings the bar back leaves ${d} behind`).toContain(`${d}:`);
+    }
+
+    /* And nothing else in this query may move them, which is what stops a
+       fourth rule growing its own copy of the condition — the shape of the two
+       bugs above. */
+    for (const d of decls) {
+      const n = [...block.matchAll(new RegExp(`${d}\\s*:`, "g"))].length;
+      expect(n, `${d} is set in more than the two rules that own the state`).toBe(2);
+    }
   });
 });

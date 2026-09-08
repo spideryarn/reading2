@@ -224,17 +224,107 @@ Same script, same server, same article, the change applied by HMR:
 `.reader.band-covers` reads `false` in every landscape row and `true` in every portrait one, so the
 switch is the condition doing the work rather than a coincidence of widths.
 
-## What was left alone
+## The same bug on the other bar, for a visitor
 
-**The install hint copies one of the guard's six arms, and always has.** Its rule wants *"the dock
-is off the screen"*; the dock is also pinned by `.dock-drawer`, `.dock:focus-within`,
-`.install-hint:focus-within` and the three dialogs, none of which it excludes — so the bar can be
-home while the hint is still translated away. That predates this change, this change does not widen
-it, and the honest fix is not a longer selector: GPT Sol's answer is an inherited
-`--install-hint-transform` set beside `--dock-bottom` in both rules, so the bar and the hint become
-one cascade decision rather than two lists kept in step by hand. It is a good change and it is not
-this report; building it here would mean shipping an unrequested behaviour change in six untested
-states on the back of a one-line bug fix.
+`shell.css` has the twin of this guard for the **top** bar, and it had the identical defect. It
+looked safe: since [260908a](260908a-the-top-bar-stops-being-drawn-when-it-has-nothing-in-it.md) the
+bar is not drawn at all in a band mode, so the leading `:has(:where(.reader) > .controls)` never
+matches. That is true for an **owner**. `barHasContent` in [layout.ts](../../src/web/layout.ts)
+opens:
+
+```ts
+if (!bar.owner) return true; // the read-only chip
+```
+
+So a **signed-out reader on a public article** has a `.controls`, and both `shell.css` rules pinned
+their top bar in every band mode at every scroll position — the reported bug exactly, on the other
+bar, one reader type wide. Nobody reported it because the reader who hits it is the reader least
+likely to write in.
+
+**Fixed here rather than deferred, and that reverses a call this plan made twice.** The argument for
+leaving it was scope: a different bar, a different plan's surface. The arguments against won —
+it is the same class named in the same session, the fix is the same word with unchanged specificity,
+GPT Sol reviewed the code and said to make it, and CLAUDE.md's rule about bugs is that *"the point is
+never the incident, it is the class it belongs to, named"*. Shipping a fix for owners while
+knowingly leaving it broken for visitors is not a scope boundary, it is a worse bug with a tidier
+diff. Greg, 2026-09-08: *"Use your judgment re decisions."*
+
+## The 56px strip this change would have created
+
+**The one finding that changed the code rather than the comments**, and the one nothing here could
+have caught: the install hint renders only on an uninstalled iPhone, so no headless run has ever had
+one.
+
+`:root:has(.install-hint) { --hint-h: 3.5rem }`, and both `.mode-band` and the table's overflow fade
+sit at `calc(max(var(--dock-bottom), var(--safe-bottom)) + var(--hint-h))` — already following the
+bar down, because a panel stopping at the bar's *resting* height would show a strip of article
+through the gap. But `--hint-h` follows nothing. So with the dock now leaving in a side-by-side band
+mode, the hint slid away with it and **the band went on stopping 3.5rem above the bottom of the
+screen**: reclaiming 40px of dock at a cost of 56px of nothing. Strictly worse than the bug.
+
+It is the same defect as `-2E` — room reserved for furniture that is not there — at the other end of
+the page, and it was already reachable in Plain for the table's fade before any of this. The fix is
+the pair the dock already has, given to the hint:
+
+| | resting, reserves document space | current, furniture positions against |
+|---|---|---|
+| dock | `--dock-space` | `--dock-bottom` |
+| hint | `--hint-h` | **`--hint-now`** (new) |
+
+`--hint-now` is `var(--hint-h)` by default and `0px` in the same rule that translates the hint away;
+`.mode-band` and `table.css`'s fade read it instead. **`--hint-h` deliberately does not move** — it
+is what `.reader`'s `padding-bottom` reserves, and document padding that changed on scroll would
+resize the document underneath `stepBar` while it is deciding whether the reader scrolled.
+
+## The half-measure, and the state model that replaced it
+
+The first attempt at the section above added `--hint-now` and left the hint's two rules keyed on
+`:not(:has(<covering band>))`, with a comment claiming the old mismatch "predates this change and is
+not widened by it". **That claim was false, and GPT Sol's second code review is what caught it.**
+
+Before this plan those rules read `:not(:has(.mode-band))`, so *any* open band stopped the hint
+moving. Narrowing `<band>` to a covering one made a state reachable that never had been: in a
+side-by-side band mode with `data-bars="hidden"`, anything that brings the dock home — a drawer, a
+dialog, dock focus — left the hint translated off the screen and its room unreserved, because the
+hint's rules excluded only a covering band while the dock's guard has six arms.
+
+The sharpest form is `.install-hint:focus-within`, which is *in* that guard: the bar is held still
+so a keyboard reader does not lose the control they are on, while the strip **containing that
+control** slides out from under them.
+
+So the three rules became two, and the fix is the one Sol proposed in the first review:
+
+```css
+:root[data-bars="hidden"] {            /* the bar leaves */
+  --dock-bottom: 0px;
+  --hint-now: 0px;
+  --install-hint-transform: translateY(calc(100% + var(--dock-space)));
+}
+:root:has(…six arms…) {                /* and whatever brings it back */
+  --dock-bottom: var(--dock-space);
+  --hint-now: var(--hint-h);
+  --install-hint-transform: translateY(0px);
+}
+```
+
+`.install-hint` in `dock.css` reads `--install-hint-transform` with a `translateY(0px)` fallback for
+every width where nothing sets it. **Three conditions became one**, the hand-kept negation of a
+six-armed guard is gone, and the two rules that used to duplicate it are deleted. Measured at
+844 × 390 with a hint injected, across four transitions:
+
+| | `--dock-bottom` | `--hint-now` | gap under band | hint on screen |
+|---|---|---|---|---|
+| scrolled down | `0px` | `0px` | 0 | no |
+| focus inside the hint | `calc(2.5rem + 0px)` | `3.5rem` | 96 | **yes** |
+| blurred | `0px` | `0px` | 0 | no |
+| a drawer opens | `calc(2.5rem + 0px)` | `3.5rem` | 96 | **yes** |
+
+96 is 40px of dock plus 56px of hint, which is what the band should clear when both are there.
+
+**Nothing about the install hint is deferred any more.** The one thing this plan says it left alone
+and then did not is worth naming as a pattern rather than a one-off: twice the cheap fix looked
+separable from the expensive one, and twice it was not, because the cheap fix moved a condition that
+something else was quietly negating.
 
 **A measured "the keyboard is up".** § The second argument, above.
 
@@ -254,6 +344,43 @@ true exactly when the band covers the prose: `?spine=0` moves the boundary to 68
 demonstrated stranded side-by-side state, which is the fix's central safety claim.
 
 Note that it reviewed the plan **as first written**, with the `:focus-within` arm still in it.
+
+## The code review
+
+`260908e-code-review-sol-1245.md`, of the built diff, and weighted higher than the plan review for
+the reason CLAUDE.md gives — a plan-stage review cannot find what the code does. Verdict *"land it
+with changes"*, five findings, and **the first of them was worth the whole exercise**: it is the
+56px strip above, which no test and no browser run here could have seen, and which would have
+shipped as a regression on exactly the device the report came from.
+
+Of the rest: the `shell.css` visitor case (found here independently, § What was left alone); a stale
+specificity paragraph from 2026-08-28 that still contradicted its own correction four lines down;
+the `overscroll-behavior` list, struck a second time for being an inventory when it had already been
+struck for being a universal; and two more holes in the static test.
+
+It confirmed the things that most needed confirming: `.reader.band-covers` is written on the same
+React render as the band, so there is no frame where the band exists and the class does not; and it
+found no state where the semantic selector leaves the dock unreachable.
+
+**It also named the two dimensions the measurements never covered** — an uninstalled iPhone with the
+install hint, and a signed-out visitor with a controls bar. Both are now measured, and both were
+hiding a bug: § The 56px strip and § The same bug on the other bar.
+
+## The third review
+
+`260908e-delta-review-sol-1320.md`, of the two changes made in answer to the second. Verdict *"land
+it with changes"*, and it was right again: the `--hint-now` arithmetic and the visitor-bar change
+were correct, and the half-measure described in § The half-measure was not. It also confirmed the
+things worth confirming — that `--hint-now: var(--hint-h)` resolves from the *winning* `--hint-h`
+rather than freezing at the token's `0`; that the two consumers moved are the only current-position
+readers (the reader padding, the dialogs, the offline strip, the return chip and the hint's own
+height all want resting geometry, and were right to be left); that `--hint-now` cannot feed document
+height and so cannot reach `stepBar`; and that both shell selectors are unchanged at (0,4,0) and
+(0,3,0).
+
+It asked for one more thing, which is done: `ViewOnlyChip`'s comment claimed the chip is *"on screen
+at every scroll position"*. That stopped being true on 2026-09-07 when the top bar started hiding at
+every width, and this change is what makes it visibly untrue for a visitor.
 
 ## Stages
 
