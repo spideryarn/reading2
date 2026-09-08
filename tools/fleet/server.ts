@@ -27,10 +27,14 @@
  * must not depend on anything under src/ (orchestrator-direction.md § Principles).
  * Worth revisiting if it grows.
  */
+import { readFileSync } from "node:fs";
 import { createServer } from "node:http";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { collect, type FleetSnapshot } from "./collect.js";
 import { parseBinds } from "./config.js";
+import { collectHealth, type HealthReport } from "./health.js";
 import { broadcast, startHeartbeat, subscribe, subscriberCount } from "./live.js";
 import { page } from "./page.js";
 
@@ -63,9 +67,22 @@ const REFRESH_MS = Number(process.env.FLEET_REFRESH_MS ?? 60_000);
 let snapshot: FleetSnapshot | null = null;
 let lastError: string | null = null;
 
+/**
+ * The box's own vital signs, refreshed alongside the fleet.
+ *
+ * Null until the first reading, and null again only if a reading throws — which
+ * `collectHealth` is built not to do: every field of it can say "I could not
+ * tell" rather than returning a zero that reads as healthy.
+ */
+let health: HealthReport | null = null;
+
 /** The wire shape, in one place, so the poll and the stream cannot disagree. */
 function statePayload(): string {
-  return JSON.stringify({ ...(snapshot ?? { rows: [], collectedAt: null, tookMs: 0 }), error: lastError });
+  return JSON.stringify({
+    ...(snapshot ?? { rows: [], collectedAt: null, tookMs: 0 }),
+    error: lastError,
+    health,
+  });
 }
 
 async function refresh(): Promise<void> {
@@ -76,6 +93,14 @@ async function refresh(): Promise<void> {
       `collected ${snapshot.rows.length} sessions in ${snapshot.tookMs}ms` +
         (subscriberCount() ? ` → ${subscriberCount()} live` : ""),
     );
+    // Cheap next to the fleet collection (~200ms without the vmstat sample,
+    // which is the one command with a real wait), and separately guarded: a
+    // health reading that throws must not cost us the session list.
+    try {
+      health = collectHealth({ includeSwapActivity: true });
+    } catch (err) {
+      console.error(`health failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
     broadcast(statePayload());
   } catch (err) {
     // Keep the previous snapshot. The page shows the age, so a stale page is
@@ -122,13 +147,70 @@ function handler(req: import("node:http").IncomingMessage, res: import("node:htt
     res.end(statePayload());
     return;
   }
+  // The React client, when it has been built.
+  if (serveStatic(url, res)) return;
+
+  // THE HAND-WRITTEN PAGE IS THE FALLBACK, and it stays for that reason.
+  // `web/dist/` only exists after `npm run build:fleet`, and a dashboard that
+  // answers 404 because somebody forgot a build step is a dashboard that is
+  // down at the moment you reach for it. This renders from the same snapshot,
+  // needs no build, and says less — which is the right way to be degraded.
   if (url === "/" || url.startsWith("/?")) {
     res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
     res.end(page(snapshot, lastError));
     return;
   }
+
   res.writeHead(404, { "content-type": "text/plain" });
   res.end("not found\n");
+}
+
+const DIST = path.join(path.dirname(fileURLToPath(import.meta.url)), "web", "dist");
+
+const TYPES: Record<string, string> = {
+  ".html": "text/html; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".woff2": "font/woff2",
+  ".svg": "image/svg+xml",
+  ".json": "application/json",
+};
+
+/**
+ * The built React client, or false if this request is not for it.
+ *
+ * PATH TRAVERSAL IS THE WHOLE RISK HERE, and it is the first code in this tool
+ * that turns a string from the network into a filesystem read. `resolve` then a
+ * prefix check on the resolved path, rather than looking for `..` in the URL:
+ * an encoded, doubled or unicode-normalised `..` is somebody else's bug list,
+ * and "is the answer inside the directory I meant" is a question with one right
+ * answer. The separator is appended to the prefix so that a sibling directory
+ * named `dist-secrets` cannot pass a `startsWith("…/dist")` test.
+ *
+ * Modes live in the URL fragment, which never reaches a server, so there is no
+ * route table to keep: anything that is not a real file is a 404.
+ */
+function serveStatic(url: string, res: import("node:http").ServerResponse): boolean {
+  const clean = (url.split("?")[0] ?? "/").replace(/\/+$/, "") || "/";
+  const rel = clean === "/" ? "index.html" : clean.slice(1);
+  const file = path.resolve(DIST, rel);
+  if (file !== DIST && !file.startsWith(DIST + path.sep)) return false;
+  let body: Buffer;
+  try {
+    body = readFileSync(file);
+  } catch {
+    return false;
+  }
+  const ext = path.extname(file);
+  res.writeHead(200, {
+    "content-type": TYPES[ext] ?? "application/octet-stream",
+    // Asset names are content-hashed, so they can be cached hard — but
+    // index.html must never be, or a browser goes on asking for a bundle that
+    // was deleted by the next build and the page simply stops working.
+    "cache-control": ext === ".html" ? "no-store" : "public, max-age=31536000, immutable",
+  });
+  res.end(body);
+  return true;
 }
 
 // One listener per address. A bind that fails is FATAL rather than logged and
