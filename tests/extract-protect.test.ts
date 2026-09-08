@@ -28,6 +28,11 @@
  * produced the same card as the treatment would make every green tick above it
  * a tick about nothing.
  *
+ * **Rule A's rescue is also checked before it ships**, and the check has its own
+ * ladder: `proseRetention` on its own inputs, the swept 12/24/40-row page where
+ * it decides, and `a-table-called-header-rolled-back` in `kept` when it fires —
+ * a withdrawal nobody can see would be worse than the loss it prevents.
+ *
  * The two synthetic cases at the bottom are the ones the corpus cannot supply:
  * **no fixture has the score topology** in which a `positive` class token on a
  * table wins candidacy and deletes the prose either side of it. That is the P0
@@ -53,6 +58,7 @@ import {
   RULES,
   UNLIKELY_CANDIDATES,
   UNLIKELY_EXCEPT_HEADER,
+  proseRetention,
   protectAuthoredStructure,
   protectionIsDisabled,
   withProtectionDisabled,
@@ -220,6 +226,12 @@ describe("the copied regexes, pinned against the library they were copied from",
     expect(LIVE_REGEXPS.okMaybeItsACandidate).toBeInstanceOf(RegExp);
     expect(UNLIKELY_CANDIDATES.source).toBe(LIVE_REGEXPS.unlikelyCandidates!.source);
     expect(OK_MAYBE_ITS_A_CANDIDATE.source).toBe(LIVE_REGEXPS.okMaybeItsACandidate!.source);
+    /* **And the flags, which `.source` does not carry.** A version that dropped
+       `i` from `unlikelyCandidates` would leave both sources identical and
+       change which class attributes match — GPT Sol's finding, 2026-09-08. Two
+       regexes are the same regex only if both halves agree. */
+    expect(UNLIKELY_CANDIDATES.flags).toBe(LIVE_REGEXPS.unlikelyCandidates!.flags);
+    expect(OK_MAYBE_ITS_A_CANDIDATE.flags).toBe(LIVE_REGEXPS.okMaybeItsACandidate!.flags);
   });
 
   it("gives `spya-keep-column` a rescue and no weight at all", () => {
@@ -260,9 +272,33 @@ describe("the copied regexes, pinned against the library they were copied from",
  * ------------------------------------------------------------------ */
 
 /**
+ * **The unlikely terms one at a time, `header` left out** — read off the live
+ * library rather than off `UNLIKELY_EXCEPT_HEADER`, so the ladder's first rung
+ * is still computed a different way from the rule it is checking.
+ *
+ * A list of whole alternatives cannot destroy an overlapping term the way a
+ * substitution can, because no term is ever taken out of the string being
+ * tested: `headerelated` is asked *does it contain `related`* and the answer is
+ * yes. Every alternative in that regex is a literal with no metacharacter in it,
+ * which the last test in this file asserts as well.
+ */
+const UNLIKELY_TERMS_BESIDES_HEADER = LIVE_REGEXPS.unlikelyCandidates!.source
+  .split("|")
+  .filter((term) => term !== "header")
+  .map((term) => new RegExp(term, "i"));
+
+/**
  * **Rung one of the ladder, computed with Readability's own regexes rather than
  * ours** — how many `<table>`s the source has, how many of them line 1119 would
  * delete, and how many of those say `header` and nothing else unlikely.
+ *
+ * **`headerSole` used to remove `/header/gi` from the string and re-test**, which
+ * is the exact substitution the adversarial set proved wrong three hundred lines
+ * below, and GPT Sol found it still living here on 2026-09-08: on `headerelated`
+ * the helper said *sole* and the shipped rule said *not sole*, so the rung
+ * claiming to expose the rule contradicted it. The ladder is only worth climbing
+ * if each rung is computed independently **and correctly**; this one now asks
+ * each surviving term whether it is in the original string.
  */
 function sourceCandidates(html: string): { tables: number; doomed: number; headerSole: number } {
   const tables = Array.from(dom(html).querySelectorAll("table"));
@@ -270,11 +306,37 @@ function sourceCandidates(html: string): { tables: number; doomed: number; heade
     const m = `${t.className} ${t.id}`;
     return LIVE_REGEXPS.unlikelyCandidates!.test(m) && !LIVE_REGEXPS.okMaybeItsACandidate!.test(m);
   });
-  const headerSole = doomed.filter(
-    (t) => !LIVE_REGEXPS.unlikelyCandidates!.test(`${t.className} ${t.id}`.replace(/header/gi, " ")),
-  );
+  const headerSole = doomed.filter((t) => {
+    const m = `${t.className} ${t.id}`;
+    return !UNLIKELY_TERMS_BESIDES_HEADER.some((term) => term.test(m));
+  });
   return { tables: tables.length, doomed: doomed.length, headerSole: headerSole.length };
 }
+
+describe("the exposure ladder's first rung, checked against the rule it exposes", () => {
+  /**
+   * **RED before the fix**, and it is the helper that was wrong rather than the
+   * pass: `"headerelated".replace(/header/gi, " ")` is `" elated"`, which says
+   * nothing unlikely, so the old helper counted the table as *header-sole* while
+   * `protectAuthoredStructure` — asking the original string — declined it. A
+   * ladder whose bottom rung disagrees with the top is a ladder that cannot
+   * catch the rule drifting.
+   */
+  it("counts `headerelated` as not header-sole, which is what the shipped rule says", () => {
+    const page = (cls: string) =>
+      `<!doctype html><html><body><table class="${cls}"><tr><th>Region</th><td>x</td></tr></table></body></html>`;
+    expect(sourceCandidates(page("headerelated"))).toEqual({ tables: 1, doomed: 1, headerSole: 0 });
+    /* The old algorithm, kept here as the thing being ruled out rather than
+       described — this is what the helper used to compute. */
+    expect(LIVE_REGEXPS.unlikelyCandidates!.test("headerelated".replace(/header/gi, " "))).toBe(false);
+    /* And the same four strings the adversarial set uses, so the two agree. */
+    for (const cls of ["headerss", "headeremark", "headereplies"]) {
+      expect(sourceCandidates(page(cls)).headerSole, cls).toBe(0);
+    }
+    /* Not vacuous: a genuinely header-sole class counts. */
+    expect(sourceCandidates(page("sticky-header-multi"))).toEqual({ tables: 1, doomed: 1, headerSole: 1 });
+  });
+});
 
 const rowsPerTable = (html: string): number[] =>
   Array.from(dom(html).querySelectorAll("table")).map((t) => t.querySelectorAll("tr").length);
@@ -306,7 +368,13 @@ describe("rule A — the four tables Readability deleted for saying they have he
     /* 3. Survivors after Readability — and the parts, not only the total.
           **The document total is the number that hid a discrepancy for a day**:
           the diagnosis said 239 and the truth is 238, because the regional
-          table's fifteenth source row is empty and Readability drops it. */
+          table's fifteenth source row is `<tr class="mw-empty-elt">` and **our
+          own furniture pass deletes it** before Readability sees the page
+          (`ENTRIES` in src/furniture.ts, `.mw-empty-elt` with `isEmptyOfWords`;
+          it takes 30 elements off this fixture). This comment and the doc both
+          used to blame Readability, which GPT Sol corrected on 2026-09-08:
+          the post-`prepareDocument` source has 14 rows in that table, so there
+          was never anything left for Readability to drop. */
     expect(rowsPerTable(pageOf(off))).toEqual([1]);
     expect(rowsPerTable(pageOf(on))).toEqual([1, 223, 14]);
     expect(rowsPerTable(pageOf(on)).reduce((a, b) => a + b, 0)).toBe(238);
@@ -902,8 +970,14 @@ describe("the adversarial set — rule A's `sole reason` test", { timeout: 120_0
 /**
  * A page whose qualifying table can be put inside another table or left at the
  * top level, with everything else held constant.
+ *
+ * `wrappers` is how many `<div>`s sit between the layout table's cell and the
+ * data table, and it is the whole of the depth case: at zero the data table's
+ * ancestors are `td, tr, tbody, table` — the fourth level, the last one
+ * Readability's `_hasAncestorTag` looks at — and each wrapper pushes the layout
+ * table one level further out of that window.
  */
-function advNestedTable(nested: boolean): string {
+function advNestedTable(nested: boolean, wrappers = 0): string {
   const inner =
     `<table class="sticky-header-multi"><caption>Table 1: receipts by region</caption>` +
     `<tr><th>Region</th><th>Receipts</th></tr>` +
@@ -914,13 +988,30 @@ function advNestedTable(nested: boolean): string {
         `<td>Reported figure for region ${i + 1}, column two, revised the same March</td></tr>`,
     ).join("") +
     `</table>`;
-  const placed = nested ? `<table class="layout"><tr><td>${inner}</td></tr></table>` : inner;
+  const padded = `${"<div>".repeat(wrappers)}${inner}${"</div>".repeat(wrappers)}`;
+  const placed = nested ? `<table class="layout"><tr><td>${padded}</td></tr></table>` : inner;
   return `<!doctype html><html><head><title>The Braemar figures</title></head><body><div id="wrapper">
 <h1>The Braemar figures</h1>
 ${ADV_P(1)}${ADV_P(2)}
 ${placed}
 ${ADV_P(3)}${ADV_P(4)}
 </div></body></html>`;
+}
+
+/**
+ * `advCard` plus *"did the data table itself survive?"*, which the plain table
+ * count cannot answer on a page that also has a layout table.
+ */
+async function advNestedCard(html: string, disabled = false) {
+  const run = () => runExtract({ html, url: "https://example.invalid/adv", slug: "adv" });
+  const r = disabled ? await withProtectionDisabled(run) : await run();
+  return {
+    kept: r.kept as Record<string, number>,
+    receipts: Array.from(dom(r.extractedHtml).querySelectorAll("table")).filter((t) =>
+      (t.textContent ?? "").includes("receipts by region"),
+    ).length,
+    prose: (r.extractedHtml.match(/ADV-PROSE-\d/g) ?? []).length,
+  };
 }
 
 describe("the adversarial set — what rule A counts", { timeout: 120_000 }, () => {
@@ -942,6 +1033,45 @@ describe("the adversarial set — what rule A counts", { timeout: 120_000 }, () 
     /* And declining to count it is not declining to keep it — the nested table
        survives either way, which is the whole reason the stamp was pointless. */
     expect(nested.tables).toBeGreaterThan(0);
+  });
+
+  /**
+   * **RED before the fix, and the reader loses a table for it.** The guard above
+   * was `table.parentElement?.closest("table, code")`, which walks to the root;
+   * Readability's `_hasAncestorTag` defaults to `maxDepth = 3` and returns false
+   * once `depth > maxDepth`, so it inspects **four** ancestor levels and no more
+   * (Readability.js:2217, and the call at line 1121 passes no depth). GPT Sol
+   * reproduced the consequence on 2026-09-08 and it is reproduced here: put one
+   * `<div>` between the layout cell and the data table and the layout table
+   * falls out of Readability's window, so Readability deletes the data table —
+   * while the unbounded check declined to stamp it, on the claim that
+   * Readability could not.
+   *
+   * The two rows below are the whole finding. Same page, one wrapper apart:
+   * without the depth mirror the second row read `kept: {}, receipts: 0`.
+   */
+  it("mirrors the four levels Readability looks at, rather than walking to the root", async () => {
+    /* Shallow: `td, tr, tbody, table` — the fourth level is the last one
+       Readability checks, so it does see the table ancestor and never reaches
+       the deletion. Declined, and the table survives unaided. */
+    const shallow = await advNestedCard(advNestedTable(true, 0));
+    expect(shallow.kept).toEqual({});
+    expect(shallow.receipts).toBe(1);
+    expect(await advNestedCard(advNestedTable(true, 0), true)).toEqual(shallow);
+
+    /* Beyond the window: one wrapper further out. Readability cannot see the
+       layout table, so the deletion at line 1119 applies and this rule's stamp
+       is the only thing that stops it. */
+    const deep = await advNestedCard(advNestedTable(true, 1));
+    expect(deep.kept).toEqual({ [RULES.headerNamedTable]: 1 });
+    expect(deep.receipts).toBe(1);
+    expect(deep.prose).toBe(4);
+    /* The counterfactual, which is what makes the stamp a rescue rather than a
+       decoration: with the pass off, the same page loses the table. */
+    const deepOff = await advNestedCard(advNestedTable(true, 1), true);
+    expect(deepOff.kept).toEqual({});
+    expect(deepOff.receipts).toBe(0);
+    expect(deepOff.prose).toBe(4);
   });
 
   /**
@@ -1015,7 +1145,7 @@ describe("the adversarial set — what rule A counts", { timeout: 120_000 }, () 
   });
 });
 
-describe("the adversarial set — the size at which a rescue costs prose", { timeout: 120_000 }, () => {
+describe("the adversarial set — the size at which a rescue would cost prose", { timeout: 120_000 }, () => {
   /**
    * **The claim in src/protect.ts's own header used to be too strong**, and this
    * is the measurement that made it say less. Its table reads
@@ -1025,45 +1155,104 @@ describe("the adversarial set — the size at which a rescue costs prose", { tim
    * token produces the same catastrophic card: table flattened into a `<div>`,
    * every paragraph gone.
    *
-   * **And it is not this pass's doing**, which is the half worth having: the
-   * identical page with `class="wikitable sortable"` — a string Readability
-   * never disliked, so nothing is stamped — loses the same four paragraphs at
-   * the same row count, byte for byte. A rescued table is a table that gets
-   * scored, and on a page whose prose is thin beside it the `<td>`s win
-   * candidacy on their own. The pass hands a page the extraction it would have
-   * had if the publisher had not written `header` in the class, and that
-   * includes the extractions that are bad.
+   * **The first version of this test then pinned that as accepted behaviour**,
+   * on the argument that it is the library's arithmetic rather than ours: the
+   * identical page with `class="wikitable sortable"` loses the same four
+   * paragraphs at the same row count, and nothing is stamped on it. GPT Sol
+   * rejected the argument on 2026-09-08 and it is not defended here. The
+   * mechanism is the library's; **the action is ours**, and it takes the real
+   * header-named page from *"prose, missing table"* to *"flattened table,
+   * missing prose"* — the same failure class the `positive` token was rejected
+   * for at twelve rows. So the rescue is now checked before it ships
+   * (`proseRetention`, src/protect.ts) and withdrawn when it costs a paragraph.
+   *
+   * What this test asserts, at all three row counts, is therefore both halves:
+   * **the treatment keeps the table where it can, and keeps every paragraph the
+   * control had, always.** The unmarked page is still measured beside it, and
+   * still loses its prose at 24 and 40 — that is what the library does to a page
+   * nobody stamped, and the point is that we no longer do it to a page we did.
    *
    * Swept rather than sampled, because the whole defect of the original claim
    * was that it was a sample of one.
    */
-  it("a rescued table wins candidacy above twelve rows — and so does an unmarked one", async () => {
+  it("keeps the table where it can and the prose always, at 12, 24 and 40 rows", async () => {
     const HEADER_NAMED = "wikitable sortable sticky-header-multi";
     const UNREMARKABLE = "wikitable sortable";
 
     for (const rows of [12, 24, 40]) {
       const stamped = await advCard(advBraemar(HEADER_NAMED, rows));
       const unmarked = await advCard(advBraemar(UNREMARKABLE, rows));
-      expect(stamped.kept, `${rows} rows`).toEqual({ [RULES.headerNamedTable]: 1 });
+      const control = await advCard(advBraemar(HEADER_NAMED, rows), true);
       expect(unmarked.kept, `${rows} rows`).toEqual({});
-      /* The two pages differ only in a class attribute Readability reads, and
-         they come out the same length: whatever happens next is the library's
-         arithmetic, not ours. */
-      expect(stamped.chars, `${rows} rows`).toBe(unmarked.chars);
-      expect(stamped.prose, `${rows} rows`).toBe(unmarked.prose);
-      expect(stamped.tables, `${rows} rows`).toBe(unmarked.tables);
-      /* And the boundary itself. */
-      expect(stamped.prose, `${rows} rows`).toBe(rows === 12 ? 4 : 0);
-      expect(stamped.tables, `${rows} rows`).toBe(rows === 12 ? 1 : 0);
-    }
 
-    /* The counterfactual the paragraph above turns on: with the pass off, the
-       header-named page keeps its prose and loses its table, so the loss at 24
-       rows really is what the rescue bought. */
-    const off = await advCard(advBraemar(HEADER_NAMED, 24), true);
-    expect(off.kept).toEqual({});
-    expect(off.prose).toBe(4);
-    expect(off.tables).toBe(0);
+      /* **Every paragraph the control had, at every size.** This is the
+         assertion the whole fallback exists to make true, and it is the one
+         that was false before it. */
+      expect(stamped.prose, `${rows} rows`).toBe(4);
+      expect(control.prose, `${rows} rows`).toBe(4);
+
+      if (rows === 12) {
+        /* Small enough that the table does not win candidacy: the rescue stands,
+           and the reader gets the table *and* the prose. */
+        expect(stamped.kept, `${rows} rows`).toEqual({ [RULES.headerNamedTable]: 1 });
+        expect(stamped.tables, `${rows} rows`).toBe(1);
+        expect(control.tables, `${rows} rows`).toBe(0);
+        expect(stamped.chars, `${rows} rows`).toBe(unmarked.chars);
+      } else {
+        /* Big enough that the rescued table would eat the page. The stamp is
+           taken back, `kept` says so, and what ships is the control extraction —
+           asserted as an equality with the control arm rather than as a
+           description of it. */
+        expect(stamped.kept, `${rows} rows`).toEqual({ [RULES.headerNamedTableRolledBack]: 1 });
+        expect(stamped.tables, `${rows} rows`).toBe(0);
+        expect(stamped.chars, `${rows} rows`).toBe(control.chars);
+        /* And the page nobody stamped still goes the way it always did — longer
+           than what we ship, with none of the prose in it, which is why the
+           criterion cannot be a length comparison. */
+        expect(unmarked.prose, `${rows} rows`).toBe(0);
+        expect(unmarked.chars, `${rows} rows`).toBeGreaterThan(stamped.chars);
+      }
+    }
+  });
+
+  /**
+   * The fallback's own instrument, exercised directly rather than through a
+   * page, because two of its three decisions are invisible from outside: a run
+   * that moved between elements is not lost, and a short one is not counted.
+   */
+  it("counts prose retention by containment, not by length or by element", () => {
+    const body = (html: string) => dom(`<!doctype html><html><body>${html}</body></html>`).body;
+    const long = (n: number) =>
+      `Paragraph ${n} of the committee's report, which runs on for long enough to be prose rather ` +
+      `than a label, and says nothing anybody will remember.`;
+
+    /* Re-wrapped and merged: same text, different elements, nothing lost. */
+    expect(
+      proseRetention(body(`<p>${long(1)}</p><p>${long(2)}</p>`), body(`<div><p>${long(1)} ${long(2)}</p></div>`)),
+    ).toEqual({ runs: 2, lost: 0, retained: true });
+    /* Deleted: the failure this exists to catch. */
+    expect(proseRetention(body(`<p>${long(1)}</p><p>${long(2)}</p>`), body(`<p>${long(1)}</p>`))).toEqual({
+      runs: 2,
+      lost: 1,
+      retained: false,
+    });
+    /* **Longer is not better**, which is the trap: a treatment of nothing but
+       table rows outweighs the control and retains none of it. */
+    const rows = Array.from({ length: 40 }, (_, i) => `<tr><td>Row ${i} of the receipts table</td></tr>`).join("");
+    const flattened = proseRetention(body(`<p>${long(1)}</p>`), body(`<table>${rows}</table>`));
+    expect(flattened.retained).toBe(false);
+    expect(body(`<table>${rows}</table>`).textContent!.length).toBeGreaterThan(long(1).length);
+    /* Under the floor: a line of site chrome is not a paragraph of the article,
+       and counting it as one withdrew a real recovery on `wiki_gdp_table`. */
+    expect(proseRetention(body("<p>From Wikipedia, the free encyclopedia</p>"), body("<p>Something else</p>"))).toEqual(
+      { runs: 0, lost: 0, retained: true },
+    );
+    /* Whitespace is normalised rather than compared. */
+    expect(proseRetention(body(`<p>${long(1)}</p>`), body(`<p>\n   ${long(1).replace(/ /g, "\n  ")}\n</p>`))).toEqual({
+      runs: 1,
+      lost: 0,
+      retained: true,
+    });
   });
 });
 
@@ -1087,15 +1276,23 @@ ${ADV_P(1)}${ADV_P(2)}${ADV_P(3)}${ADV_P(4)}
 
 describe("the adversarial set — rule B's topology", { timeout: 120_000 }, () => {
   /**
-   * **RED before the fix.** `querySelector` reaches through a nested
+   * **RED before the fix.** `querySelector` used to reach through a nested
    * `div.amendment.amendment-correction`, so an outer notice and the inner one
-   * inside it can resolve to the *same* citation element — and `notice += 2`
+   * inside it could resolve to the *same* citation element — and `notice += 2`
    * per outer div then counted that element once per notice that found it. Two
    * inner notices under one outer reported **6 for 5 elements stamped**, in a
    * field whose own documentation says the unit is elements stamped. A count
    * that overstates what a pass did is the exact shape of
    * docs/reusable/silent-success.md, and it is worse here than a wrong number
    * elsewhere because `kept` is the instrument this pass is judged by.
+   *
+   * **The number moved from 5 to 4 when the citation lookup became
+   * `:scope >`** (see the case below). The outer notice has no citation child of
+   * its own any more — only two inner notices that have theirs — so it is
+   * declined, and four elements are stamped rather than five. The test is kept
+   * as it was otherwise: the count under test comes back from the pipeline and
+   * the number it is compared against is read off the DOM, which is the only
+   * reason a lying count is visible here at all.
    */
   it("counts elements stamped rather than notices found, when notices nest", async () => {
     const html = advPaper(
@@ -1116,7 +1313,10 @@ describe("the adversarial set — rule B's topology", { timeout: 120_000 }, () =
     const d = dom(html);
     const direct = protectAuthoredStructure(d);
     const actuallyStamped = d.querySelectorAll(`.${KEEP_CONTENT}`).length;
-    expect(actuallyStamped).toBe(5);
+    expect(actuallyStamped).toBe(4);
+    /* Which four: the two inner notices and their two citations. The outer div
+       is declined for having no citation child of its own. */
+    expect(d.querySelectorAll(`div.amendment-citation.${KEEP_CONTENT}`)).toHaveLength(2);
     expect(direct).toEqual({ [RULES.correctionNotice]: actuallyStamped });
     expect(through.kept).toEqual({ [RULES.correctionNotice]: actuallyStamped });
     /* Nothing was paid for it: all four paragraphs are still there. */
@@ -1124,26 +1324,39 @@ describe("the adversarial set — rule B's topology", { timeout: 120_000 }, () =
   });
 
   /**
-   * **Recorded rather than narrowed.** The citation is found by `querySelector`
-   * anywhere beneath the notice, so a notice whose citation sits inside an
-   * unrelated `<aside>` qualifies, which is wider than the topology rule B was
-   * measured on — PLOS writes `div.amendment-citation` as a **direct child**
-   * (evals/extraction/fixtures/plos_biology.html). Left wide, because
-   * narrowing it to a direct child would decline any publisher who wraps the
-   * citation in one more div, and no construction here makes the width cost
-   * anything: the stamped container is an *ancestor* of the article's prose or
-   * a sibling too small to win candidacy, and a positive token only deletes
-   * prose when it wins. If a page is ever found where it does, `:scope >` is
-   * the one-word narrowing and this is the case that flips.
+   * **Flipped on 2026-09-08, and the flip is the finding.** This used to assert
+   * that a notice whose citation sits inside an unrelated `<aside>` *is*
+   * stamped, on the reasoning that narrowing to a direct child would decline a
+   * publisher who wraps the citation one div deeper, and that no construction
+   * here made the width cost anything.
+   *
+   * GPT Sol named what that was: a deferral wearing a test. PLOS writes
+   * `div.amendment-citation` as a **direct child**
+   * (evals/extraction/fixtures/plos_biology.html), that is the only topology
+   * anybody has measured, and a `positive` token can displace an author's prose
+   * from anywhere on the page — so *"three constructions did not break it"* is
+   * not evidence for stamping a shape nobody has seen. The rule is now
+   * `:scope > div.amendment-citation`, and the wrapped shape is declined.
+   *
+   * **What would widen it again**: a real publisher fixture whose citation is
+   * one div deeper, with treatment and control measured on it the way the
+   * topologies below are. Then this case flips back and takes an adversarial
+   * one with it.
    */
-  it("stamps a notice whose citation is buried in an unrelated descendant", async () => {
+  it("declines a notice whose citation is buried in an unrelated descendant", async () => {
     const buried = await advCard(
       advPaper(
         `<div class="${ADV_AMENDMENT}"><h2>ADV-NOTICE-HEADING</h2>
            <aside class="unrelated"><h3>Elsewhere</h3>${ADV_CITATION}</aside></div>`,
       ),
     );
-    expect(buried.kept).toEqual({ [RULES.correctionNotice]: 2 });
+    expect(buried.kept).toEqual({});
+    /* Not a green tick about nothing: the same notice with the citation as a
+       direct child is stamped, on the same page. */
+    const direct = await advCard(
+      advPaper(`<div class="${ADV_AMENDMENT}"><h2>ADV-NOTICE-HEADING</h2>${ADV_CITATION}</div>`),
+    );
+    expect(direct.kept).toEqual({ [RULES.correctionNotice]: 2 });
     expect(buried.prose).toBe(4);
   });
 

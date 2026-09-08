@@ -664,7 +664,20 @@ const REGION_CHARS: Record<string, number> = {
      stage 2, and the reason the paragraph below no longer says they cannot. */
   "python-docs-itertools": 29925,
   "pg-greatwork": 54900,
-  "plos-biology": 23330,
+  /* 23,330 until 2026-09-08, when the region gained the 2018 correction notice
+     — `.article-content > div.amendment.amendment-correction`, 191 squeezed
+     characters, a sibling of `div#artText` rather than a child of it. This is a
+     widened region and it is exactly what this pin exists to make somebody
+     explain, so: the manifest's own note has counted *Correction* as the first
+     of the twelve article `<h2>` since 2026-09-05 and named the notice as one
+     of the three article sections that were missing, while the region said it
+     was not the article at all — the prose and the DOM shortcut disagreed, and
+     the region was the wrong one. Measured both ways on both arms: with the
+     protect pass off, the wider region scores `articleRecall` 0.96335 against
+     the old region's 0.97124, so it *penalises* the extraction that drops the
+     notice. `plos-biology.manifest.json` § note carries the arithmetic and the
+     floor that moved with it. */
+  "plos-biology": 23521,
   "mdn-cache-control": 16615,
 };
 

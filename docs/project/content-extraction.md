@@ -340,11 +340,25 @@ case in [`tests/extract-protect.test.ts`](../../tests/extract-protect.test.ts), 
 the corpus has that score topology. Neither token reaches a reader: `keepClasses` is false, so both
 are stripped with every other class.
 
-**What it recovers, measured through the real pipeline on both arms:**
+**Read that as "one token per job", not as "the weightless one is safe on a table".** It really does
+move no score, and at the size the pair was measured at the table survives and so does the prose
+either side of it — but take the same synthetic from twelve body rows to twenty-four and
+`spya-keep-column` loses the prose as well. **A rescued table is a table that gets scored**, and on a
+page whose prose is thin beside it, `<td>`s alone win candidacy. That is not a reason to narrow rule
+A, because it is not ours: the identical page written `class="wikitable sortable"` — a string
+Readability never disliked, so nothing is stamped — loses the same four paragraphs at the same row
+count. The pass hands a page the extraction it would have had if the publisher had not written
+`header`, and that includes the bad ones. Both readings are pinned in that test file's adversarial
+set.
+
+**What it recovers, measured through the real pipeline on both arms** — the second arm being
+`withProtectionDisabled`, a seam that exists only so a counterfactual can be run, because *"the
+fixture passes"* and *"the fixture passes because of this pass"* are otherwise the same green
+([silent-success.md](../reusable/silent-success.md)):
 
 | fixture | stamped | out |
 |---|---|---|
-| `wiki_gdp_table` | 2 tables | 1 → **3** tables, 1 → **238** rows — **223** in the GDP table, **14** in the regional one (its fifteenth source row is empty and Readability drops it), 1 in the map-legend swatch grid. Its one "surviving" table was that grid: **zero** content tables survived the page unaided |
+| `wiki_gdp_table` | 2 tables | 1 → **3** tables, 1 → **238** rows — **223** in the GDP table, **14** in the regional one (its fifteenth source row is `<tr class="mw-empty-elt">`, and **our own furniture pass above deletes it** before Readability sees the page — the row never reaches the library, and at the post-`prepareDocument` snapshot the source table has fourteen rows too), 1 in the map-legend swatch grid. Its one "surviving" table was that grid: **zero** content tables survived the page unaided |
 | `ar5iv` | 2 tables | 7 → **9** tables, 42 → **60** rows; Table 1 (6 rows) and Table 2 (12) land back inside their own `<figure>`, after their `<figcaption>` |
 | `plos_biology` | the correction notice, 2 elements | *"Correction"*, *"10 Apr 2018"* and the correction's own DOI reach the reader for the first time; 28,004 → **28,352** characters |
 | the other 32 | **nothing** | byte-identical with the pass on and off, `medium_about` and `pmc_article` raising the same typed refusal in both arms |

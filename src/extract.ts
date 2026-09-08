@@ -31,7 +31,13 @@ import { escapeHtml } from "./html.js";
 import { canonicaliseCallouts, type CalloutStats } from "./callouts.js";
 import { type FurnitureRemovals, removePlatformFurniture } from "./furniture.js";
 import { canonicaliseNotes, type NoteStats } from "./notes.js";
-import { type KeptStructure, protectAuthoredStructure } from "./protect.js";
+import {
+  type KeptStructure,
+  type ProtectOptions,
+  RULES,
+  proseRetention,
+  protectAuthoredStructure,
+} from "./protect.js";
 /* The namespace and its scrub — src/reserved.ts is the only file allowed to
    name one of these attributes. See `stampSourceIds`. */
 import { RESERVED_ATTRS, scrubReserved } from "./reserved.js";
@@ -383,7 +389,13 @@ export function readArticle(
   callouts: CalloutStats;
   /** What `removePlatformFurniture` deleted, per selector — see src/furniture.ts. */
   removed: FurnitureRemovals;
-  /** What `protectAuthoredStructure` stamped, per rule — see src/protect.ts. */
+  /**
+   * What `protectAuthoredStructure` stamped, per rule — see src/protect.ts.
+   *
+   * `a-table-called-header-rolled-back` in place of `a-table-called-header`
+   * means the rescue was withdrawn and `article` is the control extraction: the
+   * fallback below.
+   */
   kept: KeptStructure;
 } {
   /* **A `VirtualConsole` with nothing attached to it**, and this is not tidiness.
@@ -406,7 +418,60 @@ export function readArticle(
   const dom = sourceDom(html, url);
   const { notes, callouts, removed, kept } = prepareDocument(dom.window.document);
   const article = new Readability(dom.window.document).parse();
-  return { article, refusal: capabilityFloor(article), notes, callouts, removed, kept };
+  const rescued = kept[RULES.headerNamedTable] ?? 0;
+  if (rescued === 0) return { article, refusal: capabilityFloor(article), notes, callouts, removed, kept };
+
+  /* **The rescue is checked before it ships**, and this is the only place it can
+     be: the criterion compares two of Readability's outputs, and this function
+     owns the Readability call. Why there is a fallback at all, what it compares
+     and what it deliberately does not compare are on `proseRetention`
+     (src/protect.ts) and § *The fallback* in that file's header.
+
+     **The cost is a second parse and a second Readability run**, and it is paid
+     only on a page rule A stamped — two of the thirty-five corpus fixtures.
+     Measured: `wiki_gdp_table` 4.6s against 1.7s for a single arm, `ar5iv` 3.3s
+     against 1.4s. Stage 2 is a batch step with nobody waiting on it
+     (docs/project/architecture.md), and the alternative to spending three
+     seconds is shipping an extraction nobody checked.
+
+     `notes`, `callouts` and `removed` are not recomputed because they cannot
+     differ: all three run before `protectAuthoredStructure` in
+     `prepareDocument`, on the same input. */
+  const controlDom = sourceDom(html, url);
+  prepareDocument(controlDom.window.document, { withoutHeaderNamedTables: true });
+  const control = new Readability(controlDom.window.document).parse();
+  const check = proseRetention(bodyOf(control?.content ?? ""), bodyOf(article?.content ?? ""));
+  if (check.retained) return { article, refusal: capabilityFloor(article), notes, callouts, removed, kept };
+
+  /* **Rolled back, and said out loud.** The stamped count is replaced rather
+     than joined, because the page that ships carries no stamp: reporting a
+     rescue that was withdrawn is the class of lie this whole pass is about.
+     `src/pipeline.ts`'s audit line iterates `kept`, so it prints this key
+     without being taught it.
+
+     Any other rule's count is carried over as it stands, and stays true: the
+     control arm ran the same pass with only rule A left out, so its correction
+     notices are the ones this page shipped with. */
+  const withdrawn: Record<string, number> = { ...kept, [RULES.headerNamedTableRolledBack]: rescued };
+  delete withdrawn[RULES.headerNamedTable];
+  return {
+    article: control,
+    refusal: capabilityFloor(control),
+    notes,
+    callouts,
+    removed,
+    kept: withdrawn,
+  };
+}
+
+/**
+ * The body of a fragment of HTML, so `proseRetention` has something to query.
+ *
+ * `null` for the URL on purpose: this parses Readability's *output*, which has
+ * no address of its own and resolves nothing.
+ */
+function bodyOf(fragment: string): Element {
+  return sourceDom(fragment, null).window.document.body;
 }
 
 /**
@@ -557,7 +622,11 @@ function sourceDom(
  * `readArticleWithProvenance` below is a third caller and would have been a
  * third chance to get it wrong.
  */
-function prepareDocument(doc: Document): {
+function prepareDocument(
+  doc: Document,
+  /** Passed straight to `protectAuthoredStructure` — see `readArticle`'s fallback. */
+  protect: ProtectOptions = {},
+): {
   notes: NoteStats;
   callouts: CalloutStats;
   removed: FurnitureRemovals;
@@ -610,7 +679,7 @@ function prepareDocument(doc: Document): {
      so running last means our token cannot influence either of them, and that
      is true by construction rather than by measurement. Readability is the only
      reader of what this writes, and it has not run yet. src/protect.ts. */
-  const kept = protectAuthoredStructure(doc);
+  const kept = protectAuthoredStructure(doc, protect);
   return { notes, callouts, removed, kept };
 }
 
@@ -767,6 +836,15 @@ export function readArticleWithProvenance(
    * `removed` rests on — and here it is doubly harmless, because the pass adds
    * a class token and moves nothing: the stamped source and Readability's
    * output are the same nodes in the same order either way.
+   *
+   * **The prose-retention fallback does not run here**, which is a divergence
+   * worth naming rather than hiding: on a page where `readArticle` rolled rule A
+   * back, this instrument would report the extraction we decided *not* to ship.
+   * It fires on no corpus fixture today (measured, C3 2026-09-08), and giving
+   * the instrument its own fallback means a second provenance-stamped run of the
+   * whole two-document dance below for a case that has never happened. If one
+   * ever does, `kept` is where it shows: this arm says `a-table-called-header`
+   * where the shipping arm says `a-table-called-header-rolled-back`.
    */
   kept: KeptStructure;
   /** The stamped source, as Readability was handed it and before it pruned anything. */

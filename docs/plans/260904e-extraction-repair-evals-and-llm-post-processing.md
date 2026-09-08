@@ -3106,7 +3106,8 @@ The diagnosis said a class-weight nudge *"does not fix it"*. That is **half righ
 stamped only the inner citation, the parent then failed the same check at 0.276, and the notice still
 went. **Stamping both** puts the parent at weight 25, where the bar is `linkDensity > 0.5`, and 0.276
 clears it. Confirmed three ways by Sol: parent alone recovers nothing, child alone recovers nothing,
-**both** take `plos_biology` from 28,112 to 28,460 characters with `"Correction"`, `"10 Apr 2018"` and
+**both** take `plos_biology` from 28,004 to 28,352 characters (the figures were 28,112 → 28,460 from
+an older spike, the same delta of 348 against a drifted baseline) with `"Correction"`, `"10 Apr 2018"` and
 the DOI all back.
 
 **What it recognises is the measured topology and nothing else**: an outer
@@ -3194,7 +3195,136 @@ correct and the instrument scores it lower. That is the ruler contradicting itse
 manifest's note calls the notice one of three *missing article sections*, so its prose and its region
 disagree, and the region is the shortcut while the prose is the reasoning. Widening it moves numbers
 this plan has published (the region's 23,330 characters and the 22,100 floor), so it is not being
-changed in passing. It is the first question in the stage-end review.
+changed in passing. It was the first question in the stage-end review, and it is answered below: **the gold was wrong.**
+
+##### The fallback — a rescue that loses the author's prose is not a rescue
+
+GPT Sol's review of the built stage refused the adversary's absolution. Its argument, adopted: an
+identical table without `header` triggering the same Readability failure explains the mechanism but
+does not absolve the pass, because **rule A is the action that turns a real header-named page from
+*prose, missing table* into *flattened table, missing prose*** — the same failure class for which the
+positive token was rejected at twelve rows.
+
+So `readArticle` runs stage 2 a **second time with rule A off** whenever rule A stamped a table, and
+ships the control arm if the treatment lost prose. The control keeps rule B running — a
+`ProtectOptions` parameter rather than the test-only module seam — so a rolled-back page still gets
+its correction notice. `kept` then says `a-table-called-header-rolled-back` **in place of**
+`a-table-called-header`, and the existing audit line carries it with no change, because it iterates
+whatever keys are there.
+
+**The obvious criterion is a length comparison and it is wrong**, which is the part worth keeping:
+in the case that caused all this the bad arm was the *longer* one — 3,726 characters of flattened
+rows against 801 characters and four paragraphs. Length scores the disaster as an improvement. What
+is compared instead is **containment**: every paragraph-level run in the control must appear
+somewhere in the treatment's text. `proseRetention` returns three numbers and no text, so a caller
+logging its result cannot log the article — [logging.md](../project/logging.md)'s rule made true by
+the signature rather than by remembering.
+
+**And the obvious floor is wrong too, which is the finding.** Written with Readability's own
+25-character scoring threshold, the criterion **fires on a real corpus fixture**: `wiki_gdp_table`'s
+treatment loses one control run — *"From Wikipedia, the free encyclopedia"*, 37 characters, written
+as `<div id="siteSub" class="noprint">` and rewritten by Readability as a `<p>`, dropped because
+`_cleanConditionally`'s arithmetic moves with the article's total score and the article had just got
+237 rows longer. At 25 the fallback would have withdrawn that page's four recovered data tables **over
+one line of site chrome the publisher had already marked as not for print.**
+
+The floor is **100** characters for that reason, and the reason is in the constant's own comment. At
+100: `wiki_gdp_table` compares 24 runs and loses none, `ar5iv` compares 111 and loses none, the
+24-and-40-row synthetic loses all four. **What it gives up is named in the same place**: a page whose
+prose is all short has little above the floor, so a catastrophe there is invisible to this check. The
+trade runs this way because a check that fires on chrome costs a reader four tables on a page that
+was fine.
+
+**Cost, measured**: `wiki_gdp_table` 4.6s against 1.7s for a single arm, `ar5iv` 3.3s against 1.4s,
+`plos_biology` unchanged because rule B does not trigger it. Two fixtures in thirty-five pay it, in a
+batch stage nobody is waiting on. **The fallback fires on no corpus fixture**, and the three stamped
+fixtures come out byte-identical to before it existed.
+
+**One divergence, named rather than left to be discovered.** `readArticleWithProvenance` does not run
+the fallback, so on a page that rolled back the eval instrument would report the extraction we did
+*not* ship. It fires on nothing today, and it is exactly the class of defect this stage exists to
+kill — an instrument measuring something other than what a reader gets. Recorded in that function's
+own `kept` doc and put to the reviewer as the narrow check of this fix.
+
+##### The rest of the second review, fixed and measured
+
+- **The ancestor guard was worse than reported.** `_hasAncestorTag` inspects four ancestor levels and
+  line 1121 passes no depth, so **one `<div>` between a layout cell and a data table is already
+  enough**: measured before the fix, the table was declined *and deleted* — `kept: {}`, zero tables.
+  The guard now walks four levels; the shallow and beyond-depth cases are both pinned. Swept all 35
+  fixtures for a table where the two guards disagree: **none**, so no corpus number moves.
+- **The exposure ladder's first rung disagreed with the shipped rule.** `sourceCandidates` still used
+  the substitution the adversary had disproved, and said *sole* where the real rule said *not sole*
+  on `headerelated`. It now tests each live unlikely alternative except `header` against the original
+  string — still derived from the library rather than from our copy, so the two cannot drift into
+  agreeing wrongly — with `headerelated`, `headerss`, `headeremark` and `headereplies` all requiring
+  zero, beside a header-sole positive control.
+- **Rule B narrowed to `:scope > div.amendment-citation`.** PLOS writes it as a direct child,
+  measured. The test that had required a citation buried in an unrelated `<aside>` to *qualify* — a
+  deferral wearing a contract — now requires it to be **declined**, with a direct-child control
+  beside it, and the comment names what would widen it again: a real publisher fixture with a wrapped
+  citation, with treatment and control both measured.
+- **Regex parity compares flags as well as source.** Said plainly in the report: this assertion
+  **cannot be red today**, because both are `i`. It is a tripwire for a future bump, not a fix for a
+  live defect, and calling it a fix would be the overstatement this section keeps catching.
+- **A false claim removed**: an element cannot qualify for both rules, because rule A selects
+  `<table>` and rule B selects `<div>`.
+- **A fixture lead recorded and not built for**: a detached `table#header` holding `<th>` cells beside
+  a separate data table would be stamped as an incomplete header shell. Sol found the construction
+  and reproduced no reader failure from it.
+
+**Red before green, checked by reverting.** All four source fixes were reverted at once and the file
+run: **5 failed, 30 passed**, and the five were exactly the new and changed cases — the `headerelated`
+rung, the four-level mirror, the row sweep (`expected +0 to be 4`, so the prose really was gone), the
+nested-notice count, and the buried-citation flip. The measurement probes were written before the
+source changes, so the pre-fix numbers here are measurements rather than reconstructions.
+
+##### The gold was wrong, and the test that says so is the one that could have gone the other way
+
+`plos-biology.manifest.json`'s `articleRegion.within` was `["div#artText"]`, and the amendment div
+sits outside it — so recovering the correction notice counted as text from outside the article and
+took `regionPrecision` from 0.9807 to **0.9727**. The extraction got more correct and the instrument
+scored it lower.
+
+The manifest's own prose had said otherwise since 2026-09-05: all twelve source `<h2>` are article,
+*Correction* listed first, three article sections gone with the notice named among them, and
+`structure.h2.atLeast: 12` set on that basis. **Its prose and its region disagreed**, and the region
+was a DOM shortcut — `div#artText` is what PLOS puts the *body* in, not the article.
+
+`within` gains `.article-content > div.amendment.amendment-correction`, which matches exactly one
+element in the prepared source and in the raw bytes, whose class list is PLOS's own. Reproduced
+independently of Sol, every figure agreeing: region 23,330 → **23,521** characters, credited 22,659 →
+**22,850**, `articleRecall` 0.97124 → 0.97147, `regionPrecision` 0.97270 → **0.98090**, and
+`minArticleChars` 22,100 → **22,300** by the manifest's own recorded policy of *the region less 5%,
+rounded down to 100*.
+
+**Widening a region so your own extraction scores better is gerrymandering**, and this one has the
+suspicious shape in full: the correction root holds 191 characters in 5 stamped elements and the
+extraction returns all 191, so recall inside the root is 1.000 and the widening **costs nothing**. A
+costless widening is exactly what a rigged one looks like. So the defence is not the argument, it is
+this measurement — both regions against both arms, the second arm being the extraction as it shipped
+until 2026-09-08:
+
+| | protect OFF | protect ON |
+|---|---:|---:|
+| corrected region, `articleRecall` | **0.96335** | 0.97147 |
+| corrected region, `regionPrecision` | 0.98074 | **0.98090** |
+| current region, `regionPrecision` | 0.98074 | 0.97270 |
+
+**The corrected region punishes the extraction that drops the notice.** The old region was the only
+one under which recovering it made the score worse. A gerrymandered region rewards its author's arm
+and is indifferent to the other; this one ranks the two arms in the order the manifest's prose
+already said they should be ranked, and it was chosen from the source rather than from the output.
+
+**The tripwire fired, which is the other half of the evidence.** `tests/extraction-scorer.test.ts`
+pins `REGION_CHARS["plos-biology"]`, with a comment saying a widened region must go red rather than
+pass quietly. It went red. The pin moved to 23,521 with the reason written beside it.
+
+**And a clause that has quietly stopped doing anything**: `except: ["ul.reflinks"]` matches **zero**
+elements in the prepared source and 26 in the raw bytes, because C4a's furniture pass now removes
+them before the region is resolved. It is harmless and it is left alone, but its `why` describes work
+it no longer does — recorded here rather than tidied, because the next person to read that `why` will
+otherwise believe it.
 
 ##### The adversarial pass, by a different agent — three defects, and one of them lost the article
 

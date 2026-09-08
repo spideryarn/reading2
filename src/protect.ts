@@ -47,8 +47,8 @@
  *
  * | token on the table | result |
  * |---|---|
- * | `spya-keep-column` | the table is a table, both prose regions survive |
- * | `spya-keep-content` | **both prose regions gone**, the table promoted to top candidate and rewritten as a `<div>` |
+ * | `spya-keep-column` | at twelve rows the table is a table and both prose regions survive; **at twenty-four neither does**, and the paragraph below is what happens then |
+ * | `spya-keep-content` | **both prose regions gone at every size**, the table promoted to top candidate and rewritten as a `<div>` |
  *
  * **No fixture in the corpus has that score topology**, which is why a corpus
  * run looked clean, and it is why tests/extract-protect.test.ts carries a
@@ -62,13 +62,51 @@
  * the difference between the rows is real at the size it was measured at; what
  * is not true is that a weightless token makes a rescue safe. **A rescued table
  * is a table that gets scored**, and on a page whose prose is thin beside it,
- * `<td>`s alone win candidacy. What keeps that from being a reason to narrow
- * rule A is that it is not ours: the identical page with `class="wikitable
- * sortable"` — a string Readability never disliked, so nothing here is stamped —
- * loses exactly the same four paragraphs at exactly the same row count. This
- * pass hands a page the extraction it would have had if the publisher had not
- * written `header`, and that includes the bad ones. Both readings are pinned in
- * tests/extract-protect.test.ts § *the adversarial set*.
+ * `<td>`s alone win candidacy.
+ *
+ * The identical page with `class="wikitable sortable"` — a string Readability
+ * never disliked, so nothing here is stamped — loses the same four paragraphs at
+ * the same row count. **That explains the mechanism and it does not absolve this
+ * pass**, which is GPT Sol's finding of 2026-09-08 and is accepted rather than
+ * argued with: rule A is the *action* that takes the real header-named page from
+ * *"prose, missing table"* to *"flattened table, missing prose"*, and that is the
+ * same failure class the `positive` token was rejected for at twelve rows. **A
+ * rescue that loses the author's prose is not a rescue.** So it is withdrawn,
+ * and the next section is how.
+ *
+ * ## The fallback — every rescue is checked, and a bad one is taken back
+ *
+ * When rule A has stamped at least one table, stage 2 runs a second time with
+ * rule A switched off and compares the two extractions. If the treatment lost
+ * prose the control had, the **control** is what ships — which is exactly the
+ * behaviour of the day before this pass existed — and `kept` says
+ * `a-table-called-header-rolled-back` instead of `a-table-called-header`, so a
+ * withdrawal is as visible in the audit line as a rescue. `readArticle`
+ * (src/extract.ts) owns the second run, because it owns the Readability call;
+ * the criterion itself is `proseRetention` below.
+ *
+ * **The criterion is not length**, and that is the trap in it: in the case that
+ * caused all this the treatment was *longer* — 3,726 characters of flattened
+ * rows against 801 characters and four paragraphs — so a length comparison
+ * scores the disaster as an improvement. What is compared is **prose
+ * retention**: every paragraph-level run of text in the control has to still be
+ * somewhere in the treatment.
+ *
+ * **Rule B does not get one**, and that was measured rather than assumed: on
+ * `plos_biology` not one control run is missing from the treatment, and every
+ * construction in tests/extract-protect.test.ts § *rule B's topology* — the
+ * notice scattered, linky, trailing, nested — keeps all four paragraphs. Rule B
+ * also stamps an *ancestor* of the prose or a sibling too small to win, where
+ * rule A stamps the one element on the page built to out-score everything
+ * round it. If a page is ever found where rule B costs a paragraph, the same
+ * fallback fits it with rule B switched off in the control arm instead.
+ *
+ * **It costs a second parse and a second Readability run**, on the pages rule A
+ * stamped and no others — two of the thirty-five corpus fixtures. Measured:
+ * `wiki_gdp_table` 4.6s against 1.7s for a single arm, `ar5iv` 3.3s against
+ * 1.4s, `plos_biology` unchanged because rule B does not trigger it. Stage 2 is
+ * a batch step with nobody waiting on it, and the alternative to spending three
+ * seconds is shipping an extraction nobody checked.
  *
  * ## Rule A — and the false positive that shrank it
  *
@@ -95,6 +133,18 @@
  * `unlikelyCandidates`**, and it must carry a non-empty `<caption>` or at least
  * one `<th>` of its own. All four target tables have one, so the arithmetic is
  * never needed.
+ *
+ * **A lead, recorded rather than built for.** There is a widely-copied Bootstrap
+ * pattern in which a scrolling data table is split in two — a detached
+ * `<table id="header">` holding only the `<th>` row, beside a second table
+ * holding the rows — and the predicate above would stamp that header shell,
+ * which is an incomplete half of a table rather than a table. GPT Sol found the
+ * construction on 2026-09-08 and did **not** reproduce a reader failure from it:
+ * stamping the shell keeps a `<th>` row nobody asked for, and nothing measured
+ * says the page loses anything for it. So it is written down here and left
+ * alone. What would change it is a real fixture of that shape, with the loss
+ * measured — at which point the narrowing is a body-row test on the table, and
+ * this paragraph is the reason it exists.
  *
  * ## Rule B — the measured topology and nothing else
  *
@@ -152,6 +202,13 @@
  * The unit is **elements stamped**, not notices found — so the PLOS correction
  * counts 2, because both the outer `div` and its citation child are stamped and
  * stamping either alone recovers nothing.
+ *
+ * `headerNamedTableRolledBack` is the one key that counts something the shipped
+ * page does *not* have: the tables rule A stamped on a run whose result was then
+ * thrown away for losing prose. It is in the same object rather than beside it
+ * so that the pipeline's audit line (src/pipeline.ts, `extract … kept …`) says
+ * it without being taught to — a withdrawal nobody can see is the failure class
+ * this whole pass is about.
  */
 export type KeptStructure = Readonly<Record<string, number>>;
 
@@ -175,7 +232,30 @@ export const RULES = {
   headerNamedTable: "a-table-called-header",
   /** Rule B — the PLOS correction notice, outer div and citation child. */
   correctionNotice: "an-amendment-correction",
+  /**
+   * Rule A, stamped and then taken back — the tables that were rescued on a run
+   * whose extraction lost prose the control arm had, so the control shipped
+   * instead. It appears *in place of* `headerNamedTable`, never beside it: the
+   * page that shipped carries no stamp at all. See § *The fallback* above.
+   */
+  headerNamedTableRolledBack: "a-table-called-header-rolled-back",
 } as const;
+
+/**
+ * **What to leave out of a run**, and there is one caller: `readArticle`
+ * (src/extract.ts) builds the fallback's control arm by asking for the same
+ * pass without rule A.
+ *
+ * Deliberately not the `withProtectionDisabled` seam above. That one is module
+ * state for mutation testing and switches off *everything*; this is a
+ * parameter, on the shipping path, and rule B goes on running — so a page that
+ * rolls rule A back still gets its correction notice. Two mechanisms because
+ * they are two different jobs, and the seam's own header says it is for tests.
+ */
+export interface ProtectOptions {
+  /** Skip rule A entirely — the control arm of the prose-retention check. */
+  readonly withoutHeaderNamedTables?: boolean;
+}
 
 /**
  * **Copied from `@mozilla/readability` 0.6.0**, `Readability.prototype.REGEXPS`.
@@ -276,15 +356,17 @@ export function protectionIsDisabled(): boolean {
  * which could in principle be nudged by a class appearing on a container.
  * Running last is the version of that with no argument required.
  *
- * Two rules, applied independently; an element could in principle qualify for
- * both and would then carry both tokens, which no page in the corpus does.
+ * Two rules, applied independently, and **no element can qualify for both**:
+ * rule A selects `<table>` and rule B selects `<div>`. The header of this file
+ * used to say an element might carry both tokens; it cannot, and GPT Sol
+ * checked it rather than took it (2026-09-08).
  */
-export function protectAuthoredStructure(doc: Document): KeptStructure {
+export function protectAuthoredStructure(doc: Document, opts: ProtectOptions = {}): KeptStructure {
   if (protectionDisabled) return {};
   const kept: Record<string, number> = {};
 
   let tables = 0;
-  for (const table of Array.from(doc.querySelectorAll("table"))) {
+  for (const table of opts.withoutHeaderNamedTables === true ? [] : Array.from(doc.querySelectorAll("table"))) {
     /* **Readability would not have deleted this one anyway**, and the count has
        to know that. Line 1119's condition carries
        `!this._hasAncestorTag(node, "table")` and `!…(node, "code")`, so a table
@@ -292,7 +374,7 @@ export function protectAuthoredStructure(doc: Document): KeptStructure {
        defeat. Stamping it is harmless — `KEEP_COLUMN` moves no score — but it
        would report a rescue that rescued nothing, which is the one thing
        `kept` must never say. */
-    if (table.parentElement?.closest("table, code") != null) continue;
+    if (readabilityCannotDeleteIt(table)) continue;
     if (!headerIsTheSoleUnlikelyTerm(table)) continue;
     if (!hasItsOwnHeaderMarkup(table)) continue;
     table.classList.add(KEEP_COLUMN);
@@ -301,19 +383,33 @@ export function protectAuthoredStructure(doc: Document): KeptStructure {
   if (tables > 0) kept[RULES.headerNamedTable] = tables;
 
   /* **Elements, counted once each.** `notice += 2` per outer div was wrong the
-     moment two notices could share an element: `querySelector` reaches through
-     a nested `div.amendment.amendment-correction`, so an outer notice and the
-     inner one it contains can both resolve to the *same* citation, and one
-     document of two inner notices inside an outer reported 6 for 5 elements
-     stamped. A set of what was actually stamped makes the unit true by
-     construction rather than by arithmetic. */
+     moment two notices could share an element, and a bare `querySelector` let
+     them: it reached through a nested `div.amendment.amendment-correction`, so
+     an outer notice and the inner one it contained both resolved to the *same*
+     citation, and one document of two inner notices inside an outer reported 6
+     for 5 elements stamped. `:scope >` below has since made that particular
+     collision impossible — a citation has one parent — but the set stays,
+     because it makes the unit true by construction rather than by argument
+     about the selector. */
   const stamped = new Set<Element>();
   /* `div.amendment.amendment-correction` is exact class-token matching — CSS
      `.a.b` is `class~=a` and `class~=b`, never a substring of the attribute.
      A substring match would take `amendment-correction-withdrawn` and anything
      else a publisher coins with the same prefix. */
   for (const outer of Array.from(doc.querySelectorAll("div.amendment.amendment-correction"))) {
-    const citation = outer.querySelector("div.amendment-citation");
+    /* **A direct child, which is the topology this was measured on.** PLOS
+       writes `div.amendment-citation` as a child of the notice
+       (evals/extraction/fixtures/plos_biology.html), and a plain
+       `querySelector` would also take a citation buried anywhere beneath —
+       inside an unrelated `<aside>`, say. That width was left in and pinned by
+       a test until GPT Sol pointed out what the test was really doing
+       (2026-09-08): a deferral wearing a green tick. A `positive` token can
+       displace an author's prose from anywhere on the page, so *"three
+       constructions did not break it"* is not evidence for stamping a shape
+       nobody has seen. **What would widen it again** is a real publisher
+       fixture whose citation is wrapped one div deeper, with the treatment and
+       control arms measured on it the way this file's other topologies are. */
+    const citation = outer.querySelector(":scope > div.amendment-citation");
     /* **Both or neither.** Measured three ways: the parent alone recovers
        nothing and the child alone recovers nothing, because whichever is left
        unstamped fails the same linkiness check and takes the other with it. */
@@ -326,6 +422,47 @@ export function protectAuthoredStructure(doc: Document): KeptStructure {
   if (stamped.size > 0) kept[RULES.correctionNotice] = stamped.size;
 
   return kept;
+}
+
+/**
+ * **How far up Readability actually looks**, and the number is the library's:
+ * `_hasAncestorTag(node, tagName, maxDepth, filterFn)` opens with
+ * `maxDepth = maxDepth || 3` and returns `false` once `depth > maxDepth`
+ * (Readability.js:2217). The loop checks the parent before incrementing, so the
+ * levels it inspects are 1, 2, 3 and 4 — and the call at line 1121 passes no
+ * depth at all.
+ */
+const ANCESTOR_LEVELS_READABILITY_CHECKS = 4;
+
+/**
+ * **The mirror of `!_hasAncestorTag(node, "table") && !…(node, "code")`, at the
+ * depth Readability really uses.**
+ *
+ * A table inside one of those is never reached by the branch rule A exists to
+ * defeat, so stamping it would report a rescue that rescued nothing — the one
+ * thing `kept` must never say.
+ *
+ * **This used to be `parentElement.closest("table, code")`, and that was not a
+ * mirror**: `closest` walks to the root, and Readability stops after four
+ * levels. GPT Sol reproduced the consequence on 2026-09-08 — a qualifying table
+ * one `<div>` deeper inside a layout table's cell is *out* of Readability's
+ * window, so Readability deletes it, while the unbounded check declined to
+ * stamp it on the claim that Readability could not. The claim was true of the
+ * shallow case and false of the deep one, which is exactly the shape a mirror
+ * written from memory takes. Both cases are pinned in
+ * tests/extract-protect.test.ts § *what rule A counts*.
+ *
+ * The two calls are folded into one walk because they scan the same window: if
+ * any of those four levels is a `<table>` or a `<code>`, one of the two
+ * `_hasAncestorTag` calls returns true and the deletion is skipped.
+ */
+function readabilityCannotDeleteIt(table: Element): boolean {
+  let node: Element | null = table.parentElement;
+  for (let level = 1; node !== null && level <= ANCESTOR_LEVELS_READABILITY_CHECKS; level += 1) {
+    if (node.tagName === "TABLE" || node.tagName === "CODE") return true;
+    node = node.parentElement;
+  }
+  return false;
 }
 
 /**
@@ -368,4 +505,74 @@ function hasItsOwnHeaderMarkup(table: Element): boolean {
   const caption = Array.from(table.children).find((child) => child.tagName === "CAPTION");
   if (caption !== undefined && (caption.textContent ?? "").trim() !== "") return true;
   return Array.from(table.querySelectorAll("th")).some((th) => th.closest("table") === table);
+}
+
+/**
+ * The elements a paragraph-level run of text can live in. Deliberately not
+ * `<td>`: a run is something the author wrote as prose, and the failure this is
+ * looking for is precisely a table's cells arriving *instead of* the prose.
+ */
+const PROSE_RUN_TAGS = "p, li, dd, dt, blockquote, figcaption, pre, h1, h2, h3, h4, h5, h6";
+
+/**
+ * **How long a run has to be before its loss means anything, and this number was
+ * measured rather than chosen.**
+ *
+ * The obvious floor is Readability's own: `_grabArticle` declines to score any
+ * element under 25 characters. At 25 the check **fires on a real corpus
+ * fixture** — `wiki_gdp_table`'s control keeps *"From Wikipedia, the free
+ * encyclopedia"*, 37 characters, which the source writes as
+ * `<div id="siteSub" class="noprint">` and Readability rewrites as a `<p>`; the
+ * treatment arm drops it, because `_cleanConditionally`'s arithmetic moves with
+ * the article's total score and the article got 237 rows of tables longer. So a
+ * 25-character floor would withdraw the recovery of the page's own data tables
+ * over one line of site chrome the publisher had already marked as not for
+ * print.
+ *
+ * 100 characters is above every such line measured on the two stamped fixtures
+ * — with it, `wiki_gdp_table` compares 24 runs and loses none, `ar5iv` compares
+ * 111 and loses none — and far below the ~250-character paragraphs whose loss is
+ * the failure this exists to catch. **What it gives up** is a page whose only
+ * prose is short: it has few runs above the floor, so little to lose, and a
+ * catastrophe there is invisible to this check. That is the trade, and it is
+ * this direction because the check that fires on chrome costs a reader four
+ * tables on a page that was fine.
+ */
+const PROSE_RUN_FLOOR = 100;
+
+/** Every run of whitespace to one space, so an indentation change is not a loss. */
+const flatten = (s: string): string => s.replace(/\s+/gu, " ").trim();
+
+/**
+ * **Did the treatment keep the prose the control had?** — the criterion the
+ * fallback in `readArticle` (src/extract.ts) turns on, and § *The fallback*
+ * above is why there is one.
+ *
+ * **Not a length comparison**, and that is the whole design: in the case that
+ * caused this the bad arm was the *longer* one, 3,726 characters of flattened
+ * table rows against 801 characters and four paragraphs. Length scores the
+ * disaster as an improvement.
+ *
+ * What is compared instead: every paragraph-level run in the `control` (see
+ * `PROSE_RUN_TAGS` and `PROSE_RUN_FLOOR`) must appear **somewhere** in the
+ * treatment's text. Containment in the whole rather than a run-for-run match, on
+ * purpose — Readability legitimately re-wraps and merges blocks between two
+ * parses of the same page, and this check is about text the reader lost, not
+ * about the elements it arrived in. A run split down the middle in the treatment
+ * would read as lost; nothing measured does that.
+ *
+ * **Counts, never text.** The return is three numbers, so a caller logging the
+ * result cannot log the article — the rule in docs/project/logging.md, made
+ * true by the signature rather than by remembering.
+ */
+export function proseRetention(
+  control: Element,
+  treatment: Element,
+): { readonly runs: number; readonly lost: number; readonly retained: boolean } {
+  const kept = flatten(treatment.textContent ?? "");
+  const runs = Array.from(control.querySelectorAll(PROSE_RUN_TAGS))
+    .map((el) => flatten(el.textContent ?? ""))
+    .filter((run) => run.length >= PROSE_RUN_FLOOR);
+  const lost = runs.filter((run) => !kept.includes(run)).length;
+  return { runs: runs.length, lost, retained: lost === 0 };
 }
