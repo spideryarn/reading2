@@ -451,6 +451,24 @@ still running. **`work.ts` only ever walks DOWN from a pane, so it cannot see th
 cannot show them, attribute them, or stop them, and nothing bills them to anybody. That is a cost
 question as much as an engineering one, and `claude-agents-dashboard` has it to surface.
 
+**It is a WINDOW, not a leak, and the difference decides what to do about it.** `orchestrator-setup`
+checked at 14:05 and found none; independently re-checked at 13:03 UTC, the two live `codex exec`
+runs (`fleet-dictation`'s and `fleet-approval-binding`'s) both trace up to `sh -c ( npx tsx
+run-codex.ts … )` whose parent is the **tmux server**, so both are ordinary `codex-batch` *panes* —
+the shape `codex-batch-pane.txt` captures — and both are attributable and stoppable. So orphans do
+not accumulate: they appear when a Bash-tool shell is reaped mid-run and they leave when the job
+ends. What is worth fixing is the window during which a paid job cannot be attributed or stopped,
+not a growing population of them. **"Two orphans are running right now" would have been false by the
+time anybody read it** — the same sample-window error as the Codex count above, one paragraph after
+writing it down.
+
+**One `ppid 1` process really is long-lived, and it is the fake.**
+`bash /tmp/fake-codex-qAz9Um/codex -o /tmp/run-codex-gc.txt`, reparented to init **6 days 20 hours**
+ago by a test run last week, 1.7 MB, costing nothing. It is a live specimen of exactly what the
+recogniser is built not to be fooled by — still on the box, still carrying `codex` as a basename,
+still correctly not recognised, because shells are never peeled and nothing under `/tmp` is an
+installed tool.
+
 **The process table cannot say which process is reading the tty, and that is now closed rather than
 open.** Measured across all 22 panes: `tpgid` equalled the pane's own `pgid` on 21 of them, and **0
 of 15 `claude` processes had a process group of their own** — the job shell, the `claude`, and
