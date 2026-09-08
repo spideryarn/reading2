@@ -1776,6 +1776,40 @@ disarmed value, and the commands that arm it are Greg's.
 > without thinking"*. It is safe, but it is not nothing, and the difference is exactly the kind a
 > handoff note must not blur. **Dry run is the default for this reason; run it first.**
 
+#### `leaseMs` stays outside, and the fear that put the question was arithmetic I had not done
+
+The implementer moved `leaseMs` out of the fingerprint alongside cadence — further than Sol's S8-1
+asked — and flagged it for me to overrule. My instinct was to pull it back: *shortening a lease
+releases a job whose session is still running, so a second starts beside the first.* Fable arbitrated
+and **the instinct is wrong, for a reason two functions away that neither of us had checked.**
+
+`lastRunOf` turns a stuck occurrence into `{kind: "unresolved", at: reservedAt}`, and `due` then
+measures `everyMs` from that `at` exactly as it does for a settled run (`jobs.ts:690–693`, verified
+by me rather than taken on trust). So a stuck job's next launch is at
+`reservedAt + max(leaseMs, everyMs)`. **Shortening the lease below the cadence is a no-op on launch
+timing.** All it does is surface the `stuck` report sooner, which is the direction you want.
+
+And in the ordinary path the lease is never consulted at all: the launcher exits within seconds and
+the occurrence settles then, so the six-hour session that follows is invisible to the ledger. What
+actually decides whether two sessions coexist is **`everyMs` against how long a session really
+runs** — and that knob is outside the fingerprint too, on Sol's own instruction. Hashing the lease
+would have put a ceremony on a knob that guards nothing while the one carrying the real exposure
+stayed free: **a guard describing coverage it does not provide**, which is the shape gate 4's NOT
+BUILT note exists to warn about.
+
+**Two comments in `schedules.ts` were false and are corrected** — `ScheduleConfig.leaseMs` claiming a
+shortened lease lets a second session start, and `MINIMUM_LEASE_MS` claiming its floor guards
+overlap. Both were written in good faith by an implementer inheriting my framing, which is exactly
+how an unchecked claim becomes a source comment. The floor's only honest job is refusing `0`;
+**`MAXIMUM_LEASE_MS` is the bound that matters**, because a 24-hour lease on a 3-hour job hides a
+hung launcher for a day.
+
+**The one thing worth acting on**, and it is not the lease: `FEEDBACK_SWEEP_PROMPT` tells its session
+to check `gjd-remote ls` for its own claim prefix before doing anything, and
+`GET_READY_TO_DEPLOY_PROMPT` has no such self-check. That is where the real duplicate-session guard
+lives, it is pinned, and adding it is a one-line change that correctly costs a re-pin. Left for 8b or
+later rather than slipped in here.
+
 #### 8a as built, 2026-09-09
 
 All six pieces landed. What is worth knowing that the sections above do not already say:
