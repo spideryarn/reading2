@@ -1,10 +1,10 @@
 # The Overseer's store, and the clock it gives everything else
 
-**Status 2026-09-08, 06:45: S1 landed and reviewed clean; S2's P0 and five P1s are being fixed now;
-S3 and S6 are being built in parallel; S4 and S5 not started.** Evidence: `tools/overseer/` holds
-three modules and 1,014 lines, `npm run typecheck` is green on four projects, and 168 tests pass —
-**and Sol's review of S2 found a P0 and five P1s that the suite passes straight through**, which is
-the finding this stage is really about.
+**Status 2026-09-08, 08:00: S1, S2 (fixed), S3 and S6 are landed and green; S4 is being built; S5
+not started.** Evidence: `npm run typecheck` reports **0** failures across the tree and 241 tests
+pass over the seven affected files, at `001deace`. Sol's reviews of the S2 fixes and of S3 are
+running now; S6 is landed but **not finished** — its reclassification measurement and its mutation
+sweep are outstanding, because the agent building it hit the account session limit.
 
 Greg, 2026-09-08, on the remaining work: *"Reprioritise as you see fit, work in parallel where you
 can."* What that changed is in § The order, reconsidered.
@@ -584,6 +584,70 @@ Two judgments to keep: `SessionKey` and `StatusKey` earn their brands; **`Claime
 not** — it validates nothing and risks implying verification it does not perform. Sol would spend that
 brand instead on an opaque admissible-snapshot type (S2-07), so that `diff()` cannot be handed a
 snapshot `admissible()` never blessed — which is currently only a comment.
+
+### What landed, and the three things the work turned up
+
+**S2's eight findings are all addressed**, red-first, with 69 tests where there were 40.
+[260908b-s2fix-review-prompt.md](260908b-s2fix-review-prompt.md) is the narrowly-scoped check of the
+fixes, per [engineering-manager.md](../reusable/engineering-manager.md)'s round-two rule — discovery
+is closed on this stage; only the fixes are in scope.
+
+**The tolerance was wrong twice, and the second correction was not mine.** I told the implementer it
+must exceed collection jitter (~70s). Six live collections refuted that: the implied deadline holds
+to **72 milliseconds**, including across a **130-second gap where a collection was missed entirely**,
+because jitter *cancels* — the producer derives `secondsLeft` from a real deadline, so both terms
+move together. The implementer then named the term that actually moves it, which neither of us had:
+**the difference in collection duration between two snapshots**, since the countdown is read early in
+a run and `collectedAt` is stamped at its end. 95 ms in the new capture, ~2.1 s in the old one, ~5 s
+worst case. Hence 10 s.
+
+And the mutation that survived the first sweep was **that constant**: raising 10 s back to 120 s left
+the entire suite green, because every constructed restart moved the deadline by minutes. **A constant
+is code**, and this is the stage's own lesson landing on the stage.
+
+**S3 met its bar and got smaller than planned.** 35 tests, 15 mutations, 15 caught. The two that
+survived the first sweep were both real: a checkpoint written straight to its final path — now caught
+by asserting the **inode changes**, which is the observable difference between rename-replace and
+write-in-place — and a **relative `meta.dir`** accepted in a checkpoint, which is Sol's S2-06 arriving
+on the recovery path it was always about.
+
+Three of its calls are worth keeping in this file rather than only in the code:
+
+- **`foldEvents` is exported and the register is a fold of the log.** That is what makes
+  disposability a property of the code rather than a promise: a rejected checkpoint costs a replay,
+  not a fleet.
+- **`opening.start` is `cold | rebuilt | resumed`**, three arms because a daemon that replayed a
+  thousand events has a baseline and must not announce itself as cold — the same distinction this
+  codebase keeps drawing between having looked and being unable to.
+- **The caller never supplies the register.** `checkpoint()` takes it from the store's own fold, so a
+  caller cannot write a checkpoint that disagrees with the log.
+
+**A finding the plan did not have: `lastSeenAlive` can only be a floor, never a reading.** With
+events-not-samples, an idle session emits nothing for hours, so liveness is `lastGoodSnapshotAt` plus
+register membership. **Anything rendering "blocked for 40 minutes" from `lastSeenAlive` alone is
+wrong** — and that is exactly what triage will reach for first, which is why it is written here and
+not only in a comment.
+
+**S6's fixtures are the best artefact of the night, and the reason is that they are real.** A
+dispatched `codex exec` sits **eight levels below the pane**: pane → `claude` → the Bash tool's
+`bash -c` → `timeout` → `npm exec` → `sh -c 'tsx'` → `node .bin/tsx` → `node --require preflight.cjs`
+→ `codex exec`. A hand-written fixture would have put it at two or three and the classifier would
+have been built to look there. Three more that kill an obvious implementation: **five processes in
+that chain carry `run-codex.ts` and exactly one carries `codex exec`**, so a recogniser matching the
+wrapper counts one review five times; **one pane held three concurrent Bash-tool children**, two of
+them running `sleep`, so *"is there a bash under this pane"* says nothing; and **the pane can be
+older than its Claude** — 115341 s against 75741 s — so pane age is not session age.
+
+**The duplicated stage, and whose fault it was.** `worktree:check` could not see a running process,
+and both agents fixed it. Theirs landed (`f3817060`); mine was discarded, its diff kept at
+`scratchpad/mgr-agentD-worktree-check.patch`. **The cause was mine**: I told the dashboard agent the
+gap was *"worth a line in your plan doc"* and never said I was fixing it, which is
+[announce before taking a queued slice](../reusable/engineering-manager.md) failing in the one
+direction a shared public finding makes easy. Two measurements from the discarded work are worth
+keeping, because they independently justify the design that landed: **`/proc/<pid>/cwd` is unreadable
+for 575 of the box's 910 processes**, and **a cwd-based rule fired on 8 of the box's 13 worktrees**
+against 2 that actually had servers — so "listening processes only" is not a shortcut, it is the
+correct signal.
 
 ### The order, reconsidered — and the constraint that deleted work
 
