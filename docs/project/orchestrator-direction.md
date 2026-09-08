@@ -310,6 +310,59 @@ is to make the decisions visible so a bad threshold shows up.
 (`new-claude`, `kill`) and has the hard-won safety properties — see
 [hetzner-remote-server-box.md](hetzner-remote-server-box.md). Reuse it; do not grow a second way.
 
+## What Greg asked for on 2026-09-08, in his own words
+
+The first three capabilities above got concrete on the day the read-only page started working.
+Quoted rather than paraphrased, because the specifics are the point — several of them name a
+mechanism, and a paraphrase would lose it.
+
+> For the `Sessions` mode, ideally list all the sessions in the left-hand column, with different
+> ways to order them (how long they've been running, status (the default), anything else that might
+> be ueful, etc). And then if I click on a session, show much more information about it in the right
+> column, e.g. input it requires from me, the recent messages, and anything else that might be
+> useful. Allow me to send steering messages to it, answer its questions, etc
+
+> I want a way to add a New session, with a text input box, perhaps using `gjd-remote new-claude
+> -p ...` so that I can still use that machinery to manage things.
+
+That parenthesis is load-bearing rather than a preference. Session identity lives in the tmux
+environment `new-claude` pins at launch, so a session started any other way is classified as a bare
+**shell** and arrives on the page anonymous and unsteerable. Reuse is not tidiness here; it is the
+difference between a row that works and a row that does not.
+
+> Ideally reuse the same machinery for voice-dictation and live-chat that we use in Spideryarn, for
+> any session-input-message boxes (e.g. new session, steering messages, answering questions, etc)
+
+See [dictation.md](dictation.md) and [live-conversation.md](live-conversation.md). Note the standing
+rule that this tool does not reach into `src/` (Principles, below) — so this is a *port*, and the
+question of whether the boundary should move is a real one to answer rather than assume.
+
+> Add action-buttons we can take in a given Session, e.g. continue, compact, pull, push, remove
+> worktree, exit, run unix sleep for 1h/3h/5h/10h, get input from Fable/GPT Sol and then use your
+> judgment, and anything else you can think of. (And ideally these would queue/steer if it's
+> currently running, so that one could press more than one, in combination with messages)
+
+**"Queue" is the hard word in that sentence**, and it is the right instinct: an agent that is
+working cannot be typed at usefully, and pressing three buttons should not race. It also crosses a
+line the doc already draws — most of these are *sentences you would type*, but `remove worktree` has
+an effect outside the conversation and should be an action the tool takes itself.
+
+> Add action-buttons that we can take in Box Health (see
+> [diagnose-box-resources.md](../reusable/diagnose-box-resources.md)), e.g. kill anything that's
+> safe to do, send a broadcast message to all agents telling them about box resources and asking
+> them to pause for a staggered period of up to an hour and/or kill stuff they can easily restart,
+> kill all the running tests
+
+**Staggered** is the word to build against. Thirty-six agents told to pause for an hour all resume
+in the same second, and the box falls over at the far end instead of the near one.
+
+> Add functionality to the Orchestrator tab, e.g. send a message to the Orchestrator (reusing
+> voice-dictation/live-realtime/etc), send a broadcast message to all agents.
+
+And on how to work:
+
+> Get product judgments from Fable primarily, and more of the technical reviews from GPT Sol
+
 ## Constraints already established
 
 These were measured on the box, mostly on 2026-09-07, and several cost real time to learn. **Read
@@ -487,7 +540,17 @@ exists"*, that distinction is its own and should survive being quoted.
 
 Ordered by value against effort, with the owner named because two agents are building here.
 
-### First — because the write path is live and was designed when it was not
+### Securing the live write path — a stage, but not the top one
+
+**Greg, 2026-09-08: "Let's include it as a stage, but it doesn't have to be the top-priority."**
+Astra put this block first, ahead of everything Greg had ordered, on the grounds that the write path
+was designed when it was read-only. Greg has read that argument and ranked it anyway, which is his
+call to make — the tailnet is small, the devices are his, and the fleet's actual failure so far has
+been resource collapse rather than anything hostile. So this is scheduled work rather than a stop.
+
+**A9 is the exception worth watching**, because it is not a hardening item: an approval that binds to
+the question sentence rather than to the diff is wrong even with no attacker at all — it can show
+Greg one thing and approve another after an ordinary re-render.
 
 | | what | owner |
 |---|---|---|
@@ -576,13 +639,48 @@ Exhaustive transcript mining, a general multi-agent chat network, a custom termi
 optimisation, and multi-box scheduling. *"Keep polling if it is adequate. None of those is necessary
 to find out whether this system actually saves Greg attention."*
 
-**And A7 is the one that is not a feature at all.** Every agent shares one Unix user with passwordless
-sudo, so one compromised agent already reaches its peers, their files and the control machinery — and
-a dashboard token stored under that same user would not be an isolation boundary. Network controls
-reduce entry points; they do not contain a compromised agent. The first real containment work is
-reviewing which production credentials and privileged operations routine agents actually need, and
-keeping control-service configuration out of writable worktrees. **This needs Greg**, and it does not
-require user accounts or RBAC in the product.
+**And A7 is not a feature at all** — every agent shares one Unix user with passwordless sudo, so one
+compromised agent already reaches its peers and the control machinery. Greg's call, 2026-09-08:
+deferred, and written up in
+[§ Appendix: security and hardening, deferred](#appendix-security-and-hardening-deferred).
+
+## Appendix: security and hardening, deferred
+
+**Greg, 2026-09-08, on the item below: "let's add this to an appendix on future security/hardening
+in orchestrator-direction, but ignore it for now."** So this is a record, not a backlog — nothing
+here is scheduled, and it is written down because the reasoning is expensive to rediscover and
+because the day one of these matters is not the day to work it out.
+
+**One compromised agent already has the box.** Every agent runs as the same Unix user with
+passwordless sudo, so any one of them reaches its peers, their files, their worktrees and the control
+machinery. GPT 6 Astra, 2026-09-08, on what follows from that:
+
+> Network controls reduce entry points; they do not contain a compromised agent … A dashboard token
+> stored under that same user would not establish an isolation boundary.
+
+Two consequences worth holding on to:
+
+- **A token is not a boundary here.** Any credential the dashboard could check is readable by
+  everything it would be protecting against. So the honest description of "reachability is the access
+  control" is that it keeps *strangers* out, and there is currently nothing between one agent and
+  another. That is a fair trade today — the agents are ours and the box is private — and it stops
+  being one the moment an agent processes something hostile with enough leverage.
+- **The first real containment work is not authentication.** Astra's ordering: review which
+  production credentials and privileged operations routine agents actually need, and keep
+  control-service configuration and deployment out of ordinary writable worktrees. Reducing broad
+  sudo changes the possible damage far more than any number of HTTP header checks. **None of this
+  requires user accounts or RBAC in the product.**
+
+The related items, all deferred with it and each already argued in
+[§ The backlog](#the-backlog-after-the-wide-review) where they sit in priority order: device-scoped
+tailnet grants rather than whole-tailnet reachability (**A5**), CSP and anti-framing on a page that
+renders agent-authored text (**A6**), and keeping Overseer-authored messages from acquiring Greg's
+authority by arriving as ordinary user turns (**A12**).
+
+**What would make this urgent**, so the trigger is written down rather than felt: an agent handling
+genuinely untrusted input with real leverage — a reader's uploaded article reaching an agent's shell,
+a public issue tracker feeding a job, a dependency with a post-install script — or the dashboard
+becoming reachable from anywhere that is not a device Greg controls.
 
 ## Principles
 
