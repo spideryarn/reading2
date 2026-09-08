@@ -75,6 +75,27 @@ type QuotesStatus = "loading" | "none" | "ready" | "error";
  * the reader leave the band, and spend the token when the GET finally settled —
  * against `activation.ts`'s rule that a press belongs to the band on screen.
  * GPT Sol, 2026-09-08.
+ *
+ * ## An always-mounted read is not an always-fresh read
+ *
+ * The opening GET happens once, and **every later revalidation belongs to the
+ * band**: its mount `reload`, and its job-completion `refresh`. So a list
+ * written while the band was closed — a job that finished after the reader left
+ * it, another tab, a CLI run with no job row at all — does not reach the prose
+ * until the band is opened again or the page is reloaded.
+ *
+ * **Named rather than fixed, and the reason is that the glossary has exactly
+ * this gap and says so** — `useGlossaryRead`'s header, since 2026-08-27:
+ * *"a glossary written in another tab while this band was closed would otherwise
+ * never arrive"*. Its answer is the same mount `reload`, and matching the
+ * established pattern beats inventing a second one here. The honest fix is one
+ * thing and it belongs to both: a completion event that does not put a
+ * subscriber on the job engine's idle cadence, plus focus revalidation for the
+ * CLI case.
+ *
+ * It is a **staleness** gap and not a disagreement — the panel and the prose
+ * read the same `QuotesRead`, so they are stale together and can never show
+ * different lists. GPT Sol raised it reviewing the built code, 2026-09-08.
  */
 export interface QuotesRead {
   status: QuotesStatus;

@@ -358,7 +358,21 @@ const NOT_A_BLOCK_SELECTION = [
      worry about, which was true and was the wrong conclusion.
 
      A search-only hit stays excluded, which is what it is today; whether that is
-     right is not this change's question. */
+     right is not this change's question.
+
+     **`mark.hit:not([data-quote])` is redundant today** — every hit without a
+     quote tier gets `data-wash` (annotate.ts § `washes`) — and is kept as the
+     one entry that states the rule rather than a consequence of it. If the two
+     ever disagree, exclusion wins: `closest` takes the list as an OR.
+
+     **The one case this still gets wrong**: a quote inside a `<mark>` the
+     *article itself* wrote. `annotateHtml` nests its own mark inside the
+     author's, so the inner quote matches nothing here but its ancestor matches
+     `mark:not(.hit)`, and `closest` walks up to it. Rare enough to name rather
+     than engineer around — source `<mark>` survives sanitising but loses our
+     reserved classes (src/sanitize-policy.ts) — and the real fix is to decide
+     from the nearest *generated* mark while checking interactive ancestors
+     separately. GPT Sol, 2026-09-08. */
   "mark:not(.hit)",
   "mark.hit.cmt",
   "mark.hit.chat",

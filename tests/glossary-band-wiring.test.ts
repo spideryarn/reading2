@@ -346,7 +346,11 @@ describe("the quotes' marks", () => {
        ring and the marks cannot come from different places. It was a pair of
        ternary chains until 2026-09-06 — `mode === "quotes" ? quoteOpenKey : …`
        beside `… ? quoteFound : …` — which is the shape that let them. */
-    expect(reader).toMatch(/quotes,\n/);
+    /* The whole slot, by the shorthand `Reader` uses — and anchored to the
+       `selectPassages` call rather than matched anywhere in the file, because a
+       bare `/quotes,\n/` is satisfied by any unrelated `quotes,` in a thousand
+       lines. GPT Sol, 2026-09-08. */
+    expect(reader).toMatch(/selectPassages\(mode, \{[\s\S]{0,200}\n\s*quotes,\n/);
     expect(passages, "selectPassages must answer quotes mode with the quotes slot").toMatch(
       /case "quotes":\s*return slots\.quotes;/,
     );

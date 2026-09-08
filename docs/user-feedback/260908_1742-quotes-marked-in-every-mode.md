@@ -61,6 +61,21 @@ here rather than left for Greg.
   from geometry rather than measurement is what that page refused to do. The stale "not reachable"
   caveats on `/design`, in `annotations.css` and in 260907c now say so.
 
+## One more gap, named rather than fixed
+
+**Quotes generated while the band is closed do not reach the prose until it is opened again**, or the
+page is reloaded. The opening GET runs once; every later revalidation belongs to the band — its
+mount `reload` and its job-completion `refresh`. So: press Quotes, leave before the job lands, and
+Plain keeps showing nothing. Same for another tab, and for a CLI run, which has no job row at all.
+
+Not fixed, because **the glossary has precisely this gap and says so** — `useGlossaryRead`'s header
+since 2026-08-27: *"a glossary written in another tab while this band was closed would otherwise
+never arrive"*. Its answer is the same mount `reload` mine uses. Matching the established pattern
+beats inventing a second one, and the real fix is one thing that belongs to both: a completion event
+that does not put a subscriber on the job engine's idle cadence, plus focus revalidation. It is a
+*staleness* gap and not a disagreement — the panel and the prose share one read, so they are stale
+together and can never show different lists.
+
 ## The one thing left for Greg, and it is about density
 
 **There is no off-switch, deliberately** — "always show" is the request, and a checkbox nobody asked
@@ -90,3 +105,28 @@ than the **mode** would do, and the whole risk of having moved them.
 
 The touch fix and the visitor's marks were each mutation-checked — the blanket `"mark"` exclusion and
 an owner-only quotes read, put back one at a time, each turned exactly one new test red.
+
+**And in a real browser**, on `fowler-phrenology` (15 quotes over 72 blocks), Playwright against
+system Chrome on the box:
+
+| | `td.text.has-hit` | `.spine-match` | `mark[data-quote]` |
+|---|---|---|---|
+| **Plain** | 0 | 0 | **16** |
+| **Quotes** | 14 | 14 | 16 |
+
+Which is the contract, measured rather than asserted: the strokes are on the page in Plain and the
+paragraph bar and the spine rail are not. (16 rather than 15 because one quote spans an inline
+element and so is two `<mark>` fragments — the case `data-quote-start`/`-end` exist for, and the
+outline draws as one box.)
+
+**The step is real and is 2px exactly.** Constructed with `?mode=search&match=words&find=Utilitarian`
+over a quoted sentence: the fragment before the hit sits at `bottom: 718.671875`, the washed fragment
+at `720.671875`. Same number 260907c measured on `/design`; what changed is that a reader can now
+meet it.
+
+**How it actually reads**, which is the thing no test can answer: light and occasional — roughly one
+stroke every 1,000–1,500px of a 16,500px article, almost always a single sentence, and no console
+errors or reflow anywhere. **One hot spot**: at the very end, three quotes land in and beside one
+paragraph and the outlines start to read as a cluster of boxes for a couple of sentences. Local
+rather than the general texture, and the abutting pair still reads as two — which is what the inset
+caps in 260907c were for. That is 15 quotes; the cap is 32, and nobody has yet seen that.

@@ -290,9 +290,17 @@ describe("a tap that already means something else does not select the block", ()
     const loaded = await readArticleFromDir(DIR);
     const marked = plainBlocks(loaded)[2];
     if (!marked) throw new Error("the fixture has too few plain-prose blocks");
-    /* A real search hit, drawn by the real annotator: the element under the
-       click is the markup a search would have produced, not a stand-in. */
-    const hit: Mark = { id: "search-1", start: 0, end: 8 };
+    /* Drawn by the real annotator, so the element under the click is markup the
+       app would really have produced rather than a stand-in.
+
+       **It is a comment mark, not a search hit, and the label used to say
+       otherwise.** `annotateHtml` defaults an absent `kind` to `"cmt"`
+       (annotate.ts § `covering`), so this has always exercised `mark.cmt` — which
+       is a fine subject for "a tap on a mark does not select the row" and is not
+       the one the old comment claimed. Caught by GPT Sol, 2026-09-08, while the
+       exclusion list below it was being narrowed; a search hit gets its own
+       coverage in the quote-over-hit case further down. */
+    const hit: Mark = { id: "cmt-1", start: 0, end: 8 };
     await draw(propsFor(articleFrom(loaded), new Map([[marked.id, [hit]]])));
 
     await tap(inProse(marked.id, "mark"));

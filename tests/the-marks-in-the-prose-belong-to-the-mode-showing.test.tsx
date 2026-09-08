@@ -630,6 +630,17 @@ function marked(): string[] {
     .map((row) => row.getAttribute("data-block") ?? "?");
 }
 
+/**
+ * Which paragraphs carry a **quote's** stroke, specifically — `mark[data-quote]`
+ * rather than `mark.hit`, so "the quotes are marked here" is distinguishable
+ * from "something is marked here".
+ */
+function quotedRows(): string[] {
+  return [...host.querySelectorAll<HTMLElement>("tr[data-block]")]
+    .filter((row) => row.querySelector("mark[data-quote]") !== null)
+    .map((row) => row.getAttribute("data-block") ?? "?");
+}
+
 /** Which paragraphs carry the ring — `openKey`'s only visible consequence. */
 function rung(): string[] {
   return [...host.querySelectorAll<HTMLElement>("tr[data-block]")]
@@ -671,10 +682,22 @@ const railTicks = (): number => host.querySelectorAll(".spine-match").length;
  * carries across an article boundary.
  */
 function agree(where: string, blocks: BlockId[], ring: BlockId[], quoted = true): void {
-  /* Document order, because `marked()` reads the rows down the page and
-     `P_QUOTE` is the last paragraph. */
-  const inProseNow = quoted ? [...blocks, P_QUOTE] : blocks;
+  /* **A union, not a concatenation**, and the distinction is `proseFound`'s own:
+     in quotes mode the quote *is* the open mode's passage, so the two sides are
+     the same array and it hands that array straight back. Written as a concat,
+     this line expected `P_QUOTE` twice there and was wrong about the one case
+     the identity check in `proseFound` exists for. Document order, because
+     `marked()` reads the rows down the page and `P_QUOTE` is the last. */
+  const inProseNow = quoted ? [...new Set([...blocks, P_QUOTE])] : blocks;
   expect(marked(), `${where}: the phrase marks`).toEqual(inProseNow);
+  /* **And that `P_QUOTE`'s mark is a QUOTE**, not merely some `mark.hit`.
+     `marked()` asks the weaker question, which is right for the other bands —
+     they mark their paragraph and the point is *which* paragraph. Here the kind
+     is the claim: a bug that leaked, say, Search's passages into Plain would put
+     a `mark.hit` on this row and satisfy the line above. GPT Sol, 2026-09-08. */
+  expect(quotedRows(), `${where}: which rows carry a quote's stroke`).toEqual(
+    quoted ? [P_QUOTE] : [],
+  );
   expect(barred(), `${where}: the paragraph bars`).toEqual(blocks);
   expect(rung(), `${where}: the ring`).toEqual(ring);
   expect(railTicks(), `${where}: the rail's ticks`).toBe(blocks.length);
@@ -770,6 +793,32 @@ async function readingSession(strict: boolean): Promise<void> {
   await settle();
   expect(heldSearch.settled, "releasing the held reply did nothing").toBe(true);
   agree("after the held search reply landed", [P_CRIT], []);
+
+  /* ---- Glossary: a band that mounts and publishes no passages at all. Named
+     in 260908i's stage 3 and missing from this sweep until then. Its selection
+     is `termSelections`, a different currency with no push-up, so the *only*
+     thing that may be marked here is the quote. */
+  await press(MODE_LABEL.glossary);
+  agree("glossary", [], []);
+
+  /* ---- Quotes, where the quote is the open mode's own passage. Everything
+     inverts: the bar and the rail light up, because here the picked slot IS the
+     quotes, and `?quote=` rings one. This is the arm that shows the two
+     questions — *what is marked* and *what owns the bar* — giving the same
+     answer when the mode is Quotes and different answers everywhere else. */
+  await press(MODE_LABEL.quotes);
+  expect(onScreen(KEPT_QUOTE), "the Quotes panel never mounted").toBe(true);
+  agree("quotes", [P_QUOTE], []);
+
+  /* ---- And Plain again, which is the assertion that replaced the Quotes arm
+     of tests/passage-mode-cleanup.test.tsx. That arm asserted the marks went
+     when the mode did; since 2026-09-08 they must not. Reached from Quotes on
+     purpose — it is the exact transition the old test asserted the opposite of,
+     and the only place in the suite it can be seen, because it needs the whole
+     composition rather than a band harness. */
+  await press(MODE_LABEL.plain);
+  expect(onScreen(KEPT_QUOTE), "the prose went with the band").toBe(true);
+  agree("plain, having just left quotes mode", [], []);
 }
 
 /** Press one of Referee's sub-mode chips by its label. */

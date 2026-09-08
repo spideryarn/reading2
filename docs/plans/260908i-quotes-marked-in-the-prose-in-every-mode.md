@@ -339,5 +339,14 @@ Answer file: `qam-review-answer.md`.
   cases and nobody has ever looked at 32 marks at once ([quotes.md](../project/quotes.md) says so).
   Plain, Search and Glossary; the outline present, the paragraph bar unchanged; and the 2px step
   measured again now that it is reachable, with a screenshot for Greg.
+
+  **Done, on `fowler-phrenology` — 15 quotes over 72 blocks, which is the densest article the local
+  database has and is half the cap.** Plain: `has-hit` 0, `.spine-match` 0, `mark[data-quote]` 16.
+  Quotes mode: 14, 14, 16. The step, over `find=Utilitarian` inside a quoted sentence: `718.671875`
+  against `720.671875` — the same 2px 260907c measured on `/design`, now reachable. No console errors
+  and no reflow. It reads light: one stroke every 1,000–1,500px of a 16,500px article, almost always
+  one sentence — **except at the very end**, where three quotes cluster in and beside one paragraph
+  and start to read as a row of boxes. That is the density question below, seen rather than argued,
+  and at 15 rather than 32.
 - GPT Sol on the diff, weighted higher than the review of this page.
 - The report note and the Sentry write.
