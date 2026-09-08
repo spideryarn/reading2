@@ -123,6 +123,26 @@ broken exhaustiveness guard, and `npm run typecheck` cannot see a widened litera
 knows that — it is **run the file that CONSUMES what you changed, not only the file you were editing
 in**. Their words: *"I'd run the file I was editing and not the file that consumed it."*
 
+**And the third one, which is what those two imply about how you check the guard itself.** If a
+type-level guard cannot go red under `npm test`, then **mutating it cannot go red under `npm test`
+either** — so the usual way of proving a guard works does not work on this kind of guard. Measured on
+2026-09-08, on the Overseer's branded-snapshot types: three mutations were applied and run through
+`tsc` rather than vitest — reverting an opaque wrapper to a branded intersection, aliasing one
+permission type to another, and making a `readonly` field mutable again. **All three are invisible to
+the test runner and all three are caught by the compiler**, two of them as
+`TS2578: Unused '@ts-expect-error' directive`, which is a real red rather than a silent pass.
+
+> A mutation the test runner cannot see is exactly the kind that lives.
+
+So when [silent-success.md](../reusable/silent-success.md) says to mutate what you added and check the
+suite notices, **"the suite" means whichever gate owns the guarantee** — and for anything resting on
+exhaustiveness, a `never` check, a branded or opaque type, or a `readonly`, that gate is
+`npm run typecheck`. Reaching for vitest by reflex will show every one of those mutations green.
+
+The mechanical part worth copying: put the mutation's counterpart in a test file as a
+`@ts-expect-error`, so **removing the guard makes the directive unused and the compile fails**. That
+turns "this should not compile" from a comment into something the gate enforces.
+
 ### The `@/` alias, and where it may live
 
 shadcn generates its imports as `@/lib/utils`, so the alias had to exist before any component landed
