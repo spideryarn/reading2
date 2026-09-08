@@ -365,7 +365,41 @@ treating them as one thing:
 
 **Gate 4 does bite, and not where I assumed.** I had reasoned that deterministic rules make no model
 calls and are therefore outside gate 4. Sound for the rules, wrong for their effects: a broadcast is
-thirty-six user turns, and a re-broadcast loop is unbounded spend. The cooldown closes it.
+thirty-six user turns, and a re-broadcast loop is unbounded spend.
+
+**And the sentence that used to end this paragraph — *"the cooldown closes it"* — was wrong**,
+found by the fleet dashboard's owner on 2026-09-08 when I sent them the finding above and asked them
+to confirm rather than assume. `lastBroadcastAt` is stamped *after* the `total === 0` refusal has
+already returned, so **a call refused for "nobody to tell" never spends the cooldown**:
+
+> An unattended rule firing on a fully-loaded box is refused, the clock is not started, and it may
+> re-fire immediately — as fast as its own schedule permits. There is no *send* loop, because nothing
+> is delivered. There is an unthrottled *refusal* loop, and every attempt costs a route's worth of
+> work on a box already under pressure. So your rule must carry its own interval and must not retry
+> on a refusal, because the route will not throttle you on exactly the condition that triggers you.
+>
+> — the fleet dashboard's owner, 2026-09-08
+
+So rule 3 carries **its own interval**, and **a refusal ends the attempt rather than starting a
+retry**. That is a constraint on 3b today, not a future tidy-up, and it is a good example of why the
+finding went to its owner rather than into my own patch: I had the defect right and the consequence
+wrong, and the correction inverted which half was dangerous.
+
+They also asked for something I had not planned: **record the refusals too**, with
+`recipients.length` as the denominator, because *"a run that reached nobody is the most informative
+reading of all and it currently leaves no trace"*. And they confirmed the delivery-time fix is
+theirs and idiomatic rather than novel — `drain.ts`'s `sendable()` already renders attribution at
+delivery for exactly the argument I made about the stale minute count.
+
+Their pushback is fair and is kept here because it widens the defect: *"for a person clicking the
+button it is defensible"* was doing too much work, since the person who clicked at 20:25 also
+reached three rows of fifteen. **But they then corrected themselves, in the direction of less
+alarm, and that correction belongs here too** — the route answers `result: {total, recipients:
+outcomes}` and the page draws it, so every excluded recipient and its reason does reach a person. It
+reaches them as a JSON dump they read by eye rather than as a sentence, which is a presentation gap
+and not a dropped join. **The useful consequence for this stage is that rule 3 and the page read the
+same object** rather than two hand-written declarations of the same idea, so the denominator the
+rule records is the denominator the page shows.
 
 #### What the survey found, and the two things that change the design
 
@@ -390,8 +424,26 @@ so at the limit, where every agent is working, the action does not degrade, it r
 **The easy fix is wrong**, which is presumably why it was not taken: the queue and `drain.ts` could
 hold `later` rows until they reach a prompt, but the broadcast text says *"arm a wake-up ~N minutes
 from now"* and N is rendered at send time. A queued delivery would arrive carrying a number that had
-gone stale, which is worse than not arriving. Rendering at delivery is the real fix and it lives in
-`routes-actions.ts`, which belongs to the fleet dashboard's owner.
+gone stale, which is worse than not arriving.
+
+**And the real fix is bigger than that**, which the dashboard's owner established by checking their
+own first answer rather than mine. Broadcasts are not merely un-queued, they are **forbidden** from
+queueing: `routes-actions.ts:505` refuses `enqueue` for a box-wide action outright, on the stated
+ground that *"there is no single session to be ordered against"*. So the fix is two changes, and only
+the second is the idiomatic one:
+
+1. A box-wide action would have to become queueable per session, **which means answering the
+   objection at `:505` rather than deleting it.** Their reading — that a broadcast wants a *held
+   delivery* in each of many sessions rather than a position in one session's order, and that the
+   two are separable — is probably right and is, in their words, *"exactly the kind [of argument]
+   that looks obvious and turns out to have a reason."*
+2. Then render `index`/`total` at delivery, which `drain.ts`'s `sendable()` already precedents.
+
+**This raises the value of the instrumentation rather than lowering it.** Crossing a refusal
+somebody wrote deliberately needs better evidence than *it would reach more sessions*. A series
+showing reachable steady at two or three of fifteen while `working` sits at five is the shape of
+argument that would justify it — **and a series showing it recovering on its own would kill the
+stage, which is a result worth having too.**
 
 So rule 3 does not work around it. It goes through the real route as Fable says, and **its store
 event records the denominator and the reason for it** — `sent to 3 of 15; 5 excluded because
@@ -423,10 +475,53 @@ rather than by the order the rules were listed in:
   the half Greg named and the half that gets dropped: **nothing on this box today checks that a
   paused agent woke up.** `pause.ts` reads the *intended* wake-up out of a transcript and never asks
   whether it happened.
-- **3c — rule 1.** Last, because it is now a regression alarm rather than a live cost, and because
-  it is the only one needing a field threaded through `observation.ts` — `permissionMode` is
-  computed fresh on every fleet collection and **dropped by `parseRow()` before it ever reaches the
-  Overseer**. That file belongs to a worktree that is still active, so it goes last and small.
+- **3c — rule 1.** Last, because it is now a regression alarm rather than a live cost rather than
+  because it is hard.
+
+#### The Overseer sees less of the fleet than the fleet sends, and the rules should not fix that by widening the differ
+
+The three fields the rules most want are all outside `ObservedRow`: `permissionMode`, `pause`, and
+`health`. Each is on the wire and each is dropped by `parseRow()` before anything in
+`tools/overseer/` sees it.
+
+The obvious move is to thread them through `observation.ts`. **Do not.** Two reasons, and the second
+is the real one:
+
+1. That file belongs to a worktree that is still active, and this stage does not need to open it.
+2. `ObservedRow` and `diff.ts` exist to answer *what changed about a session's identity and status
+   over time*. `pause` and `permissionMode` flicker for reasons that are not events —
+   `pause` is recomputed from a transcript tail on every collection — so threading them through the
+   differ manufactures a stream of "changes" that mean nothing. **That is the same argument
+   `source.ts` already made about `health`** and settled the same way: *"a missing health block would
+   read as a health change."* Widening the differ would be re-deciding a question that has been
+   decided once, in the direction it was decided against.
+
+The resolution costs nothing, because the daemon already holds what the rules need.
+`SourceMessage` carries `{kind: "payload"; json: unknown}` — **the whole raw wire payload, before
+`parseRow` narrows it.** The rules parse the two or three fields they want out of that same value,
+with their own narrow parser and their own unknown arms. No second HTTP client, no edit to another
+worktree's file, and no diff noise.
+
+This is the seam the direction doc describes doing its job: the differ answers past-tense questions,
+and a rule asking *is anything wrong right now* is a present-tense question that was never its
+customer.
+
+#### The wake-check is nearly built, and I had it down as the least designed thing here
+
+I flagged "check later that they woke up" as the weakest part of this plan. It is the strongest,
+because `pause.ts` already computes it: `Pause.overdue` is set only when the wake-up time **was
+actually read**, is more than `OVERDUE_GRACE_MS` (5 minutes) in the past, **and nothing has run
+since**. That third clause is the whole difficulty — it is what tells a wake-up that never fired
+apart from one that fired and went quiet — and it is already written and already tested.
+
+So the wake-check has no detector to build. What it lacks is a **consumer**: nothing anywhere reads
+`overdue` and does anything about it. That is a one-line read in rule 3 plus the durable record of
+who was told and when, and it moves the wake-check from the largest piece of 3b to the smallest.
+
+**The pattern is now three for three in this job** — the scheduler seam, the kill machinery, and the
+wake-check were each already built and each waiting for a caller. It is worth saying plainly because
+it keeps being the answer: **the thing missing from this codebase is almost never the mechanism, it
+is the thing that decides to use it.**
 
 #### The one question that is Greg's, and it blocks nothing
 
