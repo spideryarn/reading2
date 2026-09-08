@@ -1,0 +1,7 @@
+{"type":"custom-title","customTitle":"steer-e2e-probe","sessionId":"c1f41eee-14d7-4393-8b70-3e7e8168a690"}
+{"type":"agent-name","agentName":"steer-e2e-probe","sessionId":"c1f41eee-14d7-4393-8b70-3e7e8168a690"}
+{"type":"mode","mode":"normal","sessionId":"c1f41eee-14d7-4393-8b70-3e7e8168a690"}
+{"type":"permission-mode","permissionMode":"auto","sessionId":"c1f41eee-14d7-4393-8b70-3e7e8168a690"}
+{"type":"atis-latch","atis":"","sessionId":"c1f41eee-14d7-4393-8b70-3e7e8168a690"}
+{"type":"bridge-session","sessionId":"c1f41eee-14d7-4393-8b70-3e7e8168a690","bridgeSessionId":"cse_01B9FoWPYqijxK4mC8EZUn8s","lastSequenceNum":0,"ownerAccountUuid":"eddd4c75-0024-4636-b7ca-d727eaeca66b","ownerOrganizationUuid":"ba7a24b8-c5a0-4a9d-ad83-6d705981d6b3"}
+{"type":"file-history-snapshot","messageId":"05adad6e-0810-42ff-9737-7c8d96a4c801","snapshot":{"messageId":"05adad6e-0810-42ff-9737-7c8d96a4c801","trackedFileBackups":{},"timestamp":"2026-09-08T02:14:42.448Z"},"isSnapshotUpdate":false}

@@ -37,22 +37,39 @@
  */
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, getTableName, sql } from "drizzle-orm";
+import type { AnyPgColumn } from "drizzle-orm/pg-core";
 
 import { closeDb, getDb } from "../src/db/client.js";
 import { loadEnvLocal } from "../src/env.js";
+import * as schema from "../src/db/schema.js";
 import {
+  aiCalls,
   articleRevisions,
+  articleVisibilityChanges,
   articles,
   blockIdentities,
+  chatThreads,
+  checkpoints,
+  comments,
+  glossaryLookups,
+  ingestEvents,
+  linkSummaries,
+  realtimeSessions,
+  refereeClaims,
+  refereeCriteria,
   revisionBlocks,
+  searchRuns,
 } from "../src/db/schema.js";
+import { mintId } from "../src/ids.js";
 import { currentOwnerId } from "../src/owner.js";
 import { MAX_PURPOSE_CHARS } from "../src/profile.js";
 import { MAX_TITLE_CHARS } from "../src/shelf.js";
 import { deriveLibraryScalars } from "../src/library-scalars.js";
 import { pgArticleReader } from "../src/store/pg.js";
-import { pgLibrarySearch, pgShelfStore } from "../src/store/pg-shelf.js";
+import { PgTable, QueryBuilder, getTableConfig } from "drizzle-orm/pg-core";
+
+import { lockedArticleForDestroyQuery, pgLibrarySearch, pgShelfStore } from "../src/store/pg-shelf.js";
 import { pgReady } from "./helpers/pg-ready.js";
 
 loadEnvLocal();
@@ -666,5 +683,424 @@ describe("the Postgres shelf and library search", () => {
     it("refuses a slug that is not a slug with a 400", async () => {
       await expect(pgShelfStore.recordOpen("../../etc")).rejects.toMatchObject({ status: 400 });
     });
+  });
+});
+
+/* --------------------------------------------- destroying one, for good -- */
+
+/**
+ * **The owner-can-delete positive control**, and it is here rather than in
+ * tests/owner-isolation.test.ts on purpose.
+ *
+ * That file's whole fixture is one article, shared by every case in its
+ * describe. A positive control for `destroy` there would consume it, and the
+ * eight tests after it would fail for a reason that has nothing to do with
+ * ownership. So the refusal lives there — a stranger gets 404 and the row is
+ * still there — and the other half, that the owner really can, lives here with
+ * a fixture of its own that nothing else reads.
+ *
+ * Its own `describe` and its own article for the same reason: the suite above
+ * builds one article and asserts against it thirty times.
+ *
+ * **What it is actually pinning is the cascade.** `articles_current_revision_fk`
+ * is `NO ACTION` and not deferrable, so an article with a *published* revision
+ * and a non-null `current_revision_id` is the shape that could refuse the
+ * delete — and it is the shape every real article is in. The Stage A spike
+ * measured this against a fully populated row
+ * (docs/plans/260906h-delete-an-article-permanently.md § What the spike found);
+ * this keeps it true.
+ */
+/**
+ * **Every table that points straight at `articles`, read off the schema.**
+ *
+ * The cascade test used to name three of them and call them "every child table"
+ * — GPT Sol's F22. There are fourteen, and the count is not the point: a
+ * hand-written list is a list the fifteenth foreign key never joins, so the test
+ * goes on passing while covering less and less of what it claims. The same
+ * argument, and the same shape, as `articleScopedTables` in
+ * tests/store-export-covers-tables.test.ts. docs/reusable/silent-success.md.
+ *
+ * **Direct keys only.** A transitive child (`revision_blocks`, which reaches
+ * `articles` through `block_identities`) is covered by its parent going, and
+ * walking the closure here would need a way to ask each table which article a
+ * row belongs to — which is exactly what a direct `article_id` is.
+ */
+interface ArticleForeignKey {
+  readonly name: string;
+  readonly column: AnyPgColumn;
+  /** `on delete set null`: the row survives, pointing at nothing. */
+  readonly survives: boolean;
+}
+
+function articleForeignKeys(): ArticleForeignKey[] {
+  const found: ArticleForeignKey[] = [];
+  for (const value of Object.values(schema)) {
+    if (!(value instanceof PgTable)) continue;
+    for (const fk of getTableConfig(value).foreignKeys) {
+      const reference = fk.reference();
+      if (getTableName(reference.foreignTable) !== "articles") continue;
+      const [column] = reference.columns;
+      if (!column) continue;
+      found.push({
+        name: getTableName(value),
+        column,
+        survives: fk.onDelete === "set null",
+      });
+    }
+  }
+  return found.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+describe("destroying an article", () => {
+  const GONE_SLUG = "test-pg-shelf-destroyed";
+  const GONE_ARTICLE = "00000000-0000-4000-8000-0000000000d6";
+  const GONE_REVISION = "00000000-0000-4000-8000-0000000000d7";
+  const GONE_BLOCK = "spya-pgaaqg";
+  const GONE_AI_CALL = "00000000-0000-4000-8000-0000000000d8";
+  const GONE_SESSION = "00000000-0000-4000-8000-0000000000d9";
+
+  async function seed(): Promise<void> {
+    const db = getDb();
+    await db.insert(articles).values({
+      id: GONE_ARTICLE,
+      ownerId: currentOwnerId(),
+      slug: GONE_SLUG,
+    });
+    await db.insert(articleRevisions).values({
+      id: GONE_REVISION,
+      articleId: GONE_ARTICLE,
+      status: "published",
+      title: "About to go",
+      fetchedAt: new Date("2026-01-01T00:00:00.000Z"),
+      tree: {
+        version: "1",
+        generator: "test",
+        slug: GONE_SLUG,
+        rootId: "n0",
+        nodes: {
+          n0: {
+            id: "n0",
+            depth: 0,
+            parent: null,
+            children: [],
+            range: [GONE_BLOCK, GONE_BLOCK],
+            title: "Root",
+            gist: "An article that is about to stop existing.",
+          },
+        },
+      },
+    });
+    /* **The pointer is the point.** Without it the delete is a much easier
+       statement than the one a reader will actually run, and the constraint
+       this test exists for is never exercised. */
+    await db
+      .update(articles)
+      .set({ currentRevisionId: GONE_REVISION })
+      .where(eq(articles.id, GONE_ARTICLE));
+    await db
+      .insert(blockIdentities)
+      .values({ articleId: GONE_ARTICLE, blockId: GONE_BLOCK });
+    await db.insert(revisionBlocks).values({
+      articleId: GONE_ARTICLE,
+      revisionId: GONE_REVISION,
+      blockId: GONE_BLOCK,
+      ordinal: 0,
+      tag: "p",
+      kind: "text",
+      text: "A paragraph nobody will read again.",
+      words: 6,
+      html: "<p>A paragraph nobody will read again.</p>",
+      gistable: true,
+    });
+    await seedEveryChild();
+  }
+
+  /**
+   * **One row in every table that carries an `article_id`**, so that the
+   * cascade assertion below is about rows rather than about empty tables.
+   *
+   * A key in this record for each name `articleForeignKeys()` finds, and the
+   * test asserts that correspondence before it asserts anything else — which is
+   * the whole of F22's fix. Generic insertion is not possible (every table has
+   * its own not-null columns and its own CHECKs), so the *seeding* is by hand;
+   * what must never be by hand is the **list**, and the equality check is what
+   * turns a new foreign key into a red test rather than into silence.
+   */
+  function childSeeds(): Record<string, () => Promise<unknown>> {
+    const db = getDb();
+    const owner = currentOwnerId();
+    const now = new Date();
+    return {
+      ai_calls: () =>
+        db.insert(aiCalls).values({
+          id: GONE_AI_CALL,
+          runId: "00000000-0000-4000-8000-0000000000da",
+          scopeKind: "job",
+          ownerId: owner,
+          articleId: GONE_ARTICLE,
+          /* The slug is kept when the pointer is nulled — that pair is the whole
+             of why this table is `set null` rather than `cascade`. */
+          articleSlug: GONE_SLUG,
+          wire: "chat",
+          purpose: "test",
+          requestedModel: "test/model",
+          startedAt: now,
+          finishedAt: now,
+          durationMs: 1,
+          outcome: "ok",
+          providerAccount: "openrouter",
+          /* `ai_calls_one_cost_source`: exactly one of the two numbers, and
+             `none` is the one that carries neither. */
+          costSource: "none",
+        }),
+      article_revisions: () => Promise.resolve(),
+      article_visibility_changes: () =>
+        db.insert(articleVisibilityChanges).values({
+          slug: GONE_SLUG,
+          articleId: GONE_ARTICLE,
+          actorOwnerId: owner,
+          fromVisibility: "private",
+          toVisibility: "public",
+          rightsConfirmed: true,
+        }),
+      block_identities: () => Promise.resolve(),
+      chat_threads: () =>
+        db
+          .insert(chatThreads)
+          .values({ articleId: GONE_ARTICLE, id: mintId(), ownerId: owner, title: "A thread" }),
+      checkpoints: () =>
+        db.insert(checkpoints).values({
+          articleId: GONE_ARTICLE,
+          namespace: "pdf-chunk",
+          key: "one",
+          value: {},
+        }),
+      comments: () =>
+        db.insert(comments).values({
+          articleId: GONE_ARTICLE,
+          id: mintId(),
+          ownerId: owner,
+          blockId: GONE_BLOCK,
+          quote: "nobody will read again",
+          start: 0,
+          status: "none",
+        }),
+      glossary_lookups: () =>
+        db.insert(glossaryLookups).values({
+          articleId: GONE_ARTICLE,
+          entryId: mintId(),
+          ownerId: owner,
+          answer: "a word",
+          searches: 0,
+          model: "test/model",
+          at: now,
+        }),
+      ingest_events: () =>
+        db.insert(ingestEvents).values({ ownerId: owner, articleId: GONE_ARTICLE, slug: GONE_SLUG }),
+      link_summaries: () =>
+        db.insert(linkSummaries).values({
+          ownerId: owner,
+          articleId: GONE_ARTICLE,
+          target: "https://example.test/linked",
+          blockId: GONE_BLOCK,
+          status: "ready",
+          summary: "what is at the other end",
+          destHash: "d",
+          contextHash: "c",
+          profileHash: "p",
+          promptVersion: 1,
+          model: "test/model",
+          expiresAt: new Date(now.getTime() + 86_400_000),
+        }),
+      realtime_sessions: () =>
+        db.insert(realtimeSessions).values({
+          id: GONE_SESSION,
+          ownerId: owner,
+          articleId: GONE_ARTICLE,
+          model: "test/model",
+          issuedAt: now,
+          acceptsUntil: new Date(now.getTime() + 60_000),
+        }),
+      referee_claims: () =>
+        db
+          .insert(refereeClaims)
+          .values({ articleId: GONE_ARTICLE, ownerId: owner, status: "pending" }),
+      referee_criteria: () =>
+        db.insert(refereeCriteria).values({
+          articleId: GONE_ARTICLE,
+          id: mintId(),
+          ownerId: owner,
+          kind: "single",
+          criterion: "is it any good",
+          status: "pending",
+        }),
+      search_runs: () =>
+        db.insert(searchRuns).values({
+          articleId: GONE_ARTICLE,
+          id: mintId(),
+          ownerId: owner,
+          criterion: "a phrase",
+          status: "pending",
+        }),
+    };
+  }
+
+  async function seedEveryChild(): Promise<void> {
+    /* Sequential rather than `Promise.all`: `ai_calls` references the realtime
+       session, and a failure here should name one table rather than a bundle. */
+    const seeds = childSeeds();
+    for (const name of Object.keys(seeds).sort()) {
+      if (name === "ai_calls") continue;
+      await seeds[name]!();
+    }
+    await seeds.ai_calls!();
+  }
+
+  async function sweep(): Promise<void> {
+    const db = getDb();
+    /* The four `set null` rows outlive the article, so they are named rather
+       than cascaded — and `ai_calls` first, because it points at the session. */
+    await db.delete(aiCalls).where(eq(aiCalls.id, GONE_AI_CALL));
+    await db.delete(realtimeSessions).where(eq(realtimeSessions.id, GONE_SESSION));
+    await db
+      .delete(articleVisibilityChanges)
+      .where(eq(articleVisibilityChanges.slug, GONE_SLUG));
+    await db.delete(ingestEvents).where(eq(ingestEvents.slug, GONE_SLUG));
+    /* And then the one statement, which is the whole of what the Stage A spike
+       measured: tidying the cascade's children by hand first is what fails. */
+    await db.delete(articles).where(eq(articles.id, GONE_ARTICLE));
+  }
+
+  beforeAll(async () => {
+    await sweep();
+    await seed();
+  });
+
+  afterAll(async () => {
+    await sweep();
+    await closeDb();
+  });
+
+  /**
+   * **The lock, read off the statement rather than raced for.**
+   *
+   * Dropping `.for("update")` leaves every other case in this file green, and
+   * the barrier in tests/article-delete-pg.test.ts green too — a lock's absence
+   * is only visible while a race is actually happening, and neither of those
+   * arranges the one it would lose. What it would lose is the ordering between
+   * this delete and `tryEnqueue`'s insert, which is the whole of GPT Sol's F4:
+   * without it an enqueue can insert between the live-job check and the DELETE,
+   * and the worker recreates the article the reader destroyed.
+   *
+   * The same assertion, for the same reason and after the same finding, as
+   * tests/store-glossary-delete-pg.test.ts § *locks the article row it is about
+   * to decide on*.
+   */
+  it("locks the article row it is about to destroy, by owner", () => {
+    const q = lockedArticleForDestroyQuery(
+      new QueryBuilder() as never,
+      "a-slug",
+      currentOwnerId(),
+    ).toSQL();
+    expect(q.sql).toMatch(/for update/i);
+    expect(q.sql, "and by owner, never by slug alone").toMatch(
+      /"slug" = \$1 and "spideryarn"\."articles"\."owner_id" = \$2/,
+    );
+  });
+
+  /**
+   * **The seeder and the schema agree**, and this runs first because every
+   * assertion below is about rows this record put there. A foreign key with no
+   * seed would make its own case vacuously green; a seed with no foreign key is
+   * a table that stopped pointing at articles and nobody noticed.
+   *
+   * The collector's own alarm is the length check: a `getTableConfig` that
+   * stopped recognising drizzle tables would return `[]`, and an empty
+   * inventory passes every assertion made about its contents.
+   */
+  it("seeds a row for every foreign key the schema has, and no others", () => {
+    const found = articleForeignKeys();
+    expect(found.length, "the collector found nothing, so it is proving nothing").toBeGreaterThan(
+      10,
+    );
+    expect(found.map((fk) => fk.name)).toEqual(Object.keys(childSeeds()).sort());
+    expect(
+      found.filter((fk) => fk.survives).map((fk) => fk.name),
+      "the four deliberate survivors, docs/plans/260906h § What survives a delete",
+    ).toEqual(["ai_calls", "article_visibility_changes", "ingest_events", "realtime_sessions"]);
+  });
+
+  it("takes the article and everything the cascade owns", async () => {
+    const db = getDb();
+    const keys = articleForeignKeys();
+
+    /** How many rows this table has in total, and how many point at the article. */
+    const census = async (fk: ArticleForeignKey) => {
+      const count = async (where?: ReturnType<typeof eq>) => {
+        const rows = await db
+          .select({ n: sql<number>`count(*)::int` })
+          .from(fk.column.table)
+          .where(where);
+        return rows[0]!.n;
+      };
+      return { total: await count(), ours: await count(eq(fk.column, GONE_ARTICLE)) };
+    };
+
+    const before = new Map(await Promise.all(keys.map(async (fk) => [fk.name, await census(fk)] as const)));
+    for (const fk of keys) {
+      /* **The anti-vacuity half.** A table with no row of ours in it would pass
+         "nothing of ours is left" without the delete doing anything at all. */
+      expect(before.get(fk.name)!.ours, `${fk.name} was never seeded`).toBeGreaterThan(0);
+    }
+
+    expect(await pgShelfStore.destroy(GONE_SLUG)).toEqual({ destroyed: GONE_SLUG });
+
+    expect(
+      await db.select({ id: articles.id }).from(articles).where(eq(articles.id, GONE_ARTICLE)),
+    ).toHaveLength(0);
+
+    /* Each table asked separately, and asked *two* questions. One `count(*)`
+       over a join would go green on a cascade that emptied three tables of
+       fourteen — and counting only the rows that point at the article cannot
+       tell a cascade from a `set null`, which is the difference this feature
+       turns on. */
+    for (const fk of keys) {
+      const was = before.get(fk.name)!;
+      const now = await census(fk);
+      expect(now.ours, `${fk.name} still points at the deleted article`).toBe(0);
+      if (fk.survives) {
+        expect(now.total, `${fk.name} is a deliberate survivor and lost a row`).toBe(was.total);
+      } else {
+        expect(now.total, `${fk.name} should have lost exactly its ${was.ours} row(s)`).toBe(
+          was.total - was.ours,
+        );
+      }
+    }
+
+    /* One transitive child by name, because the loop above only reaches the
+       direct keys: `revision_blocks` hangs off `block_identities`. */
+    expect(
+      await db
+        .select({ blockId: revisionBlocks.blockId })
+        .from(revisionBlocks)
+        .where(eq(revisionBlocks.articleId, GONE_ARTICLE)),
+    ).toHaveLength(0);
+
+    /* And it is off the shelf, which is the thing the reader asked for. */
+    expect((await pgArticleReader.listArticles()).map((a) => a.slug)).not.toContain(GONE_SLUG);
+  });
+
+  it("404s for an article that is not there, rather than reporting a delete", async () => {
+    await expect(pgShelfStore.destroy("test-pg-no-such-article")).rejects.toMatchObject({
+      status: 404,
+    });
+  });
+
+  it("404s a second time, so a repeat cannot report success", async () => {
+    /* The first case already destroyed it. A `destroy` that returned
+       `{ destroyed }` for a row it did not delete would make a double-press
+       look like two successes — and the client is about to navigate away on
+       the strength of that answer. */
+    await expect(pgShelfStore.destroy(GONE_SLUG)).rejects.toMatchObject({ status: 404 });
   });
 });

@@ -1,0 +1,26 @@
+greg@spideryarn-box:~/code/spideryarn2/.claude/worktrees/fleet-dashboard-v01$ printf "1. install deps\n2. run the suite\n3
+. push\n"
+1. install deps
+2. run the suite
+3. push
+greg@spideryarn-box:~/code/spideryarn2/.claude/worktrees/fleet-dashboard-v01$ echo "Test Files  3 passed (3)"
+Test Files  3 passed (3)
+greg@spideryarn-box:~/code/spideryarn2/.claude/worktrees/fleet-dashboard-v01$
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

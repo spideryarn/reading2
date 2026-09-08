@@ -503,7 +503,63 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
    > near the end of the import order; this file is imported **second**, so a
    > guard degraded to a tie would now lose rather than win. The symptom is a
    > bar that slides out from under a keyboard reader mid-tab, which no test we
-   > have can see. GPT Sol caught a version of exactly this tie on 2026-08-28. */
+   > have can see. GPT Sol caught a version of exactly this tie on 2026-08-28.
+
+   **And since 2026-09-08 there is a fourth state above all three: no bar.**
+   `Reader` does not render `.controls` when it would be empty, which on a
+   reading view is most of the time (layout.ts § `barHasContent`). The ladder,
+   highest specificity first:
+
+   | state                        | `--bar-bottom` | selector                                                    |
+   |------------------------------|----------------|-------------------------------------------------------------|
+   | bar, and a guard holds it    | resting        | `:root:has(BAR):has(BAR:focus-within, .mode-band)` (0,4,0)    |
+   | no bar at all                | `--safe-top`   | `:root:not(:has(BAR))` (0,2,0)                                |
+   | bar, hidden by scroll        | `--safe-top`   | `:root[data-bars="hidden"]` (0,2,0)                           |
+   | bar, at rest                 | resting        | `:root` in tokens.css (0,1,0)                                 |
+
+   The two (0,2,0) rows tie and it does not matter: they compute the same value,
+   and they cannot both be about the same bar anyway. The guard gained its
+   `:has(BAR)` on the same day, which is what keeps it above the no-bar rule —
+   and is the right shape regardless, since a guard that exists to stop *the
+   bar* sliding out from under a reader has nothing to say when there is no bar
+   to slide.
+
+   **`BAR` above is `:where(.reader) > .controls`, and the scope is load-bearing
+   now that the bar is conditional.** An author's prose may contain
+   `<p class="controls">` — `src/sanitize-policy.ts` reserves six class names and
+   `controls` is not one of them, verified by running the sanitiser over a forged
+   chain rather than by reading the allowlist. Unscoped, such a paragraph makes
+   `:has(.controls)` true and reserves 44px for a bar nobody drew, which is the
+   reported bug back again on that one article. The direct-child combinator is
+   the whole of the defence: article markup lives inside a `<td>` and is never a
+   child of `.reader`. `:where()` contributes no specificity, so both rows keep
+   the numbers in the table.
+
+   It is not airtight and does not need to be here: a publisher who forges
+   `<div class="reader"><p class="controls">` gets the empty strip back on their
+   own article, and nothing else. The place where getting this wrong *costs*
+   something is `scroll.ts`, which would measure that paragraph as the chrome
+   every deep link has to clear — see `controlsBar()` there, which is scoped
+   more tightly than a selector can be. `.mode-band` in the guard below is
+   deliberately left unscoped: a forgery there can only hold the bar *down*,
+   which is what happened before this change anyway, and scoping it wrongly
+   would silently stop the guard firing — the failure GPT Sol caught twice in
+   this file. */
+:root:not(:has(:where(.reader) > .controls)) {
+  /* **No bar, so nothing pinned under one** — the band starts at the top of the
+     screen, and the sticky table head with it.
+
+     `var(--safe-top)` rather than `0px` for the reason the hidden state gives
+     below: there is an opaque `.reader::before` of exactly the inset's height
+     painting the strip under the clock, and a table head at `0` would be drawn
+     behind the time. The two rules answer the same number for the same reason,
+     which is why their specificity tie is harmless.
+
+     **`--bar-hide` is deliberately not set here.** It is the bar's own
+     `transform` and there is no bar to transform; setting it would be a
+     declaration about an element that does not exist. */
+  --bar-bottom: var(--safe-top);
+}
 :root[data-bars="hidden"] {
   /* **`var(--safe-top)`, not `0px`.** This is the y the table head parks at
      once the bar has gone, and in the installed app y=0 is under the clock — so
@@ -590,8 +646,17 @@ td.gist .sticky,
    this, decided by source order — the exact fragility GPT Sol caught on
    2026-08-28. Adding an argument to a `:has()` changes nothing, because `:has()`
    takes its most specific argument and `.controls:focus-within` is still it.
-   docs/plans/plain-mode-and-the-way-out.md § 1. */
-:root:has(.controls:focus-within, .mode-band) {
+   docs/plans/plain-mode-and-the-way-out.md § 1.
+
+   **The leading `:has(:where(.reader) > .controls)` is not padding.** It does two things at once:
+   it stops this guard reserving 44px for a bar that is not rendered — which is
+   the whole of the bug a reader reported on 2026-09-07, since `.mode-band` is
+   exactly when the bar is empty — and it takes the selector to (0,4,0), above
+   the `:root:not(:has(.controls))` rule that then has to win in every other
+   band mode. One selector rather than two, for the reason two paragraphs up:
+   split, the no-bar case would be a tie decided by source order.
+   docs/plans/260908a-the-top-bar-stops-being-drawn-when-it-has-nothing-in-it.md */
+:root:has(:where(.reader) > .controls):has(:where(.reader) > .controls:focus-within, .mode-band) {
   --bar-bottom: calc(var(--bar-h) + var(--safe-top));
   /* Both, or the bar a keyboard reader is standing in stays off the top of the
      screen while everything under it politely moves down to make room. */

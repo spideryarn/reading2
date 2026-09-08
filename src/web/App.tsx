@@ -290,9 +290,14 @@ function SignedIn({
   if (adminOnly(route) && !isAdmin(user.id))
     return <Library key={user.id} readerId={user.id} />;
 
-  // The shelf is home, so it gets no way-home logo — a link to the page you are
-  // already on is a dead control, and Library.tsx names the app in its own
-  // `<h1>` anyway. Everywhere else, the corner. See HomeLogo.tsx.
+  /* The shelf is home, so it gets no way-home logo — a link to the page you
+     are already on is a dead control, and Library.tsx names the app in its own
+     `<h1>` anyway. Everywhere else, the corner. See HomeLogo.tsx.
+
+     Since 2026-09-08 that `<h1>` has the spider drawn beside it, so the shelf
+     is no longer the one page with a wordmark and no mark. It is an `<img>` in
+     Library.tsx's own header rather than this component: what the shelf does
+     not want is the *link*, not the glyph. */
   /* **`key`, and it is the account switch rather than a hint to React.** A
      direct A→B sign-in keeps this element in the same place in the tree, so
      without a key React reuses the instance and `useShelf`'s state — the shelf,

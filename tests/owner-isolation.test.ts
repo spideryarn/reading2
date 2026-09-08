@@ -1196,6 +1196,39 @@ describe("one owner's article, asked for by another", { timeout: 20_000 }, () =>
     expect(row?.title ?? null).toBeNull();
   });
 
+  /**
+   * **The one act here that cannot be taken back**, so the re-select is not
+   * belt and braces.
+   *
+   * Every other case in this file asserts a 404 and stops, because a rename
+   * that did not happen leaves nothing to look for. A delete is different:
+   * `destroy` throwing 404 *after* its `DELETE` had run would look exactly the
+   * same from the caller's side, and the fixture would only be missing from the
+   * tests below — which run afterwards, and would fail for a reason nobody
+   * could trace back to here. So the row is asked for directly, unfiltered by
+   * owner, and it has to still be there.
+   *
+   * `destroy` is deliberately kept out of the positive-control position: the
+   * owner-can-delete case lives in tests/store-shelf-pg.test.ts, because a
+   * positive control that consumed this suite's fixture would take the rest of
+   * the file with it.
+   */
+  it("cannot be deleted by them", async () => {
+    const { pgShelfStore } = await import("../src/store/pg-shelf.js");
+    await expect(
+      runInRequest(async () => {
+        setRequestOwner(OUTSIDER);
+        return pgShelfStore.destroy(SLUG);
+      }),
+    ).rejects.toMatchObject({ status: 404 });
+
+    const still = await getDb()
+      .select({ id: articles.id })
+      .from(articles)
+      .where(eq(articles.id, ARTICLE_ID));
+    expect(still).toHaveLength(1);
+  });
+
   it("cannot be opened by them", async () => {
     const { pgShelfStore } = await import("../src/store/pg-shelf.js");
     await expect(
@@ -1373,13 +1406,22 @@ describe("the same route asked by two different people", { timeout: 20_000 }, ()
     claims: { sub, email: `${sub}@example.test`, role: "authenticated", is_anonymous: false },
   });
 
-  async function reader(sub: string, method: string, body?: unknown) {
+  /**
+   * One authenticated request, as `sub`, at whatever URL — the raw form.
+   *
+   * `reader` below was this function with `/api/reader` written into it, and it
+   * stayed that way while `/api/reader` was the only route that could tell two
+   * people apart by what it *returned*. Deleting an article is the second, and
+   * it needs a different URL and no parsed body, so the URL is an argument now
+   * and `reader` is the same call with the profile shape put back on it.
+   */
+  async function call(sub: string, method: string, url: string, body?: unknown) {
     const payload = body === undefined ? [] : [Buffer.from(JSON.stringify(body))];
     const req = Object.assign(
       (async function* () {
         yield* payload;
       })(),
-      { method, url: "/api/reader", headers: { authorization: "Bearer whatever" } },
+      { method, url, headers: { authorization: "Bearer whatever" } },
     ) as unknown as IncomingMessage;
     let status = 0;
     let text = "";
@@ -1397,6 +1439,11 @@ describe("the same route asked by two different people", { timeout: 20_000 }, ()
     } as unknown as ServerResponse;
     const { handleApi } = await import("../src/routes.js");
     await handleApi(req, res, asPerson(sub));
+    return { status, text };
+  }
+
+  async function reader(sub: string, method: string, body?: unknown) {
+    const { status, text } = await call(sub, method, "/api/reader", body);
     return { status, body: text ? (JSON.parse(text) as { profile: string | null }) : { profile: null } };
   }
 
@@ -1423,6 +1470,42 @@ describe("the same route asked by two different people", { timeout: 20_000 }, ()
    * And the identity really came off the token rather than out of the
    * environment — `SPIDERYARN_OWNER_ID` set to one of them changes nothing.
    */
+  /**
+   * **`DELETE /api/library/:slug`, over HTTP, and the gate is the only thing
+   * standing between a stranger and somebody else's article.**
+   *
+   * The store cases above prove `ownedSlug` filters. Neither they nor the route
+   * prove that the owner box was filled *from the token* — and this is the one
+   * route where getting that wrong is not a leak but a destruction. Delete
+   * `setRequestOwner(user.id)` from src/routes.ts and every store test above
+   * still passes, while this one deletes the seeded owner's article on the
+   * stranger's request: `currentOwnerId()` would fall back to
+   * `SPIDERYARN_OWNER_ID`, which is the seeded owner.
+   *
+   * Both halves in one test, and in this order. The stranger's 404 on its own
+   * is satisfied by a route that is simply broken; the owner's 200 immediately
+   * afterwards, on the same slug through the same code, is what makes the 404 a
+   * refusal rather than an accident.
+   */
+  it("will not let one of them delete the other's article", async () => {
+    const db = getDb();
+    const id = randomUUID();
+    const slug = `test-owner-isolation-delete-${id.slice(0, 8)}`;
+    await db.insert(articles).values({ id, ownerId: SEEDED as OwnerId, slug });
+
+    const theirs = await call(STRANGER, "DELETE", `/api/library/${slug}`);
+    expect(theirs.status).toBe(404);
+    expect(
+      await db.select({ id: articles.id }).from(articles).where(eq(articles.id, id)),
+    ).toHaveLength(1);
+
+    const mine = await call(SEEDED, "DELETE", `/api/library/${slug}`);
+    expect(mine.status).toBe(200);
+    expect(
+      await db.select({ id: articles.id }).from(articles).where(eq(articles.id, id)),
+    ).toHaveLength(0);
+  });
+
   it("and does not consult SPIDERYARN_OWNER_ID to decide", async () => {
     const before = process.env.SPIDERYARN_OWNER_ID;
     process.env.SPIDERYARN_OWNER_ID = SEEDED;

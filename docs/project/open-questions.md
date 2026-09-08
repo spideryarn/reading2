@@ -249,3 +249,73 @@ plan for it would have to settle:
 could *host* them: hotlinks rot, publishers block by referer, and today every reader's browser
 announces itself to the publisher's CDN on every read. That is a bigger piece of work than this
 question, and it would make this one free.
+
+---
+
+## Q12 — Does "briefly broken is fine" apply to `dev`, or only to production? <a id="q12"></a>
+
+[CLAUDE.md](../../CLAUDE.md) says, under *This is a beta, and speed still wins*:
+
+> It is not the end of the world if something is briefly broken — a database migration that lands
+> before the code that matches it, and breaks production for the minutes in between, is fine.
+
+Both readings are natural and at least two agents have taken the wider one for weeks. But the
+example is about **production**, where the readership is small and knows what it signed up for —
+and the cost of a red **`dev`** is a different thing entirely, because `npm run deploy` gates the
+exact sha it ships — `scripts/deploy.ts` runs the full suite against a worktree of that sha, not
+just a typecheck. So a broken trunk never reaches a reader. It reaches *agents*.
+
+**Measured on the night of 2026-09-08**, from one shared-fixture collision I pushed: one session
+spent **twenty minutes** proving an earlier red was not theirs; another spent a **full 24-minute
+gate**; a `Next deploy` and a `get-ready-for-deploy` run were both about to spend a third and a
+fourth before they were told. Roughly an hour of other agents' time from one uuid, on a box running
+forty of them.
+
+**Recommendation: say which one it means.** A sentence like *"this is about production; on `dev`,
+push the fix rather than batching it — a red trunk costs other agents' gates, not readers'
+minutes"* would settle it. That is an edit to CLAUDE.md, whose wording is a rule, so it wants
+Greg's approval one set at a time ([edit-important-docs.md](../reusable/edit-important-docs.md))
+rather than an agent deciding it.
+
+Raised jointly with `spideryarn2-4c`, which had read it the same way.
+
+---
+
+## Q13 — Two additions to `silent-success.md`, awaiting approval <a id="q13"></a>
+
+Both earned on 2026-09-08 and both belong in
+[silent-success.md](../reusable/silent-success.md), which needs Greg's approval to edit — so they
+are parked here rather than landed, and two sessions agreed not to write them independently.
+
+**1. Mutation-test what you just ADDED, not only what you changed.** `sameMaterial` in
+`tools/fleet/steer.ts` existed specifically to stop an approval binding to the wrong diff — a
+known security finding. Stubbed to `return true`, **all 66 tests still passed.** For several hours
+there was a fix for a named vulnerability that was completely untested at that layer, with every
+check agreeing it was fine. Red-first only ever tests the diff; the thing you just added is
+precisely the thing no existing test was written against.
+
+**And the reason it belongs in *this* doc rather than in `testing.md`** — `spideryarn2-4c`'s
+framing, which is sharper than mine. Four guards found real problems that night (`fixture-ids`
+caught a fixture collision, `doc-links` caught a line-number citation, an exhaustive `Record`
+caught four new refusal codes, a contract test caught an invalidated control). Every one of them
+was mechanical, and every one was working. **The only broken check of the night was the one that
+found nothing.** A guard reporting a problem is a guard working; a guard reporting nothing is
+exactly the two states this codebase keeps writing comments about — "I looked and there is
+nothing" and "I could not look" — wearing one face. Silence from a guard is the same claim as
+silence from the box, and it deserves the same suspicion.
+
+**2. The shape in which a wrong claim feels most like a finding.** Two instances of one symptom, a
+plausible mechanism, and no check of where either came from. Two directions of the same error, both
+seen that night: *a mechanism proposed without provenance* (two uuid collisions read as one minting
+habit, when one was a counting-block id that hit a real `auth.users` row and the others were real
+captured conversation uuids shared on purpose), and *an instrument trusted without calibration*
+(grepping pane output for question marks, getting 1 of 23, and nearly filing it as a refutation —
+the decisions ended in full stops; the grep answered the question asked rather than the one meant).
+
+The advice is **not** "check your work", because everybody involved believed they had. It is that
+**the moment a claim feels most like a finding is the moment to buy the cheap external check** —
+exactly when it feels least necessary. In both cases the refuting evidence was one step away and
+nearly free; the expensive part was thinking to want it.
+
+Formulation developed with `spideryarn2-4c`, which is pointing at this entry rather than duplicating
+it.

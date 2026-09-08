@@ -352,7 +352,12 @@ const step = (
     promptVersion: stamp?.promptVersion ?? null,
     model: stamp?.model ?? null,
     status: "done",
-    startedAt: new Date(),
+    /* **Eight and a bit seconds apart, rather than both `new Date()`.** The
+       metadata page subtracts these two to say how long a step took, and a pair
+       written in the same millisecond makes a column swap invisible: `started`
+       and `finished` would be equal, so reading the wrong one is still right.
+       docs/plans/260908a-exact-time-and-duration-on-the-metadata-step-rows.md */
+    startedAt: new Date(Date.now() - 8_400),
     finishedAt: new Date(),
   });
 
@@ -613,6 +618,52 @@ describe("a re-extraction, through beginRevision and publishRevision", () => {
     expect(runs.get("fetch")?.inputHash, "fetch records nothing about its input").toBe(
       NO_INPUT_HASH,
     );
+  }, 30_000);
+
+  /**
+   * **Both stamps of one run reach the page, and the copy keeps them together.**
+   *
+   * The metadata page subtracts them to say *how long it took*
+   * (docs/plans/260908a-exact-time-and-duration-on-the-metadata-step-rows.md),
+   * so the thing that would make it lie is a start from one run beside a finish
+   * from another. `beginDraftIn` copies both columns in one `INSERT … SELECT`
+   * over one row, which is the reason it cannot — asserted here rather than
+   * left to the reading of that statement.
+   *
+   * The component tests for the card are jsdom over a fabricated body and would
+   * be just as green if `articleMetadata` read the wrong column, which is why
+   * this one is against Postgres and compares against the stored row.
+   */
+  it("gives the page both stamps of one run, carried unchanged", async () => {
+    const [before, after] = await Promise.all([runsFor(firstRevision), runsFor(secondRevision)]);
+    const meta = await pgArticleReader.articleMetadata(SLUG);
+
+    /* `glossary` because it is one of the carried ones: its row was written in
+       the first revision and copied, so this asks the copy and the read at
+       once. `hierarchy` below is the re-run half of the same question. */
+    const carried = after.get("glossary");
+    expect(carried?.startedAt, "a carried run has a start").toBeInstanceOf(Date);
+    expect(carried?.startedAt?.toISOString()).toBe(before.get("glossary")?.startedAt?.toISOString());
+    expect(carried?.finishedAt?.toISOString()).toBe(
+      before.get("glossary")?.finishedAt?.toISOString(),
+    );
+
+    for (const name of ["glossary", "hierarchy"] as StepName[]) {
+      const row = after.get(name);
+      const stage = meta.stages.find((s) => s.step === name);
+      expect(stage?.startedAt, `${name} start, as the page is told it`).toBe(
+        row?.startedAt?.toISOString(),
+      );
+      expect(stage?.ranAt, `${name} finish, as the page is told it`).toBe(
+        row?.finishedAt?.toISOString(),
+      );
+      /* The pair is an interval and not two readings of one column — the check
+         that a swap or a duplicated field would fail while the two `toBe`s
+         above still passed. */
+      expect(
+        Date.parse(stage?.ranAt ?? "") - Date.parse(stage?.startedAt ?? ""),
+      ).toBeGreaterThan(0);
+    }
   }, 30_000);
 
   it("reports the three as not done", async () => {

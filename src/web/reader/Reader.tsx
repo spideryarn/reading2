@@ -87,7 +87,7 @@ import { arrivalTarget, isBlockOnScreen, scrollToBlock } from "../scroll.js";
 import { orderComments, positionOf, stepComment } from "../comment-nav.js";
 import { jumpToComment, stepToComment } from "../comment-jump.js";
 import { buildSections, sectionDepth } from "../position.js";
-import { bandCoversProse, fitView, offerableGists, proseVisible } from "../layout.js";
+import { bandCoversProse, barHasContent, fitView, offerableGists, proseVisible } from "../layout.js";
 import { navPlan, useArrowNav } from "../keynav.js";
 import { paragraphLabelNotice, paragraphLabelsReady, paragraphPill } from "../nav-labels.js";
 import { ReturnChip } from "../ReturnChip.js";
@@ -1343,6 +1343,24 @@ export function Reader({
    */
   const paragraphNotice = paragraphLabelNotice(article.navLabelStatus);
 
+  /**
+   * **Is the controls bar drawn at all?** Not since 2026-09-08, on most reading
+   * views — see `barHasContent` in layout.ts for what is left in it and why so
+   * little, and the plan for the reader who reported the empty strip.
+   *
+   * The CSS half is `:root:not(:has(.controls))` in shell.css § the bar that
+   * leaves while you read, which lets `--bar-bottom` fall to the status-bar
+   * inset when this is false. Nothing in `scroll.ts` needs telling: both
+   * `stickyOffset` and `stickyDestination` already answer `--safe-top` for an
+   * absent bar.
+   */
+  const showBar = barHasContent({
+    owner: owner !== null,
+    inMode,
+    offerableGists: offerableGistDepths.length,
+    showText,
+  });
+
   /** The gist columns actually on screen — the leaf column isn't one of them. */
   const shownGists = useMemo(
     () => fit.columns.filter((d) => d !== geometry.leafDepth),
@@ -1855,96 +1873,119 @@ export function Reader({
           foot of the page names the open mode and is the way out of it, and
           the URL still carries `?spine=`, `?text=` and `?cols=` for anybody who
           wants to pin the layout by hand (docs/project/url-state.md). */}
-      <div className="controls">
-        {/* First of all: what footing you are reading on outranks every control
-            that follows, and this bar is the one piece of chrome that is on
-            screen at every scroll position. */}
-        {!owner && <ViewOnlyChip sessionUnconfirmed={sessionUnconfirmed} />}
-        {/* The granularity controls belong to the table-of-contents mode, so
-            they go with it. Leaving them on screen in another mode would offer
-            columns that are not there — a control that looks live, does
-            nothing, and gives the reader no way to tell which. Nothing takes
-            their place: the mode's name is on the Dock, and saying it twice is
-            what this bar was full of.
+      {/* **And since 2026-09-08 it is not drawn at all when that leaves it
+          empty**, which on a reading view is most of the time: `showBar` above,
+          `barHasContent` in layout.ts, and shell.css for the 44px that then
+          stops being reserved. It was no longer "the one piece of chrome that
+          is on screen at every scroll position" — the sentence below is kept
+          because it is still the ordering rule for what goes *in* the bar, and
+          the Dock is what that claim is now true of.
 
-            **They wear the column's full name now** — `Parts`, `Sections`,
-            `Paragraphs` rather than `L1`, `L2`, `Para`. The numbers were
-            defensible while the table's own header row said the words above
-            each column; that row lost its height on 2026-09-05
-            (TableView.tsx § the head), so this is the only place a column is
-            named at all. tree.ts § `columnLabel`. */}
-        {!inMode && (
-          <>
-            {offerableGistDepths.map((d) => (
-              <Toggle
-                key={d}
-                className={PILL}
-                pressed={shownGists.includes(d)}
-                onPressedChange={() => toggle(d)}
-                title={columnHint(d, geometry.leafDepth)}
-              >
-                {columnLabel(d, geometry.leafDepth)}
-              </Toggle>
-            ))}
-            {/* The paragraph outline, beside the prose rather than instead of
-                it. Only offered in reading mode: in outline mode this column is
-                the view, and turning it off would leave nothing.
-
-                **And only while there are labels to draw.** Where there are
-                not, the control is replaced by the sentence saying why rather
-                than disabled with the sentence in its tooltip — a touch reader
-                cannot open a tooltip, which is the argument that took the pills
-                from `L3` to `Paragraphs` in the first place (tree.ts §
-                `columnLabel`). A pill that opened a column of blank cells is
-                the failure nav-labels.ts exists to prevent; a pill that opened
-                a column of one repeated notice would be worse still.
-
-                **`|| leafOn` is the door back out, and it is not a hedge.**
-                `toggle` is the only caller of `setCols` in this file, so
-                replacing the control replaces the only way to *close* the
-                column as well as the only way to open it. The leaf depth can
-                already be on without this pill — `?cols=` naming it, shared or
-                bookmarked — and such a reader was left with a wide column of
-                one repeated sentence and nothing to shut it with: for ever, if
-                the status is `failed`. So the notice stands in for the pill
-                only while the column is shut, which is the case it was written
-                for; once the column is open the pill comes back, because the
-                column itself is already carrying the sentence
-                (TableView § `withheldLeafCell`) and what the reader needs from
-                the bar is the way out. GPT Sol's F2 on stage 1, 2026-09-06. */}
-            {showText &&
-              (paragraphPill(article.navLabelStatus, leafOn) === "toggle" ? (
+          **The element itself, rather than `display: none` or a `:empty` rule**
+          — which would both work for the layout, and were weighed rather than
+          missed. `scroll.ts` asks the DOM four times whether there is a bar and
+          a present-but-unpainted one answers yes to all four; and `:empty` is
+          one stray `{" "}` away from drawing the strip again with nothing to
+          say so. docs/plans/260908a-the-top-bar-stops-being-drawn-when-it-has-nothing-in-it.md
+          § The simpler options passed over. */}
+      {showBar && (
+        <div className="controls">
+          {/* First of all: what footing you are reading on outranks every control
+              that follows. */}
+          {!owner && <ViewOnlyChip sessionUnconfirmed={sessionUnconfirmed} />}
+          {/* The granularity controls belong to the table-of-contents mode, so
+              they go with it. Leaving them on screen in another mode would offer
+              columns that are not there — a control that looks live, does
+              nothing, and gives the reader no way to tell which. Nothing takes
+              their place: the mode's name is on the Dock, and saying it twice is
+              what this bar was full of.
+  
+              **They wear the column's full name now** — `Parts`, `Sections`,
+              `Paragraphs` rather than `L1`, `L2`, `Para`. The numbers were
+              defensible while the table's own header row said the words above
+              each column; that row lost its height on 2026-09-05
+              (TableView.tsx § the head), so this is the only place a column is
+              named at all. tree.ts § `columnLabel`. */}
+          {!inMode && (
+            <>
+              {offerableGistDepths.map((d) => (
                 <Toggle
+                  key={d}
                   className={PILL}
-                  pressed={leafOn}
-                  onPressedChange={() => toggle(geometry.leafDepth)}
-                  title={columnHint(geometry.leafDepth, geometry.leafDepth)}
+                  pressed={shownGists.includes(d)}
+                  onPressedChange={() => toggle(d)}
+                  title={columnHint(d, geometry.leafDepth)}
                 >
-                  {columnLabel(geometry.leafDepth, geometry.leafDepth)}
+                  {columnLabel(d, geometry.leafDepth)}
                 </Toggle>
-              ) : (
-                <span className="pill-note">{paragraphNotice}</span>
               ))}
-          </>
-        )}
-        {/* Failures of the comment transport belong here rather than in the
-            dialog: if the fetch never landed there is no dialog to put them in. */}
-        {commentError && (
-          <span className="cmt-transport-error" title={commentError}>
-            comments: {commentError}
-          </span>
-        )}
-        {/* **The tree's version sat here, in a dashed monospace chip, on every
-            article.** It went on 2026-09-05 with the glossary's and the
-            quotes' provenance lines, which are the same fact in the same voice
-            — Greg: *"those are all confusing and unnecessary"*, then *"and any
-            other modes as needed"*. This one is the controls bar rather than a
-            mode, and it is the most-seen of the three, which is the argument
-            for rather than against. `hierarchy/4` tells a reader nothing they
-            can act on; `Metadata` is where an owner sees it
-            (Metadata.tsx § `StageRow`). The narrow breakpoint already hid it,
-            which was the first sign it was not carrying its space. */}
-      </div>
+              {/* The paragraph outline, beside the prose rather than instead of
+                  it. Only offered in reading mode: in outline mode this column is
+                  the view, and turning it off would leave nothing.
+  
+                  **And only while there are labels to draw.** Where there are
+                  not, the control is replaced by the sentence saying why rather
+                  than disabled with the sentence in its tooltip — a touch reader
+                  cannot open a tooltip, which is the argument that took the pills
+                  from `L3` to `Paragraphs` in the first place (tree.ts §
+                  `columnLabel`). A pill that opened a column of blank cells is
+                  the failure nav-labels.ts exists to prevent; a pill that opened
+                  a column of one repeated notice would be worse still.
+  
+                  **`|| leafOn` is the door back out, and it is not a hedge.**
+                  `toggle` is the only caller of `setCols` in this file, so
+                  replacing the control replaces the only way to *close* the
+                  column as well as the only way to open it. The leaf depth can
+                  already be on without this pill — `?cols=` naming it, shared or
+                  bookmarked — and such a reader was left with a wide column of
+                  one repeated sentence and nothing to shut it with: for ever, if
+                  the status is `failed`. So the notice stands in for the pill
+                  only while the column is shut, which is the case it was written
+                  for; once the column is open the pill comes back, because the
+                  column itself is already carrying the sentence
+                  (TableView § `withheldLeafCell`) and what the reader needs from
+                  the bar is the way out. GPT Sol's F2 on stage 1, 2026-09-06. */}
+              {showText &&
+                (paragraphPill(article.navLabelStatus, leafOn) === "toggle" ? (
+                  <Toggle
+                    className={PILL}
+                    pressed={leafOn}
+                    onPressedChange={() => toggle(geometry.leafDepth)}
+                    title={columnHint(geometry.leafDepth, geometry.leafDepth)}
+                  >
+                    {columnLabel(geometry.leafDepth, geometry.leafDepth)}
+                  </Toggle>
+                ) : (
+                  <span className="pill-note">{paragraphNotice}</span>
+                ))}
+            </>
+          )}
+          {/* **Failures of the comment transport left this bar on 2026-09-08**,
+              for the Dock's Comments button — which is the control they are about,
+              and which is on screen whether or not this bar is. They were here
+              because "if the fetch never landed there is no dialog to put them
+              in", and that is still true: the Dock is the answer to it now.
+  
+              They could not stay: this bar is drawn only when it has content
+              (`showBar` above), so a refused delete would have summoned 44px of
+              chrome and pushed the article down mid-read. **Not deleted** — GPT
+              Sol's G3 on 260905g refused that, because `error` is not the
+              drawer's `loadFailed`: that one is about the fetch that fills the
+              list and is only drawn when the list is empty, while this carries
+              every failed *change*, including one whose row has scrolled off.
+              Dock.tsx § the Comments button. */}
+          {/* **The tree's version sat here, in a dashed monospace chip, on every
+              article.** It went on 2026-09-05 with the glossary's and the
+              quotes' provenance lines, which are the same fact in the same voice
+              — Greg: *"those are all confusing and unnecessary"*, then *"and any
+              other modes as needed"*. This one is the controls bar rather than a
+              mode, and it is the most-seen of the three, which is the argument
+              for rather than against. `hierarchy/4` tells a reader nothing they
+              can act on; `Metadata` is where an owner sees it
+              (Metadata.tsx § `StageRow`). The narrow breakpoint already hid it,
+              which was the first sign it was not carrying its space. */}
+        </div>
+      )}
       <TableView
         article={article}
         /* The route's slug, not `article.meta.slug` — TableView.tsx § `slug`
@@ -2354,6 +2395,12 @@ export function Reader({
                 comments: ordered,
                 loaded: owner.comments.loaded,
                 loadFailed: owner.comments.loadFailed,
+                /* A refused write, retry or delete. It was a chip in the
+                   controls bar until 2026-09-08 and moved here when that bar
+                   stopped being drawn on a reading view that had nothing else
+                   to put in it — Dock.tsx § the Comments button, and
+                   docs/plans/260908a-the-top-bar-stops-being-drawn-when-it-has-nothing-in-it.md. */
+                error: commentError,
                 panel,
                 onPanel: (next) => void setPanel(next),
                 onOpenComment: (id) => {

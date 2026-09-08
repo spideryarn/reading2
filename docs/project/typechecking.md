@@ -84,6 +84,45 @@ ways this bites, both met on 2026-09-04:
 
 The habit that follows: after editing a test file, run `npm run typecheck` and not only the file.
 
+### A guard you rely on, that only this gate can enforce
+
+The two cases above are accidents — a type error nobody wanted. There is a third, deliberate one, and
+it is the more dangerous because it looks like extra safety rather than a gap: **a test written so
+that the type system, not the assertions, is what catches the mistake.**
+
+The live example is `tests/gjd-remote-tmux.test.ts`, where the fixture of unknown causes is annotated
+as an exhaustive `Record` over `SessionUnknownCause`. Add a cause to the union and the file stops
+compiling until somebody accounts for it — which is exactly the intent, and it fired for real on
+2026-09-08 when a seventh cause arrived. But **`npm test` reports 126 passed while that guard is
+broken**, because vitest strips the annotation without reading it.
+
+So the rule, which is the one above stated the other way round: **a type-level guard is a lint, not a
+test.** Two things follow.
+
+- **Write it where its gate runs**, and say in the file that `npm test` cannot see it — otherwise the
+  next reader adds a case, sees green, and believes the guard held.
+- **"All tests pass" from any agent says nothing about a type-level guarantee.** When the thing you
+  are relying on is exhaustiveness, a `never` check, or a branded type, the evidence is
+  `npm run typecheck` and only that.
+
+This is worth more care than an ordinary type error, because the whole point of such a guard is that
+somebody *stops thinking* about the class it covers.
+
+**And the companion rule, learned the same night by the agent who asked for the paragraph above.** In
+one batch they added four refusal codes — the exhaustive `Record` fired exactly as designed and
+refused to compile — and, in the same batch, added a field to a returned object literal. That second
+one is **not a type error anywhere**: `typecheck` was clean, it was pushed, and a test that spelled
+out the whole object went red on `dev`.
+
+> a type-level guard catches a changed **shape** and cannot catch a changed **value** — and adding a
+> field is a value change to every assertion that spells out an object.
+
+So the two gates fail in opposite directions and neither covers the other: `npm test` cannot see a
+broken exhaustiveness guard, and `npm run typecheck` cannot see a widened literal that every
+`toEqual` in the tree disagrees with. The habit that follows is not "run both" — everyone already
+knows that — it is **run the file that CONSUMES what you changed, not only the file you were editing
+in**. Their words: *"I'd run the file I was editing and not the file that consumed it."*
+
 ### The `@/` alias, and where it may live
 
 shadcn generates its imports as `@/lib/utils`, so the alias had to exist before any component landed

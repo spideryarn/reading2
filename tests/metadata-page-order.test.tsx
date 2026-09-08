@@ -99,8 +99,8 @@ function article(): Article {
 }
 
 const STAGES = [
-  { step: "fetch", label: "Fetching the page", outputs: ["raw/a.html"], done: true, ranAt: null, bytes: null },
-  { step: "extract", label: "Reading the text out", outputs: ["output/a.html"], done: false, ranAt: null, bytes: null },
+  { step: "fetch", label: "Fetching the page", outputs: ["raw/a.html"], done: true, ranAt: null, startedAt: null, bytes: null },
+  { step: "extract", label: "Reading the text out", outputs: ["output/a.html"], done: false, ranAt: null, startedAt: null, bytes: null },
 ];
 
 let host: HTMLDivElement;
@@ -233,10 +233,21 @@ describe("what the page puts first", () => {
        2026-09-03.
 
        **It said "Delete this article" until 2026-09-04**, over a control that
-       has only ever archived — the rename that answers report
+       had only ever archived — the rename that answers report
        SPIDERYARN-READING2-19. This line is the pin on the section heading;
-       tests/shelf-archive-label.test.tsx pins the shelf's own two. */
-    expect(order.slice(-2)).toEqual(["Technical details", "Archive this article"]);
+       tests/shelf-archive-label.test.tsx pins the shelf's own two.
+
+       **And it says it again since 2026-09-07, over a control that really
+       deletes** — docs/plans/260906h-delete-an-article-permanently.md. The two
+       endings sit together at the foot of the page, reversible first, in the
+       order Greg asked for: *"underneath Archive"*. The pin that keeps the word
+       honest is no longer this list but tests/metadata-delete-permanently.test.tsx,
+       which asserts a `DELETE` goes out and what it costs. */
+    expect(order.slice(-3)).toEqual([
+      "Technical details",
+      "Archive this article",
+      "Delete this article",
+    ]);
     /* And the first, which is the half of Greg's "directly underneath the
        title" that a section list can actually check. */
     expect(order[0]).toBe("In one sentence");
@@ -484,9 +495,13 @@ describe("the button that takes the article off the shelf", () => {
     });
   });
 
+  /* Scoped to the Archive section since 2026-09-07, when a second ending got a
+     section of its own beneath it — `Section` derives the id from the label. */
+  const archiveSection = () => host.querySelector("#sec-archive-this-article");
+
   const button = () =>
-    [...(host.querySelector("main")?.querySelectorAll<HTMLButtonElement>("button") ?? [])].find(
-      (b) => ["Archive", "Put back", "Delete"].includes(b.textContent?.trim() ?? ""),
+    [...(archiveSection()?.querySelectorAll<HTMLButtonElement>("button") ?? [])].find((b) =>
+      ["Archive", "Put back", "Delete"].includes(b.textContent?.trim() ?? ""),
     );
 
   it("says Archive, and never Delete", async () => {
@@ -495,8 +510,19 @@ describe("the button that takes the article off the shelf", () => {
     expect(button()?.textContent?.trim()).toBe("Archive");
     /* Absent rather than merely not asked for: a revert of the rename, or a
        second button appearing beside this one, is exactly the drift worth
-       catching. */
-    expect(host.querySelector("main")?.textContent).not.toContain("Delete this article");
+       catching.
+
+       **What it may not say has narrowed, and deliberately.** Until 2026-09-07
+       this asserted the page nowhere contained "Delete this article" — because
+       there was nothing on the server that could. There is now
+       (docs/plans/260906h-delete-an-article-permanently.md), and it is a
+       section of its own below this one. What must never come back is *this*
+       control wearing that word: bare "Delete" over a handler that archives is
+       the whole of report SPIDERYARN-READING2-19, and the new control says
+       "Delete permanently" precisely so the two can never be read as the same
+       offer. */
+    expect(button()?.textContent?.trim()).not.toContain("Delete");
+    expect(archiveSection()?.textContent).not.toContain("Delete");
   });
 
   /**

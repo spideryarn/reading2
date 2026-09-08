@@ -1,0 +1,2 @@
+not-a-number sh -c vitest run
+   12345

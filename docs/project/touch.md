@@ -335,6 +335,42 @@ The rest of that work — the browser's own chrome, which is not ours to hide, a
 Screen path that is the only way to be rid of it — is
 [260828av-mobile-screen-real-estate.md](../plans/260828av-mobile-screen-real-estate.md).
 
+### And it did not reach the mode bands
+
+**The query spread to one further control in the fortnight after — the footnote's *back to your
+place* link, 44px, footnotes.css § a coarse pointer, 2026-09-06 — and to nothing inside a mode
+band, ever.** So the order rows in the glossary and quotes bands were whatever height their text
+happened to be: 23px, with 5px dead strips between the wrapped lines and 64% of a row's box not on
+a button. (An earlier draft of this section said the bar was the only finger-sized rule in the app.
+GPT Sol found the counter-example; the point that survives is the one about mode bands.) A reader could not
+press the glossary's — SPIDERYARN-READING2-2J, and
+[260908a](../plans/260908a-glossary-order-button-not-clickable-on-touch.md) is honest that the
+incident was never reproduced and that what shipped is a floor rather than a diagnosis.
+
+Two more rules live in § a coarse pointer now, and
+[narrow-windows.md § What a control owes a finger](narrow-windows.md#what-a-control-owes-a-finger)
+is where they are written down:
+
+- **40px on both order rows** — the dock's own number, given to both because they are one control
+  written twice and a floor given to one is a report filed about the other.
+- **16px on every text field**, because iOS zooms the page in on a smaller one and does not zoom
+  back out. **That one asks `any-pointer: coarse`**, unlike every other size rule here, and the
+  reason is in narrow-window.css § a field iOS zooms into: one point of type is not chrome, so the
+  trade the paragraph above makes does not apply, and an iPad with a Magic Keyboard reports
+  `pointer: fine` while its reader goes on tapping the glass. The four Tailwind-styled fields carry
+  `tw:any-pointer-coarse:text-base` at their own call sites, because the utilities layer outranks
+  the stylesheet whatever the specificity.
+
+And two things that are about a finger rather than a size, in `glossary.css` and `quotes.css`:
+**`:hover` went behind `@media (hover: hover)`** — on iOS the wash sticks to whatever was last
+touched, and it paints nearly the same box as the pressed state, so an unpressed order could sit
+there looking like the one in force — and **`:active` arrived**, because a finger got no feedback at
+all and a tap that landed looked exactly like one that missed.
+
+**The rest of the band is still pointer-sized**: the threshold slider is 16px tall, and half a dozen
+buttons are between 19 and 28. Nothing generalises the rule; each control gets it when somebody
+notices.
+
 ## What the Enter key promises
 
 > The keyboard on mobile devices should have a Done/Send button where
