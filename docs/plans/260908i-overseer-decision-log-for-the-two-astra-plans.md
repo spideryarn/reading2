@@ -154,3 +154,9 @@ and [260908f-overseer-and-fleet-improvement-roadmap.md](260908f-overseer-and-fle
   it but not worth waiting on. For the record: the dashboard restart became Greg's because the
   classifier **blocked** the command, not because the earlier reasoning about authority was found
   optional — both stand.
+- 2026-09-08 22:50 UTC — **Greg** restarted `fleet-dashboard` (serving `index-CT7ppcO0.js`, the newest
+  build, one pid on both binds, HTTP 200) and opened the daemon tmux job; the launch line had split
+  in the paste so the pane held a bare `sh`. **I** typed the launch into that pane; daemon up as
+  pid 1178932, instance 3145d8c1, resumed from the checkpoint, reading the source over SSE.
+  `overseer status` now prints `overseer  Overseer: Overseer`; `/api/state` rows carry `role`.
+  Outage: 22:36:48 to 22:47:34 UTC. Both restarts verified, both services on dev code.
