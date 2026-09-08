@@ -329,6 +329,10 @@ async function lockRetriedAttempt(tx: Tx, job: Job, retryOf: string) {
  * insert's own transaction. An unlocked existence check is the same race one
  * statement later — the finding says so in as many words.
  *
+ * **A miss is not a refusal on its own**, because `articleExists` was read
+ * without holding anything: `restartRatherThanRefuse` is what a miss goes
+ * through, and it asks for one more pass before it will say no.
+ *
  * Narrower than it looks, and deliberately not sold as more: this closes the
  * window *before* the insert, not the one after it. A holder that goes terminal
  * once our non-reserving row is committed still leaves an address nothing
@@ -383,6 +387,77 @@ function adoptedJobGone(): Error {
 }
 
 /**
+ * **Why one pass through `enqueueIn` produced no outcome.** Both mean *open a
+ * fresh transaction and go round again*; they are named rather than both being
+ * `null` because the caller does different things with them, and because each
+ * records a different fact.
+ *
+ * `nothingHoldsIt` — the insert conflicted and then the re-read classified
+ * nothing, because whoever held it finished between the two statements. The way
+ * is clear now, so the next attempt inserts.
+ *
+ * `holderLeftTheQueue` — the queue holder this request adopted a name from is no
+ * longer active, **and this transaction's article lookup is from before that**.
+ * See `restartRatherThanRefuse`.
+ */
+type Restart = "nothingHoldsIt" | "holderLeftTheQueue";
+
+/**
+ * Which pass this is. `again` is the one restart `holderLeftTheQueue` buys, and
+ * on it the holder guard refuses rather than asking for another.
+ *
+ * A two-value union rather than a boolean, so that neither the call site nor the
+ * reader has to remember which way round `true` points.
+ */
+type Look = "first" | "again";
+
+/**
+ * Named rather than `typeof result === "string"`, which would be a lie the
+ * compiler could not catch the day `EnqueueOutcome` grew a string member.
+ */
+const isRestart = (result: EnqueueOutcome | Restart): result is Restart =>
+  result === "nothingHoldsIt" || result === "holderLeftTheQueue";
+
+/**
+ * **The guard's own staleness, and the only repair that does not reverse the
+ * lock order** — GPT Sol's F50, docs/plans/260906h-delete-an-article-permanently.md.
+ *
+ * `lockArticleFor` on an absent article locks *nothing*
+ * (docs/postmortems/260901f-a-for-update-that-locks-nothing.md), so
+ * `articleExists === false` is a fact from a moment that has already passed —
+ * exactly the kind of fact this whole family of guards exists to distrust. The
+ * losing sequence is an ordinary second paste:
+ *
+ * 1. `lockArticleFor` finds no article and takes no lock;
+ * 2. the holder creates the article, publishes, goes terminal, and **commits**;
+ * 3. `lockAdoptedHolder` wants an *active* holder, finds a terminal one, and
+ *    refuses — on the strength of an article lookup taken before step 2.
+ *
+ * The reader is then told *"the article this was joining has gone"* about an
+ * article that is sitting right there.
+ *
+ * **The repair is to start the transaction over, not to look at the article
+ * again here.** Re-reading or re-locking `articles` after the job lock is the
+ * trap: `pgShelfStore.destroy` takes `articles` and then `jobs`, and a
+ * transaction holding a job row and then reaching for the article row is the
+ * other half of that cycle. Restarting releases the job lock and goes back
+ * through the canonical article-first order, where the second pass finds the
+ * article, skips this guard entirely, and inserts as the ordinary adoption it
+ * always was.
+ *
+ * **Exactly one restart**, and the `Look` is how it is counted. A second miss
+ * means the holder really has gone and left nothing behind, which is what the
+ * 409 says. The window is not mathematically closed — the holder could commit
+ * inside the retry's own gap too — but each pass is a fresh article-first
+ * lookup, and a loop here would be trading a rare wrong sentence for an
+ * unbounded one.
+ */
+function restartRatherThanRefuse(look: Look): Restart {
+  if (look === "again") throw adoptedJobGone();
+  return "holderLeftTheQueue";
+}
+
+/**
  * **The rows this insert leaned on, re-asked under the lock** — the pair of
  * guards `requiresArticle` is the third of.
  *
@@ -397,13 +472,20 @@ function adoptedJobGone(): Error {
  * `articles` and then `jobs`; a transaction taking them the other way round
  * would be the cycle. Called with whether that lock found anything rather than
  * with the row, because that is all either guard wants to know.
+ *
+ * **Throws for the two answers that are final, and returns for the one that is
+ * not.** A missing attempt is a 404 and a second look could only agree with it;
+ * a missing *holder* is only final on the second look, because
+ * `articleExists` was read before nothing was locked — `restartRatherThanRefuse`
+ * is the whole of that argument.
  */
 async function requireWhatTheAllocationLeanedOn(
   db: Tx,
   job: Job,
   ticket: EnqueueTicket,
   articleExists: boolean,
-): Promise<void> {
+  look: Look,
+): Promise<Restart | undefined> {
   if (ticket.retryOf !== undefined) {
     const [attempt] = await lockRetriedAttempt(db, job, ticket.retryOf);
     if (!attempt) throw noSuchAttempt();
@@ -413,12 +495,14 @@ async function requireWhatTheAllocationLeanedOn(
      but provenance. See `lockAdoptedHolder`. */
   if (!articleExists && ticket.adoptedFromJob !== undefined) {
     const [holder] = await lockAdoptedHolder(db, job, ticket.adoptedFromJob);
-    if (!holder) throw adoptedJobGone();
+    if (!holder) return restartRatherThanRefuse(look);
   }
+  return undefined;
 }
 
 /**
- * One insert-or-look. `null` means the holder finished in between; ask again.
+ * One insert-or-look. A `Restart` rather than an outcome means *open a fresh
+ * transaction and call this again* — see `Restart` for the two reasons.
  *
  * **A transaction since 2026-09-06**, where it used to be two statements on the
  * pool. The insert and the article lock in front of it have to land together or
@@ -432,7 +516,8 @@ async function enqueueIn(
   db: Tx,
   job: Job,
   ticket: EnqueueTicket,
-): Promise<EnqueueOutcome | null> {
+  look: Look,
+): Promise<EnqueueOutcome | Restart> {
   const [article] = await lockArticleFor(db, job);
   /* **Re-read after the lock, never trusting the preflight.** The preflight in
      src/jobs.ts still runs and still fails fast — it is what stops a typo
@@ -441,7 +526,14 @@ async function enqueueIn(
      invalidates. */
   if (!article && ticket.requiresArticle === true) throw noSuchArticle();
 
-  await requireWhatTheAllocationLeanedOn(db, job, ticket, article !== undefined);
+  const restart = await requireWhatTheAllocationLeanedOn(
+    db,
+    job,
+    ticket,
+    article !== undefined,
+    look,
+  );
+  if (restart) return restart;
 
   const inserted = await db
     .insert(jobs)
@@ -584,7 +676,7 @@ async function enqueueIn(
   }
 
   // Whoever held it finished between the two statements. The caller asks again.
-  return null;
+  return "nothingHoldsIt";
 }
 
 /**
@@ -595,8 +687,12 @@ async function enqueueIn(
  * `settleIn` and `releaseStepIn`, and for the same reason: what happens inside
  * a transaction should be readable without the transaction wrapped around it.
  */
-async function tryEnqueue(job: Job, ticket: EnqueueTicket): Promise<EnqueueOutcome | null> {
-  return await getDb().transaction((db) => enqueueIn(db, job, ticket), READ_COMMITTED);
+async function tryEnqueue(
+  job: Job,
+  ticket: EnqueueTicket,
+  look: Look,
+): Promise<EnqueueOutcome | Restart> {
+  return await getDb().transaction((db) => enqueueIn(db, job, ticket, look), READ_COMMITTED);
 }
 
 /**
@@ -952,10 +1048,27 @@ const rawPgJobStore: JobStore = {
      * Retrying the insert is the whole fix: the way is clear now, so the second
      * attempt succeeds. Bounded, because a caller that loses this race twice in
      * a row against different holders is in a situation the loop cannot improve.
+     *
+     * **The same loop now carries a second reason to go round**, and it is the
+     * one that has to be counted separately: `holderLeftTheQueue` says the
+     * article lookup this pass refused on was taken before nothing was locked,
+     * and the repair is one fresh pass through the *article-first* lock order —
+     * `restartRatherThanRefuse` for why re-reading the article in place would be
+     * a deadlock rather than a fix. `look` is that count, and it only ever moves
+     * forwards, so a request cannot spend the whole budget asking the same
+     * question.
+     *
+     * **Nothing is re-spent by going round.** The job's id and its quota
+     * reservation are both minted outside this method — `mintId` in the caller's
+     * own loop and `withIngestSlot` (src/billing/admission.ts) around the whole
+     * request — and a pass that returns a `Restart` has written nothing, so
+     * there is no row for `releaseReservation` to see and no second id to leak.
      */
+    let look: Look = "first";
     for (let attempt = 0; ; attempt++) {
-      const result = await tryEnqueue(job, ticket);
-      if (result) return result;
+      const result = await tryEnqueue(job, ticket, look);
+      if (!isRestart(result)) return result;
+      if (result === "holderLeftTheQueue") look = "again";
       if (attempt >= 3) {
         throw new Error(`Could not enqueue job ${job.id} for ${job.slug}, and nothing holds it.`);
       }

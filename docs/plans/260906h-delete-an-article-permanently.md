@@ -751,6 +751,51 @@ again later rather than to argue about it.
 processes belonging to other sessions were live on the box at the time, and the last full-suite
 attempt on a loaded box is what preceded the OOM sweep.
 
+#### F50 — the guard refused the legitimate paste it was written to allow
+
+Sol's third look at Stage C was scoped to one question — do the F40/F41/F42 fixes hold? — and three
+of its four answers were *holds*. The fourth found a regression the F41 guard introduced.
+
+`lockArticleFor` on an absent article locks nothing
+([260901f-a-for-update-that-locks-nothing.md](../postmortems/260901f-a-for-update-that-locks-nothing.md)),
+so the `articleExists = false` that the guard consults is a fact from a moment that has already
+passed — **the same shape of staleness the guard itself exists to distrust**. On a second paste of a
+URL a live job is still minting: the article lookup finds nothing and takes no lock; the holder then
+creates the article, publishes it, goes terminal and commits; and `lockAdoptedHolder`, which wants an
+*active* holder, refuses on the strength of the earlier lookup. The reader is told *"The article this
+was joining has gone"* about an article that is sitting right there. Established.
+
+**The fix is to restart the transaction once, not to look at the article again under the job lock.**
+Re-reading or re-locking `articles` after `lockAdoptedHolder` is the trap, and Sol named it: `destroy`
+takes `articles` then `jobs`, so a transaction holding a job row and reaching for the article row is
+the other half of that cycle. The restart releases the job lock and goes back through the canonical
+article-first order, where the second pass finds the article, skips the guard entirely, and inserts as
+the ordinary adoption it always was. `enqueueOrGet` already had a bounded retry loop for the
+*"nothing holds it"* case, so this is a second named reason to go round rather than new machinery:
+`Restart` names both, and a `Look = "first" | "again"` counts the one restart a holder miss buys. A
+second miss means the holder really has gone, which is what the 409 says.
+
+**Nothing is re-spent by going round.** The job id is minted in `enqueue`'s own loop and the quota
+reservation by `withIngestSlot`, both *outside* `enqueueOrGet`; and a pass that returns a `Restart`
+has executed only `SELECT … FOR UPDATE` and written no row — so `releaseReservation`, whose predicate
+already excludes a slot some job is spending, still sees the truth either way.
+
+**Not mathematically closed, and said out loud.** The holder can commit inside the *retry's* own gap
+too. Each pass is a fresh article-first lookup, so the window narrows by the width of one transaction
+rather than disappearing, and a loop here would trade a rare wrong sentence for an unbounded one.
+Closing it properly needs a table that claims an address — which is what the F41 comment already
+points at — not more retries. Written down rather than left for a green tick to imply.
+
+The test is [`tests/article-delete-pg.test.ts`](../../tests/article-delete-pg.test.ts) § *still lets
+the paste in when the holder published inside the guard's own gap*. **Its barrier is on the holder's
+job row rather than the article, because there is no article — that is the whole premise.** With none
+present `lockArticleFor` returns without waiting, so the guard's own `FOR UPDATE` is the only lock
+left on the path; an enqueue still unsettled at the barrier is therefore an enqueue stopped *inside*
+the guard with `articleExists` already false, and `expect(settled).toBe(false)` is what proves the
+window was entered. Watched red against the pre-fix refusal, and the F41 refusal above it watched red
+against a fix that never refuses — so both directions are pinned, and a mutation that simply stops
+refusing does not sail through.
+
 ### Stage D — the control on the metadata page
 
 - [ ] `DeletePermanently` under `ArchiveArticle`, in its own `Section` labelled **Delete this

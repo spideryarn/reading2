@@ -205,6 +205,13 @@ export interface EnqueueTicket {
    * absent**: is that exact job still `queued` or `running`? A holder that
    * finished normally leaves an article behind, and adopting it then is an
    * ordinary shelf adoption rather than a resurrection.
+   *
+   * **A miss buys one restart rather than a refusal**, because *"the article is
+   * absent"* is itself a fact nothing was holding — the holder can create it and
+   * go terminal in between, and refusing then takes a perfectly legitimate
+   * second paste away. GPT Sol's F50, same plan; the argument, and why the
+   * repair cannot be a second look at the article in place, is at
+   * `restartRatherThanRefuse` in ./pg-jobs.ts.
    */
   adoptedFromJob?: string;
 }

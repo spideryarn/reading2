@@ -882,6 +882,103 @@ describe("what a delete can take out from under a request already in flight", ()
     expect(await articleRows()).toHaveLength(1);
     expect((await jobRows()).map((row) => row.id).sort()).toEqual([holderJob, job.id].sort());
   }, 20_000);
+
+  /**
+   * **F50 — the guard refusing the very thing it was written to allow.**
+   *
+   * The article the guard consults is looked up with `FOR UPDATE`, and `FOR
+   * UPDATE` on a row that is not there **locks nothing**
+   * (docs/postmortems/260901f-a-for-update-that-locks-nothing.md). So *"there is
+   * no article"* is not held still by anything, and the holder is free to create
+   * one, publish it, and go terminal in the gap before the holder lookup runs —
+   * at which point that lookup, which wants an *active* holder, refuses a paste
+   * whose article is sitting right there.
+   *
+   * This is the same sequence as *still lets the paste in when the holder
+   * finished by publishing rather than dying* above, minus its one convenience:
+   * that case starts with `givenArticle()`, so the paste blocks on the article
+   * row and the article exists from first to last. Here there is no article
+   * until the holder makes one, which is the ordinary state of a first ingest
+   * and the whole of what makes this window reachable.
+   *
+   * ## How the interleaving is arranged rather than hoped for
+   *
+   * The barrier is on the **holder's job row**, not the article — there is no
+   * article to hold. With none there, `lockArticleFor` returns empty without
+   * waiting, and the only lock left on this path is `lockAdoptedHolder`'s, so an
+   * enqueue that has not settled after 250ms is an enqueue stopped inside the
+   * guard with `articleExists` already recorded as false. `expect(settled)` is
+   * that proof, and without it a paste that had already finished would go green
+   * on a window it never entered.
+   *
+   * The holder then does what a holder does — creates the article, publishes it,
+   * marks itself `done` — from inside the transaction the barrier is holding, so
+   * all of it commits in exactly the gap, every time. A timing slip fails this
+   * test rather than passing it: an enqueue that ran before the commit sees a
+   * live holder and adopts from the queue, which is the *other* test's case, and
+   * the `settled` assertion is what catches it.
+   */
+  it("still lets the paste in when the holder published inside the guard's own gap", async () => {
+    if (!pool) return;
+    const holderJob = await givenJob({ status: "queued", url: URL });
+    expect(await articleRows(), "no article yet, which is what makes this reachable").toHaveLength(
+      0,
+    );
+
+    const holder = await pool.connect();
+    let job: Job;
+    try {
+      await holder.query("begin");
+      await holder.query("select 1 from spideryarn.jobs where id = $1 for update", [holderJob]);
+
+      const pasting = asOwner(() =>
+        enqueue({ slug: "a-second-paste", url: URL, steps: ["fetch"], pump: false }),
+      );
+      let settled = false;
+      void pasting.then(
+        () => {
+          settled = true;
+        },
+        () => {
+          settled = true;
+        },
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      expect(settled, "the paste must be waiting on the holder's job row").toBe(false);
+
+      /* The holder opening its draft, publishing, and finishing — all of it
+         inside the window, because it is all inside the barrier's transaction. */
+      const { rows: made } = await holder.query<{ id: string }>(
+        "insert into spideryarn.articles (owner_id, slug) values ($1, $2) returning id",
+        [OWNER, SLUG],
+      );
+      const articleId = made[0]?.id;
+      const { rows: published } = await holder.query<{ id: string }>(
+        "insert into spideryarn.article_revisions (article_id, status, final_url) " +
+          "values ($1, 'published', $2) returning id",
+        [articleId, URL],
+      );
+      await holder.query("update spideryarn.articles set current_revision_id = $1 where id = $2", [
+        published[0]?.id,
+        articleId,
+      ]);
+      await holder.query(
+        "update spideryarn.jobs set status = 'done', finished_at = now() where id = $1",
+        [holderJob],
+      );
+      await holder.query("commit");
+
+      job = await pasting;
+    } finally {
+      await holder.query("rollback").catch(() => {});
+      holder.release();
+    }
+
+    expect(job.slug, "it lands on the article the holder made").toBe(SLUG);
+    expect(await articleRows()).toHaveLength(1);
+    expect((await jobRows()).map((row) => row.id).sort()).toEqual([holderJob, job.id].sort());
+  }, 20_000);
 });
 
 /* ------------------------- a finished job that never gave its slot back -- */
