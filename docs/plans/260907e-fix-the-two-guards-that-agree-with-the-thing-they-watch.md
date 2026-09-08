@@ -636,3 +636,37 @@ A second, smaller residue: a tree running a checkout from before this fix still 
 every worktree it sweeps, so a synchronised cluster can reappear (`6.0 h` on six trees
 today). Self-limiting as worktrees turn over, and harmless while `logs/` holds
 everything anyway.
+
+## First removals, 2026-09-08 — and they did not go through the tool
+
+Greg asked for the unneeded worktrees to be swept. Four were removed, ~3G reclaimed:
+`feedback-comment-chip`, `feedback-long-article-sluggish`, `feedback-cap-admin`,
+`agent-a8b787452ea1b7081` — genuinely idle 60–131 h, landed, no dirty files, no live
+process with a cwd inside them.
+
+**By hand, not by `worktree:sweep -- remove`, which refused.** Worth recording plainly,
+because it is a bypass of the guard this plan just fixed:
+
+- The **age floor** refused on a `7.2 h` stamp that six trees shared to the second —
+  another agent running the pre-fix code from a tree that has not updated. Their
+  genuine idle times were 35–169 h. So the fix stops *this* tree stamping, but not
+  other trees, and the floor stays contaminated until every worktree turns over — which
+  it cannot do while the floor blocks removal. That circle is the finding.
+- The **ignored-path blocker** refused on `data/_ai-calls.test.jsonl` (25 KB here
+  against 39 MB in the primary — a test byproduct) and `logs/`.
+
+What was checked before overriding, beyond what the tool checks: no process anywhere
+on the box had a cwd inside any of them (`/proc/*/cwd`), and their `.env.local` files
+hold **no key the primary lacks** — they are stale copies missing keys added since,
+so the "differs from the primary's copy" blocker was a false alarm in these four.
+Compared by key name only.
+
+Two candidates were **kept** on the tool's judgement, which was right:
+`worktree-corners-into-dock` has an uncommitted edit to a planning doc, and the
+detached tree has uncommitted edits to `setup-dev.md` and a test.
+
+The four branches are fully in `origin/dev` and were left in place; `removeOne` would
+have deleted them, and tidying them is a separate small call.
+
+**So the sweep still has no true firing of its own.** It has now been overridden once,
+with evidence, which is not the same thing and should not be counted as one.

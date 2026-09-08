@@ -708,13 +708,19 @@ export function ChangelogPage() {
   useDocumentTitle(pageTitle({ kind: "changelog" }));
 
   return (
-    <main className="tw:mx-auto tw:max-w-2xl tw:px-6 tw:pt-[calc(3.5rem_+_var(--safe-top))] tw:pb-24 tw:font-sans">
+    <main className="tw:mx-auto tw:flex tw:min-h-dvh tw:max-w-2xl tw:flex-col tw:px-6 tw:pt-[calc(3.5rem_+_var(--safe-top))] tw:font-sans">
+      {/* **"Home", not "Back", since 2026-09-08.** It goes to `/` rather than
+          `history.back()`, and most people who open this page were *sent* to it
+          — from an email, from the footer of another page, from a link in an
+          article — so there was often no "back" for it to mean. It is also the
+          label the footer uses for the same destination, and one page should not
+          call one address two things. */}
       <Link
         href="/"
         className="tw:mb-6 tw:inline-flex tw:items-center tw:gap-1 tw:text-xs tw:text-ink-faint tw:no-underline tw:hover:text-highlight"
       >
         <ArrowLeft size={13} />
-        Back
+        Home
       </Link>
 
       {/* The same string the footer, the command bar and the tab title use —
@@ -734,6 +740,13 @@ export function ChangelogPage() {
       </p>
 
       <ChangelogBody versions={PARSED.versions} />
+
+      {/* The spacer that puts the footer on the floor of a `min-h-dvh` flex
+          column. It grows to nothing on a page this long and is here so the
+          four bare pages have one shape rather than two; ContactPage.tsx, where
+          it does the work, says why it is a spacer and not `mt-auto` on the
+          footer. */}
+      <div className="tw:flex-1" />
 
       <SiteFooter />
     </main>

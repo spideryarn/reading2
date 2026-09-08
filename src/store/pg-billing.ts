@@ -86,6 +86,7 @@
  */
 
 import { eq, sql } from "drizzle-orm";
+import type { SQLWrapper } from "drizzle-orm";
 
 import {
   PRIVATE_INGEST_COST,
@@ -403,19 +404,41 @@ export function usageSql(ownerId: string, entitlement: Entitlement) {
 }
 
 /**
- * **Is the article this row was charged for public right now?**
+ * **What price is this charged row at — one spelling, for every reader of it.**
  *
- * A `left join` and a `coalesce`, because there is nothing to backfill: a row
- * charged before the `article_id` column existed has no article to resolve, and
- * neither does one whose article has been deleted. Both read as **private**, so
- * an unresolvable row is charged full price — the direction that cannot be
- * gamed. See `ingest_events.article_id` in ../db/schema.ts.
+ * Three terms, and each one is a different question:
  *
- * Two constants rather than two spellings, so the usage query and the offer
- * query below cannot come to disagree about what "public" means.
+ * 1. `articles.visibility` — **is it public right now?** Live, on every read,
+ *    which is the whole design: sharing lowers usage and unsharing puts it
+ *    straight back.
+ * 2. `ingest_events.article_visibility_at_delete` — **what was it when it was
+ *    destroyed?** Null while the article exists, so this can never disagree with
+ *    the term above; it only answers once there is nothing to ask. Without it
+ *    `on delete set null` would reprice a deleted public article's rows from
+ *    half to full, and the owner's usage would go up for having thrown something
+ *    away. See `ingest_events.article_visibility_at_delete` in ../db/schema.ts.
+ * 3. `'private'` — **the row that resolves to nothing at all.** Every row charged
+ *    before `article_id` existed, with no way to backfill one. Full price, the
+ *    direction that cannot be gamed.
+ *
+ * **A function rather than three literals, because it is asked in two files.**
+ * The usage query and the offer query below shared a constant so they could not
+ * come to disagree about what "public" means; the admin page's half-price split
+ * (pg-admin.ts) asks the same question in Drizzle's builder, in another file.
+ * They had already parted company on paper — that one's comment claimed *"the
+ * same `coalesce` reading `usageSql` uses"* over a bare `= 'public'`, which
+ * happened to agree and had stopped being a description. The argument for one
+ * spelling does not stop at the file boundary, so this is exported and pg-admin
+ * imports it. It takes either a raw fragment or a Drizzle column, since the two
+ * callers have one each.
  */
+export function isPublicPrice(live: SQLWrapper, frozen: SQLWrapper) {
+  return sql`coalesce(${live}, ${frozen}, 'private') = 'public'`;
+}
+
+/** The join that makes term 1 available, and the two aliases this file uses. */
 const VISIBILITY_JOIN = sql`left join spideryarn.articles a on a.id = e.article_id`;
-const IS_PUBLIC = sql`coalesce(a.visibility, 'private') = 'public'`;
+const IS_PUBLIC = isPublicPrice(sql`a.visibility`, sql`e.article_visibility_at_delete`);
 
 /**
  * The `succeeded_at` half of the usage filter — charged, and inside the window.

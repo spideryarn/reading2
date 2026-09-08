@@ -32,13 +32,32 @@ export function SignInPage() {
   useDocumentTitle(pageTitle({ kind: "login" }));
 
   return (
-    <main className="tw:mx-auto tw:flex tw:min-h-screen tw:max-w-sm tw:flex-col tw:justify-center tw:px-6 tw:font-sans">
-      <h1 className="tw:font-prose tw:text-3xl tw:text-foreground">Spideryarn</h1>
-      <p className="tw:mb-8 tw:mt-1 tw:text-sm tw:text-muted-foreground">
-        Read deeply, at whatever level of detail you need. Sign in to get to your shelf.
-      </p>
+    /* `min-h-dvh`, not `min-h-screen`: on a phone `100vh` is the viewport with
+       the browser's chrome *retracted*, so the page is always a bar or two
+       taller than the window and the footer starts below the fold. */
+    <main className="tw:mx-auto tw:flex tw:min-h-dvh tw:max-w-sm tw:flex-col tw:px-6 tw:font-sans">
+      {/* **The centring wraps the form, not the page**, and until 2026-09-08 it
+          wrapped the page. `justify-center` on `<main>` centred the footer along
+          with the sign-in controls, which left the row floating at about 70% of
+          the height with 306px of black beneath it — the whole page's worth of
+          furniture arranged around nothing. Now the form is centred in whatever
+          space the footer does not want.
 
-      <SignInControls />
+          **This `flex-1` is also what puts the footer on the floor**, and it is
+          worth knowing that it is not `mt-auto` on the footer. That was the
+          first version and it silently cancelled the footer's own `mt-20` —
+          same property, `auto` wins and resolves to zero — so the 80px above the
+          rule vanished on five pages. SiteFooter.tsx says what that measured.
+          The other three bare pages carry a plain `tw:flex-1` spacer for the
+          same job; this page needs the wrapper anyway, to centre the form. */}
+      <div className="tw:flex tw:flex-1 tw:flex-col tw:justify-center">
+        <h1 className="tw:font-prose tw:text-3xl tw:text-foreground">Spideryarn</h1>
+        <p className="tw:mb-8 tw:mt-1 tw:text-sm tw:text-muted-foreground">
+          Read deeply, at whatever level of detail you need. Sign in to get to your shelf.
+        </p>
+
+        <SignInControls />
+      </div>
 
       {/* **The one page here that is a dead end without it.** Somebody sent to
           `/login` by a password-reset email has no landing page behind them and

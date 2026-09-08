@@ -3,8 +3,12 @@
  * **The footer row, and the things about it that are decisions rather than
  * markup.**
  *
- * The row itself is five links and an address, and a test that only counted
- * them would be a test of JSX. What is worth pinning is:
+ * The row itself is a wordmark, an optional sentence, a colophon and six links
+ * minus whichever one is this page, and a test that only counted them would be a
+ * test of JSX. (It said "five links and an address" until 2026-09-08 — the
+ * address left on 2026-09-06 and this sentence did not notice, which is the
+ * argument for the inventory being a `describe` rather than a paragraph.) What
+ * is worth pinning is:
  *
  *  - **It drops the link for the page it is on.** That is the whole reason the
  *    component reads `useRoute()` instead of taking a prop everywhere, and the
@@ -170,7 +174,7 @@ describe("the site footer", () => {
     ]);
   });
 
-  it("takes a sentence of its own above the links", () => {
+  it("takes a sentence of its own beside the links", () => {
     history.replaceState(null, "", "/profile");
     act(() => root.render(<SiteFooter>About these screenshots.</SiteFooter>));
     expect(host.textContent).toContain("About these screenshots.");
@@ -303,7 +307,7 @@ describe("the pages that mount it", () => {
       "PrivacyPage.tsx": 1,
       "ProfilePage.tsx": 1,
       /* `/features/public-readable-sharing`, since 2026-09-06. It is under
-         `/features`, so it wears that family's `variant="marketing"` row — but
+         `/features`, so it wears that family's row — but
          it takes no *link* in the row, and that asymmetry is deliberate:
          `FooterPage` does not have a `public-sharing` member, so nothing drops
          and no page links here. It is reached from the shelf, from `/privacy`

@@ -51,9 +51,14 @@ they carried.
 **It nearly became two components on the day it became one.** The marketing redesign
 ([marketing-pages.md](marketing-pages.md)) extracted its own `SiteFooter` into `SiteBits.tsx` in
 another worktree the same afternoon, and the two met at a merge. Greg's call, 2026-09-03, was one
-component: the general one absorbed the other, and `variant="marketing"` is what carries the
-redesign's taller spacing on `/` and `/features`. The provenance sentence stayed with those two
-pages as child text, because it is a promise about *them* rather than a fact about the site.
+component: the general one absorbed the other, and a `variant="marketing"` prop carried the
+redesign's taller spacing on `/` and `/features` until 2026-09-08, when the row was redesigned to
+close a page on one measure and the prop went with it
+([260908d](../plans/260908d-make-the-site-footer-and-the-signed-out-pages-more-aesthetically-pleasing.md)).
+The provenance sentence stayed with those two pages as child text, because it is a promise about
+*them* rather than a fact about the site — trimmed on the same day from *"Spideryarn Reading — beta.
+Every screenshot…"* to *"Every screenshot here is…"*, since the row now carries a wordmark above it
+and a `© … · beta` colophon below it and the prefix was saying both twice.
 
 The link for the page you are already on drops itself, decided from `useRoute()` — except on the
 two pages `App.tsx` uses as fallbacks, which have to say which page they are, and which is a trap
@@ -101,13 +106,16 @@ how to reach us is the worst place in the app to overclaim.
 
 **Shaped like `/privacy`, not like the marketing pages.** The three marketing pages carry `SiteNav`,
 a hero and the `--site-*` token scope, which exist to sell something over a long scroll; this is four
-sentences, so it takes the policy page's Back link, `h1` and `SiteFooter`.
+sentences, so it takes the policy page's `← Home` link, `h1` and `SiteFooter`. (That link said
+*Back* until 2026-09-08 — it goes to `/` rather than `history.back()`, and most people who open this
+page were sent to it.)
 
 **Linked from one place**: `LINKS` in [`SiteFooter.tsx`](../../src/web/SiteFooter.tsx), which is
-what that array is for. That puts it on all eight pages that carry the row and nowhere under
-`/read/`. **The row's `mailto:` stayed** — mildly redundant beside a Contact link, and the redundancy
-is the cheaper mistake, since the address is the one thing in the row a stuck reader can act on in
-one press. The plan
+what that array is for. That puts it on every page that carries the row and nowhere under
+`/read/`. **The row's `mailto:` stayed** for a day — mildly redundant beside a Contact link, and the
+redundancy looked like the cheaper mistake, since the address is the one thing in the row a stuck
+reader can act on in one press. **Greg reversed that on 2026-09-06** and the row is all pages now;
+see § The footer above. The plan
 ([260905c](../plans/260905c-contact-page-and-a-warmer-feedback-thank-you.md)) names that as a
 judgment call Greg can overrule in one line, along with the decision not to add it to `SiteNav`,
 whose top bar was measured tight at the 320px reflow width.
@@ -230,7 +238,7 @@ over no fill.
 
 So it now carries the same shell — `.site`, `SiteNav here="pricing"`, a hero with the glow and a real
 `h1` (it had none, and its outline began at level two), a `sr-only` *Plans* `h2` so the outline does
-not jump from the `h1` to the cards' `h3`s, and `SiteFooter variant="marketing"`. **The nav's
+not jump from the `h1` to the cards' `h3`s, and a `SiteFooter`. **The nav's
 *Sign in* link stays on this page** rather than jumping to `/#sign-in` the way it does from
 `/features`, and that is load-bearing rather than tidy: the buy path for a stranger is *press here,
 sign in here, come back here*, because `SignInControls` remembers the address it was standing on.

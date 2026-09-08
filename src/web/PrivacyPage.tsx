@@ -136,13 +136,19 @@ export function PrivacyPage() {
   useTakedownFragment();
 
   return (
-    <main className="tw:mx-auto tw:max-w-2xl tw:px-6 tw:pt-[calc(3.5rem_+_var(--safe-top))] tw:pb-24 tw:font-sans">
+    <main className="tw:mx-auto tw:flex tw:min-h-dvh tw:max-w-2xl tw:flex-col tw:px-6 tw:pt-[calc(3.5rem_+_var(--safe-top))] tw:font-sans">
+      {/* **"Home", not "Back", since 2026-09-08.** It goes to `/` rather than
+          `history.back()`, and most people who open this page were *sent* to it
+          — from an email, from the footer of another page, from a link in an
+          article — so there was often no "back" for it to mean. It is also the
+          label the footer uses for the same destination, and one page should not
+          call one address two things. */}
       <Link
         href="/"
         className="tw:mb-6 tw:inline-flex tw:items-center tw:gap-1 tw:text-xs tw:text-ink-faint tw:no-underline tw:hover:text-highlight"
       >
         <ArrowLeft size={13} />
-        Back
+        Home
       </Link>
 
       <h1 className="tw:m-0 tw:font-prose tw:text-2xl tw:leading-snug tw:text-foreground">
@@ -485,8 +491,15 @@ export function PrivacyPage() {
           The <strong className="tw:text-foreground">Archive</strong> button on your shelf takes an
           article off the shelf and out of your library search, and you can bring it back at any
           time under “Show archived”. Nothing is destroyed, and your notes on it are still there.
-          There is no button that really erases an article — undo matters more than tidiness — so if
-          you want one actually gone, email us and we will do it.
+        </p>
+        <p>
+          If you want an article actually gone,{" "}
+          <strong className="tw:text-foreground">Delete permanently</strong> on the article’s own
+          page does that. It erases the article and everything you did with it — your comments,
+          notes, highlights, questions and chats, and everything the models made from it. There is
+          no undo and no copy we can bring back for you, which is why it asks twice. What it cannot
+          reach is a copy already downloaded to a device: a page or an image your browser or
+          somebody else’s has kept is out of our hands.
         </p>
         <p>
           If you had shared an article and then archive it, it stops being listed anywhere public —
@@ -615,8 +628,10 @@ export function PrivacyPage() {
           — and, worse, a second public address saying things about what we do
           that has to stay true alongside this one. The words belong beside "What
           you add is your responsibility" two sections up, which is the same fact
-          told to the other party, and beside "Deleting things", which is already
-          "email us and we will do it by hand". Findability comes from the link
+          told to the other party, and beside "Deleting things", which since
+          2026-09-07 is a button the owner can press rather than an email we
+          answer by hand — for the article. The account is still the email.
+          Findability comes from the link
           rather than from the page's name: nobody has to guess that a rights
           complaint lives under Privacy, because the two places a stranger meets
           a republished article both carry `TAKEDOWN_LINK` pointing straight at
@@ -691,6 +706,13 @@ export function PrivacyPage() {
 
       {/* The way back out, for a reader who arrived here from the landing page
           and now wants to know what the thing actually does. SiteFooter.tsx. */}
+      {/* The spacer that puts the footer on the floor of a `min-h-dvh` flex
+          column. It grows to nothing on a page this long and is here so the
+          four bare pages have one shape rather than two; ContactPage.tsx, where
+          it does the work, says why it is a spacer and not `mt-auto` on the
+          footer. */}
+      <div className="tw:flex-1" />
+
       <SiteFooter />
     </main>
   );

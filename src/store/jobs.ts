@@ -198,6 +198,92 @@ export interface EnqueueTicket {
    * Postgres feature (docs/project/billing.md), and there is no second ledger.
    */
   ingestEventId?: string;
+  /**
+   * **This request names an article that must already exist**, so the store may
+   * refuse rather than insert if it does not.
+   *
+   * **True exactly when the slug was adopted from the shelf** —
+   * `SlugAllocation.from === "shelf"` (src/jobs.ts), which covers `{ slug,
+   * steps }` (*run something on the article I already have*) and a paste of an
+   * address one of this reader's articles already holds.
+   *
+   * False, and absent, for the two allocations that are requests to **have** an
+   * article: a mint, and an adoption from an in-flight job of this reader's that
+   * has not opened its draft yet. The worker's `lockOrCreateArticle` creating the
+   * row is right for those, and refusing on absence would break the simultaneous
+   * double-paste that legitimately adopts a name before any article row exists.
+   *
+   * **It used to read `!request.url && !request.upload`**, and that was wrong for
+   * the shelf paste: the request looks identical to the paste that mints, and
+   * only the allocation can tell them apart. GPT Sol's F21 on the same plan.
+   *
+   * `enqueue` (src/jobs.ts) already refuses that shape up front, and this is not
+   * a second copy of that check — it is the same check taken again **under the
+   * article lock**, because the preflight's answer is a fact from before the
+   * lock and a delete committing in between is what invalidates it. GPT Sol's
+   * F4 on docs/plans/260906h-delete-an-article-permanently.md; the reasoning is
+   * at `lockArticleFor` in src/store/pg-jobs.ts.
+   *
+   * Optional, and absent means *no*, so that a caller written before this
+   * existed goes on inserting rather than starting to refuse — the direction
+   * that can only fail to block, never wrongly block.
+   */
+  requiresArticle?: boolean;
+  /**
+   * **The terminal attempt this request repeats** — `EnqueueRequest.retryOf`
+   * (src/jobs.ts), carried through so the store can require it to still be
+   * there when it inserts.
+   *
+   * `requiresArticle` is false for most retries and correctly so: a job stopped
+   * while still `queued` never made an article, and its retry must be allowed
+   * to make one. That leaves a retry with *nothing* it has to find, and
+   * `retryJob` reads the failed attempt on the pool minutes of nothing in
+   * particular before the insert. So: read the attempt, delete the article
+   * (which takes its terminal jobs with it), insert anyway, and the worker's
+   * `lockOrCreateArticle` rebuilds what the reader destroyed. GPT Sol's F40,
+   * docs/plans/260906h-delete-an-article-permanently.md.
+   *
+   * The store locks this row and refuses if it has gone, which makes the pair
+   * *"the article and the attempt that named it"* one decision taken under one
+   * lock. **Existence is the whole test** — not the status: `retryJob` has
+   * already refused an attempt that is not terminal, and terminal is absorbing,
+   * so a second opinion here could only ever disagree with the first.
+   *
+   * A `queued`-and-cancelled attempt still satisfies it, which is why this is
+   * the fix rather than `requiresArticle: true` for every retry: that attempt's
+   * row exists even though its article never did.
+   *
+   * **`trimFinished` can also take it**, in principle: the retention sweep runs
+   * on every job ending, and an attempt that fell out of the kept window during
+   * this request would be refused where it used to be queued. That answer is
+   * true rather than unfortunate — the record has gone, and the card offering
+   * Retry would 404 on its next poll for the same reason.
+   */
+  retryOf?: string;
+  /**
+   * **The live job whose name this request adopted** —
+   * `SlugAllocation.from === "queue"` (src/jobs.ts), and the id it carries.
+   *
+   * The sibling of `requiresArticle`, for the allocation that deliberately does
+   * *not* insist on an article. Adopting from the queue says only that a holder
+   * was seen at the moment of the lookup; by the time the insert runs it may
+   * have published and finished and had its article destroyed, and this request
+   * would then queue a job on a slug with nothing under it — which the worker
+   * would helpfully create. GPT Sol's F41, same plan.
+   *
+   * So the store re-asks, under the article lock and **only when the article is
+   * absent**: is that exact job still `queued` or `running`? A holder that
+   * finished normally leaves an article behind, and adopting it then is an
+   * ordinary shelf adoption rather than a resurrection.
+   *
+   * **A miss buys one restart rather than a refusal**, because *"the article is
+   * absent"* is itself a fact nothing was holding — the holder can create it and
+   * go terminal in between, and refusing then takes a perfectly legitimate
+   * second paste away. GPT Sol's F50, same plan; the argument, and why the
+   * repair cannot be a second look at the article in place, is at
+   * `restartRatherThanRefuse` in ./pg-jobs.ts.
+   */
+  adoptedFromJob?: string;
 }
 
 /**

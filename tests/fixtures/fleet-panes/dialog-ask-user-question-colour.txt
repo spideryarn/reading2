@@ -1,0 +1,28 @@
+  - /help — the built-in help screen; /config for settings, /model to switch model, /fast to toggle fast mode.
+  - /clear starts a fresh context; --continue / --resume pick a session back up.
+  - Slash commands come from built-ins plus skills in .claude/skills and plugins; typing / lists what's available.
+  - !<command> at the prompt runs a shell command in-session so its output lands in the conversation.
+  - Ctrl+C interrupts the current turn; /tasks shows background work.
+
+  Runs until you close this session · For durable cloud-based loops, use /schedule
+
+✻ Cogitated for 24s · done 6:38 AM
+
+❯ Use the AskUserQuestion tool right now, header "Colour", question "Which colour should the placeholder swatch be?",
+  three options Red, Green, Blue. Call no other tool first.
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ ☐ Colour
+
+Which colour should the placeholder swatch be?
+
+❯ 1. Red
+     A red placeholder swatch.
+  2. Green
+     A green placeholder swatch.
+  3. Blue
+     A blue placeholder swatch.
+  4. Type something.
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  5. Chat about this
+
+Enter to select · ↑/↓ to navigate · Esc to cancel

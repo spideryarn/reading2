@@ -1634,11 +1634,37 @@ export async function runExpansionWave(opts: {
  * Whether it ever moves is **stage 8's decision**, with the evidence stage 5
  * measures — the same book read both ways, side by side, against the cost.
  * docs/plans/260904d-deepen-fat-sections.md § stage 8.
+ *
+ * ## The name is written twice in this file, and that is deliberate
+ *
+ * `deepeningEnabled()` reads `process.env.SPIDERYARN_DEEPEN_HIERARCHY`
+ * literally rather than through this const. An environment read under `src/`
+ * has to spell its own name or no inventory can see it — a computed key is the
+ * door `SPIDERYARN_ENV_PINNED` sat behind, unseen by every inventory from the
+ * day it was written until something enumerated every read
+ * (docs/plans/260908a-make-every-environment-variable-read-literal-and-inventory-them.md).
+ * The const stays because `evals/deepen/run.ts` sets the lever by it and prints
+ * it.
+ *
+ * **What this one has, and what it does not.** `REASK_ENV` and
+ * `DEEPEN_RECORDS_ENV` below each have a *behavioural* test that sets the
+ * variable through the const and reads the effect back. This one has none —
+ * nothing in `tests/` sets it or calls `deepeningEnabled()` — so a divergence
+ * would have switched the eval's lever off in silence and the run would have
+ * reported a deepening that never happened.
+ *
+ * That is why `tests/env-reads-are-literal.test.ts` holds a *static* table
+ * instead: it asserts this const's imported value against the literal the sweep
+ * collected from this file, in both directions. It cannot prove the read still
+ * works; it does catch the two spellings parting company, which was the whole
+ * exposure. Added on 2026-09-08 because the claim that a behavioural test
+ * covered all four was written down before anybody checked, and two of the four
+ * did not have one.
  */
 export const DEEPEN_ENV = "SPIDERYARN_DEEPEN_HIERARCHY";
 
 export function deepeningEnabled(): boolean {
-  const asked = process.env[DEEPEN_ENV];
+  const asked = process.env.SPIDERYARN_DEEPEN_HIERARCHY;
   return asked === "1" || asked === "true";
 }
 
@@ -1705,6 +1731,12 @@ export function deepeningEnabled(): boolean {
  *
  * A repeat therefore wants the article's structure row to already exist, which
  * is to say: run it once ordinarily, then repeat with this set.
+ *
+ * **`reaskExpansions` reads the name literally and this const spells it again**
+ * — see `DEEPEN_ENV` above for why a read has to name itself. Safe here because
+ * `tests/hierarchy-deepen-wave.test.ts` sets `process.env[REASK_ENV]` and
+ * asserts what `reaskExpansions` answers, so the two spellings cannot diverge
+ * without that test going red.
  */
 export const REASK_ENV = "SPIDERYARN_DEEPEN_REASK";
 
@@ -1744,7 +1776,7 @@ let warnedAboutReask: string | null = null;
  * "I set it to 1 and nothing happened" is the mistake most likely to be made.
  */
 export function reaskExpansions(slug: string): boolean {
-  const raw = process.env[REASK_ENV];
+  const raw = process.env.SPIDERYARN_DEEPEN_REASK;
   const slugs = parseReaskSlugs(raw);
   if (slugs.includes(slug)) return true;
   if (slugs.length > 0 && warnedAboutReask !== raw) {
@@ -1785,6 +1817,12 @@ export function reaskExpansions(slug: string): boolean {
  *
  * **Not on `HierarchyRun`**, which is read on every ingest by code that wants
  * eight numbers, not several hundred rows.
+ *
+ * **`saveDeepenRecords` reads the name literally and this const spells it
+ * again** — see `DEEPEN_ENV` above for why a read has to name itself. Safe here
+ * because `tests/hierarchy-deepen-wave.test.ts` points this variable at a temp
+ * directory *through the const* and then counts the files in it, so a
+ * divergence writes nothing and that test goes red.
  */
 export const DEEPEN_RECORDS_ENV = "SPIDERYARN_DEEPEN_RECORDS";
 
@@ -1893,7 +1931,7 @@ export async function saveDeepenRecords(
    */
   failure?: { reason: string },
 ): Promise<void> {
-  const dir = process.env[DEEPEN_RECORDS_ENV];
+  const dir = process.env.SPIDERYARN_DEEPEN_RECORDS;
   if (dir === undefined || dir.trim() === "") return;
   const file: DeepenRecordsFile = {
     version: "deepen-records/4",

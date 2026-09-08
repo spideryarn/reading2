@@ -82,7 +82,7 @@ import {
 } from "../db/schema.js";
 import { FREE_LIFETIME_INGESTS, tierForPrice } from "../billing/tiers.js";
 import type { TierRow } from "../billing/tiers.js";
-import { allAccountSnapshots, entitlementFromRow } from "./pg-billing.js";
+import { allAccountSnapshots, entitlementFromRow, isPublicPrice } from "./pg-billing.js";
 import type { AccountSnapshot } from "./pg-billing.js";
 import { allTiers } from "./pg-tiers.js";
 import type { AccountRow } from "./account-row.js";
@@ -523,21 +523,32 @@ export function adminQueries(db: Db) {
            ../billing-plan.ts states: integer counts that add up, and no
            half-unit divided for display.
 
-           The join is `left` and the predicate is `= 'public'`, so a row whose
-           article is gone or predates the column falls to full price — the same
-           `coalesce` reading `usageSql` uses, and the direction that cannot be
-           gamed. In flight is not counted here for the same reason it is not
-           discounted there: nobody knows yet. */
+           The join is `left` and the predicate is `isPublicPrice`, **imported
+           from pg-billing.ts rather than spelled again here** — this is the same
+           question the quota wall asks, in a different query builder in a
+           different file, and the two coming to disagree about what "public"
+           means is a wrong number on one page and a right one on the other with
+           nothing red. It has three terms: the live column, then the price
+           frozen onto the ledger row when its article was deleted, then
+           `'private'` for a row that resolves to nothing — so a row whose
+           article predates the column falls to full price, and a row whose
+           article was destroyed keeps whatever it cost. In flight is not counted
+           here for the same reason it is not discounted there: nobody knows yet.
+           tests/admin-queries.test.ts § the ingest ledger's half-price split. */
         lifetimeShared: sql<number>`count(*) filter (
             where ${ingestEvents.succeededAt} is not null
-              and ${articles.visibility} = 'public')`.mapWith(Number),
+              and ${isPublicPrice(articles.visibility, ingestEvents.articleVisibilityAtDelete)})`.mapWith(
+          Number,
+        ),
         inPeriodShared: sql<number>`count(*) filter (
             where ${ingestEvents.succeededAt} is not null
               and ${billingAccounts.currentPeriodStart} is not null
               and ${billingAccounts.currentPeriodEnd} is not null
               and ${ingestEvents.succeededAt} >= ${billingAccounts.currentPeriodStart}
               and ${ingestEvents.succeededAt} < ${billingAccounts.currentPeriodEnd}
-              and ${articles.visibility} = 'public')`.mapWith(Number),
+              and ${isPublicPrice(articles.visibility, ingestEvents.articleVisibilityAtDelete)})`.mapWith(
+          Number,
+        ),
       })
       .from(ingestEvents)
       .leftJoin(billingAccounts, eq(billingAccounts.ownerId, ingestEvents.ownerId))

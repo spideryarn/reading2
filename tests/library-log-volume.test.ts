@@ -213,7 +213,7 @@ function runLoads(loads: number): string[][] {
      is appended to rather than replaced: the lane's setup has already pinned
      `DATABASE_URL` there, which is what keeps the child on the run's private
      database. src/env.ts § `PINNED`. */
-  env[PINNED] = [...pinnedNames(env), "SPIDERYARN_OWNER_ID"].join(",");
+  env[PINNED] = [...pinnedNames(env[PINNED]), "SPIDERYARN_OWNER_ID"].join(",");
 
   /* The timeout goes here, not only on `beforeAll`. `spawnSync` blocks the
      worker's event loop, so vitest's own timeout cannot fire while it waits —

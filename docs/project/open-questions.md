@@ -249,3 +249,42 @@ plan for it would have to settle:
 could *host* them: hotlinks rot, publishers block by referer, and today every reader's browser
 announces itself to the publisher's CDN on every read. That is a bigger piece of work than this
 question, and it would make this one free.
+
+---
+
+## Q12 — Does "briefly broken is fine" apply to `dev`, or only to production? <a id="q12"></a>
+
+[CLAUDE.md](../../CLAUDE.md) says, under *This is a beta, and speed still wins*:
+
+> It is not the end of the world if something is briefly broken — a database migration that lands
+> before the code that matches it, and breaks production for the minutes in between, is fine.
+
+Both readings are natural and at least two agents have taken the wider one for weeks. But the
+example is about **production**, where the readership is small and knows what it signed up for —
+and the cost of a red **`dev`** is a different thing entirely, because `npm run deploy` gates the
+exact sha it ships — `scripts/deploy.ts` runs the full suite against a worktree of that sha, not
+just a typecheck. So a broken trunk never reaches a reader. It reaches *agents*.
+
+**Measured on the night of 2026-09-08**, from one shared-fixture collision I pushed: one session
+spent **twenty minutes** proving an earlier red was not theirs; another spent a **full 24-minute
+gate**; a `Next deploy` and a `get-ready-for-deploy` run were both about to spend a third and a
+fourth before they were told. Roughly an hour of other agents' time from one uuid, on a box running
+forty of them.
+
+**Recommendation: say which one it means.** A sentence like *"this is about production; on `dev`,
+push the fix rather than batching it — a red trunk costs other agents' gates, not readers'
+minutes"* would settle it. That is an edit to CLAUDE.md, whose wording is a rule, so it wants
+Greg's approval one set at a time ([edit-important-docs.md](../reusable/edit-important-docs.md))
+rather than an agent deciding it.
+
+**The argument from the sentence's own reasoning, added 2026-09-08**, because it is stronger than
+the argument from cost and does not depend on the hour above being typical. The licence in CLAUDE.md
+is granted with a reason attached: *"the readership is small and knows what it signed up for"*. That
+is not a claim about how much breakage costs — it is a claim about **who absorbs the cost, and
+whether they consented to it.** Readers of a beta did consent. **Agents cannot.** A red trunk is
+inherited silently by every worktree that pulls, and the cost lands as somebody debugging what they
+believe is their own breakage — which is worse than the same minutes spent knowingly, and is the one
+thing the original sentence's reasoning does not cover. So the licence really is narrower on `dev`
+than on `main`, for a reason that has nothing to do with readers.
+
+Raised jointly with `spideryarn2-4c`, which had read it the same way.

@@ -64,6 +64,8 @@
  * The library, because that *is* home — a link to the page you are on is a
  * dead control, and the shelf already names the app in its `<h1>`. App.tsx
  * makes that choice, so this component never has to know which route it is on.
+ * The shelf draws the spider beside that heading itself (Library.tsx, from
+ * 2026-09-08): it wanted the glyph, which is decoration, and not the link.
  *
  * **And, since 2026-09-06, none of the pages that mount a `Dock`.** The
  * article, its metadata and tweets pages, and the three visitor stand-ins in

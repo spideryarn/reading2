@@ -1,0 +1,3 @@
+NAME       TYPE        SIZE        USED PRIO
+/swapfile  file 17179865088 12383318016   -2
+/swapfile2 file 17179865088  8163016704   -3

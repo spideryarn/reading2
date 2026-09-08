@@ -33,6 +33,36 @@ The shelf's own API surface grew on 2026-08-26: `GET /api/library` (now taking `
 shape and the specific pattern has to win — otherwise the search box would read as a request to
 rename an article called "search".
 
+`DELETE /api/library/:slug` joined them on 2026-09-06 and **nothing calls it yet** — the control
+that will is Stage D of
+[260906h-delete-an-article-permanently.md](../plans/260906h-delete-an-article-permanently.md), and
+until it lands this is reachable only by a `curl`. It destroys the article and everything cascading
+off it, answers 404 for a slug that is not yours and 409 while an import is running on it, and
+there is no undo: *Archive* below is the reversible ending, and this is the other one.
+
+**It takes the article's finished jobs too**, and that is worth knowing because `jobs` is keyed by
+slug text, has no foreign key to `articles`, and so is invisible to the cascade. A `done`, `error`
+or `cancelled` row keeps the attempt's own URL and its own slug, and Retry copies both — so leaving
+one behind left a button that queued a job for the destroyed slug and rebuilt the article, weeks
+later and at the reader's leisure. A *running* job is refused instead (the 409 above), because it
+may still hold an unsettled quota reservation that deleting the row would strand; a terminal one
+should not, since every transition into a terminal status settles the slot in the same transaction
+— and since 2026-09-08 the delete **checks that rather than assuming it**, because the schema
+permits the state the code cannot reach, and refuses with a 500 if it finds one. The argument in
+full is at `deleteTerminalJobs` and `strandedReservationsQuery` in
+[`src/store/pg-shelf.ts`](../../src/store/pg-shelf.ts).
+
+**And two requests that were already in flight can no longer bring the article back.** Deleting the
+terminal jobs closes the unhurried route; it does nothing for a Retry, or a second paste of an
+address, that read what it needed *before* the delete and inserts afterwards. Neither insists on the
+article — a retry of an attempt that never opened a draft, and a paste adopting a name from a job
+still minting, are both requests to *have* an article — so each now names the **job row** its
+allocation depended on, and the enqueue locks and re-checks that row inside the transaction that
+inserts: the attempt it repeats must still exist, and the queue holder it adopted from must still be
+active. `EnqueueTicket` in [`src/store/jobs.ts`](../../src/store/jobs.ts) has both, and
+`tests/article-delete-pg.test.ts` § *what a delete can take out from under a request already in
+flight* holds the article row open so each race happens on purpose rather than by luck.
+
 **This said "the two routes" until 2026-08-25.** The last two arrived together, and they are one
 route with three views rather than three routes: same article, same fetch, same bottom bar, so
 `Route` carries a `view` and `ArticlePage` branches on it

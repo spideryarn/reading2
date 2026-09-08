@@ -1,0 +1,34 @@
+{
+  /* The fleet dashboard's browser client. Bundler resolution and the DOM libs,
+     because vite is what builds this and a browser is what runs it — the same
+     shape as src/web/tsconfig.json, and for the same reasons.
+
+     WHY THIS PROJECT HAD TO EXIST. The root tsconfig.json includes `tools`,
+     which expands to every `.ts` and `.tsx` beneath it. Those flags are
+     `nodenext` resolution, `lib: ES2022` with no DOM, and no `jsx` at all —
+     so every file in this directory failed there on sight: TS17004 on the first
+     angle bracket, and `document` undefined. The root project now excludes
+     `tools/fleet/web` and this one claims it instead.
+
+     "exclude" is stated explicitly and must stay stated: tsconfig.base.json
+     deliberately carries no file list, but if one ever crept back in it would
+     be inherited here and could silently empty this project. `npm run
+     typecheck` fails a project that resolves zero files, which is the real
+     guard — see scripts/typecheck.ts, and docs/reusable/silent-success.md for
+     the family of bug it belongs to.
+
+     No `@/` alias. The product's client has one because shadcn generates
+     imports against it; this tool has none deliberately, since the only thing
+     the alias could reach is `src/`, and a tool that must run with the
+     product's server absent has no business importing from there. */
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["vite/client"]
+  },
+  "include": ["src"],
+  "exclude": []
+}

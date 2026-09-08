@@ -1,0 +1,250 @@
+{
+ "schema": 1,
+ "rows": [
+  {
+   "id": "$2225",
+   "name": "sol-stage1-0322-3835718",
+   "title": null,
+   "repo": null,
+   "worktree": null,
+   "meta": {
+    "version": "legacy"
+   },
+   "startedAt": "2026-09-08T02:22:51.000Z",
+   "paneId": null,
+   "panePid": null,
+   "claudeSessionId": null,
+   "question": null,
+   "status": {
+    "kind": "shell",
+    "busy": true
+   }
+  },
+  {
+   "id": "$1643",
+   "name": "adversarial-fixtures-four-postmortems",
+   "title": null,
+   "repo": "spideryarn/reading2",
+   "worktree": null,
+   "meta": {
+    "version": 1,
+    "kind": "claude",
+    "repo": "spideryarn/reading2",
+    "dir": "/home/greg/code/spideryarn2"
+   },
+   "startedAt": "2026-09-06T21:42:25.000Z",
+   "paneId": "%1646",
+   "panePid": 645023,
+   "claudeSessionId": "117e181a-155b-435a-b95b-e74220678d1a",
+   "question": null,
+   "status": {
+    "kind": "idle"
+   }
+  },
+  {
+   "id": "$1207",
+   "name": "arch-a10-style-ownership",
+   "title": null,
+   "repo": "spideryarn/reading2",
+   "worktree": null,
+   "meta": {
+    "version": 1,
+    "kind": "claude",
+    "repo": "spideryarn/reading2",
+    "dir": "/home/greg/code/spideryarn2"
+   },
+   "startedAt": "2026-09-06T06:42:28.000Z",
+   "paneId": "%1210",
+   "panePid": 2679467,
+   "claudeSessionId": "b703205c-2c22-4c3d-a0e2-6f189f410f4b",
+   "question": null,
+   "status": {
+    "kind": "idle"
+   }
+  },
+  {
+   "id": "$1208",
+   "name": "arch-a5-mode-surface",
+   "title": null,
+   "repo": "spideryarn/reading2",
+   "worktree": null,
+   "meta": {
+    "version": 1,
+    "kind": "claude",
+    "repo": "spideryarn/reading2",
+    "dir": "/home/greg/code/spideryarn2"
+   },
+   "startedAt": "2026-09-06T06:42:47.000Z",
+   "paneId": "%1211",
+   "panePid": 2685057,
+   "claudeSessionId": "76667309-a22a-477c-af3b-4f16d1ce0cf0",
+   "question": null,
+   "status": {
+    "kind": "idle"
+   }
+  },
+  {
+   "id": "$1574",
+   "name": "bottom-bar-modes-tooltips-and-new-mode",
+   "title": "Bottom-bar modes tooltips and new-mode.md",
+   "repo": "spideryarn/reading2",
+   "worktree": null,
+   "meta": {
+    "version": 1,
+    "kind": "claude",
+    "repo": "spideryarn/reading2",
+    "dir": "/home/greg/code/spideryarn2"
+   },
+   "startedAt": "2026-09-06T20:03:31.000Z",
+   "paneId": "%1577",
+   "panePid": 3921071,
+   "claudeSessionId": "e9ec435f-7e67-4046-a657-924bdff46e17",
+   "question": null,
+   "status": {
+    "kind": "idle"
+   }
+  },
+  {
+   "id": "$1992",
+   "name": "changelog-redesign-and-open-source-page",
+   "title": "Changelog redesign and open source page",
+   "repo": "spideryarn/reading2",
+   "worktree": null,
+   "meta": {
+    "version": 1,
+    "kind": "claude",
+    "repo": "spideryarn/reading2",
+    "dir": "/home/greg/code/spideryarn2"
+   },
+   "startedAt": "2026-09-07T20:00:02.000Z",
+   "paneId": "%1995",
+   "panePid": 430640,
+   "claudeSessionId": "3dbdbfcb-3264-4b23-9243-1c3013826ae9",
+   "question": {
+    "kind": "question",
+    "prompt": "\u2610 How to finish The 260907f work is committed and unpushed, waiting on one clean full-suite run. Three attempts have now been killed or blocked by box conditions rather than by anything in the code. How do you want to close it out?",
+    "options": [
+     {
+      "label": "Run it at low concurrency (Recommended)",
+      "key": {
+       "via": "digit",
+       "digit": "1"
+      }
+     },
+     {
+      "label": "Push now on existing evidence",
+      "key": {
+       "via": "digit",
+       "digit": "2"
+      }
+     },
+     {
+      "label": "Keep waiting for a quiet box",
+      "key": {
+       "via": "digit",
+       "digit": "3"
+      }
+     },
+     {
+      "label": "Type something.",
+      "key": {
+       "via": "digit",
+       "digit": "4"
+      }
+     },
+     {
+      "label": "Chat about this",
+      "key": {
+       "via": "digit",
+       "digit": "5"
+      }
+     }
+    ]
+   },
+   "status": {
+    "kind": "needs-you"
+   }
+  }
+ ],
+ "tmuxServerPid": 132280,
+ "collectedAt": "2026-09-08T02:39:52.807Z",
+ "tookMs": 12328,
+ "error": null,
+ "health": {
+  "load": {
+   "kind": "value",
+   "load1": 35.2,
+   "load5": 33.13,
+   "load15": 30.81,
+   "cores": 16,
+   "ratio1": 2.2
+  },
+  "memory": {
+   "kind": "value",
+   "totalBytes": 32859295744,
+   "availableBytes": 11146022912,
+   "availableFraction": 0.33920455869889504
+  },
+  "swap": {
+   "kind": "value",
+   "totalBytes": 34359730176,
+   "usedBytes": 25605009408,
+   "usedFraction": 0.7452040303239895,
+   "areas": 2
+  },
+  "disk": {
+   "kind": "value",
+   "totalKiB": 314660132,
+   "usedKiB": 148110736,
+   "availableKiB": 153732740,
+   "usePercent": 50
+  },
+  "swapActivity": {
+   "kind": "value",
+   "siKBs": 99168,
+   "soKBs": 0,
+   "waPercent": 1,
+   "activelySwapping": true
+  },
+  "attribution": {
+   "kind": "value",
+   "groups": [
+    {
+     "kind": "other",
+     "procs": 702,
+     "rssKiB": 12293044
+    },
+    {
+     "kind": "vitest",
+     "procs": 35,
+     "rssKiB": 10601980
+    },
+    {
+     "kind": "chrome",
+     "procs": 256,
+     "rssKiB": 3893164
+    },
+    {
+     "kind": "node",
+     "procs": 187,
+     "rssKiB": 1892736
+    },
+    {
+     "kind": "vite",
+     "procs": 11,
+     "rssKiB": 802744
+    }
+   ]
+  },
+  "verdict": {
+   "level": "strained",
+   "reasons": [
+    "load average 35.2 is over 2x the 16 cores (ratio 2.2)",
+    "actively swapping (si 99168, so 0 KB/s)"
+   ]
+  },
+  "collectedAt": "2026-09-08T02:39:54.245Z",
+  "tookMs": 1437
+ },
+ "refreshMs": 60000
+}

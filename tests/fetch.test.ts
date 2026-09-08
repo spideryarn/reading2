@@ -253,66 +253,363 @@ describe("mimeType", () => {
   });
 });
 
+/* ------------------------------------------------------------------ *
+ * What the document starts with
+ * ------------------------------------------------------------------ */
+
+const enc = new TextEncoder();
+
+/** A whole page, well formed. The easy case, which both predicates must pass. */
+const PAGE = "<!doctype html><html><head><title>U</title></head><body><p>Prose.</p></body></html>";
+
+/**
+ * The same markup in UTF-16 — the encoding a Latin-1 scan physically cannot
+ * read, because every ASCII character is followed by a `\0`.
+ *
+ * `bom` is a parameter rather than a given because the two answers differ and
+ * both are decided rather than accidental: with a BOM the file says what it is
+ * and we read it; without one it says nothing, trips the binary-data-byte test
+ * on its own null bytes, and is refused. See the two tests that pin each.
+ */
+function utf16(text: string, littleEndian: boolean, bom = true): Uint8Array {
+  const out = new Uint8Array((bom ? 2 : 0) + text.length * 2);
+  let at = 0;
+  if (bom) {
+    out[0] = littleEndian ? 0xff : 0xfe;
+    out[1] = littleEndian ? 0xfe : 0xff;
+    at = 2;
+  }
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    out[at + i * 2] = littleEndian ? c & 0xff : c >> 8;
+    out[at + 1 + i * 2] = littleEndian ? c >> 8 : c & 0xff;
+  }
+  return out;
+}
+
+/**
+ * A **real** UTF-8 BOM, as three bytes.
+ *
+ * `enc.encode("﻿…")` would produce the same three bytes, but writing the
+ * character in a fixture proves nothing: the thing under test has to tell a
+ * decoded `U+FEFF` from the raw `EF BB BF` in front of undecoded bytes, and a
+ * helper that only ever sees one of them cannot be shown to. ⟨Sol F3⟩
+ */
+function withUtf8Bom(text: string): Uint8Array {
+  return new Uint8Array([0xef, 0xbb, 0xbf, ...enc.encode(text)]);
+}
+
+/* The four things a substring search over 16 KB called documents, measured
+   against the code that shipped on 2026-09-07. Each declares another
+   vocabulary in its first token, and none of them is a web page.
+   docs/plans/260908a-match-the-documents-leading-tokens-instead-of-searching-for-markup.md */
+const ATOM =
+  '<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom">' +
+  "<title>Atom</title><link href=\"https://example.com/\"/></feed>";
+const RSS = '<?xml version="1.0"?><rss version="2.0"><channel><title>RSS</title></channel></rss>';
+const SVG =
+  '<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg">' +
+  "<title>Chart</title><style>text{fill:#000}</style></svg>";
+const JSON_WITH_SCRIPT = '{"template":"<script>alert(1)</script>","id":7}';
+
+/**
+ * The shape of the file that started all this: a 4 KB comment, then a bare
+ * `<title>`, and no `<!doctype>`, `<html>`, `<head>` or `<body>` anywhere.
+ */
+const NO_WRAPPER =
+  `<!--\n  Request (Greg, 2026-09-07, verbatim):\n  ${"a request, quoted at length. ".repeat(140)}\n-->` +
+  "<title>Agent Communication and Orchestration</title>" +
+  '<meta name="description" content="How sessions find and message each other.">' +
+  "<style>:root { --ink: #1a1a1a; }</style>" +
+  "<main><h1>Agent communication</h1><p>Prose.</p></main>";
+
+/** XHTML: an XML prolog, then a doctype, then a root that *is* `<html>`. */
+const XHTML =
+  '<?xml version="1.0" encoding="utf-8"?>' +
+  '<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" ' +
+  '"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">' +
+  '<html xmlns="http://www.w3.org/1999/xhtml"><head><title>X</title></head><body><p>Prose.</p></body></html>';
+
 /**
  * **The same question, asked of a file somebody uploaded** — where the only
  * "header" is the reader's own filename.
  *
- * Every case here is one where the name and the bytes could disagree, plus the
- * one that nearly shipped broken: a UTF-16 page. `sniffKind` scans bytes as
- * Latin-1 and UTF-16 markup is `<\0!\0d\0o…`, so the raw scan sees nothing at
- * all — and the first version of `uploadedDocumentKind` refused a perfectly good
- * file that `decodeHtml` reads flawlessly. Found by a GPT Sol review, 2026-09-07,
- * and this is the case that keeps it fixed.
- * docs/plans/260907b-upload-an-html-file-and-a-url-for-a-pdf.md.
+ * **This predicate is the negative one, and that is the whole design.** The
+ * reader has told us what the file is; the bytes are asked only whether they
+ * *disprove* it. So the cases here are things that are provably something else
+ * — binary, or an XML vocabulary that names itself — and everything textual
+ * that merely fails to look like the author's picture of a web page is
+ * accepted and left to stage 2. Two tests below were reversed to say so.
+ * docs/plans/260908a-match-the-documents-leading-tokens-instead-of-searching-for-markup.md
+ *
+ * The case that nearly shipped broken is still here: a UTF-16 page, whose
+ * markup is `<\0!\0d\0o…` and so invisible to the Latin-1 scan `sniffKind`
+ * does. Found by a GPT Sol review, 2026-09-07.
  */
 describe("uploadedDocumentKind", () => {
-  const enc = new TextEncoder();
-  const page = "<!doctype html><html><head><title>U</title></head><body><p>Prose.</p></body></html>";
   const aPdf = enc.encode("%PDF-1.4\nhello\n%%EOF\n");
 
-  /** The same markup in UTF-16, with the BOM a saved file would carry. */
-  const utf16 = (littleEndian: boolean) => {
-    const out = new Uint8Array(2 + page.length * 2);
-    out[0] = littleEndian ? 0xff : 0xfe;
-    out[1] = littleEndian ? 0xfe : 0xff;
-    for (let i = 0; i < page.length; i++) {
-      const c = page.charCodeAt(i);
-      out[2 + i * 2] = littleEndian ? c & 0xff : c >> 8;
-      out[3 + i * 2] = littleEndian ? c >> 8 : c & 0xff;
-    }
-    return out;
-  };
-
   it("reads a page whose markup no Latin-1 scan can see", () => {
-    expect(uploadedDocumentKind("saved.html", utf16(true))).toBe("html");
-    expect(uploadedDocumentKind("saved.html", utf16(false))).toBe("html");
+    expect(uploadedDocumentKind("saved.html", utf16(PAGE, true))).toBe("html");
+    expect(uploadedDocumentKind("saved.html", utf16(PAGE, false))).toBe("html");
     /* The plain case, so the fallback above cannot be the only thing working. */
-    expect(uploadedDocumentKind("saved.html", enc.encode(page))).toBe("html");
+    expect(uploadedDocumentKind("saved.html", enc.encode(PAGE))).toBe("html");
+  });
+
+  /**
+   * **The name says PDF and the bytes say UTF-16 HTML** — and the bytes win.
+   *
+   * ⟨Sol F2.⟩ Until 2026-09-08 this returned `null`: `sniffKind` scanned the
+   * raw bytes only, and `uploadedDocumentKind` reached its decoder only after
+   * `sniffKind` had already said `"html"`, which for a `.pdf` name it never
+   * would. So the filename overruled the bytes — the opposite of the rule this
+   * module's docstrings state in three places. The fix put the decoded
+   * fallback inside `sniffKind`'s own evidence path, which is why the same
+   * fixture now works through both functions.
+   */
+  it("reads UTF-16 markup even when the name claims a PDF", () => {
+    expect(uploadedDocumentKind("a.pdf", utf16(PAGE, true))).toBe("html");
+    expect(uploadedDocumentKind("a.pdf", utf16(PAGE, false))).toBe("html");
   });
 
   it("believes the bytes over the name, in both directions", () => {
     expect(uploadedDocumentKind("mislabelled.html", aPdf)).toBe("pdf");
-    expect(uploadedDocumentKind("mislabelled.pdf", enc.encode(page))).toBe("html");
+    expect(uploadedDocumentKind("mislabelled.pdf", enc.encode(PAGE))).toBe("html");
   });
 
   /* The tie the filename exists to break: `%PDF-` at byte zero is a PDF whatever
      anyone says, but a page that merely *mentions* one is a page — and without
      the claim it would go to the transcriber and be charged for. */
   it("does not send a page that mentions a PDF to the transcriber", () => {
-    const mentions = enc.encode(page.replace("<p>", "<p>about %PDF-1.7 files, "));
+    const mentions = enc.encode(PAGE.replace("<p>", "<p>about %PDF-1.7 files, "));
     expect(uploadedDocumentKind("p.html", mentions)).toBe("html");
   });
 
-  it("refuses what the bytes do not support, whatever it is called", () => {
-    expect(uploadedDocumentKind("notes.html", enc.encode(`prose, ${"x".repeat(400)}`))).toBeNull();
+  /**
+   * **The page with no `<body>`, because HTML does not require one.**
+   *
+   * Greg uploaded one of our own tutorial pages on 2026-09-07 and got
+   * `[up-pdf]` — the sentence this feature had just reworded, from the check
+   * this feature had just written. **Two independent things refused it and
+   * either alone was enough**, which is why both are pinned in one case rather
+   * than two:
+   *
+   *  1. It has no `<!doctype>`, no `<html>`, no `<head>` and no `<body>`
+   *     **anywhere in 108 KB**. That is not a malformed file: tag omission is
+   *     in the HTML spec, all three of those start tags are optional, and every
+   *     browser builds the same tree from it.
+   *  2. Its first tag is at byte 4106, behind a comment holding the request the
+   *     page was written from. The old raw window was 1030 bytes and the old
+   *     decoded window 4096 — so the marker sat ten bytes past the end of the
+   *     only slice that could have seen it.
+   *
+   * The fixture keeps both properties. Its own `<title>` lands at 4111 rather
+   * than the real file's 4106 — the assertion below is what makes it past the
+   * old window, not the exact number, which nothing should depend on.
+   * docs/postmortems/260907c-a-heuristic-promoted-to-a-gate.md.
+   */
+  it("reads a page that omits html, head and body, as the spec allows", () => {
+    /* The guard that keeps this case about the *marker* and not only the
+       window: move the comment and the assertion below still passes for the
+       wrong reason. */
+    expect(NO_WRAPPER.indexOf("<title")).toBeGreaterThan(4096);
+    expect(uploadedDocumentKind("tutorial.html", enc.encode(NO_WRAPPER))).toBe("html");
+    /* And on the fetched path too, where nothing declared anything: this file
+       is the reason the positive predicate skips comments rather than stopping
+       at the first byte. */
+    expect(sniffKind(null, enc.encode(NO_WRAPPER))).toBe("html");
+  });
+
+  /**
+   * **Every HTML file this repo actually holds**, rather than one this file's
+   * author wrote.
+   *
+   * The countermeasure from
+   * docs/postmortems/260907c-a-heuristic-promoted-to-a-gate.md, mechanised
+   * rather than left as advice. Every fixture above began
+   * `<!doctype html><html><head>`, because that is the picture of an HTML file
+   * the person writing the check had in their head — so the suite proved the
+   * check agreed with its author about what a document looks like, which is
+   * docs/reusable/silent-success.md and not evidence.
+   *
+   * `docs/tutorials/` is the corpus because nobody wrote it for this test, and
+   * one of its six files is the one that was refused in production. Reading the
+   * repo from a unit test is unusual and deliberate: a detector needs input its
+   * author did not choose, and this is the cheapest source of it we have.
+   *
+   * **If this goes red on a tutorial you just added**, the tutorial is probably
+   * fine and the detector is probably wrong — that is the direction this failed
+   * in last time. Read the file before you touch the detector.
+   */
+  it("reads every HTML file this repo already holds", async () => {
+    const { readdir, readFile } = await import("node:fs/promises");
+    const dir = new URL("../docs/tutorials/", import.meta.url);
+    const names = (await readdir(dir)).filter((n) => n.endsWith(".html"));
+    /* A corpus that quietly became empty would make this test pass forever
+       while checking nothing. */
+    expect(names.length).toBeGreaterThan(0);
+    for (const name of names) {
+      const fileBytes = new Uint8Array(await readFile(new URL(name, dir)));
+      expect(uploadedDocumentKind(name, fileBytes), name).toBe("html");
+    }
+  });
+
+  /**
+   * **Reversed on 2026-09-08, and the reversal is the point of the change.**
+   *
+   * Both of these were pinned as `null` by the author of the old check, from
+   * the author's own picture of what an HTML file looks like — which is the
+   * last paragraph of
+   * docs/postmortems/260907c-a-heuristic-promoted-to-a-gate.md and the mistake
+   * that refused a real file in production. A `<div>` fragment and a page of
+   * prose are both things a browser opens and a reader may legitimately hand
+   * us; neither proves it is something *other* than a web page, and proof of
+   * something else is now the only ground for refusing an upload. Stage 2 says
+   * whether there is an article in it, which is stage 2's question.
+   *
+   * They stay `null` from `sniffKind`, where nothing has claimed anything and
+   * we need a reason to say yes rather than a reason to say no. The two
+   * predicates disagreeing here is the design working, not drift.
+   */
+  it("accepts a fragment and plain prose, and lets stage 2 judge them", () => {
+    const fragment = enc.encode("<div><p>Just a fragment.</p></div>");
+    const prose = enc.encode(`prose, ${"x".repeat(400)}`);
+    expect(uploadedDocumentKind("part.html", fragment)).toBe("html");
+    expect(uploadedDocumentKind("notes.html", prose)).toBe("html");
+    expect(sniffKind(null, fragment)).toBeNull();
+    expect(sniffKind(null, prose)).toBeNull();
+  });
+
+  /**
+   * **The veto, and it is a closed rule rather than a list of formats.**
+   *
+   * The WHATWG binary-data-byte test — any of `0x00–0x08`, `0x0B`, `0x0E–0x1A`,
+   * `0x1C–0x1F` in the resource header — is the spec's own answer to *is this
+   * text at all*, and one rule covers PNG, ZIP and everything built on it, a
+   * renamed video and the rest without anybody enumerating them. Enumerating
+   * them is the open-ended blocklist this design rejected, and forgetting an
+   * entry is exactly how the original bug was made.
+   */
+  it("refuses a file whose bytes are not text, whatever it is called", () => {
     expect(uploadedDocumentKind("movie.html", new Uint8Array(3000).fill(7))).toBeNull();
+    expect(uploadedDocumentKind("shot.html", bytes(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00))).toBeNull();
+    expect(uploadedDocumentKind("book.html", bytes(0x50, 0x4b, 0x03, 0x04, 0x14, 0x00, 0x00, 0x00))).toBeNull();
     expect(uploadedDocumentKind("paper.pdf", enc.encode("PK this is a zip"))).toBeNull();
+  });
+
+  /**
+   * **The one text rule beside it: an `<?xml` prolog whose root is not `<html`.**
+   *
+   * A rule *about XML* rather than a list of XML vocabularies, so Atom, RSS,
+   * RDF and a prolog'd SVG all go in one line — and none of them needed
+   * naming. All four were accepted as web pages by the substring search that
+   * shipped on 2026-09-07.
+   */
+  it("refuses a file that declares itself another XML vocabulary", () => {
+    expect(uploadedDocumentKind("feed.html", enc.encode(ATOM))).toBeNull();
+    expect(uploadedDocumentKind("feed.html", enc.encode(RSS))).toBeNull();
+    expect(uploadedDocumentKind("chart.html", enc.encode(SVG))).toBeNull();
+  });
+
+  /** XHTML is the case the rule above must not catch: its root *is* `<html>`. */
+  it("reads XHTML, prolog, doctype and all", () => {
+    expect(uploadedDocumentKind("page.html", enc.encode(XHTML))).toBe("html");
+    expect(sniffKind(null, enc.encode(XHTML))).toBe("html");
+  });
+
+  /**
+   * **The cost of the veto being closed, named rather than discovered later.**
+   *
+   * A feed with no `<?xml` prolog declares nothing about itself and is text, so
+   * the upload path accepts it and stage 2 decides. That is the knowingly
+   * imperfect label moving from stage 1 to stage 2, argued in the plan's review
+   * ledger under F4: one reader's own chosen file, their own slot, visible to
+   * nobody else — against the unbounded alternative of a valid file with no
+   * route in, which is the bug this whole thread started with.
+   */
+  it("accepts a prolog-less feed, which is the trade being made", () => {
+    const prologLess = enc.encode("<feed><title>Atom</title><entry><summary>x</summary></entry></feed>");
+    expect(uploadedDocumentKind("feed.html", prologLess)).toBe("html");
+    /* Not on the fetched path, where `<feed` is no reason to say yes. */
+    expect(sniffKind(null, prologLess)).toBeNull();
+  });
+
+  /**
+   * **BOM-less UTF-16 is refused, and that is a decision.**
+   *
+   * It is full of `0x00`, so the binary-data-byte test trips. The spec's UTF-16
+   * BOM check runs first, which is why the BOM'd fixture at the top of this
+   * describe is read — a file that says what it is gets read, a file that says
+   * nothing and looks like binary does not. Pinned so the next person finds a
+   * decision here rather than a gap.
+   */
+  it("refuses BOM-less UTF-16, deliberately", () => {
+    expect(uploadedDocumentKind("saved.html", utf16(PAGE, true, false))).toBeNull();
+    expect(uploadedDocumentKind("saved.html", utf16(PAGE, false, false))).toBeNull();
+  });
+
+  /**
+   * **Sol F3: three independent cases, because one combined case proved less
+   * than it looked.**
+   *
+   * The combined version would pass under an implementation that treats a
+   * leading `<!--` as *positive* HTML evidence — which is what the WHATWG table
+   * actually says — instead of skipping the comment and asking what follows it.
+   * That mistake accepts `<!-- generated --><feed>…`, so the third case is the
+   * one that can tell them apart, and it belongs on the fetched path where a
+   * wrong yes is unrecoverable.
+   */
+  it("skips a comment rather than counting it as evidence", () => {
+    expect(uploadedDocumentKind("page.html", enc.encode("<title>T</title><main>Prose.</main>"))).toBe("html");
+    expect(
+      uploadedDocumentKind("page.html", enc.encode(`<!--${"x".repeat(5000)}--><title>T</title><main>Prose.</main>`)),
+    ).toBe("html");
+    expect(sniffKind(null, enc.encode("<!-- generated --><feed><title>Atom</title></feed>"))).toBeNull();
+  });
+
+  /** A page Chrome saved: its own comment first, then the document. */
+  it("reads a page saved by a browser", () => {
+    const saved = `<!-- saved from url=(0035)https://example.com/a-page -->\n${PAGE}`;
+    expect(uploadedDocumentKind("saved.html", enc.encode(saved))).toBe("html");
+    expect(sniffKind(null, enc.encode(saved))).toBe("html");
+  });
+
+  /**
+   * **A real three-byte BOM in front of real bytes**, not a `U+FEFF` in a
+   * string — because the thing under test walks raw bytes *and* decoded text,
+   * and a fixture that only ever holds one spelling cannot show it handles
+   * both. ⟨Sol F3⟩
+   *
+   * **The third case is the one that isolates the byte walk**, and it was added
+   * after mutation testing: with only the first two, deleting the raw
+   * `EF BB BF` skip left the suite green, because the decoded fallback strips
+   * the BOM itself and answered for it. The byte walk is the only uncapped one,
+   * so a BOM followed by a comment longer than `MARKUP_WINDOW` is the case the
+   * decoder cannot rescue — and it is not contrived: the tutorial page that
+   * caused all this carries 4 KB of quoted request, and 16 KB of it is a
+   * licence header away.
+   */
+  it("looks past a UTF-8 BOM, as bytes", () => {
+    expect(uploadedDocumentKind("bom.html", withUtf8Bom(PAGE))).toBe("html");
+    expect(sniffKind(null, withUtf8Bom(PAGE))).toBe("html");
+    expect(sniffKind(null, withUtf8Bom(ATOM))).toBeNull();
+    const behindALongComment = `<!--${"x".repeat(20_000)}--><title>T</title><main>Prose.</main>`;
+    expect(sniffKind(null, withUtf8Bom(behindALongComment))).toBe("html");
   });
 });
 
+/**
+ * **The fetched path, where nothing has claimed anything.**
+ *
+ * This predicate is the positive one: a vague or absent content type means we
+ * are guessing, so we need a reason to say yes, and the reason is the WHATWG
+ * signature table matched **at the leading position** — never searched for. The
+ * asymmetry with `uploadedDocumentKind` above is deliberate and argued in
+ * docs/plans/260908a-match-the-documents-leading-tokens-instead-of-searching-for-markup.md.
+ */
 describe("sniffKind", () => {
-  const pdf = new TextEncoder().encode("%PDF-1.4\n%\xE2\xE3\xCF\xD3\n");
-  const page = new TextEncoder().encode("<!doctype html><html><body><p>hello</p></body></html>");
+  const pdf = enc.encode("%PDF-1.4\n%\xE2\xE3\xCF\xD3\n");
+  const page = enc.encode("<!doctype html><html><body><p>hello</p></body></html>");
 
   it("believes the bytes over the header, in both directions", () => {
     // Publishers really do serve PDFs as octet-stream...
@@ -334,37 +631,709 @@ describe("sniffKind", () => {
 
   it("refuses what it can't read", () => {
     expect(sniffKind("image/png", bytes(0x89, 0x50, 0x4e, 0x47))).toBeNull();
-    expect(sniffKind("application/json", new TextEncoder().encode('{"a":1}'))).toBeNull();
-    expect(sniffKind("text/plain", new TextEncoder().encode("Chapter 1. It is a truth"))).toBeNull();
+    expect(sniffKind("application/json", enc.encode('{"a":1}'))).toBeNull();
+    expect(sniffKind("text/plain", enc.encode("Chapter 1. It is a truth"))).toBeNull();
   });
 
+  /**
+   * **⟨Sol F5⟩ A live bug, and the suite was green over it for the third time
+   * in this one function.**
+   *
+   * The case below existed and passed `"text/html"` as the content type — so
+   * `declaredHtml` short-circuited and the branch under test never ran. With a
+   * vague header, which is the only header that reaches this branch, a page
+   * that merely mentions `%PDF-1.7` in its first kilobyte was filed as a PDF
+   * and sent to the transcriber: money spent to produce nothing readable. The
+   * ordering is the detector's contract — `%PDF-` at byte zero is unconditional
+   * because that is where the format puts it, and a `%PDF-` further in loses to
+   * positive leading HTML evidence.
+   */
   it("is not fooled by a page that talks about PDFs", () => {
-    /* A bare `%PDF-` anywhere in the first kilobyte is much looser than the
-       format, which puts the header on the first line. This page would have
-       been filed as a PDF and never rendered. */
-    const page = new TextEncoder().encode(
+    const talksAboutPdfs = enc.encode(
       '<!doctype html><html><head><script>const header = "%PDF-1.7";</script></head><body><p>About PDFs</p></body></html>',
     );
-    expect(sniffKind("text/html", page)).toBe("html");
+    expect(sniffKind("text/html", talksAboutPdfs)).toBe("html");
+    expect(sniffKind(null, talksAboutPdfs)).toBe("html");
+    expect(sniffKind("application/octet-stream", talksAboutPdfs)).toBe("html");
+    expect(sniffKind("application/pdf", talksAboutPdfs)).toBe("html");
+    expect(uploadedDocumentKind("about-pdfs.html", talksAboutPdfs)).toBe("html");
+  });
+
+  /** And the other side of that ordering: at byte zero nothing outranks it. */
+  it("still trusts %PDF- at byte zero over anything a header says", () => {
+    expect(sniffKind("text/html", pdf)).toBe("pdf");
+    expect(sniffKind(null, pdf)).toBe("pdf");
+  });
+
+  /**
+   * **The four things a substring search called web pages.** Every one of them
+   * was measured against the code that shipped on 2026-09-07, and every one was
+   * fed enough text to clear Readability's floor and came back a publishable
+   * article — so "a false positive only costs a later *no article here*" was
+   * false as well as untested.
+   */
+  it("refuses documents that declare another vocabulary", () => {
+    expect(sniffKind(null, enc.encode(JSON_WITH_SCRIPT))).toBeNull();
+    expect(sniffKind("application/octet-stream", enc.encode(JSON_WITH_SCRIPT))).toBeNull();
+    expect(sniffKind(null, enc.encode(ATOM))).toBeNull();
+    expect(sniffKind(null, enc.encode(RSS))).toBeNull();
+    expect(sniffKind(null, enc.encode(SVG))).toBeNull();
+  });
+
+  /**
+   * **`< html>` — a space after the `<`.**
+   *
+   * The old regex was `/<\s*(html…)/`, which is not any tag HTML has. A search
+   * that can land mid-string needs that kind of tolerance; matching at the
+   * leading position does not, so the defect goes away rather than being fixed.
+   */
+  it("refuses a tag that is not a tag", () => {
+    expect(sniffKind(null, enc.encode("< html><body><p>hello</p></body>"))).toBeNull();
   });
 
   it("is not fooled by JSON that happens to contain markup", () => {
-    const json = new TextEncoder().encode('{"template":"<p>hello</p>","id":7}');
+    const json = enc.encode('{"template":"<p>hello</p>","id":7}');
     expect(sniffKind(null, json)).toBeNull();
     expect(sniffKind("application/octet-stream", json)).toBeNull();
   });
 
+  /**
+   * ⟨Sol F2, widened.⟩ A *fetched* UTF-16 page with a vague header was refused
+   * too, which is the body-wins rule broken on the path it was written for. The
+   * decoded fallback lives in this function's shared evidence path for exactly
+   * that reason.
+   */
+  it("reads UTF-16 through the header shrugs that reach this branch", () => {
+    for (const header of [null, "application/octet-stream", "application/pdf", "text/plain"]) {
+      expect(sniffKind(header, utf16(PAGE, true)), `LE / ${header}`).toBe("html");
+      expect(sniffKind(header, utf16(PAGE, false)), `BE / ${header}`).toBe("html");
+    }
+  });
+
+  /** A document may begin at its head, and often does. */
+  it("reads a document that begins at a head-level tag", () => {
+    expect(sniffKind(null, enc.encode('<meta charset="utf-8"><title>T</title><main>Prose.</main>'))).toBe("html");
+    expect(sniffKind(null, enc.encode("<body><p>hello</p></body>"))).toBe("html");
+    expect(sniffKind(null, enc.encode("<title>T</title><p>hello</p>"))).toBe("html");
+  });
+
   it("finds a PDF header that straddles the end of the window", () => {
-    const padded = new Uint8Array([
-      ...new Uint8Array(1020).fill(0x20),
-      ...new TextEncoder().encode("%PDF-1.4\n"),
-    ]);
+    const padded = new Uint8Array([...new Uint8Array(1020).fill(0x20), ...enc.encode("%PDF-1.4\n")]);
     expect(sniffKind("application/octet-stream", padded)).toBe("pdf");
   });
 
   it("finds a PDF header hiding behind a few junk bytes", () => {
     const junked = new Uint8Array([0x0d, 0x0a, 0x0d, 0x0a, ...pdf]);
     expect(sniffKind(null, junked)).toBe("pdf");
+  });
+});
+
+/**
+ * **Round 2: the six things a cross-family review found in the first cut**, and
+ * one pattern under three of them.
+ *
+ * ⟨Sol F9–F14, plus F16, 2026-09-08.⟩ Kept in their own describe because they
+ * are a *class* rather than six incidents, and the class is worth reading
+ * whole: **the same bytes were getting a different answer depending on the
+ * filename**, in both directions. F12 and F11 were `null` fetched and `"html"`
+ * uploaded; F13 and F14 were the other way about. That is the body-wins rule —
+ * the one thing the plan calls non-negotiable — broken three ways at once.
+ *
+ * The cause was structural rather than six bugs: wherever the tokenizer gave
+ * up, the veto read "nothing proven against it" and accepted, while the
+ * positive predicate read "no evidence for it" and refused. **The two
+ * predicates were always meant to differ in how much evidence they demand,
+ * never in what the bytes say.** So the fix was one shared reading of the
+ * bytes — one encoding-aware view, one walk, three facts off it — and the
+ * invariant at the bottom of this describe is what stops it drifting apart
+ * again.
+ */
+describe("the two predicates over one set of bytes", () => {
+  /* Long enough that Readability would publish it — which is what makes each of
+     these a real cost rather than a curiosity. Sol got 7,209 characters and
+     `refusal: null` out of `readArticle` for the component below. */
+  const prose = "<p>Real article prose, at length. </p>".repeat(60);
+
+  /**
+   * **⟨F9⟩ `<script>` and `<style>` are how a component file opens**, not how a
+   * document does.
+   *
+   * The plan's own review ledger said so under F4 and the first cut kept them
+   * anyway, on the strength of their being in the WHATWG table. They are — but
+   * that table answers *is there any HTML here* for a browser that has already
+   * decided to render something, and we are answering *is this a document* with
+   * nothing else to go on.
+   *
+   * **The last two assertions are the two-predicate design working**, not a
+   * contradiction: named `.html` the reader has told us what it is and a Svelte
+   * file is not provably anything else, so it goes to stage 2. Removing these
+   * from the *positive* set therefore costs the upload path nothing at all.
+   */
+  it("does not take a component's opening tag as evidence of a document", () => {
+    const svelte = enc.encode(`<script lang="ts">export let a;</script>\n<main>${prose}</main>`);
+    const vue = enc.encode(`<style scoped>main { color: red }</style>\n<main>${prose}</main>`);
+    expect(sniffKind(null, svelte)).toBeNull();
+    expect(sniffKind("application/pdf", svelte)).toBeNull();
+    expect(sniffKind(null, vue)).toBeNull();
+    expect(uploadedDocumentKind("case.pdf", svelte)).toBeNull();
+    expect(uploadedDocumentKind("case.html", svelte)).toBe("html");
+  });
+
+  /**
+   * **⟨F10⟩ A real PDF behind one junk byte, called `.html`.**
+   *
+   * The reordering that fixed F5 put `declaredHtml` in front of `pdfAt > 0`, so
+   * a header or a filename saying HTML beat PDF bytes the detector had already
+   * recognised — the body-wins rule inverted, and money either way: a PDF filed
+   * as HTML produces an empty article, a page filed as PDF pays a transcriber.
+   *
+   * Both halves are pinned together because the fix is one ordering: **leading
+   * HTML evidence beats a `%PDF-` found further in; nothing else does.** A test
+   * of either half alone passes under the version that got the other wrong.
+   */
+  it("lets PDF bytes beat a claim, without losing the page that mentions one", () => {
+    const realPdf = enc.encode("\n%PDF-1.7\n1 0 obj\n<< /Type /Catalog >>\nendobj\ntrailer\n%%EOF\n");
+    expect(sniffKind(null, realPdf)).toBe("pdf");
+    expect(sniffKind("text/html", realPdf)).toBe("pdf");
+    expect(uploadedDocumentKind("case.html", realPdf)).toBe("pdf");
+    expect(uploadedDocumentKind("case.pdf", realPdf)).toBe("pdf");
+
+    const talksAboutOne = enc.encode(`<!doctype html><html><body>About %PDF-1.7 files. ${prose}</body></html>`);
+    expect(sniffKind(null, talksAboutOne)).toBe("html");
+    expect(sniffKind("text/html", talksAboutOne)).toBe("html");
+    expect(uploadedDocumentKind("case.html", talksAboutOne)).toBe("html");
+  });
+
+  /**
+   * **⟨F11⟩ UTF-16 with a long comment, which is where the capped fallback
+   * showed.**
+   *
+   * The first cut read UTF-16 by decoding a 16 KB prefix, so a BOM'd UTF-16
+   * page whose first tag sat behind a 9,000-character comment was invisible to
+   * the positive predicate and visible to nothing at all — which meant the
+   * *upload* path accepted it (nothing proven against it) and the *fetched*
+   * path refused it. The documented "false negative" turned out to be a
+   * filename changing the meaning of bytes.
+   *
+   * The fix is a UTF-16 `CodeUnits` view chosen from the BOM, over which the
+   * ordinary uncapped walk runs — so there is no separate horizon for UTF-16 to
+   * fall off, and `MARKUP_WINDOW` is gone rather than merely enlarged.
+   */
+  it("reads UTF-16 as far in as it reads anything else", () => {
+    const behindAComment = `<!--${"x".repeat(9000)}--><!doctype html><html><body>Prose.</body></html>`;
+    for (const littleEndian of [true, false]) {
+      const b = utf16(behindAComment, littleEndian);
+      const which = littleEndian ? "LE" : "BE";
+      expect(sniffKind(null, b), `${which} fetched, no header`).toBe("html");
+      expect(sniffKind("application/pdf", b), `${which} fetched, application/pdf`).toBe("html");
+      expect(uploadedDocumentKind("case.html", b), `${which} upload .html`).toBe("html");
+      expect(uploadedDocumentKind("case.pdf", b), `${which} upload .pdf`).toBe("html");
+    }
+  });
+
+  /**
+   * **⟨F12⟩ `--!>` closes a comment**, and every browser agrees.
+   *
+   * The HTML parser calls it an *incorrectly-closed comment*, raises a parse
+   * error and closes the comment anyway
+   * (https://html.spec.whatwg.org/multipage/parsing.html#parse-error-incorrectly-closed-comment).
+   * Reading only `-->` meant a page whose licence header ends that way looked
+   * like one unterminated comment and nothing else — no first tag, no evidence,
+   * refused when fetched. JSDOM renders its prose perfectly well.
+   */
+  it("closes a comment the way a browser does", () => {
+    const page = enc.encode(`<!-- license --!><!doctype html><html><body>${prose}</body></html>`);
+    expect(sniffKind(null, page)).toBe("html");
+    expect(sniffKind("application/pdf", page)).toBe("html");
+    expect(uploadedDocumentKind("case.pdf", page)).toBe("html");
+    /* Whichever terminator comes first is the one that ends it, or a `--!>`
+       inside a normally-closed comment would swallow the document after it. */
+    expect(sniffKind(null, enc.encode("<!-- a --> <!doctype html><html><body>hi --!> there</body></html>"))).toBe(
+      "html",
+    );
+  });
+
+  /**
+   * **⟨F13⟩ `<?xml-stylesheet …?>` is not an XML declaration.**
+   *
+   * A case-insensitive prefix match on `<?xml` claimed it was one, which set
+   * the XML flag and turned the veto on: fetched it read `"html"`, uploaded as
+   * `.html` it read `null`. Two rules put that right, and they are different
+   * rules rather than one loosened:
+   *
+   *  - **A declaration** is lowercase `<?xml` followed by the whitespace XML
+   *    requires. `<?xml-stylesheet` is a processing instruction, not that.
+   *  - **A processing instruction is skippable anyway**, because the HTML
+   *    parser treats `<?…>` as a bogus comment and ends it at the first `>`
+   *    (https://html.spec.whatwg.org/multipage/parsing.html#parse-error-disallowed-processing-instruction-target).
+   *    So the document after it is still the document, on both paths.
+   */
+  it("tells an XML declaration from a processing instruction", () => {
+    const styled = enc.encode(`<?xml-stylesheet href="x.css"?><body><p>Prose.</p>${prose}</body>`);
+    expect(sniffKind(null, styled)).toBe("html");
+    expect(uploadedDocumentKind("case.html", styled)).toBe("html");
+    expect(uploadedDocumentKind("case.pdf", styled)).toBe("html");
+    /* And a real declaration still declares: uppercase is not one either. */
+    expect(sniffKind(null, enc.encode('<?XML version="1.0"?><body><p>Prose.</p></body>'))).toBe("html");
+  });
+
+  /**
+   * **⟨F14, and then reversed by F22⟩ A doctype names the vocabulary, and that
+   * is the end of the question.**
+   *
+   * **This test asserted the opposite until 2026-09-08 and the reversal is
+   * deliberate**, so read the argument before restoring it. F14 was real: the
+   * rule *an XML prolog whose root is not `<html>`* was being answered `yes` on
+   * the doctype without ever looking at the root, and `<?xml?><!doctype html>
+   * <feed>` walked through both paths. The fix skipped the doctype and asked
+   * the first element — and that fix is what has now gone.
+   *
+   * **Because the line it defended is not one the design holds anywhere else.**
+   * Measured:
+   *
+   * ```
+   * fetch upload  input
+   * html  html    <!doctype html><feed>            (no prolog)
+   * null  null    <?xml?><!doctype html><feed>     (the same document + 21 bytes)
+   * ```
+   *
+   * Without a prolog `<!doctype html` is already sufficient positive evidence,
+   * on both paths, and nobody has objected to that. **One document must not get
+   * two answers over a prolog** — that is the same coherence rule the property
+   * test at the bottom of this describe exists for, and F14's fix was breaking
+   * it in a place the property test could not see.
+   *
+   * The rule is now: *an XML prolog whose document does not declare itself
+   * HTML, **by root or by doctype**, is another vocabulary.* The cases the veto
+   * exists for do not move, because neither of them says `html` — pinned below.
+   */
+  it("takes a doctype as the vocabulary's own declaration", () => {
+    const feed = enc.encode(`<?xml version="1.0"?><!doctype html><feed><title>Atom</title>${prose}</feed>`);
+    const prologLess = enc.encode(`<!doctype html><feed><title>Atom</title>${prose}</feed>`);
+    /* The pair, asserted together, because the point is that they agree. */
+    for (const [label, b] of [["with a prolog", feed], ["without one", prologLess]] as const) {
+      expect(sniffKind(null, b), label).toBe("html");
+      expect(sniffKind("application/pdf", b), label).toBe("html");
+      expect(uploadedDocumentKind("case.html", b), label).toBe("html");
+      expect(uploadedDocumentKind("case.pdf", b), label).toBe("html");
+    }
+    /* XHTML, which is what the allowance exists for. */
+    expect(uploadedDocumentKind("case.html", enc.encode(XHTML))).toBe("html");
+    expect(sniffKind(null, enc.encode(XHTML))).toBe("html");
+    /* XHTML with no doctype at all, which is how most of it is written: the
+       root element is the other half of the rule, and a mutant that kept only
+       the doctype clause passed the whole suite without this. */
+    const rootOnly = enc.encode(
+      `<?xml version="1.0" encoding="utf-8"?><html xmlns="http://www.w3.org/1999/xhtml"><body>${prose}</body></html>`,
+    );
+    expect(sniffKind(null, rootOnly)).toBe("html");
+    expect(uploadedDocumentKind("case.html", rootOnly)).toBe("html");
+    /* And the converse: a prolog over a root that is neither `html` nor a
+       doctype is another vocabulary even when its first tag is one this module
+       would otherwise take as evidence. Both paths must agree — without the
+       suppression in `documentEvidence` the fetched path called this `html`
+       while the veto refused it, which is the round-2 incoherence again. */
+    const xmlTitle = enc.encode(`<?xml version="1.0"?><title>Atom</title><summary>${prose}</summary>`);
+    expect(sniffKind(null, xmlTitle)).toBeNull();
+    expect(uploadedDocumentKind("case.html", xmlTitle)).toBeNull();
+    /* And what the veto still catches, since neither doctype says `html`. */
+    const svg = enc.encode(
+      '<?xml version="1.0"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "s.dtd"><svg><title>T</title></svg>',
+    );
+    const rss = enc.encode('<?xml version="1.0"?><rss version="2.0"><channel><title>R</title></channel></rss>');
+    expect(sniffKind(null, svg)).toBeNull();
+    expect(uploadedDocumentKind("case.html", svg)).toBeNull();
+    expect(sniffKind(null, rss)).toBeNull();
+    expect(uploadedDocumentKind("case.html", rss)).toBeNull();
+  });
+
+  /**
+   * **⟨F16⟩ A BOM in front of a PNG.**
+   *
+   * The WHATWG text-or-binary rule returns *text* the moment it sees a BOM and
+   * never looks further, which is correct for the question a browser is asking
+   * and wrong for the claim this module makes — that one closed rule catches
+   * PNG, ZIP and everything built on them. Three bytes in front of any of them
+   * defeated it.
+   *
+   * So the BOM is **skipped** rather than treated as an answer, and the scan
+   * runs over what follows; for UTF-16 the scan runs over decoded code units,
+   * which is the same question asked in the units that file is actually made
+   * of. A real BOM'd UTF-16 page still passes — pinned above and below.
+   */
+  it("does not let a BOM excuse the bytes behind it", () => {
+    const png = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, ...new Uint8Array(400).fill(0x03)];
+    expect(uploadedDocumentKind("case.html", new Uint8Array([0xef, 0xbb, 0xbf, ...png]))).toBeNull();
+    expect(uploadedDocumentKind("case.html", new Uint8Array(png))).toBeNull();
+    expect(uploadedDocumentKind("case.html", withUtf8Bom(PAGE))).toBe("html");
+  });
+
+  /**
+   * **A page with a stray `0x00` in it is still a page**, and this is the one
+   * case where the veto and the evidence genuinely disagree.
+   *
+   * The binary-data test trips — a NUL is a NUL — but the file opens with a
+   * doctype, so the fetched path calls it a web page, and a filename may not
+   * then unsay that. Positive evidence is therefore checked **before** the veto
+   * in `uploadedDocumentKind`, and this is the fixture that makes that ordering
+   * load-bearing rather than decorative: added after a mutant that deleted the
+   * line survived the whole suite.
+   *
+   * Not invented, either. Truncated exports, mangled UTF-16 conversions and
+   * some CMS output carry a NUL in the body; a browser replaces it with U+FFFD
+   * and renders the page.
+   */
+  it("reads a page that carries a stray NUL byte", () => {
+    const withNul = new Uint8Array([
+      ...enc.encode("<!doctype html><html><body><p>Prose "),
+      0x00,
+      ...enc.encode(`more prose. ${prose}</p></body></html>`),
+    ]);
+    expect(sniffKind(null, withNul)).toBe("html");
+    expect(uploadedDocumentKind("case.html", withNul)).toBe("html");
+  });
+
+  /**
+   * **A UTF-16 needle found half a character out.**
+   *
+   * Terminators are searched for as bytes, and a multi-byte needle can be
+   * spelled by the *tails* of ordinary characters. `?>` in UTF-16LE is
+   * `3F 00 3E 00`, and `U+3F41 U+3E00 U+0100` lays exactly those four bytes
+   * down starting at an **odd** offset. A search that accepted it would put the
+   * cursor half a character out and read the rest of the file shifted, so the
+   * document behind the declaration would vanish — which is why the view
+   * rejects odd-numbered hits and keeps looking.
+   *
+   * Written after a mutant that removed that check survived the whole suite:
+   * every other UTF-16 fixture here is ASCII behind a BOM, and ASCII cannot
+   * produce a straddling match.
+   *
+   * **The fixture is an `?>` rather than the `-->` it started as**, and the
+   * reason is worth keeping. The comment walk now looks for a single `>` and
+   * then checks what precedes it, so a straddling hit there is merely rejected
+   * on the next line and the old fixture stopped discriminating — it went on
+   * passing with the guard removed. The XML declaration's `?>` is the two-byte
+   * needle that is left, so that is where the check has to be proved.
+   */
+  it("does not find a UTF-16 terminator straddling two characters", () => {
+    const straddling = utf16("<?xml 㽁㸀Ā?><!doctype html><html><body>Prose.</body></html>", true);
+    expect(sniffKind(null, straddling)).toBe("html");
+    expect(uploadedDocumentKind("case.html", straddling)).toBe("html");
+  });
+
+  /**
+   * **⟨F17⟩ A ceiling, because no correctness test can see this one.**
+   *
+   * Reading `-->` and `--!>` as two separate searches made detection
+   * **quadratic**: in a document of ordinary empty comments the first search
+   * closes at once and the second scans to the end of the file, once per
+   * comment. Measured before the fix — 16 KiB 134 ms, 32 KiB 429 ms, 64 KiB
+   * 2.2 s, 128 KiB 6.6 s, and 1 MiB still running after a minute. Synchronous
+   * CPU in the one server process, reachable from any uploaded file: a 100 KB
+   * document takes the service down for everyone.
+   *
+   * Every correctness test in this file passed throughout, and would have gone
+   * on passing, which is the whole reason this test exists and is written as a
+   * clock rather than a value.
+   *
+   * **128 KiB and 400 ms, and both numbers were chosen against measurements
+   * rather than picked.** The brief suggested 1 MiB under 100 ms; neither half
+   * of that survived contact.
+   *
+   *  - **Not 1 MiB.** A regression makes this test *hang* rather than fail —
+   *    the quadratic version did not finish 1 MiB in a minute, and a
+   *    synchronous test body cannot be timed out. At 128 KiB it was 6.6 s, so
+   *    the regression fails in seconds and says so.
+   *  - **Not 100 ms.** Both calls together measure ~6 ms fixed, but this box
+   *    runs the suite beside twenty-odd other vitest processes, and a ceiling
+   *    five times the real number is a test that fails on a busy afternoon.
+   *    400 ms sits ~65× above what it costs and ~16× below what the bug cost,
+   *    which is a gap no amount of load closes.
+   *
+   * If this ever goes red, do not raise the number: run the shape at 2× and 4×
+   * and see whether the time quadruples.
+   */
+  it("stays linear over documents built of the things it skips", () => {
+    /* `<!---->` is the shape that was quadratic: the first terminator closes at
+       once so the second search had the whole rest of the file to scan. */
+    const manyComments = enc.encode("<!---->".repeat(18_724)); // ~128 KiB
+    /* Banner dashes, the other shape a comment scan can go quadratic on:
+       `<!-- ------------------------------- -->` punctuates half the CSS in the
+       world, and a scan that advances one character per `--` would crawl. */
+    const bannerDashes = enc.encode(`<!--${"-".repeat(1_000_000)}--><title>T</title><main>x</main>`);
+
+    /* **A third arm was here and has been removed rather than left to rot** —
+       an unterminated doctype internal subset, which used to run `doctypeEnd`
+       to the end of the file. That function is gone (the plan's § F22 and F14),
+       so `<!doctype html [` is now answered by the first token and the fixture
+       measured nothing at all. A timing arm that exercises no loop is worse than
+       no arm: it passes for ever and reads like coverage. ⟨Sol F24.⟩ */
+
+    for (const [label, b] of [
+      ["128 KiB of empty comments", manyComments],
+      ["a comment of nothing but dashes", bannerDashes],
+    ] as const) {
+      const started = performance.now();
+      sniffKind(null, b);
+      uploadedDocumentKind("case.html", b);
+      expect(performance.now() - started, `${label}: fetched + uploaded`).toBeLessThan(400);
+    }
+  });
+
+  /**
+   * **⟨F23⟩ Linear is not the whole of the promise — the constant has to be
+   * small too.**
+   *
+   * The first fix for the quadratic scan searched for the next `>` and checked
+   * what preceded it. That is linear in the document, and it is also **one
+   * native `Buffer.indexOf` call per `>` in it**, so a comment stuffed with
+   * them cost a call per character: 168 ms for 1 MiB, 776 ms for 4 MiB, 2.4 s
+   * for 16 MiB, measured through a real upload. The fetch cap is 32 MiB and the
+   * upload cap 50 MiB, so that is seconds of the one server process, and the
+   * 128 KiB ceiling above never saw it — a `>` costs nothing there.
+   *
+   * The fix is what was suggested for the P0 in the first place and not taken:
+   * **bound the second search by the first.** Find `-->` once; look for `--!>`
+   * only in front of it. Two native scans per comment, each over that comment's
+   * own span, and no single stuffing character can make either of them
+   * degrade — which is the property the `>` scan lacked and this test exists to
+   * hold.
+   *
+   * **The `x` after `<!--` is load-bearing in the fixture.** Without it the
+   * first `>` is an abrupt-closing empty comment, the walk stops at byte four,
+   * and the megabyte behind it is never read: the test would pass in 0 ms while
+   * proving nothing. That mistake was made once while writing this.
+   *
+   * **The answer was to stop searching natively at all.** `Buffer.indexOf`
+   * costs ~300 ns per call whatever the size, and degrades to 151 ms per 16 MiB
+   * when the haystack repeats the needle's prefix — so every native variant had
+   * *some* stuffing character that punished it, and each round of review found
+   * the next one. A `unit()` read is 6.6 ns and does not care what the byte is.
+   * The sliding window in `commentEnd` measures 78–90 ms per 16 MiB across
+   * dashes, `>`, ordinary text and a million small comments alike: worse than a
+   * native scan at its best, better than all of them at their worst, and — the
+   * point — **a function of length alone, so no input makes it slower**.
+   *
+   * **4 MiB and 400 ms**, calibrated like the ceiling above. The fixed version
+   * measures 40–66 ms across all three shapes, so the ceiling is six times the
+   * worst of them — the headroom a box running twenty other suites needs. The
+   * defects it has to catch are all above it at this size and, since load can
+   * only make a measurement larger, that direction never flakes: the `>` scan
+   * cost 776 ms here, and the bounded two-search 591 ms on the third shape.
+   *
+   * **Each shape broke a different version of this function**, and a fix for
+   * one was never a fix for the others — which is the whole reason there are
+   * three and not one. Not all three catch every past defect (a comment of
+   * dashes was only 148 ms under the bounded search); together they cover the
+   * designs that have actually been written here.
+   *
+   * Two mechanical notes, both learned by getting them wrong:
+   *
+   *  - **Warm up first.** Cold, the first megabyte pays for V8 compiling the
+   *    loop: 420 ms against 45 ms warm. That is a fixed cost this test is not
+   *    about, and it would have had us raising the ceiling for a reason that is
+   *    not the algorithm.
+   *  - **Build one fixture at a time.** Holding three multi-megabyte buffers
+   *    alive at once put the measurement up from 208 ms to 580 ms in GC alone.
+   */
+  it("stays cheap over comments stuffed with terminator candidates", () => {
+    const size = 4 * 1024 * 1024;
+    const tail = "--><title>T</title><main>x</main>";
+    sniffKind(null, enc.encode(`<!--x${">".repeat(4096)}${tail}`));
+
+    /* Thunks, so each fixture can be collected before the next is built. */
+    for (const [label, build] of [
+      ["4 MiB of '>' in one comment", () => enc.encode(`<!--x${">".repeat(size)}${tail}`)],
+      ["4 MiB of '-' in one comment", () => enc.encode(`<!--x${"-".repeat(size)}${tail}`)],
+      ["4 MiB of tiny comments", () => enc.encode("<!--x>-->".repeat(size / 9))],
+    ] as const) {
+      const b = build();
+      const started = performance.now();
+      sniffKind(null, b);
+      uploadedDocumentKind("case.html", b);
+      expect(performance.now() - started, label).toBeLessThan(400);
+    }
+  });
+
+  /**
+   * **⟨F18⟩ `<!-->` is an empty comment, not the start of one.**
+   *
+   * HTML calls it *abrupt closing of an empty comment*: a parse error, and the
+   * comment ends anyway — so `<!--><!doctype html>…` is a document with a
+   * useless comment in front of it, and JSDOM renders its body. Reading only
+   * `-->` and `--!>` as terminators meant the comment never closed, there was
+   * no first tag, and the filename decided the answer again.
+   * https://html.spec.whatwg.org/multipage/parsing.html#parse-error-abrupt-closing-of-empty-comment
+   *
+   * **It falls out of F17's fix rather than being patched in**, which is the
+   * part worth knowing: a comment now ends at the first `>` whose preceding
+   * characters are `--`, and in `<!-->` those are the opener's own dashes.
+   * Both abrupt-closing forms the spec lists are that one rule.
+   *
+   * **`<!--!>` is the case that does *not* close** — the `!` puts the parser in
+   * the comment state with `!` as data, so a browser swallows the rest of the
+   * file. It is pinned because it is the only thing separating "the terminator
+   * may overlap the opener" from "anything ending in `>` closes a comment".
+   */
+  it("closes an empty comment the way the parser does, and only then", () => {
+    const tail = `<!doctype html><html><body>${prose}</body></html>`;
+    for (const opener of ["<!-->", "<!--->"]) {
+      const b = enc.encode(opener + tail);
+      expect(sniffKind(null, b), opener).toBe("html");
+      expect(uploadedDocumentKind("case.html", b), opener).toBe("html");
+      expect(uploadedDocumentKind("case.pdf", b), opener).toBe("html");
+    }
+    /* Not a terminator: a browser reads the rest of the file as comment data,
+       so there is no document here and we must not invent one. */
+    expect(sniffKind(null, enc.encode(`<!--!>${tail}`))).toBeNull();
+  });
+
+  /**
+   * **⟨F19⟩ A doctype does not end at its first `>`.**
+   *
+   * An internal subset holds markup declarations of its own, and a public
+   * identifier is a quoted literal that may contain anything. Taking the first
+   * `>` cut the doctype in half and left the root check reading `<!ENTITY`, so
+   * perfectly valid XHTML — which JSDOM parses and whose body text is
+   * `article` — was refused on every path.
+   *
+   * Both shapes are here because they fail the same naive scan for two
+   * different reasons, and a fix for one need not be a fix for the other.
+   */
+  it("reads a doctype with an internal subset, and one with a quoted >", () => {
+    const subset = enc.encode(
+      '<?xml version="1.0"?>\n<!DOCTYPE html [<!ENTITY article "article">]>\n' +
+        '<html xmlns="http://www.w3.org/1999/xhtml"><body>&article;</body></html>',
+    );
+    const quoted = enc.encode(
+      '<?xml version="1.0"?><!DOCTYPE html SYSTEM "a>b.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><body>x</body></html>',
+    );
+    for (const [label, b] of [
+      ["an internal subset", subset],
+      ["a > inside a quoted literal", quoted],
+    ] as const) {
+      expect(sniffKind(null, b), label).toBe("html");
+      expect(uploadedDocumentKind("case.html", b), label).toBe("html");
+      expect(uploadedDocumentKind("case.pdf", b), label).toBe("html");
+    }
+  });
+
+  /**
+   * **The subsets that are only readable because nothing reads them** ⟨F22, and
+   * the reason `doctypeEnd` was deleted rather than made nesting-aware⟩.
+   *
+   * **Do not "fix" these by reintroducing a DTD lexer.** They are here to say
+   * that the lexer is gone on purpose. It tracked quotes and one level of
+   * brackets, and both cases below defeated it:
+   *
+   *  - a **nested** `[` inside the subset closed it early;
+   *  - an **apostrophe** in an English comment inside the subset — *can't* —
+   *    opened a quoted literal that never closed, so the doctype ran to the end
+   *    of the file and the document was refused outright.
+   *
+   * The second is not exotic. An entity subset is the canonical reason to
+   * hand-write a doctype in XHTML, and a comment beside it is ordinary
+   * authoring. A nesting-depth fix would not have helped it at all — the real
+   * gap was that comments and processing instructions *inside* a subset were
+   * being lexed as declarations, which is a DTD parser, not a delimiter.
+   *
+   * And it was modelling a grammar nothing downstream applies: stage 2 is
+   * `new JSDOM(html)` with no content type, so it runs the **HTML** parser,
+   * whose rule for `<!DOCTYPE html [` is to end at the first `>` and let `]>`
+   * fall into the body text. `commentEnd` and the processing-instruction skip
+   * find *one delimiter* each and cite the spec for it; this function was
+   * parsing the inside of a construct, which is why it alone kept producing
+   * findings.
+   */
+  it("reads doctype subsets it does not parse", () => {
+    const body = '<html xmlns="http://www.w3.org/1999/xhtml"><body>article</body></html>';
+    for (const [label, src] of [
+      ["a nested bracket", `<?xml version="1.0"?><!DOCTYPE html [<!ELEMENT p (#PCDATA)[x]>]>${body}`],
+      [
+        "an apostrophe in a comment inside the subset",
+        `<?xml version="1.0"?><!DOCTYPE html [<!ENTITY nbsp "&#160;"><!-- we can't use one here -->]>${body}`,
+      ],
+    ] as const) {
+      expect(sniffKind(null, enc.encode(src)), label).toBe("html");
+      expect(uploadedDocumentKind("case.html", enc.encode(src)), label).toBe("html");
+    }
+  });
+
+  /**
+   * **The invariant the six of round 2 were instances of — now with an expected
+   * column** ⟨Sol F20⟩.
+   *
+   * The first version of this test skipped every fixture whose fetched answer
+   * was not `"html"`, so it proved that *already-recognised* evidence survives
+   * a filename and nothing about whether the reading found the evidence in the
+   * first place. Both F18 and F19 passed it while being broken — they returned
+   * `null`, so the test looked away.
+   *
+   * **Consistency and correctness are two properties**, and a table that only
+   * checks the first is the shape of test this whole thread keeps producing:
+   * one that agrees with the code about what to examine
+   * (docs/reusable/silent-success.md). So every fixture now names the answer it
+   * expects, and a fixture that quietly stops being recognised fails here
+   * rather than dropping out of the loop.
+   *
+   * The two predicates may still differ in **how much evidence they demand** —
+   * a `<div>` fragment is refused when fetched and accepted when uploaded, and
+   * that is the design. What they may never do is contradict each other about
+   * the bytes.
+   */
+  it("reads the same bytes the same way, whatever the file is called", () => {
+    const corpus: [string, Uint8Array, "html" | "pdf" | null][] = [
+      ["a whole page", enc.encode(PAGE), "html"],
+      ["a page with no wrapper", enc.encode(NO_WRAPPER), "html"],
+      ["XHTML", enc.encode(XHTML), "html"],
+      [
+        "XHTML with an internal subset",
+        enc.encode('<?xml version="1.0"?><!DOCTYPE html [<!ENTITY a "b">]><html><body>x</body></html>'),
+        "html",
+      ],
+      ["an abruptly-closed empty comment", enc.encode(`<!--><!doctype html><html><body>${prose}</body></html>`), "html"],
+      ["a browser-closed comment", enc.encode(`<!-- x --!><!doctype html><html><body>${prose}</body></html>`), "html"],
+      ["a processing instruction", enc.encode(`<?xml-stylesheet href="x.css"?><body>${prose}</body>`), "html"],
+      ["a comment longer than any window", enc.encode(`<!--${"x".repeat(30_000)}--><title>T</title><main>x</main>`), "html"],
+      ["UTF-16LE, BOM'd", utf16(PAGE, true), "html"],
+      ["UTF-16BE, BOM'd", utf16(PAGE, false), "html"],
+      ["UTF-8 BOM", withUtf8Bom(PAGE), "html"],
+      ["UTF-16LE behind a long comment", utf16(`<!--${"x".repeat(9000)}--><!doctype html><html><body>P</body></html>`, true), "html"],
+      ["UTF-16LE with a straddling terminator", utf16("<?xml 㽁㸀Ā?><!doctype html><html><body>P</body></html>", true), "html"],
+      [
+        "a page with a stray NUL",
+        new Uint8Array([...enc.encode("<!doctype html><html><body><p>Prose "), 0x00, ...enc.encode("more.</p>")]),
+        "html",
+      ],
+      ["a real PDF behind a junk byte", enc.encode("\n%PDF-1.7\n1 0 obj\n<< /Type /Catalog >>\nendobj\n"), "pdf"],
+      ["an Atom feed", enc.encode(ATOM), null],
+      ["an RSS feed", enc.encode(RSS), null],
+      ["an SVG", enc.encode(SVG), null],
+      ["JSON holding a script tag", enc.encode(JSON_WITH_SCRIPT), null],
+      ["a fragment", enc.encode("<div><p>Just a fragment.</p></div>"), null],
+      ["prose", enc.encode(`prose, ${"x".repeat(400)}`), null],
+      /* `html`, and its prolog-less twin two rows down must match it: see
+         "takes a doctype as the vocabulary's own declaration" above. */
+      ["a doctype'd feed", enc.encode(`<?xml version="1.0"?><!doctype html><feed>${prose}</feed>`), "html"],
+      ["the same feed with no prolog", enc.encode(`<!doctype html><feed>${prose}</feed>`), "html"],
+      ["a doctype'd SVG", enc.encode('<?xml version="1.0"?><!DOCTYPE svg SYSTEM "s.dtd"><svg><title>T</title></svg>'), null],
+      ["XHTML with no doctype", enc.encode(`<?xml version="1.0"?><html xmlns="x"><body>${prose}</body></html>`), "html"],
+      ["a prolog over a bare title", enc.encode(`<?xml version="1.0"?><title>A</title><summary>${prose}</summary>`), null],
+      ["a Svelte component", enc.encode(`<script lang="ts">export let a;</script>\n<main>${prose}</main>`), null],
+      ["a tag that is not a tag", enc.encode("< html><body><p>hello</p></body>"), null],
+      ["a comment a browser never closes", enc.encode(`<!--!><!doctype html><html><body>${prose}</body></html>`), null],
+    ];
+    for (const [label, b, expected] of corpus) {
+      /* Correctness: the reading itself, which the old version of this test
+         never asked about. */
+      expect(sniffKind(null, b), `${label}: fetched`).toBe(expected);
+      /* Consistency: and no filename may then unsay it. Only checked where the
+         bytes said something — where they did not, the two predicates are
+         *meant* to differ, and their own tests pin that. */
+      if (expected === null) continue;
+      expect(uploadedDocumentKind("case.html", b), `${label}: uploaded as .html`).toBe(expected);
+      expect(uploadedDocumentKind("case.pdf", b), `${label}: uploaded as .pdf`).toBe(expected);
+    }
   });
 });
 
