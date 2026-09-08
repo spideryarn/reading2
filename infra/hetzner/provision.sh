@@ -1342,9 +1342,9 @@ install_unit fleet-dashboard.service <<'FLEET_DASHBOARD_UNIT'
 [Unit]
 Description=Fleet dashboard -- the page showing what every agent session is doing
 Documentation=file:///home/@USER@/code/spideryarn2/docs/project/orchestrator-direction.md
-# tailscaled as well as the network, because FLEET_BIND names a tailnet address
-# as well as loopback, and tools/fleet/server.ts treats a bind it cannot take as
-# FATAL rather than carrying on half-bound.
+# tailscaled as well as the network, because on a logged-in box FLEET_BIND names
+# a tailnet address as well as loopback, and tools/fleet/server.ts treats a bind
+# it cannot take as FATAL rather than carrying on half-bound.
 After=network-online.target tailscaled.service
 Wants=network-online.target
 
@@ -1363,16 +1363,35 @@ Group=@USER@
 WorkingDirectory=/home/@USER@/code/spideryarn2
 Environment=HOME=/home/@USER@
 
-# BOTH ADDRESSES, WRITTEN OUT. Loopback alone is the quiet failure: it works
-# perfectly from the box and simply cannot be reached from Greg's phone, which
-# is the only thing the tailnet address is for. So the pair is here rather than
-# only in a file that could be missing.
+# LOOPBACK ONLY, AND THAT IS THE POINT. 127.0.0.1 is the one address that is
+# correct on every box and cannot fail to bind, so this line starts the service
+# anywhere. The tailnet address is per-machine, so it arrives from the file
+# below and from nowhere else -- an address written here would be a second copy
+# of a fact that changes with the box.
 #
-# The tension, named rather than hidden: 100.92.255.119 belongs to THIS box, and
-# the next one will have a different one. The env file is how that box corrects
-# it -- provision.sh writes it from `tailscale ip -4` -- and the leading `-`
-# means a box without the file still starts on what is written here.
-Environment=FLEET_BIND=127.0.0.1,100.92.255.119
+# THIS LINE USED TO NAME THIS BOX'S TAILNET ADDRESS TOO, under a comment saying
+# "a box without the file still starts on what is written here". It started and
+# then died, and every step is inside this repo: provision.sh installs Tailscale
+# WITHOUT logging in (`tailscale up` wants a browser and a provisioning run has
+# none), so `tailscale ip -4` prints nothing, so no env file is written, so the
+# `-` below makes that fine and THIS value is what starts -- naming an address
+# belonging to another machine. tools/fleet/server.ts treats a bind it cannot
+# take as FATAL, deliberately, so the whole server exits, including the loopback
+# listener that would have worked. A comment claiming a fallback works, beside a
+# fallback that does not, is worse than no comment at all. Found by a
+# cross-family review, 2026-09-08.
+#
+# THE TRADE, AND IT IS THE RIGHT WAY ROUND: on a box nobody has run
+# `tailscale up` on, the dashboard answers from the box and not from a phone.
+# That is visible, correct and one command from fixed, and it beats a service
+# that will not start at all.
+#
+# That command is a DOCUMENTED step rather than a mechanism, and the reason is
+# worth knowing before anybody adds one: EnvironmentFile is read when the
+# service STARTS, so an ExecStartPre writing the file would not affect the run
+# that wrote it, only the next one. Write the file first, then restart --
+# docs/project/hetzner-remote-server-box.md, under "Tailscale".
+Environment=FLEET_BIND=127.0.0.1
 EnvironmentFile=-/etc/fleet-dashboard.env
 
 # FLEET_ACT_ENABLED IS DELIBERATELY ABSENT, in every form, including set to
@@ -1428,15 +1447,21 @@ RestartSec=10
 WantedBy=multi-user.target
 FLEET_DASHBOARD_UNIT
 
-# The dashboard's bind list. The unit already names both addresses, because a
-# loopback-only dashboard is the quiet failure -- perfect from the box, and
-# simply unreachable from the phone it exists for. This file OVERRIDES that pair
-# with the address tailscaled actually gave THIS machine, which is the half that
-# cannot be right in a checked-in file. A box that has not been `tailscale up`'d
-# gets no file and falls back to what the unit says.
+# The dashboard's bind list. The unit falls back to LOOPBACK ALONE -- the one
+# address that is right on every box and cannot fail to bind -- and this file is
+# the only way the tailnet address, which only this machine has, ever reaches
+# it. Written from `tailscale ip -4`, so it exists only once somebody has logged
+# Tailscale in, which provisioning deliberately does not do.
 #
-# Written with mktemp + mv -T, like /etc/gjd-remote-host above, so a failed run
-# cannot leave a half-written env file that the unit would then read.
+# BOTH BRANCHES DO WORK, and the second one is the fix to a P1. Written with
+# mktemp + mv -T, like /etc/gjd-remote-host above, so a failed run cannot leave
+# a half-written env file that the unit would then read -- and REMOVED when
+# there is no address, so a re-imaged or re-provisioned box cannot inherit the
+# previous machine's.
+#
+# After `tailscale up`, nothing re-runs this. The step that regenerates the file
+# and restarts the service, in that order, is written down in
+# docs/project/hetzner-remote-server-box.md under "Tailscale".
 fleet_ip=$(tailscale ip -4 2>/dev/null | head -n 1 || true)
 case "$fleet_ip" in
   100.*)
@@ -1450,7 +1475,20 @@ case "$fleet_ip" in
     echo "fleet dashboard binds 127.0.0.1,$fleet_ip"
     ;;
   *)
-    echo "no tailnet address yet -- fleet dashboard binds what the unit says"
+    # NO LOGIN, SO NO ADDRESS -- and any file from before is REMOVED rather than
+    # left alone. Leaving it was the bug with the longer fuse: a re-imaged or
+    # re-provisioned box would go on binding the PREVIOUS machine's tailnet
+    # address, out of a file nothing here rewrote, and a bind it cannot take
+    # kills the whole dashboard rather than one listener.
+    #
+    # `test -f` first rather than a bare `rm -f`: on a DIRECTORY of that name
+    # `rm -f` fails, and under `set -e` that would abort the entire provisioning
+    # run over a file that is only ever an optional override.
+    if test -f /etc/fleet-dashboard.env; then
+      rm -f /etc/fleet-dashboard.env
+      echo "no tailnet address yet -- removed a stale /etc/fleet-dashboard.env"
+    fi
+    echo "no tailnet address yet -- fleet dashboard binds 127.0.0.1 only; after tailscale up, see docs/project/hetzner-remote-server-box.md (Tailscale) for the two commands that add the tailnet address"
     ;;
 esac
 
@@ -1823,11 +1861,19 @@ check "fleet dashboard ExecStart is in the primary checkout" 'out=$(systemctl sh
 # way. `parseBinds` refuses one at startup; this refuses one at provisioning
 # time, when a person is still reading the output.
 check "fleet dashboard binds no wildcard" '! grep -q "0\.0\.0\.0" /etc/systemd/system/fleet-dashboard.service && { ! test -f /etc/fleet-dashboard.env || ! grep -q "0\.0\.0\.0" /etc/fleet-dashboard.env; }'
-# Loopback alone is the quiet failure: perfect from the box, and simply
-# unreachable from the phone the tailnet address exists for. Asserted against
-# whichever source will win at start time -- the env file if provisioning wrote
-# one, the unit otherwise.
-check "fleet dashboard binds the tailnet too" 'if test -f /etc/fleet-dashboard.env; then grep -q "FLEET_BIND=.*100\." /etc/fleet-dashboard.env; else grep -q "FLEET_BIND=.*100\." /etc/systemd/system/fleet-dashboard.service; fi'
+# Loopback alone is reachable from the box and not from the phone the tailnet
+# address exists for -- so on a logged-in box the pair must be there. On a box
+# nobody has logged in yet, the correct state is the OPPOSITE: no file at all,
+# and the unit's loopback-only fallback. Both halves are asserted, because a
+# leftover file naming another machine's address is one the server cannot bind,
+# and a bind it cannot take takes the whole dashboard down.
+#
+# Asked of `tailscale ip -4`, the same source the file is written from, rather
+# than of an address baked in here: this check has to be right on the next box
+# too. This version used to be the second half only, and it would now go red on
+# every correctly-provisioned box that had not been logged in -- a red check
+# nobody expects to be green is how a report stops being read.
+check "fleet dashboard binds the tailnet once tailscale is logged in" 'fleet_now=$(tailscale ip -4 2>/dev/null | head -n 1 || true); case "$fleet_now" in 100.*) test "$(cat /etc/fleet-dashboard.env)" = "FLEET_BIND=127.0.0.1,$fleet_now" ;; *) ! test -e /etc/fleet-dashboard.env ;; esac'
 # FLEET_ACT_ENABLED gates enacted actions -- removing a worktree, killing a
 # session -- and stays unset until routes-actions.ts has had its GPT Sol review.
 # A unit that named it, even as false, is one edit away from enabling it, and a

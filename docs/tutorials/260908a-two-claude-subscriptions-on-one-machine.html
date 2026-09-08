@@ -539,9 +539,13 @@ if [[ -n "${CLAUDE_ACCOUNT_DIR:-}" ]]; then
 else
   unset CLAUDE_CONFIG_DIR 2>/dev/null || true
   here="$(pwd -P)/"                      # not $PWD: that is logical, and a symlinked
-  while IFS= read -r line; do            # path into the repo would slip past the test
-    [[ "$line" == \#* || -z "${line// }" ]] && continue
-    [[ "$here" == "${line%%:*}/"* ]] && { export CLAUDE_CONFIG_DIR="${line#*:}"; break; }
+  best_len=0                             # path into the repo would slip past the test
+  while IFS= read -r line; do            # longest match wins, so a worktree can be
+    [[ "$line" == \#* || -z "${line// }" ]] &amp;&amp; continue   # carved out of its repo
+    root="${line%%:*}"
+    if [[ "$here" == "$root/"* &amp;&amp; ${#root} -gt $best_len ]]; then
+      best_len=${#root}; export CLAUDE_CONFIG_DIR="${line#*:}"
+    fi
   done &lt; "$CONF"
 fi
 unset CLAUDE_SECURESTORAGE_CONFIG_DIR 2>/dev/null || true
@@ -913,6 +917,27 @@ pool.</p>
   <summary>Will my existing login be disturbed?</summary>
   <p>No. Creating a second config directory files a new Keychain item under a different service name;
   the original is untouched. This was checked before and after on this machine.</p>
+</details>
+
+<details>
+  <summary>Can I put just some tabs, or one worktree, on the other account?</summary>
+  <p>Yes — the account is chosen <strong>per process, at launch</strong>, so there are three levers of
+  decreasing coarseness: the routing table (a whole directory tree), <code>claude-acct use
+  &lt;name&gt;</code> (a shell or tab, and everything it dispatches), and
+  <code>CLAUDE_ACCOUNT_DIR=… claude</code> (one invocation).</p>
+  <p>A single worktree can be carved out of its repo, because the routing table is
+  <strong>longest-match</strong> rather than first-match — a longer path wins wherever its line sits
+  in the file. First-match would have meant a worktree route added below its repo's route silently did
+  nothing, which is this document's whole subject.</p>
+  <p><code>CLAUDE_ACCOUNT_DIR</code> is specifically the lever that reaches dispatched sessions:
+  <code>run-claude.ts</code> strips <code>CLAUDE_CONFIG_DIR</code> from the child environment but not
+  this one.</p>
+  <p>Two things you cannot do. <strong>Subagents of one session cannot differ</strong> — they run
+  inside the parent process and share its credential; a session is one account, whole. And
+  <strong>a running session cannot be moved</strong>: the variable is read at startup, so changing the
+  routing affects the next <code>claude</code>, never the ones already up. That is why arming the
+  wrapper does not disturb a live fleet — but it also means "I fixed the routing" and "this tab is now
+  on the right account" are different claims.</p>
 </details>
 
 <details>
