@@ -61,7 +61,7 @@ import { readFile, readdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
 
-import type { Pause, PauseUnknownCause } from "./wire.js";
+import type { ConversationRateLimit, Pause, PauseUnknownCause } from "./wire.js";
 import { type TranscriptRecord, readRawTail } from "./transcript.js";
 
 // ---------------------------------------------------------------------------
@@ -155,7 +155,44 @@ export type RateLimitReading =
       /** ISO. `Pause.overdue` may be set only because this was actually read. */
       resetsAt: string;
     }
-  | { kind: "not-limited" };
+  | { kind: "not-limited" }
+  /**
+   * The scan RAN and could not answer for this session. Not the same as nobody
+   * having looked, which is `undefined` — see `readRateLimitSource`.
+   */
+  | { kind: "cannot-tell"; why: string };
+
+/**
+ * The usage collector's answer, as the two-and-a-bit facts this module needs.
+ *
+ * **A narrowing on purpose, not laziness.** `tools/overseer/usage.ts` owns
+ * rate-limit collection and its `RateLimitHit` carries nine fields — an id, a
+ * transcript path, the raw message, coverage. This module needs a window name,
+ * a reset instant, and the ability to say it could not tell. Importing the fat
+ * type would couple the pause reader to a producer it has no other business
+ * with, and every field it did not use would be a field somebody later reads
+ * from the wrong place.
+ *
+ * So the adapter is here, at the seam, and it is the ONLY thing in this file
+ * that knows the other module's shape. `resetsAtMs` is milliseconds there and
+ * `Pause` wants an ISO string, which is the kind of conversion that goes wrong
+ * silently when it is done at three call sites instead of one.
+ *
+ * **`cannot-tell` is passed through rather than flattened to `not-limited`.**
+ * That is the whole reason this function exists rather than a `??`: the
+ * collector distinguishes *this session is not rate-limited* from *the
+ * evidence did not settle it*, and collapsing them here would throw away the
+ * distinction one line after it crossed the boundary.
+ */
+export function rateLimitFrom(answer: ConversationRateLimit): RateLimitReading {
+  if (answer.kind === "none") return { kind: "not-limited" };
+  if (answer.kind === "cannot-tell") return { kind: "cannot-tell", why: answer.why };
+  return {
+    kind: "limited",
+    window: answer.hit.window,
+    resetsAt: new Date(answer.hit.resetsAtMs).toISOString(),
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Source 1: the transcript tail. Pure parsers.
@@ -682,6 +719,12 @@ function readRateLimitSource(
         why: "nobody has published a rate-limit reading for this session, and scanning for one costs seconds — so we cannot say whether it is waiting on a usage limit",
       },
     };
+  }
+  if (reading.kind === "cannot-tell") {
+    /* Somebody looked and the evidence did not settle it — a different fact
+       from nobody having looked, and a different remedy. See
+       `rate-limits-unreadable` on `PauseUnknownCause`. */
+    return { limited: null, failure: { cause: "rate-limits-unreadable", why: reading.why } };
   }
   if (reading.kind === "not-limited") return { limited: null, failure: null };
 
