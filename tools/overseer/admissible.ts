@@ -63,13 +63,25 @@ import type { FreshSnapshot, ObservedRow, ObservedSnapshot, ParseResult } from "
  * Mutating `accepted.error` did the same thing without even a spread. GPT Sol
  * found both, 2026-09-08, after the brand was already in.
  *
- * The box closes both. `#snapshot` is an ECMAScript private field, which
- * TypeScript treats NOMINALLY: no object literal, no spread, and no other class
- * is assignable to this type, because none of them has that declaration. The
- * class itself is not exported, so no other module can `new` one — only the
- * type escapes. And `snapshot` hands back a `FreshSnapshot` whose own fields
- * are `readonly`, so the copy a caller reads cannot be edited into a lie
- * either.
+ * **WHAT THIS IS: NOMINAL.** `#snapshot` is an ECMAScript private field, which
+ * TypeScript treats nominally — no object literal, no spread and no other class
+ * is assignable to this type, because none of them carries that declaration —
+ * and the class is not exported, so no other module can `new` one. Only the
+ * type escapes.
+ *
+ * **WHAT THIS IS NOT: IMMUTABLE AT RUNTIME.** `readonly` is compile-time and
+ * shallow. `Object.assign(box.snapshot, { error: "boom" })` compiles, and so
+ * does `row.status.secondsLeft = 0` a level down. Nothing in this codebase does
+ * either — checked across daemon.ts, store.ts, notes.ts and work.ts — and a
+ * grep for `Object.assign` is what keeps that true. The freeze that would close
+ * it was weighed and declined: it would walk the opaque `question` and `health`
+ * JSON this module deliberately does not interpret, and freeze rows the store's
+ * register holds by reference, which is more surface than the thing it guards.
+ *
+ * So the guarantee, at its true strength: **no forgery without a cast or a
+ * mutation, and both are greppable.** `diff()` backs it up where it would cost
+ * the most — one `unplaceable` assertion on its `previous`, at the single point
+ * where a mutated baseline would bridge two tmux worlds.
  *
  * What it asserts, exactly: this snapshot parsed, its producer had really
  * collected, its last collection did not fail, and its clock is at or beyond
@@ -78,9 +90,6 @@ import type { FreshSnapshot, ObservedRow, ObservedSnapshot, ParseResult } from "
  * the snapshot may become HISTORY: that is `Baseline` in diff.ts, a separate
  * type for a separate permission, because "safe to compare against" and "safe
  * to keep as the world" are not the same claim.
- *
- * A cast still forges one, as a cast forges anything. The point is that it now
- * takes a cast rather than an object literal.
  */
 class AdmissibleBox {
   readonly #snapshot: FreshSnapshot;
@@ -89,7 +98,7 @@ class AdmissibleBox {
     this.#snapshot = snapshot;
   }
 
-  /** What was accepted. Readonly throughout, so reading it cannot un-accept it. */
+  /** What was accepted. The live object, not a copy — see the type's comment. */
   get snapshot(): FreshSnapshot {
     return this.#snapshot;
   }

@@ -53,15 +53,16 @@ function diffed(previous: AdmissibleSnapshot | null, next: AdmissibleSnapshot): 
  *
  * `admissible()` cannot hand out a baseline any more (S2-01, second attempt), so
  * every test that compares two collections goes through `baselineOf` exactly as
- * a restarted daemon does. It THROWS on the null rather than shrugging: passing
- * a null `previous` into `diff()` compiles and quietly means "cold start", which
- * would turn a refused world into a fleet's worth of `session-seen` in the
- * middle of a test that was checking for silence.
+ * a restarted daemon does. It THROWS on a refusal rather than shrugging, and
+ * puts the refusal's own sentence in the message: passing a null `previous` into
+ * `diff()` compiles and quietly means "cold start", which would turn a refused
+ * world into a fleet's worth of `session-seen` in the middle of a test that was
+ * checking for silence.
  */
 function mustBaseline(snapshot: AdmissibleSnapshot): Baseline {
-  const baseline = baselineOf(snapshot);
-  if (baseline === null) throw new Error(`refused as a baseline: the collection at ${snapshot.snapshot.clock.at}`);
-  return baseline;
+  const result = baselineOf(snapshot);
+  if (!result.ok) throw new Error(`refused as a baseline: ${result.reason}`);
+  return result.baseline;
 }
 
 function kinds(events: readonly OverseerEvent[]): string[] {
@@ -69,15 +70,25 @@ function kinds(events: readonly OverseerEvent[]): string[] {
 }
 
 /**
- * THE TWO RULES THAT ARE TYPES RATHER THAN BEHAVIOUR, so this is the only test
- * here that vitest cannot fail. It goes red under `npm run typecheck`, which is
- * the wrapper that includes tests/ — `tsc` on the app alone never reads this
- * file, and vitest strips these annotations without looking at them.
+ * THE RULES THAT ARE TYPES RATHER THAN BEHAVIOUR, so this is the only test here
+ * that vitest cannot fail. It goes red under `npm run typecheck`, which is the
+ * wrapper that includes tests/ — `tsc` on the app alone never reads this file,
+ * and vitest strips these annotations without looking at them.
  *
  * Each `@ts-expect-error` below is an assertion that the line under it does NOT
  * compile. If a later change makes any of them legal again, the directive
  * becomes unused and the build fails saying so — which is the only way a
  * compile-time guarantee can be regression-tested.
+ *
+ * **WHAT IT PROVES, AND THE LIMIT.** It proves that these three forgeries need
+ * a cast: an admissible snapshot is not a baseline, a spread is not an
+ * admission, and a field assignment on an accepted snapshot is refused. It does
+ * NOT prove immutability, and reading it as though it did is the mistake this
+ * whole stage keeps finding. `Object.assign(admitted.snapshot, …)` compiles —
+ * `readonly` is compile-time and shallow — and so does a write nested inside a
+ * row. The runtime consequence of the first is covered by the mutated-baseline
+ * test below; the nested one is uncovered on purpose, and `AdmissibleSnapshot`
+ * says why.
  */
 test("TYPE-LEVEL: the three forgeries the P0 and S2-07 turned on", () => {
   const admitted = freshFixture("status-change-before");
@@ -401,7 +412,14 @@ describe("CONSTRUCTED: a different tmux generation", () => {
     const unplaceable = edited("status-change-after", (p) => {
       p["tmuxServerPid"] = null;
     });
-    expect(baselineOf(unplaceable)).toBeNull();
+    const refused = baselineOf(unplaceable);
+    expect(refused.ok).toBe(false);
+    // A HOLD IS NOT SILENCE, and neither is this. The daemon has to be able to
+    // write down why last night's snapshot would not stand as this morning's
+    // world; a bare null gave it nothing to say.
+    if (refused.ok) return;
+    expect(refused.reason).toContain("6 sessions");
+    expect(refused.reason).toContain("no tmux generation");
 
     // And the same snapshot is what `diff()` holds — one predicate, two
     // callers, checked here so they cannot drift into two.
@@ -412,7 +430,23 @@ describe("CONSTRUCTED: a different tmux generation", () => {
       p["tmuxServerPid"] = null;
       p["rows"] = [];
     });
-    expect(baselineOf(drained)).not.toBeNull();
+    expect(baselineOf(drained).ok).toBe(true);
+  });
+
+  test("S2-01: a baseline mutated after minting crashes rather than bridging two tmux worlds", () => {
+    // SOL'S ROUND-THREE EXAMPLE, and the honest answer to it. The box is
+    // nominal, not immutable: `readonly` is compile-time, so `Object.assign`
+    // onto the live snapshot the accessor hands back does compile. Nothing in
+    // this codebase does that — a grep is the check — but the type's guarantee
+    // is made at MINT and JavaScript cannot hold a value still afterwards, so
+    // the use site asks once.
+    //
+    // What it buys: this exact sequence used to be a silently bridged reboot,
+    // the P0's own failure, reached by mutation instead of by assignment. It is
+    // now a crash, which is the direction the bar asks for.
+    const baseline = mustBaseline(freshFixture("status-change-before"));
+    Object.assign(baseline.snapshot, { tmuxServerPid: null });
+    expect(() => diff(baseline, freshFixture("status-change-after"))).toThrow(/mutated after minting/);
   });
 
   test("S2-01: a baseline recovered after a restart closes what ended while the daemon was down", () => {

@@ -134,16 +134,32 @@ function unplaceable(snapshot: FreshSnapshot): boolean {
  *
  * **WHY IT IS NOT A HOLE.** It refuses exactly what `diff()` holds, by calling
  * the same predicate: a snapshot whose world cannot be placed is not a baseline
- * however it was obtained, so a caller holding one this module just held gets
- * `null` here too.
+ * however it was obtained, so a caller holding one this module just held is
+ * refused here too.
  *
- * **READ THE NULL.** `diff(baselineOf(x), next)` compiles when this returns
- * null and quietly means "cold start", which announces the whole fleet. Branch
- * on it and say something; do not pass it straight through.
+ * **AND WHY THE REFUSAL CARRIES A SENTENCE.** Same rule as the `held` arm of
+ * `DiffOutcome`, applied to the one other place this module says no: a hold is
+ * not silence. A daemon that comes up after a crash and cannot use last night's
+ * snapshot has to be able to write down WHY — "the stored collection lists 24
+ * sessions and no tmux generation" is a fact somebody can act on, and a bare
+ * `null` was a shrug. It returns a result rather than a nullable for that
+ * reason and not to protect a caller from composing it wrongly; nothing has
+ * called it yet, so that hazard is still hypothetical while this one is the
+ * module's own stated rule.
  */
-export function baselineOf(snapshot: AdmissibleSnapshot): Baseline | null {
+export type BaselineResult = { ok: true; baseline: Baseline } | { ok: false; reason: string };
+
+export function baselineOf(snapshot: AdmissibleSnapshot): BaselineResult {
   const fresh = snapshot.snapshot;
-  return unplaceable(fresh) ? null : new BaselineBox(fresh);
+  if (unplaceable(fresh)) {
+    return {
+      ok: false,
+      reason:
+        `the collection at ${fresh.clock.at} lists ${fresh.rows.length} sessions and no tmux generation, ` +
+        `so it cannot stand as a world for the next one to be compared against`,
+    };
+  }
+  return { ok: true, baseline: new BaselineBox(fresh) };
 }
 
 /** Which session, in the best terms available — one of which is not a fact. */
@@ -415,12 +431,17 @@ export const WAIT_DEADLINE_ROUNDING_MS = 2_000;
  * enters — its duration can only push its deadline LATER, which makes the
  * difference smaller, and a difference that shrinks is not reported anyway.
  *
- * The cost, stated rather than hidden: **on a collection that took twenty
- * seconds, a wait extended by less than twenty-two is invisible.** That is the
- * right side to err on — a false positive is a fabricated event, which is this
+ * The cost, stated rather than hidden, and stated at its true strength: **on a
+ * collection that took twenty seconds, a wait extended by less than twenty-two
+ * MAY be invisible.** Not "is": a long collection can hide a genuine small
+ * extension, and whether it does depends on where inside that collection the
+ * countdown happened to be sampled. So the bound is SOUND — nothing it reports
+ * is fabricated — without being COMPLETE, and small extensions are not
+ * guaranteed to be detected. That is the right side to err on, because a false
+ * positive is an event in the history that never happened, which is this
  * module's worst outcome, and the smallest restart worth recording is minutes
- * long — and unlike a constant it tightens automatically on a healthy box,
- * where the bound is about six seconds.
+ * long. Unlike a constant it also tightens on its own: on a healthy box the
+ * bound is about six seconds.
  */
 export function waitDeadlineToleranceMs(nextTookMs: number): number {
   return nextTookMs + WAIT_DEADLINE_ROUNDING_MS;
@@ -528,11 +549,16 @@ export function diff(previous: Baseline | null, next: AdmissibleSnapshot): DiffO
   // evidence, and refusing it would stall the history over a payload that
   // cannot mislead anyone.
   //
-  // ONLY `next` IS CHECKED, and `previous` needs no check because the TYPE has
-  // already made it. Every `Baseline` in existence went through `unplaceable`
-  // — here or in `baselineOf()` — so a `previous` with rows and no generation
-  // cannot be constructed. This used to be an argument about callers being
-  // disciplined, which is what GPT Sol reopened the P0 over.
+  // `previous` IS CHECKED TOO, three lines below, and the reason is worth the
+  // words. Every `Baseline` went through `unplaceable` when it was minted —
+  // here or in `baselineOf()` — so the TYPE makes the guarantee AT MINT. What
+  // the type cannot do is hold a value still afterwards: `readonly` is
+  // compile-time, so `Object.assign(baseline.snapshot, { tmuxServerPid: null })`
+  // compiles, and the guarantee would then be about a snapshot that no longer
+  // exists. This comment used to claim `previous` needed no check because the
+  // type had already made it, which was the same shape of overclaim the P0 was
+  // about — a promise stronger than the code, in a module whose whole subject
+  // is not making those. GPT Sol, third pass.
   if (unplaceable(nextSnapshot)) {
     return {
       kind: "held",
@@ -552,6 +578,25 @@ export function diff(previous: Baseline | null, next: AdmissibleSnapshot): DiffO
   }
 
   const previousSnapshot = previous.snapshot;
+
+  // THE ONE POINT WHERE A MUTATION WOULD BRIDGE TWO TMUX WORLDS, so it is asked
+  // once here rather than defended everywhere. A throw rather than a `held`:
+  // this is not a thing the box can do to us, it is a thing our own code would
+  // have had to do to itself, and a history is better stopped than continued
+  // from a world somebody edited underneath it.
+  //
+  // WHAT IT DOES NOT COVER, said plainly rather than left to be discovered: the
+  // check is shallow. `previousSnapshot.rows[0].status.secondsLeft = 99` still
+  // compiles and still goes unnoticed, and freezing the graph to catch it would
+  // walk opaque `question` and `health` JSON and freeze rows the store's
+  // register shares. The guarantee is "no forgery without a cast or a mutation,
+  // and both are greppable" — not immutability.
+  if (unplaceable(previousSnapshot)) {
+    throw new Error(
+      "a Baseline that cannot be placed in a world: it was mutated after minting, " +
+        "so the world this diff would stand on is not the one that was checked",
+    );
+  }
 
   const relation = generationRelation(previousSnapshot.tmuxServerPid, nextSnapshot.tmuxServerPid);
   switch (relation) {
