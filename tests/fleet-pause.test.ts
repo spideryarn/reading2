@@ -292,7 +292,20 @@ describe("parseSessionStoreFiles / readShellState", () => {
     // ever contribute to `none`. `~/.claude/sessions/<pid>.json` is undocumented
     // and private; a Claude Code upgrade that moved it would otherwise turn every
     // row silently calm.
-    const state = readShellState(index(), "00000000-0000-0000-0000-000000000000", Date.now());
+/* THESE UUIDS ARE THIS FILE'S ALONE, and the odd-looking prefix is the point.
+   They were `00000000-…` and `11111111-…`, which `tests/fixture-ids.test.ts`
+   caught as collisions with `db-schema.test.ts` and `migration-snapshots.test.ts`.
+   Vitest runs files in parallel against one database, so whichever tears down
+   first deletes the other's fixture and every test in the OTHER file fails —
+   green alone, red in the suite, and the failure lands on the innocent file.
+
+   Nothing here inserts anything: `pause.ts` reads files and touches no database,
+   so these are conversation ids in an in-memory index rather than rows. That
+   makes `NOT_A_ROW` in that guard the textbook fix — but declaring it would be
+   asserting that nothing in `db-schema.test.ts` or `migration-snapshots.test.ts`
+   inserts them either, which is a claim about two files this one does not own.
+   A distinct id makes no claim about anybody. */
+    const state = readShellState(index(), "f1ee7a05-0000-4000-8000-000000000001", Date.now());
     expect(state.kind).toBe("unreadable");
   });
 
@@ -786,10 +799,10 @@ describe("readPause", () => {
     const { projectsDir, sessionsDir } = box({
       uuid: UUID,
       jsonl: "",
-      store: [{ sessionId: "11111111-1111-1111-1111-111111111111", status: "idle", updatedAt: 1 }],
+      store: [{ sessionId: "f1ee7a05-0000-4000-8000-000000000002", status: "idle", updatedAt: 1 }],
     });
     const pause = await readPause({
-      claudeSessionId: "11111111-1111-1111-1111-111111111111",
+      claudeSessionId: "f1ee7a05-0000-4000-8000-000000000002",
       dir: null,
       rateLimit: { kind: "not-limited" },
       projectsDir,
