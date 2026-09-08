@@ -908,6 +908,37 @@ push spent re-establishing facts about vanished trees.
 > somebody's gate runs after yours. At 05:00 with the fleet asleep, nothing re-checks `dev` until
 > morning, and the person who finds it will not be the person who can explain it.
 
+### The join of everyone's green branches was red, and it was nobody's slice
+
+At 05:03, with all 24 sessions on the box idle or waiting, I gated `dev` **exactly as pushed** —
+`HEAD == origin/dev == 14c87890`, clean tree, so the result is a statement about the trunk rather than
+about a worktree. **EXIT=1.** Six lanes clean; the test lane failed on exactly one file out of 842,
+`tests/fixture-ids.test.ts`, with 15,992 tests passing.
+
+Two uuids were declared in more than one test file — `117e181a-…` across `fleet-queue.test.ts`,
+`fleet-steer.test.ts` and seven uses in `fleet-web.test.tsx`, and `76667309-…` across the first two.
+Vitest runs files in parallel against one database, so whichever tears down first deletes the other's
+fixture and every test in it 404s — **while passing when run alone**. Real, not contention: it fails
+identically run by itself, and it is a static read of the test sources, which a loaded box cannot
+affect. It arrived in `44f60619`, from `worktree-fleet-dashboard-v01`. Reported to that session and
+left untouched.
+
+**What this is evidence of, and what it is not** — 260907e's distinction, and they were right that I
+had blurred it. This red is evidence about **the join**: every branch that composes `dev` tonight was
+green on its own, each gated by whoever wrote it, and the combination was not. It is **not** evidence
+that the "last agent awake" trigger was right. That trigger is a claim about *when* the re-gating
+trade stops applying; this run is a fact about *whether ~120 merged commits are green*. A later reader
+will be tempted to read the red as vindication of the rule, and it says nothing about it. The two
+happened on the same night; they are not the same finding.
+
+**What it does support** is narrower and worth having: on a trunk this busy, "everyone gated their own
+work" does not add up to "the trunk is green", because nothing gates the join. That is an argument for
+somebody running a whole-trunk gate when the fleet goes quiet — which costs 24 minutes once, not an
+hour per push — rather than an argument against the trade above. Note also that this red would **not**
+have reached a reader: `npm run deploy` gates the exact sha it ships in its own worktree
+(`scripts/deploy.ts:21-27`), so the cost of it was one agent's twenty minutes, which is precisely the
+downside the corrected paragraph above names.
+
 ### The normaliser should refuse, not rely on a hand check
 
 Sol's **P2-RETURN-NORMALIZER**: the body comparison should refuse automatic comparison whenever the
