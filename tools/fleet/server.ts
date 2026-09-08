@@ -35,10 +35,12 @@ import { fileURLToPath } from "node:url";
 import { collectWithDeadline, type FleetSnapshot } from "./collect.js";
 import { parseBinds } from "./config.js";
 import { collectHealth, type HealthReport } from "./health.js";
+import { type HealthTurn } from "./health-history.js";
+import { makeHealthRetention } from "./health-wiring.js";
 import { applySecurityHeaders } from "./headers.js";
 import { broadcast, startHeartbeat, subscribe, subscriberCount } from "./live.js";
 import { drainSharedQueues, handleActionRequest } from "./routes-actions.js";
-import { refreshOnce } from "./refresh.js";
+import { nextWaitMs, refreshOnce } from "./refresh.js";
 import { newSessionRoutes } from "./routes-new.js";
 import { renameRoute } from "./routes-rename.js";
 import { handleSteerRequest } from "./routes-steer.js";
@@ -113,6 +115,28 @@ let health: HealthReport | null = null;
 let attemptedAt: string | null = null;
 
 /**
+ * The last day of vitals: the store, the route and the retain hook, composed.
+ *
+ * **ONE CALL, DELIBERATELY.** The store and the route must be the same store
+ * and the same route, and this file cannot be imported by a test — so the
+ * composition lives in `health-wiring.ts` where a test drives the identical
+ * function, and what is left here is the call and the log lines. See that
+ * file's header for the version of this that looked tested and was not.
+ *
+ * **A STORE THAT WILL NOT OPEN IS NOT FATAL, AND IS NOT SILENT EITHER.** A
+ * read-only home directory or a relative `FLEET_HEALTH_DIR` must not stop the
+ * dashboard, because the live page is worth more than its history — but the
+ * route then answers `unreadable` with a sentence, so the panel says nothing is
+ * being recorded rather than drawing an empty day.
+ */
+const retention = makeHealthRetention({
+  dir: process.env["FLEET_HEALTH_DIR"],
+  refreshMs: REFRESH_MS,
+});
+for (const line of retention.lines.log) console.log(line);
+for (const line of retention.lines.error) console.error(line);
+
+/**
  * The wire shape, in one place, so the poll and the stream cannot disagree.
  *
  * The shape itself lives in state.ts, where it can be tested without binding a
@@ -153,11 +177,22 @@ function statePayload(): string {
  * zero that reads as healthy — so this catch is for the case where that is
  * itself wrong.
  */
-function refreshHealth(): void {
+function refreshHealth(): HealthTurn {
   try {
-    health = collectHealth({ includeSwapActivity: true });
+    const report = collectHealth({ includeSwapActivity: true });
+    health = report;
+    return { kind: "reading", report };
   } catch (err) {
-    console.error(`health failed: ${err instanceof Error ? err.message : String(err)}`);
+    const why = err instanceof Error ? err.message : String(err);
+    console.error(`health failed: ${why}`);
+    /* **`health` IS DELIBERATELY LEFT HOLDING THE PREVIOUS REPORT** — the live
+       page showing the last thing we knew is better than it showing nothing —
+       **and that is exactly why this returns rather than being read back.** A
+       retention layer that read the variable would append that stale report
+       under a fresh timestamp, which is a reading nobody took wearing a clock.
+       The turn is the truth about this turn; the variable is the best thing we
+       have to draw. They are different, and now they are separate. */
+    return { kind: "collector-failed", why: `collectHealth threw: ${why}` };
   }
 }
 
@@ -190,6 +225,12 @@ async function refresh(): Promise<void> {
       }
     },
     refreshHealth,
+    // A no-op when the store would not open, rather than a branch in the loop:
+    // whether history is being kept is a startup fact, and the route is where
+    // it is reported.
+    retainHealth: retention.retainHealth,
+    refreshMs: REFRESH_MS,
+    now: () => new Date(),
     publish: () => broadcast(statePayload()),
     drain: drainSharedQueues,
     log: (line) => console.log(line),
@@ -210,7 +251,11 @@ async function refresh(): Promise<void> {
 async function refreshLoop(): Promise<void> {
   for (;;) {
     await refresh();
-    const wait = lastError === null ? REFRESH_MS : Math.min(REFRESH_MS * 5, 300_000);
+    /* `nextWaitMs` in refresh.ts, not the expression that used to be here: the
+       same number is recorded in every health sample as what the next reading
+       was expected at, and two copies of this rule would draw a legitimate
+       backoff as an outage the first time one of them moved. */
+    const wait = nextWaitMs(REFRESH_MS, lastError !== null);
     await new Promise((r) => setTimeout(r, wait).unref?.());
   }
 }
@@ -244,6 +289,10 @@ function handler(req: import("node:http").IncomingMessage, res: import("node:htt
     res.end(statePayload());
     return;
   }
+  // The last day of box health, for the chart on Box health. Read-only, and it
+  // reads nothing but this process's own append-only file.
+  if (retention.route.handle(req, res)) return;
+
   // Recent messages for one session, for the detail pane.
   //
   // ADDRESSED THROUGH THE CURRENT SNAPSHOT, NOT THROUGH THE QUERY STRING. The

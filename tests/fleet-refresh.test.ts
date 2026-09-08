@@ -22,6 +22,8 @@ import { describe, expect, it } from "vitest";
 
 import type { FleetRow, FleetSnapshot } from "../tools/fleet/collect.js";
 import type { DrainResult } from "../tools/fleet/drain.js";
+import type { HealthTurn, SampleStamp } from "../tools/fleet/health-history.js";
+import type { HealthReport } from "../tools/fleet/health.js";
 import { SteeringQueue } from "../tools/fleet/queue.js";
 import { refreshOnce, type RefreshDeps } from "../tools/fleet/refresh.js";
 import { makeActionRoutes, type ActionDeps, type ActionRoutes } from "../tools/fleet/routes-actions.js";
@@ -124,18 +126,43 @@ async function enqueueOverHttp(routes: ActionRoutes, body: Record<string, unknow
   return status;
 }
 
+/** A health reading with nothing interesting in it, for turns that are not about health. */
+function bareReport(): HealthReport {
+  return {
+    load: { kind: "unknown", why: "not measured in this test" },
+    memory: { kind: "unknown", why: "not measured in this test" },
+    swap: { kind: "unknown", why: "not measured in this test" },
+    disk: { kind: "unknown", why: "not measured in this test" },
+    swapActivity: { kind: "skipped" },
+    attribution: { kind: "unknown", why: "not measured in this test" },
+    verdict: { level: "unknown", reasons: ["fixture"] },
+    collectedAt: "2026-09-08T12:00:00.000Z",
+    tookMs: 7,
+  };
+}
+
 /** The rest of one turn's world, recording rather than doing. */
 function refreshHarness(over: Partial<RefreshDeps> = {}) {
   const events: string[] = [];
   const logs: string[] = [];
   const kept: ({ snapshot: FleetSnapshot } | { error: string })[] = [];
+  const retained: { turn: HealthTurn; stamp: SampleStamp }[] = [];
   const deps: RefreshDeps = {
     collect: () => Promise.resolve(snap()),
     keep: (result) => {
       kept.push(result);
       events.push("keep");
     },
-    refreshHealth: () => events.push("health"),
+    refreshHealth: () => {
+      events.push("health");
+      return { kind: "reading", report: bareReport() };
+    },
+    retainHealth: (turn, stamp) => {
+      retained.push({ turn, stamp });
+      events.push("retain");
+    },
+    refreshMs: 60_000,
+    now: () => new Date("2026-09-08T12:00:30.000Z"),
     publish: () => events.push("publish"),
     drain: () => {
       events.push("drain");
@@ -152,7 +179,7 @@ function refreshHarness(over: Partial<RefreshDeps> = {}) {
     subscribers: () => 0,
     ...over,
   };
-  return { deps, events, logs, kept };
+  return { deps, events, logs, kept, retained };
 }
 
 /* ================================================================== *
@@ -239,4 +266,74 @@ describe("one refresh turn", () => {
     const again = await refreshOnce(refreshHarness().deps);
     expect(again.error).toBe(null);
   });
+});
+
+/* ================================================================== *
+ * The health history, joined the same way and for the same reason.
+ * ================================================================== */
+
+describe("one refresh turn, retaining box health", () => {
+  it("retains after it publishes and before it drains", async () => {
+    /* After publish: publishing is what a person is waiting on, and a write
+       that can stall on dirty-page writeback does not belong in front of it.
+       Before drain: the drain is up to six ten-second `execFileSync` calls and
+       anything behind it can be starved for a minute. */
+    const { deps, events } = refreshHarness();
+    await refreshOnce(deps);
+    expect(events.indexOf("retain")).toBeGreaterThan(events.indexOf("publish"));
+    expect(events.indexOf("retain")).toBeLessThan(events.indexOf("drain"));
+  });
+
+  it("retains the turn even when the collection failed, because that is when it matters", async () => {
+    const { deps, retained } = refreshHarness({ collect: () => Promise.reject(new Error("tmux timed out")) });
+    await refreshOnce(deps);
+    expect(retained).toHaveLength(1);
+  });
+
+  it("records the LONGER interval after a failed collection, not the nominal one", async () => {
+    /* The loop waits 5x after a failure. A sample that claimed the nominal
+       cadence would make every backed-off turn look like a five-minute outage
+       — an alarm that is usually wrong, which is the same picture as a quiet
+       page over a dead box. */
+    const good = refreshHarness();
+    await refreshOnce(good.deps);
+    const bad = refreshHarness({ collect: () => Promise.reject(new Error("tmux timed out")) });
+    await refreshOnce(bad.deps);
+
+    /* 60s wait + the fixture snapshot's tookMs + the health reading's 7ms. */
+    expect(good.retained[0]?.stamp.nextDueMs).toBeGreaterThanOrEqual(60_000);
+    expect(good.retained[0]?.stamp.nextDueMs).toBeLessThan(120_000);
+    /* 5 x 60s, and no collection time to add because there was no collection. */
+    expect(bad.retained[0]?.stamp.nextDueMs).toBe(300_000 + 7);
+  });
+
+  it("does not let a retention failure stop the loop or spoil the collection", async () => {
+    const { deps, events, logs } = refreshHarness({
+      retainHealth: () => {
+        events.push("retain");
+        throw new Error("no space left on device");
+      },
+    });
+    const outcome = await refreshOnce(deps);
+    expect(outcome.error).toBe(null);
+    expect(outcome.collected).not.toBe(null);
+    expect(events).toContain("publish");
+    expect(events).toContain("drain");
+    expect(logs.join(" ")).toContain("no space left on device");
+  });
+
+  it("appends a collector failure as its own arm rather than as a reading", async () => {
+    const { deps, retained } = refreshHarness({
+      refreshHealth: () => ({ kind: "collector-failed", why: "collectHealth threw: out of memory" }),
+    });
+    await refreshOnce(deps);
+    expect(retained[0]?.turn).toEqual({ kind: "collector-failed", why: "collectHealth threw: out of memory" });
+  });
+
+  /* THE END-TO-END JOIN IS IN tests/fleet-health-wiring.test.ts, and it is not
+     here on purpose. A version of it lived in this file and built its own store
+     and its own route — which would stay green if `server.ts` composed a
+     DIFFERENT store, the exact failure the test claimed to catch. It now drives
+     `makeHealthRetention`, the function the server itself calls. GPT Sol's
+     finding 5, 2026-09-08. */
 });

@@ -1,0 +1,559 @@
+/**
+ * The last twenty-four hours of the box, on a phone.
+ *
+ * > Box Health: graphs of recentish history (last 24h) so he can see whether
+ * > there were problems/disruptions, plus amount/proportion of swap used
+ * >
+ * > — Greg, 2026-09-08
+ *
+ * ## What is drawn, and in what order of importance
+ *
+ * **The verdict strip first**, because it is the answer. One band per pixel
+ * column over the whole window, coloured by the collector's own verdict, worst
+ * wins in a shared column — so a single 73-second `critical` at 04:00 is still
+ * on screen at 09:00. Under it, four lines with the same x scale: load, memory
+ * available, swap used, IO wait. Under those, **a sentence**, which is what a
+ * three-minute outage actually looks like at this width.
+ *
+ * ## The four kinds of nothing, drawn four ways
+ *
+ * All of the reasoning is in history-series.ts; what this file must not do is
+ * flatten any of it:
+ *
+ *  - a **gap** is hatched, and the line BREAKS across it;
+ *  - an **unknown** reading is violet, and is **never plotted at zero**;
+ *  - an **absent** reading (no swap configured, not sampled) is grey;
+ *  - **before the history begins** is its own region with its own label, so a
+ *    twenty-minute-old process does not show twenty minutes of line under an
+ *    axis that says a day.
+ *
+ * ## Why the SVG is stretched and the words are not
+ *
+ * `viewBox` in fixed units with `preserveAspectRatio="none"` and the element at
+ * `width: 100%` — so the plot fills whatever width the phone has without this
+ * component measuring anything. Stretching would distort strokes and text, so
+ * every stroke carries `vector-effect="non-scaling-stroke"` and **there is no
+ * text inside the SVG at all**: labels are HTML beside it, which also means
+ * they are selectable, translatable and read out properly.
+ *
+ * **Colour is never the only carrier.** Every band and every series states its
+ * number in text underneath.
+ */
+import { useCallback, useEffect, useState, type ReactNode } from "react";
+
+import { Explain, type Tip } from "./Tooltip";
+import { type HistoryApi, type HistoryView, type RetentionView } from "./health-history-client";
+import {
+  collapseVerdict,
+  describeDuration,
+  describeGaps,
+  plotHistory,
+  type HistoryPlot,
+  type SeriesPlot,
+} from "./history-series";
+import { Card, SectionHeading, cx, toneClasses } from "./ui";
+
+/** The window Greg asked for. A selector is a query parameter away when it is wanted. */
+export const WINDOW_HOURS = 24;
+
+/**
+ * How often to re-ask.
+ *
+ * A new sample only exists every ~73 seconds, so asking faster would be a
+ * megabyte of JSON for an answer that has not changed. The state poll runs at
+ * five seconds and this deliberately does not follow it.
+ */
+export const HISTORY_POLL_MS = 60_000;
+
+/** The plot's own coordinate space. Stretched to the card's width by the viewBox. */
+const PLOT_W = 1000;
+const STRIP_H = 22;
+const SERIES_H = 64;
+
+function timeOfDay(ms: number): string {
+  return new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+/* ------------------------------------------------------------------ *
+ * The panel.
+ * ------------------------------------------------------------------ */
+
+export function HealthHistory({
+  api,
+  nowMs,
+}: {
+  api: HistoryApi;
+  /** Passed in rather than read here, so a test can place the right-hand edge. */
+  nowMs: number;
+}): ReactNode {
+  const [view, setView] = useState<HistoryView | null>(null);
+
+  const load = useCallback(() => {
+    let live = true;
+    void api.window(WINDOW_HOURS).then((next) => {
+      if (live) setView(next);
+    });
+    return () => {
+      live = false;
+    };
+  }, [api]);
+
+  useEffect(() => {
+    const cancel = load();
+    const timer = setInterval(load, HISTORY_POLL_MS);
+    return () => {
+      cancel();
+      clearInterval(timer);
+    };
+  }, [load]);
+
+  return (
+    <div className="tw:mt-4">
+      <SectionHeading>The last 24 hours</SectionHeading>
+      <Card className="tw:p-3">
+        <HistoryBody view={view} nowMs={nowMs} />
+      </Card>
+    </div>
+  );
+}
+
+/**
+ * The four answers, kept apart.
+ *
+ * `null` is *we have not asked yet*, which is not a claim about anything and
+ * must not look like one — so it says so rather than drawing an empty day.
+ */
+function HistoryBody({ view, nowMs }: { view: HistoryView | null; nowMs: number }): ReactNode {
+  if (view === null) {
+    return <p className="tw:text-[13px] tw:text-ink-faint">Reading the last 24 hours…</p>;
+  }
+  if (view.kind === "unreadable") {
+    return (
+      <Note tone="unknown" head="No history to draw.">
+        {view.why}
+      </Note>
+    );
+  }
+  if (view.kind === "no-answer") {
+    return (
+      <Note tone="unknown" head="This page could not fetch the history.">
+        {view.why} The box itself may be perfectly well — this is about the request, not the reading.
+      </Note>
+    );
+  }
+
+  const plot = plotHistory(view, nowMs);
+
+  if (plot.sampleCount === 0) {
+    /* AN EMPTY WINDOW IS NOT AN EMPTY BOX. The dashboard restarts often, and a
+       freshly started one legitimately knows nothing yet. */
+    return (
+      <div>
+        <Note tone="idle" head="Nothing recorded in the last 24 hours.">
+          The dashboard writes one sample per collection, so this fills in as it runs. It is empty after a
+          restart, and that is not a claim about how the box has been.
+        </Note>
+        <Retention retention={view.retention} />
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <VerdictStrip plot={plot} />
+      <p className="tw:mt-2 tw:text-[13px] tw:text-ink-soft">{describeGaps(plot, timeOfDay)}</p>
+      {/* **BEFORE THE CHART'S OWN SENTENCES**, because if the writer has
+          stopped, every break below it is about the writer rather than about
+          the box, and reading them the other way round is the whole failure. */}
+      <Retention retention={view.retention} />
+      {plot.beforeHistory === null ? null : (
+        <p className="tw:mt-1 tw:text-[12px] tw:text-ink-faint">
+          {/* NOT a gap, and said in different words on purpose: nothing was
+              lost here, there was never anything to lose.
+
+              "Retained data begins" after a rotation, because older samples DID
+              exist and were discarded — "collecting since" would be a claim
+              about when we started looking, and it would be false. */}
+          {plot.retainedOnly ? "Retained data begins" : "Collecting since"}{" "}
+          {timeOfDay(plot.beforeHistory.toMs)} — the{" "}
+          {describeDuration(plot.beforeHistory.toMs - plot.beforeHistory.fromMs)} before that is not
+          recorded here, which is not the same as the box having been quiet.
+        </p>
+      )}
+
+      {plot.series.map((series) => (
+        <SeriesChart key={series.spec.key} series={series} plot={plot} />
+      ))}
+
+      <Legend />
+
+      {view.unreadableLines > 0 || view.unreadableSamples > 0 ? (
+        <p className="tw:mt-2 tw:text-[12px] tw:text-unknown-ink">
+          {view.unreadableLines > 0
+            ? `${view.unreadableLines} line${view.unreadableLines === 1 ? "" : "s"} in the store could not be read`
+            : null}
+          {view.unreadableLines > 0 && view.unreadableSamples > 0 ? "; " : null}
+          {view.unreadableSamples > 0
+            ? `${view.unreadableSamples} sample${view.unreadableSamples === 1 ? "" : "s"} arrived in a shape this page does not understand`
+            : null}
+          . Those moments are missing from the chart rather than wrong on it.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ *
+ * The strip.
+ * ------------------------------------------------------------------ */
+
+const STRIP_TIP: Tip = {
+  head: "The 24-hour strip",
+  what: "One band per moment, in the colour of the collector's own verdict at the time — green ok, amber strained, red critical, violet could-not-tell.",
+  how: "Where several readings share one pixel the WORST one wins, never an average: a one-minute spike at 4am is the thing you opened this to find. Hatched means nothing was recorded at all.",
+};
+
+function VerdictStrip({ plot }: { plot: HistoryPlot }): ReactNode {
+  /* One band per plot unit is far more than any phone has pixels, so the
+     collapse happens here at a resolution the SVG can actually show. */
+  const bands = collapseVerdict(plot.verdict, plot.fromMs, plot.toMs, 360);
+  const x = scaler(plot);
+  return (
+    <div>
+      <Explain tip={STRIP_TIP} placement="bottom" className="tw:block tw:w-full">
+        <svg
+          viewBox={`0 0 ${PLOT_W} ${STRIP_H}`}
+          preserveAspectRatio="none"
+          className="tw:block tw:h-[22px] tw:w-full tw:rounded-sm"
+          role="img"
+          aria-label={`The box's verdict over the last 24 hours. ${describeGaps(plot, timeOfDay)}`}
+        >
+          <Hatch />
+          <rect x={0} y={0} width={PLOT_W} height={STRIP_H} fill="var(--quiet-wash)" />
+          {bands.map((band) => (
+            <rect
+              key={band.fromMs}
+              x={x(band.fromMs)}
+              y={0}
+              width={Math.max(x(band.toMs) - x(band.fromMs), 1)}
+              height={STRIP_H}
+              fill={toneVar(band.tone)}
+            />
+          ))}
+          <Absences plot={plot} height={STRIP_H} />
+        </svg>
+      </Explain>
+      <div className="tw:mt-1 tw:flex tw:justify-between tw:text-[11px] tw:text-ink-faint">
+        <span>{timeOfDay(plot.fromMs)}</span>
+        <span>24 hours</span>
+        <span>now</span>
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ *
+ * One series.
+ * ------------------------------------------------------------------ */
+
+function SeriesChart({ series, plot }: { series: SeriesPlot; plot: HistoryPlot }): ReactNode {
+  const { spec } = series;
+  /**
+   * **A FIXED AXIS, and this is the one thing on the panel that was found by
+   * looking at it rather than by a test.**
+   *
+   * The axis used to be fitted to the window's peak. On a day containing the
+   * 2026-09-08 spike — load 391 on 16 cores — that put the ceiling at 430, every
+   * ordinary hour at 4% of the height, and the amber and red bands into
+   * sub-pixel slivers, so the *whole chart* was painted red and a normal day
+   * looked catastrophic. One outlier decided what every other hour looked like.
+   * Every test was green.
+   */
+  const ceiling = spec.max;
+  const x = scaler(plot);
+  const y = (value: number): number => SERIES_H - (Math.min(value, ceiling) / ceiling) * SERIES_H;
+
+  const worseIsHigher = spec.bands.worseIs === "higher";
+  const band = (from: number, to: number): { y: number; height: number } => {
+    const top = y(Math.max(from, to));
+    const bottom = y(Math.min(from, to));
+    return { y: top, height: Math.max(bottom - top, 0) };
+  };
+  const strained = band(spec.bands.strained, spec.bands.critical);
+  const critical = worseIsHigher ? band(spec.bands.critical, ceiling) : band(0, spec.bands.critical);
+
+  const tip: Tip = {
+    head: spec.label,
+    what: `${spec.label} over the last 24 hours, in ${spec.unit}.`,
+    how: `Amber past ${format(spec.bands.strained)} and red past ${format(spec.bands.critical)} — the same cutoffs the tiles above use, imported from one place so they cannot drift apart. A break in the line means nothing was recorded; violet means the reading could not be taken, which is never drawn as zero.`,
+  };
+
+  return (
+    <div className="tw:mt-3">
+      <div className="tw:flex tw:items-baseline tw:justify-between tw:gap-2">
+        <span className="tw:text-[11px] tw:font-semibold tw:tracking-wide tw:text-ink-faint tw:uppercase">
+          {spec.label}
+        </span>
+        <span className="tw:text-[12px] tw:text-ink-soft">{summarise(series)}</span>
+      </div>
+      <Explain tip={tip} placement="bottom" className="tw:block tw:w-full">
+        <svg
+          viewBox={`0 0 ${PLOT_W} ${SERIES_H}`}
+          preserveAspectRatio="none"
+          className="tw:mt-1 tw:block tw:h-16 tw:w-full tw:rounded-sm tw:bg-panel-raised"
+          role="img"
+          aria-label={`${spec.label} over the last 24 hours. ${summarise(series)}`}
+        >
+          <Hatch />
+          {/* The thresholds, behind everything, so a shape is read against them. */}
+          <rect x={0} y={strained.y} width={PLOT_W} height={strained.height} fill="var(--needs-wash)" />
+          <rect x={0} y={critical.y} width={PLOT_W} height={critical.height} fill="var(--alarm-wash)" />
+
+          <Absences plot={plot} height={SERIES_H} />
+
+          {series.absences.map((span) => (
+            <rect
+              key={`absent-${span.fromMs}`}
+              x={x(span.fromMs)}
+              y={0}
+              width={Math.max(x(span.toMs) - x(span.fromMs), 1)}
+              height={SERIES_H}
+              fill="var(--quiet-wash)"
+            />
+          ))}
+          {/* VIOLET, FULL HEIGHT, NEVER A POINT AT ZERO. A reading that could
+              not be taken is not a low reading. */}
+          {series.unknowns.map((span) => (
+            <rect
+              key={`unknown-${span.fromMs}`}
+              x={x(span.fromMs)}
+              y={0}
+              width={Math.max(x(span.toMs) - x(span.fromMs), 1)}
+              height={SERIES_H}
+              fill="var(--unknown-wash)"
+            />
+          ))}
+
+          {/* WHERE THE LINE RAN OFF THE TOP. A fixed axis means a real
+              excursion has to be marked, or a line pressed against the ceiling
+              reads as a plateau. The real number is in the sentence above. */}
+          {series.overCeiling.map((span) => (
+            <rect
+              key={`over-${span.fromMs}`}
+              x={x(span.fromMs)}
+              y={0}
+              width={Math.max(x(span.toMs) - x(span.fromMs), 1.5)}
+              height={4}
+              fill="var(--alarm)"
+            />
+          ))}
+
+          {series.segments.map((segment, index) => (
+            <polyline
+              key={`seg-${index}-${segment[0]?.atMs ?? index}`}
+              points={segment.map((point) => `${x(point.atMs)},${y(point.value)}`).join(" ")}
+              fill="none"
+              stroke="var(--ink-soft)"
+              strokeWidth={1.5}
+              strokeLinejoin="round"
+              vectorEffect="non-scaling-stroke"
+            />
+          ))}
+        </svg>
+      </Explain>
+    </div>
+  );
+}
+
+/**
+ * The sentence beside each chart's label.
+ *
+ * **The worst point, with its time.** A spike narrower than a pixel is invisible
+ * as a shape and obvious as a sentence, and this panel exists to answer a
+ * question rather than to be looked at.
+ */
+function summarise(series: SeriesPlot): string {
+  if (series.worst === null) {
+    return "no readings in this window";
+  }
+  const direction = series.spec.bands.worseIs === "lower" ? "low" : "peak";
+  const now = series.latest === null ? "" : `now ${format(series.latest.value)}${series.spec.unit} · `;
+  return `${now}${direction} ${format(series.worst.value)}${series.spec.unit} at ${timeOfDay(series.worst.atMs)}`;
+}
+
+function format(value: number): string {
+  return value >= 10 ? String(Math.round(value)) : value.toFixed(1);
+}
+
+/* ------------------------------------------------------------------ *
+ * Shared bits.
+ * ------------------------------------------------------------------ */
+
+function scaler(plot: HistoryPlot): (ms: number) => number {
+  const span = Math.max(plot.toMs - plot.fromMs, 1);
+  return (ms) => ((ms - plot.fromMs) / span) * PLOT_W;
+}
+
+function toneVar(tone: string): string {
+  switch (tone) {
+    case "work":
+      return "var(--work)";
+    case "needs":
+      return "var(--needs)";
+    case "alarm":
+      return "var(--alarm)";
+    default:
+      return "var(--unknown)";
+  }
+}
+
+/**
+ * The hatch a gap wears.
+ *
+ * A pattern rather than a flat colour, because **absence has to look different
+ * in kind from every reading**, not merely different in hue — a flat grey band
+ * reads as one more state of the box, and this is the state of the *record*.
+ * Defined per SVG (ids are document-global, so the id is shared and defining it
+ * twice is harmless — the second definition is identical).
+ */
+function Hatch(): ReactNode {
+  return (
+    <defs>
+      <pattern id="fleet-gap-hatch" width={6} height={6} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+        <rect width={6} height={6} fill="var(--page)" />
+        <line x1={0} y1={0} x2={0} y2={6} stroke="var(--rule-strong)" strokeWidth={2} />
+      </pattern>
+    </defs>
+  );
+}
+
+/** Gaps and the before-history region, drawn identically wherever they appear. */
+function Absences({ plot, height }: { plot: HistoryPlot; height: number }): ReactNode {
+  const x = scaler(plot);
+  return (
+    <>
+      {plot.beforeHistory === null ? null : (
+        <>
+          <rect
+            x={x(plot.beforeHistory.fromMs)}
+            y={0}
+            width={Math.max(x(plot.beforeHistory.toMs) - x(plot.beforeHistory.fromMs), 0)}
+            height={height}
+            fill="var(--quiet-wash)"
+          />
+          {/* **THE BOUNDARY, DRAWN.** Without it this grey is the same grey as
+              "no reading to take", and two different meanings sharing one fill
+              is the collapse this panel is built to refuse. The rule says where
+              the record starts; the sentence under the strip says what that
+              means. A browser pass is what found them wearing the same colour. */}
+          <rect
+            x={Math.max(x(plot.beforeHistory.toMs) - 1, 0)}
+            y={0}
+            width={2}
+            height={height}
+            fill="var(--rule-strong)"
+          />
+        </>
+      )}
+      {plot.gaps.map((gap) => (
+        <rect
+          key={`gap-${gap.fromMs}`}
+          x={x(gap.fromMs)}
+          y={0}
+          width={Math.max(x(gap.toMs) - x(gap.fromMs), 1)}
+          height={height}
+          fill="url(#fleet-gap-hatch)"
+        />
+      ))}
+    </>
+  );
+}
+
+/** Says what each fill means, because a hatch is not self-explanatory. */
+function Legend(): ReactNode {
+  return (
+    <div className="tw:mt-3 tw:flex tw:flex-wrap tw:gap-x-3 tw:gap-y-1 tw:text-[11px] tw:text-ink-faint">
+      {/* Four kinds of nothing, four fills, four names. If two of these ever
+          share an entry, one of them has stopped being drawn. */}
+      <Swatch fill="url(#fleet-gap-hatch)" hatched>
+        nothing recorded
+      </Swatch>
+      <Swatch fill="var(--unknown-wash)">could not tell</Swatch>
+      <Swatch fill="var(--quiet-wash)">no reading to take</Swatch>
+      <Swatch fill="var(--quiet-wash)" edge>
+        before the record starts
+      </Swatch>
+      <span className={cx("tw:font-medium", toneClasses("alarm").ink)}>critical</span>
+      <span className={cx("tw:font-medium", toneClasses("needs").ink)}>strained</span>
+      <span className={cx("tw:font-medium", toneClasses("work").ink)}>ok</span>
+    </div>
+  );
+}
+
+function Swatch({
+  fill,
+  hatched,
+  edge,
+  children,
+}: {
+  fill: string;
+  hatched?: boolean;
+  /** Draws the boundary rule, so this swatch matches the region it names. */
+  edge?: boolean;
+  children: ReactNode;
+}): ReactNode {
+  return (
+    <span className="tw:inline-flex tw:items-center tw:gap-1">
+      <svg width={14} height={10} className="tw:shrink-0 tw:rounded-[2px]" aria-hidden="true">
+        {hatched === true ? <Hatch /> : null}
+        <rect width={14} height={10} fill={fill} stroke="var(--rule)" />
+        {edge === true ? <rect x={12} width={2} height={10} fill="var(--rule-strong)" /> : null}
+      </svg>
+      {children}
+    </span>
+  );
+}
+
+/**
+ * **When the WRITER has stopped, say so — never let it show up as a break.**
+ *
+ * If appends start failing (a full disk, a lock held by another process, a
+ * partial write that poisoned the file) the live page carries on and the old
+ * samples stay readable, so the chart simply grows a hole at its right-hand
+ * edge. That hole is indistinguishable from the box having gone down — an
+ * outage manufactured by the monitoring rather than observed by it, and the
+ * worst thing in this feature's blast radius. GPT Sol's finding 3.
+ *
+ * Silent when everything is fine: a line saying "retention is working" on every
+ * healthy load is a line nobody reads, and one nobody reads is one nobody
+ * notices changing.
+ */
+function Retention({ retention }: { retention: RetentionView | null }): ReactNode {
+  /* Null is "this server did not say", not "fine". No claim either way, and
+     nothing to draw — the alternative is a reassurance nothing produced. */
+  if (retention === null) return null;
+  const trouble = retention.failure ?? (retention.poisoned ? "an earlier write may have left a partial record" : null);
+  if (trouble === null) return null;
+  return (
+    <div className="tw:mt-2 tw:border-l-4 tw:border-l-alarm tw:bg-alarm-wash tw:py-1 tw:pl-3">
+      <p className="tw:text-[13px] tw:font-medium tw:text-alarm-ink">Nothing is being written to the history.</p>
+      <p className="tw:mt-1 tw:text-[12px] tw:text-ink-soft">
+        {trouble}
+        {retention.lastSuccessAt === null
+          ? " — no sample has been written since this dashboard started."
+          : ` — the last one that worked was ${timeOfDay(Date.parse(retention.lastSuccessAt))}.`}{" "}
+        <strong>Any break after that is this, not the box.</strong>
+        {retention.poisoned ? " Restarting the dashboard repairs the file and resumes." : null}
+      </p>
+    </div>
+  );
+}
+
+function Note({ tone, head, children }: { tone: "unknown" | "idle"; head: string; children: ReactNode }): ReactNode {
+  return (
+    <div className={cx("tw:border-l-4 tw:pl-3", toneClasses(tone).edge)}>
+      <h3 className="tw:text-[13px] tw:font-medium">{head}</h3>
+      <p className="tw:mt-1 tw:text-[13px] tw:text-ink-soft">{children}</p>
+    </div>
+  );
+}
