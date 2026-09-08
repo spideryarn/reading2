@@ -988,9 +988,16 @@ echo "=== test worker cap ==="
 # docs/plans/260906h-cap-vitest-workers-so-one-box-can-hold-ten-suites.md has
 # the incident and the arithmetic.
 #
-# 3 rather than the repo's own default of half the cores (8 here): that default
+# 2 rather than the repo's own default of half the cores (8 here): that default
 # has to be right for a laptop running one suite, and this file is where a
 # machine gets to say it is crowded.
+#
+# It was 3 until 2026-09-08, when eighteen concurrent runs at 3 put this box at
+# load 391 with swap 100% full. Do not read the drop to 2 as the fix for that --
+# it is not, and measuring why is what 260908b is about. 87% of a run's peak
+# memory is spent before its first worker forks, so the worker cap bounds FORKS
+# (54 to 36 here) and barely touches gigabytes. The memory half of the answer is
+# the reserve file written just below.
 #
 # A FILE, not the `env` block of ~/.claude/settings.json where this obviously
 # belonged: measured on this box, nothing in that block reaches a Claude Bash
@@ -998,7 +1005,25 @@ echo "=== test worker cap ==="
 # box was built. A file vitest.config.ts reads has no propagation to be wrong
 # about. Written every run, not merged: one number, ours, nobody else's to keep.
 run 30 "test worker cap" "${AS_USER[@]}" \
-  "mkdir -p \$HOME/.config/spideryarn && printf '3\n' > \$HOME/.config/spideryarn/vitest-max-workers"
+  "mkdir -p \$HOME/.config/spideryarn && printf '2\n' > \$HOME/.config/spideryarn/vitest-max-workers"
+
+# How much RAM to keep back for everything that is not a test run: the agents
+# themselves (12.9 GB across 159 processes when this was measured), postgres,
+# the dev servers, the browsers, and the page cache.
+#
+# THE PRESENCE OF THIS FILE IS THE OPT-IN. vitest.config.ts asks
+# /proc/meminfo whether there is room for a run's fixed 3.84 GB on top of this
+# reserve, and REFUSES TO START when there is not -- which is the only thing
+# that actually bounds how many suites run at once, because nothing else does.
+# A laptop has no file, keeps the static behaviour, and is never refused:
+# MemAvailable is Linux's number and macOS has no honest equivalent.
+#
+# 4 GB, and the arithmetic is worth keeping: this box idles around 9-15 GB
+# available, so a run needs 4 + 3.84 = 7.84 GB before it may start, and gets
+# turned away below that. On 2026-09-08 it had 1.7 GB, and every one of the
+# eighteen runs would have been refused.
+run 30 "test memory reserve" "${AS_USER[@]}" \
+  "mkdir -p \$HOME/.config/spideryarn && printf '4\n' > \$HOME/.config/spideryarn/vitest-memory-reserve-gb"
 
 echo "=== mcp servers ==="
 # Pin at provision time rather than resolving @latest on every session
@@ -1221,7 +1246,11 @@ check "swap active"              'swapon --show | grep -q swapfile'
 # "this machine has nothing to say", so a check for existence alone would pass
 # on the state that silently gives the box back the repo's own default of half
 # the cores -- 8 here, and no complaint from anything.
-check "test worker cap set"      'su - '"$USER_NAME"' -c "cat ~/.config/spideryarn/vitest-max-workers" | grep -qx "3"'
+check "test worker cap set"      'su - '"$USER_NAME"' -c "cat ~/.config/spideryarn/vitest-max-workers" | grep -qx "2"'
+# Same reasoning one file along, and it matters more here: an absent or empty
+# reserve file is not a smaller reserve, it is NO ADMISSION CHECK AT ALL, and
+# the box goes back to being the machine that ran eighteen suites into swap.
+check "test memory reserve set"  'su - '"$USER_NAME"' -c "cat ~/.config/spideryarn/vitest-memory-reserve-gb" | grep -qx "4"'
 check "node is the wanted major" 'su - '"$USER_NAME"' -c "node -v" | grep -q "^v${GJD_NODE_MAJOR}\."'
 check "npm present"              'su - '"$USER_NAME"' -c "command -v npm"'
 # The check that would have caught the bug. `claude --version` stayed green for

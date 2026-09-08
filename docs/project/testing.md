@@ -53,8 +53,44 @@ the one place every invocation passes through — `npm test`, `npm run check`, a
 | | says | set by |
 | --- | --- | --- |
 | `VITEST_MAX_WORKERS=8 npm test` | this run is alone, go faster | you, per run |
-| `~/.config/spideryarn/vitest-max-workers` | this machine is crowded | `infra/hetzner/provision.sh` writes `3` |
+| `~/.config/spideryarn/vitest-max-workers` | this machine is crowded | `infra/hetzner/provision.sh` writes `2` |
 | half the cores, at least 2 | everywhere else | the default |
+
+### The worker cap is a CPU lever, and barely a memory one
+
+Worth knowing before you reach for it. Measured with
+[`scripts/spike-vitest-workers.py`](../../scripts/spike-vitest-workers.py), a run's peak memory is
+
+    peak RSS ≈ 3.84 GB fixed + 0.198 GB per worker
+
+so **87% of it is spent before the first worker forks**. Eighteen concurrent runs cost 79.7 GB of
+peak at a cap of 3 and 72.6 GB at a cap of 1 — on a box with 62 GiB of RAM and swap together, both
+overrun it. Turning the cap down bounds *forks*, which is real and is why the box says 2; it does
+not bound gigabytes, and on 2026-09-08 gigabytes are what ran out. The table and the arithmetic are
+in [260908b](../plans/260908b-adaptive-test-resource-limits-so-concurrent-suites-cannot-exhaust-the-box.md).
+
+### So a crowded machine may refuse to start a run at all
+
+What actually bounds the number of concurrent suites, since nothing else did.
+[`vitest-admission.ts`](../../vitest-admission.ts) asks `/proc/meminfo` before a run begins:
+
+    capacity = floor((MemAvailable - reserve - 3.84 GB) / 0.198 GB)
+
+Below one worker of capacity the run **stops, loudly**, saying `NO TESTS RAN` and naming the
+numbers. It does not quietly fall back to one worker: the sum has just said no worker fits, and
+starting a 3.84 GB process group anyway is how postgres gets OOM-killed — which it nearly was on
+2026-09-06.
+
+There is no lock, no lease file and no coordination between runs. A run that has started is already
+inside the next run's `MemAvailable`, so the kernel's own number is the shared state. (A registry
+was designed and rejected: it is write-after-read, so in the thundering herd it existed to handle,
+every starter reads zero and every starter takes the maximum. And `--maxWorkers` overrides the
+config, so a config-time lease can record 1 while the run uses 8.)
+
+**Presence of `~/.config/spideryarn/vitest-memory-reserve-gb` is the opt-in**, and provisioning
+writes `4` on the box. A laptop has no file and is never refused: `MemAvailable` is Linux's number
+and macOS has no honest equivalent, so it is stated rather than approximated. If a run is refused
+and you are certain, delete the file or set a smaller reserve.
 
 A *file* for the middle one, because the obvious environment variable never arrives: nothing in the
 `env` block of `~/.claude/settings.json` reaches a Claude Bash tool call — measured, including the

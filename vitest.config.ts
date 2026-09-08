@@ -6,6 +6,12 @@ import type { InlineConfig } from "vitest/node";
 import { defaultExclude, defineConfig } from "vitest/config";
 
 import { TEST_LANES, type TestLane } from "./tests/store-migration-registry.js";
+import {
+  ADMISSION_POLICY_VERSION,
+  decideAdmission,
+  readMemorySnapshot,
+  readReserveBytes,
+} from "./vitest-admission.js";
 
 /**
  * Deliberately separate from vite.config.ts: that file mounts the /api dev
@@ -169,7 +175,51 @@ export function resolveParallelWorkers(machineFile = MACHINE_WORKERS_FILE): numb
   return Math.max(2, Math.floor(availableParallelism() / 2));
 }
 
-const PARALLEL_WORKERS = resolveParallelWorkers();
+/**
+ * What this config asks for, and the one place the machine gets a veto.
+ *
+ * Two questions, asked in order because they are different questions: *how many
+ * workers should one run take here* — the three layers above — and *is there
+ * room for a run at all*, which is [`vitest-admission.ts`](./vitest-admission.ts)
+ * and which exists because the answer to the first turned out to be nearly
+ * irrelevant to memory. 87% of a run's peak RSS is spent before its first
+ * worker forks, so capping workers bounds forks and not gigabytes;
+ * docs/plans/260908b-adaptive-test-resource-limits-so-concurrent-suites-cannot-exhaust-the-box.md
+ * has the table. The second question can only ever reduce the first, or refuse.
+ *
+ * **The number logged here is what the CONFIG asked for, and is deliberately
+ * not called the resolved one.** `--maxWorkers` on the command line beats it —
+ * that is the escape hatch the cap sits at the root to preserve, and
+ * tests/vitest-worker-caps.test.ts pins it — so a line announcing itself as the
+ * final worker count would be a lie on exactly the runs somebody is debugging.
+ * GPT Sol, 2026-09-08.
+ */
+function workersForThisRun(): number {
+  const nominal = resolveParallelWorkers();
+  const decision = decideAdmission({
+    nominalWorkers: nominal,
+    snapshot: readMemorySnapshot(),
+    reserveBytes: readReserveBytes(),
+  });
+  /* A refusal is thrown rather than returned as a small number: the arithmetic
+     has said no worker fits, and the failure mode this whole file exists to
+     stop is a run that starts anyway and takes postgres down with it. It must
+     also not look like a red test — the message says so in as many words. */
+  if (decision.kind === "refuse") throw new Error(decision.message);
+  if (decision.kind === "not-applicable") return nominal;
+  if (decision.workers < nominal) {
+    const gb = (n: number) => `${(n / 1024 ** 3).toFixed(2)} GB`;
+    console.error(
+      `[vitest] memory admission: asking for ${decision.workers} of a nominal ${nominal} workers ` +
+        `(MemAvailable ${gb(decision.availableBytes)}, reserve ${gb(decision.reserveBytes)}, ` +
+        `room for ${decision.capacity}). --maxWorkers still overrides this. ` +
+        `Policy v${ADMISSION_POLICY_VERSION}, pid ${process.pid}.`,
+    );
+  }
+  return decision.workers;
+}
+
+const PARALLEL_WORKERS = workersForThisRun();
 
 /**
  * What every project shares. Split out so the three differ **only** in the ways
