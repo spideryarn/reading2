@@ -486,6 +486,36 @@ survives:
   here goes near `src/public/routes.ts`, and the public dispatcher still runs before `requireUser`,
   read-methods only, no owner set. I am not changing that ordering or looking at it.
 
+## What the fifth sweep will measure, and why it will draw the wrong conclusion
+
+**`src/routes.ts` is bigger than when the split started, and that is expected rather than a failure —
+but nothing yet says so where a sweep will look.** Measured on `dev`:
+
+| When | Lines | What had just landed |
+|---|---|---|
+| 2026-09-06 21:38 | 8,180 | the fourth sweep's number, before any table |
+| 2026-09-07 09:00 | 8,385 | stage 3a — the table itself, plus billing |
+| 2026-09-07 10:37 | 8,472 | stage 3b — jobs and uploads |
+| 2026-09-07 19:49 | 8,538 | stage 2 here — referee's eight |
+| 2026-09-08 01:23 | 8,575 | stage 5 — search |
+
+Four slices in, the file has grown by about **395 lines**, roughly 7–12 per guard moved: a table row
+costs more lines than the `if` arm it replaces. With 56 guards left, expect another 400–650.
+
+**Lines were never the metric this work moves.** Biome's cognitive complexity on
+`serveAuthenticatedApi` is what collapses: **244 → 234 → 183 → 164 → 153** (verified independently
+here at 01:23 — `src/routes.ts:7401`, complexity 153, against a ceiling of 25). That is the number to
+quote.
+
+The reason the file cannot shrink is written into 260907b as a scope line: **moving domains into
+separate files is explicitly out of scope, and marked "Greg's call"**. So a sweep that measures
+`src/routes.ts` by `wc -l` will find it worse every week while the work is going well. If the file's
+size is the thing that matters, the extraction is a separate decision that has not been taken — and
+it is the one that would actually pay. Worth putting to Greg rather than inferring.
+
+Two other functions in this file exceed the ceiling and are untouched by the migration, so they will
+survive it: `:2349` at complexity 77 and `:2591` at 36.
+
 ## The next slice, so the fifth sweep inherits a queue
 
 > **Claimed, 2026-09-07 21:30.** `searches` is **taken by 260907b** (`worktree-api-dispatch-by-domain`),
