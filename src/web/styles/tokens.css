@@ -145,6 +145,18 @@
    * the property by hand in the console did nothing either, which is the tell:
    * a control property set the same way read back fine.
    *
+   * **That is no longer true of this toolchain, and the decision above stands
+   * anyway.** Re-tested twice on 2026-09-07 — Fable through a fixture, and again
+   * through a real `npm run build` — and under Vite 8.2.2 with
+   * `@tailwindcss/vite` 4.3.3 the rule survives inside `@layer app` and its
+   * `var()` references are *not* inlined: the built sheet still read
+   * `conic-gradient(from var(--spya-probe-angle), …)`. `.spya-radius`
+   * (styles/logo-animations.css) now depends on exactly that, because the `from`
+   * angle of a conic gradient cannot be interpolated any other way. Kept as the
+   * warning it is rather than deleted, because the *replacement* below is better
+   * on its own terms, and because the same claim appears in two other files that
+   * have not been re-tested.
+   *
    * What replaces it needs no registration at all. This token switches value,
    * and each *consumer* transitions its own ordinary animatable property —
    * `transform` on the bar, `top` on everything pinned under it. They still

@@ -2812,6 +2812,57 @@ ruler's five recorded preconditions, which are conditions on **how stage C may u
   **the stamp rescues none of them** — the answer to the open question in the brief, and not the one
   anybody guessed.
 
+#### What is left, ranked — two reviews, and the census that decided it (2026-09-08)
+
+With C0, C1a, C4a and C5 on `dev`, what remains is C2, C3 and C4b. Fable and then **GPT Astra** were
+asked which of them is worth building, and **they disagreed**, so the tie was broken by measuring
+rather than by preferring a reviewer.
+
+- **Fable:** stage D is the real successor — it improves the reading view, arc, Summaries, Outline,
+  Structure and reading time *together*, where C2/C3 improve one page shape. Drop C4b, defer C2 with
+  C3 until somebody counts what C3 would recover.
+- **Astra:** the opposite. **One bounded recovery stage, then leave extraction.** C3 first, narrowed
+  to the data tables that are demonstrably lost; C2 only as its prerequisite and with no independent
+  programme; stage D deferred *and* narrowed; C4b dropped.
+
+**Nobody had done the count both reviews were asking for, so it was done.** Across all 35 fixtures,
+classifying a table as data by the publisher's own markup — a `<th>`, or three rows and two columns,
+excluding anything inside a declared `.navbox`/`.infobox`/`.ambox`/sidebar — the corpus holds **41
+data tables, keeps 34, and loses 7**:
+
+| fixture | lost | what it is |
+|---|---|---|
+| `wiki_gdp_table` | **2** | a **223-row** table and a 15-row table. The article is *List of countries by GDP*; **274 `<tr>` in, 1 out.** The tables are the article |
+| `ar5iv` | **2** | *Table 1: Maximum path lengths…* (6 rows) and *Table 2: …better BLEU scores…* (12 rows) — the Attention paper's results |
+| `hn_dropbox`, `mdn_cache`, `pg_greatwork` | 1 each | arguable: an HN comment tree and two layout-ish tables, none of them a reader's evidence |
+
+**Four of the seven are real, and two of those are the worst kind of loss this plan can produce**:
+`ar5iv` **keeps all four `Table N:` captions while dropping two of the tables**, so the reader is
+told a table is there and shown nothing. That is worse than dropping both, because it looks
+complete. It is also the exact failure the gates cannot see — nothing is invented and source order
+is preserved, so `attribution` and `sourceOrder` both pass.
+
+**Decision: Astra's ranking, on the strength of the census.** Four tables across two fixtures sounds
+narrow and the fixture count understates it — "a Wikipedia list article" and "a paper with a results
+table" are two of the commonest shapes a reader brings. Against that, stage D moves nothing a reader
+has lost; it re-presents things they already have. **Losing the evidence outranks re-arranging it.**
+
+**And Astra corrected Fable's *reasoning* on C4b, not only its conclusion.** Both say drop it, but
+Greg's *"a bit of junk in the structure that's getting ignored"* line supports inspectable
+classification rather than prohibiting it — and "getting ignored" is not automatically true, because
+`src/block-policy.ts` currently includes untreated blocks in automatic evidence. **So C4b is dropped
+on opportunity cost, not because Greg ruled it out.** The distinction matters if it is ever revisited.
+
+**On stage D, when it comes: keep all six visibility commitments.** Fable proposed trimming the
+stored per-block restore and the audit view, on the grounds they were promised to earn a
+*model*-driven classification and D's is deterministic. Astra called that quiet erosion and gave the
+reason that settles it: **a deterministic false positive excludes the same evidence from generated
+accounts as a model's would.** The audit can be a modest list of blocks, classification and matched
+rule; it does not have to be a dashboard. Astra also found a dependency that kills the "mostly
+assignment" estimate — restoring an interior block of a trailing supplement collapses one supplement
+group into zero, stranding it and returning the whole article as body, and a leading-run does not fix
+that shape.
+
 **Deferred out of stage C, deliberately:**
 
 - **`dir`/`lang`.** Sol P1-C06 shows it is a data-contract change, not a recogniser: correctness needs

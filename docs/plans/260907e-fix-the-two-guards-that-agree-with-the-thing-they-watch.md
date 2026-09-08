@@ -589,3 +589,50 @@ It is visible as a cluster only because the verdict now names its evidence.
   a real question and a separate one.
 - **The first true firing of either guard** is still unrecorded, because neither has
   had one. A guard never seen to fire truly is unproven, and both remain so.
+
+---
+
+## One day later: the constraint moved, it did not go away
+
+Re-measured 2026-09-08, with the fix on `dev` and running from a tree that has it.
+
+**The floor is honest now.** Verdicts name their signal, the values are real, and the
+`2.1 h` residue predicted above did age out. Two brand-new trees are held by the floor
+*alone*, which is exactly what it is for.
+
+**And almost nothing became removable, for a reason this plan put out of scope.**
+Of eighteen trees, all but two carry a non-floor blocker, and on eleven of them it is
+the same one:
+
+```
+FAIL 1 ignored path git has no copy of
+     logs/
+```
+
+`logs/` is where `scripts/tmux-job.ts` writes, and CLAUDE.md tells every agent to use
+`tmux-job.ts` for long jobs. **So the prescribed tooling generates the thing that
+blocks teardown**, on every tree that has ever run a test suite or a review. The age
+floor was never the binding constraint; it was merely the one that fired first and
+hid the next one.
+
+The disk went the wrong way meanwhile — 14G over 16 worktrees on 2026-09-07, **15G
+over 19** now, with 20G free. Roughly three worktrees a day arriving and none leaving.
+
+That is not an argument against this change: an honest floor is a precondition for
+anything else, and until it landed the second blocker was invisible behind the first.
+It does mean the *goal* — reclaiming finished worktrees — needs one more decision, and
+it is a product call rather than an engineering one:
+
+> **Should build and test logs count as work that blocks removal?**
+
+They are rebuildable by definition, and `worktree-check.ts` already has the concept —
+`disposable`, for ignored paths it recognises as regenerable, which are counted rather
+than listed. Adding `logs/` to that set is a small change to one classifier. What makes
+it Greg's call and not mine is that it is a *safety* classifier: the argument for the
+current behaviour is that "rebuildable" is a claim about the future, and the file that
+refuses to guess is the one that has never lost anybody's work.
+
+A second, smaller residue: a tree running a checkout from before this fix still stamps
+every worktree it sweeps, so a synchronised cluster can reappear (`6.0 h` on six trees
+today). Self-limiting as worktrees turn over, and harmless while `logs/` holds
+everything anyway.
