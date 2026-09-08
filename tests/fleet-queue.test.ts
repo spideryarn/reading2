@@ -32,6 +32,7 @@ import {
   type QueueLimits,
   type UnsentFailure,
 } from "../tools/fleet/queue.js";
+import { QuarantineBook } from "../tools/fleet/quarantine.js";
 import type { FleetStatus } from "../tools/fleet/status.js";
 import { steerableStatus, type SteerFailure } from "../tools/fleet/steer.js";
 
@@ -75,8 +76,13 @@ const INSTANCE = "1a2b3c4d";
 /** A queue with a clock you move by hand. Nothing here waits for real time. */
 function makeQueue(limits?: Partial<QueueLimits>, serverInstanceId = INSTANCE) {
   const clock = { t: 1_700_000_000_000 };
-  const q = new SteeringQueue({ now: () => clock.t, serverInstanceId, ...(limits ? { limits } : {}) });
-  return { q, clock, advance: (ms: number) => (clock.t += ms) };
+  // ITS OWN BOOK, sharing this queue's clock and run id. The hold machinery has
+  // its own file — tests/fleet-quarantine.test.ts — and nothing in this one
+  // opens a hold; what it needs is a real book rather than a stub, so that a
+  // `next()` here asks the same question production's does.
+  const quarantine = new QuarantineBook({ now: () => clock.t, serverInstanceId });
+  const q = new SteeringQueue({ now: () => clock.t, serverInstanceId, quarantine, ...(limits ? { limits } : {}) });
+  return { q, quarantine, clock, advance: (ms: number) => (clock.t += ms) };
 }
 
 function ctx(status: FleetStatus, claudeSessionId = CONVO) {
