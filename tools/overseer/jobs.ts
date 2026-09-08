@@ -71,6 +71,60 @@
 import { createHash } from "node:crypto";
 
 import type { OverseerEvent } from "./diff.js";
+import { canonicalRuleSpec, type RuleSpec } from "./rules.js";
+
+/**
+ * WHAT A JOB ACTUALLY IS, and it is in the fingerprint.
+ *
+ * Two arms, because two things wear the word "job": one starts a Claude session
+ * on the box and one runs a deterministic rule inside the daemon. They differ
+ * in what they cost, in what they may do, and in who dispatches them, so they
+ * are a discriminated union rather than a flag beside a nullable spec.
+ *
+ * **`rule` carries its whole configuration**, which is GPT Sol's SP-1: a
+ * dispatcher that selected executable code by `definition.id` would leave the
+ * authorised pin valid across a changed threshold or a changed action. The spec
+ * is data, `definitionHash` hashes it, and a moved knob refuses the job.
+ */
+export type JobWork =
+  /** A Claude session, started by `SpawnJob`. What the standing jobs are. */
+  | { readonly kind: "session" }
+  /** A deterministic rule, run in process by the scheduler's two-phase protocol. No model calls, no session. */
+  | { readonly kind: "rule"; readonly rule: RuleSpec };
+
+/**
+ * A job definition narrowed to the rule arm, at the type level.
+ *
+ * This is half of what makes the deterministic-only arming path structural
+ * rather than a filter (SP-4): `ruleJobs()` returns these, so a session job
+ * cannot be handed to that path without changing a declared type, which is a
+ * visible edit rather than something a future job falls through. The other half
+ * is that the path supplies no `SpawnJob` at all — see `scheduler.ts`.
+ */
+export type RuleJobDefinition = JobDefinition & { readonly work: Extract<JobWork, { kind: "rule" }> };
+
+/** An authorised job whose work is a rule, by construction. */
+export type AuthorisedRuleJob = { readonly definition: RuleJobDefinition; readonly authorisedHash: DefinitionHash };
+
+/**
+ * The canonical form of a job's work.
+ *
+ * Exhaustive on purpose: a third arm stops this compiling, which is the only
+ * thing that stops a new kind of job being invisible to the fingerprint that
+ * authorises it.
+ */
+function canonicalWork(work: JobWork): string {
+  switch (work.kind) {
+    case "session":
+      return "work:session";
+    case "rule":
+      return `work:rule\n${canonicalRuleSpec(work.rule)}`;
+    default: {
+      const never: never = work;
+      throw new Error(`no canonical form for job work ${JSON.stringify(never)}`);
+    }
+  }
+}
 
 /**
  * One scheduled job, as data.
@@ -109,6 +163,16 @@ export type JobDefinition = {
    * and it is required rather than optional so that a new job has to say so.
    */
   readonly documents: readonly JobDocument[];
+  /**
+   * WHAT THIS JOB IS — a session to start, or a rule to run — with every knob
+   * the rule has.
+   *
+   * Required rather than optional, and hashed: an optional field defaulting to
+   * `session` would make "somebody has not decided yet" and "this starts a
+   * Claude session" the same value, which is the bag-of-optionals shape the
+   * rest of this module refuses.
+   */
+  readonly work: JobWork;
 };
 
 /**
@@ -147,12 +211,17 @@ export const DEFINITION_HASH_LENGTH = 12;
  * is exposed to; the destructure below is exhaustive so the compiler says so.
  */
 export function definitionHash(definition: JobDefinition): DefinitionHash {
-  const { id, everyMs, leaseMs, what, documents } = definition;
+  const { id, everyMs, leaseMs, what, documents, work } = definition;
   const canonical = [
     `id:${id.length}:${id}`,
     `everyMs:${everyMs}`,
     `leaseMs:${leaseMs}`,
     `what:${what.length}:${what}`,
+    // THE WORK, INCLUDING EVERY KNOB OF A RULE. GPT Sol's SP-1: without this a
+    // rule's threshold or its chosen action could move while the pin that
+    // authorised it stayed valid, which is gate 3's prohibition wearing the
+    // clothes of an implementation detail.
+    canonicalWork(work),
     // THE COUNT FIRST, then each entry length-prefixed like the strings above:
     // without the count, a job with one document could hash the same as a job
     // with two whose paths concatenate to the same bytes.
@@ -708,6 +777,13 @@ export function foldOccurrences(
       case "session-wait-restarted":
       case "session-row-changed":
       case "session-pane-replaced":
+      // AND THE RULE ARMS. A rule event is addressed BY an occurrence id and
+      // says nothing about that occurrence's lifecycle — the reservation, the
+      // start and the finish around it are the job events above. Folding one
+      // here would let a finding move a run's state, which is a different
+      // record silently editing this one.
+      case "rule-intended":
+      case "rule-settled":
         break;
       default: {
         const never: never = event;

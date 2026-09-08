@@ -8,6 +8,20 @@
  *
  *     append `reserved` and fsync it   ──▶  spawn  ──▶  append `started`
  *
+ * ## And the same ordering one layer in, for a rule
+ *
+ * A deterministic rule runs IN this process rather than as a child, and the
+ * decision it takes is the thing gate 1 wants written down. So it gets the same
+ * dance again inside the occurrence:
+ *
+ *     detect  ──▶  append `rule-intended` and fsync it  ──▶  act  ──▶  append `rule-settled`
+ *
+ * **The scheduler owns that sequence** (GPT Sol's SP-2): `SpawnJob` cannot carry
+ * it, because it is handed no store and its `JobOutcome` has nowhere for a
+ * finding to go, and a runner given an `append` and trusted to call it first is
+ * a runner that can be written the other way round. What a caller supplies is
+ * `RuleWork` — looking and acting — and nothing else. See `runRule`.
+ *
  * ## Three gates, and only one of them is about the clock
  *
  * A tick asks, in this order:
@@ -71,7 +85,7 @@
  * ones become an `unrecorded` report and the completion, which lands after the
  * tick has returned, goes to `onLostRecord`.
  */
-import type { JobEvent, OverseerEvent } from "./diff.js";
+import type { JobEvent, OverseerEvent, RuleEvent } from "./diff.js";
 import {
   authorisationOf,
   definitionHash,
@@ -89,6 +103,7 @@ import {
   type OccurrenceIndex,
   type OccurrenceKey,
 } from "./jobs.js";
+import { decideRule, describeRuleOutcome, type RuleObservation, type RuleOutcome, type RuleSpec } from "./rules.js";
 import type { AppendResult } from "./store.js";
 
 /**
@@ -109,6 +124,36 @@ export type JobSpawn =
   | { readonly kind: "refused"; readonly why: string };
 
 export type SpawnJob = (definition: JobDefinition, key: OccurrenceKey) => JobSpawn;
+
+/**
+ * **The impure halves of a rule, and only those.**
+ *
+ * The ordering below is the scheduler's and is not injectable, which is the
+ * point of GPT Sol's SP-2: a runner handed `record` and trusted to append
+ * before it acts is a runner that can be written the other way round, and
+ * *"a rule that acted and then failed to append has taken an action nobody can
+ * review"* is the gate-1 failure the ordering exists to prevent. So what a
+ * caller supplies is **looking** and **acting**, and the sequence between them
+ * belongs to `runRule`.
+ *
+ * `act` is never reached by a spec whose `disposition` is `"propose"` — see the
+ * switch in `runRule`. Rule 2's is, so rule 2 cannot kill anything however its
+ * actor is implemented.
+ */
+export type RuleWork = {
+  /**
+   * The pid an in-process run is recorded under.
+   *
+   * The daemon's own, because it is the only truthful positive pid under the
+   * current schema (GPT Sol's Q1). Injected rather than read from `process`,
+   * so this module goes on having no globals.
+   */
+  readonly selfPid: number;
+  /** LOOK. Reads the box, over HTTP, and never acts — `killRoute`'s dry run for rule 2. */
+  readonly observe: (spec: RuleSpec) => Promise<RuleObservation>;
+  /** ACT on a proposal the scheduler has ALREADY recorded and fsynced. */
+  readonly act: (spec: RuleSpec, what: string) => Promise<RuleOutcome>;
+};
 
 /**
  * What the scheduler needs from the store, and no more.
@@ -181,7 +226,29 @@ export type TickInput = {
   /** Each with the fingerprint it was authorised under — see `AuthorisedJob`, and C2 for what a bare definition let through. */
   readonly definitions: readonly AuthorisedJob[];
   readonly store: OccurrenceLog;
-  readonly spawn: SpawnJob;
+  /**
+   * **OPTIONAL, AND THAT IS THE DETERMINISTIC-ONLY ARMING PATH.**
+   *
+   * GPT Sol's SP-4: there was one global switch, arming it supplied both
+   * standing jobs, and both were immediately due — so there was no way to watch
+   * a deterministic rule fire without starting paid model sessions under a gate
+   * 4 that is admittedly unbuilt.
+   *
+   * The fix is a **capability, not a filter**. A daemon armed for rules only is
+   * given no spawner at all, so no code in that process can create a session
+   * however due a job is or however it got into the list. A job whose work is a
+   * session meets a `refused` — a fact, loud in the log — rather than a
+   * dispatch. `scripts/overseer.ts`'s `schedulerWiring` is the only place that
+   * decides which it is.
+   *
+   * `| undefined` as well as optional, unlike the rest of this codebase's
+   * absent-versus-undefined discipline, and deliberately: here the two mean the
+   * same thing — **this process holds no such capability** — so making a caller
+   * spread conditionally would buy a distinction that does not exist.
+   */
+  readonly spawn?: SpawnJob | undefined;
+  /** What a rule job needs. Absent means a rule job is refused for the same reason and in the same way as a session job with no spawner. */
+  readonly rules?: RuleWork | undefined;
   /** Injected, always. Nothing in this area reads the wall clock for itself. */
   readonly now: () => Date;
   /**
@@ -332,10 +399,10 @@ function dispatch(input: TickInput, definition: JobDefinition, at: string, nowMs
     return [{ kind: "not-dispatched", jobId: definition.id, why: `the reservation could not be recorded, so nothing was started: ${reserved.why}` }];
   }
 
-  // (2) THE SPAWN.
+  // (2) THE SPAWN — or, for a rule, the two-phase protocol below.
   let outcome: JobSpawn;
   try {
-    outcome = input.spawn(definition, key);
+    outcome = start(input, definition, key, id);
   } catch (cause) {
     // A THROW IS NOT A REFUSAL, and this is the distinction the whole file is
     // about. `refused` claims the job did not start; a runner that broke its
@@ -419,6 +486,161 @@ function dispatch(input: TickInput, definition: JobDefinition, at: string, nowMs
 }
 
 /**
+ * What actually starts, once the reservation is on the disk.
+ *
+ * **A switch on the definition's own hashed `work`**, never on its id. Choosing
+ * executable code by `definition.id` is exactly what GPT Sol's SP-1 blocked: the
+ * id is in the fingerprint, but so is nothing about what the id then selected,
+ * so a rule's threshold or its action could move while the pin stayed valid.
+ * Here the arm and its whole configuration are the thing that was authorised.
+ *
+ * **A missing capability is a REFUSAL, and refusals are facts.** A daemon armed
+ * for deterministic rules only holds no spawner, so a session job meets a
+ * sentence in the log rather than a dispatch — and there is no code in that
+ * process that could have started it. See `TickInput.spawn`.
+ */
+function start(input: TickInput, definition: JobDefinition, key: OccurrenceKey, id: OccurrenceId): JobSpawn {
+  const work = definition.work;
+  switch (work.kind) {
+    case "session": {
+      const spawn = input.spawn;
+      if (spawn === undefined) {
+        return {
+          kind: "refused",
+          why:
+            "this daemon was started with no session dispatcher, so it cannot start a Claude session for any job — " +
+            "it is armed for deterministic rules only",
+        };
+      }
+      return spawn(definition, key);
+    }
+    case "rule": {
+      const rules = input.rules;
+      if (rules === undefined) {
+        return { kind: "refused", why: "this daemon was started with no rule runner, so a deterministic rule cannot be run here" };
+      }
+      return runRule(input, rules, work.rule, id);
+    }
+    default: {
+      const never: never = work;
+      throw new Error(`no way to start job work ${JSON.stringify(never)}`);
+    }
+  }
+}
+
+/**
+ * **THE TWO-PHASE RULE PROTOCOL: detect, append the intent and fsync it, act
+ * only if that landed, append the ending.**
+ *
+ * GPT Sol's SP-2, and it is the ordering `dispatch` above already uses for
+ * spawning, one layer in — *"the same machinery generalised rather than new
+ * machinery"*. Gate 1 wants the decision recorded **before** the action, so a
+ * rule that acted and then failed to write it down has taken an action nobody
+ * can review, which is the failure the whole arrangement is against.
+ *
+ * The scheduler owns the sequence rather than handing a runner an `append` and
+ * trusting it, because a runner given both halves can be written the other way
+ * round and nothing would catch it.
+ *
+ * **Three things are deliberately NOT symmetrical:**
+ *
+ *  - A rule with nothing to say, or one that could not look, appends **one**
+ *    terminal event. There was no intent, so there is nothing to fail closed
+ *    on, and writing an intent nobody had would put a decision in the log that
+ *    was never taken.
+ *  - `disposition: "propose"` has **no path to the actor at all**. Rule 2's
+ *    ending is written here, from the decision, and turning it into a rule that
+ *    could act is an edit to a hashed field — so the job stops dispatching
+ *    until a person re-pins it.
+ *  - The occurrence's own outcome is `failed` only when the **protocol** broke
+ *    (an append lost, an actor that threw). A rule that ran and was refused is
+ *    a run that completed; what it decided is in `rule-settled`, which is the
+ *    record for that question.
+ */
+function runRule(input: TickInput, rules: RuleWork, spec: RuleSpec, id: OccurrenceId): JobSpawn {
+  const done = (async (): Promise<JobOutcome> => {
+    let observation: RuleObservation;
+    try {
+      observation = await rules.observe(spec);
+    } catch (cause) {
+      // A THROW FROM THE OBSERVER IS NOT A SIGHTING. It is the same fact as a
+      // refusal from the far end — we could not look — and it must not be
+      // flattened into an empty candidate list, which would read as "nothing
+      // is wedged".
+      observation = { kind: "cannot-see", why: `looking at the fleet threw instead of answering: ${messageOf(cause)}` };
+    }
+    const decision = decideRule(spec, observation);
+    if (decision.kind !== "propose") {
+      return settleRule(
+        input,
+        id,
+        spec,
+        decision.kind === "nothing" ? { kind: "nothing-to-do", why: decision.why } : { kind: "refused", why: decision.why },
+      );
+    }
+
+    // (1) THE INTENT, AND NOTHING IS DONE ABOUT IT UNTIL IT IS ON THE DISK.
+    const intended = record(input.store, [
+      {
+        kind: "rule-intended",
+        at: input.now().toISOString(),
+        occurrenceId: id,
+        ruleId: spec.kind,
+        what: decision.what,
+        finding: decision.finding,
+      },
+    ]);
+    if (!intended.ok) {
+      // FAIL CLOSED. The action is not attempted, and the occurrence ends as a
+      // failure so that a run which decided something and did nothing about it
+      // is visible rather than looking like a quiet success.
+      return { kind: "failed", why: `the rule's intent could not be recorded, so nothing was done about it: ${intended.why}` };
+    }
+
+    // (2) THE ACTION.
+    let outcome: RuleOutcome;
+    switch (spec.disposition) {
+      case "propose":
+        outcome = { kind: "proposed", what: decision.what };
+        break;
+      case "act":
+        try {
+          outcome = await rules.act(spec, decision.what);
+        } catch (cause) {
+          // A THROW IS NOT A REFUSAL, the same distinction `dispatch` draws
+          // about spawning: an actor that broke its contract has told us
+          // nothing about whether the action landed.
+          outcome = { kind: "failed", why: `the actor threw instead of answering: ${messageOf(cause)}` };
+        }
+        break;
+      default: {
+        const never: never = spec.disposition;
+        throw new Error(`no action for rule disposition ${JSON.stringify(never)}`);
+      }
+    }
+
+    // (3) THE ENDING.
+    return settleRule(input, id, spec, outcome);
+  })();
+  return { kind: "spawned", pid: rules.selfPid, done };
+}
+
+/** Write down how a rule's run ended, and say so in the occurrence when even that could not be written down. */
+function settleRule(input: TickInput, id: OccurrenceId, spec: RuleSpec, outcome: RuleOutcome): JobOutcome {
+  const wrote = record(input.store, [
+    { kind: "rule-settled", at: input.now().toISOString(), occurrenceId: id, ruleId: spec.kind, outcome },
+  ]);
+  if (!wrote.ok) {
+    return { kind: "failed", why: `the rule ${describeRuleOutcome(outcome)} and that could not be recorded: ${wrote.why}` };
+  }
+  return outcome.kind === "failed" ? { kind: "failed", why: outcome.why } : { kind: "exited", code: 0 };
+}
+
+function messageOf(cause: unknown): string {
+  return cause instanceof Error ? cause.message : String(cause);
+}
+
+/**
  * A failed append, as a report — or nothing at all when it landed.
  *
  * A helper rather than four `if`s, so that adding a fifth append cannot quietly
@@ -437,7 +659,7 @@ function lostReports(
 }
 
 /** Every way an append can fail, as one closed door. A refusal and a thrown filesystem error mean the same thing to a caller that must not proceed. */
-function record(store: OccurrenceLog, events: readonly JobEvent[]): { ok: true } | { ok: false; why: string } {
+function record(store: OccurrenceLog, events: readonly (JobEvent | RuleEvent)[]): { ok: true } | { ok: false; why: string } {
   try {
     const result = store.append(events);
     if (result.ok) return { ok: true };

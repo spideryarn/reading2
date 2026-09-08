@@ -119,6 +119,7 @@ const JOB: JobDefinition = {
   leaseMs: 120_000,
   what: "npm run get-ready-to-deploy",
   documents: [],
+  work: { kind: "session" },
 };
 
 /**
@@ -188,8 +189,8 @@ describe("a definition's fingerprint", () => {
     // rest of the canonical form inside it hashes the same as the honest one.
     // Two different authorised instructions with one fingerprint is exactly the
     // edit the hash exists to detect.
-    const a = definitionHash({ id: "x\neveryMs:5\nleaseMs:6\nwhat:y", everyMs: 1, leaseMs: 2, what: "z", documents: [] });
-    const b = definitionHash({ id: "x", everyMs: 5, leaseMs: 6, what: "y\neveryMs:1\nleaseMs:2\nwhat:z", documents: [] });
+    const a = definitionHash({ id: "x\neveryMs:5\nleaseMs:6\nwhat:y", everyMs: 1, leaseMs: 2, what: "z", documents: [], work: { kind: "session" } });
+    const b = definitionHash({ id: "x", everyMs: 5, leaseMs: 6, what: "y\neveryMs:1\nleaseMs:2\nwhat:z", documents: [], work: { kind: "session" } });
     expect(a).not.toBe(b);
   });
 

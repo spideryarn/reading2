@@ -61,7 +61,7 @@ import { admissible, type AdmissibleSnapshot } from "./admissible.js";
 import { baselineOf, diff, sessionKey, type Baseline, type OverseerEvent, type SessionIdentity } from "./diff.js";
 import type { AuthorisedJob } from "./jobs.js";
 import { conditionTracker, describeNote, openNoteLog, type DaemonNote } from "./notes.js";
-import { describeReport, schedulerTick, type LostRecord, type SpawnJob } from "./scheduler.js";
+import { describeReport, schedulerTick, type LostRecord, type RuleWork, type SpawnJob } from "./scheduler.js";
 import { parseAttempt, parseObservation, type JsonValue, type ObservedAttemptClock, type ObservedRow } from "./observation.js";
 import { fleetSource, type SourceMessage, type SourceOptions, type Transport } from "./source.js";
 import {
@@ -345,7 +345,19 @@ export type DaemonOptions = {
    * overdue one is reported rather than skipped. The attention and usage guards
    * are deliberately left exactly as they were: they belong to another stage.
    */
-  jobs?: { intervalMs?: number; definitions: readonly AuthorisedJob[]; spawn: SpawnJob };
+  jobs?: {
+    intervalMs?: number;
+    definitions: readonly AuthorisedJob[];
+    /**
+     * **ABSENT IS THE DETERMINISTIC-ONLY ARMING.** A daemon given no spawner
+     * holds no capability to start a Claude session, so a session job meets a
+     * refusal rather than a dispatch — GPT Sol's SP-4, and `scheduler.ts`
+     * § `TickInput.spawn` says why that is a capability rather than a filter.
+     */
+    spawn?: SpawnJob;
+    /** Looking and acting for a deterministic rule. Absent means a rule job is refused, the same way and for the same reason. */
+    rules?: RuleWork;
+  };
   /**
    * WHAT TO SAY ABOUT THE SCHEDULER on the status page — the job ids, and any
    * whose definition no longer matches its pin.
@@ -734,6 +746,7 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
             definitions: jobOptions.definitions,
             store,
             spawn: jobOptions.spawn,
+            rules: jobOptions.rules,
             now,
             // The completion append lands after the tick has returned, so its
             // failure cannot reach the reports above. This is where it goes.

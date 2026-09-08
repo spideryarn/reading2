@@ -792,7 +792,7 @@ describe("the scheduler on the daemon's clock", () => {
   /** Real milliseconds, only so the timers under test actually fire. The daemon's own clock is still the fake one. */
   const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
-  const JOB: JobDefinition = { id: "prod-the-overseer", everyMs: 60_000, leaseMs: 120_000, what: "say hello", documents: [] };
+  const JOB: JobDefinition = { id: "prod-the-overseer", everyMs: 60_000, leaseMs: 120_000, what: "say hello", documents: [], work: { kind: "session" } };
   /** Pinned to its own fingerprint: this file is about the daemon's timers, and the pin itself is tested in overseer-jobs.test.ts. */
   const AUTHORISED: AuthorisedJob = { definition: JOB, authorisedHash: definitionHash(JOB) };
 
