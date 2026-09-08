@@ -25,10 +25,14 @@ makes an implied deadline (`collectedAt + secondsLeft`) wobble, so anything comp
 a tolerance the size of a collection interval. **It does not wobble.** Measured over six consecutive
 collections, three waiting sessions each: the implied deadline is stable to **72 ms**, and it does
 not move when the interval doubles — because the producer derives `secondsLeft` from a real deadline,
-so both halves of the sum move together. That is what sizes `WAIT_DEADLINE_TOLERANCE_MS` in
-`tools/overseer/diff.ts` at ten seconds rather than two minutes, and
-`tests/overseer-diff.test.ts` re-measures it from these two files so the claim goes red rather than
-stale if the producer ever changes.
+so both halves of the sum move together.
+
+What *does* move the implied deadline is the collection's own duration — the countdown is read off
+the pane early in a run and `collectedAt` is stamped when the run ends — so the bound in
+`waitDeadlineToleranceMs` (`tools/overseer/diff.ts`) is computed from each pair's `tookMs` rather
+than being a constant sized off this capture, whose collections all took 3.8 s. On a loaded box they
+take 5.7–11.0 s and there is no ceiling. `tests/overseer-diff.test.ts` re-measures the stability
+claim from these two files, so it goes red rather than stale if the producer ever changes.
 
 The duplicate pair is the one most likely to be misread as filler. It is the opposite: with SSE and
 polling both live, receiving the same collection twice is the *normal* case, and the admissibility
