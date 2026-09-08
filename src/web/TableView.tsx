@@ -289,6 +289,71 @@ function applyOpen(
   return out;
 }
 
+/* ------------------------------------------------ selecting a block by tap --
+ *
+ * **On a touch device the gutter's affordances are drawn on the selected row
+ * and nowhere else** (styles/gutter.css § the touch reveal), so a finger needs
+ * a way to say which row that is. This is it, and the whole reason it is a
+ * named predicate rather than an `onClick` on the `<tr>` is that the `<tr>`
+ * version has no policy: some nested taps would select and others would not,
+ * according to which handler cancelled first, which element called
+ * `stopPropagation`, and whether the hover card had already swallowed the
+ * click at document capture. Sol walked all nine cases on 2026-09-07 and they
+ * did not form a rule. Written as policy it can be tested; written as
+ * propagation it could only be discovered.
+ * docs/plans/260908e-gutter-icons-on-touch-only-when-a-block-is-selected.md.
+ */
+
+/** Everything inside `td.text` that a tap already means something else by. */
+const NOT_A_BLOCK_SELECTION = [
+  /* Following it is the point of tapping it, and selecting the row it is
+     leaving would leave the selection behind on a row nobody is on. */
+  "a[href]",
+  /* Every `<mark>` the annotator draws: a comment, a chat anchor, a search hit,
+     a glossary term. `mouseup` has already acted on these (below), and a
+     glossary term's click never even arrives — useHoverCard cancels it at
+     document capture. Naming them means the answer is the same either way. */
+  "mark",
+  /* The ⤢ on a figure, and every control in the gutter. The gutter's own
+     buttons also call `stopPropagation`, and that is exactly what this list
+     exists not to depend on. */
+  "button",
+  "[role='button']",
+  /* **The OPEN "…" panel, and only that.** A closed gutter is
+     `pointer-events: none`, so a tap on its blank strip never lands here at
+     all — it falls through to this cell and selects the row, which is the
+     finger's version of "hovering blank gutter still reveals the icons" and is
+     wanted rather than tolerated. The open panel takes its hit-testing back
+     deliberately, because it is opaque and the paragraph behind it must not be
+     pressable through it (gutter.css § the gutter), so its padding and border
+     are a real target with no handler — and this is what stops one selecting
+     the row underneath. */
+  ".blk-gutter",
+  /* A footnote marker that the source wrote without an href. */
+  "[role='doc-noteref']",
+  ".footnote-ref",
+].join(", ");
+
+/**
+ * **Whether this click is a reader choosing this block**, rather than reaching
+ * for something inside it.
+ *
+ * `detail === 0` is a click no pointer produced — a keyboard or
+ * assistive-technology activation, which fires `click` with no preceding
+ * `mouseenter`. Without this guard, tabbing to a link in the prose and pressing
+ * Enter would move the selected row, paint the wash and shift `activeChain`,
+ * on input that never touched the row. GPT Sol, 2026-09-07.
+ */
+export function isBlockSelectionTap(event: {
+  target: EventTarget | null;
+  detail: number;
+}): boolean {
+  if (event.detail === 0) return false;
+  const target = event.target;
+  if (!(target instanceof Element)) return false;
+  return target.closest(NOT_A_BLOCK_SELECTION) === null;
+}
+
 /**
  * **The leaf column for an article whose paragraph labels are not there**, or
  * `null` when they are and it should draw itself as usual.
@@ -1455,8 +1520,16 @@ function TableViewInner({
                 rowSpan needs from the rows it covers. */}
             {row === 0 && withheldLeaf}
             {showText && (
+              // biome-ignore lint/a11y/useKeyWithClickEvents: there is deliberately no keyboard equivalent. This exists so a finger can say which row it is on, and `isBlockSelectionTap` refuses a click no pointer produced for exactly that reason — a keyboard reader reaches the gutter by tabbing to it, where `:focus-visible` reveals it at full strength on any row.
               <td
                 data-nav-depth={geometry.leafDepth}
+                /* **Selecting this block**, which on a touch device is what
+                   draws its gutter — see `isBlockSelectionTap` above for the
+                   policy and why it is one. On a pointer device `mouseenter`
+                   has already set the same value, so this is a no-op there. */
+                onClick={(e) => {
+                  if (isBlockSelectionTap(e.nativeEvent)) setHoveredRow(row);
+                }}
                 // `kind-*` carries the splitter's classification through to CSS —
                 // `kind-heading`, which gets more space above than below so a
                 // heading groups with the section it introduces, and

@@ -1,6 +1,6 @@
 # The gutter waits to be asked on a finger too
 
-Status as of 2026-09-08: **reviewed, not yet built.** GPT Sol's plan review returned three P0s and changed the design materially — read § What the plan review changed before § What gets built, which is superseded in three places and marked where.
+Status as of 2026-09-08: **built, and what shipped is the reviewed design rather than the one first written down.** Read § What the plan review changed and then § What was actually built; § What gets built is the pre-review draft, kept because the review is easier to follow against it, and superseded in three places.
 
 From [SPIDERYARN-READING2-2G](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-2G),
 2026-09-07 17:42 UTC, `build_commit=c0fb04a4`:
@@ -455,6 +455,110 @@ but it also says the swap is not one token: on a hybrid, mouse hover and a persi
 need separate state, and `hoveredRow` is already carrying two meanings once a click can write it.
 That is a bigger change than this report, so the conclusion is **narrowed** instead: this fixes the
 device Greg reported from, and § What is still open says a Magic Keyboard iPad is untouched by it.
+
+## What was actually built
+
+Two files, and between them about thirty lines that are not comment.
+
+### `gutter.css`
+
+```css
+@media (hover: none) {
+  :where(tr.row-active) .blk-permalink,
+  :where(tr.row-active) .block-chat,
+  :where(tr.row-active) .blk-help,
+  :where(tr.row-active) .blk-more { opacity: 0.705; pointer-events: auto; }
+}
+```
+
+and, above it, the reveal list split three ways: the four `tr:hover` selectors into
+`@media (hover: hover)` together with `tr:hover .blk-permalink { opacity: 0.6 }`, the four
+`:focus-visible` reveals and `.block-chat.has` left unconditional, and the three duplicated
+`tr:hover` selectors deleted. Nothing was restated: `.block-chat.has`,
+`.blk-gutter[data-open] > *`, `.blk-permalink.failed` and the four focus reveals all win where they
+should, because `:where()` has no weight and the whole touch block is (0,1,0).
+
+### `TableView.tsx`
+
+An exported `isBlockSelectionTap` beside a `NOT_A_BLOCK_SELECTION` list, and one `onClick` on the
+prose cell — `td.text`, not the `<tr>`, which is the P0 above. The list is `a[href]`, `mark`,
+`button`, `[role="button"]`, `.blk-gutter`, `[role="doc-noteref"]`, `.footnote-ref`; gist cells are
+excluded by the surface rather than by a rule, since the handler is not on the row. `detail !== 0`
+refuses a click no pointer produced.
+
+**Tapping the blank gutter selects the row, and that is worth naming rather than discovering.** A
+closed gutter is `pointer-events: none`, so a tap on the strip beside a paragraph never has
+`.blk-gutter` as its target — it falls through to the cell, exactly as *hovering* blank gutter still
+reveals the icons on a pointer. So the margin itself is a second way in, which is the nearest thing
+this change has to a discoverability answer: a reader who prods the empty column gets the controls.
+The `.blk-gutter` entry in the list is therefore about the **open** "…" panel, which takes its
+hit-testing back on purpose because it is opaque and the paragraph behind it must not be pressable
+through it. The first draft of the test asserted the closed case and passed, because jsdom does not
+implement `pointer-events` — a green assertion about a state a browser cannot produce.
+
+### The number, and a correction to the review
+
+**0.705, and the review's own figure for the case it was arguing about was wrong.** Sol quoted
+gutter.css:584's **2.77:1** as what 0.653 measures on a selected row. That line covers two grounds
+in one sentence and 2.77 belongs to the other one: `td.text.opaque`'s `--muted`. Over the `--panel`
+a selected row is painted, 0.653 is **2.95:1**. The P0 stands — 2.95 is still short, and the
+argument that a documented corner case became the normal path is untouched — but the shortfall was
+smaller than the review said, and this doc should not repeat a number it can compute.
+
+It can compute it, which is the second correction. This doc said `--sidebar` "is not written
+anywhere in `src/`, so this is a browser measurement rather than an arithmetic one". True and
+misleading: it is written in the repo-root `styles/tokens.css`, which is a sheet the client loads
+and `allSheets()` resolves. I had grepped one directory and reported the result as the world.
+
+| ground | what paints it | 0.653 | 0.705 |
+|---|---|---|---|
+| `--page`  | an ordinary paragraph | 3.00:1 | 3.32:1 |
+| `--panel` | `tr.row-active td.text` | 2.95:1 | 3.23:1 |
+| `--muted` | `td.text.opaque` — and it beats `row-active`, same specificity, written later | 2.77:1 | 3.00:1 |
+
+So the binding case is a **selected figure row**, which nobody would have thought to open, and 0.705
+is the value that clears all three. The ceiling is unchanged in kind and recomputed: the bookmark
+stops leading the column at 0.866 over `--page`, and its lead at 0.705 is 1.35:1 plus a hue the
+affordances have none of. This retires the second of the stylesheet's two recorded shortfalls;
+the 1x stroke-width one stands and is explicitly **not** re-measured at the new value, because it is
+a rendered number and the table above cannot predict it.
+
+### The tests
+
+- **`tests/gutter-touch-contrast.test.ts`** is new. It reads the four tokens out of the sheets the
+  client actually loads, asserts the alias chain (`--panel` → `--sidebar`, `--ink-faint` →
+  `--muted-foreground`, …) so a re-pointed alias fails here rather than in the reading view, and
+  computes the ratio on all three grounds. It fails naming which ground and by how much.
+- **`tests/gutter-target-size.test.ts`** gained the gate. Its two touch assertions could not tell a
+  permanent reveal from a conditional one — they asked whether `.blk-help` was in the block with a
+  pressable opacity, and both answer yes — which is why the 2026-09-04 change shipped. Now: every
+  selector in the block must match `:where(tr.row-active) .<class>` (that is the specificity
+  invariant written as a shape, not the phrase "it is safe"), the hover reveal must be inside
+  `@media (hover: hover)`, and the focus reveal must be inside neither query.
+- **`tests/block-selection-by-tap.test.tsx`** is new and mounts the real `TableView`, because the
+  cheap version — asserting that a click on the row sets it active — goes green while every
+  propagation failure in the P0 remains. That was the review's exact warning about which abstraction
+  to pin.
+- The brace-counting `@media` block reader moved into `tests/helpers/stylesheets.ts` as
+  `mediaBlock()`, now that two files ask for it.
+
+**Each was mutated and watched go red**: the opacity lowered to 0.653 (two grounds fail), the
+`:where()` dropped (six tests fail), the `(hover: hover)` guard removed (the hover assertion fails).
+
+### A bug found on the way and deliberately not fixed
+
+`tr:hover .blk-permalink { opacity: 0.6 }` is (0,2,1) and `.blk-permalink:hover { opacity: 1 }` is
+(0,2,0), and pointing at the permalink matches both — so **the permalink never brightens when you
+point at it**; it takes the `color: var(--highlight)` from that rule and keeps the recessive 0.6,
+against a comment two lines up that says "full when it is the thing you are pointing at". It is
+exactly the class this file documents at `.blk-permalink.failed`, and it is pre-existing: moving the
+rule into `@media (hover: hover)` changes neither weight nor order.
+
+Not fixed here, and the reason is the licence rather than the effort. It is a visible change to
+desktop hover inside a report about touch, and the clean fix — `:where(tr:hover)` on the recessive
+rule, which would also retire the `tr:hover .blk-permalink.failed` workaround — needs the permalink
+taken out of the (0,2,1) reveal list, which is a third change to a heavily-argued selector list. One
+line in a plan doc is the right size for it; a follow-up is not filed because this doc is the file.
 
 ## What is still open
 

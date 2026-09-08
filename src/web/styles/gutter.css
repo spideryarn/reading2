@@ -503,13 +503,6 @@ td.text.kind-heading .blk-gutter {
   opacity: 0;
   pointer-events: none;
 }
-tr:hover .blk-permalink,
-tr:hover .block-chat,
-tr:hover .blk-help,
-tr:hover .blk-permalink,
-tr:hover .block-chat,
-tr:hover .blk-help,
-tr:hover .blk-more,
 .blk-permalink:focus-visible,
 .block-chat:focus-visible,
 .blk-help:focus-visible,
@@ -518,9 +511,35 @@ tr:hover .blk-more,
   opacity: 1;
   pointer-events: auto;
 }
-/* Recessive on the row, full when it is the thing you are pointing at — the
-   ladder `.block-ref` used to have, kept. */
-tr:hover .blk-permalink { opacity: 0.6; }
+
+/* **The hover reveal is now behind `(hover: hover)`, and that is load-bearing
+   rather than tidy.** iOS leaves `:hover` stuck on whatever was last tapped, so
+   an unguarded `tr:hover` is a second, platform-dependent gate on the same
+   controls — and it is not the same gate. A tap that something else handles (a
+   glossary term, an external link, a footnote marker) is swallowed at document
+   capture (useHoverCard.ts, ProseHoverCard.tsx), so the touch reveal below never
+   fires while sticky hover still lands: the gutter would open at full strength
+   on a row nothing selected. Guarding the query is what stops the fix being
+   defeated by the quirk it was written around. GPT Sol, 2026-09-08.
+
+   The `:focus-visible` reveals and `.block-chat.has` stay outside the query on
+   purpose: a keyboard reader and a block's own state do not depend on what kind
+   of pointer is attached.
+
+   (`glossary.css` and `quotes.css` took the same guard the same day, for the
+   same class of reason — a control unreachable, or unavoidable, on a finger.) */
+@media (hover: hover) {
+  tr:hover .blk-permalink,
+  tr:hover .block-chat,
+  tr:hover .blk-help,
+  tr:hover .blk-more {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  /* Recessive on the row, full when it is the thing you are pointing at — the
+     ladder `.block-ref` used to have, kept. */
+  tr:hover .blk-permalink { opacity: 0.6; }
+}
 .blk-permalink:hover,
 .blk-permalink:focus-visible { opacity: 1; color: var(--highlight); }
 
@@ -551,59 +570,86 @@ tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
    the imbalance was left-right; in a column it is top-bottom, and the argument
    is the same one.)
 
-   **And the number is 0.653, which is exactly 3:1 against the page.** These are
-   icon-only controls that are permanently visible here, so WCAG 2.2's 1.4.11
-   applies to them, and the 0.35 this file carried for a day was **1.65:1** —
-   short by a wide margin. The arithmetic, from the tokens rather than from a
-   screenshot: `--page` is `oklch(0.145 0 0)` and `--ink-faint` is
-   `oklch(0.63 0 0)`; both are achromatic, so linear-light sRGB is `L³` and that
-   *is* the relative luminance, and `opacity` composites in gamma-encoded sRGB —
-   which the pixels confirm to the digit (0.35 predicted 54.4 and Chrome drew
-   54; 0.653 predicted 92.9 and drew 93).
+   **But it is the selected row only, since 2026-09-08.** The rule below used to
+   have no prefix, which fixed the shut door by removing the gate rather than
+   replacing it: every row of the article drew its affordances, permanently, and
+   BlockGutter.tsx's own sentence — *at rest the gutter shows state, on hover it
+   shows affordances* — became false on a finger. Greg, reading on an iPad,
+   asked for the icons back only on the block he selects
+   (SPIDERYARN-READING2-2G; docs/plans/260908e-…). `:where()` is what makes that
+   one rule instead of five: it contributes nothing, so this whole list stays at
+   (0,1,0) — beating the bare hidden state above on source order alone, and
+   losing *naturally* to `.block-chat.has`, `.blk-gutter[data-open] > *`,
+   `.blk-permalink.failed` and the four `:focus-visible` reveals, every one of
+   which is (0,2,0). Written with a plain `tr.row-active` prefix it would be
+   (0,2,1) and would have needed all four of those restated underneath it.
+
+   **And the number is 0.705, which is 3:1 against the darkest ground it can now
+   land on.** These are icon-only controls, so WCAG 2.2's 1.4.11 applies to them
+   whether they are permanent or revealed on selection, and 0.35 — what this file
+   carried for a day — was **1.65:1**. The arithmetic, from the tokens rather
+   than from a screenshot: `--ink-faint` is `oklch(0.63 0 0)` and the grounds are
+   `--page` `oklch(0.145 0 0)`, `--panel` `oklch(0.19 0 0)` (what
+   `tr.row-active td.text` paints, prose.css) and `--muted` `oklch(0.245 0 0)`
+   (what `td.text.opaque` paints, and it wins over `row-active` — same
+   specificity, written later). All achromatic, so linear-light sRGB is `L³` and
+   that *is* the relative luminance, and `opacity` composites in gamma-encoded
+   sRGB — which the pixels confirm to the digit (0.35 predicted 54.4 and Chrome
+   drew 54; 0.653 predicted 92.9 and drew 93).
+
+   | ground | 0.653 | 0.705 |
+   |---|---|---|
+   | `--page`  | 3.00:1 | 3.32:1 |
+   | `--panel` | 2.95:1 | 3.23:1 |
+   | `--muted` | 2.77:1 | 3.00:1 |
+
+   **0.653 was right while every row was lit and is not right now.** It was 3:1
+   against `--page`, and a tinted row was a corner case you had to be hovering to
+   reach; a *selected* row is the only place an affordance is ever visible here,
+   so the tint is the normal path and the corner case is the whole thing. That
+   retires shortfall 2 below, which is why there is one left rather than two.
 
    **Why not 4.5:1, and this is the part not to "round up to be safe".** The
    gutter's grammar is that the reader's own mark carries the weight and the
-   affordances do not. The bookmark's luminance lead over them is 2.72:1 at
-   0.35, **1.49:1 at 0.653 — plus its hue, which the affordances have none of**,
-   1.00:1 at the 0.868 that buys 4.5:1, and *inverted* above that. So 0.868 is
-   the point where the reader's mark stops leading and the buttons begin to
-   outshine it. 0.653 is not the least we can get away with: it is the compliant
-   setting the grammar survives, and the next step up is the one that breaks it.
+   affordances do not. The bookmark's luminance lead over them is 2.72:1 at 0.35
+   and 1.49:1 at 0.653; at 0.705 it is **1.35:1 — plus its hue, which the
+   affordances have none of** — and it reaches 1.00:1, where the mark stops
+   leading and the buttons begin to outshine it, at 0.866 over `--page` (0.875
+   over `--panel`, 0.889 over `--muted`). So 0.705 is not the least we can get
+   away with and it is nowhere near the ceiling: it is the compliant setting on
+   every ground the reveal can land on, with the grammar intact.
 
-   **Two shortfalls left in deliberately, recorded rather than discovered.**
-   Both are known and neither was worth its cost, in the same spirit as the
-   22 × 15 target that stood for a month before Greg asked:
-
-   1. **1x: 2.34:1.** A 12px lucide glyph draws a 1px stroke that never covers a
-      whole device pixel on a 1x screen, so the rendered peak falls short of the
-      nominal ratio. The one-line remedy is `.blk-gutter svg { stroke-width: 2.5 }`
-      in this block, measured at 3.01:1 at 1x, 2x and 3x. Not taken: it buys the
-      ratio only on 1x `(hover: none)` hardware — old Android tablets, since a 1x
-      touch laptop has a trackpad and does not match this query — and costs about
-      a quarter more ink on every iPad, every row.
-   2. **A tinted row: 2.77:1.** `td.text.opaque` (media and captions) paints
-      `--muted` and `tr.row-active td.text` paints `--panel`, and the ratio is
-      quoted against `--page`. Alpha partly rides a lighter background up, which
-      is the argument that killed the alternative of writing this as a flat grey:
-      a flat `oklch(0.478 0 0)` is the same 3:1 over the page and drops to
-      **2.46:1** over `--muted`, where 0.653 holds 2.77.
+   **One shortfall left in deliberately, recorded rather than discovered.** It is
+   known and was not worth its cost, in the same spirit as the 22 × 15 target
+   that stood for a month before Greg asked. **1x: 2.34:1 at 0.653, and not
+   re-measured at 0.705** — it is a rendered-stroke number, not an arithmetic
+   one, so the table above does not predict it and this comment will not guess.
+   A 12px lucide glyph draws a 1px stroke that never covers a whole device pixel
+   on a 1x screen, so the rendered peak falls short of the nominal ratio. The
+   one-line remedy is `.blk-gutter svg { stroke-width: 2.5 }` in this block. Not
+   taken: it buys the ratio only on 1x `(hover: none)` hardware — old Android
+   tablets, since a 1x touch laptop has a trackpad and does not match this query
+   — and costs about a quarter more ink on every iPad.
 
    **`.block-chat.has` is untouched by this and must stay so**: it is *state*,
    not an affordance, and its `opacity: 1` and `--chat-mark` win here on
    specificity (0,2,0 against 0,1,0) rather than by being written below. A block
-   that already has a conversation goes on saying so at full strength, in blue.
-   Nothing in this block may set `color`, or that quietly stops being true —
-   `tests/gutter-target-size.test.ts` says so.
+   that already has a conversation goes on saying so at full strength, in blue,
+   **on every row** — it is one of the two marks that survive the gate, the other
+   being `.blk-cmt`, which was never in this query at all. Nothing in this block
+   may set `color`, or that quietly stops being true —
+   `tests/gutter-target-size.test.ts` says so, and now says the same about the
+   gate and about opacity.
 
    docs/plans/260904b-… § The touch contrast has the tables, the crops and the
    option held in reserve: deleting this block altogether so touch inherits the
    desktop grammar. */
 @media (hover: none) {
-  .blk-permalink,
-  .block-chat,
-  .blk-help,
-  .blk-more {
-    opacity: 0.653;
+  :where(tr.row-active) .blk-permalink,
+  :where(tr.row-active) .block-chat,
+  :where(tr.row-active) .blk-help,
+  :where(tr.row-active) .blk-more {
+    opacity: 0.705;
     pointer-events: auto;
   }
 }
