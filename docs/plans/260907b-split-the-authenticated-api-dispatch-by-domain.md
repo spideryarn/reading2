@@ -985,11 +985,10 @@ explains two data points, an instrument that contradicts someone else — is the
 cheap external check, precisely when it feels least necessary. This is the same rule as
 [silent-success.md](../reusable/silent-success.md) from the author's side rather than the check's:
 that file says a check can share an assumption with the code; this says an author shares one with
-themselves. **Whether it graduates into that file is Greg's call**, since `docs/reusable/` wording is
-a rule and edits there go one approved set at a time. It is parked as
-[open-questions.md § Q13](../project/open-questions.md#q13), which is the version to approve or
-reject; the working is here, the proposal is there, and that entry is meant to be **deleted** once
-decided rather than left to accumulate.
+themselves. **Greg approved it on 2026-09-08 and it landed in that file**, so the
+question it was parked as — `open-questions.md` § Q13 — has been deleted, which is what that file is
+for. The working is here; the rule is now in
+[silent-success.md](../reusable/silent-success.md).
 
 **And the counterpoint, which belongs next to all of this rather than under it.** Every real problem
 found on the night of 2026-09-08 was caught by **a guard somebody had written earlier, for a different

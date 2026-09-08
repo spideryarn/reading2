@@ -1,9 +1,13 @@
 # The Overseer's store, and the clock it gives everything else
 
-**Status 2026-09-08, 05:00: S1 landed and reviewed clean; S2 landed with a P0 outstanding; S3–S5 not
-started.** Evidence: `tools/overseer/` holds three modules and 1,014 lines, `npm run typecheck` is
-green on four projects, and 168 tests pass — **and Sol's review of S2 found a P0 and five P1s that
-the suite passes straight through.** The next session starts at § S2's review, not at S3.
+**Status 2026-09-08, 06:45: S1 landed and reviewed clean; S2's P0 and five P1s are being fixed now;
+S3 and S6 are being built in parallel; S4 and S5 not started.** Evidence: `tools/overseer/` holds
+three modules and 1,014 lines, `npm run typecheck` is green on four projects, and 168 tests pass —
+**and Sol's review of S2 found a P0 and five P1s that the suite passes straight through**, which is
+the finding this stage is really about.
+
+Greg, 2026-09-08, on the remaining work: *"Reprioritise as you see fit, work in parallel where you
+can."* What that changed is in § The order, reconsidered.
 
 The standing direction is [orchestrator-direction.md](../project/orchestrator-direction.md) — read it
 first; it holds the constraints, Greg's horizon, and the seam with the fleet dashboard, and it
@@ -581,6 +585,57 @@ not** — it validates nothing and risks implying verification it does not perfo
 brand instead on an opaque admissible-snapshot type (S2-07), so that `diff()` cannot be handed a
 snapshot `admissible()` never blessed — which is currently only a comment.
 
+### The order, reconsidered — and the constraint that deleted work
+
+Greg, 2026-09-08: *"Reprioritise as you see fit, work in parallel where you can."* Three changes.
+
+**S2's P0 is not negotiable and nothing follows it.** It is landed code that can write a history
+that is plausible and false, and S3 is the stage that writes histories to disk. Fixing it after the
+store exists means the store's first real test writes corrupt history.
+
+**S3 got smaller, because of a constraint from the dashboard agent.** Greg's robustness ceiling —
+*"if the orchestrator broke I could just ssh in and use Claude Code in the terminal"* — was read back
+as a design rule: **no state that only this process knows how to reconstruct.** So the store is
+**disposable**. If `~/.overseer/` is missing, empty, or truncated, the Overseer starts cold, says so
+plainly, and runs. It never refuses to start, and there is no repair step. That deleted a whole class
+of recovery machinery this plan was about to acquire.
+
+> *disposable* has to include **truncated**, not just missing. A file cut off mid-line by an OOM kill
+> is the case that actually happens here, and it is the one that tempts a repair step. If a
+> half-written last line costs you the last line and nothing else, you have it right.
+>
+> — the fleet dashboard agent, 2026-09-08
+
+**S6 is new, and it is the only part of § `idle` is the bug that needs nothing from anyone else.**
+Four live sessions were mid-`codex exec` and every one of them showed as `idle`. That is mechanical,
+not a judgement, so it is buildable today — and it does **not** need an arm on `SessionState`. The
+seam both agents agreed on:
+
+> **The dashboard reports the pane; the Overseer decides what the work is.** `panePid` is a fact
+> about a pane; "this session is waiting 40 minutes on a paid review" is a judgement about work, and
+> judgements belong on the Overseer's side. Adding a `SessionState` arm would encode a conclusion in
+> a field whose whole job is to report an observation.
+>
+> — agreed between this agent and the fleet dashboard agent, 2026-09-08
+
+So S2-fix, S3 and S6 run in parallel; S4 and S5 follow, in that order, because S5 is the stage that
+actually answers Greg's opening requirement — *a way to (re)start it if it gets killed*.
+
+### A fact that landed underneath this stage: a session can be renamed
+
+`POST /api/sessions/rename` landed on 2026-09-08, after S2. **A session's name can now change without
+`gjd-remote ls` having run**, and renaming also clears `GJD_PROVISIONAL` — without which `adoptTitles`
+renames it straight back.
+
+This does **not** break the diff: `SessionIdentity` is the tmux handle plus `claimedConversationId`
+and has never included the name, which is the same conclusion for the same reason as the
+`claudeSessionId` correction above. Two consequences it does have:
+
+- The register must hold the name as **last observed**, refreshed every snapshot, not written once at
+  first sighting — otherwise reboot recovery offers Greg a name he deliberately changed.
+- **A rename currently produces no event at all.** It is a deliberate act by a person and it is
+  invisible to the history. Folded into S2's review round rather than opened as its own stage.
+
 ### S3 — the store: single writer, checkpoint, crash recovery
 
 - One `events.jsonl`, truncate-to-newline on open, the exclusive lock, and `current.json` as a
@@ -608,6 +663,27 @@ down until the next login, with `Restart=always` never getting a chance to matte
   login**; and the executable path proven to survive worktree removal.
 
 **Reboot-resume of the sessions themselves is O4, a later stage.** This one only makes it possible.
+
+### S6 — work, not panes: the Codex subprocess arm
+
+Independent of S3–S5, and running in parallel with them.
+
+The pure classifier takes a process-table snapshot and the pane pid; a thin adapter reads the real
+table. Splitting them is the point — the judgement is testable against captured fixtures and the I/O
+is not in it. **A pane pid that is null, dead, or unreadable is a "could not tell" arm carrying why**,
+never "no subprocess found", which is a different claim and the dangerous one.
+
+- **Done:** fixtures captured from this box's real process table, and a number — how many of the live
+  sessions this reclassifies, checked by hand that they really are mid-review.
+
+**Not in S6:** the prose-question case. *"Has this agent asked Greg something?"* is a judgement, not a
+parse — ten of fifteen sessions genuinely waiting on Greg had ended their turn in full stops, and a
+mechanical check found one of twenty-three. That one is the Overseer's short-lived model calls, later.
+
+**Also not in S6, but now owned here:** the `needs-you` sub-kind. *An agent asked me something* and
+*the harness wants a permission* are different work items — and on this box the second is nearly
+always a **launch defect**, because auto mode should have handled it. So it is not a queue item for
+Greg at all; the action is to fix how that session was started.
 
 ## What this stage is not
 
