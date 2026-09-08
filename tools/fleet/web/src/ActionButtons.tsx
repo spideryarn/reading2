@@ -187,14 +187,45 @@ function successCopy(outcome: Extract<ActionOutcome, { ok: true }>): { head: str
 }
 
 /**
- * **WHAT A FAILED ACTION MAY BE SAID TO HAVE DONE**, which is four sentences
+ * **TWO FACTS, ONE SENTENCE**, and the collapse is deliberate.
+ *
+ * `unknown` and `not-told` stay separate arms in `DeliveryReading` and in
+ * `parseDelivery`, because they really are different things and a diagnosis
+ * wants to know which. They used to get two headings here, and that was wrong
+ * twice over.
+ *
+ *  - The `not-told` heading said *the server did not say*, which is FALSE half
+ *    the time it appears: `parseDelivery` folds an absent `delivery` and a word
+ *    this build does not recognise onto the same arm, so the server may well
+ *    have said `"half-ish"` and been misunderstood here.
+ *  - A person holding a phone does the same thing either way — go and look
+ *    before pressing it again. Two headings that mean one action are a cost on
+ *    a small screen, and they invite a reader to believe there is a difference
+ *    to act on.
+ *
+ * **The distinction survives in the type, in the parse and in the tests**, and
+ * it is what a later stage needs. The footer under this card — `why`, the
+ * `code · HTTP nnn` line, and who said the words — separates the client-side
+ * readings (`unreachable`, `not-json`, no reply at all) from a server refusal.
+ * It does NOT separate an unparsable delivery word from an absent one, which is
+ * exactly why the heading above it must claim neither.
+ */
+const CANNOT_TELL: { head: string; body: string } = {
+  head: "This page cannot tell whether the action took effect.",
+  body:
+    "It may have taken effect and it may not; the words below are all there is to go on. Look before repeating it — a second press is a NEW action, not a repair of the first, and neither can be undone from here.",
+};
+
+/**
+ * **WHAT A FAILED ACTION MAY BE SAID TO HAVE DONE**, which is three sentences
  * and used to be one.
  *
  * "Nothing happened." went above every failure, `from: "client"` included —
  * where the answer never came back and the request may perfectly well have
  * deleted a worktree or killed thirty processes. It is the most expensive
  * sentence on this page, because a person who reads it presses the button
- * again, and none of these actions can be taken back.
+ * again, and none of these actions can be taken back. **It is gone**: no
+ * reading available here supports it, `none` included. See `none` below.
  *
  * A `Record` over the closed union, so a fifth arm of `DeliveryReading` fails
  * the build here rather than quietly taking the last branch — the same shape,
@@ -203,31 +234,59 @@ function successCopy(outcome: Extract<ActionOutcome, { ok: true }>): { head: str
  * **The words differ from that one's on purpose and it is not a twin.** There
  * the subject is keystrokes going into an input box, and the advice is about a
  * retry appending to half-typed text. Here the subject is an action — a queue
- * gesture, a worktree removal, a kill — and there is nothing to append to. The
- * TYPE and the PARSE are shared, which is the part a second copy would rot.
- *
- * `unknown` and `not-told` are two situations and get two headings: the first
- * is *the attempt failed in a way that cannot say*, the second is *the server
- * refused and did not mention it*. Both mean look before repeating; neither
- * means nothing happened. Only a server-stated `none` says that.
+ * gesture, a worktree removal, a kill — and there is nothing to append to, so
+ * the advice is that a repeat is a fresh act rather than an addition. The TYPE
+ * and the PARSE are shared, which is the part a second copy would rot.
  */
 const ACTION_DELIVERY_COPY: Record<DeliveryReading["kind"], { head: string; body: string | null }> = {
-  none: { head: "Nothing happened.", body: null },
+  /**
+   * **THIS ARM SPEAKS FOR KEYSTROKES AND MAY NEVER SPEAK FOR THE ACTION.**
+   *
+   * `Delivery` is minted by `fire()` in steer.ts and means one thing: what
+   * became of a sequence of `tmux send-keys` calls. `none` says none of them
+   * left this box. It says nothing whatever about a queue, a worktree or a
+   * process — an action can be refused after its effect has already run, and a
+   * route can state `none` about the keystroke half of a request that did
+   * plenty besides.
+   *
+   * **It is also unreachable on this path today.** No `ok: false` body in
+   * routes-actions.ts carries a `delivery` at all, so every action failure
+   * lands on `not-told`; the fixtures below it in the tests are the only thing
+   * that reaches these words. An unreachable arm making the strongest claim on
+   * the page is the worst combination available, and that is what it was.
+   *
+   * **Do not widen this back out.** Whole-action effect is a different fact,
+   * and there is no server-side contract that carries it — Stage 3 of
+   * docs/plans/260908j is where one would have to come from, and it is server
+   * work. Until such a field exists, this heading describes keystrokes only.
+   */
+  none: {
+    head: "No keystrokes went out.",
+    body:
+      "That is the whole of what the server said, and it is only about keystrokes: it does not say whether the rest of the action took effect. Read its own words below before repeating it.",
+  },
+  /**
+   * **"AND THE REST DID NOT" WAS FALSE**, and it contradicted the sentence
+   * printed directly beneath it.
+   *
+   * `fire()` reaches `partial` down two roads and only one of them knows the
+   * remainder failed. Its own `why` says "Part of the sequence arrived and the
+   * rest cannot be accounted for" when `mayHaveLanded(e)`, and "and the rest
+   * did not" only when it does not. So the card may assert the first clause —
+   * some of it definitely happened — and must not assert the second.
+   *
+   * The old retry sentence was keystroke reasoning too ("acts again on whatever
+   * the first one already did"), which is true of typing into a box and false
+   * of a kill or a worktree removal: those do not accumulate, they simply
+   * happen again.
+   */
   partial: {
-    head: "PART of it went out.",
+    head: "PART of it took effect.",
     body:
-      "The server says some of it took effect and the rest did not. Do NOT repeat this before going and looking — a second attempt acts again on whatever the first one already did, and nothing here can undo either.",
+      "Some of it definitely happened and the sequence did not finish. The rest may or may not have happened as well; nothing here can tell you which. Look before repeating it — a second press is a NEW action, not a repair of the first, and neither can be undone from here.",
   },
-  unknown: {
-    head: "It is not known whether this happened.",
-    body:
-      "The attempt failed in a way that cannot say what the server did with it, so this may have taken effect. Go and look before pressing it again.",
-  },
-  "not-told": {
-    head: "The server did not say whether this happened.",
-    body:
-      "It refused without saying what it had already done. Treat that as unknown rather than as nothing: look before pressing it again.",
-  },
+  unknown: CANNOT_TELL,
+  "not-told": CANNOT_TELL,
 };
 
 export function ActionOutcomeCard({ outcome, onRefresh }: { outcome: ActionOutcome; onRefresh: () => void }): ReactNode {
@@ -1492,8 +1551,9 @@ export function BoxActions({
             **AND SO IS "Nothing happened."**, which is the failure half of the
             same rule and was exempt from it until 2026-09-08. This is the panel
             with `kill` on it: a second tap whose reply never came back may have
-            ended thirty processes, and the page said the opposite. The four
-            headings are `ACTION_DELIVERY_COPY`'s, above.
+            ended thirty processes, and the page said the opposite. The sentence
+            is now gone from every arm — `ACTION_DELIVERY_COPY`, above, and its
+            comments say why no reading here can support it.
           */}
           <p className={cx("tw:font-medium", done.ok ? "tw:text-work-ink" : "tw:text-alarm-ink")}>
             {!done.ok
@@ -1534,8 +1594,20 @@ export function BoxActions({
                 <p className="tw:mt-1 tw:font-medium tw:text-alarm-ink">{ACTION_DELIVERY_COPY[done.delivery.kind].body}</p>
               )}
               <p className="tw:mt-1 tw:break-words tw:text-ink">{done.why}</p>
+              {/* THE STATUS BELONGS HERE TOO. The session card has always shown
+                  it and this one did not, and the difference matters now that
+                  `unknown` and `not-told` share one heading: this line is where
+                  a person finds out which situation they are in. "HTTP 500,
+                  said by this browser" is an answer that came back unreadable;
+                  no status at all is a request whose answer never came. */}
               <p className="tw:mt-1 tw:text-[12px] tw:text-ink-faint">
                 <Mono>{done.code}</Mono>
+                {done.status === null ? null : (
+                  <>
+                    <span className="tw:px-1">·</span>
+                    <Mono>{`HTTP ${done.status}`}</Mono>
+                  </>
+                )}
                 <span className="tw:px-1">·</span>
                 {done.from === "server" ? "said by the dashboard server" : "said by this browser"}
               </p>

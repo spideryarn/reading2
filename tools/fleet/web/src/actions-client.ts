@@ -879,8 +879,16 @@ export type ActionOutcome =
    * `delivery` is REQUIRED, and its four arms are the ones steer-client.ts
    * already established. Optional would let a producer omit it silently and
    * leave the renderer picking a default, which is the same defect wearing a
-   * question mark. `not-told` is the arm for "the server sent none"; `none` is
-   * a positive claim and only a server may make it.
+   * question mark. `not-told` is the arm for a body that carried no delivery —
+   * and, because `parseDelivery` folds them together, for one that carried a
+   * word this build cannot read.
+   *
+   * **What this field is NOT.** `Delivery` is about keystrokes: it is minted by
+   * `fire()` in steer.ts from a sequence of `tmux send-keys` calls. It has no
+   * opinion about whether a queue changed, a worktree went, or a process died.
+   * A whole-action outcome is a different fact and there is no field for it
+   * yet — do not borrow this one for it, and see `ACTION_DELIVERY_COPY` in
+   * ActionButtons.tsx, which is where the temptation actually lands.
    */
   | { ok: false; code: string; why: string; status: number | null; from: "server" | "client"; delivery: DeliveryReading };
 

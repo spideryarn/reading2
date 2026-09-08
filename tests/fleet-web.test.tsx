@@ -4141,16 +4141,19 @@ describe("the action buttons, which are the server's vocabulary", () => {
         why: "pane %1646 is in session $1643 now, not $1",
         status: 409,
         from: "server",
-        /* A server that states `none` is the one case allowed to produce
-           "Nothing happened.", which is why this fixture still says it. The
-           other three arms are next door, in "what became of an ACTION". */
+        /* `none` is the server saying no KEYSTROKES left this box. It is NOT
+           a claim about the action as a whole, and since the fix round of
+           260908j the card no longer reads it as one. The other three arms are
+           next door, in "what became of an ACTION". */
         delivery: { kind: "none" },
       }),
     });
     openWith([CONTINUE_WIRE], { api: rec });
     await act(async () => {});
     await clickSaying("Continue");
-    expect(container.textContent).toContain("Nothing happened.");
+    expect(container.textContent).toContain("No keystrokes went out.");
+    // The whole-action claim is not available to this arm and never was.
+    expect(container.textContent).not.toContain("Nothing happened.");
     expect(container.textContent).toContain("pane %1646 is in session $1643 now, not $1");
     expect(container.textContent).toContain("said by the dashboard server");
   });
@@ -5243,6 +5246,52 @@ describe("what became of an ACTION, which is also not two answers", () => {
     }) as unknown as typeof fetch;
   }
 
+  /**
+   * A `fetch` that answers, and whose body will not parse.
+   *
+   * **The mutation this exists to catch.** `postJson`'s invalid-JSON branch can
+   * be changed from `unknown` back to `none` and the suite stayed green,
+   * because nothing drove the real client through a response whose `json()`
+   * REJECTS — only through a `fetch` that throws. A status arrived, so the
+   * request certainly reached the server; what did not arrive is any account of
+   * what it did with it.
+   */
+  function unreadableBody(status = 500): typeof fetch {
+    return (async () =>
+      ({
+        status,
+        json: async () => {
+          throw new SyntaxError("Unexpected token < in JSON at position 0");
+        },
+      }) as unknown as Response) as unknown as typeof fetch;
+  }
+
+  /** Answers the dry run, then answers the real press with a body that will not parse. */
+  function answersThenGarbles(first: Record<string, unknown>): typeof fetch {
+    let calls = 0;
+    return (async () => {
+      calls += 1;
+      if (calls === 1) return { status: 200, json: async () => first } as unknown as Response;
+      return {
+        status: 500,
+        json: async () => {
+          throw new SyntaxError("Unexpected token < in JSON at position 0");
+        },
+      } as unknown as Response;
+    }) as unknown as typeof fetch;
+  }
+
+  /**
+   * The sentence a server-stated `none` may say, and the ONLY thing it may say.
+   *
+   * `Delivery` is about keystrokes. Nothing on this path licenses a claim about
+   * a queue, a worktree or a process, so this string must never appear over any
+   * other reading — that is what the `not.toContain` uses of it are for.
+   */
+  const KEYSTROKE_SENTENCE = "No keystrokes went out.";
+  /** One heading for both readings that cannot tell, because the action is the same. */
+  const CANNOT_TELL_HEAD = "This page cannot tell whether the action took effect.";
+
   /** The session page, with the real client wired to `fetchImpl`. */
   function openActing(fetchImpl: typeof fetch, actions: unknown[]): void {
     const client = makeActionsApi(fetchImpl);
@@ -5277,13 +5326,26 @@ describe("what became of an ACTION, which is also not two answers", () => {
 
     const text = container.textContent ?? "";
     expect(text).not.toContain("Nothing happened.");
-    expect(text).toContain("It is not known whether this happened.");
+    expect(text).not.toContain(KEYSTROKE_SENTENCE);
+    expect(text).toContain(CANNOT_TELL_HEAD);
+    /* THE LOAD-BEARING CLAUSES, pinned rather than the whole paragraph. Each of
+       these is a sentence that would be FALSE if it went the other way: the
+       first because the action may have run, the second because a repeat of a
+       kill or a worktree removal is a fresh act and not an addition to the
+       first one. Copy edits around them stay cheap. */
+    expect(text).toContain("may have taken effect and it may not");
+    expect(text).toContain("a second press is a NEW action");
     // The local sentence is still there, and still owned by whoever wrote it.
     expect(text).toContain("this browser could not reach the dashboard");
     expect(text).toContain("said by this browser");
   });
 
-  it("says PART of it went out when the server says that is what happened", async () => {
+  it("does not claim the rest did NOT happen when the server says partial", async () => {
+    /* `fire()` in steer.ts reaches `partial` down two roads, and only one of
+       them knows the remainder failed: its own words are "Part of the sequence
+       arrived and the rest cannot be accounted for" when `mayHaveLanded(e)`,
+       and "and the rest did not" when it does not. The card sits directly above
+       that verbatim sentence and used to contradict half of it. */
     openActing(
       refusing(
         { ok: false, code: "enter-not-sent", why: "the text was typed and the Enter could not be sent", delivery: "partial" },
@@ -5296,8 +5358,14 @@ describe("what became of an ACTION, which is also not two answers", () => {
 
     const text = container.textContent ?? "";
     expect(text).not.toContain("Nothing happened.");
-    expect(text).toContain("PART of it went out.");
-    expect(text).toContain("Do NOT repeat this");
+    expect(text).not.toContain(KEYSTROKE_SENTENCE);
+    expect(text).toContain("PART of it took effect.");
+    // The clause that was false, and must not come back in any form.
+    expect(text).not.toContain("the rest did not");
+    // The three clauses that carry the whole meaning.
+    expect(text).toContain("Some of it definitely happened");
+    expect(text).toContain("may or may not have happened");
+    expect(text).toContain("a second press is a NEW action");
     // Still verbatim, still the server's.
     expect(text).toContain("the text was typed and the Enter could not be sent");
   });
@@ -5312,7 +5380,9 @@ describe("what became of an ACTION, which is also not two answers", () => {
 
     const text = container.textContent ?? "";
     expect(text).not.toContain("Nothing happened.");
-    expect(text).toContain("The server did not say whether this happened.");
+    expect(text).not.toContain(KEYSTROKE_SENTENCE);
+    expect(text).toContain(CANNOT_TELL_HEAD);
+    expect(text).toContain("the words below are all there is to go on");
   });
 
   it("does not read a delivery word it has never heard of as nothing", async () => {
@@ -5322,20 +5392,35 @@ describe("what became of an ACTION, which is also not two answers", () => {
 
     const text = container.textContent ?? "";
     expect(text).not.toContain("Nothing happened.");
-    expect(text).toContain("The server did not say whether this happened.");
+    expect(text).not.toContain(KEYSTROKE_SENTENCE);
+    expect(text).toContain(CANNOT_TELL_HEAD);
+    /* AND IT DOES NOT SAY THE SERVER WAS SILENT, because the server was not:
+       it said "half-ish" and this build could not read it. `parseDelivery`
+       folds an absent field and an unrecognised one onto the same arm, so any
+       heading that claimed silence would be false on half its traffic. That is
+       the whole reason the two headings collapsed into this one. */
+    expect(text).not.toContain("did not say whether this took effect");
+    expect(text).not.toContain("did not say whether this happened");
+    expect(text).toContain("the words below are all there is to go on");
   });
 
-  it("still says nothing happened when the server says exactly that", async () => {
-    /* The negative half. A guard that never lets the plain case through is one
-       that has simply stopped saying the true thing. */
+  it("reads a server-stated `none` as being about keystrokes and nothing wider", async () => {
+    /* The negative half, narrowed. `none` is still allowed to say its own true
+       thing — a guard that never lets the plain case through has simply stopped
+       saying it — but the true thing is about KEYSTROKES. It does not license
+       "Nothing happened.", which is a claim about a queue, a worktree or a
+       process that no `Delivery` value can support. */
     openActing(refusing({ ok: false, code: "not-steerable", why: "that session is not at a prompt", delivery: "none" }), [CONTINUE_WIRE]);
     await act(async () => {});
     await clickSaying("Continue");
 
     const text = container.textContent ?? "";
-    expect(text).toContain("Nothing happened.");
-    expect(text).not.toContain("PART of it went out.");
-    expect(text).not.toContain("It is not known whether this happened.");
+    expect(text).toContain(KEYSTROKE_SENTENCE);
+    // The clause that keeps the heading narrow.
+    expect(text).toContain("only about keystrokes");
+    expect(text).not.toContain("Nothing happened.");
+    expect(text).not.toContain("PART of it took effect.");
+    expect(text).not.toContain(CANNOT_TELL_HEAD);
   });
 
   it("does not say nothing happened on the box when the kill's reply never arrived", async () => {
@@ -5352,8 +5437,66 @@ describe("what became of an ACTION, which is also not two answers", () => {
 
     const text = container.textContent ?? "";
     expect(text).not.toContain("Nothing happened.");
-    expect(text).toContain("It is not known whether this happened.");
+    expect(text).not.toContain(KEYSTROKE_SENTENCE);
+    expect(text).toContain(CANNOT_TELL_HEAD);
+    expect(text).toContain("a second press is a NEW action");
     expect(text).toContain("said by this browser");
+  });
+
+  it("reads an answer whose body will not parse as unknown, in the client itself", async () => {
+    /* DRIVEN THROUGH THE REAL CLIENT, and asserting the field rather than the
+       words, because this is the branch a renderer test cannot pin: change
+       `postJson`'s invalid-JSON arm to `none` and every rendering test above
+       still passes, since none of them ever reaches it. */
+    const outcome = await makeActionsApi(unreadableBody()).run(ROW, "continue");
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) throw new Error("unreachable");
+    expect(outcome.delivery.kind).toBe("unknown");
+    expect(outcome.code).toBe("not-json");
+    expect(outcome.from).toBe("client");
+  });
+
+  it("does not say nothing happened when the answer came back and would not parse", async () => {
+    /* The same branch, on screen. A 500 with an HTML error page in it is the
+       ordinary shape of this: the request unquestionably reached the server. */
+    openActing(unreadableBody(), [REMOVE_WORKTREE_WIRE]);
+    await act(async () => {});
+    await clickSaying("Remove worktree");
+    await clickSaying("Yes — remove worktree");
+
+    const text = container.textContent ?? "";
+    expect(text).not.toContain("Nothing happened.");
+    expect(text).not.toContain(KEYSTROKE_SENTENCE);
+    expect(text).toContain(CANNOT_TELL_HEAD);
+    expect(text).toContain("the body was not JSON");
+  });
+
+  it("does not say nothing happened on the box when the kill's answer would not parse", async () => {
+    /* The second consumer of the same arm, so the box path is constrained too
+       rather than inheriting the session page's guarantee. */
+    openActingBox(answersThenGarbles({ ok: true, op: "dry-run", dryRun: true, result: { candidates: [{ pid: 5001 }] } }), [
+      KILL_SUITES_WIRE,
+    ]);
+    await act(async () => {});
+    await clickSaying("Kill test suites");
+    await clickSaying("Yes — kill test suites");
+
+    const text = container.textContent ?? "";
+    expect(text).not.toContain("Nothing happened.");
+    expect(text).not.toContain(KEYSTROKE_SENTENCE);
+    expect(text).toContain(CANNOT_TELL_HEAD);
+    expect(text).toContain("may have taken effect and it may not");
+    /* The footer is what tells the two collapsed readings apart, so it has to
+       carry the status. An answer arrived here — it just could not be read. */
+    expect(text).toContain("HTTP 500");
+  });
+
+  it("reads a box answer whose body will not parse as unknown, in the client itself", async () => {
+    const outcome = await makeActionsApi(unreadableBody()).box("kill-suites", false);
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) throw new Error("unreachable");
+    expect(outcome.delivery.kind).toBe("unknown");
+    expect(outcome.code).toBe("not-json");
   });
 });
 

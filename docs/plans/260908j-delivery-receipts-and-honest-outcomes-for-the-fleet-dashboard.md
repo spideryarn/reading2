@@ -155,6 +155,60 @@ so this was caught by the implementer reading past it rather than by me specifyi
 delivery, every refusal is reached before any keystroke, so the route sends nothing and the client
 reads `not-told`. Inventing a value at the route would have been the opposite of the point.
 
+#### The code review found three P0s, and the first is this stage committing the class it closed
+
+Reviewed at `c0453d0c`. The narrow claim held — the only literal `"Nothing happened."` was the
+`none` arm, and every parse path had to produce `none` to reach it. **The semantics did not.**
+
+**S1: `"Nothing happened."` is stronger than `delivery: "none"`.** The server's `Delivery` type is
+*about keystrokes*: `none` means nothing left the box for the pane. It does not establish that an
+action did nothing to a queue, a worktree or a process. So reusing that vocabulary for
+`ActionOutcome`/`BoxOutcome` gave the **safe-looking arm** the power to make a false whole-action
+assertion — a lossy join, inside the stage built to fix one. Worse, the arm is **unreachable on the
+action path today** (no action route sends a delivery on failure), so it was an unreachable arm
+making the boldest claim.
+
+Fixed by narrowing rather than by inventing an action-wide effect type, which needs a server
+contract that does not exist: `No keystrokes went out.` — and a comment on the arm saying it speaks
+only for keystrokes, is unreachable today, and must not be widened without that contract. **The
+comment is the real guard**: when Stage 3 adds whole-action effect, the temptation will be to reuse
+this arm rather than add one.
+
+**S2: the `partial` body asserted something the server contradicts.** `fire()` reaches `partial`
+down two roads and only one of them knows the remainder failed (`steer.ts:1253-1255`):
+
+    "Part of the sequence arrived" +
+      (mayHaveLanded(e) ? " and the rest cannot be accounted for" : " and the rest did not")
+
+The card said *the rest did not*, printed directly above that verbatim sentence. **I had already
+hand-edited this body once and changed the wrong half** — swapping "landed" for "took effect" while
+leaving the false clause. The rewrite asserts only what is true on both roads.
+
+**S3: two headings a reader cannot act on differently.** `parseDelivery` maps *absent field* and
+*present-but-unrecognised* both to `not-told`, so "the server did not say" is false when the server
+said `"half-ish"` and this page failed to understand it. The copy collapses to one shared constant;
+**the type keeps both arms**, because they are genuinely different facts and useful for diagnosis.
+
+**And my stated reason for that decision was false.** I wrote that the `code · HTTP nnn · from`
+footer "already exposes which one happened". It does not: it separates the client-side readings
+(`unreachable`, `not-json`) from a server refusal, but a server body carrying an unrecognised
+`delivery` and one carrying none produce an **identical** footer. The implementer checked and said
+so. That is not a reason to keep two headings — it is a second reason the heading must claim
+neither, and it is the version now written into the code.
+
+**S4: a surviving mutation that restored the exact bug.** Flipping the invalid-JSON branch from
+`unknown` to `none` left the suite green — the tests covered a thrown `fetch` but nothing drove the
+real client with a response whose `json()` rejects. Now covered on both the session and box paths.
+
+**Six mutations at the end, all caught.** The bodies had been materially underconstrained — only
+fragments of one were asserted, so the others "could be replaced with most false advice without
+failing the suite", which is exactly how S2's false sentence shipped. Each body now pins its
+load-bearing clause, plus a standing `not.toContain("the rest did not")`.
+
+**One repair the implementer made beyond the brief:** the box failure footer never rendered
+`HTTP nnn`, only the session card did — which made the new comment about the footer false *on the
+path with `kill` on it*.
+
 ### ✅ Stage 2 — a queue id minted by a dead process must not resolve in this one (landed 2026-09-08)
 
 New leaf `tools/fleet/instance.ts`; ids become `<instance>-q<n>`; a new `other-instance` refusal
