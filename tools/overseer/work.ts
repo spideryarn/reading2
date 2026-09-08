@@ -79,6 +79,12 @@
  * or "running for 56 years" in whatever computes a duration from it, and the
  * whole point of this module is a reading that cannot be mistaken for a
  * measurement it did not take.
+ *
+ * **`atMs` IS ACCURATE TO ABOUT A SECOND, NOT TO A MILLISECOND**, and the type
+ * cannot say so. It is derived from `ps`'s `etimes`, which counts whole seconds,
+ * so the same process read twice yields two starts up to a second apart. Fine
+ * for "this review has been running 41 minutes"; useless for ordering two
+ * processes, and never to be compared for equality — see the module comment.
  */
 export type ProcessStart = { known: true; atMs: number } | { known: false };
 
@@ -212,6 +218,24 @@ export type WorkReading =
       inspected: number;
       paneCommand: string;
       /**
+       * When the PANE PROCESS itself started — the age of the thing
+       * `paneCommand` names, and of nothing else.
+       *
+       * It is here so that a renderer showing "this shell has run one command
+       * for six hours" can say six hours **about the command**, without reaching
+       * for a duration that describes a different object. The dashboard's
+       * `startedAt` is the tmux session's, and the two come apart routinely
+       * rather than rarely: in one capture in this repo's fixtures the pane is
+       * 115341 s old and the `claude` inside it is 75741 s old, because
+       * `gjd-remote resume` drops a fresh conversation into a pane that was
+       * already there.
+       *
+       * Accurate to about a second — see `ProcessStart`. Absent on
+       * `cannot-tell` for the same reason `paneCommand` is: there, no pane was
+       * found, and an age of zero would read as "just started".
+       */
+      paneStarted: ProcessStart;
+      /**
        * When the table this was decided from was read.
        *
        * Carried on both walking arms so a `WorkReading` stored on its own can
@@ -233,6 +257,8 @@ export type WorkReading =
        */
       inspected: number;
       paneCommand: string;
+      /** When the pane process itself started. See the arm above. */
+      paneStarted: ProcessStart;
       /** When the table this was decided from was read. See the arm above. */
       atMs: number;
     };
@@ -535,8 +561,12 @@ export function classifyPaneWork(panePid: number | null, reading: ProcessTableRe
   }
 
   const paneCommand = truncate(pane.command);
+  // The PANE ROW's own start, taken from the same row `paneCommand` came from.
+  // Deliberately not the tmux session's `startedAt`, and deliberately not the
+  // first child's: a pane outlives the conversations put into it.
+  const paneStarted = pane.started;
   const atMs = reading.atMs;
   const [first, ...rest] = jobs;
-  if (first === undefined) return { kind: "no-child-work", inspected, paneCommand, atMs };
-  return { kind: "child-work", jobs: [first, ...rest], inspected, paneCommand, atMs };
+  if (first === undefined) return { kind: "no-child-work", inspected, paneCommand, paneStarted, atMs };
+  return { kind: "child-work", jobs: [first, ...rest], inspected, paneCommand, paneStarted, atMs };
 }

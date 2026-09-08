@@ -11,7 +11,8 @@
  * WHERE A CASE IS CONSTRUCTED IT SAYS SO IN ITS NAME, and it is built by editing
  * one field of a captured file rather than by inventing a table.
  */
-import { readFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 
@@ -320,6 +321,62 @@ describe("classifying a real pane", () => {
   });
 });
 
+describe("the pane's own age belongs to the pane, not to the command it is running", () => {
+  test("paneStarted is the pane PROCESS's start, and it is not the session's", () => {
+    // THE MEASUREMENT THIS FIELD EXISTS FOR. In this real capture the pane is
+    // 115341 s old and the `claude` inside it is 75741 s old - a difference of
+    // eleven hours, because `gjd-remote resume` puts a fresh conversation in a
+    // pane that was already there. So a renderer that dressed `paneCommand` in
+    // the pane's age would be labelling one object with evidence about another.
+    const parsed = parseProcessTable(raw("quiet-claude-pane"), NOW_MS);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    const pane = parsed.rows.find((r) => r.pid === PANE["quiet-claude-pane"]);
+    const claude = parsed.rows.find((r) => r.pid === 412924);
+    expect(pane?.started).toEqual({ known: true, atMs: NOW_MS - 115_341_000 });
+    expect(claude?.started).toEqual({ known: true, atMs: NOW_MS - 75_741_000 });
+
+    const reading = classifyPaneWork(PANE["quiet-claude-pane"], readingOf("quiet-claude-pane"));
+    expect(reading.kind).toBe("no-child-work");
+    if (reading.kind !== "no-child-work") return;
+    expect(reading.paneStarted).toEqual({ known: true, atMs: NOW_MS - 115_341_000 });
+  });
+
+  test("paneStarted rides on the child-work arm too", () => {
+    const reading = classifyPaneWork(PANE["shell-pane-running-tests"], readingOf("shell-pane-running-tests"));
+    expect(reading.kind).toBe("child-work");
+    if (reading.kind !== "child-work") return;
+    // The 'this shell has run one command for N' row the dashboard wants: the
+    // pane's own 1282 s, alongside its own command.
+    expect(reading.paneStarted).toEqual({ known: true, atMs: NOW_MS - 1_282_000 });
+    expect(reading.paneCommand).toMatch(/npx.*vitest.*run/);
+  });
+
+  test("a pane whose start could not be read says so rather than looking new (constructed)", () => {
+    const parsed = parseProcessTable("  100     1  -1 bash pane\n  200   100  9 codex exec --model x\n", NOW_MS);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    const reading = classifyPaneWork(100, { read: true, rows: parsed.rows, atMs: NOW_MS });
+    expect(reading.kind).toBe("child-work");
+    if (reading.kind !== "child-work") return;
+    // NOT `atMs: NOW_MS`, which is what a zero-instead-of-unknown would give and
+    // would render as "started just now" on a pane that has been up for days.
+    expect(reading.paneStarted).toEqual({ known: false });
+  });
+
+  test("cannot-tell carries no pane age, because absent means we could not look", () => {
+    for (const reading of [
+      classifyPaneWork(null, readingOf("quiet-claude-pane")),
+      classifyPaneWork(999_999, readingOf("quiet-claude-pane")),
+      classifyPaneWork(100, { read: false, why: "ps died" }),
+    ]) {
+      expect(reading.kind).toBe("cannot-tell");
+      expect(reading).not.toHaveProperty("paneStarted");
+      expect(reading).not.toHaveProperty("paneCommand");
+    }
+  });
+});
+
 describe("a reading that could not be taken never renders as a reading", () => {
   test("a null pane pid says so, and names the cause", () => {
     const reading = classifyPaneWork(null, readingOf("codex-review-under-pane"));
@@ -451,6 +508,75 @@ describe("the tree is a moment, and a moment can be malformed", () => {
   });
 });
 
+/**
+ * THE POSITIVE CONTROL. Read this before believing a zero.
+ *
+ * This module's headline number is allowed to be nought — on a quiet fleet no
+ * session is mid-review, and `no-child-work` everywhere is the right answer. The
+ * trouble is that **a zero produced by a working instrument and a zero produced
+ * by a broken one are the same number**, and the second is the more likely of
+ * the two after any refactor: a recogniser regex that stops matching, a walk
+ * that stops descending, a probe that returns rows nothing is ever found in.
+ * Nothing else in this suite would go red for that — every other test here would
+ * pass a classifier that had quietly stopped finding anything, because most of
+ * them assert an absence.
+ *
+ * So these three tests exist for one purpose, and it is not coverage: **they are
+ * the reason a future zero means "there was none" rather than "we stopped
+ * finding any."** They are the only tests here that assert, from real captures
+ * of real running work, that the instrument still detects. If you are deleting
+ * or weakening one, you are removing the thing that makes the number
+ * interpretable — do not, and if a fixture goes stale, re-capture it rather than
+ * relax the assertion.
+ *
+ * The live equivalent, run by hand on 2026-09-08: a `vitest` deliberately
+ * started under this session's own pane was caught by 2 of 8 consecutive live
+ * probes at depth 5, which is how the zero measured that day was known to be a
+ * real zero. That run is gone; these two captures are what remain of it.
+ * `probeProcessTable` carries the third control, and it runs on every call —
+ * see its `selfPid` check.
+ */
+describe("POSITIVE CONTROL: the instrument still detects real work", () => {
+  test("control 1 - a real paid codex review is still found", () => {
+    // tests/fixtures/overseer-process-trees/codex-review-under-pane.txt, taken
+    // while a genuine `codex exec` was running under this box's own pane.
+    const reading = classifyPaneWork(PANE["codex-review-under-pane"], readingOf("codex-review-under-pane"));
+    expect(reading.kind).toBe("child-work");
+    if (reading.kind !== "child-work") return;
+    expect(reading.jobs.map((j) => j.recogniser)).toEqual(["codex-exec"]);
+  });
+
+  test("control 2 - a real test suite under a shell pane is still found", () => {
+    // shell-pane-running-tests.txt, 21 minutes into a real `npm test`.
+    const reading = classifyPaneWork(PANE["shell-pane-running-tests"], readingOf("shell-pane-running-tests"));
+    expect(reading.kind).toBe("child-work");
+    if (reading.kind !== "child-work") return;
+    expect(reading.jobs.map((j) => j.recogniser)).toEqual(["vitest"]);
+  });
+
+  test("control 3 - a real headless claude run is still found", () => {
+    // headless-claude-under-pane.txt, during a real `scripts/run-claude.ts`.
+    const reading = classifyPaneWork(PANE["headless-claude-under-pane"], readingOf("headless-claude-under-pane"));
+    expect(reading.kind).toBe("child-work");
+    if (reading.kind !== "child-work") return;
+    expect(reading.jobs.map((j) => j.recogniser)).toEqual(["claude-headless"]);
+  });
+
+  test("all three recognisers have a control, so none can rot unnoticed", () => {
+    // If a recogniser is added without a real capture behind it, this fails and
+    // says so - which is the difference between a table that grew and a table
+    // that grew evidence.
+    const controlled = new Set(
+      [
+        classifyPaneWork(PANE["codex-review-under-pane"], readingOf("codex-review-under-pane")),
+        classifyPaneWork(PANE["shell-pane-running-tests"], readingOf("shell-pane-running-tests")),
+        classifyPaneWork(PANE["headless-claude-under-pane"], readingOf("headless-claude-under-pane")),
+      ].flatMap((r) => (r.kind === "child-work" ? r.jobs.map((j) => j.recogniser) : [])),
+    );
+    expect([...controlled].sort()).toEqual(Object.keys(RECOGNISERS).sort());
+  });
+});
+
 describe("the probe, against this box's real process table", () => {
   test("it asks ps for exactly the four columns the parser reads", () => {
     expect(PS_ARGV).toEqual(["-eo", "pid=,ppid=,etimes=,args="]);
@@ -481,6 +607,62 @@ describe("the probe, against this box's real process table", () => {
     if (verdict.kind === "cannot-tell") return;
     expect(verdict.inspected).toBeGreaterThan(0);
     expect(verdict.paneCommand).not.toBe("");
+  });
+
+  test("the control is about OUR pid, not merely about some pid (pid 0 is nobody)", () => {
+    // Every ppid in a real table is also a pid somewhere - except 0, which is
+    // the parent of init and is never a process. So a control that had drifted
+    // to matching `ppid` would accept 0 and this refuses it. Mutation testing
+    // found that drift; nothing else here could see it.
+    const reading = probeProcessTable({ selfPid: 0 });
+    expect(reading.read).toBe(false);
+    if (reading.read) return;
+    expect(reading.why).toMatch(/did not include this process \(pid 0\)/);
+  });
+
+  test("a valid table OF SOMEWHERE ELSE is refused, which is what the default is for", () => {
+    // The control on the control. A fake `ps` that prints a real, well-formed,
+    // 9-row process table - captured off this box, so every line parses - and
+    // that contains pid 1 but not us. Everything else in this file passes
+    // `selfPid` explicitly, so without this the DEFAULT could quietly become
+    // something always present (pid 1, say) and every test would stay green
+    // while the control stopped controlling anything. Mutation testing found
+    // exactly that. The fake-binary-in-a-tmpdir shape is the one
+    // tests/run-codex.test.ts already uses.
+    const dir = mkdtempSync(join(tmpdir(), "fake-ps-"));
+    try {
+      const table = join(dir, "table.txt");
+      writeFileSync(table, raw("quiet-claude-pane"));
+      const bin = join(dir, "ps");
+      writeFileSync(bin, `#!/bin/sh\nexec cat ${table}\n`);
+      chmodSync(bin, 0o755);
+
+      // Sanity: the fake is well-formed enough to be believed, so the refusal
+      // below is about the control and not about the parsing.
+      const believed = probeProcessTable({ bin, selfPid: 652780 });
+      expect(believed.read).toBe(true);
+      if (believed.read) expect(believed.rows).toHaveLength(9);
+
+      // And with the real default it is refused, because we are not in it.
+      const refused = probeProcessTable({ bin });
+      expect(refused.read).toBe(false);
+      if (refused.read) return;
+      expect(refused.why).toMatch(new RegExp(`did not include this process \\(pid ${process.pid}\\)`));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("the probe's own per-run control: a table without this process is refused", () => {
+    // The cheap positive control that travels with every call. If `ps` returns
+    // rows that do not include the caller, the reading is not of this machine -
+    // and a reading of somewhere else, full of processes nothing will ever be
+    // found under, is the exact shape of an instrument that has quietly stopped
+    // working while still answering. Costs one pass over the rows and no spawn.
+    const reading = probeProcessTable({ selfPid: 2_147_483_646 });
+    expect(reading.read).toBe(false);
+    if (reading.read) return;
+    expect(reading.why).toMatch(/did not include this process/);
   });
 
   test("output that exits 0 but is not a process table is a failure", () => {

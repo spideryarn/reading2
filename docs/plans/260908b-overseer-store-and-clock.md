@@ -733,6 +733,121 @@ and has never included the name, which is the same conclusion for the same reaso
 - **Done:** the full torn-write sequence — tear, restart, append, append, read — and a second daemon
   refusing to start. Not "a torn line is skipped".
 
+### Where the hardening stopped, and how we knew
+
+Three review rounds on one mechanism — the types carrying *this snapshot passed the gate* and *this
+may stand as the world*. Round three found the private-field box still hands out the live object, so
+`Object.assign(baseline.snapshot, { tmuxServerPid: null })` compiles with no cast. Rather than fix
+it, this went to **Fable**, per
+[engineering-manager.md](../reusable/engineering-manager.md)'s rule that a P0 surviving round two is
+settled through Fable or Greg rather than past the orchestrator. It was the first time that clause
+was needed.
+
+**The verdict: stop hardening the type.** Take a small honest patch — a result union, one runtime
+assertion, three corrected comments — and decline the deep freeze.
+
+**Why the freeze is a ghost, with evidence rather than intuition.** Round two's hole was real
+*because the spread is this file's own idiom*: `{ ...snapshot, clock: snapshot.clock }` sits at
+`admissible.ts:154`, so an agent forging a brand by spread was doing what the surrounding code does.
+Round three's needs somebody to write `Object.assign` onto a value typed `readonly`. Fable grepped
+`daemon.ts`, `store.ts`, `notes.ts` and `work.ts`: **no production code mutates a snapshot anywhere**,
+and the one realistic site — a test mutating a fixture — cannot leak, because `freshFixture` re-parses
+per call. The freeze also had an unpriced cost: it would freeze structures shared with the store's
+register and walk opaque `question`/`health` JSON, which is more surface than the thing it guards.
+
+**The loop diagnosis, which is the part worth carrying elsewhere:**
+
+> Rounds 2 and 3 are the same finding at increasing resolution. TypeScript's `readonly` was never
+> runtime immutability, so asking a reviewer *"is it sound?"* will always get the next level down.
+> Freeze it and round 4 finds `structuredClone`-then-forge. That is convergence to a known limit, not
+> a chain of misses.
+>
+> — Fable, 2026-09-08
+
+**And the exit, which is a change of question rather than of code.** State the guarantee at its true
+strength in the code, and ask the next review *"is this statement accurate?"* rather than *"is this
+sound?"* — bundling it with the next stage rather than reviewing the mechanism alone. **A comment
+stronger than the code is what misleads the next agent**, which is this stage's own recurring class
+arriving in prose instead of in types. So three comments that overclaimed are being corrected, and
+the uncovered case — a nested `row.status.secondsLeft = 3600` — is **written down as uncovered**
+rather than covered.
+
+The one runtime check that does land is at the use site, not the mint: `diff()` asserts `unplaceable`
+on its `previous` once. **The type makes the guarantee at mint; JavaScript cannot hold a value still
+between mint and use, so the use site checks once.** Sol's exact example becomes a crash rather than
+a bridged reboot — correct-and-unavailable over plausible-and-up, at the one point where a mutation
+could bridge two tmux worlds.
+
+**And the redirection matters more than the ruling.** Fable's closing point is where the hazard now
+actually lives:
+
+> A wrong history is far more likely to come from the daemon's register folding, `goneWhileAway`, and
+> the checkpoint/baseline write ordering than from anyone assigning to a readonly field.
+
+That is where the next review goes.
+
+### S3's review, and the premise in it that was wrong
+
+[260908b-s3-review-sol.md](260908b-s3-review-sol.md). A P0 and four others; all five dispatched fixes
+landed, and **one finding was rejected on its premise rather than fixed** — which is the part worth
+keeping.
+
+**S3-01 (P0) — the lock was not exclusive.** Rename-plus-read-back only catches contenders that
+renamed before the read. Now `openSync(path, "wx")`: the kernel decides, in one syscall. The residual
+is **named rather than hidden** — clearing a provably-dead pid's lock cannot be made atomic without a
+primitive Node does not expose — and it is covered by a second line: **ownership is the lock file
+itself, checked two ways.** Inode-and-device identity between the held fd and the path catches a
+competitor's unlink-and-recreate *even when byte-identical*; the record's `instanceId` catches an
+in-place overwrite, which keeps the inode. Checked before the log is repaired, before the append
+handle opens, and before every write — so a start that lost the clearing race refuses rather than
+truncating a log the winner is appending to, which was the worse half of the finding.
+
+**S3-02 — replay is now all-or-nothing.** One unreadable line inside the range being replayed means
+no fold at all. A hole *before* the checkpoint's cursor does not block a resume: those bytes were
+folded when they were good, and refusing there would throw away a sound checkpoint over a line
+nothing reads again. The framing that unlocked it — not a hostile-user boundary, but a **persistence,
+version and corruption** boundary — is in the module comment, next to the sentence that makes the
+strictness affordable:
+
+> Every refusal in this file is affordable precisely because the thing on the other side of it is a
+> working daemon with no memory.
+
+**S3-06 — the cursor now saves work as a number rather than as a claim.** The checkpoint is read
+first, the log only from the cursor, positionally. `StoreOpening` gained `bytesScanned`, and the
+smoke run prints `Resumed … Read 0 bytes of the log.` A range too large to replay is a **cold start
+rather than an attempt** — the restart-loop cliff removed instead of documented.
+
+**And S3-04, which was rejected.** Sol's premise was that a resumed store must reconstruct a baseline
+from what it holds. It must not, and cannot honestly: the register keeps `lastStatusKey` rather than
+the status and has never held `title` or `question`, so anything minted from it carries **an invented
+`collectedAt` for a collection that never happened** — plausible wrongness manufactured by the
+recovery path, which is where it survives longest. The daemon instead persists **the producer's own
+wire bytes** and, on restart, re-parses and re-blesses them through `parseObservation` and
+`admissible()`.
+
+> The register answers *what is running*. The baseline answers *what did the producer last say*.
+> Different questions, and only the second is safe to re-derive, because we can keep the exact bytes.
+
+That now sits on `SessionRegister` in the code, because the temptation will recur. **The fields the
+register drops are dropped on purpose; that is what makes it safe, and it is a property to preserve
+rather than a gap to close.**
+
+**Two things about reviews follow from it**, and both agents reached them independently: a premise
+from a cross-family review **can be wrong in the same way code can**, and it is easier to miss because
+a finding arrives already framed as a defect with a fix implied. Sol found a real gap here — a
+restart genuinely could not produce `working → idle` — and named the wrong repair. Taking the gap and
+refusing the repair is the outcome to aim for.
+
+**Mutations: 29 tried, 28 caught, and the survivor reported as an equivalent mutant rather than
+banked as coverage.** Five of the original fifteen went **NO-OP** because their anchors had been
+rewritten, and were re-anchored and re-run rather than counted — *a mutation that matches nothing
+reports nothing*, which is this whole failure class in miniature.
+
+**The sharpest finding of the round is about tests, not stores.** The mutant that removed the
+absolute-path check really did create a directory in the repo root — **which then made the next run of
+that test pass for the wrong reason.** A control that poisons its own verification is worth killing on
+sight; that test now cleans up whatever happens.
+
 ### S4 — the source and the daemon
 
 - SSE with poll fallback, the freshness watchdog, degradation and restoration events. **No health
