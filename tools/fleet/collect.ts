@@ -314,8 +314,65 @@ export function snapshotFrom(
   };
 }
 
+/**
+ * Did the tmux server change under us mid-collection? The message if so, null if not.
+ *
+ * Pure and exported so the decision can be tested without a box, because it is
+ * a decision with three arms and only one of them is obvious.
+ *
+ * A NULL ON EITHER SIDE IS NOT DRIFT. Not being able to read the generation is
+ * common enough — a tmux busy enough to time out a `display-message` is exactly
+ * the box this tool is for — and treating "I could not tell" as "it changed"
+ * would blank the dashboard at the moment it is most wanted. The snapshot then
+ * carries a null `tmuxServerPid`, which already says "unverifiable" to anything
+ * that reads it. Only two numbers that DISAGREE are evidence of a restart.
+ */
+export function generationDrift(before: number | null, after: number | null): string | null {
+  if (before === null || after === null) return null;
+  if (before === after) return null;
+  return (
+    `the tmux server restarted during this collection (was pid ${before}, now ${after}) — ` +
+    `session and pane handles from two different servers cannot be joined`
+  );
+}
+
+/**
+ * The tmux server's pid, asked directly. Null when it cannot be read.
+ *
+ * A second way to get the same number as `tmuxServerPid(listPanesOutput)`, and
+ * that is the point: it is read once BEFORE the inventory and once WITH the
+ * panes, and the two must agree. See `collect`.
+ */
+function generationNow(): number | null {
+  try {
+    const out = execFileSync("tmux", ["display-message", "-p", "#{pid}"], { encoding: "utf8", timeout: 5_000 });
+    return /^\d{1,10}$/.test(out.trim()) ? Number(out.trim()) : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function collect(): Promise<FleetSnapshot> {
   const startedAt = Date.now();
+  /**
+   * THE GENERATION, READ BEFORE THE INVENTORY AND CHECKED AFTER IT.
+   *
+   * A collection is not one command. The sessions come from a bash script that
+   * takes eight to twelve seconds; the panes and the generation come from a
+   * separate `tmux list-panes` afterwards. If the tmux server dies and restarts
+   * in between, the sessions from the old server get joined to pane handles from
+   * the new one — `$1643` and `%1646` come round again — and the whole thing is
+   * stamped with the new generation, which is the label that says "these handles
+   * are consistent". The result is a snapshot that is internally wrong and
+   * carries a token asserting that it is not. GPT Sol's F16, 2026-09-08.
+   *
+   * A restart mid-collection is rare and a reboot is not, and the failure is
+   * invisible: every row looks ordinary. So bracket it. A change means the
+   * snapshot is thrown away and the caller keeps its previous one and marks it
+   * stale, which is the honest outcome — a twelve-second gap in the history
+   * beats twelve seconds of confident nonsense.
+   */
+  const generationBefore = generationNow();
   // ASYNC, AND THAT IS NOT TIDINESS. This was `execFileSync`, which blocks the
   // whole event loop — so for the eight to twelve seconds a collection takes,
   // the server answered nothing at all. The cache made the *data* instant and
@@ -330,7 +387,10 @@ export async function collect(): Promise<FleetSnapshot> {
   });
   const parsed = parseSessions(out);
   if (parsed.failure) throw new Error(`could not read this box's tmux sessions: ${parsed.failure}`);
-  const snapshot = snapshotFrom(parsed, panes(), 0);
+  const listing = panes();
+  const drift = generationDrift(generationBefore, listing.tmuxServerPid);
+  if (drift) throw new Error(drift);
+  const snapshot = snapshotFrom(parsed, listing, 0);
   const rows = snapshot.rows;
 
   // ASK ONLY THE BLOCKED ONES what they are asking. A capture is cheap, but a

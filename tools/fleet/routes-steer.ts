@@ -526,7 +526,12 @@ export function parseAnswerBody(raw: unknown): Parsed<AnswerRequest> {
 
 export type RateVerdict = { ok: true } | { ok: false; why: string; retryAfterMs: number };
 
-export type RateLimiter = { check(key: string, now: number): RateVerdict };
+export type RateLimiter = {
+  /** Reads only. Asking whether a send is allowed must not itself cost a slot. */
+  check(key: string, now: number): RateVerdict;
+  /** Spends a slot. Called once the request has reached the delivery module. */
+  record(key: string, now: number): void;
+};
 
 /**
  * A floor per pane and a ceiling for the box.
@@ -551,7 +556,32 @@ export function createRateLimiter(
 ): RateLimiter {
   const lastByKey = new Map<string, number>();
   let recent: number[] = [];
+  /**
+   * TESTING AND SPENDING ARE TWO OPERATIONS, and they used to be one.
+   *
+   * `check` recorded a slot the moment it said yes — before the target shape,
+   * the text, the declared status, the live verification or the delivery had
+   * been looked at. So six well-formed but bogus requests spent the whole
+   * fleet's allowance and locked out a real one for ten seconds, without a
+   * single keystroke having gone anywhere. GPT Sol's F18.
+   *
+   * Now `check` only reads. `record` is called once the request has reached the
+   * delivery module, which is the point at which it has cost the box something
+   * — three tmux commands with ten-second timeouts — and may have typed. A
+   * request refused before that (bad origin, unparseable body, an id that is
+   * not an id) is free, which is what it should be: it cost us nothing.
+   */
+  const spend = (key: string, now: number): void => {
+    lastByKey.set(key, now);
+    recent.push(now);
+    // The map is keyed by pane id, which is unbounded over a long uptime.
+    // Forget anything far older than its own floor.
+    if (lastByKey.size > 256) {
+      for (const [k, t] of lastByKey) if (now - t > opts.minIntervalMs * 20) lastByKey.delete(k);
+    }
+  };
   return {
+    record: spend,
     check(key, now) {
       const prev = lastByKey.get(key);
       if (prev !== undefined && now - prev < opts.minIntervalMs) {
@@ -569,13 +599,6 @@ export function createRateLimiter(
           why: `${recent.length} sends across the fleet in the last ${opts.burstWindowMs}ms is the ceiling`,
           retryAfterMs: Math.max(1, opts.burstWindowMs - (now - oldest)),
         };
-      }
-      lastByKey.set(key, now);
-      recent.push(now);
-      // The map is keyed by pane id, which is unbounded over a long uptime.
-      // Forget anything far older than its own floor.
-      if (lastByKey.size > 256) {
-        for (const [k, t] of lastByKey) if (now - t > opts.minIntervalMs * 20) lastByKey.delete(k);
       }
       return { ok: true };
     },
@@ -750,6 +773,13 @@ export function makeSteerRoutes(overrides: Partial<SteerDeps> = {}): SteerRoutes
     // EVERY FIELD BELOW COMES OUT OF THE BODY. Nothing here asks tmux who is in
     // that pane — see the header. The delivery module does the asking, and it
     // compares what it finds against these claims.
+    // SPENT HERE, not at the check above. From this line on the request costs
+    // the box three tmux commands and may type into a pane, which is what the
+    // allowance is protecting. Everything refused before this point — a bad
+    // origin, an unparseable body, an id that is not an id — was free, and
+    // charging for it let six bogus requests lock out a real one. Sol's F18.
+    deps.limiter.record(target.paneId, deps.now());
+
     let result: SteerResult;
     try {
       result =

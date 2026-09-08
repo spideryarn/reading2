@@ -580,7 +580,8 @@ describe("the rate limiter", () => {
 
   it("does not let a refused request consume the caller's next slot", () => {
     const limiter = createRateLimiter({ minIntervalMs: 1000, burstMax: 5, burstWindowMs: 10_000 });
-    expect(limiter.check("%1", 0).ok).toBe(true);
+    limiter.check("%1", 0);
+    limiter.record("%1", 0);
     expect(limiter.check("%1", 100).ok).toBe(false);
     expect(limiter.check("%1", 200).ok).toBe(false);
     // If the refusals had moved the clock, this would still be inside the floor.
@@ -589,12 +590,64 @@ describe("the rate limiter", () => {
 
   it("has a whole-box ceiling as well as a per-pane floor", () => {
     const limiter = createRateLimiter({ minIntervalMs: 10, burstMax: 3, burstWindowMs: 10_000 });
-    expect(limiter.check("%1", 0).ok).toBe(true);
-    expect(limiter.check("%2", 100).ok).toBe(true);
-    expect(limiter.check("%3", 200).ok).toBe(true);
+    for (const [pane, at] of [["%1", 0], ["%2", 100], ["%3", 200]] as const) {
+      expect(limiter.check(pane, at).ok).toBe(true);
+      limiter.record(pane, at);
+    }
     expect(limiter.check("%4", 300).ok).toBe(false);
     // …and the window is a window, not a total.
     expect(limiter.check("%4", 20_000).ok).toBe(true);
+  });
+
+  it("does not spend a slot merely for being asked — Sol's F18", () => {
+    // THE COUPLING THIS SPLIT REMOVES. `check` used to record the moment it said
+    // yes, so six well-formed but bogus requests spent the whole fleet's
+    // allowance and locked out a real one for ten seconds without a keystroke
+    // going anywhere. The two tests above were written against that behaviour
+    // and passed because of it, which is why they needed rewriting rather than
+    // merely adapting.
+    const limiter = createRateLimiter({ minIntervalMs: 1000, burstMax: 3, burstWindowMs: 10_000 });
+    for (let i = 0; i < 20; i++) expect(limiter.check("%1", i).ok).toBe(true);
+    // Twenty questions, no answers spent. And the positive half: once one is
+    // actually spent, the floor bites — so this cannot pass by the limiter
+    // having stopped working altogether.
+    limiter.record("%1", 20);
+    expect(limiter.check("%1", 21).ok).toBe(false);
+  });
+
+  it("charges a request that reached the delivery module, even when it was refused there", async () => {
+    // The other side of F18, and the reason `record` is not simply moved to the
+    // success path: a request that got as far as `verifyTarget` has cost the box
+    // three tmux commands with ten-second timeouts, whatever it returned. That
+    // is the cost the allowance exists to bound.
+    let clock = 1_000_000;
+    const refused: SteerResult = { ok: false, reason: { code: "pane-gone", why: "no such pane" } };
+    const { routes, calls } = harness(refused, { now: () => clock });
+    const first = await post(routes, fakeReq({ body: JSON.stringify(messageBody()) }));
+    expect(first.status).toBe(409);
+    expect(calls).toHaveLength(1);
+
+    clock += 40;
+    const second = await post(routes, fakeReq({ body: JSON.stringify(messageBody()) }));
+    expect(second.status).toBe(429);
+    // And it did not reach delivery a second time.
+    expect(calls).toHaveLength(1);
+  });
+
+  it("charges nothing for a request refused before delivery", async () => {
+    // A malformed body never reaches tmux, so it must not cost the fleet a slot.
+    let clock = 1_000_000;
+    const { routes, calls } = harness(OK, { now: () => clock });
+    for (let i = 0; i < 8; i++) {
+      const bad = await post(routes, fakeReq({ body: JSON.stringify({ paneId: "not-a-pane" }) }));
+      expect(bad.status).toBe(400);
+    }
+    expect(calls).toHaveLength(0);
+
+    clock += 1;
+    const real = await post(routes, fakeReq({ body: JSON.stringify(messageBody()) }));
+    expect(real.status).toBe(200);
+    expect(calls).toHaveLength(1);
   });
 });
 
