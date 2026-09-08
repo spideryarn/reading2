@@ -1,9 +1,23 @@
 # `/changelog` gets a contents list, collapsible releases and a version number — and `/opensource` gets a page
 
-Status as of 2026-09-07: **built, on branch `worktree-changelog-toc-and-opensource`, not yet
-deployed.** Evidence: `tests/changelog-page.test.tsx` 26 passing, `tests/site-footer.test.tsx` 17
-passing, `npm run typecheck` clean, and the page measured in Chrome at 1280×1000 — see § What
-changed, measured.
+Status as of 2026-09-08: **built and reviewed, committed on
+`worktree-changelog-toc-and-opensource`, not yet pushed to `dev` and therefore not deployed.**
+Evidence: three commits — the work (`073cfa6e`) and two merges of `origin/dev` (`ad6ab70d`,
+`e4b4a54f`); `npm run typecheck` clean across all three projects; the four test files this work owns
+green (`changelog-page` 32, `site-footer` 17, `build-description` 8, `changelog-file`); GPT Sol's
+stage-2 review answered in full, all eight findings applied (see § The review, and what it changed);
+and the page measured in Chrome at 1280×1000 — see § What changed, measured. The last full-suite run
+was still going when this was written; **the push waits on it.**
+
+**What is deliberately not done**, so nobody reads this doc as a claim that it is:
+
+- `/opensource`'s label is written out in three places, where `/changelog`'s became `CHANGELOG_LABEL`
+  on `dev` the same day. Recorded at both ends (`router.ts` § `OPENSOURCE_HREF`, and the footer row)
+  and left for Greg — it is a change to code this branch only merged.
+- `/opensource` is not in the command bar, where `/changelog` now is. Same call, same reason.
+- The copy stage still emits *"the change"* links. The page no longer draws them as anything but a
+  sha, and 69 committed lines already carry them, so changing the prompt would alter nothing a
+  reader sees. § The two commit rows become one has the argument.
 
 ## Goal
 
@@ -194,6 +208,53 @@ Two things the browser found that no test had:
 
 And one the tests found: an entry's commit and its *release's* commit are two different facts, so a
 fixture where they were the same sha counted two correct links as a duplicate.
+
+## The review, and what it changed
+
+GPT Sol, stage 2, 2026-09-07. **Eight findings, all eight right** — checked in the code or the
+browser before any was acted on, and two were confirmed by measurement rather than by reading.
+
+Its verdict was *not ready to commit*, on one finding:
+
+- **P1 — `/opensource` published a false privacy claim.** The page told a signed-out reader that
+  "nobody" can read their data. `/privacy` says the opposite in as many words — *"Spideryarn is beta
+  software run by one person — assume we can see what's in it"* — and there is an administrator view
+  across owners ([admin.md](../project/admin.md)). Rewritten to the true and narrower claim:
+  publishing the code publishes no reader data. **The worst place in the app to overclaim is the
+  page linking to the privacy page**, which is the same lesson `/contact` learned in
+  [260905c](260905c-contact-page-and-a-warmer-feedback-thank-you.md).
+
+Four that were wrong rather than merely improvable:
+
+- **The contents links cancelled their own navigation.** `preventDefault()` cost four things at
+  once — the address bar, reload, Back, and Ctrl-click, which opened a new tab at the *top* of the
+  page. Now an ordinary fragment link plus a `hashchange` listener; verified in Chrome, both
+  directions.
+- **`/\evil.example/phish` passed the link validator as an app path.** Not `//`-prefixed, so
+  `badLinkUrl` read it as a path — and `new URL()` resolves it cross-origin, because the URL standard
+  treats a backslash as a slash after a special scheme (measured in node). Pre-existing, and the
+  page draws these as links a reader is invited to click.
+- **The tooltip could print seven characters of a word.** `buildDescription`'s guard was
+  `!== "unknown"`; a build stamped `SPIDERYARN_BUILD_COMMIT=release-candidate` would have said *"built
+  … from release"*. Now a 40-hex check, with `tests/build-description.test.ts`.
+- **A duplicate inside `commits` drew two links under one React key.** The existing test proved
+  deduplication in the direction that already worked.
+
+Three P3s, all overstatement: the `Omit` comment claimed a compile-time guarantee structural typing
+does not give; this doc's own table said *"50 releases visible at once"* when the page is 4,640 px
+tall; and the stage list below still described minting a version at deploy time, contradicting the
+decision two sections above it. All three corrected in place rather than quietly.
+
+Sol also settled a question it had been asked and answered against its own suspicion: `<details>`
+state is sound, because `onToggle` catches the openings that are nobody's click. Confirmed
+afterwards in Chrome — a reload restored a previously-opened release from session history, and a
+later re-render left it open rather than slamming it shut.
+
+**One bug was found before Sol saw it**, while the review prompt was being written: the release
+number was an index into the versions that *parsed*, so a single unparseable line would have
+silently renumbered every release above it. It counts the file's lines now, inside `parseChangelog`.
+That is the finding this plan is least comfortable about — it was introduced and caught in the same
+hour, by writing down what the code did rather than by any check.
 
 ## What this deliberately does not do
 
