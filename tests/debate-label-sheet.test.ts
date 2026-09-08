@@ -4,7 +4,7 @@
  * Stage D′ of
  * docs/plans/260906b-an-evaluation-for-debate-mode-and-what-it-finds.md, whose
  * **F60** is the specification: *"label every evaluable row, show the labeller
- * only target, quote and evidence — `relation`, `valence` and `applies` hidden
+ * only target, quote and evidence — `relation`, `lean` and `applies` hidden
  * — and label before any repaired output exists."*
  *
  * The first `describe` is the one that matters. Every row in its fixture carries
@@ -33,7 +33,7 @@ import {
   ORDER_STRATEGY,
   renderLabelSheet,
 } from "../evals/debate/label-sheet.js";
-import { RELATION_VALUES, VALENCE_VALUES } from "../evals/debate/score.js";
+import { LEAN_VALUES, RELATION_VALUES } from "../evals/debate/score.js";
 import type { DebateJournalEvent, DebatePassKind } from "../src/debate-journal.js";
 
 const temps: string[] = [];
@@ -118,7 +118,7 @@ function answered(
  */
 const SENTINELS = {
   relation: "SENTINEL-RELATION-Zqx",
-  valence: "SENTINEL-VALENCE-Zqx",
+  lean: "SENTINEL-LEAN-Zqx",
   applies: "SENTINEL-APPLIES-Zqx",
   limits: "SENTINEL-LIMITS-Zqx",
 };
@@ -217,15 +217,23 @@ function wideSheet(seed: number): LabelSheet {
    ========================================================================== */
 
 describe("what a labeller may see", () => {
-  it("never renders relation, valence, applies or limits", () => {
+  it("never renders relation, lean, applies or limits", () => {
     const text = renderLabelSheet(buildLabelSheet([twoPassReport()]));
     for (const [field, sentinel] of Object.entries(SENTINELS)) {
       expect(text, `${field}'s value leaked into the sheet`).not.toContain(sentinel);
     }
-    /* And not the field names either: a sheet that printed "valence:" beside a
+    /* And not the field names either: a sheet that printed "relation:" beside a
        blank would be teaching the labeller the model's vocabulary for the field
-       it is about to be compared against. */
-    for (const name of ["relation", "valence", "applies", "limits"]) {
+       it is about to be compared against.
+
+       `lean` is deliberately not in this list, and cannot be: the sheet's whole
+       question is *"which way does the quoted passage lean"*, and the options it
+       offers are `leans-for` / `leans-against`, so the substring is on the page
+       by design. Before the 2026-09-08 rename the field was called `valence`,
+       a word the sheet never had to say, and this loop covered it. What still
+       covers the lean field is the sentinel above — the model's *answer* is what
+       must not leak, and that is asserted for all four fields. */
+    for (const name of ["relation", "applies", "limits"]) {
       expect(text.toLowerCase(), `the sheet names the field "${name}"`).not.toContain(name);
     }
   });
@@ -295,13 +303,13 @@ describe("the answers the sheet asks for", () => {
      the sheet. */
   it("offers exactly the vocabulary the scorer joins labels on, in order", () => {
     const text = renderLabelSheet(buildLabelSheet([twoPassReport()]));
-    expect(optionsIn(text)).toEqual([...VALENCE_VALUES]);
+    expect(optionsIn(text)).toEqual([...LEAN_VALUES]);
   });
 
   it("offers nothing from the other vocabulary", () => {
     const offered = new Set(optionsIn(renderLabelSheet(buildLabelSheet([twoPassReport()]))));
     for (const relation of RELATION_VALUES) {
-      if ((VALENCE_VALUES as readonly string[]).includes(relation)) continue;
+      if ((LEAN_VALUES as readonly string[]).includes(relation)) continue;
       expect(offered.has(relation), `the sheet offers "${relation}", which is a relation`).toBe(
         false,
       );

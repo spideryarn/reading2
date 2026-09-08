@@ -120,7 +120,7 @@ const reported = (evidence: SearchEvidence, over: Record<string, unknown> = {}) 
   sourceQuote: "a caveat nobody reads is not an honest instrument",
   articleReferenceQuote: "What the tide clock cannot tell you",
   relation: "disputes",
-  valence: "negative",
+  lean: "leans-against",
   applies: "It says the caveat is not read, which is the essay's whole mechanism.",
   ...over,
 });
@@ -133,7 +133,7 @@ describe("the level is the name of the strongest evidence", () => {
     url: REPLY.url,
     sourceQuote: "a caveat nobody reads is not an honest instrument",
     relation: "disputes",
-    valence: "negative",
+    lean: "leans-against",
     applies: "…",
     articleReferenceQuote: "What the tide clock cannot tell you",
     identifies,

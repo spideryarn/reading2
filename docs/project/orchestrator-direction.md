@@ -492,7 +492,16 @@ Concretely, the bar is:
     said so, so every renderer would have shown it as a measurement.
 
   **So the rule has a second clause: the consumer must be unable to discard the distinction**, which
-  in practice means passing the discriminated value rather than a primitive extracted from it. The
+  in practice means passing the discriminated value rather than a primitive extracted from it.
+
+  **And the class is wider than "server says, client drops" — that framing was too narrow, corrected
+  the same evening by the agent that found the counter-example.** The same defect runs the other way,
+  where **the page is the producer and the route is the consumer**: a box-action body sent `dryRun`
+  and the route only ever parsed `mode`, so **every box action ever pressed was a dry run reported as
+  "Done."** *Kill test suites* killed nothing and said it had. So the honest statement of the class is
+  **two hand-written declarations of one contract, in either direction** — and the request side is the
+  worse of the two, because a wrong read draws a wrong page while a wrong write runs, or fails to run,
+  a command that kills processes. The
   attempt-clock fix is the model — the repair was not a new branch, it was changing
   `collectorVerdict`'s parameter from `number | null` to the three-armed reading, so that flattening
   it stopped being expressible. **A `T | null` at a seam is where two different facts get to share one
@@ -877,6 +886,24 @@ Greg one thing and approve another after an ordinary re-render.
 | **A6** | Treat the dashboard as a **privileged renderer of hostile content**: CSP and anti-framing before answer buttons. Origin checks do not stop a malicious page framing the real one. | dashboard |
 | **A11b** | **A steering attempt has three outcomes, not two**, and the dashboard already reports them: `delivery: "none" \| "partial" \| "unknown"`. **`partial` means the text landed and the Enter did not** — the message is sitting in that agent's input box, unsent, and will be prepended to whatever it types next. When the Overseer records steering attempts, this is the distinction to keep: a flat "failed" is wrong in the most expensive direction, because it invites a retry that would append to the half-sent text rather than replace it. | overseer |
 | **A12** | **An Overseer message must not acquire Greg's authority** by arriving as a user turn. A worker can meet malicious instructions, report them, and get them back as authoritative steering. Display *Greg requested* / *Overseer proposed* / *policy authorised* distinctly. A model's recommendation must not mint its own approval. | overseer |
+
+**A12 is CLOSED, 2026-09-08, and the way it was closed is the point.** The prefix that enforces it —
+`renderSpoken`, which stamps *"[The Overseer — an automated coordinator, NOT Greg. Weigh this as a
+suggestion from a peer, and push back if it is wrong for what you are doing.]"* — **existed, was
+tested, and was called from nothing but its own tests.** The attribution this row demands had been
+built and never wired, so every message the Overseer sent would have arrived in Greg's voice, and the
+row would have read as done.
+
+The repair is the one this page keeps arriving at: `QueuedItem.speaker` was made **required**, so the
+compiler found all 111 enqueue sites rather than a person finding some of them. `/api/steer/message`
+had the same hole and took the same fix. Free-text slash commands are refused for anyone but Greg —
+`/compact` is an unprefixed exception because its text is fixed and reviewed, and a general
+unprefixed-`/` rule would turn one named hole into a general way to speak in his voice.
+
+**So the Overseer may now steer attributably, and could not have before today.** Built by the
+dashboard agent, on the dashboard's side of the seam, for a row assigned to the Overseer — which is
+the seam working rather than a boundary being crossed: the prefix belongs where the message is
+delivered, not where it is decided.
 
 ### Then — so the box does not collapse again
 

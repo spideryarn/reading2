@@ -20,6 +20,22 @@
  * gone would be the shape this whole eval exists to catch: an empty group is
  * this mode's commonest *honest* answer, so nothing would look wrong. Every
  * attempt therefore comes back either replayed or with a `skipped` reason.
+ *
+ * ## The one thing this file adapts, and the reason it is here rather than there
+ *
+ * A journal is a **stored artefact**, and every journal on disk was written
+ * before `valence` became `lean` on 2026-09-08. `readShared` (src/debate.ts) is
+ * strict about that vocabulary on purpose — a row arriving *today* in the old
+ * words is a prompt that has stopped emitting what we asked for — so replaying a
+ * historical journal through it turned all 26 stored rows into `cannot-tell`,
+ * silently, and every stance figure Layer 1 produced was about the rename.
+ *
+ * So the adapter sits **at the boundary**: `readStoredVocabulary` below, between
+ * `parsePass` and the readers, exactly where production puts `readStoredLean`
+ * for the panel. Live strictness is untouched, the adapted rows are counted
+ * rather than quietly rewritten, and `supersededLeans` rides on the result and
+ * into `replayLines` — because a replay that rewrote rows and did not say so is
+ * the same silent success one level down.
  */
 import {
   admissibleSources,
@@ -38,6 +54,7 @@ import type {
 import { whereSearchCountCameFrom, type Usage } from "../../src/openrouter-stream.js";
 import type { ArticleBlockText } from "../../src/shingles.js";
 import type { ClaimDebateRow, DebateGroup, DirectDebateRow } from "../../src/types.js";
+import { supersededLean } from "./score.js";
 
 /** The half of a chat completion a replay reads. Structural, so a journal from an older run still parses. */
 interface JournalledAnswer {
@@ -55,6 +72,15 @@ export type ReplayedAttempt =
       pass: DebatePassKind;
       /** `admissible.size` — the foot line's *"the search returned evidence from N pages"*. */
       returnedSources: number;
+      /**
+       * **How many rows were read forward from the pre-2026-09-08 `valence`
+       * vocabulary** before the readers saw them — see `readStoredVocabulary`.
+       *
+       * Carried on every replayed attempt, `0` included, so that *"nothing was
+       * adapted"* is a thing this type can say rather than a thing a reader
+       * infers from silence.
+       */
+      supersededLeans: number;
       group: DebateGroup<DirectDebateRow> | DebateGroup<ClaimDebateRow>;
     }
   | { ok: false; attemptId: string; pass: DebatePassKind | null; skipped: string };
@@ -96,6 +122,43 @@ export function replayJournal(
     if (!start) return { ok: false, attemptId, pass: null, skipped: "no attempt-started" };
     return replayOne(start, responses.get(attemptId), opts.blockText);
   });
+}
+
+/** Rows as the readers should see them, and how many the age of the file changed. */
+interface StoredRows {
+  rows: unknown[];
+  supersededLeans: number;
+}
+
+/**
+ * **The journal/stored-artefact boundary: rows written before the rename, read
+ * forward — and nothing else touched.**
+ *
+ * A row qualifies only if it has **no `lean` at all** and a `valence` that is
+ * one of the four superseded words; `supersededLean` (score.ts) owns both
+ * conditions and the mapping, and src/types.ts's `readStoredLean` is the
+ * production copy of the same four-way map. Everything else is handed on
+ * verbatim, which is the half that matters: a row answering `lean: "supportive"`
+ * today is a prompt failure, and it must go on landing in `cannot-tell` and go
+ * on being counted off-vocabulary by `vocabularyReport`. An adapter that reached
+ * for `valence` whenever `lean` was merely *unrecognised* would swallow exactly
+ * the failure the eval exists to find.
+ */
+function readStoredVocabulary(rows: readonly unknown[]): StoredRows {
+  let supersededLeans = 0;
+  const adapted = rows.map((row) => {
+    /* Non-objects are `readGroupWith`'s to count as `malformed`; changing what
+       it is handed here would move that number for no reason. */
+    if (row === null || typeof row !== "object" || Array.isArray(row)) return row;
+    const lean = supersededLean(row);
+    if (lean === null) return row;
+    supersededLeans += 1;
+    /* A copy, never a mutation: the journal's own rows are also what
+       `journal-rows.ts` hands to `vocabularyReport`, which must go on seeing
+       what was actually written. */
+    return { ...row, lean };
+  });
+  return { rows: adapted, supersededLeans };
 }
 
 function replayOne(
@@ -147,13 +210,15 @@ function replayOne(
   if (!blockText) {
     return skip("this pass needs the article's blocks, and none was supplied");
   }
+  const stored = readStoredVocabulary(rows);
   if (start.pass === "direct") {
     return {
       ok: true,
       attemptId: start.attemptId,
       pass: "direct",
       returnedSources: admissible.size,
-      group: readDirectGroup(rows, { admissible, article: identity, blockText }, searches),
+      supersededLeans: stored.supersededLeans,
+      group: readDirectGroup(stored.rows, { admissible, article: identity, blockText }, searches),
     };
   }
   return {
@@ -161,7 +226,8 @@ function replayOne(
     attemptId: start.attemptId,
     pass: "claims",
     returnedSources: admissible.size,
-    group: readClaimGroup(rows, { admissible, article: identity, blockText }, searches),
+    supersededLeans: stored.supersededLeans,
+    group: readClaimGroup(stored.rows, { admissible, article: identity, blockText }, searches),
   };
 }
 
@@ -179,7 +245,12 @@ export function replayLines(replayed: readonly ReplayedAttempt[]): string[] {
       `${String(r.group.counts.reportedRows).padStart(2)} reported, ` +
       `${String(r.returnedSources).padStart(2)} returned source(s), ` +
       `${String(r.group.counts.webSearches)} search(es)` +
-      (lost ? `; lost: ${lost}` : "; nothing lost")
+      (lost ? `; lost: ${lost}` : "; nothing lost") +
+      /* Said out loud, and only when it happened: a run of these lines with no
+         such clause is a claim that every row was read exactly as written. */
+      (r.supersededLeans > 0
+        ? `; ${String(r.supersededLeans)} row(s) read forward from the pre-2026-09-08 valence vocabulary`
+        : "")
     );
   });
 }
