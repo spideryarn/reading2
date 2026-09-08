@@ -114,6 +114,42 @@ put the write path in as *"a stage, but it doesn't have to be the top-priority."
 that. So on the Overseer's side the order is **attention first**, and the write path stays where he
 put it.
 
+## Where this stands, 13:55 on 2026-09-08
+
+**Important work left**, and it is the implementation of five of the six stages. What is finished is
+the part that had to be finished first: **every seam is agreed and every contract is a type**, so the
+six sessions can now build in parallel without a negotiation between them.
+
+| | landed | what remains |
+|---|---|---|
+| **A** attention | the five types, verbatim, in `wire.ts` (`4d5cc454`) | the classifier, and the evaluation that justifies it |
+| **B** usage | the dashboard's `Pause` contract (`f1c34e96`) | the collector and the 429 ground truth |
+| **C** harness | shape agreed with the dashboard; two live findings (below) | `harness.ts`, and moving `steer.ts`'s refusal to read it |
+| **D** health | seam agreed (`refreshOnce`, not `server.ts`); `lock.ts` extracted for it | retention and the drawing |
+| **E/F** dictation | file split agreed with the dashboard | all of it |
+| **A5** | **closed**, no code | nothing |
+
+**Three things landed that were not in the plan**, all of them because the work turned them up:
+
+1. **`tools/overseer/lock.ts`** (`93cf4628`) — the one-writer discipline extracted to a leaf, because
+   the health retention needed it and *the third copy would have been the simplified one*.
+2. **A test for `EPERM`-is-alive**, found by mutation and not by reading: replacing that branch with a
+   flat `return false` left all 102 tests green. The branch deciding whether **a live process
+   belonging to somebody else** reads as running had no test at all, which is exactly what lets a
+   second writer take a live lock.
+3. **A live A10 measurement** from `fleet-approval-binding`: **three panes right now hold non-empty
+   unsent drafts, one of them the words *"yes, shut it all down"* in a session running in auto mode.**
+   Free text typed at a pane concatenates with what is already in the box. That is why the evidence
+   union in Stage A is load-bearing rather than fastidious, and why a `prose` item gets **no answer
+   control at all** in v1.
+
+**And one cost finding, which is not engineering:** `w2-harness-adapter` found **two orphaned paid
+`gpt-5.6-sol --effort high` reviews running under `ppid 1`**, attributable to no session, which
+nothing on the dashboard can see or stop. Related to a trap already recorded — a killed codex run
+still writes its `--output` file, so a stale review is indistinguishable from a fresh one and both the
+exit code and file-exists pass. An orphan whose output path is later reused is that trap with a long
+fuse.
+
 ## Stages
 
 Each ends with the tree green and committed, and would make sense as a stopping point.
