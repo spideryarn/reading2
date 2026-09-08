@@ -100,6 +100,7 @@ import { GitHubMark } from "./GitHubMark.js";
 import { Link } from "./Link.js";
 import {
   CHANGELOG_HREF,
+  CHANGELOG_LABEL,
   CONTACT_HREF,
   FEATURES_HREF,
   LIBRARY_HREF,
@@ -176,12 +177,19 @@ const LINKS: readonly {
   /* Added 2026-09-06 with `/changelog` — same claim, same array-is-the-edit.
      "What's new" rather than "Changelog": the latter is the internal name for
      the process that writes the page (docs/project/changelog.md), and a
-     reader has never heard of it. */
-  { href: CHANGELOG_HREF, label: "What’s new", here: "changelog" },
+     reader has never heard of it.
+
+     **The label is `CHANGELOG_LABEL` rather than the words**, since 2026-09-07:
+     the command bar offers this page too, so the string had four homes and three
+     comments promising they matched. router.ts § `CHANGELOG_LABEL`. */
+  { href: CHANGELOG_HREF, label: CHANGELOG_LABEL, here: "changelog" },
   /* Added 2026-09-07 with `/opensource` — and, like the three entries above it,
      this array is the whole edit. The first entry to carry an icon; see `icon`
      above for why this one and not the others.
-     docs/plans/260907f-changelog-table-of-contents-collapsible-versions-version-numbers-and-an-opensource-page.md. */
+     docs/plans/260907f-changelog-table-of-contents-collapsible-versions-version-numbers-and-an-opensource-page.md.
+
+     Its label is still the words, unlike the row above — router.ts
+     § `OPENSOURCE_HREF` says why, and that it should not stay that way for long. */
   {
     href: OPENSOURCE_HREF,
     label: "Open source",

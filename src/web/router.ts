@@ -706,11 +706,32 @@ export const PRICING_HREF = "/pricing";
  */
 export const CONTACT_HREF = "/contact";
 /**
- * Every release since launch — linked from the footer, where it is labelled
- * "What's new" rather than "Changelog", the internal name for the process
- * that writes it (docs/project/changelog.md).
+ * Every release since launch — linked from the footer and offered by the
+ * command bar, labelled "What's new" at both rather than "Changelog", which is
+ * the internal name for the process that writes it (docs/project/changelog.md).
  */
 export const CHANGELOG_HREF = "/changelog";
+/**
+ * **What that page is called, everywhere it is called anything.**
+ *
+ * Four places said this string independently — the footer row, the command
+ * bar's page row, the page's own `<h1>`, and the browser tab — and three of
+ * them carried a comment promising they matched one of the others. Four
+ * promises kept by hand is what a rename breaks silently, and *What's new* is
+ * exactly the kind of label that gets reworded: it is a phrase, not a noun, and
+ * it deliberately is not the word the code uses for the same thing.
+ *
+ * **The apostrophe is `’` (U+2019), not `'`**, and that is load-bearing rather
+ * than typographic fussiness: the command bar compares what a reader typed
+ * against this string without folding punctuation, so it carries `whats new` as
+ * an explicit alias. CommandBar.tsx § `PAGES`.
+ *
+ * Beside the href rather than in title-text.ts, which is the modes' table — a
+ * page is not a mode, and the 2026-09-07 change that put this one in the
+ * command bar is the change that had to say so in a type
+ * (command-match.ts § `Command`).
+ */
+export const CHANGELOG_LABEL = "What’s new";
 /**
  * The repository, the licence, and how to work on it — linked from the footer
  * under the GitHub mark, and from `/changelog`, which points at that repository
@@ -719,6 +740,15 @@ export const CHANGELOG_HREF = "/changelog";
  * One word rather than two: Greg named it `/opensource`, and a hyphen is the
  * kind of thing somebody types wrong when they are repeating an address aloud.
  * OpenSourcePage.tsx.
+ *
+ * **No `OPENSOURCE_LABEL` beside `CHANGELOG_LABEL` above, yet**, and the two
+ * arrived within a day of each other so the asymmetry is worth naming rather
+ * than leaving to be noticed. *Open source* is written out in three places — the
+ * footer row, the page's `<h1>` and the browser tab — which is exactly the shape
+ * that comment argues against. It is left alone because extracting it is a
+ * change to code this branch is only merging, not a part of the work Greg asked
+ * for; the reasoning above applies to it whole, and whoever next renames either
+ * page should do both.
  */
 export const OPENSOURCE_HREF = "/opensource";
 /**

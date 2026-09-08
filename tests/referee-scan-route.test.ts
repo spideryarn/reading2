@@ -339,8 +339,19 @@ describe("whose manuscript this is", () => {
       fileURLToPath(new URL("../src/routes.ts", import.meta.url)),
       "utf8",
     );
+    /* **The scan is an `AUTH_ROUTES` row, not a chain guard, since 260907e.**
+       This used to cut `if (refereeScan && req.method === "GET") { … }` with the
+       closing brace pinned at four spaces — the guard's indentation *inside*
+       `serveAuthenticatedApi`. The route is now a table row at two spaces, so
+       that regex returns `""` and the control below fires. It did, which is the
+       safety net working: the ordering claim is unchanged, and only the shape it
+       is read out of has moved.
+
+       Anchored on the pattern rather than on a binding name, because a row has
+       no binding — and the pattern is written into the row, since one row uses
+       it. */
     const whole =
-      /if \(refereeScan && req\.method === "GET"\) \{[\s\S]*?\n {4}\}/.exec(source)?.[0] ?? "";
+      /pattern: \/\^\\\/api\\\/referee\\\/scan[\s\S]*?\n {4}\},/.exec(source)?.[0] ?? "";
     expect(whole, "the route is not in src/routes.ts under that name").not.toBe("");
     /* Comments out, so a sentence *about* a call cannot stand in for one. */
     const body = whole.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");

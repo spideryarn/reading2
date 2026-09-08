@@ -60,7 +60,7 @@
 import { useEffect } from "react";
 import { APP_NAME, MODE_LABEL, SEP, TAGLINE, VIEW_LABEL, articleTitle, clamp } from "../title-text.js";
 import { DEFAULT_MODE, type Mode } from "./params.js";
-import type { AdminPage, ArticleView } from "./router.js";
+import { CHANGELOG_LABEL, type AdminPage, type ArticleView } from "./router.js";
 
 /**
  * What each admin page calls itself in the tab.
@@ -302,10 +302,12 @@ function segments(spec: TitleSpec): string[] {
     case "contact":
       return ["Contact", APP_NAME];
 
-    /* Matches the footer's own label for the same address, so a reader who
-       followed "What's new" down there sees the same words in the tab. */
+    /* The same constant the footer row and the command bar draw, so a reader
+       who followed "What's new" in from either sees those words in the tab —
+       which used to be a comment promising it and is now the import.
+       router.ts § `CHANGELOG_LABEL`. */
     case "changelog":
-      return ["What’s new", APP_NAME];
+      return [CHANGELOG_LABEL, APP_NAME];
 
     /* Two words, and the same two the footer uses — the tab is where somebody
        who opened this page to check whether the code is public looks to find it

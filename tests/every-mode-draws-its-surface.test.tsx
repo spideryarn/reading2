@@ -83,6 +83,7 @@ import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MODES, type Mode } from "../src/modes.js";
 import type { AutoRunTarget } from "../src/web/auto-run-targets.js";
+import { commandId, modeCommand } from "../src/web/command-match.js";
 import { MODE_LABEL } from "../src/title-text.js";
 import type {
   Article,
@@ -893,8 +894,14 @@ const COMMAND_BAR: Trigger = {
 
     const selected = field.getAttribute("aria-activedescendant");
     expect(selected, `typing "${MODE_LABEL[mode]}" selected nothing`).not.toBeNull();
+    /* **`commandId` rather than the mode's own name**, because the row id is
+       not the mode's name and this test found that out the hard way: the bar
+       started prefixing the kind on 2026-09-07 (`mode:structure`) and every
+       case here went red at once. A hand-spelled id format is a second copy of
+       a decision made in `command-match.ts`; minting it the way the bar mints
+       it is the version that cannot drift again. */
     expect(
-      selected?.endsWith(`-${mode}`),
+      selected?.endsWith(`-${commandId(modeCommand(mode))}`),
       `typing "${MODE_LABEL[mode]}" selected ${selected} rather than ${mode}`,
     ).toBe(true);
 
