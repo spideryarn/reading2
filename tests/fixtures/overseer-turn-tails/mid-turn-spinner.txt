@@ -1,0 +1,30 @@
+
+  ⎿  Added 1 line, removed 4 lines
+      547      return { kind: "shell", pid: pane.pid, command: pane.command };
+      548    }
+      549
+      550 -  return unknown(
+      551 -    "unrecognised-pane-process",
+      552 -    `pane ${panePid} is running \`${pane.command}\`, which is no harness this knows, and is not a shell
+          -either`,
+      553 -  );
+      550 +  return { kind: "shell", pid: pane.pid, command: pane.command };
+      551  }
+
+  Ran 2 shell commands
+
+● Memory pressure — the suite refused to start (that's the admission guard, not a pass). Waiting for the box to clear
+  rather than reading an empty grep as success.
+
+  Running 2 shell commands…
+  ⎿  $ until [ "$(awk '/MemAvailable/{print int($2/1048576)}' /proc/meminfo)" -ge 10 ]; do sleep 20; done; echo
+     "MemAvailable now $(awk '/MemAvailable/{print int($2/1048576)}' /proc/meminfo) GB"
+
+✻ Philosophising… (23m 10s · ↓ 88.6k tokens)
+  ⎿  Tip: Use /btw to ask a quick side question without interrupting Claude's current work
+
+───────────────────────────────────────────────────────────────────────────────────────────────────── w2-harness-adapter ─
+❯ 
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  [Opus 5 (1M context)] worktrees/harness-adapter (worktree-harness-adapter*) ⑂ harness-adapter · ██░░░░░░░░ 21%     /rc
+  ⏵⏵ auto mode on (shift+tab to cycle) · gh auth login for PR status · ← for agents

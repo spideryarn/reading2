@@ -1,0 +1,30 @@
+  nothing changed — there the two are ANDed into one set and nothing downstream asks which filter removed a hit. The
+  comment now says the order is not load-bearing there, says why the pair a hundred lines away is, and records that it was
+  mutation-checked rather than assumed. It's the same failure we've been trading fixes for all afternoon, just in prose:
+  an unchecked claim hardening into a source comment a future reader treats as a constraint.
+
+  56 tests, typecheck green on all four projects, lint clean.
+
+  Still outstanding: the full npm test suite and the GPT Sol review, both in tmux. The Sol prompt was built before these
+  last three rounds of changes, so if it lands findings in this area I'll rebuild the diff for round two rather than let a
+  stale review stand in. Nothing committed yet.
+
+✻ Worked for 4m 21s · done 1:41 PM · 1 monitor still running
+
+● Monitor event: "full test suite and GPT Sol review completion"
+
+  Checking the Sol answer file exists and is fresh
+  ⎿  $ cat docs/plans/260908f-stageb-usage-limits-code-review-sol-r1.md
+
+✽ Frosting… (57s · ↓ 496 tokens · almost done thinking)
+  ⎿  Tip: Run /ultrareview for a cloud-based multi-agent review that finds and verifies bugs in your branch — 3 free
+     reviews left
+
+  › Message from @claude-agents-dashbo…: The part of your message that matters most is the part where you were wrong,
+  and I want to say why rather than just ack… (ctrl+o to expand)
+
+──────────────────────────────────────────────────────────────────────────────────────────────────────── w2-usage-limits ─
+❯ 
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  [Opus 5 (1M context)] worktrees/usage-limits (worktree-usage-limits*) ⑂ usage-limits · ███░░░░░░░ 30%              /rc
+  ⏵⏵ auto mode on · gh auth login for PR status · 1 monitor · ← for agents

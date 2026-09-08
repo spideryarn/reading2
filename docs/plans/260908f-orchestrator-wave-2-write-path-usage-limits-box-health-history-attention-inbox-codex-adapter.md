@@ -114,16 +114,16 @@ put the write path in as *"a stage, but it doesn't have to be the top-priority."
 that. So on the Overseer's side the order is **attention first**, and the write path stays where he
 put it.
 
-## Where this stands, 2026-09-08T13:42Z
+## Where this stands, 2026-09-08T14:25Z
 
-**Important work left**, and it is now the last mile of four stages rather than all of six. What is
+**Important work left**, and it is now the last mile of three stages rather than all of six. What is
 finished is the part that had to be finished first: **every seam is agreed and every contract is a
 type**, so no session is waiting on another to decide anything.
 
 | | landed | what remains |
 |---|---|---|
 | **A** attention | the five types (`4d5cc454`); classifier built, evaluated and Sol-reviewed | **the push** — `Checkpoint.attention` is not on dev yet |
-| **B** usage | the dashboard's `Pause` contract (`f1c34e96`) and `pause.ts` | **the push**, then `Checkpoint.usage` on my side, behind A |
+| **B** usage | **DONE** (`95c2f49a`) — `usage.ts`, `UsageReport`, 19 Sol findings taken | `Checkpoint.usage` on my side, behind A |
 | **C** harness | **DONE** (`5c2e31cb`), worktree torn down | nothing; the `steer.ts` argv parser is unowned |
 | **D** health | seam agreed (`refreshOnce`, not `server.ts`); `lock.ts` extracted for it | retention and the drawing |
 | **E** dictation | the server half — `transcribe.ts`, `routes-transcribe.ts`, `vocabulary.ts` | the client half, and Greg's own mic test |
@@ -401,6 +401,245 @@ irreversible) is a real part of the design, but it is a **decision the Overseer 
 something the phone renders — and shipping it as a field invites a UI that shows Greg a queue of
 things it has decided not to ask him. It lands when something answers, not when something lists.
 
+#### Stage A, built — and what the measurement says
+
+Landed 2026-09-08. `tools/overseer/turn-tail.ts` cuts the tail of an ended turn out of a pane,
+`attention-classify.ts` asks one small model one closed question about it, `attention.ts` groups and
+ranks, `attention-pass.ts` walks the fleet and holds the budget, `attention-memory.ts` remembers what
+was already decided, and the list rides on `Checkpoint.attention` in `~/.overseer/current.json`. **No
+`STORE_SCHEMA` bump**: a reader that ignores the field draws no inbox, which is *poorer* rather than
+*wrong*, and that is the store's own stated rule. `npx tsx scripts/overseer.ts attention` runs a pass
+by hand; `--dry` reads the panes and costs a pass without spending anything.
+
+**The evaluation is the point of the stage rather than a footnote**, because a list that only
+reproduced `needs-you` would be a failure. Method: capture every live pane ONCE, to disk; run the
+classifier against those bytes; and — with no sight of the classifier's output — have a Fable
+subagent read the same captures cold and say for each session whether it is genuinely waiting on
+Greg. One capture, two readers, because a fleet of thirty changes underneath you and a second capture
+would make every disagreement ambiguous between *the classifier was wrong* and *the box moved*.
+
+**It was done twice, and the second one is the one that counts.** GPT Sol reviewed the first and was
+right that it would not carry a general claim: the dashboard snapshot behind its `needs-you` number
+was collected 3m20s after the panes were frozen, and its "7 of 9" was three stochastic readings of
+the same three examples — repeatability, not population recall. So the whole thing was re-run on a
+**fresh, held-out capture**, after every fix, with the dashboard state fetched concurrently.
+
+| | first capture, 12:40 | **held-out capture, 13:50** |
+|---|---|---|
+| Sessions | 32 | 25 |
+| Fable: genuinely waiting on Greg | 3 (+1 cannot-tell) | **4** (no cannot-tell) |
+| **`needs-you` found** | 0 of 3 | **0 of 4** — 0 `needs-you` rows out of 24 |
+| Classifier, three cold runs | found 2, 2, 3 of the 3; 2 invented | **found 4, 4, 4 of the 4; 0 invented** |
+| Sessions the two readers agreed on | 30 of 32 | **25 of 25** |
+
+The four the held-out capture found — `claude-agents-dashboard`, `fb2g-gutter-icons-on-touch`,
+`gjd-remote-on-remote-box`, `overseer-orchestrator-design-and` — are the same four in all three runs
+and the same four Fable named, and **every one of them read as `idle` on the dashboard**.
+
+**What that does and does not support, and Sol was right to push twice.** The defensible sentence is:
+*on this held-out capture the classifier matched Fable's four positives, repeatably, while the nearest
+dashboard snapshot showed none of them as `needs-you`.* **The numbers are not what they look like.**
+"4 of 4, three times" is **four positives read three times**, not twelve independent ones, and the
+zero inventions are **twenty-one negatives read three times**, not sixty-three. Three runs measure
+REPEATABILITY; they do not enlarge the population. Seven positives across two captures is not a
+population, both ground truths come from one model family, and the second capture is smaller and
+calmer than the first. The next gate is a third capture with a human adjudicating rather than Fable.
+
+**Two clocks that are not the same clock.** The dashboard collects every ~65s and serves the cache,
+so `/api/state` cannot be sampled at the same instant as a pane: the held-out comparison's snapshot
+was collected **54 seconds** before the capture, against 3m20s for the first. That is **nearby, not
+simultaneous**, and the word matters — a session can end a turn in 54 seconds, and on a fleet this
+size several do.
+
+**Where it wobbles, and I said this wrong twice before Sol corrected it.** The SET of flagged sessions
+was identical across the three held-out runs. The `kind` was not: `fb2g-gutter-icons-on-touch` came
+back `irreversible`, `other` and `technical` on the same tail. **Those are not adjacent buckets.**
+`irreversible` is first in the ranking and `other` is last, so that spread is the whole axis, and the
+honest statement is that **presence is stable and RANKING IS UNVALIDATED** — not that the wobble is
+confined to somewhere cheap. It is still the cheaper of the two failures, because a misplaced item is
+on the list and a missed one is invisible; but "cheaper" is not "measured", and nothing here measures
+the ranking.
+
+**And on the arm that matters, the answer is sharper than *it wobbles*.** No session in either capture
+produced an `irreversible` verdict from an obvious case, so two tails were **derived from a real
+capture by one stated change** and classified eight times each: *"Say the word and I'll push it to
+main"* → `irreversible` 8 of 8; *"Say the word and I'll remove the worktree"*, with and without the
+uncommitted-work clause → `irreversible` 8 of 8 both ways. Then the arguable one, which
+`orchestrator-setup` asked for and which is the finding: *"The migration is written and reviewed and
+I have not run it. Say the word and I'll run it."* → **`technical` 8 of 8**. Not noisy — confidently
+and consistently wrong.
+
+**That settles the sampling question in the direction that does not flatter us.** Majority-of-three
+would not fix the migration case; **it would ratify it**. Which is Fable's warning arriving as a
+measurement rather than a principle: a vote is a machine for laundering confidence into agreement,
+and the confident mistake is the one you most want caught. Nor is the fix more context —
+`orchestrator-setup` pointed out that `meta.dir` tells you whose *code*, not whose *data*, and
+[database.md § `DATABASE_URL=…` does not do what it looks like](../project/database.md#database_url-npm-run-dbmigrate-does-not-do-what-it-looks-like)
+is a whole section about a migration that hit the wrong database and printed `✓ migrations applied`.
+A classifier handed the tree would answer *"local, therefore technical"* with more confidence and the
+same wrongness.
+
+**A mechanical consequence floor is the proposed fix, and it is half a fix.** The idea: a tail whose
+offered action matches a small reviewed list is floored at *cannot tell*, which the model may raise
+and may not lower — the same shape as everything else that has held here, where the lock is enforced
+by the kernel and the wire types by the compiler. Probed against four derived tails, and the answer
+is that **the vocabulary hypothesis holds in one failure and not the other**:
+
+| derived tail | catchable word | 8 runs |
+|---|---|---|
+| "The migration is written… Say the word and I'll run it." | migration | `technical` 8 — **the floor would catch it** |
+| "…rewrites every article's slug in place; the old ones are not kept anywhere." | none | `irreversible` 2, `technical` 5, `other` 1 — **the floor would miss it** |
+| "…goes to all 214 registered readers; there is no way to unsend it." | none | `irreversible` 8 — right without help |
+| "a migration in a scratch worktree against my own local Supabase" | migration | `irreversible` 8 — over-cautious already |
+
+So the floor is worth building and must not be sold as guarding the top of the ranking: the case it
+misses is the one that is *also* noisy, and the case it would over-flag is one the model already
+over-flags on its own. **Floor plus a visible "this list may be under-ranked" line, not floor
+instead of it.** Ordering agreed with `orchestrator-setup`: transcripts first (they buy presence),
+then the floor, then nothing about giving the classifier more context until the floor proves
+insufficient.
+
+**What a pass costs, corrected.** A cold pass over 25 sessions: **10 model calls, $0.0036**, on
+`openai/gpt-5.6-luna` through OpenRouter (32 sessions / 11 calls / $0.0039 on the first capture). A
+re-run against identical captures is **0 calls** — the cache works. **But "0 calls at steady state"
+was wrong and Sol caught it**: over 4.5 minutes on the live fleet, **8 of 12 ended-turn tails were new
+or changed**, because a session that ends a turn mints a tail. At the 2-minute cadence that is a few
+calls a pass, and the honest arithmetic is roughly **$0.50–$1.00/day** rather than the $0.21 first
+claimed. Still cheap; four times cheap.
+
+**And a cost trap worth carrying forward, in three cases rather than the two first written down.**
+`usage.cost` alone reports **$0.00000 for a pass that cost money**: this box's key is BYOK, so the
+gateway charges its own account nothing and the real figure is in
+`usage.cost_details.upstream_inference_cost`. **But adding the two together is the other half of the
+same bug** — on an ordinary call `upstream == cost`, one sum reported twice, so a naive sum doubles
+the bill, and the first draft here did exactly that while fixing the first half. The repo had already
+solved all of it in **`src/ai-spend.ts`** (not `ai-call.ts`, which is what was first claimed here),
+whose `normaliseByokUpstream` insists on `=== true` *"because that is what keeps 'we were not told'
+from being read as 'yes'"* — and which names a **third case**: `cost: 0` **and** a real upstream
+figure **without** `is_byok`. Its answer is to record the call as **unpriced** rather than guess.
+`callCost` mirrors all three with the citation; unpriced calls stay out of the total and are counted,
+and a total containing one prints as a floor. *That is the same rule `StatusSince` reached from the
+other direction the same day — a quantity that is a lower bound must not be able to render as a
+reading — and two instances found separately are what make it a rule rather than a preference.*
+
+**The floor on recall this design cannot lift — and the one it can.** Claude Code draws on the
+terminal's *alternate screen*, which has no scrollback, so `capture-pane -S -80` and a bare capture
+return the same ~25 lines (measured). A turn that asked and then printed forty lines has pushed its
+own question off the top. **That is a property of the PANE, not of the session**, and
+`orchestrator-setup` measured the difference at 13:15: of the 25 most recently modified of 268
+transcripts on the box, **25 of 25 had a retrievable turn-ending assistant text**, and **5 of 25 —
+20% — were longer than 25 lines**, the longest 47. So one session in five has a tail this capture
+cannot see in full, and the transcript has it exactly, untruncated and ANSI-free, at
+`~/.claude/projects/<slugified-cwd>/<session-id>.jsonl`. **The next slice.** It does not replace the
+`dialog` arm — the harness draws those and they are not in the transcript — which lines the two
+sources up with the evidence union already published.
+
+**GPT Sol reviewed this twice before it landed and would not approve it either time. Nine findings
+across the two rounds, all real, all fixed** — which is the second review earning its keep, since a
+plan-stage review could not have found any of them. The second round mattered as much as the first:
+three of its findings were **holes in the fixes**, including one that would have let the worst bug
+survive an upgrade.
+
+1. **A classifier failure published a false *nothing needs you*.** One ended turn, one 429, and the
+   result was `{"kind":"list","items":[],"sessionsScanned":1}` — with `breakdownBalances()` green
+   throughout, because every row *did* enter a bucket. The accounting proves the walk happened; it
+   cannot prove the judgement did. Worse, the failed verdict was **cached**, so every later pass over
+   an unchanged fleet answered from memory, made zero calls, and repeated the same wrong silence.
+   Now: an `unreadable` verdict is never cached, and an EMPTY list with anything unclassified becomes
+   `unknown`. **Incompleteness suppresses the claim of absence and never the items** — a partial list
+   costs an agent wall-clock, and an empty one on evidence we did not get is a false claim about
+   Greg's obligations.
+2. **A scan of nothing drew as a calm fleet**, which the wire type's own comment forbids. And the
+   test that was supposed to catch it asserted only that the two results *differed* — which they did,
+   by the count, while both were still `kind: "list"`. A check answering a weaker question than the
+   one it is named for.
+3. **An unrecognised dialog counted as a pane we understood.** A harness dialog-format change would
+   have turned every question on the box into a calm fleet. Measured while fixing it: none of the six
+   `dialog-*` captures carries the `⏵⏵` footer, because Claude Code takes it away with the input box,
+   so the signal is the dialog's key-hint line — `pane.ts`'s own *"the one marker that prose never
+   produces by accident"*. It is a second copy of a private function and the duplication is declared
+   and pinned against all six fixtures.
+4. **`waitingSince` survived exactly the unobserved gap the store refuses to span.** `store.ts` will
+   not republish the previous list after a restart; `attention.json` quietly undid that by persisting
+   the waits, so a question answered during downtime and asked again came back *"waiting since"* a
+   moment nobody observed. The waits now carry the epoch that observed them and are dropped when it
+   changes; **the verdicts are kept**, because a verdict is about text and a wait is about continuous
+   observation.
+5. **Both parsers cast rather than parsed.** `{"evidence":{"kind":"dialog"}}` crossed the evidence
+   boundary with no question and no options, and `inboxLines()` threw on a missing `duplicates`.
+   Every field and every arm is parsed now, in both.
+6. **`readTurnTail` did not return only what the agent said.** The backward walk ran past an earlier
+   `❯` in the scrollback — *Greg's own last message* — so a turn that said "Done." could be handed to
+   the classifier with "Should I deploy this now?" attached to the front and become a confident card
+   quoting a question nobody's agent asked, with the fingerprint caching the contamination. **The
+   worst of the six**, and the one furthest from anything a plan could have anticipated.
+7. **A shutdown released the store's lock with a pass still in flight**, so a `Restart=always` daemon
+   could have two writers on `attention.json`. The pass is awaited before the lock is released, and
+   the write is atomic.
+
+**And then the second round, which is why one review is not enough.** Three of these are holes in the
+fixes above rather than new ground:
+
+8. **The 429 could still survive an upgrade.** The pass had stopped *writing* an `unreadable`
+   verdict, and a memory file from an older build could still *hold* one — read back as a cache hit,
+   never added to `unclassified`, publishing the same false calm indefinitely. **A fix that only
+   covers newly-written records is not a fix.** `CacheableVerdict` now excludes the arm at the type
+   level, so neither a writer nor a reader can express it, and a file holding one is refused whole.
+9. **The completeness field was counting the wrong things**: distinct fingerprints rather than
+   affected sessions (two sessions sharing one failed tail is two sessions unjudged), it omitted a
+   session with no pane, and an empty list plus an unparseable pane printed *"nothing needs you"* with
+   a caveat under it **retracting the claim**. Keyed on `sessionsUnreadable` now, so that case is
+   `unknown`; and a partial list says **"at least N"** rather than N with a footnote.
+10. **A per-process epoch was not enough, and the exception path was still open.** A daemon can
+    outlive a tmux restart, after which `$1` names a different session — this repo already treats
+    `tmuxServerPid` as the generation, and it is in the epoch now. The `catch` path called
+    `stopHere()` before the await that the normal path did. And `overseer attention` is **read-only by
+    default** with `--write` as the opt-in, because it does not honour the daemon's lock and an atomic
+    rename stops a torn file rather than a lost update.
+
+**One accounting point of Sol's, which is about the register rather than the code.** Adding the
+Overseer's seam to `tests/no-undeclared-spend.test.ts`'s ALLOWED map exempts it; it does not record
+what it spends, and that file says so in as many words — *a green test is not a register*. There is
+now an `UNMETERED_SPEND` entry in `src/spend-declarations.ts` naming the account, the per-pass cost
+and why neither seam can be used.
+
+**How to run this again**, because a measurement nobody can repeat is an anecdote. The capture/replay
+is in the CLI rather than in a throwaway script for exactly that reason:
+
+```
+npx tsx scripts/overseer.ts attention --dry --capture-to /tmp/panes      # freeze the fleet, spend nothing
+npx tsx scripts/overseer.ts attention --panes /tmp/panes --out /tmp/run.json --no-write
+```
+
+Then hand `/tmp/panes` to a Fable subagent with no sight of `/tmp/run.json`, ask it per session
+whether that session is genuinely waiting on Greg and why, and compare. **Order matters**: an
+agreement produced by letting the second reader see the first one's answer is worth nothing.
+
+**Tests**: 109 across six files, plus a type-level half in `tests/overseer-attention.test.ts` that
+goes red at `npm run typecheck` and cannot at `npm test` (vitest strips types) — it asserts that no
+field reaches both arms of the evidence union, and that a `confidence` or a `routeTo` will not
+compile. Every fixture under `tests/fixtures/overseer-turn-tails/` is a real capture.
+**Mutation-checked: 22 deliberate breakages of the finished code, 22 of 22 caught** — and six of them
+reinstate Sol's findings exactly, which is the only way to know that tests written after a fix would
+have caught the bug before it.
+
+**Two things named rather than claimed as done.** The `prose` arm gets no answer control in v1, and
+the reason is now stronger than *it is inferred rather than observed*: finding 6 means a card could
+have quoted **Greg's own last message back at him as his agent's question**, so a button would have
+acted on his sentence. And the dialog key-hint recogniser is a declared second copy of `pane.ts`'s
+private `isFooter`; `claude-agents-dashboard` is exporting it, and the swap is one import and a
+deletion — **the fixtures stay**, because they are what would catch the export itself drifting.
+
+**Still open, and named rather than left to be discovered.** One live pane came back `unreadable` on
+the held-out capture: a session with no status line at all above its input box, after a `/clear`. The
+arm did its job — it said so instead of guessing — and it is a real gap in the recogniser, and if that
+session had been one of the four it would have been a silent miss rather than a visible one. And
+`duplicates: []` remains a positive claim ("nobody else is asking") that can only be made about the
+sessions actually read; a pass skips Codex panes and mid-turn ones, so within one pass it means "none
+of the ones I read". The dashboard is declining the field as `readonly [...] | null` for the
+version-skew case; the same caution applies inside a single pass.
+
+
 ### Stage B — usage limits, and the reading that refuses to lie
 
 - `tools/overseer/usage.ts`, pure parsers, string in and a discriminated union out — the shape
@@ -566,6 +805,35 @@ wrong or unfounded:
 | "adding a name to `KnownUsageWindow` without adding it to the array is a compile error" | it is not; an array only checks one direction. Now a `Record<KnownUsageWindow, true>` |
 | "deleting the null-uuid guard is an equivalent mutant" | equivalent in `kind`, not in `why` — I checked the discriminator and claimed the value |
 
+**An open question the first live reading raises, and it is a product judgement rather than an
+engineering one.** On this box the verdict is `unknown` continuously until 2026-09-12, because 27
+unexpired rejections contradict the cache. Four days of a gauge that can never say *"you are fine"*
+is the shape the dashboard spent the same day fixing elsewhere — a caveat on 29 of 32 cards is
+wallpaper, not a caveat. `orchestrator-setup` asked whether a rejection that can NEVER be attributed
+is the same fact as one that cannot be attributed YET. Measured on the live data,
+2026-09-08T14:12Z, and the answer is **three ways, not two**:
+
+| | resolved by | today's verdict |
+|---|---|---|
+| **transient** — this pass could not read the cache | the next scan | `unknown`, correctly |
+| **resolvable by an event** — a rejection that contradicts an attributed cache | a `/login` swap, not a scan | `unknown` |
+| **permanent** — nothing can ever settle it | nothing | would be `unknown` forever |
+
+All 27 are the middle row, and the distinction matters because **the event is not hypothetical**.
+They are `contradicted`, not `cannot-attribute`: every one is `seven_day`, all share the single reset
+instant 2026-09-12T18:00Z, all were hit inside three hours on 2026-09-07, and they expire *before*
+the current account's cached weekly window rolls on 2026-09-15T04:59Z — so no future scan will ever
+change their status. **But a `/login` back to the account they belong to would**, and that account
+swap is the very thing that created them. If Greg swapped back tomorrow he would genuinely be limited
+until Friday, and a gauge that had been reporting `ok` would have been wrong for four days in the
+expensive direction.
+
+So "waiting for information that will never arrive" is not quite it: the information can arrive, just
+not from looking again. **Whether four days of `unknown` is honest or merely useless is Greg's call**,
+and the two options are to keep it as it is, or to let an attributed cache showing plenty of headroom
+outweigh a contradicted rejection and report `ok` with the standing fact named beside it. Nothing has
+been changed on the strength of this note.
+
 **Deliberately not done, and it is the half of "done looks like" that is missing**: the usage block
 is **not** written into `current.json`. That means a schema field, a `parseCheckpoint` arm, both
 construction sites in `store.ts`, and a cadence decision in `daemon.ts` about when to pay for a scan
@@ -593,7 +861,10 @@ argument — a rejection found at 13:00 and resetting on Friday is still in forc
 13:05 scan fell over — which is the store's job and needs no watermarks in the collector. See
 *What landed* above for the precondition any future incremental path would need.
 
-The full transcript scan is **45s over 1,770 transcripts, 2.9 GB, 870,799 lines**, and the wide window
+The full transcript scan is **45s over 1,770 transcripts, 2.9 GB, 870,799 lines** (measured
+2026-09-08T13:23Z — stamped after the fact, because a later reading of 1,772 files and 875,528 lines
+read as a competing claim rather than an earlier one, which is this wave's own rule biting the
+section that states it), and the wide window
 is deliberate: a narrower one can miss a `seven_day` rejection that is still in force. But that is an
 argument for reading the whole history **once**, not for re-reading it. **A `seven_day` rejection found
 at T with a `resetsAt` of T+7d stays in force until that instant whether or not you look again** — it

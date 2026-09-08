@@ -24,11 +24,14 @@
  * `console.log` rather than src/log.ts: this is a CLI, and that is the rule —
  * docs/project/logging.md.
  */
+import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { attentionRunner, DEFAULT_MAX_CALLS, runAttentionCommand } from "../tools/overseer/attention-cli.js";
 import { runOverseer, TICK_MS } from "../tools/overseer/daemon.js";
+import type { AttentionList } from "../tools/fleet/wire.js";
 import type { OverseerEvent } from "../tools/overseer/diff.js";
 import { describeNote, openConditions, readNotes, type DaemonNote } from "../tools/overseer/notes.js";
 import {
@@ -284,6 +287,13 @@ export function statusLines(root: string, nowMs: number = Date.now()): string[] 
 
   if (checkpoint !== null) {
     lines.push("", registerSummary(checkpoint.register), ...attentionLines(checkpoint.register, nowMs));
+    // THE INBOX, NOT THE STATUSES. The block above ranks sessions by the state
+    // their pane is in; this one says what has been ASKED. They are different
+    // questions, and the whole of § `idle` is the bug is that the first cannot
+    // answer the second: every session genuinely waiting on Greg on 2026-09-08
+    // showed as `idle`, because `needs-you` means a dialog is drawn and their
+    // decisions were sentences ending in full stops.
+    lines.push("", ...inboxLines(checkpoint.attention, nowMs));
   } else if (read.kind === "unusable") {
     // Said out loud rather than left as an absence: a missing block reads as an
     // empty fleet to anybody who has not counted the blocks before.
@@ -342,6 +352,57 @@ function attentionLines(register: readonly RegisterEntry[], nowMs: number): stri
     lines.push("            ≥ is a floor: the daemon found it already in that state and cannot see when it began");
   }
   return lines;
+}
+
+/**
+ * The attention inbox, as the checkpoint carries it.
+ *
+ * **Three outcomes, three sentences, and never a blank.** A list; a calm fleet,
+ * which is an empty list WITH the count that proves something looked; and *could
+ * not tell*, which is what a broken probe or a pass that never ran produces.
+ * Printing nothing for the second and third is how an empty inbox comes to mean
+ * both "all clear" and "the thing that was supposed to look is dead" —
+ * docs/reusable/silent-success.md, and § The failure to design against, which
+ * names *the Overseer silently dead while the page says "nothing needs you"* as
+ * one of the two failures worth designing against.
+ */
+export function inboxLines(list: AttentionList, nowMs: number): string[] {
+  if (list.kind === "unknown") return [`inbox       COULD NOT TELL — ${list.why}`];
+  const age = describeAge(nowMs - Date.parse(list.scannedAt));
+  // ONLY WHEN NON-ZERO. A caveat printed on every healthy pass is one Greg learns
+  // to read past, which is A17 — an alarm that is usually wrong is worse than no
+  // alarm — and would be worse than not having the number at all.
+  //
+  // AT LEAST N, rather than N and a retraction. An empty list cannot reach here
+  // with anything unjudged — `buildAttentionList` returns `unknown` for that —
+  // so the only incomplete case left is a list that found something, and the
+  // honest form of it is a floor rather than a figure with a caveat under it.
+  // The same rule the money uses one file over: a quantity that is a lower bound
+  // must not be able to render as a reading.
+  if (list.items.length === 0) {
+    return [`inbox       nothing needs you, out of ${list.sessionsScanned} sessions looked at ${age} ago`];
+  }
+  const lines =
+    list.sessionsUnreadable === 0
+      ? [`inbox       ${list.items.length} waiting, out of ${list.sessionsScanned} sessions looked at ${age} ago`]
+      : [
+          `inbox       AT LEAST ${list.items.length} waiting, out of ${list.sessionsScanned} sessions looked at ${age} ago`,
+          `            ${list.sessionsUnreadable} session(s) could not be judged at all, so there may be more`,
+        ];
+  for (const item of list.items) {
+    const waited = describeAge(nowMs - Date.parse(item.waitingSince));
+    const also = item.duplicates.length === 0 ? "" : ` (+${item.duplicates.length} asking the same)`;
+    lines.push(`            ${item.kind.padEnd(12)} ${waited.padStart(6)}  ${item.sessionName}${also}`);
+    // The evidence kind is printed because it is the difference between a
+    // question the harness DREW and one we INFERRED from a turn's tail, and a
+    // person reading this needs to know which they are looking at.
+    lines.push(`            ${" ".repeat(12)} ${" ".repeat(6)}  ${item.evidence.kind}: ${oneLine(item)}`);
+  }
+  return lines;
+}
+
+function oneLine(item: { evidence: { kind: "dialog"; question: string } | { kind: "prose"; why: string } }): string {
+  return (item.evidence.kind === "dialog" ? item.evidence.question : item.evidence.why).replace(/\s+/g, " ").slice(0, 110);
 }
 
 /**
@@ -449,13 +510,19 @@ function usageLines(report: UsageReport): string[] {
 const HELP = [
   "overseer — the fleet's history, and the daemon that records it",
   "",
-  "  npx tsx scripts/overseer.ts run [--url URL] [--tick-ms N]",
+  "  npx tsx scripts/overseer.ts run [--url URL] [--tick-ms N] [--no-attention]",
   "  npx tsx scripts/overseer.ts status",
   "  npx tsx scripts/overseer.ts events [--limit N]",
   "  npx tsx scripts/overseer.ts notes [--limit N]",
   "  npx tsx scripts/overseer.ts usage [--since-hours N] [--max-transcripts N] [--json]",
+  "  npx tsx scripts/overseer.ts attention [--max-calls N] [--dry] [--json]",
+  "                                        [--capture-to DIR | --panes DIR] [--out FILE] [--write]",
   "",
   `The store is $OVERSEER_STORE_DIR, or ~/.overseer. The dashboard is ${DEFAULT_FLEET_URL} unless --url says otherwise.`,
+  "",
+  "`attention` reads every live pane and says what needs Greg. --dry makes no model calls and no",
+  "paid pass. It does NOT write the store's memory unless you pass --write: the daemon holds the",
+  "lock and this command does not honour it, so two writers is the default you do not want.",
 ].join("\n");
 
 function flag(argv: readonly string[], name: string): string | undefined {
@@ -518,6 +585,23 @@ async function main(argv: readonly string[]): Promise<number> {
       for (const note of read.notes) console.log(`${note.at}  ${describeNote(note)}`);
       return 0;
     }
+    case "attention":
+      return await runAttentionCommand({
+        root,
+        maxCalls: Number(flag(argv, "--max-calls") ?? DEFAULT_MAX_CALLS),
+        dry: argv.includes("--dry"),
+        json: argv.includes("--json"),
+        // READ-ONLY BY DEFAULT, and `--write` is the opt-in — GPT Sol's second
+        // round. The daemon holds the store's lock and this command does not
+        // honour it, so a hand run against a live daemon's root was a second
+        // writer on `attention.json`: an atomic rename stops a torn file and does
+        // nothing about a lost update or a duplicated call. Refusing by default
+        // costs a person nothing (the daemon is the producer) and cannot be wrong.
+        write: argv.includes("--write"),
+        out: flag(argv, "--out") ?? null,
+        panes: flag(argv, "--panes") ?? null,
+        captureTo: flag(argv, "--capture-to") ?? null,
+      });
     case "usage": {
       // A command rather than a daemon block for the same reason the header
       // gives for the rest of this file: there is no scheduler here yet, and the
@@ -562,6 +646,24 @@ async function main(argv: readonly string[]): Promise<number> {
         });
       }
       const tickMs = flag(argv, "--tick-ms");
+      // The attention pass is wired in HERE rather than inside the daemon,
+      // because it reads tmux and calls a paid model and daemon.ts does neither.
+      // With no key it is absent, and the store then publishes a list that says
+      // nothing has looked — which is not the same as an empty one.
+      // The epoch is one continuous run of observation, and a restart mints a new
+      // one — which is exactly when the persisted WAITS must be dropped, because a
+      // first-seen instant cannot span a gap nobody watched. The verdicts survive
+      // it; see `memoryForEpoch`.
+      const attentionRun = argv.includes("--no-attention")
+        ? null
+        : attentionRunner(root, `daemon-${randomUUID()}`);
+      if (attentionRun === null) {
+        console.log(
+          argv.includes("--no-attention")
+            ? "attention: off (--no-attention)"
+            : "attention: off — OPENROUTER_API_KEY is not set, so nothing will look at what needs you",
+        );
+      }
       const outcome = await runOverseer({
         root,
         baseUrl: flag(argv, "--url") ?? process.env["OVERSEER_FLEET_URL"] ?? DEFAULT_FLEET_URL,
@@ -569,6 +671,7 @@ async function main(argv: readonly string[]): Promise<number> {
         // Absent rather than undefined: `exactOptionalPropertyTypes` tells those
         // apart, and absent is what "take the default" means.
         ...(tickMs === undefined ? {} : { tickMs: Number(tickMs) }),
+        ...(attentionRun === null ? {} : { attention: { run: attentionRun } }),
       });
       switch (outcome.kind) {
         case "refused":
