@@ -1992,6 +1992,18 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
               `extract ${ctx.slug}: removed ${removals.map(([sel, n]) => `${n}× ${sel}`).join(", ")}`,
             );
           }
+          /* **The other half of the same audit line** — what stage 2 told
+             Readability to keep (src/protect.ts). Silent when nothing was
+             stamped, which is 32 of the 35 corpus fixtures, and for the same
+             reason: a line saying zero on every article is how the one page
+             that matters gets lost. Rule names and integers only. */
+          const stamps = Object.entries(result.kept);
+          if (stamps.length > 0) {
+            plog.info(
+              { slug: ctx.slug, step: "extract", kept: result.kept },
+              `extract ${ctx.slug}: kept ${stamps.map(([rule, n]) => `${n}× ${rule}`).join(", ")}`,
+            );
+          }
           return {
             parts: { extractedHtml: result.extractedHtml, meta: result.meta },
             detail: result.meta.title,

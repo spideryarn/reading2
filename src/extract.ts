@@ -31,6 +31,7 @@ import { escapeHtml } from "./html.js";
 import { canonicaliseCallouts, type CalloutStats } from "./callouts.js";
 import { type FurnitureRemovals, removePlatformFurniture } from "./furniture.js";
 import { canonicaliseNotes, type NoteStats } from "./notes.js";
+import { type KeptStructure, protectAuthoredStructure } from "./protect.js";
 /* The namespace and its scrub — src/reserved.ts is the only file allowed to
    name one of these attributes. See `stampSourceIds`. */
 import { RESERVED_ATTRS, scrubReserved } from "./reserved.js";
@@ -178,6 +179,15 @@ export interface ExtractResult {
    * is where that trade stops being premature.
    */
   removed: FurnitureRemovals;
+  /**
+   * **What stage 2 told Readability to keep, per rule** — the other half of the
+   * audit line, and the mirror of `removed` above (src/protect.ts).
+   *
+   * It rides here for exactly the reason `removed` does, and the same trade is
+   * still premature. A rule that stamped nothing is absent rather than zero,
+   * which `KeptStructure` explains.
+   */
+  kept: KeptStructure;
 }
 
 /**
@@ -373,6 +383,8 @@ export function readArticle(
   callouts: CalloutStats;
   /** What `removePlatformFurniture` deleted, per selector — see src/furniture.ts. */
   removed: FurnitureRemovals;
+  /** What `protectAuthoredStructure` stamped, per rule — see src/protect.ts. */
+  kept: KeptStructure;
 } {
   /* **A `VirtualConsole` with nothing attached to it**, and this is not tidiness.
      JSDOM's default forwards its own errors straight to `console`, and one of
@@ -392,9 +404,9 @@ export function readArticle(
      of the same class, and the first one where the leak was a dependency's
      rather than ours. See docs/project/logging.md. */
   const dom = sourceDom(html, url);
-  const { notes, callouts, removed } = prepareDocument(dom.window.document);
+  const { notes, callouts, removed, kept } = prepareDocument(dom.window.document);
   const article = new Readability(dom.window.document).parse();
-  return { article, refusal: capabilityFloor(article), notes, callouts, removed };
+  return { article, refusal: capabilityFloor(article), notes, callouts, removed, kept };
 }
 
 /**
@@ -549,6 +561,7 @@ function prepareDocument(doc: Document): {
   notes: NoteStats;
   callouts: CalloutStats;
   removed: FurnitureRemovals;
+  kept: KeptStructure;
 } {
   unhideCollapsedSections(doc);
   /* **The PDF figure marker, scrubbed on the one path a stranger's markup
@@ -591,7 +604,14 @@ function prepareDocument(doc: Document): {
      neither reads what the other writes — so it is simply the later arrival.
      src/callouts.ts. */
   const callouts = canonicaliseCallouts(doc);
-  return { notes, callouts, removed };
+  /* **Last, and the order is the safe one rather than an arbitrary one.**
+     Nothing else in this pass reads a class token we invent — the note and
+     callout recognisers know their shapes by the publisher's own class names —
+     so running last means our token cannot influence either of them, and that
+     is true by construction rather than by measurement. Readability is the only
+     reader of what this writes, and it has not run yet. src/protect.ts. */
+  const kept = protectAuthoredStructure(doc);
+  return { notes, callouts, removed, kept };
 }
 
 /**
@@ -740,6 +760,15 @@ export function readArticleWithProvenance(
    * than assumed — C4a, 2026-09-06.
    */
   removed: FurnitureRemovals;
+  /**
+   * What `protectAuthoredStructure` stamped, per rule (src/protect.ts).
+   *
+   * **Stamped before the source is stamped with ids**, the same ordering fact
+   * `removed` rests on — and here it is doubly harmless, because the pass adds
+   * a class token and moves nothing: the stamped source and Readability's
+   * output are the same nodes in the same order either way.
+   */
+  kept: KeptStructure;
   /** The stamped source, as Readability was handed it and before it pruned anything. */
   source: Document;
   /**
@@ -761,7 +790,7 @@ export function readArticleWithProvenance(
   stampedElements: number;
 } {
   const prepared = sourceDom(html, url);
-  const { notes, callouts, removed } = prepareDocument(prepared.window.document);
+  const { notes, callouts, removed, kept } = prepareDocument(prepared.window.document);
   const stampedElements = stampSourceIds(prepared.window.document);
   const sourceHtml = prepared.window.document.documentElement.outerHTML;
   const forReadability = sourceDom(prepared.serialize(), url);
@@ -774,6 +803,7 @@ export function readArticleWithProvenance(
     notes,
     callouts,
     removed,
+    kept,
     source: prepared.window.document,
     sourceHtml,
     stampedElements,
@@ -953,7 +983,7 @@ export async function runExtract(opts: {
      Found by a GPT Sol review that reproduced it, 2026-08-26 — the fourth round
      of the same class, and the first one where the leak was a dependency's
      rather than ours. See docs/project/logging.md. */
-  const { article, refusal, notes, callouts, removed } = readArticle(opts.html, opts.url);
+  const { article, refusal, notes, callouts, removed, kept } = readArticle(opts.html, opts.url);
   if (!article) {
     throw new ReadabilityRefused();
   }
@@ -1003,6 +1033,7 @@ export async function runExtract(opts: {
     notes,
     callouts,
     removed,
+    kept,
   };
 }
 

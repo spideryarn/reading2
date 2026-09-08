@@ -2904,8 +2904,9 @@ substring inside class attributes:**
 | `wiki_gdp_table` | 1 → **3** | 1 → ~~239~~ **238** |
 
 **239 was wrong and is struck above; the number is 238** — 223 rows from the GDP table, 14
-from the regional one whose fifteenth source row is empty, 1 from the map-legend grid. Reconciled
-per table by GPT Sol, 2026-09-08, which is how a document total stops hiding a discrepancy.
+from the regional one whose fifteenth source row is deleted by our own furniture pass, 1 from the
+map-legend grid. Reconciled per table by GPT Sol, 2026-09-08, which is how a document total stops
+hiding a discrepancy — and re-attributed below, because Sol blamed Readability for a row of ours.
 
 **And the navboxes stay out** — wiki goes to 3 tables, not 8. They die on a different branch
 (`UNLIKELY_ROLES`, for `role="navigation"` on their wrapper) and **link density plays no part in it**,
@@ -3079,9 +3080,17 @@ version is the corpus test):
 "tables survive" true generally and must not be quoted as though it did.
 
 **The 238 is right and the diagnosis's 239 was wrong**, reconciled by Sol per table: the GDP table
-contributes **223** rows, the regional table **14** (its fifteenth source row is empty and Readability
-drops it), the map-legend swatch grid **1**. The stage records the per-table counts, not only the
-document total — a total is the number that hid the discrepancy for a day.
+contributes **223** rows, the regional table **14**, the map-legend swatch grid **1**. The stage
+records the per-table counts, not only the document total — a total is the number that hid the
+discrepancy for a day.
+
+**Sol attributed the missing fifteenth row to Readability, and that is wrong.** The row is
+`<tr class="mw-empty-elt">` — the only one in the fixture — and **our own C4a furniture pass deletes
+it** before Readability sees the page (`src/furniture.ts` § `ENTRIES`). Found by the agent building
+the oracle, which needed the snapshot point to be exact and so could not accept a nearly-right causal
+story. The count is unchanged and the cause is ours, which matters because the oracle's declared
+normalisation is written against the post-`prepareDocument` DOM: at that snapshot the source table
+has fourteen rows too, and a normalisation excusing a row nothing drops would be excusing nothing.
 
 **The navboxes stay out**, as measured: wiki reaches 3 tables, not 8. They carry no unlikely token of
 their own and die on their wrapper's `role="navigation"`, which no stamp on a table can reach.
@@ -3139,6 +3148,161 @@ corrections come with a case that defeats the original:
   `_prepArticle` removes. So: compare against the post-`prepareDocument` DOM, strip non-visible nodes
   before reading text, and allow a wholly empty row to disappear — each written down as a permitted
   difference rather than absorbed by a loose comparison.
+
+##### What landed, 2026-09-08 — and the three places the plan above was wrong
+
+[`src/protect.ts`](../../src/protect.ts), run **last** in `prepareDocument`, with
+`kept: KeptStructure` threaded to `ExtractResult` beside `removed` and an audit line in
+`src/pipeline.ts` that prints rule names and integers and is silent on the 32 fixtures that stamp
+nothing. `tests/extract-protect.test.ts` drives everything through `runExtract` and
+`splitIntoBlocks`.
+
+**The measurement beat the plan three times, and the plan is corrected rather than defended:**
+
+1. **The PLOS character counts were 28,112 → 28,460 and are 28,004 → 28,352.** The *delta* is 348
+   either way, so the rule's effect was right and the baseline had drifted under it — which is what a
+   number quoted from a stale run looks like when it is nearly right.
+2. **"Five fixtures are stamped" was wrong arithmetic on a right conclusion.** Three fixtures stamp;
+   the other two of the five are the bot walls, which stamp nothing and refuse. Thirty
+   zero-stamp fixtures either way.
+3. **The ar5iv landing sequence was overstated.** The plan claimed `figcaption` / `table` / `h2: 5
+   Training` as a contiguous run. The first two are adjacent and always were, inside the `<figure>`;
+   the `<h2>` is not adjacent and is not even a sibling — three paragraphs of § 4's own prose sit
+   between them, where the author put them, and the heading opens the next `<section>`. The test
+   asserts the true document order, `FIGURE, P, P, P, H2`.
+
+**The evidence that is worth more than any of ours: a floor written by somebody else went green.**
+`plos-biology.manifest.json` sets `structure.h2.atLeast: 12` and its note names the three article
+sections that are gone, the 2018 correction notice first. The shipped extraction returned **11**.
+With rule B it returns **12**, and the one gained is `"Correction"`. That assertion was written on
+2026-09-05 for a different purpose by somebody with no stake in this stage, which is exactly what
+makes it evidence rather than agreement.
+
+**One collateral repair, root-caused rather than patched.** Recovering the notice broke two cases in
+`tests/extraction-scorer.test.ts`. `region-padding-only`'s precondition needs 2,000 characters of
+off-region paddable prose; `plos-biology` had **2,030**, a thirty-character margin, and was the only
+fixture in the fast block that could run the arm. The recovered citation paragraph is **203** of
+those characters, so moving it into the output left 1,827 and the arm stopped being exercised at all.
+`mdn-cache-control` joins `SMALL_FIXTURES` with 6,971 paddable characters — three and a half times
+the bar, and not sitting on a boundary anything can nudge. `plos-biology` stays for the seven arms it
+still exercises.
+
+**And an open question the stage did not settle, recorded rather than quietly absorbed.**
+`plos-biology`'s `articleRegion` is `div#artText`, which does **not** contain the amendment div — so
+recovering the notice takes `regionPrecision` from 0.9807 to **0.9727**. The extraction is more
+correct and the instrument scores it lower. That is the ruler contradicting itself: the same
+manifest's note calls the notice one of three *missing article sections*, so its prose and its region
+disagree, and the region is the shortcut while the prose is the reasoning. Widening it moves numbers
+this plan has published (the region's 23,330 characters and the 22,100 floor), so it is not being
+changed in passing. It is the first question in the stage-end review.
+
+##### The adversarial pass, by a different agent — three defects, and one of them lost the article
+
+C0's adversary rule, applied: the agent that attacked `src/protect.ts` did not write it and was
+briefed to break it rather than confirm it. It found three defects, all **red before the fix and
+green after**, each verified by mutating the source back and reading the failure message — and the
+other seven adversarial cases stayed green under the same mutation, which is what makes each one
+about its own defect rather than about the pass being off.
+
+**1. The neutralisation could be defeated by an overlapping term, and the cost was the whole page.**
+The first fix replaced `header` with a space and re-tested, arguing that a space cannot be part of
+any unlikely term so nothing could be *glued* into existence. True, and the wrong question. **The
+danger was destruction, not creation.** `header` ends in `r`, and `related`, `remark`, `replies` and
+`rss` all begin with one, so `headerelated`, `headerss`, `headeremark` and `headereplies` each
+contain a *second, genuine* unlikely term sharing that letter — and removing `header` removed it
+too: `"headerelated".replace(/header/gi, " ")` is `" elated"`, which matches nothing.
+
+Measured through `runExtract` on a page carrying `<table class="headerelated">`: the pass stamped it,
+Readability kept it, it won candidacy, and the output was **3,726 characters of flattened rows with
+all four paragraphs of prose deleted**, against 801 characters and four paragraphs with the pass off.
+Not junk kept — **the article lost.**
+
+The substitution is gone. `UNLIKELY_EXCEPT_HEADER` is `unlikelyCandidates` with its one `header`
+alternative removed, derived from the pinned copy and asked of the **original** string, so the join
+hazard is impossible rather than argued about. Verified independently: the literal `|header|` occurs
+exactly once in the source, `headerelated` and `headerss` now decline, and both real tables and the
+Arabic sidebar are unchanged.
+
+**2. `kept` overstated what rule B stamped.** `querySelector` reaches through a nested
+`div.amendment.amendment-correction`, so an outer notice and an inner one can resolve to the *same*
+citation element, and `notice += 2` per outer counted that element once per notice that found it. A
+document with two inner notices under one outer reported **6 for 5 elements actually stamped** — in
+the one field whose own docstring says the unit is elements stamped. Now a `Set` of what was actually
+stamped, so the unit is true by construction rather than by arithmetic that happens to agree.
+
+**3. Rule A counted rescues that rescued nothing.** Line 1119 carries `!_hasAncestorTag(node, "table")`
+and `!…(node, "code")`, so a table nested inside either is never reached by the deletion rule A exists
+to defeat. The pass stamped one anyway and reported it. The stamp was harmless — `KEEP_COLUMN` moves
+no score — but **the number was not**, and a count that reports work nobody did is the exact shape of
+the failure this stage is about. Readability's two ancestor guards are now mirrored.
+
+##### The claim the adversary corrected, and it is the honest one
+
+The header comment's two-token table read `spya-keep-column` ⇒ *the table is a table, both prose
+regions survive*, against `spya-keep-content` losing them. **That was a reading of one page with
+twelve body rows.** At twenty-four rows the weightless token produces the identical catastrophic
+card — table flattened to a `<div>`, every paragraph gone. **A weightless token does not make a
+rescue safe**: a rescued table is a table that gets *scored*, and thin prose beside it loses.
+
+The mitigating half was checked rather than assumed. The same page with `class="wikitable sortable"`
+— a string Readability never disliked, nothing stamped — loses the same four paragraphs at the same
+row count, to the character. **So this is Readability's arithmetic and not ours**, and rule A is
+faithful in the only sense available to it: it hands the page the extraction it would have had if the
+publisher had not written `header`, bad outcomes included. Both readings are in the comment now, and
+a swept test pins 12, 24 and 40 rows with its own control.
+
+##### What the adversary could not do, said plainly
+
+- **`headerelated` has no known real-world instance.** The defect and its consequence are measured;
+  the likelihood is not. A sharp edge with no known page on it.
+- **The seam has a hole nothing pins.** `withProtectionDisabled` restores in a `finally` after
+  `await fn()`, so a callback returning a **non-promise thenable that never settles** leaves the pass
+  disabled permanently — reproduced in a scratch script, deliberately not written as a test, because
+  reproducing it inside the suite would disable the pass for every test after it and there is no
+  exported way to force the flag back. Nothing in the repo passes a thenable, and the comment claims
+  only that a *throwing* case is safe, which it is.
+- **Rule B's citation lookup is wider than its measured topology** — `querySelector` finds a citation
+  anywhere beneath the notice, where PLOS writes it as a direct child. Left wide and pinned: no
+  construction made the width cost anything, and `:scope >` would decline any publisher who wraps the
+  citation once more. If a page is ever found where it costs prose, that pinned test is the one that
+  flips.
+- **No rule-B shape was found that costs a paragraph**, in three serious attempts. That is a failure
+  to break it, not evidence it cannot be broken.
+- **One sentence is narrower than it reads.** *"The token never reaches the reader"* holds, but
+  `readArticleWithProvenance` snapshots the prepared DOM into `sourceHtml`, so the tokens do reach
+  the eval harness's provenance artefact. No eval instrument reads class names, so nothing measures
+  differently — grepped, not assumed.
+
+###### What the oracle turned out to need — built 2026-09-08, and it corrected its own brief
+
+[`evals/extraction/table-oracle.mts`](../../evals/extraction/table-oracle.mts) and
+`tests/table-oracle.test.ts` (20 tests). Matching is by provenance id through `sourceRefOf`, and an
+output table is accepted **only when the id resolves to a `<table>` in the source** — a `descendant`
+resolution that lands on a `<tbody>` is reported *untraceable* rather than quietly matched, which is
+the abstention-shaped green C0 exists to refuse.
+
+**The four-field projection this section specified cannot detect one of the mutations it demands.**
+Delete a link and leave its text, and tag, normalised text, `rowSpan` and `colSpan` are all
+unchanged. So the projection carries a **fifth** field, the resolved hrefs in the cell, and the test
+asserts that mutation produces `cell-links-differ` and **no** `cell-text-differs` — the second half
+being what proves the fifth field is doing the work rather than riding along.
+
+**Cell text never leaves the module.** A text difference reports character counts and an eight-hex
+digest, which is enough to show two cells swapped — each new digest is the other's old one, and the
+test asserts exactly that — and not enough to reconstruct an author's prose.
+
+**The normalisations are data, not judgement**, exported as `NORMALISATIONS` with a test asserting
+the list is exactly three, so a fourth is a deliberate act rather than a loosened comparison:
+`empty-row-may-vanish`, `non-visible-nodes-stripped`, `whitespace-collapsed` (no case folding).
+Hidden-but-present nodes are deliberately **not** normalised — there are zero inside the corpus's 192
+source tables, and widening an oracle for a case nobody has is how an instrument stops being able to
+fail.
+
+**Corpus reading, 2026-09-08**, with C3's recovery in: `wiki-gdp-table` 3 of 3 traced tables agree,
+`ar5iv` 9 of 9 agree. Across 19 table-bearing fixtures, 118 traced, 65 agree, 53 differ, 74 source
+tables absent from the output, 0 untraceable. **The 53 are almost all `hn-dropbox` comment tables and
+one `blogger-bldgblog` sidebar cell Readability empties** — real losses, reported rather than
+absorbed, and the number to watch is that it did not come out as zero.
 
 ##### How it is proved — the ladder, the counterfactual, and the adversary
 

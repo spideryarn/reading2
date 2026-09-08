@@ -632,6 +632,16 @@ const SMALL_FIXTURES = [
    * tested only by the slow run.
    */
   "plos-biology",
+  /**
+   * **And the seventh, because the sixth stopped qualifying.** PLOS cleared
+   * `region-padding-only`'s 2,000-character precondition by **30 characters**,
+   * and stage 2's protect pass (src/protect.ts, 2026-09-08) recovered the 2018
+   * correction notice — 203 characters of it paddable prose a moment earlier —
+   * leaving 1,827. `plos-biology` stays for the seven arms it still exercises;
+   * `mdn-cache-control` is the next smallest page that can run this one, at
+   * 248 KB and 6,971 characters of off-region prose.
+   */
+  "mdn-cache-control",
 ];
 
 const FIXTURE_DIR = path.join("evals", "extraction", "fixtures");
@@ -655,6 +665,7 @@ const REGION_CHARS: Record<string, number> = {
   "python-docs-itertools": 29925,
   "pg-greatwork": 54900,
   "plos-biology": 23330,
+  "mdn-cache-control": 16615,
 };
 
 function fixtureBytes(name: string): {
@@ -1611,18 +1622,26 @@ describe("the degenerate arms — each has to lose, and the test names where", (
        * that was the complete post plus 595 genuine stamped comment paragraphs,
        * 231,371 characters against a correct 32,820, and `detects` found nothing.
        *
-       * `plos-biology` is the smallest page that can run it: the journal's aside,
-       * subject-area rail and related-article furniture sit outside `div#artText`
-       * and the extraction does not already carry them.
+       * **It was `plos-biology` until 2026-09-08, and that was a 30-character
+       * margin.** The arm's precondition wants 2,000 characters of off-region
+       * paddable prose, and PLOS had **2,030**. Stage 2's protect pass
+       * (src/protect.ts) then recovered the 2018 correction notice — which the
+       * manifest's own note calls one of three missing article sections — and
+       * its 203-character citation paragraph moved from *paddable* into the
+       * output, leaving 1,827 and no exposure at all. So the case moved to
+       * `mdn-cache-control`, which has **6,971** characters of off-region prose,
+       * three and a half times the bar, and is not sitting on a boundary
+       * anything can nudge.
        */
-      const { raw, url, manifest, prepared } = fixtureBytes("plos-biology");
+      const FIXTURE = "mdn-cache-control";
+      const { raw, url, manifest, prepared } = fixtureBytes(FIXTURE);
       const ctx = { manifest, url };
       const shipped = armNamed(SHIPPED_ARM).run(raw, url, ctx);
       const arm = armNamed("region-padding-only");
       expect(arm.precondition(raw, shipped, ctx), "nothing off the article to pad with").toBe(true);
       const cardOf = (c: Candidate, name: string) =>
         score({
-          fixture: "plos-biology", arm: name, html: c.html, stampedHtml: c.stampedHtml,
+          fixture: FIXTURE, arm: name, html: c.html, stampedHtml: c.stampedHtml,
           refused: c.refused, title: c.title, byline: c.byline, sourceHtml: prepared, manifest,
         });
       const clean = cardOf(shipped, SHIPPED_ARM);
