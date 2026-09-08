@@ -329,7 +329,7 @@ button.dbt-mark:focus-visible { outline: 2px solid var(--highlight); outline-off
   margin: 0 0 0.3rem;
 }
 /* What the page does to what it answers. A word, not a badge with a colour of
-   its own: `relation` groups the list and `valence` draws the colour, and
+   its own: `relation` groups the list and `lean` draws the colour, and
    colouring both would make the row look as though it carried two verdicts. */
 .dbt-relation {
   color: var(--ink-soft);
@@ -352,7 +352,7 @@ button.dbt-mark:focus-visible { outline: 2px solid var(--highlight); outline-off
    **The scale's middle step is deliberately unused.** `--div-rg-4` is the
    centre of a ramp, and putting `neutral` there would say *zero on a scale*,
    which is the score this mode does not compute. */
-.dbt-valence {
+.dbt-lean {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
@@ -361,10 +361,10 @@ button.dbt-mark:focus-visible { outline: 2px solid var(--highlight); outline-off
   font-weight: 600;
   letter-spacing: 0.02em;
 }
-.dbt-valence svg { flex: none; }
-.dbt-valence-for { color: var(--div-rg-7); }
-.dbt-valence-against { color: var(--div-rg-1); }
-.dbt-valence-quiet { color: var(--ink-faint); }
+.dbt-lean svg { flex: none; }
+.dbt-lean-for { color: var(--div-rg-7); }
+.dbt-lean-against { color: var(--div-rg-1); }
+.dbt-lean-quiet { color: var(--ink-faint); }
 
 .dbt-applies {
   margin: 0;

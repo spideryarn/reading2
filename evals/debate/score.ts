@@ -31,9 +31,9 @@
  */
 import {
   type DebateCounts,
+  type DebateLean,
   type DebateLosses,
   type DebateRelation,
-  type DebateValence,
   lossesOf,
 } from "../../src/types.js";
 
@@ -42,7 +42,7 @@ import {
 /**
  * **The two fields every figure below reads**, and nothing else.
  *
- * `string` rather than `DebateRelation`/`DebateValence` on purpose, and it is
+ * `string` rather than `DebateRelation`/`DebateLean` on purpose, and it is
  * not laziness: `DirectDebateRow` and `ClaimDebateRow` are both assignable to
  * it, *and* so is a row read straight back off `article_revisions.debate`,
  * which is JSONB and is bound by no TypeScript type at all. The vocabulary
@@ -52,13 +52,13 @@ import {
  */
 export interface ScorableRow {
   relation: string;
-  valence: string;
+  lean: string;
 }
 
 /* ------------------------------------------------------------ the vocabularies -- */
 
 /*  The two vocabularies, written as a total mapping from the union to itself so
-    that a new `DebateRelation` or `DebateValence` member is a **compile error**
+    that a new `DebateRelation` or `DebateLean` member is a **compile error**
     here rather than a value that quietly lands in `offVocabulary`. A bare
     `readonly DebateRelation[]` would accept a short list without complaint —
     and production's own `new Set<DebateRelation>([...])` in src/debate.ts is
@@ -70,26 +70,26 @@ const RELATION_KEYS: { [K in DebateRelation]: K } = {
   corroborates: "corroborates",
   unclear: "unclear",
 };
-const VALENCE_KEYS: { [K in DebateValence]: K } = {
-  positive: "positive",
-  negative: "negative",
-  neutral: "neutral",
-  unknown: "unknown",
+const LEAN_KEYS: { [K in DebateLean]: K } = {
+  "leans-for": "leans-for",
+  "leans-against": "leans-against",
+  neither: "neither",
+  "cannot-tell": "cannot-tell",
 };
 
 /** Every relation, in the order a table prints them. Includes `unclear`. */
 export const RELATION_VALUES: readonly DebateRelation[] = Object.values(RELATION_KEYS);
-/** Every valence, in the order a table prints them. Includes `unknown`. */
-export const VALENCE_VALUES: readonly DebateValence[] = Object.values(VALENCE_KEYS);
+/** Every lean, in the order a table prints them. Includes `cannot-tell`. */
+export const LEAN_VALUES: readonly DebateLean[] = Object.values(LEAN_KEYS);
 
 /** Is this string one of the five relations this build knows? */
 export function isRelation(value: string): value is DebateRelation {
   return Object.hasOwn(RELATION_KEYS, value);
 }
 
-/** Is this string one of the four valences this build knows? */
-export function isValence(value: string): value is DebateValence {
-  return Object.hasOwn(VALENCE_KEYS, value);
+/** Is this string one of the four leans this build knows? */
+export function isLean(value: string): value is DebateLean {
+  return Object.hasOwn(LEAN_KEYS, value);
 }
 
 /* -------------------------------------------- the raw vocabulary, before coercion -- */
@@ -126,9 +126,9 @@ export function rawField(value: unknown): RawField {
 
 /* Production's own coercion, mirrored exactly: `str()` then set membership,
    falling through to the vocabulary's "we cannot tell" value rather than
-   dropping the row (src/debate.ts § `readRow`). `RELATIONS`/`VALENCES` are not
+   dropping the row (src/debate.ts § `readRow`). `RELATIONS`/`LEANS` are not
    exported from there, so this is a mirror rather than a reuse — but it is
-   mirrored off the *types*, through `RELATION_KEYS`/`VALENCE_KEYS` below, which
+   mirrored off the *types*, through `RELATION_KEYS`/`LEAN_KEYS` below, which
    a new union member cannot be added to without a compile error. Production's
    own `new Set<DebateRelation>([...])` has no such gate. */
 
@@ -138,17 +138,17 @@ export function coerceRelation(value: unknown): DebateRelation {
   return isRelation(text) ? text : "unclear";
 }
 
-/** What production would store for this raw valence. Never throws, never drops. */
-export function coerceValence(value: unknown): DebateValence {
+/** What production would store for this raw lean. Never throws, never drops. */
+export function coerceLean(value: unknown): DebateLean {
   const text = rawField(value).text;
-  return isValence(text) ? text : "unknown";
+  return isLean(text) ? text : "cannot-tell";
 }
 
 /** How often one raw spelling turned up, and whether this build knows it. */
 export interface RawCount {
   label: string;
   count: number;
-  /** `false` means this string is coerced away — to `unclear` or to `unknown`. */
+  /** `false` means this string is coerced away — to `unclear` or to `cannot-tell`. */
   known: boolean;
 }
 
@@ -157,12 +157,12 @@ export interface VocabularyReport {
   rows: number;
   /** Every distinct raw `relation` spelling, commonest first, ties alphabetical. */
   relations: RawCount[];
-  /** Every distinct raw `valence` spelling, same order. */
-  valences: RawCount[];
+  /** Every distinct raw `lean` spelling, same order. */
+  leans: RawCount[];
   /** Rows whose raw `relation` is not one this build knows. */
   offVocabularyRelations: number;
-  /** Rows whose raw `valence` is not one this build knows. */
-  offVocabularyValences: number;
+  /** Rows whose raw `lean` is not one this build knows. */
+  offVocabularyLeans: number;
   /** Rows where **either** field is off-vocabulary. The number a gate reads. */
   offVocabularyRows: number;
   /** Rows that were not an object at all, so neither field could be read. */
@@ -175,17 +175,18 @@ export interface VocabularyReport {
  *
  * ## Why this exists, and it is the most important function in the file
  *
- * `src/debate.ts` maps an out-of-vocabulary answer to `unclear` / `unknown`
+ * `src/debate.ts` maps an out-of-vocabulary answer to `unclear` / `cannot-tell`
  * rather than dropping the row, deliberately: those are honest answers and are
  * drawn as calmly as the rest. P7 in the plan pins that mapping. But P7 proves
  * only that the *coercion* works — **nothing anywhere proves that a prompt
  * still emits the vocabulary the coercion accepts.**
  *
- * So consider the repair this eval exists to test. Reword the valence
+ * So consider the repair this eval exists to test. Reword the lean
  * instruction, and the model starts answering `supportive` / `critical`
- * instead of `positive` / `negative`. Every row is coerced to `unknown`. The
+ * instead of `leans-for` / `leans-against`. Every row is coerced to
+ * `cannot-tell`. The
  * wrong-target rows the repair was aimed at are gone — because *every* label is
- * gone. A valence-disagreement rate computed over the coerced values would
+ * gone. A lean-disagreement rate computed over the coerced values would
  * **improve**, and the prompt repair would report success at the exact moment
  * it destroyed the field. That is
  * [silent-success.md](../../docs/reusable/silent-success.md) in one paragraph:
@@ -200,7 +201,7 @@ export interface VocabularyReport {
  * ## What it refuses to do
  *
  * - **It never coerces.** It reports what arrived. `coerceRelation` /
- *   `coerceValence` are separate and are for showing the two side by side.
+ *   `coerceLean` are separate and are for showing the two side by side.
  * - **It never treats an absent field as an empty one, or either as a word.**
  *   Three different prompt failures, three different labels.
  * - **It never judges a spelling.** An unknown word is `known: false`, counted
@@ -211,9 +212,9 @@ export interface VocabularyReport {
  */
 export function vocabularyReport(rows: readonly unknown[]): VocabularyReport {
   const relations = new Map<string, RawCount>();
-  const valences = new Map<string, RawCount>();
+  const leans = new Map<string, RawCount>();
   let offVocabularyRelations = 0;
-  let offVocabularyValences = 0;
+  let offVocabularyLeans = 0;
   let offVocabularyRows = 0;
   let unreadableRows = 0;
 
@@ -228,29 +229,29 @@ export function vocabularyReport(rows: readonly unknown[]): VocabularyReport {
       unreadableRows += 1;
       offVocabularyRows += 1;
       bump(relations, { text: "", kind: "not-a-string", label: "(row not an object)" }, false);
-      bump(valences, { text: "", kind: "not-a-string", label: "(row not an object)" }, false);
+      bump(leans, { text: "", kind: "not-a-string", label: "(row not an object)" }, false);
       offVocabularyRelations += 1;
-      offVocabularyValences += 1;
+      offVocabularyLeans += 1;
       continue;
     }
-    const record = row as { relation?: unknown; valence?: unknown };
+    const record = row as { relation?: unknown; lean?: unknown };
     const relation = rawField(record.relation);
-    const valence = rawField(record.valence);
+    const lean = rawField(record.lean);
     const relationKnown = isRelation(relation.text);
-    const valenceKnown = isValence(valence.text);
+    const leanKnown = isLean(lean.text);
     bump(relations, relation, relationKnown);
-    bump(valences, valence, valenceKnown);
+    bump(leans, lean, leanKnown);
     if (!relationKnown) offVocabularyRelations += 1;
-    if (!valenceKnown) offVocabularyValences += 1;
-    if (!relationKnown || !valenceKnown) offVocabularyRows += 1;
+    if (!leanKnown) offVocabularyLeans += 1;
+    if (!relationKnown || !leanKnown) offVocabularyRows += 1;
   }
 
   return {
     rows: rows.length,
     relations: sortCounts(relations),
-    valences: sortCounts(valences),
+    leans: sortCounts(leans),
     offVocabularyRelations,
-    offVocabularyValences,
+    offVocabularyLeans,
     offVocabularyRows,
     unreadableRows,
   };
@@ -263,7 +264,7 @@ function sortCounts(counts: ReadonlyMap<string, RawCount>): RawCount[] {
 /**
  * **The gate.** Non-empty means the answers did not come back in the vocabulary
  * this build reads, and **no coerced figure from this run may be believed** —
- * an arm whose words we do not know scores `unclear`/`unknown` everywhere,
+ * an arm whose words we do not know scores `unclear`/`cannot-tell` everywhere,
  * which is indistinguishable from an arm that honestly could not tell.
  *
  * Returned as sentences rather than thrown, for the reason `cost.ts` gives: the
@@ -273,15 +274,15 @@ function sortCounts(counts: ReadonlyMap<string, RawCount>): RawCount[] {
 export function vocabularyProblems(report: VocabularyReport): string[] {
   const problems: string[] = [];
   const unknownRelations = report.relations.filter((r) => !r.known).map((r) => r.label);
-  const unknownValences = report.valences.filter((v) => !v.known).map((v) => v.label);
+  const unknownLeans = report.leans.filter((v) => !v.known).map((v) => v.label);
   if (report.offVocabularyRelations > 0) {
     problems.push(
       `${String(report.offVocabularyRelations)} of ${String(report.rows)} row(s) used a relation this build does not know (${unknownRelations.join(", ")}) — they are coerced to "unclear", so no relation figure from this run means anything`,
     );
   }
-  if (report.offVocabularyValences > 0) {
+  if (report.offVocabularyLeans > 0) {
     problems.push(
-      `${String(report.offVocabularyValences)} of ${String(report.rows)} row(s) used a valence this build does not know (${unknownValences.join(", ")}) — they are coerced to "unknown", so no valence figure from this run means anything`,
+      `${String(report.offVocabularyLeans)} of ${String(report.rows)} row(s) used a lean this build does not know (${unknownLeans.join(", ")}) — they are coerced to "cannot-tell", so no lean figure from this run means anything`,
     );
   }
   if (report.unreadableRows > 0) {
@@ -304,7 +305,7 @@ export function vocabularyLines(report: VocabularyReport): string[] {
             (c.known ? "" : `   OFF-VOCABULARY — coerced to "${fallback}"`),
         )),
   ];
-  return [...block("relation", report.relations, "unclear"), ...block("valence", report.valences, "unknown")];
+  return [...block("relation", report.relations, "unclear"), ...block("lean", report.leans, "cannot-tell")];
 }
 
 /**
@@ -318,9 +319,9 @@ export function coercedRows(rows: readonly unknown[]): ScorableRow[] {
   return rows.map((row) => {
     const record = (row === null || typeof row !== "object" ? {} : row) as {
       relation?: unknown;
-      valence?: unknown;
+      lean?: unknown;
     };
-    return { relation: coerceRelation(record.relation), valence: coerceValence(record.valence) };
+    return { relation: coerceRelation(record.relation), lean: coerceLean(record.lean) };
   });
 }
 
@@ -394,18 +395,18 @@ export function lossReasonLines(table: LossReasonTable): string[] {
   ];
 }
 
-/* ------------------------------------------------- relation × valence, in full -- */
+/* ------------------------------------------------- relation × lean, in full -- */
 
-/** A row whose relation or valence this build has no cell for. */
+/** A row whose relation or lean this build has no cell for. */
 export interface OffVocabularyRow {
   relation: string;
-  valence: string;
+  lean: string;
 }
 
 /** The full contingency table, every cell present. */
 export interface ContingencyTable {
-  /** `cells[relation][valence]`. Every one of the 20 cells exists, zeros included. */
-  cells: Record<DebateRelation, Record<DebateValence, number>>;
+  /** `cells[relation][lean]`. Every one of the 20 cells exists, zeros included. */
+  cells: Record<DebateRelation, Record<DebateLean, number>>;
   /** Rows handed in — the denominator every rate over this table uses. */
   total: number;
   /** Rows that landed in a cell. `classified + offVocabulary.length === total`. */
@@ -421,83 +422,83 @@ export interface ContingencyTable {
   offVocabulary: OffVocabularyRow[];
   /** Per-relation totals, for the denominators the plan asks to be printed per relation. */
   byRelation: Record<DebateRelation, number>;
-  /** Per-valence totals. */
-  byValence: Record<DebateValence, number>;
+  /** Per-lean totals. */
+  byLean: Record<DebateLean, number>;
 }
 
 /**
- * The relation × valence contingency table — **all twenty cells, always**.
+ * The relation × lean contingency table — **all twenty cells, always**.
  *
- * **What it refuses to do:** it does not exclude `unclear` or `unknown`, does
+ * **What it refuses to do:** it does not exclude `unclear` or `cannot-tell`, does
  * not exclude any relation as "ambiguous" (round one excluded `qualifies` and
  * `extends`; Sol's F37 refused that), does not merge cells, and does not drop a
  * row whose words it does not recognise — that row goes in `offVocabulary` and
  * still counts toward `total`. Nothing here is a rate; it is a census.
  */
 export function contingencyTable(rows: readonly ScorableRow[]): ContingencyTable {
-  const cells = {} as Record<DebateRelation, Record<DebateValence, number>>;
+  const cells = {} as Record<DebateRelation, Record<DebateLean, number>>;
   const byRelation = {} as Record<DebateRelation, number>;
-  const byValence = {} as Record<DebateValence, number>;
+  const byLean = {} as Record<DebateLean, number>;
   for (const relation of RELATION_VALUES) {
-    const row = {} as Record<DebateValence, number>;
-    for (const valence of VALENCE_VALUES) row[valence] = 0;
+    const row = {} as Record<DebateLean, number>;
+    for (const lean of LEAN_VALUES) row[lean] = 0;
     cells[relation] = row;
     byRelation[relation] = 0;
   }
-  for (const valence of VALENCE_VALUES) byValence[valence] = 0;
+  for (const lean of LEAN_VALUES) byLean[lean] = 0;
 
   const offVocabulary: OffVocabularyRow[] = [];
   let classified = 0;
   for (const row of rows) {
-    if (!isRelation(row.relation) || !isValence(row.valence)) {
-      offVocabulary.push({ relation: row.relation, valence: row.valence });
+    if (!isRelation(row.relation) || !isLean(row.lean)) {
+      offVocabulary.push({ relation: row.relation, lean: row.lean });
       continue;
     }
-    cells[row.relation][row.valence] += 1;
+    cells[row.relation][row.lean] += 1;
     byRelation[row.relation] += 1;
-    byValence[row.valence] += 1;
+    byLean[row.lean] += 1;
     classified += 1;
   }
-  return { cells, total: rows.length, classified, offVocabulary, byRelation, byValence };
+  return { cells, total: rows.length, classified, offVocabulary, byRelation, byLean };
 }
 
 /** The table as text, one line per relation, with the off-vocabulary count said out loud. */
 export function contingencyLines(table: ContingencyTable): string[] {
   const relWidth = Math.max(...RELATION_VALUES.map((r) => r.length), "(all)".length);
-  const colWidth = Math.max(...VALENCE_VALUES.map((v) => v.length), 5);
-  const head = `  ${"".padEnd(relWidth)}  ${VALENCE_VALUES.map((v) => v.padStart(colWidth)).join("  ")}      (all)`;
+  const colWidth = Math.max(...LEAN_VALUES.map((v) => v.length), 5);
+  const head = `  ${"".padEnd(relWidth)}  ${LEAN_VALUES.map((v) => v.padStart(colWidth)).join("  ")}      (all)`;
   const body = RELATION_VALUES.map((relation) => {
-    const cols = VALENCE_VALUES.map((v) => String(table.cells[relation][v]).padStart(colWidth));
+    const cols = LEAN_VALUES.map((v) => String(table.cells[relation][v]).padStart(colWidth));
     return `  ${relation.padEnd(relWidth)}  ${cols.join("  ")}  ${String(table.byRelation[relation]).padStart(9)}`;
   });
-  const foot = `  ${"(all)".padEnd(relWidth)}  ${VALENCE_VALUES.map((v) => String(table.byValence[v]).padStart(colWidth)).join("  ")}  ${String(table.classified).padStart(9)}`;
+  const foot = `  ${"(all)".padEnd(relWidth)}  ${LEAN_VALUES.map((v) => String(table.byLean[v]).padStart(colWidth)).join("  ")}  ${String(table.classified).padStart(9)}`;
   const off =
     table.offVocabulary.length === 0
       ? `  off-vocabulary: none, over ${String(table.total)} row(s)`
       : `  off-vocabulary: ${String(table.offVocabulary.length)} of ${String(table.total)} row(s) — ` +
-        table.offVocabulary.map((r) => `${r.relation}/${r.valence}`).join(", ");
+        table.offVocabulary.map((r) => `${r.relation}/${r.lean}`).join(", ");
   return [head, ...body, foot, off];
 }
 
 /* ------------------------------------------------------- the opposite-pair mark -- */
 
 /**
- * How many rows put `relation` and `valence` on opposite signs.
+ * How many rows put `relation` and `lean` on opposite signs.
  *
  * `rate` is `null` — never `0` — when there are no rows at all.
  */
 export interface OppositePairMark {
-  /** `disputes` + `positive`. */
-  disputesPositive: number;
-  /** `corroborates` + `negative`. */
-  corroboratesNegative: number;
+  /** `disputes` + `leans-for`. */
+  disputesLeansFor: number;
+  /** `corroborates` + `leans-against`. */
+  corroboratesLeansAgainst: number;
   /** The two added up. */
   pairs: number;
   /**
    * **Every row handed in**, classified or not.
    *
    * The denominator is deliberately not "rows with a recognised relation and
-   * valence": an arm that answered `unclear`/`unknown` everywhere produces no
+   * lean": an arm that answered `unclear`/`cannot-tell` everywhere produces no
    * opposite pairs at all, and against a classified-only denominator it would
    * come out looking *cleaner* than an arm that committed to an answer. That is
    * the reward-for-answering-less failure Sol's F36 named in a different place,
@@ -511,7 +512,7 @@ export interface OppositePairMark {
 /**
  * **The opposite-pair mark — a sampling frame, and nothing else.**
  *
- * Counts `disputes`+`positive` and `corroborates`+`negative`.
+ * Counts `disputes`+`leans-for` and `corroborates`+`leans-against`.
  *
  * ## What this is, and the ruling it does not overturn
  *
@@ -521,12 +522,12 @@ export interface OppositePairMark {
  * rows in both cells, one per group:
  *
  * - *"The stated 10% is wrong; it is at least 30%, which makes the warning
- *   stronger."* — truthfully `disputes` + `positive`.
+ *   stronger."* — truthfully `disputes` + `leans-for`.
  * - *"The reported figures are right, but the conclusion drawn from them is
- *   indefensible."* — truthfully `corroborates` + `negative`.
+ *   indefensible."* — truthfully `corroborates` + `leans-against`.
  *
  * What the measurement of 2026-09-08 added is the other half: **all three known
- * bad valence rows are opposite pairs.** So the mark has *high recall* for the
+ * bad lean rows are opposite pairs.** So the mark has *high recall* for the
  * wrong-target bug and *low precision*, which is exactly what F35 established.
  * A high-recall, low-precision mark is worthless as a coercion and excellent as
  * a **sampling frame** — it decides which rows a person reads before hand-
@@ -545,17 +546,17 @@ export interface OppositePairMark {
  *   over an empty set reads as *"we checked, and it is clean"*.
  */
 export function oppositePairs(rows: readonly ScorableRow[]): OppositePairMark {
-  let disputesPositive = 0;
-  let corroboratesNegative = 0;
+  let disputesLeansFor = 0;
+  let corroboratesLeansAgainst = 0;
   for (const row of rows) {
-    if (row.relation === "disputes" && row.valence === "positive") disputesPositive += 1;
-    if (row.relation === "corroborates" && row.valence === "negative") corroboratesNegative += 1;
+    if (row.relation === "disputes" && row.lean === "leans-for") disputesLeansFor += 1;
+    if (row.relation === "corroborates" && row.lean === "leans-against") corroboratesLeansAgainst += 1;
   }
-  const pairs = disputesPositive + corroboratesNegative;
+  const pairs = disputesLeansFor + corroboratesLeansAgainst;
   const total = rows.length;
   return {
-    disputesPositive,
-    corroboratesNegative,
+    disputesLeansFor,
+    corroboratesLeansAgainst,
     pairs,
     total,
     rate: total === 0 ? null : pairs / total,
@@ -568,7 +569,7 @@ export function oppositePairs(rows: readonly ScorableRow[]): OppositePairMark {
  */
 export function formatOppositePairs(mark: OppositePairMark): string {
   const head = `${String(mark.pairs)} / ${String(mark.total)} rows`;
-  const split = `${String(mark.disputesPositive)} disputes+positive, ${String(mark.corroboratesNegative)} corroborates+negative`;
+  const split = `${String(mark.disputesLeansFor)} disputes+leans-for, ${String(mark.corroboratesLeansAgainst)} corroborates+leans-against`;
   const rate = mark.rate === null ? "no rows, so no rate" : `${(mark.rate * 100).toFixed(1)}%`;
   return `${head} (${split}) — ${rate}; an inspection frame, not an error count`;
 }

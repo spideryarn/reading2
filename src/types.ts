@@ -3503,12 +3503,28 @@ export const MAX_QUIZ_ANSWER_CHARS = 4000;
  * **What the outside page does to what it is answering** — the field that
  * groups the list.
  *
- * Orthogonal to `DebateValence` below, and the two must stay that way. The
- * first draft of the plan derived the icon from this field and a GPT Sol review
- * (F9) refused it: an author's own later post can dispute, qualify, extend or
- * corroborate their earlier piece, and *"the author later corrected this"* is
- * among the most valuable rows this mode can produce — derived valence makes it
- * neutral by construction and throws the useful part away.
+ * **Strongly associated with `DebateLean` below, and not functionally dependent
+ * on it** — which is a correction, made twice. This said "orthogonal, and the
+ * two must stay that way" until 2026-09-08, and the measurement refuted the
+ * word: over 61 real rows the lean varies freely only under `qualifies`, and
+ * `disputes` and `corroborates` carry the lean their own word implies in 32 of
+ * 35. That is association, and reading it as entailment is what produced two
+ * separate attempts to make the opposite pairs unspellable — round one's
+ * coercion, refused by Sol's F35, and a discriminated union, refused by F65.
+ *
+ * The two remain different questions and both must be asked. This one is the
+ * **argumentative move**; the lean is the **overall stance toward a target that
+ * may be composite**, and an outside page can dispute one proposition while
+ * supporting the conclusion around it —
+ * docs/plans/260906b-an-evaluation-for-debate-mode-and-what-it-finds.md § "The
+ * overlap between `relation` and `valence`, and what it is not" has one honest
+ * example per group, and they are the reason no type here forbids a pair.
+ *
+ * Deriving the icon from this field was refused separately (F9). That finding's
+ * own example has since been cut by F19, and an author correcting their earlier
+ * claim really is *against* that claim rather than merely "not hostile" — being
+ * their own author is **provenance**, which is ruled out of this field below.
+ * The refusal stands anyway, on F35's ground rather than F9's.
  *
  * **`follow-up` is deliberately not a sixth value here**, and the next reader
  * will reach for it: it is *provenance*, not relation, and a single field would
@@ -3534,19 +3550,41 @@ export type DebateRelation =
  * include it?"* — and, on the thing we are not building: a *"62% negative"* line
  * hands the reader a verdict on a piece they are in the middle of reading, which
  * is the summary-shaped failure docs/project/vision.md exists to refuse. No
- * numeric valence is computed or stored anywhere.
+ * numeric lean is computed or stored anywhere.
+ *
+ * **The words are agreement words, and that is the repair.** This was
+ * `DebateValence`, spelled `positive | negative | neutral | unknown`, until
+ * 2026-09-08. Three stored rows had recorded the source's stance toward *its
+ * own* subject rather than toward the row's target — a page negative about Uri
+ * Geller marked `negative` on a row whose target was a claim it *supported* —
+ * and the reader saw a red **Critical** chip over a source that agreed with the
+ * article.
+ *
+ * The diagnosis is **sentiment collapse**, and it is why the rename is the fix
+ * rather than decoration: `positive | negative` is sentiment-analysis
+ * vocabulary, so the cheapest reading of a passage is its polarity toward
+ * whatever it is itself discussing. That the page therefore *agrees with* the
+ * article is a second hop, and the model skipped it. `leans-for` and
+ * `leans-against` cannot be answered without naming what they lean toward.
+ *
+ * **All three errors were in group two**, which already carried an explicit
+ * target-binding sentence — so this was never a missing instruction, and
+ * `readStoredLean` below is what keeps the rows written before the rename
+ * readable.
  *
  * **The target is stated because otherwise this means three things** (Sol's
  * F19): it is the model's estimate of the cited passage's stance toward *the
  * article itself* in group one, and toward *the `claimQuote`* in group two. Not
- * the passage's tone, and not its stance toward some third subject.
+ * the passage's tone, not its stance toward some third subject, and — the
+ * negation those three rows needed and the prompt did not have — not toward
+ * whatever the outside piece is itself discussing.
  *
  * **`Comment.valence` is not a precedent.** That is the referee's own placement
  * of a passage on their own criterion — a person's judgment, stored as such.
  * This is a model's reading of a stranger's page: same shape, different
  * instrument, and the panel labels it as such.
  */
-export type DebateValence = "positive" | "negative" | "neutral" | "unknown";
+export type DebateLean = "leans-for" | "leans-against" | "neither" | "cannot-tell";
 
 /**
  * What both groups' rows share.
@@ -3593,7 +3631,13 @@ interface DebateRowBase {
    */
   sourceQuote: string;
   relation: DebateRelation;
-  valence: DebateValence;
+  /**
+   * **Never read straight off a stored row** — call `readStoredLean` below.
+   * Rows written before 2026-09-08 have no `lean` at all, they have a `valence`
+   * in the old vocabulary, and nothing revalidates a row on the way out of the
+   * database.
+   */
+  lean: DebateLean;
   /** How the outside piece bears on this row's target. The model's reading, labelled as such. */
   applies: string;
   /**
@@ -3998,6 +4042,52 @@ export interface Debate {
  * a CLI and two model calls in it (tests/client-imports.test.ts). The stage
  * re-exports it, so the server side still has one name for it.
  */
+/** Is this one of the four leans this build knows? Total by construction below. */
+const LEAN_MEMBERS: { [K in DebateLean]: true } = {
+  "leans-for": true,
+  "leans-against": true,
+  neither: true,
+  "cannot-tell": true,
+};
+
+/**
+ * **The lean of a row that may have been written before the vocabulary changed.**
+ *
+ * `isDebateDocument` validates that the two groups hold arrays and nothing about
+ * the rows inside them, and Postgres hands JSONB back unchecked — so a row
+ * stored before 2026-09-08 arrives typed as `DebateRow` while carrying
+ * `valence: "positive"` and no `lean` at all. Indexing an appearance table with
+ * that gives `undefined`, and the next property access crashes the panel.
+ *
+ * That is not hypothetical here: `lossesOf` above exists because the same
+ * assumption — that the type describes what comes out of the database — printed
+ * *"offered 5 of these; 3 are shown — ."* to a reader, the explanation lost to an
+ * `undefined` that arithmetic turned into `NaN`. Sol's F68 named this one before
+ * it shipped rather than after.
+ *
+ * **One accessor, called by every consumer**, rather than the same map written
+ * out at each call site. The mapping is the honest one: the old vocabulary's
+ * four values carried the same four meanings under sentiment-flavoured names,
+ * and anything else — a missing field, a spelling neither vocabulary knows —
+ * becomes `cannot-tell`, which is a real answer here and is drawn as calmly as
+ * the rest.
+ */
+export function readStoredLean(row: { lean?: unknown; valence?: unknown }): DebateLean {
+  if (typeof row.lean === "string" && Object.hasOwn(LEAN_MEMBERS, row.lean)) {
+    return row.lean as DebateLean;
+  }
+  switch (row.valence) {
+    case "positive":
+      return "leans-for";
+    case "negative":
+      return "leans-against";
+    case "neutral":
+      return "neither";
+    default:
+      return "cannot-tell";
+  }
+}
+
 export function isDebateDocument(value: unknown): boolean {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
   const doc = value as { direct?: { rows?: unknown }; claims?: { rows?: unknown } };

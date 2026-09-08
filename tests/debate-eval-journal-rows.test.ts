@@ -118,7 +118,7 @@ describe("reading a captured pass", () => {
     const report = journalRowsOf([
       started("a1", "direct"),
       answered("a1", {
-        content: fence([{ relation: "disputes", valence: "negative", url: "https://x.example/1" }]),
+        content: fence([{ relation: "disputes", lean: "leans-against", url: "https://x.example/1" }]),
         annotations: [annotation("https://x.example/1", "the extract the model was shown")],
       }),
       {
@@ -136,7 +136,7 @@ describe("reading a captured pass", () => {
     expect(pass?.pass).toBe("direct");
     expect(pass?.article?.slug).toBe("cargocult");
     expect(pass?.rows).toEqual([
-      { relation: "disputes", valence: "negative", url: "https://x.example/1" },
+      { relation: "disputes", lean: "leans-against", url: "https://x.example/1" },
     ]);
     expect(pass?.packets).toEqual([
       {
@@ -160,20 +160,20 @@ describe("reading a captured pass", () => {
       started("a1", "claims"),
       answered("a1", {
         content: fence([
-          { relation: "contradicts", valence: "supportive" },
-          { relation: "agrees-with", valence: "critical" },
+          { relation: "contradicts", lean: "supportive" },
+          { relation: "agrees-with", lean: "critical" },
         ]),
         annotations: [annotation("https://x.example/1", "extract")],
       }),
     ]);
     const pass = report.passes[0];
     expect(pass?.rows).toEqual([
-      { relation: "contradicts", valence: "supportive" },
-      { relation: "agrees-with", valence: "critical" },
+      { relation: "contradicts", lean: "supportive" },
+      { relation: "agrees-with", lean: "critical" },
     ]);
     const vocabulary = vocabularyReport(pass?.rows ?? []);
     expect(vocabulary.offVocabularyRows).toBe(2);
-    expect(vocabulary.valences.map((v) => v.label).sort()).toEqual(["critical", "supportive"]);
+    expect(vocabulary.leans.map((v) => v.label).sort()).toEqual(["critical", "supportive"]);
   });
 
   it("reads the pass off attempt-started, never off its position in the file", () => {
@@ -317,7 +317,7 @@ describe("a count that is short says so", () => {
     const report = journalRowsOf([
       started("a1", "direct"),
       answered("a1", {
-        content: fence([{ relation: "disputes", valence: "negative" }]),
+        content: fence([{ relation: "disputes", lean: "leans-against" }]),
         annotations: [annotation("https://x/1", "e")],
       }),
     ]);
@@ -343,7 +343,7 @@ describe("the file itself", () => {
       JSON.stringify(started("a1", "direct")),
       JSON.stringify(
         answered("a1", {
-          content: fence([{ relation: "disputes", valence: "negative" }]),
+          content: fence([{ relation: "disputes", lean: "leans-against" }]),
           annotations: [annotation("https://x/1", "an extract")],
         }),
       ),
