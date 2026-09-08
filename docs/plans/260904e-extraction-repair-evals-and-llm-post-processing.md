@@ -9,8 +9,12 @@ review by Fable on 2026-09-07 argues none of the three is the right next thing**
 D instead (it improves the reading view, arc, Summaries, Outline, Structure and reading time
 together, where C2/C3 improve one page shape) and dropping C4b, whose cost this plan overstated: the
 `Block` representation it was said to need **already exists**, as `treatment`/`role`, and § D says so
-in its own first line. Two scope calls are open for Greg and named in § C5. Scope narrowed after
-review.** The model repair pass Greg asked for is
+in its own first line. **Astra was then asked and disagreed with Fable**, ranking a bounded recovery
+stage first; a census broke the tie (41 data tables in the corpus, 34 kept, **7 lost**, 4 of them a
+reader's evidence) and Astra's ranking was adopted. **C4b is dropped, stage D deferred with all six
+visibility commitments intact, and C3 is next — diagnosed 2026-09-08 and much smaller than it was
+scoped as: the tables are deleted *before* candidate scoring, so there is no reinsertion problem and
+C2's rationale mostly goes with it.** Nothing of C3 is built yet. Scope narrowed after review.** The model repair pass Greg asked for is
 **not** in this plan — GPT Sol's review found its operation layer not yet designable, and it moves to
 its own plan with the preconditions named in
 [What this plan deliberately does not build](#what-this-plan-deliberately-does-not-build-the-model-repair-pass).
