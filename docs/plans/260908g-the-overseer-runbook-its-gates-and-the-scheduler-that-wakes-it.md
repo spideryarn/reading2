@@ -459,9 +459,28 @@ decision the Overseer makes on Greg's behalf be **somewhere he can easily review
 is not on the wire and not in the panel; and `notes.ts` is explicitly for facts about the Overseer's
 own condition — being deaf, losing a record — where a rule firing at the fleet is not that.
 
-The five updates a new event kind costs (`diff.ts`, `store.ts`'s `foldEvents`, `jobs.ts`'s
-`foldOccurrences` ignore list, and `scripts/overseer.ts`'s `EVENT_KINDS` and `describeEvent`) are
-each compiler-enforced by a `never`, so the cost is real but nothing can be silently missed.
+**I first wrote that a new event kind costs five compiler-enforced updates. It is six, and the sixth
+is not compiler-enforced.** Checked before the number went into a brief, because an unchecked claim
+in a brief is how a wrong number becomes a comment in the source.
+
+1. `tools/overseer/diff.ts:616` — the union itself.
+2. `tools/overseer/store.ts:952` — `EVENT_KINDS`, a `Record<OverseerEvent["kind"], true>`, so a
+   missing key does not compile.
+3. `tools/overseer/store.ts:1837` — `foldEvents`.
+4. `tools/overseer/jobs.ts:594` — `foldOccurrences`'s explicitly-named ignore list.
+5. `scripts/overseer.ts:189` and `:243` — a **second** `EVENT_KINDS` and `describeEvent`.
+6. **`tools/overseer/store.ts:1097` — `parseEvent`, and this one is a runtime parser.**
+
+Six is the fact; the sixth is the finding. `EVENT_KINDS` being a total record means the *key* cannot
+be forgotten, but **the parse branch for the new arm can be**, and nothing refuses to compile if it
+is. The failure that produces is the shape this project keeps meeting: the event appends to
+`events.jsonl` perfectly, and comes back on the next read as
+*"kind … is not an event this version knows"*. A write that succeeds and a read that quietly refuses
+it — [silent-success.md](../reusable/silent-success.md) with the halves in the inconvenient order,
+because the damage is done in one process and discovered in another.
+
+So the acceptance test for the new arm is **round-trip, not append**: write one, read it back through
+`parseEvent`, and assert on what comes out. An append that returns `ok` proves nothing here.
 
 #### Build order, revised
 
@@ -514,14 +533,31 @@ actually read**, is more than `OVERDUE_GRACE_MS` (5 minutes) in the past, **and 
 since**. That third clause is the whole difficulty — it is what tells a wake-up that never fired
 apart from one that fired and went quiet — and it is already written and already tested.
 
-So the wake-check has no detector to build. What it lacks is a **consumer**: nothing anywhere reads
-`overdue` and does anything about it. That is a one-line read in rule 3 plus the durable record of
-who was told and when, and it moves the wake-check from the largest piece of 3b to the smallest.
+So the wake-check has no detector to build.
 
-**The pattern is now three for three in this job** — the scheduler seam, the kill machinery, and the
-wake-check were each already built and each waiting for a caller. It is worth saying plainly because
-it keeps being the answer: **the thing missing from this codebase is almost never the mechanism, it
-is the thing that decides to use it.**
+**I then wrote that nothing anywhere reads `overdue`, and that was wrong.** The field's author
+checked it end to end rather than from memory and found the reader: it crosses the wire in
+`types.ts`, deliberately untouched by the clock-skew shift because it is the server's judgement
+rather than a time the browser may reinterpret, and `PauseLine.tsx:175` draws it in the alarm colour
+— *"wake-up — overdue 22m"*, with the due time on the card. It landed with its consumer this
+afternoon.
+
+The mistake is worth keeping because of its shape. *"Nothing reads it"* is a claim about the whole
+repository, and I checked it against `tools/overseer/`, which is the directory I was standing in.
+The field is declared in `wire.ts` and its only reader is in the browser, so the search I ran could
+only ever have found the producer. **Same class as the census that counted its own `grep`, and as
+the impossibility claim that did not name its domain** — a claim about a domain checked against a
+subset of it, and the third instance today.
+
+**What survives is sharper than what I wrote, not weaker.** `overdue` has a *human* consumer and no
+automated one. So does the kill machinery — `selectForKill` is reached by a person pressing a button
+on a phone. That is the real pattern, and it is the case for the Overseer stated in one line: the
+mechanisms here are built, correct, and each waits on somebody noticing. The scheduler seam was the
+one genuine orphan.
+
+For 3b this means the wake-check is a one-line read plus the durable record of who was told and
+when — the smallest piece of the stage rather than the largest, and its hard half is already written,
+already tested, and already trusted enough to be drawn in the loud colour.
 
 #### The one question that is Greg's, and it blocks nothing
 
