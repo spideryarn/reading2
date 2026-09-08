@@ -88,7 +88,7 @@ region, labelled, and never as absence-of-reading.
 
 **In the dashboard process, appended from `refreshOnce`.**
 
-[orchestrator-direction.md § Two tenses](../project/orchestrator-direction.md#two-tenses-the-seam-between-the-overseer-and-the-dashboard)
+[overseer-direction.md § Two tenses](../project/overseer-direction.md#two-tenses-the-seam-between-the-overseer-and-the-dashboard)
 assigns *"the vitals history"* to the Overseer's past tense. This plan puts it in the dashboard, and
 that divergence is deliberate, agreed between the two sessions on 2026-09-08, and left for Greg to
 settle in the doc rather than settled here:
@@ -102,7 +102,7 @@ settle in the doc rather than settled here:
 - A history whose writer depends on two processes has two ways to develop holes.
 
 > take it. Your argument beats the direction doc's assignment. […] Note the divergence in your plan
-> and let Greg move the doc; I will not edit orchestrator-direction.md out from under you.
+> and let Greg move the doc; I will not edit overseer-direction.md out from under you.
 >
 > — the `orchestrator-setup` session, 2026-09-08
 
@@ -272,7 +272,7 @@ Each is a commit, and each is worth having if the next never lands.
 - [x] Force each of the four states and photograph them: a real gap (stop the server for a few
       minutes), a `collector-failed` turn, an `unknown` reading, a fresh store with three samples.
 - [x] GPT Sol on the built code, with the diff and the screenshots.
-- [x] Docs: a section in `orchestrator-direction.md` or its own file, and the line under the entry
+- [x] Docs: a section in `overseer-direction.md` or its own file, and the line under the entry
       point that owns it.
 
 ## What the plan review changed — GPT Sol, 2026-09-08
@@ -368,7 +368,7 @@ complexity bought with nothing.
 parameter away.
 
 **Update the standing ownership doc before implementing.** *Accepted, done by
-`orchestrator-setup`* in the same commit as the lock extraction — `orchestrator-direction.md`
+`orchestrator-setup`* in the same commit as the lock extraction — `overseer-direction.md`
 § Two tenses now carries the divergence, marked as agreed between the two sessions rather than
 decided by one, and says explicitly that changing the assignment itself is Greg's call.
 
@@ -495,5 +495,5 @@ follow-ups below rather than pretended away.
   to.
 - [260907e-agent-fleet-dashboard.md](260907e-agent-fleet-dashboard.md) — the dashboard, its stages,
   and the middle robustness tier this sits in.
-- [orchestrator-direction.md](../project/orchestrator-direction.md) — the standing direction, and the
+- [overseer-direction.md](../project/overseer-direction.md) — the standing direction, and the
   § Two tenses that this diverges from.
