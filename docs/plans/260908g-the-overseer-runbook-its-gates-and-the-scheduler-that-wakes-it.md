@@ -224,7 +224,7 @@ way it worked this morning, and nothing half-built is load-bearing.
 |---|---|
 | **1** — the runbook and the gates | **done**, `dev`. `docs/project/overseer.md`, four gates. The `/overseer` skill was deleted on 2026-09-08 — see the stage. |
 | **2** — the scheduler and the watchdog | **done**, `dev`, after two GPT Sol rounds. **Armed by `OVERSEER_JOBS_ENABLED` and OFF.** |
-| **3** — the three deterministic rules | **3a done, 2026-09-08 evening; Sol's code review answered the same night.** The protocol and rule 2 are built, fired against the live specimen, and green. 3b–3d not started. Fable arbitrated how much each rule may act; Sol blocked the first draft with four P0s, all accepted, then reviewed the code and raised four more — four fixed, three deferred onto 3d. The acting rule is still last, now behind **five** named preconditions. |
+| **3** — the three deterministic rules | **3a and 3b done, 2026-09-08 night, both Sol-reviewed.** Two of the three rules run: rule 2 (wedged work) and rule 1 (launch-mode drift), both observe-only, both fired against real specimens, 305 tests green. The protocol has its own pinned file. **3c and 3d not started** — 3c is the review surface, and 3d, the only rule that would *act*, is behind **five** named preconditions and a decision of Greg's. Fable arbitrated how much each rule may act; Sol blocked the plan with four P0s and the code with four more. |
 | **4** — the deferral queue | **not started.** |
 | **5** — reboot revival | **not started.** Needs a new verb: `gjd-remote resume` is `attach`. |
 | **6** — CLI ergonomics, and the rename | **the rename is done**; the CLI is not started. |
@@ -917,6 +917,66 @@ specimen and that specimen no longer exists**, so it remains the guess Sol calle
 even the one case. And Greg's instruction — leave it standing as a test case — was overtaken by
 events rather than followed, so **a future demonstration needs a new specimen**, which is a thing to
 make deliberately rather than wait for.
+
+#### Stage 3b, and the two things it settled against this plan
+
+Landed 2026-09-08 night: `tools/overseer/rule-protocol.ts` holds everything deciding *whether and how
+a rule acts*, `RULE_SOURCES` pins that instead of `scheduler.ts`, and rule 1 fired for real against a
+deliberately-made specimen. 7 files / 305 tests, typecheck 0, verified after the merge.
+
+**The pin test asserts both directions and checks each is non-vacuous first**, which is the detail
+that makes it worth anything: a test proving only that the protocol *is* covered would also pass if
+`RULE_SOURCES` named the whole repository. Confirmed live — rewording `describeReport` and editing
+`sweep` leave the pin current; weakening the disposition switch takes it stale. That is exactly the
+pair Stage 3b existed to produce.
+
+**This plan was wrong about the second HTTP request, and the argument that settles it is not the one
+I would have used.** I wrote that the rules should read the daemon's held payload because *"no second
+HTTP client"*; the implementer did a `GET` instead and is right. The constraint that section actually
+cares about — do not widen `ObservedRow`, do not open `observation.ts` — is untouched, and **a second
+*mechanism* for looking at the fleet is worse than a second *request* to a route that serves a cached
+string.** Sol then demolished the implementer's own best argument for it and agreed with the verdict
+anyway: a held payload's `servedAt` is **frozen**, so it would look permanently fresh, and the
+staleness threshold only means anything because a `GET` re-serves it.
+
+**And the fingerprint covers less than 3a implied**, self-reported rather than found: `rule-protocol.ts`
+does not itself `fsync` — unpinned `store.ts` does, so deleting `fsyncSync` leaves every pin current —
+and `scheduler.ts` can still change *whether and how often* a rule runs even though it no longer
+decides *what* a rule does. `rule-jobs.ts` now states that boundary under *What the fingerprint does
+NOT cover* rather than implying a stronger one. **The pin is a guard on the decision, not on the
+whole causal chain**, and a plan that let it read as the latter would be worse than one admitting it.
+
+#### Counting four arms buys nothing if the decision has two
+
+Sol's review of 3b found the same failure twice, one level in from where the implementer was looking,
+and it is the sharpest instance of the day's theme because the *mutations were already there*.
+
+**F1.** Rule 1 preserved all four `PaneAutoMode` arms in its counts — and then returned `nothing` when
+a session was unreadable, which settles as `nothing-to-do`. So the four counts survived in prose while
+**the discriminant every consumer branches on collapsed `cannot-tell` into the healthy answer.** Nine
+mutations had been written against this code and all nine lived inside the counting rather than the
+deciding. Now three-valued.
+
+**F2.** The observer trusted rows out of a payload whose own collection had failed — **which is
+exactly the payload my own outage produced an hour earlier** — and the fixture omitted the `error`
+field entirely, so no test over it could ever have caught the case. The dashboard serves its last-good
+rows after a failed collection, so those rows are real, plausible, and describe a box that may have
+moved on.
+
+Both changed what the rule *decides*, not what it reports. **A mutation suite can be thorough about
+the wrong half**, and "seventeen mutations, all caught" is compatible with none of them touching the
+branch that matters.
+
+#### The guard against damaging the box could have damaged the box
+
+The specimen-maker was written *because* a hand-made specimen had just blinded the fleet. Its `stop`
+verb passed a bare `-t <name>` to tmux — **which resolves by prefix, not exact match** — so on a box
+carrying twenty-odd sessions it could have killed a stranger whose name merely started the same way.
+Fixed with tmux's `=` exact-match prefix.
+
+Worth keeping because of where it sits: the fix for one blast-radius mistake carried another, in the
+same file, aimed at the same box. **The instinct that writes a guard is not the instinct that checks
+the guard's own target resolution**, and nothing about `-t foo` looks dangerous.
 
 #### SP-11, and a number I sent to somebody else
 
