@@ -85,10 +85,14 @@ export type SeenQuestion = Extract<PaneQuestion, { kind: "question" }>;
  *    a message aimed at what somebody read ten minutes ago lands in whatever is
  *    there now. It is required for that reason, not optional with a fallback.
  *
- * `panePid` is optional because the dashboard row does not currently carry it.
- * When it is supplied it catches `respawn-pane`, which keeps the pane id and
- * starts a new process — the one way a pane's contents change identity without
- * the pane id changing. Supply it when you have it.
+ * `panePid` stays optional, and the dashboard row does now carry it (`FleetRow`,
+ * since 2026-09-08 — tmux is asked for `#{pane_pid}` in the same listing that
+ * gives us the pane handle). It catches `respawn-pane`, which keeps the pane id
+ * and starts a new process, the one way a pane's contents change identity
+ * without the pane id changing. It is optional rather than required because a
+ * pid tmux would not tell us must degrade to "no respawn check" rather than
+ * making the row unsteerable: every other guard here still applies. Supply it
+ * when you have it, which is nearly always.
  */
 export type SteerTarget = {
   /** tmux pane handle: `%` and digits. */

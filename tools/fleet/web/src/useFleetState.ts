@@ -34,6 +34,21 @@ export type FleetFeed = {
   error: string | null;
   /** How many refreshes have failed in a row. Zero after any success. */
   failures: number;
+  /**
+   * **How long the server actually leaves between collections**, learnt by
+   * watching, or null until two distinct snapshots have arrived.
+   *
+   * The staleness threshold is derived from this rather than written down (see
+   * `freshness` in Header.tsx). It is measured rather than assumed because the
+   * cadence is not ours: the collector runs every 55–60s today because a
+   * collection costs the box ten seconds of work, and that number will move the
+   * next time the box's load does. A threshold that does not move with it is a
+   * banner that cries wolf, which is what a 30-second constant was doing.
+   *
+   * `state.refreshMs` beats this when the server ever starts sending it: being
+   * told is better than inferring, and the inference needs two payloads.
+   */
+  cadenceMs: number | null;
   /** Ask now. Wired to the button the stale banner shows. */
   refresh: () => void;
 };
@@ -62,6 +77,11 @@ export function useFleetState(transport: Transport = DEFAULT_TRANSPORT): FleetFe
   const [receivedAt, setReceivedAt] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [failures, setFailures] = useState(0);
+  const [cadenceMs, setCadenceMs] = useState<number | null>(null);
+  /* When the box was last collected, as of the previous payload — the other
+     half of the subtraction above. A ref, because it is read inside the
+     transport's callback and must not re-run the effect. */
+  const lastCollected = useRef<number | null>(null);
   /* The handle, kept in a ref so `refresh` is stable across renders and so the
      button does not have to be re-bound every five seconds. */
   const handle = useRef<{ refresh: () => void } | null>(null);
@@ -73,6 +93,21 @@ export function useFleetState(transport: Transport = DEFAULT_TRANSPORT): FleetFe
         setReceivedAt(Date.now());
         setError(null);
         setFailures(0);
+        /* The gap between two DISTINCT collections, which is not the gap
+           between two polls: the server caches, so several polls in a row hand
+           back the same snapshot and `at > previous` is what tells them apart.
+           The last gap rather than an average, so a cadence that changes is
+           followed rather than smoothed away; the bounds throw out a clock jump
+           and a first payload whose `collectedAt` predates this tab. */
+        const at = next.collectedAt === null ? Number.NaN : Date.parse(next.collectedAt);
+        if (Number.isFinite(at)) {
+          const previous = lastCollected.current;
+          if (previous !== null && at > previous) {
+            const gap = at - previous;
+            if (gap >= 5_000 && gap <= 30 * 60_000) setCadenceMs(gap);
+          }
+          lastCollected.current = at;
+        }
       },
       onError: (message) => {
         // The state is deliberately untouched. See the header.
@@ -93,8 +128,9 @@ export function useFleetState(transport: Transport = DEFAULT_TRANSPORT): FleetFe
       receivedAt,
       error,
       failures,
+      cadenceMs,
       refresh: () => handle.current?.refresh(),
     }),
-    [state, receivedAt, error, failures],
+    [state, receivedAt, error, failures, cadenceMs],
   );
 }

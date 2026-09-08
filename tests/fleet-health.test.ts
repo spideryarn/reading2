@@ -74,8 +74,16 @@ describe("parseMemory", () => {
     // The real capture: free was 5472649216, available was 12811866112 —
     // available is the bigger number, which is the whole point of reading it
     // instead of free (idle RAM spent on cache, handed back on demand).
-    expect(r.availableKiB).toBe(12811866112);
-    expect(r.availableKiB).toBeGreaterThan(5472649216);
+    // BYTES, and the field name now says so. It said `availableKiB` until
+    // 2026-09-08, and this test passed the whole time — it asserted the number
+    // against the wrong name, so the name could not be wrong. The page drew
+    // "10298 GiB of 31337 GiB" and a browser found it.
+    expect(r.availableBytes).toBe(12811866112);
+    expect(r.availableBytes).toBeGreaterThan(5472649216);
+    // The unit, pinned as a magnitude: this box has ~32 GB, so `totalBytes`
+    // is tens of billions. A field that ever holds KiB would be ~32 million,
+    // which is what this bound catches and what the name alone did not.
+    expect(r.totalBytes).toBeGreaterThan(1e10);
     expect(r.availableFraction).toBeCloseTo(12811866112 / 32859295744, 6);
   });
 
@@ -105,8 +113,8 @@ describe("parseSwap", () => {
     expect(r.kind).toBe("value");
     if (r.kind !== "value") throw new Error("unreachable");
     expect(r.areas).toBe(2);
-    expect(r.totalKiB).toBe(17179865088 * 2);
-    expect(r.usedKiB).toBe(12383318016 + 8163016704);
+    expect(r.totalBytes).toBe(17179865088 * 2);
+    expect(r.usedBytes).toBe(12383318016 + 8163016704);
     expect(r.usedFraction).toBeCloseTo((12383318016 + 8163016704) / (17179865088 * 2), 6);
   });
 
@@ -237,8 +245,8 @@ describe("computeVerdict", () => {
   // reads as "everything is fine except X" rather than restating five fields.
   const healthy: Parameters<typeof computeVerdict>[0] = {
     load: { kind: "value", load1: 2, load5: 2, load15: 2, cores: 16, ratio1: 2 / 16 },
-    memory: { kind: "value", totalKiB: 100, availableKiB: 60, availableFraction: 0.6 },
-    swap: { kind: "value", totalKiB: 100, usedKiB: 10, usedFraction: 0.1, areas: 1 },
+    memory: { kind: "value", totalBytes: 100, availableBytes: 60, availableFraction: 0.6 },
+    swap: { kind: "value", totalBytes: 100, usedBytes:10, usedFraction: 0.1, areas: 1 },
     disk: { kind: "value", totalKiB: 100, usedKiB: 40, availableKiB: 60, usePercent: 40 },
     swapActivity: { kind: "value", siKBs: 0, soKBs: 0, waPercent: 1, activelySwapping: false },
   };
@@ -252,7 +260,7 @@ describe("computeVerdict", () => {
   it("says critical when swap is at the cliff, even though nothing else is bad", () => {
     const v = computeVerdict({
       ...healthy,
-      swap: { kind: "value", totalKiB: 100, usedKiB: 99, usedFraction: 0.99, areas: 1 },
+      swap: { kind: "value", totalBytes: 100, usedBytes:99, usedFraction: 0.99, areas: 1 },
     });
     expect(v.level).toBe("critical");
     expect(v.reasons.some((r) => r.includes("cliff"))).toBe(true);
@@ -261,7 +269,7 @@ describe("computeVerdict", () => {
   it("does not raise the level on swap fill alone below the cliff — some swap used is normal", () => {
     const v = computeVerdict({
       ...healthy,
-      swap: { kind: "value", totalKiB: 100, usedKiB: 50, usedFraction: 0.5, areas: 1 },
+      swap: { kind: "value", totalBytes: 100, usedBytes:50, usedFraction: 0.5, areas: 1 },
     });
     expect(v.level).toBe("ok");
   });
@@ -294,7 +302,7 @@ describe("computeVerdict", () => {
   it("stays readable from partial data: one core reading known is enough to avoid `unknown`", () => {
     const v = computeVerdict({
       load: { kind: "unknown", why: "uptime failed" },
-      memory: { kind: "value", totalKiB: 100, availableKiB: 60, availableFraction: 0.6 },
+      memory: { kind: "value", totalBytes: 100, availableBytes: 60, availableFraction: 0.6 },
       swap: { kind: "unknown", why: "swapon failed" },
       disk: { kind: "value", totalKiB: 100, usedKiB: 40, availableKiB: 60, usePercent: 40 },
       swapActivity: { kind: "skipped" },
