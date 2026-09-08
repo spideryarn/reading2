@@ -880,10 +880,33 @@ still have been green. Read the merge's file list first and pick from that. In t
 
 **The cost of being wrong here is real and should be named**, not waved past: a merge can land
 something that only the full suite would catch, and this trade will eventually let one through. The
-bet is that a red found by the next agent's gate, on a shared trunk that builds nothing, is cheaper
-than an hour per push spent re-establishing facts about vanished trees. If that stops being true —
-`main` deploys from `dev`, or the fleet quietens down — the trade should be revisited rather than
-inherited.
+bet is that a red found later, on a shared trunk that builds nothing, is cheaper than an hour per
+push spent re-establishing facts about vanished trees.
+
+> **Corrected by 260907e, 2026-09-08 05:10, and the correction makes the trade safer rather than
+> riskier.** The paragraph above originally named *"`main` deploys from `dev`"* as a future condition
+> that would invalidate the bet. **It is already the case** — `TRUNK_BRANCH = "dev"`
+> ([scripts/deploy-checks.ts:186](../../scripts/deploy-checks.ts)) and `dev` is deploy's only accepted
+> source since the trunk flip on 2026-09-02. A trigger written as *if this ever happens* when it
+> happened six days ago reads, to the third person to find this, as a rule whose condition has quietly
+> fired.
+>
+> **And what actually protects production is not the next agent's gate.** `npm run deploy` runs the
+> gates itself, against **a worktree of the exact sha**, and pushes that sha by name
+> (`<sha>:refs/heads/main`) rather than pushing whatever `main` has become — precisely because a green
+> working tree here has broken `main` three times. So a red that slips onto `dev` is caught by the
+> deploy's own gate before it can reach a reader.
+>
+> That changes what the downside *is*. It is **not** "production ships something broken"; it is
+> "another agent loses twenty minutes establishing that a red is not theirs" — which is exactly what
+> the measurement above cost 260907e, from the other side. That is a real cost and worth naming. It
+> is a smaller one than the original paragraph implied.
+>
+> **The triggers that would genuinely invalidate the bet**, replacing the two above: if `npm run
+> deploy` stopped gating the sha it ships; if it accepted a source other than the trunk; or — the one
+> shaped like a moment rather than a state — **if you are the last agent awake**. The bet assumes
+> somebody's gate runs after yours. At 05:00 with the fleet asleep, nothing re-checks `dev` until
+> morning, and the person who finds it will not be the person who can explain it.
 
 ### The normaliser should refuse, not rely on a hand check
 
