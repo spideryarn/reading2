@@ -16,7 +16,10 @@
  * differently is run it through `bash` instead of `ssh`, because we are already
  * on the box it wants to ask.
  */
-import { execFileSync } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
+import { promisify } from "node:util";
+
+const run = promisify(execFile);
 
 import { buildSessionScript, parseSessions, type Session } from "../../scripts/gjd-remote-tmux.js";
 import { capturePane, parsePane, type PaneQuestion } from "./pane.js";
@@ -68,14 +71,6 @@ export type FleetSnapshot = {
 };
 
 /**
- * The worktree's directory name, for a session inside one.
- *
- * Worktrees live at `<repo>/.claude/worktrees/<name>`, so the segment after
- * `worktrees` is the name. Returns null for a session sitting in a plain
- * checkout, which is not the same as an unknown — the caller renders it as
- * blank rather than as a guess.
- */
-/**
  * Session handle → pane handle, for every pane tmux knows about.
  *
  * ONE CALL FOR THE WHOLE BOX rather than one per session. Exported and taking
@@ -96,6 +91,14 @@ export function panesBySession(listPanesOutput: string): Map<string, string> {
   return out;
 }
 
+/**
+ * The worktree's directory name, for a session inside one.
+ *
+ * Worktrees live at `<repo>/.claude/worktrees/<name>`, so the segment after
+ * `worktrees` is the name. Returns null for a session sitting in a plain
+ * checkout, which is not the same as an unknown — the caller renders it as
+ * blank rather than as a guess.
+ */
 export function worktreeOf(dir: string): string | null {
   const parts = dir.split("/");
   const at = parts.lastIndexOf("worktrees");
@@ -148,12 +151,14 @@ export function toRows(
  * tell busy from idle from parked-on-a-question. It costs about a second, and
  * the flag exists so that callers which do not need states cannot hang on it.
  *
- * THE STATUS IS ATTACHED TO EACH ROW HERE, not carried alongside as a Map, and
- * that is not a style choice. `server.ts` serves `/api/agents` by
- * `JSON.stringify`ing this snapshot, and a `Map` stringifies to `{}` — the
- * status would vanish from the JSON with nothing erroring anywhere, which is
- * the exact shape of bug docs/reusable/silent-success.md is about.
+ * THE STATUS IS ATTACHED TO EACH ROW, not carried alongside as a Map, and that
+ * is not a style choice. `server.ts` serves the snapshot by `JSON.stringify` —
+ * and a `Map` stringifies to `{}`, so the status would vanish from the JSON
+ * with nothing erroring anywhere, which is the exact shape of bug
+ * docs/reusable/silent-success.md is about. See `snapshotFrom`, and the JSON
+ * round-trip test that pins it.
  */
+
 /**
  * Every pane on the box, keyed by its session. Empty on failure rather than
  * throwing: not knowing a pane costs a question, while the row itself is still
@@ -172,9 +177,43 @@ function panes(): Map<string, string> {
   }
 }
 
-export function collect(): FleetSnapshot {
+/**
+ * The shell we ask the box, as a function so a test can look at it.
+ *
+ * `agents: true` is load-bearing and was invisible: flipping it to `false`
+ * left every test green while the live dashboard degraded every Claude row to
+ * `unknown`, because the status tests inject an agents map directly and never
+ * touch this call. GPT Sol's F5. `tests/fleet-collect.test.ts` now asserts this
+ * script differs from the agents-free one, so the flag cannot be flipped in
+ * silence.
+ */
+export function sessionScript(): string {
+  return buildSessionScript({ agents: true });
+}
+
+/**
+ * A parse plus the pane map, as a snapshot. Pure, and separate from `collect`
+ * so the join can be tested without a box — including the JSON round trip,
+ * which is where a `Map` would vanish.
+ */
+export function snapshotFrom(
+  parsed: ReturnType<typeof parseSessions>,
+  panes: ReadonlyMap<string, string>,
+  tookMs: number,
+  now = new Date(),
+): FleetSnapshot {
+  const status = new Map(statusesOf(parsed).map((r) => [r.id, r.status]));
+  return { rows: toRows(parsed.sessions, status, panes), collectedAt: now.toISOString(), tookMs };
+}
+
+export async function collect(): Promise<FleetSnapshot> {
   const startedAt = Date.now();
-  const out = execFileSync("bash", ["-c", buildSessionScript({ agents: true })], {
+  // ASYNC, AND THAT IS NOT TIDINESS. This was `execFileSync`, which blocks the
+  // whole event loop — so for the eight to twelve seconds a collection takes,
+  // the server answered nothing at all. The cache made the *data* instant and
+  // left every request queued behind the collector anyway, which is a page that
+  // hangs exactly when you refresh it during a refresh. GPT Sol's F3.
+  const { stdout: out } = await run("bash", ["-c", sessionScript()], {
     encoding: "utf8",
     // Transcripts run to tens of megabytes and the script prints a base64 of
     // its own output; the default 1 MB would truncate a busy box silently.
@@ -183,8 +222,8 @@ export function collect(): FleetSnapshot {
   });
   const parsed = parseSessions(out);
   if (parsed.failure) throw new Error(`could not read this box's tmux sessions: ${parsed.failure}`);
-  const status = new Map(statusesOf(parsed).map((r) => [r.id, r.status]));
-  const rows = toRows(parsed.sessions, status, panes());
+  const snapshot = snapshotFrom(parsed, panes(), 0);
+  const rows = snapshot.rows;
 
   // ASK ONLY THE BLOCKED ONES what they are asking. A capture is cheap, but a
   // capture per session per refresh is ~35 of them on a box that fell over
@@ -202,9 +241,5 @@ export function collect(): FleetSnapshot {
     }
   }
 
-  return {
-    rows,
-    collectedAt: new Date().toISOString(),
-    tookMs: Date.now() - startedAt,
-  };
+  return { ...snapshot, collectedAt: new Date().toISOString(), tookMs: Date.now() - startedAt };
 }

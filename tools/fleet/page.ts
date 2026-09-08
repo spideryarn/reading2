@@ -107,10 +107,15 @@ export function page(snap: FleetSnapshot | null, error: string | null, now = Dat
   // agents-call failure turns every Claude row unknown at once, and a header
   // reading "0 need you" over eleven unanswerable rows would be exactly the lie
   // the status module exists to prevent.
+  // `other` is NOT "idle": it holds waiting, no-agent and shell rows too — a
+  // busy shell running the test suite among them — and `unknown` is counted
+  // separately, so labelling it "idle" both overcounted and double-counted.
+  // Two unknown rows read as "2 idle · 2 unknown". GPT Sol's F2. The honest
+  // label is the vague one.
   const tally = [
     counts.needsYou ? `<b>${counts.needsYou} need you</b>` : "",
     counts.working ? `${counts.working} working` : "",
-    counts.other ? `${counts.other} idle` : "",
+    counts.other - counts.unknown > 0 ? `${counts.other - counts.unknown} other` : "",
     counts.unknown ? `<b>${counts.unknown} unknown</b>` : "",
   ]
     .filter(Boolean)
