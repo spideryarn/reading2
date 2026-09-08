@@ -1,8 +1,8 @@
 # Agent fleet dashboard
 
-**Status as of 2026-09-08 13:15: important work left — the page does what it claimed, the durable
-repair for why it did not has landed for one endpoint of four, and the work is now spread across six
-sessions instead of one.**
+**Status as of 2026-09-08 15:40: important work left, and most of it is other sessions landing
+rather than this one building. Six of the seven wave workstreams are on `dev`; two branches are
+finished and unpushed.**
 
 **The buttons work.** All seventeen session actions and the three box actions render on the real page,
 checked in a browser at phone width and not merely in a suite. Recent messages are wired. A queued
@@ -39,17 +39,30 @@ transitive closure under DOM-only libs, so one `import type` makes the typecheck
 endpoint of four is migrated; see Stage v0.8a for what is left and for the two corrections the plan
 doc needed.
 
-**What is left, in order:**
+**What is left, in order.** v0.4g and v0.4h are both **landed** since the previous version of this
+list; what remains is smaller and mostly not this session's.
 
-1. **v0.4g — declutter the session detail view.** A needs-you detail view is **3,398px tall at
-   390px wide: four screens of scrolling, 31 buttons, two text inputs**, measured in a real browser
-   rather than estimated. Fable is ruling on it now, from the screenshots.
-2. **v0.4h — "working" is hiding at least three states.** Blocked on the usage-limit collector's
-   field names, which `w2-usage-limits` is sending. Fable's product ruling already exists.
-3. **The rest of v0.8a** — three endpoints, ~30 twin declarations, and one (`FleetRow`) that cannot
-   migrate the same way at all.
-4. **The systemd cutover**, which is Greg's to run — `sudo systemctl enable` is refused for agents on
-   this box. Script prepared 2026-09-08 12:00, unrun.
+1. **Two finished branches, unpushed.** `worktree-fleet-approval-binding` (nine commits: A9 ticked,
+   A10's prose half built — `sendMessage` now refuses a pane whose input box has anything in it,
+   proved end to end against a live session) and `worktree-attention-inbox`. Both waiting on their
+   own reviews. Nothing to build; somebody has to land them.
+2. **The rest of v0.8a** — three endpoints, ~30 twin declarations, and one (`FleetRow`) that cannot
+   migrate the same way at all. About a day, and the value is now measured rather than argued.
+3. **The systemd cutover**, which is Greg's to run — `sudo systemctl enable` is refused for agents on
+   this box. Script prepared 2026-09-08 12:00, unrun. **Step 3 is a decision, not a check**: it is
+   the moment the dashboard becomes tailnet-reachable, and `w2-fleet-dictation` measured that
+   `navigator.mediaDevices` is *absent* (not degraded) at the tailnet address, so HTTPS there is a
+   feature prerequisite rather than a nicety.
+4. **v0.4j — the phone's clock**, written up 2026-09-08 and not started. Two alarms on this page can
+   be manufactured by a browser clock a few minutes fast.
+5. **v0.2c's other half** — delivery receipts and action ids. The browser now reads `delivery`; the
+   five states and the repeat-retrieves-the-receipt rule are not built.
+
+**Two product questions are Greg's and are not blocked on anything.** Whether the cutover should
+widen the bind at all, and what to do about a card that draws **five identical full-width
+UNCLASSIFIED pills** — every option on an agent-authored `AskUserQuestion` is unclassified by
+construction, so the badge distinguishes nothing *within* that card while teaching a reader to stop
+seeing it. `CONSEQUENCE_TONE`'s inequality is right and is not the thing to change.
 
 **Who is doing what, agreed 2026-09-08 13:00 across six sessions.** Greg asked for the remaining work
 to be fanned out; this is the split, and the seam in every case is a **type**, not a schedule.
@@ -622,7 +635,14 @@ model's reading:**
   could not count them reliably — the panes redraw between captures — so the "ten with a proposed
   answer attached" figure stays Fable's observation rather than a measured one.
 
-### 🔴 Stage v0.2b: an approval must bind to what is being approved — BLOCKS v0.4
+### ✅ Stage v0.2b: an approval must bind to what is being approved (landed 2026-09-08, `6fbb1f56` · `688bd699` · `44f60619`)
+
+**This stage read 🔴 and "BLOCKS v0.4" for most of a day after it had shipped, and that cost
+somebody most of a morning nearly rebuilding it.** The plan doc being three commits behind the code
+is the same class as the bug it describes: a document that says a safeguard is missing when it is
+present is as expensive as one that says a safeguard is present when it is missing — the first
+buys a rebuild, the second buys an incident. Fixed 2026-09-08 by the session that went looking for
+the work and found it done. v0.4 shipped; the block is lifted.
 
 **Found by GPT Astra, 2026-09-08, by experiment rather than by reading**, and confirmed here
 against `promptAbove` in `pane.ts`. It changed a proposed file's contents from `hello` to
@@ -639,16 +659,42 @@ Two consequences, and the second is worse than the first:
 - the re-capture guard passes when the material has changed underneath it;
 - **the phone can ask Greg to approve something without showing him what it is.**
 
-- [ ] `PaneQuestion` carries the **material**: the command, the diff, the destination path, the
-      permission scope — whatever is above the rule, not merely the sentence below it.
-- [ ] `sameQuestion` compares the material. A capture that cannot read it is a **refusal**, not a
-      question with an empty material field.
-- [ ] Where the capture is incomplete, offer a handoff (`gjd-remote resume <name>`) rather than a
-      button. Astra's recommendation, and the right shape: a button that cannot be honest should
-      not exist.
-- [ ] **"Yes once" and "yes, and don't ask again" get visibly different treatment.** One is a
-      decision about this action; the other changes the session's permission posture for
-      everything that follows, and they currently render as two adjacent list items.
+- [x] `PaneQuestion` carries the **material**: the command, the diff, the destination path, the
+      permission scope — whatever is above the rule, not merely the sentence below it. `6fbb1f56`.
+      Three arms rather than a nullable string, because `no-material` (a `/loop` menu, where the
+      options are the whole question) and `unreadable` (there is a dialog here and we could not see
+      what it is about) are opposite claims that would draw the same empty box. `materialAbove` is
+      bounded by the dialog's **top** border rather than by the last rule, which was the bug.
+- [x] `sameQuestion` compares the material. A capture that cannot read it is a **refusal**, not a
+      question with an empty material field. `688bd699`. `sameMaterial` returns false for
+      `unreadable` **including against another `unreadable`**: two screens we could not read are not
+      evidence that they are the same screen.
+- [x] **Half done, and now finished.** An `unreadable` material already takes the buttons away
+      whatever the caller asked for (`44f60619`) — but the card said only "Answer it in the
+      terminal", which is correct and useless to somebody holding a phone in another room. It now
+      prints the command, `gjd-remote resume <name>`, as selectable monospace text. A refusal that
+      does not name the next move is a refusal a person can do nothing with.
+- [x] **"Yes once" and "yes, and don't ask again" get visibly different treatment.** `44f60619`.
+      `classifyConsequence` reads the label into `once` | `persistent` | `decline` | `unknown`,
+      recomputed server-side in `parseQuestion` rather than believed off the wire, and the client
+      draws a `Consequence` pill beside each option. **`unknown` is drawn at least as loudly as
+      `persistent`**, held by an inequality over `CONSEQUENCE_TONE` that the suite asserts — draw
+      the conservative default in neutral grey and it becomes the safest-looking badge on screen,
+      which would inverse the guarantee by a colour choice.
+
+**Verified in a browser on 2026-09-08, not only in the suite.** A dialog was provoked on a
+throwaway session and the card drew all of it: the *"What you would be approving"* box with the
+material in it, the sha256 fingerprint and its sentence, the options as buttons with their
+keystrokes, and a consequence badge on every option with a working tooltip. Every part of this stage
+had tests before it had a screenshot, and this repo has four features that were built, tested,
+routed, shipped and dead.
+
+**One thing the screenshot showed that the tests could not.** On an agent's own `AskUserQuestion`
+every option is `unknown` by construction, so the card draws five identical full-width red badges on
+a phone. The tone rule is right and is not being softened — but it was calibrated for a permission
+dialog where the badge tells `once` from `persistent`, and a badge on every option distinguishes
+nothing within its own card. Left as a design question for Greg in
+[260908f](260908f-prose-needs-an-empty-input-box-not-merely-a-box.md), not patched here.
 
 ### ✅ Stage v0.2e: what answering a dialog *does* decides whether it may be answered (landed 2026-09-08)
 
@@ -708,7 +754,38 @@ unreachable in production**: every real cursor menu is a permission dialog and e
 `AskUserQuestion` is numbered. The branch stays, tested against a synthetic capture, because that is
 a fact about today's widgets rather than a guarantee.
 
-### Stage v0.2c: delivery has a third outcome, and it is "I do not know"
+### ✅ Stage v0.2f: prose needs an EMPTY input box, not merely a box (landed 2026-09-08)
+
+**The other half of Astra's A10**, and the half v0.2e above does not touch: v0.2e is about which
+recognised *dialogs* may be answered, and this is about prose typed at a pane whose state nobody has
+established. Its own doc, because two agents are editing this file today:
+**[260908f-prose-needs-an-empty-input-box-not-merely-a-box.md](260908f-prose-needs-an-empty-input-box-not-merely-a-box.md)**.
+
+`inputSurface` established that an input box EXISTS and never read what was in it. Measured
+read-only across every pane on this box on 2026-09-08: of seventeen Claude sessions with a prompt on
+screen, thirteen were empty and **three held a live draft** — `%218` on `❯ yes, shut it all down`,
+in a session running in auto mode. A Send there types our text onto the end of Greg's and our Enter
+submits the concatenation, so the dashboard delivers an approval nobody wrote, at a moment nobody
+chose, against whatever is on screen by then. **That is v0.2b's bug arriving through the prose door
+rather than the dialog door.**
+
+The existing fixture `none-typed-numbered-message-in-input-box.txt` reproduces it with no tmux — and
+the suite listed it under *"sends to every real screen that does have one"*, so until today the
+defect was not merely untested, it was asserted as correct.
+
+The fix is a narrowing rather than a check: `inputSurface` moved into `pane.ts` as a four-arm
+`PaneSurface` union — `dialog | empty-input | occupied-input | unrecognised` — and `sendMessage`
+requires `empty-input` where `answerQuestion` requires `dialog`, both under a `never`. Prose stops
+being established by absence and starts requiring strictly more evidence about the screen than
+answering does, which is what A10 asks for. **`occupied-input`, not `drafted-input`**: a capture
+cannot tell a person's half-typed reply from a suggestion the harness offered or the greyed hint a
+never-used session draws, and the name must not claim provenance the parser does not have.
+
+Refused in a real browser and then allowed in one — and two rounds of GPT Sol, the second of which
+found a comment in the first version that denied what the code beneath it did. Both are in
+260908f.
+
+### 🟡 Stage v0.2c: delivery has a third outcome, and it is "I do not know" (the browser reads it, 2026-09-08 `91e1f3a0`; receipts and action ids not started)
 
 Astra's A11. The nonce proved the transport *can* work; it says nothing about what happened to any
 later request. A phone loses connectivity after the keys land but before the response arrives; the
@@ -1193,7 +1270,7 @@ written for.
   being helpful — and it is indistinguishable from typed input by anything in a capture. The defence
   is the same one: never claim provenance you did not read.
 
-### 🔵 Stage v0.4h: "working" is hiding at least three different things
+### ✅ Stage v0.4h: "working" is hiding at least three different things (landed 2026-09-08 — reader `aade22b0`, render `91ce727c`, scoping `2bfe48dc`, usage seam `86151d30`)
 
 **Greg, 2026-09-08:** *"can you try and distinguish between statuses like `Working`, `Hit usage
 limits`, and `Paused/waiting` (e.g. because it's been asked to run Unix sleep or idle waiting for a
@@ -1434,7 +1511,7 @@ Greg's list, 2026-09-08: continue, compact, pull, push, remove worktree, exit, `
 - [ ] A queued item is visible and cancellable while it waits. A queue you cannot see is a queue
       that surprises you an hour later.
 
-### Stage v0.5b: dictation and live chat, ported
+### 🟡 Stage v0.5b: dictation and live chat, ported (dictation landed 2026-09-08, `c2d19b93`; live chat not started)
 
 Greg wants the product's voice machinery on every input box here — new session, steering, answers.
 See [dictation.md](../project/dictation.md) and

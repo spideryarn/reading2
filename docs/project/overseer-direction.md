@@ -967,10 +967,30 @@ been resource collapse rather than anything hostile. So this is scheduled work r
 the question sentence rather than to the diff is wrong even with no attacker at all — it can show
 Greg one thing and approve another after an ordinary re-render.
 
+**A9 and A10 landed on 2026-09-08** and are ticked in the table below rather than removed from it,
+because each carries a finding worth keeping. A9's is that binding an approval to the question
+sentence discards the diff *by construction*, not by a slip. A10's is sharper than the row says: the
+gap is not only that prose might append to a draft but that it **does**, and the concatenation is
+submitted as one turn — so the dashboard can deliver an approval nobody wrote, through the prose
+door rather than the dialog one. Proved end to end on a throwaway session, and the fix, the two
+things it cost and the two conclusions that turned out to be wrong are in
+[260908f-prose-needs-an-empty-input-box-not-merely-a-box.md](../plans/260908f-prose-needs-an-empty-input-box-not-merely-a-box.md).
+
+**One thing A10 did NOT close, stated because the row implies otherwise.** *"Or reach a foreground
+program"* is still open. Neither `#{pane_current_command}` nor `/proc`'s `tpgid` can see it —
+Claude, the pane's bash and any child share one process group on this box, measured on three panes.
+**And Claude Code's own `~/.claude/sessions/<pid>.json` is not the answer either**, which is worth
+recording because it looks like one: a guard on its `status: "shell"` was built and removed on
+2026-09-08, after GPT Sol read the 2.1.263 binary and found that the field means *idle with an
+unfinished `local_bash` task* — true whenever a backgrounded job is running behind a session that is
+perfectly able to receive a message. The guard would have refused every message to such a session
+indefinitely and starved its queue. The expression is quoted in `steer.ts`'s KNOWN GAPS so nobody
+rebuilds it from the same wrong premise.
+
 | | what | owner |
 |---|---|---|
-| **A9** | **Approval must bind to the material, not the sentence.** Astra changed a proposed file's contents from `hello` to `goodbye` and the pane parser returned an identical question and options — it keeps *"Do you want to create notes.md?"* and discards the diff. So an approval can be accepted after the thing being approved has changed, and the phone can ask for approval without showing what it is. Bind to command, diff, destination and permission scope; hand off to a terminal when the capture is incomplete; and make *"yes once"* and *"auto-approve this session"* visibly different. | dashboard |
-| **A10** | A live Claude descendant does not prove an **empty input box owns the keystrokes** — the text may append to a draft, hit a modal, or reach a foreground program. Make arbitrary prose a narrower capability than answering a recognised dialog. | dashboard |
+| **A9 ✅** | **Approval must bind to the material, not the sentence.** Astra changed a proposed file's contents from `hello` to `goodbye` and the pane parser returned an identical question and options — it keeps *"Do you want to create notes.md?"* and discards the diff. So an approval can be accepted after the thing being approved has changed, and the phone can ask for approval without showing what it is. Bind to command, diff, destination and permission scope; hand off to a terminal when the capture is incomplete; and make *"yes once"* and *"auto-approve this session"* visibly different. | dashboard |
+| **A10 ✅** | A live Claude descendant does not prove an **empty input box owns the keystrokes** — the text may append to a draft, hit a modal, or reach a foreground program. Make arbitrary prose a narrower capability than answering a recognised dialog. | dashboard |
 | **A11** | Delivery needs an **uncertain** state. A nonce proves the transport *can* work; it says nothing about later requests. Action IDs, and five states — accepted, keys submitted, reception observed, refused, outcome unknown — with a repeat retrieving the receipt. **Never auto-retry keystrokes.** | dashboard |
 | **A5** | **Reachability, but narrower.** The reference system we copied checked callers against `owner-logins.txt` before POSTs — *its write boundary was never reachability alone*, and we took the half we liked. The cheap fix is a device-scoped tailnet grant, not a login page. Tailscale's default policy is permissive, so verify rather than assume. | both |
 | **A6** | Treat the dashboard as a **privileged renderer of hostile content**: CSP and anti-framing before answer buttons. Origin checks do not stop a malicious page framing the real one. | dashboard |

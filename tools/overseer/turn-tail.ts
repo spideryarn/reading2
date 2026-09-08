@@ -3,7 +3,7 @@
  *
  * ## The finding this exists for
  *
- * `docs/project/orchestrator-direction.md` § "`idle` is the bug: the vocabulary
+ * `docs/project/overseer-direction.md` § "`idle` is the bug: the vocabulary
  * describes the pane, not the work". Measured on the live fleet 2026-09-08:
  * **ten of fifteen sessions genuinely waiting on Greg had ended their turn
  * handing him a decision in sentences, and not one of them showed as needing

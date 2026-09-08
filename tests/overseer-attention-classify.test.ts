@@ -4,7 +4,7 @@
  * WHY THERE IS A MODEL HERE AT ALL, and it is measured rather than assumed.
  * A mechanical check found 1 of 23 waiting sessions by grepping for question
  * marks, because the decisions end in full stops
- * (docs/project/orchestrator-direction.md § `idle` is the bug). The direction
+ * (docs/project/overseer-direction.md § `idle` is the bug). The direction
  * doc is explicit about the split: subprocess ancestry is in the process table
  * and belongs in `work.ts`, but *"has this agent asked Greg something?" is a
  * judgement, not a parse*.
@@ -266,7 +266,7 @@ describe("what a call cost, which is three cases and not one", () => {
 describe("the model", () => {
   it("is a small fast one, and its id is spelled out here rather than imported", () => {
     // The Overseer must not depend on anything under src/
-    // (docs/project/orchestrator-direction.md § Principles), so it cannot import
+    // (docs/project/overseer-direction.md § Principles), so it cannot import
     // src/models.ts. This assertion is the drift alarm that the duplication
     // otherwise would not have.
     expect(ATTENTION_CLASSIFIER_MODEL).toBe("openai/gpt-5.6-luna");

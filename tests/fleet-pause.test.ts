@@ -280,13 +280,13 @@ describe("parseSessionStoreFiles / readShellState", () => {
     // 1471795.json: status "shell", statusUpdatedAt 1788870512689. `claude
     // agents --json` reports this session as `busy` and reports no dwell at all.
     const state = readShellState(index(), "913bc3ec-f5b3-4f25-903c-b7270474386d", 1788870512689 + 372_000);
-    expect(state).toEqual({ kind: "in-a-shell-call", sinceMs: 372_000 });
+    expect(state).toEqual({ kind: "background-work", sinceMs: 372_000 });
   });
 
   it("says a busy and an idle session are positively NOT in a shell call", () => {
     const i = index();
-    expect(readShellState(i, "b2cfaf57-fda7-4ae9-a5f7-4a962ccd110e", Date.now()).kind).toBe("not-in-a-shell-call");
-    expect(readShellState(i, "9e1264ae-d4e2-47db-b38d-80f8b51ed4b6", Date.now()).kind).toBe("not-in-a-shell-call");
+    expect(readShellState(i, "b2cfaf57-fda7-4ae9-a5f7-4a962ccd110e", Date.now()).kind).toBe("not-background-work");
+    expect(readShellState(i, "9e1264ae-d4e2-47db-b38d-80f8b51ed4b6", Date.now()).kind).toBe("not-background-work");
   });
 
   it("treats a MISSING record as could-not-look, not as absence of the state", () => {
@@ -340,7 +340,7 @@ describe("parseSessionStoreFiles / readShellState", () => {
     const i = parseSessionStoreFiles([
       { name: "1.json", text: JSON.stringify({ sessionId: "s1", status: "hibernating", statusUpdatedAt: 1 }) },
     ]);
-    expect(readShellState(i, "s1", Date.now()).kind).toBe("not-in-a-shell-call");
+    expect(readShellState(i, "s1", Date.now()).kind).toBe("not-background-work");
   });
 
   it("takes the newest record when two files claim one conversation", () => {
@@ -348,14 +348,14 @@ describe("parseSessionStoreFiles / readShellState", () => {
       { name: "old.json", text: JSON.stringify({ sessionId: "s1", status: "idle", updatedAt: 1000 }) },
       { name: "new.json", text: JSON.stringify({ sessionId: "s1", status: "shell", statusUpdatedAt: 500, updatedAt: 2000 }) },
     ]);
-    expect(readShellState(i, "s1", 1500).kind).toBe("in-a-shell-call");
+    expect(readShellState(i, "s1", 1500).kind).toBe("background-work");
   });
 
   it("clamps a dwell time computed against a clock a moment ahead of ours", () => {
     const i = parseSessionStoreFiles([
       { name: "1.json", text: JSON.stringify({ sessionId: "s1", status: "shell", statusUpdatedAt: 2000 }) },
     ]);
-    expect(readShellState(i, "s1", 1000)).toEqual({ kind: "in-a-shell-call", sinceMs: 0 });
+    expect(readShellState(i, "s1", 1000)).toEqual({ kind: "background-work", sinceMs: 0 });
   });
 });
 
@@ -389,14 +389,14 @@ const CLEAN_TRANSCRIPT: PauseInputs["transcript"] = {
   scan: { entries: [], lastRecordAt: "2026-09-08T13:00:00.000Z" },
   reachedStartOfFile: true,
 };
-const CLEAN_SHELL: ShellState = { kind: "not-in-a-shell-call" };
+const CLEAN_SHELL: ShellState = { kind: "not-background-work" };
 const CLEAN_RATE: RateLimitReading = { kind: "not-limited" };
 
 describe("choosePause — precedence", () => {
   it("puts a positively known rate limit above a pending cron", () => {
     const pause = choosePause({
       transcript: transcriptWithCron("36 12 08 09 *", "2026-09-08T08:49:01.031Z"),
-      shell: { kind: "in-a-shell-call", sinceMs: 5_000 },
+      shell: { kind: "background-work", sinceMs: 5_000 },
       rateLimit: { kind: "limited", window: "five_hour", resetsAt: "2026-09-08T15:30:00.000Z" },
       nowMs: NOW,
     });
@@ -406,7 +406,7 @@ describe("choosePause — precedence", () => {
   it("puts a pending cron above a shell call", () => {
     const pause = choosePause({
       transcript: transcriptWithCron("36 12 08 09 *", "2026-09-08T08:49:01.031Z"),
-      shell: { kind: "in-a-shell-call", sinceMs: 5_000 },
+      shell: { kind: "background-work", sinceMs: 5_000 },
       rateLimit: CLEAN_RATE,
       nowMs: NOW,
     });
@@ -421,11 +421,11 @@ describe("choosePause — precedence", () => {
   it("puts a shell call above a cannot-tell, even when a source failed", () => {
     const pause = choosePause({
       transcript: { kind: "failed", cause: "no-transcript", why: "no transcript file" },
-      shell: { kind: "in-a-shell-call", sinceMs: 372_000 },
+      shell: { kind: "background-work", sinceMs: 372_000 },
       rateLimit: CLEAN_RATE,
       nowMs: NOW,
     });
-    expect(pause).toEqual({ kind: "in-a-shell-call", sinceMs: 372_000 });
+    expect(pause).toEqual({ kind: "background-work", sinceMs: 372_000 });
   });
 
   it("reaches `none` only when all three sources were consulted successfully", () => {
@@ -781,7 +781,7 @@ describe("readPause", () => {
       nowMs: NOW,
       tailBytes: 1024 * 1024,
     });
-    expect(pause).toEqual({ kind: "in-a-shell-call", sinceMs: 372_000 });
+    expect(pause).toEqual({ kind: "background-work", sinceMs: 372_000 });
   });
 
   it("says no-conversation-id rather than none when the session has no uuid", async () => {
@@ -942,7 +942,7 @@ describe("readPause", () => {
       nowMs: NOW,
       tailBytes: 1024 * 1024,
     });
-    expect(pause).toEqual({ kind: "in-a-shell-call", sinceMs: 1_000 });
+    expect(pause).toEqual({ kind: "background-work", sinceMs: 1_000 });
   });
 });
 
@@ -1003,7 +1003,7 @@ describe("the seam with the usage collector", () => {
        Neither is `none`. */
     const notCollected = choosePause({
       transcript: { kind: "read", scan: { entries: [], lastRecordAt: null }, reachedStartOfFile: true },
-      shell: { kind: "not-in-a-shell-call" },
+      shell: { kind: "not-background-work" },
       rateLimit: undefined,
       nowMs: Date.now(),
     });
@@ -1011,7 +1011,7 @@ describe("the seam with the usage collector", () => {
 
     const unreadable = choosePause({
       transcript: { kind: "read", scan: { entries: [], lastRecordAt: null }, reachedStartOfFile: true },
-      shell: { kind: "not-in-a-shell-call" },
+      shell: { kind: "not-background-work" },
       rateLimit: { kind: "cannot-tell", why: "27 rejections could not be attributed to this account" },
       nowMs: Date.now(),
     });
