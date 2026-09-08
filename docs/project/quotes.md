@@ -2,9 +2,10 @@
 
 The sentences of a piece that are worth carrying out of it, in the band between the spine and the
 prose. **Every row is the article's own text**, verified verbatim against the block it came from, and
-**every row the panel is showing is marked in the prose** — pressing one rings it and takes you
-there. (The one exception is a row whose block a re-extraction took away.) See
-[§ Every visible quote is marked](#every-visible-quote-is-marked-and-the-bar-is-how-many).
+**every row the panel is showing is marked in the prose — in every mode, whether or not the band is
+open** — pressing one rings it and takes you there. (The one exception is a row whose block a
+re-extraction took away.) See
+[§ Every visible quote is marked](#every-visible-quote-is-marked-in-every-mode-and-the-bar-is-how-many).
 
 *The article's*, and deliberately not *the author's* — see [§ Whose words these are](#whose-words-these-are).
 Verification can prove the words are in the piece. It cannot prove who wrote them, and the promise
@@ -275,9 +276,45 @@ default, display them in order."* The glossary defaults to `prioritised`; copyin
 first version, and a cross-family review pointed out that the glossary's later override is not
 permission to override an explicit decision about a different feature.
 
-### Every visible quote is marked, and the bar is how many
+### Every visible quote is marked, in every mode, and the bar is how many
 
-Since 2026-09-05, and until then only the *selected* one was — so the mode drew nothing at all on the
+**In every mode since 2026-09-08**, which is [260908i](../plans/260908i-quotes-marked-in-the-prose-in-every-mode.md).
+Greg, in the feedback report that asked for it (SPIDERYARN-READING2-2P):
+
+> Always show the quotes (highlighted with a border around them), if there are any that have been
+> generated. Always show them in the text view, even if we're not in quotes mode.
+
+The marks were published by the band, so they lived exactly as long as it did and went the moment
+the reader pressed Plain. **They are no longer published at all**: everything they are made of — the
+artefact, `?quote=`, `?rank=`, `?bar=`, the blocks — is state `Reader` already holds, so
+[`useQuoteMarks`](../../src/web/reader/useQuoteMarks.ts) computes them and the whole publication
+protocol went with them, including the `derived` arm of `usePassageLifecycle`, whose only caller
+this was.
+
+Three consequences worth knowing before changing anything here:
+
+- **The quotes reach the prose in every mode and the paragraph bar, the spine rail and the ring in
+  none.** `proseFound` in [reader/passages.ts](../../src/web/reader/passages.ts) is the whole of that
+  split and carries the argument: a quote's `confidence` is `null`, which `blockStrength` reads as
+  certainty, and every quote's `slot` is `0`, which is the first saved search's colour. In quotes
+  mode the picked slot *is* the quotes, so nothing there changed.
+- **The opening read moved up**, `useQuotesRead` in `OwnedReader`, exactly as the glossary's did in
+  2026-08-27 and for the same reason. `useStepJob` and `useAutoRun` stayed in the band deliberately —
+  a job subscriber up there holds the engine to its idle cadence for every reader of every article,
+  and an activation owner up there could spend a Quotes press after the reader had left the band.
+- **A quote is the one mark a tap may fall through.** `NOT_A_BLOCK_SELECTION` in
+  [TableView.tsx](../../src/web/TableView.tsx) excludes every `<mark>` because a tap on one already
+  means something — except a quote, which nothing acts on. With up to 32 of them on the page in
+  Plain, a blanket exclusion would make the best sentences in the piece the ones a finger cannot
+  select, and therefore cannot annotate ([touch.md](touch.md)).
+
+**What is still open** is the density: the default `?rank=` is `document`, where `rankQuotes` returns
+the whole list and the bar does nothing, so a reader who has never touched the controls meets all of
+them. The bar is the control and it survives a mode change, but it is only reachable from inside
+quotes mode. Nobody has yet looked at 32 marks at once. See § *An article's quotes are capped*.
+
+Since 2026-09-05 the whole shown list is marked rather than only the *selected* one — until then the
+mode drew nothing at all on the
 article until you pressed a row, and the slider changed the list without changing the page. Greg,
 in the feedback report that asked for it (SPIDERYARN-READING2-1Z):
 

@@ -339,11 +339,32 @@ const NOT_A_BLOCK_SELECTION = [
   /* Following it is the point of tapping it, and selecting the row it is
      leaving would leave the selection behind on a row nobody is on. */
   "a[href]",
-  /* Every `<mark>` the annotator draws: a comment, a chat anchor, a search hit,
-     a glossary term. `mouseup` has already acted on these (below), and a
-     glossary term's click never even arrives — useHoverCard cancels it at
-     document capture. Naming them means the answer is the same either way. */
-  "mark",
+  /* Every `<mark>` the annotator draws **except a quote**: a comment, a chat
+     anchor, a search hit, a glossary term. `mouseup` has already acted on these
+     (below), and a glossary term's click never even arrives — useHoverCard
+     cancels it at document capture. Naming them means the answer is the same
+     either way.
+
+     **A quote is the one mark nothing acts on, and since 2026-09-08 it is on
+     the page in every mode** — so a blanket `"mark"` would turn up to 32 of an
+     article's best sentences into dead zones for the tap that selects a
+     paragraph, which is how a finger reaches the gutter and therefore how a
+     reader annotates (docs/project/touch.md). The list below says "a quote and
+     nothing else": a quote that *also* carries a comment, a chat anchor, a
+     glossary term or a search's wash keeps the exclusion, because there the tap
+     does mean something. GPT Sol found this, reviewing
+     docs/plans/260908i-quotes-marked-in-the-prose-in-every-mode.md — the plan
+     had recorded "nothing clicks a `mark.hit`" as a reason there was nothing to
+     worry about, which was true and was the wrong conclusion.
+
+     A search-only hit stays excluded, which is what it is today; whether that is
+     right is not this change's question. */
+  "mark:not(.hit)",
+  "mark.hit.cmt",
+  "mark.hit.chat",
+  "mark.hit.term",
+  "mark.hit[data-wash]",
+  "mark.hit:not([data-quote])",
   /* The ⤢ on a figure, and every control in the gutter. The gutter's own
      buttons also call `stopPropagation`, and that is exactly what this list
      exists not to depend on. */

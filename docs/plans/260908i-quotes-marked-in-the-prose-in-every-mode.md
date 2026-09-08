@@ -17,6 +17,12 @@ line of this: `mark.hit[data-quote]` draws a two-tier stroke and no fill, today,
 screen, and vanish the moment the reader presses Plain. This plan makes them a property of the
 article view rather than of a mode.
 
+**Status: built and landed on `dev`.** Stage 0's review changed the design twice and added two
+findings the request did not mention — a tap dead-zone, and two rendering defects that stopped being
+unreachable. § *Stage 0* keeps its verdict; the report note is
+[260908_1742](../user-feedback/260908_1742-quotes-marked-in-every-mode.md). The one thing left open
+is the **density** question at the end of § *The three product questions*, which is Greg's.
+
 ## What is actually in the way
 
 Not the drawing — that is done. Three structural facts, each of which was a deliberate decision when

@@ -1296,8 +1296,12 @@ export const SPECIMEN_MARKS: { label: string; marks: Mark[] }[] = [
        and back up where it ends. Named here rather than quietly claimed
        otherwise — /design exists to show what the reader gets, so a specimen
        advertising a property it does not have is the worst thing on it.
-       Not reachable in the reading view today (one mode's marks at a time);
-       260907c § The step where a quote crosses a search hit. */
+       **Reachable in the reading view since 2026-09-08**, when the quotes
+       started being marked in every mode; this line said "not reachable today
+       (one mode's marks at a time)" until then, and a specimen whose caveat has
+       gone stale is the second worst thing on this page.
+       260907c § The step where a quote crosses a search hit, and
+       docs/plans/260908i-quotes-marked-in-the-prose-in-every-mode.md. */
     label: "A quote over a search hit — both channels drawn, but see the 2px step in the lower rule",
     marks: [
       { id: "h", start: 33, end: 78, kind: "hit", strength: 0.45, slot: 0 },

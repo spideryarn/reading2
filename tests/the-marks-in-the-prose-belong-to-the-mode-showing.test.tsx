@@ -1,7 +1,16 @@
 // @vitest-environment jsdom
 /**
- * **The marks in the prose, the ring on one of them and the rail's ticks are
- * all the band that is open — through a whole reading session.**
+ * **The ring, the paragraph bars and the rail's ticks are all the band that is
+ * open — and the phrase marks are that band plus the quotes, which are on the
+ * page whatever mode it is. Through a whole reading session.**
+ *
+ * **The second clause arrived on 2026-09-08** and the file's name is one clause
+ * behind it, deliberately: renaming it would cost every link into it for a
+ * distinction `agree()` below states in full. Greg asked for the quotes to be
+ * marked *"even if we're not in quotes mode"* (SPIDERYARN-READING2-2P), so
+ * exactly one of the four projections stopped belonging to the open band. See
+ * `agree` for which, and `proseFound` in src/web/reader/passages.ts for why the
+ * other three must not follow it.
  *
  * This is the test a pure `selectPassages` unit test and a miniature-`Reader`
  * band harness both miss, and GPT Sol's F1 on the plan is the whole reason it
@@ -172,6 +181,17 @@ const P_TIME = "spya-cccccc" as BlockId;
 const P_FIND = "spya-dddddd" as BlockId;
 const P_CRIT = "spya-eeeeee" as BlockId;
 const P_CLAIM = "spya-ffffff" as BlockId;
+/**
+ * **The paragraph the quotes mode marked, which since 2026-09-08 is marked in
+ * every mode.**
+ *
+ * A seventh paragraph of its own rather than a quote laid over one of the six,
+ * and that is what makes the arms below readable: "which blocks are marked"
+ * stays a sentence naming the band, with one constant added to it everywhere.
+ * A quote sharing `P_IDEA` would make the ideas arm pass whether or not the
+ * quotes were drawn at all.
+ */
+const P_QUOTE = "spya-iiiiii" as BlockId;
 
 const IDEA_QUOTE = "Thirty-one participants in each arm";
 const TIME_QUOTE = "The trial ran through the spring";
@@ -179,6 +199,8 @@ const TIME_QUOTE = "The trial ran through the spring";
 const FIND = "posthoc";
 const CRIT_QUOTE = "no unexposed comparison group";
 const CLAIM_QUOTE = "the effect held in eleven";
+/** The line the quotes step chose. Verbatim from `P_QUOTE`, as the artefact's are. */
+const KEPT_QUOTE = "Writing is thinking";
 
 function para(id: BlockId, text: string): Block {
   return {
@@ -208,6 +230,7 @@ const BLOCKS: Block[] = [
   para(P_FIND, `A ${FIND} subgroup was named after the fact.`),
   para(P_CRIT, `There was ${CRIT_QUOTE} at any point.`),
   para(P_CLAIM, `Even so, ${CLAIM_QUOTE} of the participants.`),
+  para(P_QUOTE, `${KEPT_QUOTE}; there is no other kind.`),
 ];
 
 /** The second article's blocks — different ids, so leakage is visible. */
@@ -454,6 +477,26 @@ function reply(url: string, method: string): Promise<Response> {
       slug === B ? timelineFor(B, B_TIME, B_TIME_QUOTE) : timelineFor(A, P_TIME, TIME_QUOTE);
     return Promise.resolve(json({ timeline, stale: false, outdated: false }));
   }
+  /* **The quotes, for article A only.** B has none, which is what lets the
+     article-change arm below show that a slot carries nothing across a boundary
+     — including this one, which is not a slot a band writes any more. */
+  if (path.startsWith("/api/quotes/")) {
+    if (slugOf(path) !== A) return Promise.resolve(new Response(null, { status: 404 }));
+    return Promise.resolve(
+      json({
+        quotes: {
+          slug: A,
+          version: "quotes/3",
+          generator: "test",
+          sourceHash: "h",
+          quotes: [{ id: "spya-qte001", blockId: P_QUOTE, text: KEPT_QUOTE, importance: 0.9 }],
+        },
+        stale: false,
+        outdated: false,
+        profileChanged: false,
+      }),
+    );
+  }
   if (path.startsWith("/api/referee/criteria/")) {
     return Promise.resolve(json({ criteria: [CRITERION], sourceHash: "h" }));
   }
@@ -606,11 +649,32 @@ const railTicks = (): number => host.querySelectorAll(".spine-match").length;
 
 /**
  * **The one assertion every arm makes**, so no arm can quietly assert less than
- * another: the three projections name the same paragraphs, the ring is inside
- * the marks, and the rail agrees about how many paragraphs are involved.
+ * another.
+ *
+ * ## The contract changed on 2026-09-08, and this is where it is written down
+ *
+ * It used to be *the three projections name the same paragraphs*. Greg then
+ * asked for the quotes to be marked *"even if we're not in quotes mode"*
+ * (SPIDERYARN-READING2-2P), which makes that false for exactly one of the three:
+ *
+ * > the phrase marks are **the open mode's passages plus the quotes**; the
+ * > paragraph bar, the spine rail and the ring are **the open mode's alone**.
+ *
+ * The split is not fastidiousness — a quote's `confidence` is `null`, which
+ * `blockStrength` reads as certainty, so a quote allowed into the paragraph bar
+ * would repaint a hedged search's bar at full; and every quote carries `slot: 0`,
+ * which is the first saved search's colour. `proseFound` in
+ * src/web/reader/passages.ts has the argument.
+ *
+ * **`quoted` is a parameter rather than a constant** so that one arm can say
+ * *no* — the second article has no quotes, which is what shows that nothing
+ * carries across an article boundary.
  */
-function agree(where: string, blocks: BlockId[], ring: BlockId[]): void {
-  expect(marked(), `${where}: the phrase marks`).toEqual(blocks);
+function agree(where: string, blocks: BlockId[], ring: BlockId[], quoted = true): void {
+  /* Document order, because `marked()` reads the rows down the page and
+     `P_QUOTE` is the last paragraph. */
+  const inProseNow = quoted ? [...blocks, P_QUOTE] : blocks;
+  expect(marked(), `${where}: the phrase marks`).toEqual(inProseNow);
   expect(barred(), `${where}: the paragraph bars`).toEqual(blocks);
   expect(rung(), `${where}: the ring`).toEqual(ring);
   expect(railTicks(), `${where}: the rail's ticks`).toBe(blocks.length);
@@ -718,7 +782,7 @@ async function viewChip(label: string): Promise<void> {
   await settle();
 }
 
-describe("the marks in the prose belong to the mode showing", () => {
+describe("the marks in the prose belong to the mode showing, plus the quotes", () => {
   it("keeps every projection agreeing through a whole session", async () => {
     await readingSession(false);
   });
@@ -736,13 +800,19 @@ describe("the marks in the prose belong to the mode showing", () => {
     await press(MODE_LABEL.timeline);
     agree("A, timeline", [P_TIME], [P_TIME]);
 
-    /* B, reached the way a reader reaches it: a different address. */
+    /* B, reached the way a reader reaches it: a different address.
+
+       **`quoted: false`, and it is the sharpest assertion in this arm.** B's
+       `/api/quotes/` answers 404, so a mark on `P_QUOTE` here would be A's
+       quote drawn on an article that does not contain it — which is what a
+       marks layer that outlives the *article* rather than the *mode* would do,
+       and the whole risk of having moved these out of the band's lifetime. */
     await go(B);
     expect(onScreen(B_IDEA_QUOTE), "the second article never loaded").toBe(true);
     await press(MODE_LABEL.ideas);
-    agree("B, ideas", [B_IDEA], [B_IDEA]);
+    agree("B, ideas", [B_IDEA], [B_IDEA], false);
     await press(MODE_LABEL.timeline);
-    agree("B, timeline", [B_TIME], [B_TIME]);
+    agree("B, timeline", [B_TIME], [B_TIME], false);
 
     /* And back to A, whose paragraphs are the only ones that may be marked. */
     await go(A);
