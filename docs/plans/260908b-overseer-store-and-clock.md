@@ -662,6 +662,47 @@ down until the next login, with `Restart=always` never getting a chance to matte
 - **Done, all four:** enabled and active; `kill -9` recovery; **an actual reboot with no intervening
   login**; and the executable path proven to survive worktree removal.
 
+**Measured on the live box, 2026-09-08 — the ground S5 stands on is worse than the plan assumed.**
+There are **no systemd units on this box at all**: `/etc/systemd/system/` holds only stock ones and
+`~/.config/systemd/user/` is empty. And the fleet dashboard — the Overseer's only data source — is
+itself a `scripts/tmux-job.ts` job whose entrypoint lives **inside a worktree**:
+
+```
+421175  132280  sh -c ( env FLEET_BIND=... npx tsx tools/fleet/server.ts )
+        > /home/greg/code/spideryarn2/.claude/worktrees/fleet-dashboard-v01/logs/tmux-jobs/…
+```
+
+Three consequences, none of them theoretical:
+
+- **`npm run worktree:check` will call `fleet-dashboard-v01` safe to delete, and it is not** —
+  provable from the type rather than guessed at. `CheckFacts` in
+  [`scripts/worktree-check.ts`](../../scripts/worktree-check.ts) has no process or pid member, every
+  field it does have is about version-control state or ignored files, and `blockers()` is a pure
+  function of `CheckFacts`. So no care elsewhere can make it notice a running process. Removing that
+  worktree takes down the page and the Overseer's source together —
+  [worktrees.md](../project/worktrees.md)'s own warning arriving through a door it does not cover.
+  **Being fixed in this run**, since long-running jobs out of worktrees are now normal here and this
+  will recur.
+- **Its ppid is `132280` — the tmux server, the same number we use as the generation marker.** So a
+  reboot takes the tmux server, every session, and the dashboard, in one go. Which means the ceiling
+  argument — *"if the orchestrator broke I could just ssh in"* — is currently doing more work than it
+  looks: after a reboot there is no page to fall back **from**.
+- So the unit S5 builds should be **generic**, and the dashboard should get one too. Offered to the
+  dashboard agent rather than done unilaterally; the page's contents are theirs, the install-and-
+  verify path in `provision.sh` is this stage's.
+
+**And one honest consequence of the fix**, flagged rather than buried: an `ExecStart` in the primary
+checkout means both processes run whatever is on `dev` at that moment, **including a red `dev`** —
+which is [open-questions.md § Q12](../project/open-questions.md#q12) arriving from a third direction.
+
+**The reboot criterion cannot be met by an agent, and will not be claimed.** *"An actual reboot with
+no intervening login"* means rebooting a box carrying ~27 live sessions and ~15 worktrees of other
+people's uncommitted work. That is Greg's to run, not an agent's. What S5 *can* prove without it, and
+what it will report instead: the unit is a **system** unit, `systemctl is-enabled` says `enabled`, and
+the symlink is present in `multi-user.target.wants` — which is precisely the evidence Sol's F7 was
+about, since the whole finding was that a *user* unit would show none of those. The reboot itself
+stays outstanding and is named as outstanding.
+
 **Reboot-resume of the sessions themselves is O4, a later stage.** This one only makes it possible.
 
 ### S6 — work, not panes: the Codex subprocess arm
