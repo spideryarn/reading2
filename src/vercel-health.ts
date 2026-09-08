@@ -195,7 +195,7 @@ interface Expected {
   with?: string;
 }
 
-const EXPECTED: readonly Expected[] = [
+const EXPECTED = [
   { name: "DATABASE_URL", breaks: null },
   /* **`ANTHROPIC_API_KEY` was here until 2026-08-31, and it is gone rather than
      demoted.** It went `breaks: null` on 2026-08-27, when the seven pipeline
@@ -343,8 +343,8 @@ const EXPECTED: readonly Expected[] = [
      tiers are configured is a database question now, not an environment one. */
 
   /* ---------------------------------------------------------------- *
-   * **The six below arrived together on 2026-09-07, from a sweep
-   * rather than from an incident.**
+   * **Six arrived together on 2026-09-07, from a sweep rather than from
+   * an incident; five of them are below.**
    *
    * A one-off sweep walked every `process.env` and `import.meta.env` read
    * under `src/` and asked which were accounted for here. It resolved 50
@@ -358,21 +358,31 @@ const EXPECTED: readonly Expected[] = [
    * per-run model overrides); these six are the ones an operator staring
    * at a deployment would want to see.
    *
-   * **There is no test holding this line, and that is the state of it.**
-   * The check was built and twice refused in review — nine established
-   * ways for a read to be silently skipped rather than refused, which in
-   * a check whose whole job is not to fail open is disqualifying. So
-   * these six entries are the *findings* of a sweep, not the output of a
-   * gate, and the next name to arrive will drift exactly as the last one
-   * did. The design that would hold it, the cheaper alternative of making
-   * the reads literal instead, and the nine attacks any rebuild must go
-   * red on first, are in
-   * docs/plans/260907e-small-uncontested-postmortem-preventions-batch.md
-   * § Stage 4.
+   * **There is a test holding this line since 2026-09-08, and the
+   * sentence above it said there was not for a day.** The check had been
+   * built and twice refused in review — nine established ways for a read
+   * to be silently skipped rather than refused, which in a check whose
+   * whole job is not to fail open is disqualifying. What made the third
+   * attempt work was retreating from cleverness rather than adding more:
+   * the *reads* were made literal, so a check that refuses everything it
+   * cannot read literally became affordable.
+   * tests/env-reads-are-literal.test.ts refuses any environment read it
+   * cannot see as `process.env.NAME`, and
+   * tests/env-names-are-inventoried.test.ts requires every name it
+   * resolves to be in exactly one of four doors, of which this table is
+   * one. A name can no longer be neither reported here nor deliberately
+   * excluded. The plan is 260908a under docs/plans/.
+   *
+   * **What it does not hold is the thing this table is actually for.**
+   * It inventories *names*. It has no opinion about whether a `breaks`
+   * clause is true, and the incident that produced this file was a name
+   * that was already here whose consequence went stale underneath it
+   * (260827b). So the gate stops the drift and would not have caught the
+   * bug; both halves are worth knowing before leaning on it.
    *
    * **Every one is `breaks: null`, and that is a rule rather than a
    * coincidence.** A `breaks` clause warns on a deployment that does not
-   * set the variable, and none of these six was added because somebody
+   * set the variable, and not one of them was added because somebody
    * decided production requires it — they were added because a static
    * check found them unaccounted for. Promoting one is a judgement about
    * production and belongs to a person; `SPIDERYARN_OWNER_ID` below is
@@ -389,9 +399,35 @@ const EXPECTED: readonly Expected[] = [
    *
    * So this is the one entry here with a real case for a `breaks` clause, and
    * it does not have one yet on purpose: a sweep found it, and a sweep is not
-   * entitled to decide that a deployment must warn. Worth promoting — the
-   * consequence would be *"jobs written before articles carried an owner cannot
-   * be listed, and every request that stamps one throws"*.
+   * entitled to decide that a deployment must warn.
+   *
+   * **The consequence this comment used to name was wrong**, and it was wrong
+   * in the direction that matters — it said *"jobs written before articles
+   * carried an owner cannot be listed, and every request that stamps one
+   * throws"*, which sends somebody to the request path. Nothing here reaches
+   * the request path. `currentOwnerId()` (src/owner.ts:237) returns the
+   * signed-in reader; where the request box exists but is empty — public read,
+   * wrapped in `runInRequest` at src/vercel.ts:345 — it *throws on the spot*
+   * without ever consulting this variable, which is the tripwire working. Only
+   * a call with no request box at all falls through to `environmentOwnerId()`,
+   * and that means the CLI, a script or an eval. Nor is there a legacy-jobs
+   * case any more: `data/_jobs/` went with the filesystem store on 2026-09-05,
+   * and src/jobs.ts no longer calls this.
+   *
+   * **And it refuses only where a wrong answer would be somebody's data.**
+   * `environmentOwnerId()` throws for want of this variable when
+   * `NODE_ENV === "production"` or `VERCEL` is set, and otherwise returns
+   * `DEV_OWNER_ID` — so an ownerless local CLI run is fine and the same run
+   * against production is not.
+   *
+   * The callers, checked 2026-09-08: src/cli-ledger.ts's `withLedger`, which is
+   * how most commands reach it; and directly in scripts/stage.ts,
+   * scripts/live-spike.ts, evals/cost/run.ts, evals/cost/interactions.ts,
+   * evals/debate/run.ts, evals/deepen/run.ts and evals/illustrated/run.ts. So a
+   * request-serving deployment is fine without it and ownerless production CLI
+   * work is not, which makes promoting this a judgement about whether
+   * production must support that — a product call, and not one a sweep is
+   * entitled to make.
    */
   { name: "SPIDERYARN_OWNER_ID", breaks: null },
   /* **`SPIDERYARN_BASE_URL` was here for a few hours on 2026-09-07 and is
@@ -417,36 +453,49 @@ const EXPECTED: readonly Expected[] = [
    * half of the app the reader actually looks at.
    */
   { name: "VITE_SENTRY_DSN", breaks: null },
-  /**
-   * **What the client's Sentry events are labelled with**, falling back to
-   * `import.meta.env.MODE` (src/web/monitoring.ts:79).
-   *
-   * **This entry's original reason was false, and the correction is the
-   * interesting part.** It said the variable *looks* platform-set and is not —
-   * that Vercel writes `VERCEL_ENV`, Vite exposes only `VITE_`-prefixed names,
-   * and nothing bridges the two, so a person must set it. GPT Sol refused that
-   * in review on 2026-09-08 and it was right: vercel.json declares
-   * `"framework": "vite"`, and Vercel's **framework environment variables**
-   * add `VITE_`-prefixed copies of its system variables to a detected
-   * framework's build — the documentation lists `VITE_VERCEL_ENV` by name
-   * (vercel.com/docs/environment-variables/framework-environment-variables,
-   * checked 2026-09-08). Nobody has to set it.
-   *
-   * **What is still open, and why the row stays for now.** Those are *build*
-   * variables, and this handler reads `process.env` in the serverless function
-   * at *runtime*. Whether a framework-injected `VITE_` name is present there
-   * too is a question about the platform that no amount of reading this repo
-   * can settle — it wants one look at a real deployment's `/api/health`. If it
-   * is absent at runtime, this line reports `false` about a variable that was
-   * compiled in correctly, which is a *worse* failure than the one the entry
-   * was added for. Moving it to the platform-written allowlist group in
-   * tests/env-names-are-inventoried.test.ts is the likely answer.
-   *
-   * Left as a report-only row rather than guessed at, because a wrong reason is
-   * what the next person checks against instead of the code — which is exactly
-   * how this comment came to be wrong in the first place.
-   */
-  { name: "VITE_VERCEL_ENV", breaks: null },
+  /* **`VITE_VERCEL_ENV` was here from 2026-09-07 until 2026-09-08, and what
+     removed it was one look at production.** It labels the client's Sentry
+     events (src/web/monitoring.ts:79). It was added with the reason that it
+     *looks* platform-set and is not — that Vercel writes `VERCEL_ENV`, Vite
+     exposes only `VITE_`-prefixed names, nothing bridges the two, so a person
+     must set it. GPT Sol refused that in review and was right: vercel.json
+     declares `"framework": "vite"`, and Vercel's framework environment
+     variables add `VITE_`-prefixed copies of its system variables to a detected
+     framework's deployment. Nobody has to set it.
+
+     That left the question this row could not answer from inside the repo:
+     those are variables the platform injects for the *framework*, and this
+     function reads `process.env` in the serverless function. Production
+     answers it for production,
+     which is the only deployment this row was ever reporting on:
+     `https://www.spideryarn.com/api/health` on commit `0f221810`, 2026-09-08,
+     returns `"ok": true`, no warnings, and `"VITE_VERCEL_ENV": false` — a
+     correctly built, correctly configured deployment, reporting `false`. So the
+     row was putting a line in an operator's report about something they cannot
+     act on and nothing was wrong with, which is the mistake this table's own
+     header is about, and a *worse* failure than the drift the entry was added
+     for.
+
+     **And the documentation says the opposite of the measurement, which is
+     worth writing down rather than resolving.** Vercel's framework environment
+     variables page, under the `Vite` preset this project declares, lists
+     `VITE_VERCEL_ENV` as *"Available at: Both build and runtime"* (fetched
+     2026-09-08). Production says otherwise. Whatever the explanation — a
+     framework runtime this project does not use, a doc that is wrong, an API
+     function built by vite.api.config.ts and outside whatever does the
+     injecting — it makes the row *worse*, not better: it reports `false` about
+     something documented to be present, on a healthy deployment, and no
+     operator can act on the difference. GPT Sol argued in review that the
+     platform documents these as build-only; that is not what the page says.
+     Neither claim is needed for the door — one measurement of the deployment
+     this row reports on is the whole basis.
+
+     It is platform metadata, so it belongs on the platform door — the allowlist in
+     tests/env-names-are-inventoried.test.ts, where the reason is recorded. The
+     name is still read, and still inventoried; it is simply not a question this
+     endpoint can ask. **The check that would tell you what the running bundle
+     was built with is a build-stamped sentinel, and the same paragraph in
+     `health` below says so about the two `VITE_SUPABASE_` rows.** */
   /**
    * Error reporting (src/monitoring.ts:175). Unset, `initMonitoring()` returns
    * without starting anything and nothing anywhere says so — the failure is
@@ -499,7 +548,126 @@ const EXPECTED: readonly Expected[] = [
    * that a deployment must warn without it.
    */
   { name: "SPIDERYARN_ORIGINS", breaks: null },
-];
+  /* `as const satisfies`, both halves. The `satisfies` is the shape check the
+     annotation used to be; the `as const` is what keeps each `name` a literal
+     type rather than `string`, which is what `ReportedEnvName` below is made
+     of. */
+] as const satisfies readonly Expected[];
+
+/** One row of the table, as written — every name a literal. */
+type ExpectedRow = (typeof EXPECTED)[number];
+
+/**
+ * **Every variable name this table declares**, as a type.
+ *
+ * Derived from `EXPECTED` so the table stays the single source: adding a row
+ * adds a name here, and there is no second list to keep in step. `Extract`
+ * rather than `ExpectedRow["or"]` because `or` is a field most rows do not
+ * have, and indexing a union by a key only some members carry is an error.
+ */
+type ReportedEnvName = ExpectedRow["name"] | Extract<ExpectedRow, { or: string }>["or"];
+
+/**
+ * **`ReportedEnvName` is exactly the names in the table** — put to the compiler
+ * as a property, because nothing else here can answer it.
+ *
+ * `tests/env-names-are-inventoried.test.ts` checks that the union above is
+ * *built out of* `typeof EXPECTED`, member by member. That is necessary and it
+ * is not sufficient, and GPT Sol demonstrated both gaps in two rounds of review
+ * on 2026-09-08, each time with everything green:
+ *
+ *  - `type ReportedEnvName = string | ExpectedRow["name"] | …` — every member
+ *    still reaches the table, and the brand admits every name in the world.
+ *  - `type ExpectedRow = (typeof EXPECTED)[number] | { name: "NEW_ONE" }` — the
+ *    widening moves *inside* the intermediate alias, where a syntactic walk
+ *    cannot follow it, and `value("NEW_ONE")` compiles.
+ *
+ * **The first fix for the first of those was a sample — one literal asserted
+ * not to be a `ReportedEnvName` — and the second attack walked straight past
+ * it**, because a sample is not a property. So this compares the brand against
+ * a derivation taken **directly** from `typeof EXPECTED`, with no alias in
+ * between, in both directions: wider fails, narrower fails. Widening
+ * `ExpectedRow` now fails here even though the walk in the test still passes,
+ * which is the division of labour — the walk keeps the derivation honest where
+ * it can see it, and this keeps the *answer* honest wherever it was written.
+ *
+ * `npm run typecheck` is what runs it — vitest never type-checks, so this is
+ * not a thing `npm test` can see, and the gate asserts instead that these lines
+ * still exist.
+ *
+ * **Exported only because `noUnusedLocals` is on**, which is the flag doing the
+ * work: an assertion nothing consumes is an error, so it cannot be left behind
+ * as decoration. Nothing imports it and nothing should.
+ */
+type MustBeOk<T extends "ok"> = T;
+/** `any` is assignable to everything, so every comparison below would pass over it. */
+type IsAny<T> = 0 extends 1 & T ? true : false;
+type NamesInTable =
+  | (typeof EXPECTED)[number]["name"]
+  | Extract<(typeof EXPECTED)[number], { or: string }>["or"];
+export type ReportedEnvNameIsExactlyTheTable = MustBeOk<
+  IsAny<ReportedEnvName> extends true
+    ? "the brand is `any`, which is assignable to everything and therefore asserts nothing"
+    : string extends NamesInTable
+      ? "the table's names are no longer literal types, so there is nothing to compare against"
+      : [ReportedEnvName] extends [NamesInTable]
+        ? [NamesInTable] extends [ReportedEnvName]
+          ? "ok"
+          : "the brand is missing a name the table carries"
+        : "the brand admits a name the table does not carry"
+>;
+
+/**
+ * **`Expected` has exactly these keys and no others**, which is the other half
+ * of the same lesson.
+ *
+ * The `satisfies readonly Expected[]` on the table is there to refuse a
+ * misspelled key — `wher` for `where` would silently drop a row's "only on
+ * Vercel" guard and warn on every laptop. The gate checks that the `satisfies`
+ * target is spelled exactly `readonly Expected[]`, and GPT Sol then added
+ * `[key: string]: unknown` to the interface itself: the spelling was untouched,
+ * every check stayed green, and excess-property checking was gone. **Checking
+ * the name of a type is not checking what the type means.**
+ *
+ * The first fix for that asked whether `string extends keyof Expected`, and Sol
+ * walked past that too, with `` [key: `w${string}`]: unknown `` — narrower than
+ * `string`, wide enough for `wher`. **So this stopped enumerating the ways to
+ * turn the check off and states the property instead**: the key set is exactly
+ * this list, in both directions. A pattern index, a numeric index, a merged
+ * second declaration, an emptied interface and `unknown` all fail it.
+ *
+ * **The list is written by hand, and adding a legitimate field to `Expected`
+ * will fail here until it is added below.** That is the trade — the same one
+ * the sweep's checksum pins make: a change goes red and asks for a person,
+ * rather than going quiet.
+ */
+type ExpectedKey = "name" | "or" | "breaks" | "valid" | "where" | "with";
+export type ExpectedHasExactlyItsDeclaredKeys = MustBeOk<
+  IsAny<Expected> extends true
+    ? "Expected is `any`"
+    : [keyof Expected] extends [ExpectedKey]
+      ? [ExpectedKey] extends [keyof Expected]
+        ? "ok"
+        : "Expected has lost one of its declared keys"
+      : "Expected has a key ExpectedKey does not list: a new field, or an index signature"
+>;
+
+/**
+ * The same rows, seen through the interface, for iterating.
+ *
+ * Two things it does, and the second is the one to keep. It makes the optional
+ * fields readable — on the union of exact row types above, `expected.or` is an
+ * error rather than `undefined`, because most rows have no such property. And
+ * its annotation is what states, at the type level, that **a `with` names a
+ * variable this table also declares**: `checkEnv` enforces that incidentally
+ * today by passing `expected.with` to `value`, and a refactor there would take
+ * that away without anybody noticing.
+ */
+const ROWS: readonly (Expected & {
+  name: ReportedEnvName;
+  or?: ReportedEnvName;
+  with?: ReportedEnvName;
+})[] = EXPECTED;
 
 /**
  * Which variables are set, and a warning for each one that is needed and is not.
@@ -528,7 +696,7 @@ function checkEnv(warnings: string[]): Record<string, boolean> {
      the server-side ones can. A build-stamped sentinel is the real answer.
      GPT Sol's review, 2026-08-27. */
   const env: Record<string, boolean> = {};
-  for (const expected of EXPECTED) {
+  for (const expected of ROWS) {
     const names = expected.or ? [expected.name, expected.or] : [expected.name];
     for (const name of names) env[name] = value(name) !== null;
 
@@ -573,8 +741,16 @@ function checkEnv(warnings: string[]): Record<string, boolean> {
  * not catch the literal strings `"undefined"` or `"false"`, which are a real
  * shape of this mistake and which nothing here can distinguish from a secret;
  * see the note on that in docs/project/deployment.md.
+ *
+ * **The argument is branded, and that buys one thing exactly.** `ReportedEnvName`
+ * is derived from `EXPECTED`, so a *caller* cannot hand this a name the table
+ * does not declare — `value("NEW_ONE")` is a compile error rather than a read
+ * that tests/helpers/env-reads.ts's sweep would never see. What it does not stop
+ * is somebody widening this parameter back to `string`; what notices *that* is
+ * the checksum pin on this function in tests/helpers/env-reads.ts, which is why
+ * the pin and the brand are both here rather than either alone.
  */
-function value(name: string): string | null {
+function value(name: ReportedEnvName): string | null {
   const raw = process.env[name];
   if (typeof raw !== "string") return null;
   const trimmed = raw.trim();

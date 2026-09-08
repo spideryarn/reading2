@@ -329,7 +329,7 @@ button.dbt-mark:focus-visible { outline: 2px solid var(--highlight); outline-off
   margin: 0 0 0.3rem;
 }
 /* What the page does to what it answers. A word, not a badge with a colour of
-   its own: `relation` groups the list and `valence` draws the colour, and
+   its own: `relation` groups the list and `lean` draws the colour, and
    colouring both would make the row look as though it carried two verdicts. */
 .dbt-relation {
   color: var(--ink-soft);
@@ -344,15 +344,15 @@ button.dbt-mark:focus-visible { outline: 2px solid var(--highlight); outline-off
    one quiet grey for the two that take no side.
 
    Every one of the four gets the same chip: same size, same weight, an icon and
-   a word. `neutral` and `unknown` are not failure states, and drawing them
+   a word. `neither` and `cannot-tell` are not failure states, and drawing them
    dimmer or smaller than their neighbours would be the panel disbelieving its
    own model out loud — the rule docs/project/timeline.md applies to an undated
    row.
 
    **The scale's middle step is deliberately unused.** `--div-rg-4` is the
-   centre of a ramp, and putting `neutral` there would say *zero on a scale*,
+   centre of a ramp, and putting `neither` there would say *zero on a scale*,
    which is the score this mode does not compute. */
-.dbt-valence {
+.dbt-lean {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
@@ -361,10 +361,10 @@ button.dbt-mark:focus-visible { outline: 2px solid var(--highlight); outline-off
   font-weight: 600;
   letter-spacing: 0.02em;
 }
-.dbt-valence svg { flex: none; }
-.dbt-valence-for { color: var(--div-rg-7); }
-.dbt-valence-against { color: var(--div-rg-1); }
-.dbt-valence-quiet { color: var(--ink-faint); }
+.dbt-lean svg { flex: none; }
+.dbt-lean-for { color: var(--div-rg-7); }
+.dbt-lean-against { color: var(--div-rg-1); }
+.dbt-lean-quiet { color: var(--ink-faint); }
 
 .dbt-applies {
   margin: 0;

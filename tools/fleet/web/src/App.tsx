@@ -25,6 +25,7 @@ import { OrchestratorPanel } from "./OrchestratorPanel";
 import { SessionsPanel } from "./SessionsPanel";
 import { httpActionsApi, type ActionsApi } from "./actions-client";
 import { useDockFit } from "./fit";
+import { httpMessagesApi, type MessagesApi } from "./messages-client";
 import { useHashState } from "./mode";
 import { httpNewSessionApi, type NewSessionApi } from "./new-session-client";
 import { httpRenameApi, type RenameApi } from "./rename-client";
@@ -42,6 +43,7 @@ export function App({
   newSession = httpNewSessionApi,
   rename = httpRenameApi,
   actionsApi = httpActionsApi,
+  messagesApi = httpMessagesApi,
   actionsPollMs,
 }: {
   transport?: Transport;
@@ -50,6 +52,12 @@ export function App({
   newSession?: NewSessionApi;
   rename?: RenameApi;
   actionsApi?: ActionsApi;
+  /**
+   * The transcript reader. Injected like the rest, and deliberately NOT wrapped
+   * in a hook here: it is asked once per opened session rather than polled, so
+   * there is no shared feed for the page to hold. RecentMessages.tsx says why.
+   */
+  messagesApi?: MessagesApi;
   /** Only a test passes this, to keep a poll off a fake clock. */
   actionsPollMs?: number;
 }): ReactNode {
@@ -115,6 +123,7 @@ export function App({
             steer={steer}
             rename={rename}
             actions={actions}
+            messages={messagesApi}
             newSession={newSession}
             onRefresh={feed.refresh}
           />

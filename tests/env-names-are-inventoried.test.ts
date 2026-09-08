@@ -118,22 +118,36 @@ const ALLOWED: readonly AllowGroup[] = [
        made. So the reason is about *who writes it*, not about whether it is
        always there.
 
-       **`VITE_VERCEL_ENV` is not in this group, and it probably should be** —
-       left alone here deliberately, because moving it means editing a row of
-       `EXPECTED` rather than adding one, and correcting that table's prose is
-       Stage 3's job. The candidate's reason, which src/vercel-health.ts's row
-       still carries, is that it *looks* platform-set and is not: Vercel writes
-       `VERCEL_ENV`, Vite exposes only `VITE_`-prefixed names, and nothing here
-       bridges the two, so a person must set it on the project. **GPT Sol's
-       review of this stage says that is false**, and vercel.json:3 is the
-       evidence: this project declares `"framework": "vite"`, and Vercel's
-       framework environment variables add `VITE_`-prefixed copies of its system
-       variables for production and preview builds of a detected framework —
-       `VITE_VERCEL_ENV` among them. So it is platform-provided build metadata,
-       and its `EXPECTED` row rests on a claim about the platform that nothing
-       in this repo can check and that the platform's own documentation
-       contradicts. Written down here rather than acted on, so Stage 3 inherits
-       a finding instead of an absence.
+       **`VITE_VERCEL_ENV` joined this group on 2026-09-08, out of `EXPECTED`,
+       and the two halves of that move were settled by two different things
+       neither of which was reading this repo harder.** Stage 2 left it in
+       `EXPECTED` with a finding attached; Stage 3 acted on it.
+
+       Half one, from GPT Sol's review of Stage 2: the row's reason — that it
+       *looks* platform-set and is not, so a person must set it — is false.
+       vercel.json:3 declares `"framework": "vite"`, and Vercel's framework
+       environment variables add `VITE_`-prefixed copies of its system variables
+       to a detected framework's deployment, `VITE_VERCEL_ENV` among them.
+
+       Half two, which the review called unsettleable from here and which one
+       HTTP request settled *for the deployment that matters*: /api/health reads
+       `process.env` in the serverless function. Production, commit `0f221810`
+       on 2026-09-08, returns `"ok": true` with no warnings and
+       `"VITE_VERCEL_ENV": false`. So the `EXPECTED` row was reporting `false`
+       about a correctly configured deployment, which is worse than the drift it
+       was added for.
+
+       **The documentation says the opposite of the measurement**, and that is
+       recorded rather than resolved: under the `Vite` preset, Vercel lists
+       `VITE_VERCEL_ENV` as "Available at: Both build and runtime" (fetched
+       2026-09-08), and Sol argued in a later round that the platform documents
+       these as build-only, which is not what the page says. Neither claim is
+       load-bearing here. The row reported `false` about a healthy deployment;
+       that is the whole basis for this door, and it needs no platform rule.
+
+       Here, the name is inventoried and nobody is asked to act on it. **A
+       build-time input is not made checkable by being reported at runtime**,
+       and this group is where that belongs.
 
        `VERCEL_PROJECT_PRODUCTION_URL` joined this group on 2026-09-08. It is
        one of the two names `ownOrigins()` (src/sanitize-policy.ts) reads to
@@ -150,6 +164,7 @@ const ALLOWED: readonly AllowGroup[] = [
       "VERCEL_URL",
       "VERCEL_GIT_COMMIT_SHA",
       "VERCEL_PROJECT_PRODUCTION_URL",
+      "VITE_VERCEL_ENV",
     ],
   },
   {
@@ -460,7 +475,7 @@ function buildRefusesWithoutClientEnv(): { calls: number; failsInside: boolean }
   return { calls: calls.length, failsInside };
 }
 
-function readExpectedTable(): ExpectedRow[] {
+function parseHealth(): AstNode {
   const source = readFileSync(path.join(REPO_ROOT, HEALTH), "utf8");
   const parsed = parseSource(source);
   /* `errorRecovery: true`, so a file this cannot parse comes back looking fine
@@ -470,25 +485,84 @@ function readExpectedTable(): ExpectedRow[] {
   if (errors.length > 0) {
     throw new Error(`${HEALTH} did not parse cleanly: ${errors.length} error(s)`);
   }
+  return parsed.program as unknown as AstNode;
+}
+
+/**
+ * The array literal inside `EXPECTED`'s initialiser, refusing any other shape.
+ *
+ * **Taught one shape, step by step, rather than unwrapping whatever it finds.**
+ * The table is written `[…] as const satisfies readonly Expected[]`, which
+ * `@babel/parser` gives as a `TSSatisfiesExpression` around a `TSAsExpression`
+ * around the array — checked against the parser rather than assumed,
+ * 2026-09-08. Both wrappers are load-bearing and so both are *required* here:
+ * the `as const` is what keeps each `name` a literal type, which is what
+ * `ReportedEnvName` is made of, and the `satisfies` is the shape check that the
+ * old `: readonly Expected[]` annotation used to be. A bare `as const` with no
+ * `satisfies`, or a `satisfies` with no `as const`, is a real loss of a
+ * guarantee dressed as a formatting change, so it is refused here rather than
+ * accepted by a generous unwrap.
+ */
+function expectedArrayLiteral(init: AstNode | undefined): AstNode {
+  const refuse = (saw: string): never => {
+    throw new Error(
+      `${HEALTH}: EXPECTED is initialised with ${saw}. This gate reads the table syntactically ` +
+        "and will not guess at a new shape. It knows exactly one: an array literal, `as const` " +
+        "(so the names stay literal types for ReportedEnvName), `satisfies` (so the rows are " +
+        "still shape-checked against Expected).",
+    );
+  };
+
+  if (init?.type !== "TSSatisfiesExpression") return refuse(`a ${String(init?.type)}, not a satisfies expression`);
+  const asExpr = init.expression as AstNode | undefined;
+  if (asExpr?.type !== "TSAsExpression") {
+    return refuse(`a satisfies expression around a ${String(asExpr?.type)}, not around \`as const\``);
+  }
+  const asType = asExpr.typeAnnotation as AstNode | undefined;
+  const asTypeName = (asType?.typeName as AstNode | undefined)?.name;
+  if (asType?.type !== "TSTypeReference" || asTypeName !== "const") {
+    return refuse(`\`as ${String(asTypeName ?? asType?.type)}\` rather than \`as const\``);
+  }
+  /* **And what is being satisfied, which the first version of this never
+     looked at.** GPT Sol changed the target to
+     `readonly (Expected & Record<string, unknown>)[]`, misspelled a key as
+     `wher`, and watched the typecheck and all eight tests pass: both wrappers
+     were present, and `satisfies` was no longer refusing an excess property.
+     The wrapper is not the guarantee; the type it names is. */
+  const target = init.typeAnnotation as AstNode | undefined;
+  const element =
+    target?.type === "TSTypeOperator" && target.operator === "readonly"
+      ? ((target.typeAnnotation as AstNode | undefined)?.type === "TSArrayType"
+          ? ((target.typeAnnotation as AstNode).elementType as AstNode | undefined)
+          : undefined)
+      : undefined;
+  const elementName = (element?.typeName as AstNode | undefined)?.name;
+  if (element?.type !== "TSTypeReference" || elementName !== "Expected" || element.typeParameters) {
+    return refuse(
+      "`satisfies` naming something other than `readonly Expected[]`. The wrapper is not the " +
+        "guarantee — the type it names is, and widening it (`Expected & Record<string, unknown>`, " +
+        "say) stops it refusing a misspelled key while leaving every check here green",
+    );
+  }
+
+  const array = asExpr.expression as AstNode | undefined;
+  if (array?.type !== "ArrayExpression") {
+    return refuse(`\`as const\` around a ${String(array?.type)}, not around an array literal`);
+  }
+  return array;
+}
+
+function readExpectedTable(): ExpectedRow[] {
+  const program = parseHealth();
 
   let array: AstNode | null = null;
-  walkAst(parsed.program as unknown, (n, _parent, _key) => {
+  walkAst(program, (n, _parent, _key) => {
     if (n.type !== "VariableDeclarator") return;
     const id = n.id as AstNode | undefined;
     if (id?.type !== "Identifier" || id.name !== "EXPECTED") return;
-    const init = n.init as AstNode | undefined;
-    /* `EXPECTED` is written `[…] as const`-free but with a type annotation, so
-       the initialiser is the array itself. A `TSAsExpression` wrapper would be
-       a shape this has not been taught, and it is refused rather than unwrapped
-       on a guess. */
-    if (init?.type !== "ArrayExpression") {
-      throw new Error(
-        `${HEALTH}: EXPECTED is initialised with a ${String(init?.type)}, not an array literal. ` +
-          "This gate reads the table syntactically and will not guess at a new shape.",
-      );
-    }
+    const found = expectedArrayLiteral(n.init as AstNode | undefined);
     if (array) throw new Error(`${HEALTH}: two declarations named EXPECTED`);
-    array = init;
+    array = found;
   });
   if (!array) throw new Error(`${HEALTH}: no declaration named EXPECTED — the door has moved`);
 
@@ -499,6 +573,148 @@ function readExpectedTable(): ExpectedRow[] {
     rows.push(rowFrom(el));
   }
   return rows;
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+   The brand on `value`, and whether it is still tied to the table
+
+   Stage 3. `value` is the one function in src/vercel-health.ts that indexes
+   `process.env` by a variable, so tests/helpers/env-reads.ts cannot read the
+   names out of it and pins it by checksum instead, declaring no names at all.
+   A pin covers what is inside it: the names come from the **callers**, and a
+   caller writing `value("NEW_ONE")` would read a variable neither the sweep nor
+   any door here has ever seen.
+
+   What closes that is a type — `value(name: ReportedEnvName)`, the union of
+   every `name` and `or` in `EXPECTED` — and `npm run typecheck` is what
+   enforces it. This file cannot check assignability and does not try. What it
+   checks is that the arrangement is still *there*: the parameter is annotated
+   with the brand, and the brand is still derived from `typeof EXPECTED` rather
+   than hand-written. Both of those are one edit away from being untrue, and
+   neither edit would make any other assertion in this file go red.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+const BRAND = "ReportedEnvName";
+/**
+ * The compile-time assertions in src/vercel-health.ts that this file cannot make.
+ *
+ * Both were added because a check here answered a weaker question than its
+ * message claimed, and both are invisible to vitest — nothing here type-checks.
+ * So what this file can do is notice they have been deleted.
+ */
+const SENTINELS = ["ReportedEnvNameIsExactlyTheTable", "ExpectedHasExactlyItsDeclaredKeys"];
+
+interface BrandFacts {
+  /** How many declarations of `value` were found — one, or this says nothing. */
+  declarations: number;
+  /** The type name `value`'s single parameter is annotated with. */
+  parameterType: string | null;
+  /** How many members `BRAND`'s union has. */
+  members: number;
+  /** How many of those reach `typeof EXPECTED`, through aliases. */
+  derivedMembers: number;
+  /** Whether `BRAND` is declared at all. */
+  declared: boolean;
+  /** Which of `SENTINELS` are missing from the source. */
+  missingSentinels: string[];
+}
+
+function brandFacts(): BrandFacts {
+  const program = parseHealth();
+
+  const aliases = new Map<string, AstNode>();
+  let declarations = 0;
+  let parameterType: string | null = null;
+
+  walkAst(program, (n) => {
+    if (n.type === "TSTypeAliasDeclaration") {
+      const id = n.id as AstNode | undefined;
+      const body = n.typeAnnotation as AstNode | undefined;
+      if (id?.type === "Identifier" && body) aliases.set(String(id.name), body);
+      return;
+    }
+    if (n.type !== "FunctionDeclaration") return;
+    const id = n.id as AstNode | undefined;
+    if (id?.type !== "Identifier" || id.name !== "value") return;
+    declarations += 1;
+    const params = n.params as unknown[];
+    /* One parameter, because "the first one is branded" is not the claim — a
+       second, unbranded one would be a second way in. */
+    if (params.length !== 1) return;
+    const param = params[0] as AstNode;
+    const annotation = (param.typeAnnotation as AstNode | undefined)?.typeAnnotation as
+      | AstNode
+      | undefined;
+    if (annotation?.type !== "TSTypeReference") return;
+    const named = annotation.typeName as AstNode | undefined;
+    if (named?.type === "Identifier") parameterType = String(named.name);
+  });
+
+  /* **Every member of the union, not the union.** The first version of this
+     asked whether the brand's declaration *reaches* `typeof EXPECTED` anywhere,
+     and GPT Sol broke it in review on 2026-09-08 with one word:
+
+       type ReportedEnvName = string | ExpectedRow["name"] | Extract<…>["or"];
+
+     That reaches `typeof EXPECTED`, typechecks, leaves the checksum pin on
+     `value` green — the function is untouched — and passes every other
+     assertion here, while `value("NEW_ONE")` compiles again. "Some branch is
+     derived" was never the claim; "the union is nothing but derived branches"
+     is. So the body is flattened into members and each one is asked separately.
+     A bare `string`, a hand-typed literal, `string & {}` — none of them reaches
+     the table, and one such member is enough to fail.
+
+     This is still a syntactic check and it cannot evaluate a type. A widening
+     written *inside* an intermediate alias would satisfy it, which is why
+     src/vercel-health.ts also asks the compiler the question directly, in
+     `ReportedEnvNameIsNotWidened`, and why `sentinel` below asserts that line
+     is still there. */
+  const members = aliases.has(BRAND) ? unionMembers(aliases.get(BRAND) as AstNode) : [];
+  const derived = members.filter((m) => reachesExpected(m, aliases, new Set([BRAND])));
+
+  return {
+    declarations,
+    parameterType,
+    members: members.length,
+    derivedMembers: derived.length,
+    declared: aliases.has(BRAND),
+    missingSentinels: SENTINELS.filter((s) => !aliases.has(s)),
+  };
+}
+
+/** A union flattened to its leaves; anything else is a one-member union. */
+function unionMembers(body: AstNode): AstNode[] {
+  if (body.type !== "TSUnionType") return [body];
+  return (body.types as AstNode[]).flatMap(unionMembers);
+}
+
+/**
+ * Whether this type expression reaches `typeof EXPECTED`, through alias hops.
+ *
+ * Transitive, so renaming or splitting the intermediate alias — `ExpectedRow`
+ * today — is not a silent failure. `seen` bounds the walk; a self-referential
+ * alias is a stack overflow otherwise, and it is per-member rather than shared,
+ * so one member's dead end cannot make the next member's live path look dead.
+ */
+function reachesExpected(node: AstNode, aliases: Map<string, AstNode>, seen: Set<string>): boolean {
+  let found = false;
+  walkAst(node, (n) => {
+    if (found) return;
+    if (n.type === "TSTypeQuery") {
+      const of = n.exprName as AstNode | undefined;
+      if (of?.type === "Identifier" && of.name === "EXPECTED") found = true;
+      return;
+    }
+    if (n.type !== "TSTypeReference") return;
+    const named = n.typeName as AstNode | undefined;
+    if (named?.type !== "Identifier") return;
+    const name = String(named.name);
+    if (seen.has(name)) return;
+    seen.add(name);
+    const body = aliases.get(name);
+    if (body && reachesExpected(body, aliases, seen)) found = true;
+  });
+  return found;
 }
 
 /* ────────────────────────────────────────────────────────────────────────────
@@ -725,6 +941,57 @@ describe("every environment name src/ reads is inventoried", () => {
       unreasoned,
       "READ_OUTSIDE_SRC says a name in EXPECTED is read by the platform or an SDK rather than by " +
         "src/. That claim is only useful with the reason attached — which SDK, reading it when.",
+    ).toEqual([]);
+  });
+
+  /* Stage 3, and the only assertion here that is not about a door. Three facts,
+     each one edit away from being untrue, and not one of the tests above would
+     go red: the parameter widened back to `string`, the brand rewritten as a
+     hand-typed union of the same names, or a second unbranded parameter added
+     beside the branded one. */
+  it("keeps value()'s argument branded, and the brand derived from the table", () => {
+    const facts = brandFacts();
+
+    expect(
+      facts.declarations,
+      `${HEALTH} must declare exactly one function named value; this found ${facts.declarations}, ` +
+        "so the facts below are about the wrong function or about none",
+    ).toBe(1);
+
+    expect(
+      facts.declared,
+      `${BRAND} is not declared in ${HEALTH}. It is what stops a caller handing value() a name ` +
+        "EXPECTED does not carry; without it that argument is an ordinary string, and the " +
+        "checksum pin on value in tests/helpers/env-reads.ts is all that is left.",
+    ).toBe(true);
+
+    expect(
+      facts.parameterType,
+      `value()'s argument in ${HEALTH} must be annotated ${BRAND}. value indexes process.env by a ` +
+        "variable, so the Stage 1 sweep cannot read the names out of it and pins it instead, " +
+        "declaring none. The names come from its callers, and this annotation is the whole of " +
+        "what keeps a caller from naming a variable no door here has ever seen.",
+    ).toBe(BRAND);
+
+    expect(facts.members, `${BRAND} is a union of no members, which cannot be right`)
+      .toBeGreaterThan(0);
+
+    expect(
+      facts.derivedMembers,
+      `${facts.members - facts.derivedMembers} member(s) of ${BRAND} do not reach ` +
+        "`typeof EXPECTED`. Every one has to: a hand-written literal drifts from the table the " +
+        "first time a row is added, which is 260827b's hand-maintained list rebuilt inside the " +
+        "check written to close it — and a bare `string` member is worse, because it silently " +
+        "readmits every name in the world while this file's other assertions stay green.",
+    ).toBe(facts.members);
+
+    expect(
+      facts.missingSentinels,
+      `gone from ${HEALTH}. Everything above is syntactic and cannot evaluate a type — a widening ` +
+        "written inside an intermediate alias satisfies all of it, which is how the first two " +
+        "versions of this test were defeated. Those assertions ask the compiler the property " +
+        "directly and fail `npm run typecheck`, which vitest never runs; this is the only thing " +
+        "here that notices one has been deleted.",
     ).toEqual([]);
   });
 });

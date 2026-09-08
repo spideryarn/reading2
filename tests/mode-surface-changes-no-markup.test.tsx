@@ -1102,7 +1102,7 @@ const DEBATE: Debate = {
         title: "The Leiden replication",
         sourceQuote: "We could not reproduce the calibration.",
         relation: "disputes",
-        valence: "negative",
+        lean: "leans-against",
         applies: "A replication in Leiden reached the opposite reading.",
         articleReferenceQuote: "The instrument was built",
         identifies: [{ kind: "named", by: "title", witness: "The instrument was built" }],

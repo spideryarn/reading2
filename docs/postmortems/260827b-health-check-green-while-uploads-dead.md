@@ -305,6 +305,30 @@ Four things it still does not reach:
    [260907e](../plans/260907e-small-uncontested-postmortem-preventions-batch.md) § Stage 4. See also
    § *Derive the contract instead of restating it* below, whose claim about this check turned out to
    be false.*
+
+   ***Built 2026-09-08, on the third attempt, and not the check this entry asked for.***
+   [`tests/env-reads-are-literal.test.ts`](../../tests/env-reads-are-literal.test.ts) and
+   [`tests/env-names-are-inventoried.test.ts`](../../tests/env-names-are-inventoried.test.ts) —
+   about 2,600 lines with the sweep they share. This entry called it "the cheapest of the four" and
+   § *Derive the contract instead of restating it* called it "a few lines"; both were wrong by two
+   orders of magnitude, which is the more useful half of this update. What changed was the target, not the cleverness: rather than
+   teach a check to resolve a computed read, the **reads** were made literal, so every
+   `process.env.X` and `import.meta.env.X` under `src/` is a literal member expression and anything
+   else is *refused* rather than skipped. Twelve reads that genuinely cannot be literal — a `.env`
+   file writing into the environment, `MODEL_ENV_VAR[task]`, this file's own reporter indexing
+   `EXPECTED` — are pinned by AST checksum, so changing one goes red and asks a person to re-read
+   it. Every name the sweep resolves must then be in exactly one of four doors: `EXPECTED`, the
+   client build inputs the build refuses to go without, a written allowlist with a reason per name,
+   or Vite's own constants. A variable can no longer be neither reported nor deliberately excluded.
+   [260908a](../plans/260908a-make-every-environment-variable-read-literal-and-inventory-them.md).
+
+   **The limit goes in the same breath, because it is this postmortem's own distinction: it
+   inventories names, not consequences.** It would not have caught the incident above.
+   `SUPABASE_SERVICE_ROLE_KEY` was already in `EXPECTED` before `src/store/blobs.ts` started reading
+   it and was still there afterwards — a membership test stays green straight through the commit, as
+   § *Derive the contract instead of restating it* says at length. What went wrong was a *reported*
+   variable quietly becoming required without gaining a `breaks` consequence, and deriving the
+   contract, which is the fix for that, is still not built.
 2. **It only sees the API function's runtime environment.** `VITE_SUPABASE_URL` and
    `VITE_SUPABASE_PUBLISHABLE_KEY` are compiled into the browser bundle at build time — and missing
    them produced a blank site on the same day, a different failure of the same class. They are in
@@ -357,6 +381,11 @@ Four things it still does not reach:
   fix sends the next sweep down a blind alley. Found by GPT Sol while reviewing the plan to build it;
   the history was then checked by hand.
   [260907e](../plans/260907e-small-uncontested-postmortem-preventions-batch.md) § Stage 4.
+
+  *Built 2026-09-08 — the membership half of this bullet, not the derivation half. See item 1 above
+  for what landed and for the sentence that has to travel with it. The first half of this bullet,
+  one declaration of each variable that both the reader and the health check import, is still the
+  fix for the incident and is still not built.*
 - **Compare the two lists by machine.** `.env.prod` exists precisely as "a record of what production
   needs" and is read by nothing. Diffing its names against `vercel env ls production` is what found
   this, done by hand, a day late. It belongs next to `check-production-gate.sh`.

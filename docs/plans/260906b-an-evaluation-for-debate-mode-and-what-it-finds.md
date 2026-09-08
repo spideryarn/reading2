@@ -412,6 +412,327 @@ Declared here rather than settled afterwards, for the reason the summaries eval 
 **Done:** *"recovered X of Y"* over Y ≥ 4, written into the spike-results doc, and journals on disk
 Layer 1 can replay. ~$0.15 per article.
 
+### The 80-20, decided 2026-09-08 — most of this eval is not needed to fix the bug
+
+Greg asked for the 80-20. Here it is, with the reasoning, because it cuts three of the five stages.
+
+**What I found by reading the captures rather than the plan.** Every journalled run stores the raw
+OpenRouter response verbatim, and that includes `message.annotations` — **eleven and twelve
+`url_citation` objects per pass, each with `url`, `title` and the `content` extract the model was
+shown**. So the frozen packets Stage C was going to *capture* are already on disk, in
+`output/debate-runs/`, bought with the $0.6384 already spent. Layer 2 needs no capture sweep; it
+needs a reader for what is there.
+
+**And the bug is stochastic, which the plan did not say.** The three Feynman rows in
+[the spike](260905f-debate-mode-stage-0-spike-results.md) § 4 point valence at the source's own
+subject. In the journalled run of the same article a day later, the equivalent
+`skepticalinquirer.org` row came back `corroborates` / **positive** — correct. One run cannot show
+this fixed, and no single re-run can show it broken. **Any honest evidence here is a rate over
+repetitions, not a before-and-after pair.** That is the finding that reshapes the stages.
+
+**What the prompt actually does, read this morning.** The defect is sharper than F54 recorded:
+
+- **Group two defines valence's target in a sentence** — *"Here `valence` is the quoted passage's
+  stance toward THE CLAIM you quoted — not toward the article as a whole, and not its tone."*
+- **Group one defines it nowhere.** `READING` says *"which way the QUOTED PASSAGE leans toward this
+  row's target"* and the word *target* is never bound for this group. The only hint is a comment in
+  the answer format, `"applies": "what it says about this article"`.
+- **Neither group's negation list covers the observed failure.** Group two rules out *the article as
+  a whole* and *its tone*. All three recorded errors are stance toward **whatever the source is
+  itself discussing** — psi, Geller — and no sentence in either prompt rules that out.
+- And F54 stands: `relation` is scoped to the outside **page** and `valence` to the **quoted
+  passage**, so the two fields do not share a subject.
+
+**So the fix is a spec repair, not a matter of taste** — a missing binding and a missing negation.
+That matters, because the machinery this plan spends most of its stages on exists to *choose between
+candidate wordings* with rigour, and there is nothing here to choose between.
+
+**The cut.** Four things, in place of Stages B–E:
+
+| | what | cost |
+|---|---|---|
+| **B′** | The free instrument: the scorer over captured journals, Layer 1 replay, Layer 0's packets as tests, the corpus manifest | **nothing** |
+| **C′** | Layer 2 from the annotations already on disk — one reading per frozen packet, no search, **repeated N times** so the output is a rate | small; no search billing |
+| **D′** | Hand-labelled ground truth for the corpus's rows, committed as a fixture | **nothing but my time** |
+| **E′** | The prompt repair, and the same packets re-read to move the rate | one more C′ sweep |
+
+**What this drops, and the condition for bringing it back.** The arms machinery, the blinded judge
+with its anchor gate, and the live confirmation sweep. The judge exists to scale labelling past what
+a person will do by hand; the corpus is **26 reported rows over three articles**, which is well
+inside hand-labelling, and a hand label is better evidence than a judged one at this size. **If D′
+turns out too small to separate the arms — if the rate moves by less than the noise across
+repetitions — the judge comes back and the arms with it**, and that is a measurement this cut
+produces rather than a risk it takes.
+
+**The simpler thing passed over, and why not.** Just fix the prompt and look at the panel. Refused:
+the bug appears on roughly half of rows on one run and none of the next, so looking proves nothing in
+either direction, and this is the exact failure [silent-success.md](../reusable/silent-success.md)
+names — a check that shares an assumption with the thing it checks.
+
+**Correction owed to Greg.** I told him Layer 3 was the only part that costs money. Layer 2 costs
+money too — a model call per packet per repetition, without search billing. Layer 3 remains the one
+that cannot be replayed, and the one to ask about.
+
+### The bug's own rows were on disk all along — measured 2026-09-08, and it changes the cut
+
+**The plan's premise was wrong in a way that made the job look far more expensive than it is.** § What
+the live runs left us with says *"The $0.6252 bought no replayable evidence. Only kept rows are
+stored."* That is true of the **validation** question, where the interesting rows are the dropped
+ones. It is false of the **valence** question, because valence is a property of a **kept** row — and
+every kept row was written to `spideryarn.article_revisions.debate` and is still there.
+
+Six artefacts are in the local database. Revision `f92fc516` (2026-09-05 22:xx) is the spike run
+itself, and it holds all three bad rows, verbatim:
+
+| relation / valence | source | what it actually does |
+|---|---|---|
+| `disputes` / **positive** | `psi-encyclopedia.spr.ac.uk` | disputes Feynman; positive about psi |
+| `corroborates` / **negative** | `skepticalinquirer.org` | backs Feynman; negative about Geller |
+| `disputes` / **positive** | `psi-encyclopedia.spr.ac.uk` | disputes Feynman; positive about parapsychology |
+
+So the positive cases are **free, recoverable and already paid for**. Nothing needs to be re-run to
+obtain them.
+
+**The measured base rate, over everything replayable.** 33 *reported* rows: 7 in the spike revision, 26 across
+the three journalled runs. **Three are wrong, all three in the spike run, and the journalled runs
+contain none** — hand-labelled row by row against § 4's definition, with two rows on the
+constitution article marked questionable rather than wrong (`windowsontheory` reads as praise and
+was called `neutral`; `nextgov` confirms the claim and was called `neutral`). The prompt did not
+change between the two: the history of `src/debate.ts` shows nothing touching `relation`, `valence`
+or either target sentence between 2026-09-05 17:36 and the journalled runs.
+
+**≈9% of reported rows, and 43% on one run of one article. Both numbers are real and the plan was
+sized for the second one.**
+
+**Corrected by Sol's F59, 2026-09-08 — the denominator that matters is smaller.** *Reported* is not
+*shown*: production kept only 15 of the journals' 26, and one journalled row has no exact matching
+annotation. With the spike's 7 kept rows the user-visible denominator is **22**, so the displayed
+error rate is **3/22**, not 3/33. The reported-row figure still measures what the model emits; only
+the kept figure measures what a reader sees, and the two must never be printed as one number.
+
+### And the pair F35 demoted is the cheapest detector we have
+
+**All three known bad rows are opposite pairs** — two `disputes`+`positive`, one
+`corroborates`+`negative`. Sol's F35 was right that an opposite pair is **not a contradiction**, and
+the two honest counter-examples above stand. But *not a contradiction* was then read as *only an
+inspection mark*, and the measurement says something stronger and more useful:
+
+> The opposite pair has **high recall** for this bug — every instance we have is one — and low
+> precision, which is exactly what F35 established.
+
+A high-recall, low-precision mark is worthless as a coercion and **excellent as a sampling frame**.
+That is what makes D′'s hand-labelling tractable: you do not label every row a sweep returns, you
+label **every opposite pair plus a matched control sample of same-signed rows**, and the control
+sample is what stops the frame from measuring only its own bias. Nothing is coerced, ordered or
+coloured by the pair — F35's ruling is untouched — it decides only *what a person looks at*.
+
+**Two sources, two completenesses — corrected 2026-09-08 after both were measured.** The
+distinction matters and I had it flat:
+
+- **The three spike rows come from the database only, and have no haystack.** F59 is right about
+  them: they are regression fixtures, not frozen packets.
+- **The 26 journalled rows come with theirs.** All **66** `url_citation` extracts are present and
+  non-empty — counted independently twice, by the instrument and by the reviewer. So those packets
+  rebuild **complete, haystack included**, which is what lets a repair be replayed against *the same
+  extract production verified against* rather than a fresh search. That is a better position than
+  either § "The bug's own rows were on disk all along" or F59 described.
+
+**And a Layer 2 packet rebuilds from the database alone.** A stored row carries `id`, `url`,
+`title`, `blockId`, `claimQuote`, `sourceQuote`, `relation`, `valence` and `applies` — every field
+§ Layer 2 asks a packet to fix except the evidence haystack, and the haystack is not what a reading
+is *about*: `READING` opens *"'relation', 'valence', 'applies' and 'limits' are YOUR READING of the
+passage you quoted"*. The passage is the `sourceQuote`, and it is stored. So the three cases that
+matter can be rebuilt for nothing — **but as regression fixtures, not as frozen packets** (F59): the
+haystack is absent, § Layer 2's contract requires it, and the judge design says the Geller case is
+invisible without the full extract. The rate is measured on annotation-backed, validation-kept rows;
+these three are the preflight. It still earns its place for the **discovery** question, which is a different stage.
+
+**What this does to the cut.** C′ shrinks. Layer 2 was to be repeated N times per packet to find a
+rate; with the positive cases already in hand, the first question is no longer *"can we make the bug
+appear?"* but *"does the repair stop the three rows we have from coming out wrong?"* — which is
+replay against three known packets, not a rate over a sweep. **Sol's F58 corrected this and is right:** a single all-correct response happens under the
+incumbent too — the journalled Skeptical Inquirer row proves it — so the three-row replay is a
+**preflight, not evidence**. The repeated incumbent-versus-repair comparison stays, and **the
+incumbent must reproduce at least one error** or the run did not exercise the defect.
+
+### E′ — the repair, written out before any output is seen
+
+> **Superseded, and kept because it was declared in advance.** § E″ below is what shipped. All three
+> changes here survived in substance — but the *order* is different, because the measurement that
+> came after this was written found that all three known errors are in group **two**, which already
+> had the target-binding sentence change 2 was going to add to group one. So the change with the most
+> evidence behind it is change 3, which this section ranked last and called the one to hold out.
+> § E″ also adds the vocabulary rename, which is not here at all.
+
+Declared here, not in a commit, so that F60's *"label before repaired outputs exist"* and F61's
+*"declare the design before seeing output"* are both satisfiable and checkable afterwards. **Three
+changes, one of them a contract change.**
+
+**1. `relation` and `valence` get the same subject and the same target** — F54, in the exact words
+that finding specified, plus the matching move on `valence`. Today `READING` (`src/debate.ts` ~1056)
+scopes `relation` to the outside **page** and `valence` to the **quoted passage**:
+
+    relation  what the outside page does to the thing it is answering:
+    valence   which way the QUOTED PASSAGE leans toward this row's target:
+
+becomes
+
+    relation  what the QUOTED PASSAGE does to this row's target:
+    valence   which way the QUOTED PASSAGE leans toward this row's target:
+
+**If this lands, the same commit changes** `DebateRelation`'s docblock in `src/types.ts` (*"What the
+outside page does to what it is answering"*), the parent plan's § 4, and the panel's explanatory
+prose. Group-one eligibility and `articleReferenceQuote` stay page-level; `applies` and `limits`
+keep their outside-piece meaning. That is F54's scope and it is not being widened.
+
+**2. Group one gets a target binding, because it has none.** Group two says *"Here `valence` is the
+quoted passage's stance toward THE CLAIM you quoted — not toward the article as a whole, and not its
+tone"* (~1168). Group one says nothing; the word *target* is never bound for it, and the only hint is
+a comment inside the answer format, `"applies": "what it says about this article"` (~1125). It gets
+the parallel sentence, naming the article as the target.
+
+**3. Both groups get the negation the failures actually need.** Group two rules out *the article as a
+whole* and *its tone*. **All three recorded errors are stance toward the source's own subject** —
+psi, Geller — and no sentence in either prompt rules that out. One clause, in both groups:
+
+> not toward whatever the outside piece is itself discussing.
+
+**Why this is a spec repair and not an arm.** A missing binding and a missing negation are defects on
+their face; there is no second wording competing with them on taste. That is the argument the whole
+cut rests on, so it is worth being explicit that **change 3 is the one with the least authority
+behind it** — 1 and 2 are F54 and a parallelism the code already has on one side, while 3 is inferred
+from three observations. If the measurement separates them at all, 3 is the one to hold out.
+
+**What must be true before this is written into `src/debate.ts`:** the hand labels exist and are
+committed (D′), the incumbent has been shown to reproduce at least one error (F58), and the raw
+vocabulary check is in place (F62) — because change 1 and change 3 both alter the sentence that
+introduces the answer vocabulary, which is precisely the edit that could turn every row `unknown`
+while looking like a success.
+
+### E″ — I re-made the claim F35 refused, and this is the second reversal, 2026-09-08
+
+**Round one of this plan claimed `disputes`+`positive` and `corroborates`+`negative` are
+contradictions. Sol's F35 refused it. On 2026-09-08 I claimed it again — as a schema defect this
+time, with a discriminated union to make the pairs unspellable — and Sol's F65 refused it again,
+citing this plan's own § 4 back at me.** Recorded as a reversal rather than quietly removed, exactly
+as the first one was.
+
+§ 4's two honest examples are still honest, and they are the answer:
+
+- *"The stated 10% is wrong; it is at least 30%, which makes the warning stronger."* — truthfully
+  `disputes` + supportive.
+- *"The reported figures are right, but the conclusion drawn from them is indefensible."* — truthfully
+  `corroborates` + critical.
+
+A type that cannot spell those forbids honest rows to forbid three wrong ones. **`lean` stays on
+every relation**, `unclear` included — F66 is right that a passage can plainly support a conclusion
+while the extract leaves its argumentative move genuinely unclear, and the plan already insists
+`unclear` and `unknown` are two different facts.
+
+And F65's charge of circularity is fair: I called three rows errors, then used the other 32 to argue
+that a divergence *is* an error. The crosstabs below show **association, not entailment**, over a
+corpus of two or three articles, and that is all they were ever entitled to show.
+
+#### What survives, and it is the part that matters
+
+**The three bad rows are still bugs.** Neither § 4 example fits them: both of those turn on a
+part-versus-whole gap — dispute the detail, support the conclusion — and the psi and Skeptical
+Inquirer rows have no such gap. Their target is one atomic `claimQuote`, and the stance recorded is
+toward the source's own subject instead.
+
+**And here is the fact that reorders the repair. All three errors are in group *two*.** The spike
+revision's `direct` group is empty; all seven rows are `claims`. Group two is the group that already
+carries an explicit target binding:
+
+> Here "valence" is the quoted passage's stance toward THE CLAIM you quoted — not toward the article
+> as a whole, and not its tone.
+
+**So the instruction was present and was not followed.** That kills the comfortable reading — that
+this is a missing sentence — and leaves the mechanism Fable named:
+
+> **Sentiment collapse.** `positive | negative` is sentiment-analysis vocabulary, so the cheapest
+> reading of a passage is its polarity toward *its own* subject. A page negative about Geller is
+> negative; that it therefore *agrees with* Feynman is a second hop, and the model skipped it.
+
+Note what that sentence does and does not rule out. It rules out the article as a whole, and it rules
+out tone. **It does not rule out the source's own subject** — which is the one thing all three rows
+did. The negation is incomplete, and completing it is the change with the most evidence behind it.
+
+#### The repair, revised
+
+1. **Complete the negation, in both groups** — *"not toward whatever the outside piece is itself
+   discussing."* The only change aimed squarely at the observed failure.
+2. **Rename the values from sentiment words to agreement words** —
+   `leans-against | neither | leans-for | cannot-tell`. Sol and Fable independently endorse this, and
+   it is the only change that addresses the mechanism rather than the instructions. Needs the legacy
+   seam at F68, below.
+3. **Bind the target in group one**, which today binds it nowhere — its only hint is the comment
+   `"applies": "what it says about this article"` inside the answer format. A real gap, and worth
+   closing, but it did **not** cause these three: group one returned no rows at all.
+4. **Give `relation` and `valence` the same subject** — F54. Today `relation` is scoped to the
+   outside *page* and `valence` to the *quoted passage*.
+5. **The legacy seam, F68.** Every stored row has `valence` and none has `lean`, and
+   `isDebateDocument` validates only that the two `rows` are arrays — row fields are never
+   re-checked, and the panel indexes an appearance table directly. Rename the values without a seam
+   and every old row reaches the renderer `undefined` and crashes on `look.icon`. One normalisation
+   accessor, not a fix in each consumer, and a test over a pre-change artefact carrying all four
+   legacy values.
+6. **Soften the docblock rather than delete it.** *"Orthogonal … and the two must stay that way"*
+   overstates: the data shows strong association. But § 4 is right that they are different questions —
+   an argumentative move and an overall stance toward a possibly composite target. The honest sentence
+   is *strongly associated in practice, not functionally dependent.*
+
+**And the worked example in the prompt is deliberately not from the corpus.** The first draft
+explained the mistake with the psychic-and-sceptic case, because it is the clearest one — which would
+have written the answer to the Cargo Cult article's three known rows into the prompt itself, and
+contaminated every future measurement on the one article in the corpus that exercises the bug. It
+says supplements and trials instead. The structure is identical and no packet we hold is named.
+
+#### What this does not fix, said plainly
+
+**F67 is the finding to keep.** The type only ever removed disagreement between two stored
+categorical fields; it could never make *"the chip contradicts the row"* impossible, because
+`relation` and `applies` are model judgements that no type relates to the source. And if the
+mechanism really is sentiment collapse, **the error can migrate into `relation`** once the stance
+field stops offering it a home. Any future scoring must therefore judge `relation` against the source
+and the target, not merely check that the chip follows the relation.
+
+**And this repair is not verified.** F70: replaying the three known packets exercises the parser and
+the renderer, never the revised prompt, so it is a regression test and not evidence. Showing that
+wrong-target interpretation actually fell needs labelled, repeated generation concentrated on
+polarity-inverting sources — sceptic-versus-believer articles, of which the corpus has one — and that
+costs money and is Greg's call. F62's raw-vocabulary gate stays necessary regardless, and F63's live
+smoke stays necessary as an integration check that the fenced answer still parses.
+
+**The bug is content-conditional and still stochastic** (F69). A source population whose own polarity
+opposes its stance toward the article creates the *opportunity*; sampling decides whether it lands.
+The aggregate `3/22` hides that stratum, so it should be reported separately rather than averaged
+away. My earlier "article-conditional, not stochastic" was too strong.
+
+#### The crosstabs, at the strength they actually support
+
+Over the 26 raw reported rows in the three real journalled runs — *real* meaning the `-check` runs
+are excluded, because those replay one synthetic `bakingreview.example` fixture twelve times, and a
+fixture repeated is not evidence repeated:
+
+|  | positive | negative | neutral | unknown |
+|---|---|---|---|---|
+| `disputes` | 0 | 12 | 0 | 0 |
+| `qualifies` | 0 | 3 | 4 | 0 |
+| `extends` | 2 | 0 | 0 | 0 |
+| `corroborates` | 5 | 0 | 0 | 0 |
+| `unclear` | 0 | 0 | 0 | 0 |
+
+And over the 35 kept rows in `article_revisions.debate`: `disputes` 9 negative and 2 positive,
+`qualifies` 10 neutral, `extends` 5 positive, `corroborates` 6 positive and 1 negative, `unclear` 2
+unknown. Two articles, four of six revisions near-identical re-runs, so the independent count is
+about thirteen.
+
+What that is good for: `qualifies` is the one relation where the field visibly varies, and all seven
+of its rows are correctly labelled on inspection — `hamtyped` accepts a schedule only for cool
+kitchens and leans against, `windowsontheory` praises parts while questioning others and is neither.
+What it is **not** good for is declaring the other relations entailed. That was the error.
+
 ### Stage B — the free instrument, and one shipped bug
 
 - `evals/debate/score.ts`: loss-reason table, the contingency table and opposite-pair mark,
@@ -1019,3 +1340,194 @@ dropped from the copy refusal → 1; `isArticleText` never firing → 5, includi
 that are its positive control; the link read from the witness again → 1. Round two: the directness
 refusal disabled → 1; `named` read off the witness again → 1; the join broken → 2; headings back in
 `blocks` → 2.
+
+## Review ledger — GPT Sol, round 4, on the 80-20 cut, 2026-09-08
+
+**Verdict: no P0. The cut is directionally right** — "the judge, generic arms framework, and full
+five-article live sweep are unnecessary for this prompt repair". Six findings before it is safe to
+build, and two of them correct arithmetic of mine.
+
+- **F58 — accepted, and it is my contradiction.** The cut says evidence must be a rate over
+  repetitions, then replaces that with one replay of three known cases. A single all-correct
+  response happens under the *incumbent* — the journalled Skeptical Inquirer row is the proof. So
+  **the three-row replay is a preflight, not evidence**, and the repeated incumbent-versus-repair
+  comparison stays, **with the incumbent required to reproduce at least one error** or the
+  experiment did not exercise the defect. That last clause is the part I would not have thought of:
+  it makes the control's failure a precondition rather than an outcome.
+- **F59 — accepted; my denominator was wrong.** "33 replayable rows" mixes reported with kept. The
+  journals report 26, but one has no exact matching annotation and **production kept only 15**;
+  with the spike's 7 kept that is **22 user-visible rows, so the displayed error rate is 3/22, not
+  3/33**. And the database-only packets omit the evidence haystack, which § Layer 2's packet
+  contract requires and which the judge design says the Geller case is invisible without. **The
+  three source-quote-only cases are regression fixtures, not frozen packets**; the rate is measured
+  on annotation-backed, validation-kept rows.
+- **F60 — accepted.** D′ inherits F47 and adds selection and confirmation bias on top. A human label
+  removes judge calibration error but still compares one categorical answer with another: it
+  measures valence disagreement, not which target the model internally evaluated. Three positives
+  cannot establish the sampling frame's recall, and matched controls give no population rate without
+  declared sampling probabilities. **So: label every evaluable row, show the labeller only target,
+  quote and evidence — `relation`, `valence` and `applies` hidden — and label before any repaired
+  output exists.** Adjudication of the questionable rows goes to a second reader; there is one
+  person here, so that is a different model family, declared as such rather than dressed up as a
+  second person.
+- **F61 — accepted, and declared here before any output is seen.** Production model and provider
+  policy, and **no `temperature` field**, because production sends none (`src/debate.ts`) and
+  forcing zero would measure a different distribution. **N=10 per condition, incumbent and repair
+  interleaved in randomised order.** Gold disagreement scored separately for the regression anchors
+  and the held-out packets. Packet-stratified permutation test, 95% packet-clustered interval, and
+  the per-packet rates printed beside it. Inconclusive → extend both to N=20; bringing the judge
+  back would not reduce generation noise. **Batch packets by article and pass with exact-ID
+  coverage — roughly 120 calls, not 520.**
+- **F62 — accepted, and it is the most valuable finding here.** P7 proves only that an
+  out-of-vocabulary answer is *coerced* to `unclear`/`unknown`. It does not prove a prompt emits the
+  accepted vocabulary. So a repair that made the model answer *"supportive"* would turn every row
+  `unknown` — and `unknown` reads as *"the wrong label was removed"*. **The repair would look like a
+  success exactly when it had destroyed the field.** Every repeated response is therefore checked
+  **before** coercion: raw vocabulary counts printed, zero out-of-vocabulary required, and the run
+  fails rather than crediting `unknown` as removal of a wrong label.
+- **F63 — accepted, and it costs money, so Greg is being asked.** Frozen packets prevent row
+  selection by design, so they cannot detect the repaired shared `READING` paragraph changing which
+  sources are selected, which quotations are emitted, or whether the live fenced answer still
+  parses. **One non-evidentiary live smoke run through `generateDebate` on the cheap `writes`
+  article**, gating integration, raw vocabulary and non-catastrophic row production only. It is not
+  evidence of the valence improvement and must never be reported as any.
+- **F64 — accepted as a narrowing.** B′ carried most of the old eval: gold-URL discovery,
+  kept-per-returned, the full loss table and Layer 0's P3–P6/P8 do not bear on a valence-only
+  repair. The instrument needed is: extract and pin eligible packets, enforce exact packet-ID
+  coverage, preserve raw vocabulary, score against hand labels, retain P7. Layer 1 replay stays as
+  reusable infrastructure.
+
+**And a factual correction to me:** the annotation counts are not uniformly 11/12. The three runs are
+**11/12, 9/12 and 12/10**. Everything else in the premises held — the raw responses and extracts are
+genuinely journalled, every inspected citation has a non-empty `url`, `title` and `content`, and the
+prompt reading is confirmed: group two binds the claim, group one never binds *target*, neither rules
+out the source's own subject, and `relation` and `valence` have different scopes.
+
+
+## Review ledger — GPT Sol, round 5, on the schema repair, 2026-09-08
+
+Prompt: [260906b-schema-repair-review-prompt.md](260906b-schema-repair-review-prompt.md).
+Answer: [260906b-schema-repair-review-sol.md](260906b-schema-repair-review-sol.md).
+
+**Verdict: refuse the discriminated union.** Two established P1s. I asked Sol to defend F9 and F35
+rather than concede them, and it did — F65 is the finding, and it is this plan quoted back at me.
+All five statements I offered were graded: **S1 false, S2 false, S3 partly true, S4 false, S5 false.**
+Sol independently re-derived the 26-row crosstab from `output/debate-runs/` and confirmed it, and ran
+`tests/debate.test.ts` green at 55/55, so the numbers held even where the argument did not.
+
+- **F65 — P1, established. Accepted, and it is the whole verdict.** The union contradicts § 4 of this
+  same plan, which already gives two honest opposite pairs and already records F35's refusal of the
+  identical claim from round one. *"Calling the three divergences errors before using the remaining 32
+  to establish entailment is circular."* Also right. The crosstabs show association, not entailment.
+- **F66 — P1, reasoned. Accepted.** `unclear` does not entail `cannot-tell`: a passage can plainly
+  support a conclusion while the extract leaves its argumentative move unclear. `lean` stays on every
+  relation, `unclear` included.
+- **F67 — P1, reasoned. Accepted, and it is the most valuable one for what comes next.** The type only
+  ever removed disagreement between two stored categorical fields. It cannot make *"the chip
+  contradicts the row"* impossible, because `relation` and `applies` are model judgements no type
+  relates to the source — and if the mechanism is sentiment collapse, **the error can migrate into
+  `relation`** once the stance field stops offering it a home.
+- **F68 — P1, established. Accepted.** I had found the same hole independently before the review
+  landed; Sol made it concrete — a renamed vocabulary without a compatibility seam sends every legacy
+  row to the renderer `undefined`, and `look.icon` crashes. One normalisation accessor, and a test
+  over a pre-change artefact carrying all four legacy values.
+- **F69 — P2, established. Accepted.** Content-conditional is not the same as non-stochastic. A
+  polarity-inverting source population is an *opportunity*; sampling decides whether it lands. My
+  "article-conditional, not stochastic" overstated it in the other direction from "3/22, stochastic".
+- **F70 — P2, reasoned. Accepted.** Replaying the three known packets tests the parser and the
+  renderer, never the revised prompt. It is a regression test, not evidence. F62's raw-vocabulary gate
+  and F63's live integration smoke both survive.
+
+**What I found while checking the findings, which changes the repair's order.** All three bad rows are
+in group **two** — the spike's `direct` group is empty and all seven rows are `claims`. Group two is
+the group that *already* carries an explicit target binding. So the instruction was present and was
+not followed, which demotes "bind the target in group one" from the fix to a separate real gap, and
+promotes completing the negation and renaming the vocabulary. Written up under § E″.
+
+**And the process lesson, which is the expensive part.** The refutation of my argument was already in
+this document, six hundred lines above where I wrote it, under a heading that says so. I read the
+plan, wrote a contradicting section into the same file, and sent it for review without noticing —
+`docs/reusable/silent-success.md`'s shape, in a document rather than in code: the check I ran shared
+its assumption with the thing being checked, because I wrote both. What caught it was the
+cross-family review, which is the one check that did not.
+
+## Review ledger — GPT Sol, round 6, on the code, 2026-09-08
+
+Prompt: [260906b-lean-rename-code-review-prompt.md](260906b-lean-rename-code-review-prompt.md).
+Answer: [260906b-lean-rename-code-review-sol.md](260906b-lean-rename-code-review-sol.md).
+Candidate: `6b5e99a1`.
+
+**No P0. Four findings, all accepted, and two of them are defects in claims I had written down as
+true.** This is the round that earns the rule about weighting a code review above a plan review: a
+plan review cannot find a docblock that promises something the code does not do.
+
+Sol also confirmed, independently and by running things: the label-sheet blinding is intact, all four
+mapped types really are exhaustiveness guards over one union, Referee mode's unrelated `valence` was
+untouched, and both mutation claims hold. 346 tests over 13 files, and every TypeScript project.
+
+- **F71 — P1, established. Accepted, and I verified it myself before fixing it.** `readStoredLean`
+  protects the panel and nothing else: `vocabularyReport` and `replayJournal` read only `lean`, so
+  every row written before the rename reads as absent. Measured over the three real journals —
+  **6/6, 10/10 and 10/10 off-vocabulary, spelling `(absent)`.** So all 26 historical rows became
+  unscorable and Layer 1 silently replayed their stance as `cannot-tell`, while the accessor's own
+  docblock claimed it was *"called by every consumer"*. It was not.
+
+  What makes this worse than an oversight: `vocabularyReport` is **the instrument built to catch a
+  prompt change that destroys a field while looking like a repair**, and it was blind to the one
+  vocabulary change that has actually happened to it. The fix keeps Sol's distinction — an adapter at
+  the stored-artefact boundary, and the **live** parser still strict, so a model answering
+  `supportive` today is still off-vocabulary and still fails the gate. Superseded rows are a **third
+  category**, counted and labelled apart from both the rows we understand and the rows we do not:
+  folding them into the off-vocabulary count makes a journal recorded last week read as a broken
+  prompt, and folding them into the known counts says nothing at all. Measured after: 26/26
+  superseded, `offVocabularyLeans` back to 0, and the real stances recovered — 7 `leans-for`, 15
+  `leans-against`, 4 `neither`, where every one of them had been `cannot-tell`.
+
+  **And a correction to my own framing of this finding, found while checking it.** `vocabularyReport`
+  is not merely blind — **it has no caller outside its own tests.** `evals/debate/run.ts` imports
+  `replayJournal` and `replayLines`, and nothing from `score.ts` but `LEAN_VALUES`. So the gate that
+  would have caught this was never wired into the runner in the first place, which is a larger gap
+  than the one Sol found and is **not fixed here**. Whoever wires it should also decide whether the
+  superseded count belongs in `vocabularyProblems` — the list a caller fails on — where it is now. It
+  is there deliberately: this function cannot know *when* its rows were written, so its sentence
+  carries both readings, and a count kept quietly out of the list is the shape the whole file exists
+  against. But that is a call better made with a real caller in front of you than invented for a
+  hypothetical one.
+- **F72 — P1, reasoned. Accepted, and my wording was self-contradictory.** The new negation said the
+  lean is *"not about whatever the outside piece is itself discussing"* — directly beside the
+  sentence binding the target to the article. But a group-one page is admissible **precisely because
+  it discusses this article**, so the clause forbade the answer it was asking for. What it must
+  exclude is a *different* subject the passage is also about. Reworded in both groups, with the old
+  phrasing now asserted **absent** so it cannot come back.
+
+  Also accepted: *"relation and lean answer that same question"* was wrong. They share a subject and
+  a target and ask different things — one names the move, the other says which way it points.
+- **F73 — P2, established. Accepted, and C4 was overstated.** The prompt test proved phrases were
+  present, not what the prompt said about them. Sol named the exact surviving mutation: change an
+  answer example to `"lean": "supportive"` and leave the vocabulary list alone, and it passes — which
+  is **F62's failure in miniature**, because every row copying that example coerces to `cannot-tell`.
+  Fixed by extracting the values actually attached to `"lean"` and `"relation"` and checking each
+  against the vocabulary. Sol's mutation now fails, run and watched.
+- **The guard test I specified was itself a silent success**, and the implementer caught it rather
+  than writing what it was told. My brief asked for a test proving the adapter does not swallow a
+  *live* off-vocabulary lean, and specified `lean: "supportive"` with no `valence` — which **passes
+  under the very mutation it was meant to catch**, because a widened adapter has no `valence` to
+  reach for. The real guard needs both fields present. That is this plan's own recurring lesson
+  arriving in a test written to enforce it, and it is the second time today a check has shared an
+  assumption with the thing it checked.
+- **F74 — P3. Accepted.** `DebateRelation` still opened *"What the outside page does to what it is
+  answering"* after the rescope; two parser comments still named `unknown`; the CSS still described
+  `neutral` and `unknown`. Fixed, plus one more the sweep found. C3's *"did not miss a Debate one"*
+  was not literally true.
+
+**And a note on the gate, because the failure is not what it looks like.** `npm run check` returned
+`✗ test` on this work with seven failures — four of them the prompt tests above and three the
+red-first tests for F71. Every one is a **torn read**: the run started at 11:11 and measured a tree
+still being edited at 11:33, so it paired the new test files with the old `src/debate.ts`. The
+failure output proves it — the prompt it printed still contains the pre-fix wording. Re-run on a
+still tree, which is what the ledger below records.
+
+Worth naming, because it will happen again on this box: **a long check measures the tree as it was
+while it ran, not as it is when you read the result.** A twenty-minute gate over a tree that two
+agents are editing reports on a commit that no longer exists. Read the failure before believing it,
+and re-run before acting on it.

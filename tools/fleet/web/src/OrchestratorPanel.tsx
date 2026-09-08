@@ -52,6 +52,17 @@ type Step = { stage: string; what: string; state: "done" | "next" | "later" };
  * **This list is prose and it will go stale**, which is why nothing on the page
  * computes anything from it and why each line names the stage it comes from.
  * The plan doc is the source; this is a signpost to it.
+ *
+ * It went stale exactly as advertised: the v0.4c line said `next` for a day
+ * after the transcript reader had landed, and nobody could tell from here that
+ * the half a person can see was still missing. That is why the line below now
+ * names **both** stages — the reader (v0.4c) and the page that calls it
+ * (v0.4f) — rather than one stage standing for a feature that took two.
+ *
+ * **Nothing is marked `next` today, and that is deliberate rather than an
+ * omission.** Several stages are open and more than one agent is working, so
+ * naming a next one from here would be a guess dressed as a fact. The plan doc
+ * has the order.
  */
 const STEPS: Step[] = [
   { stage: "v0.1", what: "A page listing the sessions, read-only.", state: "done" },
@@ -62,7 +73,7 @@ const STEPS: Step[] = [
   { stage: "v0.6", what: "Start an agent, through gjd-remote rather than a second way. Killing is not built.", state: "done" },
   { stage: "v0.5", what: "The recurring instructions as buttons, queued rather than raced.", state: "done" },
   { stage: "v0.5c", what: "Box Health can act: kill what is safe, kill the suites, broadcast.", state: "done" },
-  { stage: "v0.4c", what: "Recent messages, from the tail of a session's own transcript.", state: "next" },
+  { stage: "v0.4c + v0.4f", what: "Recent messages, from the tail of a session's own transcript, read on the session detail.", state: "done" },
   { stage: "v0.7", what: "The decision log: what was decided for you, and how sure the model was.", state: "later" },
   { stage: "—", what: "The Overseer itself: a daemon, a store, and a session spawned to judge.", state: "later" },
 ];

@@ -32,6 +32,7 @@ inventing a process.
 | [edit-important-docs.md](edit-important-docs.md) | changing a doc whose wording is a rule — one small set of changes at a time, before/after, approval before each |
 | [codex-cli-as-subagent.md](codex-cli-as-subagent.md) | a GPT/Codex subagent for cross-family review or delegated work, via [`scripts/run-codex.ts`](../../scripts/run-codex.ts) |
 | [claude-cli-as-subagent.md](claude-cli-as-subagent.md) | the mirror image — reaching Opus from something that is *not* a Claude session (a Codex run, a script, the box), via [`scripts/run-claude.ts`](../../scripts/run-claude.ts) |
+| [claude-subscriptions.md](claude-subscriptions.md) | one repo must bill a different Claude subscription from the rest — `CLAUDE_CONFIG_DIR`, why the wrapper has to be a `PATH` script rather than a shell function, and how to prove which account you are on |
 | [review-prompt-template.md](review-prompt-template.md) | writing the prompt for that review — name the candidate durably, suspicions last, a severity scale, an ID on every finding |
 | [claude-in-chrome.md](claude-in-chrome.md) | driving a browser through the Chrome extension, and it will not connect — `list_connected_browsers` returning `[]` is almost always the wrong Chrome profile |
 | [playwright-browser-control.md](playwright-browser-control.md) | driving a browser from a script, with no eyes — on the remote box, where the Chrome extension cannot follow ([browser-control.md](../project/browser-control.md) is which mechanism goes where) |
@@ -47,6 +48,7 @@ inventing a process.
 | Doc | What it saves you |
 |---|---|
 | [silent-success.md](silent-success.md) | **the pattern behind most of a day's bugs** — a thing reports success while doing nothing, and the check you would naturally run agrees with it, because it shares an assumption with the code |
+| [name-is-evidence.md](name-is-evidence.md) | **a name is assigned by one mechanism and consumed by another** — so it has provenance, decays, and is not necessarily unique; code that treats it as identity addresses the wrong object while every step succeeds |
 | [written-down-is-not-checked.md](written-down-is-not-checked.md) | **prose cannot fail, so nobody checks it** — a comment or doc that asserts a future, an absence, an inventory, or a generalisation from a same-shaped sample, believed later because writing it down looked like verifying it |
 | [trawl-session-transcripts.md](trawl-session-transcripts.md) | Greg says "this is not the first time" — extract the prose from every recent session transcript and have Sonnets read it, so the answer has names and timestamps |
 | [css-sticky-containing-block.md](css-sticky-containing-block.md) | why `position: sticky` can be declared correctly and do nothing — its range is its containing block minus itself |
