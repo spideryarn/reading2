@@ -186,6 +186,26 @@ depends on the dashboard being up. Hence two clocks in the state file rather tha
 apart exactly when something is wrong, and a single number would hide the case where the Overseer is
 alive but deaf. **A dead dashboard is a fact the Overseer records, not a silence it sits in.**
 
+**Divergence, 2026-09-08: the vitals history is being built in the DASHBOARD, not here.** The bullet
+above assigns it to the Overseer and `daemon.ts` says outright *"No health history and no local
+collection"*; both are now describing an intention rather than the code. Agreed between the two
+agents rather than decided by one: the reading already exists in-process where it is collected, so
+writing it at the source removes a transport hop **and** removes the dependency on the Overseer being
+up — which matters most in exactly the hour Greg is opening the graph to ask about. It gets its own
+root, `~/.fleet-health/`, so there is never a question of two writers on one file. **Recorded here
+before the code lands, not after**, because until it is written down this page points the rest of the
+wave at the wrong owner. Whether the assignment above should change is Greg's call, not ours.
+
+**And the one-writer discipline moved to a leaf so it would not be written a third time.** The
+retention needs the same kernel-backed exclusion the store has — a second dashboard on a different
+`FLEET_PORT` sharing the same directory is a second writer, and two starts can race before either
+observes an async bind failure. So `takeLock` / `stillOurs` / `isProcessAlive` / `LockHolder` /
+`LockRefusal` came out of `store.ts` into
+[`tools/overseer/lock.ts`](../../tools/overseer/lock.ts), which imports nothing but node builtins and
+`jsonl.ts`. **The third copy would have been the simplified one, and that is the copy that is wrong
+in the way nobody notices** — the same argument `jsonl.ts`'s own header makes about the rule it
+holds.
+
 ### The seam is a file, not a function — `~/.overseer/current.json`
 
 Written 2026-09-08, once the Overseer existed and the sentence *"the Overseer writes a current-state
@@ -927,6 +947,57 @@ dashboard agent, on the dashboard's side of the seam, for a row assigned to the 
 the seam working rather than a boundary being crossed: the prefix belongs where the message is
 delivered, not where it is decided.
 
+**A5 is CLOSED too, 2026-09-08, and the answer was none of the options.** Astra's row said *"Tailscale's
+default policy is permissive, so verify rather than assume"*, and nobody had verified. Greg's
+instruction: *"Get input from GPT Sol and/or Fable then use your judgment about whether/how to deal
+with this now."* Measured first, arbitrated second.
+
+**What the box actually says.** The tailnet has **exactly two devices** — this box
+(`100.92.255.119`) and Greg's iPhone, both his — and `tailscale serve status` and `funnel status` both
+report **"No serve config"**, so nothing is public. **The running dashboard binds `127.0.0.1` only**;
+it is not tailnet-reachable at all today, and Greg reaches it over an ssh forward. The repo's unit
+already says `Environment=FLEET_BIND=127.0.0.1`, and
+[a test enforces exactly that string](../../tests/systemd-units.test.ts). **The widening is not in the
+unit — it is in `/etc/fleet-dashboard.env`**, which exists on this box, contains
+`FLEET_BIND=127.0.0.1,100.92.255.119`, and is read at start because `EnvironmentFile=` comes after
+`Environment=`. So the surface widens at the instant `systemctl enable --now` runs, and not before.
+
+**Fable's verdict, and it reframes the row rather than answering it:**
+
+> A5 hardens a boundary against parties that don't exist yet while A7 (deferred, reasonably) leaves
+> the real one open. Fixing A5 now buys nothing that A7 hasn't already given away.
+>
+> — Fable, 2026-09-08
+
+All 27 agents share one Unix user and can already reach `127.0.0.1:8787`. **The untrusted parties that
+actually exist are on the loopback side of the bind, not the tailnet side**, so the two deferrals are
+consistent and fixing one without the other is not.
+
+**And the "cheap fix" Astra proposed is not cheap, for a reason worth keeping.** *Tailscale ACLs have
+no deny rule* — everything is allow. Restricting `:8787` to one device cannot be done by adding a
+grant beside the default `*:*`; it means deleting the wildcard and enumerating everything else that
+must still work, **including the ssh Greg reaches the box by**, in a console no agent can read or
+test, with lockout as the failure mode. That is a whole-policy rewrite, not a paste.
+
+**So the rule attaches to the widening, not to a backlog.** The dashboard binds loopback and has no
+write-path auth because the only parties who can reach it already own the box (A7). **Anyone widening
+the bind to the tailnet does it with `tailscale serve` proxying to the loopback bind, and an owner
+check on the `Tailscale-User-Login` header for every write** — not an ACL grant, because a device is
+not a person and Greg's phone being on the tailnet does not mean Greg is holding it. On a one-user
+tailnet that check is redundant today, which is exactly why it is a precondition on the widening
+commit rather than work to schedule now.
+
+**The likely failure mode of the deferral is not an attacker**, and naming it is the point: someone
+enables the unit as written; months later a device joins for convenience — the Mac, a collaborator's
+laptop, a tagged node for the scheduler — and nobody re-reads the policy, because *"it's on the
+tailnet"* has become the reason it is safe. The cost is keystrokes into any pane, which is root plus
+every key in `.env.local`, plus **`git push origin HEAD:main` from any pane — an unreviewed deploy to
+paying readers, with nothing mechanical to stop it**
+([version-control.md § What protects `main`](version-control.md#what-protects-main-and-what-does-not)).
+**Two devices today is what makes deferring safe; it is not something to build on.** Build on the
+bind, which the box controls and `ss -ltnp` can verify, rather than on tailnet membership, which only
+the admin console knows.
+
 ### Then — so the box does not collapse again
 
 | | what | owner |
@@ -1062,3 +1133,9 @@ becoming reachable from anywhere that is not a device Greg controls.
 - **This is not Spideryarn.** It runs on the box, spans repos, and must not depend on the product
   database or on anything under `src/`. If it ever earns its own repo, that should be a move, not a
   rewrite.
+  <br>↳ The one narrowing of this, and what it cost:
+  [260908f § Stage E](../plans/260908f-orchestrator-wave-2-write-path-usage-limits-box-health-history-attention-inbox-codex-adapter.md).
+  Greg asked for the product's voice dictation to be **reused** rather than copied, so leaf,
+  browser-only, product-agnostic modules may be imported and nothing else may.
+  `tests/fleet-imports.test.ts` names the twelve files that reach and fails on a thirteenth — the
+  list is the cost of the move, and it is meant to be reviewed rather than extended.

@@ -1,0 +1,90 @@
+Document links: node node_modules/vitest/vitest.mjs run tests/doc-links.test.ts --maxWorkers=1
+
+ RUN  v4.1.11 /home/greg/code/spideryarn2
+
+
+ Test Files  1 passed (1)
+      Tests  14 passed (14)
+   Start at  13:21:45
+   Duration  6.41s (transform 200ms, setup 219ms, import 3.26s, tests 2.54s, environment 0ms)
+
+
+
+Typecheck: node --import tsx scripts/typecheck.ts
+✓ src/web/tsconfig.json  (341 files)
+✓ tests/tsconfig.json  (1588 files)
+✓ tools/fleet/web/tsconfig.json  (29 files)
+✓ tsconfig.json  (469 files)
+✓ all 1666 source files are covered by some project
+
+
+Full-suite attempt: npm test -- --maxWorkers=1
+
+> spideryarn@1.0.0 test
+> vitest run --maxWorkers=1
+
+failed to load config from /home/greg/code/spideryarn2/vitest.config.ts
+
+⎯⎯⎯⎯⎯⎯⎯ Startup Error ⎯⎯⎯⎯⎯⎯⎯⎯
+Error: REFUSING TO START: not enough memory on this machine for a test run.
+  MemAvailable 8.86 GB, and swap 15.16 GB of 32.00 GB used.
+  A run needs 5.00 GB before its first worker, plus 0.20 GB per worker,
+  and this machine holds back 4.00 GB for everything that is not a test run.
+  NO TESTS RAN AND NOTHING WAS VERIFIED — this is resource pressure, not a test failure.
+  Wait for the machine to clear, or remove /home/greg/.config/spideryarn/vitest-memory-reserve-gb to switch this off.
+  (admission policy v1, pid 15)
+    at workersForThisRun (file:///home/greg/code/spideryarn2/node_modules/.vite-temp/vitest.config.ts.timestamp-1788870023717-4184d2d00489c.mjs:457:40)
+    at file:///home/greg/code/spideryarn2/node_modules/.vite-temp/vitest.config.ts.timestamp-1788870023717-4184d2d00489c.mjs:465:26
+    at ModuleJob.run (node:internal/modules/esm/module_job:569:25)
+    at async node:internal/modules/esm/loader:650:26
+    at async loadConfigFromBundledFile (file:///home/greg/code/spideryarn2/node_modules/vite/dist/node/chunks/node.js:37165:12)
+    at async bundleAndLoadConfigFile (file:///home/greg/code/spideryarn2/node_modules/vite/dist/node/chunks/node.js:37015:21)
+    at async loadConfigFromFile (file:///home/greg/code/spideryarn2/node_modules/vite/dist/node/chunks/node.js:36975:42)
+    at async resolveConfig (file:///home/greg/code/spideryarn2/node_modules/vite/dist/node/chunks/node.js:36581:22)
+    at async _createServer (file:///home/greg/code/spideryarn2/node_modules/vite/dist/node/chunks/node.js:26388:65)
+    at async createViteServer (file:///home/greg/code/spideryarn2/node_modules/vitest/dist/chunks/cli-api.CnMVyzaz.js:8902:17)
+
+
+
+
+
+Broad check: node --import tsx scripts/check.ts --fast (summary excerpt)
+============================================================
+summary
+============================================================
+  ✗ typecheck    FAILED
+  ✗ build        FAILED
+  ✗ test         FAILED
+  ✓ cycles       clean
+  ✓ chain        clean
+  ✗ conflicts    FAILED
+  ✗ committed    FAILED
+  ! lint         has findings
+      the lint baseline is not clean on purpose — docs/project/linting.md
+  ! knip         has findings
+      unused files/exports/deps are queued, not fixed — promote to a gate when this reaches zero
+  ! complexity   159 finding(s)
+      a high score means 'go and look', never 'this is wrong'
+  ! dupes        321 finding(s)
+      some duplication is honest; read before deduplicating
+
+A gate failed. That means something is newly wrong.
+
+
+Broad-check causes (context, not all captured tool output): typecheck/conflicts/committed subprocesses hit tsx IPC listen EPERM; API build rejected an existing client bundle from a different commit; database setup could not reach loopback/Docker. Direct typecheck above passed. No source code was changed to address these baseline/environment limitations.
+
+Final checks after upstream reconciliation at 3e2e3bd4:
+
+ RUN  v4.1.11 /home/greg/code/spideryarn2
+
+
+ Test Files  1 passed (1)
+      Tests  14 passed (14)
+   Start at  13:41:14
+   Duration  8.95s (transform 556ms, setup 485ms, import 2.68s, tests 5.28s, environment 0ms)
+
+✓ src/web/tsconfig.json  (342 files)
+✓ tests/tsconfig.json  (1591 files)
+✓ tools/fleet/web/tsconfig.json  (30 files)
+✓ tsconfig.json  (472 files)
+✓ all 1669 source files are covered by some project

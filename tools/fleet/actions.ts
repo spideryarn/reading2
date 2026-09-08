@@ -56,6 +56,13 @@
  *    eliminated.
  */
 import { descendsFrom } from "./steer.js";
+/* The vocabulary's own shapes live in wire.ts, because the browser renders the
+   buttons from what this file describes and cannot import a module that reaches
+   node:child_process. Re-exported so every existing `from "./actions.js"`
+   import keeps working. */
+import type { Speaker, SpokenAction, SpokenActionId } from "./wire.js";
+
+export type { Speaker, SpokenAction, SpokenActionId } from "./wire.js";
 
 /* ------------------------------------------------------------------ *
  * The vocabulary.
@@ -68,66 +75,13 @@ export type ActionScope =
   /** The box. Needs no session, and affects everybody. */
   | "box";
 
-export type SpokenActionId =
-  | "continue"
-  | "compact"
-  | "pull"
-  | "push"
-  | "run-checks"
-  | "report-status"
-  | "ease-off"
-  | "sleep-1h"
-  | "sleep-3h"
-  | "sleep-5h"
-  | "sleep-10h"
-  | "ask-fable"
-  | "ask-sol"
-  | "wrap-up"
-  | "stop-and-ask";
+/* `SpokenActionId` and `SpokenAction` are in wire.ts and re-exported above. */
 
 export type EnactedActionId = "remove-worktree" | "kill-session" | "kill-test-suites" | "kill-safe-processes";
 
 export type BroadcastActionId = "resource-broadcast";
 
 export type ActionId = SpokenActionId | EnactedActionId | BroadcastActionId;
-
-/**
- * A sentence delivered to one session's input box.
- *
- * `text` is ONE LINE, always, and that is a hard constraint rather than a house
- * style: `checkText` in steer.ts refuses a message containing a newline,
- * because Claude Code's input box submits on Enter and a two-line message is
- * two messages, the first of them half a sentence. So these read as dense
- * paragraphs. tests/fleet-actions.test.ts asserts every one of them survives
- * `checkText`, which is the check that would otherwise be made at the moment
- * somebody presses the button.
- */
-export type SpokenAction = {
-  effect: "spoken";
-  id: SpokenActionId;
-  scope: "session";
-  /** What the button says. */
-  label: string;
-  /** One line, for a tooltip or a coordinator's log. */
-  summary: string;
-  /**
-   * The exact words. **This is a prompt a real agent will act on**, not a
-   * label, so it is written to be acted on: it says what to do, names the
-   * mechanism where the mechanism is the part that goes wrong on this box, and
-   * asks for an answer back where the answer is the point.
-   */
-  text: string;
-  /**
-   * `slash-command` means Claude Code EXECUTES it rather than the agent
-   * judging it, so it happens even to an agent that would have pushed back.
-   * `/compact` is the only one today. Kept as a field rather than a comment
-   * because the confirmation a UI should show is different: an agent can
-   * decline a sentence, and cannot decline a slash command.
-   */
-  form: "prose" | "slash-command";
-  /** Should the UI ask twice? True where the effect is hard to undo. */
-  needsConfirm: boolean;
-};
 
 /**
  * An effect outside the conversation: a directory deleted, a process signalled.
@@ -560,8 +514,10 @@ export function boxActions(): readonly Action[] {
  * a coordinator's proposal and Greg's instruction are indistinguishable unless
  * the text says which it is. A model's recommendation must not mint its own
  * approval.
+ *
+ * The type itself is in wire.ts and re-exported at the top of this file; the
+ * prefixes below are the runtime half and stay here.
  */
-export type Speaker = "greg" | "overseer";
 
 const SPEAKER_PREFIX: Record<Speaker, string> = {
   greg: "[Greg, via the fleet dashboard] ",

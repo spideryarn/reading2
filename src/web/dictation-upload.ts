@@ -15,7 +15,20 @@
  */
 import { MAX_AUDIO_BYTES, formatOf, tooLongMessage } from "../dictation-limits.js";
 import { apiFetch, failure } from "./lib/api.js";
-import type { DictationContext } from "./useDictation.js";
+import type { TranscriptionResult } from "./transcriber.js";
+
+export type { TranscriptionResult };
+
+/**
+ * **Where in the product a dictation was going.** Mirrors `Where` in
+ * [src/transcribe.ts](../transcribe.ts), which turns it into a vocabulary.
+ *
+ * It lives here rather than in [`useDictation`](./useDictation.ts) because the
+ * hook stopped having an opinion about it on 2026-09-08: it is generic in its
+ * context now, and this is the product's answer. See
+ * [`transcriber.ts`](./transcriber.ts) for why that edge was cut.
+ */
+export type DictationContext = { kind: "profile" } | { kind: "article"; slug: string };
 
 /**
  * Base64 in chunks, because the one-liner breaks on real recordings.
@@ -34,34 +47,6 @@ function base64(bytes: Uint8Array): string {
   }
   return btoa(out);
 }
-
-/**
- * The transcript, or a reason there isn't one.
- *
- * `text` may be an empty string on success — a reader who pressed the button
- * and said nothing gets a successful transcription of nothing, and the box must
- * be left exactly as it was rather than told something went wrong.
- */
-export type TranscriptionResult =
-  | { ok: true; text: string }
-  | {
-      ok: false;
-      message: string;
-      /**
-       * **Whether sending the same bytes again could possibly work.**
-       *
-       * The reason a Retry button needs a field rather than a guess:
-       * [copy.md](../../docs/project/copy.md) is explicit that telling somebody
-       * to try again when retrying cannot work is the expensive mistake — they
-       * do it four or five times and conclude the app is broken. A recording
-       * this browser cannot encode, or one over the size cap, will be refused
-       * identically for ever; a 502 or a dropped connection very likely will
-       * not. GPT Sol's plan review, F5.
-       */
-      retryable: boolean;
-    }
-  /** The reader navigated away or pressed again. Say nothing to anybody. */
-  | { ok: false; abandoned: true; message: string; retryable: false };
 
 /**
  * How long the client waits before giving the box back.

@@ -23,7 +23,9 @@ import {
   authProviderRefused,
   ingestQuotaReached,
   type ReaderFacingFailure,
-  pageHadTooLittleText,
+  articleHadNoText,
+  documentHadTooLittleText,
+  documentHasNoArticle,
   pdfChunkTooBig,
   pdfPagesCutOff,
   pdfPagesFiltered,
@@ -157,7 +159,21 @@ const FROM_FACTORIES: Record<FactoryName, ReaderFacingFailure[]> = {
      wherever it appears in a sentence; a page of 431 characters would trip it.
      That is the invariant being broad rather than this message being wrong, and
      it is why the 500-character threshold itself is not in the sentence. */
-  pageHadTooLittleText: [pageHadTooLittleText(185)],
+  documentHadTooLittleText: [
+    documentHadTooLittleText("url", 185),
+    documentHadTooLittleText("upload", 185),
+  ],
+  /* **Both origins, and that is the branch that matters here.** Two sentences
+     under one code is what the invariant below refuses, and until 2026-09-08
+     these two *were* one sentence — the fetched one, shown to somebody holding
+     a file. A single call would leave the uploaded branch out of every
+     invariant in this file, which is the exact shape the header above records
+     `placingFailed` shipping in. */
+  documentHasNoArticle: [documentHasNoArticle("url"), documentHasNoArticle("upload")],
+  /* Stage 3's, and both origins for the same reason. It was a constant that the
+     first sweep of this split missed — reachable from an uploaded scan, where a
+     PDF's only text is a publisher record stage 2 withholds. ⟨GPT Sol, F24⟩ */
+  articleHadNoText: [articleHadNoText("url"), articleHadNoText("upload")],
   pdfTooManyPages: [pdfTooManyPages(142, 100)],
   pdfChunkTooBig: [pdfChunkTooBig(34, 30)],
   pdfPagesCutOff: [pdfPagesCutOff([12, 13])],
