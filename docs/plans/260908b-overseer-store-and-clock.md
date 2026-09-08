@@ -43,8 +43,47 @@ All measured on 2026-09-08 unless stated. The first is the finding that makes th
   fields `GJD_METADATA_VERSION` / `GJD_KIND` / `GJD_REPO` / `GJD_REMOTE_DIR` — is pinned into the
   **tmux environment** at launch ([`scripts/gjd-remote-tmux.ts`](../../scripts/gjd-remote-tmux.ts)),
   and a reboot takes the tmux server and all of it. `gjd-remote` writes only a log. Transcripts
-  survive under `~/.claude/projects/` and the working directory is recoverable from the transcript's
-  path, but **which** sessions were alive, and what each was for, is written down nowhere.
+  survive under `~/.claude/projects/`, but **which** sessions were alive, and what each was for, is
+  written down nowhere.
+
+### What resume actually needs, and what it can never get back
+
+Spiked 2026-09-08. Two corrections to what this plan assumed, both of which make the register
+*larger* rather than smaller — which is the direction you want to be wrong in only once.
+
+**`gjd-remote` cannot resume anything.** `new-claude`
+([`scripts/gjd-remote.ts:2484`](../../scripts/gjd-remote.ts)) always mints a fresh `randomUUID()` and
+passes `--session-id <new-uuid>`; it never passes `--resume` or `--continue`. And `gjd-remote resume`
+is a different feature entirely — `tmux attach -d`, which needs the tmux session to still be alive.
+So O4 is not "call the existing tool"; the CLI has the machinery (`-r/--resume`, `-c/--continue`,
+`--fork-session`) and our tooling uses none of it. **That is a change to `gjd-remote`, and it should
+be a flag on `new-claude` rather than a second launcher in `tools/overseer/`.**
+
+**The transcript path is not enough, and this plan previously said it was.** The directory in
+`~/.claude/projects/` is a *slugified* cwd, so it is lossy; and `repo` is provably not derivable from
+the directory at all — [`scripts/gjd-remote-log.ts`](../../scripts/gjd-remote-log.ts) says so in a
+comment. So the register records the real values rather than reconstructing them:
+
+| field | why, and whether it survives a reboot without us |
+|---|---|
+| `claudeSessionId` | what `--resume` takes. Recoverable from the transcript filename, but see identity below |
+| `dir` | the real path. **Not** recoverable — the projects directory holds a lossy slug |
+| `repo` | **Not derivable from `dir`.** Must be recorded |
+| `kind`, `metadataVersion` | the `META` contract; tmux-only, so gone |
+| `name` | the human handle, and the claim register other jobs rely on |
+| `model`, `permissionMode` | not set by `gjd-remote` today and not reported by `claude agents --json`, so **if a future flag ever sets one, there is currently no way to recover it.** Record them the moment anything can vary them |
+| `lastSeenAlive` | the heartbeat. Absent-and-finished and absent-and-killed look identical without it |
+
+**What no register can restore**, and O4 must say so plainly rather than implying a fleet that comes
+back whole: the in-flight turn and its tool calls, all subagent state under
+`~/.claude/teams/session-<id>/`, and every pid-keyed socket identity
+(`~/.claude/sessions/<pid>.json`, `/run/user/1000/cc-socks/<pid>.sock` — tmpfs, gone on reboot
+regardless). A resumed session is the *conversation* back, not the *work* back.
+
+**Resuming a session that never died is untested territory.** `--bg --resume` documents a guard
+("starts a copy and says so when the session is already running"); plain interactive `--resume`
+documents none, and nobody here has tried it. So the Overseer checks liveness before it ever calls
+resume, and O4's dry-run exists partly to make that check visible.
 - **The Overseer does not collect.** Settled with the dashboard agent on 2026-09-08. Its server
   serves the whole snapshot at `/api/state` and streams it at `/api/live` (SSE, event name
   `snapshot`, same bytes by construction — both call one `statePayload()`). A collection costs ~12s
@@ -102,16 +141,51 @@ whole files and a day's worth can be read without touching the rest.
 restarting.** The rules, all three of which must hold before a snapshot is diffed:
 
 - **`error` must be null.** The dashboard keeps and serves its last good snapshot when a refresh
-  fails, marking it stale — correct for a page, and inadmissible as evidence of change.
-- **`collectedAt` must have advanced** since the last diffed snapshot. The same snapshot served
-  twice is one observation, not two, and SSE plus polling means we will genuinely see it twice.
+  fails, marking it stale — correct for a page, and inadmissible as evidence of change. **Verified in
+  the code, not just its comment** ([`tools/fleet/server.ts`](../../tools/fleet/server.ts)): the
+  catch sets `lastError` and leaves `snapshot` alone, and — the part that matters — it then calls
+  `broadcast(statePayload())` anyway. **So a failed refresh is pushed down the SSE stream too.** A
+  subscriber that treats every `snapshot` event as a fresh observation would record a stale one.
+- **`collectedAt` must be non-null and must have advanced** since the last diffed snapshot. The same
+  snapshot served twice is one observation, not two, and SSE plus polling guarantees we see it twice.
+  **Non-null is not pedantry:** before the first collection completes, `statePayload()` substitutes
+  `{ rows: [], collectedAt: null, tookMs: 0 }`, so a subscriber connecting to a just-started
+  dashboard gets a real payload with a null clock. A naive comparison against a previous string
+  would either throw or silently treat null as "not advanced" for the wrong reason.
 - **`rows` must be non-empty.** An empty fleet is possible in principle and near-impossible here; the
   underlying parse refuses a short listing rather than returning one, so an empty list is far more
-  likely to be a bug than a fact. Treat it as a source failure, and record *that*.
+  likely to be a bug than a fact. It is also exactly what the startup payload above contains, which
+  is the concrete case: **the first thing the Overseer sees on connecting to a restarting dashboard
+  is an empty fleet**, and without this rule that reads as 36 sessions dying at once. Treat it as a
+  source failure, and record *that*.
 
 A snapshot that fails any of these produces a `source-degraded` event, not silence. **A dead
 dashboard is a fact the Overseer records, not a silence it sits in** — the coupling created by
 consuming someone else's stream is only acceptable if its failure is visible.
+
+### Identity is the tmux handle AND the Claude session id, never the handle alone
+
+The obvious key is the tmux handle (`$1643`) — it is immutable, it survives renames, and
+`gjd-remote` addresses everything by it for good reasons. **For a live view that is right; for a
+history it is wrong.**
+
+A tmux session can be resumed into a *different conversation*: same handle, same name, same pane, new
+Claude session id. Keying a timeline on the handle alone would silently splice two conversations
+together and present them as one agent working continuously — the worst kind of wrong, because the
+result is plausible and nothing about it looks broken. Handed to us by the dashboard agent on
+2026-09-08, along with the fields to fix it: `FleetRow` now carries `claudeSessionId` and `panePid`
+beside `paneId`, from the same `list-panes -a` call.
+
+So the store's identity is the **pair**, and a handle whose `claudeSessionId` changes is a
+`session-replaced` event — neither a death nor a birth, and distinct from both. That is the third
+case in a distinction this plan previously had only two of:
+
+- the tmux session was killed → `session-gone`
+- its Claude exited, tmux still there → a status change, not a disappearance
+- the handle was reused by a new conversation → `session-replaced`
+
+**All three look identical if you key on the handle**, which is exactly why the plan review was asked
+whether `session-gone` was the right concept.
 
 ### Two clocks in `current.json`, never one
 
