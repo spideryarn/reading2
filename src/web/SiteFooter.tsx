@@ -16,20 +16,39 @@
  * 2026-09-03 extracted its own `SiteFooter` into `SiteBits.tsx` on the same day
  * this file was written, in another worktree — two components, one name, the
  * same job, found only when the branches met. Greg's call was one component:
- * *"mine absorbs theirs"*. That is what `variant` below is for, and it is the
- * evidence for the paragraph above rather than a counter-example to it — the
- * duplication this file exists to prevent had already begun, twice, in a week.
+ * *"mine absorbs theirs"*. It is the evidence for the paragraph above rather
+ * than a counter-example to it — the duplication this file exists to prevent had
+ * already begun, twice, in a week. The `variant` prop that merge left behind was
+ * removed on 2026-09-08; see `SPACING`.
  * docs/project/marketing-pages.md.
+ *
+ * ## What it looks like, and why it looks like that
+ *
+ * A hairline, then one flex row with two ends: the wordmark, the caller's
+ * sentence and a colophon on the left, the links on the right. Before
+ * 2026-09-08 it was a rule and a huddle of underlined grey text at the far left
+ * of it, which on `/` meant about 370px of content under 1104px of rule and
+ * nothing closing the page. Each decision in it carries its reason at the point
+ * of use below — the rule's colour, the link class, the missing middots, the
+ * plain-text wordmark, the absent `mt-auto`, and the single spacing measure.
+ * docs/plans/260908d-make-the-site-footer-and-the-signed-out-pages-more-aesthetically-pleasing.md
+ * has the measurements it was changed against.
  *
  * ## Where it goes, and where it does not
  *
- * Every page a reader *lands on and reads*, and there are nine:
- * `LandingPage`, `FeaturesPage`, `PricingPage`, `PrivacyPage`, `ContactPage`,
- * `ChangelogPage` and `SignInPage` signed out, and the signed-in pages of the
- * same shape — the shelf, `/profile`, and those same policy and marketing
- * pages when a signed-in reader opens them. `/pricing` is the seventh, since
- * 2026-09-03, `/contact` the eighth, since 2026-09-05, and `/changelog` the
- * ninth, since 2026-09-06.
+ * Every page a reader *lands on and reads*: `LandingPage`, `FeaturesPage`,
+ * `PricingPage`, `PrivacyPage`, `ContactPage`, `ChangelogPage`,
+ * `PublicReadableSharingPage` and `SignInPage` signed out, and the signed-in
+ * pages of the same shape — the shelf, `/profile`, and those same policy and
+ * marketing pages when a signed-in reader opens them. `/pricing` arrived
+ * 2026-09-03, `/contact` 2026-09-05, `/changelog` and
+ * `/features/public-readable-sharing` 2026-09-06.
+ *
+ * **Written without a count, deliberately, since 2026-09-08.** This paragraph
+ * said "nine" while omitting `PublicReadableSharingPage` from its own list, and
+ * a count beside the list it counts is a fact with two homes — the same trap
+ * `FooterPage` below carries a note about. GPT Sol, reviewing the 260908d plan,
+ * finding 3.
  * `tests/site-footer.test.tsx` pins the list, so this paragraph and the code
  * cannot drift apart quietly — and it was the test, not this paragraph, that
  * was right for a day (GPT Sol, stage 2 code review, finding 6).
@@ -96,13 +115,16 @@
  */
 import type { ReactNode } from "react";
 
+import { GitHubMark } from "./GitHubMark.js";
 import { Link } from "./Link.js";
+import { Wordmark } from "./SiteBits.js";
 import {
   CHANGELOG_HREF,
   CHANGELOG_LABEL,
   CONTACT_HREF,
   FEATURES_HREF,
   LIBRARY_HREF,
+  OPENSOURCE_HREF,
   PRICING_HREF,
   PRIVACY_HREF,
   useRoute,
@@ -129,7 +151,7 @@ import {
  */
 type FooterPage = Extract<
   Route["kind"],
-  "library" | "features" | "privacy" | "pricing" | "contact" | "changelog"
+  "library" | "features" | "privacy" | "pricing" | "contact" | "changelog" | "opensource"
 >;
 
 /**
@@ -139,7 +161,22 @@ type FooterPage = Extract<
  * it is the shelf, signed out it is the landing page, and on either of them a
  * link labelled Home would point at the page under the reader's feet.
  */
-const LINKS: readonly { href: string; label: string; here: FooterPage }[] = [
+const LINKS: readonly {
+  href: string;
+  label: string;
+  here: FooterPage;
+  /**
+   * A mark drawn before the label, and exactly one entry has one.
+   *
+   * Greg asked for the open-source link *"using GitHub logo to indicate"*, and
+   * the mark is doing work the word cannot: in a row of six identical grey
+   * words, it is the only thing that says *this one leaves the site and goes
+   * somewhere you already know how to read*. `aria-hidden` inside `GitHubMark`,
+   * because the label beside it is the accessible name and an icon read aloud
+   * as well is noise.
+   */
+  icon?: ReactNode;
+}[] = [
   { href: LIBRARY_HREF, label: "Home", here: "library" },
   { href: FEATURES_HREF, label: "Features", here: "features" },
   /* Added 2026-09-03 with `/pricing`, and this array is the whole edit — which
@@ -160,39 +197,74 @@ const LINKS: readonly { href: string; label: string; here: FooterPage }[] = [
   /* Added 2026-09-06 with `/changelog` — same claim, same array-is-the-edit.
      "What's new" rather than "Changelog": the latter is the internal name for
      the process that writes the page (docs/project/changelog.md), and a
-     reader has never heard of it. */
+     reader has never heard of it.
+
+     **The label is `CHANGELOG_LABEL` rather than the words**, since 2026-09-07:
+     the command bar offers this page too, so the string had four homes and three
+     comments promising they matched. router.ts § `CHANGELOG_LABEL`. */
   { href: CHANGELOG_HREF, label: CHANGELOG_LABEL, here: "changelog" },
+  /* Added 2026-09-07 with `/opensource` — and, like the three entries above it,
+     this array is the whole edit. The first entry to carry an icon; see `icon`
+     above for why this one and not the others.
+     docs/plans/260907f-changelog-table-of-contents-collapsible-versions-version-numbers-and-an-opensource-page.md.
+
+     Its label is still the words, unlike the row above — router.ts
+     § `OPENSOURCE_HREF` says why, and that it should not stay that way for long. */
+  {
+    href: OPENSOURCE_HREF,
+    label: "Open source",
+    here: "opensource",
+    icon: <GitHubMark size={11} />,
+  },
 ];
 
-const LINK_CLASS = "tw:text-ink-faint tw:hover:text-highlight";
+/**
+ * **`SiteNav`'s link class, copied deliberately** (SiteBits.tsx § `SiteNav`), so
+ * a page speaks one link language at the top and at the bottom.
+ *
+ * **`tw:no-underline` is the load-bearing word.** This app imports no Tailwind
+ * preflight (tailwind.css § the bit of preflight we need), so the UA's
+ * `text-decoration: underline` stands wherever nothing removes it — and until
+ * 2026-09-08 nothing here did. Five grey underlined items in a row is what made
+ * this footer read as raw markup rather than as furniture, and it was the only
+ * link row on the site wearing them: the nav, the *Back* links, the `mailto:` on
+ * `/contact` and every cross-reference in the privacy policy all say
+ * `tw:no-underline` themselves. Do not drop it on the theory that a footer link
+ * "should" be underlined; nothing else here is.
+ */
+const LINK_CLASS =
+  "tw:text-sm tw:text-muted-foreground tw:no-underline tw:transition-colors tw:hover:text-foreground";
 
 /**
- * **How much air the row sits in**, and it is two values because the pages come
- * in two shapes rather than because anybody wanted a knob.
+ * **One measure, and it used to be two.**
  *
- * `page` is the app's own measure and the default, so it is what every page gets
- * that is chrome around something a reader came for. `marketing` is the taller,
- * roomier one the 2026-09-03 redesign chose, and the three pages that pass it —
- * `/`, `/features` and `/pricing` — are the whole of its use. Kept exactly as
- * that redesign had it (`mt-24 pt-6 pb-16`) when its footer was absorbed into
- * this file — those two pages end in a lot of vertical space on purpose, and the
- * app's tighter measure read as the page having been cut off.
- * docs/project/marketing-pages.md.
+ * There was a `variant` prop — `page` (`mt-14 pt-5`) against `marketing`
+ * (`mt-24 pt-6 pb-16`), the taller one carried over from the 2026-09-03
+ * redesign and passed by four callers. The reason it existed was that a single
+ * grey line of 12px text looked *cut off* under the marketing pages' vertical
+ * space, so those pages bought the closure back with air. Since 2026-09-08 the
+ * footer has a wordmark, a colophon and a two-ended row, which is mass of its
+ * own, and one measure closes both kinds of page. Four callers lost a prop and
+ * the knob went with it. docs/plans/260908d-make-the-site-footer-and-the-signed-out-pages-more-aesthetically-pleasing.md.
+ *
+ * If a page ever genuinely needs different air, give *that page* a wrapper
+ * rather than giving this component a second knob back.
  */
-const SPACING = {
-  page: "tw:mt-14 tw:pt-5",
-  marketing: "tw:mt-24 tw:pt-6 tw:pb-16",
-} as const;
+const SPACING = "tw:mt-20 tw:pt-8 tw:pb-16";
 
 export function SiteFooter({
   children,
   here,
-  variant = "page",
 }: {
   /**
-   * An optional sentence above the links — what the landing and features pages
-   * say about their screenshots. Anything true of *this page* rather than of
-   * the site, which is why it is the caller's and not a constant here.
+   * An optional sentence in the left-hand block, between the wordmark and the
+   * colophon — what the landing and features pages say about their screenshots.
+   * Anything true of *this page* rather than of the site, which is why it is the
+   * caller's and not a constant here.
+   *
+   * It said "above the links" until 2026-09-08, which was true of the stacked
+   * row this replaced and is not true of the two-ended one: the links are now
+   * *beside* it.
    */
   children?: ReactNode;
   /**
@@ -202,32 +274,124 @@ export function SiteFooter({
    * arrangement that cannot drift.
    */
   here?: FooterPage;
-  /** Which spacing — see `SPACING`. The three marketing pages pass `marketing`. */
-  variant?: keyof typeof SPACING;
 }) {
   const route = useRoute();
   const kind = here ?? route.kind;
   const links = LINKS.filter((l) => l.here !== kind);
 
   return (
-    <footer
-      className={`${SPACING[variant]} tw:border-t tw:border-border tw:text-xs tw:text-ink-faint`}
-    >
-      {children && <p className="tw:m-0">{children}</p>}
-      <p className={children ? "tw:mt-2 tw:mb-0" : "tw:m-0"}>
-        {/* The separator goes *between*, so the row cannot end in a dangling
-            `·`. It used to be a trailing one on every link, which was correct
-            only because the contact address was always drawn last after them —
-            and stopped being correct the moment that address left. */}
-        {links.map((l, i) => (
-          <span key={l.href}>
-            {i > 0 && " · "}
-            <Link href={l.href} className={LINK_CLASS}>
+    /* **A literal translucent white, not `border-border`.** `--border` is
+       `oklch(0.27 0 0)` — a solid grey line, and on a `oklch(0.145 0 0)` page it
+       was the heaviest edge anywhere on it, sitting under the least important
+       content. The marketing language builds its edges from translucent white
+       instead (site.css § the ladder), and this is that same family without
+       needing a `.site` ancestor — which matters, because this footer also draws
+       on the shelf and `/profile`, and neither of those may become a `.site`
+       page.
+
+       **`border-[rgb(255_255_255/0.16)]` and not `border-white/[0.16]`**, which
+       is what a Tailwind opacity modifier would normally be for. Read the CSS
+       v4.3.3 actually emits for it:
+
+           border-color: var(--tw-color-white);
+           @supports (color: color-mix(in lab, red, red)) {
+             border-color: color-mix(in oklab, var(--tw-color-white) 16%, transparent);
+           }
+
+       The alpha lives inside the `@supports`, and the declaration outside it is
+       **opaque white**. So a browser without `color-mix` gets a solid white 1px
+       rule across the foot of the page — a louder version of exactly the defect
+       this line exists to fix, on the only browsers nobody here tests. An
+       arbitrary literal has no fallback to be wrong. GPT Sol, reviewing the
+       260908d plan, finding 7; checked against the compiled stylesheet rather
+       than taken on trust.
+
+       **`0.16` — `--site-hairline-strong` — rather than the plain `0.10`
+       hairline, and that is a measurement rather than a preference.** The 10%
+       version was tried first, on the reasoning that it is the value most edges
+       on these pages use, and it disappeared: those edges are borders around a
+       `--site-surface` fill, so the fill is doing half the separating, and a
+       bare rule over the page background has nothing helping it. The stronger
+       value is the one the language already keeps for exactly that job.
+
+       **There is no `mt-auto` here, and that is the interesting one.** Pushing
+       the footer to the floor of a short page is a real requirement — `/contact`
+       and `/login` are both shorter than one screen — and `mt-auto` inside the
+       flex column those pages now are is the obvious way to say it. It was
+       written that way first and it was wrong: `margin-top: auto` and
+       `margin-top: 5rem` are the same property, and Tailwind emits `mt-auto`
+       later regardless of the order they appear in the class string, so `auto`
+       won everywhere — and `auto` resolves to zero wherever there is no free
+       space to absorb, which is every page that is not a flex column and also
+       any flex column whose free space something else has already taken.
+       Measured immediately afterwards: `marginTop: 0px` on `/`, `/pricing`,
+       `/privacy`, `/changelog` and `/login`, the rule sitting flush against the
+       bottom of the last panel on five pages out of six — while the sixth
+       looked perfect and the screenshots of the other five looked close enough
+       to pass. docs/reusable/silent-success.md.
+
+       CSS has no way to spell "auto, but at least 5rem", so the push belongs to
+       the page rather than to the footer: the short pages carry a `tw:flex-1`
+       element above this one, which grows into the free space and leaves this
+       margin alone. ContactPage.tsx has the shape. */
+    <footer className={`${SPACING} tw:border-t tw:border-[rgb(255_255_255/0.16)]`}>
+      {/* Two ends rather than one huddle. On `/` and `/pricing` the row is
+          1104px wide and used to hold about 370px of text hard against its left
+          edge, leaving roughly 70% of the rule with nothing under it.
+
+          `flex-wrap` is the whole narrow-window story — docs/project/narrow-windows.md
+          § "a row of things whose widths you do not control must be allowed to
+          wrap". On a narrow window the links drop under the left column, and
+          inside `/login`'s 336px column they do so at any window width.
+          Measured clean — `scrollWidth - clientWidth === 0`, that doc's own
+          check — on all seven pages at 1440, 390 and 320. */}
+      <div className="tw:flex tw:flex-wrap tw:items-start tw:justify-between tw:gap-x-10 tw:gap-y-6">
+        <div className="tw:flex tw:max-w-[46ch] tw:flex-col tw:gap-2">
+          {/* Plain text, deliberately: see SiteBits.tsx § `Wordmark`. A link to
+              `/` here would be the one thing this component exists to prevent —
+              an entry pointing at the page under the reader's feet — on every
+              page that is `/`. */}
+          <Wordmark className="tw:text-sm" />
+          {children && (
+            <p className="tw:m-0 tw:text-xs tw:leading-relaxed tw:text-ink-faint">{children}</p>
+          )}
+          {/* The line that closes the page. A fact rather than copy, so it is
+              not subject to docs/project/positioning.md § Whose words — and the
+              year is read rather than typed, because a hardcoded one is wrong
+              every January and nothing goes red when it is. */}
+          <p className="tw:m-0 tw:text-xs tw:text-ink-faint">
+            © {new Date().getFullYear()} Spideryarn · beta
+          </p>
+        </div>
+        {/* **The gap is the separator.** It was ` · ` between every pair, which
+            was already the careful version — a trailing one on each link had
+            been correct only while the contact address was drawn last after
+            them, and stopped being the moment that address left. Set in a row
+            of its own with real space between the items, the middot is one more
+            grey mark competing with the words. */}
+        <nav
+          aria-label="Site"
+          className="tw:flex tw:flex-wrap tw:gap-x-5 tw:gap-y-2"
+        >
+          {/* **One entry carries a mark, and it is why this is not a bare
+              `{l.label}`.** Greg asked for the open-source link *"using GitHub
+              logo to indicate"* — see `icon` on `LINKS`. `inline-flex` only when
+              there is one, so every other link stays the plain inline text this
+              row's spacing was measured against. */}
+          {links.map((l) => (
+            <Link
+              key={l.href}
+              href={l.href}
+              className={
+                l.icon ? `${LINK_CLASS} tw:inline-flex tw:items-center tw:gap-1.5` : LINK_CLASS
+              }
+            >
+              {l.icon}
               {l.label}
             </Link>
-          </span>
-        ))}
-      </p>
+          ))}
+        </nav>
+      </div>
     </footer>
   );
 }

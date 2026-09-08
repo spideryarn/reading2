@@ -9,6 +9,8 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  type BarContents,
+  barHasContent,
   DEFAULT_ROOT_PX,
   fitView,
   offerableGists,
@@ -433,5 +435,71 @@ describe("the article on its own stops at the measure", () => {
     expect(f.columns).toEqual([3]);
     expect(f.widths).toEqual([1588]); // the window, less the rail
     expect(f.alone).toBe(false);
+  });
+});
+
+/**
+ * **The controls bar's content, which decides whether it is drawn at all.**
+ *
+ * The failure this guards is asymmetric, and that is why it is a table rather
+ * than three assertions. Say yes too often and the reader gets the 44px of
+ * nothing they reported (`SPIDERYARN-READING2-2E`); say no too often and a
+ * control disappears — a visitor loses the one line telling them whose document
+ * this is, or a failed comment write is swallowed. Only the first of those is
+ * visible on screen.
+ *
+ * docs/plans/260908a-the-top-bar-stops-being-drawn-when-it-has-nothing-in-it.md
+ */
+describe("barHasContent", () => {
+  const owner: BarContents = {
+    owner: true,
+    inMode: true,
+    offerableGists: 2,
+    showText: true,
+  };
+
+  it("is empty for an owner in a mode — the case the reader reported", () => {
+    // Structure, Outline, Chat, Search, Plain: `inMode` is every mode but
+    // Hierarchy, and none of them draws a granularity pill.
+    expect(barHasContent(owner)).toBe(false);
+  });
+
+  it("is never empty for a visitor, in any mode", () => {
+    // The read-only chip. `offerableGists` and `showText` describe the
+    // *article*, and neither reaches the bar in a mode, so this has to hold
+    // with both of them off as well.
+    expect(barHasContent({ ...owner, owner: false })).toBe(true);
+    expect(
+      barHasContent({ ...owner, owner: false, offerableGists: 0, showText: false }),
+    ).toBe(true);
+  });
+
+  it("has the granularity pills in Hierarchy", () => {
+    expect(barHasContent({ ...owner, inMode: false })).toBe(true);
+  });
+
+  it("still has the paragraph pill in Hierarchy on a flat article", () => {
+    // No gist depths to offer, but `?text=1` still draws the `Paragraphs` pill
+    // or the sentence standing in for it — nav-labels.ts § `paragraphPill`.
+    expect(barHasContent({ ...owner, inMode: false, offerableGists: 0 })).toBe(true);
+  });
+
+  it("is empty in Hierarchy when the article offers neither", () => {
+    // Reachable: a flat article opened with `?text=0`. Nothing would be drawn
+    // in it, so the strip should go here too — the bug is "an empty bar", not
+    // "an empty bar in a mode".
+    expect(
+      barHasContent({ ...owner, inMode: false, offerableGists: 0, showText: false }),
+    ).toBe(false);
+  });
+
+  it("stays empty when a comment write has failed — that mark is on the Dock now", () => {
+    // The one transient thing that could put this bar back. It moved to the
+    // Comments button on the day this predicate was written, precisely so that
+    // a refused delete cannot summon 44px of chrome and push the article down
+    // (Dock.tsx § the Comments button). There is no input here to pass, and
+    // that absence is the assertion: `BarContents` has no `commentError` field,
+    // so this line would not compile if one came back without a decision.
+    expect(barHasContent(owner)).toBe(false);
   });
 });

@@ -217,11 +217,46 @@ export function Tooltip({
   const childRef = (children.props as { ref?: Ref<HTMLElement> }).ref;
   const ref = useMergeRefs<HTMLElement>([refs.setReference, childRef ?? null]);
 
+  /**
+   * **A trigger that already describes itself keeps that description, and gains
+   * the card's rather than losing it.**
+   *
+   * `mergeProps` in `@floating-ui/react` applies the *user's* props last for
+   * every key that is not an `on…` handler (`.concat(userProps)` into the
+   * reduce), so anything in `children.props` **overwrites** what `useRole`
+   * generated. That is right for `className` and wrong for this one attribute,
+   * which is a list and not a value — and it is wrong in a way nothing reports:
+   * the card still opens, still animates, and is simply no longer the trigger's
+   * accessible description.
+   *
+   * Worse, React puts the key in `props` even when the JSX wrote `undefined`,
+   * so a trigger that describes itself only *sometimes* — `DockTab`'s `note`,
+   * which is a comment write that failed — suppressed the card's id in **every**
+   * state, including the ordinary one where it has no note at all. That is the
+   * regression GPT Sol caught in the built code, 2026-09-08.
+   *
+   * So the child's own value is taken out before the merge and put back after,
+   * joined with whatever `useRole` produced. Both survive, in that order —
+   * card first, because it is the description the reader asked for by hovering,
+   * and the standing note second. `undefined` when there is neither, rather than
+   * an empty string, which is a dangling reference in some screen readers.
+   *
+   * This also repairs § the switch itself, which has set its own
+   * `aria-describedby` beside a card since the day the cards landed and has been
+   * losing the card's ever since.
+   */
+  const { "aria-describedby": ownDescribedBy, ...childProps } = children.props as {
+    "aria-describedby"?: string | undefined;
+  };
+  const merged = getReferenceProps({ ...childProps, ref });
+  const describedBy =
+    [merged["aria-describedby"], ownDescribedBy].filter(Boolean).join(" ") || undefined;
+
   return (
     <>
       {/* `ref` last: it must win over any `ref` already in children.props,
           which the merged one already includes. */}
-      {cloneElement(children, getReferenceProps({ ...children.props, ref }))}
+      {cloneElement(children, { ...merged, "aria-describedby": describedBy })}
       {isMounted && (
         <FloatingPortal>
           <div
@@ -288,7 +323,11 @@ export function Tooltip({
  * goes above the description, because a reader who opened the card because the
  * button would not move should not have to read two paragraphs first.
  *
- * Three callers, and the second generalised it. The bar's **experimental
+ * Four callers, and the second generalised it. The fourth is the live
+ * conversation's **microphone setup** card (LiveButton.tsx), which reports the
+ * placement actually resolved while the selector beside it may still read
+ * `Auto` — not the mid-flight sense, and it was already here when this said
+ * three. The bar's **experimental
  * switch** (Dock.tsx § the switch itself), where it is never the only carrier —
  * the button draws a warning marker, and the same sentence is in an `sr-only`
  * span it points `aria-describedby` at. From 2026-09-07, the bar's **mode
@@ -301,6 +340,29 @@ export function Tooltip({
  * widening. What all three share is that a reader opening this card wants to
  * know why the control looks the way it does before they want to know what it
  * is for.
+ *
+ * **Two ways to get `state` wrong**, both found writing the wordmark's card on
+ * 2026-09-08 and both fixed by not using it there at all.
+ *
+ * It is not the slot for *this reader gets somewhere else*. The wordmark looks
+ * identical to the owner and to a stranger; what differs is where it leads, and
+ * where a control leads is the description. So `DockHome` varies `what` instead.
+ *
+ * **The tempting generalisation is false, and it was written here first.** *Every
+ * caller uses it for a control that looks different* covers the first three and
+ * not the microphone, whose selector can read `Auto` while `state` reports the
+ * headset or laptop placement actually resolved — neither mid-flight nor visible
+ * on the control. What the four share is thinner and truer: `state` is what is
+ * true **of this control right now**, as against `what`, which is true of it
+ * always. Where the control looks off, that is usually why; it is not the test.
+ * GPT Sol, 2026-09-08.
+ *
+ * And a `state` must not contradict the `what` beneath it, because it is read
+ * first and the reader goes on to read the other one anyway. That draft put
+ * *"…rather than to a library of your own"* over *"Back to your library"*: a
+ * denial, and then the thing denied. Where `state` is right, keep the
+ * possessive out of the `what` under it — which is what Comments does, and why
+ * its pair reads.
  */
 export function ControlTip({
   head,

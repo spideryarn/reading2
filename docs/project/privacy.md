@@ -37,10 +37,14 @@ Asked, on the day, because none of them could be read off the code:
    position while every reader was a friend of Greg's, and it has an address that reaches a real
    human on it — but there are paying readers as of 2026-09-03, so the condition it was waiting on
    has been met. It is the first thing to change.
-2. **Deletion and export**: *"email us and we'll do it"*. True today — there is no
+2. **Deletion and export**: *"email us and we'll do it"*. True on the day — there was no
    account-deletion endpoint, and no per-article delete either: the shelf's button archives, and
    since 2026-09-04 it says so — and the page says all of that in those words rather than implying
    a button. Build the button and this paragraph changes.
+   **Half of it has been built, and this paragraph has therefore changed**: since 2026-09-07 a
+   reader can destroy one of their own articles for good, from that article's metadata page —
+   § *Deleting an article, for good* below. Account deletion is still a mailbox and a pair of hands,
+   so the sentence survives for the account and no longer for the article.
 3. **Whether we read reader content**: yes, and the page says so plainly. There is an
    administrator's view across all owners ([admin.md](admin.md)), debugging a reader's broken
    article means looking at it, and a reader discovering that for themselves is far worse than
@@ -296,6 +300,59 @@ one more, and is gone when the request ends; nothing stores it and nothing logs 
 the same reason it always did. The `ai_calls` row saying a dictation happened is still written, and
 still carries no content.
 
+## Deleting an article, for good
+
+**Added 2026-09-07**, when the shelf stopped being the only ending an article has.
+`DELETE /api/library/:slug`, offered from one place — *Delete this article* at the foot of that
+article's metadata page, under Archive. The plan and every decision behind it are
+[260906h-delete-an-article-permanently.md](../plans/260906h-delete-an-article-permanently.md); the
+words the reader sees are [copy.md](copy.md) § *The words on the one control that cannot be undone*.
+What belongs on **this** page is the part that is a promise about a reader's data.
+
+**What actually goes.** One statement, `delete from articles`, and the cascade: the revisions, the
+blocks and their identities, the hierarchy and every generated artefact, and all of the reader's own
+work on the piece — comments, notes, highlights, questions, chats, saved searches, where they left
+off. Measured, not assumed: the Stage A spike seeded a fully populated article and listed what
+emptied.
+
+**What deliberately survives, and why the page may not imply otherwise.** Four things keep a row
+with the article pointer set to null: `ai_calls` (the spend ledger outlives everything, and carries
+no content), `ingest_events` (the billing slot is **not** refunded — deleting does not give a slot
+back, [billing.md](billing.md)), `article_visibility_changes` (takedown evidence about a document we
+no longer serve, changed from `cascade` to `set null` *for* this feature), and `feedback` rows
+naming the slug. None of them holds the article's text.
+
+**And the honest limit: a copy already on a device cannot be recalled.** The control says so in
+those words, and so must this page. Two of those copies are ours to name because we put them there —
+the IndexedDB copy this browser saved so the article opens offline, and any export the reader has
+taken as a zip. The delete retires the whole of the first for the signed-in reader on the device it
+runs on (`forgetCachedReader` in [`cached-shelf.ts`](../../src/web/lib/cached-shelf.ts)); it cannot
+reach another device, and it cannot reach a file already saved to a disk. **A third is a bug rather
+than a fact**: authenticated plates and assets are served `immutable` for a year
+([`src/routes.ts`](../../src/routes.ts)), so a browser may go on painting an image out of its own
+HTTP cache after the article is gone. That is on the plan to fix and it is not yet fixed.
+
+**The bytes are the other outstanding half.** The raw downloaded file — the PDF, the saved page —
+is content-addressed and shared between articles *and between owners*, so deleting the article does
+not yet delete the object. Stage E of the plan is the reference-counted catalogue that will. **Until
+it lands, the page's existing paragraph is still true and must not be rewritten early**: it says we
+keep the original *"stored under a fingerprint of its own contents rather than under your name, so
+that if somebody else added the same document it is the same file and deleting your copy cannot take
+theirs"*. When Stage E lands, that paragraph gains a clause and loses nothing — deleting your copy
+still cannot take somebody else's, and we will no longer keep the file once nobody refers to it.
+
+**`PrivacyPage.tsx` caught up on 2026-09-07, in the same run.** Under *Deleting things* it had read
+*"There is no button that really erases an article — undo matters more than tidiness — so if you
+want one actually gone, email us and we will do it"*, and Stage D made every clause of that false.
+It now says what Delete permanently does, that there is no undo and no copy we can bring back, and
+the one limit worth a reader's attention: a copy already downloaded to a device is out of our hands.
+The account is still the email, and that sentence stayed.
+
+It was caught by the agent that built the control rather than by a test, and **no test pins it** —
+see the section below for what is pinned and why this is not. The rule it broke is this doc's own:
+the page has to stay true of the code, and a feature that falsifies a sentence on it is not finished
+until that sentence moves. The same trap took three sentences down on 2026-09-02 (`fcb0a209`).
+
 ## What is pinned by a test, and what is not
 
 [`tests/privacy-page.test.ts`](../../tests/privacy-page.test.ts) holds the **model names** to
@@ -349,10 +406,18 @@ these moves:
   § Where a reader's voice goes below, which is the one place on this site where we tell a reader
   that something got weaker — [ai-gateway.md § A key is not
   access](ai-gateway.md#a-key-is-not-access-and-the-difference-is-invisible-until-a-reader-finds-it)
-- **account deletion** or **export** grows a button, which changes decision 2 above
-- **what the Archive button does** — it archives, it is called Archive since 2026-09-04, and the
-  page says so; when a real delete or an account-deletion path is built, that section is the first
-  thing to rewrite. The page also says what archiving does to an article that was *shared*: it drops
+- **account deletion** or **export** grows a button, which changes decision 2 above. **The
+  per-article half of that happened on 2026-09-07 and the page was rewritten in the same run** —
+  § *Deleting an article, for good* above is the record of what moved and what deliberately did not.
+  What is still open here is the other two: account deletion is a mailbox and a pair of hands, and
+  the page says so; export has had a button since before this section was written and the page has
+  never mentioned it either way
+- **what Archive and Delete permanently do, and the difference between them** — Archive archives,
+  it has been called Archive since 2026-09-04, and *Deleting things* on the page now describes both
+  controls: Archive is reversible and destroys nothing, Delete permanently erases the article and
+  everything made from it with no undo, and neither can reach a copy already downloaded to a device.
+  Rewrite that section if either control changes what it does. The page also says what archiving
+  does to an article that was *shared*: it drops
   out of the public listing (`publicLibraryQuery` filters `archived_at`) and the link keeps working,
   which is [library.md](library.md#archive-and-undo-is-the-confirmation)'s split between listing and
   access. If `publicSlug` ever starts filtering too, that sentence is wrong

@@ -202,6 +202,25 @@ relationship between them.
 wrong thing; the mutation run found it in seconds. Reasoning is the natural check par excellence,
 because it re-runs the same assumption that produced the code.
 
+**Mutate what you just *added*, not only what you changed.** Red-first tests the diff; the thing you
+just added is precisely the thing no existing test was written against. A guard written to close a
+named security finding was stubbed to `return true` and **all 66 tests still passed** — a fix for a
+known vulnerability, untested, with every check agreeing it was fine. And note which check that was:
+four other guards caught real problems the same night and every one of them was working. **The only
+broken check was the one that found nothing.** A guard reporting nothing is the same claim as a
+system reporting nothing, and deserves the same suspicion.
+
+**The moment a claim feels most like a finding is the moment to buy the cheap external check.** The
+shape: two instances of one symptom, a plausible mechanism, and no check of where either came from.
+It arrives in two directions and both feel like insight from inside. *A mechanism proposed without
+provenance* — two fixture-id collisions read as one bad habit, when one was a counting-block id that
+hit a real row and the others were captured ids shared on purpose; acting on it would have made the
+tests green and the fixtures lie. *An instrument trusted without calibration* — grepping agents'
+output for question marks, getting 1 of 23, and nearly filing it as a refutation, when the questions
+ended in full stops; the grep answered the question asked rather than the one meant. The advice is
+not "check your work", because everyone involved believed they had. Both times the refuting evidence
+was one step away and nearly free; the expensive part was thinking to want it.
+
 **Test the test.** Break the thing on purpose and confirm you get a red. A test whose only evidence
 is that it passes is indistinguishable from one that inspects nothing — which is exactly how a
 link checker came to go green on all three bugs it was written in response to.

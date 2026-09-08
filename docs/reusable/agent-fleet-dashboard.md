@@ -99,6 +99,115 @@ But it is not universal, and pretending otherwise produces a UI that lies:
 So the per-harness capability is a real distinction, and the honest UI shows those rows as read-only
 rather than offering a text box that quietly does nothing or something terrible.
 
+### One session has three ids, and only one of them means "this agent"
+
+The thing we got wrong for a day, and the correction that made the write path safe. In our
+multiplexer a session carries:
+
+- a **session handle** — survives a rename, which the listing tool performs;
+- a **pane handle** — survives a *respawn*, which starts a brand-new process behind the same name;
+- the **agent conversation's own id**, the one the CLI was launched with.
+
+They are not interchangeable, and each one is blind to a different way the world moves under you. A
+session resumed into a *different conversation* keeps the first two — same handle, same name, same
+pane. Address by either of those alone and a message aimed at what somebody read ten minutes ago
+lands in whatever is there now, with a green tick.
+
+So: **carry all three from the collector to the client, verify all three at send time, and make the
+conversation id required rather than optional-with-a-fallback.** A row that cannot supply it — a
+plain shell, a legacy session — must be unsteerable, not steerable-on-a-guess. Add an ancestry check
+too: that the process answering to the conversation id is genuinely running *underneath* that pane,
+because the same agent could be running somewhere else on the box entirely.
+
+Fetch the pane's pid from the *listing that has no target* (`list-panes -a` and its equivalents)
+rather than a per-session query. Ours resolved to the active pane of the current window, so an agent
+in a split was invisible for two months — and an invisible agent reads as a session with no agent
+in it.
+
+### The write route must never look anything up
+
+The design decision that everything else rests on. Every id and the session's status come **out of
+the request body**, because they are what the person could see when they tapped. It is tempting to
+have the server re-read them from the live system first — it looks more authoritative. It is the
+opposite: the server would then be comparing the system against itself, every guard would pass
+unconditionally, and a page ten minutes stale would still send.
+
+The honest framing is that these are **stale-but-honest claims**, and the guards exist to detect
+that they have gone stale. That also names the residual risk plainly: a client that "helpfully"
+refreshes before building the body defeats all of it, and nothing on the server can tell. Write it
+down next to the route, because the next person to touch the client will think refreshing is a
+kindness.
+
+### An approval must bind to what is being approved
+
+The most important thing on this page, and we got it wrong in a way no test would have found.
+
+We scraped the blocked agent's dialog into a question and a list of options, and we captured **the
+sentence** — "Do you want to create notes.md?" — because our parser walked back from the options and
+stopped at the horizontal rule above them. The harness draws that rule *between the diff and the
+question*. So the thing being approved was discarded by construction.
+
+Two consequences, and the second is the one that matters:
+
+- our "has this dialog changed since you looked?" guard compared two materially different actions as
+  equal, because the sentence and the option labels were identical;
+- **the page could ask somebody to approve something without showing them what it is.**
+
+A reviewer found it by experiment rather than by reading: it changed a proposed file's contents in a
+pinned fixture from `hello` to `goodbye` and got back an identical question and identical options.
+That is the kind of check worth stealing — *change the thing the feature is about, and assert the
+output changes.*
+
+So: **capture the material** (the command, the diff, the destination, the permission scope), carry a
+**fingerprint** of it alongside, show the material and compare the fingerprint. Two fields, because
+comparing prose is fragile and showing a hash is useless. And make "I could not read the material" a
+distinct arm that **refuses** — a screen you could not read is not evidence that it is the same
+screen you could not read last time, so two `unreadable`s must not compare equal.
+
+One more distinction, which we would have missed: **"yes once" and "yes, and stop asking me" are not
+two items on a list.** The first is a decision about one action; the second changes what the session
+will approve on its own from then on. Classify each option by consequence, treat an unrecognised
+label as *at least* as serious as the dangerous one — and then check the UI actually renders the
+conservative default as alarmingly as the known-dangerous one. If "unknown" is grey and "persistent"
+is red, the safe default has become the least alarming badge and the guarantee is inverted.
+
+### Screen text is not provenance, and no parser fixes that
+
+The finding to sit with rather than fix. Everything read off a terminal was printed by the very
+process you are deciding whether to type at. An agent processing a hostile web page can print:
+
+```
+❯ 1. Approve destructive action
+  2. Cancel
+Enter to confirm · Esc to cancel
+```
+
+and a scraper accepts it. There is a real race that makes it worse if status and screen-capture are
+separate steps: an agent can genuinely be blocked, be answered, become busy, and *then* print
+attacker-shaped output — and the collector publishes "still blocked" plus the forged question.
+
+You cannot parse your way out of this. The honest options are a **structured, trusted source of
+question identity** (which a terminal does not give you), keeping dialog answering **read-only**, or
+**accepting explicitly that pane text is executable UI** — as a decision somebody made, written
+down, rather than a property nobody noticed. Pick one and say which.
+
+A related trap in the same family: we bound the material using the harness's box-drawing characters
+(solid border outside, dashed separators inside). That is an observation about one build, not a
+promise. When it changes, a truncated dialog starts reading as complete and **nothing goes red**,
+because every fixture is a frozen capture of the old build.
+
+### Delivery has a third outcome
+
+Not "sent" and "refused". A phone loses connectivity after the keystrokes land but before the
+response arrives. The text arrives and the Enter fails, leaving a half-typed message in the input box
+for the next keystroke to submit. An identical-looking dialog recurs, and a rate limiter keyed on
+time and target will not deduplicate it.
+
+So: mint an **action id** on the client, carry it through, return it, and let a repeat of the same id
+retrieve the receipt rather than send again. Model at least *nothing sent* / *partially sent* /
+*outcome unknown* alongside success and refusal. And **never retry a keystroke automatically** after
+an ambiguous failure — a retry is a second message, and there is no way to take the first one back.
+
 ## "Needs you" is usually a menu, not a prompt
 
 The thing that reframes the product. We assumed a blocked agent wanted a message. Captured live, a
@@ -142,6 +251,32 @@ Ranked by blast radius, smallest first:
 - **An unauthenticated public tunnel** of any kind: disqualifying. Not "risky" — disqualifying.
 
 Keep the ssh forward working whatever else you add. It is the fallback that depends on nothing.
+
+**Re-decide this the day you add the first write path.** Reachability-as-access-control is a very
+different trade for a read-only list of titles than for a route that types into every agent on the
+machine, and the change happens in one commit while the decision sits unexamined in a doc written
+weeks earlier. Nothing prompts you; the tests stay green either way.
+
+Whatever you choose, you still need a **CSRF check on the write**, and you should write down what it
+does *not* do, because it will otherwise be read as authentication:
+
+- Require an `Origin` header, reject it missing and reject the literal string `null` (a sandboxed
+  iframe, a `data:` document, some redirect chains).
+- Require `Origin`'s host to equal `Host` — and then require the hostname to be an IP literal or on
+  a small allowlist. **That last part is the one people skip.** Without it, a page on a domain the
+  attacker controls, re-resolved to your private IP, sends an `Origin` and a `Host` that agree
+  perfectly and sail through a naive same-origin comparison.
+- Require a JSON content type, which is not CORS-simple, so a cross-origin `fetch` needs a preflight
+  you never answer.
+
+What that stops is the browser-as-confused-deputy case, and nothing else. Anything on the network
+that sets its own headers — `curl`, a script, another agent on the same box — is indistinguishable
+from your dashboard. It says nothing about *which person* pressed the button, because there is
+nobody to ask.
+
+And rate-limit the write. A held key on a phone repeats faster than any human intent, so you want a
+floor per target *and* a ceiling across the whole fleet — twenty targets each sitting at their own
+floor is not a limit.
 
 ## Scheduling: check what you already have
 

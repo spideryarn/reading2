@@ -495,6 +495,70 @@ usermod -aG docker "$USER_NAME"
 # already-open shell would not, which is the trap this avoids.
 run 180 "docker pull hello-world" docker pull hello-world
 
+echo "=== tailscale ==="
+# Installed by hand on the live box on 2026-09-08
+# (curl -fsSL https://tailscale.com/install.sh | sudo sh, version 1.102.3) because the agent
+# fleet dashboard needs to be reachable from Greg's phone and binding the tailnet interface is
+# the access control -- docs/project/hetzner-remote-server-box.md. AGENTS.md's rule -- a change
+# to the box that should still be true next week is also a change to the file that builds the
+# next box -- makes doing it there and not here a bug on its own, whether or not the dashboard
+# ships.
+#
+# Tailscale's OWN apt repo, exactly as https://pkgs.tailscale.com/stable/#ubuntu-noble documents
+# -- fetched and verified on 2026-09-08, not recalled from memory: both files below were
+# downloaded and inspected before this was written. Two things differ from the Docker block just
+# above, both because Tailscale's server decides the file's shape and not this script:
+#   - the key served at .noarmor.gpg is ALREADY a binary OpenPGP keyring (confirmed with
+#     `gpg --show-keys` against the downloaded file: "OpenPGP Public Key Version 4"), not the
+#     ASCII-armored key `gpg --dearmor` exists to convert. Piping a file that needs no converting
+#     through dearmor is not "following the pattern more closely", it is corrupting the key.
+#   - the sources.list.d line is fetched verbatim rather than built from ${DEB_ARCH} and
+#     ${UBUNTU_CODENAME} by hand, because pkgs.tailscale.com already renders it for the exact
+#     codename in the URL -- so the codename is still derived the way the Docker block derives
+#     it (the ${UBUNTU_CODENAME} computed above, from /etc/os-release), it is just spliced into
+#     a URL instead of a hand-written `deb` line.
+#
+# The two URLs are resolved HERE, in this shell, not inside the `bash -o pipefail -c '...'`
+# below. That single-quoted string becomes the -c argument of a brand-new bash process (`run`
+# execs "$@" directly, it is not `eval`d by this shell), and UBUNTU_CODENAME was never exported
+# -- so a ${UBUNTU_CODENAME} written inside those quotes would expand to nothing in that child
+# and silently curl a URL with an empty path segment. Every other apt block in this file sidesteps
+# this by only ever using ${DEB_ARCH}/${UBUNTU_CODENAME} inline, in this shell (the docker `echo`
+# line above, the supabase download below); this is the first one that needed the value inside a
+# spawned command, so the substitution has to happen before `run` is called, not after.
+TAILSCALE_KEY_URL="https://pkgs.tailscale.com/stable/ubuntu/${UBUNTU_CODENAME}.noarmor.gpg"
+TAILSCALE_LIST_URL="https://pkgs.tailscale.com/stable/ubuntu/${UBUNTU_CODENAME}.tailscale-keyring.list"
+run 60 "tailscale signing key" bash -o pipefail -c "curl -fsSL '$TAILSCALE_KEY_URL' -o /usr/share/keyrings/tailscale-archive-keyring.gpg"
+chmod 0644 /usr/share/keyrings/tailscale-archive-keyring.gpg
+run 60 "tailscale apt list" bash -o pipefail -c "curl -fsSL '$TAILSCALE_LIST_URL' -o /etc/apt/sources.list.d/tailscale.list"
+run 180 "apt update (tailscale)" bash -c 'apt-get -o DPkg::Lock::Timeout=600 --error-on=any -y update'
+
+# Assert the CANDIDATE'S ORIGIN before installing, exactly as the Docker and node blocks above
+# do, and for the same reason: this repo has already been bitten once by apt reporting success
+# while installing a different package entirely (novnc had pulled in Ubuntu's nodejs, and
+# `apt-get install nodejs` said "already the newest version" and exited 0). Ubuntu ships no
+# tailscale package of its own today, but a stale cache or a mirror could still hand back a
+# candidate from somewhere other than pkgs.tailscale.com, and "tailscale is installed" would be
+# no evidence of anything by itself.
+TAILSCALE_POLICY=$(apt-cache policy tailscale)
+TAILSCALE_CAND=$(printf '%s\n' "$TAILSCALE_POLICY" | awk '/^ *Candidate:/{print $2}')
+TAILSCALE_SRC=$(printf '%s\n' "$TAILSCALE_POLICY" | awk -v v="$TAILSCALE_CAND" '
+  $1 == v || ($1 == "***" && $2 == v) { hit = 1; next }
+  hit { print $2; exit }')
+case "$TAILSCALE_SRC" in
+  https://pkgs.tailscale.com/*) echo "tailscale candidate $TAILSCALE_CAND from $TAILSCALE_SRC" ;;
+  *) echo "FATAL: tailscale candidate is '$TAILSCALE_CAND' from '$TAILSCALE_SRC', wanted one from pkgs.tailscale.com - Tailscale's repo is not winning" >&2; exit 1 ;;
+esac
+run 180 "install tailscale" bash -c 'apt-get -o DPkg::Lock::Timeout=600 -y install tailscale'
+
+# Enabled and started, but NOT logged in -- `tailscale up` is deliberately never run here.
+# It prints a URL a human has to open in a browser, exactly like claude's and codex's own
+# /login above, and a provisioning script that blocked on that would hang forever on a box with
+# no browser to open it in. `enable --now` only starts tailscaled, the daemon: the box is left
+# one `tailscale up` away from joining the tailnet, and nothing here opens a port or connects to
+# anything.
+systemctl enable --now tailscaled
+
 echo "=== supabase cli ==="
 # Pinned to the version this repo is built against (docs/project/database.md,
 # docs/project/supabase-local.md). There is no apt repository for it; the .deb
@@ -924,17 +988,54 @@ echo "=== test worker cap ==="
 # docs/plans/260906h-cap-vitest-workers-so-one-box-can-hold-ten-suites.md has
 # the incident and the arithmetic.
 #
-# 3 rather than the repo's own default of half the cores (8 here): that default
+# 2 rather than the repo's own default of half the cores (8 here): that default
 # has to be right for a laptop running one suite, and this file is where a
 # machine gets to say it is crowded.
+#
+# It was 3 until 2026-09-08, when eighteen concurrent runs at 3 put this box at
+# load 391 with swap 100% full. Do not read the drop to 2 as the fix for that --
+# it is not, and measuring why is what 260908b is about. 87% of a run's peak
+# memory is spent before its first worker forks, so the worker cap bounds FORKS
+# (54 to 36 here) and barely touches gigabytes. The memory half of the answer is
+# the reserve file written just below.
 #
 # A FILE, not the `env` block of ~/.claude/settings.json where this obviously
 # belonged: measured on this box, nothing in that block reaches a Claude Bash
 # tool call, not even the CLAUDE_CODE_SCROLL_SPEED that has been in it since the
 # box was built. A file vitest.config.ts reads has no propagation to be wrong
 # about. Written every run, not merged: one number, ours, nobody else's to keep.
+#
+# Written through a temporary file and renamed, for both files here: `>`opens
+# and TRUNCATES before it writes, so an interrupted run leaves a zero-byte file
+# rather than the old one. For the reserve below that state used to read as
+# "this machine has no policy" -- the check silently absent on the one machine
+# that asked for it. rename(2) is atomic within a filesystem, so a reader sees
+# the old contents or the new ones and never nothing. GPT Sol, 2026-09-08.
 run 30 "test worker cap" "${AS_USER[@]}" \
-  "mkdir -p \$HOME/.config/spideryarn && printf '3\n' > \$HOME/.config/spideryarn/vitest-max-workers"
+  "mkdir -p \$HOME/.config/spideryarn && printf '2\n' > \$HOME/.config/spideryarn/.vitest-max-workers.tmp && mv \$HOME/.config/spideryarn/.vitest-max-workers.tmp \$HOME/.config/spideryarn/vitest-max-workers"
+
+# How much RAM to keep back for everything that is not a test run: the agents
+# themselves (12.9 GB across 159 processes when this was measured), postgres,
+# the dev servers, the browsers, and the page cache.
+#
+# THE PRESENCE OF THIS FILE IS THE OPT-IN. vitest.config.ts asks
+# /proc/meminfo whether there is room for a run's fixed 3.84 GB on top of this
+# reserve, and REFUSES TO START when there is not -- which is the only thing
+# that actually bounds how many suites run at once, because nothing else does.
+# A laptop has no file, keeps the static behaviour, and is never refused:
+# MemAvailable is Linux's number and macOS has no honest equivalent.
+#
+# 4 GB, and the arithmetic is worth keeping: a run's fixed cost is 5 GB, so it
+# needs 9 GB available before it may start and is turned away below that. This
+# box idles around 14-18 GB available, so ordinary work is admitted and a box
+# already carrying several suites starts refusing. On 2026-09-08 it had 1.7 GB,
+# and every one of the eighteen runs would have been refused.
+#
+# Turn this DOWN, not the constant, if the box starts refusing work it should
+# have done: the reserve is a policy about this machine, and the 5 GB is a
+# measurement about the suite.
+run 30 "test memory reserve" "${AS_USER[@]}" \
+  "mkdir -p \$HOME/.config/spideryarn && printf '4\n' > \$HOME/.config/spideryarn/.vitest-memory-reserve-gb.tmp && mv \$HOME/.config/spideryarn/.vitest-memory-reserve-gb.tmp \$HOME/.config/spideryarn/vitest-memory-reserve-gb"
 
 echo "=== mcp servers ==="
 # Pin at provision time rather than resolving @latest on every session
@@ -1157,7 +1258,11 @@ check "swap active"              'swapon --show | grep -q swapfile'
 # "this machine has nothing to say", so a check for existence alone would pass
 # on the state that silently gives the box back the repo's own default of half
 # the cores -- 8 here, and no complaint from anything.
-check "test worker cap set"      'su - '"$USER_NAME"' -c "cat ~/.config/spideryarn/vitest-max-workers" | grep -qx "3"'
+check "test worker cap set"      'su - '"$USER_NAME"' -c "cat ~/.config/spideryarn/vitest-max-workers" | grep -qx "2"'
+# Same reasoning one file along, and it matters more here: an absent or empty
+# reserve file is not a smaller reserve, it is NO ADMISSION CHECK AT ALL, and
+# the box goes back to being the machine that ran eighteen suites into swap.
+check "test memory reserve set"  'su - '"$USER_NAME"' -c "cat ~/.config/spideryarn/vitest-memory-reserve-gb" | grep -qx "4"'
 check "node is the wanted major" 'su - '"$USER_NAME"' -c "node -v" | grep -q "^v${GJD_NODE_MAJOR}\."'
 check "npm present"              'su - '"$USER_NAME"' -c "command -v npm"'
 # The check that would have caught the bug. `claude --version` stayed green for
@@ -1398,6 +1503,14 @@ check "docker daemon runs"       'timeout 30 docker info'
 # as $USER_NAME proves the daemon, the runtime and the group all work together.
 # The image was pulled above, so this needs no network.
 check "docker run as $USER_NAME" 'timeout 120 su - '"$USER_NAME"' -c "docker run --rm hello-world" | grep -q "Hello from Docker"'
+# Deliberately not a check on `tailscale status` -- its output and exit code differ once a box is
+# logged in versus not, and login is a human step this script never takes, so a check that
+# assumed either state would be wrong about the other. What provisioning owns is that the daemon
+# exists, is enabled to survive a reboot, and is running; whether it has joined the tailnet is
+# gjd-remote doctor's to check, once logging in is something an operator can have done.
+check "tailscale binary runs"    'timeout 10 su - '"$USER_NAME"' -c "tailscale version"'
+check "tailscaled enabled"       'systemctl is-enabled tailscaled | grep -qx enabled'
+check "tailscaled running"       'systemctl is-active tailscaled | grep -qx active'
 check "supabase cli pinned"      'timeout 30 su - '"$USER_NAME"' -c "supabase --version" | grep -qx "'"$SUPABASE_VERSION"'"'
 # The editor, in the three places that name it -- because they come apart. The
 # package can be present while $EDITOR still says nothing, and both can be right
@@ -1476,3 +1589,8 @@ if [ "$fail" -ne 0 ]; then
   exit 1
 fi
 echo "PROVISION OK"
+# The one human step this run deliberately left undone -- see "=== tailscale ===" above for why
+# `tailscale up` is never run by this script. Printed every time, like cloud-init's own
+# final_message: harmless to see again once it is already done, and the only way an operator who
+# skipped it the first time finds out.
+echo "Next (if not already done): sudo tailscale up --hostname=spideryarn-box --operator=$USER_NAME"

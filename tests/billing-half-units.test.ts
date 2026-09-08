@@ -295,9 +295,9 @@ describe("what an ingest costs", () => {
   /**
    * **The direction that cannot be gamed.** Every row charged before the
    * `article_id` column existed has nothing to resolve, and there is no backfill
-   * — so it must cost full price rather than half. The same must hold when an
-   * article is deleted out from under a charged row, which `on delete set null`
-   * makes possible.
+   * — so it must cost full price rather than half. A row whose article was
+   * deleted is *not* this case any more: it resolves to the price the article
+   * had when it went, and the describe below is where that lives.
    */
   it("charges a row it cannot resolve to an article at full price", async () => {
     await givenCharged(null);
@@ -307,23 +307,112 @@ describe("what an ingest costs", () => {
       inFlight: 0,
     });
   });
+});
 
-  it("puts a deleted public article's rows back to full price", async () => {
+/* ------------------------------------------- deleting must not move a bill -- */
+
+/**
+ * **Destroying an article changes what it cost, in neither direction.**
+ *
+ * `ingest_events.article_id` is `on delete set null`, so before
+ * `article_visibility_at_delete` existed a delete re-read every charged row of a
+ * public article as unresolvable and therefore full price — the owner's usage
+ * went *up* because they threw something away. Deleting is not a purchase and it
+ * is not a refund.
+ *
+ * **The freeze happens at deletion, not at charge**, and that distinction is the
+ * whole of it (GPT Sol's F2, 2026-09-06). Stamping the price when the ingest is
+ * charged is the design docs/project/billing.md rejects in as many words:
+ * *"charging half at add time misses the article you decide to share three weeks
+ * later, which is most of them."* So the two cases below that share and unshare
+ * *after* charging are not decoration — they are the regression this column
+ * could so easily introduce, and they were green before it existed and must stay
+ * green now.
+ *
+ * The deletion is a bare `delete from spideryarn.articles`, because there is no
+ * delete path in the product yet. That is also the point: the stamp is a
+ * `BEFORE DELETE` trigger rather than application code precisely so that a hand-
+ * run statement, an admin path or a cascade nobody has written yet all get it.
+ */
+describe("deleting an article freezes what it cost, rather than repricing it", () => {
+  it("keeps a deleted public article's rows at half price", async () => {
     if (!pool) return;
-    const article = await givenArticle("deleted-later", "public");
+    const article = await givenArticle("deleted-while-public", "public");
     await givenCharged(article);
-    expect((await usageFor(OWNER, FREE)).chargedHalfPrice).toBe(1);
+    const before = await usageFor(OWNER, FREE);
+    expect(before).toEqual({ chargedFullPrice: 0, chargedHalfPrice: 1, inFlight: 0 });
 
     await pool.query("delete from spideryarn.articles where id = $1", [article]);
-    /* `on delete set null`, so the row survives — the ledger may not lose an
-       ingest — and reverts to full price. Written down at the column as a
-       policy: there is no article-deletion path in the app today, and if one is
-       built it takes the billing lock and says what it will cost. */
-    expect(await usageFor(OWNER, FREE)).toEqual({
-      chargedFullPrice: 1,
-      chargedHalfPrice: 0,
-      inFlight: 0,
-    });
+
+    /* `on delete set null`, so the ledger row survives — the ledger may not lose
+       an ingest — and it keeps the price the article had when it went. */
+    expect(await usageFor(OWNER, FREE)).toEqual(before);
+    expect(halfUnitsUsed(await usageFor(OWNER, FREE))).toBe(PUBLIC_INGEST_COST);
+  });
+
+  it("keeps a deleted private article's rows at full price", async () => {
+    if (!pool) return;
+    const article = await givenArticle("deleted-while-private", "private");
+    await givenCharged(article);
+    const before = await usageFor(OWNER, FREE);
+    expect(before).toEqual({ chargedFullPrice: 1, chargedHalfPrice: 0, inFlight: 0 });
+
+    await pool.query("delete from spideryarn.articles where id = $1", [article]);
+
+    /* The unremarkable half, and it is here because it is the one the fallback
+       could break: `coalesce(a.visibility, e.article_visibility_at_delete,
+       'private')` reads a stamped `'private'` and a null identically, and a
+       trigger that stamped the wrong thing would show up here first. */
+    expect(await usageFor(OWNER, FREE)).toEqual(before);
+  });
+
+  it("freezes the price at deletion, not at charge: shared after charging, then deleted", async () => {
+    if (!pool) return;
+    const article = await givenArticle("shared-then-deleted", "private");
+    await givenCharged(article);
+    expect(halfUnitsUsed(await usageFor(OWNER, FREE))).toBe(PRIVATE_INGEST_COST);
+
+    /* Live while it exists: sharing it three weeks after the charge still halves
+       it. Stamp at charge time and this line is the one that goes red. */
+    await setVisibility("half-units-shared-then-deleted", "public");
+    expect(halfUnitsUsed(await usageFor(OWNER, FREE))).toBe(PUBLIC_INGEST_COST);
+
+    await pool.query("delete from spideryarn.articles where id = $1", [article]);
+    expect(halfUnitsUsed(await usageFor(OWNER, FREE))).toBe(PUBLIC_INGEST_COST);
+  });
+
+  it("freezes the price at deletion, not at charge: unshared after charging, then deleted", async () => {
+    if (!pool) return;
+    const article = await givenArticle("unshared-then-deleted", "public");
+    await givenCharged(article);
+    expect(halfUnitsUsed(await usageFor(OWNER, FREE))).toBe(PUBLIC_INGEST_COST);
+
+    /* And the other way: taking it down puts the cost back, which is what the
+       unshare warning says out loud before it happens. */
+    await setVisibility("half-units-unshared-then-deleted", "private");
+    expect(halfUnitsUsed(await usageFor(OWNER, FREE))).toBe(PRIVATE_INGEST_COST);
+
+    await pool.query("delete from spideryarn.articles where id = $1", [article]);
+    expect(halfUnitsUsed(await usageFor(OWNER, FREE))).toBe(PRIVATE_INGEST_COST);
+  });
+
+  it("does not stamp anything while the article is still there", async () => {
+    if (!pool) return;
+    const article = await givenArticle("still-here", "public");
+    await givenCharged(article);
+    await setVisibility("half-units-still-here", "private");
+    await setVisibility("half-units-still-here", "public");
+
+    /* **Not a second source of truth.** The column is null for every row whose
+       article exists, so there is nothing for `articles.visibility` to disagree
+       with — the fallback only ever answers once the article is gone. If a
+       future change stamps it early, this is what says so. */
+    const { rows } = await pool.query<{ stamped: string | null }>(
+      `select article_visibility_at_delete as stamped
+         from spideryarn.ingest_events where article_id = $1`,
+      [article],
+    );
+    expect(rows.map((r) => r.stamped)).toEqual([null]);
   });
 });
 

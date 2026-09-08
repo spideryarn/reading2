@@ -51,9 +51,14 @@ they carried.
 **It nearly became two components on the day it became one.** The marketing redesign
 ([marketing-pages.md](marketing-pages.md)) extracted its own `SiteFooter` into `SiteBits.tsx` in
 another worktree the same afternoon, and the two met at a merge. Greg's call, 2026-09-03, was one
-component: the general one absorbed the other, and `variant="marketing"` is what carries the
-redesign's taller spacing on `/` and `/features`. The provenance sentence stayed with those two
-pages as child text, because it is a promise about *them* rather than a fact about the site.
+component: the general one absorbed the other, and a `variant="marketing"` prop carried the
+redesign's taller spacing on `/` and `/features` until 2026-09-08, when the row was redesigned to
+close a page on one measure and the prop went with it
+([260908d](../plans/260908d-make-the-site-footer-and-the-signed-out-pages-more-aesthetically-pleasing.md)).
+The provenance sentence stayed with those two pages as child text, because it is a promise about
+*them* rather than a fact about the site — trimmed on the same day from *"Spideryarn Reading — beta.
+Every screenshot…"* to *"Every screenshot here is…"*, since the row now carries a wordmark above it
+and a `© … · beta` colophon below it and the prefix was saying both twice.
 
 The link for the page you are already on drops itself, decided from `useRoute()` — except on the
 two pages `App.tsx` uses as fallbacks, which have to say which page they are, and which is a trap
@@ -70,6 +75,10 @@ component nothing renders.
 
 The Contact page is the one place in the chrome that spells the address, and it says the Feedback
 button is the better route anyway.
+
+**One entry in the row carries a mark**, and it is the only one that does. Greg, 2026-09-07:
+*"create a brief /opensource page in the footer with links to/from various other pages, using GitHub
+logo to indicate."* See [§ The open-source page](#the-open-source-page).
 
 ## The contact page
 
@@ -97,16 +106,45 @@ how to reach us is the worst place in the app to overclaim.
 
 **Shaped like `/privacy`, not like the marketing pages.** The three marketing pages carry `SiteNav`,
 a hero and the `--site-*` token scope, which exist to sell something over a long scroll; this is four
-sentences, so it takes the policy page's Back link, `h1` and `SiteFooter`.
+sentences, so it takes the policy page's `← Home` link, `h1` and `SiteFooter`. (That link said
+*Back* until 2026-09-08 — it goes to `/` rather than `history.back()`, and most people who open this
+page were sent to it.)
 
 **Linked from one place**: `LINKS` in [`SiteFooter.tsx`](../../src/web/SiteFooter.tsx), which is
-what that array is for. That puts it on all eight pages that carry the row and nowhere under
-`/read/`. **The row's `mailto:` stayed** — mildly redundant beside a Contact link, and the redundancy
-is the cheaper mistake, since the address is the one thing in the row a stuck reader can act on in
-one press. The plan
+what that array is for. That puts it on every page that carries the row and nowhere under
+`/read/`. **The row's `mailto:` stayed** for a day — mildly redundant beside a Contact link, and the
+redundancy looked like the cheaper mistake, since the address is the one thing in the row a stuck
+reader can act on in one press. **Greg reversed that on 2026-09-06** and the row is all pages now;
+see § The footer above. The plan
 ([260905c](../plans/260905c-contact-page-and-a-warmer-feedback-thank-you.md)) names that as a
 judgment call Greg can overrule in one line, along with the decision not to add it to `SiteNav`,
 whose top bar was measured tight at the 320px reflow width.
+
+## The open-source page
+
+[`/opensource`](../../src/web/OpenSourcePage.tsx), since 2026-09-07. Greg:
+
+> create a brief /opensource page in the footer with links to/from various other pages, using GitHub
+> logo to indicate.
+
+Four short paragraphs in `/privacy`'s shape rather than the marketing shell — the repository, the
+MIT licence, the docs folder and the vision doc, that most of the codebase was written by AI agents,
+and a pointer at `/privacy` and `/changelog`. **Everything on it is already true in
+[README.md](../../README.md)** § *Contributing* and § *Working here*, which owns those facts; the
+page is the reader-facing half-page of them, and a claim that appears only there is a claim nothing
+else can check.
+
+**The mark is a component of ours, and had to be.** [icons.md](icons.md) says Lucide and only
+Lucide, and that stands — but Lucide dropped its brand glyphs before the v1 we are on, so
+`lucide-react@1.34.0` exports nothing matching `/github/i`. There is no icon to import and no second
+icon library to add, so [`GitHubMark.tsx`](../../src/web/GitHubMark.tsx) sits beside
+[`GoogleMark.tsx`](../../src/web/GoogleMark.tsx) and for the reason that file gives. It differs from
+its neighbour in one way that matters: GitHub's is a monochrome mark published to be used as one, so
+it takes `currentColor` and goes faint with the row it is in, where Google's four-colour asset may
+not be recoloured at all.
+
+**Not on `SiteNav`**, and not on the landing page: it is a page somebody looks for by name, and the
+top bar was measured tight at the 320px reflow width when `/contact` wanted a place there too.
 
 ## The privacy policy
 
@@ -200,7 +238,7 @@ over no fill.
 
 So it now carries the same shell — `.site`, `SiteNav here="pricing"`, a hero with the glow and a real
 `h1` (it had none, and its outline began at level two), a `sr-only` *Plans* `h2` so the outline does
-not jump from the `h1` to the cards' `h3`s, and `SiteFooter variant="marketing"`. **The nav's
+not jump from the `h1` to the cards' `h3`s, and a `SiteFooter`. **The nav's
 *Sign in* link stays on this page** rather than jumping to `/#sign-in` the way it does from
 `/features`, and that is load-bearing rather than tidy: the buy path for a stranger is *press here,
 sign in here, come back here*, because `SignInControls` remembers the address it was standing on.

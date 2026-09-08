@@ -50,6 +50,35 @@
  * note now means *compared, and identical* — a fact rather than a shrug, which
  * is what makes exiting 0 honest.
  *
+ * ## Failing closed has a cost, and it is paid in credibility
+ *
+ * `/logs/` was added to `.gitignore` three hours after this file first landed
+ * (d0141d13, 2026-09-02), by a commit about something else, and nobody gave it
+ * a verdict. From that afternoon **every worktree in which a job had been run
+ * refused to be removed**, at a directory holding nothing but the stdout of a
+ * command you could run again — 13 of the box's 19 trees, six days later.
+ *
+ * Nothing was lost, and that is the point: what it cost was the standing of the
+ * refusal. An agent that has argued its way past this printout four times will
+ * argue its way past the fifth, and the fifth is the pipeline run in `data/`.
+ * So a false alarm here is not the cheap direction after all, and two things
+ * follow, both of which the rest of this file now tries to hold to:
+ *
+ * - **Recognise everything that is genuinely recognisable**, then fail closed on
+ *   what is left. `logStrays` is that, and it inspects rather than trusts.
+ * - **A blocker should name the action that clears it**, not just the doubt.
+ *
+ * The second one has a limit, found the same day: for `.env.local` the action
+ * cannot be a printed `diff`, which would put both secrets on stdout. It points
+ * at docs/project/worktrees.md, which compares key names and value hashes. And
+ * a line-subset test that would have cleared a merely-stale copy was tried and
+ * reverted — see `copiedFromPrimary` for why two current snapshots cannot
+ * establish that.
+ *
+ * `tests/worktree-check.test.ts` reads the repo's `.gitignore` and fails if a
+ * directory in it has no verdict here and is not declared to block on purpose —
+ * because the two files have to agree and nothing else holds them together.
+ *
  * ## What it still cannot see, on purpose
  *
  * File modes, xattrs and empty directories under `data/`; a commit reachable
@@ -68,7 +97,7 @@
 
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, readdirSync, readFileSync, readlinkSync } from "node:fs";
+import { type Dirent, existsSync, readdirSync, readFileSync, readlinkSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -111,6 +140,8 @@ export interface CheckFacts {
   /** Ignored paths recognised as rebuildable. Counted, not listed. */
   disposable: number;
   trunk: TrunkStanding;
+  /** Servers currently listening on a port from inside this directory. */
+  listeners: ListenerScan;
 }
 
 export interface Blocker {
@@ -168,6 +199,23 @@ export function blockers(f: CheckFacts): Blocker[] {
         "up nowhere. The bit is in this worktree's own index, so it goes with the",
         "directory and so does the edit.",
         "clear it:  git update-index --no-assume-unchanged --no-skip-worktree -- <path>",
+      ],
+    });
+  }
+
+  if (f.listeners.kind === "checked" && f.listeners.found.length > 0) {
+    out.push({
+      why: `${f.listeners.found.length} ${plural(f.listeners.found.length, "server is", "servers are")} running out of this directory`,
+      detail: [
+        ...f.listeners.found.map((l) => `${l.addr}  pid ${l.pid}  ${l.command}`),
+        "",
+        "Nothing here is lost by deleting the directory, so this is not the usual",
+        "kind of blocker — but the process does not die with it, and that is worse",
+        "than if it did. A Node server keeps its port and goes on answering, while",
+        "every file it reads per request has gone: the fleet dashboard's",
+        "`serveStatic` calls readFileSync on each request, so it would serve 404s",
+        "from an open port. Anything watching the port would say it was up.",
+        "Move the server, prove the new one answers, then remove this.",
       ],
     });
   }
@@ -230,6 +278,36 @@ export const DISPOSABLE_IGNORED = [
 ] as const;
 
 /**
+ * The one subtree of `logs/` whose contents are recognisable as captured
+ * stdout: `scripts/tmux-job.ts` owns `logs/tmux-jobs/` and writes exactly one
+ * flat `<session>.log` per job there, so `LOG_DIR` in that file is the
+ * invariant this leans on.
+ *
+ * **A first path segment, matched exactly.** `logs/tmux-jobs-keep/` is not
+ * `logs/tmux-jobs/`, for the same reason `.DS_Store-important` is not
+ * `.DS_Store` — see `DISPOSABLE_IGNORED` above.
+ *
+ * **One entry, and it is not a list to grow casually.** `dev-server` was here
+ * for a day and a GPT Sol review took it out: unlike `tmux-jobs` nothing in the
+ * repo writes it, it was only ever an ad-hoc shell redirect, so "it is captured
+ * stdout" was a guess about a name rather than a fact about a writer. What else
+ * lives under `logs/` is a **loop's dated report** and the changelog's
+ * hand-edited `verified/<day>.json`, each the only copy of something a person
+ * or a run produced. The bar for adding a name here is a writer in the repo
+ * whose output shape can be checked — see `logStrays`, which checks it.
+ */
+export const TRANSIENT_LOG_SUBTREES = ["tmux-jobs"] as const;
+
+/**
+ * What a `logs/tmux-jobs/` entry has to look like to be waved through.
+ *
+ * Allowlisting the *directory* alone would mean an agent could put the only
+ * copy of anything inside it and this would skip the lot (GPT Sol, 2026-09-08).
+ * So the name buys an inspection, not a pass.
+ */
+const TMUX_JOB_LOG = /^[A-Za-z0-9_.-]+\.log$/;
+
+/**
  * Ignored paths that are here because something copied them in, and whose
  * original is in the primary checkout.
  *
@@ -244,7 +322,7 @@ export const COPIED_FROM_PRIMARY: Record<string, string> = {
   ".claude/settings.local.json": "this machine's permission grants, written by Claude Code",
 };
 
-export type IgnoredVerdict = "disposable" | "copied-from-primary" | "corpus-half" | "unexplained";
+export type IgnoredVerdict = "disposable" | "copied-from-primary" | "corpus-half" | "logs" | "unexplained";
 
 /**
  * What one line of `git status --ignored=matching` means for removal.
@@ -254,6 +332,12 @@ export type IgnoredVerdict = "disposable" | "copied-from-primary" | "corpus-half
  * until somebody runs a pipeline stage in there, and it is exactly that run
  * this check exists to notice. Deciding it needs the files, so the caller does
  * it — see `corpusStrays`.
+ *
+ * `logs/` is the same shape and arrives for a duller reason: it holds both
+ * captured stdout and dated reports, and **git will not show you which**. A
+ * wholly-ignored directory comes back from `--ignored=matching` as the single
+ * entry `logs/`, so no prefix in `DISPOSABLE_IGNORED` could ever name
+ * `logs/tmux-jobs/`. See `logStrays`.
  *
  * Git quotes any path with an awkward character in it, and nothing here
  * un-quotes. That is the safe direction: a quoted path starts with `"`, matches
@@ -267,6 +351,7 @@ export function classifyIgnored(p: string): IgnoredVerdict {
   if (p.endsWith(".activity.log")) return "disposable";
   if (p in COPIED_FROM_PRIMARY) return "copied-from-primary";
   if (CORPUS_HALVES.some((h) => p === `${h}/`)) return "corpus-half";
+  if (p === "logs/") return "logs";
   return "unexplained";
 }
 
@@ -294,6 +379,93 @@ export function comparedWithPrimary(root: string, primary: string, rel: string):
 /** The primary checkout's root, from anywhere in it or in one of its worktrees. */
 export function primaryRoot(root: string): string {
   return path.dirname(gitCommonDir(root));
+}
+
+/* ------------------------------------------------------------- logs/ -- */
+
+/**
+ * Entries under `logs/` that are not one process's captured stdout.
+ *
+ * The whole directory is gitignored, so committing saves none of it — and it
+ * holds two unlike things. `logs/tmux-jobs/` is what a command printed and
+ * costs a re-run; `logs/loops/get-ready-to-deploy/<day>.md` is a loop's dated
+ * ledger of what it found, and `logs/changelog/verified/<day>.json` is where a
+ * person writes a judgement by hand. Both of the latter exist nowhere else.
+ *
+ * So: **the transient subtrees are named, and everything else blocks** —
+ * `TRANSIENT_LOG_SUBTREES` is the allowlist, and a `logs/` subdirectory nobody
+ * has thought about yet is reported rather than swallowed.
+ *
+ * One line per top-level entry, with a count, rather than one per file. A
+ * directory name is enough to act on, and a dev server's thousand rotated logs
+ * must not bury the other blockers.
+ */
+export function logStrays(root: string): string[] {
+  const dir = path.join(root, "logs");
+  if (!existsSync(dir)) return [];
+
+  /* Unreadable counts against the tree, and says so as a blocker rather than as
+     a stack trace: the CLI has no try/catch around `gather`, so a throw here
+     would exit non-zero with no printed verdict at all — technically closed,
+     unreadable in practice. */
+  let entries: Dirent[];
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch (err) {
+    return [`logs/  (could not be read, so nothing here can vouch for it: ${(err as Error).message})`];
+  }
+
+  const strays: string[] = [];
+  for (const entry of entries) {
+    if (entry.isDirectory() && (TRANSIENT_LOG_SUBTREES as readonly string[]).includes(entry.name)) {
+      strays.push(...jobLogStrays(dir, entry.name));
+      continue;
+    }
+    const name = `logs/${entry.name}`;
+    /* Never followed: a link into a generated location is one entry, not a
+       subtree, and never a loop — the same reason `entriesUnder` orders its
+       checks this way. A `logs/tmux-jobs` that is a *symlink* does not take the
+       allowlist above either, and needs no guard there to be refused: `Dirent`
+       is built from an `lstat`, so a symlink is never `isDirectory()`. Tested,
+       because that is a property of node rather than of anything here. */
+    if (entry.isSymbolicLink()) strays.push(`${name}  (symlink)`);
+    else if (entry.isDirectory()) {
+      /* The count is a courtesy; the entry blocks either way. So a subtree that
+         will not walk still gets named rather than taking the whole run down. */
+      let n: number | undefined;
+      try {
+        n = entriesUnder(path.join(dir, entry.name)).length;
+      } catch {
+        n = undefined;
+      }
+      const how = n === undefined ? "could not be walked" : `${n} ${plural(n, "file", "files")}`;
+      strays.push(`${name}/  (${how}, and nothing here knows what they are)`);
+    } else strays.push(name);
+  }
+  return strays.sort();
+}
+
+/**
+ * Anything in `logs/tmux-jobs/` that is not one job's `<session>.log`.
+ *
+ * The allowlisted name buys an inspection rather than a pass: without this,
+ * `logs/tmux-jobs/notes.md` — somebody's only copy — is skipped along with the
+ * directory. Flat, regular, `.log`; a nested directory, a symlink, a socket or
+ * any other extension is reported. Unreadable is reported too, because "we
+ * could not look" must never read the same as "we looked and it was fine".
+ */
+function jobLogStrays(logsDir: string, subtree: string): string[] {
+  let entries: Dirent[];
+  try {
+    entries = readdirSync(path.join(logsDir, subtree), { withFileTypes: true });
+  } catch (err) {
+    return [`logs/${subtree}/  (could not be read, so nothing here can vouch for it: ${(err as Error).message})`];
+  }
+
+  return entries
+    .filter((e) => !(e.isFile() && TMUX_JOB_LOG.test(e.name)))
+    .map((e) => `logs/${subtree}/${e.name}  (not a job log, and nothing here knows what it is)`)
+    .sort();
 }
 
 /* ----------------------------------------------------- the corpus halves -- */
@@ -552,6 +724,9 @@ export function triageIgnored(root: string, linked: boolean, ignoredLines: strin
       case "corpus-half":
         corpusHalf(t, root, linked, p);
         break;
+      case "logs":
+        logsDirectory(t, root);
+        break;
       default:
         t.unexplained.push(p);
     }
@@ -595,11 +770,39 @@ function copiedFromPrimary(t: IgnoredTriage, root: string, primary: Originals, p
        and an edit made in the primary since the copy was taken look identical.
        Only the first loses anything, so the message must not assert the first —
        an agent told "what was changed here exists nowhere else" about a primary
-       that drifted goes looking for a change it never made. */
-    t.unexplained.push(`${p} — DIFFERS from the primary's copy. One of the two moved since the copy was taken; if it was this one, the change exists nowhere else`);
+       that drifted goes looking for a change it never made.
+
+       **A line-subset test was tried here and reverted** (GPT Sol, 2026-09-08,
+       260908b): if every line of this copy is also in the primary's, it looked
+       safe to call it merely stale. It is not. A worktree that *deleted* a key
+       is still a subset; two files with the same lines in a different order
+       differ under this repo's last-wins parser (src/env.ts); and a comment
+       only here is somebody's note. History cannot be inferred from two current
+       snapshots — it would need the hash taken when the copy was made. The
+       narrowing cleared none of the box's nineteen trees, so it bought nothing
+       and risked the one failure this file exists to prevent. Do not re-add it
+       without recording that baseline.
+
+       The resolution goes in the docs rather than in a printed command: a raw
+       `diff` of two `.env.local`s writes both secrets to stdout, and from there
+       into a transcript. docs/project/worktrees.md compares key names and value
+       hashes instead. */
+    t.unexplained.push(`${p} — DIFFERS from the primary's copy. One of the two moved since the copy was taken; if it was this one, the change exists nowhere else. Compare them without printing a value: docs/project/worktrees.md § Before you remove one`);
   }
   else if (verdict.kind === "only-here") t.unexplained.push(`${p} — the primary has no copy of this`);
   else t.unexplained.push(`${p} — could not be compared with the primary's copy: ${verdict.why}`);
+}
+
+/**
+ * `logs/` in this tree: the transient subtrees counted, everything else named.
+ *
+ * No primary/worktree split, unlike `corpusHalf`. `logs/` means the same thing
+ * in both, and the primary is refused on its own blocker anyway.
+ */
+function logsDirectory(t: IgnoredTriage, root: string): void {
+  const strays = logStrays(root);
+  if (strays.length === 0) t.verified.push(`logs/ holds nothing but captured stdout (${TRANSIENT_LOG_SUBTREES.join(", ")})`);
+  else t.unexplained.push(...strays);
 }
 
 function corpusHalf(t: IgnoredTriage, root: string, linked: boolean, p: string): void {
@@ -623,6 +826,101 @@ function corpusHalf(t: IgnoredTriage, root: string, linked: boolean, p: string):
  * across many worktrees and have already fetched (`fetchTrunkSha`). Omit it and
  * this fetches for itself, which is what the single-tree CLI wants.
  */
+/* --------------------------------------------------- servers still running -- */
+
+export type Listener = { pid: number; addr: string; command: string };
+
+/**
+ * Either the answer, or the reason there isn't one. Never a bare empty list,
+ * because "I found no servers" and "I cannot look for servers" are different
+ * facts and only one of them clears a worktree for removal.
+ */
+export type ListenerScan = { kind: "checked"; found: Listener[] } | { kind: "cannot-tell"; why: string };
+
+/**
+ * **Is anything serving out of this directory right now?**
+ *
+ * The rest of this file asks whether deleting the directory would *lose* data.
+ * This asks a different question, added 2026-09-08 after the `orchestrator-setup`
+ * session pointed out that `worktree:check` would happily clear
+ * `fleet-dashboard-v01` — the worktree the fleet dashboard's `ExecStart`, its
+ * `node_modules` and its served bundle all live inside. Nothing would be lost.
+ * The page would simply stop existing, and this check would have said SAFE.
+ *
+ * Scoped to *listening* processes on purpose, and there are numbers behind that
+ * rather than an instinct. The `orchestrator-setup` session built the broader
+ * version — every process whose cwd is under the tree — and measured it on this
+ * box before discarding it: **it fired on 8 of the 13 worktrees, against 2 that
+ * actually had a server in them.** A worktree with an agent's shell sitting in
+ * it is the normal state here, so that check fires almost always, which is the
+ * `/logs/` mistake above told a second time. A bound port is the narrow case
+ * that actually matters: something outside this machine is relying on it.
+ *
+ * The same measurement found the other reason: **`/proc/<pid>/cwd` is
+ * unreadable for 575 of the box's 910 processes.** A cwd sweep cannot even SEE
+ * most of the box, so it would have been silently blind rather than wrong,
+ * which is the worse of the two. It works here because a listening pid on this
+ * box is one of greg's, and the readlink either succeeds or the process is not
+ * ours to block on.
+ *
+ * **`cannot-tell` is not a blocker**, which is the one place this file does not
+ * fail closed, and it is deliberate. `ss` is Linux-only, so on the Mac the
+ * unknown would be permanent and universal — the same for every tree, every
+ * time. An alarm that can never be cleared is not caution, it is noise, and the
+ * paragraph above about `/logs/` is what noise costs here. It is reported as a
+ * note instead, so the gap is visible rather than silent.
+ */
+export function listenersUnder(root: string, lines?: string): ListenerScan {
+  let out: string;
+  if (lines !== undefined) {
+    out = lines;
+  } else {
+    const r = spawnSync("ss", ["-ltnpH"], { encoding: "utf8", timeout: 10_000 });
+    if (r.error !== undefined || r.status !== 0) {
+      const why = r.error?.message ?? `ss exited ${String(r.status)}`;
+      return { kind: "cannot-tell", why: `could not list listening sockets (${why})` };
+    }
+    out = r.stdout;
+  }
+
+  const prefix = root.endsWith(path.sep) ? root : root + path.sep;
+  const found: Listener[] = [];
+  const seen = new Set<number>();
+
+  for (const line of out.split("\n")) {
+    const addr = line.trim().split(/\s+/)[3] ?? "";
+    for (const m of line.matchAll(/pid=(\d+)/g)) {
+      const pid = Number(m[1]);
+      if (!Number.isInteger(pid) || seen.has(pid)) continue;
+      seen.add(pid);
+      let cwd: string;
+      try {
+        cwd = readlinkSync(`/proc/${pid}/cwd`, "utf8");
+      } catch {
+        // Somebody else's process, or one that exited between `ss` and here.
+        // Neither is ours to block on.
+        continue;
+      }
+      if (cwd !== root && !cwd.startsWith(prefix)) continue;
+      found.push({ pid, addr, command: commandOf(pid) });
+    }
+  }
+  return { kind: "checked", found };
+}
+
+/** A readable argv for a pid, or a shrug. Truncated: some of these are enormous. */
+function commandOf(pid: number): string {
+  try {
+    const argv = readFileSync(`/proc/${pid}/cmdline`, "utf8")
+      .split("\0")
+      .filter((a) => a !== "");
+    const joined = argv.join(" ");
+    return joined.length > 120 ? `${joined.slice(0, 117)}...` : joined;
+  } catch {
+    return "(command unreadable)";
+  }
+}
+
 export function gather(root: string, trunkSha?: string): CheckFacts {
   let linked = false;
   try {
@@ -651,6 +949,7 @@ export function gather(root: string, trunkSha?: string): CheckFacts {
     hidden,
     ...triaged,
     trunk: trunkSha === undefined ? standingAgainstTrunk(root) : standingAgainstSha(root, trunkSha),
+    listeners: listenersUnder(root),
   };
 }
 
@@ -675,6 +974,12 @@ export function report(facts: CheckFacts): Report {
   if (facts.trunk.kind === "landed") lines.push(`  ok   every commit here is on origin/${TRUNK_BRANCH}`);
   if (facts.dirty.length === 0) lines.push("  ok   nothing uncommitted or untracked");
   if (facts.hidden.length === 0) lines.push("  ok   nothing tracked is hidden from git status");
+  if (facts.listeners.kind === "checked" && facts.listeners.found.length === 0) {
+    lines.push("  ok   no server is listening on a port from inside this directory");
+  }
+  if (facts.listeners.kind === "cannot-tell") {
+    lines.push(`  ·    did not check for running servers: ${facts.listeners.why}`);
+  }
   for (const v of facts.verified) lines.push(`  ok   ${v}`);
   if (facts.disposable > 0) {
     lines.push(`  ·    ${facts.disposable} ignored ${plural(facts.disposable, "entry", "entries")} rebuildable (node_modules, dist, …)`);

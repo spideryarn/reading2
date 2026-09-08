@@ -84,6 +84,103 @@ ways this bites, both met on 2026-09-04:
 
 The habit that follows: after editing a test file, run `npm run typecheck` and not only the file.
 
+### A guard you rely on, that only this gate can enforce
+
+The two cases above are accidents — a type error nobody wanted. There is a third, deliberate one, and
+it is the more dangerous because it looks like extra safety rather than a gap: **a test written so
+that the type system, not the assertions, is what catches the mistake.**
+
+The live example is `tests/gjd-remote-tmux.test.ts`, where the fixture of unknown causes is annotated
+as an exhaustive `Record` over `SessionUnknownCause`. Add a cause to the union and the file stops
+compiling until somebody accounts for it — which is exactly the intent, and it fired for real on
+2026-09-08 when a seventh cause arrived. But **`npm test` reports 126 passed while that guard is
+broken**, because vitest strips the annotation without reading it.
+
+So the rule, which is the one above stated the other way round: **a type-level guard is a lint, not a
+test.** Two things follow.
+
+- **Write it where its gate runs**, and say in the file that `npm test` cannot see it — otherwise the
+  next reader adds a case, sees green, and believes the guard held.
+- **"All tests pass" from any agent says nothing about a type-level guarantee.** When the thing you
+  are relying on is exhaustiveness, a `never` check, or a branded type, the evidence is
+  `npm run typecheck` and only that.
+
+This is worth more care than an ordinary type error, because the whole point of such a guard is that
+somebody *stops thinking* about the class it covers.
+
+**And the companion rule, learned the same night by the agent who asked for the paragraph above.** In
+one batch they added four refusal codes — the exhaustive `Record` fired exactly as designed and
+refused to compile — and, in the same batch, added a field to a returned object literal. That second
+one is **not a type error anywhere**: `typecheck` was clean, it was pushed, and a test that spelled
+out the whole object went red on `dev`.
+
+> a type-level guard catches a changed **shape** and cannot catch a changed **value** — and adding a
+> field is a value change to every assertion that spells out an object.
+
+So the two gates fail in opposite directions and neither covers the other: `npm test` cannot see a
+broken exhaustiveness guard, and `npm run typecheck` cannot see a widened literal that every
+`toEqual` in the tree disagrees with. The habit that follows is not "run both" — everyone already
+knows that — it is **run the file that CONSUMES what you changed, not only the file you were editing
+in**. Their words: *"I'd run the file I was editing and not the file that consumed it."*
+
+**And the third one, which is what those two imply about how you check the guard itself.** If a
+type-level guard cannot go red under `npm test`, then **mutating it cannot go red under `npm test`
+either** — so the usual way of proving a guard works does not work on this kind of guard. Measured on
+2026-09-08, on the Overseer's branded-snapshot types: three mutations were applied and run through
+`tsc` rather than vitest — reverting an opaque wrapper to a branded intersection, aliasing one
+permission type to another, and making a `readonly` field mutable again. **All three are invisible to
+the test runner and all three are caught by the compiler**, two of them as
+`TS2578: Unused '@ts-expect-error' directive`, which is a real red rather than a silent pass.
+
+> A mutation the test runner cannot see is exactly the kind that lives.
+
+So when [silent-success.md](../reusable/silent-success.md) says to mutate what you added and check the
+suite notices, **"the suite" means whichever gate owns the guarantee** — and for anything resting on
+exhaustiveness, a `never` check, a branded or opaque type, or a `readonly`, that gate is
+`npm run typecheck`. Reaching for vitest by reflex will show every one of those mutations green.
+
+The mechanical part worth copying: put the mutation's counterpart in a test file as a
+`@ts-expect-error`, so **removing the guard makes the directive unused and the compile fails**. That
+turns "this should not compile" from a comment into something the gate enforces.
+
+**But reach for it only when the claim really is negative, and this is the trap** — found within the
+hour by the agent who took the paragraph above and applied it, whose first attempt did not work and
+who only discovered that by mutating it. Their guard declared **its own** `Record<RefusalCode, number>`
+in the test file and put `@ts-expect-error` on an incomplete literal. So the annotation under test was
+the one in the test. Widening the real export to `Partial<Record<…>>` left the guard **green**.
+
+> An assertion that constructs its own premise cannot detect the premise changing.
+
+So the rule is duller than the trick, and it is the rule rather than the trick that matters:
+
+- The claim is **"this shape cannot be constructed"** → `@ts-expect-error`. Negative claims need
+  something that fails when they stop being true.
+- The claim is **"this export already has this type"** → a **plain assignment of the real export**:
+  `const total: Record<RefusalCode, number> = REFUSAL_STATUS;`. Nothing clever, and it reads the thing
+  it is guarding.
+
+**And an unexpected use of it: a return type can guard a *timing* property.** In `tools/fleet/`,
+`answerQuestion` compares a freshly parsed dialog against the one the caller saw, then sends a
+keystroke. `steer.ts`'s KNOWN GAPS already recorded that a window remains between the last check and
+the send, because tmux offers no compare-and-send. What it did not say is the thing the safety
+actually rests on: **that window is microseconds only because nothing suspends inside it.** Make the
+function `async` and put a single `await` between the comparison and the send, and the window becomes
+arbitrarily long — the pane gets answered from a terminal meanwhile, and the digit lands in whatever
+replaced the dialog. **No test would go red**, because every test drives a synchronous fake.
+
+So the guard is the return type: `SteerResult`, and deliberately not `Promise<SteerResult>`. Making
+the function `async` fails `npm run typecheck` in three places, one of them an unused
+`@ts-expect-error`. **In this language, "does not suspend" is expressible as a return type** — which
+means a concurrency property that would otherwise live in a comment can be handed to the gate.
+
+Worth knowing because the reflex is to reach for a type guard when the claim is about *shape*. It is
+also available when the claim is about *when*.
+
+**And the general form, which covers both this and the injected-seam rule:** *the guard must read the
+thing it is guarding, not a copy of it.* An assertion whose premise is written in the test, and a
+test seam whose default is a stub, are the same failure — an instrument disconnected from its
+subject.
+
 ### The `@/` alias, and where it may live
 
 shadcn generates its imports as `@/lib/utils`, so the alias had to exist before any component landed

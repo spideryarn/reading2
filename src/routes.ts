@@ -12,6 +12,8 @@
  *   GET    /api/library/search   `?q=…&limit=…` → passages from every article at once
  *   PATCH  /api/library/:slug    { archived?: boolean, title?: string | null, purpose?: string | null }
  *                                 → { entry, purpose } — see `patchShelf` for why purpose is beside it
+ *   DELETE /api/library/:slug    destroy it, for good → { destroyed: slug }. 409 while an
+ *                                 import is running; no body, and nothing to undo
  *   POST   /api/library/:slug/open   one more open, for the shelf's tooltip
  *   GET    /api/models           which model writes what
  *                                 → { tasks: [{ task, model, id, provider, source, effort? }] }
@@ -6636,6 +6638,20 @@ const REFEREE_CLAIMS_PATTERN = /^\/api\/referee\/claims\/([\w.%-]+)$/;
    so both are named here rather than spelled into the rows twice. */
 const SEARCHES_PATTERN = /^\/api\/search\/([\w.%-]+)$/;
 const ONE_RUN_PATTERN = /^\/api\/search\/([\w.%-]+)\/([\w.%-]+)$/;
+/* Chat: an article's conversations, and one conversation. Two rows apiece — GET
+   and POST on the list, PATCH and DELETE on the thread — so both are named here.
+   The other eight chat and live-session matchers are used by one row each and
+   are written into those rows, per the rule above.
+
+   **`ONE_THREAD_PATTERN` also matches `/api/chat/<slug>/live-tool`**, because
+   `live-tool` is spelled with the same characters a thread id may use. Nothing
+   is ambiguous: the live-tool row is POST and these two are PATCH and DELETE, so
+   no path is accepted twice for one method —
+   tests/authenticated-api-route-contract.test.ts § *allows
+   /api/chat/:slug/live-tool three times, because the methods differ* is what
+   holds that, and it held it while these were guards too. */
+const CHAT_PATTERN = /^\/api\/chat\/([\w.%-]+)$/;
+const ONE_THREAD_PATTERN = /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)$/;
 
 /**
  * **The ordered table `serveAuthenticatedApi`'s `if` chain is being moved into,
@@ -6654,9 +6670,13 @@ const ONE_RUN_PATTERN = /^\/api\/search\/([\w.%-]+)\/([\w.%-]+)$/;
  * Because the move is incremental and must reorder nothing. What is here is the
  * **bottom of the chain, taken upward**: billing was its last four guards, jobs
  * and uploads the nine immediately above those, referee the eight above them,
- * search the four above *those*, and asking the table after every remaining
- * guard and before the terminal 404 puts each of the twenty-five in exactly the
- * position it already had.
+ * search the four above *those*, and chat and the live sessions the twelve above
+ * those again — and asking the table after every remaining guard and before the
+ * terminal 404 puts each of them in exactly the position it already had. The
+ * count is deliberately not written here: it changes once per slice, and a
+ * number in a comment that decays on a schedule is a comment that is wrong more
+ * often than right. `EXPECTED_AUTH_ROUTES` in
+ * tests/authenticated-api-route-contract.test.ts is where the inventory lives.
  *
  * **So the rows are in chain order, and prepending is how a domain arrives.**
  * The next slice up goes above the search rows, not below them — the table's
@@ -6685,6 +6705,217 @@ const ONE_RUN_PATTERN = /^\/api\/search\/([\w.%-]+)\/([\w.%-]+)$/;
  * **No `g` or `y` flag**, refused by `assertDispatchableRoutes` below.
  */
 const AUTH_ROUTES: readonly AuthRoute[] = [
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: CHAT_PATTERN,
+    handler: async ({ request: { res, query } }, captures) => {
+      const slug = slugPart(captures, 1);
+      const threads = await sweepChat(slug);
+      /* **`?summary=1` is the reading view's version of this list**, and it is a
+         parameter rather than a route because it is the same question with the
+         transcripts left off — same sweep, same order, same ids.
+
+         The reading view needs one thing from chat: which conversations are
+         anchored to which passage, so it can draw a mark and say something on
+         hover. Handing it the transcripts as well is not merely wasteful. Chat
+         state changes on every streamed token, so holding threads above
+         `TableView` would re-render — and re-`annotateHtml` — every paragraph
+         of the article, hundreds of times, while an answer arrives. Found by a
+         GPT-5.6 review, 2026-08-26; docs/plans/260826ab-chat-as-gateway.md § summaries. */
+      if (query.get("summary") === "1") {
+        send(res, 200, { threads: threads.map(summarise) });
+        return;
+      }
+      send(res, 200, { threads });
+    },
+  },
+
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: CHAT_PATTERN,
+    handler: async ({ request: { req, res } }, captures) => {
+      /* The one branch that does not call `send`. It writes its own headers and
+         ends the response itself, so there is nothing for `send` to do — but
+         `res.statusCode` is still set, which is all the logging in `finally`
+         reads. A stream that fails *before* the headers go out throws, and the
+         catch below answers it as ordinary JSON; after that, the failure is an
+         `error` frame inside a 200, because the status line is long gone. */
+      /* **The article goes on every row this request writes.** Without it,
+         "what has this piece cost me" would cover the ingest and none of the
+         questions asked about it afterwards — which is the half a reader
+         actually generates. src/ai-spend.ts § `withSpendAttribution`. */
+      const chatBody = await readBody(req);
+      await withSpendAttribution({ articleSlug: slugPart(captures, 1) }, () =>
+        streamChat(slugPart(captures, 1), chatBody, res),
+      );
+    },
+  },
+
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)\/cancel$/,
+    handler: async ({ request: { req, res } }, captures) => {
+      const [slug, id] = [slugPart(captures, 1), part(captures, 2)];
+      send(res, 200, await cancelChat(slug, id, await readBody(req)));
+    },
+  },
+
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: /^\/api\/chat\/([\w.%-]+)\/live-tool$/,
+    handler: async ({ request: { req, res } }, captures) => {
+      /* Attributed like every other paid call this article causes. A tool run
+         may embed or search, and "what has this piece cost me" should not stop
+         at the questions that were typed. */
+      const slug = slugPart(captures, 1);
+      const toolBody = await readBody(req);
+      send(
+        res,
+        200,
+        await withSpendAttribution({ articleSlug: slug }, () => liveTool(slug, toolBody)),
+      );
+    },
+  },
+
+  /* **Live conversation's ticket.** It is under the conversation rather than
+     under the article because it seeds the session with the thread. Its pair is
+     `POST /api/chat/:slug/:threadId/spoken`, the write that lands a finished
+     exchange back in that thread; the `/api/live/:sessionId/…` routes are the
+     session's accounting, a different subject with its own comment.
+
+     **The two halves of that pair are not adjacent here, and were not adjacent
+     in the chain either** — the accounting routes have always sat between them,
+     because this table is in the order the chain dispatched and that is the
+     order the chain had. Rearranging it into subject order would be the one edit
+     a slice of this migration may not make. (An earlier draft of this comment
+     said they *had* been adjacent and that the move separated them. Both halves
+     were wrong; GPT Sol, 260908a stage 2/3 review § F11.) */
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)\/live$/,
+    handler: async ({ request: { req, res } }, captures) => {
+      const [slug, id] = [slugPart(captures, 1), part(captures, 2)];
+      send(res, 200, await liveChatToken(slug, id, await readBody(req)));
+    },
+  },
+
+  /* **Live conversation's three accounting endpoints, and they are NOT under
+     `/api/chat/`.**
+
+     `POST /api/chat/:slug/:threadId/live` and `…/spoken` are: a ticket needs the
+     thread to seed from, and a spoken exchange is appended to it. These three
+     are about the *session* — what it
+     spent, when its channel opened, when it ended — and a session outlives the
+     thread it started in, may be reported against after the reader has moved on,
+     and is addressed by a uuid this server minted rather than by a slug and a
+     thread id. Routing them under a conversation would have made every report
+     carry two identifiers that nothing checks against each other, which is two
+     more ways for a report to be about the wrong thing.
+
+     `[\w-]+` rather than the slug class the rest of this file uses: these ids
+     are uuids from `randomUUID`, so a dot or a percent-escape in one is not a
+     spelling to accept, it is a request to look at. */
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: /^\/api\/live\/([\w-]+)\/connected$/,
+    handler: async ({ request: { res } }, captures) => {
+      send(res, 200, await liveConnected(part(captures, 1)));
+    },
+  },
+
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: /^\/api\/live\/([\w-]+)\/usage$/,
+    handler: async ({ request: { req, res } }, captures) => {
+      /* **Not wrapped in `withSpendAttribution`, and that is deliberate.** That
+         helper puts an article on rows the *collector* writes — the calls made
+         inside this request. This request makes no model call at all: it reports
+         one that happened on a wire this server never touched, and the row is
+         built and written directly. The article comes off the session row, which
+         is a more durable answer than the ambient scope anyway. */
+      send(res, 200, await liveUsage(part(captures, 1), await readBody(req)));
+    },
+  },
+
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: /^\/api\/live\/([\w-]+)\/close$/,
+    handler: async ({ request: { req, res } }, captures) => {
+      send(res, 200, await liveClose(part(captures, 1), await readBody(req)));
+    },
+  },
+
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)\/spoken$/,
+    handler: async ({ request: { req, res } }, captures) => {
+      /* **The spend attribution the streaming route has, for the half of a live
+         session this server can see.** It buys nothing today: the realtime rows
+         are written by `/api/live/:sessionId/usage` above, which takes its
+         article off the session row rather than off the ambient scope. Kept
+         because this request makes model calls of its own the moment anything
+         here does, and because it is the only request in a live conversation
+         that knows which article it belongs to. */
+      const [slug, id] = [slugPart(captures, 1), part(captures, 2)];
+      const spokenBody = await readBody(req);
+      send(
+        res,
+        200,
+        await withSpendAttribution({ articleSlug: slug }, () => spokenChat(slug, id, spokenBody)),
+      );
+    },
+  },
+
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)\/stop$/,
+    handler: async ({ request: { req, res } }, captures) => {
+      // The slug becomes a directory; the ids are only ever matched in a Map.
+      const [slug, id] = [slugPart(captures, 1), part(captures, 2)];
+      send(res, 200, await stopChat(slug, id, await readBody(req)));
+    },
+  },
+
+  {
+    kind: "pattern",
+    method: "PATCH",
+    pattern: ONE_THREAD_PATTERN,
+    handler: async ({ request: { req, res } }, captures) => {
+      // Slug becomes a directory; the thread id is only ever matched in a list.
+      const [slug, id] = [slugPart(captures, 1), part(captures, 2)];
+      const { title } = objectBody(await readBody(req));
+      if (typeof title !== "string") throw httpError(400, "Expected { title }");
+      send(res, 200, { threads: await chatStore.rename(slug, id, title) });
+    },
+  },
+
+  {
+    kind: "pattern",
+    method: "DELETE",
+    pattern: ONE_THREAD_PATTERN,
+    handler: async ({ request: { res } }, captures) => {
+      const [slug, id] = [slugPart(captures, 1), part(captures, 2)];
+      /* Under the conversation's turn order, like the writes in `streamChat`.
+         A retry or an edit checks that it will be accepted, then aborts the live
+         answer, then writes — and a delete landing between the check and the
+         write puts the abort-then-refuse bug back in a narrower window. There is
+         no reason a delete needs to interleave with a turn, so it does not. */
+      send(res, 200, {
+        threads: await inTurnOrder(`${slug}/${id}`, () => chatStore.remove(slug, id)),
+      });
+    },
+  },
+
   /* **Search — the runs list, and one run.** The chain's last four guards
      before this table was consulted, moved here on 2026-09-07 in the order they
      had, and therefore still answering from the position they answered from.
@@ -7707,41 +7938,12 @@ export async function serveAuthenticatedApi(
      docs/plans/260901i-the-referee-places-the-passage-themselves.md § *Why a
      separate path*. A named path cannot express the ambiguity. */
   const commentMark = /^\/api\/comments\/([\w.%-]+)\/([\w.%-]+)\/mark$/.exec(path);
-  const chat = /^\/api\/chat\/([\w.%-]+)$/.exec(path);
-  const oneThread = /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)$/.exec(path);
-  const chatStop = /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)\/stop$/.exec(path);
-  const chatCancel = /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)\/cancel$/.exec(path);
-  /* Live conversation's two: a ticket to open one, and the write that lands a
-     finished exchange in the thread. Both are under the conversation rather
-     than under the article, because both need the thread — one to seed the
-     session with it, the other to append to it. */
-  const chatLive = /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)\/live$/.exec(path);
-  const chatLiveTool = /^\/api\/chat\/([\w.%-]+)\/live-tool$/.exec(path);
-  const chatSpoken = /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)\/spoken$/.exec(path);
-  /* **Live conversation's three accounting endpoints, and they are NOT under
-     `/api/chat/`.**
-
-     The two above are: a ticket needs the thread to seed from, and a spoken
-     exchange is appended to it. These three are about the *session* — what it
-     spent, when its channel opened, when it ended — and a session outlives the
-     thread it started in, may be reported against after the reader has moved on,
-     and is addressed by a uuid this server minted rather than by a slug and a
-     thread id. Routing them under a conversation would have made every report
-     carry two identifiers that nothing checks against each other, which is two
-     more ways for a report to be about the wrong thing.
-
-     `[\w-]+` rather than the slug class the rest of this file uses: these ids
-     are uuids from `randomUUID`, so a dot or a percent-escape in one is not a
-     spelling to accept, it is a request to look at. */
-  const liveSessionConnected = /^\/api\/live\/([\w-]+)\/connected$/.exec(path);
-  const liveSessionUsage = /^\/api\/live\/([\w-]+)\/usage$/.exec(path);
-  const liveSessionClose = /^\/api\/live\/([\w-]+)\/close$/.exec(path);
-  /* The search, referee, jobs, uploads and billing matchers used to be declared
-     here and handled at the very end of the chain. They are the rows of
-     `AUTH_ROUTES` above, in that same order, and the table is consulted after
-     every guard below and before the terminal 404 — the position they already
-     had, so the move reorders nothing. `liveSessionClose` is now the last
-     matcher this chain declares, and chat's threads are the next slice up. */
+  /* The chat, live-session, search, referee, jobs, uploads and billing matchers
+     used to be declared here and handled at the very end of the chain. They are
+     the rows of `AUTH_ROUTES` above, in that same order, and the table is
+     consulted after every guard below and before the terminal 404 — the position
+     they already had, so the move reorders nothing. `commentMark` is now the last
+     matcher this chain declares, and comments are the next slice up. */
 
     /* **The second gate, and it guards a prefix rather than a route.**
        Everything under `/api/admin/` is refused to everybody but the one
@@ -7881,6 +8083,27 @@ export async function serveAuthenticatedApi(
        record", and a client that forgot one field would silently clear it. */
     if (shelfEntry && req.method === "PATCH") {
       send(res, 200, await patchShelf(slugPart(shelfEntry, 1), await readBody(req)));
+      return;
+    }
+    /**
+     * **Destroy the article, for good.** The other ending, beside the `archived`
+     * flag the PATCH above sets.
+     *
+     * **No body.** There is nothing to say: the slug is the whole request, and a
+     * body would only invite a confirmation token that the server would have to
+     * either check (a second authorisation, disagreeing with the first) or
+     * ignore (a field that reads as a safeguard and is not one). The two-step
+     * confirm is the client's, and it is a property of the button rather than of
+     * the protocol.
+     *
+     * **And no ownership check here.** Authorisation is the `where` clause
+     * inside the one statement `destroy` runs, so this route asks nobody whose
+     * article it is — a second check would be a second opinion that can disagree
+     * with the first, and the one that matters is the one in the `DELETE`.
+     * docs/project/auth.md § *whose data is it*.
+     */
+    if (shelfEntry && req.method === "DELETE") {
+      send(res, 200, await shelfStore.destroy(slugPart(shelfEntry, 1)));
       return;
     }
     if (modelsRoute && req.method === "GET") {
@@ -8404,138 +8627,16 @@ export async function serveAuthenticatedApi(
       send(res, 200, { comments: await commentStore.remove(slug, id) });
       return;
     }
-    if (chat && req.method === "GET") {
-      const slug = slugPart(chat, 1);
-      const threads = await sweepChat(slug);
-      /* **`?summary=1` is the reading view's version of this list**, and it is a
-         parameter rather than a route because it is the same question with the
-         transcripts left off — same sweep, same order, same ids.
-
-         The reading view needs one thing from chat: which conversations are
-         anchored to which passage, so it can draw a mark and say something on
-         hover. Handing it the transcripts as well is not merely wasteful. Chat
-         state changes on every streamed token, so holding threads above
-         `TableView` would re-render — and re-`annotateHtml` — every paragraph
-         of the article, hundreds of times, while an answer arrives. Found by a
-         GPT-5.6 review, 2026-08-26; docs/plans/260826ab-chat-as-gateway.md § summaries. */
-      if (query.get("summary") === "1") {
-        send(res, 200, { threads: threads.map(summarise) });
-        return;
-      }
-      send(res, 200, { threads });
-      return;
-    }
-    if (chat && req.method === "POST") {
-      /* The one branch that does not call `send`. It writes its own headers and
-         ends the response itself, so there is nothing for `send` to do — but
-         `res.statusCode` is still set, which is all the logging in `finally`
-         reads. A stream that fails *before* the headers go out throws, and the
-         catch below answers it as ordinary JSON; after that, the failure is an
-         `error` frame inside a 200, because the status line is long gone. */
-      /* **The article goes on every row this request writes.** Without it,
-         "what has this piece cost me" would cover the ingest and none of the
-         questions asked about it afterwards — which is the half a reader
-         actually generates. src/ai-spend.ts § `withSpendAttribution`. */
-      const chatBody = await readBody(req);
-      await withSpendAttribution({ articleSlug: slugPart(chat, 1) }, () =>
-        streamChat(slugPart(chat, 1), chatBody, res),
-      );
-      return;
-    }
-    if (chatCancel && req.method === "POST") {
-      const [slug, id] = [slugPart(chatCancel, 1), part(chatCancel, 2)];
-      send(res, 200, await cancelChat(slug, id, await readBody(req)));
-      return;
-    }
-    if (chatLiveTool && req.method === "POST") {
-      /* Attributed like every other paid call this article causes. A tool run
-         may embed or search, and "what has this piece cost me" should not stop
-         at the questions that were typed. */
-      const slug = slugPart(chatLiveTool, 1);
-      const toolBody = await readBody(req);
-      send(
-        res,
-        200,
-        await withSpendAttribution({ articleSlug: slug }, () => liveTool(slug, toolBody)),
-      );
-      return;
-    }
-    if (chatLive && req.method === "POST") {
-      const [slug, id] = [slugPart(chatLive, 1), part(chatLive, 2)];
-      send(res, 200, await liveChatToken(slug, id, await readBody(req)));
-      return;
-    }
-    if (liveSessionConnected && req.method === "POST") {
-      send(res, 200, await liveConnected(part(liveSessionConnected, 1)));
-      return;
-    }
-    if (liveSessionUsage && req.method === "POST") {
-      /* **Not wrapped in `withSpendAttribution`, and that is deliberate.** That
-         helper puts an article on rows the *collector* writes — the calls made
-         inside this request. This request makes no model call at all: it reports
-         one that happened on a wire this server never touched, and the row is
-         built and written directly. The article comes off the session row, which
-         is a more durable answer than the ambient scope anyway. */
-      send(res, 200, await liveUsage(part(liveSessionUsage, 1), await readBody(req)));
-      return;
-    }
-    if (liveSessionClose && req.method === "POST") {
-      send(res, 200, await liveClose(part(liveSessionClose, 1), await readBody(req)));
-      return;
-    }
-    if (chatSpoken && req.method === "POST") {
-      /* **The spend attribution the streaming route has, for the half of a live
-         session this server can see.** It buys nothing today: the realtime rows
-         are written by `/api/live/:sessionId/usage` above, which takes its
-         article off the session row rather than off the ambient scope. Kept
-         because this request makes model calls of its own the moment anything
-         here does, and because it is the only request in a live conversation
-         that knows which article it belongs to. */
-      const [slug, id] = [slugPart(chatSpoken, 1), part(chatSpoken, 2)];
-      const spokenBody = await readBody(req);
-      send(
-        res,
-        200,
-        await withSpendAttribution({ articleSlug: slug }, () => spokenChat(slug, id, spokenBody)),
-      );
-      return;
-    }
-    if (chatStop && req.method === "POST") {
-      // The slug becomes a directory; the ids are only ever matched in a Map.
-      const [slug, id] = [slugPart(chatStop, 1), part(chatStop, 2)];
-      send(res, 200, await stopChat(slug, id, await readBody(req)));
-      return;
-    }
-    if (oneThread && req.method === "PATCH") {
-      // Slug becomes a directory; the thread id is only ever matched in a list.
-      const [slug, id] = [slugPart(oneThread, 1), part(oneThread, 2)];
-      const { title } = objectBody(await readBody(req));
-      if (typeof title !== "string") throw httpError(400, "Expected { title }");
-      send(res, 200, { threads: await chatStore.rename(slug, id, title) });
-      return;
-    }
-    if (oneThread && req.method === "DELETE") {
-      const [slug, id] = [slugPart(oneThread, 1), part(oneThread, 2)];
-      /* Under the conversation's turn order, like the writes in `streamChat`.
-         A retry or an edit checks that it will be accepted, then aborts the live
-         answer, then writes — and a delete landing between the check and the
-         write puts the abort-then-refuse bug back in a narrower window. There is
-         no reason a delete needs to interleave with a turn, so it does not. */
-      send(res, 200, {
-        threads: await inTurnOrder(`${slug}/${id}`, () => chatStore.remove(slug, id)),
-      });
-      return;
-    }
 
     /**
      * **The table, asked after every guard above and before the 404 below.**
      *
-     * Search, referee, jobs, uploads and billing live in `AUTH_ROUTES` (above
-     * `serveAuthenticatedApi`) rather than in this chain. They were its last
-     * twenty-five guards, immediately above the terminal 404, so consulting the
-     * table exactly here leaves each of them where it already was and reorders
-     * nothing — the property that makes each increment a rearrangement rather
-     * than a behaviour change.
+     * Chat, the live sessions, search, referee, jobs, uploads and billing live in
+     * `AUTH_ROUTES` (above `serveAuthenticatedApi`) rather than in this chain.
+     * They were the chain's last guards, in that order, immediately above the
+     * terminal 404, so consulting the table exactly here leaves each of them
+     * where it already was and reorders nothing — the property that makes each
+     * increment a rearrangement rather than a behaviour change.
      *
      * **That property is why the queue is consumed bottom-up.** A domain from
      * the middle of the chain would answer from here instead of from where it

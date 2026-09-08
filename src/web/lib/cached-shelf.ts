@@ -36,13 +36,91 @@
  * A rename or an archive patches the React list, not the saved body — so the
  * first paint after either can show the old title, or a card the reader deleted,
  * for as long as the live answer takes. Counts and order can jump for the same
- * reason. That is accepted rather than overlooked: renames are cosmetic and
- * Delete is archive, so nothing here can lose anything. Said out loud in the
- * plan too, because "it flickered an old title at me" should be a known price
- * and not a bug report.
+ * reason. That is accepted rather than overlooked: renames are cosmetic. Said
+ * out loud in the plan too, because "it flickered an old title at me" should be
+ * a known price and not a bug report.
+ *
+ * ## "Delete is archive, so nothing here can lose anything" — no longer true
+ *
+ * That sentence stood here until 2026-09-07 and was the whole reason staleness
+ * was cheap: every card named something that still existed, so the worst a
+ * stale one could do was be out of date about it. `DELETE /api/library/:slug`
+ * ends that (docs/plans/260906h-delete-an-article-permanently.md). A card
+ * painted from a body saved before a delete names an article that is **gone**,
+ * and it opens a 404 — which, per `offline-store.ts` § `invalidate`, looks
+ * exactly like a delete that failed.
+ *
+ * `forgetCachedReader` below is the answer, and it is deliberately blunt: the
+ * one control that destroys an article calls it on a confirmed deletion and
+ * retires this reader's whole cached set, rather than trying to name the seven
+ * or eight prefixes an article's data is spread across. Per-article
+ * invalidation can replace it later; nothing here may go on promising an
+ * article that has been destroyed.
  */
 import type { LibraryEntry } from "../../types.js";
-import { readCached } from "./offline-store.js";
+import { forgetUser, lastKnownUser, readCached } from "./offline-store.js";
+
+/**
+ * **Whose drawer this is, asked now** — for a caller that is about to do
+ * something long and must not ask again afterwards.
+ *
+ * A re-export with a name that says *when*, rather than a second import of
+ * `lastKnownUser` at a call site that has no other business in the offline
+ * store. `DeletePermanently` reads it before it sends its DELETE, because the
+ * same lookup made after the round trip can have moved on to a different reader
+ * — see `forgetCachedReader` below.
+ *
+ * An id. It selects a drawer and authorises nothing.
+ */
+export function cachedReaderNow(): string | null {
+  return lastKnownUser();
+}
+
+/**
+ * Throw away **everything** this device has cached for one reader.
+ *
+ * For the one caller that has destroyed something for good — `DeletePermanently`
+ * in [Metadata.tsx](../Metadata.tsx). Invalidating `/api/library` and
+ * `/api/article/<slug>` is not enough: metadata, comments, chat, search,
+ * glossary and illustrated are all cacheable too (`api.ts` § `cacheable`), and
+ * any one of them left behind is this app telling a reader that an article they
+ * destroyed is still here.
+ *
+ * ## The reader is an argument, and it used to be a lookup
+ *
+ * This called `lastKnownUser()` itself, which meant *whoever is signed in by the
+ * time the delete has settled* — and a direct A→B sign-in landing in that window
+ * (`rememberUser(B)` with no `forgetUser(A)`, because that only runs on a null
+ * session) emptied **B's** drawer while leaving A's holding a card for an
+ * article that no longer exists. Two failures out of one line: B loses a head
+ * start they did not need to lose, and A comes back to a shelf that paints a
+ * card which opens a 404 — the thing this module says at the top nothing here
+ * may go on doing. GPT Sol found it reviewing the built control, 2026-09-08.
+ *
+ * So the caller captures the reader **before** it starts, and hands it in. The
+ * honest limit, said out loud: that capture is still a lookup of its own rather
+ * than the `owner` that travelled with the token `apiFetch` actually used
+ * (`api.ts` § `Credential`), so it narrows the window from a whole round trip to
+ * the moment before one rather than closing it. Closing it would mean letting a
+ * caller pass a credential into `apiFetch`, which that file deliberately does
+ * not allow.
+ *
+ * **Never throws.** `forgetUser` already gives up quietly where IndexedDB is
+ * missing or refuses (a private window, Node), and a cache we could not clear
+ * must not stop the reader being taken to their library — the delete has
+ * happened either way, and the live answer is one request behind.
+ *
+ * `null` — nobody was signed in — is not an error: there is no drawer to empty
+ * and this does nothing.
+ */
+export async function forgetCachedReader(reader: string | null): Promise<void> {
+  if (!reader) return;
+  try {
+    await forgetUser(reader);
+  } catch {
+    /* Deliberately swallowed — see above. */
+  }
+}
 
 /** The one URL this module is about. Kept in step with `useShelf`'s own fetch. */
 const SHELF_URL = "/api/library";

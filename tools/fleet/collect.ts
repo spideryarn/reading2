@@ -16,11 +16,21 @@
  * differently is run it through `bash` instead of `ssh`, because we are already
  * on the box it wants to ask.
  */
-import { execFileSync } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
+import { promisify } from "node:util";
 
-import { buildSessionScript, parseSessions, type Session } from "../../scripts/gjd-remote-tmux.js";
+const run = promisify(execFile);
 
-/** One line of the page. Deliberately flat: v0.1 renders strings, nothing else. */
+import {
+  buildSessionScript,
+  parseSessions,
+  type Session,
+  type SessionMeta,
+} from "../../scripts/gjd-remote-tmux.js";
+import { capturePane, parsePane, type PaneQuestion } from "./pane.js";
+import { statusesOf, type FleetStatus } from "./status.js";
+
+/** One line of the page. Deliberately flat: it is rendered, and it is JSON. */
 export type FleetRow = {
   /** tmux's own session handle (`$1643`) — the address, and stable across renames. */
   id: string;
@@ -31,7 +41,71 @@ export type FleetRow = {
   repo: string | null;
   /** The worktree directory's own name, when the session is in one. */
   worktree: string | null;
+  /**
+   * The launcher's metadata, WHOLE and undamaged — the same discriminated union
+   * `Session` carries, not a flattened set of nullable fields.
+   *
+   * `repo` and `worktree` above are for RENDERING and are lossy on purpose: a
+   * name for a person to read. This is the record, and it holds `dir` — the
+   * full working directory, which nothing else in the payload can reconstruct.
+   * `~/.claude/projects/<slug>/` is a slugified cwd and slugification is lossy,
+   * and the repo is provably not derivable from the directory either (there is
+   * a comment in gjd-remote-log.ts saying so).
+   *
+   * WITHOUT THIS A REBOOT IS UNRECOVERABLE, which is what put it here. Session
+   * identity lives only in the tmux environment, so a reboot erases it — and a
+   * history that recorded a tmux handle and some display fields could say what
+   * was running and not where, so nothing could be resumed. GPT Sol's P0 on the
+   * Overseer's plan (2026-09-08), relayed by that session; the fix belongs in
+   * this file because this is where the fields were being dropped.
+   *
+   * The union rather than `dir: string | null` so that reading `dir` forces the
+   * `version === 1` check: a legacy session genuinely does not have one, and a
+   * null that the compiler lets you ignore is the shape this project keeps
+   * writing comments about.
+   */
+  meta: SessionMeta;
   startedAt: string;
+  /**
+   * What the session is doing. A union, never a bare string, and `unknown`
+   * carries the reason — see status.ts, and the source comments in
+   * `sessionState` that explain why "we could not ask" must never collapse into
+   * "nothing is happening".
+   */
+  status: FleetStatus;
+  /**
+   * tmux's PANE handle (`%2108`), which is a different thing from `id` (the
+   * SESSION handle, `$1643`). Anything that reads or writes the terminal needs
+   * this one; anything that names a session needs the other. Null when the
+   * session's pane could not be resolved.
+   */
+  paneId: string | null;
+  /**
+   * The pane's own pid (its shell), when tmux told us. Not an address — it is
+   * the thing that CHANGES when a pane is respawned under the same handle, so
+   * `steer.ts` compares it before typing and refuses if the pane you were
+   * looking at has been replaced by another one wearing its name.
+   */
+  panePid: number | null;
+  /**
+   * The CONVERSATION's uuid — Claude's own `--session-id`, not tmux's `$1643`.
+   *
+   * Carried because it is the only one of the three ids that identifies the
+   * thing a person means by "this agent": a tmux session can be resumed into a
+   * different conversation and keep its handle, its name and its pane. Null for
+   * a session that is not a Claude, and for a legacy one that never pinned it —
+   * and a null here is what makes the steer route refuse rather than guess.
+   */
+  claudeSessionId: string | null;
+  /**
+   * What this session is asking, when it is blocked on a dialog — and null
+   * otherwise, including for every session that is merely working.
+   *
+   * Only filled in for rows the status pass already called `needs-you`: a
+   * capture per session per refresh is cheap but pointless for a pane nobody is
+   * waiting on, and every extra capture is load on a box that fell over today.
+   */
+  question: PaneQuestion | null;
 };
 
 /** A snapshot, and enough about it to know whether to believe it. */
@@ -40,7 +114,69 @@ export type FleetSnapshot = {
   collectedAt: string;
   /** How long the collection took. It is seconds, not milliseconds — see the server. */
   tookMs: number;
+  /**
+   * Which tmux server these handles belong to — see `tmuxServerPid`. Every `$…`
+   * and `%…` in `rows` is meaningless without it, and comparing two snapshots
+   * across a reboot without checking it silently equates different sessions.
+   */
+  tmuxServerPid: number | null;
 };
+
+/** A pane's address, and the pid that changes when it is respawned under it. */
+export type PaneInfo = { paneId: string; panePid: number | null };
+
+/**
+ * Session handle → pane handle, for every pane tmux knows about.
+ *
+ * ONE CALL FOR THE WHOLE BOX rather than one per session. Exported and taking
+ * its input as a string so the parse can be tested without tmux.
+ *
+ * A session can hold several panes; the first wins, which is the one `ls`-style
+ * tools mean by "the session's pane". A session with no pane is simply absent —
+ * it does not get an empty string, because "" would be accepted as an address
+ * somewhere downstream and `%` is what makes an address recognisable.
+ */
+export function panesBySession(listPanesOutput: string): Map<string, PaneInfo> {
+  const out = new Map<string, PaneInfo>();
+  for (const line of listPanesOutput.split("\n")) {
+    const [session, pane, pid] = line.trim().split(/\s+/);
+    if (!session || !pane) continue;
+    // A pid we cannot read is null, not a dropped row: the pane handle is still
+    // the address, and losing the row because a third field was odd would cost
+    // the session its question for no gain. `steer.ts` treats an absent pid as
+    // "no respawn check available" and every other guard still applies.
+    const panePid = pid !== undefined && /^\d{1,10}$/.test(pid) ? Number(pid) : null;
+    if (!out.has(session)) out.set(session, { paneId: pane, panePid });
+  }
+  return out;
+}
+
+/**
+ * The tmux SERVER's pid, from the same listing — a generation token.
+ *
+ * `$1643` is unique within one tmux server and meaningless across two. When the
+ * server dies, handles start again at `$0`, so a stored `$1643` from before a
+ * reboot and a live `$1643` after one are different sessions wearing one name,
+ * and nothing in the row can tell them apart. This is the field that can.
+ *
+ * `claudeSessionId` covers the same hazard for the CONVERSATION half (a session
+ * resumed into a different chat); this covers the runtime half (the same handle
+ * in a new tmux server). Neither subsumes the other: a reboot changes this and
+ * nothing else, and a resume changes the uuid and nothing else. Sol's finding on
+ * the Overseer's plan, 2026-09-08.
+ *
+ * Free: `#{pid}` is a fourth field on the `list-panes -a` we already run, not
+ * another call. Null when the listing is empty or the field is not a number,
+ * because a generation we had to guess would defeat the purpose.
+ */
+export function tmuxServerPid(listPanesOutput: string): number | null {
+  for (const line of listPanesOutput.split("\n")) {
+    const parts = line.trim().split(/\s+/);
+    const pid = parts[3];
+    if (pid !== undefined && /^\d{1,10}$/.test(pid)) return Number(pid);
+  }
+  return null;
+}
 
 /**
  * The worktree's directory name, for a session inside one.
@@ -66,14 +202,34 @@ export function worktreeOf(dir: string): string | null {
  * metadata convention entirely — its repo is genuinely unknown, and saying so
  * is the whole reason that union has a second arm.
  */
-export function toRows(sessions: readonly Session[]): FleetRow[] {
+export function toRows(
+  sessions: readonly Session[],
+  status: ReadonlyMap<string, FleetStatus>,
+  panes: ReadonlyMap<string, PaneInfo> = new Map(),
+): FleetRow[] {
   return sessions.map((s) => ({
     id: s.id,
     name: s.name,
     title: s.title.trim() === "" ? null : s.title.trim(),
     repo: s.meta.version === 1 ? s.meta.repo : null,
     worktree: s.meta.version === 1 ? worktreeOf(s.meta.dir) : null,
+    meta: s.meta,
     startedAt: s.created.toISOString(),
+    paneId: panes.get(s.id)?.paneId ?? null,
+    panePid: panes.get(s.id)?.panePid ?? null,
+    claudeSessionId: s.claudeId,
+    // Filled in below, only for the blocked rows. Null here rather than
+    // undefined so the field is always present in the JSON.
+    question: null as PaneQuestion | null,
+    // A session the status pass did not cover is `unknown` with a reason, not a
+    // default that reads as calm. There is no legitimate way to get here — the
+    // two lists come from one parse — so if it ever shows up on the page, the
+    // page is telling you about a real bug rather than about the box.
+    status: status.get(s.id) ?? {
+      kind: "unknown",
+      cause: "no-status-derived",
+      why: "no status was derived for this session",
+    },
   }));
 }
 
@@ -85,13 +241,272 @@ export function toRows(sessions: readonly Session[]): FleetRow[] {
  * match the rows, and "no sessions" is the answer least likely to make anyone
  * look. The caller keeps its previous snapshot instead.
  *
- * `agents: false` because v0.1 shows no status, so there is no reason to pay
- * for `claude agents --json` — the flag exists precisely so callers that do not
- * need states cannot hang on it. v0.3 turns it on.
+ * `agents: true` since v0.3, because the agents list is the only thing that can
+ * tell busy from idle from parked-on-a-question. It costs about a second, and
+ * the flag exists so that callers which do not need states cannot hang on it.
+ *
+ * THE STATUS IS ATTACHED TO EACH ROW, not carried alongside as a Map, and that
+ * is not a style choice. `server.ts` serves the snapshot by `JSON.stringify` —
+ * and a `Map` stringifies to `{}`, so the status would vanish from the JSON
+ * with nothing erroring anywhere, which is the exact shape of bug
+ * docs/reusable/silent-success.md is about. See `snapshotFrom`, and the JSON
+ * round-trip test that pins it.
  */
-export function collect(): FleetSnapshot {
+
+/**
+ * One `list-panes -a` answers two questions, so they travel together: which
+ * pane belongs to which session, and which tmux server all of those handles
+ * belong to. Grouped rather than passed as two arguments because a caller that
+ * can supply the panes and omit the generation is a caller that will.
+ */
+export type PaneListing = { panes: ReadonlyMap<string, PaneInfo>; tmuxServerPid: number | null };
+
+/**
+ * Every pane on the box, keyed by its session, and the server they are on.
+ *
+ * Empty on failure rather than throwing: not knowing a pane costs a question,
+ * while the row itself is still worth showing. A null generation is the same
+ * bargain — it says "unverifiable", which is what a consumer needs to hear.
+ */
+function panes(): PaneListing {
+  try {
+    const out = execFileSync(
+      "tmux",
+      // `#{pid}` is the SERVER's pid, not the pane's — a fourth field on a call
+      // we were already making, and the only cheap way to tell one tmux server's
+      // `$1643` from the next one's.
+      ["list-panes", "-a", "-F", "#{session_id} #{pane_id} #{pane_pid} #{pid}"],
+      { encoding: "utf8", timeout: 10_000 },
+    );
+    return { panes: panesBySession(out), tmuxServerPid: tmuxServerPid(out) };
+  } catch {
+    return { panes: new Map(), tmuxServerPid: null };
+  }
+}
+
+/**
+ * The shell we ask the box, as a function so a test can look at it.
+ *
+ * `agents: true` is load-bearing and was invisible: flipping it to `false`
+ * left every test green while the live dashboard degraded every Claude row to
+ * `unknown`, because the status tests inject an agents map directly and never
+ * touch this call. GPT Sol's F5. `tests/fleet-collect.test.ts` now asserts this
+ * script differs from the agents-free one, so the flag cannot be flipped in
+ * silence.
+ */
+export function sessionScript(): string {
+  return buildSessionScript({ agents: true });
+}
+
+/**
+ * A parse plus the pane map, as a snapshot. Pure, and separate from `collect`
+ * so the join can be tested without a box — including the JSON round trip,
+ * which is where a `Map` would vanish.
+ */
+export function snapshotFrom(
+  parsed: ReturnType<typeof parseSessions>,
+  listing: PaneListing,
+  tookMs: number,
+  now = new Date(),
+): FleetSnapshot {
+  const status = new Map(statusesOf(parsed).map((r) => [r.id, r.status]));
+  return {
+    rows: toRows(parsed.sessions, status, listing.panes),
+    collectedAt: now.toISOString(),
+    tookMs,
+    tmuxServerPid: listing.tmuxServerPid,
+  };
+}
+
+/**
+ * **Is this a listing of the box we are standing on?**
+ *
+ * `generationDrift` below asks whether the world changed mid-collection. This
+ * asks something more basic that nothing here asked before: whether the tmux we
+ * just interrogated is the tmux this process lives in. A `tmux ls` pointed at
+ * another socket — `TMUX` unset in a child, a `-S` somewhere in a wrapper, a
+ * second server started by hand — **succeeds**, and returns a thousand entirely
+ * plausible sessions belonging to nobody we know. Every row parses. Nothing
+ * errors. The page shows a calm, populated, wrong fleet.
+ *
+ * The idea is the `orchestrator-setup` session's, from their process probe:
+ * do not ask whether the output *looks* like the right kind of thing, ask
+ * whether it is a reading **of this machine** — and the cheapest way to know is
+ * that we are in it. It costs one lookup in data already in hand.
+ *
+ * TWO CHECKS, BECAUSE THEY FAIL DIFFERENTLY. `TMUX` carries the server's pid, so
+ * comparing it to the listing's catches the wrong *server*; `TMUX_PANE` catches
+ * a listing of the right server that has somehow lost us, which is a listing
+ * that may have lost others.
+ *
+ * NOT BEING UNDER TMUX IS NOT A FAULT. The collector runs under `tmux-job.ts` in
+ * production and from a shell in every test, so an absent `TMUX` means "cannot
+ * check" and must not block — the `/logs/` lesson in `worktree-check.ts`, which
+ * is that an alarm nobody can clear is one somebody deletes.
+ */
+export type SelfCheck =
+  /** We are in the listing, so it is ours. */
+  | { kind: "present"; paneId: string }
+  /** Not running under tmux, so there is nothing to look for. Not a fault. */
+  | { kind: "cannot-check"; why: string }
+  /** We ARE under tmux and are not in this listing. The listing is not of our box. */
+  | { kind: "absent"; why: string };
+
+export function selfCheck(
+  panes: ReadonlyMap<string, PaneInfo>,
+  listedServerPid: number | null,
+  env: { TMUX?: string | undefined; TMUX_PANE?: string | undefined },
+): SelfCheck {
+  const pane = env.TMUX_PANE;
+  const tmux = env.TMUX;
+  if (typeof pane !== "string" || pane === "" || typeof tmux !== "string" || tmux === "") {
+    return { kind: "cannot-check", why: "this process is not running under tmux, so it cannot look for itself" };
+  }
+  // `TMUX` is `<socket>,<server pid>,<session index>`.
+  const ourServer = Number(tmux.split(",")[1]);
+  if (Number.isInteger(ourServer) && listedServerPid !== null && ourServer !== listedServerPid) {
+    return {
+      kind: "absent",
+      why:
+        `this listing is of tmux server ${listedServerPid} and this process lives in server ${ourServer} — ` +
+        `every handle in it belongs to a different world`,
+    };
+  }
+  for (const info of panes.values()) {
+    if (info.paneId === pane) return { kind: "present", paneId: pane };
+  }
+  return {
+    kind: "absent",
+    why:
+      `this process runs in pane ${pane} and that pane is not in the listing — ` +
+      `so the listing is not of this box, or it is missing rows`,
+  };
+}
+
+/**
+ * Did the tmux server change under us mid-collection? The message if so, null if not.
+ *
+ * Pure and exported so the decision can be tested without a box, because it is
+ * a decision with three arms and only one of them is obvious.
+ *
+ * A NULL ON EITHER SIDE IS NOT DRIFT. Not being able to read the generation is
+ * common enough — a tmux busy enough to time out a `display-message` is exactly
+ * the box this tool is for — and treating "I could not tell" as "it changed"
+ * would blank the dashboard at the moment it is most wanted. The snapshot then
+ * carries a null `tmuxServerPid`, which already says "unverifiable" to anything
+ * that reads it. Only two numbers that DISAGREE are evidence of a restart.
+ */
+export function generationDrift(before: number | null, after: number | null): string | null {
+  if (before === null || after === null) return null;
+  if (before === after) return null;
+  return (
+    `the tmux server restarted during this collection (was pid ${before}, now ${after}) — ` +
+    `session and pane handles from two different servers cannot be joined`
+  );
+}
+
+/**
+ * The tmux server's pid, asked directly. Null when it cannot be read.
+ *
+ * A second way to get the same number as `tmuxServerPid(listPanesOutput)`, and
+ * that is the point: it is read once BEFORE the inventory and once WITH the
+ * panes, and the two must agree. See `collect`.
+ */
+function generationNow(): number | null {
+  try {
+    const out = execFileSync("tmux", ["display-message", "-p", "#{pid}"], { encoding: "utf8", timeout: 5_000 });
+    return /^\d{1,10}$/.test(out.trim()) ? Number(out.trim()) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * How long one collection gets before a caller stops waiting for it.
+ *
+ * Generous on purpose: a collection takes 8–12 seconds normally, the child
+ * below already has its own 60-second timeout, and this box has hit load
+ * average 391. This is the backstop behind that timeout rather than a second
+ * copy of it.
+ */
+export const COLLECT_DEADLINE_MS = 120_000;
+
+/**
+ * Wait for a collection, or give up on it — but never wait forever.
+ *
+ * **`collect()` CAN FAIL TO SETTLE, AND THAT STOPPED THE SERVER'S LOOP FOR
+ * GOOD.** Its child gets `timeout: 60_000`, which sends SIGTERM, and a `bash`
+ * in uninterruptible IO on a swapping box does not die on SIGTERM.
+ * `promisify(execFile)`'s promise then waits for a process that is not coming
+ * back. In `server.ts` the refresh loop chains from the END of each run, so it
+ * never reached its next iteration — and nothing threw, so `lastError` stayed
+ * `null` while `collectedAt` sat at the last success.
+ *
+ * Observed in the field on 2026-09-08 by the `orchestrator-setup` session:
+ * roughly **thirty minutes stale with `error: null`**, self-healing when the
+ * child finally died. That is `silent-success.md` in its purest form — the
+ * thing that would have reported the fault was the thing that stopped — and it
+ * had no test because there was nothing to call.
+ *
+ * The abandoned promise is NOT cancelled, because there is nothing to cancel it
+ * with; its eventual result is ignored. What matters is that the CALLER is
+ * freed, so the next attempt happens and `attemptedAt` keeps moving even while
+ * `collectedAt` does not.
+ *
+ * `run` is a parameter so a test can hand it a promise that never settles,
+ * which is the one behaviour that cannot be arranged with a real tmux.
+ */
+export async function collectWithDeadline(
+  run: () => Promise<FleetSnapshot> = collect,
+  ms: number = COLLECT_DEADLINE_MS,
+): Promise<FleetSnapshot> {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const deadline = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => reject(new Error(collectionAbandoned(ms))), ms);
+    timer.unref?.();
+  });
+  try {
+    return await Promise.race([run(), deadline]);
+  } finally {
+    if (timer !== null) clearTimeout(timer);
+  }
+}
+
+/** The sentence a person reads when a collection was abandoned. Exported so a test can hold it. */
+export function collectionAbandoned(ms: number): string {
+  return (
+    `the collection did not finish within ${Math.round(ms / 1000)}s and has been abandoned — ` +
+    `a tmux or bash child is probably wedged; any rows shown are from the previous one`
+  );
+}
+
+export async function collect(): Promise<FleetSnapshot> {
   const startedAt = Date.now();
-  const out = execFileSync("bash", ["-c", buildSessionScript({ agents: false })], {
+  /**
+   * THE GENERATION, READ BEFORE THE INVENTORY AND CHECKED AFTER IT.
+   *
+   * A collection is not one command. The sessions come from a bash script that
+   * takes eight to twelve seconds; the panes and the generation come from a
+   * separate `tmux list-panes` afterwards. If the tmux server dies and restarts
+   * in between, the sessions from the old server get joined to pane handles from
+   * the new one — `$1643` and `%1646` come round again — and the whole thing is
+   * stamped with the new generation, which is the label that says "these handles
+   * are consistent". The result is a snapshot that is internally wrong and
+   * carries a token asserting that it is not. GPT Sol's F16, 2026-09-08.
+   *
+   * A restart mid-collection is rare and a reboot is not, and the failure is
+   * invisible: every row looks ordinary. So bracket it. A change means the
+   * snapshot is thrown away and the caller keeps its previous one and marks it
+   * stale, which is the honest outcome — a twelve-second gap in the history
+   * beats twelve seconds of confident nonsense.
+   */
+  const generationBefore = generationNow();
+  // ASYNC, AND THAT IS NOT TIDINESS. This was `execFileSync`, which blocks the
+  // whole event loop — so for the eight to twelve seconds a collection takes,
+  // the server answered nothing at all. The cache made the *data* instant and
+  // left every request queued behind the collector anyway, which is a page that
+  // hangs exactly when you refresh it during a refresh. GPT Sol's F3.
+  const { stdout: out } = await run("bash", ["-c", sessionScript()], {
     encoding: "utf8",
     // Transcripts run to tens of megabytes and the script prints a base64 of
     // its own output; the default 1 MB would truncate a busy box silently.
@@ -100,9 +515,31 @@ export function collect(): FleetSnapshot {
   });
   const parsed = parseSessions(out);
   if (parsed.failure) throw new Error(`could not read this box's tmux sessions: ${parsed.failure}`);
-  return {
-    rows: toRows(parsed.sessions),
-    collectedAt: new Date().toISOString(),
-    tookMs: Date.now() - startedAt,
-  };
+  const listing = panes();
+  const drift = generationDrift(generationBefore, listing.tmuxServerPid);
+  if (drift) throw new Error(drift);
+  // Before anything is derived from the listing, not after: a listing of the
+  // wrong box produces rows that are individually perfect.
+  const self = selfCheck(listing.panes, listing.tmuxServerPid, process.env);
+  if (self.kind === "absent") throw new Error(`this is not a listing of this box: ${self.why}`);
+  const snapshot = snapshotFrom(parsed, listing, 0);
+  const rows = snapshot.rows;
+
+  // ASK ONLY THE BLOCKED ONES what they are asking. A capture is cheap, but a
+  // capture per session per refresh is ~35 of them on a box that fell over
+  // today, and the answer is meaningless for a pane nobody is waiting on.
+  //
+  // A capture or parse that fails leaves `question` null: the row still shows
+  // as needs-you, which is true and useful, and the page says it could not read
+  // the question rather than pretending there is not one.
+  for (const row of rows) {
+    if (row.status.kind !== "needs-you" || row.paneId === null) continue;
+    try {
+      row.question = parsePane(capturePane(row.paneId));
+    } catch {
+      row.question = null;
+    }
+  }
+
+  return { ...snapshot, collectedAt: new Date().toISOString(), tookMs: Date.now() - startedAt };
 }

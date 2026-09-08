@@ -1,0 +1,41 @@
+  Sent by greg@gregdetre.com / 001bb7a0-7720-4f1b-8b9d-1ee6e63d132a, which is ADMIN_USER_ID_PROD in src/admin.ts — so this is the administrator, and
+  docs/project/feedback-reports.md § Who sent it says build it, simplest version first, without stopping to ask whether it is worth doing.
+
+  This is a regression report — it says the behaviour used to exist. So the first job is not to design an auto-hide; it is to find the one that was
+  there and find out what stopped it. git log the dock and the reader shell around the recent mode-surface and corners-into-dock work
+  (src/web/ModeSurface.tsx, the arch-a5-mode-surface and worktree-corners-into-dock worktrees). Restoring a deleted behaviour and writing a new one
+  are different fixes with different risks, and only one of them is what was asked for. docs/project/touch.md and docs/project/narrow-windows.md.
+
+  Reproduce it at an iPhone-landscape viewport before you fix it, and write the failing test first — docs/project/browser-control.md then
+  docs/project/browser-testing.md; on this box that is Playwright against system Chrome, not the Chrome extension. A browser that renders nothing
+  still produces a valid screenshot, so assert on a measured value or on something that changed.
+
+  By the time you run, SPIDERYARN-READING2-2E — "a black empty horizontal bar at the top of the screen", filed two minutes earlier by the same person
+  on the same page — may already have been fixed by session fb2e-black-bar-at-top-of-screen, and it was asked to check whether the two are one
+  cause. Read its plan doc and its note in docs/user-feedback/ before you start; if it already fixed yours, verify that and resolve 2E's twin rather
+  than doing the work twice.
+
+  Proceed autonomously, following docs/reusable/engineering-manager.md and docs/project/feedback-reports.md: your own worktree, land it on dev, and
+  finish with the bookkeeping in the three-ways-a-report-ends section.
+
+● I'll start by reading the context — the sibling report's work first, since it may already have fixed this.
+
+  Recent history of dock/narrow-window css
+  ⎿  $ git log --oneline --date=short --pretty='%h %ad %s' --since=2026-08-28 -- src/web/styles/narrow-window.css src/web/styles/dock.css | head -40
+
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ Bash command
+ Tip: auto mode handles these prompts for you — choose "switch to auto mode" below
+
+   │ git log -S'.mode-band' --oneline --date=short --pretty='%h %ad %s' -- src/web/styles/narrow-window.css | head -20
+   History of mode-band in narrow-window.css
+
+ This command requires approval
+
+ Do you want to proceed?
+ ❯ 1. Yes
+   2. Yes, and don’t ask again for: git log *
+   3. Yes, and switch to auto mode · auto mode handles these prompts for you
+   4. No
+
+ Esc to cancel · Tab to amend

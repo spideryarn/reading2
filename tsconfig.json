@@ -16,9 +16,14 @@
     "src",
     "scripts",
     /* tools/ — box utilities that are not part of the product and must not
-       import from src/. They run exactly the way scripts/ does, tsx and node
-       ESM, so they are checked by this project for the same reason. The fleet
-       dashboard is the first of them: docs/project/orchestrator-direction.md. */
+       import from src/ (bar UI primitives). They run exactly the way scripts/
+       does, tsx and node ESM, so they are checked by this project for the same
+       reason. The fleet dashboard is the first of them:
+       docs/project/orchestrator-direction.md.
+
+       Its browser half is NOT node and is excluded below — see
+       tools/fleet/web/tsconfig.json, which explains what went wrong when this
+       project claimed those files. */
     "tools",
     /* The production API. It runs the same way these do — node ESM, our own
        `.js`-suffixed relative imports — and it is the only copy of the server
@@ -30,6 +35,10 @@
        evals/README.md. */
     "evals",
     "vite.config.ts",
+    /* The fleet dashboard's client build. Same reasoning as the line above: it
+       runs as node ESM in this project, so it is checked by this project — even
+       though the client it builds is excluded below. */
+    "vite.fleet.config.ts",
     /* The API build. Same reasoning as vite.config.ts: it runs as node ESM in
        this project, so it is checked by this project. */
     "vite.api.config.ts",
@@ -60,5 +69,8 @@
     "vitest.witness.config.ts",
     "drizzle.config.ts"
   ],
-  "exclude": ["src/web"]
+  /* Both entries are browser clients with their own project: the product's, and
+     the fleet dashboard's. Neither is node, and this project's `nodenext`
+     resolution and absent `jsx` flag reject both on sight. */
+  "exclude": ["src/web", "tools/fleet/web"]
 }
