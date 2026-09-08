@@ -97,15 +97,12 @@ import {
   existsSync,
   fstatSync,
   fsyncSync,
-  ftruncateSync,
   mkdirSync,
   openSync,
   readFileSync,
   readSync,
-  renameSync,
   statSync,
   unlinkSync,
-  writeSync,
 } from "node:fs";
 import { homedir, hostname } from "node:os";
 import { isAbsolute, join } from "node:path";
@@ -120,6 +117,7 @@ import {
   type SessionKey,
   type StatusKey,
 } from "./diff.js";
+import { truncateToLastLine, writeAll, writeAtomically, type JsonlRepair } from "./jsonl.js";
 import type { ObservedRow, ParseResult } from "./observation.js";
 
 /**
@@ -135,9 +133,6 @@ export const STORE_SCHEMA = 1;
 export const EVENTS_FILE = "events.jsonl";
 export const CHECKPOINT_FILE = "current.json";
 export const LOCK_FILE = "overseer.lock";
-
-/** How much of a torn line is kept for the log message. The bytes count is exact regardless. */
-const DROPPED_TEXT_CAP = 4096;
 
 /**
  * How many bytes of log a start is willing to replay before it gives up and
@@ -179,8 +174,6 @@ export type ColdReason =
   | "log-has-holes"
   | "log-too-large-to-replay";
 
-export type LogRepair = { torn: false } | { torn: true; droppedBytes: number; droppedText: string };
-
 /**
  * How this daemon came up, in the three ways that are actually different.
  *
@@ -197,7 +190,7 @@ export type StoreStart =
 
 export type StoreOpening = {
   start: StoreStart;
-  repair: LogRepair;
+  repair: JsonlRepair;
   /** Events folded at open: the tail past the checkpoint's cursor, or the whole log for a rebuild. */
   eventsReplayed: number;
   /** Lines in the scanned range the reader could not use. One is enough to force a cold start. */
@@ -931,69 +924,6 @@ function keyFor(tmuxId: string, claimedConversationId: string | null): string {
 }
 
 /**
- * Truncate the log to its last complete line, **on disk**, before anything
- * appends to it.
- *
- * Scanning backwards in chunks rather than reading the file, because this runs
- * at every start and the file only grows. A file with no newline at all
- * truncates to empty — that is a single torn line and there is nothing in it to
- * keep.
- */
-function repairEventLog(path: string): LogRepair {
-  if (!existsSync(path)) return { torn: false };
-  const fd = openSync(path, "r+");
-  try {
-    const size = fstatSync(fd).size;
-    if (size === 0) return { torn: false };
-
-    const CHUNK = 64 * 1024;
-    let end = size;
-    let lastNewline = -1;
-    while (end > 0) {
-      const start = Math.max(0, end - CHUNK);
-      const buffer = Buffer.alloc(end - start);
-      readSync(fd, buffer, 0, buffer.length, start);
-      const index = buffer.lastIndexOf(0x0a);
-      if (index !== -1) {
-        lastNewline = start + index;
-        break;
-      }
-      end = start;
-    }
-    if (lastNewline === size - 1) return { torn: false };
-
-    const keep = lastNewline + 1;
-    const droppedBytes = size - keep;
-    const dropped = Buffer.alloc(Math.min(droppedBytes, DROPPED_TEXT_CAP));
-    readSync(fd, dropped, 0, dropped.length, keep);
-    ftruncateSync(fd, keep);
-    fsyncSync(fd);
-    return { torn: true, droppedBytes, droppedText: dropped.toString("utf8") };
-  } finally {
-    closeSync(fd);
-  }
-}
-
-/**
- * Write every byte, because `writeSync` does not promise to.
- *
- * It returns a COUNT, and a short write on a regular file is rare rather than
- * impossible — a signal, a full disk. Trusting the count without looking at it
- * would produce exactly the torn line this module opens by repairing, except
- * with nothing having gone wrong at the time and no error anywhere. The loop
- * costs nothing and removes the class.
- */
-function writeAll(fd: number, text: string): void {
-  const buffer = Buffer.from(text, "utf8");
-  let written = 0;
-  while (written < buffer.length) {
-    const wrote = writeSync(fd, buffer, written, buffer.length - written);
-    if (wrote <= 0) throw new Error(`wrote ${wrote} of ${buffer.length - written} remaining bytes`);
-    written += wrote;
-  }
-}
-
-/**
  * Read a file from a byte offset, and only from there.
  *
  * `readFileSync` then `subarray` allocates the whole file to hand back its
@@ -1017,37 +947,6 @@ function readSlice(path: string, from: number): Buffer {
     return buffer.subarray(0, read);
   } finally {
     closeSync(fd);
-  }
-}
-
-/**
- * Write, flush, then rename over the target.
- *
- * The `fsync` before the rename is what makes the new file's CONTENT durable;
- * the directory `fsync` after it is what makes the rename itself durable, and
- * it is best-effort because opening a directory for reading is a Linux
- * affordance rather than a portable one. The temp file is a sibling on purpose:
- * a rename across filesystems is not atomic and is not even the same syscall.
- */
-function writeAtomically(path: string, directory: string, text: string): void {
-  const temp = `${path}.tmp-${process.pid}-${randomUUID()}`;
-  const fd = openSync(temp, "w");
-  try {
-    writeAll(fd, text);
-    fsyncSync(fd);
-  } finally {
-    closeSync(fd);
-  }
-  renameSync(temp, path);
-  try {
-    const dir = openSync(directory, "r");
-    try {
-      fsyncSync(dir);
-    } finally {
-      closeSync(dir);
-    }
-  } catch {
-    /* Not every platform lets you fsync a directory. The rename still happened. */
   }
 }
 
@@ -1654,7 +1553,7 @@ export function openStore(options: OpenStoreOptions = {}): OpenStoreResult {
     }
     // BEFORE the append handle is opened, so nothing can land after the torn
     // bytes. This is the whole of design call 1.
-    const repair = repairEventLog(eventsPath);
+    const repair = truncateToLastLine(eventsPath);
     if (!stillOurs(lock, lockPath)) {
       closeSync(lock.fd);
       return { ok: false, refusal: { reason: "lost-the-race", holder: null } };

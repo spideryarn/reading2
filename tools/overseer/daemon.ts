@@ -563,8 +563,8 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     //     matches it exactly. Nothing repeats and nothing is lost.
     //   died during 3 — `writeAtomically` renames, so a reader sees the old
     //     checkpoint or the new one, never half. That is the previous case.
-    //   died during 1 — the log's last line may be torn. `repairEventLog`
-    //     truncates to the last complete newline before the next append, so the
+    //   died during 1 — the log's last line may be torn. `truncateToLastLine`
+    //     (jsonl.ts) cuts back to the last complete newline before the next append, so the
     //     partial event is dropped and the baseline file, being older, causes it
     //     to be re-derived.
     //

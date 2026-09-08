@@ -615,6 +615,16 @@ export type DiffOutcome =
  * A `session-seen` for a handle that a `tmux-session-gone` in the same batch
  * refers to is therefore always the later of the two.
  *
+ * **ONE ROW CAN NOW PRODUCE THREE EVENTS**, and their order within the row is
+ * part of the same contract: `session-row-changed`, then
+ * `session-pane-replaced`, then at most one of `session-wait-restarted` or
+ * `session-status`. The row material first because the last two carry the
+ * status clock and the first two must not disturb it — a fold that saw them the
+ * other way round would still be right, and the fixed order is so that two
+ * readings of one afternoon are the same afternoon. A row that was REPLACED
+ * produces one event and stops: `session-replaced` already carries the whole new
+ * row, so a row change beside it would double-count.
+ *
  * ## THE BLIND SPOT THIS CANNOT COVER, stated because absence is invisible
  *
  * A session that starts after one snapshot and exits before the next is not in

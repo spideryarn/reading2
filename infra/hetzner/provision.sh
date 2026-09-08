@@ -1382,22 +1382,35 @@ EnvironmentFile=-/etc/fleet-dashboard.env
 # be one edit away from enabling it, and a unit file is exactly the sort of file
 # somebody skims and completes.
 
-# BUILD THE CLIENT ONLY WHEN IT IS MISSING. tools/fleet/web/dist is gitignored,
-# so no `git pull` can ever supply it and server.ts exits 2 without it -- a
+# BUILD THE CLIENT ON EVERY START. tools/fleet/web/dist is gitignored, so no
+# `git pull` can ever supply it and server.ts exits 2 without it -- a
 # freshly-cloned checkout would otherwise come up dead after every reboot with
-# nobody watching. The test short-circuits on a normal boot.
+# nobody watching.
 #
-# NOT an unconditional rebuild, which was the first proposal: with
-# Restart=always and RestartSec=10 that is a vite build every ten seconds for
-# the length of a crash loop, on a box that has reached load average 391.
+# UNCONDITIONAL, AND THAT IS A REVERSAL. The first two versions tested for
+# dist/index.html first, on the reasoning that Restart=always plus RestartSec=10
+# makes an unconditional build a vite build every ten seconds through a crash
+# loop, on a box that has reached load average 391. Then somebody timed it:
+# `npm run build:fleet` is **1.9 seconds**, and the whole client is one 339 kB
+# bundle. The objection was sized against a build nobody had measured.
 #
-# THE PRICE OF THE `test`, said here so the next person meets the rule rather
-# than the symptom: **deploying a client change to this service means running
-# `npm run build:fleet` in the primary checkout.** A missing build fails loudly;
-# a STALE one does not -- a `dev` that moves tools/fleet/web/ without a rebuild
-# leaves the old bundle in place and this unit serves the old page with no error
-# anywhere. There is no alarm for that, only this line.
-ExecStartPre=/bin/sh -c 'test -f tools/fleet/web/dist/index.html || /usr/bin/npm run build:fleet'
+# What the `test` bought was ~2 seconds per start. What it cost is the failure
+# with no alarm anywhere: a `dev` that moves tools/fleet/web/ without a rebuild
+# leaves the old bundle in place, and this unit serves a STALE page against a
+# newer server, silently. A missing build fails loudly; a stale one does not.
+# Rebuilding every start makes the bundle a function of the checkout rather than
+# of who last remembered to run a command.
+#
+# And the conditional version did not even prevent the loop it was named for: a
+# FAILED build never writes dist/index.html, so `test -f` never short-circuits
+# and every retry rebuilds anyway. Found by the fleet dashboard agent,
+# 2026-09-08. Bounded by StartLimitBurst in both versions -- at ~2s a build plus
+# RestartSec=10, thirty starts fit well inside the 900s window, so systemd stops
+# it and says so.
+#
+# No `-` prefix, deliberately: a client that will not build should fail the
+# start loudly rather than quietly serve the previous bundle.
+ExecStartPre=/usr/bin/npm run build:fleet
 ExecStart=/home/@USER@/code/spideryarn2/node_modules/.bin/tsx tools/fleet/server.ts
 
 # Room for that build on a loaded box. The default 90s is one contended vite

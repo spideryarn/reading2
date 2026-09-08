@@ -203,16 +203,33 @@ describe("the fleet dashboard unit", () => {
     expect(unit).toContain("FLEET_ACT_ENABLED");
   });
 
-  it("builds the gitignored client, and only when it is missing", () => {
+  it("builds the gitignored client on every start, unconditionally and without a `-`", () => {
     // No `git pull` can supply tools/fleet/web/dist, and server.ts exits 2
-    // without it — so a checkout that has never been built would come up dead
-    // after every reboot with nothing watching. Guarded by a `test`, because
-    // with Restart=always an unconditional build is a vite build every ten
-    // seconds for the length of a crash loop.
+    // without it, so a checkout that has never been built comes up dead after
+    // every reboot with nothing watching.
+    //
+    // THIS ASSERTION WAS REVERSED ON 2026-09-08, and the reversal is the point
+    // of the comment. It used to require a `test -f` guard, on the reasoning
+    // that Restart=always plus RestartSec=10 makes an unconditional build a
+    // vite build every ten seconds through a crash loop. Then the build was
+    // timed: 1.9 seconds. The guard was bought against a cost nobody had
+    // measured, and it was paid for with the failure that has no alarm — a
+    // `dev` that moves the client without a rebuild leaves the old bundle in
+    // place and this unit serves a STALE page against a newer server, silently.
+    // A missing build fails loudly; a stale one does not.
+    //
+    // The guard also did not prevent the loop it was named for: a FAILED build
+    // never writes index.html, so `test -f` never short-circuits and every
+    // retry rebuilt anyway.
     const pre = section(unit, "Service").filter((l) => l.startsWith("ExecStartPre="));
     expect(pre).toHaveLength(1);
     expect(pre[0]).toContain("build:fleet");
-    expect(pre[0]).toContain("test -f tools/fleet/web/dist/index.html");
+    // Not conditional: the bundle must be a function of the checkout, not of
+    // who last remembered to run a command.
+    expect(pre[0]).not.toContain("test -f");
+    // No `-` prefix. A client that will not build fails the start loudly rather
+    // than quietly serving the previous bundle.
+    expect(pre[0]).not.toMatch(/^ExecStartPre=-/);
   });
 
   it("waits for tailscaled, because a bind it cannot take is fatal", () => {
