@@ -70,6 +70,7 @@
  * or a re-check against tmux at the moment of the read. Recorded rather than
  * papered over.
  */
+import { fromPsArgs, readClaudeCommandLine } from "../fleet/claude-argv.js";
 
 /**
  * When the kernel says a process started, or a positive statement that we could
@@ -522,14 +523,30 @@ export const RECOGNISERS: Record<WorkRecogniserId, WorkRecogniser> = {
     id: "claude-headless",
     label: "Headless Claude (claude --print)",
     executable: /^claude$/,
-    // ANCHORED TO THE FIRST ARGUMENT, not searched for anywhere in the line.
-    // A pane's own interactive Claude is `claude --session-id <uuid> <the whole
-    // prompt>`, and a prompt is free text that can contain the word `--print`.
-    // Matching loosely would relabel every interactive session on the box as a
-    // batch job. `scripts/run-claude.ts` puts `--print` first (buildClaudeArgs),
-    // and so does the `claude -p ...` idiom. KNOWN GAP: `claude --model x -p ...`
-    // is missed, and reads as no-child-work rather than as something wrong.
-    args: /^(--print|-p)(\s|$)/,
+    // THE SHARED READER, since 2026-09-08, and it closes this entry's own
+    // KNOWN GAP. The rule used to be `/^(--print|-p)(\s|$)/` — anchored to the
+    // FIRST argument, because a prompt is free text and an agent writing about
+    // `--print` must not be relabelled a batch job. That anchoring was the only
+    // defence available without a flag table, and it cost `claude --model x -p
+    // …`, which read as no-child-work while `harness.ts` correctly called it
+    // headless: two answers about one process in one tick, which is the class
+    // docs/plans/260908h exists to remove.
+    //
+    // `--model` is in the reader's table as taking a value, so `-p` after it is
+    // a flag rather than that flag's value, which is the whole of the fix.
+    // What is new besides is the third answer: a command line with a flag we do
+    // not know is UNREADABLE and matches nothing, rather than being guessed at.
+    //
+    // **WHERE THE OPTION REGION ENDS IS `claude-argv.ts`'S QUESTION**, and this
+    // comment deliberately does not restate it. It was measured on 2026-09-08
+    // that real `claude` 2.1.263 accepts options after a positional (`claude
+    // some-prompt --version` prints the version), which is not what the
+    // anchored regex above assumed — so the safe thing for this entry to depend
+    // on is the `headless` field, not on a boundary rule stated twice.
+    args: (args) => {
+      const reading = readClaudeCommandLine(fromPsArgs(`claude ${args}`));
+      return reading.kind === "session" && reading.headless;
+    },
     note: "A subagent dispatched from outside a session (scripts/run-claude.ts), or any `claude -p`.",
   },
   vitest: {
