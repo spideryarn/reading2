@@ -444,7 +444,7 @@ const EXPECTED: readonly Expected[] = [
    */
   { name: "DATABASE_POOL_MAX", breaks: null },
   /**
-   * How many ingest jobs run at once (`CONCURRENCY_ENV`, src/jobs.ts:401),
+   * How many ingest jobs run at once (`jobConcurrency()`, src/jobs.ts),
    * defaulting to 3. A value that is not a positive whole number is ignored
    * rather than obeyed — `0` would stop every ingest in the account and read
    * exactly like the queue being wedged — so what an operator needs from this

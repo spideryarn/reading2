@@ -597,10 +597,24 @@ function missingObjectAdvice(key: string): string {
  * about the one `blobStore()` applies.
  *
  * Only whether they are set, never their values.
+ *
+ * **The helper is handed the value; it does not go and get it.** A helper that
+ * reads `process.env[name]` puts the two names somewhere no inventory of this
+ * repo's configuration can see them — the same computed-key door
+ * `SPIDERYARN_ENV_PINNED` sat behind, unseen by every inventory from the day it
+ * was written until something enumerated every read
+ * (docs/plans/260908a-make-every-environment-variable-read-literal-and-inventory-them.md).
+ * Read literally at the call sites, both names are visible from the syntax.
+ * The test is still truthiness of the same value, with no `.trim()`, for the
+ * reason above.
  */
 function credentialsSeen(): string {
-  const seen = (name: string): string => `${name} is ${process.env[name] ? "set" : "not set"}`;
-  return `${seen("SUPABASE_URL")} and ${seen("SUPABASE_SERVICE_ROLE_KEY")}`;
+  const seen = (name: string, value: string | undefined): string =>
+    `${name} is ${value ? "set" : "not set"}`;
+  return (
+    `${seen("SUPABASE_URL", process.env.SUPABASE_URL)} and ` +
+    `${seen("SUPABASE_SERVICE_ROLE_KEY", process.env.SUPABASE_SERVICE_ROLE_KEY)}`
+  );
 }
 
 /* **`readRaw(dir)` was here, and it went on 2026-09-05.** It read a `raw.json`

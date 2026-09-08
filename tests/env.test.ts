@@ -21,9 +21,20 @@
  * than importing it repeatedly and fighting the memo. The rule is the thing
  * that was wrong; a test that re-implemented it would prove nothing, so
  * `applyEnvFile` is exported from src/env.ts and used by both.
+ *
+ * **The pinned names arrive as an argument**, since 2026-09-08: `loadEnvLocal`
+ * reads `process.env.SPIDERYARN_ENV_PINNED` literally and hands the parsed set
+ * down, so that a name this repo authored is visible to anything enumerating
+ * this tree's configuration rather than being discovered inside an injected
+ * record. These tests compose the two halves exactly as `loadEnvLocal` does —
+ * `pinnedNames(env[PINNED])` — so the pin is still exercised from the value a
+ * parent process would really have set.
  */
 import { describe, expect, it } from "vitest";
-import { applyEnvFile, chooseTargetUrl, parseEnvFile, PINNED } from "../src/env.js";
+import { applyEnvFile, chooseTargetUrl, parseEnvFile, PINNED, pinnedNames } from "../src/env.js";
+
+/** No pin at all: the ordinary case, and every deployment. */
+const UNPINNED = new Set<string>();
 
 const FILE = `
 # a comment
@@ -40,7 +51,7 @@ describe("where a variable's value comes from", () => {
     const env: Record<string, string | undefined> = { OPENROUTER_API_KEY: "from-the-shell" };
     const inherited = { ...env };
 
-    const shadowed = applyEnvFile(FILE, env, inherited);
+    const shadowed = applyEnvFile(FILE, env, inherited, UNPINNED);
 
     expect(env.OPENROUTER_API_KEY).toBe("from-the-file");
     // And it says so, by name — never by value, because these are secrets.
@@ -73,7 +84,7 @@ describe("where a variable's value comes from", () => {
        would win. */
     const inherited = { ...env };
 
-    const shadowed = applyEnvFile(FILE, env, inherited);
+    const shadowed = applyEnvFile(FILE, env, inherited, pinnedNames(env[PINNED]));
 
     expect(env.DATABASE_URL, "pinned").toBe("the-poison");
     /* And it is a *narrowing*, not a switch: everything unpinned still follows
@@ -91,7 +102,7 @@ describe("where a variable's value comes from", () => {
     };
     const inherited = { ...env };
 
-    expect(applyEnvFile(FILE, env, inherited)).toEqual([]);
+    expect(applyEnvFile(FILE, env, inherited, pinnedNames(env[PINNED]))).toEqual([]);
     expect(env.DATABASE_URL).toBe("the-poison");
     expect(env.OPENROUTER_API_KEY).toBe("the-other-poison");
     /* A name the file sets that nobody pinned still arrives. */
@@ -106,7 +117,7 @@ describe("where a variable's value comes from", () => {
     const inherited = { OPENROUTER_API_KEY: "from-the-shell" };
     const env: Record<string, string | undefined> = { OPENROUTER_API_KEY: "test-key" };
 
-    const shadowed = applyEnvFile(FILE, env, inherited);
+    const shadowed = applyEnvFile(FILE, env, inherited, UNPINNED);
 
     expect(env.OPENROUTER_API_KEY).toBe("test-key");
     expect(shadowed).toEqual([]);
@@ -114,7 +125,7 @@ describe("where a variable's value comes from", () => {
 
   it("fills in a variable the environment does not have at all", () => {
     const env: Record<string, string | undefined> = {};
-    applyEnvFile(FILE, env, {});
+    applyEnvFile(FILE, env, {}, UNPINNED);
     expect(env.UNSET_ANYWHERE_ELSE).toBe("fresh");
   });
 
@@ -122,12 +133,12 @@ describe("where a variable's value comes from", () => {
     // Nothing was shadowed, so nothing is worth a warning line.
     const inherited = { OPENROUTER_API_KEY: "from-the-file" };
     const env: Record<string, string | undefined> = { ...inherited };
-    expect(applyEnvFile(FILE, env, inherited)).toEqual([]);
+    expect(applyEnvFile(FILE, env, inherited, UNPINNED)).toEqual([]);
   });
 
   it("strips matching quotes and ignores comments", () => {
     const env: Record<string, string | undefined> = {};
-    applyEnvFile(FILE, env, {});
+    applyEnvFile(FILE, env, {}, UNPINNED);
     expect(env.DATABASE_URL).toBe("quoted-value");
     expect(env["# a comment"]).toBeUndefined();
   });
@@ -138,7 +149,7 @@ describe("where a variable's value comes from", () => {
        stops somebody reading it as a bug later. */
     const inherited = { OPENROUTER_API_KEY: "from-the-shell" };
     const env: Record<string, string | undefined> = { OPENROUTER_API_KEY: "from-the-shell" };
-    applyEnvFile(FILE, env, inherited);
+    applyEnvFile(FILE, env, inherited, UNPINNED);
     expect(env.OPENROUTER_API_KEY).toBe("from-the-file");
   });
 });
@@ -159,8 +170,11 @@ describe("where a variable's value comes from", () => {
  * test of this machine.
  */
 describe("which database a script targets", () => {
-  const shell = { DATABASE_URL: "postgres://named-on-the-command-line" };
-  const afterLoad = { DATABASE_URL: "postgres://from-env-local" };
+  /* Two URLs rather than two environments, since 2026-09-08: `resolveTargetUrl`
+     names `DATABASE_URL` at its own literal reads now, so the choice itself has
+     nothing to look a name up in. src/env.ts § `chooseTargetUrl`. */
+  const shell = "postgres://named-on-the-command-line";
+  const afterLoad = "postgres://from-env-local";
 
   it("lets the shell win where the target is an argument", () => {
     /* db:migrate, db:check, db:corpus-readiness, db:repair-migration-ledger.
@@ -184,14 +198,14 @@ describe("which database a script targets", () => {
     /* `??` and not `||`, and not a bare read: resolving to undefined here would
        make a script print "DATABASE_URL is not set" beside a perfectly good
        one, which is the ordinary case on every laptop. */
-    expect(chooseTargetUrl(true, {}, afterLoad)).toBe("postgres://from-env-local");
+    expect(chooseTargetUrl(true, undefined, afterLoad)).toBe("postgres://from-env-local");
   });
 
   it("is undefined when nothing anywhere sets it, under either rule", () => {
     /* The scripts each print their own message for this; what matters is that
        neither rule invents a value. */
-    expect(chooseTargetUrl(true, {}, {})).toBeUndefined();
-    expect(chooseTargetUrl(false, {}, {})).toBeUndefined();
+    expect(chooseTargetUrl(true, undefined, undefined)).toBeUndefined();
+    expect(chooseTargetUrl(false, undefined, undefined)).toBeUndefined();
   });
 
   it("does not read the shell's value out of the post-load environment", () => {
@@ -201,7 +215,7 @@ describe("which database a script targets", () => {
        nothing to show for it. Here the shell's value comes from the snapshot
        taken before any of our code ran, so a caller that has *already* loaded
        `.env.local` gets the same answer as one that has not. */
-    const alreadyLoaded = { DATABASE_URL: "postgres://from-env-local" };
+    const alreadyLoaded = "postgres://from-env-local";
     expect(chooseTargetUrl(true, shell, alreadyLoaded)).toBe(
       "postgres://named-on-the-command-line",
     );
@@ -256,7 +270,7 @@ describe("reading an env file", () => {
        the change was kept. GPT Sol caught that the extraction was described as
        a pure refactor and was not. */
     const env: Record<string, string | undefined> = {};
-    applyEnvFile("A=first\nA=second\n", env, {});
+    applyEnvFile("A=first\nA=second\n", env, {}, UNPINNED);
     expect(env.A).toBe("second");
   });
 
@@ -265,7 +279,7 @@ describe("reading an env file", () => {
        shell, and within the file the last line beats the earlier one. */
     const inherited = { A: "from-the-shell" };
     const env: Record<string, string | undefined> = { ...inherited };
-    expect(applyEnvFile("A=first\nA=second\n", env, inherited)).toEqual(["A"]);
+    expect(applyEnvFile("A=first\nA=second\n", env, inherited, UNPINNED)).toEqual(["A"]);
     expect(env.A).toBe("second");
   });
 

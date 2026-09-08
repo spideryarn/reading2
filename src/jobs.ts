@@ -397,8 +397,27 @@ class DeadlineReached extends Error {
  */
 export const REQUEUE_BUDGET = 2;
 
-/** What `SPIDERYARN_JOB_CONCURRENCY` is called, in one place so it cannot be misspelt twice. */
-export const CONCURRENCY_ENV = "SPIDERYARN_JOB_CONCURRENCY";
+/* **`CONCURRENCY_ENV` was here and went on 2026-09-08, and the reason is worth
+   more than the constant was.** It held the string
+   `"SPIDERYARN_JOB_CONCURRENCY"` so the name could not be misspelt twice, and
+   `jobConcurrency()` read the environment through it. That computed key is
+   invisible to any inventory of what this deployment needs — the same door
+   `SPIDERYARN_ENV_PINNED` sat behind, unseen by every inventory from the day it
+   was written (`5aceccfe`, 2026-09-04) until something tried to enumerate every
+   read three days later. Three days is not the point and neither is any
+   duration: it was invisible *by construction*, and would have stayed so
+   (docs/plans/260908a-make-every-environment-variable-read-literal-and-inventory-them.md).
+   So the read below names the variable outright.
+
+   Keeping the constant as well would have been the obvious move and is the
+   wrong one: nothing imported it, so it would have existed only to be *quoted*
+   by comments, while the read spelled the name a second time with nothing
+   holding the two together. A misspelling of either copy leaves
+   `jobConcurrency()` quietly on its default. One spelling, in the read, is
+   fewer parts and cannot disagree with itself. `REASK_ENV` and
+   `DEEPEN_RECORDS_ENV` in src/hierarchy-deepen.ts kept their constants for the
+   opposite reason — evals and tests import those to *set* the variable, and
+   tests/env-reads-are-literal.test.ts holds each against its read. */
 
 /**
  * **How many jobs may run at once, anywhere.**
@@ -438,7 +457,7 @@ export const CONCURRENCY_ENV = "SPIDERYARN_JOB_CONCURRENCY";
 export const DEFAULT_JOB_CONCURRENCY = 3;
 
 export function jobConcurrency(): number {
-  const asked = Number(process.env[CONCURRENCY_ENV]);
+  const asked = Number(process.env.SPIDERYARN_JOB_CONCURRENCY);
   return Number.isInteger(asked) && asked > 0 ? asked : DEFAULT_JOB_CONCURRENCY;
 }
 
@@ -2080,7 +2099,8 @@ export async function advanceJobWith(
    * an optional owner and `listJobs` passes one, so the asymmetry reads like an
    * oversight. It is the opposite. The concurrency cap is *global* — "how many
    * jobs may run at once, anywhere", counted inside `claim`'s `queue_state`
-   * lock (`CONCURRENCY_ENV` above) — and this is the **only** door that reaches
+   * lock (`SPIDERYARN_JOB_CONCURRENCY`, `jobConcurrency()` above) — and this is
+   * the **only** door that reaches
    * the job of an owner who is not coming back. Scope it, and a reader whose
    * claimant died leaves a `running` row holding one of the three global slots
    * for ever, because the only thing that would settle it is a request that
