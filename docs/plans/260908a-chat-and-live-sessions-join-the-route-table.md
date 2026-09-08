@@ -11,8 +11,10 @@ which is where the method, the capture/normalise script and the two corrections 
 were written down. **Read that one first if you have read neither** — this doc says what is
 different about chat, not what the recipe is.
 
-> **Status: plan written, not built.** Nothing in `src/routes.ts` has been touched. Awaiting the
-> plan-stage review before any code, because the block contains routes the security map names.
+> **Status, 2026-09-08 02:30: built.** Plan reviewed, Stage 1 written and reviewed, Stage 2 moved
+> the twelve, Stage 3 updated the contract. The status line below each stage is the current one; this
+> line said *plan written, not built* until the work was done, which GPT Sol flagged as stale
+> (260908a stage 1 review § F8).
 
 ## Claimed
 
@@ -381,3 +383,298 @@ On the file getting longer, asked directly and answered directly:
 > converges on one routing mechanism; file extraction is a separate decision.
 >
 > — GPT Sol, 2026-09-08
+
+## Stage 1, as built — and what the mutation actually showed
+
+`tests/chat-thread-delete-route.test.ts`, two cases, registered in the `private-postgres` lane of
+`TEST_LANES` (a new test file defaults to `unit`, whose `DATABASE_URL` is poisoned on purpose, so an
+unregistered Postgres suite fails on `ECONNREFUSED 127.0.0.1:1` and looks like a broken database).
+
+**Green unmutated: 2 passed of 2.**
+
+**Mutation 1 — the subject — 2 failed of 2**, and the second failure is worth more than the first:
+
+- *answers with the remaining conversations* — `threads was not an array — a promise was not awaited:
+  expected false to be true`. The predicted `{"threads":{}}`.
+- *really removed it, and not only in the reply* — `expected [ 'spya-j827m6', 'spya-dmkgcy' ] to
+  deeply equal [ 'spya-dmkgcy' ]`. **Both conversations were still in the store when the next request
+  looked.** So the file does not merely detect a Promise where an array belongs; it demonstrates the
+  defect the plan described — the reply had already gone out saying the thread was deleted while the
+  deletion had not happened. The prediction was for the first assertion only; the second is better
+  evidence and was not designed for.
+
+**The box died during this stage, and the discriminator mattered.** A triage agent killed every
+vitest process on the machine at load average 391 with swap full, and reported any run in flight
+void. This run was not in flight: it had written its `EXIT=1` line, the vitest summary and two named
+assertion failures whose text matches the predicted semantics exactly. A killed run writes no `EXIT=`
+line at all — which is the property `scripts/tmux-job.ts` exists to give, and it is the difference
+between a result and a silence. `src/routes.ts` was reverted immediately and verified byte-identical
+to `HEAD` before anything else was done.
+
+**Mutation 2 — the control — 2 passed of 2, as predicted before it was run.** The lock deleted, the
+`await` kept, and every assertion in the file still holds. So the plan's table is not a claim any
+more:
+
+| Mutation | Predicted | Observed |
+|---|---|---|
+| `await inTurnOrder(…)` → `inTurnOrder(…)` | red | **2 failed of 2** |
+| `inTurnOrder(k, f)` → `f()` | green | **2 passed of 2** |
+
+Both halves matter. A file that only demonstrated the red would leave the reader free to believe it
+also covers the lock — which is precisely the belief that produced the earlier test
+`tests/turn-order.test.ts` warns about, the one that passed with the lock removed. Demonstrating the
+green is what makes the disclaimer in this file's header a measurement rather than a modesty.
+
+## Stage 2, as built — and the corruption the body diff could not have caught
+
+The twelve moved as one contiguous block, verified contiguous by the script before anything was cut:
+each guard's end offset is the next one's start, so *"the chain's last twelve"* is a measurement
+rather than a reading. `CHAT_PATTERN` and `ONE_THREAD_PATTERN` are new module-scope constants,
+because those matchers have two rows each; the other eight are written into their single rows, which
+is the rule the constants' own comment states.
+
+**The verifier says the move is a move.** Eleven bodies identical, one refused and accounted for:
+
+```
+refused, accounted    chat GET                 2 returns in the guard's own scope
+identical             chat POST                163 chars
+identical             chatCancel POST          127 chars
+identical             chatLiveTool POST        175 chars
+identical             chatLive POST            130 chars
+identical             liveSessionConnected POST 55 chars
+identical             liveSessionUsage POST    72 chars
+identical             liveSessionClose POST    72 chars
+identical             chatSpoken POST          212 chars
+identical             chatStop POST            125 chars
+identical             oneThread PATCH          258 chars
+identical             oneThread DELETE         162 chars
+
+the move is a move
+```
+
+### The bug in the first attempt, which is the useful part of this stage
+
+The generator renamed the matcher identifier to `captures` with a global `\bchat\b`. It rewrote
+**English**:
+
+- *"The reading view needs one thing from chat"* became *"one thing from captures"*.
+- The citation `docs/plans/260826ab-chat-as-gateway.md` became `260826ab-captures-as-gateway.md` — a
+  link to a file that does not exist.
+
+**The body diff cannot catch this**, and that is the point worth keeping. The normaliser strips
+comments before comparing, precisely so that re-indenting or re-wrapping a comment is not reported
+as a code change — so a comment silently rewritten is invisible to the very check whose job is to
+prove the move was a move. It was caught by reading the generated rows before applying them, which is
+not a mechanism.
+
+The generator was fixed — match on a copy with comments and string contents blanked, then splice at
+those offsets in the original, so the rename touches identifiers and never prose.
+
+> **This paragraph used to end by saying anyone repeating the recipe inherits that fix, through the
+> committed verifier. That was false**, and the review below caught it (F9): the verifier does not
+> generate code, and the generator that had the fix was a scratchpad script. The claim is now true by
+> a better route — **the verifier compares comments**, so the next generator does not have to be
+> careful. See § *The Stage 2/3 review* for the check watched failing on this exact corruption.
+
+### `chat` GET: the mutation, not the argument
+
+The rail refused it, so the plan review (F2) required a watched mutation instead of the hand argument
+the plan originally proposed. The early `return;` was deleted from the moved handler and
+`tests/the-query-string-does-not-decide-the-route.test.ts` run:
+
+```
+× reaches the summaries branch when it carries ?summary=1
+AssertionError: expected { id: 'spya-cue56u', …(5) } to not have property "messages"
+1 failed | 2 passed (3)
+```
+
+Both `send` calls execute, the second overwrites the first, and the summary reply arrives carrying
+the full transcript. The return was restored and the file is green. **The other exit is therefore
+covered by a test rather than by a paragraph**, which is what F2 asked for and is better than what
+the plan proposed.
+
+### Comments that moved with their routes
+
+Two blocks in the chain explained routes rather than the chain, and went to the table with them: the
+live-session accounting comment (*"they are NOT under `/api/chat/`"*), and the live-conversation
+ticket comment. The second needed rewriting rather than relocating, because **chain dispatch order
+splits the pair it describes** — the ticket is now four rows above `spoken`, with the three
+`/api/live/` rows between. The rewritten comment says so, and says why the table must not be sorted
+into subject order to fix it.
+
+Three comments elsewhere were stale and are corrected: the chain's *"`liveSessionClose` is now the
+last matcher this chain declares"* (it is `commentMark` now, and comments are the next slice), and
+the table's two *"twenty-five guards"* counts. The first of those two now **refuses to carry a
+count at all** — it changes once per slice, and `EXPECTED_AUTH_ROUTES` is the inventory.
+
+## Stage 3, as built — red first, and one check that could not fail
+
+**Red first.** With the twelve moved and nothing else touched, the contract test failed **exactly the
+two expectations Sol's F1 named, and only those**: *answers the moved domains from the table* and
+*keeps the table in the chain's order*. **324 passed of 326** — so `EXPECTED_AUTH_ROUTES`, the
+81-route inventory, needed no edit, which is the evidence that the move changed no route's identity.
+
+Both lists took the same twelve pair keys, generated rather than typed. Green at **326 of 326**.
+
+**The `moved` prefix list is inert in this tree, and saying so is the point.** `/api/chat` and
+`/api/live` are added, but the filter beside them is the blind version — 260907b's `pathish` fix is
+committed on their branch and not yet pushed. So that line cannot fail here yet, and a green run is
+not evidence the move is complete.
+
+**So it was checked, with a control.** The filter was temporarily un-blinded locally (the same
+backslash-stripping idea as their fix) and the contract test run:
+
+- with `/api/chat` and `/api/live` in `moved`: **326 passed** — no chat or live guard is left in the
+  chain.
+- with `/api/comments` added, a domain still entirely in the chain: **red**, *"a moved route is still
+  a guard in the chain as well as a row in the table"*, six guards found.
+
+The second run is what makes the first mean anything. Both probes were reverted; **this tree ships
+the filter exactly as `dev` has it**, because the fix is 260907b's to land and duplicating it is how
+the referee slice got built twice.
+
+## The Stage 1 review, and the P1 it caught in a file I had just committed
+
+`docs/plans/260908a-stage1-review-sol.md`, against commit `ccd3ac8c`. Verdict: **stage is sound with
+these changes.** Five findings, all accepted, all verified here first.
+
+**F4 — P1. The committed stage broke a repository test, and Sol ran it rather than reasoning to it.**
+`tests/chat-thread-delete-route.test.ts` carried a line-anchored `**Blind to.**`, which is reserved
+vocabulary: `tests/store-migration-registry.test.ts` requires every file containing it to appear in
+`STORE_CONVERSIONS`. Reproduced here — and running the **whole** file rather than Sol's filtered case
+found a **second** failure it had not reached: *leaves no file that the import graph can reach and
+nothing accounts for*, because the new test reaches a condemned module through `scratchArticleInPg`
+and had no verdict in `STORE_MIGRATION`.
+
+Both fixed honestly rather than quietly:
+
+- the marker is renamed to `**Outside this oracle.**`, outside the vocabulary. Sol's own advice was
+  *"do not add a historically false `STORE_CONVERSIONS` entry"*, and it is right: this file is not a
+  conversion, it was written five days after the filesystem store was deleted.
+- a `STORE_MIGRATION` entry says exactly that, and is marked **`evidence: "static-only"`**. That
+  field was not in the first attempt, and a third assertion caught it — the default is `"dynamic"`,
+  which claims the instrumented witness watched the file run, and that witness is a dated measurement
+  from 2026-09-03. A file that did not exist cannot have been watched. **13 of 13 green** afterwards.
+
+**F5 — P2. The general argument I put in the umbrella plan was wrong in three ways.** It said the
+public dispatch is the one thing before `requireUser` (it is not — the Stripe webhook's exact-path
+branch at `src/routes.ts:6381` also runs there), that a *different* literal prefix implies a
+*disjoint* one (it does not — `/api/public/foo` is a different literal prefix inside the public
+namespace), and it therefore listed an incomplete set of ways it could stop being true. Rewritten in
+260907b as the narrow claim: **two** pre-auth claims, named and cited, with the four ways they could
+change. The wrong version is kept above the right one, because it is the version anybody would write.
+
+**F6 — P3, accepted.** The lane comment said nothing goes near Storage. `scratchArticleInPg` reaches
+it through `loadArticleIntoPg` → `storeRawSource`. Corrected, with a note that it was copied from the
+neighbouring entry without checking — which is how it got there.
+
+**F7 — P3, accepted.** `expect(article.copied).toContain("blocks")` was cargo, copied from the
+sibling file; thread deletion reads no block. Removed.
+
+**F8 — P3, accepted.** The plan's status line still said *plan written, not built*. Refreshed.
+
+**One thing in the review I am recording rather than acting on.** Sol notes the second oracle case is
+timing-sensitive under mutation 1 — the background deletion *could* finish before the second `it`
+reads, so the first assertion is the reliable one. That is right, and it does not weaken the stage:
+the first case is the oracle, and the second observed red is a bonus rather than the mechanism. It is
+worth knowing that a future flake there would mean the race resolved the other way, not that the
+route regressed.
+
+## Where the file stands
+
+| | Lines | Complexity of `serveAuthenticatedApi` |
+|---|---|---|
+| before this slice | 8,575 | 153 |
+| after it | **8,651** | **125** |
+
+Seventy-six lines longer and twenty-eight points simpler, which is the trade this migration has been
+making all along and the reason § *What the fifth sweep will measure* exists in 260907e. Biome's
+ceiling is 25, so the function is still five times over it; `:2349` at 77 and `:2591` at 36 are
+untouched by this migration and will survive it.
+
+## The Stage 2/3 review, and the claim in this doc that was false
+
+`docs/plans/260908a-stage23-review-sol.md`, against `b4bd19c8`. **No P0 and no P1** — Sol re-ran the
+verifier against the git blobs itself and confirmed the twelve are a pure move, the two constants are
+byte-equivalent to the matchers they replaced, both pair-key lists hold the same twelve in the right
+order, `chatLive` is filed under `/api/chat` everywhere, and `query` reaching `chat` GET is the same
+`URLSearchParams` instance `serveApi` built. Four findings, all accepted.
+
+**F9 — P2. This doc claimed a fix that was not in the artefact.** § *Stage 2, as built* said anyone
+repeating the recipe "inherits the fixed version" through the committed verifier. **False.** The
+verifier only captures, normalises and diffs; the *generator* is what had the comment bug, and the
+generator was a scratchpad script that no longer exists. So the sentence described a safeguard nobody
+could inherit — which is a worse defect than the bug it was describing, because it reads as closed.
+
+Fixed by making the claim true in the better direction: **the verifier now compares comments**, so a
+future generator does not have to be careful. `commentsIn` collects each body's comment text,
+whitespace-collapsed and **without** the matcher rename applied — a comment that said `chat` before
+the move must still say `chat` after it, because the rename is a code edit with no business in prose.
+An intended rewrite is declared in `EXPECTED_COMMENT_EDITS` (empty for this slice) and anything
+undeclared fails.
+
+**And it was watched failing on the real thing.** The original corruption was reproduced into a
+scratch copy of the finished `routes.ts` — the two phrases the bug actually produced, code untouched
+— and the verifier run against it:
+
+```
+identical             chat GET                 202 chars
+*** COMMENT CHANGED *** chat GET — 1 before, 1 after
+  before: … one thing from chat: … docs/plans/260826ab-chat-as-gateway.md § summaries. */
+  after : … one thing from captures: … docs/plans/260826ab-captures-as-gateway.md § summaries. */
+1 problem(s)   exit=1
+```
+
+**The body still reports `identical`.** That line is the whole demonstration: this is a defect the
+body diff cannot see and the comment check can.
+
+The edge of the instrument, stated so the next reader does not infer a wider one: comments *outside*
+handler bodies — the ones above a row, including the two live-session blocks this slice moved — are
+still read by a person in the diff.
+
+**F10 — P2. A refusal was skipping the body comparison, not just narrowing it.** `chat` GET reached
+`continue` before its bodies were compared, so *any* change anywhere in that handler would have
+printed `refused, accounted`. The rail was answering a question about returns and was being read as
+answering the question about the whole body — the same shape of mistake as a check that agrees with
+the code because it shares an assumption with it.
+
+Now every guard's body is compared first and the rail is an **additional** demand on top. The
+expected-refusal map also matches the rail's own words rather than only the key, so an explanation
+written for *two* returns cannot silently cover three. `chat` GET's bodies are identical, so the
+strengthened version is green — which is the point: the fix costs nothing and the old version was
+green for the wrong reason.
+
+Sol also names a reusable blind spot I am recording rather than fixing: `blockAt` counts raw braces,
+including inside comments and strings. It does not mis-extract these twelve — checked — but a
+scanner-based boundary would be safer for whoever takes `comments`.
+
+**F11 — P3. My rewritten comment made two false claims about where things are.** It said the ticket
+and `spoken` "were declared next to each other in the chain" and that the move separated them. Both
+halves wrong: the three accounting guards sat between them in the chain too. The accounting comment's
+"the two above" was also wrong, since `spoken` is below it. Both now name routes rather than
+positions, and the ticket comment records what it used to say. **I asserted this without checking,
+in a commit whose whole subject is that assertions about moved code must be checked.**
+
+**F12 — P3. `git diff --check` failed** on a whitespace-only line and a misindented comment left by
+the script that inserted the twelve keys. Fixed.
+
+## The gate
+
+`npm run check` on the final tree, 2026-09-08 03:14–03:45: **typecheck, build, cycles, chain,
+conflicts and committed all clean.** The suite ran **828 files passed, 1 skipped, 1 failed** —
+15,511 tests passed of 15,547.
+
+The one failure is **not this slice's**: `tests/step-failure-seam.test.ts`, a job-deadline suite that
+touches no route, timed out at 30 s while the box was at load 35 with 27 users on it. Re-run alone:
+**9 of 9 green.** That is the shape
+[postgres-suites-fail-from-contention](../project/testing.md) describes, and re-running the file
+alone rather than believing the batch is the whole remedy.
+
+An earlier run of the same gate failed on `tests/fixture-ids.test.ts` — three fleet-dashboard tests
+sharing the uuid `11111111-…`. Also not this slice's, and by the time it was diagnosed the session
+that owns those files had already fixed it on `dev`; a second merge cleared it. **Fifteen minutes
+went into proving a red was somebody else's**, which is the cost the box's contention imposes on
+every slice and is worth stating rather than absorbing silently.
+
+Complexity: 136 findings against the repo, of which `serveAuthenticatedApi` is now **125** against a
+ceiling of 25 — 153 before this slice.
