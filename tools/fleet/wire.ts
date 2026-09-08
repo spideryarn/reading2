@@ -474,6 +474,29 @@ export type UsageReport = {
   tookMs: number;
 };
 
+/**
+ * What the Overseer's checkpoint knows about usage limits — **and why it might
+ * know nothing**, which is three different facts rather than one absence.
+ *
+ * A bare `UsageReport | null` would put *no pass has ever run*, *the stored
+ * report was unreadable* and *this checkpoint predates the field* in one slot.
+ * The first is ordinary, the second means something is wrong with the store, and
+ * the third means the reader is newer than the writer. They call for different
+ * words on a page and only `why` can carry the difference.
+ *
+ * **There is deliberately no empty-report arm.** A scan that found nothing is a
+ * `UsageReport` whose `rateLimits` say so, with its own `collectedAt`; inventing
+ * a report to mean *we have not looked* would be the most reassuring possible
+ * lie, which is the same trap `attentionNotYetRun` exists to avoid.
+ *
+ * `at` is when the checkpoint was written, NOT when anything was scanned —
+ * nothing was. A report's own `collectedAt` is the only instant that can tell a
+ * quiet account from a pass that stopped running.
+ */
+export type StoredUsage =
+  | { kind: "report"; report: UsageReport }
+  | { kind: "none"; why: string; at: string };
+
 /* ------------------------------------------------------------------ *
  * Which harness is in a pane, and what may honestly be done to it.
  * ------------------------------------------------------------------ */
