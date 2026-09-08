@@ -32,7 +32,7 @@ import type { ReactNode } from "react";
 import { Explain, type Tip } from "./Tooltip";
 import { Button, cx } from "./ui";
 import type { FleetState } from "./types";
-import { collectedAge, formatDuration, tally } from "./view";
+import { clockNote, collectedAge, formatDuration, tally } from "./view";
 
 /**
  * **How far past the collector's own cadence a snapshot has to be before the
@@ -203,6 +203,13 @@ export function Header({
 }): ReactNode {
   const rows = state?.rows ?? [];
   const counts = tally(rows);
+  /* **THE ONE LINE ABOUT THE READER'S OWN DEVICE.** Every age above is already
+     shifted into this browser's terms at the parse boundary, so this changes
+     nothing about them — it exists because a corrected page and a broken clock
+     otherwise look identical, and because nothing else will ever tell Greg his
+     phone is five minutes fast. Quiet by construction: no colour, no card, and
+     nothing at all under a minute (view.ts § `CLOCK_SKEW_NOTICE_MS`). */
+  const clock = state === null ? null : clockNote(state.clockSkew);
 
   return (
     <header className="masthead">
@@ -241,6 +248,13 @@ export function Header({
             {fresh.stale ? `STALE — ${fresh.age}` : fresh.age}
           </Explain>
         </div>
+
+        {/* Its own row rather than another item in the wrap above, so that on a
+            phone it never lands between the tally and the age and pushes the
+            one number this page is read for onto a second line. */}
+        {clock === null ? null : (
+          <p className="tw:mt-0.5 tw:text-[12px] tw:text-ink-faint">{clock}</p>
+        )}
       </div>
 
       {fresh.why !== null ? (

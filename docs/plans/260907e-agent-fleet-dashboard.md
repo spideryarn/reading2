@@ -1936,7 +1936,7 @@ stage.** Confusing them gets you a linter for a problem the compiler should have
   findings, and a fresh backlog that size is how the check that would catch the next one gets
   ignored.
 
-### 🔵 Stage v0.4j: the page reads the box's clock with the phone's
+### ✅ Stage v0.4j: the page reads the box's clock with the phone's
 
 **Found by `fleet-health-history` on 2026-09-08, in their own chart, and flagged to
 everyone else.** Their version: `Math.max(serverEdgeMs, Date.now())` on the right-hand edge of the
@@ -1972,23 +1972,62 @@ line.
 
 #### What it needs
 
-- [ ] **A `servedAt` on the state payload**: the server's clock at the moment it answers. Neither
+- [x] **A `servedAt` on the state payload**: the server's clock at the moment it answers. Neither
       `collectedAt` nor `attemptedAt` can stand in — the gap between either of those and receipt is
       *genuine snapshot age*, up to a full cadence, and cannot be told apart from skew. `servedAt`
       minus `receivedAt` is skew plus network latency, and latency here is milliseconds against a
       threshold of minutes.
-- [ ] **One conversion at the parse boundary**, applied to every server timestamp the client reads —
-      `collectedAt`, `startedAt`, `lastModified`, `pause.at`, `pause.resetsAt`. Not to `receivedAt`,
-      which is already the browser's.
-- [ ] **Say it out loud when the skew is large.** A phone minutes off is worth one line on the page,
+- [x] **One conversion at the parse boundary**, applied to every server timestamp the client reads —
+      `collectedAt`, `startedAt`, `lastModified`, `pause.at`, `pause.resetsAt`, and since v0.6f
+      `attention.coordinatorWrittenAt` and `attention.list.scannedAt`. Not to `receivedAt`, which is
+      already the browser's.
+- [x] **Say it out loud when the skew is large.** A phone minutes off is worth one line on the page,
       because it is a fact about the reader's device that nothing else will ever tell them, and
       because it explains any residual oddness. Silence here would make a corrected page and a
       broken clock look identical.
-- [ ] A test that fixes the browser clock some minutes ahead of the server's and asserts the STALE
+- [x] A test that fixes the browser clock some minutes ahead of the server's and asserts the STALE
       banner does **not** appear. Watched failing first: without the correction it appears.
 
-**Not started.** Written up rather than bolted on, because the correction touches every timestamp the
-client parses and the naive version silently breaks a measurement that is currently right.
+**Built 2026-09-08**, and two things came out different from the write-up above.
+
+**`lastModified` is not on `FleetState` and never was.** It arrives on `/api/messages`, a second
+boundary with no clock of its own — so it is corrected by the skew `/api/state` measured, applied by
+a `withClockSkew` wrapper around the `MessagesApi` in App.tsx. A `servedAt` on that route too was
+rejected: it is a second measurement of one fact, the two would differ by a few milliseconds of
+latency, and a page whose transcript ages and snapshot ages were corrected by different numbers is
+harder to reason about than one corrected by the same number. The alternative was drilling a `skew`
+prop through four components that have no business knowing about clocks.
+
+**`AttentionPanel`'s tolerance shrank rather than vanishing, and the constant it left behind is a
+different fact.** `CLOCK_SKEW_MS` is deleted as the stage says. What replaces it is
+`RENDER_SLACK_MS = 5_000`, and it is not an allowance for a device: `useNow` ticks once a second, so
+a render triggered by an arriving payload compares a just-corrected timestamp against a `now` up to
+a tick old. With a hard `age < 0` refusal, a checkpoint written moments before it was served flashes
+*"at a time this page could not read"* on a healthy fleet — the alarm-a-clock-manufactures failure
+with a different clock in it. One tick plus room for a slow render, two orders of magnitude below
+the five- and six-minute thresholds it must not swallow.
+
+Every new test carries its own positive control — the same fixture minus `servedAt`, which is
+exactly the pre-stage build — because *no STALE on the page* is also what a blank page says. Two
+mutations were run: disabling the shift reds 4 of them with the intended assertions, and forcing the
+skew to `unknown` reds 5.
+
+#### v0.6f raised the price, and paid a deposit that this stage collects
+
+The attention panel decides whether to say *nothing is waiting on you* by asking how old the scan is,
+so a phone whose clock is minutes ahead can make a live inbox read as a dead one — the same alarm-a-
+clock-manufactures failure as the STALE banner, on the panel the page exists for.
+
+GPT Sol's C2 caught the sharp edge of it: `ageMs` clamped a negative age to zero, so a timestamp
+*ahead* of the browser read as **"0s ago" forever** and suppressed the staleness check permanently.
+That is fixed. What it was fixed WITH is a placeholder: a flat `CLOCK_SKEW_MS = 2 * 60_000`
+allowance, beyond which a timestamp is treated as unreadable rather than fresh. Two minutes is a
+number chosen for being obviously generous, not measured — it is wrong in the safe direction and it
+is still wrong.
+
+**This stage deletes that constant.** Once a server timestamp arrives already in browser-clock
+terms, a future `scannedAt` means a genuinely broken clock rather than an ordinary phone, and the
+panel can say so instead of tolerating a window.
 
 ### ✅ Stage v0.6f: the attention inbox has a producer and no consumer
 

@@ -62,7 +62,7 @@ import { describe, expect, it } from "vitest";
 import { modeApplicability, readPanes, toRows, type FleetRow } from "../tools/fleet/collect.js";
 import { readPaneMode } from "../tools/fleet/pane.js";
 import type { FleetStatus } from "../tools/fleet/status.js";
-import { parsePermissionMode, parseRow } from "../tools/fleet/web/src/types.js";
+import { CLOCK_SKEW_UNMEASURED, parsePermissionMode, parseRow } from "../tools/fleet/web/src/types.js";
 import type { Session } from "../scripts/gjd-remote-tmux.js";
 
 const FLEET_PANES = path.join(process.cwd(), "tests/fixtures/fleet-panes");
@@ -514,8 +514,8 @@ describe("parsePermissionMode — the client, failing towards the safe arm", () 
 
   /** And `parseRow` has to actually read it, rather than the field existing unused. */
   it("is read off the row, not defaulted", () => {
-    const row = parseRow({ id: "$1", permissionMode: { kind: "not-auto", mode: "manual mode" } });
+    const row = parseRow({ id: "$1", permissionMode: { kind: "not-auto", mode: "manual mode" } }, CLOCK_SKEW_UNMEASURED);
     expect(row?.permissionMode).toEqual({ kind: "not-auto", mode: "manual mode" });
-    expect(parseRow({ id: "$1" })?.permissionMode.kind).toBe("cannot-tell");
+    expect(parseRow({ id: "$1" }, CLOCK_SKEW_UNMEASURED)?.permissionMode.kind).toBe("cannot-tell");
   });
 });

@@ -122,6 +122,38 @@ export type FleetState = {
    * `tools/overseer/attention.ts`. This server carries it and does not read it.
    */
   attention: AttentionFeed;
+  /**
+   * **THE SERVER'S OWN CLOCK, AT THE MOMENT IT ANSWERED** — the one field on
+   * this payload that is about us rather than about the box.
+   *
+   * Greg reads this page on a phone over Tailscale, and the phone's clock is
+   * not this box's. Every age the client draws is
+   * `browserNow − Date.parse(aServerTimestamp)`, so a phone three minutes fast
+   * turns a current snapshot into a permanently-on STALE banner (the threshold
+   * is 2.5 × the ~60s cadence ≈ 2m 30s) and puts *"this may not be this
+   * session's conversation"* on every working row. An alarm a clock can
+   * manufacture is one that stops being read. v0.4j in
+   * docs/plans/260907e-agent-fleet-dashboard.md.
+   *
+   * **Neither `collectedAt` nor `attemptedAt` can stand in**, and that is the
+   * whole reason this is a third timestamp rather than a reuse of one of them.
+   * The gap between either of those and the moment the client receives the
+   * payload is GENUINE SNAPSHOT AGE — up to a full cadence of it — and there is
+   * no way to tell that apart from clock skew. `servedAt − receivedAt` is skew
+   * plus network latency, and latency on a tailnet is milliseconds against a
+   * threshold of minutes.
+   *
+   * Read here rather than passed in: this function IS the answer, so the
+   * moment it runs is the moment being reported. A caller-supplied value could
+   * be as old as whatever produced it, which is exactly the mistake above.
+   *
+   * **Not a schema bump**, by this file's own rule: a consumer that ignores it
+   * is poorer (it goes on comparing two clocks) rather than wrong. The client
+   * says so at the type — `ClockSkew`'s `unknown` arm in web/src/types.ts —
+   * and corrects by ZERO when the field is absent, because an unknown skew is
+   * not a small one.
+   */
+  servedAt: string;
 };
 
 export function fleetState(
@@ -150,6 +182,11 @@ export function fleetState(
     schema: 1,
     attemptedAt,
     attention,
+    /* The clock read that makes every age on the page comparable. Unlike
+       `collectedAt` above, inventing this one here is not a lie with a clock on
+       it — it is the only honest reading of it, because composing the payload
+       is answering the request. See `servedAt`. */
+    servedAt: new Date().toISOString(),
     rows: snapshot?.rows ?? [],
     tmuxServerPid: snapshot?.tmuxServerPid ?? null,
     // NOT `snapshot?.collectedAt ?? new Date().toISOString()`, however tempting

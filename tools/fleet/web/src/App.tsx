@@ -16,7 +16,7 @@
  * below exists so a test can drive the page without a clock or a network, and
  * it is the same seam.
  */
-import type { ReactNode } from "react";
+import { useMemo, useRef, type ReactNode } from "react";
 
 import { AttentionPanel } from "./AttentionPanel";
 import { Dock } from "./Dock";
@@ -26,12 +26,13 @@ import { OrchestratorPanel } from "./OrchestratorPanel";
 import { SessionsPanel } from "./SessionsPanel";
 import { httpActionsApi, type ActionsApi } from "./actions-client";
 import { useDockFit } from "./fit";
-import { httpMessagesApi, type MessagesApi } from "./messages-client";
+import { httpMessagesApi, withClockSkew, type MessagesApi } from "./messages-client";
 import { useHashState } from "./mode";
 import { httpNewSessionApi, type NewSessionApi } from "./new-session-client";
 import { httpRenameApi, type RenameApi } from "./rename-client";
 import { httpSteerApi, type SteerApi } from "./steer-client";
 import type { Transport } from "./transport";
+import { CLOCK_SKEW_UNMEASURED, type ClockSkew } from "./types";
 import { cx } from "./ui";
 import { useActions } from "./useActions";
 import { useFleetState } from "./useFleetState";
@@ -63,6 +64,21 @@ export function App({
   actionsPollMs?: number;
 }): ReactNode {
   const feed = useFleetState(transport);
+  /* **THE ONE CLOCK CORRECTION, HELD FOR THE ONE BOUNDARY THAT HAS NO CLOCK OF
+     ITS OWN.** `/api/state` carries `servedAt` and everything it holds is
+     converted into this browser's terms at the parse boundary; `/api/messages`
+     does not, and its `lastModified` is subtracted from the browser's clock in
+     two places. Same process, same box, so the skew measured on one route is
+     the truth about the other — messages-client.ts § `withClockSkew` argues
+     why that beats a second `servedAt` and a second measurement.
+
+     A ref rather than state: the wrapper below must not be rebuilt on every
+     poll (that would restart the read on every session card), and what it wants
+     is the freshest skew AT THE MOMENT AN ANSWER ARRIVES rather than the one
+     the page had when the wrapper was made. */
+  const skew = useRef<ClockSkew>(CLOCK_SKEW_UNMEASURED);
+  skew.current = feed.state?.clockSkew ?? CLOCK_SKEW_UNMEASURED;
+  const messages = useMemo(() => withClockSkew(messagesApi, () => skew.current), [messagesApi]);
   /* The second feed: the action vocabulary and the queues. A different
      resource with a different cost and a different clock — see useActions.ts.
      **It never asks /api/state**, which is what keeps the server's guards from
@@ -143,7 +159,7 @@ export function App({
               steer={steer}
               rename={rename}
               actions={actions}
-              messages={messagesApi}
+              messages={messages}
               newSession={newSession}
               onRefresh={feed.refresh}
             />
