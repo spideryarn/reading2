@@ -1466,6 +1466,39 @@ written twice. No test was edited; five mutations on the extracted module were a
 one that reports a torn file as clean fails in the **notes** suite as well as the store's, so both
 callers really are exercised through it.
 
+#### Open after S7, deferred with reasons rather than forgotten
+
+Two findings from the reviews are **not being fixed in this plan**. Both are pre-existing rather than
+introduced by S7, both are P2, and both are recorded here because a finding that is merely not
+mentioned again has become a decision by default — which is the thing the whole S7 stage existed to
+undo.
+
+**O-1 — `parseEvent` accepts self-inconsistent event payloads.** In `store.ts`, `key` is validated
+only as a non-empty string and never checked against `identity`; a row event's `row.id` and claimed
+conversation id are checked against neither; and a pane event may carry a null `paneId` beside a
+non-null `panePid`. **The asymmetry is what makes it conspicuous:** `parseRegisterEntry` already
+enforces canonical-key consistency for the checkpoint, so the event log — the file the checkpoint is a
+fold *of* — is the laxer of the two. Pre-existing across all five original arms. Worth doing, and
+worth doing as one deliberate pass over every arm rather than bolted onto whichever arm is being
+touched.
+
+**O-2 — `jsonl.ts` defends against short writes and ignores short reads.** `readSync` returns a count
+and both read sites assume a full buffer, so a short read can let the zero-filled remainder hide a
+newline — truncating past valid records — or pad the reported dropped text with NULs. Pre-existing in
+`store.ts` before the extraction, which is why the extraction is still behaviour-preserving. **The
+extraction is also what makes it worth fixing now**: there is one copy to fix instead of two, which is
+the argument S7-03 was made on, arriving again.
+
+**And two guaranteed mutation survivors, recorded as uncovered rather than left to look covered.**
+Deleting either `fsyncSync` in `jsonl.ts` passes the entire suite, because the tests observe the bytes
+that result rather than durability across a crash. That is not a gap a unit test can close — it needs
+a machine that can lose power — so the honest move is to say so here. `fsync` is load-bearing for
+exactly one scenario and no test in this repo exercises it.
+
+**What would move any of these up the list:** an unreadable-line count above zero in a real
+`events.jsonl`, or a checkpoint that refuses to parse on a restart. Both are already visible in
+`overseer status`, which is where they would show first.
+
 **What this stage is deliberately not.** It is not new capability. Nothing here makes the Overseer do
 anything it could not do this morning; it closes three gaps between what the code does and what the
 plan says it does. That is the right shape for the last stage of a plan and the wrong shape for a
