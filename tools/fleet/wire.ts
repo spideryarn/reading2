@@ -276,3 +276,163 @@ export type HarnessCapabilities = {
   /** Reading the pane's screen and its process tree. */
   watch: Capability;
 };
+
+/* ------------------------------------------------------------------ *
+ * The attention inbox. Produced by the Overseer, rendered by the page.
+ *
+ * The premise it corrects was measured on the live fleet 2026-09-08 and is
+ * written up in docs/project/orchestrator-direction.md § `idle` is the bug:
+ * `needs-you` means *Claude Code says a dialog is open*, and TEN OF FIFTEEN
+ * sessions genuinely waiting on Greg had ended their turn handing him a
+ * decision in sentences, with not one of them showing as needing him. A
+ * mechanical check found 1 of 23 by grepping for question marks, because the
+ * decisions end in full stops. So a list built from `needs-you` alone is a list
+ * of the cheapest thing on the box.
+ * ------------------------------------------------------------------ */
+
+/** Why we believe this needs Greg. The two arms are answered by DIFFERENT MECHANISMS. */
+export type AttentionEvidence =
+  | {
+      /** The harness says a dialog is open. Mechanical, observed, and it has options. */
+      kind: "dialog";
+      question: string;
+      /** In the order the harness drew them. Answering picks one of these. */
+      options: readonly string[];
+    }
+  | {
+      /** The turn ended handing Greg a decision in prose. INFERRED, and it may be wrong. */
+      kind: "prose";
+      /** The tail of the turn, so a person can check the inference rather than trust it. */
+      excerpt: string;
+      /** What made us think so, in words. Never a score. */
+      why: string;
+    };
+
+/** Consequence and reversibility. NOT confidence, and NOT urgency. */
+export type AttentionKind = "irreversible" | "product" | "technical" | "other";
+
+/** Whether answering this from a phone is a real option. */
+export type AttentionAnswerability =
+  | { kind: "phone" }
+  | { kind: "needs-a-screen"; why: string }
+  | { kind: "unknown"; why: string };
+
+export type AttentionItem = {
+  /** Stable across snapshots, so a card cannot move under a finger. */
+  id: string;
+  /** tmux's own handle — the address, and stable across renames. */
+  sessionId: string;
+  sessionName: string;
+  /** When we FIRST saw this question. Not when we last saw it. */
+  waitingSince: string;
+  kind: AttentionKind;
+  evidence: AttentionEvidence;
+  answerability: AttentionAnswerability;
+  /** Other sessions asking the same thing. Answer once, apply to all. */
+  duplicates: readonly { sessionId: string; sessionName: string; waitingSince: string }[];
+};
+
+export type AttentionList =
+  | {
+      kind: "list";
+      /** Already sorted: by `kind` first, then by `waitingSince`. The renderer must not re-sort. */
+      items: readonly AttentionItem[];
+      /** THE POSITIVE CONTROL. Zero items out of zero scanned is a broken probe. */
+      sessionsScanned: number;
+      scannedAt: string;
+    }
+  | { kind: "unknown"; why: string; scannedAt: string };
+
+/* ------------------------------------------------------------------ *
+ * Why a session is not doing anything, which is three facts wearing one word.
+ * ------------------------------------------------------------------ */
+
+/**
+ * **A session that is paused, and what it is waiting for.**
+ *
+ * Greg, 2026-09-08: *"can you try and distinguish between statuses like
+ * `Working`, `Hit usage limits`, and `Paused/waiting` (e.g. because it's been
+ * asked to run Unix sleep or idle waiting for a CronCreate or similar, i.e.
+ * it's kind of idle, but with an intention to reactivate, and ideally make a
+ * note of when it should reactivate (and whether it's overdue))"*.
+ *
+ * ## This is an added fact, NOT an eighth `FleetStatus` arm
+ *
+ * v0.4d decided the general form of this question — *how `idle` splits is an
+ * added fact, not another status* — and the research for this stage looked for
+ * an argument against that and did not find one. A cron-parked session is
+ * genuinely `idle`: it is at a prompt, and typing at it works. So is a
+ * rate-limited one. Making it a status would also mean touching **five**
+ * exhaustive switches (`triageRank`, `steerableStatus`, `drainGate`,
+ * `deliveryGate`, `modeApplicability`) to say something none of them needs to
+ * know.
+ *
+ * ## Where these states actually hide, measured rather than assumed
+ *
+ * Under `idle`, not `working`. A pending `CronCreate` wake-up was found on
+ * **8 of 11 idle rows** in one pass, and a rate-limited session prints its
+ * error, ends its turn and stops — so it reads `idle` too. The stage began
+ * from the opposite assumption and the measurement corrected it.
+ *
+ * ## `none` is a claim, and it is the one that will be got wrong
+ *
+ * `none` says *we looked, everywhere we can look, and this session is not
+ * waiting for anything*. It is not a default and it is not what silence
+ * produces. Every source that could not be consulted — a transcript tail that
+ * ran out of window before reaching the start of the file, a session store that
+ * could not be read, a rate-limit scan nothing has run yet — comes back as
+ * `cannot-tell` with the reason. Folding those into `none` is the
+ * ambiguous-negative mistake this module made three times in one night, and it
+ * costs more here than anywhere else: a rate-limited session never resumes by
+ * itself, so one nobody restarts is an hour of nothing. Measured on
+ * 2026-09-08: a limit hit at 06:02 with `resetsAt` 06:30, and the next turn was
+ * a person typing "Continue" at 08:21 — **111 minutes**.
+ */
+export type Pause =
+  | { kind: "none" }
+  | {
+      kind: "rate-limited";
+      /**
+       * The window's own name, verbatim from the record — `five_hour`,
+       * `seven_day`, or one of the rotating per-model codenames.
+       *
+       * **Deliberately not a closed union.** The cache carries names that
+       * appear and vanish without notice, and an exhaustive switch over them
+       * would silently drop a real one. `isKnownUsageWindow` in
+       * `tools/overseer/usage.ts` narrows the two worth naming; the rest render
+       * by raw name.
+       */
+      window: string;
+      resetsAt: string;
+      /**
+       * True only when `resetsAt` is in the past AND the session has taken no
+       * turn since. A rate-limited session never resumes by itself (Fable,
+       * 2026-09-08), so this is deterministic rather than a guess — and it may
+       * be set only when `resetsAt` was actually read.
+       */
+      overdue: boolean;
+    }
+  | { kind: "scheduled-wakeup"; at: string; overdue: boolean; source: "cron" }
+  | { kind: "in-a-shell-call"; sinceMs: number }
+  | { kind: "cannot-tell"; why: string; cause: PauseUnknownCause };
+
+/**
+ * WHY we could not tell, as a name rather than only a sentence.
+ *
+ * `tail-window-exhausted` is the one that will bite: the tail read stops at a
+ * byte budget without reaching the start of the file, so the evidence may be
+ * above it. That is a different fact from having read the whole file and found
+ * nothing, and only one of the two is `none`.
+ *
+ * `rate-limits-not-collected` is the honest state of the world until the
+ * Overseer publishes a usage report on a cadence — the scan costs seconds on a
+ * loaded box, which is far too much for a 73-second refresh loop, so this
+ * module reads a published reading rather than running one.
+ */
+export type PauseUnknownCause =
+  | "tail-window-exhausted"
+  | "no-transcript"
+  | "transcript-unreadable"
+  | "no-conversation-id"
+  | "session-store-unreadable"
+  | "rate-limits-not-collected";
