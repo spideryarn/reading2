@@ -17,3 +17,30 @@ and [260908f-overseer-and-fleet-improvement-roadmap.md](260908f-overseer-and-fle
   Kill refused by the auto-mode classifier, so asked Greg to kill it. Four other shells had already ended.
 - 2026-09-08 20:15Z — **Overseer** — Usage reader works: five-hour window 17% (resets 21:49Z),
   seven-day 43%, cache 83 minutes old. Will re-read each tick.
+- 2026-09-08 20:20Z — **Greg** — Deferred the whole Spideryarn product plan; focus is the Overseer and
+  the fleet dashboard. Recorded in [overseer-queue.md](../project/overseer-queue.md).
+- 2026-09-08 20:20Z — **Greg** — Kill the two Astra sessions that wrote the plans, and anything that
+  is dead weight. Astra reserved for really tricky or important calls; Sol for the rest.
+- 2026-09-08 20:22Z — **Overseer** — Killed `wk-install-0116-2281848` (the 20-hour webkit install with
+  no worktree and no log). The two Astra shells were already gone before the kill reached them.
+- 2026-09-08 20:50Z — **Overseer** — Messaged the two peers building Overseer machinery
+  (`claude-agents-dashboard`, `overseer-md-agent-coordinator`) through the steer route to ask which
+  files they hold. Delivery reported ok for both.
+- 2026-09-08 20:55Z — **Overseer** — Dispatched wave 1 of the roadmap: `260908f-roadmap-baseline`
+  (Baseline stage: census table, freshness tests, two client repairs) and
+  `260908f-roadmap-failure-containment` (refresh single-flight, SSE backpressure, source.ts body
+  bound). File sets disjoint from each other; the rest of the roadmap waits on the peers' replies and
+  Baseline's census. Wave 2 candidates: Overseer status card, Delivery uncertainty, Execution identity.
+- 2026-09-08 21:05Z — **Overseer** — Peers replied: the dashboard agent holds no `tools/fleet/` files
+  tonight; the 260908g agent holds only `tools/overseer/{jobs,rules,rule-jobs,rule-work,scheduler,
+  daemon,store}.ts`, `scripts/overseer.ts`, `scripts/overseer-pins.ts` and their tests, and
+  `current.json` stays schema 2 under its Stage 3a. Dispatched `260908f-roadmap-overseer-status`
+  (status card: fleet-owned reader of the two clocks, `OverseerPanel.tsx`). Suggested to the dashboard
+  agent that it take the roadmap's Box contracts and Delivery uncertainty stages with its next slice,
+  because they are its files; awaiting its answer before dispatching anyone else onto them.
+- 2026-09-08 21:05Z — **Overseer** — *Assumption pending Greg*: Execution identity waits until 260908g
+  Stage 3a lands, because its daemon-side propagation touches `store.ts`, which that agent holds.
+- 2026-09-08 21:05Z — **Greg-queued, not yet dispatched** — local-time display (London and Athens)
+  in the usage and status commands; waits for `scripts/overseer.ts` to be free of the 3a agent.
+- 2026-09-08 21:08Z — **Overseer** — Cheap tick every 20 minutes from this session (`ov-tick.sh`:
+  daemon status, usage, my sessions' last turns). No model call unless something changed.

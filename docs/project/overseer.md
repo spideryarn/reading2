@@ -96,8 +96,9 @@ This one is a list on purpose, because the test is uncomputable at 3am and the l
 - no `git` command that throws work away, anywhere, for the reasons in
   [AGENTS.md](../../AGENTS.md);
 - **and nothing dispatched that Greg did not queue.** Scheduled jobs, plan docs and the feedback
-  queue are queued. A job of your own devising is a proposal in the log. *"My job is basically new
-  ideas"* is a boundary on origination, and its test is simply: **is it in the queue?**
+  queue are queued, and so is everything in [overseer-queue.md](overseer-queue.md), the slow lane
+  for work Greg approved and deferred. A job of your own devising is a proposal in the log. *"My job
+  is basically new ideas"* is a boundary on origination, and its test is simply: **is it in the queue?**
 
 **And the categories that were missing from that list until GPT Sol went looking on 2026-09-08.** Its
 objection was that a prohibited list is only as good as its completeness, which is exactly why the

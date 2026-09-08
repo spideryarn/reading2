@@ -95,6 +95,9 @@ reference, and is authoritative wherever the two disagree.
   Greg's behalf, the standing scheduled jobs, the three deterministic rules that are worth more than
   any amount of judgement, and the traps — a steering message must be one line, `partial` delivery
   means the text landed and the Enter did not, and a pane can show a prompt that nobody typed.
+- **[overseer-queue.md](overseer-queue.md)** — the Overseer's slow lane: work Greg approved and
+  deferred, one line each and the product question it waits on, so a lull has something queued and
+  gate 3's "is it in the queue?" has a place to look. The Spideryarn product plan sits there whole.
 - **[changelog.md](changelog.md)** — how a deploy becomes a line on the public `/changelog`: why a
   version *is* a deploy and why Vercel's list rather than git is the only place that knows which shas
   those were, the append-only NDJSON the process writes, and the four stages — a fan-out of small
