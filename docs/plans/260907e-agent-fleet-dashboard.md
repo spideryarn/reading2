@@ -545,6 +545,37 @@ were in exactly that state.
 - [ ] Only then ask whether Codex deserves rows of its own. It probably does not while it has no
       sessions — a row per subprocess is a different product from a row per agent.
 
+### Stage v0.6d: when something is red, say whose it is
+
+**Measured twice on the night of 2026-09-08, by two sessions that were not looking for it.** A
+shared-fixture collision landed on `dev` from this worktree. One session spent **twenty minutes**
+proving an earlier red was not theirs; another spent a **full 24-minute gate** discovering the same
+thing. Both times the answer was in the failure message from the start — it names the files.
+
+> Twice tonight the expensive part was not the red, it was attribution. […] If the dashboard ever
+> surfaces a red, the field worth showing first is not the assertion but *which worktree last
+> touched the files it names.*
+>
+> — `split-routes-one-slice`, 2026-09-08
+
+That is a better idea than anything in this plan about test results, and it is cheap: the failure
+message contains paths, `git log -1 --format=%s -- <path>` names the commit, and the worktree is in
+the branch name. It also generalises past tests — it is the same question as "who do I ask about
+this", which is the one thing a fleet of forty agents makes hard.
+
+- [ ] When a red is surfaced, lead with **the worktree that last touched the files named in the
+      failure**, not with the assertion.
+- [ ] Say plainly when the answer is *not* attributable — a red with no file paths, or files last
+      touched by a merge. Guessing an owner is worse than saying nobody knows, because the guess
+      sends somebody to read code that is not theirs.
+- [ ] The same field belongs on a session row: **what has this agent touched**, so the reverse
+      lookup works too.
+
+Two costs to keep honest about. `git log` on a path is a per-file subprocess, so this must be
+computed for the handful of paths in one failure and never for the fleet. And the last commit to
+touch a file is a heuristic, not an author — a merge commit or a sweeping rename will name the wrong
+worktree, which is precisely why the "not attributable" arm has to exist rather than be a fallback.
+
 ### Stage v0.7+: the decision log
 
 Deferred by Greg on 2026-09-08 — "eventually both, start simple, defer this to a middle stage".
