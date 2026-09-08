@@ -129,3 +129,11 @@ The overall direction is strong: it reuses current foundations, preserves the on
 Resolve **R1–R4 before handing the roadmap to an implementation agent**. R5 should also be settled before the destructive-action stage begins. R6–R7 are meaningful roadmap improvements but need not block unrelated early reliability work.
 
 I did not rerun tests: the supplied 364-test baseline was sufficient for this plan-only review, and no files or live state were changed.
+
+---
+
+Candidate closure (parent, 2026-09-08): the corrected plan and its evidence landed in
+`acc13c1f9cc05cd4d4ac69faedf15ec63b72787b`, pushed to `origin/dev`. The first review was
+a live candidate against `4adcdfd6`; the second resolved R1–R7. The parent subsequently reconciled
+peer work through `3e2e3bd4` as recorded in the plan; that factual reconciliation was outside the
+second review snapshot. This note records provenance and does not alter the verdict above.

@@ -951,8 +951,7 @@ source expects 2; identify the running binary/service before diagnosing migratio
   [Validation evidence](260908f-overseer-and-fleet-improvement-roadmap-validation.txt) records the
   full-suite memory refusal and broad-check limitations: sandbox IPC/database access and an existing
   client/API build-revision mismatch. No full-repository green result is claimed.
-- [ ] Commit/push the final named plan artifacts to `dev`; final commit provenance is recorded in
-  the review artifact after committing.
+- [x] Committed the seven named plan/review/evidence artifacts as `acc13c1f9cc05cd4d4ac69faedf15ec63b72787b` and pushed to `origin/dev`. Review artifacts record candidate closure; no runtime code or services were changed by this work.
 
 When implementation starts, record each completed stage's commit, focused tests, integrated gate
 result, browser evidence (where applicable), deployment revision, and any remaining unknown. Update

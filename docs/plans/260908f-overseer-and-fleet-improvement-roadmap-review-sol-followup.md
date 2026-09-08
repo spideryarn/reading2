@@ -9,3 +9,11 @@
 No established P0/P1 remains. The remaining launcher and persistence mechanics are appropriately deferred implementation details, not genuine impossibilities. No tests were rerun.
 
 **APPROVE**
+
+---
+
+Candidate closure (parent, 2026-09-08): the corrected plan and its evidence landed in
+`acc13c1f9cc05cd4d4ac69faedf15ec63b72787b`, pushed to `origin/dev`. The first review was
+a live candidate against `4adcdfd6`; the second resolved R1–R7. The parent subsequently reconciled
+peer work through `3e2e3bd4` as recorded in the plan; that factual reconciliation was outside the
+second review snapshot. This note records provenance and does not alter the verdict above.
