@@ -289,8 +289,30 @@ export const FEEDBACK_SHAPE = {
    */
   masthead: {
     hook: "fb-masthead",
+    /* **`p-0` is not tidiness — it is the difference between matching the row
+       and nearly matching it.** The global button reset in tailwind.css takes a
+       `<button>`'s border, background and font, deliberately not its
+       `line-height` (the note there says why), and **not its padding either**.
+       So this button kept the UA's `padding: 1px 6px` while the `<a>`s beside
+       it have none: measured on 2026-09-08 at 18px tall against their 16, and
+       6px of dead space at each end, which in a right-aligned row shows up as a
+       22px gap where every other gap is `gap-4`'s 16.
+
+       The vertical px never mattered — the text baselines aligned exactly
+       either way, because the row is `items-baseline` and the glyph is shorter
+       than the line box. The horizontal 6px did.
+
+       **And `pointer-coarse:min-h-10` is what `p-0` then owes a finger.** The
+       corner button this replaces was 38x44 on a phone; the row's natural
+       height is 16. 2.5rem is the floor the dock has had since 2026-08-28 on
+       Greg's own ask, and `pointer` rather than `any-pointer` is the
+       convention narrow-window.css § a coarse pointer argues — sizes on the
+       primary pointer, so an iPad with a trackpad is not given 40px of chrome
+       it will never touch. `Profile` and `Admin` carry the same class for the
+       reason that file gives about the two order rows: a floor given to one
+       control in a row is a bug report about the one beside it. GPT Sol, P2. */
     button:
-      "fb-masthead tw:inline-flex tw:items-center tw:gap-1.5 tw:text-xs tw:text-ink-faint tw:hover:text-highlight",
+      "fb-masthead tw:inline-flex tw:items-center tw:gap-1.5 tw:p-0 tw:text-xs tw:text-ink-faint tw:pointer-coarse:min-h-10 tw:hover:text-highlight",
     word: "",
     icon: 13,
     /* Downwards, like the `Profile` and `Admin` cards it shares a
@@ -366,21 +388,33 @@ export function FeedbackTrigger({ variant }: { variant: FeedbackVariant }) {
     >
       <button
         type="button"
-        /* **`dock-feedback` styles nothing on its own**, the way
-           `dock-experimental` next to it does not: it is how § the bar's fit
-           ladder finds this button, and how a test finds one button among
-           twenty that are all `dock-btn`. No `--feedback-w` here — that is the
-           corner button's own width and nothing else reads it, and a 7.5rem
-           fixed-width exception in the row would make a last-rung bar scroll
-           where it would otherwise have fitted. GPT Sol, G7 and T2. */
+        /* **Every shape's class string carries its `hook`**, and two of the
+           three hooks style nothing on their own — `dock-feedback` the way
+           `dock-experimental` next to it does not, and `fb-masthead` not at
+           all. They are how a count finds this button among the twenty
+           `dock-btn`s or the three masthead controls, which is the rule
+           `FEEDBACK_TRIGGER_SELECTOR` above is built on; `dock-feedback` is
+           additionally how § the bar's fit ladder finds it.
+
+           No `--feedback-w` outside the corner — that is the corner button's
+           own width and nothing else reads it, and a 7.5rem fixed-width
+           exception in the bar's row would make a last-rung bar scroll where it
+           would otherwise have fitted. GPT Sol, G7 and T2. */
         className={shape.button}
         onClick={api.open}
         /* **The accessible name, now that `title` is not supplying one.**
-           Both shapes hide the word at some width — the corner's under the
-           731px query, the bar's under the fit ladder — and `display: none`
-           takes it out of the accessibility tree as well as off the screen, so
-           without this the button is an unlabelled icon on exactly the widths
-           where a tooltip cannot be opened either. */
+           Two of the three shapes hide the word at some width — the corner's
+           under the 731px query, the bar's under the fit ladder — and
+           `display: none` takes it out of the accessibility tree as well as off
+           the screen, so without this the button is an unlabelled icon on
+           exactly the widths where a tooltip cannot be opened either.
+
+           **The masthead shape never hides it**, and still carries this: the
+           name is then the same string twice, which is what a screen reader
+           would read anyway, and making the attribute conditional on the
+           variant would put a decision in the markup that the table above
+           exists to hold. It is also the one thing here that must not depend on
+           a `word` class staying non-empty. */
         aria-label="Feedback"
       >
         <MessageSquareWarning size={shape.icon} />

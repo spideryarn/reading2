@@ -417,6 +417,45 @@ describe("the route walk: one way home, never two triggers", () => {
   });
 
   /**
+   * **The shelf reached sideways** — an ordinary reader at an administrator's
+   * address, which `SignedIn` answers with the shelf rather than a refusal
+   * (App.tsx § the administrator's pages; docs/project/admin.md says why it is
+   * the shelf and not the 404 page).
+   *
+   * **This is the case that caught the bug the masthead move introduced**, found
+   * by GPT Sol on 2026-09-08 and not by anything in this file: the corner
+   * trigger's condition asked about `route.kind`, and `design` is not
+   * `library` — so these two addresses drew the shelf's masthead trigger *and*
+   * a corner one. Two Feedback buttons on one screen, which is precisely the
+   * rule this file exists to hold.
+   *
+   * Neither address was in `PLAIN_ROUTES`, and `tests/admin-only-routes.test.tsx`
+   * proves they render the shelf without ever counting a trigger — so the
+   * guarantee was advertised, believed, and false, with every suite green. The
+   * fix in App.tsx is a `drawsShelf` predicate both halves read, so the
+   * question is "what page is this" rather than "what route is this".
+   *
+   * `%s` covers both, because `admin` and `design` reach the shelf by the same
+   * line and a single case would not say whether the walk knew about two.
+   */
+  it.each(["/design", "/admin"])(
+    "a non-admin at %s gets the shelf, and exactly one Feedback trigger",
+    async (path) => {
+      signIn();
+      await show(path);
+      expect(feedbackTriggers(), `${path} drew ${feedbackTriggers().length} triggers`).toHaveLength(
+        1,
+      );
+      expect(document.querySelector(".fb-masthead"), `${path} is not the shelf`).not.toBeNull();
+      expect(document.querySelector(".fb-button"), `${path} kept a corner button`).toBeNull();
+      /* The shelf draws no way home wherever it is reached from — the same
+         claim as the case above, which is what makes "this really is the
+         shelf" more than an assertion about one class name. */
+      expect(waysHome()).toHaveLength(0);
+    },
+  );
+
+  /**
    * **The three pages that mount a `Dock` for their owner** — and the whole
    * point of the change. One way home, in the bar; one Feedback trigger, in the
    * bar; and nothing left in either corner.

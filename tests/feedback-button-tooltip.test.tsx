@@ -307,6 +307,29 @@ describe("the Feedback button, in the shelf masthead", () => {
       "tw:text-ink-faint",
     ])
       expect(btn.classList.contains(cls), `missing ${cls}`).toBe(true);
+    /* **`p-0` is the one that is not copied from the neighbours**, and the one
+       most likely to be dropped as redundant. It is not: the global button
+       reset in tailwind.css takes a `<button>`'s border, background and font
+       and leaves the UA's `padding: 1px 6px`, which the `<a>`s beside this have
+       none of. Measured in Chrome on 2026-09-08 — without it the button is 18px
+       tall against their 16 and carries 6px of dead space at each end, so the
+       last gap in a `gap-4` row reads as 22px. jsdom has no layout and cannot
+       see any of that, which is exactly why the class is pinned here. */
+    expect(btn.classList.contains("tw:p-0"), "the UA button padding is back").toBe(true);
+    /* **What `p-0` then owes a finger.** The corner trigger this replaces was
+       38x44 on a phone; the row's natural height is 16, so without a floor the
+       move would have answered a report filed *from* a phone with a smaller
+       target than the one being complained about. 2.5rem is the dock's floor
+       since 2026-08-28, and `pointer-coarse` rather than `any-pointer-coarse`
+       is narrow-window.css § a coarse pointer's convention: sizes follow the
+       primary pointer, so a trackpad-equipped iPad is not given 40px of chrome
+       it will never touch. Verified at 40px in Chrome under mobile emulation,
+       where `(pointer: coarse)` genuinely matches — `hasTouch` alone does not
+       flip it. GPT Sol, P2. */
+    expect(
+      btn.classList.contains("tw:pointer-coarse:min-h-10"),
+      "a phone control back under the touch floor",
+    ).toBe(true);
     /* The failure mode, exactly as in the bar: `.fb-button` carries
        `position: fixed` and the top-right corner of the window with it. */
     expect(btn.classList.contains("fb-button")).toBe(false);

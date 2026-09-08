@@ -386,7 +386,26 @@ export function Library({
               labels are already visible, where the tooltip adds a sentence
               rather than naming the button. */}
           <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
-            <div className="tw:flex tw:items-baseline tw:gap-4">
+            {/* **`ml-auto`, so this group is right-aligned on its own line
+                too.** The row above is `flex-wrap` + `justify-between`, and
+                `space-between` puts a *single* item on a line at that line's
+                start — so as soon as this group wrapped, which is every phone,
+                it sat hard against the left margin with the width of the page
+                empty to its right.
+
+                That was invisible while the group was only `Profile` and
+                `Admin`, and stopped being invisible on 2026-09-08 when the
+                Feedback trigger joined it: Greg's report asks for that button
+                in the **top right**, and on the phone he filed it from the
+                answer was the top left. GPT Sol caught it in review; measured
+                at 390px, the group ran 24→250 in a 366px column.
+
+                `ml-auto` and not `justify-end` on the parent, which would push
+                the wordmark about on the unwrapped line. On that line this
+                changes nothing — `justify-between` had already put the free
+                space here — so it costs one class and only acts once the row
+                has wrapped. */}
+            <div className="tw:ml-auto tw:flex tw:items-baseline tw:gap-4">
               {/* Home is where a global thing gets a way in. The profile page
                   holds what is true of the reader on every article, so a link to
                   it from inside one article would be a link nobody finds —
@@ -420,7 +439,7 @@ export function Library({
               >
                 <Link
                   href={PROFILE_HREF}
-                  className="tw:inline-flex tw:items-center tw:gap-1.5 tw:text-xs tw:text-ink-faint tw:no-underline tw:hover:text-highlight"
+                  className="tw:inline-flex tw:items-center tw:gap-1.5 tw:text-xs tw:text-ink-faint tw:no-underline tw:pointer-coarse:min-h-10 tw:hover:text-highlight"
                 >
                   <User size={13} />
                   Profile
@@ -438,7 +457,7 @@ export function Library({
                 >
                   <Link
                     href={ADMIN_HREF}
-                    className="tw:inline-flex tw:items-center tw:gap-1.5 tw:text-xs tw:text-ink-faint tw:no-underline tw:hover:text-highlight"
+                    className="tw:inline-flex tw:items-center tw:gap-1.5 tw:text-xs tw:text-ink-faint tw:no-underline tw:pointer-coarse:min-h-10 tw:hover:text-highlight"
                   >
                     <Shield size={13} />
                     Admin
