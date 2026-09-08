@@ -203,6 +203,127 @@ export type QueueView = {
 };
 
 /* ------------------------------------------------------------------ *
+ * Which harness is in a pane, and what may honestly be done to it.
+ * ------------------------------------------------------------------ */
+
+/**
+ * The harnesses this box can tell apart.
+ *
+ * From the direction doc's principle: *"One adapter per harness, and honest
+ * about what each can do. Claude, Codex and bare shells have genuinely
+ * different capabilities; flattening them into one 'message an agent' verb
+ * produces a UI that lies."*
+ *
+ * The KIND is here because the page renders it. The EVIDENCE for it — which
+ * pid, how many hops below the pane — is `Harness` in
+ * `tools/overseer/harness.ts` and stays on the server, because it is a fact
+ * about a process tree rather than anything a button needs.
+ *
+ * `unknown` is a real arm, not a fallback. A pane we could not identify is a
+ * pane nothing may be typed at, and saying so out loud is the point.
+ *
+ * MEASURED ON THIS BOX, 2026-09-08 at 12:15 UTC, 26 panes: 17 `claude-code`, 6
+ * `shell`, 1 `codex-batch`, 2 `codex-interactive`, 0 `claude-headless`, 0
+ * `unknown`. Seventeen minutes earlier the same measurement found 22 panes and
+ * **no Codex of any kind**, so a Codex column that renders empty is a reading
+ * of a moving fleet rather than a bug to chase — and an empty one is not
+ * evidence that the arm is dead code.
+ */
+export type HarnessKind =
+  | "claude-code"
+  | "claude-headless"
+  | "codex-batch"
+  | "codex-interactive"
+  | "shell"
+  | "unknown";
+
+/**
+ * May we do this, and if not, what does the reader get told?
+ *
+ * NOT A BOOLEAN. A greyed-out button with no sentence beside it is a UI saying
+ * "no" and meaning "I am not going to tell you", and the reader of that goes
+ * and does the thing by hand in the terminal instead. The `why` IS the feature.
+ *
+ * **THE CLIENT MUST DERIVE A THIRD ARM FROM THIS RATHER THAN CONSUME IT
+ * DIRECTLY.** This crosses as JSON, so the field can be absent — an older
+ * server, a partial response — and an absence is a claim nobody made. Reading a
+ * missing field as `can: false` invents a refusal; reading it as `can: true`
+ * invents a grant and offers an action that cannot work. The client's parse
+ * needs a `not-told` arm of its own. That is the sixteenth instance in
+ * docs/postmortems/260908b, and the one that keeps coming back.
+ */
+export type Capability = { can: true } | { can: false; why: string };
+
+/**
+ * The three questions worth asking of a harness, and why they are three rather
+ * than one.
+ *
+ * `steerWithProse` and `answerDialog` come apart, and not hypothetically: a
+ * Claude session sitting on a trust dialog can be sent `Down` then `Enter` at a
+ * moment when a sentence would be swallowed by that dialog, and the two were
+ * proven on different days by different means. Collapsing them into "can I talk
+ * to it" would have to pick one and would be wrong about the other.
+ *
+ * `watch` is here even though everything on this box can be watched, because a
+ * capability set in which nothing is ever true reads as a list of excuses. It
+ * is also the first arm a remote or cloud session would refuse.
+ */
+export type HarnessCapabilities = {
+  /** Free prose, delivered to be READ as a message rather than executed. */
+  steerWithProse: Capability;
+  /** A recognised dialog answered with an arrow key or a digit. */
+  answerDialog: Capability;
+  /** Reading the pane's screen and its process tree. */
+  watch: Capability;
+};
+
+/* ------------------------------------------------------------------ *
+ * Dictation: POST /api/transcribe.
+ * ------------------------------------------------------------------ */
+
+/**
+ * A recording, on its way to be turned into words.
+ *
+ * **`audio` is base64 of somebody talking in Greg's room**, which is a class of
+ * payload nothing else on this server handles. Three rules follow it everywhere
+ * it goes: it is never logged, its size is never logged either (a running tally
+ * of request sizes is a picture of when somebody was talking), and it is held
+ * for one request and then dropped.
+ *
+ * `format` is the container word, not a MIME type — `formatOf` in
+ * `src/dictation-limits.ts` maps one to the other in the browser, and the server
+ * checks the result against the same closed list. A wrong container is not a
+ * rejection, it is a transcript of noise.
+ */
+export type TranscribeRequest = {
+  audio: string;
+  format: string;
+  /**
+   * Which box this came from, so the vocabulary can be built for it.
+   *
+   * `session` names a tmux handle the snapshot already knows — the server looks
+   * it up rather than trusting it, so the worst a crafted value can do is miss.
+   * `new-session` is the box that starts an agent, which relates to no session
+   * yet and gets the fleet-wide list.
+   */
+  context: { kind: "session"; sessionId: string } | { kind: "new-session" };
+};
+
+/**
+ * What came back.
+ *
+ * **An empty `text` is a success**, not a failure: somebody who pressed the
+ * button and said nothing must have their box left exactly as it was rather
+ * than be told something went wrong.
+ *
+ * A failure is `{ error }` with the sentence in it, and the HTTP status carries
+ * whether a second identical request could work — read off the number rather
+ * than out of the prose, because the prose is freely rewritable and the branch
+ * is not.
+ */
+export type TranscribeResponse = { text: string };
+
+/* ------------------------------------------------------------------ *
  * The attention inbox. Produced by the Overseer, rendered by the page.
  *
  * The premise it corrects was measured on the live fleet 2026-09-08 and is

@@ -90,6 +90,7 @@ import { DictationButton, DictationStrip } from "./DictationStrip.js";
 import { LiveButton } from "./live/LiveButton.js";
 import { LiveStatus } from "./live/LiveStatus.js";
 import type { LiveApi } from "./live/useLiveConversation.js";
+import { sendForTranscription } from "./dictation-upload.js";
 import { useDictationField } from "./useDictationField.js";
 import { hostOf, isWebUrl } from "../urls.js";
 import { TooltipGroup } from "./Tooltip.js";
@@ -1914,6 +1915,7 @@ export function Composer({
     },
     box,
     context: { kind: "article", slug },
+    transcribe: sendForTranscription,
   });
 
   // A Live ticket can still be pending before Live claims the microphone.

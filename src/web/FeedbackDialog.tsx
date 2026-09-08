@@ -110,6 +110,7 @@ import { DictationButton, DictationStrip } from "./DictationStrip.js";
 import { collectFeedbackDiagnostics } from "./feedback-diagnostics.js";
 import { imageFileFromDrop, imageFileFromPaste, screenshotFromFile } from "./feedback-screenshot.js";
 import { apiFetch, failure } from "./lib/api.js";
+import { sendForTranscription } from "./dictation-upload.js";
 import { useDictationField } from "./useDictationField.js";
 import { useVisualViewport } from "./useVisualViewport.js";
 
@@ -612,6 +613,7 @@ export function FeedbackDialog({ open, onClose, where }: Props) {
     onChange: setBody,
     box,
     context: where.slug === null ? { kind: "profile" } : { kind: "article", slug: where.slug },
+    transcribe: sendForTranscription,
   });
 
   /**

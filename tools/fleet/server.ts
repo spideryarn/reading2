@@ -42,6 +42,7 @@ import { refreshOnce } from "./refresh.js";
 import { newSessionRoutes } from "./routes-new.js";
 import { renameRoute } from "./routes-rename.js";
 import { handleSteerRequest } from "./routes-steer.js";
+import { handleTranscribeRequest } from "./routes-transcribe.js";
 import { fleetState } from "./state.js";
 import { readRecentMessages } from "./transcript.js";
 
@@ -316,6 +317,25 @@ function handler(req: import("node:http").IncomingMessage, res: import("node:htt
   // Enacted actions are off by default (`FLEET_ACT_ENABLED=1`), so what is live
   // here today is the catalogue, the queue and the dry runs.
   if (handleActionRequest(req, res)) return;
+
+  // Dictation. The only route here that takes AUDIO, which is a class of
+  // payload nothing else on this server handles — so it is neither logged nor
+  // sized in a log, and it is held for one request. routes-transcribe.ts.
+  //
+  // The snapshot is passed as a FUNCTION rather than a value: it is replaced by
+  // the refresh loop, and a closure taken at startup would prime every
+  // dictation for whichever fleet existed when the server booted. The words
+  // Greg is about to say are the session names on the page in front of him now.
+  if (
+    handleTranscribeRequest(req, res, () =>
+      (snapshot?.rows ?? []).map((row) => ({
+        id: row.id,
+        title: row.title,
+        dir: row.meta.version === 1 ? row.meta.dir : null,
+      })),
+    )
+  )
+    return;
 
   // Renaming a session. A write, but a mild one — it changes a label, not a
   // conversation — and it is the one action here whose *second half* is the

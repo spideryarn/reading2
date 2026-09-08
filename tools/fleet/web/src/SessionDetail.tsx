@@ -93,9 +93,10 @@
  * intact. Nothing here renders a bare number: it renders a number wearing its
  * caveat, and `Explain` is how it wears it.
  */
-import { useCallback, useState, type ReactNode } from "react";
+import { useCallback, useRef, useState, type ReactNode } from "react";
 
 import { ActionOutcomeCard, SessionActions, SessionQueue } from "./ActionButtons";
+import { DictationControl, useFleetDictation } from "./DictationControl";
 import { PauseLine } from "./PauseLine";
 import { RecentMessages, useRecentMessages } from "./RecentMessages";
 import { Handles, LaunchMode, QuestionCard, StatusPill, Uptime } from "./SessionParts";
@@ -402,6 +403,18 @@ export function SessionDetail({
 }): ReactNode {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
+  /** The composer, so the dictation knows where the caret is. */
+  const box = useRef<HTMLTextAreaElement>(null);
+  /* **Named, so the vocabulary leads with this session's own words.** Somebody
+     dictating here is very often about to say the handle on the screen in front
+     of them, or the worktree it is working in — and the server promotes the
+     named session to the front of the term list for exactly that. */
+  const dictate = useFleetDictation({
+    value: text,
+    onChange: setText,
+    box,
+    context: { kind: "session", sessionId: row.id },
+  });
   const [outcome, setOutcome] = useState<SteerOutcome | null>(null);
   /**
    * The server's own sentence, once it has told us answering is switched off.
@@ -640,9 +653,14 @@ export function SessionDetail({
             </label>
             <textarea
               id="steer-text"
+              ref={box}
               value={text}
               rows={3}
               disabled={busy || unaddressable !== null}
+              /* `readOnly`, NOT `disabled`, for the ~2 seconds the transcript is
+                 in flight: `disabled` drops the selection, and the selection is
+                 the caret the words are about to be spliced at. */
+              readOnly={dictate.readOnly}
               onChange={(e) => setText(e.target.value)}
               placeholder="e.g. pull the latest dev and carry on"
               className="tw:w-full tw:rounded-md tw:border tw:border-rule tw:bg-panel tw:p-2 tw:text-[14px] tw:text-ink tw:disabled:opacity-50"
@@ -651,7 +669,20 @@ export function SessionDetail({
               {/* THE LABELS CARRY THE DIFFERENCE NOW, so the paragraph that
                   used to explain it is a tap on Queue. "Send" and "Queue it"
                   were two words that did not say which was slower. */}
-              <Button variant="loud" onClick={onSend} disabled={busy || text.trim() === "" || unaddressable !== null}>
+              {/* **`sendBlocked`, not `readOnly`** — they are not the same
+                  thing and the second is the one everybody forgets. `readOnly`
+                  is the two seconds AFTER the press to stop; `armed` is the
+                  microphone still being on. Guard only the first and Send now
+                  types the rough live guesses into a live agent's pane, or on
+                  Safari and Firefox types nothing that was said at all. And the
+                  button is disabled as well as guarded: a correct guard behind a
+                  lit button is a press that does nothing and says nothing, which
+                  is the worse half of the pair. */}
+              <Button
+                variant="loud"
+                onClick={onSend}
+                disabled={busy || text.trim() === "" || unaddressable !== null || dictate.sendBlocked}
+              >
                 {busy ? "Sending…" : "Send now"}
               </Button>
               {/* The second gesture, not a fallback for the first — and absent on
@@ -666,7 +697,10 @@ export function SessionDetail({
                   }}
                   placement="top"
                 >
-                  <Button onClick={() => void onQueue()} disabled={busy || text.trim() === "" || unaddressable !== null}>
+                  <Button
+                    onClick={() => void onQueue()}
+                    disabled={busy || text.trim() === "" || unaddressable !== null || dictate.sendBlocked}
+                  >
                     Queue (~73s)
                   </Button>
                 </Explain>
@@ -677,6 +711,15 @@ export function SessionDetail({
                   a two-line message arrives as two, the first half a sentence. */}
               <span className="tw:text-[12px] tw:text-ink-faint">One line — a newline would submit it early.</span>
             </div>
+            {/* On its own row rather than in with the send buttons: it grows a
+                status line, a level meter and sometimes a failure sentence, and
+                a control that changes width should not be pushing Send now
+                around under a thumb. */}
+            <DictationControl
+              dictation={dictate.dictation}
+              toggle={dictate.toggle}
+              className="tw:mt-1.5"
+            />
             {offerQueue ? null : (
               <p className="tw:mt-1 tw:text-[12px] tw:text-ink-faint">
                 It is at a prompt, so Send is all there is to do here. Queue comes back when it is working, or when

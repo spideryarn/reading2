@@ -15,13 +15,18 @@
  *    claim was retracted the same day — the socket accepts the connection and
  *    returns no error whether the token is right, wrong or absent, and nothing
  *    arrives. Nothing in this file may grow a second channel on it.
- *  - **A Codex batch job cannot receive a keystroke at all.** `scripts/subagent-cli.ts`
- *    spawns them with `fd 0 = 'ignore'`, which it calls "the load-bearing
- *    anti-hang guarantee". There is no degraded mode for those; there is a
- *    refusal.
- *  - **A bare shell would EXECUTE the text.** A steering message typed at a
- *    session the page mislabelled is a command line, and `rm` is a word people
- *    write in messages.
+ *  - **A Codex batch job cannot receive a keystroke at all**, and **a bare shell
+ *    would EXECUTE the text**. Both of those are now stated once, as data, in
+ *    `HARNESS_CAPABILITIES` in `tools/overseer/harness.ts` — which harness can
+ *    be sent prose, which can be sent a dialog answer, which can only be
+ *    watched, and the sentence to show a reader for every refusal. **That table
+ *    is the owner of those facts; this file must not restate them.** The
+ *    refusal `verifyTarget` returns for a non-Claude pane is still written out
+ *    inline below rather than read from the table — that wiring is deliberately
+ *    held until `fleet-approval-binding`'s restructure of this file lands, by
+ *    agreement with that session and with `claude-agents-dashboard`, because a
+ *    sentence swap is not worth a merge conflict in the middle of somebody
+ *    else's diff. Nothing behavioural is waiting on it.
  *
  * SO EVERY ENTRY POINT REFUSES RATHER THAN DEGRADES. Each returns
  * `{ok:true,…} | {ok:false, reason}`, never throws a refusal away, and never
