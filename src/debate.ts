@@ -148,9 +148,9 @@ import type {
   Debate,
   DebateCounts,
   DebateGroup,
+  DebateLean,
   DebateLosses,
   DebateRelation,
-  DebateValence,
   DirectDebateRow,
   IdentificationSignal,
   Meta,
@@ -176,9 +176,9 @@ export type {
   Debate,
   DebateCounts,
   DebateGroup,
+  DebateLean,
   DebateLosses,
   DebateRelation,
-  DebateValence,
   DirectDebateRow,
 };
 
@@ -320,20 +320,44 @@ export async function readDebate(dir: string): Promise<Debate | null> {
 
 /* ------------------------------------------------------------- the counters -- */
 
-const RELATIONS: ReadonlySet<string> = new Set<DebateRelation>([
-  "disputes",
-  "qualifies",
-  "extends",
-  "corroborates",
-  "unclear",
-]);
+/**
+ * **The answer vocabularies, total by construction.**
+ *
+ * These were `new Set<DebateRelation>([…])`, which constrains every element to
+ * be a member and never asks whether every member is present. Deleting
+ * `"extends"` from the list compiled clean and the whole suite stayed green —
+ * measured 2026-09-08, not reasoned about — and the consequence is silent:
+ * `parsePass` coerces anything the set does not hold to `unclear` / `cannot-tell`,
+ * so every `extends` row would have gone grey with nothing reporting a failure.
+ * That is the shape docs/reusable/silent-success.md is about, and the same one
+ * `lossesOf` (src/types.ts) was written to close for the loss reasons.
+ *
+ * A mapped type over the union is total: omit a member and it is a compile
+ * error at the object literal, before any test has to notice. The `Object.keys`
+ * round-trip is only to get a runtime set out of it — the type is the guard.
+ *
+ * The eval's `RELATION_KEYS` / `LEAN_KEYS` (evals/debate/score.ts) use the
+ * same shape deliberately, because an instrument that measures a vocabulary
+ * must not be able to disagree with the code that accepts it.
+ */
+const RELATION_MEMBERS: { [K in DebateRelation]: true } = {
+  disputes: true,
+  qualifies: true,
+  extends: true,
+  corroborates: true,
+  unclear: true,
+};
 
-const VALENCES: ReadonlySet<string> = new Set<DebateValence>([
-  "positive",
-  "negative",
-  "neutral",
-  "unknown",
-]);
+const LEAN_MEMBERS: { [K in DebateLean]: true } = {
+  "leans-for": true,
+  "leans-against": true,
+  neither: true,
+  "cannot-tell": true,
+};
+
+const RELATIONS: ReadonlySet<string> = new Set(Object.keys(RELATION_MEMBERS));
+
+const LEANS: ReadonlySet<string> = new Set(Object.keys(LEAN_MEMBERS));
 
 export function emptyLosses(): DebateLosses {
   return {
@@ -770,11 +794,19 @@ function readShared(row: Record<string, unknown>, opts: GroupInput): SharedVerdi
       ...(evidence.title ? { title: evidence.title } : {}),
       sourceQuote,
       /* Out-of-vocabulary answers become the values those vocabularies have for
-         "we cannot tell", rather than dropping the row: `unclear` and `unknown`
-         are correct answers and are drawn as calmly as the rest. A model that
-         cannot tell whether a page agrees should say so and be believed. */
+         "we cannot tell", rather than dropping the row: `unclear` and
+         `cannot-tell` are correct answers and are drawn as calmly as the rest. A
+         model that cannot tell whether a page agrees should say so and be
+         believed.
+
+         **This stays strict about the live wire on purpose.** A row arriving
+         today with the pre-2026-09-08 vocabulary is a prompt that has stopped
+         emitting what we asked for, and folding it in quietly is the exact
+         failure `vocabularyReport` exists to catch. Carrying the old vocabulary
+         forward is a job for the readers of *stored* rows — `readStoredLean` in
+         src/types.ts — not for this one. */
       relation: RELATIONS.has(str(row.relation)) ? (str(row.relation) as DebateRelation) : "unclear",
-      valence: VALENCES.has(str(row.valence)) ? (str(row.valence) as DebateValence) : "unknown",
+      lean: LEANS.has(str(row.lean)) ? (str(row.lean) as DebateLean) : "cannot-tell",
       applies,
       ...(limits === "" ? {} : { limits }),
     },
@@ -1053,18 +1085,39 @@ find drops the whole row — not the quote, the row — and retyping a phrase fr
 memory is the commonest way that happens. If the extract you were shown does not
 contain a sentence worth quoting, leave the page out.`;
 
-const READING = `"relation", "valence", "applies" and "limits" are YOUR READING of the passage
+const READING = `"relation", "lean", "applies" and "limits" are YOUR READING of the passage
 you quoted, and are shown to the reader as such.
 
-  relation  what the outside page does to the thing it is answering:
+  relation  what the QUOTED PASSAGE does to this row's target:
             disputes | qualifies | extends | corroborates | unclear
-  valence   which way the QUOTED PASSAGE leans toward this row's target:
-            positive | negative | neutral | unknown
+  lean      which way the QUOTED PASSAGE leans toward this row's target:
+            leans-for | leans-against | neither | cannot-tell
   applies   how the outside piece bears on that target, in a sentence or two
   limits    where it does NOT bear on it — OPTIONAL, and only where there is a
             real mismatch. Omit the row rather than invent a limitation.
 
-"unclear" and "unknown" are correct answers and are drawn as calmly as any
+THE ONE MISTAKE TO AVOID, AND IT IS AN EASY ONE
+
+"lean" is about THIS ROW'S TARGET and about nothing else. The trap is a passage
+that is ALSO about some other thing — a person, a product, a phenomenon, a
+field — where it is far easier to say how the passage feels about that thing
+than to work out which way it points at the target. Those two answers are
+often opposite.
+
+A page arguing that a popular supplement does nothing is unfavourable toward
+the supplement. But if this row's target is a claim that the trials found no
+effect, then that page LEANS FOR the target — it supports it. Answer "does
+this passage support or undercut the target?", never "how does this passage
+feel about its own subject?".
+
+"relation" and "lean" are about the same passage and the same target, but they
+ask different things: one names the argumentative move, the other says which
+way it points. They line up far more often than not, and that is expected. They
+come apart honestly when a passage takes issue with part of the target while
+backing the whole of it — "the stated 10% is wrong; it is at least 30%, which
+makes the warning stronger" disputes and leans-for, truthfully.
+
+"unclear" and "cannot-tell" are correct answers and are drawn as calmly as any
 other. If you cannot tell what a page is doing, say so.
 
 Write plainer than the article, never further from it: use the article's own
@@ -1107,6 +1160,10 @@ ${UNTRUSTED}
 
 ${READING}
 
+Here this row's target is THE ARTICLE ITSELF — the piece described above — so
+"relation" and "lean" are both about that article. Not the passage's tone, and
+not its stance toward some other subject the passage is also about.
+
 Prefer named authors and established venues where you have the choice. No
 ranking by prominence is applied to what you return, and the reader is told so.
 
@@ -1121,7 +1178,7 @@ Say nothing else. Answer with one fenced block and close it:
     "sourceQuote": "words copied from that page",
     "articleReferenceQuote": "words copied from that page in which it names this article",
     "relation": "disputes",
-    "valence": "negative",
+    "lean": "leans-against",
     "applies": "what it says about this article",
     "limits": "optional"
   }
@@ -1165,8 +1222,9 @@ ${UNTRUSTED}
 
 ${READING}
 
-Here "valence" is the quoted passage's stance toward THE CLAIM you quoted — not
-toward the article as a whole, and not its tone.
+Here this row's target is THE CLAIM YOU QUOTED, so "relation" and "lean" are
+both about that claim. Not the article as a whole, not the passage's tone, and
+not the passage's stance toward some other subject the passage is also about.
 
 Prefer named authors and established venues where you have the choice. No
 ranking by prominence is applied to what you return, and the reader is told so.
@@ -1183,7 +1241,7 @@ Say nothing else. Answer with one fenced block and close it:
     "claimQuote": "the article's own words for the claim",
     "sourceQuote": "words copied from the outside page",
     "relation": "qualifies",
-    "valence": "neutral",
+    "lean": "neither",
     "applies": "how it bears on that claim",
     "limits": "optional"
   }

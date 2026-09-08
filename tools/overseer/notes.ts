@@ -42,8 +42,10 @@
  *
  * Nothing here talks to the network and nothing at module scope does anything.
  */
-import { closeSync, existsSync, fstatSync, ftruncateSync, openSync, readFileSync, readSync, writeSync } from "node:fs";
+import { closeSync, existsSync, openSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+
+import { truncateToLastLine, writeAll, type JsonlRepair } from "./jsonl.js";
 
 /** Beside `events.jsonl` and `current.json`, in the same store root. */
 export const NOTES_FILE = "daemon.jsonl";
@@ -224,11 +226,9 @@ export function describeNote(note: DaemonNote): string {
   }
 }
 
-export type NoteRepair = { torn: false } | { torn: true; droppedBytes: number };
-
 export type NoteLog = {
   readonly path: string;
-  readonly repair: NoteRepair;
+  readonly repair: JsonlRepair;
   append(note: DaemonNote): void;
   close(): void;
 };
@@ -243,17 +243,16 @@ export type NoteLog = {
  * append later, the malformed record is no longer the final line — a reader
  * that only forgives the LAST line then loses a good note too. Same reasoning,
  * same fix, and the same test as `store.ts`'s event log, which is the file this
- * one sits beside. (It is also the same twenty lines: `store.ts` keeps its
- * `repairEventLog` private, so this is a duplicate of a subtle rule rather than
- * a reuse of one. Reported as a finding rather than fixed here, since that file
- * is landed and under review.)
+ * one sits beside — and now literally the same code: `jsonl.ts`, which is where
+ * the reasoning lives and where the three ways these two copies had already
+ * drifted apart are written down.
  *
  * No lock. The daemon holds the store's lock for its whole life and is the only
  * writer of this file; a second daemon never gets far enough to open it.
  */
 export function openNoteLog(root: string): NoteLog {
   const path = join(root, NOTES_FILE);
-  const repair = truncateToLastNewline(path);
+  const repair = truncateToLastLine(path);
   const fd = openSync(path, "a");
   let closed = false;
   return {
@@ -262,11 +261,10 @@ export function openNoteLog(root: string): NoteLog {
     append(note) {
       if (closed) throw new Error("this note log is closed");
       // ONE WRITE, on an O_APPEND fd, so a note lands whole at the end whatever
-      // else is happening — the same discipline as `store.ts`'s `writeAll`.
-      const text = `${JSON.stringify(note)}\n`;
-      const buffer = Buffer.from(text, "utf8");
-      let written = 0;
-      while (written < buffer.length) written += writeSync(fd, buffer, written, buffer.length - written);
+      // else is happening. `writeAll` rather than a bare loop: this used to be a
+      // hand-rolled copy that never checked the count was positive, which is an
+      // infinite loop inside the daemon on the rare case the loop exists for.
+      writeAll(fd, `${JSON.stringify(note)}\n`);
     },
     close() {
       if (closed) return;
@@ -274,44 +272,6 @@ export function openNoteLog(root: string): NoteLog {
       closeSync(fd);
     },
   };
-}
-
-/**
- * Cut the file back to its last complete line, on disk.
- *
- * Scans backwards in chunks: this runs at every start and the file only grows.
- * A file with no newline at all truncates to empty, because a single torn line
- * has nothing in it to keep.
- */
-function truncateToLastNewline(path: string): NoteRepair {
-  if (!existsSync(path)) return { torn: false };
-  const fd = openSync(path, "r+");
-  try {
-    const size = fstatSync(fd).size;
-    if (size === 0) return { torn: false };
-    const buffer = Buffer.alloc(1);
-    readSync(fd, buffer, 0, 1, size - 1);
-    if (buffer[0] === 0x0a) return { torn: false };
-
-    const CHUNK = 64 * 1024;
-    let end = size;
-    let keep = 0;
-    while (end > 0) {
-      const start = Math.max(0, end - CHUNK);
-      const chunk = Buffer.alloc(end - start);
-      readSync(fd, chunk, 0, chunk.length, start);
-      const at = chunk.lastIndexOf(0x0a);
-      if (at !== -1) {
-        keep = start + at + 1;
-        break;
-      }
-      end = start;
-    }
-    ftruncateSync(fd, keep);
-    return { torn: true, droppedBytes: size - keep };
-  } finally {
-    closeSync(fd);
-  }
 }
 
 /**

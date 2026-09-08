@@ -46,6 +46,12 @@ function session(over: Partial<Session> = {}): Session {
     windows: 1,
     title: "",
     provisional: false,
+    /* Its own id, not the shared `1111…` one. That belongs to `db-schema.test.ts`,
+       which inserts a row under it — and vitest runs files in parallel against one
+       database, so whichever tore down first would delete the other's fixture.
+       Nothing here inserts anything; this is an in-memory `Session` and the value
+       is opaque. `tests/fixture-ids.test.ts` is what noticed, on two branches at
+       once: dev picked this value and a worktree picked another, within an hour. */
     claudeId: "f1ee7000-0000-4000-8000-000000000001",
     proc: { kind: "claude" },
     meta: { version: 1, kind: "claude", repo: "spideryarn/reading2", dir: "/home/greg/code/spideryarn2" },

@@ -55,11 +55,10 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { readAttemptClock } from "../fleet/state.js";
 import { admissible, type AdmissibleSnapshot } from "./admissible.js";
 import { baselineOf, diff, sessionKey, type Baseline, type OverseerEvent, type SessionIdentity } from "./diff.js";
 import { conditionTracker, describeNote, openNoteLog, type DaemonNote } from "./notes.js";
-import { parseObservation, type JsonValue, type ObservedRow } from "./observation.js";
+import { parseAttempt, parseObservation, type JsonValue, type ObservedAttemptClock, type ObservedRow } from "./observation.js";
 import { fleetSource, type SourceMessage, type SourceOptions, type Transport } from "./source.js";
 import {
   describeOpening,
@@ -173,72 +172,40 @@ export function freshness(input: FreshnessInput): Freshness {
   };
 }
 
-/**
- * When the producer last STARTED a collection, as this daemon needs it.
- *
- * **The inference is not made here.** `readAttemptClock` in
- * `tools/fleet/state.ts` owns it, and the reason it owns it is worth keeping:
- * `attemptedAt` is written BEFORE each attempt, so on any producer that reports
- * it a non-null `collectedAt` implies a non-null attempt clock — a collection
- * cannot have succeeded without having been started. So a payload with data and
- * no attempt clock is provably a producer that does not REPORT trying, rather
- * than one that never tried. That is a consequence of the field's write
- * ordering, not a convention two agents agreed on, which is why it lives in one
- * shared function instead of being re-derived here. **Do not re-derive it.**
- *
- * The field was added on 2026-09-08 without a schema bump — correctly, by the
- * producer's own rule — so an older server simply does not send it, and
- * `not-reported` is a live case rather than a hypothetical: `:8787` was emitting
- * exactly that shape while this was written.
- *
- * Read off the raw payload because `parseObservation` does not carry the field
- * yet. That is the one place in this daemon that touches the raw JSON, and the
- * real fix is for `observation.ts` to parse it — reported as a finding rather
- * than made here, since that file is landed and under review.
- */
-export type Attempt =
-  | { known: false; why: string }
-  | { known: true; attemptedAt: null }
-  | { known: true; attemptedAt: string; atMs: number };
-
-export function readAttempt(json: unknown): Attempt {
-  if (typeof json !== "object" || json === null || Array.isArray(json)) {
-    return { known: false, why: "the payload is not an object" };
-  }
-  const record = json as Record<string, unknown>;
-  const clock = readAttemptClock({
-    attemptedAt: stringOrNull(record["attemptedAt"]),
-    collectedAt: stringOrNull(record["collectedAt"]),
-  });
-  switch (clock.kind) {
-    case "attempted": {
-      const atMs = Date.parse(clock.at);
-      // A non-empty string that is not a date is the producer being wrong about
-      // its own field, which is a "cannot tell" rather than a moment.
-      if (!Number.isFinite(atMs)) return { known: false, why: `attemptedAt is ${JSON.stringify(clock.at)}, which is not a timestamp` };
-      return { known: true, attemptedAt: clock.at, atMs };
-    }
-    case "never-attempted":
-      // Also the both-absent case, merged on purpose upstream: no data has
-      // arrived either way, and the action is the same.
-      return { known: true, attemptedAt: null };
-    case "not-reported":
-      return { known: false, why: clock.why };
-    default: {
-      const never: never = clock;
-      throw new Error(String(never));
-    }
-  }
-}
-
-function stringOrNull(u: unknown): string | null {
-  return typeof u === "string" ? u : null;
-}
-
 export type CollectorVerdict =
   | { kind: "cannot-tell"; why: string }
   | { kind: "collecting"; sinceAttemptMs: number }
   | { kind: "stopped"; sinceAttemptMs: number; why: string };
+
+/**
+ * The newest READING of the attempt clock, which is not the newest TIMESTAMP.
+ *
+ * MAKING A TYPE HONEST DOES NOTHING IF THE CONSUMER FLATTENS IT BACK. The whole
+ * point of `ObservedAttemptClock`'s third arm is that "this payload cannot say"
+ * is a different answer from "it has not attempted" — and the daemon used to
+ * keep only `lastAttemptAtMs: number | null`, moved on a positive reading and
+ * untouched by any other. So a producer that STOPPED reporting the field — a
+ * dashboard rolled back to a build from before it existed, or one that started
+ * emitting a malformed value — left the last good timestamp standing as current
+ * evidence, and five minutes later the watchdog measured its age and called a
+ * healthy collector stopped. A reading that could not be taken was being
+ * answered with an older reading that could: this codebase's recurring shape,
+ * one layer above where `parseAttempt` had just fixed it.
+ *
+ * So the daemon holds the reading, and this is the fold that keeps the newest
+ * one. `null` means no payload has said anything yet.
+ *
+ * THE ONLY THING THAT SURVIVES A NEWER READING IS AN OLDER POSITIVE ONE WITH A
+ * LATER INSTANT, which is the out-of-order guard the `Math.max` used to be: a
+ * reconnect can replay a payload the daemon has already seen, and the collector
+ * has not gone backwards in time because the transport did.
+ */
+export function latestAttempt(held: ObservedAttemptClock | null, next: ObservedAttemptClock): ObservedAttemptClock {
+  if (held === null) return next;
+  if (!held.reported || !held.attempted) return next;
+  if (next.reported && next.attempted && next.atMs < held.atMs) return held;
+  return next;
+}
 
 /**
  * Is the dashboard's collector still trying?
@@ -270,8 +237,12 @@ export type CollectorVerdict =
  * two guessed ones.
  */
 export function collectorVerdict(input: {
-  /** The newest `attemptedAt` any payload has carried, or null if none has. */
-  lastAttemptAtMs: number | null;
+  /**
+   * The LATEST reading, not the latest positive one — see `latestAttempt`. A
+   * `number | null` here is what let a stale timestamp answer a question the
+   * current payload had already declined to answer.
+   */
+  attempt: ObservedAttemptClock | null;
   /** When the last payload of any kind arrived, by OUR clock. */
   lastPayloadAtMs: number | null;
   nowMs: number;
@@ -281,10 +252,28 @@ export function collectorVerdict(input: {
   if (input.lastPayloadAtMs === null || input.nowMs - input.lastPayloadAtMs > deadlineMs) {
     return { kind: "cannot-tell", why: "nothing has arrived from the dashboard recently, so its collector cannot be asked about" };
   }
-  if (input.lastAttemptAtMs === null) {
+  const attempt = input.attempt;
+  if (attempt === null) {
     return { kind: "cannot-tell", why: "no payload has carried an attemptedAt, so this producer cannot say" };
   }
-  const sinceAttemptMs = input.nowMs - input.lastAttemptAtMs;
+  if (!attempt.reported) {
+    // GOING BLIND IS NOT THE SAME AS GOING QUIET, and the temptation runs both
+    // ways. Reporting `stopped` here would be the original bug mirrored — an
+    // alarm about a collector we simply cannot see. Reporting `collecting`
+    // would be worse: a restoration that clears a real alarm the moment the
+    // producer's clock became unreadable. `cannot-tell` is neither, so an open
+    // condition stays open and a closed one stays closed until a reading
+    // arrives that can actually answer.
+    return { kind: "cannot-tell", why: `the latest payload cannot say whether its collector is trying: ${attempt.why}` };
+  }
+  if (!attempt.attempted) {
+    // The producer answered, and its answer is that it has never STARTED a
+    // collection. That is not a wedged collector — the freshness watchdog is
+    // what reports a dashboard that has never given us one, and a second alarm
+    // here would be two names for the same outage.
+    return { kind: "cannot-tell", why: "the dashboard reports that it has never started a collection" };
+  }
+  const sinceAttemptMs = input.nowMs - attempt.atMs;
   if (sinceAttemptMs <= deadlineMs) return { kind: "collecting", sinceAttemptMs };
   return {
     kind: "stopped",
@@ -416,7 +405,7 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
   // What the producer has told us about its own collector, from every payload
   // — accepted, duplicate or rejected alike. A wedged collector serves the same
   // cached body for ever, so DUPLICATES are where this is learned.
-  let lastAttemptAtMs: number | null = null;
+  let attemptReading: ObservedAttemptClock | null = null;
   let lastPayloadAtMs: number | null = null;
 
   const checkFreshness = (): void => {
@@ -429,7 +418,7 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
       write(conditions.degrade("freshness", at.toISOString(), verdict.why));
     }
 
-    const collector = collectorVerdict({ lastAttemptAtMs, lastPayloadAtMs, nowMs, refreshMs });
+    const collector = collectorVerdict({ attempt: attemptReading, lastPayloadAtMs, nowMs, refreshMs });
     switch (collector.kind) {
       case "stopped":
         write(conditions.degrade("collector", at.toISOString(), collector.why));
@@ -527,16 +516,24 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
    * daemon in one process would share it.
    */
   function take(json: unknown, via: Transport, at: string): boolean {
+    lastPayloadAtMs = now().getTime();
+    const parsed = parseObservation(json);
     // BEFORE THE GATE, and from every payload including the ones it refuses: a
     // failing collector keeps attempting while its snapshots are rejected, and
-    // that pair is precisely what tells a failing source from a stopped one.
-    lastPayloadAtMs = now().getTime();
-    const attempt = readAttempt(json);
-    if (attempt.known && attempt.attemptedAt !== null) {
-      lastAttemptAtMs = Math.max(lastAttemptAtMs ?? attempt.atMs, attempt.atMs);
-    }
+    // that pair is precisely what tells a failing source from a stopped one. So
+    // the reading has to survive a payload with no snapshot in it — hence the
+    // fallback, which is the SAME function `parseObservation` fills the field
+    // with rather than a looser second reading of it. Without it, a dashboard
+    // whose rows this version refuses would be reported as a stopped collector,
+    // which is a fault it does not have.
+    const attempt = parsed.ok ? parsed.value.attempt : parseAttempt(json);
+    // EVERY READING, NOT ONLY THE ONES THAT CARRY A TIMESTAMP. A payload that
+    // cannot answer RETIRES the last one that could, because the alternative is
+    // measuring the age of a reading the producer has stopped taking — see
+    // `latestAttempt`.
+    attemptReading = latestAttempt(attemptReading, attempt);
 
-    const verdict = admissible(accepted, parseObservation(json));
+    const verdict = admissible(accepted, parsed);
     switch (verdict.verdict) {
       case "reject":
         write(conditions.degrade("snapshots", at, verdict.reason));
@@ -620,8 +617,8 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     //     matches it exactly. Nothing repeats and nothing is lost.
     //   died during 3 — `writeAtomically` renames, so a reader sees the old
     //     checkpoint or the new one, never half. That is the previous case.
-    //   died during 1 — the log's last line may be torn. `repairEventLog`
-    //     truncates to the last complete newline before the next append, so the
+    //   died during 1 — the log's last line may be torn. `truncateToLastLine`
+    //     (jsonl.ts) cuts back to the last complete newline before the next append, so the
     //     partial event is dropped and the baseline file, being older, causes it
     //     to be re-derived.
     //

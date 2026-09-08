@@ -76,7 +76,10 @@ import {
   type Speaker,
   type Step,
 } from "./actions.js";
+import type { FleetSnapshot } from "./collect.js";
+import { createDrainCursor, drainOnce, type DrainResult } from "./drain.js";
 import {
+  deliveryGate,
   drainGate,
   SteeringQueue,
   type DrainGate,
@@ -88,6 +91,7 @@ import {
   checkOrigin,
   createRateLimiter,
   MAX_BODY_BYTES,
+  parseSpeaker,
   parseStatus,
   parseTarget,
   readBody,
@@ -247,11 +251,26 @@ export const ACTION_ERROR_STATUS: Record<ActionErrorCode, number> = {
 };
 
 /** What a queued item looks like on the wire, with the queue's own staleness rule applied. */
-export type QueuedItemView = QueuedItem & { stale: boolean };
+/**
+ * One item as the page reads it, with the two judgments only the queue can make.
+ *
+ * `stale` and `stuck` are both the QUEUE's rules asked rather than recomputed
+ * (`isStale`, `isStuck`), because both are comparisons against limits the page
+ * has never been told, and a page that guessed either would draw a recovery
+ * button a moment before or after the server would honour it.
+ */
+export type QueuedItemView = QueuedItem & { stale: boolean; stuck: boolean };
 
 export type QueueView = {
   sessionId: string;
   items: QueuedItemView[];
+  /**
+   * How many of `items` could still reach a pane — `SteeringQueue.isDeliverable`
+   * counted, which is neither `items.length` nor `items.length` minus the
+   * obvious ones. The page uses it to decide whether anything is genuinely
+   * ahead of a new message; see the comment on the field's producer.
+   */
+  deliverable: number;
   volatile: true;
   warning: string;
   since: number;
@@ -311,10 +330,23 @@ export type ActionResponse =
   | { ok: true; op: "catalogue"; schema: 1; actions: { session: readonly Action[]; box: readonly Action[] }; queues: QueueView[]; acting: { enabled: boolean; why: string }; now: number }
   | { ok: true; op: "enqueued"; item: QueuedItem; position: number; gate: DrainGate }
   | { ok: true; op: "cancelled"; item: QueuedItem }
-  | { ok: true; op: "dry-run"; action: ActionId; steps: readonly Step[]; candidates?: KillCandidate[]; scanned?: number; unreadable?: number }
-  | { ok: true; op: "ran"; action: ActionId; run: PlanRun; killed?: number[]; skipped?: { pid: number; why: string }[] }
-  | { ok: true; op: "broadcast-preview"; action: ActionId; total: number; recipients: BroadcastOutcome[]; sample: string | null }
-  | { ok: true; op: "broadcast"; action: ActionId; total: number; recipients: BroadcastOutcome[] }
+  /** A stale item's clock reset, so the next pass may deliver it. */
+  | { ok: true; op: "revived"; item: QueuedItem }
+  /** A lease nobody settled, cleared by a person. It is NOT a claim that nothing was sent. */
+  | { ok: true; op: "abandoned"; item: QueuedItem }
+  /*
+   * THE FOUR ARMS THAT DESCRIBE AN EFFECT, and they agree on two field names.
+   *
+   * `dryRun` says whether it really happened and `result` holds what happened
+   * or would happen; nothing else is at the top level. The page reads exactly
+   * those two — see § What a box action answers, above `boxRoute`, for the day
+   * these arms each invented their own names and the confirmation in front of
+   * `kill-test-suites` rendered the word "null" for it.
+   */
+  | { ok: true; op: "dry-run"; action: ActionId; dryRun: true; result: { steps: readonly Step[]; candidates?: KillCandidate[]; scanned?: number; unreadable?: number } }
+  | { ok: true; op: "ran"; action: ActionId; dryRun: false; result: { run: PlanRun; killed?: number[]; skipped?: { pid: number; why: string }[] } }
+  | { ok: true; op: "broadcast-preview"; action: ActionId; dryRun: true; result: { total: number; recipients: BroadcastOutcome[]; sample: string | null } }
+  | { ok: true; op: "broadcast"; action: ActionId; dryRun: false; result: { total: number; recipients: BroadcastOutcome[] } }
   | {
       ok: false;
       code: ActionErrorCode;
@@ -356,28 +388,24 @@ export function parseMode(v: unknown, fallback: ActionMode): Parsed<ActionMode> 
   return bad(`mode must be 'enqueue', 'dry-run' or 'run', not ${JSON.stringify(v)}`);
 }
 
-/**
- * Who is speaking, defaulting to the WEAKER claim.
- *
- * `overseer` rather than `greg` when the field is missing, and the asymmetry is
- * the point: a coordinator that forgets to say who it is gets the prefix that
- * says "weigh this as a peer's suggestion", and a caller that wants Greg's
- * authority has to ask for it in as many words. The other default would let a
- * model mint its own approval by omission — A12 in actions.ts's own header.
- */
-export function parseSpeaker(v: unknown): Parsed<Speaker> {
-  if (v === undefined || v === null) return { ok: true, value: "overseer" };
-  const s = asString(v);
-  if (s === "greg" || s === "overseer") return { ok: true, value: s };
-  return bad(`speaker must be 'greg' or 'overseer', not ${JSON.stringify(v)}`);
-}
-
 export type SessionActionRequest = {
   target: SteerTarget;
   declaredStatus: FleetStatus;
   what: { kind: "action"; action: Action } | { kind: "message"; text: string };
   mode: ActionMode;
   confirm: boolean;
+  /**
+   * WHO IS SPEAKING, on the path that carries almost every message.
+   *
+   * `BoxActionRequest` has had this since it was written and the broadcast
+   * route renders with it; this one did not, so the attribution rule reached
+   * every fleet-wide broadcast — the rarest thing the tool does — and no
+   * single-session instruction at all, which is the one a person taps, the one
+   * the queue drains, and the one an automated coordinator will use. It is
+   * parsed by the SAME `parseSpeaker`, so there is one answer to "what does
+   * silence mean" rather than two that can drift.
+   */
+  speaker: Speaker;
   /** For `remove-worktree`. The row's own directory and branch, as shown. */
   worktreeDir: string | null;
   branch: string | null;
@@ -421,6 +449,8 @@ export function parseSessionBody(raw: unknown): Parsed<SessionActionRequest> {
 
   const mode = parseMode(o.mode, "enqueue");
   if (!mode.ok) return mode;
+  const speaker = parseSpeaker(o.speaker);
+  if (!speaker.ok) return speaker;
   const confirm = o.confirm === true;
   const worktreeDir = asString(o.worktreeDir);
   const branch = asString(o.branch);
@@ -428,7 +458,7 @@ export function parseSessionBody(raw: unknown): Parsed<SessionActionRequest> {
 
   return {
     ok: true,
-    value: { target: target.value, declaredStatus, what, mode: mode.value, confirm, worktreeDir, branch, sessionName },
+    value: { target: target.value, declaredStatus, what, mode: mode.value, confirm, speaker: speaker.value, worktreeDir, branch, sessionName },
   };
 }
 
@@ -915,6 +945,15 @@ export function realActionDeps(): ActionDeps {
 export type ActionRoutes = {
   /** True when this request was ours — mounted the way `serveStatic` is. */
   handle(req: IncomingMessage, res: ServerResponse): boolean;
+  /**
+   * One delivery pass over a fresh snapshot, at most one item per session.
+   *
+   * ON THE ROUTES OBJECT RATHER THAN BESIDE IT, so that draining and filling
+   * are the same object's two halves. `deps.queue` is private to this closure,
+   * and that is the point: there is no way to reach the drain without the queue
+   * the routes filled, because there is no second constructor to call.
+   */
+  drain(snapshot: FleetSnapshot): DrainResult;
 };
 
 function respond(res: ServerResponse, status: number, body: ActionResponse, extra: Record<string, string> = {}): void {
@@ -955,6 +994,11 @@ const ENQUEUE_CODE: Record<EnqueueRefusalRule, ActionErrorCode> = {
   "bad-text": "bad-request",
   "no-such-action": "no-such-action",
   "wrong-scope": "wrong-scope",
+  // `wrong-mode` rather than `queue-refused`, because that is precisely what it
+  // is: the action is fine and enqueueing is the wrong thing to do with it. The
+  // page can then offer the dry run, which is the alternative the queue's own
+  // sentence names.
+  "enacted-not-deliverable": "wrong-mode",
   "session-queue-full": "queue-refused",
   "fleet-queue-full": "queue-refused",
   "double-tap": "queue-refused",
@@ -972,16 +1016,31 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
   const deps: ActionDeps = { ...realActionDeps(), ...overrides };
   /** When the fleet was last told to ease off. Server-lifetime, like the queue. */
   let lastBroadcastAt: number | null = null;
+  /**
+   * WHERE THE NEXT DRAIN PASS STARTS. Server-lifetime state, built here rather
+   * than inside `drainOnce` for the reason on `DrainCursor`: the drain is a
+   * pure function of its inputs, and the one thing it has to remember between
+   * passes belongs beside the queue it rotates over. There is one of these per
+   * `ActionRoutes`, so it cannot be shared between two tests any more than the
+   * queue can.
+   */
+  const drainCursor = createDrainCursor();
 
   /* ---------------- GET /api/actions ---------------- */
 
   function catalogue(res: ServerResponse): void {
     const queues: QueueView[] = deps.queue.snapshots().map((s) => ({
       sessionId: s.sessionId,
-      // `stale` is the QUEUE's rule, asked rather than recomputed. A page that
-      // decided staleness for itself would be a second opinion about when an
-      // instruction is too old to deliver, and the two would drift.
-      items: s.items.map((i) => ({ ...i, stale: deps.queue.isStale(i) })),
+      // `stale` and `stuck` are the QUEUE's rules, asked rather than
+      // recomputed. A page that decided staleness for itself would be a second
+      // opinion about when an instruction is too old to deliver, and the two
+      // would drift.
+      items: s.items.map((i) => ({ ...i, stale: deps.queue.isStale(i), stuck: deps.queue.isStuck(i) })),
+      // AND SO IS THIS. The page asks "is anything already ahead of the message
+      // I am about to queue" before it offers Queue on an idle session, and
+      // `items.length` is the wrong answer to that question: an invalidated or
+      // stale item is in the list and is ahead of nothing.
+      deliverable: deps.queue.deliverableCount(s.sessionId),
       volatile: true,
       warning: s.warning,
       since: s.since,
@@ -1058,7 +1117,7 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
     const shape = r.what.kind === "action" ? `action=${r.what.action.id}` : `chars=${r.what.text.length}`;
     deps.log(
       `action session: pane=${target.paneId} session=${target.sessionId} claude=${target.claudeSessionId} ` +
-        `declared=${r.declaredStatus.kind} mode=${r.mode} ${shape}`,
+        `declared=${r.declaredStatus.kind} mode=${r.mode} speaker=${r.speaker} ${shape}`,
     );
 
     if (r.what.kind === "action" && r.what.action.scope !== "session") {
@@ -1099,7 +1158,7 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
     }
 
     if (r.mode === "dry-run") {
-      respond(res, 200, { ok: true, op: "dry-run", action: action.id, steps: built.plan.steps });
+      respond(res, 200, { ok: true, op: "dry-run", action: action.id, dryRun: true, result: { steps: built.plan.steps } });
       return;
     }
 
@@ -1141,7 +1200,7 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
       refuse(res, "plan-failed", `step ${(run.stoppedAt ?? 0) + 1} did not pass its gate: ${stopped?.verdict ?? "unknown"}`, run);
       return;
     }
-    respond(res, 200, { ok: true, op: "ran", action: action.id, run });
+    respond(res, 200, { ok: true, op: "ran", action: action.id, dryRun: false, result: { run } });
   }
 
   async function enqueue(r: SessionActionRequest, res: ServerResponse): Promise<void> {
@@ -1166,7 +1225,8 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
     }
 
     const t = { sessionId: r.target.sessionId, claudeSessionId: r.target.claudeSessionId };
-    const result: EnqueueResult = r.what.kind === "action" ? deps.queue.enqueueAction(t, r.what.action.id) : deps.queue.enqueueMessage(t, r.what.text);
+    const result: EnqueueResult =
+      r.what.kind === "action" ? deps.queue.enqueueAction(t, r.what.action.id, r.speaker) : deps.queue.enqueueMessage(t, r.what.text, r.speaker);
     if (!result.ok) {
       deps.log(`action session: refused code=${ENQUEUE_CODE[result.rule]} rule=${result.rule}`);
       refuse(res, ENQUEUE_CODE[result.rule], result.why);
@@ -1176,8 +1236,17 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
     // refused request must not push the person's own next legitimate press
     // further away.
     deps.limiter.record(r.target.sessionId, deps.now());
-    deps.log(`action session: QUEUED id=${result.item.id} session=${r.target.sessionId} position=${result.position} gate=${gate.kind}`);
-    respond(res, 200, { ok: true, op: "enqueued", item: result.item, position: result.position, gate });
+    // THE GATE WE REPORT IS THE DELIVERY ONE, and it is not the one we refused
+    // on. The refusal above is "could this session ever be typed into"; this
+    // field answers the different question the page asks — "does this go now or
+    // wait" — and the two differ on `needs-you`, where the drain holds an item
+    // until the dialog has been dealt with. Reporting `now` there would promise
+    // a delivery that the very next pass declines to make.
+    const willGo = deliveryGate(r.declaredStatus);
+    deps.log(
+      `action session: QUEUED id=${result.item.id} session=${r.target.sessionId} speaker=${r.speaker} position=${result.position} gate=${willGo.kind}`,
+    );
+    respond(res, 200, { ok: true, op: "enqueued", item: result.item, position: result.position, gate: willGo });
   }
 
   /* ---------------- POST/DELETE /api/actions/cancel ---------------- */
@@ -1208,8 +1277,135 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
     respond(res, 200, { ok: true, op: "cancelled", item: result.item });
   }
 
+  /* ---------------- POST /api/actions/revive ---------------- */
+
+  /**
+   * Re-arm an item that has waited past `maxAgeMs`.
+   *
+   * **THE ROUTE EXISTS BECAUSE THE QUEUE'S ANSWER OTHERWISE HAS NO LISTENER.**
+   * `next()` refuses a stale item and says *"re-arm it if it is still what you
+   * want"*; `revive()` was written for exactly that and nothing reached it, so
+   * the page drew an item under copy promising delivery that no pass would ever
+   * make — this stage's own bug in a state nobody had looked at (GPT Sol's D2).
+   *
+   * Deliberately a person's gesture rather than something `next()` does: the
+   * point of staleness is that somebody looks at an old instruction again
+   * before it lands in a conversation that has moved on.
+   *
+   * Written like `cancelRoute` in every respect that is a rule — the same body,
+   * the same origin check inside `parsedBody`, the same two failure codes
+   * classified off the snapshot so the SENTENCE stays the queue's.
+   */
+  async function reviveRoute(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    const parsed = await parsedBody(req, res, MAX_BODY_BYTES);
+    if (parsed === null) return;
+    // The same two fields, so the same parser. A second one would be a second
+    // place for `sessionId` to stop being checked.
+    const body = parseCancelBody(parsed);
+    if (!body.ok) {
+      refuse(res, "bad-request", body.why);
+      return;
+    }
+    const { sessionId, itemId } = body.value;
+    const result = deps.queue.revive(sessionId, itemId);
+    if (!result.ok) {
+      const present = deps.queue.snapshot(sessionId).items.some((i) => i.id === itemId);
+      const code: ActionErrorCode = present ? "in-flight" : "no-such-item";
+      deps.log(`action revive: refused code=${code} session=${sessionId} item=${itemId}`);
+      refuse(res, code, result.why);
+      return;
+    }
+    deps.log(`action revive: RE-ARMED id=${itemId} session=${sessionId}`);
+    respond(res, 200, { ok: true, op: "revived", item: result.item });
+  }
+
+  /* ---------------- POST /api/actions/abandon ---------------- */
+
+  /**
+   * Clear a lease nobody settled, so the rest of that session's queue can move.
+   *
+   * **IT IS NOT A CLAIM THAT NOTHING WAS SENT, AND THE COPY MUST NOT MAKE ONE.**
+   * `drain.ts` leaves the lease open when `sendMessage` throws precisely because
+   * nothing can tell a request that died before the keystrokes from one that
+   * died after; the message may be in that agent's input box already. This route
+   * is the missing half of that design — *"a person decides"* had no way for a
+   * person to decide, so one thrown send wedged that session's queue for ever
+   * (GPT Sol's D4). `settle(…, "abandoned")` is the queue's own word for it.
+   *
+   * **THE IN-FLIGHT/STUCK LINE IS `queue.isStuck`, NOT A COMPARISON HERE.** The
+   * queue owns `leaseMs`; a second copy of the rule in this file would let the
+   * page offer the button a moment before `next()` would agree, and abandoning a
+   * send that is still going out is the one thing the open lease prevents.
+   */
+  async function abandonRoute(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    const parsed = await parsedBody(req, res, MAX_BODY_BYTES);
+    if (parsed === null) return;
+    const body = parseCancelBody(parsed);
+    if (!body.ok) {
+      refuse(res, "bad-request", body.why);
+      return;
+    }
+    const { sessionId, itemId } = body.value;
+    const item = deps.queue.snapshot(sessionId).items.find((i) => i.id === itemId);
+    if (!item) {
+      deps.log(`action abandon: refused code=no-such-item session=${sessionId} item=${itemId}`);
+      refuse(res, "no-such-item", `no queued item ${itemId} for ${sessionId}`);
+      return;
+    }
+    if (item.leasedAt === null) {
+      // Nothing was ever handed out, so there is no lease to clear and no
+      // ambiguity to resolve. The gesture that fits is named, because a refusal
+      // that does not say what to press instead is a dead end.
+      deps.log(`action abandon: refused code=bad-request session=${sessionId} item=${itemId}`);
+      refuse(res, "bad-request", `${itemId} has not been handed out to anything, so there is no delivery to abandon — cancel it instead`);
+      return;
+    }
+    if (!deps.queue.isStuck(item)) {
+      deps.log(`action abandon: refused code=in-flight session=${sessionId} item=${itemId}`);
+      refuse(res, "in-flight", `${itemId} was handed out a moment ago and may still be going out; abandoning it now could clear a lease while the keystrokes are on their way`);
+      return;
+    }
+    const result = deps.queue.settle(sessionId, itemId, "abandoned");
+    if (!result.ok) {
+      // Only reachable if the queue changed under us, which it cannot today —
+      // this handler never yields between the read and the write.
+      deps.log(`action abandon: refused code=no-such-item session=${sessionId} item=${itemId}`);
+      refuse(res, "no-such-item", result.why);
+      return;
+    }
+    deps.log(`action abandon: ABANDONED id=${itemId} session=${sessionId}`);
+    respond(res, 200, { ok: true, op: "abandoned", item: result.item });
+  }
+
   /* ---------------- POST /api/actions/box ---------------- */
 
+  /**
+   * ## What a box action answers, and why every arm answers it the same way
+   *
+   * Two fields, on all four 200s:
+   *
+   *  - **`dryRun`** — whether this REALLY happened. Read off the answer rather
+   *    than remembered from the request by everything downstream, because a
+   *    server that ignored the flag and killed seventeen processes would
+   *    otherwise be reported on the page as having answered a question.
+   *  - **`result`** — what it did, or what it would do: the steps, the
+   *    candidate pids, the recipients, the sample sentence. Whatever this
+   *    holds, `RawValue` in ActionButtons.tsx draws it, and it is the entire
+   *    content of the confirmation a person reads before pressing *kill*.
+   *
+   * **THE UNIFORMITY IS THE FIX, not tidiness.** Until 2026-09-08 each arm
+   * invented its own top-level field names — `steps`, `candidates`, `killed`,
+   * `skipped`, `recipients`, `sample` — while `actions-client.ts` read
+   * `parsed["would"] ?? parsed["result"]`, a name no arm has ever sent. Both
+   * ends were internally coherent and disagreed about a *word*, so both
+   * compiled, both were tested, and the panel in front of `kill-test-suites`
+   * rendered the literal grey word "null" where the consequences belong. That
+   * is instance #11 of
+   * docs/postmortems/260908b-the-parts-were-all-tested-and-none-of-the-joins-were.md,
+   * and the durable repair is the shared wire type in § Stage v0.8a; this is
+   * the half of it that stops the page lying today. **A new arm here that
+   * invents a field name instead of filling `result` re-opens it.**
+   */
   async function boxRoute(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const parsed = await parsedBody(req, res, MAX_BOX_BODY_BYTES);
     if (parsed === null) return;
@@ -1303,10 +1499,16 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
         ok: true,
         op: "dry-run",
         action: action.id,
-        steps: preview.ok ? preview.plan.steps : [],
-        candidates,
-        scanned: scan.procs.length,
-        unreadable: scan.unreadable,
+        // THE TWO FIELDS THE CONFIRMATION PANEL IS BUILT OUT OF, and they are
+        // named here rather than left for a reader to infer from `op`. See
+        // § What a box action answers, above `boxRoute`.
+        dryRun: true,
+        result: {
+          steps: preview.ok ? preview.plan.steps : [],
+          candidates,
+          scanned: scan.procs.length,
+          unreadable: scan.unreadable,
+        },
       });
       return;
     }
@@ -1345,7 +1547,7 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
     deps.log(`action box: KILLING action=${action.id} pids=${pids.join(",")}`);
     const run = await runPlan(built.plan, deps.io);
     deps.log(`action box: ${run.completed ? "DONE" : "STOPPED"} action=${action.id} steps=${run.steps.length}`);
-    respond(res, 200, { ok: true, op: "ran", action: action.id, run, killed: pids, skipped });
+    respond(res, 200, { ok: true, op: "ran", action: action.id, dryRun: false, result: { run, killed: pids, skipped } });
   }
 
   /**
@@ -1412,11 +1614,14 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
         ok: true,
         op: "broadcast-preview",
         action: action.id,
-        total,
-        recipients: outcomes,
-        // One recipient's exact words, so the person can read what is about to
-        // be said to thirty-six agents before it is said.
-        sample: first === undefined ? null : renderBroadcast(action, { index: 0, total }, r.speaker),
+        dryRun: true,
+        result: {
+          total,
+          recipients: outcomes,
+          // One recipient's exact words, so the person can read what is about to
+          // be said to thirty-six agents before it is said.
+          sample: first === undefined ? null : renderBroadcast(action, { index: 0, total }, r.speaker),
+        },
       });
       return;
     }
@@ -1505,7 +1710,7 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
       `action box: BROADCAST action=${action.id} speaker=${r.speaker} told=${sent}/${total} of ${r.recipients.length} rows` +
         (unreached > 0 ? ` (ran out of time before ${unreached})` : ""),
     );
-    respond(res, 200, { ok: true, op: "broadcast", action: action.id, total, recipients: outcomes });
+    respond(res, 200, { ok: true, op: "broadcast", action: action.id, dryRun: false, result: { total, recipients: outcomes } });
   }
 
   function skippedOutcome(rec: Recipient, gate: DrainGate | undefined): BroadcastOutcome {
@@ -1561,6 +1766,9 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
   }
 
   return {
+    drain(snapshot) {
+      return drainOnce(snapshot, { queue: deps.queue, cursor: drainCursor, sendMessage: deps.sendMessage, log: deps.log, now: deps.now });
+    },
     handle(req, res) {
       const pathname = (req.url ?? "/").split("?")[0] ?? "/";
       if (pathname !== "/api/actions" && !pathname.startsWith("/api/actions/")) return false;
@@ -1599,6 +1807,17 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
           return true;
         }
         void guard(cancelRoute(req, res), res);
+        return true;
+      }
+      // The two recovery gestures. POST only, unlike cancel: neither is the
+      // thing a client naturally reaches for a DELETE with, and both CHANGE an
+      // item rather than removing one.
+      if (pathname === "/api/actions/revive" || pathname === "/api/actions/abandon") {
+        if (method !== "POST") {
+          refuse(res, "method-not-allowed", "this is POST only", undefined, { allow: "POST" });
+          return true;
+        }
+        void guard(pathname === "/api/actions/revive" ? reviveRoute(req, res) : abandonRoute(req, res), res);
         return true;
       }
       // Ours by prefix and not a route. Claimed rather than returned false, so
@@ -1660,4 +1879,17 @@ let shared: ActionRoutes | null = null;
 export function handleActionRequest(req: IncomingMessage, res: ServerResponse): boolean {
   shared ??= makeActionRoutes();
   return shared.handle(req, res);
+}
+
+/**
+ * The refresh loop's way in, THROUGH THE SAME `shared` the routes answer from.
+ *
+ * Written exactly like `handleActionRequest` above, and for the reason in that
+ * comment: two `SteeringQueue`s would be two queues, and the one the page can
+ * see would be the one nothing delivers from. That is not a hypothetical — it
+ * is the shape of the bug this stage exists to fix, one step further along.
+ */
+export function drainSharedQueues(snapshot: FleetSnapshot): DrainResult {
+  shared ??= makeActionRoutes();
+  return shared.drain(snapshot);
 }
