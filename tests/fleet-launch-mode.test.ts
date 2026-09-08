@@ -54,7 +54,7 @@
  * by one stated change, in the test, so the change sits next to the assertion —
  * the convention tests/fleet-pane.test.ts set.
  */
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -65,8 +65,10 @@ import type { FleetStatus } from "../tools/fleet/status.js";
 import { parsePermissionMode, parseRow } from "../tools/fleet/web/src/types.js";
 import type { Session } from "../scripts/gjd-remote-tmux.js";
 
+const FLEET_PANES = path.join(process.cwd(), "tests/fixtures/fleet-panes");
+
 function fixture(name: string): string {
-  return readFileSync(path.join(process.cwd(), "tests/fixtures/fleet-panes", name), "utf8");
+  return readFileSync(path.join(FLEET_PANES, name), "utf8");
 }
 
 /* ------------------------------------------------------ reading the pane -- */
@@ -183,15 +185,27 @@ describe("readPaneMode — which permission mode the status bar says", () => {
    * of the session starting*, and it is why collect.ts reads the pane for the
    * working rows rather than only for the blocked ones.
    */
+  /**
+   * **THE LIST IS DERIVED, BECAUSE THE NAME OF THIS TEST IS A CLAIM ABOUT ALL
+   * OF THEM.** It used to name six files by hand while sixteen `dialog-`
+   * captures sat in the directory, so "on every dialog we have captured" was
+   * false the moment a seventh arrived — silently, since nothing compares a
+   * hand-typed list against the disk.
+   *
+   * That is the class in
+   * [260908c](../docs/postmortems/260908c-a-fixture-recruited-as-evidence-for-a-property-it-never-established.md),
+   * found while writing it up: a fixture's membership of a list is a claim
+   * nobody re-checks, and the claim here is exhaustiveness. `readdirSync` makes
+   * the disk the list, so a new capture is covered on the day it lands rather
+   * than on the day somebody remembers.
+   *
+   * The count is asserted too. A filter that matched nothing would iterate zero
+   * fixtures and pass, which is the way this kind of test dies quietly.
+   */
   it("cannot read the mode while a dialog is up, on every dialog we have captured", () => {
-    for (const name of [
-      "dialog-bash-permission.txt",
-      "dialog-file-write.txt",
-      "dialog-edit-diff.txt",
-      "dialog-folder-trust.txt",
-      "dialog-model-selector.txt",
-      "dialog-ask-user-question.txt",
-    ]) {
+    const names = readdirSync(FLEET_PANES).filter((f) => f.startsWith("dialog-") && f.endsWith(".txt"));
+    expect(names.length).toBeGreaterThanOrEqual(15);
+    for (const name of names) {
       expect(readPaneMode(fixture(name)).kind, name).toBe("cannot-tell");
     }
   });
