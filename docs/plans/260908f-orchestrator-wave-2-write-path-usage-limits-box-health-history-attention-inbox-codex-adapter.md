@@ -1,263 +1,502 @@
-# Orchestrator wave 2 — write path, usage limits, box health history, attention inbox, Codex adapter
+# Wave 2: the write path, usage limits, box-health history, the attention inbox, and a Codex adapter
 
-The plan doc five sessions of wave 2 share. Each session owns its own stages and appends them here
-rather than keeping a private plan, so that the order of work, the seams between us and the
-decisions taken are in one place.
+Greg, 2026-09-08, in one message:
 
-> Oh, and borrow from Spideryarn for voice-dictation and realtime-dialog for all
-> input-message-text-boxes.
+> Use @docs/reusable/engineering-manager.md to work on:
+> - securing the write path
+> - usage limits (perhaps there's an API we can call to get the updated status? failing that, I'll add
+>   an admin key. use Sonnet for web research if needed)
+> - for the Box Health, show graphs of recentish history (last 24h), so that I can tell whether there
+>   might have been problems/disruptions to be aware of, and include the amount/proportion of swap used
+> - attention inbox
+> - v1 of Codex/GPT harness adapter
 >
-> — Greg, 2026-09-08
+> Push and pull periodically
 
-**This file was created by `w2-fleet-dictation` because it did not exist yet.** Only the dictation
-section below is written by that session; the other four sessions append their own. Nothing here
-speaks for a stage somebody else owns.
+The direction, the constraints and every earlier quote live in
+[orchestrator-direction.md](../project/orchestrator-direction.md). This plan does not restate them; it
+says what gets built, by whom, in what order, and what done looks like.
 
-Direction and constraints: [orchestrator-direction.md](../project/orchestrator-direction.md).
-Stage list for the dashboard itself: [260907e](260907e-agent-fleet-dashboard.md).
+## Two things are already answered, and the answer changes the work
 
----
+**Usage limits: there is no API, and the admin key would not help.** Greg offered one; the research
+was done and hand-verified earlier the same day, and is written up in
+[§ Can we call an API instead? Mostly no, and not with an admin key](../project/orchestrator-direction.md#can-we-call-an-api-instead-mostly-no-and-not-with-an-admin-key).
+The short version: every `/v1/organizations/*` usage endpoint reports **Console API-key spend**, not
+subscription quota — Anthropic's own FAQ says *"This API only tracks Claude Code usage on the Claude
+API"* — and admin keys are minted for a Console organisation, which a personal Max subscription may
+not have. The headers that do carry the real numbers are undocumented, unversioned, and currently
+reported returning persistent 429s.
 
-## Voice dictation on the fleet's message boxes — `w2-fleet-dictation`
+**So this stage is not research, it is construction**, and the sources are already identified: the
+local `~/.claude.json` cache as a *hint that must be checked against its own `resets_at`*, and the
+transcript 429 as *ground truth*. No Sonnet web research is being spent on a question that was
+answered today. **Do not ask Greg for the admin key.**
 
-Owner: the `w2-fleet-dictation` session, in the `fleet-dictation` worktree.
+**Swap is already collected.** `parseSwap` and `parseSwapActivity` in `tools/fleet/health.ts` already
+return total, used, `usedFraction`, the per-file breakdown, and live si/so from `vmstat` — and
+`health-view.ts` already renders a swap card with the *"swap is a cliff, not a slope"* thresholds. So
+the swap half of Greg's third bullet is **mostly done**, and what is missing is the part he actually
+asked for: **history**. Whoever takes it should check the rendered card against his ask rather than
+rebuild the collector.
 
-Greg, 2026-09-08, when asked what a realtime dialog would be talking *to*:
+## Ownership: two agents, one tree of files
+
+Greg added a sixth item mid-run — *"borrow from Spideryarn for voice-dictation and realtime-dialog for
+all input-message-text-boxes"* — and said *"if helpful, use `gjd-remote new-claude` to fan these out."*
+So this is six workstreams across six sessions, and the split below was **negotiated by message, not
+assumed**: proposed to `claude-agents-dashboard` at 12:45 and accepted at 12:58 with three collisions
+named.
+
+| item | session | why |
+|---|---|---|
+| **1. securing the write path** | `claude-agents-dashboard` | A9, A10, A11, A6 are all `owner: dashboard` in [§ The backlog](../project/orchestrator-direction.md#securing-the-live-write-path-a-stage-but-not-the-top-one). The write path is `routes-*.ts` and `steer.ts`. **A6 already landed** (`0a5a3008`, CSP + anti-framing). |
+| **2. usage limits** | `w2-usage-limits` | Account-level, not pane-level. Collector and 429 ground truth here; the `FleetStatus` arm is the dashboard's. |
+| **3. box-health 24h history + swap** | `fleet-health-history` | Retained in the dashboard process, against the direction doc's assignment — see below. |
+| **4. attention inbox** | **split** | The Overseer decides what needs Greg and why; the dashboard renders and collects the tap. |
+| **5. Codex/GPT harness adapter v1** | `w2-harness-adapter` | It is a question about what a session *is*, which is the Overseer's tense. |
+| **6. dictation + realtime dialog** | `w2-fleet-dictation` | Dictation first, by Greg's call; the dialog stage is gated on it. |
+
+**Every collision has the same shape, and the seam is a type in each case: one side detects, the other
+renders.** The dashboard owns `FleetStatus` (five exhaustive switches depend on it) and owns the row
+type, so a Codex session and a rate-limited session become *arms it adds*, from *field names we send
+it first*. Its words, and they are the rule: **"Send me the shape, not the rows."**
+
+**The split on #4 is the seam working, not a boundary being crossed** — the same shape as A12, which
+the dashboard closed on the Overseer's behalf because the prefix belongs where the message is
+delivered. Here the ranking belongs where the durations are, which is the store.
+
+### `wire.ts`, and why the Overseer's types are going into it
+
+The dashboard is spiking `tools/fleet/wire.ts`: **one leaf module holding every type that crosses the
+server/browser boundary, imported by both sides, so a field one side adds is a compile error on the
+other rather than a silently-missing render.** It exists because of the same morning's postmortem —
+sixteen instances of a hand-written join that nothing checked, ten of them lossy, the worst being a
+body that sent `dryRun` while the route only ever parsed `mode`, so **every box action ever pressed
+was a dry run reported as "Done."**
+
+`~/.overseer/current.json` is exactly that kind of boundary and currently has exactly that protection:
+none. **So the Overseer's published types go into `wire.ts` when it lands** — we write them, the
+dashboard imports them, and neither side can drop a field the other set. The store's parsers are
+already leaf-shaped for an unrelated reason (pure, no `execFileSync` and no `Date.now()` inside them),
+so they should fit. **If the spike is disproved** — every server type reaches `node:child_process`
+transitively and the client tsconfig has no node types — the fallback is a hand-written mirror **plus
+a test that fails when the two drift**, which is second best and much better than nothing.
+
+### Where the health history lives, and the one thing owed in return
+
+[§ Two tenses](../project/orchestrator-direction.md#two-tenses-the-seam-between-the-overseer-and-the-dashboard)
+assigns the vitals history to the Overseer's past tense, and `daemon.ts` says outright *"No health
+history and no local collection"*. **It is being built in the dashboard process instead**, and the
+argument for that beat the doc: the reading already exists in-process there, **there is one collector
+on this box and it is not ours** (a collection costs ~12s of grepping thirty-five transcripts, on a
+box that has hit load 391 with the OOM killer firing), and writing at the source removes both a
+transport hop and a dependency on the Overseer being up. It gets its own root, `~/.fleet-health/`, so
+there is never a question of two writers on one file. Greg decides whether the direction doc moves.
+
+**The contract taken in return: a gap must render as a gap, never a line drawn across it.** Writing
+the history inside the dashboard means a dashboard crash punches a hole in exactly the record Greg
+opens to find out whether something went wrong — and his stated purpose is *"so that I can tell
+whether there might have been problems/disruptions to be aware of"*. An interpolated line through the
+ninety minutes the box was thrashing answers that question with a confident **no**. So the sample
+interval is recorded, and a wider-than-interval gap is a **datum** ("no reading"), not a missing one.
+Two smaller ones in the same family: a 24h axis on a process up for 20 minutes must say so rather than
+letting the axis imply a day, and `health.ts`'s readings are unions with `unknown` arms that **must
+not be flattened to numbers on the way to disk** — a stored `null` cannot tell "load was 0" from
+"`nproc` failed".
+
+## Ordering, and why it is not Greg's list order
+
+Greg's list is a list, not a ranking — he ranked this work explicitly earlier the same day
+([§ The order of work](../project/orchestrator-direction.md#the-order-of-work)): *"attention triage,
+then perhaps box vitals and throttling, then account usage limits, then scheduler"*, and separately
+put the write path in as *"a stage, but it doesn't have to be the top-priority."* Nothing has changed
+that. So on the Overseer's side the order is **attention first**, and the write path stays where he
+put it.
+
+## Stages
+
+Each ends with the tree green and committed, and would make sense as a stopping point.
+
+### Stage A — the attention list, the deciding half
+
+**The premise triage was about to be built on is wrong**, and it was measured:
+[§ `idle` is the bug](../project/orchestrator-direction.md#idle-is-the-bug-the-vocabulary-describes-the-pane-not-the-work).
+`needs-you` means *Claude Code says a dialog is open*; ten of fifteen sessions genuinely waiting on
+Greg had ended their turn handing him a decision **in prose, ending in a full stop**, and not one
+showed as needing him. So the first thing this stage owes is a way to see those.
+
+- A typed `Attention` list written into `~/.overseer/current.json`, one entry per **question**, not
+  per session — *"at 11pm nobody cares which of 36 asked"*.
+- **Sorted by kind first** (irreversible, product, technical, other) **and only then by age**: *"age
+  is a tie-breaker, not a rank"*.
+- **Duplicate collapse**, because a repeated duplicate is the strongest available signal that a
+  *policy* is missing.
+- **Answerable-from-a-phone** as an explicit field, since a question needing a diff read just makes
+  him feel behind.
+- Ranking is by **consequence and reversibility, never by self-reported confidence** — A18 and Fable
+  reached that independently, and confidence ranking promotes exactly the confident mistakes you want
+  caught.
+
+**Done looks like**: the list appears in `current.json`, a schema bump if a reader ignoring it would
+be wrong, and — the honest check — **it finds prose-ending questions that `needs-you` misses**, with
+the count measured against the live fleet and written into this doc. A list that only reproduces
+`needs-you` is a failure of this stage, not a pass.
+
+#### The shape, and the four decisions inside it
+
+Published into `tools/fleet/wire.ts` (which landed as `3df3e833`), so the dashboard imports it rather
+than re-declaring it. Types only, no imports, no runtime values — a `const` there is bundled into the
+browser.
+
+```ts
+/** Why we believe this needs Greg. The two arms are answered by DIFFERENT MECHANISMS. */
+export type AttentionEvidence =
+  | {
+      /** The harness says a dialog is open. Mechanical, observed, and it has options. */
+      kind: "dialog";
+      question: string;
+      /** In the order the harness drew them. Answering picks one of these. */
+      options: readonly string[];
+    }
+  | {
+      /** The turn ended handing Greg a decision in prose. INFERRED, and it may be wrong. */
+      kind: "prose";
+      /** The tail of the turn, so a person can check the inference rather than trust it. */
+      excerpt: string;
+      /** What made us think so, in words. Never a score. */
+      why: string;
+    };
+
+/** Consequence and reversibility. NOT confidence, and NOT urgency. */
+export type AttentionKind = "irreversible" | "product" | "technical" | "other";
+
+/** Whether answering this from a phone is a real option. */
+export type AttentionAnswerability =
+  | { kind: "phone" }
+  | { kind: "needs-a-screen"; why: string }
+  | { kind: "unknown"; why: string };
+
+export type AttentionItem = {
+  /** Stable across snapshots, so a card cannot move under a finger. */
+  id: string;
+  /** tmux's own handle — the address, and stable across renames. */
+  sessionId: string;
+  sessionName: string;
+  /** When we FIRST saw this question. Not when we last saw it. */
+  waitingSince: string;
+  kind: AttentionKind;
+  evidence: AttentionEvidence;
+  answerability: AttentionAnswerability;
+  /** Other sessions asking the same thing. Answer once, apply to all. */
+  duplicates: readonly { sessionId: string; sessionName: string; waitingSince: string }[];
+};
+
+export type AttentionList =
+  | {
+      kind: "list";
+      /** Already sorted: by `kind` first, then by `waitingSince`. The renderer must not re-sort. */
+      items: readonly AttentionItem[];
+      /** THE POSITIVE CONTROL. Zero items out of zero scanned is a broken probe. */
+      sessionsScanned: number;
+      scannedAt: string;
+    }
+  | { kind: "unknown"; why: string; scannedAt: string };
+```
+
+**One — the evidence union is the load-bearing part, and flattening it is the bug this stage is most
+likely to ship.** A dialog is *observed*: the harness drew it, the options are enumerated, and
+answering means picking one. A prose question is *inferred*: we read the tail of a turn and decided it
+was a question, and answering means free text. Those are different risks, not different confidences —
+A10 says a live Claude descendant does not prove an empty input box owns the keystrokes, so **arbitrary
+prose must stay a narrower capability than answering a recognised dialog**. A single `question: string`
+field with a boolean beside it would let a renderer draw the same card for both, which is how the
+dangerous one gets the easy affordance.
+
+**Two — there is no confidence field anywhere, and that is deliberate.** Fable and Astra's A18 reached
+it independently: *ranking by self-reported confidence promotes exactly the confident mistakes you most
+want caught*. `AttentionKind` ranks by consequence and reversibility. If a score turns up in a later
+draft, it is a regression.
+
+**Three — `waitingSince` is first-seen, not last-seen, and it is why the store had to come first.**
+The pane says a dialog is open; it cannot say for how long. Duration is a fact only something with a
+memory can produce, which is the whole reason
+[§ The order of work](../project/orchestrator-direction.md#the-order-of-work) says attention triage
+*arrives* first but cannot be *built* first.
+
+**Four — the producer sorts, and the renderer must not.** *"Do not reorder or replace a card's options
+while his finger is approaching them"* (Astra). Stable `id`s make that possible; a renderer that
+re-sorts on every payload throws it away. And `sessionsScanned` is the positive control — an empty
+list is only good news if something looked.
+
+**What is deliberately NOT in the type**: a routing field. *Who should answer this* (the Overseer for
+what it can verify, Sol for evidence in the tree, Fable for wording and defaults, Greg for anything
+irreversible) is a real part of the design, but it is a **decision the Overseer acts on**, not
+something the phone renders — and shipping it as a field invites a UI that shows Greg a queue of
+things it has decided not to ask him. It lands when something answers, not when something lists.
+
+### Stage B — usage limits, and the reading that refuses to lie
+
+- `tools/overseer/usage.ts`, pure parsers, string in and a discriminated union out — the shape
+  `health.ts` already uses and the reason it is trusted.
+- **A reading whose `resets_at` is in the past is `stale`, never a percentage.** Measured: the file
+  was 48 minutes old and its `five_hour` window had reset 27 minutes earlier, so its `utilization: 70`
+  described a window that no longer existed. **The file always parses and always yields a plausible
+  number**; nothing in it announces the number is void.
+- **The transcript 429 is ground truth**: `"error":"rate_limit"`, `apiErrorStatus: 429`, and a
+  `quotaLimits` object carrying `rateLimitType` and a `resetsAt`. Exact, greppable, cannot be stale.
+- Account identity from `claude auth status` — which matters the moment there is more than one, and
+  multiple Max subscriptions is **medium-term by Greg's call**, so this stage records *which account*
+  and builds no rotation.
+
+**Done looks like**: a usage block in `current.json` that says `unknown` when it cannot tell, with a
+test that feeds it an expired `resets_at` and watches it refuse. And a **positive control** — a probe
+that finds no 429s anywhere must be distinguishable from a probe that is broken
+([silent-success.md](../reusable/silent-success.md)).
+
+### Stage C — the Codex/GPT harness adapter, v1
+
+Half of this exists and was measured: `tools/overseer/work.ts` already recognises `codex exec` in the
+process tree, because **4 sessions were running it and 0 showed as anything but idle**. And
+`steer.ts` already refuses to send keystrokes to a Codex batch job. What does not exist is the
+**type**: a session's harness is currently an assumption, not a field.
+
+- A `Harness` discriminated union with a **capability declaration per harness** — what can be
+  steered, what can be answered, what can only be watched.
+- The principle it serves is already written down: *"One adapter per harness, and honest about what
+  each can do. Claude, Codex and bare shells have genuinely different capabilities; flattening them
+  into one 'message an agent' verb produces a UI that lies."*
+- v1 means **honest recognition, not new control**: a Codex session is identified and its
+  capabilities are stated. Nothing new becomes steerable in this stage.
+
+**Done looks like**: the fleet can say *this is a Codex job and you cannot type at it* as a typed
+fact rather than a special case buried in `steer.ts`.
+
+### Stage D — box-health history (`fleet-health-history`)
+
+Owned elsewhere; the contract is [§ Where the health history lives](#where-the-health-history-lives-and-the-one-thing-owed-in-return)
+above. **Swap is not part of the work**: `SwapReading` already gives `usedBytes`/`totalBytes`/fraction
+and the per-file breakdown, `SwapActivityReading` already gives si/so and `activelySwapping`, and
+`health-view.ts` already draws the card. Greg's bullet asks for *history*; the measurement exists.
+
+### Stage E — dictation on every fleet input box (`w2-fleet-dictation`)
+
+Greg's call when asked what a realtime dialog would be talking *to*:
 
 > Let's do dictation first. The goal of realtime dialog would be to talk with whichever agent the
-> input-message-text-box relates to, perhaps by feeding in a compacted summary of the conversation
-> so far, and/or giving it the ability to use tool use to gather more information (e.g. by reading
+> input-message-text-box relates to, perhaps by feeding in a compacted summary of the conversation so
+> far, and/or giving it the ability to use tool use to gather more information (e.g. by reading
 > docs/code/etc, or anything else that might help it have an informed conversation) — if you feel
 > unblocked enough to make progress on that, then add it as a stage and try and get it working.
 > Borrow (or better still reuse) from Spideryarn.
 
-### Which boxes, and which one is deliberately left alone
+**"Better still reuse" is a decision about a principle, and it is his to make.**
+[§ Principles](../project/orchestrator-direction.md#principles) says the fleet tool must not depend on
+anything under `src/`, *"If it ever earns its own repo, that should be a move, not a rewrite."* There
+are ~3000 lines of hard-won client machinery there (`useDictation.ts` 1612, `mic-recording.ts` 461,
+`DictationStrip.tsx` 502, `useAudioLevel.ts` 204, `mic-lock.ts` 110). **Copying that is worse than
+depending on it**, so the rule becomes: import only **leaf, browser-only, product-agnostic** modules,
+extract a coupling behind a parameter rather than importing the coupling, and **write the resulting
+import list into this doc** — because that list is the cost of the move if the tool ever gets its own
+repo.
 
-| box | file | dictation? |
-|---|---|---|
-| **Say something to it** — the steering message | `SessionDetail.tsx` | yes, the main one |
-| **New session** — the whole prompt an agent wakes up with | `NewSessionPanel.tsx` | yes |
-| **Rename** — a session's name | `SessionDetail.tsx` | **no**, and on purpose |
-| Overseer message | `OrchestratorPanel.tsx` | **there is no box**, and there must not be one |
+**The server half is the real work, and the vocabulary is the point.** Dictation's second pass is not
+a better ear, it is a vocabulary: measured 2026-08-27, every dedicated speech-to-text model mangled
+this app's own words until one was *told what the words might be*. Ours are different and
+better-defined than an article's — session names, worktree names, `gjd-remote`, `tmux`, `vitest`,
+`Overseer`. **A fleet dashboard whose transcriber has never heard the word "worktree" will mangle
+every message Greg dictates.**
 
-**The rename field does not get a microphone.** A misheard name is silently wrong and sticks — the
-box already carries a warning that saving the same name again is not a no-op — and `looksLikeAName`
-refuses most of what speech produces anyway, so the failure would be a button that appears to work
-and then refuses. `claude-agents-dashboard` made the same call independently, 2026-09-08.
+**What cannot be verified from here, and must not be pretended:** there is no audio input device on
+this box and Chrome's fake-mic flags do not work headless. The real `getUserMedia` path is Greg's to
+test from his own device, and the report must say which half was checked. *"A valid session ticket is
+not proof that a microphone opened, a response event is not proof that sound played."*
 
-**`OrchestratorPanel.tsx` has no text box and this work does not add one.** Its own header says why:
-there is no Overseer process, so a box there *"would swallow what you typed and look like it had
-worked, which is the one thing this page is built not to do"*. Adding a microphone to a box that
-does not exist is not a smaller version of that lie. When the Overseer lands and grows a box, it
-gets a microphone the same way any other box does — see § Adding it to a box.
+#### What was built, and what it cost — `w2-fleet-dictation`, 2026-09-08
 
-### The rule for importing from `src/`
-
-[orchestrator-direction.md § Principles](../project/orchestrator-direction.md#principles) says this
-tool *"must not depend on the product database or on anything under `src/`… If it ever earns its own
-repo, that should be a move, not a rewrite."* Greg has now also said **"better still reuse"**, and
-there are ~3,000 lines of hard-won browser audio machinery in `src/web/`. Copying that would be
-worse than depending on it: two copies of a state machine that took a day of debugging to get
-believable, drifting from the moment the second one lands.
-
-So the principle is narrowed rather than dropped, and this is the rule:
+Written into this doc rather than a private one, per the brief. The rule above became:
 
 > **Only LEAF, BROWSER-ONLY, PRODUCT-AGNOSTIC modules may be imported from `src/`.** Nothing that
 > reaches the database, an auth session, a slug, an article, or a route under `src/routes.ts`. If a
 > module is nearly leaf but for one product coupling, extract the coupling behind a parameter rather
 > than importing the coupling.
 
-"If it ever earns its own repo, that should be a move, not a rewrite" survives intact, and the list
-below is what that move would carry. **If that list grows past what a person would move by hand, the
-answer is to say so, not to grow it quietly.**
+**And it is a test, not a paragraph.** [`tests/fleet-imports.test.ts`](../../tests/fleet-imports.test.ts)
+walks the fleet's whole transitive import graph and asserts the set of `src/` files it reaches is
+**exactly** the twelve named below, each with a line saying what it is for. Adding a thirteenth is a
+diff somebody reviews. It was watched failing — an `import { loadEnvLocal } from "../../src/env.js"`
+in one fleet file took two of its five tests red — and its first assertion is a self-check on the
+walker itself, because a closure walker that sees nothing looks exactly like one that found a leaf.
 
-### What the fleet now depends on, from `src/`
+##### What the fleet now depends on, from `src/` — the cost of the move
 
-This is the cost of the move. Every entry is a file with **no imports of its own** except React and
-the other entries here — measured, not assumed, by walking the import closure.
+**Direct**, what fleet files actually name: `src/web/useDictation.ts` (the microphone),
+`src/web/useDictationField.ts` (the caret, the span, the closed box), `src/web/useAudioLevel.ts`,
+`src/dictation-limits.ts` (the size caps, shared by both ends — what that file was built for),
+`src/dictation-fillers.ts` (the ums), `src/vocabulary.ts` (`packTerms`, `MAX_TERM`, the fence).
 
-**Direct imports** — what fleet files actually name:
-
-| module | lines | why |
-|---|---|---|
-| `src/web/useDictation.ts` | 1,633 | the microphone: four phases, one owned track, the recorder, the two-pass transcript |
-| `src/web/useDictationField.ts` | 252 | wiring it to a text box: the caret, the span, the closed box |
-| `src/web/useAudioLevel.ts` | 204 | the meter, reading *the track being recorded* |
-| `src/dictation-limits.ts` | 122 | the size caps and the container list, shared by both ends — what this file was built for |
-| `src/dictation-fillers.ts` | 312 | the ums, deleted (server half) |
-| `src/vocabulary.ts` | 456 | `packTerms`, `MAX_TERM`, the angle-bracket strip (server half) |
-
-**Pulled in transitively**, all leaves: `src/web/mic-lock.ts`, `mic-recording.ts`, `mic-devices.ts`,
+**Transitive**, all leaves: `mic-lock.ts`, `mic-recording.ts`, `mic-devices.ts`,
 `dictation-errors.ts`, `audio-level.ts`, and the new `src/web/transcriber.ts`.
 
-**Total: 4,205 lines across 13 files, and no external package beyond `react`.**
+**Twelve files, ~4,200 lines, and no external package beyond `react`.** That is what a move to its
+own repo would carry, and it is small enough that a person would carry it by hand.
 
-Measured by walking the import closure — and the walker was wrong the first time, in the direction
-that flatters: its regex matched `import ... from` on one line only, so every multi-line braced
-import was invisible and `mic-devices.ts` went missing from a closure that imports it. It carries a
-self-check now that fails loudly on exactly that file. The numbers below are from the fixed one.
+##### The one edge that had to be cut, and what it was worth
 
-#### What is deliberately NOT imported, and why
+`useDictation.ts` imported `sendForTranscription` from `dictation-upload.ts`, which calls `apiFetch`
+— and that one edge reached **21 files and 16,054 lines**, through `lib/api.ts` to
+`@supabase/supabase-js`, `@sentry/core`, the offline store and the billing plan. So `transcribe` is
+a parameter now (`Transcriber<C>` in the new leaf `src/web/transcriber.ts`) and `context` is opaque:
+the hook snapshots it per session, travels it on a kept recording, and never looks inside.
+`useDictation.ts`'s closure is now **8 files, 2,938 lines, `react` only**.
 
-- **`src/web/DictationStrip.tsx`** (502 lines) **and `MicLevel.tsx`.** They are the *chrome*, and
-  their class names — `prof-mic-note`, `prof-listening`, `prof-interim`, `mic-level` — are the
-  product's hand-written stylesheet, which the fleet does not load. `MicLevel` was on the import list
-  for an hour, because a grep for `className="` did not match a template literal and reported it as
-  using inline styles only. It draws five bars off a CSS variable; the fleet's version of that is
-  thirty lines. Importing it would typecheck, build, and render an
-  unstyled button: [silent-success](../reusable/silent-success.md) with a green bundle on it. The
-  fleet writes its own control against the same hook state. The split is **reuse the machinery,
-  write the chrome**, which is also right on the merits: the fleet page follows the device between
-  light and dark and the product is dark unconditionally.
-- **`src/web/dictation-upload.ts`**. The one product coupling in the client half. Its own closure is
-  **21 files and 16,054 lines**,
-  reaching `lib/api.ts` → `@supabase/supabase-js`, `@sentry/core`, the offline store and the billing
-  plan. Cutting that single edge took `useDictation.ts` from a closure with all of that in it down to
-  **8 files, 2,938 lines and `react`** — which is what makes everything above importable. See
-  § The parameter.
-- **`src/transcribe.ts`**. Measured: **161 files, 118,082 lines**, pulling `pg`, `drizzle-orm`,
-  `stripe`, `jsdom`, `@mozilla/readability`, `pino` and `@anthropic-ai/sdk` into a tool whose whole
-  claim is that it runs with the product's server absent. See § The server half.
+The six product boxes gained one line each (`transcribe: sendForTranscription`) and nothing else
+changed. The two tests that drive the hook directly pass the real product transcriber in, so they
+still exercise the whole upload path.
 
-### The parameter: `useDictation` stops knowing where the words go
+##### Not imported, and both would have been green all the way to the page
 
-`src/web/useDictation.ts` imports `sendForTranscription` from `dictation-upload.ts`, which calls
-`apiFetch("/api/transcribe")` — the product's authenticated client. That is the coupling, and it is
-extracted rather than imported:
+`DictationStrip.tsx` and `MicLevel.tsx` render against hand-written class names —
+`prof-mic-note`, `prof-listening`, `mic-level` — from a stylesheet this page does not load. They
+would typecheck, build, and render an unstyled button. `MicLevel` sat on the import list for an hour
+on the strength of a grep for `className="` that could not see a template literal. So: **reuse the
+machinery, write the chrome** — `tools/fleet/web/src/DictationControl.tsx`, which is also right on
+the merits, since this page follows the device between light and dark and the product is dark
+unconditionally.
 
-- A new leaf `src/web/transcriber.ts` holds `TranscriptionResult` and
-  `type Transcriber<C> = (blob, mimeType, context: C, signal?) => Promise<TranscriptionResult>`.
-- `useDictation` and `useDictationField` gain a **required** `transcribe` option and become generic
-  in `C`, the context type. They call `transcribe(blob, mime, where, signal)` and have no opinion
-  about what `where` is or which server answers.
-- `context` **stays** on the options, opaque. It is not folded into a closure, because
-  `tests/feedback-dictation-vocabulary.test.tsx` exists to walk exactly that join — box hands the
-  hook a `context`, the upload puts it in the body — and a closure would delete the seam that test
-  watches. The hook's existing care about `context` (snapshotted per session, travelling with a kept
-  recording, so a reader who navigates mid-upload is not transcribed against another article's
-  glossary) is untouched.
-- The six product call sites gain one line: `transcribe: sendForTranscription`. Nothing else about
-  them changes.
+##### The server half: measured out of contention, not ruled out on principle
 
-The fleet passes its own transcriber, its own context (`{ sessionId }` or `{ kind: "new-session" }`),
-and its own server.
+`src/transcribe.ts` was the first candidate. Its closure is **161 files and 118,082 lines**, pulling
+`pg`, `drizzle-orm`, `stripe`, `jsdom`, `@mozilla/readability`, `pino` and the Anthropic SDK into a
+tool whose whole claim is that it runs with the product's server absent. Even the smallest useful
+piece, `ai-call.ts`, is 20 files and 20,344 lines. So `tools/fleet/transcribe.ts` makes its own call
+to `POST https://openrouter.ai/api/v1/audio/transcriptions` — still through the gateway, no second
+one — borrowing the three files under `src/` that import nothing at all.
 
-### The server half: the fleet makes its own OpenRouter call
+**The honest half of that ruling:** `transcribeWith` *is* free of the database at runtime, because
+`ai-spend.ts` writes through a sink that is `null` unless the product's server installs one. Which
+means going through it **would not have metered this spend either** — no `ai_calls` row, nothing for
+`npm run cost`. The fleet's OpenRouter spend is invisible to the product's ledger whichever shape is
+chosen. That is a property of being a separate tool, not a cost of this decision, and it is named
+here rather than discovered later. A dictation is about $0.0005.
 
-Two shapes were considered and one was measured out of contention.
+##### The vocabulary works, and a 200 would not have told us
 
-**(a) Import `src/transcribe.ts` with an empty vocabulary.** Ruled out. `transcribeWith` is
-genuinely free of the database at runtime — `ai-spend.ts` writes through a *sink* that is `null`
-unless the product's server installs one — but that is not the cost. The cost is the closure: 161
-files, 118,082 lines, `pg` and `stripe` and `jsdom` among them, plus `loadEnvLocal()` reading the
-product repo's `.env.local` and `src/log.ts`'s pino configuration. A tool that must work with the
-product absent cannot import the product's Postgres driver to transcribe a sentence. Even a
-hypothetical `transcribeWith` extracted to its own module still reaches `ai-call.ts`, which measures
-20 files and 20,344 lines.
+`tools/fleet/vocabulary.ts`: `FLEET_TERMS` first (the box's own words — `worktree`, `tmux`,
+`gjd-remote`, `Overseer`, `vitest`, the model names), then the live snapshot's session handles,
+titles and directory leaves, most recently active first, with the named session promoted. Packed by
+`packTerms`, which strips angle brackets and caps each term — a session title is a sentence a model
+wrote about work that was often *"look at this hostile input"*, so it needs the same fence an
+article title does.
 
-*And a second finding, which is the honest half of ruling (a) out:* going through `ai-call.ts` would
-not have metered the spend anyway. The sink is `null` outside a collector box, so the fleet's
-transcription calls would have left no `ai_calls` row and `npm run cost` would not have seen them.
-Either way the fleet's OpenRouter spend is invisible to the product's ledger. That is a real gap and
-it is named here rather than discovered later — see § What is not built.
+Verified against the real gateway, because the evidence has to be the transcript changing rather
+than the status code — OpenRouter's chat route accepted a `prompt` field for eleven days, answered
+`200`, and changed nothing. [`tools/fleet/probe-transcribe.ts`](../../tools/fleet/probe-transcribe.ts)
+sends one clip twice:
 
-**(b) The fleet calls OpenRouter's `/v1/audio/transcriptions` itself, with its own vocabulary.**
-Chosen. ~150 lines in `tools/fleet/transcribe.ts`, importing the three true leaves above. Still
-through OpenRouter — [ai-gateway.md](../project/ai-gateway.md)'s rule is not weakened, and no second
-gateway is added.
+```
+with the fleet vocabulary (2663 ms):
+  Add this to Spideryarn please, the granularity zoom is fine …
+with NO vocabulary (1226 ms):
+  Add this to Spiderrion, please. The granularity zoom is fine, …
+```
 
-**The vocabulary is the whole reason this is worth doing properly.** The finding from 2026-08-27 is
-that the second pass *"is not a better ear, it is a vocabulary"* — every dedicated speech-to-text
-model mangled this app's own words until it was handed a list. A fleet dashboard whose transcriber
-has never heard the word **worktree** would mangle every message Greg dictates. And our vocabulary is
-better defined than an article's, because we know it exactly rather than inferring it:
+##### Which boxes, and the two that are deliberately left alone
 
-1. **The fleet's own words** — `worktree`, `tmux`, `gjd-remote`, `Overseer`, `vitest`, `Supabase`,
-   `Vercel`, `Postgres`, `OpenRouter`, `Hetzner`, `Tailscale`, `Drizzle`, `Playwright`, `typecheck`,
-   `Spideryarn`, `Greg Detre`, `origin/dev`, and the model names (`Opus`, `Sonnet`, `Haiku`,
-   `Fable`, `GPT Sol`, `Codex`).
-2. **The live fleet** — every session's handle and title, every worktree name, every repo directory,
-   read off the snapshot the server already holds in memory. This is the part an article can only
-   guess at: the words Greg is about to say into this box are the names on the page in front of him.
+| box | dictation? |
+|---|---|
+| **Say something to it** — the steering message, `SessionDetail.tsx` | yes, the main one |
+| **New session** — the whole prompt an agent wakes up with | yes |
+| **Rename** — a session's name, `SessionDetail.tsx` | **no** |
+| Overseer message, `OrchestratorPanel.tsx` | **there is no box** |
 
-Capped and sanitised by `src/vocabulary.ts`'s `packTerms` and `MAX_TERM`, which already strip angle
-brackets and cap each term — the same guards, for the same reason, since a session title is text
-this tool did not write.
+**The rename field gets no microphone.** A misheard message reaches an agent that can ask what you
+meant; a misheard *name* is silently wrong and sticks, and the Save button already warns that saving
+the same name again is not a no-op. `claude-agents-dashboard` reached the same call independently.
 
-### The seam with the other sessions
+**`OrchestratorPanel.tsx` has no message box and this work does not add one.** Its own header says
+why: there is no Overseer process, so a box there *"would swallow what you typed and look like it
+had worked, which is the one thing this page is built not to do"*. A microphone on a box that does
+not exist is not a smaller version of that lie.
 
-- **`claude-agents-dashboard`** owns `tools/fleet/`. Agreed division, 2026-09-08: `OrchestratorPanel.tsx`
-  and `NewSessionPanel.tsx` are this session's to edit now; **`SessionDetail.tsx` is theirs first**,
-  and their declutter lands before the microphone does.
-- **`tools/fleet/wire.ts`** is where the transcribe request and response types are declared. Types
-  only, no runtime values, **no imports ever** — the client's tsconfig compiles its whole transitive
-  closure under DOM-only libs, so one `import type` turns `npm run typecheck` red. The client
-  derives with `Omit<…>` rather than restating, so a new wire field stops the parse compiling.
-- **Every write route goes through the Origin check** (`tools/fleet/origin.ts`), and the transcribe
-  route is a write route.
+##### What is verified, and what only Greg can verify
 
-### Three things the audio makes different from every other route on this server
+| | |
+|---|---|
+| The server half, end to end against the live gateway | **verified** — see the A/B above |
+| The `keywords` array reaching the model and changing the transcript | **verified** |
+| The bundle carrying dictation and not Supabase | **verified** — `grep -c supabase` on the built JS is 0; `mic-no-tape`, `mic-unplugged` and `api/transcribe` are all present |
+| The import rule holding | **verified** — the test, watched failing |
+| The route's Origin check, size cap and format refusal | **verified** |
+| **A microphone opening** | **NOT verified, and cannot be from this box** |
+| **A real transcript landing in a real box from real speech** | **NOT verified** |
 
-Asked for by `claude-agents-dashboard`, and right:
+There is no audio input device on this box and Chrome's fake-microphone flags do not work headless
+here. Everything past *"Opening the microphone…"* is Greg's to check from his own phone or laptop.
 
-1. **Nothing about the audio is logged** — not its bytes, not its transcript, and not a size that
-   accumulates into a picture of when somebody was talking. The product's rule
-   ([logging.md](../project/logging.md)) is the same one; this server logs with `console.log` and
-   the rule is the destination, not the function name.
-2. **The failure path says which of three things happened**, in words: the microphone gave us
-   nothing, the upload failed, or the model refused. On a phone those are indistinguishable and all
-   read as *"the button does nothing"*. The bracketed codes come with `useDictation` already.
-3. **This tool has spent 2026-09-08 fixing four features that were silently dead.** A dictation
-   button that fails quietly would be the fifth.
+### Stage F — realtime dialog, gated on Stage E
 
-### Stages
+**The conversation partner is not the agent itself**, and that misreading is the expensive one: an
+agent in a tmux pane has turn latency in tens of seconds, and `steer.ts` already reports that a
+delivered message can be `partial` — the text landed and the Enter did not. What Greg described is a
+realtime model briefed *about* that session — a compacted summary plus tool use to read docs and code
+— which he talks through, and which then hands the agent a message. Gated honestly: **an unfinished
+Stage F on top of a shaky Stage E is worse than Stage E alone.**
 
-| | | |
-|---|---|---|
-| **D1** | `src/web/transcriber.ts`, the parameter, and the six product call sites. Nothing in `tools/` yet. | |
-| **D2** | `tools/fleet/transcribe.ts` + `POST /api/transcribe` on the fleet server, with the fleet vocabulary. Verified against the real gateway with a real clip. | |
-| **D3** | `tools/fleet/web/src/DictationControl.tsx` — the fleet's own chrome over the reused hook — and the microphone on `NewSessionPanel.tsx`. | |
-| **D4** | The microphone on `SessionDetail.tsx`'s message box, **after** `claude-agents-dashboard` has pushed its declutter. | |
-| **D5** | A test that pins the import allowlist above, so the list cannot grow without somebody deciding to. | |
-| **D6** | Stage 2 — realtime dialog — **gated**: only if D1–D5 are solid. See below. |
+## A5 is not a live exposure; it is a decision that happens at `systemctl enable`
 
-### Stage 2, and the misreading that would be expensive
+Measured on the box, 2026-09-08, because Astra's finding said *"Tailscale's default policy is
+permissive, so verify rather than assume"* and nobody had verified:
 
-**The conversation partner is not the agent itself.** An agent in a tmux pane has turn latency in
-tens of seconds, and `steer.ts` already reports that a delivered message can be `partial` — the text
-landed and the Enter did not. Audio must not be piped at a pane.
+- The tailnet has **exactly two devices** — this box (`100.92.255.119`) and Greg's iPhone
+  (`100.108.254.125`, offline). Both his.
+- `tailscale serve status` and `tailscale funnel status` both report **"No serve config"**. Nothing is
+  exposed to the public internet.
+- **The running dashboard binds `127.0.0.1` only.** It is not tailnet-reachable today at all; Greg
+  reaches it over an ssh forward.
+- **The widening is not in the unit.** The repo's unit says `Environment=FLEET_BIND=127.0.0.1` and
+  `tests/systemd-units.test.ts` asserts that exact string. It is `/etc/fleet-dashboard.env` — which
+  exists, contains `FLEET_BIND=127.0.0.1,100.92.255.119`, and is read at start because
+  `EnvironmentFile=` comes after `Environment=`.
 
-What Greg described is a realtime model **briefed about** that agent: a compacted summary of the
-conversation so far, plus tool use to read docs and code, so he can talk through what the session is
-doing and then hand it a message. `src/web/live/useLiveConversation.ts` and `src/live.ts` are what
-would be reused. OpenRouter has no realtime API, so this path does not go through the gateway and
-the audio never reaches our server —
-[live-conversation.md](../project/live-conversation.md#the-audio-never-touches-our-server).
+So A5 describes an exposure that **does not exist yet and begins at the instant
+`sudo systemctl enable --now fleet-dashboard.service` runs** — a step already waiting on Greg. That
+reframes it from scheduled engineering into a precondition attached to a command, which is a much
+cheaper place for it to live.
 
-**Gated honestly.** If stage 1 is not solid, this stops and says so. An unfinished stage 2 on top of
-a shaky stage 1 is worse than stage 1 alone.
+**Fable arbitrated and returned a fourth option: close it, and attach the rule to the widening.** The
+full reasoning is now in
+[orchestrator-direction.md § A5 is CLOSED too](../project/orchestrator-direction.md#the-backlog-after-the-wide-review)
+— the short version is that A5 hardens a boundary against parties who do not exist while A7 leaves
+open the one that does (all 27 agents share a Unix user and already reach `127.0.0.1:8787`), that
+**Tailscale ACLs have no deny rule** so the "cheap" grant is really a whole-policy rewrite with
+lockout as its failure mode, and that the genuine equivalent of the reference system's allowlist is
+`tailscale serve` plus an owner check on `Tailscale-User-Login`, not an ACL. **No code work; one
+precondition on one command; row closed.**
 
-### What can and cannot be verified from this box
+## The simpler option passed over
 
-> A valid session ticket is not proof that a microphone opened, a response event is not proof that
-> sound played.
+**Rendering the attention list straight from `needs-you` and shipping it today.** It would have been
+an afternoon, it would have looked right, and it would have been wrong in the direction that matters:
+it lists the agents that are *blocked*, and Fable's reframing is that a blocked agent is the cheapest
+thing on the box —
+
+> The agent that costs real money is the one that is **working, confidently, on the wrong thing**
+> … It never asks. It never appears on a "needs you" list.
 >
-> — [live-conversation.md](../project/live-conversation.md)
+> — Fable, 2026-09-08
 
-**There is no audio input device on this box, and Chrome's fake-microphone flags do not work
-headless here — measured, not assumed.** So the real `getUserMedia` path cannot be exercised from
-here at all. What a browser pass on the box can show is the page rendering, the button changing
-state, the failure sentence appearing, and — by driving `MediaRecorder` from Web Audio — the upload,
-the server, the model call and the transcript landing in the box. What it cannot show is a
-microphone opening.
+Stage A's prose-question detection is the smallest thing that does not inherit that error. The
+misdirection half — plan-doc name, last commit, time since a push, whether the session is in the
+primary checkout — is deliberately **not** in this wave; the proxies exist in what is already
+collected, and building the question surface first is the boring half done honestly.
 
-Everything past that needs Greg, on his own device, and the report says so rather than implying
-otherwise.
+## Not in this wave
 
-### What is not built
-
-- **The fleet's OpenRouter spend is not in the product's ledger.** No `ai_calls` row, so `npm run
-  cost` does not see it. True of shape (a) as well as (b) — see above — so it is a property of the
-  fleet being a separate tool, not of this choice. A dictation costs about $0.0005.
-- **Nothing streams**, for the same reason the product's dictation does not: a partial transcript is
-  not a prefix of the final one.
+- **The scheduler.** Last by Greg's own ordering, and it should not be quietly promoted
+  ([cron-scheduler.md](../project/cron-scheduler.md)).
+- **Multiple Max accounts / rotation.** Medium-term by his call.
+- **Push notifications.** *"Push almost nothing"* — two categories only, and neither is an agent
+  waiting on a question. The inbox is a surface to open, not a thing that buzzes.
+- **A22's event protocol, A21's unattended actions, A23's resource claims.** Deferred outright in the
+  backlog and not reopened here.

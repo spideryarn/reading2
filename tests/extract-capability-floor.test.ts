@@ -33,7 +33,7 @@ import {
   readArticleWithProvenance,
   runExtract,
 } from "../src/extract.js";
-import { pageHadTooLittleText } from "../src/messages.js";
+import { documentHadTooLittleText } from "../src/messages.js";
 import { SHIPPED_ARM, armNamed, preparedSourceHtml } from "../evals/extraction/arms.mjs";
 import { parseManifest } from "../evals/extraction/manifest.mjs";
 import { score } from "../evals/extraction/scorecard.mjs";
@@ -161,7 +161,10 @@ describe("the reader is told the count of the page in front of them", () => {
   it("says a different number for a different page", () => {
     /* Two counts, because one call can be satisfied by a hardcoded 185 — which
        is a mutation that survived every other case here. */
-    const [medium, pmc] = WALLS.map((w) => pageHadTooLittleText(w.chars).message);
+    /* Both walls are fetched pages — they are URLs in `WALLS` — so the origin
+       is the fetched one here. The uploaded branch's own count is covered in
+       tests/messages.test.ts and end to end in tests/job-failure.test.ts. */
+    const [medium, pmc] = WALLS.map((w) => documentHadTooLittleText("url", w.chars).message);
     expect(medium).toContain("185");
     expect(pmc).toContain("130");
     expect(medium).not.toContain("130");

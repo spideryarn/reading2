@@ -684,6 +684,38 @@ describe("one daemon, enforced", () => {
     expect(isProcessAlive(aDefinitelyDeadPid())).toBe(false);
   });
 
+  /**
+   * **`EPERM` means alive, and until 2026-09-08 nothing checked it.**
+   *
+   * Found by mutation rather than by reading: replacing the `EPERM` branch with
+   * a flat `return false` left all 102 tests green. The two cases above only
+   * exercise the success path (our own pid) and `ESRCH` (a dead pid), so the
+   * one branch that decides whether a *live process belonging to somebody else*
+   * reads as running had no test at all — and reading it as "gone" is what lets
+   * a second writer take a live lock.
+   *
+   * pid 1 is the foreign process every Linux box has. The `getuid` guard is the
+   * test's own positive control: as root, `kill(1, 0)` succeeds and this would
+   * pass without touching the branch, so it says so out loud rather than
+   * reporting a check it did not make.
+   */
+  test("isProcessAlive treats EPERM as alive, not as gone", () => {
+    const uid = process.getuid?.();
+    if (uid === 0) {
+      expect(isProcessAlive(1)).toBe(true);
+      return; // Ran as root: kill(1, 0) succeeds, so the EPERM branch was NOT exercised.
+    }
+    // The branch is only under test if pid 1 really does refuse us.
+    let code: string | undefined;
+    try {
+      process.kill(1, 0);
+    } catch (cause) {
+      code = (cause as NodeJS.ErrnoException).code;
+    }
+    expect(code).toBe("EPERM");
+    expect(isProcessAlive(1)).toBe(true);
+  });
+
   test("a write refuses once the lock has been taken from under it", () => {
     const root = tempRoot();
     const store = mustOpen(root);
