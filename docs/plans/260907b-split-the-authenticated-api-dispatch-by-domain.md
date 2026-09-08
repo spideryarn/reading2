@@ -908,6 +908,105 @@ push spent re-establishing facts about vanished trees.
 > somebody's gate runs after yours. At 05:00 with the fleet asleep, nothing re-checks `dev` until
 > morning, and the person who finds it will not be the person who can explain it.
 
+### The join of everyone's green branches was red, and it was nobody's slice
+
+At 05:03, with all 24 sessions on the box idle or waiting, I gated `dev` **exactly as pushed** —
+`HEAD == origin/dev == 14c87890`, clean tree, so the result is a statement about the trunk rather than
+about a worktree. **EXIT=1.** Six lanes clean; the test lane failed on exactly one file out of 842,
+`tests/fixture-ids.test.ts`, with 15,992 tests passing.
+
+Two uuids were declared in more than one test file — `117e181a-…` across `fleet-queue.test.ts`,
+`fleet-steer.test.ts` and seven uses in `fleet-web.test.tsx`, and `76667309-…` across the first two.
+Vitest runs files in parallel against one database, so whichever tears down first deletes the other's
+fixture and every test in it 404s — **while passing when run alone**. Real, not contention: it fails
+identically run by itself, and it is a static read of the test sources, which a loaded box cannot
+affect. It arrived in `44f60619`, from `worktree-fleet-dashboard-v01`. Reported to that session and
+left untouched; its owner fixed it at `6f603772`, and `dev` was green again 25 minutes after the gate
+went red.
+
+**The tempting generalisation was wrong**, which is worth recording because three sessions nearly
+acted on it. This was the *second* uuid collision of the night from the fleet tests, so 260907e read
+the pair as a method — ids minted by hand from a small pool — and I repeated that to the session
+running a deploy as though it were established. The owner checked where each id actually came from
+instead, and **the two had different causes.** The earlier `11111111-…` was a counting-block id
+colliding with a real `auth.users` row, genuinely destructive. Tonight's two are real Claude
+conversation uuids captured off live sessions, shared across three files **on purpose** because those
+files describe one agent being steered, queued for and rendered — colliding with no row at all, since
+`tools/fleet/` imports nothing under `src/`. `NOT_A_ROW` was the right answer rather than a
+workaround, and acting on my version would have given four fixtures four distinct ids, asserting they
+differ when they deliberately do not. Two instances of one symptom, a plausible mechanism, and no
+check of provenance is the exact state in which a wrong claim feels most like a finding.
+
+**What this is evidence of, and what it is not** — 260907e's distinction, and they were right that I
+had blurred it. This red is evidence about **the join**: every branch that composes `dev` tonight was
+green on its own, each gated by whoever wrote it, and the combination was not. It is **not** evidence
+that the "last agent awake" trigger was right. That trigger is a claim about *when* the re-gating
+trade stops applying; this run is a fact about *whether ~120 merged commits are green*. A later reader
+will be tempted to read the red as vindication of the rule, and it says nothing about it. The two
+happened on the same night; they are not the same finding.
+
+**What it does support** is narrower and worth having: on a trunk this busy, "everyone gated their own
+work" does not add up to "the trunk is green", because nothing gates the join. That is an argument for
+somebody running a whole-trunk gate when the fleet goes quiet — which costs 24 minutes once, not an
+hour per push — rather than an argument against the trade above. Note also that this red would **not**
+have reached a reader: `npm run deploy` gates the exact sha it ships in its own worktree
+(`scripts/deploy.ts:21-27`), so the cost of it was one agent's twenty minutes, which is precisely the
+downside the corrected paragraph above names.
+
+### The expensive part was never getting the evidence, it was thinking to want it
+
+The sharpest formulation of this job's transferable result did not come from the migration, and it
+did not come from me alone. Three sessions produced three instances of one shape in a single night,
+and the third named the mechanism.
+
+**Two of the three were wrong claims that felt like findings.** Mine: two uuid collisions from one
+worktree, a plausible mechanism (ids minted from a small pool), and no check of where either id came
+from — passed to a third session as established. `claude-agents-dashboard`'s, a few hours earlier and
+from the opposite direction: Fable said ten of fifteen "idle" sessions had ended their turn handing
+Greg a decision; they checked it by grepping each pane's last line for a question mark, got **1 of
+23**, and nearly wrote that up as a refutation. It wasn't one — the decisions end in full stops
+(*"My only recommendation is about packaging: Stage E is a plan doc of its own."*). They read the
+punctuation; Fable read the meaning.
+
+> Yours was a mechanism proposed without provenance, mine was an instrument trusted without
+> calibration. Both feel like findings while you're inside them.
+>
+> — `claude-agents-dashboard`, 2026-09-08
+
+**And the part that makes it actionable:** in both cases the refuting evidence was *cheap and one step
+away*. Both uuids were sitting in my own paragraph. One pane, read properly, would have taken thirty
+seconds. Nothing was hard to obtain. **What was missing was the thought that it was worth obtaining
+at all** — which is exactly the state the five safety-net holes above were found in, every one by an
+external probe and not one by re-reading.
+
+That reframes the standing advice. "Check your work" is not the lesson, because all three of us
+believed we had. The lesson is that the moment a claim feels *most* like a finding — a mechanism that
+explains two data points, an instrument that contradicts someone else — is the moment to buy the
+cheap external check, precisely when it feels least necessary. This is the same rule as
+[silent-success.md](../reusable/silent-success.md) from the author's side rather than the check's:
+that file says a check can share an assumption with the code; this says an author shares one with
+themselves. **Whether it graduates into that file is Greg's call**, since `docs/reusable/` wording is
+a rule and edits there go one approved set at a time. It is parked as
+[open-questions.md § Q13](../project/open-questions.md#q13), which is the version to approve or
+reject; the working is here, the proposal is there, and that entry is meant to be **deleted** once
+decided rather than left to accumulate.
+
+**And the counterpoint, which belongs next to all of this rather than under it.** Every real problem
+found on the night of 2026-09-08 was caught by **a guard somebody had written earlier, for a different
+reason**: `fixture-ids` caught the uuid collision; `doc-links` caught a line-number citation *inside
+the entry about not repeating facts you have not checked*; the exhaustive `Record` in
+`REFUSAL_STATUS` caught four new refusal codes; and this plan's own contract test caught the control
+that chat's move had invalidated. The sessions mostly did **attribution**, not detection.
+
+The one that should worry us is the guard that found *nothing*: 66 tests that passed with
+`sameMaterial` stubbed out. A guard reporting a problem is a guard working. A guard reporting nothing
+is the two states this plan spent five sections learning to tell apart — and it is the only one of
+the night's checks that was actually broken.
+
+> The guards did the work; we mostly did the attribution.
+>
+> — `claude-agents-dashboard`, 2026-09-08
+
 ### The normaliser should refuse, not rely on a hand check
 
 Sol's **P2-RETURN-NORMALIZER**: the body comparison should refuse automatic comparison whenever the

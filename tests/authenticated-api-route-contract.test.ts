@@ -389,8 +389,12 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     witnesses: ["/api/library/search"],
   },
   {
+    /* **`DELETE` joined `PATCH` on 2026-09-06**, and they are one matcher with
+       two arms rather than two matchers: the same `shelfEntry` regex, branching
+       on the method. The permanent delete —
+       docs/plans/260906h-delete-an-article-permanently.md. */
     match: { kind: "regex", source: "^\\/api\\/library\\/([\\w.%-]+)$", flags: "" },
-    methods: ["PATCH"],
+    methods: ["PATCH", "DELETE"],
     witnesses: ["/api/library/w1", "/api/library/w.1"],
   },
   {
@@ -758,7 +762,7 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
 
 /** Loud failure controls. Never the oracle — see the header. */
 const EXPECTED_MATCHER_COUNT = 67;
-const EXPECTED_GUARD_COUNT = 81;
+const EXPECTED_GUARD_COUNT = 82;
 
 /* ------------------------------------------------------------- the source read */
 

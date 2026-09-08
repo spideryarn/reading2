@@ -72,17 +72,26 @@ describe("the usage query", () => {
    * **The half-price join, and the direction it fails in.**
    *
    * A charged row whose article cannot be resolved — every row charged before
-   * `ingest_events.article_id` existed, and any row whose article was later
-   * deleted — must be charged **full** price. That is a `left join` plus a
-   * `coalesce`, and both halves are load-bearing: an inner join would drop those
-   * rows out of the count altogether, which is the ledger forgetting an ingest,
-   * and a bare `visibility = 'public'` without the coalesce would be `null` for
-   * them, which is neither branch and so counts in neither column.
+   * `ingest_events.article_id` existed — must be charged **full** price. That is
+   * a `left join` plus a `coalesce`, and both halves are load-bearing: an inner
+   * join would drop those rows out of the count altogether, which is the ledger
+   * forgetting an ingest, and a bare `visibility = 'public'` without the coalesce
+   * would be `null` for them, which is neither branch and so counts in neither
+   * column.
+   *
+   * **The middle term is a deleted article's frozen price.** Deleting must not
+   * move anybody's bill in either direction, and `on delete set null` would
+   * otherwise reprice a public article's rows from half to full — the owner's
+   * usage going *up* because they threw something away. `articles.visibility`
+   * still wins wherever there is one, so nothing changes while an article
+   * exists. src/db/schema.ts § `article_visibility_at_delete`.
    */
   it("resolves an unresolvable row as private, over a left join", () => {
     const { sql } = dialect.sqlToQuery(usageSql("owner", PAID));
     expect(sql).toContain("left join spideryarn.articles a on a.id = e.article_id");
-    expect(sql).toContain("coalesce(a.visibility, 'private') = 'public'");
+    expect(sql).toContain(
+      "coalesce(a.visibility, e.article_visibility_at_delete, 'private') = 'public'",
+    );
   });
 
   it("counts in-flight reservations with no age limit, which is the bypass fix", () => {

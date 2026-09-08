@@ -19,13 +19,17 @@
  *    find. See docs/plans/260826e-postgres-storage-implementation.md § Rules.
  */
 
-import { and, asc, desc, eq, isNull, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
-import { articles, articleRevisions, revisionBlocks } from "../db/schema.js";
+import { articles, articleRevisions, ingestEvents, jobs, revisionBlocks } from "../db/schema.js";
 import { MAX_TITLE_CHARS } from "../shelf.js";
 import { MAX_PURPOSE_CHARS, normaliseProfileText } from "../profile.js";
 import { log } from "../log.js";
+import { currentOwnerId, type OwnerId } from "../owner.js";
+import { READ_COMMITTED } from "./isolation.js";
+import { lockBillingAccount } from "./pg-billing.js";
+import { TERMINAL } from "./pg-jobs.js";
 import { notFound, ownedByReader, ownedSlug, requireSlug, shelfFrom } from "./pg.js";
 import type { LibrarySearch, LibrarySearchOptions, ShelfStore } from "./contracts.js";
 import { guardDbStore } from "./db-errors.js";
@@ -42,6 +46,282 @@ import { pgArticleReader } from "./pg.js";
  * looks like an empty library.
  */
 const CONFIG = "english";
+
+/**
+ * **The article this delete is about to destroy, read and locked** — taking its
+ * builder so a test can read the SQL rather than a constant beside it.
+ *
+ * The same shape and the same reason as `lockedGlossaryArticleQuery`
+ * ([pg-glossary.ts](pg-glossary.ts)) and `lockedArticleQuery`
+ * ([pg-visibility.ts](pg-visibility.ts)), and the finding behind all three is
+ * one finding: deleting `.for("update")` leaves the entire suite green, because
+ * a lock's absence is only visible while a race is actually happening.
+ * `tests/store-shelf-pg.test.ts` reads this statement instead, and that
+ * assertion fires every time.
+ *
+ * **`for update` is the whole ordering argument here, and it is doing more work
+ * than it does for the glossary.** It is the same row `lockOrCreateArticle`
+ * takes (src/store/pg-revisions.ts) and — since Sol's F4, 2026-09-06 — the same
+ * row `tryEnqueue` takes before inserting a job. So the three are serialised
+ * against each other: either the delete gets it and a later enqueue re-reads
+ * absence and answers 404, or the enqueue gets it and the job check below sees
+ * a committed row and refuses. Without it, an enqueue that had already passed
+ * `articleExists` can insert *after* the check and *before* the delete, and the
+ * worker that picks that job up recreates the article the reader destroyed.
+ *
+ * **Through `ownedSlug`, like everything else**, so the owner check and the
+ * lookup are one clause and there is no window between "whose is it" and
+ * "destroy it".
+ */
+export function lockedArticleForDestroyQuery(
+  db: Pick<ReturnType<typeof getDb>, "select">,
+  slug: string,
+  ownerId: OwnerId,
+) {
+  return db
+    .select({ id: articles.id })
+    .from(articles)
+    .where(ownedSlug(slug, ownerId))
+    .for("update")
+    .limit(1);
+}
+
+/**
+ * **Is anything working on this article right now?**
+ *
+ * Deliberately **broader** than `liveJobHoldingADraftQuery` in
+ * [pg-glossary.ts](pg-glossary.ts), which this was first written as a copy of,
+ * and the two narrowings that file makes on purpose are the two this must not
+ * inherit. GPT Sol's F3, 2026-09-06.
+ *
+ * - **A claimed job that has not opened its draft yet counts.** The glossary
+ *   query misses it, correctly for its own question — it is asking whether a
+ *   job could put the deleted list back, and a job with no draft cannot. This
+ *   asks a different question, and `draft_revision_id is null` is the ordinary
+ *   *first* state of every ingest (src/db/schema.ts § `draft_revision_id`).
+ *   That job is charged, and deleting the article under it strands its
+ *   reservation.
+ * - **A running job whose lease has expired counts.** The glossary query
+ *   excludes it through `leaseIsLive`, again correctly: a fenced-out job cannot
+ *   publish. But it is not finished — `settleExpired` puts it back to `queued`
+ *   on the same row and it carries on (src/db/schema.ts § `requeues`) — so it
+ *   is a wait the reader can end by pressing Stop, not a row to delete under.
+ *
+ * `done`, `error` and `cancelled` are the three this does **not** match, and
+ * that is measured rather than assumed: both slug indexes are partial on
+ * `status in ('queued','running')`, so a terminal row blocks nothing and the
+ * reader can re-add the same URL afterwards. It does not stay as history
+ * either — `deleteTerminalJobs` below says why the delete takes it.
+ *
+ * **Owner-scoped as well as slug-scoped.** `jobs.slug` carries no foreign key
+ * and no owner filter of its own, so without `owner_id` this would let one
+ * reader's job refuse another reader's delete — which is both a leak (the 409
+ * says the slug is busy) and a denial of service.
+ *
+ * **No `limit`, because it locks.** Every matching row is locked, not just the
+ * first: the point is to hold whatever is live still for the length of this
+ * transaction. Nothing is locked when nothing matches, which is exactly the
+ * hole the article lock above closes
+ * (docs/postmortems/260901f-a-for-update-that-locks-nothing.md).
+ */
+function liveJobsForQuery(
+  db: Pick<ReturnType<typeof getDb>, "select">,
+  slug: string,
+  ownerId: OwnerId,
+) {
+  return db
+    .select({ id: jobs.id })
+    .from(jobs)
+    .where(
+      and(
+        eq(jobs.ownerId, ownerId),
+        eq(jobs.slug, slug),
+        inArray(jobs.status, ["queued", "running"]),
+      ),
+    )
+    .for("update");
+}
+
+/**
+ * **The import the reader is being asked to stop**, in the words they will see.
+ *
+ * A sentence rather than a code, and written for somebody who pressed a button:
+ * it says what is in the way and what to do about it, and nothing about leases,
+ * reservations or drafts. The same discipline as `jobRunning` in
+ * [pg-glossary.ts](pg-glossary.ts).
+ *
+ * **Refusing is the cheap answer, not the cautious one.** The first draft of
+ * this deleted the slug's non-terminal jobs instead, to clear the
+ * `jobs_reserved_slug` collision the Stage A spike measured — and that leaks the
+ * job's quota slot for ever, because deleting a job deliberately does not touch
+ * its reservation (src/db/schema.ts § `ingest_event_id`) and an unsettled
+ * reservation deliberately never expires (§ `ingest_events`). Refusing solves
+ * the collision as well: the reader stops the import, which settles the
+ * reservation through the path that exists for it, and then deletes.
+ */
+function importRunning(): Error {
+  return Object.assign(
+    new Error(
+      "An import is running on this article, so it cannot be deleted yet. Stop it, or wait " +
+        "for it to finish, then delete.",
+    ),
+    { status: 409 },
+  );
+}
+
+/**
+ * **Why the finished jobs go with the article, when the running ones stop it.**
+ *
+ * The argument needs a home, because the two halves look contradictory: a live
+ * job makes the delete refuse, and a terminal one is deleted outright.
+ *
+ * ## What a leftover terminal row can do
+ *
+ * `jobs` has no `article_id`; it is keyed by `slug` text and is invisible to the
+ * cascade. Stage C left the terminal rows on the grounds that they are inert
+ * against all four of the queue's partial unique indexes, which is true and is
+ * not the whole question. `retryJob` (src/jobs.ts) copies the failed attempt's
+ * own `url` or `upload` into the new request, and `slugForRetry` deliberately
+ * keeps the failed attempt's own slug — so **Retry on a long-dead failure
+ * queues a job for the destroyed slug, and the worker's `lockOrCreateArticle`
+ * remakes the article.** That is not a race the reader has to win: the row
+ * survives on purpose, so they can do it weeks later. GPT Sol's F20,
+ * docs/plans/260906h-delete-an-article-permanently.md.
+ *
+ * ## Why deleting them cannot leak a quota slot, where deleting a live one can
+ *
+ * F3 is why an *active* job is refused rather than deleted: it may be holding an
+ * unsettled reservation, deleting the row does not settle it
+ * (src/db/schema.ts § `ingest_event_id`), and an unsettled reservation never
+ * expires (§ `ingest_events`).
+ *
+ * A terminal job cannot be in that state, and this is a property of the code
+ * rather than an observation about the rows. **Every transition into a terminal
+ * status settles the reservation inside the same transaction**, and there are
+ * only four of them: `settlingIfTerminal` (pg-jobs.ts) wraps `releaseStep` and
+ * `finish`, `requestCancel` settles on the branch that answers `cancelled`,
+ * `settleExpired`'s sweep releases everything it ended, and `settleIn`
+ * (pg-session.ts) succeeds the slot in the publishing transaction. So by the
+ * time a row is `done`, `error` or `cancelled` its slot is already `succeeded_at`
+ * or `released_at`, and the `ingest_events` row — which is what the bill is
+ * computed from — is untouched by this delete in either case. `jobs.ingest_event_id`
+ * is `NO ACTION` in both directions.
+ *
+ * `pgJobStore.forget` and `trimFinished` have deleted terminal rows on exactly
+ * this reasoning since before any of it was written down; this is the same
+ * operation, chosen by article rather than by hand.
+ *
+ * **And the argument above is checked rather than trusted**, by
+ * `strandedReservationsQuery` below. It is an argument about the *application*,
+ * and the database does not carry it: `jobs_status` permits `error` while
+ * `ingest_events_settled_once` permits both settlement timestamps to stay null
+ * (src/db/schema.ts), so a hand-run `UPDATE`, an admin repair or a migration can
+ * make the state this paragraph says is unreachable — and this delete would then
+ * erase the only link from the slot to the job that spent it. GPT Sol's F42.
+ *
+ * ## Owner-scoped, like everything else here
+ *
+ * `articles.slug` is globally unique, so another owner cannot have this article
+ * — but they *can* have a terminal job that lost the race for the name, and it
+ * is not this delete's business. Their retry would create *their* article, which
+ * is a different row and already possible today.
+ */
+function deleteTerminalJobs(
+  tx: Pick<ReturnType<typeof getDb>, "delete">,
+  slug: string,
+  ownerId: OwnerId,
+) {
+  return tx
+    .delete(jobs)
+    .where(and(eq(jobs.ownerId, ownerId), eq(jobs.slug, slug), inArray(jobs.status, TERMINAL)));
+}
+
+/**
+ * **A finished job of this article's still holding a slot nobody gave back.**
+ *
+ * The check `deleteTerminalJobs` above is not allowed to skip, and the reason it
+ * is a query rather than a comment: the sentence *"a terminal job's reservation
+ * is always settled"* is true of every path through this codebase and is **not**
+ * a constraint. `jobs_status` allows `error`, `ingest_events_settled_once` allows
+ * `num_nonnulls(succeeded_at, released_at) <= 1` — which includes zero — and one
+ * `update spideryarn.jobs set status = 'error'` by hand puts the two together.
+ * GPT Sol's F42, docs/plans/260906h-delete-an-article-permanently.md.
+ *
+ * If that row is deleted, the slot is counted against the reader for ever and
+ * `jobs.ingest_event_id` was the only thing that said which job had spent it. So
+ * the delete refuses instead, loudly — see `strandedReservation`.
+ *
+ * **It refuses rather than settling.** Settling would mean choosing between
+ * charging the reader and refunding them on the strength of a job status that is
+ * corrupt by hypothesis, which is a bill nobody asked for either way. Sol's
+ * finding says the same in one line: *"Do not infer whether to charge or
+ * release."*
+ *
+ * **`for update`, and it locks nothing at all in the ordinary case** — the join
+ * is inner and the predicate is *unsettled*, so a healthy article matches no
+ * rows and there is nothing to lock. When it does match, the lock makes the
+ * check and `deleteTerminalJobs` one decision about the same rows, and the
+ * transaction throws immediately afterwards and releases them.
+ *
+ * Not `for update of jobs`, which is what this asked for first and is what a
+ * reviewer will reach for: drizzle qualifies the table with its schema there,
+ * and `for update of "spideryarn"."jobs"` is a `42601` syntax error — Postgres
+ * wants the alias alone. Locking the ledger row as well costs nothing here for
+ * the reason above.
+ *
+ * **Pre-existing rather than introduced**, and worth saying so: `trimFinished`
+ * and `forget` have deleted terminal rows on the same assumption since long
+ * before this feature, and still do. This is one delete path made stricter than
+ * the status quo, not a hole this one opened.
+ */
+function strandedReservationsQuery(
+  db: Pick<ReturnType<typeof getDb>, "select">,
+  slug: string,
+  ownerId: OwnerId,
+) {
+  return db
+    .select({ jobId: jobs.id, reservationId: ingestEvents.id })
+    .from(jobs)
+    .innerJoin(ingestEvents, eq(jobs.ingestEventId, ingestEvents.id))
+    .where(
+      and(
+        eq(jobs.ownerId, ownerId),
+        eq(jobs.slug, slug),
+        inArray(jobs.status, TERMINAL),
+        isNull(ingestEvents.succeededAt),
+        isNull(ingestEvents.releasedAt),
+      ),
+    )
+    .for("update");
+}
+
+/**
+ * **The refusal for a state that should not exist**, and it says so.
+ *
+ * A 500 rather than a 409: a conflict is something the reader can resolve by
+ * waiting or pressing Stop, and this is neither their doing nor within their
+ * power. The `status` is also what lets the sentence out past `guardDbStore`
+ * (src/store/db-errors.ts) — without one, the reader would get *"Something went
+ * wrong"* and nobody would ever learn what.
+ *
+ * Ids, no prose: a job id and a reservation id are both ours (src/log.ts). They
+ * go to the log rather than into the sentence, because they are what a person
+ * repairing this needs and are noise to the reader who cannot.
+ */
+function strandedReservation(rows: { jobId: string; reservationId: string }[]): Error {
+  log("store").error(
+    { jobIds: rows.map((r) => r.jobId), reservationIds: rows.map((r) => r.reservationId) },
+    "refusing to delete an article: a finished job still holds an unsettled ingest reservation",
+  );
+  return Object.assign(
+    new Error(
+      "This article cannot be deleted: one of its finished imports is still holding a quota " +
+        "slot that was never settled, and deleting it would spend that slot for ever. Nothing " +
+        "has been deleted, and this has been reported.",
+    ),
+    { status: 500 },
+  );
+}
 
 const rawPgShelfStore: ShelfStore = {
   async read(slug: string): Promise<ShelfState> {
@@ -115,6 +395,132 @@ const rawPgShelfStore: ShelfStore = {
       .where(ownedSlug(slug))
       .returning({ slug: articles.slug });
     if (!row) throw notFound(slug);
+  },
+
+  /**
+   * **One statement, and the cascade does the rest.** See `ShelfStore.destroy`
+   * for what the three answers mean; this is why it is shaped the way it is.
+   *
+   * ## Why nothing is tidied up first
+   *
+   * `articles_current_revision_fk` is `NO ACTION` and **not deferrable**, so it
+   * is checked at the end of each *statement* rather than at commit. Deleting
+   * the children by hand first therefore fails, and wrapping that in a
+   * transaction rescues nothing — measured, both ways round, by the Stage A
+   * spike on a fully populated article
+   * (docs/plans/260906h-delete-an-article-permanently.md § What the spike
+   * found). The single `delete from articles` succeeds on exactly that row.
+   *
+   * So the transaction here is not for the delete. It is for the three
+   * decisions in front of it, which have to be taken against a state nothing
+   * can move underneath them.
+   *
+   * ## The lock order, which is not negotiable
+   *
+   * `billing_accounts` **before** `articles`, everywhere — the rule
+   * [pg-billing.ts](pg-billing.ts) § *The lock order* states and the reason it
+   * is stated as *everywhere*: a consistent order is what stops this
+   * deadlocking, so a second writer that took the article first and the billing
+   * row second would be the cycle. Deleting an article moves usage in exactly
+   * the way an unshare does, which is why this transaction is in the rule at
+   * all — and since 2026-09-06 the price is frozen by a `BEFORE DELETE` trigger
+   * on `articles` (Stage B), which runs inside this lock and therefore cannot
+   * read a visibility somebody is changing.
+   *
+   * `lockBillingAccount` creates the row if the reader has none, because a
+   * `FOR UPDATE` that matches nothing locks nothing
+   * (docs/postmortems/260901f-a-for-update-that-locks-nothing.md) — a free
+   * reader is precisely the case the boundary is for.
+   *
+   * ## What survives, deliberately
+   *
+   * The four `on delete set null` tables keep their rows with a null
+   * `article_id`: `ai_calls` and `ingest_events` because the ledger outlives
+   * everything, `article_visibility_changes` because takedown evidence about a
+   * document we no longer serve is exactly what a late complaint needs, and
+   * `realtime_sessions`. The `uploads` row survives too, with a stale `slug`
+   * and no foreign key at all — the column has no unique index, so it dangles
+   * harmlessly. **The terminal `jobs` rows do not survive**: they carry the
+   * attempt's own slug and URL, which is a live Retry button pointing at a
+   * destroyed article, so `deleteTerminalJobs` takes them in this transaction.
+   *
+   * **The `uploads` row is left alone on purpose.** Deleting it destroys the
+   * only durable mapping from this article back to its staging object
+   * ([pg-uploads.ts](pg-uploads.ts) § `forget`), and Stage E owns removing that
+   * object. Removing the row here would make the bytes unreachable rather than
+   * deleted, which is the failure that stage exists to prevent.
+   */
+  async destroy(slug: string): Promise<{ destroyed: string }> {
+    /* Before any query, so a pasted title comes back as "that is not a name"
+       rather than as "there is no such article". tests/store-slug-guard.test.ts. */
+    requireSlug(slug);
+
+    /* Read once, out here, and passed down. Asking `currentOwnerId()` again at
+       each of the three sites would be three opinions that can differ — the
+       argument `ownedSlug` (src/store/owned-slug.ts) already makes about the AI
+       ledger, and it matters more here than anywhere: the owner in the `where`
+       of the DELETE has to be the owner the lock was taken as. */
+    const ownerId = currentOwnerId();
+
+    return getDb().transaction(async (tx) => {
+      /* **An unlocked read, and it has to come first.** `lockBillingAccount`
+         below *creates* the reader's billing row if they have none — so taking
+         it before establishing that the article is theirs means a request that
+         is about to be refused writes a row on its way out. For a stranger with
+         a real account that is a harmless empty anchor; for one without,
+         `billing_accounts.owner_id` references `auth.users(id)` and the whole
+         thing comes back as a `23503` wearing a 500 instead of the 404 it is.
+         Watched doing exactly that, 2026-09-06, by
+         tests/owner-isolation.test.ts.
+
+         **This is not the authorising read**, and moving the locked one up here
+         instead would break the lock order (`billing_accounts` before
+         `articles`, everywhere) and put the documented deadlock cycle back. A
+         plain `SELECT` takes no row lock at all, so it is outside that order and
+         cannot be half of a cycle. It refuses early and never permits: the
+         answer that counts is the locked re-read below, which is the one the
+         DELETE is ordered against. */
+      const [seen] = await tx
+        .select({ id: articles.id })
+        .from(articles)
+        .where(ownedSlug(slug, ownerId))
+        .limit(1);
+      if (!seen) throw notFound(slug);
+
+      await lockBillingAccount(tx, ownerId);
+
+      const [article] = await lockedArticleForDestroyQuery(tx, slug, ownerId);
+      if (!article) throw notFound(slug);
+
+      const live = await liveJobsForQuery(tx, slug, ownerId);
+      if (live.length > 0) throw importRunning();
+
+      /* **And now the finished ones, which are safe to delete for a reason and
+         not by assumption.** The reason is that a terminal job's slot is always
+         settled; the database does not enforce it, so this asks. Nothing can
+         become terminal underneath it either: the refusal above has just locked
+         every active row for this slug and found none, and an insert can only
+         ever arrive `queued`. See `strandedReservationsQuery`. */
+      const stranded = await strandedReservationsQuery(tx, slug, ownerId);
+      if (stranded.length > 0) throw strandedReservation(stranded);
+
+      /* **And the finished ones go with it**, in this transaction, and only
+         after the refusal above has established there are no others. See
+         `deleteTerminalJobs` for why a terminal row is safe to delete and an
+         active one is not. */
+      await deleteTerminalJobs(tx, slug, ownerId);
+
+      const result = await tx.delete(articles).where(ownedSlug(slug, ownerId));
+
+      /* `rowCount === 1`, never `>= 1` and never ignored — the house idiom for a
+         conditional write. The `where` names a globally unique slug, so any
+         other number is a bug rather than a busier day, and reporting
+         `{ destroyed }` over a zero would be the silent success this repo keeps
+         writing up: the client navigates away and the article is still there. */
+      if (result.rowCount !== 1) throw notFound(slug);
+
+      return { destroyed: slug };
+    }, READ_COMMITTED);
   },
 };
 
