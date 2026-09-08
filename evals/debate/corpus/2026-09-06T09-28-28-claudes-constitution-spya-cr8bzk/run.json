@@ -1,0 +1,55 @@
+{
+  "runId": "2026-09-06T09-28-28",
+  "startedAt": "2026-09-06T09:28:31.384Z",
+  "slug": "claudes-constitution-spya-cr8bzk",
+  "model": "anthropic/claude-sonnet-5",
+  "sourceHash": "03ba70bc164908cd.75770b55cd713653.8dfe33b0bfcae047",
+  "completed": true,
+  "error": null,
+  "elapsedMs": 74517,
+  "webSearches": 6,
+  "kept": {
+    "direct": 1,
+    "claims": 4
+  },
+  "cost": {
+    "kind": "measured",
+    "nanos": 215026000,
+    "unpriced": 0,
+    "calls": 2,
+    "callIds": [
+      "gen-1788686911-Nrn7iu3lWcAtZ7uCXzm8",
+      "gen-1788686950-dtGwBStqhdRYsakjwPVa"
+    ],
+    "webSearches": 6,
+    "problems": []
+  },
+  "costLine": "$0.2150 over 2 call(s)",
+  "ledgerRunId": "982b3571-1cca-4d24-a334-6f7e8abbbdf5",
+  "journalFile": "output/debate-runs/2026-09-06T09-28-28-claudes-constitution-spya-cr8bzk/journal.jsonl",
+  "journalWriteFailures": 0,
+  "reconciliation": {
+    "attempts": [
+      {
+        "attemptId": "c48c6c4c-fd92-4ced-92aa-03d15af9f3d7",
+        "pass": "direct",
+        "response": "body",
+        "outcome": "ok",
+        "failure": null,
+        "status": "captured"
+      },
+      {
+        "attemptId": "91f6ec69-efb3-4d97-bdb0-28e9fed09b3b",
+        "pass": "claims",
+        "response": "body",
+        "outcome": "ok",
+        "failure": null,
+        "status": "captured"
+      }
+    ],
+    "captured": 2,
+    "unmatchedStarts": 0,
+    "orphanEvents": 0,
+    "complete": true
+  }
+}

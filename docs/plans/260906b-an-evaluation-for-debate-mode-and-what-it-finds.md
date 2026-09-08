@@ -243,6 +243,16 @@ is not extended, `RELATIONS.has` / `VALENCES.has` fall through and **every row s
 
 ## The corpus
 
+> **The three runs we actually paid for are committed, at
+> [`evals/debate/corpus/`](../../evals/debate/corpus/README.md)** — `cargocult`, `writes` and
+> `claudes-constitution`, 2026-09-06. They were in `output/debate-runs/`, which is gitignored scratch,
+> which meant they existed in exactly one place: a worktree about to be deleted. `npm run
+> worktree:check` caught it on 2026-09-08. Every number in this plan comes out of those files and
+> nothing can produce them again — the searches cost money, the web has moved, and the answers are
+> stochastic. The `-check` runs are **not** committed: `run.ts` writes those from a synthetic fixture
+> and they are regenerable, and counting twelve replays of one fixture as twelve pieces of evidence is
+> a mistake this plan has already made once.
+
 **Four of the five roles I first assigned were wrong**, and the corrections came from hand-verified
 web research rather than from assumption. Verified means: fetched the page and read the sentence in
 which it names the article.
