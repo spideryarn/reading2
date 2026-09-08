@@ -603,6 +603,35 @@ fleet dashboard's owner**, who is deciding on that evidence whether to cross a d
 their own code. The sampler now records categorical counts, and they have been told which number
 changed and why.
 
+#### `working` is not a proxy for busy either, and the measurement nearly said otherwise
+
+The dashboard's owner then checked the live board against `ListAgents` as an independent oracle and
+found something neither of us had assumed: **a row the board calls `working` can be a session whose
+turn has ended** with something backgrounded behind it. Claude Code's own `status: "shell"` means
+`idle && hasUnfinishedLocalBash`, and such a session is at a prompt and can be messaged — but
+`drainGate` excludes it. So `working` is a poor proxy for load *and* an unreliable proxy for busy,
+and some of what the exclusion drops was reachable all along.
+
+Measured 2026-09-08 at 20:53: **one of three `working` rows was at a prompt**, with no unknowns.
+
+**The instrument nearly reported the opposite, and how it nearly did is the durable part.** The
+oracle is `~/.claude/sessions/*.json`, and the join is **not** the pid in the filename: measured
+pairs are pane `1921921` against file `1921927`, pane `3184904` against `3184909`, and (from
+`pause.ts`, which already joins correctly) `124240` against `124250`. The pane pid is the shell and
+Claude is a descendant at no fixed offset. My first attempt joined on the filename and returned
+*unknown for four rows out of four*.
+
+Had `unknown` been folded into "no", it would have reported `working_but_at_prompt = 0` — clean,
+plausible, precise, and false — and that number would have gone to the person deciding the stage.
+**An absent reading standing in for a negative one**, which is [silent-success.md](../reusable/silent-success.md)
+in its purest form and the shape this whole day kept producing.
+
+My second attempt walked the process tree instead. It returned zero unknowns, so it *looked*
+correct — and read `0` where the identity join reads `1`. **A join that returns no unknowns is not
+thereby a join that answers the right question**; ancestry is merely adjacent to identity. The
+sampler now joins on the `sessionId` inside each file, the way `pause.ts` always did, and reports
+`unknown` as its own column so the next reader can check it rather than trust it.
+
 #### The Overseer sees less of the fleet than the fleet sends, and the rules should not fix that by widening the differ
 
 The three fields the rules most want are all outside `ObservedRow`: `permissionMode`, `pause`, and
