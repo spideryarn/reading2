@@ -364,6 +364,64 @@ The page could show the draft state *before* Send is pressed — the same princi
 `wire.ts` is being written by somebody else today. Deferred deliberately: Stage B is the safety and
 Stage C is the explanation, and both stand without this.
 
+## Made to refuse in a real browser, and then made to allow
+
+**A green suite is not evidence that a person can see a thing, and it is emphatically not evidence
+that a safeguard fires.** Four features in this repo were built, tested, routed, shipped and dead —
+the page sent `dryRun` and the route has only ever parsed `mode`, so every box action ever pressed
+was a dry run reported as "Done."
+([260908b](../postmortems/), and `renderSpoken` in this very directory was called from its tests and
+from nowhere else). So this was driven from Chrome against the running server, on a throwaway
+session of my own.
+
+**The refusal.** A draft `❯ DRAFT-BRAVO-still-being-written` left in `%2433`'s box; Send pressed
+from the page with `HELLO-FROM-THE-BROWSER`. The card, verbatim:
+
+> **Nothing was sent.**
+> pane %2433 has 1 line of text already in its input box; a message sent now would be added to the
+> end of it and submitted as one
+> `input-not-empty` · HTTP 409 · said by the dashboard server
+> Refreshing will not help — the box is not empty, and only that session can empty it. Wait for it
+> to send what it has, or go and look:
+> `gjd-remote resume ab-dummy-target`
+
+**And the box was then read back**, which is the half that matters: `capture-pane` showed
+`❯ DRAFT-BRAVO-still-being-written`, unchanged, with no `HELLO-FROM-THE-BROWSER` appended. The
+screenshot proves the message; the capture proves the safeguard.
+
+**Then made to allow, because a guard that has never let anything through is a guard that is simply
+off.** The box was cleared, the page reloaded, and the same Send succeeded — a green *Sent.* card
+printing the two `send-keys` calls, and the agent replied in its own terminal. Both halves, or
+neither is evidence.
+
+**And A9's client half, proved the same way rather than assumed.** A dialog was provoked on the same
+throwaway session — an agent's own `AskUserQuestion` with five options — and the card drew all of it:
+a *"What you would be approving"* box holding the material, the sha256 fingerprint under it with the
+sentence about what the server compares before it types, the five options as buttons with their
+keystrokes, and a consequence badge on **every one** reading
+`UNCLASSIFIED — ASSUME IT IS FROM NOW ON`, with a working tooltip. Nothing here was inferred from a
+passing test.
+
+**A design finding that came out of that screenshot and is NOT fixed here**, because it is a
+judgement rather than a defect. On an `AskUserQuestion` every option is `unknown` by construction —
+an agent writes its own labels and none of them says "yes" — so the card draws five identical
+full-width red badges on a 390px phone. The rule they enforce is right and must not be softened:
+`unknown` is drawn at least as loudly as `persistent`, held by an inequality over `CONSEQUENCE_TONE`
+that the suite asserts, because the alternative is the conservative default becoming the mildest
+badge on screen. But the tone was calibrated for a **permission dialog**, where some options are
+`once` and some `persistent` and the badge tells them apart. **A badge that appears on every option
+in a card distinguishes nothing within that card**, and five maximum-alarm pills on a benign question
+is how a reader learns to stop seeing them. The honest fix is probably one line of prose at the card
+level for the all-`unknown` case rather than per-option pills — but that is a design call for Greg,
+and weakening the tone table to get there would be the guarantee traded for the aesthetics.
+
+**One thing the browser found that no test would have.** The first Send returned
+`declared-not-steerable`, not `input-not-empty` — the collector had briefly failed to read the
+session, so the page was honestly offering Send on a row whose status was stale. That is not this
+stage's bug and it did not stop the proof (a Refresh and a retry produced the expected refusal), but
+it is a reminder that the refusal a person actually meets is whichever guard fires first, and the
+ordering of them is a product decision nobody has made deliberately.
+
 ## What the review changed
 
 **GPT Sol reviewed the plan before a line was built** —

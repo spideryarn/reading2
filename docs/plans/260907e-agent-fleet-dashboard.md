@@ -669,9 +669,19 @@ Two consequences, and the second is worse than the first:
       the conservative default in neutral grey and it becomes the safest-looking badge on screen,
       which would inverse the guarantee by a colour choice.
 
-**Verified in a browser, not only in the suite** — see § Evidence. Every part of this stage had
-tests before it had a screenshot, and this repo has four features that were built, tested, routed,
-shipped and dead.
+**Verified in a browser on 2026-09-08, not only in the suite.** A dialog was provoked on a
+throwaway session and the card drew all of it: the *"What you would be approving"* box with the
+material in it, the sha256 fingerprint and its sentence, the options as buttons with their
+keystrokes, and a consequence badge on every option with a working tooltip. Every part of this stage
+had tests before it had a screenshot, and this repo has four features that were built, tested,
+routed, shipped and dead.
+
+**One thing the screenshot showed that the tests could not.** On an agent's own `AskUserQuestion`
+every option is `unknown` by construction, so the card draws five identical full-width red badges on
+a phone. The tone rule is right and is not being softened — but it was calibrated for a permission
+dialog where the badge tells `once` from `persistent`, and a badge on every option distinguishes
+nothing within its own card. Left as a design question for Greg in
+[260908f](260908f-prose-needs-an-empty-input-box-not-merely-a-box.md), not patched here.
 
 ### ✅ Stage v0.2e: what answering a dialog *does* decides whether it may be answered (landed 2026-09-08)
 
