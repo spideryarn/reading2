@@ -2258,10 +2258,27 @@ rather than patched, and every claim below was re-measured here before it was wr
 *working* are both left out. For a person pressing **Ease off**, that is defensible and the comment
 above it says so.
 
-**For a rule that fires *because* the box is under pressure, it inverts.** The more load there is, the
-more sessions are working, and the fewer the broadcast reaches. Measured from
-`~/.overseer/last-snapshot.json` at 20:25: 15 rows — 7 shells, 5 working, 3 idle — so the broadcast
-would have reached **3 of 15**, and the 5 it excluded were the ones consuming the box.
+**For a rule that fires *because* the box is under pressure, it inverts.** The more sessions are
+working, the fewer the broadcast reaches.
+
+**The first two numbers in this paragraph were wrong, both in the direction that favoured the stage,
+and the correction came from the person whose stage it was.** GPT Sol caught it reviewing their plan;
+`spideryarn2-b6` passed it on unprompted.
+
+- *"3 of 15"* mixed **8 agent sessions with 7 shells**. A shell was never eligible to be spoken to,
+  so counting shells in the denominator overstates what the route is missing. The honest reading of
+  20:25 is **3 of 8 agent sessions deliverable, 5 held because working, 7 shells never eligible** —
+  and the first reading off the corrected sampler is **4 of 7**.
+- *"the 5 it excluded were the ones consuming the box"* was **an inference nobody had earned**.
+  `working` describes a Claude pane's state; it does not establish that those sessions were
+  consuming the machine. Attributing load to sessions needs `health.ts`'s own attribution evidence,
+  which this dashboard has and that argument was not using.
+
+**What survives is the structural claim, and it is the part this stage rests on**: every working row
+is excluded by construction, and an all-working fleet makes the route refuse rather than degrade.
+That does not depend on any denominator. What the numbers were doing was saying how *often* the
+exclusion bites — which is the question the sampler exists to answer, and which was being
+overstated.
 
 **The sharp end is `total === 0`** (`:1710`). When every agent is working — the exact condition the
 action exists for — the route refuses the whole call with *"none of the rows you sent is at a prompt
@@ -2303,11 +2320,16 @@ So the fix is to render at delivery rather than at enqueue — and it is **two c
 #### Not started, and deliberately waiting on evidence
 
 Crossing a deliberate refusal needs better evidence than *it would reach more sessions*.
-`spideryarn2-b6` is sampling `total`, `reachable`, `working`, the full status histogram and the load
-ratio every 30 seconds for 24 hours, recording an unreadable snapshot **as unreadable rather than as
-zero rows**. Two early readings — 3 of 15, then 2 of 14 with `working` steady at 5 — are a direction
-rather than a result; the second is the more interesting, because the denominator moved while the
-working count did not, which is a session ending rather than pressure easing.
+`spideryarn2-b6` is sampling **both denominators** — agent sessions and total rows — with the full
+status histogram and the load ratio, every 30 seconds for 24 hours, recording an unreadable snapshot
+**as unreadable rather than as zero rows**. Reading it against agents rather than rows is the
+correction above; the series will allow either framing to be judged rather than requiring anybody to
+take one.
+
+**The early readings do not obviously support the stage.** Load `ratio1` has fallen to 0.26 and the
+agent count is dropping as sessions finish, which is the *recovers on its own* case — the one that
+kills this stage. One reading is not that result, but it was reported alongside the ones that
+favoured the fix rather than instead of them, which is the only reason it is worth anything.
 
 **A series showing reachability recovering on its own kills this stage**, which is the cheaper
 outcome and the one to hope for.
