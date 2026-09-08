@@ -126,6 +126,14 @@ facts defeat it at this commit:
   grepped: no caller anywhere enqueues `steps: ["labels"]`. And this plan excludes `labels` from the
   offered set. So a reader who pressed it would strip their paragraph labels with no door back.
 
+  > **2026-09-07, and this half has since stopped being true.** Stage 2b of 260906a landed in a
+  > worktree hours after this grep: `publishRevisionIn` now queues the free successor in the
+  > publication's own transaction whenever the revision says `pending`, and the browser drives it.
+  > The **conclusion still holds**, for the reason the second question in `src/rerun-steps.ts` asks:
+  > the successor is free of quota and is not free of money, so the press would buy the pipeline's
+  > slowest pass (682 s) invisibly, on top of the `hierarchy` call it names, and the labels would be
+  > gone in between. Out for the cost, not for the absence of a door.
+
 A third fact makes it worse rather than better: force does not bypass hierarchy's checkpoints
 (`src/hierarchy.ts:2853`), so the press may replay a checkpoint and buy nothing — a re-run that
 looks like it worked and changed nothing, which is the failure this repo names most often.
@@ -852,7 +860,11 @@ than a row: a forced hierarchy may replay its checkpoint and buy nothing
 (`src/hierarchy.ts:2853`), it publishes an empty pending-label state, and the free Labels successor
 that [260906a](260906a-labels-leave-the-blocking-hierarchy-step.md) describes **is not built** — so
 today it would strip a reader's paragraph labels with no door back. Whoever picks this up needs the
-successor first, then explicit checkpoint, cost and atomicity semantics for the press. The natural
+successor first, then explicit checkpoint, cost and atomicity semantics for the press.
+
+**2026-09-07: the successor exists**, so what is left of that list is the checkpoint, cost and
+atomicity semantics — and the cost half is now the whole objection, because the press would buy a
+682 s labels pass the reader never named. See the note above. The natural
 shape is probably `{ steps: ["hierarchy", "labels"], force: ["hierarchy"] }` in one atomic draft,
 but that is a design call, not a foregone one.
 

@@ -162,7 +162,7 @@ export interface UseIllustrated {
    *
    * **What unforced actually buys is de-duplication of the painting half.**
    * `work_key` is computed over the request with `force` in it (`workKeyFor`,
-   * src/jobs.ts), so a forced press and an unforced one are two keys and two
+   * src/store/jobs.ts), so a forced press and an unforced one are two keys and two
    * $0.40–$0.65 jobs: two tabs, or a press either side of a poll, and the reader
    * pays twice — `ensure` above, at length. There is nothing for a force to
    * overcome here in any case, because this verb is offered only from the empty

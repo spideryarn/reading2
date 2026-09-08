@@ -1897,6 +1897,11 @@ describe("the authenticated API's route contract", () => {
       expect(sorted(parsed.guards.filter((g) => g.fromTable).map((g) => pairKey(g.method, g.match))))
         .toEqual(
           sorted([
+            // search, 260907b stage 5
+            "GET regex /^\\/api\\/search\\/([\\w.%-]+)$/",
+            "POST regex /^\\/api\\/search\\/([\\w.%-]+)$/",
+            "PATCH regex /^\\/api\\/search\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
+            "DELETE regex /^\\/api\\/search\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
             // referee, 260907e
             "GET regex /^\\/api\\/referee\\/criteria\\/([\\w.%-]+)$/",
             "POST regex /^\\/api\\/referee\\/criteria\\/([\\w.%-]+)$/",
@@ -1923,7 +1928,7 @@ describe("the authenticated API's route contract", () => {
             "GET literal /api/billing/usage",
           ]),
         );
-      const moved = ["/api/billing", "/api/jobs", "/api/uploads", "/api/referee"];
+      const moved = ["/api/billing", "/api/jobs", "/api/uploads", "/api/referee", "/api/search"];
       expect(
         parsed.guards.filter(
           (g) => !g.fromTable && moved.some((p) => describeMatch(g.match).includes(p)),
@@ -1956,6 +1961,11 @@ describe("the authenticated API's route contract", () => {
         parsed.guards.filter((g) => g.fromTable).map((g) => pairKey(g.method, g.match)),
         "the table's rows are the bottom of the chain in the order it had them; a domain is prepended, never appended, and the interleave inside jobs/uploads is not to be tidied",
       ).toEqual([
+        // search, 260907b stage 5
+        "GET regex /^\\/api\\/search\\/([\\w.%-]+)$/",
+        "POST regex /^\\/api\\/search\\/([\\w.%-]+)$/",
+        "PATCH regex /^\\/api\\/search\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
+        "DELETE regex /^\\/api\\/search\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
         // referee, 260907e
         "GET regex /^\\/api\\/referee\\/criteria\\/([\\w.%-]+)$/",
         "POST regex /^\\/api\\/referee\\/criteria\\/([\\w.%-]+)$/",
