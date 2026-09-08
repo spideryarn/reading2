@@ -434,6 +434,24 @@ Captured 2026-09-08, and several of these contradict what a hand-written fixture
   writes a parser branch for, and a branch built for a value nothing emits is untestable, permanent
   and invisible. If it ever *is* seen again, it is a real finding in the collector and wants a
   snapshot saved, not a tolerance added.
+
+  **And the way the re-measurement got it wrong is worth more than the correction.** The live sample
+  reported *"no `null` in 551 observations"* and that was read as refuting the claim. It does not,
+  because **every live row in that window was a version-1 session — the sample contained no legacy
+  session at all**, so the measurement never had the chance to see the value it was said to rule out.
+  The agent's own statement of the rule:
+
+  > A census over a sample cannot refute a claim about which values are **possible**; only the source
+  > can do that. The data that would have caught me was on disk the whole time — I asked it the
+  > change-count question rather than the value-census one.
+
+  **This is exactly the positive-control rule** written into
+  [silent-success.md](../reusable/silent-success.md) earlier the same evening, arriving from a
+  direction nobody expected: not a broken instrument reporting zero, but a working instrument reporting
+  zero over a population that could not have contained the thing. The distinction the rule needs, and
+  which this instance supplies, is between **measuring a frequency** and **refuting an existence** —
+  a sample can do the first and never the second. Worth considering as an addition to that note if it
+  recurs; one instance is an observation.
 - **`title` is null for most sessions** (14 of ~37 had one), so null is the common case, not the edge.
 - **`question` was null in every row of every snapshot**, and `shell.busy` was always `true`. Both
   branches are therefore **unexercised by real data** — worth knowing before trusting a test that
