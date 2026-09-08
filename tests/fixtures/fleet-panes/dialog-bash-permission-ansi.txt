@@ -1,0 +1,26 @@
+
+[38;5;231m●[39m Hi! 👋
+
+[38;5;246m✻[39m [38;5;246mCooked for 2s · done 1:57[39m
+
+[38;5;239m[48;5;237m❯ [38;5;231mrun the shell command: curl -s https://example.com | head -1[39m
+
+[38;5;246m[49m●[39m Fetching example.com and showing first line
+[38;5;246m  ⎿  $ curl -s https://example.com | head -1[39m
+
+[38;5;153m──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[39m [1m[38;5;153mBash command[0m
+ [1mTip: auto mode handles these prompts for you — choose "switch to auto mode" below[0m
+
+   curl -s https://example.com | head -1
+   [38;5;246mFetch example.com and show first line[39m
+
+ This command requires approval
+
+ Do you want to proceed?
+ [38;5;153m❯[39m [38;5;246m1. [38;5;153mYes[39m
+   [38;5;246m2. [39mYes, and don’t ask again for: curl -s https://example.com
+   [38;5;246m3. [39mYes, and switch to auto mode[38;5;246m · auto mode handles these prompts for you[39m
+   [38;5;246m4. [39mNo
+
+ [38;5;246mEsc to cancel · Tab to amend[39m
