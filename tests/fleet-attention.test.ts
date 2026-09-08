@@ -357,3 +357,35 @@ describe("the field on the payload", () => {
     expect(wire.attention.list.items[0]?.evidence.question).toBe("Drop the sessions table?");
   });
 });
+
+
+describe("the evidence disclosure sits above the card's tap overlay", () => {
+  /**
+   * **A PARTIAL DETECTOR FOR A BUG NO UNIT TEST CAN SEE, and it says so rather
+   * than pretending otherwise.**
+   *
+   * The attention card is a stretched link: `.session-open::after` covers it
+   * `inset: 0`, and a positioned element paints above in-flow content whatever
+   * the DOM order says. So the evidence disclosure inside it received NO pointer
+   * input at all — measured 2026-09-08 in Chrome on the box, `elementFromPoint`
+   * at every corner and the centre of its `<summary>` returned
+   * `button.session-open`, Playwright refused the click as intercepted, and a
+   * real wheel over the opened `<pre>` left `scrollTop` at 0.
+   *
+   * **Keyboard focus was unaffected**, so Tab+Enter opened it and every unit test
+   * passed. jsdom has no layout, no paint order and no `elementFromPoint` worth
+   * the name, so nothing in this suite could have caught it and nothing in this
+   * suite can catch its return. The real check is a browser.
+   *
+   * What this CAN do is fail if either half of the fix is deleted, which is the
+   * likely way it comes back — a class dropped in a refactor, or the rule tidied
+   * out of a stylesheet nobody connects to a component. Both halves, or neither.
+   */
+  it("keeps the class and the rule that lift it, which are useless apart", () => {
+    const panel = readFileSync(new URL("../tools/fleet/web/src/AttentionPanel.tsx", import.meta.url), "utf8");
+    const css = readFileSync(new URL("../tools/fleet/web/src/tailwind.css", import.meta.url), "utf8");
+
+    expect(panel).toContain('<details className="attention-evidence');
+    expect(css).toMatch(/\.session-card \.attention-evidence[\s\S]{0,80}z-index:\s*1;/);
+  });
+});

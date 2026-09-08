@@ -523,8 +523,19 @@ function Evidence({ item }: { item: AttentionItem }): ReactNode {
       {/* A `<details>` rather than a tooltip: the card holds terminal output
           measured at up to 1,736 characters, and a floating panel is the wrong
           container for something you scroll. The idiom is the one
-          SessionDetail.tsx and ActionButtons.tsx already use. */}
-      <details className="tw:mt-1">
+          SessionDetail.tsx and ActionButtons.tsx already use.
+
+          **`attention-evidence` IS LOAD-BEARING AND IS NOT STYLING.** The card is
+          a stretched link — `.session-open::after` covers it edge to edge — and a
+          positioned overlay paints above in-flow content whatever the DOM order
+          says. Without the lift this whole disclosure was UNREACHABLE BY TAP OR
+          CLICK: measured 2026-09-08 in Chrome on the box, `elementFromPoint` at
+          every corner and the centre of the summary returned `button.session-open`,
+          Playwright refused the click as intercepted, and a real wheel over the
+          opened `<pre>` left `scrollTop` at 0. Only Tab+Enter worked, which a
+          phone does not have — and the phone is what this is for. See the rule in
+          tailwind.css beside `.explain`, which is lifted for the same reason. */}
+      <details className="attention-evidence tw:mt-1">
         <summary className="tw:cursor-pointer tw:rounded-md tw:px-1 tw:py-1 tw:text-[12px] tw:text-ink-faint tw:hover:text-ink-soft">
           inferred from its last turn — show the last {lines} line{lines === 1 ? "" : "s"} of its screen
         </summary>

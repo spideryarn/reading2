@@ -549,9 +549,19 @@
      whose name is every word on the card.
 
      `.explain` is lifted above the overlay so its own tap still opens its card.
-     That is the one place on a card where a tap does something other than open
-     the session, and it is the place a reader taps when they want to know what
-     the word means. */
+     It is the place a reader taps when they want to know what a word means.
+
+     **ANYTHING ELSE INTERACTIVE ON A CARD MUST BE LIFTED THE SAME WAY, and this
+     comment used to say `.explain` was the only one.** A positioned `::after`
+     paints above in-flow content regardless of DOM order, so an unlifted control
+     inside a card is not merely hard to hit — it receives no pointer input at
+     all. The attention inbox's evidence disclosure (`.attention-evidence`) was
+     shipped without the lift and was unreachable by tap or click: measured
+     2026-09-08 in Chrome on the box, `elementFromPoint` at every corner and the
+     centre of its `<summary>` returned `button.session-open`, and a real wheel
+     over the opened `<pre>` left `scrollTop` at 0. Keyboard focus was unaffected,
+     so Tab+Enter worked and every unit test passed — which is why this was found
+     by driving a browser and could not have been found any other way. */
   .session-card {
     position: relative;
   }
@@ -578,7 +588,8 @@
     outline: 2px solid var(--focus);
     outline-offset: 2px;
   }
-  .session-card .explain {
+  .session-card .explain,
+  .session-card .attention-evidence {
     position: relative;
     z-index: 1;
   }
