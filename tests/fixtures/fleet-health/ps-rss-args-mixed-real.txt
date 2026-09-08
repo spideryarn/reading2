@@ -1,0 +1,24 @@
+ 9952 /usr/lib/systemd/systemd --system --deserialize=81
+    0 [kthreadd]
+    0 [pool_workqueue_release]
+ 1916 sh -c vitest run
+896160 node /home/greg/code/spideryarn2/.claude/worktrees/delete-article-permanently/node_modules/.bin/vitest run
+161336 codex exec --model gpt-5.6-sol -c model_reasoning_effort=high -c approval_policy=never -c default_permissions=review --cd /home/greg/code/spideryarn2/.claude/worktrees/worktree-html-with-no-body-tag --skip-git-repo-check -o /tmp/run-codex-e7CU3E/output-1.txt -- # Review: a plan to replace a substring markup search with a leading-token match
+163136 codex exec --model gpt-5.6-sol -c model_reasoning_effort=high -c approval_policy=never -c default_permissions=review --cd /home/greg/code/spideryarn2/.claude/worktrees/fleet-dashboard-v01 --skip-git-repo-check -o /tmp/run-codex-yGM1ry/output-1.txt -- # Code review: the agent fleet dashboard, stages v0.1 and v0.3
+ 1696 sh -c vite
+21620 node /home/greg/code/spideryarn2/.claude/worktrees/changelog-toc-and-opensource/node_modules/.bin/vite
+ 1696 sh -c SPIDERYARN_STORE=${SPIDERYARN_STORE:-postgres} vite
+61380 node /home/greg/code/spideryarn2/node_modules/.bin/vite
+ 1700 sh -c vite dev --port 5180 --strictPort
+46296 node /home/greg/code/hellozenno/frontend/node_modules/.bin/vite dev --port 5180 --strictPort
+ 2832 npm exec @playwright/mcp@0.0.80 --headless --isolated --browser chrome --executable-path /usr/bin/google-chrome-stable
+ 2836 npm exec chrome-devtools-mcp@1.8.0 --headless
+ 1696 sh -c 'playwright-mcp' --headless --isolated --browser chrome --executable-path /usr/bin/google-chrome-stable
+ 2684 node /home/greg/.npm/_npx/cbf1b8a072280925/node_modules/.bin/playwright-mcp --headless --isolated --browser chrome --executable-path /usr/bin/google-chrome-stable
+ 1696 sh -c 'chrome-devtools-mcp' --headless
+165436 node dist/start/server.js
+14512 node dist/server/server.js
+56420 node /home/greg/code/spideryarn2/.claude/worktrees/fleet-dashboard-v01/node_modules/.bin/tsx tools/fleet/server.ts
+56500 node /home/greg/code/spideryarn2/.claude/worktrees/fleet-dashboard-v01/node_modules/.bin/tsx scripts/run-codex.ts --model gpt-5.6-sol --effort high --timeout-minutes 45
+ 1824 bash ./scripts/local/run_backend.sh
+ 1820 bash /home/greg/gjd-remote/jobs/let-s-add-a-new-mode-c7524e4c-c103-4d19-b442-b29f337655ee.sh
