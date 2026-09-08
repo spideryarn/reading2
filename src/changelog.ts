@@ -108,6 +108,26 @@ export interface ChangelogEntry {
 export interface ChangelogVersion {
   /** The deploy's `created` time, UTC, and the version's id. */
   version: string;
+  /**
+   * **Which release this is, counted from the oldest — the number `/changelog`
+   * shows.** 1-based, over the file's non-blank lines.
+   *
+   * Set here rather than worked out by the page, and the difference is the whole
+   * reason the field exists: the page would have to index into the versions that
+   * *parsed*, so one unparseable line in the middle of the file would silently
+   * renumber every release above it. This counts lines, so a line that failed
+   * takes its own number down with it and nothing else moves.
+   * `tests/changelog-file.test.ts` says no line may fail, which is what makes
+   * that a hypothetical — but the page's whole design is *never blank the page*
+   * (ChangelogPage.tsx), and a tolerance that quietly gets the numbers wrong is
+   * the shape of failure docs/reusable/silent-success.md is about.
+   *
+   * Not in the NDJSON, and not to be put there: it is a property of the file's
+   * shape, so writing it down would be a second copy of something that can
+   * always be counted, and the two would disagree the first time anything moved.
+   * A version keeps its number for ever anyway, because runs only append.
+   */
+  release: number;
   deployment_id: string;
   sha: string;
   previous_sha: string | null;
@@ -118,13 +138,39 @@ export interface ChangelogVersion {
   entries: ChangelogEntry[];
 }
 
+const SHA = /^[0-9a-f]{40}$/;
+
 /** `https://github.com/spideryarn/reading2/commit/<sha>` */
 export function commitUrl(sha: string): string {
   return `${REPO_URL}/commit/${sha}`;
 }
 
-const SHA = /^[0-9a-f]{40}$/;
-const STAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
+/**
+ * The sha a link points at, or `null` if it does not point at a commit.
+ *
+ * The inverse of `commitUrl`, and it exists because **the copy stage emits
+ * commits in two places at once**: an entry's `links` carry one labelled *"the
+ * change"*, and `commits` carries the whole list. Greg, 2026-09-07: *"I found
+ * the difference between the link to the changes and the commit a bit
+ * confusing."* They were not different — the page drew one commit as an orange
+ * link beside `/features`, and the others as tiny grey shas, with nothing
+ * saying they were the same kind of thing. So the page asks this of every link
+ * and sorts them into somewhere-to-go and a-commit, rather than into
+ * came-from-`links` and came-from-`commits`.
+ *
+ * Anchored to `commitUrl`'s own prefix rather than to "contains github.com":
+ * this must not claim a link to an issue, a file or another repository is a
+ * commit of ours, since what the page then does with it is draw seven of its
+ * characters and throw the rest away.
+ */
+export function shaFromCommitUrl(url: string): string | null {
+  const prefix = `${REPO_URL}/commit/`;
+  if (!url.startsWith(prefix)) return null;
+  const rest = url.slice(prefix.length);
+  return SHA.test(rest) ? rest : null;
+}
+
+const STAMP =/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
 
 /** What a parse found: the lines that were good, and a sentence per line that was not. */
 export interface ParseResult {
@@ -149,11 +195,23 @@ function isRecord(v: unknown): v is Record<string, unknown> {
  *
  * `//` is excluded from "a path" deliberately — `//evil.example` is protocol
  * relative and leaves the site.
+ *
+ * **And so is `/\`, which is the same attack spelled with the other slash.**
+ * `"/\\evil.example/phish"` is not `//`-prefixed, so it passed this check for as
+ * long as the check existed — and `new URL("/\\evil.example/phish",
+ * "https://www.spideryarn.com")` is `https://evil.example/phish`, because the
+ * URL standard treats a backslash as a slash after a special scheme. Measured in
+ * node, 2026-09-07; found by GPT Sol's review of the changelog page, P2. The
+ * page draws these as links a reader is invited to click, so a second character
+ * that is *either* slash is refused.
  */
 function badLinkUrl(url: string): boolean {
-  if (url.startsWith("/")) return url.startsWith("//");
-  const prefix = `${REPO_URL}/commit/`;
-  return !(url.startsWith(prefix) && SHA.test(url.slice(prefix.length)));
+  if (url.startsWith("/")) return url.startsWith("//") || url.startsWith("/\\");
+  /* The same question `shaFromCommitUrl` answers, asked for a different reason —
+     so it is asked once. This used to hold its own copy of the prefix and the
+     sha check, which is two places for "what counts as one of our commits" to
+     be edited and one place for it to be forgotten. */
+  return shaFromCommitUrl(url) === null;
 }
 
 function readLinks(raw: unknown, where: string, problems: string[]): ChangelogLink[] {
@@ -248,7 +306,25 @@ function readEntry(raw: unknown, where: string, problems: string[]): ChangelogEn
   };
 }
 
-function readVersion(raw: unknown, where: string, problems: string[]): ChangelogVersion | null {
+/**
+ * One line, checked.
+ *
+ * **`Omit<…, "release">`, because the line does not know which release it is** —
+ * that is a fact about the line's position among its neighbours, and only
+ * `parseChangelog` is holding those.
+ *
+ * It is a signpost, not a guarantee, and the first version of this comment
+ * claimed otherwise. Structural typing lets a future edit return
+ * `{ ...fields, release: Number(raw.release) }` from here without complaint —
+ * GPT Sol's review, P3. What actually keeps the numbering right is the
+ * `{ ...v, release }` at the call site, whose own `release` wins whatever this
+ * returns.
+ */
+function readVersion(
+  raw: unknown,
+  where: string,
+  problems: string[],
+): Omit<ChangelogVersion, "release"> | null {
   if (!isRecord(raw)) {
     problems.push(`${where}: not an object`);
     return null;
@@ -358,9 +434,14 @@ function readVersion(raw: unknown, where: string, problems: string[]): Changelog
 export function parseChangelog(text: string): ParseResult {
   const problems: string[] = [];
   const versions: ChangelogVersion[] = [];
+  /* **Counts the lines, not the successes** — see `ChangelogVersion.release`.
+     Incremented before either failure path, so a line that does not parse still
+     consumes its number and the releases above it keep theirs. */
+  let release = 0;
 
   for (const [i, line] of text.split("\n").entries()) {
     if (line.trim() === "") continue;
+    release += 1;
     let raw: unknown;
     try {
       raw = JSON.parse(line);
@@ -369,7 +450,7 @@ export function parseChangelog(text: string): ParseResult {
       continue;
     }
     const v = readVersion(raw, `line ${i + 1}`, problems);
-    if (v) versions.push(v);
+    if (v) versions.push({ ...v, release });
   }
 
   problems.push(...chainProblems(versions));
