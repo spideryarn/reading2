@@ -33,7 +33,7 @@
  * Every paid call goes through OpenRouter (docs/project/ai-gateway.md), and this
  * one does too — but it cannot use `src/ai-call.ts`, because the Overseer must
  * not depend on the product database or anything under `src/`
- * (docs/project/orchestrator-direction.md § Principles). So this is a thin
+ * (docs/project/overseer-direction.md § Principles). So this is a thin
  * client of its own over `fetch`, in the shape `scripts/spike-pdf-width.ts`
  * already uses, and `ATTENTION_CLASSIFIER_MODEL` is a second copy of
  * `QUICK_MODEL_OPENROUTER`'s value with a test asserting the two still agree.

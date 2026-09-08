@@ -43,7 +43,7 @@
  *
  * `tmux capture-pane` is about a millisecond, so reading thirty panes is ~30ms —
  * not the ~12 seconds of grepping thirty-five transcripts that
- * docs/project/orchestrator-direction.md § Two tenses is emphatic about not
+ * docs/project/overseer-direction.md § Two tenses is emphatic about not
  * doing twice. The model calls are the cost, and they are bounded by `maxCalls`
  * and made once per DISTINCT tail rather than once per session.
  */

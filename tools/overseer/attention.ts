@@ -133,7 +133,7 @@ export function attentionQuestionKey(o: Pick<AttentionObservation, "evidence" | 
  * Kept by the Overseer rather than derived from a pane, because a pane cannot
  * say how long anything has been true. It is the same fact `RegisterEntry`
  * carries about a status, one level down, and it is why
- * docs/project/orchestrator-direction.md § The order of work says attention
+ * docs/project/overseer-direction.md § The order of work says attention
  * triage *arrives* first but cannot be *built* first.
  */
 export type AttentionWaits = ReadonlyMap<string, string>;

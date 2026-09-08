@@ -129,7 +129,7 @@ export async function runAttentionCommand(options: AttentionCommandOptions): Pro
 
   // FROM THE ENVIRONMENT, AND DELIBERATELY NOT FROM `.env.local`. `loadEnvLocal`
   // lives in src/env.ts and the Overseer must not depend on anything under src/
-  // (docs/project/orchestrator-direction.md § Principles) — and a second reader
+  // (docs/project/overseer-direction.md § Principles) — and a second reader
   // of the same file would be worse than none, because src/env.ts lets the FILE
   // beat the shell, while a daemon's key comes from its unit file and the shell
   // must win. Two precedence rules over one filename is how you get a process

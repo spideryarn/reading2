@@ -11,7 +11,7 @@
  * **The daemon does not use this.** Inside the daemon the sessions come from the
  * register, which is folded from the dashboard's own snapshot, because *there is
  * one collector on this box and it is not ours*
- * (docs/project/orchestrator-direction.md § Two tenses). This function exists so
+ * (docs/project/overseer-direction.md § Two tenses). This function exists so
  * `overseer attention` can be run against the live fleet without a healthy
  * daemon and without the dashboard — which is what an evaluation needs, since an
  * evaluation that could only run when everything else was working would be an
