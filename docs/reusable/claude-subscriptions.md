@@ -131,9 +131,13 @@ if [[ -n "${CLAUDE_ACCOUNT_DIR:-}" ]]; then
 else
   unset CLAUDE_CONFIG_DIR 2>/dev/null || true
   here="$(pwd -P)/"                      # not $PWD: that is logical, and a symlinked
-  while IFS= read -r line; do            # path into the repo would slip past the test
-    [[ "$line" == \#* || -z "${line// }" ]] && continue
-    [[ "$here" == "${line%%:*}/"* ]] && { export CLAUDE_CONFIG_DIR="${line#*:}"; break; }
+  best_len=0                             # path into the repo would slip past the test
+  while IFS= read -r line; do            # longest match wins, so a worktree can be
+    [[ "$line" == \#* || -z "${line// }" ]] && continue   # carved out of its repo
+    root="${line%%:*}"
+    if [[ "$here" == "$root/"* && ${#root} -gt $best_len ]]; then
+      best_len=${#root}; export CLAUDE_CONFIG_DIR="${line#*:}"
+    fi
   done < "$CONF"
 fi
 unset CLAUDE_SECURESTORAGE_CONFIG_DIR 2>/dev/null || true
@@ -205,6 +209,43 @@ Two hazards carry across regardless of which you pick:
   terminals got the right account, every dispatched agent silently got account 1, and nothing looked
   wrong. This is the same failure the `PATH` script above exists to prevent, arrived at
   independently. Put the decision somewhere every invocation reaches.
+
+## How fine can the split get?
+
+The account is chosen **per process, at launch**, from the environment. That fixes the granularity
+precisely, and it is worth knowing in both directions.
+
+| Lever | Scope | How |
+|---|---|---|
+| the routing table | a directory tree — repo plus every worktree under it | `~/.claude-accounts` |
+| a shell or tab | everything launched from it, dispatched agents included | `claude-acct use <name>` |
+| one invocation | that process only | `CLAUDE_ACCOUNT_DIR=… claude` |
+
+**A single worktree can be carved out of its repo**, because the routing table is longest-match, not
+first-match: a longer path beats a shorter one wherever the two lines sit in the file. That was worth
+the extra four lines — first-match would mean a worktree route added below its repo's route silently
+did nothing, which is this document's whole subject matter.
+
+```
+/Users/greg/dev/spideryarn/reading2:/Users/greg/.claude-spideryarn
+/Users/greg/dev/spideryarn/reading2/.claude/worktrees/client-job:/Users/greg/.claude-client
+```
+
+**`CLAUDE_ACCOUNT_DIR` is the lever that reaches dispatched sessions.** `scripts/run-claude.ts`
+strips `CLAUDE_CONFIG_DIR` from the child environment but not this, so a tab pinned with
+`claude-acct use` passes its account down to everything it dispatches, while a tab that merely
+exported `CLAUDE_CONFIG_DIR` would not. Verified by calling the exported `claudeEnv` directly rather
+than by reading it.
+
+Two things you cannot do:
+
+- **Split accounts between subagents of one session.** They run inside the parent process and share
+  its credential. A session is one account, whole.
+- **Move a session that is already running.** The variable is read at startup, so arming or changing
+  the routing affects the *next* `claude`, never the ones already up. That is usually what you want —
+  it is why arming the wrapper does not disturb a live fleet — but it does mean "I fixed the routing"
+  and "this tab is now on the right account" are different claims. Restart the tab, then ask
+  `claude-acct`.
 
 ## How to know which account you are actually on
 
