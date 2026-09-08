@@ -487,7 +487,17 @@ exists"*, that distinction is its own and should survive being quoted.
 
 Ordered by value against effort, with the owner named because two agents are building here.
 
-### First — because the write path is live and was designed when it was not
+### Securing the live write path — a stage, but not the top one
+
+**Greg, 2026-09-08: "Let's include it as a stage, but it doesn't have to be the top-priority."**
+Astra put this block first, ahead of everything Greg had ordered, on the grounds that the write path
+was designed when it was read-only. Greg has read that argument and ranked it anyway, which is his
+call to make — the tailnet is small, the devices are his, and the fleet's actual failure so far has
+been resource collapse rather than anything hostile. So this is scheduled work rather than a stop.
+
+**A9 is the exception worth watching**, because it is not a hardening item: an approval that binds to
+the question sentence rather than to the diff is wrong even with no attacker at all — it can show
+Greg one thing and approve another after an ordinary re-render.
 
 | | what | owner |
 |---|---|---|
@@ -576,13 +586,48 @@ Exhaustive transcript mining, a general multi-agent chat network, a custom termi
 optimisation, and multi-box scheduling. *"Keep polling if it is adequate. None of those is necessary
 to find out whether this system actually saves Greg attention."*
 
-**And A7 is the one that is not a feature at all.** Every agent shares one Unix user with passwordless
-sudo, so one compromised agent already reaches its peers, their files and the control machinery — and
-a dashboard token stored under that same user would not be an isolation boundary. Network controls
-reduce entry points; they do not contain a compromised agent. The first real containment work is
-reviewing which production credentials and privileged operations routine agents actually need, and
-keeping control-service configuration out of writable worktrees. **This needs Greg**, and it does not
-require user accounts or RBAC in the product.
+**And A7 is not a feature at all** — every agent shares one Unix user with passwordless sudo, so one
+compromised agent already reaches its peers and the control machinery. Greg's call, 2026-09-08:
+deferred, and written up in
+[§ Appendix: security and hardening, deferred](#appendix-security-and-hardening-deferred).
+
+## Appendix: security and hardening, deferred
+
+**Greg, 2026-09-08, on the item below: "let's add this to an appendix on future security/hardening
+in orchestrator-direction, but ignore it for now."** So this is a record, not a backlog — nothing
+here is scheduled, and it is written down because the reasoning is expensive to rediscover and
+because the day one of these matters is not the day to work it out.
+
+**One compromised agent already has the box.** Every agent runs as the same Unix user with
+passwordless sudo, so any one of them reaches its peers, their files, their worktrees and the control
+machinery. GPT 6 Astra, 2026-09-08, on what follows from that:
+
+> Network controls reduce entry points; they do not contain a compromised agent … A dashboard token
+> stored under that same user would not establish an isolation boundary.
+
+Two consequences worth holding on to:
+
+- **A token is not a boundary here.** Any credential the dashboard could check is readable by
+  everything it would be protecting against. So the honest description of "reachability is the access
+  control" is that it keeps *strangers* out, and there is currently nothing between one agent and
+  another. That is a fair trade today — the agents are ours and the box is private — and it stops
+  being one the moment an agent processes something hostile with enough leverage.
+- **The first real containment work is not authentication.** Astra's ordering: review which
+  production credentials and privileged operations routine agents actually need, and keep
+  control-service configuration and deployment out of ordinary writable worktrees. Reducing broad
+  sudo changes the possible damage far more than any number of HTTP header checks. **None of this
+  requires user accounts or RBAC in the product.**
+
+The related items, all deferred with it and each already argued in
+[§ The backlog](#the-backlog-after-the-wide-review) where they sit in priority order: device-scoped
+tailnet grants rather than whole-tailnet reachability (**A5**), CSP and anti-framing on a page that
+renders agent-authored text (**A6**), and keeping Overseer-authored messages from acquiring Greg's
+authority by arriving as ordinary user turns (**A12**).
+
+**What would make this urgent**, so the trigger is written down rather than felt: an agent handling
+genuinely untrusted input with real leverage — a reader's uploaded article reaching an agent's shell,
+a public issue tracker feeding a job, a dependency with a post-install script — or the dashboard
+becoming reachable from anywhere that is not a device Greg controls.
 
 ## Principles
 
