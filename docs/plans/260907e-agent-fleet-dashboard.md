@@ -1,12 +1,34 @@
 # Agent fleet dashboard
 
-**Status as of 2026-09-08: running.** Serving on the box at `127.0.0.1:8787` and on the tailnet at
-`100.92.255.119:8787`, showing ~36 sessions with status, and rendering the pending question for
-blocked ones. Evidence: `tools/fleet/` holds seven modules, 163 tests pass across six files, and
-`curl -sN /api/live` streams a `snapshot` event. Tailscale 1.102.3 is installed and logged in.
+**Status as of 2026-09-08 05:00: running, and done enough to stop here.**
 
-**Not yet reachable from the page:** `steer.ts` (no route calls it) and the React client (in
-flight). One claim in an earlier version of this plan was **retracted** — see
+Serving on `127.0.0.1:8787` and on the tailnet at `100.92.255.119:8787`, under
+`scripts/tmux-job.ts` so it survives memory pressure. ~36 sessions with status, the pending question
+for blocked ones, Box Health, and a master–detail Sessions view with steering. Evidence:
+`tools/fleet/` holds fourteen modules; **580 tests pass across fifteen files**; both typecheck
+projects are clean; a browser check reports zero CSP violations, zero console errors and zero
+horizontal overflow at 390px and 1280px, light and dark.
+
+**Verified end to end, not at the call site.** A message sent from the client's own body-builder,
+through the real server, arrives in the target pane and nowhere else — nonce generated inside the
+script and written only to a file. Starting a session through `POST /api/sessions/new` produces a
+real Claude that answers.
+
+**Two things are deliberately switched off**, and both are decisions rather than defects:
+
+- **Answering a dialog** returns 503 with a sentence saying why. Two cross-family reviews found that
+  the captured question did not include *what was being approved*; that is now fixed, but a second
+  finding is not fixable — pane text is not provenance. See **Stage v0.2b** below,
+  and the question for Greg in **Stage v0.4d**.
+- **The action buttons and the queue** are built and tested (`actions.ts`, `queue.ts`) but not wired
+  to a route. That is [Stage v0.5](#stage-v05-the-steering-vocabulary).
+
+**Read Stage v0.4d first.** Fable read all 38 live panes and broke this plan's premise: the sessions actually waiting
+on Greg are hiding under `idle`, and the dialog-answering this write path was built for is a
+rounding error. That reframing is worth more than anything below it.
+
+Two claims in earlier versions of this plan were **retracted** — the inbox socket, and "no shell
+anywhere" in the launch path. Both are in
 [Evidence](#evidence-what-was-actually-tested), which records what failed as well as what worked.
 
 The standing direction is [orchestrator-direction.md](../project/orchestrator-direction.md); this
@@ -411,7 +433,7 @@ keys on time and pane, does not deduplicate it.
 - [ ] **Never an automatic keystroke retry** after an ambiguous failure. A retry is a second
       message, and there is no way to take the first one back.
 
-### Stage v0.2d: the dashboard is a privileged renderer of hostile content
+### ✅ Stage v0.2d: the dashboard is a privileged renderer of hostile content (CSP landed 2026-09-08, `0a5a3008`; the tailnet grant is Greg's)
 
 Astra's A6, which is explicit that it names an architectural exposure rather than claiming an
 exploit exists — it calls the React text rendering a good decision. What it wants *before* answer
@@ -429,18 +451,18 @@ boundary was never reachability alone. We copied the half we liked.
       only, not from the tailnet at large. Tailscale's default policy is permissive, so **the
       policy has to be read rather than assumed**. Keep the ssh forward.
 
-### Stage v0.3: status
+### ✅ Stage v0.3: status (landed 2026-09-08)
 
 - [ ] working / idle / blocked, from the two-source join in `sessionState` — never from
       `claude agents --json` alone, which is incomplete by measurement.
 - [ ] Sort blocked to the top, and show the count.
 
-### Stage v0.4: what it is blocked on
+### ✅ Stage v0.4: what it is blocked on — reading it, not answering it (landed 2026-09-08)
 
 - [ ] Scrape the pending question and its numbered options from the pane.
 - [ ] Tap an option → send that digit. The narrow, safe case, and the one that pays for the phone.
 
-### Stage v0.4b: Sessions becomes master–detail
+### ✅ Stage v0.4b: Sessions becomes master–detail (landed 2026-09-08, `44f60619`)
 
 Greg, 2026-09-08 — quoted in full in
 [orchestrator-direction.md](../project/orchestrator-direction.md#what-greg-asked-for-on-2026-09-08-in-his-own-words).
@@ -456,7 +478,7 @@ Greg, 2026-09-08 — quoted in full in
 - [ ] Narrow windows collapse to one column and the detail is a push, not a squeeze —
       [narrow-windows.md](../project/narrow-windows.md).
 
-### Stage v0.4c: recent messages
+### ✅ Stage v0.4c: recent messages (landed 2026-09-08, `ec05379c`)
 
 The detail pane's "recent messages" needs a source. Transcripts are on disk and are tens of
 megabytes; `gjd-remote ls` greps whole ones and costs 10–12s, which is the thing this tool exists
