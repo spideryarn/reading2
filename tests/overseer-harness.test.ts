@@ -361,6 +361,36 @@ describe("a headless Claude is never declared steerable", () => {
     expect(HARNESS_CAPABILITIES[h.kind].steerWithProse.can).toBe(false);
   });
 
+  /**
+   * THE SAME GRANT, ARRIVING BY THE ONE TOKEN THE READER USED TO TRUST.
+   *
+   * GPT Sol's ARGV-P1-01. `--` is a word people write in prose, and on a
+   * flattened line nothing says whether it is the separator or that word. The
+   * reader stopped at it, never reached the `--print` after it, and handed back
+   * `claude-code` — which `HARNESS_CAPABILITIES` grants prose steering on. So
+   * the original bug of this whole plan, reintroduced by a token that had been
+   * reasoned about and judged safe.
+   *
+   * The judgement said: stopping at a `--` after a positional is safe under
+   * both readings, because "if the prompt really is one element, nothing after
+   * it was a flag anyway". That is the half it got wrong — the prompt being one
+   * element does not mean it is the LAST element, and here a real `--print`
+   * follows it. Same class as
+   * docs/postmortems/260908f: a claim of impossibility made against the space
+   * the author had in mind rather than the space the code runs in.
+   */
+  test("a bare `--` inside a flattened PROMPT does not hide the `--print` after it (constructed)", () => {
+    const argv =
+      "claude --session-id 404961e7-a9af-47c9-bf9e-38918ba8ffc4 Please explain -- carefully --print";
+    const table = `  9001     1   1000 bash -l\n  9002  9001    999 ${argv}\n`;
+    const h = classifyPaneHarness(9001, readingOfText(table));
+    expect(h.kind).not.toBe("claude-code");
+    expect(h.kind).toBe("unknown");
+    if (h.kind !== "unknown") return;
+    expect(h.cause).toBe("ambiguous-harness");
+    expect(HARNESS_CAPABILITIES[h.kind].steerWithProse.can).toBe(false);
+  });
+
   test("the same command line read as faithful argv IS a steerable session (constructed)", () => {
     // The other half of the pair, and it cannot be asserted through
     // `classifyPaneHarness`, which only ever has the `ps` rendering. Read the

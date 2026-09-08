@@ -61,7 +61,7 @@
  *    positionals, and a dash-led token after one is a flag like any other.
  *  - On **`ps`-flattened** that same process is byte-identical to `["claude",…,"Please","add","a",
  *    "--print","flag"]`, which **is** headless. Not decidable. So once an **unconsumed positional**
- *    has appeared, any later dash-led token before a `--` is `unreadable`, naming the token.
+ *    has appeared, any later dash-led token is `unreadable`, naming the token.
  *
  * The same command line, two fidelities, two different **correct** answers — which is precisely what
  * a tagged input is for, and what a single `string` API could never have expressed.
@@ -70,10 +70,33 @@
  * `--permission-mode auto --print` must stay readable, and that is the shape our own launcher emits
  * on nearly every process on the box. Only a bare word that nothing claimed arms the rule.
  *
- * A bare `--` after a positional still ends the option region, and stopping there is safe under both
- * readings of a flattened line: if the prompt really is one element, nothing after it was a flag
- * anyway; if the words really are separate arguments, the `--` is a real separator. Nothing is lost
- * by stopping either way.
+ * **AND THE SEPARATOR IS A DASH-LED TOKEN LIKE ANY OTHER.** This used to exempt a bare `--`, on the
+ * argument that stopping there was safe under both readings — *if the prompt really is one element,
+ * nothing after it was a flag anyway; if the words really are separate arguments, the `--` is a real
+ * separator*. The first half is false, and GPT Sol's ARGV-P1-01 (round 2 of Stage B) is the
+ * counter-example: a prompt being one element does not make it the LAST element. Measured —
+ *
+ *     ["claude","--session-id",A,"Please explain -- carefully","--print"]
+ *       faithful  -> session, headless=TRUE      the CLI really does parse that --print
+ *       flattened -> session, headless=FALSE     WRONG, and it grants prose steering
+ *
+ * — because the scan stopped at the `--` inside the prompt and never reached the flag after it. `--`
+ * is a word people type in prose. So the rule is ONE condition, not two: on a flattened line, once
+ * an unconsumed positional has appeared, **every** dash-led token — the separator included — is
+ * `unreadable`. Before a positional a `--` is still a real separator, which is where both of this
+ * repo's launchers put it (`gjd-remote.ts`'s `new-claude`, `run-claude.ts`'s `buildClaudeArgs`), so
+ * the refusal costs nothing on real traffic: 6 live `claude` processes on 2026-09-08, none of them
+ * changed by it.
+ *
+ * **The narrower rule, named and not taken.** The two readings of an ambiguous `--` differ only when
+ * a dash-led token follows it — with nothing dash-led after, everything remaining is a positional
+ * under both readings and the answer is the same either way. So "refuse only when something dash-led
+ * follows" would be exactly the disagreement, and it would keep
+ * `--name my session -- go and do the thing` readable. Not taken: it is a second condition and a
+ * lookahead, buying back one shape that no producer here can emit (a session name cannot contain a
+ * space — see `--name` in the table below), and this rule already refuses more than it strictly must
+ * on the dash-led case for the same reason. One condition over every dash-led token is the rule that
+ * can be read off the code.
  *
  * ══ A FLAG CAN BE A COMMAND ══
  *
@@ -218,9 +241,12 @@ const FLAGS: ReadonlyMap<string, Arity> = new Map<string, Arity>([
   // gjd-remote new-claude
   ["--session-id", "one"],
   ["--permission-mode", "one"],
-  // A display name somebody typed, and `new-claude` emits it shell-quoted (`--name ${shq(name)}`)
-  // precisely because it may contain spaces. ONE value all the same: that is what the CLI takes, and
-  // on a flattened line the extra words become positionals like any other prose.
+  // A display name somebody typed. `new-claude` emits it shell-quoted (`--name ${shq(name)}`), and
+  // that is defence in depth on the way to a shell rather than evidence that it holds spaces — a
+  // name CANNOT hold one: `gjd-remote.ts:2462` and `tools/fleet/routes-new.ts:376` both refuse
+  // anything but `^[a-z0-9][a-z0-9-]{0,40}$`. (This comment used to read the quoting as the proof of
+  // the opposite.) ONE value either way: that is what the CLI takes, and on a flattened line any
+  // extra words are positionals like any other prose.
   ["--name", "one"],
   ["-n", "one"],
   // run-claude buildClaudeArgs
@@ -446,8 +472,8 @@ function refuseNonClaude(argv0: string | undefined): ClaudeReading | undefined {
 /**
  * What one dash-led token turned out to be.
  *
- * The scan below is four rules — separator, positional, flag, and the fidelity-dependent refusal —
- * and this is the third and fourth extracted so the loop stays readable as those four.
+ * The scan below is four rules — the fidelity-dependent refusal, separator, positional, flag — and
+ * this is the last of them extracted so the loop stays readable as those four.
  */
 type FlagStep =
   | { step: "refuse"; why: string }
@@ -458,28 +484,19 @@ type FlagStep =
 /**
  * Read one dash-led token and whatever belongs to it.
  *
- * `sawPositional` and `fidelity` are here for one rule, the one the module header calls the point of
- * the fidelity tag: on a `ps`-flattened line, a dash-led token after an unclaimed bare word cannot be
- * told from a word of the prompt.
+ * **THE FLATTENED-AMBIGUITY RULE IS NOT HERE**, and moving it out was ARGV-P1-01's fix. It used to
+ * be the first thing this function did, which meant it could only ever see the tokens that reached
+ * it — and a bare `--` never did, because the scan broke on the separator before calling this. So
+ * the one token that most needed the rule was the one exempt from it. It now lives in the scan, over
+ * every dash-led token, which is also one condition instead of two.
  */
 function readFlagToken(args: {
   token: string;
   rest: readonly string[];
   at: number;
   hasSeparator: boolean;
-  sawPositional: boolean;
-  fidelity: ClaudeCommandLine["fidelity"];
 }): FlagStep {
-  const { token, rest, at, hasSeparator, sawPositional, fidelity } = args;
-
-  if (sawPositional && fidelity === "ps-flattened") {
-    return {
-      step: "refuse",
-      why:
-        `\`${token}\` follows a bare word on a command line read from \`ps\` (which has already` +
-        ` lost the quoting), so whether it is a flag or a word of the prompt cannot be read`,
-    };
-  }
+  const { token, rest, at, hasSeparator } = args;
 
   // `--name=value` and `--name value` are both real spellings and the CLI takes either.
   const eq = token.indexOf("=");
@@ -547,6 +564,20 @@ export function readClaudeCommandLine(line: ClaudeCommandLine): ClaudeReading {
     const token = rest[i];
     if (token === undefined) break;
 
+    // ONE RULE, OVER EVERY DASH-LED TOKEN INCLUDING THE SEPARATOR, and it runs before the separator
+    // is honoured because `--` is the token it was missing. On a `ps`-flattened line, once a bare
+    // word nothing claimed has appeared, this token is either an option or a word of the prompt and
+    // the command line no longer says which. See the module header for the measured grant.
+    if (token.startsWith("-") && sawPositional && line.fidelity === "ps-flattened") {
+      return {
+        kind: "unreadable",
+        why:
+          `\`${token}\` follows a bare word on a command line read from \`ps\` (which has already` +
+          ` lost the quoting), so whether it belongs to the option region or is a word of the` +
+          ` prompt cannot be read`,
+      };
+    }
+
     // End of options, by the CLI's own rule: everything after is positional.
     if (token === "--") break;
 
@@ -559,14 +590,7 @@ export function readClaudeCommandLine(line: ClaudeCommandLine): ClaudeReading {
       continue;
     }
 
-    const step = readFlagToken({
-      token,
-      rest,
-      at: i,
-      hasSeparator,
-      sawPositional,
-      fidelity: line.fidelity,
-    });
+    const step = readFlagToken({ token, rest, at: i, hasSeparator });
     if (step.step === "refuse") return { kind: "unreadable", why: step.why };
     if (step.step === "command") return { kind: "subcommand", name: step.name };
     i = step.next;

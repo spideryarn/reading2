@@ -339,6 +339,116 @@ describe("sendMessage refuses anything that is not the session it was promised",
   });
 
   /**
+   * GPT SOL'S STEER-P0-01: THE RIGHT TEXT, DELIVERED TO THE WRONG SESSION,
+   * REACHED BY BEING RIGHT ABOUT THE PANE.
+   *
+   * A pane holds outer Claude A. A starts a descendant Claude B whose launch
+   * prompt quotes A's uuid — `gjd-remote new-claude` puts a prompt into argv,
+   * so this is a shape our own tooling makes — and pgrep, which matches the
+   * uuid anywhere in a flattened argv, returns both. A reads `yes`; B reads
+   * `no`, because B's own `--session-id` is B's. The loop accepted A and
+   * stopped looking. But **B is the one in front of the terminal**, and its
+   * screen is an ordinary empty Claude input box, so the screen check agrees —
+   * and A's message is typed at B.
+   *
+   * What lost the information is the `no` arm: *not a claude at all* (the
+   * wrapper shell below, a `grep`) and *a different live conversation* were the
+   * same answer, and nothing downstream could tell them apart afterwards.
+   *
+   * ORDERING IS ASSERTED BOTH WAYS ROUND because "take the first match" is a
+   * bug that hides behind pid order: with A first the old code accepted before
+   * it ever read B.
+   */
+  it("refuses when a SECOND, different claude is live under the same pane", () => {
+    const nested = ["    1     0", "  100     1", "  200   100", "  201   200", ""].join("\n");
+    const impostorArgv = ["claude", "--session-id", OTHER_UUID, "--", "resume", "from", UUID];
+    const lines = {
+      ours: `200 claude --session-id ${UUID} --name fleet\n`,
+      theirs: `201 claude --session-id ${OTHER_UUID} -- resume from ${UUID}\n`,
+    };
+    const cmdlines = {
+      200: ["claude", "--session-id", UUID, "--name", "fleet"],
+      201: impostorArgv,
+    };
+
+    for (const order of [`${lines.ours}${lines.theirs}`, `${lines.theirs}${lines.ours}`]) {
+      const { io, sent } = fakeBox({ pgrep: order, parents: nested, cmdlines });
+      refused(sendMessage(TARGET, "keep going", WORKING, io), sent, "competing-claude");
+    }
+
+    // THE POSITIVE CONTROL, and it is the half that proves the refusal above is
+    // about the second claude rather than about the fixture: the same pane, the
+    // same ancestry, the same message — with the impostor gone, it sends.
+    const { io: ok, sent: sentOk } = fakeBox({ pgrep: lines.ours, parents: nested, cmdlines });
+    const result = sendMessage(TARGET, "keep going", WORKING, ok);
+    expect(result.ok).toBe(true);
+    expect(sentOk).toEqual([
+      ["send-keys", "-t", "%10", "-l", "--", "keep going"],
+      ["send-keys", "-t", "%10", "Enter"],
+    ]);
+  });
+
+  /**
+   * THE SAME REFUSAL FOR THE CANDIDATE WE COULD NOT READ, and it keeps P1-2's
+   * distinction: the sentence names our parser rather than claiming the fleet
+   * is in a state it may not be in.
+   *
+   * Our session is there and verified. Beside it is another claude carrying a
+   * flag `claude-argv.ts` does not know, so we cannot say whether it is a
+   * second interactive conversation or something harmless. That is exactly the
+   * question `competing-claude` exists to answer, and "we do not know" is not
+   * an answer that permits a keystroke.
+   */
+  it("refuses when a second claude under the pane cannot be read at all", () => {
+    const nested = ["    1     0", "  100     1", "  200   100", "  201   200", ""].join("\n");
+    const { io, sent } = fakeBox({
+      pgrep: `200 claude --session-id ${UUID} --name fleet\n201 claude --future-flag x -- ${UUID}\n`,
+      parents: nested,
+      cmdlines: {
+        200: ["claude", "--session-id", UUID, "--name", "fleet"],
+        201: ["claude", "--future-flag", "x", "--", UUID],
+      },
+    });
+    const result = sendMessage(TARGET, "keep going", WORKING, io);
+    if (result.ok) throw new Error(`expected a refusal, got a send of ${JSON.stringify(result.sent)}`);
+    expect(result.reason.code).toBe("claude-unreadable");
+    expect(result.reason.why).toContain("--future-flag");
+    expect(sent).toEqual([]);
+  });
+
+  /**
+   * THE OTHER DIRECTION OF THE SAME RULE, and it is what stops it costing
+   * availability.
+   *
+   * `scripts/run-claude.ts` spawns `claude --print … -- <prompt>` as a CHILD of
+   * the session that dispatched it, and its prompt routinely quotes the
+   * dispatching session's own uuid. That child is a descendant of the pane and
+   * pgrep finds it — but it is headless: its stdin is a pipe, it read its
+   * prompt once at exec, and it will never take a byte off that tty. It is not
+   * a competing owner of the terminal, so it must not refuse the send.
+   *
+   * Refusing it would starve exactly the sessions that delegate, and the guard
+   * would look right while doing it — the same shape as the
+   * `~/.claude/sessions/<pid>.json` guard this file's header tells you not to
+   * rebuild.
+   */
+  it("sends anyway when the second claude under the pane is headless", () => {
+    const nested = ["    1     0", "  100     1", "  200   100", "  201   200", ""].join("\n");
+    const { io, sent } = fakeBox({
+      pgrep: `200 claude --session-id ${UUID} --name fleet\n201 claude --print -- review ${UUID}\n`,
+      parents: nested,
+      cmdlines: {
+        200: ["claude", "--session-id", UUID, "--name", "fleet"],
+        201: ["claude", "--print", "--", `review ${UUID}`],
+      },
+    });
+    const result = sendMessage(TARGET, "keep going", WORKING, io);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.verified.claudePid).toBe(200);
+    expect(sent).toHaveLength(2);
+  });
+
+  /**
    * MEASURED ON THIS BOX, 2026-09-08, and it is why the argv check cannot be
    * skipped when there is only one candidate left.
    *
@@ -1255,6 +1365,20 @@ describe("reading the box", () => {
    */
   const faithful = (...argv: string[]) => fromProcCmdline(procCmdline(...argv));
 
+  /**
+   * **`no` SPLIT IN TWO ON 2026-09-08, and the arm each case lands in is now
+   * asserted rather than lumped together.** Sol's STEER-P0-01: *not a `claude`
+   * at all* and *a different live conversation* used to be one answer, and the
+   * second of those is the only thing here that can be sitting in front of the
+   * pane's terminal. `verifyTarget` cannot reconstruct the difference after the
+   * fact, so it is made here, where the argv is.
+   *
+   * Every case is still a pair — the argv that must be refused and, beside it,
+   * one that must be accepted — because a suite of refusals is satisfied by a
+   * function that has stopped saying yes to anything.
+   */
+  const armOf = (line: ReturnType<typeof faithful>, id: string) => isClaudeForSession(line, id).match;
+
   it("identifies a claude by its actual argv, not by bytes in its command line", () => {
     const real = faithful("claude", "--session-id", UUID, "--name", "fleet-dashboard-v01");
     expect(isClaudeForSession(real, UUID)).toEqual({ match: "yes" });
@@ -1262,17 +1386,16 @@ describe("reading the box", () => {
 
     // F3 itself: a DIFFERENT conversation whose initial prompt mentions ours.
     // pgrep would flatten this to a command line containing `--session-id
-    // <UUID>`, and the ancestry walk cannot tell the two apart.
+    // <UUID>`, and the ancestry walk cannot tell the two apart. It is a live
+    // conversation, so it is `other-claude` and not merely "not ours".
     const impostorArgv = ["claude", "--session-id", OTHER_UUID, `read the notes at --session-id ${UUID} and continue`];
     const impostor = faithful(...impostorArgv);
-    expect(isClaudeForSession(impostor, UUID)).toEqual({ match: "no" });
+    expect(armOf(impostor, UUID)).toBe("other-claude");
     expect(isClaudeForSession(impostor, OTHER_UUID)).toEqual({ match: "yes" });
     expect(impostorArgv.join(" ")).toContain(`--session-id ${UUID}`);
 
     // after a bare `--` everything is positional by definition
-    expect(isClaudeForSession(faithful("claude", "--session-id", OTHER_UUID, "--", "--session-id", UUID), UUID)).toEqual(
-      { match: "no" },
-    );
+    expect(armOf(faithful("claude", "--session-id", OTHER_UUID, "--", "--session-id", UUID), UUID)).toBe("other-claude");
     expect(isClaudeForSession(faithful("claude", "--session-id", UUID, "--", "go on"), UUID)).toEqual({ match: "yes" });
 
     // THE CASE THAT DISCRIMINATES, and the two above do not: a claude with no
@@ -1280,7 +1403,7 @@ describe("reading the box", () => {
     // reader that walked through the separator would read our uuid out of
     // somebody else's prompt and hand the pane over. Mutating the `--` rule in
     // `claude-argv.ts` left both assertions above green and this one red.
-    expect(isClaudeForSession(faithful("claude", "--", "--session-id", UUID), UUID)).toEqual({ match: "no" });
+    expect(armOf(faithful("claude", "--", "--session-id", UUID), UUID)).toBe("other-claude");
     // and its pair, so this is not satisfied by a reader that says no to
     // everything: the same separator with the id in front of it, where it is
     // genuinely an option
@@ -1290,25 +1413,32 @@ describe("reading the box", () => {
 
     // the expected uuid with something appended is a different uuid, and this
     // is the case the old prefix test was reaching for and had backwards
-    expect(isClaudeForSession(faithful("claude", "--session-id", `${UUID}9`), UUID)).toEqual({ match: "no" });
-    expect(isClaudeForSession(faithful("claude", "--session-id", UUID.slice(0, 8)), UUID)).toEqual({ match: "no" });
+    expect(armOf(faithful("claude", "--session-id", `${UUID}9`), UUID)).toBe("other-claude");
+    expect(armOf(faithful("claude", "--session-id", UUID.slice(0, 8)), UUID)).toBe("other-claude");
     expect(isClaudeForSession(faithful("claude", "--session-id", UUID), UUID)).toEqual({ match: "yes" });
 
     // two of them: we cannot know which one the CLI kept, so we refuse rather
-    // than guess "the first", which would answer yes to ours-then-theirs
-    expect(isClaudeForSession(faithful("claude", "--session-id", UUID, "--session-id", OTHER_UUID), UUID)).toEqual({
-      match: "no",
-    });
-    expect(isClaudeForSession(faithful("claude", "--session-id", OTHER_UUID, "--session-id", UUID), UUID)).toEqual({
-      match: "no",
-    });
+    // than guess "the first", which would answer yes to ours-then-theirs. And
+    // an ambiguous pair is a live conversation whichever way it resolves, so it
+    // is `other-claude` in both orderings.
+    expect(armOf(faithful("claude", "--session-id", UUID, "--session-id", OTHER_UUID), UUID)).toBe("other-claude");
+    expect(armOf(faithful("claude", "--session-id", OTHER_UUID, "--session-id", UUID), UUID)).toBe("other-claude");
 
-    // argv[0] must be a claude, by basename, wherever it was installed
+    // argv[0] must be a claude, by basename, wherever it was installed. THIS is
+    // what `no` means now: nothing a keystroke in that pane could reach.
     expect(isClaudeForSession(faithful("grep", "--session-id", UUID), UUID)).toEqual({ match: "no" });
     expect(isClaudeForSession(faithful("/home/greg/.local/bin/claude", "--session-id", UUID), UUID)).toEqual({
       match: "yes",
     });
     expect(isClaudeForSession(faithful(), UUID)).toEqual({ match: "no" });
+
+    // A HEADLESS CLAUDE FOR SOMEBODY ELSE IS `no`, NOT `other-claude`, and the
+    // asymmetry is the whole reason the split is affordable: `--print` read its
+    // prompt at exec and will never take a byte off that tty, so it cannot be
+    // the process our keystrokes reach. `run-claude.ts` puts one of these under
+    // a delegating session's pane on every sub-run.
+    expect(armOf(faithful("claude", "--print", "--session-id", OTHER_UUID, "--", "go"), UUID)).toBe("no");
+    expect(armOf(faithful("claude", "--print", "--session-id", UUID, "--", "go"), UUID)).toBe("headless");
   });
 
   /**

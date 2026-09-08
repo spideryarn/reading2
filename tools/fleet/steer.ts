@@ -55,6 +55,41 @@
  *    last check in every entry point here is now the one adjacent to the send,
  *    which is what Sol's F4 was about — and the realistic race is not the clock
  *    but another person or agent answering the same dialog from the terminal.
+ *  - **THE ANCESTRY AND THE ARGV ARE TWO OBSERVATIONS AND NOTHING BINDS THEM TO
+ *    ONE PROCESS GENERATION.** `verifyTarget` reads the parent table from `ps`,
+ *    filters candidates against that snapshot, and then reads each survivor's
+ *    *current* `/proc/<pid>/cmdline`. If a pid exited and were recycled in
+ *    between, stale ancestry would say "under this pane" while fresh argv said
+ *    "session A", and the two halves would be about different processes. GPT
+ *    Sol's STEER-P0-02, **weighed and deliberately not fixed** — which is a
+ *    judgement, so here is the domain it was made in rather than a claim that
+ *    it cannot happen:
+ *
+ *    Measured on this box, 2026-09-08: `pid_max` is 4,194,304 and 3,842
+ *    processes were forked in 60 seconds (64/s) at an ordinary load, so the pid
+ *    space wraps about every **18 hours**. The gap between the two reads is one
+ *    `execFileSync` plus a `readFileSync` — sub-millisecond to a few ms — so a
+ *    specific candidate pid being reissued inside it is order 1e-8, and the
+ *    process that got it would ALSO have to be a `claude` carrying this exact
+ *    conversation's uuid for the splice to grant anything. That arithmetic is
+ *    about THIS box: a kernel back on the old 32,768 default would wrap in
+ *    minutes rather than hours, and the number moves by three orders of
+ *    magnitude (still not milliseconds).
+ *
+ *    The fix that would close it is `/proc/<pid>/stat`'s start time (field 22)
+ *    read beside the argv and compared against a start time carried in the
+ *    ancestry snapshot (`ps -o pid=,ppid=,lstart=`), so both observations name
+ *    the same generation. Not built, for three reasons and the third is the
+ *    deciding one. It widens `SteerIo`'s process-table contract for a race
+ *    nobody has seen. It would not actually be complete — the ancestry WALK
+ *    reads each parent from the same snapshot, so a recycled *intermediate* pid
+ *    splices the chain just as well, and binding that needs a start time for
+ *    every row rather than for the candidates. And the gap above is
+ *    structurally the same race, bigger, needing no pid wrap at all, and is
+ *    stated here as unclosable and accepted: a partial fix that reads as a
+ *    complete one is worse than a paragraph, because the next person stops
+ *    looking. If it is ever built, it belongs with a pidfd, not with a second
+ *    snapshot.
  *  - **We verify the pane, not the foreground process group.** `send-keys`
  *    delivers to the pane's tty and whichever process group is in front reads
  *    it. On this box `#{pane_current_command}` is `bash` for every Claude
@@ -64,6 +99,19 @@
  *    of them. If a verified Claude has shelled out to something in the
  *    foreground, our text goes to that instead, and nothing here can see it.
  *    `paneSurface` narrows this and does not close it: see its own comment.
+ *
+ *    **`verifyTarget` now narrows one case of it and does not close that
+ *    either.** GPT Sol's STEER-P0-01: a second, INTERACTIVE claude under the
+ *    same pane is a second candidate for the keystrokes, and the screen check
+ *    cannot separate them because both draw the same empty input box. Where we
+ *    can see one, we refuse (`competing-claude`). What that does not cover is a
+ *    competing claude whose argv never mentions this uuid, because the
+ *    candidate list comes from `pgrep -f -- <uuid>` and it is not in it — a
+ *    plain `claude` somebody started in the pane by hand is the shape. Widening
+ *    to *every* descendant of the pane would see those; it was not taken here,
+ *    because it means an argv read per descendant on a pane that may have
+ *    dozens, to cover a launch nothing in this repo performs. Stated so the
+ *    next person weighs it rather than assuming it was covered.
  *
  *    **DO NOT REBUILD THE `~/.claude/sessions/<pid>.json` GUARD.** It was built
  *    on 2026-09-08, against that file's `status` field reading `shell`, on the
@@ -195,6 +243,24 @@ export type RefusalCode =
   | "pane-in-copy-mode"
   /** No live `claude --session-id <expected>` under that pane. */
   | "no-claude-in-pane"
+  /**
+   * The conversation we were promised IS under that pane — and so is a second,
+   * interactive `claude` that is a different conversation, or one whose command
+   * line we could not read.
+   *
+   * GPT Sol's STEER-P0-01. `send-keys` addresses a PANE, not a process, and
+   * whichever process group is in front reads it — which this file cannot
+   * determine (the header's second KNOWN GAP). With two Claudes under one pane
+   * we have no way to say which of them the keystrokes reach, and the screen
+   * check cannot tell us: both draw the same empty input box. So the honest
+   * answer is to refuse, and it is not a claim that anything is broken.
+   *
+   * Its own code rather than `no-claude-in-pane`, because the remedy is
+   * different in kind: the session is alive and well and a person can talk to
+   * it at the terminal; what is missing is our ability to say where a keystroke
+   * would land.
+   */
+  | "competing-claude"
   /**
    * A `claude` is under that pane and WE COULD NOT READ ITS COMMAND LINE — an
    * unknown flag, a flag missing its value. **This is a claim about our parser,
@@ -669,12 +735,19 @@ export function candidatePids(pgrepOut: string): number[] {
  * wrong in one of them the day the module settles it. This file depends on the
  * four arms of the reading, not on how they are computed.
  *
- * **THIS RETURNS FOUR ANSWERS AND NOT A BOOLEAN**, which is GPT Sol's P1-2 and
+ * **THIS RETURNS FIVE ANSWERS AND NOT A BOOLEAN**, which is GPT Sol's P1-2 and
  * the whole reason the shared reader was worth building. A boolean collapses
  * *we could not read that command line* into *there is no claude here*, and
  * `verifyTarget` then tells a person their session has gone when what actually
  * happened is that `claude` grew a flag we do not know. Fail-closed is not the
  * same as fail-loud; `unreadable` is both, and it carries the flag's name.
+ *
+ * **The fifth arm arrived the same way, one round later.** `no` was covering
+ * *not a `claude` at all* and *a different live conversation* at once, and
+ * `verifyTarget` — which is where it matters, because a second conversation may
+ * be the one in front of the pane's terminal — could not get the distinction
+ * back afterwards. STEER-P0-01, and the same lesson as P1-2: a collapsed answer
+ * looks safe until somebody downstream needs the half that was thrown away.
  *
  * The policy this file keeps, over the reading the module hands back:
  *
@@ -700,12 +773,37 @@ export type ClaudeForSession =
   /** A live, interactive `claude` for exactly this conversation. */
   | { match: "yes" }
   /**
-   * Not this conversation's claude: a different id, no id at all, two that
-   * differ, or not a `claude` in the first place. A fact about the process.
+   * NOTHING A KEYSTROKE IN THIS PANE COULD REACH. Not a `claude` at all (the
+   * gjd-remote job shell, a `grep` that mentions the uuid), a `claude`
+   * subcommand that prints and exits, or a `claude` for some other conversation
+   * running under `--print` — which read its prompt at exec and never looks at
+   * a terminal. A fact about the process, and the arm that lets the caller send
+   * anyway.
+   *
+   * **THIS ARM USED TO MEAN MORE THAN IT DOES NOW, and that was Sol's
+   * STEER-P0-01.** It also covered *a different live conversation*, which is
+   * the one thing here that CAN be sitting in front of that tty — so the caller
+   * had no way to tell "a wrapper script" from "somebody else's Claude", and
+   * accepted our own pid while a second Claude owned the terminal. See
+   * `other-claude`.
    */
   | { match: "no" }
   /** This conversation's claude, under `--print`. Nothing typed at it is read. */
   | { match: "headless" }
+  /**
+   * A live, interactive `claude` that is NOT this conversation.
+   *
+   * It reads a terminal, it is a descendant of the pane we are about to type
+   * into, and `send-keys` goes to whichever process group is in front — which
+   * this file cannot determine (see the header's second KNOWN GAP). So its
+   * presence is a reason to refuse even when the conversation we WERE promised
+   * is also there: "the right text delivered to the wrong session" is the
+   * failure this file exists to prevent, and a second Claude is the shape of it.
+   *
+   * A different id, two ids that differ, or no id at all all land here: each is
+   * a conversation that is not the one we were asked for.
+   */
+  | { match: "other-claude"; why: string }
   /** We could not read the command line. A fact about OUR PARSER, and `why` names it. */
   | { match: "unreadable"; why: string };
 
@@ -715,7 +813,10 @@ export function isClaudeForSession(line: FaithfulCommandLine, claudeSessionId: s
     case "not-claude":
       return { match: "no" };
     // `claude agents` is a command, not a conversation. Nothing is listening,
-    // and it carries no session id, so it can never be ours.
+    // and it carries no session id, so it can never be ours. NOT `other-claude`
+    // for the same reason: `subcommand`'s own doc in claude-argv.ts is *a
+    // command, not a session; nothing may be typed at it*, so it is not a
+    // competing owner of the terminal either.
     case "subcommand":
       return { match: "no" };
     case "unreadable":
@@ -725,9 +826,26 @@ export function isClaudeForSession(line: FaithfulCommandLine, claudeSessionId: s
       // one conversation; `A A B` is not, and a rule that looked at the first
       // two would let that through in the granting direction.
       const distinct = new Set(reading.sessionIds);
-      if (distinct.size !== 1) return { match: "no" };
-      if (!distinct.has(claudeSessionId)) return { match: "no" };
-      return reading.headless ? { match: "headless" } : { match: "yes" };
+      const ours = distinct.size === 1 && distinct.has(claudeSessionId);
+
+      // **HEADLESS IS CHECKED BEFORE IDENTITY, and it has to be**: a `--print`
+      // run never reads a tty, whosever conversation it is, so it can neither
+      // be steered nor steal a keystroke. That is what keeps this refusal
+      // affordable — `scripts/run-claude.ts` spawns exactly this as a CHILD of
+      // the session that dispatched it, routinely quoting the dispatcher's own
+      // uuid in the prompt, so every delegating session has one of these under
+      // its pane for the length of the sub-run.
+      if (reading.headless) return ours ? { match: "headless" } : { match: "no" };
+
+      if (ours) return { match: "yes" };
+      const ids = [...distinct];
+      return {
+        match: "other-claude",
+        why:
+          ids.length === 0
+            ? "an interactive `claude` carrying no --session-id at all"
+            : `an interactive \`claude\` carrying --session-id ${ids.join(", ")}`,
+      };
     }
     default: {
       const never: never = reading;
@@ -759,6 +877,101 @@ export function descendsFrom(pid: number, ancestor: number, parents: ReadonlyMap
 }
 
 /**
+ * WHAT EVERY CANDIDATE UNDER THE PANE TURNED OUT TO BE.
+ *
+ * The loop used to stop at its first `yes` and keep three loose locals for the
+ * rest. It cannot stop any more — STEER-P0-01 is a candidate that only the
+ * OTHER side of a `yes` can see — so what it gathers is named, and each field
+ * says what it licenses. Everything here is "the first one seen", because these
+ * fields decide a sentence rather than an action; the pids are for the log and
+ * for the sentence.
+ */
+type PaneCandidates = {
+  /** A live, interactive claude for the conversation we were promised. */
+  ours: number | undefined;
+  /** Our conversation, under `--print`. It is not listening; D5. */
+  headless: number | undefined;
+  /** A different live conversation, which may be the one in front of the tty. */
+  competitor: { pid: number; why: string } | undefined;
+  /** A claude whose command line our own parser could not read. */
+  unreadable: { pid: number; why: string } | undefined;
+};
+
+/**
+ * Read the argv of every candidate under the pane, and say what each one was.
+ *
+ * **IT DOES NOT STOP AT A `yes`.** It used to, and that was GPT Sol's
+ * STEER-P0-01: the pane holds our Claude A, A has started a Claude B whose
+ * prompt quotes A's uuid (so pgrep returns both), and whichever of them the loop
+ * met first decided the answer. With A first it accepted and never looked —
+ * while B was the one in front of the terminal, showing an ordinary empty input
+ * box that the screen check happily approves. Reading them all costs one
+ * `/proc` read per candidate, on a list the ancestry filter has already cut to
+ * this pane; stopping early bought nothing and hid the one fact worth having.
+ *
+ * THROWS rather than refusing, because "a process table we cannot read" is the
+ * caller's `box-unreadable` and not a verdict about anybody's session.
+ */
+function readCandidates(underPane: readonly number[], claudeSessionId: string, io: SteerIo): PaneCandidates {
+  const found: PaneCandidates = { ours: undefined, headless: undefined, competitor: undefined, unreadable: undefined };
+  for (const pid of underPane) {
+    const raw = io.cmdline(pid);
+    // null is "it exited between the pgrep and now", which is a no rather than a
+    // failure. Every other reason to be unable to read an argv is a box we
+    // cannot believe, and is thrown.
+    if (raw === null) continue;
+    const verdict = isClaudeForSession(fromProcCmdline(raw), claudeSessionId);
+    // FIRST OF EACH KIND, not last, so the answer does not depend on pid order —
+    // which is the property the old `break` failed to have.
+    if (verdict.match === "yes" && found.ours === undefined) found.ours = pid;
+    if (verdict.match === "headless" && found.headless === undefined) found.headless = pid;
+    if (verdict.match === "other-claude" && found.competitor === undefined) {
+      found.competitor = { pid, why: verdict.why };
+    }
+    if (verdict.match === "unreadable" && found.unreadable === undefined) {
+      found.unreadable = { pid, why: verdict.why };
+    }
+  }
+  return found;
+}
+
+/**
+ * The pane holds our conversation AND something else that may be in front of
+ * the terminal — or it does not, and we may send.
+ *
+ * `null` IS THE ONLY THING THAT LETS A KEYSTROKE OUT of `verifyTarget`, which
+ * is why it is a function returning a refusal rather than two `if`s in the
+ * caller: both reasons to refuse a pane that *does* contain our session live
+ * here, together, and adding a third is an edit to one place.
+ *
+ * The unreadable arm refuses too, and that is deliberate rather than
+ * over-caution: an argv our parser cannot read may be a second interactive
+ * Claude, and this function's whole question is whether anything else could be
+ * reading that tty. It is `claude-unreadable` rather than `competing-claude`
+ * because the honest sentence names our parser — the same distinction P1-2
+ * bought below.
+ */
+function contendedPane(target: SteerTarget, found: PaneCandidates): SteerFailure | null {
+  if (found.competitor !== undefined) {
+    return no(
+      "competing-claude",
+      `pane ${target.paneId} holds session ${target.claudeSessionId} AND a second live claude` +
+        ` (pid ${found.competitor.pid}, ${found.competitor.why}). A keystroke goes to the pane, not` +
+        ` to a process, so which of them would read it cannot be determined from here`,
+    );
+  }
+  if (found.unreadable !== undefined) {
+    return no(
+      "claude-unreadable",
+      `pane ${target.paneId} holds session ${target.claudeSessionId} AND another claude` +
+        ` (pid ${found.unreadable.pid}) whose command line this cannot read, so whether it too is` +
+        ` reading that terminal is unknown: ${found.unreadable.why}`,
+    );
+  }
+  return null;
+}
+
+/**
  * No claude under this pane that we may type at — and WHICH of the three that
  * is, because they are three different things to tell a person.
  *
@@ -774,7 +987,9 @@ export function descendsFrom(pid: number, ancestor: number, parents: ReadonlyMap
  * because it is three branches that answer one question and the caller has
  * fifteen of its own.
  */
-function noUsableClaude(target: SteerTarget, headlessPid: number | undefined, unreadable: string | undefined): SteerFailure {
+function noUsableClaude(target: SteerTarget, found: PaneCandidates): SteerFailure {
+  const headlessPid = found.headless;
+  const unreadable = found.unreadable?.why;
   if (headlessPid !== undefined) {
     return no(
       "claude-headless",
@@ -790,9 +1005,21 @@ function noUsableClaude(target: SteerTarget, headlessPid: number | undefined, un
         ` session ${target.claudeSessionId} is unknown: ${unreadable}`,
     );
   }
+  // STILL `no-claude-in-pane` WHEN THE ONLY CLAUDE THERE IS SOMEBODY ELSE'S,
+  // and only the sentence got better. The code answers "can this row be
+  // steered", and the answer is the same no it always was — a pane resumed into
+  // another conversation has no claude for OURS in it. `competing-claude` is
+  // for the strictly worse case above, where ours is there too and the choice
+  // between them cannot be made. Naming what we did find is the addition:
+  // "no live claude for session X" reads as *your session has died*, and
+  // "and this is what is in that pane instead" is the thing a person can act on.
+  const instead =
+    found.competitor === undefined
+      ? ""
+      : `; what is under it is pid ${found.competitor.pid}, ${found.competitor.why}`;
   return no(
     "no-claude-in-pane",
-    `no live claude for session ${target.claudeSessionId} is running under pane ${target.paneId}`,
+    `no live claude for session ${target.claudeSessionId} is running under pane ${target.paneId}${instead}`,
   );
 }
 
@@ -816,17 +1043,26 @@ function noUsableClaude(target: SteerTarget, headlessPid: number | undefined, un
  *     that does the real work. It refuses a bare shell, a Codex batch job, a
  *     pane whose Claude has exited, and — the case none of the others catch — a
  *     pane that has been resumed into a DIFFERENT conversation since the caller
- *     read it.
+ *     read it;
+ *  6. and **nothing else that could be reading that terminal is under it** —
+ *     `send-keys` addresses the pane, so a second, interactive claude down there
+ *     is a second candidate for our keystrokes and there is no way from here to
+ *     say which of them gets them. Sol's STEER-P0-01; `contendedPane`.
  *
  * ANCESTRY FIRST, THEN `/proc`, and the order is not a micro-optimisation. The
  * ancestry filter is arithmetic over a table we already have, so it costs
  * nothing and usually leaves one candidate; the argv read is a syscall per
  * candidate against a process that may exit underneath it. Doing the cheap
- * narrowing first means a box with forty agents on it reads one `cmdline`.
+ * narrowing first means a box with forty agents on it reads the argv of the one
+ * or two under THIS pane rather than of every process that mentioned the uuid.
+ * (It used to say "reads one `cmdline`", which stopped being true when the loop
+ * below stopped breaking at its first match — see STEER-P0-01 there. It reads
+ * every candidate under the pane now, and that is the point of it.)
  *
  * Together those pin address, container, process and conversation. What they
- * cannot pin is which process group is reading the tty (see the file header),
- * and the milliseconds after the last check.
+ * cannot pin is which process group is reading the tty (see the file header —
+ * (6) narrows that gap to the case we can SEE, and does not close it), and the
+ * milliseconds after the last check.
  */
 export function verifyTarget(target: SteerTarget, io: SteerIo): { ok: true; verified: Verified } | SteerFailure {
   const shape = checkTarget(target);
@@ -867,32 +1103,17 @@ export function verifyTarget(target: SteerTarget, io: SteerIo): { ok: true; veri
   const tree = parents;
   const underPane = candidates.filter((pid) => descendsFrom(pid, pane.panePid, tree));
 
-  let claudePid: number | undefined;
-  // WHAT THE OTHER CANDIDATES SAID, kept because a refusal has to name the
-  // right thing. A `yes` ends the loop; anything else is only a candidate for
-  // the sentence we give the person if no `yes` ever arrives.
-  let headlessPid: number | undefined;
-  let unreadable: string | undefined;
+  let found: PaneCandidates;
   try {
-    for (const pid of underPane) {
-      const raw = io.cmdline(pid);
-      // null is "it exited between the pgrep and now", which is a no rather
-      // than a failure. Every other reason to be unable to read an argv is a
-      // box we cannot believe, and is thrown.
-      if (raw === null) continue;
-      const verdict = isClaudeForSession(fromProcCmdline(raw), target.claudeSessionId);
-      if (verdict.match === "yes") {
-        claudePid = pid;
-        break;
-      }
-      if (verdict.match === "headless" && headlessPid === undefined) headlessPid = pid;
-      if (verdict.match === "unreadable" && unreadable === undefined) unreadable = verdict.why;
-    }
+    found = readCandidates(underPane, target.claudeSessionId, io);
   } catch (e) {
     return no("box-unreadable", `a process's command line could not be read: ${(e as Error).message}`);
   }
 
-  if (claudePid === undefined) return noUsableClaude(target, headlessPid, unreadable);
+  const claudePid = found.ours;
+  if (claudePid === undefined) return noUsableClaude(target, found);
+  const contended = contendedPane(target, found);
+  if (contended) return contended;
 
   return {
     ok: true,
