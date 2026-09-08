@@ -1,0 +1,298 @@
+# Prose needs an empty input box, not merely a box
+
+**Status as of 2026-09-08: measured, not built.** The defect below was reproduced against three live
+panes on this box by read-only `capture-pane` and against a pinned fixture that has been in the
+corpus since before the bug was known. No code has changed. Evidence is in
+[§ The measurement](#the-measurement); the fixture is
+`tests/fixtures/fleet-panes/none-typed-numbered-message-in-input-box.txt`.
+
+This is Astra's **A10** in
+[orchestrator-direction.md § The backlog](../project/orchestrator-direction.md#the-backlog-after-the-wide-review),
+and it is the half of A10 that Stage v0.2e did not cover. It gets its own doc rather than a fifth
+`### Stage` in [260907e](260907e-agent-fleet-dashboard.md) because two agents are editing that file
+today; a one-line stage entry there points here.
+
+## Goal
+
+**Sending prose into somebody else's agent session must stop being established by absence.**
+
+Today `sendMessage` in [`tools/fleet/steer.ts`](../../tools/fleet/steer.ts) concludes that a pane
+will accept a typed message from three facts: `parsePane` did not recognise a dialog, there is a `❯`
+on the screen, and it has a box border above it and another within four lines below. Two of those
+are positive and one is an absence — and none of them reads what is *in* the box.
+
+So the page offers **Send** on a session that has a half-typed message sitting in its input box, and
+tmux appends ours to theirs and presses Enter on the concatenation. The agent receives one user turn
+that neither person wrote.
+
+Astra's sentence for it:
+
+> A live Claude descendant does not prove an **empty input box owns the keystrokes** — the text may
+> append to a draft, hit a modal, or reach a foreground program. Make arbitrary prose a narrower
+> capability than answering a recognised dialog.
+>
+> — GPT 6 Astra, 2026-09-08
+
+Of those three, **the draft is the one that is happening now**, the modal is largely covered by
+`parsePane`, and the foreground program is **not solvable on this box at all** — see
+[§ What we are not building](#what-we-are-not-building), which has the measurement.
+
+## The measurement
+
+Taken 2026-09-08 with `tmux capture-pane -p`, read-only, across every pane on the box. Seventeen
+held a Claude session with a `❯` on screen. **Thirteen were empty. Four were not, and three of those
+were live drafts between the input box's two borders:**
+
+```
+%218   ❯ yes, shut it all down                 (code/hellozenno, auto mode on)
+%2082  ❯ push it to dev once both are green    (worktree-command-bar-commands-and-place)
+%351   ❯ send those two messages for me        (code/spideryarn2)
+```
+
+Each of those three returns `{ ok: true }` from `inputSurface` today. A Send of `check the tests` to
+`%218` types `check the tests` immediately after `down`, and the second `send-keys` submits
+**`yes, shut it all downcheck the tests`** to an agent running in auto mode.
+
+### This is A9's bug arriving through the prose door
+
+The reading that matters, and it is not the one this doc started with:
+
+> `%218` is sitting on "yes, shut it all down" in a session running in auto mode. A Send to it
+> concatenates and our Enter submits, so the dashboard would deliver an approval nobody wrote — the
+> words are Greg's, the intent is Greg's, and the submission is ours, minutes or hours later,
+> against whatever question is on screen by then. That is not "prose lands in the wrong place"; it
+> is the approval-binding bug of v0.2b arriving through the prose door instead of the dialog door.
+>
+> — `claude-agents-dashboard`, 2026-09-08
+
+Greg typed those words at some point, at a terminal, meaning them about something. He did not press
+Enter. **Our Enter is the act**, and it happens at a moment we choose against a screen we have not
+read, which is precisely what A9 spent a day making impossible on the dialog path: an approval bound
+to a sentence rather than to the material it is about. The two doors are the same bug, and the
+narrowing below is the same fix — the act must bind to what is actually on the screen now.
+
+That also settles a design question the next section would otherwise have to argue: the draft is not
+noise to be worked around, it is somebody's unfinished decision, and appending to it is not a
+delivery failure but an authorship one.
+
+Two things this measurement settles that reasoning would not have:
+
+- **The feature survives the fix.** Thirteen of seventeen were empty, so requiring emptiness costs
+  availability on roughly a quarter of panes at any instant, and that quarter is exactly the quarter
+  where sending is wrong.
+- **An empty Claude Code input box has no placeholder text in it.** The prompt line is `❯` followed
+  by a single U+00A0 and nothing else, on every one of the thirteen and on both empty-box fixtures.
+  Had there been a placeholder, "is it empty" would have been a string-matching problem against a
+  build's copy, and the honest answer would have been not to try.
+
+`none-typed-numbered-message-in-input-box.txt` reproduces it with no tmux: it is a pane with a
+three-line draft in the box, and `inputSurface` returns `ok` at line 20. That fixture was added for
+an unrelated reason — to prove a numbered list *typed by a person* is not a dialog — and it has been
+quietly documenting this defect ever since.
+
+### Why it stayed invisible
+
+`INPUT_BOX_LINES = 4` means a draft of five or more visual lines already pushes the closing border
+out of the window, and `inputSurface` refuses it as "no box border within 4 lines below". So the
+long drafts — the ones somebody would notice — were refused for an unrelated reason, and only the
+short ones got through. The guard that made this rare is not a guard against this.
+
+## References
+
+- [`tools/fleet/steer.ts`](../../tools/fleet/steer.ts) — `inputSurface`, whose own comment already
+  names this ("**A box with a draft in it is still a box** … That is a real defect and it is not
+  this function's — it wants a product decision about what to do, not a tighter predicate"). This
+  doc is that product decision. Also `sendMessage`, `answerQuestion`, `SteerResult`, `RefusalCode`.
+- [`tools/fleet/pane.ts`](../../tools/fleet/pane.ts) — `parsePane`, `cleanLines`, `isInputPrompt`,
+  `PaneQuestion`, `PaneMaterial`, `PaneGate`. The parser, and where the new type belongs.
+- [260907e § Stage v0.2e](260907e-agent-fleet-dashboard.md) — the *dialog* half of A10, landed. Read
+  it before touching `PaneGate`: `conversation` is the only arm reached by positive evidence and
+  `unknown` is refused alongside `permission` on purpose. **Nothing here changes it.**
+- [260907e § Stage v0.2b](260907e-agent-fleet-dashboard.md) — A9, which the doc still shows as 🔴 and
+  which is in fact three-and-a-half boxes built. Corrected in the first stage below.
+- [`tools/fleet/routes-steer.ts`](../../tools/fleet/routes-steer.ts) — `REFUSAL_STATUS`, a `Record`
+  keyed by the union, so a new refusal code will not compile until it has a status.
+- [`tools/fleet/drain.ts`](../../tools/fleet/drain.ts) — read, not edited. Owned by the
+  `claude-agents-dashboard` session.
+- [orchestrator-direction.md](../project/orchestrator-direction.md) and
+  [260908b-whole-approach-review-astra-v2.md](260908b-whole-approach-review-astra-v2.md) — A9, A10,
+  A11 and the review they came from.
+- [silent-success.md](../reusable/silent-success.md) — the reason every acceptance criterion below
+  says what the check prints when it is defeated.
+
+## Principles and key decisions
+
+**Prose becomes a positively-established act, not a residual one.** Answering a dialog already
+requires a positive identification — `parsePane` recognised a specific dialog, `classifyGate` earned
+the `conversation` arm, and `sameQuestion` re-checked the material's fingerprint against a fresh
+capture. Prose required "we did not recognise anything, and there is a box shape". After this, both
+require a positive reading of the screen, and prose requires **strictly more**: the box must exist
+*and* be empty. That is what "narrower capability" means here, and it is enforced by which arm of a
+union each entry point accepts rather than by a rule each caller remembers.
+
+**One reader of the screen, in the module that reads screens.** `inputSurface` lives in `steer.ts`
+and re-parses the pane that `sendMessage` has already parsed. Two functions reading the same capture
+is the drift this module warns about in three separate comments ("Two regexes for one thing drift,
+and the direction this one would drift in is 'types a message into a permission dialog'"). So
+`inputSurface` **moves into `pane.ts`** and widens into `paneSurface`, which returns one union
+answering one question: *what is this pane showing, and what may be sent to it?* `steer.ts` calls it
+once and switches. This deletes a `parsePane` call rather than adding one.
+
+**A refusal, not an override.** The simpler option considered and rejected: let the page send anyway
+behind a confirmation ("there is a draft; send regardless"). Rejected because the draft belongs to
+somebody else — the agent typed it, or Greg typed it in the terminal and walked away — and no
+confirmation on a phone can tell those apart. If an override is ever wanted it should arrive with a
+reason, not as the default shape.
+
+**The draft's text does not cross the wire.** The refusal says *how many lines* are in that box and
+not what they say. This file's header promises that nothing here logs a word of what people say to
+their agents, and putting one agent's unsent sentence onto Greg's phone would be that promise broken
+by the guard that exists to protect it. The simpler option — show the draft so Greg can judge — is
+named and passed over; it can be added later as a deliberate decision.
+
+**A queued message that hits a draft waits rather than dies.** `no()` in `steer.ts` returns
+`delivery: "none"` and `sent: []`, so the new refusal reaches `drain.ts` on the path that calls
+`queue.release` with `nothingWasSent()` evidence and puts the item back at the head of its queue. No
+change to `queue.ts` or `drain.ts`, and the never-auto-retry rule is untouched: nothing was sent, so
+there is nothing to retry. This is the correct behaviour by accident of good design next door, and
+it is asserted rather than assumed.
+
+## What we are not building
+
+**The foreground-program half of A10, because it cannot be built here.** `steer.ts`'s header says
+`#{pane_current_command}` is `bash` for every Claude session and so cannot tell a Claude pane from a
+shell pane. That is true, and the reason is worse than the note implies. Measured on 2026-09-08
+across `%1999`, `%2085` and `%2166`, reading `/proc/<pid>/stat`:
+
+```
+pid=503078  comm=bash    pgrp=503078 sid=503078 tpgid=503078
+pid=503092  comm=claude  pgrp=503078 sid=503078 tpgid=503078
+```
+
+Claude, the pane's bash, and anything Claude shells out to are **all in one process group**, and the
+tty's foreground process group id is that group. So `tpgid` carries no more information than tmux's
+field did: there is no kernel-level signal on this box that distinguishes Claude from a child it has
+shelled out to. A check built on one would read strong and mean nothing, which is the failure class
+this project keeps writing postmortems about. The gap stays named in `steer.ts`'s KNOWN GAPS, with
+the measurement attached so the next person does not re-derive it.
+
+**A `clipped` signal out of `materialAbove` for a top border on line 0 of the capture.** Named as
+the right fix in `steer.ts`'s header, and still probably right — but no fixture in the corpus of 23
+triggers it, and one constructed by deleting the lines above a fixture's top border produces a
+*correct* body, not a wrong one. A guard whose trigger cannot be demonstrated is an untested guard,
+and this repo has just spent a day on four of those. Left named, not built.
+
+**`PaneGate`, `classifyGate`, `sameQuestion`, `sameMaterial` and the answering path.** Landed,
+tested against 23 captures, and out of scope. The two things Stage v0.2e deliberately left open —
+the TOCTOU window and the unreachable `arrows` branch of `keysFor` — are decisions with reasons, and
+nothing here argues with either.
+
+## Stages
+
+### Stage A: A9 is built; the doc says it is not, and the refusal does not say what to do instead
+
+The smallest thing, and it lands first so something is true by the end of the hour.
+
+Stage v0.2b in [260907e](260907e-agent-fleet-dashboard.md) is marked 🔴 with four unticked boxes.
+Three and a half of them shipped this morning and the doc never caught up: `material` with its
+sha256 fingerprint and three arms (`6fbb1f56`), `sameMaterial` where `unreadable` never equals
+anything including another `unreadable` (`688bd699`), and the client's `Material` component and
+`Consequence` pill with the `CONSEQUENCE_TONE` inequality holding `unknown` at least as loud as
+`persistent` (`44f60619`).
+
+The half-box genuinely open is the handoff. When the material comes back `unreadable` the card takes
+the buttons away and says *"Answer it in the terminal."* — which is correct and useless, because it
+does not say how to get to that terminal. Astra asked for `gjd-remote resume <name>`, and the
+command exists (`scripts/gjd-remote.ts`, and the tool prints that exact line itself at two places).
+
+- [ ] `Material`'s `unreadable` arm in `tools/fleet/web/src/SessionParts.tsx` renders the actual
+      command, `gjd-remote resume <session name>`, as **selectable** monospace text — the person
+      reading it is on a phone and is about to paste it into a terminal somewhere else, so a
+      sentence they have to retype is barely better than no sentence. The session's **name**, never
+      its id: that is what the command takes. Needs the name threaded through `QuestionCard`; that
+      is a one-line prop at the call site in `SessionDetail.tsx`, which belongs to the other
+      session — **ask before adding it**.
+- [ ] Tick the three built boxes in 260907e § Stage v0.2b, mark the stage ✅ with the three commits
+      named, and move "BLOCKS v0.4" — v0.4 shipped.
+- [ ] Prove it in a browser: a pane whose material is `unreadable` shows no option buttons and does
+      show the resume command. Screenshot.
+
+### Stage B: `paneSurface` — one reading of the screen, with an arm for a drafted box
+
+The safety property. Everything after this is presentation.
+
+- [ ] **Red first.** A test in `tests/fleet-steer.test.ts` that drives `sendMessage` with an `io`
+      whose `capture` returns `none-typed-numbered-message-in-input-box.txt` and asserts a refusal.
+      **Watch it fail**, and record what it printed when it failed — it must fail with `ok: true`
+      and two `send-keys` calls in `sent`, because a test that goes red for the wrong reason (a
+      malformed fake, a fixture that does not load) proves nothing.
+- [ ] `PaneSurface` in `pane.ts`, four arms, no optionals:
+      `{ kind: "dialog"; question: PaneDialog }` · `{ kind: "empty-input"; promptLine: number }` ·
+      `{ kind: "drafted-input"; promptLine: number; draftLines: number }` ·
+      `{ kind: "unrecognised"; why: string }`. `PaneDialog` is the existing
+      `Extract<PaneQuestion, { kind: "question" }>`, exported from `pane.ts` so `steer.ts`'s
+      `SeenQuestion` becomes an alias of it rather than a second spelling.
+- [ ] `paneSurface(capture): PaneSurface` in `pane.ts`, absorbing `inputSurface` verbatim — same
+      three conditions, same `isBoxBorder`, same `BORDER_TITLE_INDENT`, same "last prompt line"
+      rule — and calling `parsePane` **once**, whose result becomes the `dialog` arm.
+- [ ] Emptiness: the prompt line is empty when everything after the `❯` trims to nothing, and every
+      line between it and the closing border does too. U+00A0 is whitespace to `String.trim`, which
+      is what an empty box actually contains; there is a test that keeps that true, because a
+      `trim` that stopped folding NBSP would turn every empty box into a drafted one and the
+      feature would vanish silently.
+- [ ] `inputSurface` is deleted from `steer.ts`, not left beside its replacement. **This touches
+      `steer.ts`, which is shared — tell `claude-agents-dashboard` first.**
+- [ ] `sendMessage` switches on `paneSurface` with a `never` in the default: `empty-input` proceeds,
+      `dialog` → `pane-is-asking` (unchanged), `drafted-input` → the new code, `unrecognised` →
+      `not-at-input` (unchanged, carrying `why`).
+- [ ] New `RefusalCode`: `input-not-empty`. Adding it makes `REFUSAL_STATUS` in `routes-steer.ts`
+      fail to compile until it is given a status — **409, not 400**: the request was fine and the
+      box is not what the client thought, and the same client may legitimately retry once that agent
+      has sent its own draft.
+- [ ] `answerQuestion` takes its dialog from the same `paneSurface` call, so the two entry points
+      cannot come to different conclusions about one capture.
+- [ ] The whole fixture corpus re-classified, printed as a table in the test output: every
+      `dialog-*` fixture must be `dialog`, `none-typed-numbered-message-in-input-box` must be
+      `drafted-input`, the two bare/blank panes `unrecognised`, and the rest `empty-input`. A count
+      per arm, asserted, so a change that silently moves one fixture between arms goes red.
+- [ ] Assert the drain's behaviour rather than assume it: a test that the refusal carries
+      `delivery: "none"` and `sent: []`, which is what `nothingWasSent()` requires before
+      `queue.release` will put the item back.
+- [ ] `npm test` and `npm run typecheck`.
+
+### Stage C: the person who pressed Send learns what happened
+
+A refusal a phone cannot act on is a refusal that teaches Greg to stop reading them.
+
+- [ ] `input-not-empty` gets a client-side sentence in the steer client that says the specific
+      thing: there is already text in that session's input box, a message sent now would be added to
+      the end of it and submitted as one, and the fix is to wait or to open the session. Not the
+      generic refusal rendering.
+- [ ] **Make it refuse in a real browser.** Start a throwaway `claude` in a tmux session of my own,
+      type a few words into its input box without pressing Enter, and press Send from the dashboard.
+      Watch the refusal arrive, screenshot it, and confirm by `capture-pane` that the draft is
+      **unchanged** — the screenshot proves the message; the capture proves the safeguard. Then
+      clear the draft and send again, and watch it succeed, because a guard that has never let
+      anything through is a guard that is simply off.
+- [ ] Never against another agent's session. `capture-pane` only on those, `send-keys` never.
+
+### Stage D (deferred, and named rather than done)
+
+The page could show the draft state *before* Send is pressed — the same principle as commit
+`18800ff6`, "the page stops offering a button it knows the server will refuse". That wants
+`surface` on the wire and computed by the collector, which lands in `wire.ts` and `collect.ts` while
+`wire.ts` is being written by somebody else today. Deferred deliberately: Stage B is the safety and
+Stage C is the explanation, and both stand without this.
+
+## Risks
+
+- **A build of Claude Code that draws a placeholder in an empty box** turns every pane into
+  `drafted-input` and the Send button stops working everywhere at once. Loud, safe, and fixed by
+  teaching the rule that shape. Named here so the next person recognises it in one minute rather
+  than thirty.
+- **A torn redraw** — a capture taken between the box being cleared and the draft being repainted —
+  reads empty when it is not. Unchanged from today and not closable without a compare-and-send tmux
+  does not have; it is in the module's KNOWN GAPS already.
+- **Moving `inputSurface` conflicts with concurrent work in `steer.ts`.** Mitigated by asking first
+  and by keeping the move verbatim: the body of the function does not change in this plan, only its
+  address and its return type.
