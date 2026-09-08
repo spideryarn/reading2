@@ -854,6 +854,66 @@ Nothing here could have ended it: the build holds no actor, and no kill was run 
 is worth knowing that the live specimen this rule was sized against no longer exists, so a future
 demonstration needs a new one.
 
+#### Three pushbacks from the implementer, and how each was settled
+
+All three are good, and one improves on Sol's own fix. Settled by me rather than inherited, which is
+the point of asking for them.
+
+**1. The SC-4 test is a proxy, and they said so themselves.** A destructure that still names all four
+fields is behaviourally identical to the mapped type, and no runtime test can see the difference —
+what the new test actually catches is the *deletion of the exported field list*, which a revert
+entails as written. **The real guarantee is compile-time only.** Accepted as stated: the value is
+that a *new* field cannot be silently omitted, which was SC-4's actual complaint, and the honest note
+is better than a test claiming more than it does.
+
+**2. Pinning `scheduler.ts` is over-broad, and this is a better answer than Sol's.** Sol offered two
+fixes and the implementer took the pin, then argued the cost Sol had not priced: `scheduler.ts` also
+carries session dispatch, the sweep, and `describeReport`'s wording, so **every rule's authorisation
+is now hostage to a file that changes for reasons having nothing to do with rules.** It re-pinned
+twice in one session; with three rules, editing a log sentence would disarm all three.
+
+They also refused Sol's alternative — *"move the disposition interpretation into pinned rule-specific
+code"* — because it gives every rule its own copy of the append-before-act ordering, which is exactly
+what SP-2 refused. That is right.
+
+**Decision: 3b splits the rule protocol out of `scheduler.ts` into its own file and pins that.** Same
+guarantee, far fewer false trips, and it is first in 3b rather than a note. The failure mode
+meanwhile is fail-safe — a stale pin *refuses* the job with a message — so it is annoying rather than
+dangerous, which is why it waits for 3b instead of reopening 3a.
+
+**3. `refusingActor` was deleted, taking defence in depth from two guards to one.** Beyond the letter
+of the brief, correctly flagged for me to decide rather than absorb. **Accepted, and it is my call
+now, not theirs:** the structural guard — the acting capability being absent from the process — is
+strictly stronger than a polite refusal, and an unwired refusing actor is a liability rather than a
+belt, because it looks like protection and invites somebody to wire it up. One real guard beats one
+real guard plus a decorative one.
+
+#### The mutation that was a no-op one time in sixteen
+
+Reported by the implementer and worth more than the fix it came from. A test asserting *"editing the
+implementation moves the fingerprint"* tampered with a digest by replacing its **last character with
+`0`** — which does nothing at all whenever the digest already ends in `0`. It had been passing by
+luck, and the luck ran out on an unrelated edit, so it went red for a reason that had nothing to do
+with the change being made.
+
+**A mutation test whose mutation is sometimes a no-op is a test that is sometimes not a test**, and
+nothing about it looks wrong: it is green, it is specific, and it names the right property. Same
+family as everything else today, and the narrowest instance of it — the check was not weak, it was
+*probabilistically absent*. Fixed to flip the character rather than set it.
+
+#### The specimen died on its own, after the rule had caught it
+
+pid 2282035 and its family (2282033/4/6) are **gone**, confirmed independently. Nothing in this build
+could have ended them — it holds no acting capability, and `daemon.jsonl` records no kill — so
+something else on the box did it, twenty hours in.
+
+The demonstration had already happened: the rule proposed against it at 20:26, and that event is in
+the ledger. But two consequences stand. **The four-hour threshold was sized against exactly one
+specimen and that specimen no longer exists**, so it remains the guess Sol called it, now without
+even the one case. And Greg's instruction — leave it standing as a test case — was overtaken by
+events rather than followed, so **a future demonstration needs a new specimen**, which is a thing to
+make deliberately rather than wait for.
+
 #### SP-11, and a number I sent to somebody else
 
 Sol is right that *"3 of 15"* mixes eight agent sessions with seven shells, and that `working`
