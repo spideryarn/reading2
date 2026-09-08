@@ -188,3 +188,81 @@ belonged and flagged only comment wording.
    substitute for an automatic comparison?
 4. **Is anything in this block reachable before `requireUser`** — i.e. does any of these twelve paths
    also match something in `src/public/routes.ts`?
+
+## Three of the four review questions, answered before the review came back
+
+Two by measurement and one by exhaustion, while the plan review was running. They are left in the
+question list above as they were asked, so the review is not steered; this is what I found.
+
+**Q4 — nothing in this block is reachable before `requireUser`, and that is exhaustive rather than
+inferred.** `src/public/routes.ts:183` gates the whole public namespace on
+`path === "/api/public" || path.startsWith("/api/public/")`. No `/api/chat/…` or `/api/live/…` path
+satisfies either clause, so the public dispatch cannot reach one. This is the argument by literal
+prefix that 260907e § *the genuinely cheap one* says is available when a namespace is literal, and it
+is available here.
+
+**Q3, first half — the rail fires on `chat` GET and on nothing else in this block.** Measured with
+`scratchpad/e4f7-count-returns.mjs`, which cuts each guard's body out of the chain, blanks comments
+and string bodies, and counts `return` tokens at the guard's own function scope (returns inside
+nested arrows excluded by tracking the depths at which a `=>` opened a block):
+
+```
+chat GET                     returns=2  *** RAIL FIRES ***
+chat POST                    returns=1  comparable
+chatCancel POST              returns=1  comparable
+chatLiveTool POST            returns=1  comparable
+chatLive POST                returns=1  comparable
+liveSessionConnected POST    returns=1  comparable
+liveSessionUsage POST        returns=1  comparable
+liveSessionClose POST        returns=1  comparable
+chatSpoken POST              returns=1  comparable
+chatStop POST                returns=1  comparable
+oneThread PATCH              returns=1  comparable
+oneThread DELETE             returns=1  comparable
+```
+
+Every one of the eleven has a single argumentless `return;` as its last statement. So the rail is not
+a formality that will fire on half the block and get argued away twelve times: it fires **once**, on
+the one guard that has a second exit, which is what a rail is supposed to look like.
+
+## Stage 3 grew a landmine, and the session that laid it said so
+
+**The leftover check in the contract test has been vacuous for every regex route**, found and
+measured by 260907b (session `spideryarn2-4c`) at 01:45 on 2026-09-08 while this plan was in review.
+Verified here independently before it was written down.
+
+`tests/authenticated-api-route-contract.test.ts:1934` filters chain guards with
+`moved.some((p) => describeMatch(g.match).includes(p))`, and `describeMatch` renders a regex as
+`` `regex /${m.source}/${m.flags}` `` — with `source`'s escapes intact. So a chat route renders as
+`regex /^\/api\/chat\/([\w.%-]+)$/`, in which the substring `/api/chat` **does not occur**: every
+separator is `\/`. The filter can only ever catch a *literal* route left behind in the chain, which
+is why it looked healthy — billing, jobs and uploads have literal rows. **Referee and search are
+entirely regex, so this assertion verified nothing for either of the last two slices** while reading
+in review as though it had. Their probe: adding `/api/chat` to `moved` with all nine `/api/chat`
+guards still in the chain left the suite **green at 326**.
+
+Their fix, landing on `dev` shortly, is a `pathish(match)` helper dropping the backslashes — the
+result is only ever searched for a prefix, so `\w` becoming `w` is harmless.
+
+**What it means for this slice, and it is not one thing:**
+
+- The exact `toEqual` list at `:1897` is the check that actually bites, and it is not vacuous: it
+  compares the *complete* set of table pair keys. Stage 3 adds twelve entries to it.
+- The `moved` prefix list at `:1931` will be enforced for real once their fix lands. This slice spans
+  **two** prefixes — `/api/chat` (nine guards) and `/api/live` (three). **`chatLive` is
+  `/api/chat/:slug/:threadId/live` and belongs to the first**, so a prefix list that sorts by the
+  word "live" mis-sorts it.
+- **If this slice is split into two, neither prefix goes into `moved` until the last guard under it
+  has moved.** Adding `/api/chat` while any of the nine is still in the chain will now fail loudly —
+  correct, but it will read as the move having broken something when it means the move is
+  incomplete.
+- They also added a **control** beside it, because the assertion passes both when there is nothing to
+  find and when it *cannot* find anything: it requires the filter to find at least one `/api/chat`
+  guard still in the chain. **That control fails the moment this slice lands, deliberately** — it is
+  addressed to whoever moves chat, and Stage 3 repoints it at the next unmigrated regex domain,
+  which is `/api/comments`.
+
+This is [silent-success.md](../reusable/silent-success.md) in its purest form: a check that agreed
+with the code because it shared an assumption with it, green for two whole slices. It is also the
+reason the two sessions talking to each other has been worth more than either of them working
+faster.

@@ -518,6 +518,11 @@ survive it: `:2349` at complexity 77 and `:2591` at 36.
 
 ## The next slice, so the fifth sweep inherits a queue
 
+> **Taken, 2026-09-08 01:40.** `chat` now has a plan of its own — [260908a-chat-and-live-sessions-join-the-route-table.md](260908a-chat-and-live-sessions-join-the-route-table.md),
+> twelve guards rather than the eleven this section says, with the DELETE oracle and the
+> return-count rail below as its Stage 1 and Stage 2. The queue after it is unchanged and starts
+> at `comments`.
+
 > **Claimed, 2026-09-07 21:30.** `searches` is **taken by 260907b** (`worktree-api-dispatch-by-domain`),
 > which asked before starting. 260907e is on an 8-hour wait and would have held the slice idle until
 > 05:17; handing it to the session that is awake is worth more than keeping the queue tidy. **The next
