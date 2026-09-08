@@ -93,6 +93,14 @@ export type RouteErrorCode =
   | "body-too-large"
   | "rate-limited"
   | "method-not-allowed"
+  /**
+   * Answering a dialog is switched off pending a decision Greg has to make —
+   * see the long comment at the dispatch. It is a `RouteErrorCode` rather than a
+   * `RefusalCode` on purpose: nothing about the box or the request was wrong, so
+   * refreshing and trying again will not help, and a client that retries on 409
+   * must not retry on this.
+   */
+  | "answering-disabled"
   | "internal";
 
 export type SteerOp = "message" | "answer";
@@ -591,6 +599,16 @@ export type SteerDeps = {
   now: () => number;
   limiter: RateLimiter;
   log: (line: string) => void;
+  /**
+   * Whether tapping an option may reach the delivery module at all. See the
+   * long comment at the dispatch for why the answer is currently no.
+   *
+   * A DEP RATHER THAN A `process.env` READ AT THE DISPATCH, so a test can drive
+   * both sides of it without mutating the environment — a test that sets an env
+   * var leaks into every other test in the file when it forgets to unset it,
+   * and the failure looks like a flake rather than a bug.
+   */
+  answeringEnabled: () => boolean;
 };
 
 export function realSteerDeps(): SteerDeps {
@@ -600,6 +618,10 @@ export function realSteerDeps(): SteerDeps {
     now: () => Date.now(),
     limiter: createRateLimiter(),
     log: (line) => console.log(line),
+    // Read per request, not once at construction: flipping it is then a server
+    // restart rather than a rebuild, and nothing here caches a decision that
+    // Greg may want to change in a hurry.
+    answeringEnabled: () => process.env["FLEET_ANSWER_ENABLED"] === "1",
   };
 }
 
@@ -671,6 +693,47 @@ export function makeSteerRoutes(overrides: Partial<SteerDeps> = {}): SteerRoutes
       `steer ${op}: pane=${target.paneId} session=${target.sessionId} claude=${target.claudeSessionId} ` +
         `pid=${target.panePid ?? "-"} declared=${request.declaredStatus.kind} ${shape}`,
     );
+
+    // ANSWERING A DIALOG IS OFF, AND THIS IS A PRODUCT DECISION WAITING FOR
+    // GREG RATHER THAN A BUG WAITING FOR A FIX.
+    //
+    // Two independent cross-family reviews on 2026-09-08 reached the same
+    // conclusion about tapping an option from a phone, by different routes.
+    //
+    //  - GPT Astra ran an experiment: it changed a proposed file's contents in
+    //    a pinned fixture and `parsePane` returned an IDENTICAL question and
+    //    identical options. `promptAbove` stops at a horizontal rule, and
+    //    Claude Code puts one between the diff and the question — so the
+    //    approval binds to "Do you want to create notes.md?" and the content
+    //    being written is discarded. **The page can ask Greg to approve
+    //    something without showing him what it is.**
+    //  - GPT Sol found six more, of which one is not fixable by tightening
+    //    anything here: pane text is not provenance. An agent that has printed
+    //    a plausible menu — deliberately, or because it was processing hostile
+    //    input — produces a capture this parser accepts, and Sol's words are
+    //    "keep dialog answering read-only unless there is a structured, trusted
+    //    source of question identity, or explicitly accept that pane text is
+    //    executable UI".
+    //
+    // That last one is Greg's call and he is asleep. So the route stays built,
+    // tested and reachable, and refuses with a sentence saying why — which is
+    // better than deleting it (the work survives and the client can render the
+    // reason) and much better than shipping it (the failure mode is a wrong
+    // approval, and there is no way to take one back).
+    //
+    // `FLEET_ANSWER_ENABLED=1` turns it on for anybody who wants to test it.
+    // Sending a MESSAGE is unaffected; stages v0.2b and v0.2c in the plan are
+    // what turn this on for real.
+    if (op === "answer" && !deps.answeringEnabled()) {
+      const why =
+        "answering a dialog is disabled: the captured question does not include what is being approved, " +
+        "so tapping an option could approve something other than what you were shown. " +
+        "Use `gjd-remote resume <name>` and answer it in the terminal. " +
+        "See docs/plans/260907e-agent-fleet-dashboard.md stage v0.2b.";
+      deps.log(`steer answer: refused code=answering-disabled pane=${target.paneId}`);
+      respond(res, 503, { ok: false, code: "answering-disabled", why });
+      return;
+    }
 
     const rate = deps.limiter.check(target.paneId, deps.now());
     if (!rate.ok) {

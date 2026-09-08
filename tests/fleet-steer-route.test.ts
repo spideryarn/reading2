@@ -164,6 +164,13 @@ function harness(result: SteerResult | (() => SteerResult) = OK, over: Partial<S
       return give();
     },
     log: (line) => logs.push(line),
+    // ON BY DEFAULT IN THE HARNESS, off by default in production — and the
+    // asymmetry is deliberate rather than a convenience. These tests are about
+    // what the route passes DOWN to the delivery module, and every one of them
+    // would otherwise be asserting the disabled path instead, quietly, while
+    // still reading as a test of answering. The gate itself has its own
+    // describe block below, which drives both sides of it explicitly.
+    answeringEnabled: () => true,
     ...over,
   });
   return { routes, calls, logs };
@@ -454,6 +461,52 @@ describe("returning the discriminated result honestly", () => {
 /* ------------------------------------------------------------------ *
  * Answering a dialog.
  * ------------------------------------------------------------------ */
+
+describe("the answering gate — off until Greg decides", () => {
+  /**
+   * Two cross-family reviews reached the same conclusion on 2026-09-08 by
+   * different routes. Astra changed a proposed file's contents in a fixture and
+   * `parsePane` returned an identical question — the approval binds to the
+   * sentence, not to what is being approved, so the page can ask Greg to
+   * approve something without showing him what it is. Sol added that pane text
+   * is not provenance at all: an agent that prints a plausible menu produces a
+   * capture this parser accepts.
+   *
+   * The second is a product decision, not a bug, so the route stays built and
+   * refuses with a sentence rather than being deleted.
+   */
+  it("refuses to answer, with 503 and a reason a person can act on", async () => {
+    const { routes, calls } = harness(OK, { answeringEnabled: () => false });
+    const r = await post(routes, fakeReq({ url: "/api/steer/answer", body: JSON.stringify(answerBody()) }));
+    expect(r.status).toBe(503);
+    expect(r.json["code"]).toBe("answering-disabled");
+    // The sentence has to name the hazard and the way round it, because it is
+    // rendered on a phone by somebody who cannot read this file.
+    expect(String(r.json["why"])).toMatch(/approve something other than what you were shown/);
+    expect(String(r.json["why"])).toMatch(/gjd-remote resume/);
+    // AND NOTHING REACHED THE DELIVERY MODULE. The status code alone would be
+    // satisfied by a route that refuses after sending.
+    expect(calls).toEqual([]);
+  });
+
+  it("leaves sending a MESSAGE alone", async () => {
+    // The gate is about tapping an option, not about steering. A gate that
+    // quietly took both would be discovered by Greg, at night, on his phone.
+    const { routes, calls } = harness(OK, { answeringEnabled: () => false });
+    const r = await post(routes, fakeReq({ url: "/api/steer/message", body: JSON.stringify(messageBody()) }));
+    expect(r.status).toBe(200);
+    expect(calls.map((c) => c.op)).toEqual(["message"]);
+  });
+
+  it("lets an answer through when it is switched on", async () => {
+    // The other side of the switch, so this file cannot pass by refusing
+    // everything — and so the fix, when it lands, has something to flip.
+    const { routes, calls } = harness(OK, { answeringEnabled: () => true });
+    const r = await post(routes, fakeReq({ url: "/api/steer/answer", body: JSON.stringify(answerBody()) }));
+    expect(r.status).toBe(200);
+    expect(calls.map((c) => c.op)).toEqual(["answer"]);
+  });
+});
 
 describe("answering a dialog", () => {
   it("passes the dialog the client is showing, and the index it chose", async () => {
