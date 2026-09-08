@@ -21,10 +21,18 @@
  *
  * The three marketing pages (`/`, `/features`, `/pricing`) open with
  * `className="site"` and a `SiteNav`, and carry the `--site-*` token scope with
- * them — a hero, a glow, a taller footer. That shell exists to sell something to
- * a stranger over a long scroll. This page is three short paragraphs, so it takes
- * `PrivacyPage.tsx`'s shape instead: a Back link, an `h1`, prose, and the same
- * `SiteFooter` every other page a reader lands on carries.
+ * them — a hero and a glow. That shell exists to sell something to a stranger
+ * over a long scroll. This page is three short paragraphs, so it takes
+ * `PrivacyPage.tsx`'s shape instead: an `← Home` link, an `h1`, prose, and the
+ * same `SiteFooter` every other page a reader lands on carries.
+ *
+ * **The footer is no longer one of the differences.** It was — the marketing
+ * pages passed `variant="marketing"` for a taller one — until 2026-09-08, when
+ * the row was redesigned and one measure closed both kinds of page. What still
+ * separates the two families is the nav and the hero, which is the decision
+ * above; that it stands is GPT Sol's finding 4 on
+ * docs/plans/260908d-make-the-site-footer-and-the-signed-out-pages-more-aesthetically-pleasing.md,
+ * where it survived having its first argument disproved.
  *
  * ## The Feedback button is the answer, and the address is the fallback
  *
@@ -62,13 +70,19 @@ export function ContactPage() {
   useDocumentTitle(pageTitle({ kind: "contact" }));
 
   return (
-    <main className="tw:mx-auto tw:max-w-2xl tw:px-6 tw:pt-[calc(3.5rem_+_var(--safe-top))] tw:pb-24 tw:font-sans">
+    <main className="tw:mx-auto tw:flex tw:min-h-dvh tw:max-w-2xl tw:flex-col tw:px-6 tw:pt-[calc(3.5rem_+_var(--safe-top))] tw:font-sans">
+      {/* **"Home", not "Back", since 2026-09-08.** It goes to `/` rather than
+          `history.back()`, and most people who open this page were *sent* to it
+          — from an email, from the footer of another page, from a link in an
+          article — so there was often no "back" for it to mean. It is also the
+          label the footer uses for the same destination, and one page should not
+          call one address two things. */}
       <Link
         href="/"
         className="tw:mb-6 tw:inline-flex tw:items-center tw:gap-1 tw:text-xs tw:text-ink-faint tw:no-underline tw:hover:text-highlight"
       >
         <ArrowLeft size={13} />
-        Back
+        Home
       </Link>
 
       <h1 className="tw:m-0 tw:font-prose tw:text-2xl tw:leading-snug tw:text-foreground">
@@ -93,6 +107,19 @@ export function ContactPage() {
           .
         </p>
       </div>
+
+      {/* **The spacer that puts the footer on the floor.** This page is a
+          `min-h-dvh` flex column, and on `/contact` — 469 characters — the
+          content is a third of one screen, which used to leave the footer
+          floating 510px above the bottom of the window with black underneath
+          it. This grows into whatever is left over.
+
+          A spacer rather than `mt-auto` on the footer, and rather than wrapping
+          everything above in a `flex-1` div: `margin-top: auto` is the same
+          property as the footer's own `mt-20`, so it silently won on every page
+          that is not a flex column and took the air above the rule with it —
+          SiteFooter.tsx says what that measured. */}
+      <div className="tw:flex-1" />
 
       <SiteFooter />
     </main>

@@ -1,6 +1,6 @@
 # Make every environment-variable read literal, and inventory them
 
-**Status as of 2026-09-08: Stage 1 built and landed. Stages 2 and 3 not started.** Stage 1 took five
+**Status as of 2026-09-08: Stages 1 and 2 built. Stage 3 not started.** Stage 1 took five
 GPT Sol verdicts — two refusals and three scoped checks — and the two changes that mattered both came
 from *giving up on making the checker clever*: pinning what cannot be reasoned about, and inverting
 the specifier rule to refuse by default. See § Stage 1 — what actually landed.
@@ -317,12 +317,150 @@ nothing under `src/` reads any more is also red, so the list cannot rot in the o
 
 `SPIDERYARN_ORIGINS` and `VERCEL_PROJECT_PRODUCTION_URL` get their door here.
 
+### Stage 2 — what actually landed
+
+`tests/env-names-are-inventoried.test.ts`, seven assertions, and exactly one line of `src/`: a
+`SPIDERYARN_ORIGINS` row added to `EXPECTED` with `breaks: null`, after GPT Sol's review overturned
+where it had been put. [The review is here](260908a-env-names-stage2-review-sol.md).
+
+**Red first named 32.** With the allowlist and the built-ins door empty, the gate named every one of
+them with its read site — the full output is in the session scratchpad as `envlitS2-red-first.txt`.
+The sweep collects **52** names; 20 are in `EXPECTED` (19 rows plus `SUPABASE_ANON_KEY` as an `or`),
+2 are required client build inputs, 2 are Vite constants, and the remaining 30 are the allowlist.
+The doors are read rather than copied: the build door is `missingClientEnv({})` **called**, so a
+third required input joins it the moment it joins the build; `EXPECTED` is parsed out of
+`src/vercel-health.ts` syntactically, refusing a row it cannot read as an object literal with a
+string-literal `name` — importing the module would drag in the database client and the store.
+
+**The two homeless names went to different doors, and one of them changed in review.**
+`VERCEL_PROJECT_PRODUCTION_URL` is platform-written, so it joins `VERCEL_URL` on the allowlist —
+there is nothing for an operator to configure. `SPIDERYARN_ORIGINS` went to the allowlist too, on
+the argument that a health report cannot tell whether this deployment needs it, which depends on
+which domains are attached to the project. **GPT Sol took that apart and was right**: that is a
+statement about *requiredness*, and `breaks: null` makes no requiredness claim — it reports presence
+to the one party who knows whether a domain is attached that neither platform variable names, and
+who is the only person who can set it. It also configures a **defence** whose server half was inert
+for two days in August because nobody could see the variable was unset. So it is in `EXPECTED` with
+`breaks: null`, and that is the only change Stage 2 made to `src/`.
+
+**A two-door name is red, and the one real overlap is pinned rather than tolerated.** The two
+`VITE_SUPABASE_` names are honestly in both `EXPECTED` and the build door, for different reasons, so
+`EXPECTED_AND_BUILD_REQUIRED` declares exactly that pair — a third name in both goes red, and so does
+either of these leaving either door. Without it, deleting an `EXPECTED` row for one of them would
+have left this gate green.
+
+**`EXPECTED` gets the reverse check with the postmortem's own exception.** An allowlisted name
+nothing reads is red; an `EXPECTED` row nothing reads is red *unless* `READ_OUTSIDE_SRC` says why the
+platform or an SDK reads it — the `ANTHROPIC_API_KEY` category. That map is **empty today and it is a
+measured fact**: all twenty names are read by a line the sweep can point at, `NODEJS_HELPERS`
+included. It exists so the next such arrival meets "declare why" rather than "delete the check".
+
+**Three of the ported reasons were false against the current tree**, which is the failure this port
+was most likely to reproduce and did not:
+
+1. The platform group said *"a deployment cannot be missing one"*. `VERCEL_GIT_COMMIT_SHA` is absent
+   whenever a `vercel deploy` runs with no git ref attached — `scripts/build-stamp.ts` says so at
+   length, and that absence is why the build stamp exists. The true reason is about *who writes it*.
+2. *"Only `tests/setup/*` sets `SPIDERYARN_ENV_PINNED`"* — nothing under `tests/setup/` sets it at
+   all; the setters are `tests/store-boots-without-inherited-credentials.test.ts` and the child
+   environments some helpers hand down.
+3. The `NODE_ENV` group's *"read to ask which of those we are in"* is true of five of its eight
+   reads; three use the answer as a **label** on a log line or a Sentry event.
+
+The three GPT Sol had already corrected in the candidate — `PGAPPNAME`, `SENTRY_FORCE_LOCAL` and
+`SPIDERYARN_OWNER_EMAIL` all being read by a deployment — were re-verified line by line and kept.
+
+**Eight mutations, each verified to have applied before its result was believed** (the diff is
+printed beside every run, and a non-unique match aborts rather than silently no-ops): removing
+`PGAPPNAME` from the allowlist named it as unaccounted; a fake allowlist name went red on the rot
+check; undeclaring half the `EXPECTED`/build overlap went red naming it; `READ_OUTSIDE_SRC` went red
+for claiming a name `src/` does read, for naming something not in `EXPECTED`, and for a blank reason;
+turning `vite.config.ts`'s `this.error` into `this.warn` went red on the build door; and a spread
+added to an `EXPECTED` row was refused rather than parsed around. Each failed exactly one assertion,
+so none is being caught by a neighbour, and every source file was restored byte-identical afterwards.
+
+**GPT Sol refused the first version, with three P1s, and all three were real** —
+[the review](260908a-env-names-stage2-review-sol.md):
+
+1. **A spread in an `EXPECTED` row was silently skipped.** `{ name: "X", ...alternative }` would have
+   had its `or` dropped, so a real second name — or a real two-door overlap — could sit in the
+   running table while the parser reported neither and every assertion stayed green. That is this
+   plan's own failure class, reproduced inside the gate written to close it. Now refused.
+2. **Door 2 was derived from a helper, not from the build.** `missingClientEnv` is only the right
+   answer to *"what does the build refuse to go without"* while `vite.config.ts` calls it and aborts
+   on the result. Delete that call and this gate, `tests/build-stamp.test.ts`, and the build itself
+   all stay quiet. The call site is now checked: exactly one call, and a `this.error()` inside its
+   enclosing function, by byte-range containment — the same positional mechanism Stage 1 allows
+   itself and nothing more.
+3. **`VITE_VERCEL_ENV`'s justification is false**, and it is `EXPECTED`'s, not this file's — see
+   Stage 3 below.
+
+Two P2s were taken as well: `READ_OUTSIDE_SRC` promised a reason and only checked the key, so
+`{ ANTHROPIC_API_KEY: "" }` satisfied everything; and the Vite-door message said "there will not be a
+third", which tells a reader that the correct remedy for `DEV` or `SSR` — Vite defines five
+constants, not two — cannot be right.
+
+**The failure message states the question rather than a remedy**, which is a rule a peer session
+established the same night: *the remedy a guard suggests is the part people act on, more than the
+diagnosis* — three sessions hit one guard and all three reached first for the answer its message
+suggested, which was right for the common case and would have made their own fixtures lie. So the
+message names all four doors, says what each one means, and picks none, with the standing warning
+that reaching for `EXPECTED` because it is listed first puts a line in every operator's report about
+something they cannot act on.
+
 ### Stage 3 — the reporter's third door, and the corrections
 
 `ReportedEnvName` brands `value`'s argument; every `with` value must be in the primary
 `name`/`or` set. Then the prose: `src/vercel-health.ts:393`'s stale consequence, the comment saying
 no test holds the line (there will be one), and 260827b item 1 marked built **with the limit stated**
 — it inventories names, not consequences, and would not have caught its own incident.
+
+**And one correction Stage 2 found and deliberately did not make.** `VITE_VERCEL_ENV`'s `EXPECTED`
+row says it looks platform-set and is not — that Vercel writes `VERCEL_ENV`, Vite exposes only
+`VITE_`-prefixed names, and nobody bridges the two, so a person must set it on the project. GPT Sol
+says that is false, and `vercel.json:3` is the evidence: this project declares
+`"framework": "vite"`, and Vercel's framework environment variables add `VITE_`-prefixed copies of
+its system variables to production and preview builds of a detected framework. If that holds, the
+row is platform-provided build metadata and belongs on the allowlist. Stage 2 left it alone because
+moving it means *editing* a row rather than adding one, and it wrote the finding into
+`tests/env-names-are-inventoried.test.ts`'s platform group so Stage 3 inherits a finding rather than
+an absence.
+
+**Half of it is now settled, and the half that remains is sharper than either party had it.** "Not
+from inside the repo" was right; "not settleable" was not — the Vercel MCP documentation tool answers
+it directly. `vercel.com/docs/environment-variables/framework-environment-variables` lists
+`VITE_VERCEL_ENV` **by name** (checked 2026-09-08), and `vercel.json` declares the `vite` framework.
+So the row's stated reason is definitively false and has been rewritten in `src/vercel-health.ts`.
+
+But the correction exposed a question nobody had asked: **those are *build* variables, and
+`/api/health` reads `process.env` in the serverless function at *runtime*.** If a framework-injected
+`VITE_` name is not present at runtime, this row reports `false` about a variable that was compiled
+into the bundle correctly — which is a *worse* failure than the one the entry was added for, and the
+same shape as the `VITE_SUPABASE_` caveat already in this table. That genuinely does want one look at
+a real deployment's `/api/health`, and the row stays report-only until somebody takes it.
+
+**A tool nobody reached for is not the same as an unanswerable question**, and this is the second
+time tonight the difference mattered — the first was a text survey that missed a read it had not
+thought to look for.
+
+## A process failure worth recording, because it is mine
+
+**Stage 2 was committed and pushed to `dev` by the subagent that built it, against a review verdict
+of *"should not land as it stands"*, and I did not read the diff first.** Every Stage 1 brief said
+"do not commit"; the Stage 2 brief listed the files the agent could touch and omitted that line.
+[engineering-manager.md](../reusable/engineering-manager.md) says what to keep for yourself — *the
+plan, the stage boundaries, the briefs, reading the diffs, deciding what the reviews were right
+about, and the commits* — and I gave two of those away by omission rather than by decision.
+
+Two of the three P1s were genuinely fixed before the push and the third was deferred, so the outcome
+was defensible; **but an overruled or deferred P1 is supposed to go to Fable or Greg first, not
+straight past, and nothing enforced that because I was not in the loop.** The work is on `dev` at
+`ec1b2543`. It was reviewed after the fact instead, which is the wrong order and is why the
+`VITE_VERCEL_ENV` correction above is a follow-up commit rather than part of the stage.
+
+The lesson is not "trust the agent less" — its judgement was good and its report was complete and
+honest about what it had deferred. It is that **a brief's silence is not a prohibition**, and the
+constraint I relied on in three previous briefs was doing work I had stopped noticing it did.
 
 ## The arbitration, and the line it drew
 

@@ -9,7 +9,7 @@ being left alone. It was a bare `<main class="max-w-3xl">` with a *← Back* lin
 so its content column started at x=360 where the other two start at x=168 — and because every
 `--site-*` custom property is declared on `.site`, none of the language below was even available on
 it. Joining the family is `className="site"`, `SiteNav here="pricing"`, a hero and
-`SiteFooter variant="marketing"`; [website-text.md § The pricing page](website-text.md#the-pricing-page)
+a `SiteFooter`; [website-text.md § The pricing page](website-text.md#the-pricing-page)
 has the copy side of the same change.
 
 The **what** lives elsewhere and is not repeated here. [positioning.md](positioning.md) is who the
@@ -25,7 +25,7 @@ this sits under.
 | [`src/web/FeaturesPage.tsx`](../../src/web/FeaturesPage.tsx) | `/features` — every mode, grouped |
 | [`src/web/PricingPage.tsx`](../../src/web/PricingPage.tsx) | `/pricing` — the plans, the buttons that buy them, the sign-in panel, the FAQ |
 | [`src/web/SiteBits.tsx`](../../src/web/SiteBits.tsx) | the furniture all three pages share, so they cannot drift into three |
-| [`src/web/SiteFooter.tsx`](../../src/web/SiteFooter.tsx) | the footer row, which these three pages share with the other four — `variant="marketing"` keeps this design's spacing |
+| [`src/web/SiteFooter.tsx`](../../src/web/SiteFooter.tsx) | the footer row, which these three pages share with the other six: a wordmark, the caller's sentence and a colophon at one end, the links at the other. **One spacing measure since 2026-09-08**, when the `variant="marketing"` knob went — the redesigned row has mass of its own and no longer reads as a page cut off |
 | [`src/web/PlanCards.tsx`](../../src/web/PlanCards.tsx) | the three plans, on all three pages — and, since 2026-09-04, the buttons that buy them on `/pricing` and `/profile` |
 | [`src/web/PublicShowcase.tsx`](../../src/web/PublicShowcase.tsx) | the block on `/` and `/features` that sends a stranger to a real shared article — every link in it derived from `/read/public`'s own listing, so an unshared article leaves none behind ([public-shelf.md](public-shelf.md)) |
 | [`src/web/shots.ts`](../../src/web/shots.ts) | every screenshot: file, pixel size, alt text |
