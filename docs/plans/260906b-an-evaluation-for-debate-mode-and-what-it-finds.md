@@ -493,7 +493,7 @@ itself, and it holds all three bad rows, verbatim:
 So the positive cases are **free, recoverable and already paid for**. Nothing needs to be re-run to
 obtain them.
 
-**The measured base rate, over everything replayable.** 33 rows: 7 in the spike revision, 26 across
+**The measured base rate, over everything replayable.** 33 *reported* rows: 7 in the spike revision, 26 across
 the three journalled runs. **Three are wrong, all three in the spike run, and the journalled runs
 contain none** — hand-labelled row by row against § 4's definition, with two rows on the
 constitution article marked questionable rather than wrong (`windowsontheory` reads as praise and
@@ -501,8 +501,14 @@ was called `neutral`; `nextgov` confirms the claim and was called `neutral`). Th
 change between the two: the history of `src/debate.ts` shows nothing touching `relation`, `valence`
 or either target sentence between 2026-09-05 17:36 and the journalled runs.
 
-**≈9% overall, and 43% on one run of one article. Both numbers are real and the plan was sized for
-the second one.**
+**≈9% of reported rows, and 43% on one run of one article. Both numbers are real and the plan was
+sized for the second one.**
+
+**Corrected by Sol's F59, 2026-09-08 — the denominator that matters is smaller.** *Reported* is not
+*shown*: production kept only 15 of the journals' 26, and one journalled row has no exact matching
+annotation. With the spike's 7 kept rows the user-visible denominator is **22**, so the displayed
+error rate is **3/22**, not 3/33. The reported-row figure still measures what the model emits; only
+the kept figure measures what a reader sees, and the two must never be printed as one number.
 
 ### And the pair F35 demoted is the cheapest detector we have
 
@@ -524,15 +530,19 @@ coloured by the pair — F35's ruling is untouched — it decides only *what a p
 `title`, `blockId`, `claimQuote`, `sourceQuote`, `relation`, `valence` and `applies` — every field
 § Layer 2 asks a packet to fix except the evidence haystack, and the haystack is not what a reading
 is *about*: `READING` opens *"'relation', 'valence', 'applies' and 'limits' are YOUR READING of the
-passage you quoted"*. The passage is the `sourceQuote`, and it is stored. So the three packets that
-matter can be built for nothing, and Stage C's capture sweep buys the valence question nothing at
-all. It still earns its place for the **discovery** question, which is a different stage.
+passage you quoted"*. The passage is the `sourceQuote`, and it is stored. So the three cases that
+matter can be rebuilt for nothing — **but as regression fixtures, not as frozen packets** (F59): the
+haystack is absent, § Layer 2's contract requires it, and the judge design says the Geller case is
+invisible without the full extract. The rate is measured on annotation-backed, validation-kept rows;
+these three are the preflight. It still earns its place for the **discovery** question, which is a different stage.
 
 **What this does to the cut.** C′ shrinks. Layer 2 was to be repeated N times per packet to find a
 rate; with the positive cases already in hand, the first question is no longer *"can we make the bug
 appear?"* but *"does the repair stop the three rows we have from coming out wrong?"* — which is
-replay against three known packets, not a rate over a sweep. The rate work comes back only if the
-repair passes those three, which is the cheap order to do it in.
+replay against three known packets, not a rate over a sweep. **Sol's F58 corrected this and is right:** a single all-correct response happens under the
+incumbent too — the journalled Skeptical Inquirer row proves it — so the three-row replay is a
+**preflight, not evidence**. The repeated incumbent-versus-repair comparison stays, and **the
+incumbent must reproduce at least one error** or the run did not exercise the defect.
 
 ### Stage B — the free instrument, and one shipped bug
 
@@ -1141,3 +1151,66 @@ dropped from the copy refusal → 1; `isArticleText` never firing → 5, includi
 that are its positive control; the link read from the witness again → 1. Round two: the directness
 refusal disabled → 1; `named` read off the witness again → 1; the join broken → 2; headings back in
 `blocks` → 2.
+
+## Review ledger — GPT Sol, round 4, on the 80-20 cut, 2026-09-08
+
+**Verdict: no P0. The cut is directionally right** — "the judge, generic arms framework, and full
+five-article live sweep are unnecessary for this prompt repair". Six findings before it is safe to
+build, and two of them correct arithmetic of mine.
+
+- **F58 — accepted, and it is my contradiction.** The cut says evidence must be a rate over
+  repetitions, then replaces that with one replay of three known cases. A single all-correct
+  response happens under the *incumbent* — the journalled Skeptical Inquirer row is the proof. So
+  **the three-row replay is a preflight, not evidence**, and the repeated incumbent-versus-repair
+  comparison stays, **with the incumbent required to reproduce at least one error** or the
+  experiment did not exercise the defect. That last clause is the part I would not have thought of:
+  it makes the control's failure a precondition rather than an outcome.
+- **F59 — accepted; my denominator was wrong.** "33 replayable rows" mixes reported with kept. The
+  journals report 26, but one has no exact matching annotation and **production kept only 15**;
+  with the spike's 7 kept that is **22 user-visible rows, so the displayed error rate is 3/22, not
+  3/33**. And the database-only packets omit the evidence haystack, which § Layer 2's packet
+  contract requires and which the judge design says the Geller case is invisible without. **The
+  three source-quote-only cases are regression fixtures, not frozen packets**; the rate is measured
+  on annotation-backed, validation-kept rows.
+- **F60 — accepted.** D′ inherits F47 and adds selection and confirmation bias on top. A human label
+  removes judge calibration error but still compares one categorical answer with another: it
+  measures valence disagreement, not which target the model internally evaluated. Three positives
+  cannot establish the sampling frame's recall, and matched controls give no population rate without
+  declared sampling probabilities. **So: label every evaluable row, show the labeller only target,
+  quote and evidence — `relation`, `valence` and `applies` hidden — and label before any repaired
+  output exists.** Adjudication of the questionable rows goes to a second reader; there is one
+  person here, so that is a different model family, declared as such rather than dressed up as a
+  second person.
+- **F61 — accepted, and declared here before any output is seen.** Production model and provider
+  policy, and **no `temperature` field**, because production sends none (`src/debate.ts`) and
+  forcing zero would measure a different distribution. **N=10 per condition, incumbent and repair
+  interleaved in randomised order.** Gold disagreement scored separately for the regression anchors
+  and the held-out packets. Packet-stratified permutation test, 95% packet-clustered interval, and
+  the per-packet rates printed beside it. Inconclusive → extend both to N=20; bringing the judge
+  back would not reduce generation noise. **Batch packets by article and pass with exact-ID
+  coverage — roughly 120 calls, not 520.**
+- **F62 — accepted, and it is the most valuable finding here.** P7 proves only that an
+  out-of-vocabulary answer is *coerced* to `unclear`/`unknown`. It does not prove a prompt emits the
+  accepted vocabulary. So a repair that made the model answer *"supportive"* would turn every row
+  `unknown` — and `unknown` reads as *"the wrong label was removed"*. **The repair would look like a
+  success exactly when it had destroyed the field.** Every repeated response is therefore checked
+  **before** coercion: raw vocabulary counts printed, zero out-of-vocabulary required, and the run
+  fails rather than crediting `unknown` as removal of a wrong label.
+- **F63 — accepted, and it costs money, so Greg is being asked.** Frozen packets prevent row
+  selection by design, so they cannot detect the repaired shared `READING` paragraph changing which
+  sources are selected, which quotations are emitted, or whether the live fenced answer still
+  parses. **One non-evidentiary live smoke run through `generateDebate` on the cheap `writes`
+  article**, gating integration, raw vocabulary and non-catastrophic row production only. It is not
+  evidence of the valence improvement and must never be reported as any.
+- **F64 — accepted as a narrowing.** B′ carried most of the old eval: gold-URL discovery,
+  kept-per-returned, the full loss table and Layer 0's P3–P6/P8 do not bear on a valence-only
+  repair. The instrument needed is: extract and pin eligible packets, enforce exact packet-ID
+  coverage, preserve raw vocabulary, score against hand labels, retain P7. Layer 1 replay stays as
+  reusable infrastructure.
+
+**And a factual correction to me:** the annotation counts are not uniformly 11/12. The three runs are
+**11/12, 9/12 and 12/10**. Everything else in the premises held — the raw responses and extracts are
+genuinely journalled, every inspected citation has a non-empty `url`, `title` and `content`, and the
+prompt reading is confirmed: group two binds the claim, group one never binds *target*, neither rules
+out the source's own subject, and `relation` and `valence` have different scopes.
+
