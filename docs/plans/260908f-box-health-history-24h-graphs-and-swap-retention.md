@@ -88,7 +88,7 @@ region, labelled, and never as absence-of-reading.
 
 **In the dashboard process, appended from `refreshOnce`.**
 
-[orchestrator-direction.md § Two tenses](../project/orchestrator-direction.md#two-tenses-the-seam-between-the-overseer-and-the-dashboard)
+[orchestrator-direction.md § Two tenses](../project/overseer-direction.md#two-tenses-the-seam-between-the-overseer-and-the-dashboard)
 assigns *"the vitals history"* to the Overseer's past tense. This plan puts it in the dashboard, and
 that divergence is deliberate, agreed between the two sessions on 2026-09-08, and left for Greg to
 settle in the doc rather than settled here:
@@ -495,5 +495,5 @@ follow-ups below rather than pretended away.
   to.
 - [260907e-agent-fleet-dashboard.md](260907e-agent-fleet-dashboard.md) — the dashboard, its stages,
   and the middle robustness tier this sits in.
-- [orchestrator-direction.md](../project/orchestrator-direction.md) — the standing direction, and the
+- [orchestrator-direction.md](../project/overseer-direction.md) — the standing direction, and the
   § Two tenses that this diverges from.
