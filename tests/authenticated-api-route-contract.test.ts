@@ -1986,11 +1986,14 @@ describe("the authenticated API's route contract", () => {
          prefix — which is also exactly what it does when the prefix test cannot
          match the guards at all, as it could not for a regex until `pathish`.
          So: claim a prefix whose guards are demonstrably *still* in the chain,
-         and require the same filter to find them. `/api/chat` is the honest
-         choice while chat is unmigrated; when chat moves this becomes a real
-         failure and the next unmigrated regex domain takes its place. */
+         and require the same filter to find them. When that domain moves this
+         becomes a real failure, and the next unmigrated regex domain takes its
+         place — which is the point: a control nobody ever has to maintain is
+         one nobody checks is still true. It has been repointed once already,
+         from `/api/chat` to `/api/comments`, when 260907e moved chat on
+         2026-09-08. */
       const stillInTheChain = parsed.guards.filter(
-        (g) => !g.fromTable && pathish(g.match).includes("/api/chat"),
+        (g) => !g.fromTable && pathish(g.match).includes("/api/comments"),
       );
       expect(
         stillInTheChain.length,
