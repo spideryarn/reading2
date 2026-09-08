@@ -114,20 +114,25 @@ put the write path in as *"a stage, but it doesn't have to be the top-priority."
 that. So on the Overseer's side the order is **attention first**, and the write path stays where he
 put it.
 
-## Where this stands, 13:55 on 2026-09-08
+## Where this stands, 2026-09-08T13:42Z
 
-**Important work left**, and it is the implementation of five of the six stages. What is finished is
-the part that had to be finished first: **every seam is agreed and every contract is a type**, so the
-six sessions can now build in parallel without a negotiation between them.
+**Important work left**, and it is now the last mile of four stages rather than all of six. What is
+finished is the part that had to be finished first: **every seam is agreed and every contract is a
+type**, so no session is waiting on another to decide anything.
 
 | | landed | what remains |
 |---|---|---|
-| **A** attention | the five types, verbatim, in `wire.ts` (`4d5cc454`) | the classifier, and the evaluation that justifies it |
-| **B** usage | the dashboard's `Pause` contract (`f1c34e96`) | the collector and the 429 ground truth |
-| **C** harness | **DONE** (`5c2e31cb`) — six arms, one `can: true`, Sol-reviewed | nothing; the `steer.ts` inline change is queued behind `fleet-approval-binding` |
+| **A** attention | the five types (`4d5cc454`); classifier built, evaluated and Sol-reviewed | **the push** — `Checkpoint.attention` is not on dev yet |
+| **B** usage | the dashboard's `Pause` contract (`f1c34e96`) and `pause.ts` | **the push**, then `Checkpoint.usage` on my side, behind A |
+| **C** harness | **DONE** (`5c2e31cb`), worktree torn down | nothing; the `steer.ts` argv parser is unowned |
 | **D** health | seam agreed (`refreshOnce`, not `server.ts`); `lock.ts` extracted for it | retention and the drawing |
-| **E/F** dictation | file split agreed with the dashboard | all of it |
+| **E** dictation | the server half — `transcribe.ts`, `routes-transcribe.ts`, `vocabulary.ts` | the client half, and Greg's own mic test |
+| **F** realtime dialog | designed, gated on E | not started, deliberately |
+| **#1** write path | A6 (`0a5a3008`), A9/A10 work landing (`91e1f3a0`, `2bfe48dc`) | the dashboard's own stage list |
 | **A5** | **closed**, no code | nothing |
+
+**The queue on `Checkpoint` is the only ordering constraint left in the wave**: `attention` lands,
+then `usage` on top, one editor of that type at a time. Everything else can finish in any order.
 
 **Three things landed that were not in the plan**, all of them because the work turned them up:
 
@@ -203,6 +208,77 @@ settled the orphan question was not a second reading at all but a **mechanism**:
 when a Bash-tool shell is reaped mid-run and leaves when the job ends, so the population is bounded by
 concurrent reviews rather than growing. That argument would hold with zero readings, which is what
 makes it the evidence.
+
+### An incomplete observation may not be read as a negative one
+
+**Three modules, three authors, arrived at separately, and stated here once so it is not restated
+three times locally.** Each found it in its own material and none of them was looking for a general
+rule:
+
+- **The health history** (`fleet-health-history`): *a gap must render as a gap, never a line drawn
+  across it.* An interpolated line through the ninety minutes the box was thrashing answers Greg's
+  actual question — *"were there disruptions I should know about?"* — with a confident **no**.
+- **The dashboard's improvement on it**: a gap has **two** causes and they must not draw identically.
+  *Absence means nothing was running. An `unknown` band means we were alive and could not tell.* If
+  the retention appends only on success, the case Greg most needs — *the box was up and health
+  collection has been broken for six hours* — becomes invisible.
+- **The usage collector** (`w2-usage-limits`): `absenceGap`, and the rule that **when it is non-null
+  this scan is not entitled to contradict what is already known.** A scan that fell over has not
+  discovered that a rate limit lifted.
+
+The same shape turns up in the types rather than the data three more times the same day: `≥` on a
+duration that is a lower bound, an unpriced call keeping a money total from printing as a figure, and
+`verdict.activeLimit` staying `null` while `level === "limited"` — **being limited can be established
+while *which* limit binds is not.** Which generalises to the sentence worth keeping:
+
+> **A composite verdict must be able to be certain about one part and uncertain about another, and a
+> type that forces them to agree will make one of them lie.**
+
+**This is a `docs/reusable/` candidate rather than a project fact**, and it is deliberately not
+written there yet — those edits go one approved set at a time and no set is open. Greg's call.
+
+### A positive control proves the step it wraps, and nothing above it
+
+**The most expensive thing found today, and it got past two people.** The attention pass published
+`{"kind":"list","items":[],"sessionsScanned":1}` — a confident *nothing needs you* — built from one
+ended turn whose single classification had returned a 429. The internal breakdown was **green
+throughout**, because every row genuinely did enter a bucket.
+
+`sessionsScanned` and the breakdown are a real positive control **on the walk**. They cannot be a
+control on the *judgement*, and the difference is invisible from inside: the accounting proves
+something was looked at and says nothing about whether looking succeeded. When
+[`w2-attention-inbox`](#stage-a--the-attention-list-the-deciding-half) reported that control as
+closing the gap, the Overseer agreed with it in writing — *"stronger than the field I designed"* —
+which it was, about the walk. **Neither of us asked what it could not see.** So the lesson is not
+"they built it too shallow"; it is that a control is named for the thing it guards and reviewed for
+the thing you hoped it guarded.
+
+**And the cache turned a bad pass into a standing condition.** The failed verdict was stored under
+the tail's fingerprint, so every later pass answered from memory, made zero model calls, and repeated
+the same wrong silence for as long as that agent stayed quiet. The dashboard agent's phrasing is the
+one to keep: **a wrong answer that is cheap to repeat outlives the condition that caused it.** Hence
+the rule now in the code beside the cache — *an `unreadable` verdict is never cached; a failure is a
+reason to look again, not a fact to remember.*
+
+**The base rate is why this class matters here more than elsewhere.** The dashboard read **0
+`needs-you` rows out of 24** on the held-out capture while four sessions were genuinely waiting.
+*Nothing needs you* is the cheapest possible thing to be wrong about, because it is what a broken
+probe, an empty fleet and a calm fleet all say.
+
+### The fix for a caveat that is always on is to scope the question, not to raise a threshold
+
+`PauseLine` drew *"waiting? unknown"* on **29 of 32 rows** — found by running a live collection, not
+by reading the code, and fixed in `2bfe48dc` under the title *a caveat on 29 of 32 cards is wallpaper,
+not a caveat*. The repair that held was not a confidence threshold. It was **scoping what the field
+answers**: `Pause` answers *why is this session not doing anything*, and on a row that is visibly
+doing something **the question does not arise**.
+
+That is the rule the new `AttentionList` count is being added under, and it is why its two constraints
+are load-bearing rather than fussy: the count is a fact about the **pass**, not about any row, so it
+belongs on the list header and only when it is true — and deliberate skips must stay out of it,
+because a number that is non-zero on nearly every pass could not be rendered under this rule at all.
+A permanent caveat is A17 wearing different clothes: healthy operation spending most of its time
+alarming, which teaches Greg to read past the one that matters.
 
 ## Stages
 
@@ -688,11 +764,11 @@ evidence is the thing this plan keeps arguing against.
 ##### The one edge that had to be cut, and what it was worth
 
 `useDictation.ts` imported `sendForTranscription` from `dictation-upload.ts`, which calls `apiFetch`
-— and that one edge reached **21 files and 16,054 lines**, through `lib/api.ts` to
+— and that one edge reached **22 files and 16,215 lines**, through `lib/api.ts` to
 `@supabase/supabase-js`, `@sentry/core`, the offline store and the billing plan. So `transcribe` is
 a parameter now (`Transcriber<C>` in the new leaf `src/web/transcriber.ts`) and `context` is opaque:
 the hook snapshots it per session, travels it on a kept recording, and never looks inside.
-`useDictation.ts`'s closure is now **8 files, 2,938 lines, `react` only**.
+`useDictation.ts`'s closure is now **8 files, 2,931 lines, `react` only**.
 
 The six product boxes gained one line each (`transcribe: sendForTranscription`) and nothing else
 changed. The two tests that drive the hook directly pass the real product transcriber in, so they
@@ -710,15 +786,30 @@ unconditionally.
 
 ##### The server half: measured out of contention, not ruled out on principle
 
-`src/transcribe.ts` was the first candidate. Its closure is **161 files and 118,082 lines**, pulling
+`src/transcribe.ts` was the first candidate. Its closure is **162 files and 118,171 lines**, pulling
 `pg`, `drizzle-orm`, `stripe`, `jsdom`, `@mozilla/readability`, `pino` and the Anthropic SDK into a
 tool whose whole claim is that it runs with the product's server absent. Even the smallest useful
-piece, `ai-call.ts`, is 20 files and 20,344 lines. So `tools/fleet/transcribe.ts` makes its own call
+piece, `ai-call.ts`, is 21 files and 20,505 lines. So `tools/fleet/transcribe.ts` makes its own call
 to `POST https://openrouter.ai/api/v1/audio/transcriptions` — still through the gateway, no second
 one — borrowing the three files under `src/` that import nothing at all.
 
 **The honest half of that ruling:** `transcribeWith` used standalone writes no database row, so
 going through it **would not have metered this spend either** — nothing for `npm run cost` to count.
+
+**And it is declared rather than merely admitted.** `tests/no-undeclared-spend.test.ts` caught this —
+`tools/fleet/transcribe.ts` names `openrouter.ai` and a credential and was in no register — which is
+the repo asking the exact question this section had answered in prose and not in code. There is now a
+`fleet-dictation` entry in [`src/spend-declarations.ts`](../../src/spend-declarations.ts) with
+`metered: false`, so **`npm run cost` prints it by name on every run**:
+
+```
+Not counted here — 8 known way(s) of spending that write no row:
+  tools/fleet/transcribe.ts
+      fleet-dictation — skips the gateway, open today
+```
+
+That is the difference between a gap somebody wrote a paragraph about and a gap the tooling says out
+loud. It stops being `false` when the fleet has somewhere to write a row.
 
 *And the mechanism is not what this doc first said.* It claimed a process-global sink that is `null`
 until the product's server installs one. There is no such thing: a sink belongs to `collectSpend`'s
@@ -818,8 +909,12 @@ here. Everything past *"Opening the microphone…"* is Greg's to check from his 
 
 [260908f-fleet-dictation-code-review-sol-r1-1356.md](260908f-fleet-dictation-code-review-sol-r1-1356.md).
 Its verdict on the first round was **"Stage 1 is not solid yet"**, and it was right — one P1 and six
-P2s, all real, all fixed. Worth listing because the pattern in them is the useful part: **five of the
-seven were rules this repo already writes down, applied to the product and not to the copy.**
+P2s, all real. Worth listing because the pattern in them is the useful part: **five of the seven
+were rules this repo already writes down, applied to the product and not to the copy.**
+
+**Its round 2 then found that four of the seven were not actually closed**, and said so with
+reproductions — see § The second round below. "All fixed" was written here after round 1 and was
+wrong, which is the reason a second round exists.
 
 | | | |
 |---|---|---|
@@ -844,6 +939,49 @@ flood test aimed at the rate limiter reached the real gateway and `tests/setup/p
 refused the call. Without that seam the route's handling of a provider failure, and of a caller
 hanging up, could not be tested at all — both are paths that only run after the money would have
 been spent.
+
+##### The second round, and what "fixed" turned out to mean
+
+[260908f-fleet-dictation-code-review-sol-r2-1435.md](260908f-fleet-dictation-code-review-sol-r2-1435.md).
+**Verdict: "Stage 1 is still not solid. The original P1 is fixed, including permission-pending, but
+four P2 issues remain."** Every one was reproduced by Sol rather than asserted, and every one was a
+fix from round 1 that did not do what its own comment said.
+
+| | what round 1 shipped | what it actually did |
+|---|---|---|
+| The action guard on New session | `if (dictate.sendBlocked) return;` | Read a **stale closure** — `start`'s deps are `[prompt]`, so pressing Dictate then Start without typing left it `false`. `SessionDetail` had the ref pattern; this file had not copied it |
+| The hang-up abort | `res.on("close")` and a return | Covered the ordinary abort and not a **rejection after the abort**: the outer boundary then wrote a 500 into a closed socket, since `headersSent` is false on a response nothing answered |
+| The rate limiter | `check` then `record` | **Recorded a slot for a request that spent nothing** — a recording below the floor never reaches the gateway, so the next real dictation three seconds later was refused for free |
+| The import ban | refuse what the walker cannot follow | The ban was **itself a regex with holes**: `import ("x")`, `import("a" + "b")` and `import /* c */ ("x")` were neither followed nor refused |
+
+**The import walker is an AST now**, and that is Sol's recommendation taken rather than argued with:
+two rounds of regex bypasses is where "one more pattern" stops being the cheaper option, for a rule
+that is architectural. `@babel/parser`, because TypeScript 7 exposes no AST from its package root —
+`import ts from "typescript"` resolves to a version stub and the tree is behind `unstable/*` — and
+because Babel's parser is already a direct dependency where `oxc-parser`, `acorn` and
+`es-module-lexer` are all present and all transitive. Sol's four bypass shapes are pinned as tests,
+and a file the walker cannot parse now lands in `unreadable` and fails rather than reading as a file
+that imports nothing.
+
+**Three things Sol said about my own tests, all correct:**
+
+- **The flood test did not prove the burst ceiling.** Twelve requests under one key at one instant
+  are refused by the three-second per-key *floor*; the fleet-wide ceiling was never reached. Twelve
+  distinct keys now, asserting ten accepted and the eleventh refused.
+- **The fakes could conceal real failures.** `fakeRes.hangUp()` did not make the response closed, so
+  a write after close was invisible — it counts them now and a test asserts zero. `fakeTranscribe`
+  kept two of its arguments, so wrong audio or a wrong container would have passed; it keeps all of
+  them, typed as `TranscribeDeps["transcribe"]`.
+- **The base64 check did not do what its comment claimed.** `"A".repeat(60_000)` is valid base64 and
+  was this feature's own test fixture. A magic-number check on the container makes the claim true;
+  the fixture is now a real EBML header with padding behind it.
+
+Writing the flood test also found something neither round named: the rate limiter was module state,
+so one test spending the burst left every test after it looking rate-limited. It is injectable now,
+with the shared instance still the one the server uses.
+
+**Nothing is overruled across either round.** Every finding was a defect or a claim of mine that
+needed correcting.
 
 ### Stage F — realtime dialog, gated on Stage E
 
