@@ -643,6 +643,72 @@ wrong outcome demonstrated — and the honest position is that jsdom cannot answ
 pass would have to. F10's fix removes the mechanism that made it most likely to bite, since the
 `mouseenter` path no longer writes anything on a finger. Named in § What is still open.
 
+## What a real browser says, on the built code
+
+Playwright against system Chrome on the box, `hasTouch: true, isMobile: true`, signed in as the
+owner, **`matchMedia` verified in the page rather than assumed** — `(hover: none)` true,
+`(hover: hover)` false, `(any-pointer: coarse)` true. The whole flow driven with `.tap()` and never
+a `.click()`, for the reason in § The measurement trap.
+
+Two passes, because the first one measured the wrong tree. Pass one ran against `8d351e48`, before
+the F10 fix; pass two re-checked the things that fix could have broken, against `d871d947`.
+
+### The headline, from pass one
+
+| viewport | affordances visible **before any tap** | on the old code |
+|---|---|---|
+| 390 × 844 | **0** of 388 | 14 per screenful |
+| 820 × 1180 | **0** of 388 | 23 per screenful |
+
+`.block-chat.has` is untouched at `opacity: 1` in `oklch(0.72 0.12 235)` — the blue, not a grey — and
+stays that way through selection, which is the trap § the touch reveal's comment names. On a pointer
+device in the same run, `.blk-help` is still 1 and `.blk-permalink` still 0.6: the desktop half did
+not move.
+
+**Chrome serialises `opacity: 0.705` as `0.70399997…` at 390 and as `0.705` at 820**, from the same
+rule. That is float32 round-tripping in `getComputedStyle`, not two values; worth writing down
+because it looks exactly like a bug in a table of measurements.
+
+### Pass two: the question F10's fix opened
+
+Gating `onMouseEnter` on `(hover: hover)` makes the click predicate **the only thing that can select
+a row on touch**, and that path had only ever run in jsdom. If a real browser had swallowed or
+retargeted the click, the feature would have been dead on the device it was written for and nothing
+in the suite would have said so. So it was checked before landing, on rows deliberately distinct from
+the current selection:
+
+| | |
+|---|---|
+| tap plain prose | **selects exactly that row**; `.blk-permalink` / `.blk-help` / `.blk-more` at 0.705 on it, 0 everywhere else |
+| tap a second paragraph | selection moves; exactly one active row |
+| tap a **link** on another row | selection unchanged |
+| tap a **`mark.cmt`** on another row | selection unchanged |
+| tap a **picture** (a bare `<img>`/`<svg>` in `.zoomable`, not the ⤢) on another row | selection unchanged **and** the lightbox opens — both halves of F11 |
+| tap the blank gutter strip of an unselected row | selects that row |
+| a pointer device | `.blk-help` 1, `.blk-permalink` 0.6, unchanged |
+
+Two things about how that was got, because both are the kind of detail that makes a green result
+mean less than it looks:
+
+- **The link and mark rows were chosen distinct from the selected one on purpose.** Pass one reported
+  "selection unchanged" for a link and it was not possible to tell whether the policy had worked or
+  the link had simply been on the row that was already selected. A check that cannot fail is not a
+  check.
+- **The fixture had no `<mark>` at all.** This article was re-ingested locally, so its block ids differ
+  from production's and its glossary never ran — zero `glossary_lookups` rows. Rather than report the
+  case inconclusive, the agent made a real bookmark on a real block (the free path, no model call)
+  and tapped the `mark.cmt` that produced. The *setup* used a synthetic `mouseup`; the assertion used
+  `.tap()`.
+
+### What the browser could not settle
+
+**The 390 × 844 viewport cannot show Structure mode's paragraphs at all.** `MODE_MIN + PROSE_MIN` is
+about 832px, so below that the mode band covers the whole window (`fit.modeW === 0` →
+`.reader.band-covers`) and intercepts every tap. The rows and their gutter CSS are in the DOM and
+correct; nothing can reach them. **Pre-existing and unrelated to this change**, and it is why the
+390 column above is a count of what is painted rather than a tap. The row-tap checks at that width
+were run in Plain mode, against the same `TableView` and the same stylesheet. Greg reported from
+`mode=structure` on a device wide enough not to be in this, which is consistent with an iPad.
 ## What is still open
 
 - **A hybrid iPad is untouched by this.** The whole fix lives inside `@media (hover: none)`, and an
