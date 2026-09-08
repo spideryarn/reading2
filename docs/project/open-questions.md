@@ -294,6 +294,16 @@ there was a fix for a named vulnerability that was completely untested at that l
 check agreeing it was fine. Red-first only ever tests the diff; the thing you just added is
 precisely the thing no existing test was written against.
 
+**And the reason it belongs in *this* doc rather than in `testing.md`** — `spideryarn2-4c`'s
+framing, which is sharper than mine. Four guards found real problems that night (`fixture-ids`
+caught a fixture collision, `doc-links` caught a line-number citation, an exhaustive `Record`
+caught four new refusal codes, a contract test caught an invalidated control). Every one of them
+was mechanical, and every one was working. **The only broken check of the night was the one that
+found nothing.** A guard reporting a problem is a guard working; a guard reporting nothing is
+exactly the two states this codebase keeps writing comments about — "I looked and there is
+nothing" and "I could not look" — wearing one face. Silence from a guard is the same claim as
+silence from the box, and it deserves the same suspicion.
+
 **2. The shape in which a wrong claim feels most like a finding.** Two instances of one symptom, a
 plausible mechanism, and no check of where either came from. Two directions of the same error, both
 seen that night: *a mechanism proposed without provenance* (two uuid collisions read as one minting
