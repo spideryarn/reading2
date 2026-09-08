@@ -148,12 +148,28 @@ const SENT_OK: SteerResult = {
   sent: [["send-keys", "-t", "%99001", "-l", "--", "…"]],
 };
 
-function harness(over: Partial<ActionDeps> & { io?: ActionIo; result?: SteerResult | ((t: SteerTarget) => SteerResult) } = {}) {
+/**
+ * Which run of the server this harness's queue is, when a test does not care.
+ *
+ * A FIXED VALUE RATHER THAN A RANDOM ONE, so a failure message names the same
+ * id twice and a test that accidentally depends on the shape of an id fails the
+ * same way every time. The tests that DO care pass `instanceId` and get two.
+ */
+const INSTANCE = "1a2b3c4d";
+
+function harness(
+  over: Partial<ActionDeps> & {
+    io?: ActionIo;
+    result?: SteerResult | ((t: SteerTarget) => SteerResult);
+    /** Which run of the server this is. Two harnesses with two of these is a restart. */
+    instanceId?: string;
+  } = {},
+) {
   const sent: Sent[] = [];
   const logs: string[] = [];
   let clock = 1_000_000;
-  const queue = over.queue ?? new SteeringQueue({ now: () => clock });
-  const { result, ...rest } = over;
+  const queue = over.queue ?? new SteeringQueue({ now: () => clock, serverInstanceId: over.instanceId ?? INSTANCE });
+  const { result, instanceId: _instanceId, ...rest } = over;
   const routes = makeActionRoutes({
     queue,
     sendMessage: (target, text, declaredStatus) => {
@@ -814,6 +830,165 @@ describe("clearing a whole session's queue", () => {
 });
 
 /* ================================================================== *
+ * An id minted by a previous run of this server.
+ *
+ * **THE HAZARD IS NOT "THE ITEM IS GONE", IT IS "THE ITEM IS SOMEBODY
+ * ELSE'S".** The queue is volatile, so a restart empties it — but the very
+ * next enqueue starts the counter again, so a phone that has been open across
+ * a restart is holding ids the running server is busy re-issuing to different
+ * work. Every one of these tests asserts what happened to the LIVE item, not
+ * just the status code: an unprefixed build cancels, re-arms, abandons or
+ * clears a stranger's instruction and answers 200.
+ * ================================================================== */
+
+describe("an item id from a previous run of the server", () => {
+  const TARGET = { sessionId: "$99001", claudeSessionId: CLAUDE_ID };
+
+  /**
+   * Two servers in one process, which is exactly what a restart looks like from
+   * the phone's side. Each has queued its own first item, so both counters are
+   * at one and an unprefixed id collides by construction.
+   */
+  function twoRuns(): {
+    dead: ReturnType<typeof harness>;
+    live: ReturnType<typeof harness>;
+    staleId: string;
+    liveId: string;
+  } {
+    const dead = harness({ instanceId: "deadbeef" });
+    const live = harness({ instanceId: "0badcafe" });
+    dead.queue.enqueueAction(TARGET, "pull", "greg");
+    live.queue.enqueueAction(TARGET, "push", "greg");
+    return {
+      dead,
+      live,
+      staleId: dead.queue.snapshot("$99001").items[0]?.id ?? "",
+      liveId: live.queue.snapshot("$99001").items[0]?.id ?? "",
+    };
+  }
+
+  it("cannot be confused with this run's, because the two runs mint different ids", () => {
+    const { staleId, liveId } = twoRuns();
+    // The whole defect in one line: without a prefix both of these are `q1`.
+    expect(staleId).not.toBe(liveId);
+  });
+
+  it("does not cancel this run's item", async () => {
+    const { live, staleId, liveId } = twoRuns();
+    const r = await call(live.routes, fakeReq({ url: "/api/actions/cancel", body: { sessionId: "$99001", itemId: staleId } }));
+    expect(r.json.code).toBe("other-instance");
+    expect(r.status).toBe(409);
+    // The fact that matters. The item nobody asked about is still queued.
+    expect(live.queue.snapshot("$99001").items.map((i) => i.id)).toEqual([liveId]);
+  });
+
+  it("does not re-arm this run's item", async () => {
+    const { live, staleId } = twoRuns();
+    live.tick(31 * 60_000);
+    expect(live.queue.next("$99001", IDLE_CTX).kind).toBe("stale");
+
+    const r = await call(live.routes, fakeReq({ url: "/api/actions/revive", body: { sessionId: "$99001", itemId: staleId } }));
+
+    expect(r.json.code).toBe("other-instance");
+    expect(r.status).toBe(409);
+    // Still stale: nothing was re-armed, so no pass will deliver it.
+    expect(live.queue.next("$99001", IDLE_CTX).kind).toBe("stale");
+  });
+
+  it("does not abandon this run's lease", async () => {
+    const { live, staleId, liveId } = twoRuns();
+    const leased = live.queue.next("$99001", IDLE_CTX);
+    expect(leased.kind).toBe("ready");
+    live.tick(61_000);
+    expect(live.queue.next("$99001", IDLE_CTX).kind).toBe("stuck");
+
+    const r = await call(live.routes, fakeReq({ url: "/api/actions/abandon", body: { sessionId: "$99001", itemId: staleId } }));
+
+    expect(r.json.code).toBe("other-instance");
+    expect(r.status).toBe(409);
+    expect(live.queue.snapshot("$99001").items.map((i) => i.id)).toEqual([liveId]);
+  });
+
+  it("does not clear this run's queue", async () => {
+    // **AND `stale-view` WOULD NOT HAVE CAUGHT IT.** `clear` compares the
+    // client's list with the queue's droppable set, which is a guard against
+    // CONCURRENT DRIFT — something arriving between the list being drawn and
+    // the tap. An old `[q1]` posted against a restarted queue that also holds
+    // exactly one item called `q1` passes that comparison exactly.
+    const { live, staleId, liveId } = twoRuns();
+
+    const r = await call(live.routes, fakeReq({ url: "/api/actions/clear", body: { sessionId: "$99001", itemIds: [staleId] } }));
+
+    expect(r.json.code).toBe("other-instance");
+    expect(r.status).toBe(409);
+    expect(live.queue.snapshot("$99001").items.map((i) => i.id)).toEqual([liveId]);
+  });
+
+  it("says which server it came from, and does not say 'no such item'", async () => {
+    // The two facts are different and the second one is the misleading one: it
+    // invites the person to conclude the instruction was never queued.
+    const { live, staleId } = twoRuns();
+    const r = await call(live.routes, fakeReq({ url: "/api/actions/cancel", body: { sessionId: "$99001", itemId: staleId } }));
+    expect(r.json.code).not.toBe("no-such-item");
+    expect(String(r.json.why)).toContain(staleId);
+    expect(String(r.json.why)).toContain("restart");
+  });
+
+  it("leaves an id that names no run at all as 'no such item'", async () => {
+    // A hand-typed or garbled id is not evidence of a previous server, and
+    // saying so would be a fresh false statement in place of the old one.
+    const { live } = twoRuns();
+    const r = await call(live.routes, fakeReq({ url: "/api/actions/cancel", body: { sessionId: "$99001", itemId: "q999" } }));
+    expect(r.status).toBe(404);
+    expect(r.json.code).toBe("no-such-item");
+  });
+
+  it("still lets this run's own ids through all four routes", async () => {
+    // The paired positive. A refusal that fires on everything is not a guard,
+    // it is an outage, and each of the four has its own copy of the check.
+    const h = harness();
+    for (const id of ["continue", "pull", "push", "run-checks"] as const) {
+      h.queue.enqueueAction(TARGET, id, "greg");
+    }
+    const ids = h.queue.snapshot("$99001").items.map((i) => i.id);
+    const [first, second, third, fourth] = ids as [string, string, string, string];
+
+    const cancelled = await call(h.routes, fakeReq({ url: "/api/actions/cancel", body: { sessionId: "$99001", itemId: first } }));
+    expect(cancelled.status).toBe(200);
+
+    h.tick(31 * 60_000);
+    const revived = await call(h.routes, fakeReq({ url: "/api/actions/revive", body: { sessionId: "$99001", itemId: second } }));
+    expect(revived.status).toBe(200);
+
+    const leased = h.queue.next("$99001", IDLE_CTX);
+    if (leased.kind !== "ready") throw new Error("expected a lease");
+    expect(leased.item.id).toBe(second);
+    h.tick(61_000);
+    const abandoned = await call(h.routes, fakeReq({ url: "/api/actions/abandon", body: { sessionId: "$99001", itemId: second } }));
+    expect(abandoned.status).toBe(200);
+
+    const cleared = await call(h.routes, fakeReq({ url: "/api/actions/clear", body: { sessionId: "$99001", itemIds: [third, fourth] } }));
+    expect(cleared.status).toBe(200);
+    expect(h.queue.snapshot("$99001").items).toEqual([]);
+  });
+
+  it("does not swallow `stale-view`, which answers a different question", async () => {
+    // The two refusals must not merge. This one is entirely WITHIN one run:
+    // the ids are this server's, and the list is simply out of date.
+    const h = harness();
+    h.queue.enqueueAction(TARGET, "pull", "greg");
+    const read = h.queue.snapshot("$99001").items.map((i) => i.id);
+    h.queue.enqueueAction(TARGET, "push", "greg");
+
+    const r = await call(h.routes, fakeReq({ url: "/api/actions/clear", body: { sessionId: "$99001", itemIds: read } }));
+
+    expect(r.status).toBe(409);
+    expect(r.json.code).toBe("stale-view");
+    expect(h.queue.snapshot("$99001").items).toHaveLength(2);
+  });
+});
+
+/* ================================================================== *
  * The plan runner. The property here is the expensive one.
  * ================================================================== */
 
@@ -1375,7 +1550,7 @@ describe("POST /api/actions/box — the staggered broadcast", () => {
     let clock = 1_000_000;
     const sent: string[] = [];
     const routes = makeActionRoutes({
-      queue: new SteeringQueue({ now: () => clock }),
+      queue: new SteeringQueue({ now: () => clock, serverInstanceId: "1a2b3c4d" }),
       sendMessage: (target) => {
         sent.push(target.paneId);
         clock += 60_000;

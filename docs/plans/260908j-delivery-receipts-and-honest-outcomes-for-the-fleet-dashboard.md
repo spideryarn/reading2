@@ -155,16 +155,42 @@ so this was caught by the implementer reading past it rather than by me specifyi
 delivery, every refusal is reached before any keystroke, so the route sends nothing and the client
 reads `not-told`. Inventing a value at the route would have been the opposite of the point.
 
-### Stage 2 — a queue id minted by a dead process must not resolve in this one
+### ✅ Stage 2 — a queue id minted by a dead process must not resolve in this one (landed 2026-09-08)
 
-Prefix every id with an injected `serverInstanceId`, and refuse an id carrying a different one with
-a **distinct** code, so the page can say *that was a previous server* rather than *no such item*.
-**All four routes, `clear` included** — it is not protected today (above). `stale-view` stays as the
-separate concurrent-drift guard; the two refusals answer different questions and must not merge.
-One instance id, reused later by request ids and preview identity (R14).
+New leaf `tools/fleet/instance.ts`; ids become `<instance>-q<n>`; a new `other-instance` refusal
+(409) on all four routes, `clear` included, checked **before** both its empty check and its
+`stale-view` comparison. `stale-view` survives for its own case — deleting the `clear` guard failed
+with *expected `other-instance`, received `stale-view`*, which is the conflation this stage was
+warned about, caught by its own test.
 
-**Done:** an id from instance A does not resolve in instance B on any of the four routes, and the
-refusal names why; `stale-view` still fires for its own case.
+**I briefed this stage sceptically and the scepticism was wrong.** The brief asked whether the prefix
+changes any outcome at all, given the queue is volatile and empty after a restart — offering
+*"no, this only improves the message"* as an acceptable answer. It is not the answer:
+
+> **The volatility argument is the trap.** A restart does empty the queue — and then the *counter*
+> restarts too, so the very next enqueue re-issues `q1` to different work. Emptiness is a state that
+> lasts until the first tap, not a protection.
+
+Measured, not argued, by driving the real `cancelRoute`: a dead run's `q1` (a `pull`) posted at a
+fresh run **removed that run's `q1`, which was a `push`** — different work, queued by somebody else
+— and answered `200 {"ok":true,"op":"cancelled"}`.
+
+**And the window is reachable rather than theoretical**, which is the part that makes this worth
+building tonight. `useActions.ts:90` skips polling entirely while the tab is hidden — its own comment
+says *"Greg leaves this open on a phone"* — and a failed poll deliberately keeps the last good feed
+on screen, because *"a queue you cannot currently read is not an empty queue"*. So across a restart
+the phone goes on rendering the dead run's ids **with live buttons**, during exactly the window in
+which the new process is re-minting them.
+
+**Three arms, not a boolean**, and this was the implementer's call rather than the brief's:
+`idOrigin` returns `this-instance | other-instance | not-instance-qualified`. A garbled or legacy id
+is **not** evidence of a previous server, so it falls through to the existing `no-such-item` instead
+of earning a second confident sentence that might be false. The brief did not ask for that
+distinction and should have.
+
+**Done:** ✅ all four routes refuse a foreign id with a distinct code; `stale-view` still fires for
+its own case; the id stays opaque to the client (never rendered, only a React key and a callback
+argument). 194 tests green across six files, and the full fleet suite at 1,390.
 
 ### Stage 3 — process and broadcast outcomes stop claiming more than they know
 
