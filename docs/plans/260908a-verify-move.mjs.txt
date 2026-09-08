@@ -46,7 +46,35 @@
  * excluded. A refused guard is not a failure: it is a guard that a person has
  * to account for by some other means, and the plan doc says which. What would
  * be a failure is a refused guard nobody noticed, so `diff` exits non-zero if
- * any refusal is unaccounted for in `EXPECTED_REFUSALS`.
+ * any refusal is unaccounted for in `EXPECTED_REFUSALS` — **or if the reason it
+ * was refused is not the reason that was accounted for.** "Two returns" and
+ * "three returns" are not the same fact, and an explanation written for one must
+ * not silently cover the other (GPT Sol, 260908a stage 2/3 review § F10).
+ *
+ * **A refusal narrows the evidence; it does not withdraw it.** The first version
+ * of this script skipped a refused guard's body comparison altogether, so any
+ * change anywhere in `chat` GET would have printed `refused, accounted` — the
+ * rail was answering a question about returns and was read as answering the
+ * question about the whole body. Bodies are now compared for **every** guard,
+ * and the rail is an *additional* demand on top (same finding).
+ *
+ * ## Comments are compared too, and that is not fussiness
+ *
+ * `normalise` strips comments, deliberately: re-indenting one is not a code
+ * change and should not read as one. But that makes this script blind by
+ * construction to a comment being **rewritten**, and on 2026-09-08 that was not
+ * hypothetical. The generator that produced the chat rows renamed the matcher
+ * identifier with a global `\bchat\b` and rewrote English with it — *"the
+ * reading view needs one thing from chat"* became *"from captures"*, and a
+ * citation became a link to a file that does not exist. Every body diffed
+ * clean. A person caught it by reading the output, which is not a mechanism.
+ *
+ * So the comment text of each guard is captured as well, whitespace-collapsed,
+ * and compared. An intentional rewrite is declared in `EXPECTED_COMMENT_EDITS`
+ * and reported; an undeclared one is a failure. Comments *outside* handler
+ * bodies — the ones that sit above a row — are not covered here and are read in
+ * the diff by a person; that is stated so the next reader knows the edge of the
+ * instrument rather than inferring one.
  *
  * **More than one match is a fact to fail on, not one to resolve by picking.**
  * An earlier extractor in this repo kept the last match and inspected a
@@ -80,11 +108,25 @@ const GUARDS = [
  * anticipated is a failure rather than a line of output.
  */
 const EXPECTED_REFUSALS = {
-  "chat GET":
-    "two returns: the `?summary=1` early exit and the final one. Accounted for by " +
-    "tests/the-query-string-does-not-decide-the-route.test.ts, which asserts both branches — " +
-    "delete the early return and the summary reply carries a transcript. Watched, not argued.",
+  "chat GET": {
+    /* Matched against the rail's own words, not merely against the key, so an
+       explanation written for two returns cannot silently cover three. */
+    reason: "2 returns in the guard's own scope",
+    why:
+      "the `?summary=1` early exit and the final one. Accounted for by " +
+      "tests/the-query-string-does-not-decide-the-route.test.ts, which asserts both branches — " +
+      "delete the early return and the summary reply carries a transcript. Watched, not argued.",
+  },
 };
+
+/**
+ * Guards whose comment text is *meant* to differ across the move, and why.
+ *
+ * Empty here: the chat slice moved every handler comment verbatim. A rewrite
+ * belongs above a row rather than inside a handler, which is where the two
+ * live-session blocks went.
+ */
+const EXPECTED_COMMENT_EDITS = {};
 
 const escape = (s) => s.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
 
@@ -115,6 +157,22 @@ function blockAt(src, from) {
     }
   }
   throw new Error("unbalanced braces");
+}
+
+/**
+ * The comment text of a body, in order, whitespace-collapsed.
+ *
+ * The matcher identifier is **not** renamed here, and that is the point: a
+ * comment that says `chat` before the move must still say `chat` after it. The
+ * rename is a code edit and has no business in prose.
+ */
+function commentsIn(body) {
+  const found = [];
+  for (const m of body.matchAll(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g)) {
+    const text = m[0].replace(/\s+/g, " ").trim();
+    if (text) found.push(text);
+  }
+  return found;
 }
 
 /** Everything the table's shape forces, and nothing else. */
@@ -217,8 +275,9 @@ function capture(mode, file) {
     const body = blockAt(src, at);
     out[key] = {
       normalised: normalise(body, matcher),
+      comments: commentsIn(body),
       /* The rail is computed from the chain body only. Its whole purpose is to
-         decide, before the move, which guards may be compared afterwards. */
+         decide, before the move, which guards need evidence beyond the diff. */
       refused: mode === "before" ? railVerdict(body) : undefined,
     };
   }
@@ -234,23 +293,57 @@ function diff(beforeFile, afterFile) {
   if (keys.length !== Object.keys(after).length) throw new Error("the two captures differ in size");
 
   for (const key of keys) {
-    const refused = before[key].refused ?? null;
-    if (refused) {
-      const why = EXPECTED_REFUSALS[key];
-      if (!why) {
-        console.log(`REFUSED, UNACCOUNTED  ${key.padEnd(24)} ${refused}`);
-        bad++;
-      } else {
-        console.log(`refused, accounted    ${key.padEnd(24)} ${refused}`);
-      }
-      continue;
-    }
+    /* **Bodies first, for every guard, refused or not.** A refusal is a demand
+       for extra evidence about one property; it is not permission to stop
+       looking at the rest. */
     if (before[key].normalised === after[key].normalised) {
       console.log(`identical             ${key.padEnd(24)} ${before[key].normalised.length} chars`);
     } else {
-      console.log(`*** DIFFERS ***       ${key}`);
+      console.log(`*** BODY DIFFERS ***  ${key}`);
       console.log(`  before: ${before[key].normalised}`);
       console.log(`  after : ${after[key].normalised}`);
+      bad++;
+    }
+
+    /* Comments, which the body comparison above has stripped and so cannot see. */
+    const wasEdited = key in EXPECTED_COMMENT_EDITS;
+    const b = before[key].comments ?? [];
+    const a = after[key].comments ?? [];
+    if (JSON.stringify(b) !== JSON.stringify(a)) {
+      if (wasEdited) {
+        console.log(`  comment edit declared: ${EXPECTED_COMMENT_EDITS[key]}`);
+      } else {
+        console.log(`*** COMMENT CHANGED *** ${key} — ${b.length} before, ${a.length} after`);
+        for (let i = 0; i < Math.max(b.length, a.length); i++) {
+          if (b[i] !== a[i]) {
+            console.log(`  before: ${b[i] ?? "(none)"}`);
+            console.log(`  after : ${a[i] ?? "(none)"}`);
+          }
+        }
+        bad++;
+      }
+    } else if (wasEdited) {
+      console.log(`*** DECLARED EDIT DID NOT HAPPEN *** ${key}`);
+      bad++;
+    }
+
+    /* And then the rail, which narrows what the identical body is worth. */
+    const refused = before[key].refused ?? null;
+    if (refused) {
+      const expected = EXPECTED_REFUSALS[key];
+      if (!expected) {
+        console.log(`REFUSED, UNACCOUNTED  ${key.padEnd(24)} ${refused}`);
+        bad++;
+      } else if (expected.reason !== refused) {
+        console.log(`REFUSED FOR A DIFFERENT REASON THAN ACCOUNTED  ${key}`);
+        console.log(`  accounted for: ${expected.reason}`);
+        console.log(`  actually     : ${refused}`);
+        bad++;
+      } else {
+        console.log(`  ↳ rail refuses: ${refused} — needs the evidence named in the plan`);
+      }
+    } else if (EXPECTED_REFUSALS[key]) {
+      console.log(`ACCOUNTED FOR A REFUSAL THAT DID NOT HAPPEN  ${key}`);
       bad++;
     }
   }

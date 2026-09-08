@@ -6779,18 +6779,19 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     },
   },
 
-  /* **Live conversation's ticket**, and the first of the three routes a live
-     session needs. It is under the conversation rather than under the article
-     because it seeds the session with the thread. Its pair is
-     `POST /api/chat/:slug/:threadId/spoken` four rows below — the write that
-     lands a finished exchange back in that thread — and the three
-     `/api/live/:sessionId/…` rows between them are the session's accounting,
-     which is a different subject and says so in its own comment.
+  /* **Live conversation's ticket.** It is under the conversation rather than
+     under the article because it seeds the session with the thread. Its pair is
+     `POST /api/chat/:slug/:threadId/spoken`, the write that lands a finished
+     exchange back in that thread; the `/api/live/:sessionId/…` routes are the
+     session's accounting, a different subject with its own comment.
 
-     They were declared next to each other in the chain and are not next to each
-     other here. That is not untidiness: this table is in the order the chain
-     dispatched, and rearranging it into subject order would be the one edit a
-     slice of this migration may not make. */
+     **The two halves of that pair are not adjacent here, and were not adjacent
+     in the chain either** — the accounting routes have always sat between them,
+     because this table is in the order the chain dispatched and that is the
+     order the chain had. Rearranging it into subject order would be the one edit
+     a slice of this migration may not make. (An earlier draft of this comment
+     said they *had* been adjacent and that the move separated them. Both halves
+     were wrong; GPT Sol, 260908a stage 2/3 review § F11.) */
   {
     kind: "pattern",
     method: "POST",
@@ -6804,8 +6805,9 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
   /* **Live conversation's three accounting endpoints, and they are NOT under
      `/api/chat/`.**
 
-     The two above are: a ticket needs the thread to seed from, and a spoken
-     exchange is appended to it. These three are about the *session* — what it
+     `POST /api/chat/:slug/:threadId/live` and `…/spoken` are: a ticket needs the
+     thread to seed from, and a spoken exchange is appended to it. These three
+     are about the *session* — what it
      spent, when its channel opened, when it ended — and a session outlives the
      thread it started in, may be reported against after the reader has moved on,
      and is addressed by a uuid this server minted rather than by a slug and a

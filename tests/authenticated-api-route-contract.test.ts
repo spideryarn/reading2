@@ -1910,8 +1910,7 @@ describe("the authenticated API's route contract", () => {
             "POST regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)\\/stop$/",
             "PATCH regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
             "DELETE regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
-    
-        // search, 260907b stage 5
+            // search, 260907b stage 5
             "GET regex /^\\/api\\/search\\/([\\w.%-]+)$/",
             "POST regex /^\\/api\\/search\\/([\\w.%-]+)$/",
             "PATCH regex /^\\/api\\/search\\/([\\w.%-]+)\\/([\\w.%-]+)$/",

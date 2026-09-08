@@ -467,12 +467,14 @@ as a code change — so a comment silently rewritten is invisible to the very ch
 prove the move was a move. It was caught by reading the generated rows before applying them, which is
 not a mechanism.
 
-The fix is in the generator now: match on a copy with comments and string contents blanked, then
-splice at those offsets in the original, so the rename touches identifiers and never prose. **Anyone
-repeating this recipe on another domain inherits the fixed version** —
-[260908a-verify-move.mjs.txt](260908a-verify-move.mjs.txt) is the verifier;
-[260907e-capture-referee.mjs.txt](260907e-capture-referee.mjs.txt) is its predecessor and does *not*
-have the fix, because it only ever normalised for comparison and never generated code.
+The generator was fixed — match on a copy with comments and string contents blanked, then splice at
+those offsets in the original, so the rename touches identifiers and never prose.
+
+> **This paragraph used to end by saying anyone repeating the recipe inherits that fix, through the
+> committed verifier. That was false**, and the review below caught it (F9): the verifier does not
+> generate code, and the generator that had the fix was a scratchpad script. The claim is now true by
+> a better route — **the verifier compares comments**, so the next generator does not have to be
+> careful. See § *The Stage 2/3 review* for the check watched failing on this exact corruption.
 
 ### `chat` GET: the mutation, not the argument
 
@@ -589,3 +591,69 @@ Seventy-six lines longer and twenty-eight points simpler, which is the trade thi
 making all along and the reason § *What the fifth sweep will measure* exists in 260907e. Biome's
 ceiling is 25, so the function is still five times over it; `:2349` at 77 and `:2591` at 36 are
 untouched by this migration and will survive it.
+
+## The Stage 2/3 review, and the claim in this doc that was false
+
+`docs/plans/260908a-stage23-review-sol.md`, against `b4bd19c8`. **No P0 and no P1** — Sol re-ran the
+verifier against the git blobs itself and confirmed the twelve are a pure move, the two constants are
+byte-equivalent to the matchers they replaced, both pair-key lists hold the same twelve in the right
+order, `chatLive` is filed under `/api/chat` everywhere, and `query` reaching `chat` GET is the same
+`URLSearchParams` instance `serveApi` built. Four findings, all accepted.
+
+**F9 — P2. This doc claimed a fix that was not in the artefact.** § *Stage 2, as built* said anyone
+repeating the recipe "inherits the fixed version" through the committed verifier. **False.** The
+verifier only captures, normalises and diffs; the *generator* is what had the comment bug, and the
+generator was a scratchpad script that no longer exists. So the sentence described a safeguard nobody
+could inherit — which is a worse defect than the bug it was describing, because it reads as closed.
+
+Fixed by making the claim true in the better direction: **the verifier now compares comments**, so a
+future generator does not have to be careful. `commentsIn` collects each body's comment text,
+whitespace-collapsed and **without** the matcher rename applied — a comment that said `chat` before
+the move must still say `chat` after it, because the rename is a code edit with no business in prose.
+An intended rewrite is declared in `EXPECTED_COMMENT_EDITS` (empty for this slice) and anything
+undeclared fails.
+
+**And it was watched failing on the real thing.** The original corruption was reproduced into a
+scratch copy of the finished `routes.ts` — the two phrases the bug actually produced, code untouched
+— and the verifier run against it:
+
+```
+identical             chat GET                 202 chars
+*** COMMENT CHANGED *** chat GET — 1 before, 1 after
+  before: … one thing from chat: … docs/plans/260826ab-chat-as-gateway.md § summaries. */
+  after : … one thing from captures: … docs/plans/260826ab-captures-as-gateway.md § summaries. */
+1 problem(s)   exit=1
+```
+
+**The body still reports `identical`.** That line is the whole demonstration: this is a defect the
+body diff cannot see and the comment check can.
+
+The edge of the instrument, stated so the next reader does not infer a wider one: comments *outside*
+handler bodies — the ones above a row, including the two live-session blocks this slice moved — are
+still read by a person in the diff.
+
+**F10 — P2. A refusal was skipping the body comparison, not just narrowing it.** `chat` GET reached
+`continue` before its bodies were compared, so *any* change anywhere in that handler would have
+printed `refused, accounted`. The rail was answering a question about returns and was being read as
+answering the question about the whole body — the same shape of mistake as a check that agrees with
+the code because it shares an assumption with it.
+
+Now every guard's body is compared first and the rail is an **additional** demand on top. The
+expected-refusal map also matches the rail's own words rather than only the key, so an explanation
+written for *two* returns cannot silently cover three. `chat` GET's bodies are identical, so the
+strengthened version is green — which is the point: the fix costs nothing and the old version was
+green for the wrong reason.
+
+Sol also names a reusable blind spot I am recording rather than fixing: `blockAt` counts raw braces,
+including inside comments and strings. It does not mis-extract these twelve — checked — but a
+scanner-based boundary would be safer for whoever takes `comments`.
+
+**F11 — P3. My rewritten comment made two false claims about where things are.** It said the ticket
+and `spoken` "were declared next to each other in the chain" and that the move separated them. Both
+halves wrong: the three accounting guards sat between them in the chain too. The accounting comment's
+"the two above" was also wrong, since `spoken` is below it. Both now name routes rather than
+positions, and the ticket comment records what it used to say. **I asserted this without checking,
+in a commit whose whole subject is that assertions about moved code must be checked.**
+
+**F12 — P3. `git diff --check` failed** on a whitespace-only line and a misindented comment left by
+the script that inserted the twelve keys. Fixed.
