@@ -1,6 +1,10 @@
 /**
- * The masthead: the tally, the tabs, and the sentence about whether to believe
- * any of it.
+ * The masthead: the tally, and the sentence about whether to believe any of it.
+ *
+ * **The mode switch used to be here and is now the bottom bar** (Dock.tsx),
+ * which is the product's argument imported wholesale: on a phone the top of the
+ * screen is the furthest thing from a thumb, and this page is read one-handed.
+ * What is left up here is the two things you read rather than press.
  *
  * ## Staleness is the feature, not the furniture
  *
@@ -25,21 +29,39 @@
  */
 import type { ReactNode } from "react";
 
-import { MODES, MODE_LABELS, type Mode } from "./mode";
-import { cx } from "./ui";
+import { Explain, type Tip } from "./Tooltip";
+import { Button, cx } from "./ui";
 import type { FleetState } from "./types";
 import { collectedAge, formatDuration, tally } from "./view";
 
 /**
- * The freshness line, and whether it is an alarm.
+ * **How far past the collector's own cadence a snapshot has to be before the
+ * page stops believing it.**
  *
- * **A failure does not have to be recent to matter, and a snapshot does not
- * have to have failed to be old.** So this is stale if EITHER a refresh has
- * failed or the snapshot has aged past the threshold, and the two produce
- * different sentences because they need different reactions: one is "the server
- * is not answering", the other is "the server is answering with something old".
+ * A multiplier, not a duration — which is the whole fix. This was
+ * `STALE_AFTER_MS = 30_000` until a browser pass watched the live page for
+ * ninety seconds and found it red for most of every cycle: the collector runs
+ * every 55–60 seconds, deliberately, because one collection costs the box about
+ * ten seconds of transcript-grepping. So the page was crying wolf by design,
+ * and a banner that is on most of the time is one nobody reads — which costs
+ * this tool the single signal it is built around.
+ *
+ * 2.5 is a missed collection plus most of a second one. Below 2, one late poll
+ * on a loaded box is an alarm; much above 3, a collector that has genuinely
+ * stopped gets three minutes of silence before anybody is told.
  */
-export const STALE_AFTER_MS = 30_000;
+export const STALE_AFTER_CADENCES = 2.5;
+
+/**
+ * What to assume until the page has watched two collections happen.
+ *
+ * It is the observed cadence on 2026-09-08 and it is a **fallback**, not the
+ * rule: `state.refreshMs` beats it if the server ever sends one, and the
+ * cadence `useFleetState` measures beats it as soon as a second distinct
+ * snapshot lands, which is a minute. Written here rather than inline so there
+ * is one place to look when the number is wrong.
+ */
+export const ASSUMED_CADENCE_MS = 60_000;
 
 export type Freshness = {
   stale: boolean;
@@ -47,6 +69,8 @@ export type Freshness = {
   age: string;
   /** The long explanation, shown only when something is wrong. */
   why: string | null;
+  /** The card the age line carries, so the threshold is never a mystery. */
+  tip: Tip;
 };
 
 export function freshness(args: {
@@ -55,22 +79,67 @@ export function freshness(args: {
   error: string | null;
   failures: number;
   now: number;
+  /** What the page has watched happen. See `useFleetState`. */
+  cadenceMs?: number | null;
 }): Freshness {
   const { state, receivedAt, error, failures, now } = args;
   const dataAge = collectedAge(state, now);
   const heardAge = receivedAt === null ? null : Math.max(0, now - receivedAt);
 
+  /* Told, then observed, then assumed — in that order, because being told is
+     better than inferring and inferring is better than guessing. */
+  const cadence = state?.refreshMs ?? args.cadenceMs ?? ASSUMED_CADENCE_MS;
+  const staleAfter = cadence * STALE_AFTER_CADENCES;
+
+  const source =
+    state?.refreshMs != null
+      ? "which the server tells us"
+      : args.cadenceMs != null
+        ? "measured from the gap between the last two snapshots"
+        : "assumed, until this page has seen two collections";
+  const heard = heardAge === null ? "nothing has arrived yet" : `last heard from ${formatDuration(heardAge)} ago`;
+
+  const tip: Tip = {
+    head: "How old this is",
+    what: `The box is collected about every ${formatDuration(cadence)} (${source}), and one collection costs it around ten seconds of work — so a number a minute old is normal, not a fault.`,
+    /* **The word this line goes red and prints is deliberately not in here.**
+       The page must be searchable for it: `tests/fleet-web.test.tsx` asserts
+       that nothing on a healthy page says it, which is the broadest guard there
+       is against the banner appearing when it should not — and an explanation
+       that quoted the word would satisfy that search on every page and quietly
+       retire the check. The sentence works without it; the check does not. */
+    how: `This line goes red past ${formatDuration(staleAfter)}, or the moment a refresh fails — whichever comes first. Right now: ${heard}.`,
+  };
+
   if (state === null) {
     return error === null
-      ? { stale: false, age: "collecting…", why: null }
+      ? { stale: false, age: "collecting…", why: null, tip }
       : {
           stale: true,
           age: "no data",
           why: `Nothing has ever been collected. ${error}${failures > 1 ? ` (${failures} attempts)` : ""}`,
+          tip,
         };
   }
 
-  const age = dataAge === null ? "collected at an unknown time" : `collected ${formatDuration(dataAge)} ago`;
+  /**
+   * **`collectedAt: null` means the first collection has not finished**, which
+   * is a different thing from a snapshot whose timestamp will not parse — and a
+   * very different thing from an empty box. The server answers `rows: []`,
+   * `collectedAt: null`, `error: null` for the ten seconds after a restart, and
+   * a page that reads that as "collected at an unknown time" over an empty list
+   * tells you the box is idle while thirty-six agents run on it.
+   *
+   * It is not stale, either: nothing has aged, so there is nothing to disbelieve
+   * yet. The panel says what is happening (`SessionsPanel`), and this line
+   * agrees with it.
+   */
+  const neverCollected = state.collectedAt === null;
+  const age = neverCollected
+    ? "collecting…"
+    : dataAge === null
+      ? "collected at an unknown time"
+      : `collected ${formatDuration(dataAge)} ago`;
 
   if (error !== null) {
     const since = heardAge === null ? "" : `, last heard ${formatDuration(heardAge)} ago`;
@@ -78,6 +147,7 @@ export function freshness(args: {
       stale: true,
       age,
       why: `${error}${since}${failures > 1 ? ` — ${failures} attempts in a row` : ""}. These rows are the last good ones.`,
+      tip,
     };
   }
 
@@ -85,47 +155,24 @@ export function freshness(args: {
   // about twelve seconds and the server caches it, so a stuck collection looks
   // exactly like a working one from out here. The snapshot's own age is the
   // only thing that can tell you.
-  if (dataAge !== null && dataAge > STALE_AFTER_MS) {
+  if (dataAge !== null && dataAge > staleAfter) {
     return {
       stale: true,
       age,
-      why: `The server is answering, but the snapshot it is serving is ${formatDuration(dataAge)} old.`,
+      why: `The server is answering, but the snapshot it is serving is ${formatDuration(dataAge)} old — over ${formatDuration(staleAfter)}, which is ${STALE_AFTER_CADENCES}× its usual ${formatDuration(cadence)}.`,
+      tip,
     };
   }
 
-  return { stale: false, age, why: state.error === null ? null : `The server's last refresh failed: ${state.error}` };
+  return {
+    stale: false,
+    age,
+    why: state.error === null ? null : `The server's last refresh failed: ${state.error}`,
+    tip,
+  };
 }
 
-function Tab({
-  mode,
-  current,
-  onChoose,
-}: {
-  mode: Mode;
-  current: Mode;
-  onChoose: (mode: Mode) => void;
-}): ReactNode {
-  const active = mode === current;
-  return (
-    <button
-      type="button"
-      role="tab"
-      aria-selected={active}
-      onClick={() => onChoose(mode)}
-      className={cx(
-        "tw:flex-1 tw:cursor-pointer tw:rounded-lg tw:px-3 tw:py-1.5 tw:text-[13px] tw:font-medium",
-        "tw:whitespace-nowrap tw:transition-colors",
-        active
-          ? "tw:bg-panel tw:text-ink tw:shadow-sm"
-          : "tw:bg-transparent tw:text-ink-faint tw:hover:text-ink-soft",
-      )}
-    >
-      {MODE_LABELS[mode]}
-    </button>
-  );
-}
-
-/** One count in the tally. Rendered only when it is non-zero, bar the total. */
+/** One count in the tally. Rendered only when it is non-zero. */
 function Count({ n, label, className }: { n: number; label: string; className?: string }): ReactNode {
   if (n === 0) return null;
   return (
@@ -135,81 +182,74 @@ function Count({ n, label, className }: { n: number; label: string; className?: 
   );
 }
 
+/**
+ * The width everything on the page agrees on.
+ *
+ * Wide, and the panels narrow themselves rather than the shell narrowing them:
+ * a masthead pinned to 48rem over a three-column list would read as two
+ * unrelated pages. `--safe-left`/`--safe-right` are here because this is the
+ * element that meets the notch in landscape.
+ */
+export const SHELL = "tw:mx-auto tw:w-full tw:max-w-[96rem] tw:px-[calc(0.75rem+var(--safe-left))]";
+
 export function Header({
   state,
   fresh,
-  mode,
-  onChoose,
   onRefresh,
 }: {
   state: FleetState | null;
   fresh: Freshness;
-  mode: Mode;
-  onChoose: (mode: Mode) => void;
   onRefresh: () => void;
 }): ReactNode {
   const rows = state?.rows ?? [];
   const counts = tally(rows);
 
   return (
-    <header className="tw:sticky tw:top-0 tw:z-10 tw:border-b tw:border-rule tw:bg-page/95 tw:backdrop-blur">
-      <div className="tw:mx-auto tw:max-w-3xl tw:px-3 tw:pt-3">
-        <div className="tw:flex tw:items-baseline tw:gap-2">
+    <header className="masthead">
+      <div className={cx(SHELL, "tw:py-2.5")}>
+        <div className="tw:flex tw:flex-wrap tw:items-baseline tw:gap-x-3 tw:gap-y-1">
           <h1 className="tw:text-[15px] tw:font-semibold tw:tracking-tight">Fleet</h1>
           <span className="tw:text-[13px] tw:text-ink-faint">
             {rows.length} session{rows.length === 1 ? "" : "s"}
           </span>
-          <button
-            type="button"
-            onClick={onRefresh}
-            className="tw:ml-auto tw:cursor-pointer tw:rounded-md tw:border tw:border-rule tw:px-2 tw:py-0.5 tw:text-[12px] tw:text-ink-soft tw:hover:border-rule-strong tw:hover:text-ink"
+
+          {/* The counts. `unknown` sits BESIDE the others whenever it is
+              non-zero rather than being folded into "idle": one failed agents
+              call turns every Claude row unknown at once, and "0 need you" over
+              eleven unanswerable rows is exactly the lie this tool exists to
+              avoid. */}
+          <div className="tw:flex tw:flex-wrap tw:gap-x-3 tw:gap-y-0.5 tw:text-[13px] tw:text-ink-soft">
+            <Count n={counts.needsYou} label="need you" className="tw:font-semibold tw:text-needs-ink" />
+            <Count n={counts.working} label="working" className="tw:text-work-ink" />
+            <Count n={counts.other - counts.unknown} label="quiet" />
+            <Count n={counts.unknown} label="unknown" className="tw:font-semibold tw:text-unknown-ink" />
+          </div>
+
+          {/* The age, and the card that says what "stale" means and when we
+              last heard anything. `Explain` puts the same sentence in the
+              button's accessible name, so it is not hover-only — which matters
+              most here, because this line is the one thing on the page you are
+              most likely to be squinting at on a phone. */}
+          <Explain
+            tip={fresh.tip}
+            placement="bottom"
+            className={cx(
+              "tw:ml-auto tw:text-[12px]",
+              fresh.stale ? "tw:font-semibold tw:text-alarm" : "tw:text-ink-faint",
+            )}
           >
-            Refresh
-          </button>
-        </div>
-
-        {/* The counts. `unknown` sits BESIDE the others whenever it is non-zero
-            rather than being folded into "idle": one failed agents call turns
-            every Claude row unknown at once, and "0 need you" over eleven
-            unanswerable rows is exactly the lie this tool exists to avoid. */}
-        <div className="tw:mt-1 tw:flex tw:flex-wrap tw:gap-x-3 tw:gap-y-0.5 tw:text-[13px] tw:text-ink-soft">
-          <Count n={counts.needsYou} label="need you" className="tw:font-semibold tw:text-needs-ink" />
-          <Count n={counts.working} label="working" className="tw:text-work-ink" />
-          <Count n={counts.other - counts.unknown} label="quiet" />
-          <Count n={counts.unknown} label="unknown" className="tw:font-semibold tw:text-unknown-ink" />
-        </div>
-
-        <p
-          className={cx(
-            "tw:mt-1 tw:text-[12px]",
-            fresh.stale ? "tw:font-semibold tw:text-alarm" : "tw:text-ink-faint",
-          )}
-        >
-          {fresh.stale ? `STALE — ${fresh.age}` : fresh.age}
-        </p>
-
-        <div
-          role="tablist"
-          aria-label="Fleet views"
-          className="tw:mt-2 tw:mb-3 tw:flex tw:gap-1 tw:rounded-xl tw:bg-quiet-wash tw:p-1"
-        >
-          {MODES.map((m) => (
-            <Tab key={m} mode={m} current={mode} onChoose={onChoose} />
-          ))}
+            {fresh.stale ? `STALE — ${fresh.age}` : fresh.age}
+          </Explain>
         </div>
       </div>
 
       {fresh.why !== null ? (
         <div className="tw:border-t tw:border-alarm/40 tw:bg-alarm-wash">
-          <div className="tw:mx-auto tw:flex tw:max-w-3xl tw:flex-wrap tw:items-center tw:gap-2 tw:px-3 tw:py-2">
+          <div className={cx(SHELL, "tw:flex tw:flex-wrap tw:items-center tw:gap-2 tw:py-2")}>
             <p className="tw:min-w-0 tw:flex-1 tw:text-[13px] tw:break-words tw:text-alarm">{fresh.why}</p>
-            <button
-              type="button"
-              onClick={onRefresh}
-              className="tw:shrink-0 tw:cursor-pointer tw:rounded-md tw:bg-alarm tw:px-2.5 tw:py-1 tw:text-[12px] tw:font-semibold tw:text-page"
-            >
+            <Button variant="loud" onClick={onRefresh}>
               Try now
-            </button>
+            </Button>
           </div>
         </div>
       ) : null}

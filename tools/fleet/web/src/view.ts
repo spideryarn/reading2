@@ -18,8 +18,17 @@
  */
 import type { FleetOptionKey, FleetRow, FleetState, FleetStatus } from "./types";
 
-/** Which colour language a row speaks. */
-export type Tone = "needs" | "work" | "idle" | "unknown";
+/**
+ * Which colour language a row speaks.
+ *
+ * `alarm` is the fifth and is not a session status: it is the red the masthead
+ * uses for staleness, borrowed by Box health for a `critical` reading. It is in
+ * this union rather than in a second one so that a tone is a tone everywhere —
+ * `toneClasses` in ui.tsx is a `Record` over exactly these names, so a sixth is
+ * a type error at every call site at once rather than a quiet fall-through to
+ * grey.
+ */
+export type Tone = "needs" | "work" | "idle" | "unknown" | "alarm";
 
 /**
  * A duration in milliseconds, as the shortest sentence that is still true.
