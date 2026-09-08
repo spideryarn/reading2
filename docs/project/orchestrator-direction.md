@@ -792,6 +792,21 @@ asleep. **Longest single stalls: 7.38h, 6.34h, 5.75h, 5.35h, 5.33h, 4.30h — 34
 Sunday**, independently reproducing an earlier finding of 41.6 agent-hours since 09-01. The longest
 stall in *any* always-auto session over three days is **21 minutes**.
 
+**And the fix landed, measured 2026-09-08 12:20 — 35 `auto`, 1 `default`, against 28/7 before.**
+`gjd-remote new-claude` now passes `--permission-mode auto` explicitly, with the reasoning in a
+comment beside it rather than in a doc nobody opens. Greg asked for this on 2026-09-08 —
+*"if there's a tweak that ensures the fleet is in auto-permissions mode, let's do that"* — believing
+he had already done it, which he had not.
+
+**The measurement is worth more than the flag, because a flag being present is not a fleet being in
+auto mode.** Every transcript touched in the previous six hours was read for its **last**
+`permissionMode` checkpoint — the current mode, not the launch mode, so a session converted mid-life
+is counted where it actually is. **36 of 78 carried one**, which is the positive control: a probe that
+found none would be broken rather than reporting a clean fleet
+([silent-success.md](../reusable/silent-success.md)). And the single `default` is not a
+counter-example — a 17-line *"Reply with the single word: pong"* probe from 05:44 that never went
+through the launcher at all. **Nothing launched by `gjd-remote` came up in `default`.**
+
 **Nothing on this box notices**: `gjd-remote log` lists a stalled session as `running`, identical to a
 healthy one. So this is the sharpest available instance of *the agent that did ask and whose asking is
 invisible* — and unlike most of this page it comes with a rate rather than an anecdote.
