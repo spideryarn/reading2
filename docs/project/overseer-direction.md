@@ -223,6 +223,36 @@ only one with a mechanical test — *is it in the queue?* Scheduled jobs, plan d
 queue are queued. A job of the Overseer's own devising is a proposal in the log, never a dispatch.
 It is the direct expression of Greg's *"my job is basically new ideas"*.
 
+### The Overseer is a peer, not a new privilege tier
+
+**GPT Sol blocked the plan behind these gates on 2026-09-08 with an architectural objection**:
+*"prose gates cannot constrain an Overseer that retains unrestricted Bash, `tmux send-keys`, and
+passwordless sudo."* Its remedy was a capability broker holding authorisation records the Overseer
+could not mint for itself. Greg settled it in one line:
+
+> Yes, the Overseer is a peer, not a new privilege tier.
+>
+> — Greg, 2026-09-08
+
+**That is the whole answer, and it makes the objection true and not load-bearing.** Every one of the
+thirty agents on this box already runs as the same Unix user with passwordless sudo
+([§ Appendix](#appendix-security-and-hardening-deferred)), so the Overseer reaches nothing its peers
+cannot already reach. What it adds is **rate, not ceiling** — more actions per hour, not more
+dangerous ones — and a broker would draw a boundary in the one place there is already no boundary,
+which is the same argument that deferred **A7** and closed **A5**.
+
+**What survives is the cheap half, and it was worth the review on its own.** Gate 3's list gained the
+categories Sol found missing, the sharpest being the one no test can see: **the gates bind what you
+cause, not what you type.** *"Finish this work"* sent to an unrestricted coding agent is an innocuous
+sentence and an arbitrary capability, so delegation is not a way round a gate. Alongside it: never
+modify your own constraints — the gates, the queue, the decision log, the watchdog, `FLEET_ACT_ENABLED`
+— and never act on a job definition that changed after it was authorised, which matters here because
+**the jobs are documents** and editing one would otherwise enlarge what may run unattended.
+
+**The trigger that would reopen this** is the same one the appendix already names, and it is about
+the fleet rather than the Overseer: an agent handling genuinely untrusted input with real leverage. On
+the day a peer stops being trustworthy, the peer argument goes with it.
+
 ### The failure to design against, second entry: log blindness
 
 [§ The failure to design against](#the-failure-to-design-against) names notification blindness, for
