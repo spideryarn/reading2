@@ -23,7 +23,7 @@ import {
   type ObservedStatus,
 } from "../tools/overseer/observation.js";
 import { EVERY_FIXTURE, editableFixture, freshFixture, freshFrom, rawFixture, rowsOf } from "./overseer-fixtures.js";
-import type { AttentionFeed } from "../tools/fleet/wire.js";
+import type { AttentionFeed, OverseerStatusFeed } from "../tools/fleet/wire.js";
 
 /**
  * What a caller that did not look at the attention inbox passes.
@@ -35,6 +35,9 @@ import type { AttentionFeed } from "../tools/fleet/wire.js";
  * says.
  */
 const NOT_ASKED: AttentionFeed = { kind: "not-asked" };
+
+/** The same, for the Overseer's own status — added to the payload without a schema bump. */
+const NO_OVERSEER: OverseerStatusFeed = { kind: "not-asked" };
 
 describe("the real captured snapshots", () => {
   test("all ten parse, and carry the fields the register needs", () => {
@@ -75,7 +78,7 @@ describe("the dashboard's own payload", () => {
     // compiling is the day the contract moved — which is exactly what happened
     // while this stage was being written: `answeringEnabled` was added below,
     // correctly WITHOUT a schema bump, and this line went red within the hour.
-    const placeholder = fleetState(null, null, null, 60_000, false, null, NOT_ASKED);
+    const placeholder = fleetState(null, null, null, 60_000, false, null, NOT_ASKED, NO_OVERSEER);
     expect(placeholder.schema).toBe(OBSERVATION_SCHEMA);
     expect(placeholder.collectedAt).toBeNull();
     expect(placeholder.rows).toEqual([]);
@@ -93,7 +96,7 @@ describe("the dashboard's own payload", () => {
   test("a snapshot's schema number is still the one this reader was written against", () => {
     // If the dashboard bumps its schema, this goes red before anything silently
     // reads the new shape with the old rules.
-    expect(fleetState(null, null, null, 60_000, false, null, NOT_ASKED).schema).toBe(OBSERVATION_SCHEMA);
+    expect(fleetState(null, null, null, 60_000, false, null, NOT_ASKED, NO_OVERSEER).schema).toBe(OBSERVATION_SCHEMA);
   });
 });
 
@@ -751,7 +754,7 @@ describe("the attempt clock, which is not the collection clock", () => {
     // Its own constructor, not a hand-made object, so the day the wire name
     // changes this line stops compiling rather than going quietly wrong — the
     // same pin the startup placeholder gets above.
-    const state = fleetState(null, null, null, 60_000, false, "2026-09-08T02:47:20.000Z", NOT_ASKED);
+    const state = fleetState(null, null, null, 60_000, false, "2026-09-08T02:47:20.000Z", NOT_ASKED, NO_OVERSEER);
     expect(state.attemptedAt).toBe("2026-09-08T02:47:20.000Z");
     const payload = JSON.parse(JSON.stringify(state)) as Record<string, JsonValue>;
     expect(parseAttempt(payload)).toEqual({

@@ -106,7 +106,7 @@ import {
    payload composer before it renders anything. `statePayload` is the function
    `server.ts` calls — it lives in state.ts precisely so a test can drive it,
    because server.ts binds ports at import time and can never be imported. */
-import { readAttention } from "../tools/fleet/attention";
+import { readCheckpointFeeds } from "../tools/fleet/overseer-status";
 import { statePayload } from "../tools/fleet/state";
 /* **THE PRODUCER'S OWN TYPE, ON THE FIXTURES THAT CLAIM TO BE ITS OUTPUT.**
    `actionsWire()` in this file once built `{actions: []}` — a flat array the
@@ -227,6 +227,14 @@ function state(over: Partial<FleetState> = {}): FleetState {
        `no-coordinator` would make every fixture quietly assert that
        `~/.overseer/` was looked at and is empty. */
     attention: { kind: "not-asked" },
+    /* And the same for the Overseer's own status: `not-asked` is what
+       `parseOverseer` produces for a payload with no `overseer` field, so a
+       fixture that does not care gets the page an older server would really
+       draw. It is not silent — the card says this server did not report
+       supervision — but it is one quiet line on the Overseer tab, which no
+       assertion in this file reads. Anything else would have each fixture
+       quietly asserting that this server looked at `~/.overseer/`. */
+    overseer: { kind: "not-asked" },
     /* Same argument again. `readClockSkew` produces this for a payload with no
        `servedAt`, so a fixture that does not care about clocks gets the state
        the page would really build off an older server — and nothing is shifted.
@@ -1452,7 +1460,7 @@ describe("the box's clock, read with the phone's", () => {
         refreshMs: 60_000,
         answeringEnabled: true,
         attemptedAt: null,
-        readAttention: () => ({ kind: "not-asked" }),
+        readCheckpoint: () => ({ attention: { kind: "not-asked" }, overseer: { kind: "not-asked" } }),
       }),
     );
     const servedAt = (payload as { servedAt?: unknown }).servedAt;
@@ -4877,9 +4885,55 @@ describe("the Overseer tab, which no longer says it is empty", () => {
     await act(async () => {});
 
     expect(buttonLabels()).toContain("Broadcast: ease off, staggered");
-    expect(container.textContent).toContain("There is nothing yet to send a message to.");
+    // The wording changed on 2026-09-08 with the Overseer status card: the old
+    // sentence's premise was that no Overseer process existed, and one does. The
+    // refusal is unchanged and is the point — a daemon that publishes a
+    // checkpoint is still not an agent that can receive a message.
+    expect(container.textContent).toContain("There is still nothing here to send a message to.");
     // A refusal with a way forward, not a shrug.
     expect(container.textContent).toContain("the broadcast above is the real thing");
+  });
+
+  it("draws the Overseer's own two clocks on the tab, straight off the payload", async () => {
+    /* THE EDGE `App` MAKES AND NOTHING ELSE COVERS: the panel gets `overseer`
+       from the state it was handed. tests/fleet-overseer-panel.test.tsx drives
+       the card and the payload; this is the one hop between them, and deleting
+       the prop in App.tsx turns it red. */
+    window.location.hash = "#overseer";
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport });
+    const wroteAt = new Date(Date.now() - 30_000).toISOString();
+    act(() =>
+      feed.push(
+        state({
+          rows: [],
+          overseer: {
+            kind: "published",
+            status: {
+              schema: 2,
+              writtenAt: wroteAt,
+              lastGoodSnapshotAt: new Date(Date.now() - 45_000).toISOString(),
+              sourceStaleAfterMs: 300_000,
+              heartbeat: {
+                kind: "reading",
+                pid: 2_375_511,
+                instanceId: "599c3840-4c9c-445f-9308-e34923704fa8",
+                startedAt: new Date(Date.now() - 3_600_000).toISOString(),
+                lastTickAt: wroteAt,
+                ticks: 28,
+              },
+              scheduler: { kind: "armed", why: "started with the scheduler on", at: wroteAt },
+              register: { kind: "read", total: 0, sessions: [] },
+            },
+          },
+        }),
+      ),
+    );
+    await act(async () => {});
+
+    expect(container.textContent).toContain("Supervision is running.");
+    expect(container.textContent).toContain("Overseer last wrote");
+    expect(container.textContent).toContain("its fleet source last updated");
   });
 });
 
@@ -6480,7 +6534,7 @@ describe("the composer production uses turns a checkpoint on disk into a questio
    *
    * **It drives `statePayload`, which is the whole reason that function was
    * moved out of server.ts.** An earlier version of this test called
-   * `readAttention` and `fleetState` itself, and that is green-by-construction:
+   * `readCheckpointFeeds` and `fleetState` itself, and that is green-by-construction:
    * it had rebuilt the missing edge inside the test, so it would have stayed
    * green after production stopped making it. GPT Sol's sharpest finding on this
    * stage. `server.ts` binds ports at import time and can never be imported, so
@@ -6496,7 +6550,7 @@ describe("the composer production uses turns a checkpoint on disk into a questio
    *
    * ## THE ONE EDGE IT DOES NOT COVER, and what does cover it
    *
-   * **This test supplies `readAttention` itself**, so `server.ts`'s own binding
+   * **This test supplies `readCheckpointFeeds` itself**, so `server.ts`'s own binding
    * of it into `PayloadDeps` is outside the boundary — the test would stay green
    * if that line were deleted. It used to be named as though it were not, which
    * is why the name is now the composer rather than "the join". Renaming it was
@@ -6507,7 +6561,7 @@ describe("the composer production uses turns a checkpoint on disk into a questio
    * exists. Extracting its deps construction only MOVES the seam — there is
    * always a last edge at the composition root that no test reaches without
    * starting a server. What closes the missing-join risk there is not a test but
-   * the **type**: `readAttention` is a required field of `PayloadDeps`, so
+   * the **type**: `readCheckpoint` is a required field of `PayloadDeps`, so
    * omitting it is a typecheck failure rather than a page that quietly draws
    * nothing. A deliberate stub would still compile — but *somebody wired the
    * wrong thing on purpose* is a different and far smaller class than *nobody
@@ -6569,7 +6623,7 @@ describe("the composer production uses turns a checkpoint on disk into a questio
           refreshMs: 60_000,
           answeringEnabled: true,
           attemptedAt: null,
-          readAttention: () => readAttention(root),
+          readCheckpoint: () => readCheckpointFeeds(root),
         }),
       ) as unknown;
 
