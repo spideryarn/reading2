@@ -635,7 +635,14 @@ model's reading:**
   could not count them reliably — the panes redraw between captures — so the "ten with a proposed
   answer attached" figure stays Fable's observation rather than a measured one.
 
-### 🔴 Stage v0.2b: an approval must bind to what is being approved — BLOCKS v0.4
+### ✅ Stage v0.2b: an approval must bind to what is being approved (landed 2026-09-08, `6fbb1f56` · `688bd699` · `44f60619`)
+
+**This stage read 🔴 and "BLOCKS v0.4" for most of a day after it had shipped, and that cost
+somebody most of a morning nearly rebuilding it.** The plan doc being three commits behind the code
+is the same class as the bug it describes: a document that says a safeguard is missing when it is
+present is as expensive as one that says a safeguard is present when it is missing — the first
+buys a rebuild, the second buys an incident. Fixed 2026-09-08 by the session that went looking for
+the work and found it done. v0.4 shipped; the block is lifted.
 
 **Found by GPT Astra, 2026-09-08, by experiment rather than by reading**, and confirmed here
 against `promptAbove` in `pane.ts`. It changed a proposed file's contents from `hello` to
@@ -652,16 +659,42 @@ Two consequences, and the second is worse than the first:
 - the re-capture guard passes when the material has changed underneath it;
 - **the phone can ask Greg to approve something without showing him what it is.**
 
-- [ ] `PaneQuestion` carries the **material**: the command, the diff, the destination path, the
-      permission scope — whatever is above the rule, not merely the sentence below it.
-- [ ] `sameQuestion` compares the material. A capture that cannot read it is a **refusal**, not a
-      question with an empty material field.
-- [ ] Where the capture is incomplete, offer a handoff (`gjd-remote resume <name>`) rather than a
-      button. Astra's recommendation, and the right shape: a button that cannot be honest should
-      not exist.
-- [ ] **"Yes once" and "yes, and don't ask again" get visibly different treatment.** One is a
-      decision about this action; the other changes the session's permission posture for
-      everything that follows, and they currently render as two adjacent list items.
+- [x] `PaneQuestion` carries the **material**: the command, the diff, the destination path, the
+      permission scope — whatever is above the rule, not merely the sentence below it. `6fbb1f56`.
+      Three arms rather than a nullable string, because `no-material` (a `/loop` menu, where the
+      options are the whole question) and `unreadable` (there is a dialog here and we could not see
+      what it is about) are opposite claims that would draw the same empty box. `materialAbove` is
+      bounded by the dialog's **top** border rather than by the last rule, which was the bug.
+- [x] `sameQuestion` compares the material. A capture that cannot read it is a **refusal**, not a
+      question with an empty material field. `688bd699`. `sameMaterial` returns false for
+      `unreadable` **including against another `unreadable`**: two screens we could not read are not
+      evidence that they are the same screen.
+- [x] **Half done, and now finished.** An `unreadable` material already takes the buttons away
+      whatever the caller asked for (`44f60619`) — but the card said only "Answer it in the
+      terminal", which is correct and useless to somebody holding a phone in another room. It now
+      prints the command, `gjd-remote resume <name>`, as selectable monospace text. A refusal that
+      does not name the next move is a refusal a person can do nothing with.
+- [x] **"Yes once" and "yes, and don't ask again" get visibly different treatment.** `44f60619`.
+      `classifyConsequence` reads the label into `once` | `persistent` | `decline` | `unknown`,
+      recomputed server-side in `parseQuestion` rather than believed off the wire, and the client
+      draws a `Consequence` pill beside each option. **`unknown` is drawn at least as loudly as
+      `persistent`**, held by an inequality over `CONSEQUENCE_TONE` that the suite asserts — draw
+      the conservative default in neutral grey and it becomes the safest-looking badge on screen,
+      which would inverse the guarantee by a colour choice.
+
+**Verified in a browser on 2026-09-08, not only in the suite.** A dialog was provoked on a
+throwaway session and the card drew all of it: the *"What you would be approving"* box with the
+material in it, the sha256 fingerprint and its sentence, the options as buttons with their
+keystrokes, and a consequence badge on every option with a working tooltip. Every part of this stage
+had tests before it had a screenshot, and this repo has four features that were built, tested,
+routed, shipped and dead.
+
+**One thing the screenshot showed that the tests could not.** On an agent's own `AskUserQuestion`
+every option is `unknown` by construction, so the card draws five identical full-width red badges on
+a phone. The tone rule is right and is not being softened — but it was calibrated for a permission
+dialog where the badge tells `once` from `persistent`, and a badge on every option distinguishes
+nothing within its own card. Left as a design question for Greg in
+[260908f](260908f-prose-needs-an-empty-input-box-not-merely-a-box.md), not patched here.
 
 ### ✅ Stage v0.2e: what answering a dialog *does* decides whether it may be answered (landed 2026-09-08)
 
@@ -720,6 +753,37 @@ re-capture, which is why the gate must read `now`. And **the arrows branch of `k
 unreachable in production**: every real cursor menu is a permission dialog and every real
 `AskUserQuestion` is numbered. The branch stays, tested against a synthetic capture, because that is
 a fact about today's widgets rather than a guarantee.
+
+### ✅ Stage v0.2f: prose needs an EMPTY input box, not merely a box (landed 2026-09-08)
+
+**The other half of Astra's A10**, and the half v0.2e above does not touch: v0.2e is about which
+recognised *dialogs* may be answered, and this is about prose typed at a pane whose state nobody has
+established. Its own doc, because two agents are editing this file today:
+**[260908f-prose-needs-an-empty-input-box-not-merely-a-box.md](260908f-prose-needs-an-empty-input-box-not-merely-a-box.md)**.
+
+`inputSurface` established that an input box EXISTS and never read what was in it. Measured
+read-only across every pane on this box on 2026-09-08: of seventeen Claude sessions with a prompt on
+screen, thirteen were empty and **three held a live draft** — `%218` on `❯ yes, shut it all down`,
+in a session running in auto mode. A Send there types our text onto the end of Greg's and our Enter
+submits the concatenation, so the dashboard delivers an approval nobody wrote, at a moment nobody
+chose, against whatever is on screen by then. **That is v0.2b's bug arriving through the prose door
+rather than the dialog door.**
+
+The existing fixture `none-typed-numbered-message-in-input-box.txt` reproduces it with no tmux — and
+the suite listed it under *"sends to every real screen that does have one"*, so until today the
+defect was not merely untested, it was asserted as correct.
+
+The fix is a narrowing rather than a check: `inputSurface` moved into `pane.ts` as a four-arm
+`PaneSurface` union — `dialog | empty-input | occupied-input | unrecognised` — and `sendMessage`
+requires `empty-input` where `answerQuestion` requires `dialog`, both under a `never`. Prose stops
+being established by absence and starts requiring strictly more evidence about the screen than
+answering does, which is what A10 asks for. **`occupied-input`, not `drafted-input`**: a capture
+cannot tell a person's half-typed reply from a suggestion the harness offered or the greyed hint a
+never-used session draws, and the name must not claim provenance the parser does not have.
+
+Refused in a real browser and then allowed in one — and two rounds of GPT Sol, the second of which
+found a comment in the first version that denied what the code beneath it did. Both are in
+260908f.
 
 ### 🟡 Stage v0.2c: delivery has a third outcome, and it is "I do not know" (the browser reads it, 2026-09-08 `91e1f3a0`; receipts and action ids not started)
 
@@ -1925,6 +1989,59 @@ line.
 
 **Not started.** Written up rather than bolted on, because the correction touches every timestamp the
 client parses and the naive version silently breaks a measurement that is currently right.
+
+### 🔴 Stage v0.6f: the attention inbox has a producer and no consumer
+
+**This is a live instance of the class this whole plan spent 2026-09-08 removing**, and it is mine.
+
+`w2-attention-inbox` built the deciding half — `tools/overseer/attention.ts`, ranked, duplicate-
+collapsed, with a `sessionsUnreadable` floor and an `unknown` arm that refuses to publish a calm
+inbox off an incomplete pass. The types are in `wire.ts` (`AttentionList`, `AttentionItem`,
+`AttentionEvidence`, `AttentionKind`, `AttentionAnswerability`). The seam was negotiated in detail:
+they decide and sort, this page renders, and I said so.
+
+**And nothing renders it.** Measured 2026-09-08 16:05:
+
+    grep -rln "AttentionList|AttentionItem" tools/fleet/web/src/   →  (nothing)
+    grep -rn  "attention"                   tools/fleet/web/src/   →  (nothing)
+
+Worse than a missing component: **the fleet server cannot see the data at all.** The list is written
+to `~/.overseer/current.json` as a field on `Checkpoint`, and nothing in `tools/fleet/` reads that
+file — `grep -rln "Checkpoint" tools/fleet/` finds nothing. So there are two missing edges, not one,
+and the type check cannot see either: a type nobody imports is not an error.
+
+That is exactly
+[260908b](../postmortems/260908b-the-parts-were-all-tested-and-none-of-the-joins-were.md)'s **Class
+A**, a missing join — *"the edge does not exist; the detector is a question about the graph, and no
+type can express 'somebody must call this'"* — and it was created **on the day the postmortem was
+written**, by the person who wrote it, through the mechanism the postmortem names: two halves each
+internally coherent, each reviewed, joined by an agreement in a conversation rather than by code.
+
+`wire.ts` does not help here and was never going to. It holds the SHAPE across a boundary that
+exists; it has no opinion about a boundary nobody crossed.
+
+- [ ] **The fleet server reads the Overseer's checkpoint.** A reader with a `CheckpointRead`-shaped
+      result — `read` / `absent` / `unreadable{why}` — because a missing or stale `~/.overseer/`
+      must render as *the coordinator is not running*, never as an empty inbox. The Overseer's own
+      store already takes `Checkpoint | null` whole for this reason.
+- [ ] **A route or a field on `/api/state`.** Prefer the field: the inbox is the thing the page
+      exists to show, and a second request for it is a second thing that can be stale on its own.
+- [ ] **The client parse, deriving rather than adopting** — `duplicates` declined to
+      `readonly [...] | null` as agreed, `sessionsUnreadable` defaulted to `0`.
+- [ ] **The render, holding three agreements made with `w2-attention-inbox` and `orchestrator-setup`
+      and written down here so they survive the conversation:**
+      **(a)** a `prose` item gets **no answer control at all** in v1 — it is inferred from a pane
+      tail, and their `readTurnTail` bug proved a card could quote *Greg's own last message* back as
+      an agent's question, so a button would have acted on his sentence;
+      **(b)** the producer sorts and the renderer must not re-sort;
+      **(c)** `sessionsUnreadable` renders **only when non-zero**, and when it does the count reads
+      as a floor — *"AT LEAST 4 need you… (1 could not be judged, so there may be more)"* — because
+      a sentence and its retraction in the same block is worse than either.
+- [ ] **A test that fails if nothing imports it.** The lesson of the class is that the join is the
+      thing to check, and the check is *who reads this?*
+
+**Cost of leaving it:** the wave's headline feature is invisible, and it will stay invisible while
+looking finished from either end. Every part has tests and passes them.
 
 ### Later: the coordinator agent
 

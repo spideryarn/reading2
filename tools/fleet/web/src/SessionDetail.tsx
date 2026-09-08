@@ -99,7 +99,7 @@ import { ActionOutcomeCard, SessionActions, SessionQueue } from "./ActionButtons
 import { DictationControl, useFleetDictation } from "./DictationControl";
 import { PauseLine } from "./PauseLine";
 import { RecentMessages, useRecentMessages } from "./RecentMessages";
-import { Handles, LaunchMode, QuestionCard, StatusPill, Uptime } from "./SessionParts";
+import { Handles, Handoff, LaunchMode, QuestionCard, StatusPill, Uptime } from "./SessionParts";
 import { Explain } from "./Tooltip";
 import { hasDeliverable, queueFor, type ActionOutcome } from "./actions-client";
 import { transcriptAge, type MessagesApi, type MessagesView } from "./messages-client";
@@ -133,7 +133,15 @@ function Section({ title, children }: { title: string; children: ReactNode }): R
  * only what to suggest next: 409 means the world moved under the view, which is
  * the one case where refreshing is the answer.
  */
-function Outcome({ outcome, onRefresh }: { outcome: SteerOutcome; onRefresh: () => void }): ReactNode {
+function Outcome({
+  outcome,
+  sessionName,
+  onRefresh,
+}: {
+  outcome: SteerOutcome;
+  sessionName: string;
+  onRefresh: () => void;
+}): ReactNode {
   if (outcome.ok) {
     return (
       <div className="tw:mt-2 tw:rounded-lg tw:border tw:border-work/40 tw:bg-work-wash tw:p-3 tw:text-[13px]">
@@ -173,7 +181,24 @@ function Outcome({ outcome, onRefresh }: { outcome: SteerOutcome; onRefresh: () 
         <span className="tw:px-1">·</span>
         {outcome.from === "server" ? "said by the dashboard server" : "said by this browser"}
       </p>
-      {outcome.status === 409 ? (
+      {/* **409 IS NOT ONE PIECE OF ADVICE**, and offering the same button for
+          all of them is how a person learns to stop reading the sentence above
+          it. Most 409s mean the world moved under the view and looking again is
+          the answer. `input-not-empty` does not: the view was right, and there
+          is somebody's half-typed sentence in that box. Refreshing changes
+          nothing, and pressing it repeatedly is how you find out. GPT Sol,
+          2026-09-08. (Two other 409s must never be retried at all —
+          `send-partial` and `send-unknown` — but those are the delivery
+          receipts' half and are not decided here.) */}
+      {outcome.code === "input-not-empty" ? (
+        <div className="tw:mt-2 tw:text-[12px] tw:text-ink-soft">
+          <p>
+            Refreshing will not help — the box is not empty, and only that session can empty it. Wait
+            for it to send what it has, or go and look:
+          </p>
+          <Handoff sessionName={sessionName} />
+        </div>
+      ) : outcome.status === 409 ? (
         <p className="tw:mt-2">
           <Button onClick={onRefresh}>Refresh and look again</Button>
         </p>
@@ -671,6 +696,7 @@ export function SessionDetail({
           <HeldBack why={answeringOff} gate={row.question.gate} />
           <QuestionCard
             question={row.question}
+            sessionName={row.name}
             onAnswer={
               unaddressable === null && answeringOff === null && row.question.gate.kind === "conversation"
                 ? onAnswer
@@ -787,7 +813,9 @@ export function SessionDetail({
             )}
           </Section>
 
-          {outcome === null ? null : <Outcome outcome={outcome} onRefresh={onRefresh} />}
+          {outcome === null ? null : (
+            <Outcome outcome={outcome} sessionName={row.name} onRefresh={onRefresh} />
+          )}
           {queueOutcome === null ? null : <ActionOutcomeCard outcome={queueOutcome} onRefresh={actions.refresh} />}
 
           {/* --------------------------------------------- 3. actions -- */}

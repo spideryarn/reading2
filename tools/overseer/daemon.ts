@@ -55,7 +55,8 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import type { AttentionList } from "../fleet/wire.js";
+import type { AttentionList, StoredUsage, UsageReport } from "../fleet/wire.js";
+import { chooseUsage } from "./usage-carry.js";
 import { admissible, type AdmissibleSnapshot } from "./admissible.js";
 import { baselineOf, diff, sessionKey, type Baseline, type OverseerEvent, type SessionIdentity } from "./diff.js";
 import { conditionTracker, describeNote, openNoteLog, type DaemonNote } from "./notes.js";
@@ -313,6 +314,17 @@ export type DaemonOptions = {
    * claim nothing needs him.
    */
   attention?: { intervalMs?: number; run: () => Promise<AttentionList> };
+  /**
+   * HOW CLOSE THIS ACCOUNT IS TO A LIMIT, injected for the same reason
+   * `attention` is: the pass reads ~2.9 GB of transcripts and shells out to
+   * `claude auth status`, and this file does neither.
+   *
+   * The difference from `attention` is that the runner returns a fresh
+   * `UsageReport` and does NOT decide whether it should be published — that is
+   * `chooseUsage`, applied here, because it needs the store's held report as well
+   * as the fresh one. A daemon given no runner publishes `usageNotYetRun`.
+   */
+  usage?: { intervalMs?: number; run: () => Promise<UsageReport> };
 };
 
 /**
@@ -328,6 +340,21 @@ export type DaemonOptions = {
  * $0.0039; the passes after it were 0 calls.
  */
 export const ATTENTION_INTERVAL_MS = 120_000;
+
+/**
+ * How often the usage scan runs: five minutes, against a 30s tick.
+ *
+ * MUCH rarer than the attention pass, and for a different reason. Attention is
+ * bounded by a fingerprint cache that makes an unchanged tail free; a usage scan
+ * has no such escape — it reads every transcript every time, measured at **30-45s
+ * over 1,772 files, 2.9 GB and ~875,000 lines** on 2026-09-08, with a 1.5x spread
+ * between two runs an hour apart purely from ambient load.
+ *
+ * Five minutes makes that about a tenth of one core, continuously. It is a floor
+ * rather than a target: the thing a shorter interval would buy is noticing a rate
+ * limit sooner, and a rate limit that has just been hit does not clear for hours.
+ */
+export const USAGE_INTERVAL_MS = 300_000;
 
 export type DaemonOutcome =
   | { kind: "refused"; refusal: StoreRefusal }
@@ -474,6 +501,11 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
   // finished yet — in which case the store publishes `attentionNotYetRun`, which
   // says nothing has looked rather than that nothing needs him.
   let attention: AttentionList | null = null;
+  // The usage report the next checkpoint will carry, or null when no pass has
+  // decided to replace what the store holds — which is BOTH "no pass has run"
+  // and "a pass ran and `chooseUsage` kept the stored one". Absent means the same
+  // thing in each case: leave the store's own report alone.
+  let usage: StoredUsage | null = null;
   const checkpointUpdate = (): CheckpointUpdate => ({
     lastGoodSnapshotAt,
     tick: true,
@@ -481,6 +513,7 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     // and "present and undefined" different things, and here absent means *keep
     // the list the store already holds*.
     ...(attention === null ? {} : { attention }),
+    ...(usage === null ? {} : { usage }),
   });
 
   const ticker = setInterval(() => {
@@ -530,6 +563,60 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
         }, attentionOptions.intervalMs ?? ATTENTION_INTERVAL_MS);
   attentionTicker?.unref?.();
 
+  /*
+   * The usage scan, on its own timer and never on the tick.
+   *
+   * A scan is 30-45 seconds; running it inside the tick would make every
+   * `lastTickAt` look 30-45 seconds late, and `lastTickAt` is how a reader tells
+   * a dead Overseer from a quiet one. That is Astra's A17 exactly - healthy
+   * operation spending most of its time alarming, which teaches Greg to ignore
+   * the alarm.
+   *
+   * ONE PASS AT A TIME, and awaited on the way out, for the same two reasons the
+   * attention pass is: overlapping scans would double a real cost for no benefit,
+   * and a shutdown that released the lock with a scan in flight could leave two
+   * writers on the store.
+   */
+  const usageOptions = options.usage;
+  let usageRunning: Promise<void> | null = null;
+  const usageTicker =
+    usageOptions === undefined
+      ? null
+      : setInterval(() => {
+          if (halted() !== null || usageRunning !== null) return;
+          usageRunning = usageOptions
+            .run()
+            .then((report) => {
+              // THE DECISION IS `chooseUsage`'S AND IT NEEDS BOTH SIDES, so the
+              // held report is read from the store rather than remembered here:
+              // the store is the only thing that knows what survived the last
+              // restart, and a second copy would part company with it.
+              const choice = chooseUsage(store.usage, report, now().getTime());
+              if (choice.kind === "take-fresh") usage = { kind: "report", report };
+              // `keep-stored` leaves `usage` as it was, so the next checkpoint
+              // carries no update and the store keeps what it holds. The reason
+              // is logged either way: "kept the 11:00 reading, this scan did not
+              // finish" is the sentence a person can act on.
+              log(`usage pass: ${choice.kind} - ${choice.why}`);
+            })
+            .catch((cause: unknown) => {
+              // A THROWN PASS BECOMES `none` WITH A REASON, not silence and not
+              // a held report passed off as current. Same rule as the attention
+              // pass: going on publishing a reading taken before the thing broke
+              // is the failure this whole stage refuses.
+              usage = {
+                kind: "none",
+                why: `the usage pass failed: ${cause instanceof Error ? cause.message : String(cause)}`,
+                at: now().toISOString(),
+              };
+              log(`usage pass failed: ${String(cause)}`);
+            })
+            .finally(() => {
+              usageRunning = null;
+            });
+        }, usageOptions.intervalMs ?? USAGE_INTERVAL_MS);
+  usageTicker?.unref?.();
+
   /**
    * Wait for a pass in flight, if there is one.
    *
@@ -538,9 +625,13 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
    * `catch(() => {})` because a pass that threw has already published its own
    * `unknown` and must not replace the error we are on our way out with.
    */
-  async function settleAttention(): Promise<void> {
-    const inFlight = attentionRunning;
-    if (inFlight !== null) await inFlight.catch(() => {});
+  async function settlePasses(): Promise<void> {
+    // BOTH passes, and the usage one matters more rather than less: it holds a
+    // file handle open across ~2.9 GB of reads, so it is the likelier of the two
+    // to still be running when a signal arrives.
+    for (const inFlight of [attentionRunning, usageRunning]) {
+      if (inFlight !== null) await inFlight.catch(() => {});
+    }
   }
 
   const makeSource = options.source ?? fleetSource;
@@ -600,12 +691,13 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     // store's lock with a paid call still in flight and a runner about to write
     // `attention.json`. The exceptional path is exactly when a second daemon is
     // most likely to be started, so it is the wrong one to leave open.
-    await settleAttention();
+    await settlePasses();
     stopHere(`the daemon threw: ${cause instanceof Error ? cause.message : String(cause)}`);
     throw cause;
   } finally {
     clearInterval(ticker);
     if (attentionTicker !== null) clearInterval(attentionTicker);
+    if (usageTicker !== null) clearInterval(usageTicker);
   }
 
   /**
@@ -742,7 +834,7 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
   // straight afterwards — the `Restart=always` case, which is the normal one —
   // could be writing that file at the same moment. The write is atomic now,
   // which stops it tearing; this stops the second writer existing at all.
-  await settleAttention();
+  await settlePasses();
 
   const final = halted();
   const why =

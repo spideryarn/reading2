@@ -182,6 +182,16 @@ export const REFUSAL_STATUS: Record<RefusalCode, number> = {
   // 200 for it. The world moved between the page and the send, so 409.
   "not-at-input": 409,
   "pane-is-asking": 409,
+  // 409 and not 400: the request was well formed and the BOX is not what the
+  // client thought — somebody's half-typed message is in the way. The same
+  // request a minute later, once that agent has sent its own text, is fine.
+  //
+  // **409 IS NOT A RETRY PERMISSION HERE OR ANYWHERE IN THIS TABLE**, which is
+  // worth saying beside this row because this is the one 409 that genuinely
+  // becomes valid on its own. `send-partial` and `send-unknown` are 409 too and
+  // must NEVER be retried automatically, so a client that keys off the status
+  // rather than the code has read the wrong field. GPT Sol, 2026-09-08.
+  "input-not-empty": 409,
   // THE TWO THAT ARE NOT 5xx AND MUST NOT BE, which is a stronger statement
   // than the rest of this table.
   //

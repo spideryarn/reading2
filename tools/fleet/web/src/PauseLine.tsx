@@ -43,9 +43,18 @@
  * by construction. Neither draws an unknown. A quiet row does, because there
  * the question is live and unanswered: is this finished, or is it stuck?
  *
- * **Positive states always draw, whatever the status** — `in-a-shell-call` on a
- * `working` row is the entire point of the stage, since that is the session the
- * board has been calling *Working* while it sits blocked on a command.
+ * **Positive states always draw, whatever the status** — `background-work` on a
+ * row the board calls *Working* is the case this stage was built for.
+ *
+ * **AND IT DOES NOT MEAN THE AGENT IS BLOCKED**, which is what this arm claimed
+ * for four hours on 2026-09-08 and is corrected here. Claude Code writes
+ * `status: "shell"` when `baseStatus === "idle" && hasUnfinishedLocalBash` —
+ * read out of the 2.1.263 binary by `fleet-approval-binding` and verified
+ * against it here: `_D==="idle"&&ZQr?"shell":_D`. So the agent has FINISHED its
+ * turn, is at a prompt, and can be messaged; what is still running is something
+ * it backgrounded. The field was read as its name and shipped saying *blocked on
+ * a command it started*, which is the opposite of the truth and would have sent
+ * a reader to a terminal instead of to the message box.
  *
  * This will matter more this week than later: the rate-limit collector reports
  * `unknown` until 2026-09-12, while 27 unattributable rejections from a
@@ -123,18 +132,18 @@ export function PauseLine({
     );
   }
 
-  if (pause.kind === "in-a-shell-call") {
+  if (pause.kind === "background-work") {
     return (
       <Explain
         tip={{
-          head: "In a shell call",
-          what: `${formatDuration(pause.sinceMs)} so far`,
-          how: "The agent is blocked on a command it started — a sleep, a test run, a build. Claude Code's own status for this is `shell`, which `claude agents --json` normalises to `busy`, which is why the board used to call it Working.",
+          head: "Background work still running",
+          what: `Started ${formatDuration(pause.sinceMs)} ago`,
+          how: "The agent has FINISHED its turn and is at a prompt — you can message it now — but something it backgrounded is still going: a test run, a dev server, a build. Claude Code records this as `shell`, and `claude agents --json` normalises it to `busy`, so the board can call the session Working when it is in fact waiting for you.",
         }}
         placement="bottom"
         className={quiet}
       >
-        in a shell call {formatDuration(pause.sinceMs)}
+        background work, {formatDuration(pause.sinceMs)}
       </Explain>
     );
   }

@@ -510,7 +510,7 @@ function usageLines(report: UsageReport): string[] {
 const HELP = [
   "overseer — the fleet's history, and the daemon that records it",
   "",
-  "  npx tsx scripts/overseer.ts run [--url URL] [--tick-ms N] [--no-attention]",
+  "  npx tsx scripts/overseer.ts run [--url URL] [--tick-ms N] [--no-attention] [--no-usage]",
   "  npx tsx scripts/overseer.ts status",
   "  npx tsx scripts/overseer.ts events [--limit N]",
   "  npx tsx scripts/overseer.ts notes [--limit N]",
@@ -664,6 +664,20 @@ async function main(argv: readonly string[]): Promise<number> {
             : "attention: off — OPENROUTER_API_KEY is not set, so nothing will look at what needs you",
         );
       }
+      // The usage scan is wired in here for the same reason, and it needs NO
+      // key: its evidence is `~/.claude.json` and the transcripts on disk, so
+      // unlike attention it is available on a box with no OpenRouter credentials
+      // at all. `--no-usage` turns it off, and the reason to want that is cost of
+      // a different kind: a scan reads ~2.9 GB, so a box already thrashing is one
+      // where a person may reasonably want it quiet.
+      //
+      // `collectUsage` takes the module's own defaults deliberately. The CLI's
+      // `--since-hours` and `--max-transcripts` narrow a scan for a person in a
+      // hurry, and a narrowed scan is exactly what `absenceGap` refuses to call
+      // conclusive — so a daemon that quietly took them would publish `unknown`
+      // for ever and look broken.
+      const usageOff = argv.includes("--no-usage");
+      if (usageOff) console.log("usage: off (--no-usage)");
       const outcome = await runOverseer({
         root,
         baseUrl: flag(argv, "--url") ?? process.env["OVERSEER_FLEET_URL"] ?? DEFAULT_FLEET_URL,
@@ -672,6 +686,7 @@ async function main(argv: readonly string[]): Promise<number> {
         // apart, and absent is what "take the default" means.
         ...(tickMs === undefined ? {} : { tickMs: Number(tickMs) }),
         ...(attentionRun === null ? {} : { attention: { run: attentionRun } }),
+        ...(usageOff ? {} : { usage: { run: () => collectUsage() } }),
       });
       switch (outcome.kind) {
         case "refused":
