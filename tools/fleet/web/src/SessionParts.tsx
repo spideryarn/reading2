@@ -345,6 +345,94 @@ function Option({
 }
 
 /**
+ * The way out, when the page has decided it cannot honestly offer a button.
+ *
+ * **A REFUSAL THAT DOES NOT NAME THE NEXT MOVE IS A REFUSAL A PERSON CANNOT
+ * ACT ON.** Astra's recommendation for the incomplete-capture case was a
+ * handoff rather than a button — "a button that cannot be honest should not
+ * exist" — and taking the button away was only the first half of that. The card
+ * said "Answer it in the terminal" to somebody holding a phone in another room,
+ * with no way to get to a terminal from there.
+ *
+ * **SELECTABLE, NOT MERELY LEGIBLE.** `select-all` makes one tap take the whole
+ * command, because the reader is on a phone and is about to paste this into an
+ * ssh session on some other device. A command they have to retype from a
+ * screenshot is barely better than no command.
+ *
+ * **THE SESSION'S NAME, NEVER ITS ID.** `gjd-remote resume` takes the name —
+ * `fleet-approval-binding`, not `$1996` — and a command that looks right and
+ * cannot run is worse than none, because it is tried first.
+ *
+ * **AND THE NAME IS NOT NECESSARILY A SHELL WORD**, which is GPT Sol's finding
+ * on the first version of this. `FleetRow.name` is typed `string` and comes off
+ * tmux, so it is whatever somebody called a session. The fleet's own create and
+ * rename routes enforce a slug, but `tmux new-session -s 'two words'` at a
+ * terminal does not, and this component's promise — *here is a command you can
+ * paste* — was wider than its type. A name that is not a bare word is quoted;
+ * one that could not survive quoting is not offered at all, because a command
+ * that runs and resumes the WRONG session is the one outcome worse than no
+ * command.
+ */
+/**
+ * A code-point loop, NOT a character class, and the reason is a byte that was
+ * in this file for about ten minutes.
+ *
+ * `steer.ts`'s `checkText` already says it: *"a control character in a SOURCE
+ * file is a byte grep cannot see and a reviewer cannot read, and this repo has
+ * been bitten by writing one."* Writing `/[\x00-\x1f]/` here put a literal NUL
+ * into this file, which made `grep` treat the whole thing as binary and return
+ * nothing for every pattern — including `Handoff`, which is how it was found:
+ * the component appeared to have vanished. The escape was correct in intent and
+ * arrived as data.
+ *
+ * So the rule is the one that file already reached, for the same reason, and it
+ * is worth stating twice rather than being rediscovered a third time.
+ */
+function hasControlChar(text: string): boolean {
+  for (const ch of text) {
+    const code = ch.codePointAt(0) ?? 0;
+    if (code < 0x20 || code === 0x7f) return true;
+  }
+  return false;
+}
+
+function shellWord(name: string): string | null {
+  if (name === "") return null;
+  // A bare slug needs nothing, and it is every name the fleet's own create and
+  // rename routes will mint. Left unquoted so the command a person meets almost
+  // every time reads as something they would have typed.
+  if (/^[A-Za-z0-9._-]+$/.test(name)) return name;
+  // Everything else goes inside single quotes, which neutralise every
+  // metacharacter POSIX sh has — spaces, `$`, backticks, `;`, `&&` — with two
+  // exceptions that are refused rather than escaped. A single quote cannot be
+  // escaped INSIDE single quotes (the `'\''` dance works and produces a string
+  // nobody can check at a glance, on a phone, before pasting it into a shell on
+  // another machine); and a control character, a newline above all, would paste
+  // as a finished command line plus whatever came after it.
+  if (name.includes("'") || hasControlChar(name)) return null;
+  return `'${name}'`;
+}
+
+export function Handoff({ sessionName }: { sessionName: string }): ReactNode {
+  const word = shellWord(sessionName);
+  if (word === null) {
+    return (
+      <p className="tw:mt-1.5 tw:text-[12px] tw:text-ink-soft">
+        Open it in the terminal — this session's name cannot be written as a shell argument, so
+        there is no command here that would be safe to paste.
+      </p>
+    );
+  }
+  return (
+    <p className="tw:mt-1.5">
+      <code className="tw:select-all tw:rounded tw:border tw:border-rule tw:bg-panel tw:px-1.5 tw:py-1 tw:font-mono tw:text-[12px] tw:break-all tw:text-ink">
+        gjd-remote resume {word}
+      </code>
+    </p>
+  );
+}
+
+/**
  * **WHAT IS ACTUALLY BEING APPROVED.**
  *
  * The prompt is the headline and this is the evidence, and the distinction is
@@ -365,17 +453,28 @@ function Option({
  * (docs/project/narrow-windows.md, § content that cannot reflow), and it is
  * never trusted for anything but display.
  */
-function Material({ material, compact }: { material: FleetMaterial; compact: boolean }): ReactNode {
+function Material({
+  material,
+  sessionName,
+  compact,
+}: {
+  material: FleetMaterial;
+  sessionName: string;
+  compact: boolean;
+}): ReactNode {
   if (material.kind === "unreadable") {
     return (
       <div className="tw:mt-2 tw:rounded-md tw:border tw:border-alarm/50 tw:bg-alarm-wash tw:p-2 tw:text-[13px]">
         <p className="tw:font-medium tw:text-alarm-ink">What this would approve could not be read.</p>
         <p className="tw:mt-1 tw:break-words tw:text-ink">{material.why}</p>
         {compact ? null : (
-          <p className="tw:mt-1 tw:text-[12px] tw:text-ink-soft">
-            So there is nothing to answer with here — an empty box in this place would look like a
-            dialog that proposes nothing, and those are opposite claims. Answer it in the terminal.
-          </p>
+          <>
+            <p className="tw:mt-1 tw:text-[12px] tw:text-ink-soft">
+              So there is nothing to answer with here — an empty box in this place would look like a
+              dialog that proposes nothing, and those are opposite claims. Answer it in the terminal:
+            </p>
+            <Handoff sessionName={sessionName} />
+          </>
         )}
       </div>
     );
@@ -432,11 +531,18 @@ function Material({ material, compact }: { material: FleetMaterial; compact: boo
  */
 export function QuestionCard({
   question,
+  sessionName,
   onAnswer,
   busy = false,
   compact = false,
 }: {
   question: FleetQuestion;
+  /**
+   * For the handoff command when the card cannot offer a button. REQUIRED
+   * rather than optional: a call site that could omit it is a call site that
+   * renders a dead end, and the compiler is the only thing that will notice.
+   */
+  sessionName: string;
   /** Null makes this a summary. A function makes every option a button. */
   onAnswer?: ((index: number) => void) | null;
   busy?: boolean;
@@ -482,7 +588,7 @@ export function QuestionCard({
           being asked — you are about to go and answer it in the terminal. The
           collapsed form belongs to the list card, and the list card is the
           `compact` branch above. */}
-      {compact ? null : <Material material={question.material} compact={false} />}
+      {compact ? null : <Material material={question.material} sessionName={sessionName} compact={false} />}
 
       {!compact && question.options.length > 0 ? (
         <>

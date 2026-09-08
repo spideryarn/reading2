@@ -184,7 +184,9 @@ function SessionCard({
       {/* Still the whole dialog, not a preview. Seeing what a blocked session
           is asking WITHOUT tapping anything is the reason this page is opened
           on a phone; the detail's copy of it is the one with buttons on. */}
-      {row.question !== null ? <QuestionCard question={row.question} compact={compact} /> : null}
+      {row.question !== null ? (
+        <QuestionCard question={row.question} sessionName={row.name} compact={compact} />
+      ) : null}
     </Card>
   );
 }

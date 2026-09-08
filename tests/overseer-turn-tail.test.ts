@@ -12,7 +12,7 @@
  * sessions genuinely waiting on Greg on 2026-09-08 had ended their turn handing
  * him a decision in sentences, ending in a full stop — none of them showed as
  * needing him, and a grep for question marks found 1 of 23
- * (docs/project/orchestrator-direction.md § `idle` is the bug). So the tail of
+ * (docs/project/overseer-direction.md § `idle` is the bug). So the tail of
  * an ended turn is the material a model has to read, and everything in this file
  * is about cutting that material out of a pane correctly and cheaply.
  *

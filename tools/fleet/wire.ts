@@ -211,7 +211,7 @@ export type QueueView = {
  * never become reachable from the client project.
  *
  * The measurements behind these shapes are in
- * docs/project/orchestrator-direction.md § "What is actually observable about
+ * docs/project/overseer-direction.md § "What is actually observable about
  * usage limits". Two facts drive every design choice below, and neither is
  * obvious from the field names alone:
  *

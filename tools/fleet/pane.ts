@@ -665,6 +665,33 @@ function materialAbove(lines: readonly Line[], firstOption: number): PaneMateria
     };
   }
 
+  // THE BORDER IS THE FIRST LINE WE HAVE, WHICH IS NOT THE SAME AS THE FIRST
+  // LINE THERE IS. The dashed test above discriminates the dialog's outside
+  // from its inner separators, and that is a reading of ONE Claude Code build:
+  // if a future one draws inner separators solid, a clipped dialog starts
+  // reading as complete and nothing here goes red, because every fixture in
+  // this repo is a frozen capture of the old build.
+  //
+  // This was nearly left unbuilt on the grounds that its trigger could not be
+  // demonstrated, and that was wrong — the construction I tried was the
+  // harmless one (delete the lines above a real outer border, and the body that
+  // comes back is correct). Sol supplied the dangerous one: take a capture with
+  // a diff in it, make its first inner separator solid as the hypothesised
+  // renderer would, and slice from there. `top` is then 0, the body is readable
+  // and INCOMPLETE, and the operation and path above it are gone. That is a
+  // confident wrong body, which is the direction this file must never be wrong
+  // in. `tests/fixtures/fleet-panes/dialog-clipped-at-a-solid-separator.txt`.
+  //
+  // The cost of being over-cautious is a dialog whose box happens to start at
+  // row 0 of the pane, which reads `unreadable` and is answered in a terminal.
+  if (top === 0) {
+    return {
+      kind: "unreadable",
+      why: "the rule above the options is the first line of the capture, so there is no way to tell the"
+        + " dialog's own border from a separator inside it — anything above has scrolled off",
+    };
+  }
+
   const body: string[] = [];
   for (let i = top + 1; i < firstOption; i++) {
     const line = lines[i];
@@ -883,6 +910,265 @@ export function parsePane(capture: string): PaneQuestion {
   const numbered = parseNumbered(lines);
   if (numbered.kind === "question") return numbered;
   return parseCursorMenu(lines);
+}
+
+/* --------------------------------------------- what this pane is showing -- */
+
+/**
+ * How many lines under the prompt the input box's bottom border may be.
+ *
+ * Moved here from steer.ts on 2026-09-08 with `paneSurface`. Four rather than
+ * twenty because at twenty `dialog-ask-user-question.txt` finds a border twelve
+ * lines under its cursor and reads as an input box on that test alone; at four
+ * it does not, so the dialog check and the border check fail it independently.
+ *
+ * It is also, by accident, why the occupied-box defect stayed rare rather than
+ * constant: a draft of five or more visual lines pushes the closing border out
+ * of this window and is refused as "no border below". The guard that made the
+ * bug uncommon is not a guard against the bug.
+ */
+const INPUT_BOX_LINES = 4;
+
+/**
+ * How many blank columns before a title makes a line the input box's TOP border.
+ *
+ * Claude Code writes the session's name into the right-hand end of that border,
+ * so after `cleanLines` turns the rule characters into spaces what is left is a
+ * long run of blanks and one word — `none-working-empty-prompt.txt` line 37 is
+ * 110 spaces and `adversarial-fixtures-four-postmortems`. An untitled border is
+ * a plain rule and needs none of this; this is only for the titled form.
+ *
+ * A heuristic about a rendering, and it is allowed to be one because it is the
+ * THIRD of three conditions rather than the only one, and because being wrong
+ * here refuses a send rather than misdirecting one.
+ */
+const BORDER_TITLE_INDENT = 20;
+
+/** The dialog arm, named once so every caller spells it the same way. */
+export type PaneDialog = Extract<PaneQuestion, { kind: "question" }>;
+
+/**
+ * **WHAT THIS PANE IS SHOWING** — an observation about a screen, and
+ * deliberately not a verdict about what may be sent to it.
+ *
+ * The policy lives in `steer.ts`, which decides which arm each of its two entry
+ * points will accept. Sol's wording, and it is the right split: a type that
+ * said "sendable" would have to be re-argued every time the policy moved, and
+ * the two would drift the moment they disagreed.
+ *
+ * **FOUR ARMS, AND `empty-input` IS THE NARROW ONE.** Until 2026-09-08 the
+ * question this answers was asked twice and answered differently: `parsePane`
+ * said whether there was a dialog, and `inputSurface` in steer.ts re-parsed the
+ * same capture to say whether there was a box. Two readings of one screen is
+ * the drift this file warns about in three other places, and the direction it
+ * would drift in is "types a message into a permission dialog". So there is one
+ * function, it parses once, and the dialog it found IS the `dialog` arm.
+ *
+ * **`occupied-input` IS NOT CALLED `drafted-input`, AND THE NAME IS THE POINT.**
+ * A capture cannot tell who put the text there. `❯ do all three` in
+ * `none-working-with-prose-decisions-list.txt` may be a person's half-typed
+ * reply, a suggestion the harness offered, or the greyed hint a never-used
+ * session shows; the pane renders all three the same way and claiming otherwise
+ * would be provenance the parser does not have (GPT Sol, 2026-09-08). What is
+ * true of all three is that the box is not empty, which is the only fact the
+ * decision needs.
+ */
+export type PaneSurface =
+  /** A dialog we recognised, already parsed. */
+  | { kind: "dialog"; question: PaneDialog }
+  /** An input box with nothing in it. */
+  | { kind: "empty-input"; promptLine: number }
+  /**
+   * An input box with something in it. `lines` is how many lines of it there
+   * are — never the text, which belongs to whoever typed it and would put one
+   * agent's unsent words on somebody else's phone.
+   */
+  | { kind: "occupied-input"; promptLine: number; lines: number }
+  /** Neither, or we could not tell. `why` names the condition that failed. */
+  | { kind: "unrecognised"; why: string };
+
+/**
+ * Whether an input-box line has anything on it, read off `raw`.
+ *
+ * **`raw`, NEVER `text`, AND THIS IS A BLOCKER SOL FOUND IN THE PLAN.**
+ * `cleanLines` replaces every character in `DECORATION` with a space, which is
+ * right for finding geometry and catastrophic for judging emptiness: a box
+ * holding `■` or `────` cleans to a line that trims to nothing, so the guard
+ * would call it empty and the send would append to it. Sol reproduced the
+ * step — `❯■`, `❯────` and the genuine `❯ ` all clean to exactly `❯`.
+ *
+ * So geometry is decided on `text` and occupancy on `raw`, which is the same
+ * capture with only the ANSI removed. `Line` has carried both since it was
+ * written, for a different reason, and this is the second.
+ *
+ * The `❯` is dropped from the prompt line because it is the box's own marker
+ * rather than anybody's text; every other line is judged whole. **`trim()` on
+ * `raw` folds U+00A0**, which is what an empty box actually contains — a
+ * `trim` that stopped folding it would call every empty box occupied and the
+ * feature would vanish silently, so a test holds that character.
+ *
+ * WHAT IT STILL CANNOT SEE: a box holding only spaces renders exactly like an
+ * empty one, and the capture has no cursor in it. That is a box we will type
+ * into, appending to whitespace nobody meant. It is the residue of reading a
+ * rendering rather than an editor's state, and it is not closable here.
+ */
+/**
+ * A line's drawn width and left indent, for comparing a border against a border.
+ *
+ * Trailing whitespace is dropped because `capture-pane` pads to the pane width
+ * on some lines and not others, so the raw length is not the drawn length.
+ */
+function shapeOf(raw: string): { width: number; indent: number } {
+  const trimmed = raw.replace(/\s+$/, "");
+  return { width: trimmed.length, indent: trimmed.length - trimmed.replace(/^\s*/, "").length };
+}
+
+function boxLineIsOccupied(raw: string, isPromptLine: boolean): boolean {
+  if (!isPromptLine) return raw.trim() !== "";
+  const marker = raw.indexOf("❯");
+  return (marker === -1 ? raw : raw.slice(marker + 1)).trim() !== "";
+}
+
+/**
+ * Is this the input box's top border?
+ *
+ * Two shapes, both measured on this box on 2026-09-08: a bare rule
+ * (`none-idle-with-prose-numbered-list.txt`), and a rule with the session's
+ * name written into its right-hand end (`none-working-empty-prompt.txt`, and
+ * every other `working` capture we have). The second is why this is not simply
+ * `rule !== "none"` — `cleanLines` only calls a line a rule when there is
+ * nothing on it but decoration, and a title is not decoration.
+ *
+ * The title must be one word. A deeply indented line of prose or code would
+ * otherwise pass, and the whole value of a border test is that transcript does
+ * not look like one.
+ */
+function isBoxBorder(line: Line | undefined): boolean {
+  if (!line) return false;
+  if (line.rule !== "none") return true;
+  const title = line.text.slice(BORDER_TITLE_INDENT);
+  if (line.text.slice(0, BORDER_TITLE_INDENT).trim() !== "") return false;
+  return title.trim() !== "" && !/\s/.test(title.trim());
+}
+
+/**
+ * One reading of one screen, for both of the things that can be sent to it.
+ *
+ * **THE SHAPE OF THE ARGUMENT, WHICH IS THE SAME AS `inputSurface`'S WAS.**
+ * "Not a dialog" is an ABSENCE, and this module refuses to build anything on
+ * one. So the box is asked for POSITIVELY:
+ *
+ *  1. `parsePane` must not find a dialog. Necessary, not sufficient; it catches
+ *     every dialog we DO recognise, and it is the weak half.
+ *  2. The last input-prompt line must sit BETWEEN THE BOX'S TWO BORDERS — one
+ *     immediately above it, one within `INPUT_BOX_LINES` below. That is the
+ *     strong half: a `❯` echoed into the transcript has prose above it, and
+ *     eleven of the twelve dialog fixtures have no border under their cursor
+ *     within the window at all.
+ *  3. It must be the LAST prompt line, so a box further up the scrollback
+ *     cannot vouch for a screen that has since become something else. Every
+ *     working capture contains an earlier `❯` — the echo of the last message
+ *     sent — and taking the first match would accept a screen that is now
+ *     anything at all.
+ *
+ * **AND THEN, NEW ON 2026-09-08, WHETHER THE BOX IS EMPTY.** Astra's A10: a
+ * live Claude descendant does not prove an empty input box owns the keystrokes.
+ * Proved on a throwaway session rather than argued — a box holding `DRAFT-ALPHA`
+ * took `OMEGA-SENT-BY-DASHBOARD` onto the end of it, the Enter submitted the
+ * concatenation, and the agent answered a user turn neither half of which
+ * anybody wrote, while the dashboard returned `ok: true`.
+ *
+ * **HOW THIS CAN STILL BE WRONG**, worth being exact about because it reads
+ * stronger than it is:
+ *
+ *  - **The screen is not provenance.** Everything above is a reading of text
+ *    printed by the process we are about to type at. A program printing a rule,
+ *    a `❯`, and another rule passes — deliberately, or because it was echoing
+ *    hostile input. Sol's F6, and no amount of parsing fixes it.
+ *  - **A shelled-out program is invisible here.** `send-keys` goes to the
+ *    pane's tty, and a child of a verified Claude reads the keys if it is in
+ *    front. `#{pane_current_command}` cannot see it and neither can `tpgid`:
+ *    measured on 2026-09-08, Claude, the pane's bash and any child all share
+ *    ONE process group, so `pgrp` = `sid` = `tpgid` = `pane_pid` for every one
+ *    of them. **`~/.claude/sessions/<pid>.json` LOOKS LIKE THE ANSWER AND IS
+ *    NOT** — a guard on its `status: "shell"` was built on 2026-09-08 and
+ *    removed the same day. See `steer.ts`'s KNOWN GAPS, which carries the
+ *    expression out of the Claude Code binary that decides that field, so
+ *    nobody has to re-derive it before rebuilding the same mistake.
+ *  - **A pane mid-redraw is a torn screen.** Claude Code repaints every frame,
+ *    and a capture can land between the box being cleared and the draft being
+ *    repainted. Both halves of a tear are real text.
+ *  - **A resized terminal moves the borders**, which reads as "no input box" —
+ *    a refusal, so the wrong answer here is the safe one.
+ *  - **The border test is a reading of one Claude Code build.** A third border
+ *    shape stops every message going out until somebody teaches it — loudly,
+ *    and in the safe direction, which is the trade this whole file makes.
+ */
+export function paneSurface(capture: string): PaneSurface {
+  const asking = parsePane(capture);
+  if (asking.kind === "question") return { kind: "dialog", question: asking };
+
+  const lines = cleanLines(capture);
+  let at = -1;
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (isInputPrompt(lines[i]?.text ?? "")) {
+      at = i;
+      break;
+    }
+  }
+  if (at === -1) return { kind: "unrecognised", why: "there is no input prompt anywhere on the screen" };
+  if (at === 0 || !isBoxBorder(lines[at - 1])) {
+    return {
+      kind: "unrecognised",
+      why: "the prompt line has no box border above it, so it is transcript rather than the input box",
+    };
+  }
+
+  // The prompt line first, then every line down to the closing border.
+  //
+  // **THE CLOSING BORDER IS MATCHED ON GEOMETRY, NOT ON "IS IT A RULE", AND
+  // THAT IS GPT SOL'S BLOCKER ON THE FIRST VERSION OF THIS.** `cleanLines`
+  // calls any line a rule when it holds nothing but decoration, and a person
+  // can type decoration: Claude Code takes multiline input on Ctrl+J, so a box
+  // holding an empty first line, then `────────`, then `  caption` had its
+  // SECOND line taken for the closing border and came back `empty-input` with
+  // `caption` never read. Sol ran that construction against the code and got
+  // `{"kind":"empty-input","promptLine":1}`.
+  //
+  // Worse, the comment that used to be here claimed the opposite — that
+  // continuations were counted before the border test — and the code returned
+  // at the rule first. A comment asserting a property the code does not have is
+  // the failure this module keeps writing postmortems about, and it was mine.
+  //
+  // **Reversing the two lines is NOT the fix**, which is the trap: the genuine
+  // closing border is also a rule with nothing on it, so counting first would
+  // count the border itself as a line of draft and call every empty box
+  // occupied. What separates them is measured rather than guessed — in all
+  // seven real captures the closing border has **exactly the top border's
+  // width and indent** (122 columns on one pane, 150 on another, indent 0 on
+  // both), because Claude Code draws the box as a matched pair. A rule typed
+  // into a draft is short, or indented, or both.
+  //
+  // Wrong in the safe direction if a build ever draws them mismatched: the
+  // closing border is not found, the scan runs off the window, and the pane
+  // comes back `unrecognised` — a refusal, loudly, rather than a send.
+  const border = shapeOf(lines[at - 1]?.raw ?? "");
+  let occupied = boxLineIsOccupied(lines[at]?.raw ?? "", true) ? 1 : 0;
+  for (let i = at + 1; i < lines.length && i <= at + INPUT_BOX_LINES; i++) {
+    const line = lines[i];
+    if (!line) break;
+    const here = shapeOf(line.raw);
+    if (line.rule !== "none" && here.width === border.width && here.indent === border.indent) {
+      return occupied === 0
+        ? { kind: "empty-input", promptLine: at }
+        : { kind: "occupied-input", promptLine: at, lines: occupied };
+    }
+    if (boxLineIsOccupied(line.raw, false)) occupied += 1;
+  }
+  return {
+    kind: "unrecognised",
+    why: `the prompt line has no box border within ${INPUT_BOX_LINES} lines below it, so this is not the input box`,
+  };
 }
 
 /* ------------------------------------ which permission mode it launched in -- */

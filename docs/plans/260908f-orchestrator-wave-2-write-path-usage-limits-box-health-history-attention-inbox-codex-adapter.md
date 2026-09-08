@@ -406,6 +406,15 @@ things it has decided not to ask him. It lands when something answers, not when 
 
 #### Stage A, built — and what the measurement says
 
+**STATUS: done enough to stop here.** On dev, gates green, and the claim it owed is measured on a
+held-out capture. What remains is real and optional, and none of it is needed for the list to be
+worth reading: the **transcript source** (a fifth of turn tails are longer than a pane can show, so
+this buys recall, which is the axis that matters), a **mechanical consequence floor** with a specific
+under-ranking line beside it, and a **third capture with a human adjudicating** rather than Fable.
+The one thing a reader should not assume is the ranking: **presence is stable and the ordering is
+unvalidated** — see below, where a genuinely arguable irreversible came back `technical` eight times
+out of eight.
+
 Landed 2026-09-08. `tools/overseer/turn-tail.ts` cuts the tail of an ended turn out of a pane,
 `attention-classify.ts` asks one small model one closed question about it, `attention.ts` groups and
 ranks, `attention-pass.ts` walks the fleet and holds the budget, `attention-memory.ts` remembers what
@@ -670,8 +679,22 @@ that finds no 429s anywhere must be distinguishable from a probe that is broken
   back — the seam owner (`claude-agents-dashboard`) asked for the field names before it built its
   FleetStatus arm, and got them. `usage.ts` keeps only the runtime values (`KNOWN_USAGE_WINDOWS`,
   `isKnownUsageWindow`), because wire.ts may hold none.
-- **`tests/overseer-usage.test.ts`**, 90 tests, against real 429 records lifted out of real
-  transcripts on this box. Plus **three mutation passes**: the finished code was broken 22 ways, one
+- **`RateLimitHit.id`** — deterministic, derived from transcript path + `hitAt` + `window`, hashed so
+  no filesystem path rides into a store or a page, and **stable across scans** so a carry-forward can
+  recognise a rejection it already knows. Minted here rather than composed by the consumer because
+  the facts that make such a key correct are the producer's: `claudeSessionId` is not unique (a
+  subagent's rejection carries the parent conversation's id) and neither is `resetsAtMs` (27
+  rejections on this box share one).
+- **`parseUsageReport(u: unknown): UsageReport | null`** — exhaustive, null on the first mismatch,
+  pure, so the Overseer store can read its own `current.json` back. Same argument as the id: a parser
+  written by the consumer is a second hand-written declaration of the type, failing in the quiet
+  direction where an absent field reads as a report that merely says less. It re-checks three
+  invariants on the way back in rather than trusting bytes we wrote — an `expired` window that has
+  grown a percentage, a `hits` scan with an empty array, and a `collectedAt` that will not parse as a
+  date (`Date.parse` returns `NaN`, which fails every comparison, so an age bound would keep such a
+  report for ever).
+- **`tests/overseer-usage.test.ts`**, 107 tests, against real 429 records lifted out of real
+  transcripts on this box. Plus **five mutation passes**: the finished code was broken 32 ways, one
   at a time, and every one now turns the suite red. The first pass is the one worth remembering —
   **seven of round 1's ten fixes had no test at all**, so the code was right and nothing would have
   noticed it going wrong again. (The tests were written after the implementation, not red-first; the
