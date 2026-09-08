@@ -925,3 +925,77 @@ describe("addressing a pane", () => {
     expect(() => capturePane("fleet-v01")).toThrow(/not a tmux pane id/);
   });
 });
+
+/* ---------------------------------------------------------------- *
+ * A9: material that reads complete and is not.
+ * ---------------------------------------------------------------- */
+
+describe("materialAbove refuses a body whose top border is the top of the capture", () => {
+  /**
+   * **THE CONSTRUCTION IS GPT SOL'S, AND IT IS THE REASON THIS GUARD EXISTS
+   * RATHER THAN BEING DEFERRED.**
+   *
+   * `materialAbove` tells the dialog's own border from a separator inside it by
+   * STYLE — Claude Code draws the outside solid and the inner separators
+   * dashed — so a topmost dashed rule means the capture began mid-dialog, and
+   * comes back `unreadable`. That is a reading of ONE BUILD, and steer.ts's
+   * KNOWN GAPS already said what would happen if a future build drew inner
+   * separators solid: a clipped dialog would start reading as complete and
+   * nothing would go red, because every fixture here is frozen against the old
+   * build.
+   *
+   * This was nearly left unbuilt on the grounds that its trigger could not be
+   * demonstrated — and the construction tried was the harmless one: delete the
+   * lines above a real outer border, and the body that comes back is correct,
+   * because it is. Sol supplied the dangerous one. Take the edit dialog, make
+   * its first INNER separator solid as the hypothesised renderer would, and
+   * begin the capture there.
+   *
+   * `dialog-clipped-at-a-solid-separator.txt` is exactly that, and what it
+   * costs is precise: the two lines above that separator are `Edit file` and
+   * `notes.md` — **the operation and the destination path**. Everything a
+   * person needs in order to know what they are approving, dropped, leaving a
+   * diff that looks like a whole dialog. A confident wrong body, which is the
+   * one direction this module must never be wrong in.
+   */
+  it("drops the operation and the path, which is why line 0 cannot be trusted", () => {
+    const clipped = fixture("dialog-clipped-at-a-solid-separator.txt");
+    const whole = parsePane(fixture("dialog-edit-diff.txt"));
+    const now = parsePane(clipped);
+    expect(whole.kind).toBe("question");
+    expect(now.kind).toBe("question");
+    if (whole.kind !== "question" || now.kind !== "question") return;
+
+    // The fixture really is the dangerous shape: still a parseable dialog, with
+    // the same question sentence and the same options as the whole one. Nothing
+    // downstream of the material could tell them apart.
+    expect(now.prompt).toBe(whole.prompt);
+    expect(now.options.map((o) => o.label)).toEqual(whole.options.map((o) => o.label));
+
+    // And what it silently drops is what a person most needs.
+    expect(whole.material.kind).toBe("read");
+    if (whole.material.kind !== "read") return;
+    expect(whole.material.text).toContain("Edit file");
+    expect(whole.material.text).toContain("notes.md");
+    expect(clipped).not.toContain("Edit file");
+
+    // So it refuses, rather than reporting the fragment as the whole thing.
+    expect(now.material.kind).toBe("unreadable");
+  });
+
+  /**
+   * The cost of the guard, asserted rather than left to be discovered: a dialog
+   * whose box genuinely begins at row 0 is refused too. There is no way to tell
+   * the two apart — that is the whole finding — and a refusal is answered in a
+   * terminal, while a wrong body is approved on a phone.
+   */
+  it("also refuses a dialog that legitimately starts at row 0, and that is the trade", () => {
+    const lines = fixture("dialog-file-write-hello.txt").split("\n");
+    const border = lines.findIndex((l) => l.trim() !== "" && cleanLines(l)[0]?.rule === "solid");
+    expect(border).toBeGreaterThan(0);
+    const q = parsePane(lines.slice(border).join("\n"));
+    expect(q.kind).toBe("question");
+    if (q.kind !== "question") return;
+    expect(q.material.kind).toBe("unreadable");
+  });
+});

@@ -406,6 +406,15 @@ things it has decided not to ask him. It lands when something answers, not when 
 
 #### Stage A, built — and what the measurement says
 
+**STATUS: done enough to stop here.** On dev, gates green, and the claim it owed is measured on a
+held-out capture. What remains is real and optional, and none of it is needed for the list to be
+worth reading: the **transcript source** (a fifth of turn tails are longer than a pane can show, so
+this buys recall, which is the axis that matters), a **mechanical consequence floor** with a specific
+under-ranking line beside it, and a **third capture with a human adjudicating** rather than Fable.
+The one thing a reader should not assume is the ranking: **presence is stable and the ordering is
+unvalidated** — see below, where a genuinely arguable irreversible came back `technical` eight times
+out of eight.
+
 Landed 2026-09-08. `tools/overseer/turn-tail.ts` cuts the tail of an ended turn out of a pane,
 `attention-classify.ts` asks one small model one closed question about it, `attention.ts` groups and
 ranks, `attention-pass.ts` walks the fleet and holds the budget, `attention-memory.ts` remembers what

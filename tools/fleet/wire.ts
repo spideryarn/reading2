@@ -778,7 +778,18 @@ export type Pause =
       overdue: boolean;
     }
   | { kind: "scheduled-wakeup"; at: string; overdue: boolean; source: "cron" }
-  | { kind: "in-a-shell-call"; sinceMs: number }
+  /**
+   * The agent's turn has ENDED and something it backgrounded is still running.
+   *
+   * **It is at a prompt and can be messaged.** Named `in-a-shell-call` for four
+   * hours on 2026-09-08, which was the field's name read as its meaning:
+   * Claude Code emits `status: "shell"` when
+   * `baseStatus === "idle" && hasUnfinishedLocalBash`, and a *backgrounded* task
+   * counts. So the commonest healthy state on this box — idle at a prompt with a
+   * dev server or a test run behind it — was being rendered as *blocked on a
+   * command it started*.
+   */
+  | { kind: "background-work"; sinceMs: number }
   | { kind: "cannot-tell"; why: string; cause: PauseUnknownCause };
 
 /**

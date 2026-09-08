@@ -558,6 +558,73 @@ describe("drainOnce fails honestly", () => {
     expect(sent).toHaveLength(2);
   });
 
+  /**
+   * **THE SAME PROPERTY FOR A10'S NEW REFUSAL, ASSERTED RATHER THAN INHERITED.**
+   *
+   * `input-not-empty` is returned when somebody's own text is already in that
+   * agent's input box. It reaches the generic put-back path above for free,
+   * because `no()` builds every refusal with `delivery: "none"` and `sent: []`
+   * — but "reaches it for free" is a claim about code somebody may change, and
+   * the plan for this stage originally proposed testing it by asserting those
+   * two fields on the `SteerResult`. GPT Sol pointed out that proves
+   * ELIGIBILITY for `nothingWasSent`, not that the drain called `release`, kept
+   * the item, cleared its lease or left it at the head. A mutation that settled
+   * every refusal would have left that test green.
+   *
+   * So it is tested where the behaviour is. The instruction must survive: a
+   * queued message that arrives while its agent has a half-typed sentence in
+   * the box is not a message to destroy, it is a message to deliver a minute
+   * later. Note what "survive" means precisely — **the item is retried, the
+   * keystrokes are not.** Nothing was sent, so there is nothing to send twice,
+   * which is the distinction `queue.release` and its `UnsentFailure` brand
+   * exist to hold.
+   */
+  it("puts a message back when the target's input box already has text in it", () => {
+    const occupied: SteerResult = {
+      ok: false,
+      reason: {
+        code: "input-not-empty",
+        why: "pane %99001 has 1 line of text already in its input box; a message sent now would be added to the end of it",
+      },
+      delivery: "none",
+      sent: [],
+    };
+    // TWO ITEMS, NOT ONE, AND THAT IS GPT SOL REVIEWING THE FIRST VERSION OF
+    // THIS TEST. With one item queued, "put back at the head" and "put back at
+    // the tail" are the same state, so a mutation that moved a refused item to
+    // the END of the queue would have left this green — and the cost of that
+    // mutation is real: the person's instructions would be delivered in the
+    // wrong order, which is the whole reason actions and messages share one
+    // queue (queue.ts, "a message that says 'actually do X instead' must land
+    // after the button that says 'do X'").
+    const { deps, queue, sent } = harness({ result: occupied });
+    queue.enqueueMessage({ sessionId: SESSION_A, claudeSessionId: CONVO_A }, "first", "greg");
+    queue.enqueueMessage({ sessionId: SESSION_A, claudeSessionId: CONVO_A }, "second", "greg");
+
+    const result = drainOnce(snap([row()]), deps);
+
+    expect(sent).toHaveLength(1);
+    // `toContain`, because the queue prefixes the speaker — the message that
+    // goes out is "[Greg, via the fleet dashboard] first". What is being
+    // asserted here is WHICH item, not how it is rendered.
+    expect(sent[0]?.text).toContain("first");
+    const back = result.outcomes[0];
+    expect(back?.kind).toBe("put-back");
+    expect(back?.kind === "put-back" && back.code).toBe("input-not-empty");
+
+    // BOTH still queued, the refused one still FIRST, and not leased.
+    expect(queue.size(SESSION_A)).toBe(2);
+    const items = queue.snapshot(SESSION_A).items;
+    expect(items[0]?.leasedAt).toBe(null);
+
+    // The order proved by behaviour rather than by reading the store: the next
+    // pass must attempt "first" again, not "second".
+    drainOnce(snap([row()]), deps);
+    expect(sent).toHaveLength(2);
+    expect(sent[1]?.text).toContain("first");
+    expect(sent[1]?.text).not.toContain("second");
+  });
+
   it("settles a refusal that may have reached the pane, and never sends it again", () => {
     // `partial` and `unknown` are the ambiguous arms: something may be sitting
     // in that agent's input box unsent, so firing the same keys again is how a

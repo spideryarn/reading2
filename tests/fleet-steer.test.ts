@@ -25,7 +25,7 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { parsePane, type OptionKey } from "../tools/fleet/pane.js";
+import { paneSurface, parsePane, type OptionKey } from "../tools/fleet/pane.js";
 import type { FleetStatus } from "../tools/fleet/status.js";
 import {
   answerQuestion,
@@ -34,7 +34,6 @@ import {
   checkText,
   describeSend,
   descendsFrom,
-  inputSurface,
   isClaudeForSession,
   keysFor,
   parseParents,
@@ -459,10 +458,8 @@ describe("sendMessage will not type at a screen that is not an input box", () =>
     for (const name of [
       "none-working-empty-prompt",
       "none-working-with-lettered-table",
-      "none-working-with-prose-decisions-list",
       "none-idle-with-prose-numbered-list",
       "none-dialog-just-answered",
-      "none-typed-numbered-message-in-input-box",
     ]) {
       const { io, sent } = fakeBox({ capture: fixture(name) });
       const result = sendMessage(TARGET, "keep going", WORKING, io);
@@ -497,7 +494,7 @@ describe("sendMessage will not type at a screen that is not an input box", () =>
       .join("\n");
     expect(parsePane(whole).kind).toBe("question");
     expect(parsePane(unrecognised).kind).toBe("none");
-    expect(inputSurface(unrecognised).ok).toBe(false);
+    expect(paneSurface(unrecognised).kind).toBe("unrecognised");
 
     const { io, sent } = fakeBox({ capture: unrecognised });
     refused(sendMessage(TARGET, "keep going", WORKING, io), sent, "not-at-input");
@@ -510,9 +507,9 @@ describe("sendMessage will not type at a screen that is not an input box", () =>
    */
   it("takes the box at the bottom, not an echo of a message in the transcript", () => {
     const whole = fixture("none-working-with-lettered-table");
-    const surface = inputSurface(whole);
-    expect(surface.ok).toBe(true);
-    if (!surface.ok) return;
+    const surface = paneSurface(whole);
+    expect(surface.kind).toBe("empty-input");
+    if (surface.kind !== "empty-input") return;
 
     // the echo really is there, higher up, and really does look like a prompt
     const lines = whole.split("\n");
@@ -521,7 +518,97 @@ describe("sendMessage will not type at a screen that is not an input box", () =>
     expect(echo).toBeLessThan(surface.promptLine);
 
     // and everything from the echo down to just above the box is not a surface
-    expect(inputSurface(lines.slice(0, surface.promptLine).join("\n")).ok).toBe(false);
+    expect(paneSurface(lines.slice(0, surface.promptLine).join("\n")).kind).toBe("unrecognised");
+  });
+});
+
+/* ---------------------------------------------------------------- *
+ * A10: a box with somebody's draft in it is not a box we may type at.
+ * ---------------------------------------------------------------- */
+
+/**
+ * ASTRA'S A10, AND THE HALF STAGE v0.2e DID NOT COVER.
+ *
+ * A live Claude descendant does not prove an empty input box owns the
+ * keystrokes. `inputSurface` establishes that a box EXISTS — a `❯` with a
+ * border above it and another within four lines below — and never reads what is
+ * IN it. So a message sent to a pane with a half-typed draft in its box is
+ * typed onto the END of that draft, and our Enter submits the concatenation.
+ *
+ * **THIS IS NOT A DELIVERY BUG, IT IS AN AUTHORSHIP ONE.** Measured read-only
+ * across every pane on this box on 2026-09-08: of seventeen Claude sessions
+ * with a prompt on screen, thirteen were empty and three held a live draft —
+ * one of them `❯ yes, shut it all down`, in a session running in auto mode.
+ * Greg typed those words at a terminal, meaning them about something, and did
+ * not press Enter. Our Enter would be the act, at a moment we chose, against a
+ * screen we have not read. That is A9's bug — an approval bound to a sentence
+ * rather than to the material — arriving through the prose door instead of the
+ * dialog door.
+ *
+ * `none-typed-numbered-message-in-input-box.txt` is a pane with a three-line
+ * draft between the two borders. It was added to prove that a numbered list a
+ * PERSON typed is not a dialog, and it has been quietly documenting this defect
+ * ever since — the suite above lists it under "sends to every real screen that
+ * does have one", so until today the bug was not merely untested, it was
+ * asserted as correct.
+ *
+ * Why it stayed rare rather than constant: `INPUT_BOX_LINES` is 4, so a draft
+ * of five or more visual lines already pushes the closing border out of the
+ * window and is refused as `not-at-input`. The guard that made this uncommon is
+ * not a guard against this.
+ */
+describe("sendMessage will not append to a draft somebody else is still writing", () => {
+  it("refuses the box that already has three lines typed into it", () => {
+    const { io, sent } = fakeBox({ capture: fixture("none-typed-numbered-message-in-input-box") });
+    refused(sendMessage(TARGET, "keep going", WORKING, io), sent, "input-not-empty");
+  });
+
+  /**
+   * The one-line case, which is the shape every live draft on the box had.
+   * Built by writing a draft into a capture that is otherwise known-good, so
+   * the ONLY difference between this and the happy path is the text in the box
+   * — a fixture that differed in two ways could pass for the wrong reason.
+   */
+  it("refuses a one-line draft, on a screen that is otherwise the happy path", () => {
+    const empty = fixture("none-working-empty-prompt");
+    const drafted = empty.replace(/❯ /, "❯ yes, shut it all down");
+    expect(drafted).not.toBe(empty);
+
+    const { io: a, sent: sa } = fakeBox({ capture: empty });
+    expect(sendMessage(TARGET, "keep going", WORKING, a).ok).toBe(true);
+    expect(sa).toHaveLength(2);
+
+    const { io: b, sent: sb } = fakeBox({ capture: drafted });
+    refused(sendMessage(TARGET, "keep going", WORKING, b), sb, "input-not-empty");
+  });
+
+  /**
+   * The refusal must be reachable by the QUEUE as well as by a person, and it
+   * must arrive on the path that puts the item back rather than the one that
+   * destroys it: `queue.release` will only accept evidence minted by
+   * `nothingWasSent()`, which requires delivery `none` AND nothing sent. If
+   * this refusal ever grew a partial send, a queued instruction would be
+   * silently dropped instead of waiting for the agent to clear its own box.
+   */
+  it("leaves the transport untouched, which is what the queue's put-back requires", () => {
+    const { io, sent } = fakeBox({ capture: fixture("none-typed-numbered-message-in-input-box") });
+    const result = sendMessage(TARGET, "keep going", WORKING, io);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.delivery).toBe("none");
+    expect(result.sent).toEqual([]);
+    expect(sent).toEqual([]);
+  });
+
+  /**
+   * The other fixture the corpus already had, and nobody had noticed either.
+   * `❯ do all three` — which may be a person's reply, a suggestion the harness
+   * offered, or a hint. A capture cannot tell, which is why the arm is called
+   * `occupied-input` and not `drafted-input` (GPT Sol, 2026-09-08).
+   */
+  it("refuses the second occupied fixture too, which the suite used to send to", () => {
+    const { io, sent } = fakeBox({ capture: fixture("none-working-with-prose-decisions-list") });
+    refused(sendMessage(TARGET, "keep going", WORKING, io), sent, "input-not-empty");
   });
 });
 
@@ -702,6 +789,15 @@ describe("answerQuestion re-reads the dialog before it answers it", () => {
    * numbers taken off, which is what such a menu would look like.
    */
   const CONVERSATION_MENU = [
+    // A LINE OF TRANSCRIPT ABOVE THE BORDER, because every real capture has
+    // one and this one did not. `materialAbove` now refuses a dialog whose
+    // topmost rule is the FIRST line of the capture — there is no way to tell
+    // the dialog's own border from a separator inside it when nothing is above
+    // it — so without this the synthetic menu came back `unreadable` and the
+    // gate `unknown`, and these two tests failed for a reason that had nothing
+    // to do with keystrokes. Fixing the fixture rather than the guard: a
+    // capture that begins at a border is not a screen tmux produces.
+    "● Ran the suite; three attempts were killed by the box rather than by the code.",
     fixture("dialog-ask-user-question").split("\n").find((l) => l.startsWith("─")) ?? "",
     " ☐ How to finish",
     "",

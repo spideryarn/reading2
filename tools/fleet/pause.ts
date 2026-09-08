@@ -29,7 +29,8 @@
  *    `~/.claude/sessions/<pid>.json` carries `status: "shell"` and
  *    `statusUpdatedAt`, and `claude agents --json` discards both — it
  *    normalises `shell` to `busy`, which is why the board says *Working* for a
- *    session parked in a shell call. **This is an undocumented private file**
+ *    session with unfinished background work. **This is an undocumented
+ *    private file**
  *    and a Claude Code upgrade can change it under us, so every departure from
  *    the expected shape is `session-store-unreadable` rather than "no shell".
  * 3. **Rate limits**, which this module does NOT collect. The scan costs
@@ -44,7 +45,7 @@
  * on this box, 2026-09-08: store file `124250.json`, and `ps -o ppid= -p
  * 124250` says `124240`. Joining on `panePid` would therefore have found a file
  * for no session at all — and "no file" is indistinguishable from "not in a
- * shell call" unless you are looking for it, which is exactly how this class of
+ * background work" unless you are looking for it, which is exactly how this class of
  * bug survives. So the store is read whole (0.9ms for 14 files, measured) and
  * indexed by the `sessionId` field it carries, which is the same conversation
  * uuid `transcript.ts` already keys on.
@@ -529,15 +530,24 @@ function num(v: unknown): number | null {
 }
 
 export type ShellState =
-  | { kind: "in-a-shell-call"; sinceMs: number }
-  /** The store was read, and this session is not parked in a shell call. */
-  | { kind: "not-in-a-shell-call" }
+  | { kind: "background-work"; sinceMs: number }
+  /** The store was read, and this session has no unfinished background work. */
+  | { kind: "not-background-work" }
   | { kind: "unreadable"; why: string };
 
 /**
- * Whether this session is parked in a shell call, and for how long.
+ * Whether this session has unfinished background work, and for how long.
  *
- * **A missing entry is `unreadable`, not `not-in-a-shell-call`.** The brief for
+ * **`status: "shell"` DOES NOT MEAN BLOCKED**, which this module claimed for
+ * four hours on 2026-09-08. Claude Code 2.1.263 emits it when
+ * `baseStatus === "idle" && hasUnfinishedLocalBash` — verified against the
+ * binary: `_D==="idle"&&ZQr?"shell":_D` — and a BACKGROUNDED task counts. So
+ * the agent's turn has ended, it is at a prompt, and it can be messaged; what
+ * is still running is something it put behind itself. Reading the field's name
+ * as its meaning turned the commonest healthy state on this box into a claim
+ * that a session was stuck.
+ *
+ * **A missing entry is `unreadable`, not `not-background-work`.** The brief for
  * this module is explicit and it is the module's own rule applied to its most
  * fragile source: the file is undocumented and private, so *we could not find
  * the record* and *the record says no* are different sentences and only one of
@@ -551,20 +561,20 @@ export function readShellState(index: StoreIndex, sessionId: string | null, nowM
   if (entry === undefined) {
     return {
       kind: "unreadable",
-      why: `no record for this conversation in ~/.claude/sessions (${index.parsed} read, ${index.unparseable} unreadable) — that file is undocumented and private, so a missing record is "could not look", not "not in a shell call"`,
+      why: `no record for this conversation in ~/.claude/sessions (${index.parsed} read, ${index.unparseable} unreadable) — that file is undocumented and private, so a missing record is "could not look", not "no background work"`,
     };
   }
-  if (entry.status !== "shell") return { kind: "not-in-a-shell-call" };
+  if (entry.status !== "shell") return { kind: "not-background-work" };
   if (entry.statusUpdatedAt === null) {
     return {
       kind: "unreadable",
-      why: `the session store says this session is in a shell call but carries no usable statusUpdatedAt, so we cannot say for how long`,
+      why: `the session store says this session has unfinished background work but carries no usable statusUpdatedAt, so we cannot say for how long`,
     };
   }
   // Clamped rather than refused: a clock skew of a few ms between the writer
   // and us is ordinary, and "0ms" is the honest floor. A NEGATIVE dwell would
   // be the shape that renders as a nonsense duration.
-  return { kind: "in-a-shell-call", sinceMs: Math.max(0, nowMs - entry.statusUpdatedAt) };
+  return { kind: "background-work", sinceMs: Math.max(0, nowMs - entry.statusUpdatedAt) };
 }
 
 // ---------------------------------------------------------------------------
@@ -588,7 +598,7 @@ export type PauseInputs = {
 /**
  * Three readings to one `Pause`.
  *
- *     rate-limited (positively known) > scheduled-wakeup > in-a-shell-call
+ *     rate-limited (positively known) > scheduled-wakeup > background-work
  *       > cannot-tell > none
  *
  * **`none` requires that every source was consulted successfully.** If one
@@ -699,8 +709,8 @@ function readStoreSource(shell: ShellState): { shell: Pause | null; failure: Fai
   if (shell.kind === "unreadable") {
     return { shell: null, failure: { cause: "session-store-unreadable", why: shell.why } };
   }
-  if (shell.kind === "in-a-shell-call") {
-    return { shell: { kind: "in-a-shell-call", sinceMs: shell.sinceMs }, failure: null };
+  if (shell.kind === "background-work") {
+    return { shell: { kind: "background-work", sinceMs: shell.sinceMs }, failure: null };
   }
   return { shell: null, failure: null };
 }
