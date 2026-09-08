@@ -15,7 +15,7 @@ import type { Session } from "../scripts/gjd-remote-tmux.js";
 import { statusOf, statusesOf, triageCounts, triageRank, triageSort } from "../tools/fleet/status.js";
 import type { FleetStatus, StatusedSession } from "../tools/fleet/status.js";
 
-const CLAUDE_ID = "11111111-1111-1111-1111-111111111111";
+const CLAUDE_ID = "f1ee7000-0000-4000-8000-000000000001";
 
 function session(over: Partial<Session> = {}): Session {
   return {
@@ -66,8 +66,8 @@ describe("statusOf: the collapses this module exists to prevent", () => {
     // the difference between a screen of guesses and a screen that says so.
     const sessions = [
       session({ id: "$1", claudeId: CLAUDE_ID, proc: { kind: "claude" } }),
-      session({ id: "$2", claudeId: "22222222-2222-2222-2222-222222222222", proc: { kind: "none" } }),
-      session({ id: "$3", claudeId: "33333333-3333-3333-3333-333333333333", proc: { kind: "unknown" } }),
+      session({ id: "$2", claudeId: "f1ee7000-0000-4000-8000-000000000002", proc: { kind: "none" } }),
+      session({ id: "$3", claudeId: "f1ee7000-0000-4000-8000-000000000003", proc: { kind: "unknown" } }),
     ];
     const rows = statusesOf({ sessions, agents: null, agentsWhy: "claude: command not found" });
 
