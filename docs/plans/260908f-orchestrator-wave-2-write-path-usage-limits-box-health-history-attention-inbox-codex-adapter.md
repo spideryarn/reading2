@@ -114,20 +114,25 @@ put the write path in as *"a stage, but it doesn't have to be the top-priority."
 that. So on the Overseer's side the order is **attention first**, and the write path stays where he
 put it.
 
-## Where this stands, 13:55 on 2026-09-08
+## Where this stands, 2026-09-08T13:42Z
 
-**Important work left**, and it is the implementation of five of the six stages. What is finished is
-the part that had to be finished first: **every seam is agreed and every contract is a type**, so the
-six sessions can now build in parallel without a negotiation between them.
+**Important work left**, and it is now the last mile of four stages rather than all of six. What is
+finished is the part that had to be finished first: **every seam is agreed and every contract is a
+type**, so no session is waiting on another to decide anything.
 
 | | landed | what remains |
 |---|---|---|
-| **A** attention | the five types, verbatim, in `wire.ts` (`4d5cc454`) | the classifier, and the evaluation that justifies it |
-| **B** usage | the dashboard's `Pause` contract (`f1c34e96`) | the collector and the 429 ground truth |
-| **C** harness | **DONE** (`5c2e31cb`) — six arms, one `can: true`, Sol-reviewed | nothing; the `steer.ts` inline change is queued behind `fleet-approval-binding` |
+| **A** attention | the five types (`4d5cc454`); classifier built, evaluated and Sol-reviewed | **the push** — `Checkpoint.attention` is not on dev yet |
+| **B** usage | the dashboard's `Pause` contract (`f1c34e96`) and `pause.ts` | **the push**, then `Checkpoint.usage` on my side, behind A |
+| **C** harness | **DONE** (`5c2e31cb`), worktree torn down | nothing; the `steer.ts` argv parser is unowned |
 | **D** health | seam agreed (`refreshOnce`, not `server.ts`); `lock.ts` extracted for it | retention and the drawing |
-| **E/F** dictation | file split agreed with the dashboard | all of it |
+| **E** dictation | the server half — `transcribe.ts`, `routes-transcribe.ts`, `vocabulary.ts` | the client half, and Greg's own mic test |
+| **F** realtime dialog | designed, gated on E | not started, deliberately |
+| **#1** write path | A6 (`0a5a3008`), A9/A10 work landing (`91e1f3a0`, `2bfe48dc`) | the dashboard's own stage list |
 | **A5** | **closed**, no code | nothing |
+
+**The queue on `Checkpoint` is the only ordering constraint left in the wave**: `attention` lands,
+then `usage` on top, one editor of that type at a time. Everything else can finish in any order.
 
 **Three things landed that were not in the plan**, all of them because the work turned them up:
 
@@ -203,6 +208,34 @@ settled the orphan question was not a second reading at all but a **mechanism**:
 when a Bash-tool shell is reaped mid-run and leaves when the job ends, so the population is bounded by
 concurrent reviews rather than growing. That argument would hold with zero readings, which is what
 makes it the evidence.
+
+### An incomplete observation may not be read as a negative one
+
+**Three modules, three authors, arrived at separately, and stated here once so it is not restated
+three times locally.** Each found it in its own material and none of them was looking for a general
+rule:
+
+- **The health history** (`fleet-health-history`): *a gap must render as a gap, never a line drawn
+  across it.* An interpolated line through the ninety minutes the box was thrashing answers Greg's
+  actual question — *"were there disruptions I should know about?"* — with a confident **no**.
+- **The dashboard's improvement on it**: a gap has **two** causes and they must not draw identically.
+  *Absence means nothing was running. An `unknown` band means we were alive and could not tell.* If
+  the retention appends only on success, the case Greg most needs — *the box was up and health
+  collection has been broken for six hours* — becomes invisible.
+- **The usage collector** (`w2-usage-limits`): `absenceGap`, and the rule that **when it is non-null
+  this scan is not entitled to contradict what is already known.** A scan that fell over has not
+  discovered that a rate limit lifted.
+
+The same shape turns up in the types rather than the data three more times the same day: `≥` on a
+duration that is a lower bound, an unpriced call keeping a money total from printing as a figure, and
+`verdict.activeLimit` staying `null` while `level === "limited"` — **being limited can be established
+while *which* limit binds is not.** Which generalises to the sentence worth keeping:
+
+> **A composite verdict must be able to be certain about one part and uncertain about another, and a
+> type that forces them to agree will make one of them lie.**
+
+**This is a `docs/reusable/` candidate rather than a project fact**, and it is deliberately not
+written there yet — those edits go one approved set at a time and no set is open. Greg's call.
 
 ## Stages
 
