@@ -176,4 +176,6 @@ is safe to delete first, because gitignored artefacts nobody else has a copy of 
 `git status` ([worktrees.md § Before you remove one](../project/worktrees.md#before-you-remove-one)).
 Anything failed or unfinished: leave the tree standing and say why.
 
-Follow [debrief-progress.md](debrief-progress.md).
+**Report back the way [debrief-progress.md](debrief-progress.md) says** — that is the final output of
+the job, not a summary of your own. Lead with what the work was for and which of its three endings it
+reached (*finished* / *done enough to stop here* / *important work left*), in those words.
