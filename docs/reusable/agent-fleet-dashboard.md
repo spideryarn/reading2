@@ -7,7 +7,7 @@ Written 2026-09-08, after a day of finding out which of the obvious approaches a
 of the cost was in two places: **a message channel that reported success and delivered nothing**, and
 **a data source that is fast, first-party, and quietly incomplete**. Both are below.
 
-This repo's own instance is [orchestrator-direction.md](../project/orchestrator-direction.md), which
+This repo's own instance is [overseer-direction.md](../project/overseer-direction.md), which
 holds the decisions; this file holds the parts that travel.
 
 ## Why you would build one at all

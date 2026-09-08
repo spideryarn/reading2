@@ -41,7 +41,7 @@ was actually about.
 Greg, 2026-09-08, on the remaining work: *"Reprioritise as you see fit, work in parallel where you
 can."* What that changed is in § The order, reconsidered.
 
-The standing direction is [orchestrator-direction.md](../project/orchestrator-direction.md) — read it
+The standing direction is [overseer-direction.md](../project/overseer-direction.md) — read it
 first; it holds the constraints, Greg's horizon, and the seam with the fleet dashboard, and it
 outlives this file. The dashboard's own plan is
 [260907e-agent-fleet-dashboard.md](260907e-agent-fleet-dashboard.md), built by a different agent at
@@ -152,7 +152,7 @@ worktree and **removes it when the job is done**; `data/` is gitignored, so a cl
 would be deleted by the next agent to finish, silently, with no copy anywhere. Second, the Overseer
 is a **box-level** daemon spanning `spideryarn2`, `hellozenno` and bare shells; a per-checkout store
 would be one store per worktree, which is not a store. Third,
-[orchestrator-direction.md § Principles](../project/orchestrator-direction.md#principles) already
+[overseer-direction.md § Principles](../project/overseer-direction.md#principles) already
 says this tooling "is not Spideryarn" and must not depend on the product.
 ## Revised after review — what changed and why
 
@@ -1059,7 +1059,7 @@ licence, and a service tracking it inherits that licence rather than being entit
 counterweight is the middle tier: **these two processes are held to a higher bar than the code they
 happen to be running from**, which is why the unit's job is to come back up rather than to validate
 what it is starting. Recorded in
-[orchestrator-direction.md § A higher bar](../project/orchestrator-direction.md#a-higher-bar-for-robustness-here-than-elsewhere-and-its-ceiling).
+[overseer-direction.md § A higher bar](../project/overseer-direction.md#a-higher-bar-for-robustness-here-than-elsewhere-and-its-ceiling).
 
 **The reboot criterion cannot be met by an agent, and will not be claimed.** *"An actual reboot with
 no intervening login"* means rebooting a box carrying ~27 live sessions and ~15 worktrees of other
@@ -1136,7 +1136,7 @@ rather than assumed.
 
 **What that trades, said plainly:** on a new box before Tailscale login, the dashboard is reachable
 from the box and not from a phone. That is a visible, correct, recoverable state, and it is the right
-side of [orchestrator-direction.md](../project/orchestrator-direction.md)'s rule about preferring
+side of [overseer-direction.md](../project/overseer-direction.md)'s rule about preferring
 *correct and unavailable* to *plausible and up* — except that here we get correct **and** up, just not
 yet remote.
 
@@ -1167,7 +1167,7 @@ the one that runs is unguarded, is a check that measures where the light is.
 that `/etc/systemd/system/<name>.service` matches the repo whenever it exists — would go red on this
 box the moment anyone edits a unit, and **stay red until somebody runs `sudo`, which agents here
 cannot do.** That is a red trunk with no agent-reachable fix, which
-[open-questions.md's Q12 discussion](../project/orchestrator-direction.md) established is worse than
+[open-questions.md's Q12 discussion](../project/overseer-direction.md) established is worse than
 the thing it detects: a shared red gate hides its own additional causes. So this is a **step in the
 procedure and a known uncovered case**, not a check.
 
@@ -1454,7 +1454,7 @@ and no way to tell them apart.
 zero *together*, so the agent genuinely blocked for three hours ranks equal-last with one blocked for
 thirty seconds — on the surface whose entire job is to rank by that. It is **silent**: nothing in the
 shape distinguishes the two cases, so a renderer cannot tell and will present a floor as a fact. And
-it is the seam's **headline claim** — [orchestrator-direction.md](../project/orchestrator-direction.md)
+it is the seam's **headline claim** — [overseer-direction.md](../project/overseer-direction.md)
 says `statusSince` is what turns a state into a duration and is what collection structurally cannot
 produce, which is exactly the sentence that made the dashboard agent want to build on it.
 
@@ -1582,7 +1582,7 @@ and `session-pane-replaced` still do not touch the field, and the tests that say
 would be WRONG rather than merely poorer*, and this is the wrong half: a consumer written against
 schema 1 does `Date.parse(entry.statusSince)`, gets `NaN` on the new shape, and renders a blank or a
 nonsense age — not an error. With the bump it says *I cannot read this*, which is what
-[orchestrator-direction.md](../project/orchestrator-direction.md) § The seam is a file already tells
+[overseer-direction.md](../project/overseer-direction.md) § The seam is a file already tells
 it to do. **The hypothetical in that paragraph came true the day after it was written**, which is the
 argument for having written it.
 
@@ -1646,7 +1646,7 @@ survived the parse and died in the presentation. `daemonStanding` took `Checkpoi
 flattening `readCheckpoint`'s three outcomes into that `null` made *I cannot read this* and *nothing
 was ever written here* the same fact. It is this stage's own defect pointed at this stage: a floor
 rendered as a measurement, and *unreadable* rendered as *never happened*. And it is the worst
-direction for this tool in particular — [orchestrator-direction.md](../project/orchestrator-direction.md)
+direction for this tool in particular — [overseer-direction.md](../project/overseer-direction.md)
 is built against the Overseer being silently dead while the page says nothing needs you; this is that
 inverted, and a person who reads `NEVER RUN` goes and starts a second daemon beside a live one.
 

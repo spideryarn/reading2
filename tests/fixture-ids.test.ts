@@ -138,7 +138,7 @@ const NOT_A_ROW: Record<string, string> = {
     "(`UUID`), `fleet-queue.test.ts` (`CONVO`), `fleet-actions.test.ts`, and seven places in " +
     "`fleet-web.test.tsx`. None of those files imports a store, a database module or anything " +
     "under `src/`; `tools/fleet/` is forbidden from depending on `src/` by its own standing rule " +
-    "(orchestrator-direction.md § Principles), so there is no row to insert and none to delete. " +
+    "(overseer-direction.md § Principles), so there is no row to insert and none to delete. " +
     "It names a conversation, which is the distinction the `3c67234f-…` tmux and `f1ee7000-…` " +
     "claude entries above already draw. " +
     "**Deliberately one id across the four files rather than four ids.** They describe the same " +

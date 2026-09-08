@@ -16,7 +16,7 @@ prioritised by ease and value, detailed enough for a less-capable agent to execu
 This task is to improve that plan, not implement it.
 
 Read the whole candidate, then the relevant sections of:
-- `docs/project/orchestrator-direction.md` (Greg's priorities and constraints).
+- `docs/project/overseer-direction.md` (Greg's priorities and constraints).
 - `docs/plans/260908f-orchestrator-wave-2-write-path-usage-limits-box-health-history-attention-inbox-codex-adapter.md`
   (already commissioned work; this roadmap must integrate it, not silently defer it).
 - The candidate's linked baseline and validation artifacts as needed.

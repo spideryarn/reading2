@@ -3,7 +3,7 @@
  *
  *   npx tsx tools/fleet/server.ts
  *
- * Direction and constraints: docs/project/orchestrator-direction.md.
+ * Direction and constraints: docs/project/overseer-direction.md.
  * Stages: docs/plans/260907e-agent-fleet-dashboard.md.
  *
  * BINDS 127.0.0.1 BY DEFAULT, and that is the whole of the access control in
@@ -24,7 +24,7 @@
  *
  * `console.log` rather than src/log.ts, deliberately: docs/project/logging.md's
  * rule is for the product's request path, and this tool is a box utility that
- * must not depend on anything under src/ (orchestrator-direction.md § Principles).
+ * must not depend on anything under src/ (overseer-direction.md § Principles).
  * Worth revisiting if it grows.
  */
 import { existsSync, readFileSync } from "node:fs";

@@ -3,7 +3,7 @@
  * snapshot as soon as `collect()` produces one, instead of the client polling
  * `/api/agents` every few seconds.
  *
- * Direction: docs/project/orchestrator-direction.md. This is scaffolding for
+ * Direction: docs/project/overseer-direction.md. This is scaffolding for
  * v0.1 ("it should auto-update … hopefully we can come up with something
  * smarter", Greg, 2026-09-08), not a new capability of its own — the payload
  * is the same `FleetSnapshot` the poll already fetches from `/api/agents`.
@@ -36,7 +36,7 @@
  * or "showing a stale copy, last updated <age>") and fall back to polling
  * `/api/agents` until a fresh `open` event arrives. THIS IS THE PART THAT
  * MATTERS MOST: a live view that has silently stopped updating but still
- * looks current is exactly the failure mode docs/project/orchestrator-direction.md
+ * looks current is exactly the failure mode docs/project/overseer-direction.md
  * and this whole project keep hitting (see also silent-success.md) — never
  * ship a "live" badge that isn't backed by a recent heartbeat.
  */

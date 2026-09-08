@@ -57,7 +57,7 @@ aimed at one session can only be enqueued, and `drain.ts`'s `sendable()` returns
 So the rule that keeps an automated coordinator from speaking with Greg's authority is implemented,
 tested, documented — and reaches every broadcast and no single-session instruction, which is
 precisely the path
-[orchestrator-direction.md](../project/orchestrator-direction.md) says the coordinator will use.
+[overseer-direction.md](../project/overseer-direction.md) says the coordinator will use.
 
 **Instance 11 is the other one to read before anything else.** `ActionButtons.tsx:969` and `:1021`
 render `<RawValue value={preview.would} depth={0} />` — the panel a person reads before pressing

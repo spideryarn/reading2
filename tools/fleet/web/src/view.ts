@@ -121,7 +121,7 @@ export function statusLabel(status: FleetStatus): { text: string; detail: string
 /**
  * Which of the three bands a status belongs to. Lower sorts higher.
  *
- * The bands are Greg's, out of docs/project/orchestrator-direction.md: the
+ * The bands are Greg's, out of docs/project/overseer-direction.md: the
  * first question the page answers is *does anyone need something from me*, and
  * the second is *what is actually moving*. Everything else is one band, because
  * a screen with seven ranks is a screen nobody reads the bottom of.

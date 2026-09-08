@@ -1,8 +1,8 @@
 # Agent fleet dashboard
 
-**Status as of 2026-09-08 13:15: important work left — the page does what it claimed, the durable
-repair for why it did not has landed for one endpoint of four, and the work is now spread across six
-sessions instead of one.**
+**Status as of 2026-09-08 15:40: important work left, and most of it is other sessions landing
+rather than this one building. Six of the seven wave workstreams are on `dev`; two branches are
+finished and unpushed.**
 
 **The buttons work.** All seventeen session actions and the three box actions render on the real page,
 checked in a browser at phone width and not merely in a suite. Recent messages are wired. A queued
@@ -39,17 +39,30 @@ transitive closure under DOM-only libs, so one `import type` makes the typecheck
 endpoint of four is migrated; see Stage v0.8a for what is left and for the two corrections the plan
 doc needed.
 
-**What is left, in order:**
+**What is left, in order.** v0.4g and v0.4h are both **landed** since the previous version of this
+list; what remains is smaller and mostly not this session's.
 
-1. **v0.4g — declutter the session detail view.** A needs-you detail view is **3,398px tall at
-   390px wide: four screens of scrolling, 31 buttons, two text inputs**, measured in a real browser
-   rather than estimated. Fable is ruling on it now, from the screenshots.
-2. **v0.4h — "working" is hiding at least three states.** Blocked on the usage-limit collector's
-   field names, which `w2-usage-limits` is sending. Fable's product ruling already exists.
-3. **The rest of v0.8a** — three endpoints, ~30 twin declarations, and one (`FleetRow`) that cannot
-   migrate the same way at all.
-4. **The systemd cutover**, which is Greg's to run — `sudo systemctl enable` is refused for agents on
-   this box. Script prepared 2026-09-08 12:00, unrun.
+1. **Two finished branches, unpushed.** `worktree-fleet-approval-binding` (nine commits: A9 ticked,
+   A10's prose half built — `sendMessage` now refuses a pane whose input box has anything in it,
+   proved end to end against a live session) and `worktree-attention-inbox`. Both waiting on their
+   own reviews. Nothing to build; somebody has to land them.
+2. **The rest of v0.8a** — three endpoints, ~30 twin declarations, and one (`FleetRow`) that cannot
+   migrate the same way at all. About a day, and the value is now measured rather than argued.
+3. **The systemd cutover**, which is Greg's to run — `sudo systemctl enable` is refused for agents on
+   this box. Script prepared 2026-09-08 12:00, unrun. **Step 3 is a decision, not a check**: it is
+   the moment the dashboard becomes tailnet-reachable, and `w2-fleet-dictation` measured that
+   `navigator.mediaDevices` is *absent* (not degraded) at the tailnet address, so HTTPS there is a
+   feature prerequisite rather than a nicety.
+4. **v0.4j — the phone's clock**, written up 2026-09-08 and not started. Two alarms on this page can
+   be manufactured by a browser clock a few minutes fast.
+5. **v0.2c's other half** — delivery receipts and action ids. The browser now reads `delivery`; the
+   five states and the repeat-retrieves-the-receipt rule are not built.
+
+**Two product questions are Greg's and are not blocked on anything.** Whether the cutover should
+widen the bind at all, and what to do about a card that draws **five identical full-width
+UNCLASSIFIED pills** — every option on an agent-authored `AskUserQuestion` is unclassified by
+construction, so the badge distinguishes nothing *within* that card while teaching a reader to stop
+seeing it. `CONSEQUENCE_TONE`'s inequality is right and is not the thing to change.
 
 **Who is doing what, agreed 2026-09-08 13:00 across six sessions.** Greg asked for the remaining work
 to be fanned out; this is the split, and the seam in every case is a **type**, not a schedule.
@@ -190,7 +203,7 @@ and all ~36 sessions in a single stroke. There are **no systemd units on this bo
 existed. Both facts checked 2026-09-08.
 
 That matters more than it looks, because
-[orchestrator-direction.md](../project/orchestrator-direction.md) leans on *"if the orchestrator
+[overseer-direction.md](../project/overseer-direction.md) leans on *"if the orchestrator
 broke I could just ssh in and use Claude Code in the terminal"* as the reason a high robustness bar
 still has a ceiling. After a reboot there is no page to fall back **from** — and, worse, nothing to
 tell you the fleet is gone, because the thing that would have told you went with it. The ssh
@@ -212,7 +225,7 @@ covered by the licence `dev` gets. The unit still boots whatever is on `dev`, be
 refuses to start until somebody fixes the trunk is unavailable exactly when it is most worth having;
 what the middle tier buys is that a fault here is worth stopping for, where the same fault on `dev`
 would not be. The decision lives in `AGENTS.md` under *This is a beta, and speed still wins* and in
-[orchestrator-direction.md § A higher bar](../project/orchestrator-direction.md).
+[overseer-direction.md § A higher bar](../project/overseer-direction.md).
 
 **The failure that standard points at is a stale client, not a red one.** The unit's `ExecStartPre`
 builds only when `tools/fleet/web/dist/index.html` is *missing* — deliberately, because with
@@ -224,7 +237,7 @@ arriving through the deployment door. Making it impossible in the unit costs mor
 the fix belongs here and it is to make the staleness **visible**: see
 [Stage v0.7a](#stage-v07a-the-page-says-which-code-it-is).
 
-The standing direction is [orchestrator-direction.md](../project/orchestrator-direction.md); this
+The standing direction is [overseer-direction.md](../project/overseer-direction.md); this
 plan is one implementation of it. **Read that first** — it holds the constraints, and it outlives
 this file.
 
@@ -381,7 +394,7 @@ cost nothing and make that class of bug impossible to miss.
 
 **Re-sliced on 2026-09-08 at Greg's request** — "let's use engineering-manager to slice this into
 many many very thin stages that we can iterate through quickly. But get to the v0.1 first and stop."
-The direction these serve is [orchestrator-direction.md](../project/orchestrator-direction.md).
+The direction these serve is [overseer-direction.md](../project/overseer-direction.md).
 
 Each slice must be **visible in a browser** and must **not need the next one to be worth having**.
 The earlier A–G staging is superseded; what it got right survives in the direction doc.
@@ -708,7 +721,7 @@ unreachable in production**: every real cursor menu is a permission dialog and e
 `AskUserQuestion` is numbered. The branch stays, tested against a synthetic capture, because that is
 a fact about today's widgets rather than a guarantee.
 
-### Stage v0.2c: delivery has a third outcome, and it is "I do not know"
+### 🟡 Stage v0.2c: delivery has a third outcome, and it is "I do not know" (the browser reads it, 2026-09-08 `91e1f3a0`; receipts and action ids not started)
 
 Astra's A11. The nonce proved the transport *can* work; it says nothing about what happened to any
 later request. A phone loses connectivity after the keys land but before the response arrives; the
@@ -754,7 +767,7 @@ boundary was never reachability alone. We copied the half we liked.
 ### ✅ Stage v0.4b: Sessions becomes master–detail (landed 2026-09-08, `44f60619`)
 
 Greg, 2026-09-08 — quoted in full in
-[orchestrator-direction.md](../project/orchestrator-direction.md#what-greg-asked-for-on-2026-09-08-in-his-own-words).
+[overseer-direction.md](../project/overseer-direction.md#what-greg-asked-for-on-2026-09-08-in-his-own-words).
 
 - [ ] Left column: every session, with orderings — how long it has been running, **status
       (default)**, and whatever else earns its place.
@@ -1193,7 +1206,7 @@ written for.
   being helpful — and it is indistinguishable from typed input by anything in a capture. The defence
   is the same one: never claim provenance you did not read.
 
-### 🔵 Stage v0.4h: "working" is hiding at least three different things
+### ✅ Stage v0.4h: "working" is hiding at least three different things (landed 2026-09-08 — reader `aade22b0`, render `91ce727c`, scoping `2bfe48dc`, usage seam `86151d30`)
 
 **Greg, 2026-09-08:** *"can you try and distinguish between statuses like `Working`, `Hit usage
 limits`, and `Paused/waiting` (e.g. because it's been asked to run Unix sleep or idle waiting for a
@@ -1434,7 +1447,7 @@ Greg's list, 2026-09-08: continue, compact, pull, push, remove worktree, exit, `
 - [ ] A queued item is visible and cancellable while it waits. A queue you cannot see is a queue
       that surprises you an hour later.
 
-### Stage v0.5b: dictation and live chat, ported
+### 🟡 Stage v0.5b: dictation and live chat, ported (dictation landed 2026-09-08, `c2d19b93`; live chat not started)
 
 Greg wants the product's voice machinery on every input box here — new session, steering, answers.
 See [dictation.md](../project/dictation.md) and
@@ -1494,7 +1507,7 @@ sessions in the same run and left the probe alone.
       implementation of "say this to everybody" and not two.
 
 **The Overseer's history is read through a file, and the shape is already decided** —
-[orchestrator-direction.md § The seam is a file, not a function](../project/orchestrator-direction.md),
+[overseer-direction.md § The seam is a file, not a function](../project/overseer-direction.md),
 written by `orchestrator-setup` on 2026-09-08 so that neither of us negotiates it at the moment of
 building. Four files under `OVERSEER_STORE_DIR` (default `~/.overseer`); one writer, lock-free
 readers.

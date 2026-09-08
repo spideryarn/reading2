@@ -9,7 +9,7 @@ Repository: `spideryarn2` (this worktree). Everything named is committed at revi
 `2a7ca6f2c35232bf738771a2f28b501ad768fece` — read it from git, not from any temp path.
 
 - **The plan under review:** `docs/plans/260908b-overseer-store-and-clock.md`
-- **The standing direction:** `docs/project/orchestrator-direction.md` — the constraints, the
+- **The standing direction:** `docs/project/overseer-direction.md` — the constraints, the
   horizon, and the seam with the fleet dashboard. Read this second; it explains the plan's context.
 - **The code the plan builds on, all of which exists and works:**
   - `tools/fleet/status.ts` — `statusOf`, `statusesOf`, `triageRank`. The plan changes this.
