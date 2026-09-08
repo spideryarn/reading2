@@ -1111,6 +1111,54 @@ describe("a signed-out browser on a shared document", () => {
     expect(outsidePublic()).toEqual([]);
   });
 
+  it("marks a visitor's quotes in the prose, in a mode that is not quotes", async () => {
+    /**
+     * **The renderer the row above admits nothing in this file can reach.**
+     *
+     * `BAND_SAYS.quotes` is the *nobody built one* sentence, because the fixture
+     * deliberately carries no quotes — that asymmetry is what makes the two
+     * answers a visitor can get distinguishable, and it must stay. So the
+     * present-quotes case gets its own payload here.
+     *
+     * What it is about is new on 2026-09-08: the quotes are marked in the prose
+     * in **every** mode (SPIDERYARN-READING2-2P), and for a visitor they come
+     * from the page's own payload rather than from a fetch. Both halves matter,
+     * and the second is the one a leak would arrive by: `useQuotesRead` is
+     * mounted in `OwnedReader`, which a visitor never reaches, so a
+     * signed-out browser must gain **no request at all** from this feature.
+     *
+     * The mode is `plain`, which has no band, no panel and nothing to do with
+     * quotes. If the mark is there, it is there because the article wears it.
+     */
+    await remount();
+    served = {
+      ...ARTICLE,
+      quotes: {
+        quotes: [
+          {
+            id: "spya-qte001",
+            /* The first *paragraph*. `spya-aaaaaa` is the `h1`, and a quote is
+               never drawn from one — `authorVoice` in src/quotes.ts. */
+            blockId: "spya-bbbbbb",
+            text: "The first paragraph",
+            importance: 0.9,
+          },
+        ],
+      },
+    };
+    await open("?mode=plain");
+
+    const strokes = host.querySelectorAll("mark[data-quote]");
+    expect(strokes.length, "the visitor's quote is not marked in the prose").toBeGreaterThan(0);
+    expect(readable(strokes[0] as Element)).toContain("The first paragraph");
+    /* And the trace is untouched: still the one public request, still no POST.
+       Asserted here rather than left to the sweep, because the sweep runs
+       against the fixture that has no quotes and so cannot see a fetch this
+       branch alone would make. */
+    expect(trace.map((r) => r.url)).toEqual([`/api/public/article/${SLUG}`]);
+    expect(trace.filter((r) => r.method !== "GET")).toEqual([]);
+  });
+
   it("says an artefact came back empty, rather than that nobody built one", async () => {
     /* Present and empty, both of them. `artefactsIn` reports the artefact off
        the *key*, so the band mounts the panel rather than answering

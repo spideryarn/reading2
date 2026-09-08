@@ -1,7 +1,7 @@
 # Quotes drawn as a stroke in the prose, with weight carrying priority
 
 Greg, 2026-09-06, deciding a question [quotes.md § Still slate, not
-yellow](../project/quotes.md#every-visible-quote-is-marked-and-the-bar-is-how-many) had recorded as
+yellow](../project/quotes.md#every-visible-quote-is-marked-in-every-mode-and-the-bar-is-how-many) had recorded as
 open:
 
 > Perhaps use another UI convention, e.g. provide a border (i.e. the boundary but not the fill) for
@@ -625,6 +625,15 @@ rule but eats 2px of a 5px interline gap, which would fuse the rules of adjacent
 of the wrong height. The right fix is to stop the quote's bottom edge riding the padded box, and it
 belongs with whoever makes quotes and search coexist. **It is the second thing to build if they
 ever do**, after the pressed-subtype split.
+
+> **They do, since 2026-09-08.**
+> [260908i](260908i-quotes-marked-in-the-prose-in-every-mode.md) puts the quotes on the page in
+> every mode, so *"unreachable — one mode's marks at a time"* is no longer true of this paragraph or
+> of the `slice` note below it. Both defects are now reachable in the reader, and neither is fixed
+> there either: that plan weighed the same two cheap fixes and reached the same answer, and inventing
+> a third from geometry rather than from a measurement is what this page refused to do. What changed
+> is that they stopped being hypothetical — the step is measured in the browser again in that plan's
+> Stage 3, and Greg has the screenshot and the two options.
 
 ### The doubled hairline between lines
 

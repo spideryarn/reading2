@@ -2,14 +2,14 @@
 /**
  * **Leaving a passage mode takes both halves of its state with it.**
  *
- * Six components resolve passages and push a `Found[]` up to `Reader`, and four
- * of them hold an `openKey` there beside it: Ideas, Timeline, Search, Quotes,
+ * Five components resolve passages and push a `Found[]` up to `Reader`, and
+ * three of them hold an `openKey` there beside it: Ideas, Timeline, Search,
  * Criteria and Claims. The two fields are one piece of state — `found` is which
  * passages are marked in the prose, `openKey` is which of those marks is *rung*.
  * `TableView` draws the ring from the key alone. So a key that outlives the
  * marks names a passage that is no longer on the page.
  *
- * **Since 2026-09-06 all six share one hook**, `usePassageLifecycle`
+ * **Since 2026-09-06 they share one hook**, `usePassageLifecycle`
  * (src/web/passage-lifecycle.ts), which holds the three rules they had six
  * copies of: publish before paint, drop an open key the list no longer has, and
  * clear on the way out in a cleanup that depends on nothing but the parent's
@@ -24,15 +24,23 @@
  * 2026-08-27.
  *
  * So the arms below are one per **shape** as well as one per band: `keyed`
- * (Ideas, Timeline, Search, Criteria), `derived` (Quotes) and `unkeyed`
- * (Claims). Ideas and Timeline are the controls that always passed.
+ * (Ideas, Timeline, Search, Criteria) and `unkeyed` (Claims). Ideas and
+ * Timeline are the controls that always passed.
  *
- * **Quotes only became a band with a key on 2026-09-05.** Before that it marked
- * the selected quote and nothing else, so it had no key to lose. It is also the
- * one band here whose marks are *not* a function of the selection, so its test
- * asserts the opposite precondition: two passages marked with nothing selected
- * at all.
- * docs/plans/260905g-mark-every-visible-quote-and-make-the-quiz-start-easier.md.
+ * **There was a third shape, `derived`, and Quotes was its only caller.** It
+ * went on 2026-09-08 along with the Quotes arm of this file, because the quotes
+ * stopped being published by a band at all: they are marked in *every* mode now,
+ * so `Reader` computes them from state it already holds
+ * (src/web/reader/useQuoteMarks.ts) and a memo gives for free the atomicity that
+ * shape existed to buy. A band that publishes nothing has no publication to
+ * protect and no cleanup to get wrong.
+ *
+ * **What replaced its arm is the opposite assertion**, one file over: that the
+ * marks *survive* leaving the mode, in
+ * tests/the-marks-in-the-prose-belong-to-the-mode-showing.test.tsx, which mounts
+ * the whole app rather than a band harness and is the only place that property
+ * can be seen.
+ * docs/plans/260908i-quotes-marked-in-the-prose-in-every-mode.md.
  *
  * **Claims is the one band with no key at all**, which is why it is the `unkeyed`
  * shape: nothing rings a claim's passage, so leaving the sub-mode has to take
@@ -86,7 +94,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Claim, ClaimsRun } from "../src/referee-claims.js";
 import type { SavedCriterion } from "../src/saved-criteria.js";
-import type { Block, BlockId, Ideas, Quotes, Timeline } from "../src/types.js";
+import type { Block, BlockId, Ideas, Timeline } from "../src/types.js";
 import type { Found } from "../src/web/search-hits.js";
 
 /** One reply, decided by the URL. */
@@ -113,7 +121,6 @@ vi.mock("../src/web/lib/api.js", async () => {
   };
 });
 
-const { QuotesBand } = await import("../src/web/modes/quotes/QuotesMode.js");
 const { TimelineBand } = await import("../src/web/modes/timeline/TimelineMode.js");
 const { IdeasBand } = await import("../src/web/modes/ideas/IdeasMode.js");
 const { CriteriaBand } = await import("../src/web/CriteriaPanel.js");
@@ -129,8 +136,6 @@ const TWO = "spya-m4p7rs" as BlockId;
 const IDEA = "spya-dea2aa";
 const EVENT = "spya-evt2aa";
 const CRIT = "spya-crt2aa";
-const QUOTE_A = "spya-qte2aa";
-const QUOTE_B = "spya-qte2bb";
 
 const QUOTE_ONE = "Thirty-one participants in each arm";
 const QUOTE_TWO = "The effect held in a post-hoc subgroup";
@@ -228,36 +233,6 @@ const CRITERION: SavedCriterion = {
   ],
 };
 
-/**
- * Two quotes, one per block, and **neither of them selected** — which is the
- * whole point of this fixture. Until 2026-09-05 quotes mode marked only the
- * selected quote, so a band with nothing selected drew nothing at all; the
- * precondition below is that `found` is 2 before anybody has pressed a row.
- *
- * Both scored the same, so `canPrioritise` is false and the rank falls back to
- * document order however the URL arrives. The bar has its own tests in
- * tests/quotes-panel.test.ts; this file is about the two halves of the state.
- */
-const QUOTES: Quotes = {
-  version: "quotes/3",
-  generator: "test",
-  slug: SLUG,
-  sourceHash: "h",
-  generatedAt: "2026-09-05T10:00:00.000Z",
-  elapsedMs: 1,
-  quotes: [
-    { id: QUOTE_A, blockId: ONE, text: QUOTE_ONE, importance: 0.9 },
-    { id: QUOTE_B, blockId: TWO, text: QUOTE_TWO, importance: 0.9 },
-  ],
-  discarded: {
-    unfound: 0,
-    otherVoice: 0,
-    wrongLength: 0,
-    overlapping: 0,
-    overCap: 0,
-    malformed: 0,
-  },
-};
 
 /**
  * **One claim, taken up one paragraph later.** Claims marks the *passages* a
@@ -317,11 +292,6 @@ const serve = (url: string): Promise<Response> => {
   if (path === `/api/timeline/${SLUG}`) {
     return Promise.resolve(json({ timeline: TIMELINE, stale: false, outdated: false }));
   }
-  if (path === `/api/quotes/${SLUG}`) {
-    return Promise.resolve(
-      json({ quotes: QUOTES, stale: false, outdated: false, profileChanged: false }),
-    );
-  }
   if (path === `/api/referee/criteria/${SLUG}`) {
     return Promise.resolve(json({ criteria: [CRITERION], sourceHash: "h" }));
   }
@@ -338,7 +308,7 @@ const serve = (url: string): Promise<Response> => {
 
 /* ------------------------------------------------------------ the harness -- */
 
-type BandName = "ideas" | "timeline" | "referee" | "claims" | "search" | "quotes";
+type BandName = "ideas" | "timeline" | "referee" | "claims" | "search";
 
 /**
  * `Reader`, in miniature: it owns `found` and `openKey`, and the band is
@@ -405,20 +375,14 @@ function Harness({ band }: { band: BandName | null }) {
           onOpenHit: onOpenKey,
         })
       : null,
-    /* **No `openKey` prop**, unlike the three above, and that is the band's
-       shape rather than an omission: which quote is rung is `?quote=`, so
-       `useQuotesMode` derives the key and pushes it up. It still has to arrive
-       in `Reader`'s state, which is what the harness prints. */
-    band === "quotes"
-      ? createElement(QuotesBand, {
-          key: "b",
-          slug: SLUG,
-          blocks: BLOCKS,
-          onJump: () => {},
-          onFound,
-          onOpenKey,
-        })
-      : null,
+    /* **Quotes is not here, and its absence is the subject of a comment rather
+       than an oversight.** It was the fifth band until 2026-09-08, when the
+       marks stopped being published by the band at all: `Reader` computes them
+       from state it already holds, because they are now drawn in every mode
+       (reader/useQuoteMarks.ts). A band that pushes nothing has no publication
+       to protect and no cleanup to get wrong. What replaced its arm here is the
+       *opposite* assertion, one file over — that the marks **survive** leaving
+       the mode — in tests/the-marks-in-the-prose-belong-to-the-mode-showing.test.tsx. */
   );
 }
 
@@ -673,39 +637,4 @@ describe("leaving a passage mode clears the open key as well as the marks", () =
     expect(state().found, "criteria owns the slot again, with its own marks").toBe(2);
   });
 
-  it("Quotes — where the marks are the whole list and the key is only the ring", async () => {
-    /* **The fourth band, added 2026-09-05 with the change that gave it a key at
-       all.** Until then quotes mode marked the selected quote and nothing else,
-       so it had no `openKey` to lose and this file's header — which has always
-       said four bands — was one band ahead of the code. GPT Sol's third
-       finding.
-
-       Quotes is the one band here whose marks are NOT a function of the
-       selection, so the precondition is the opposite shape: two passages marked
-       with nothing selected at all. A test that opened `?quote=` first would
-       pass against the bug it is about. */
-    history.replaceState(null, "", `/read/${SLUG}?mode=quotes`);
-    show("quotes");
-    await flush();
-
-    expect(state().found, "both quotes marked before anybody presses a row").toBe(2);
-    expect(state().openKey).toBe("none");
-
-    /* And the ring arrives from `?quote=` rather than from a press, because
-       that is the state a selected quote is *in* whether the reader got there
-       by pressing a row or by opening a shared link. `quoteMarkKey`'s shape:
-       id, block, and `0` for the index. */
-    history.replaceState(null, "", `/read/${SLUG}?mode=quotes&quote=${QUOTE_B}`);
-    show("quotes");
-    await flush();
-
-    expect(state().found, "selecting one does not unmark the others").toBe(2);
-    expect(state().openKey).toBe(`${QUOTE_B}:${TWO}:0`);
-
-    show(null);
-    await flush();
-
-    expect(state().found).toBe(0);
-    expect(state().openKey).toBe("none");
-  });
 });
