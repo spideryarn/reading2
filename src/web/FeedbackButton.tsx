@@ -1,5 +1,5 @@
 /**
- * "Feedback" — the dialog, mounted once, and the two triggers that open it.
+ * "Feedback" — the dialog, mounted once, and the triggers that open it.
  *
  * Greg, 2026-08-31: *"I want to add a `Feedback` button somewhere, perhaps
  * top-right."* It began as the mirror image of HomeLogo.tsx in the opposite
@@ -7,7 +7,7 @@
  * because the argument for reserving the space is made there in full and only
  * summarised here.
  *
- * ## One dialog, two triggers, and why it is not one component any more
+ * ## One dialog, several triggers, and why it is not one component any more
  *
  * It was one component until 2026-09-06: a button that owned the `open` state
  * *and* mounted `FeedbackDialog`. That shape cannot survive the dialog's own
@@ -24,7 +24,7 @@
  *  - **`FeedbackHost`** wraps the signed-in app, holds the `open` state and the
  *    dialog, and offers `open()` through a context whose value is stable, so a
  *    press does not re-render every consumer.
- *  - **`FeedbackTrigger`** is a button and its hover card, in one of two
+ *  - **`FeedbackTrigger`** is a button and its hover card, in one of three
  *    shapes, and does nothing but call `open()`.
  *
  * **Not a portal**, which is the other way a single component could have been
@@ -77,12 +77,17 @@
  * in an effect — is a component reaching up out of itself to change the page's
  * layout.
  *
- * **`.fb-button` still draws in the corner on every page without a `Dock`**, and
- * nothing reserves anything for it there, which is safe for the reason
- * HomeLogo.tsx now gives on its own side: those pages have no sticky bars, so
- * there is nothing for a fixed corner to land on top of. Their top spacing is
- * each page's own and there is no shared number — see that file, which carries
- * the whole note.
+ * **`.fb-button` still draws in the corner on every page that has no chrome of
+ * its own**, and nothing reserves anything for it there, which is safe for the
+ * reason HomeLogo.tsx now gives on its own side: those pages have no sticky
+ * bars, so there is nothing for a fixed corner to land on top of. Their top
+ * spacing is each page's own and there is no shared number — see that file,
+ * which carries the whole note.
+ *
+ * **That set is "no `Dock`" minus the shelf, since 2026-09-08.** The shelf has
+ * a masthead cluster of its own, so a fixed corner there was a second top-right
+ * competing with the page's first — see `FEEDBACK_SHAPE.masthead`, which has
+ * the report that said so. App.tsx names both exclusions in one line.
  */
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 /* Type only, so that the two `placement` strings in `FEEDBACK_SHAPE` below are
@@ -106,7 +111,7 @@ interface FeedbackApi {
  * signed-in gate. A trigger that finds `null` renders nothing.
  *
  * Deliberately not exported. A second consumer would be a second way to open
- * the box, and the two shapes below are already every way there is.
+ * the box, and the shapes below are already every way there is.
  */
 const FeedbackContext = createContext<FeedbackApi | null>(null);
 
@@ -172,7 +177,7 @@ export function FeedbackHost({ children }: { children: ReactNode }) {
 }
 
 /**
- * Which of the two shapes a trigger wears.
+ * Which of the three shapes a trigger wears.
  *
  * **`corner`** is the original: `position: fixed` in the top-right of the
  * window, `--feedback-w` wide. Every page that does not mount a `Dock` draws
@@ -189,15 +194,21 @@ export function FeedbackHost({ children }: { children: ReactNode }) {
  * bar. So it takes the bar's own classes, which is also what puts its label
  * under § the bar's fit ladder rather than under the 731px query the corner
  * button's word answers to.
+ *
+ * **`masthead`** is the shelf's, since 2026-09-08, and it exists for the same
+ * reason `dock` does one page further on: the shelf has a chrome cluster of its
+ * own, and a fixed corner beside it reads as a second one. The row above
+ * `FEEDBACK_SHAPE.masthead` has the report that prompted it.
  */
-export type FeedbackVariant = "corner" | "dock";
+export type FeedbackVariant = "corner" | "dock" | "masthead";
 
 /**
- * **The two shapes, as a table rather than as three ternaries in the markup.**
+ * **The three shapes, as a table rather than as ternaries in the markup.**
  *
- * Everything that differs between them is here, and it is four things: the
- * classes the button wears, the class its word wears, which way its card opens,
- * and whether that card may flip onto the cross axis.
+ * Everything that differs between them is here, and it is six things: the class
+ * a test counts this trigger by, the classes the button wears, the class its
+ * word wears, how big its glyph is, which way its card opens, and whether that
+ * card may flip onto the cross axis.
  *
  * A table because each row is a claim somebody has to be able to check, and two
  * of them are claims a browser is needed to falsify — `placement` and
@@ -206,16 +217,27 @@ export type FeedbackVariant = "corner" | "dock";
  * (tests/feedback-button-tooltip.test.tsx), which is the difference between a
  * decision that is recorded and one that is only implied by an argument list.
  *
- * `--feedback-w` appears in neither row, deliberately. It is the corner
- * button's own width, set on `.fb-button`, and nothing else reads it now; the
- * bar's copy is content-sized, because a 7.5rem fixed-width exception in the
- * row could make a last-rung bar scroll where it would otherwise have fitted.
- * GPT Sol, G7 and T2.
+ * **`hook` is the one field that is not about appearance**, and it is here
+ * because of what went wrong when the second shape arrived. The rule that there
+ * is never more than one trigger on a screen is asserted by counting elements
+ * (tests/dock-corner-controls.test.tsx), and that count was a hand-written
+ * selector listing the shapes that existed when it was written. A third shape
+ * added without touching it would not have broken the test — it would have made
+ * the test stop covering a page, silently and greenly, which is the failure
+ * docs/reusable/silent-success.md is about. `FEEDBACK_TRIGGER_SELECTOR` below
+ * is built from this column, so a fourth shape is counted by existing.
+ *
+ * `--feedback-w` appears in no row, deliberately. It is the corner button's own
+ * width, set on `.fb-button`, and nothing else reads it now; the bar's copy is
+ * content-sized, because a 7.5rem fixed-width exception in the row could make a
+ * last-rung bar scroll where it would otherwise have fitted. GPT Sol, G7 and T2.
  */
 export const FEEDBACK_SHAPE = {
   corner: {
+    hook: "fb-button",
     button: "fb-button",
     word: "fb-button-text",
+    icon: 15,
     /* Downwards: this button is at the top of the window and there is nothing
        above it. */
     placement: "bottom",
@@ -225,18 +247,77 @@ export const FEEDBACK_SHAPE = {
     keepSide: true,
   },
   dock: {
+    hook: "dock-feedback",
     button: "dock-btn dock-feedback",
     word: "dock-btn-label",
+    icon: 15,
     /* Upwards: this one is at the *bottom* of the window, and a `bottom` card
        would be drawn under the bar it belongs to. */
     placement: "top",
     /* Inside the row, with room either side, so the ordinary flip is right. */
     keepSide: false,
   },
+  /**
+   * **The shelf's own masthead row**, since 2026-09-08 — the third shape, and
+   * the first that is not chrome fixed to an edge of the window.
+   *
+   * Greg, 2026-09-07 (SPIDERYARN-READING2-2C): *"Show the Feedback button in
+   * the top right of the logged in Homepage"* — filed about a button that was
+   * already drawn there. The corner variant was on that page, at every width,
+   * with nothing painted over it. What it was not was *findable*: a 15px
+   * `--ink-faint` glyph fixed in the window's corner, while the shelf's own
+   * `Profile`/`Admin` links — the same colour, the same icon-and-label shape —
+   * sat in a cluster about 130px to its left and 20px below. Two top-rights,
+   * and the one Greg looked at was the page's.
+   *
+   * So it takes its neighbours' classes verbatim rather than getting a `fb-`
+   * rule of its own. That is the whole point of the row: this control is not
+   * meant to be distinguishable from `Profile` beside it, and a stylesheet rule
+   * here would be a second place for the two to drift apart.
+   * docs/plans/260908e-feedback-button-in-the-shelf-masthead.md.
+   *
+   * **`word` is empty, and that is a decision rather than an omission.** Both
+   * other shapes give the word up when their space runs out — the corner's
+   * under the 731px query, the bar's under the fit ladder — and this row does
+   * not: it wraps instead (Library.tsx's `flex-wrap`), so the label survives at
+   * every width. That is worth having here, because the label is most of what
+   * makes this findable at all, and losing it was half of what went wrong with
+   * the corner on a phone.
+   *
+   * `icon` is 13 rather than 15 to match `Profile` and `Admin`, which is the
+   * same argument as the classes: it belongs to the row, not to the feature.
+   */
+  masthead: {
+    hook: "fb-masthead",
+    button:
+      "fb-masthead tw:inline-flex tw:items-center tw:gap-1.5 tw:text-xs tw:text-ink-faint tw:hover:text-highlight",
+    word: "",
+    icon: 13,
+    /* Downwards, like the `Profile` and `Admin` cards it shares a
+       `TooltipGroup` with — this row is at the top of the page. */
+    placement: "bottom",
+    /* Its neighbours' setting too. The row is right-aligned and this is its
+       last control, so a 22rem card that cannot centre would otherwise flip
+       onto the cross axis and land over the shelf's own heading. */
+    keepSide: true,
+  },
 } as const satisfies Record<
   FeedbackVariant,
-  { button: string; word: string; placement: Placement; keepSide: boolean }
+  { hook: string; button: string; word: string; icon: number; placement: Placement; keepSide: boolean }
 >;
+
+/**
+ * **Every shape's hook class, as one selector** — the way to ask a rendered
+ * page "how many Feedback triggers are on this screen?" without hand-listing
+ * the shapes that happened to exist when the question was written.
+ *
+ * Derived rather than typed out, so the "never two, never none" rule in
+ * tests/dock-corner-controls.test.tsx keeps covering every variant as variants
+ * are added. See `hook` on the table above for the failure this closes.
+ */
+export const FEEDBACK_TRIGGER_SELECTOR = Object.values(FEEDBACK_SHAPE)
+  .map((shape) => `.${shape.hook}`)
+  .join(", ");
 
 export function FeedbackTrigger({ variant }: { variant: FeedbackVariant }) {
   const api = useContext(FeedbackContext);
@@ -302,10 +383,14 @@ export function FeedbackTrigger({ variant }: { variant: FeedbackVariant }) {
            where a tooltip cannot be opened either. */
         aria-label="Feedback"
       >
-        <MessageSquareWarning size={15} />
+        <MessageSquareWarning size={shape.icon} />
         {/* Given up when the space runs out, the way the wordmark gives up its
             word — styles.css § feedback for the corner, § the bar's fit ladder
-            for the bar. The icon and the `aria-label` carry it from there. */}
+            for the bar. The icon and the `aria-label` carry it from there.
+
+            **The masthead shape keeps it at every width**, so its `word` class
+            is the empty string: that row wraps rather than shedding controls,
+            and the label is most of what makes this one findable. */}
         <span className={shape.word}>Feedback</span>
       </button>
     </Tooltip>

@@ -239,7 +239,12 @@ function json(body: unknown, status = 200): Response {
    tests/public-network-trace.test.tsx says the same about its own two. */
 const { App } = await import("../src/web/App.js");
 const { Dock, fitSignature, visibleModes } = await import("../src/web/Dock.js");
-const { FeedbackHost } = await import("../src/web/FeedbackButton.js");
+const { FeedbackHost, FEEDBACK_TRIGGER_SELECTOR } = await import("../src/web/FeedbackButton.js");
+/* The shelf's masthead case asks whether the Feedback trigger joined the row
+   `Profile` is in, and this is that link's address rather than a second copy of
+   the string. Down here with the others because `router.js` is what `App.js`
+   above already pulled in. */
+const { PROFILE_HREF } = await import("../src/web/router.js");
 const { resetForTests: resetExperimental } = await import("../src/web/experimental-store.js");
 
 let host: HTMLDivElement;
@@ -314,8 +319,22 @@ async function show(path: string): Promise<void> {
  * sees.
  */
 const waysHome = () => document.querySelectorAll(".logo-home, .dock-home");
-/** Every Feedback trigger, in either shape, for the same reason. */
-const feedbackTriggers = () => document.querySelectorAll(".fb-button, .dock-feedback");
+/**
+ * Every Feedback trigger, **in every shape there is**, for the same reason.
+ *
+ * The selector used to be `.fb-button, .dock-feedback`, typed out here — and
+ * that is a hand-maintained list of the shapes that existed the day it was
+ * written. When the third shape arrived on 2026-09-08 it would have gone on
+ * passing while quietly covering one page fewer: a masthead trigger matching
+ * neither class is *uncountable*, so a shelf drawing two buttons would have
+ * counted as one and this file would have been green about it. The list is
+ * `FEEDBACK_TRIGGER_SELECTOR` now, derived from `FEEDBACK_SHAPE` itself, so a
+ * fourth shape is counted by existing.
+ * docs/reusable/silent-success.md; tests/feedback-button-tooltip.test.tsx §
+ * every shape is countable holds up the other end, that each shape really does
+ * render the hook class the selector is built from.
+ */
+const feedbackTriggers = () => document.querySelectorAll(FEEDBACK_TRIGGER_SELECTOR);
 
 /** A reader, posed before `show`. */
 function signIn(): void {
@@ -363,13 +382,38 @@ describe("the route walk: one way home, never two triggers", () => {
    * none. It is the control for the walk above: without it, a version of this
    * file that found one way home on every page would be indistinguishable from
    * one that could not tell the pages apart.
+   *
+   * **And its Feedback button is in its own masthead row, not in the corner**,
+   * since 2026-09-08 — the third place a trigger can be, and the second time a
+   * page with chrome of its own has taken the button out of the window's
+   * corner. Greg filed the corner button as missing from this page while it was
+   * drawn on it (SPIDERYARN-READING2-2C); the corner is where a reader looking
+   * at the shelf's own `Profile`/`Admin` cluster does not look.
+   * docs/plans/260908e-feedback-button-in-the-shelf-masthead.md.
+   *
+   * The `.fb-button` assertion is the load-bearing half. Without it this case
+   * passes on a shelf drawing **both** — the count would say two and fail, but
+   * only because of the count; naming the corner class says *which* one is
+   * supposed to be gone, which is the thing App.tsx's one line decides.
    */
-  it("the shelf draws no way home at all, and still has the corner button", async () => {
+  it("the shelf draws no way home, and puts Feedback in its masthead", async () => {
     signIn();
     await show("/");
     expect(waysHome()).toHaveLength(0);
     expect(feedbackTriggers()).toHaveLength(1);
-    expect(document.querySelector(".fb-button")).not.toBeNull();
+    expect(document.querySelector(".fb-masthead"), "the shelf lost its trigger").not.toBeNull();
+    expect(document.querySelector(".fb-button"), "the corner button came back").toBeNull();
+    /* **Inside the shelf's own header**, and not merely somewhere on the page.
+       A trigger rendered at the bottom of the shelf would satisfy every line
+       above — it is the position that was the whole complaint, and position is
+       the one thing a class name does not carry. This is as close to it as
+       jsdom gets: the header is the element the `Profile` link is in. */
+    const header = document.querySelector("header");
+    expect(header?.querySelector(".fb-masthead"), "not in the masthead row").not.toBeNull();
+    expect(
+      header?.querySelector(`a[href="${PROFILE_HREF}"]`),
+      "the row this is supposed to have joined is not here",
+    ).not.toBeNull();
   });
 
   /**

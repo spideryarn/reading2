@@ -235,11 +235,27 @@ export function App() {
      the three visitor stand-ins all mount a `Dock` and draw the trigger there
      (Dock.tsx). `ArticlePage`'s four branches that have no `Dock` — loading,
      error, not-shared and reauth-required — each draw the corner trigger
-     themselves, so nothing that has one today loses it. */
+     themselves, so nothing that has one today loses it.
+
+     **And `library`, since 2026-09-08, for the same reason one route further
+     down.** The shelf draws its own trigger in its masthead row, beside
+     `Profile` and `Admin` (Library.tsx), because a fixed corner button next to
+     a cluster of identically-styled chrome is a second top-right rather than
+     the page's one — Greg reported the corner button as missing while looking
+     straight at it, SPIDERYARN-READING2-2C. `FEEDBACK_SHAPE.masthead` in
+     FeedbackButton.tsx carries the whole story, and
+     docs/plans/260908e-feedback-button-in-the-shelf-masthead.md the reasoning.
+
+     **Both exclusions are written here rather than in the pages that replace
+     them**, so that "which page draws the corner one" is a single expression
+     somebody can read, instead of a rule you can only reconstruct by opening
+     four files. What stops the two halves drifting into none-at-all or two-at-
+     once is tests/dock-corner-controls.test.tsx, which walks the routes and
+     counts. */
   return (
     <FeedbackHost>
       <SignedIn route={route} user={user} />
-      {route.kind !== "read" && <FeedbackTrigger variant="corner" />}
+      {route.kind !== "read" && route.kind !== "library" && <FeedbackTrigger variant="corner" />}
     </FeedbackHost>
   );
 }
