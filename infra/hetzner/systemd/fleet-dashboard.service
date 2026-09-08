@@ -15,7 +15,7 @@
 # note in overseer.service.
 [Unit]
 Description=Fleet dashboard -- the page showing what every agent session is doing
-Documentation=file:///home/@USER@/code/spideryarn2/docs/project/orchestrator-direction.md
+Documentation=file:///home/@USER@/code/spideryarn2/docs/project/overseer-direction.md
 # tailscaled as well as the network, because on a logged-in box FLEET_BIND names
 # a tailnet address as well as loopback, and tools/fleet/server.ts treats a bind
 # it cannot take as FATAL rather than carrying on half-bound.

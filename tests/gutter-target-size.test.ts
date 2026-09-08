@@ -33,7 +33,7 @@
  * fails when the two disagree. This is that something.
  */
 import { describe, expect, it } from "vitest";
-import { readerCssNoComments } from "./helpers/stylesheets.js";
+import { mediaBlock, readerCssNoComments } from "./helpers/stylesheets.js";
 import { BLK_SLOT_MIN_PX, BLK_SLOT_REM, PROSE_ALONE_MAX_REM, proseAloneMaxPx } from "../src/web/layout.js";
 
 // The reading-view sheets as a set, comments stripped. Both files quote the
@@ -205,19 +205,36 @@ function rulesWith(selector: string): Array<{ sel: string; body: string }> {
  * a check that could never fail for the reason it says.
  */
 function touchBlock(): string {
-  for (const m of css.matchAll(/@media \(hover: none\)/g)) {
-    const open = css.indexOf("{", m.index);
-    let depth = 0;
-    for (let i = open; i < css.length; i++) {
-      if (css[i] === "{") depth++;
-      else if (css[i] === "}" && --depth === 0) {
-        const body = css.slice(open + 1, i);
-        if (body.includes(".blk-permalink")) return body;
-        break;
-      }
+  return queryBlock("(hover: none)");
+}
+
+/**
+ * The body of the gutter's `@media (hover: hover) { … }`, the same way.
+ *
+ * Its own block since 2026-09-08. Until then the hover reveal had no query at
+ * all, which on iOS is a second gate on the same controls: `:hover` sticks to
+ * whatever was last tapped, so a tap that something else swallows can light a
+ * gutter the touch rule never chose. See the block's comment.
+ */
+function hoverBlock(): string {
+  return queryBlock("(hover: hover)");
+}
+
+/** Shared by both, and neither may match the other's query. */
+function queryBlock(query: string): string {
+  return mediaBlock(css, query, ".blk-permalink");
+}
+
+/** The selectors a block declares, one per rule, whitespace flattened. */
+function selectorsIn(block: string): string[] {
+  const out: string[] = [];
+  for (const m of block.matchAll(/([^{}]+)\{[^{}]*\}/g)) {
+    for (const part of (m[1] ?? "").split(",")) {
+      const sel = part.replace(/\s+/g, " ").trim();
+      if (sel) out.push(sel);
     }
   }
-  throw new Error("no `@media (hover: none)` block covering the gutter");
+  return out;
 }
 
 /**
@@ -362,10 +379,36 @@ describe("the column shows as many controls as the row has room for", () => {
     /* Without this the reveal is a target that is visible and not clickable:
        the container is `pointer-events: none` and every child opts back in. */
     expect(shown[0]?.body).toContain("pointer-events: auto");
-    /* A keyboard reader never produces `tr:hover`, so focus has to be in the
-       same list, or the button is invisible for exactly the reader who cannot
-       find it by waving a mouse at the page. */
-    expect(shown[0]?.sel).toContain(".blk-help:focus-visible");
+
+    /* **And the hover reveal is inside `@media (hover: hover)`**, which is the
+       2026-09-08 change and is load-bearing rather than tidy. iOS leaves
+       `:hover` stuck on the last thing tapped, so an unguarded `tr:hover` is a
+       *second* gate on these controls — and not the same one: a tap the hover
+       card swallows at document capture never reaches the row-selection handler,
+       so the touch reveal below would not fire while sticky hover still lit the
+       gutter at full strength on a row nothing selected. Asserted here because
+       deleting the query leaves every other test in this file green. */
+    expect(
+      hoverBlock(),
+      "`tr:hover` reveals the gutter outside `@media (hover: hover)` — on iOS that is a second, sticky gate",
+    ).toContain("tr:hover .blk-help");
+    expect(touchBlock(), "the hover reveal is inside the touch query").not.toContain("tr:hover");
+
+    /* A keyboard reader never produces `tr:hover`, and must not be inside a
+       pointer query either — the focus reveal is its own rule, unconditional,
+       or the button is invisible for exactly the reader who cannot find it by
+       waving a mouse at the page. It was in the hover list until the query
+       arrived; splitting it out is what keeps it device-independent. */
+    const focused = rulesWith(".blk-help:focus-visible");
+    expect(focused.length, "nothing reveals `.blk-help` on focus").toBe(1);
+    expect(focused[0]?.body).toContain("opacity: 1");
+    expect(focused[0]?.body).toContain("pointer-events: auto");
+    expect(hoverBlock(), "the focus reveal is trapped inside `(hover: hover)`").not.toContain(
+      ".blk-help:focus-visible",
+    );
+    expect(touchBlock(), "the focus reveal is trapped inside `(hover: none)`").not.toContain(
+      ":focus-visible",
+    );
   });
 
   it("leaves the reader's marks alone on a touch device", () => {
@@ -391,19 +434,83 @@ describe("the column shows as many controls as the row has room for", () => {
     // applies to every device.
     expect(rule(".block-chat.has")).toContain("color: var(--chat-mark)");
     expect(rule(".blk-cmt")).toContain("color: var(--highlight)");
+
+    /* **The opacity half of the same trap, which the colour check walks past.**
+       Since the reveal became conditional, `.block-chat.has` is not merely a
+       colour that could be overwritten — it is a mark that could be *dimmed* to
+       the affordances' value on the one row the reader is on, which is state
+       drawn as an affordance. It survives on specificity: every selector in this
+       block is `:where(tr.row-active) .<one class>`, and `:where()` contributes
+       nothing, so the whole block is (0,1,0) and loses to `.block-chat.has`,
+       `.blk-gutter[data-open] > *`, `.blk-permalink.failed` and the four
+       `:focus-visible` reveals, each of which is (0,2,0).
+
+       Written with a plain `tr.row-active` prefix it would be (0,2,1) and would
+       beat all five, and each would have needed restating underneath it — five
+       corrective rules, none of which anything but a specificity calculation
+       would have missed. That is this stylesheet's recorded failure mode: a
+       wrong *opacity* on an element that is present and correct
+       (`.blk-permalink.failed`, GPT Sol, 2026-08-31). Hence the shape of the
+       assertion: not "the block is harmless" but "the block cannot outrank
+       anything". */
+    for (const sel of selectorsIn(touch)) {
+      expect(
+        sel,
+        `\`${sel}\` in the touch block is not \`:where(tr.row-active) .<class>\` — anything with more weight than that outranks \`.block-chat.has\` and dims a state mark to an affordance`,
+      ).toMatch(/^:where\(tr\.row-active\) \.[\w-]+$/);
+    }
+
+    /* **And the exact set, because a shape assertion caps the weight without
+       saying anything about the contents.** Deleting only
+       `:where(tr.row-active) .block-chat,` leaves every remaining selector
+       matching the pattern above, `.blk-help` still satisfying the reachability
+       check below, and both other files green — while a plain chat button stays
+       at `opacity: 0; pointer-events: none` on the selected row, which is the
+       shut door on an iPad that started all of this. GPT Sol, 2026-09-08. */
+    const AFFORDANCES = [".blk-permalink", ".block-chat", ".blk-help", ".blk-more"];
+    expect(selectorsIn(touch).sort()).toEqual(
+      AFFORDANCES.map((c) => `:where(tr.row-active) ${c}`).sort(),
+    );
+    for (const affordance of AFFORDANCES) {
+      const revealed = rulesWith(`:where(tr.row-active) ${affordance}`);
+      expect(revealed.length, `nothing reveals \`${affordance}\` on the selected row`).toBe(1);
+      expect(revealed[0]?.body).toContain("opacity: 0.705");
+      expect(revealed[0]?.body).toContain("pointer-events: auto");
+    }
   });
 
-  it("exists at all on a device with no hover, and can be pressed there", () => {
-    /* This stylesheet has shipped a hover-only affordance twice — `.block-chat`
-       and `.block-id` — and a desktop harness said fine both times, because
-       `(hover: none)` never matches on one. Greg reads on an iPad. */
+  it("shows the gutter on a finger only on the row the finger chose", () => {
+    /* Two bugs, one on each side of the same rule, and this asserts against
+       both.
+
+       **It must exist.** This stylesheet has shipped a hover-only affordance
+       twice — `.block-chat` and `.block-id` — and a desktop harness said fine
+       both times, because `(hover: none)` never matches on one. Greg reads on an
+       iPad.
+
+       **And it must be gated.** The fix for that, on 2026-09-04, removed the
+       gate rather than replacing it: the affordances were drawn on every row,
+       permanently, so BlockGutter's own sentence — at rest the gutter shows
+       state, on hover it shows affordances — was false on a finger, and Greg
+       reported it three days later (SPIDERYARN-READING2-2G). The version of this
+       test that shipped that could not tell the two apart: it asked whether
+       `.blk-help` was in the block with a pressable opacity, and both the
+       permanent reveal and the conditional one answer yes.
+
+       `tests/block-selection-by-tap.test.tsx` is the other half — that a finger
+       can actually reach `.row-active`, which no scan of a stylesheet can say. */
     const touch = touchBlock();
     const found = /([^{}]*\.blk-help[^{}]*)\{([^{}]*)\}/.exec(touch);
     expect(found, "`.blk-help` is not in the `(hover: none)` block").not.toBeNull();
+    expect(
+      (found?.[1] ?? "").replace(/\s+/g, " "),
+      "`.blk-help` is revealed on touch without waiting to be asked for",
+    ).toContain(":where(tr.row-active) .blk-help");
     const body = (found?.[2] ?? "").replace(/\s+/g, " ");
     expect(body).toContain("pointer-events: auto");
     /* Faint but present, and never invisible: a 0 here is the hover-only bug
-       with a different spelling. */
+       with a different spelling. How faint is `tests/gutter-touch-contrast.test.ts`,
+       which computes it from the tokens rather than trusting the number. */
     const opacity = Number(/opacity:\s*([\d.]+)/.exec(body)?.[1]);
     expect(opacity).toBeGreaterThan(0);
     expect(opacity).toBeLessThan(1);

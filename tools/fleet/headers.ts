@@ -93,11 +93,24 @@ export const SECURITY_HEADERS: Readonly<Record<string, string>> = {
   "x-frame-options": "DENY",
   "x-content-type-options": "nosniff",
   "referrer-policy": "no-referrer",
-  // There is nothing here that legitimately wants a camera, a microphone or a
-  // location. Voice dictation is a planned stage (Greg, 2026-09-08) — when it
-  // lands, `microphone=(self)` goes here deliberately rather than by discovering
-  // that the feature does not work.
-  "permissions-policy": "camera=(), microphone=(), geolocation=(), payment=()",
+  // **`microphone=(self)` since 2026-09-08, because voice dictation landed.**
+  //
+  // The line above used to say `microphone=()` and predicted its own successor:
+  // *"when it lands, `microphone=(self)` goes here deliberately rather than by
+  // discovering that the feature does not work."* It was discovered the second
+  // way — a browser pass on the built page found one console line,
+  // `Permissions policy violation: microphone is not allowed in this document`,
+  // under a mic button that failed with `[mic-no-start]` and looked exactly like
+  // the box's missing audio hardware. Worth recording, because the prediction
+  // was right and the process still went the other way round.
+  //
+  // `(self)` and not `*`: this page's own script may open a microphone, an
+  // iframe of somebody else's may not — and `frame-ancestors 'none'` above means
+  // there should be no frames here at all.
+  //
+  // Camera, geolocation and payment stay closed. Nothing here wants them, and a
+  // policy that names what it allows is one somebody can check.
+  "permissions-policy": "camera=(), microphone=(self), geolocation=(), payment=()",
 };
 
 /** Applied to every response, before anything decides what the response is. */

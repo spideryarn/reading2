@@ -1,0 +1,32 @@
+
+  ┌────────────────────────────────┬────────────┬─────────┐
+  │            my stuff            │   state    │   RSS   │
+  ├────────────────────────────────┼────────────┼─────────┤
+  │ Supabase stack (12 containers) │ up         │ ~382 MB │
+  ├────────────────────────────────┼────────────┼─────────┤
+  │ Flask :3000                    │ listening  │ —       │
+  ├────────────────────────────────┼────────────┼─────────┤
+  │ Vite :5180                     │ listening  │ ~28 MB  │
+  ├────────────────────────────────┼────────────┼─────────┤
+  │ Chrome on :99 (CDP 9333)       │ responding │ ~99 MB  │
+  └────────────────────────────────┴────────────┴─────────┘
+
+  So my footprint is roughly 0.5 GB, not a contributor to the 14.3 GB of test suites.
+
+  Two things worth flagging back:
+
+  - The box is still not recovered. Load average is 101 (5-min 133), swap 22/31 GB, 6 GB available. And ps still counts 18
+    vitest processes — so either they respawned, or another wave started after the sweep. Whoever is triaging may want to
+    look again rather than assume it's settled.
+  - My stack is idle and I can free it on request. Nothing is using the app right now; supabase stop plus killing vite and
+    my Chrome window would return ~0.5 GB. I've left it up because you asked for the site running with the dummy Greek
+    user and Source in it — that data lives in the local Supabase volume, which survives a supabase stop and comes back on
+    supabase start. Say the word and I'll shut it down.
+
+✻ Brewed for 1m 3s · done 2:11 AM
+                                                                                  new task? /clear to save 168.7k tokens
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ yes, shut it all down
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  [Opus 5 (1M context)] code/hellozenno (main) · █░░░░░░░░░ 17%                                               /rc failed
+  ⏵⏵ auto mode on (shift+tab to cycle) · ← for agents

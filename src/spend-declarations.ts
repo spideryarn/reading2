@@ -362,6 +362,49 @@ export const DECLARATIONS: readonly Declaration[] = [
     metered: true,
     why: "The cheap arm's model (the quick tier) is served only on chat/completions, and the seam for that wire (`openRouterJson`) owns the per-job provider policy — this eval's arms deliberately differ from the app's policy and from each other, which is the same reason the PDF bake-off's OpenRouter arm is a declared bypass.",
   },
+  {
+    /* **The fleet dashboard's dictation, and the first entry here that is not
+       this app.**
+
+       `tools/fleet/` is a box utility that must run with the product's server
+       absent — docs/project/overseer-direction.md § Principles — and Greg
+       asked for the product's voice dictation on its message boxes on
+       2026-09-08. The browser half is *reused* from `src/web/` under a
+       leaf-only import rule (`tests/fleet-imports.test.ts`). The server half
+       could not be, and that was a measurement rather than a preference:
+       `src/transcribe.ts`'s import closure is 162 files and 118,171 lines,
+       pulling `pg`, `drizzle-orm`, `stripe` and `jsdom` into a tool whose whole
+       claim is that it works without them.
+
+       **Declared rather than fixed, and the difference matters here.** Routing
+       this through `openRouterTranscription` would not have metered it either:
+       a spend sink belongs to `collectSpend`'s async scope, and a call outside
+       one increments an unscoped counter, warns, and drops the record. The
+       fleet server opens no such scope and has no database to write to. So the
+       hole is a property of the tool being separate, not of the wire it chose —
+       and this entry exists so `npm run cost` says so out loud every run
+       instead of the money simply not appearing.
+
+       The cost is small and the shape is bounded: one `openai/gpt-transcribe`
+       call per press, ~$0.0005 each, behind a rate limiter of one per three
+       seconds per box and ten a minute across the fleet
+       (`tools/fleet/routes-transcribe.ts`). What would change this entry is the
+       fleet gaining somewhere to write a row — an Overseer store, if one lands
+       — at which point `metered` becomes true and this comment becomes wrong.
+
+       GPT Sol corrected the reasoning here once already: this file's first
+       draft of the argument said a sink was "null until the product's server
+       installs one", which is not how `ai-spend.ts` works. */
+    id: "fleet-dictation",
+    kind: "bypass",
+    since: "2026-09-08",
+    account: "openrouter",
+    file: "tools/fleet/transcribe.ts",
+    job: "dictation",
+    wire: "transcription",
+    metered: false,
+    why: "The fleet dashboard is not this app and must run with its server absent: importing `src/transcribe.ts` to reach the seam would pull 162 files and `pg`, `drizzle-orm`, `stripe` and `jsdom` into a box utility. And the seam would not have metered it anyway — a spend sink belongs to `collectSpend`'s async scope, which this server never opens, and it has no database to write a row to.",
+  },
 ];
 
 /**
@@ -440,6 +483,13 @@ export const UNMETERED_SPEND: readonly UnmeteredSpend[] = [
     what: "A Claude subagent dispatched from outside a Claude session: a delegated implementation, or a second opinion with a clean context. An Opus run at --effort high is not free, and the CLI reports what it cost in the status line (total_cost_usd) even on a subscription.",
     why: "The same reason as run-codex.ts above — it spawns another vendor's CLI as a subprocess rather than making a request, so there is no HTTP call for declaredFetch to wrap and no response body to meter. It is in this table rather than only in the test's ALLOWED map because a green test is not a register.",
     since: "2026-09-06",
+  },
+  {
+    file: "tools/overseer/attention-classify.ts",
+    account: "OPENROUTER_API_KEY — the same key as the app's, and therefore INSIDE the OpenRouter spend cap, but on rows the app's ledger never sees",
+    what: "The Overseer's attention pass: one `openai/gpt-5.6-luna` call per newly-ended agent turn, asking whether that turn handed a person a decision. Measured 2026-09-08 — a cold pass over 25 sessions is 10 calls and $0.0036, an unchanged fleet is free, and a live fleet turns over ~8 of 12 ended tails in four minutes, so the running cost is roughly $0.50–$1.00/day at a two-minute cadence.",
+    why: "It cannot go through `src/ai-call.ts` and it cannot go through `declaredFetch` either, and for one reason: docs/project/overseer-direction.md § Principles says the Overseer must not depend on the product database or on anything under `src/`, and both seams live there. That is the whole point of the tool — the thing you reach for when the product is broken cannot be built on the product. So it has its own thin client, one endpoint, a hard `maxCalls` ceiling per pass, and both cost pockets read back from the gateway and printed (`callCost`). It is here as well as in the test's ALLOWED map for the reason the entry above gives: a green test is not a register, and an allow-list says a file MAY spend without saying what it spends. If a second file under tools/overseer/ ever needs a line here, that is a fork of this seam and should be refused rather than listed.",
+    since: "2026-09-08",
   },
 ];
 

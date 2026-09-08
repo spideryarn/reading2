@@ -21,6 +21,7 @@ import {
   CHECKPOINT_FILE,
   EVENTS_FILE,
   STORE_SCHEMA,
+  attentionNotYetRun,
   type Checkpoint,
   type CheckpointRead,
   type RegisterEntry,
@@ -50,6 +51,10 @@ function checkpointAt(agoMs: number, pid = 4242): Checkpoint {
     cursor: { events: 12, bytes: 900 },
     heartbeat: { pid, instanceId: "i1", startedAt: "2026-09-08T07:00:00.000Z", lastTickAt: new Date(NOW - agoMs).toISOString(), ticks: 100 },
     register: [],
+    // A checkpoint from a daemon with no attention pass wired in. `unknown` is
+    // what the store publishes then, and it is not the same as an empty list:
+    // *nothing has looked* rather than *nothing needs you*.
+    attention: attentionNotYetRun(new Date(NOW - agoMs).toISOString()),
   };
 }
 
@@ -125,7 +130,7 @@ describe("telling a dead daemon from a quiet one", () => {
     // had been up for eighty minutes and had written `current.json` thirty
     // seconds earlier, in schema 1, which this build correctly refuses.
     //
-    // The direction matters. orchestrator-direction.md names the failure this
+    // The direction matters. overseer-direction.md names the failure this
     // whole project is designed against — the Overseer silently dead while the
     // page says nothing needs you. This is that inverted, and no better: a
     // person who reads NEVER RUN goes and starts a second daemon.

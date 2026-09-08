@@ -32,6 +32,10 @@
  * silently rounded a new state to "idle" would be the exact lie the status
  * module exists to prevent.
  */
+import type { Pause, PauseUnknownCause } from "../../wire.js";
+
+export type { Pause, PauseUnknownCause };
+
 export type FleetStatus =
   | { kind: "needs-you" }
   | { kind: "working" }
@@ -184,6 +188,13 @@ export type FleetRow = {
   question: FleetQuestion | null;
   /** Which permission mode it launched in. See `FleetPermissionMode`. */
   permissionMode: FleetPermissionMode;
+  /**
+   * Why this session is not doing anything — *beside* the status, not instead
+   * of it. A cron-parked session and a rate-limited one are both genuinely
+   * `idle`; see `Pause` in `wire.ts` for why this is an added fact rather than
+   * an eighth `FleetStatus` arm.
+   */
+  pause: Pause;
   /** What the session recorded about itself. See `SessionMeta`. */
   meta: SessionMeta;
   /**
@@ -480,6 +491,105 @@ export function parsePermissionMode(v: unknown): FleetPermissionMode {
 }
 
 /**
+ * Why a session is paused, off the wire.
+ *
+ * **AN ABSENT FIELD IS `cannot-tell`, NEVER `none`**, and that is the whole
+ * reason this function exists rather than a cast. A server too old to send
+ * `pause` has made no claim about whether anything is waiting; rendering that
+ * as *not waiting for anything* would be the most reassuring possible lie, and
+ * it is the exact shape of instance 16 in
+ * docs/postmortems/260908b — a consumer inventing a value the producer never
+ * offered. `none` is a positive statement that every source was consulted, and
+ * only the server is in a position to make it.
+ *
+ * Every arm is checked field by field for the same reason `parsePermissionMode`
+ * is: a `rate-limited` with no `resetsAt` is not a rate limit we can act on, it
+ * is a shape this page does not understand, and saying so beats drawing a
+ * badge over a missing time.
+ */
+export function parsePause(v: unknown): Pause {
+  if (v === undefined || v === null) {
+    return {
+      kind: "cannot-tell",
+      why: "this server did not say whether this session is waiting for anything",
+      cause: "rate-limits-not-collected",
+    };
+  }
+  if (!isRecord(v)) {
+    return { kind: "cannot-tell", why: "the server sent a pause that is not an object", cause: "rate-limits-not-collected" };
+  }
+  const kind = str(v["kind"]);
+  const unreadable = (why: string): Pause => ({ kind: "cannot-tell", why, cause: "rate-limits-not-collected" });
+
+  if (kind === "none") return { kind: "none" };
+
+  if (kind === "rate-limited") {
+    const window = str(v["window"]);
+    const resetsAt = str(v["resetsAt"]);
+    if (window === null || resetsAt === null) {
+      return unreadable("the server said this session is rate limited but did not say which window or when it resets");
+    }
+    /* `overdue` is only ever the server's. It may be set only when the reset
+       time was actually read, and this page has no way to check that — so a
+       missing or non-boolean value is false rather than computed here. */
+    return { kind: "rate-limited", window, resetsAt, overdue: v["overdue"] === true };
+  }
+
+  if (kind === "scheduled-wakeup") {
+    const at = str(v["at"]);
+    if (at === null) {
+      return unreadable("the server said this session has a wake-up scheduled but did not say when");
+    }
+    return { kind: "scheduled-wakeup", at, overdue: v["overdue"] === true, source: "cron" };
+  }
+
+  if (kind === "in-a-shell-call") {
+    const sinceMs = v["sinceMs"];
+    if (typeof sinceMs !== "number" || !Number.isFinite(sinceMs) || sinceMs < 0) {
+      return unreadable("the server said this session is in a shell call but did not say for how long");
+    }
+    return { kind: "in-a-shell-call", sinceMs };
+  }
+
+  if (kind === "cannot-tell") {
+    return {
+      kind: "cannot-tell",
+      why: str(v["why"]) ?? "no reason was given",
+      cause: parsePauseCause(v["cause"]),
+    };
+  }
+
+  return unreadable(
+    kind === null
+      ? "the server sent a pause with no kind"
+      : `this page does not know the pause ${JSON.stringify(kind)}`,
+  );
+}
+
+/**
+ * The named cause, or the one that says we were never told.
+ *
+ * A cause this build has not heard of falls back rather than throwing: the
+ * `why` beside it is the server's own sentence and is what a person reads, so
+ * an unfamiliar name costs nothing on screen.
+ */
+const PAUSE_CAUSES: readonly PauseUnknownCause[] = [
+  "tail-window-exhausted",
+  "no-transcript",
+  "transcript-unreadable",
+  "no-conversation-id",
+  "session-store-unreadable",
+  "rate-limits-not-collected",
+  "rate-limits-unreadable",
+  "schedule-not-parseable",
+];
+
+function parsePauseCause(v: unknown): PauseUnknownCause {
+  const found = PAUSE_CAUSES.find((c) => c === v);
+  return found ?? "rate-limits-not-collected";
+}
+
+/**
  * A session's own record of itself, off the wire.
  *
  * `version` is checked as the number 1 rather than as "not legacy", so a
@@ -508,6 +618,7 @@ export function parseRow(v: unknown): FleetRow | null {
     status: parseStatus(v["status"]),
     question: parseQuestion(v["question"]),
     permissionMode: parsePermissionMode(v["permissionMode"]),
+    pause: parsePause(v["pause"]),
     meta: parseMeta(v["meta"]),
     panePid:
       typeof v["panePid"] === "number" && Number.isSafeInteger(v["panePid"]) && v["panePid"] > 0

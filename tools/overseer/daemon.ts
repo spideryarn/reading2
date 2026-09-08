@@ -55,6 +55,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
+import type { AttentionList } from "../fleet/wire.js";
 import { admissible, type AdmissibleSnapshot } from "./admissible.js";
 import { baselineOf, diff, sessionKey, type Baseline, type OverseerEvent, type SessionIdentity } from "./diff.js";
 import { conditionTracker, describeNote, openNoteLog, type DaemonNote } from "./notes.js";
@@ -64,6 +65,7 @@ import {
   describeOpening,
   openStore,
   storeRoot,
+  type CheckpointUpdate,
   type LockHolder,
   type OverseerStore,
   type SessionRegister,
@@ -299,7 +301,33 @@ export type DaemonOptions = {
   streamRetryAfterMs?: number;
   /** Injected by tests so the fold can be driven without sockets. */
   source?: (options: SourceOptions) => AsyncIterable<SourceMessage>;
+  /**
+   * WHAT NEEDS GREG, and the reason it is injected rather than built here.
+   *
+   * The pass reads tmux panes and calls a model, and this file does neither: it
+   * consumes the dashboard's stream, folds events, and writes. Building the pass
+   * inline would put `execFileSync` and a paid HTTP call inside the loop whose
+   * whole job is to keep running when other things are broken. So
+   * `scripts/overseer.ts` supplies it, and a daemon given none simply publishes
+   * `attentionNotYetRun` — which says so, rather than an empty list, which would
+   * claim nothing needs him.
+   */
+  attention?: { intervalMs?: number; run: () => Promise<AttentionList> };
 };
+
+/**
+ * How often the attention pass runs: two minutes, against a 30s tick.
+ *
+ * Not every tick, and the reason is Astra's A30 — *thirty-six sessions must not
+ * trigger thirty-six model reviews a minute*. What actually holds that is the
+ * fingerprint cache, which makes an unchanged tail free; this interval is the
+ * second bound. Measured on this box on 2026-09-08: over 4.5 minutes on a
+ * 30-session fleet, **zero** ended-turn tails changed, because a tail is static
+ * by definition until its session moves and a session that moved reads as
+ * mid-turn and costs nothing. A cold pass over 32 sessions was 11 calls and
+ * $0.0039; the passes after it were 0 calls.
+ */
+export const ATTENTION_INTERVAL_MS = 120_000;
 
 export type DaemonOutcome =
   | { kind: "refused"; refusal: StoreRefusal }
@@ -442,12 +470,78 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
   // silent: `writtenAt` moving while `lastGoodSnapshotAt` stands still is
   // exactly how a reader tells "the Overseer is deaf" from "the Overseer is
   // dead". Unref'd so it can never be the reason a process will not exit.
+  // The attention list the next checkpoint will carry, or null when no pass has
+  // finished yet — in which case the store publishes `attentionNotYetRun`, which
+  // says nothing has looked rather than that nothing needs him.
+  let attention: AttentionList | null = null;
+  const checkpointUpdate = (): CheckpointUpdate => ({
+    lastGoodSnapshotAt,
+    tick: true,
+    // Spread rather than assigned: `exactOptionalPropertyTypes` makes "absent"
+    // and "present and undefined" different things, and here absent means *keep
+    // the list the store already holds*.
+    ...(attention === null ? {} : { attention }),
+  });
+
   const ticker = setInterval(() => {
     if (halted() !== null) return;
     checkFreshness();
-    guard(store.checkpoint({ lastGoodSnapshotAt, tick: true }));
+    guard(store.checkpoint(checkpointUpdate()));
   }, tickMs);
   ticker.unref?.();
+
+  const attentionOptions = options.attention;
+  // ONE PASS AT A TIME. The pass makes model calls and can outlive its own
+  // interval on a bad afternoon at the gateway; overlapping passes would double
+  // the bill and race each other's memory file for no benefit at all.
+  //
+  // AND THE PASS IS AWAITED ON THE WAY OUT — GPT Sol's finding 5. Clearing the
+  // interval stops the NEXT pass and does nothing about the one in flight, so a
+  // shutdown released the store's lock while a runner was still alive and about
+  // to write `attention.json`. A newly started daemon, or a manual CLI run,
+  // could then be writing the same file at the same moment. The write is atomic
+  // now, which stops a torn file; awaiting it stops the second writer existing.
+  let attentionRunning: Promise<void> | null = null;
+  const attentionTicker =
+    attentionOptions === undefined
+      ? null
+      : setInterval(() => {
+          if (halted() !== null || attentionRunning !== null) return;
+          attentionRunning = attentionOptions
+            .run()
+            .then((list) => {
+              attention = list;
+            })
+            .catch((cause: unknown) => {
+              // A THROWN PASS BECOMES `unknown`, NOT SILENCE. Leaving the last
+              // list in place would go on publishing a fleet that was true
+              // twenty minutes ago while the probe was broken, with its own
+              // `scannedAt` the only clue and nobody reading it.
+              attention = {
+                kind: "unknown",
+                why: `the attention pass failed: ${cause instanceof Error ? cause.message : String(cause)}`,
+                scannedAt: now().toISOString(),
+              };
+              log(`attention pass failed: ${String(cause)}`);
+            })
+            .finally(() => {
+              attentionRunning = null;
+            });
+        }, attentionOptions.intervalMs ?? ATTENTION_INTERVAL_MS);
+  attentionTicker?.unref?.();
+
+  /**
+   * Wait for a pass in flight, if there is one.
+   *
+   * A function rather than an inline check because the assignment happens inside
+   * an interval callback, which the compiler cannot see from a `catch`; and
+   * `catch(() => {})` because a pass that threw has already published its own
+   * `unknown` and must not replace the error we are on our way out with.
+   */
+  async function settleAttention(): Promise<void> {
+    const inFlight = attentionRunning;
+    if (inFlight !== null) await inFlight.catch(() => {});
+  }
 
   const makeSource = options.source ?? fleetSource;
 
@@ -501,10 +595,17 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     // different things done about them. Best effort by construction: if the
     // store is what broke, the note will fail too, and `stopHere` swallows that
     // rather than replacing the real error with a second one.
+    // THE PASS IS AWAITED HERE TOO — GPT Sol's second round. The normal exit
+    // awaits it before `stopHere`, and this path did not, so a throw released the
+    // store's lock with a paid call still in flight and a runner about to write
+    // `attention.json`. The exceptional path is exactly when a second daemon is
+    // most likely to be started, so it is the wrong one to leave open.
+    await settleAttention();
     stopHere(`the daemon threw: ${cause instanceof Error ? cause.message : String(cause)}`);
     throw cause;
   } finally {
     clearInterval(ticker);
+    if (attentionTicker !== null) clearInterval(attentionTicker);
   }
 
   /**
@@ -628,10 +729,20 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     // them, with no later comparison able to notice, because the baseline says
     // that world is already accounted for.
     saveBaseline(root, json);
-    if (!guard(store.checkpoint({ lastGoodSnapshotAt, tick: true }))) return false;
+    if (!guard(store.checkpoint(checkpointUpdate()))) return false;
     checkFreshness();
     return true;
   }
+
+  // AWAIT THE PASS IN FLIGHT BEFORE RELEASING ANYTHING — GPT Sol's finding 5.
+  // `clearInterval` in the `finally` stops the NEXT pass and says nothing about
+  // the one already running, which is a paid HTTP call that can take thirty
+  // seconds. Without this, `stopHere` released the store's lock while a runner
+  // was still alive and about to write `attention.json`, so a daemon started
+  // straight afterwards — the `Restart=always` case, which is the normal one —
+  // could be writing that file at the same moment. The write is atomic now,
+  // which stops it tearing; this stops the second writer existing at all.
+  await settleAttention();
 
   const final = halted();
   const why =

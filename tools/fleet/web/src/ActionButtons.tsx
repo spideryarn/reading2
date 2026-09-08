@@ -870,6 +870,21 @@ export function SessionQueue({
   const revive = useCallback((itemId: string) => act(api.revive, itemId), [act, api]);
   const abandon = useCallback((itemId: string) => act(api.abandon, itemId), [act, api]);
 
+  /* BEFORE THE EMPTY-QUEUE SENTENCE, because it is a different fact. A queue
+     whose item list this page could not read is not a queue with nothing in it,
+     and "Nothing is waiting." is the most reassuring thing this panel can say —
+     so it must never be what an unreadable payload produces. See
+     `QueueView.itemsUnreadable`. */
+  if (queue !== null && queue.itemsUnreadable) {
+    return (
+      <p className="tw:text-[13px] tw:text-alarm-ink">
+        This server sent a queue for this session with no list of items this page can read, so nothing here can
+        say what is waiting. That is not the same as nothing waiting — treat it as unknown, and look at the
+        session before sending anything that depends on order.
+      </p>
+    );
+  }
+
   if (queue === null || queue.items.length === 0) {
     return (
       <p className="tw:text-[13px] tw:text-ink-soft">

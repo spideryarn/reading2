@@ -198,6 +198,43 @@ describe("recognising a command line", () => {
     expect(recogniseCommand("codex login")).toBeNull();
   });
 
+  test("the other two documented non-interactive modes are batch jobs too (constructed)", () => {
+    // `codex --help` on this box, 2026-09-08: `exec` carries `[aliases: e]`, and
+    // `review` is a second non-interactive mode. Both are 15-45 minutes of paid
+    // model time during which the pane looks empty, which is the whole finding
+    // this module exists for - and `exec` alone missed both. Constructed,
+    // because `run-codex.ts` hard-codes `exec` and so nothing has ever captured
+    // one; they are here on the CLI's own word.
+    expect(recogniseCommand("codex e --model gpt-5.6-sol -- hi")?.id).toBe("codex-exec");
+    expect(recogniseCommand("codex review --model gpt-5.6-sol")?.id).toBe("codex-exec");
+    // `e`/`review` do not loosen into a prefix match.
+    expect(recogniseCommand("codex export")).toBeNull();
+    expect(recogniseCommand("codex reviewer")).toBeNull();
+  });
+
+  test("a global option before the subcommand does not hide a batch run (constructed)", () => {
+    // THIS TEST REPLACES ONE THAT PINNED THE WRONG ANSWER. It asserted
+    // `codex --model x review the diff` was NOT a batch run, on the reasoning
+    // that the subcommand must lead. But `codex --help` gives
+    // `codex [OPTIONS] <COMMAND> [ARGS]` — global options come FIRST — so that
+    // is a perfectly ordinary non-interactive review, and the old test locked
+    // in a miss of exactly the paid run this module exists to catch. A
+    // cross-family review found it.
+    expect(recogniseCommand("codex --model x review the diff")?.id).toBe("codex-exec");
+    expect(recogniseCommand("codex --model gpt-5.6-sol exec -- hi")?.id).toBe("codex-exec");
+    // A boolean flag must not swallow the subcommand after it.
+    expect(recogniseCommand("codex --json exec -- hi")?.id).toBe("codex-exec");
+  });
+
+  test("what the lost quoting costs, stated rather than hidden (constructed)", () => {
+    // `codex 'review this diff'` is an INTERACTIVE codex with one prompt
+    // argument, but `ps args` has already flattened the quotes away and it
+    // arrives identical to a batch `codex review this diff`. We report batch.
+    // Asserted so the wrong answer is a documented cost with a test naming it,
+    // rather than a surprise for whoever meets it next.
+    expect(recogniseCommand("codex review this diff")?.id).toBe("codex-exec");
+  });
+
   test("a watch-mode vitest is not a job anybody is waiting on (constructed)", () => {
     expect(recogniseCommand("node /home/greg/code/x/node_modules/.bin/vitest --watch")).toBeNull();
   });

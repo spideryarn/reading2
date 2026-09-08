@@ -1221,7 +1221,7 @@ rm -f /etc/profile.d/gjd-remote-loopback.sh
 
 echo "=== box services ==="
 # The two long-running box tools, as SYSTEM units so they come back after a
-# reboot: the Overseer (docs/project/orchestrator-direction.md) and the fleet
+# reboot: the Overseer (docs/project/overseer-direction.md) and the fleet
 # dashboard it reads. Both ran as tmux jobs out of worktrees until 2026-09-08,
 # which meant `git worktree remove` or a reboot took them down silently -- and
 # the reboot case is the bad one, because the tool you would use to notice is
@@ -1249,7 +1249,7 @@ install_unit() {
 install_unit overseer.service <<'OVERSEER_UNIT'
 # The Overseer: it subscribes to the fleet dashboard's stream, folds what it
 # sees into ~/.overseer, and is the only thing on this box that remembers what
-# the fleet did yesterday. docs/project/orchestrator-direction.md.
+# the fleet did yesterday. docs/project/overseer-direction.md.
 #
 # A SYSTEM unit with User=@USER@, not a systemd USER unit, and that is the whole
 # reason this file exists. A user unit does not start at boot unless lingering
@@ -1264,7 +1264,7 @@ install_unit overseer.service <<'OVERSEER_UNIT'
 # stale.
 [Unit]
 Description=Overseer -- records what the agent fleet did, so there is a yesterday
-Documentation=file:///home/@USER@/code/spideryarn2/docs/project/orchestrator-direction.md
+Documentation=file:///home/@USER@/code/spideryarn2/docs/project/overseer-direction.md
 After=network-online.target
 Wants=network-online.target
 
@@ -1341,7 +1341,7 @@ install_unit fleet-dashboard.service <<'FLEET_DASHBOARD_UNIT'
 # note in overseer.service.
 [Unit]
 Description=Fleet dashboard -- the page showing what every agent session is doing
-Documentation=file:///home/@USER@/code/spideryarn2/docs/project/orchestrator-direction.md
+Documentation=file:///home/@USER@/code/spideryarn2/docs/project/overseer-direction.md
 # tailscaled as well as the network, because on a logged-in box FLEET_BIND names
 # a tailnet address as well as loopback, and tools/fleet/server.ts treats a bind
 # it cannot take as FATAL rather than carrying on half-bound.

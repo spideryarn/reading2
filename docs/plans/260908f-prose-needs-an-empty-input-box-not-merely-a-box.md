@@ -7,7 +7,7 @@ before the bug was known — one of which the suite explicitly asserted as a scr
 `tests/fixtures/fleet-panes/none-typed-numbered-message-in-input-box.txt`.
 
 This is Astra's **A10** in
-[orchestrator-direction.md § The backlog](../project/orchestrator-direction.md#the-backlog-after-the-wide-review),
+[overseer-direction.md § The backlog](../project/overseer-direction.md#the-backlog-after-the-wide-review),
 and it is the half of A10 that Stage v0.2e did not cover. It gets its own doc rather than a fifth
 `### Stage` in [260907e](260907e-agent-fleet-dashboard.md) because two agents are editing that file
 today; a one-line stage entry there points here.
@@ -176,7 +176,7 @@ short ones got through. The guard that made this rare is not a guard against thi
   keyed by the union, so a new refusal code will not compile until it has a status.
 - [`tools/fleet/drain.ts`](../../tools/fleet/drain.ts) — read, not edited. Owned by the
   `claude-agents-dashboard` session.
-- [orchestrator-direction.md](../project/orchestrator-direction.md) and
+- [overseer-direction.md](../project/overseer-direction.md) and
   [260908b-whole-approach-review-astra-v2.md](260908b-whole-approach-review-astra-v2.md) — A9, A10,
   A11 and the review they came from.
 - [silent-success.md](../reusable/silent-success.md) — the reason every acceptance criterion below

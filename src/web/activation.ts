@@ -382,11 +382,20 @@ const emit = () => {
 };
 
 /**
- * **The reader pressed the control for this target.** Called from a real
- * `onClick`, and from nowhere else.
+ * **The reader pressed the control for this target.** Called from a real press,
+ * and from nowhere else.
  *
  * Not from `setMode` or any other query-state setter: that is what Back and
  * Forward move, and history must never manufacture an activation.
+ *
+ * **A press is not always an `onClick`, and has not been since 2026-09-08.**
+ * That sentence read *"called from a real `onClick`"* until the command bar grew
+ * rows that are not modes: its Tweets row calls `armActivationForTweets` from
+ * the `Enter` that takes it, so an arming can now come from a keypress in a
+ * modal dialog. The rule the wording was protecting is untouched — it is
+ * *deliberate act versus navigation*, and Enter on a row a reader chose is as
+ * deliberate as a click on the button beside it. What is still forbidden is the
+ * thing history does. 260908e.
  */
 export function armActivation(slug: string, target: AutoRunTarget): void {
   nonces += 1;

@@ -169,10 +169,14 @@
 .dock.dock-fit-3 .dock-home .dock-btn-label,
 .dock.dock-fit-3 .dock-feedback .dock-btn-label { display: none; }
 
-/* Rung 2 — the modes go to glyphs, and what is left with a word is Comments,
-   Tweets and Metadata. **Not "the other three":** the app cluster's two words
-   went at rung 1 and do not come back, and the experimental switch has never
-   carried one. Square-ish once the text is gone, so fourteen icons read as one
+/* Rung 2 — the modes go to glyphs, and what is left with a word is Commands,
+   Comments, Tweets and Metadata. **Not "the other three":** the app cluster's
+   two words went at rung 1 and do not come back, and the experimental switch
+   has never carried one. `Commands` joined this list on 2026-09-08 without any
+   rule changing — it is a plain `.dock-btn`, so rungs 1 and 2 never named it
+   and rung 3's sweep always caught it. What changed that day is only *where*
+   the word appears: the button moved to the head of the row, so a middling
+   window now begins with a wordless wordmark and the word `Commands`. Square-ish once the text is gone, so fourteen icons read as one
    segmented control rather than as loose glyphs. **This was rung 1 until
    2026-09-06** and is still the old `max-width: 1100px` rule's job.
 

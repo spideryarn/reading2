@@ -2,7 +2,7 @@
  * v0.3 of the fleet dashboard: what each session is doing, and which ones want
  * you first.
  *
- * Direction and constraints: docs/project/orchestrator-direction.md.
+ * Direction and constraints: docs/project/overseer-direction.md.
  * Stages: docs/plans/260907e-agent-fleet-dashboard.md § Stage v0.3.
  *
  * THE STATUS IS NOT OURS EITHER, and that is the whole reason this file is so
@@ -124,7 +124,7 @@ export function statusesOf(input: StatusInput): StatusedSession[] {
 /**
  * Which of the three bands a status belongs to. Lower sorts higher.
  *
- * The bands are Greg's, from orchestrator-direction.md: the first thing the
+ * The bands are Greg's, from overseer-direction.md: the first thing the
  * page must answer is *does anyone need something from me*, and the second is
  * *what is actually moving*. Everything else is one band, because a screen with
  * seven ranks is a screen nobody reads the bottom of.

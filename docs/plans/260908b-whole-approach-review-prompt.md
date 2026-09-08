@@ -38,7 +38,7 @@ Repository `spideryarn2`, this worktree. Read from git at revision
 `35e4d36834dc66ca2f2603dfb0e888fb1f36750e`.
 
 Start here:
-- `docs/project/orchestrator-direction.md` — **the most important file.** The standing direction:
+- `docs/project/overseer-direction.md` — **the most important file.** The standing direction:
   Greg's priorities, the constraints measured on the box, the seam between the two agents, what is
   known about usage limits, and the access model.
 

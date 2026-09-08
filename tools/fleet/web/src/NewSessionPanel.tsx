@@ -38,6 +38,7 @@
  */
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
+import { DictationControl, useFleetDictation } from "./DictationControl";
 import type { LaunchRecord, NewSessionApi } from "./new-session-client";
 import { Button, Card, Mono, cx } from "./ui";
 
@@ -149,7 +150,62 @@ export function NewSessionPanel({ api }: { api: NewSessionApi }): ReactNode {
     };
   }, [pollingSince]);
 
+  /* The box itself, so the dictation knows where the caret is. */
+  const box = useRef<HTMLTextAreaElement>(null);
+  /* `new-session` rather than a session id: this prompt relates to no agent yet,
+     so the vocabulary it is primed with is the whole fleet's names — which is
+     right, because what somebody types here is usually about the sessions and
+     worktrees that already exist. */
+  const dictate = useFleetDictation({
+    value: prompt,
+    onChange: setPrompt,
+    box,
+    context: { kind: "new-session" },
+  });
+
+  /**
+   * **CLOSING THE PANEL MUST STOP THE MICROPHONE, because closing it unmounts
+   * nothing.**
+   *
+   * `open` only decides whether the box and its controls are *rendered*; this
+   * component stays mounted either way, so `useDictation`'s cleanup never runs
+   * and a dictation started before Close carries on recording behind a panel
+   * with no Stop button on it. There is no way back to it: the toggle is inside
+   * the branch that just disappeared.
+   *
+   * The product hit this exact shape in its Feedback dialog, and
+   * docs/project/dictation.md names it — *"if the box lives in a component that
+   * stays mounted when it disappears… closing it unmounts nothing"*. GPT Sol
+   * found it here as a P1 on 2026-09-08, in code written by somebody who had
+   * read that sentence and not applied it.
+   *
+   * `dictation.toggle`, not the field wrapper's `toggle`, which would put the
+   * focus back into a box that is no longer on screen.
+   */
+  /* **Read at the moment of sending, not captured when `start` was built.**
+     `start`'s dependency list is `[prompt]`, so a `dictate.sendBlocked` read
+     inside it is whatever it was when the prompt last changed — and the case
+     that matters is somebody pressing Dictate and then Start without typing,
+     where the closure still holds `false`. The DOM `disabled` was protective and
+     the action-boundary guard, which is the one that survives a programmatic
+     call, was not. GPT Sol's round 2, finding 1; `SessionDetail` had the ref
+     pattern already and this file did not copy it. */
+  const blocked = useRef(dictate.sendBlocked);
+  blocked.current = dictate.sendBlocked;
+
+  const armed = dictate.dictation.armed;
+  const stopMic = dictate.dictation.toggle;
+  useEffect(() => {
+    if (!open && armed) stopMic();
+  }, [open, armed, stopMic]);
+
   const start = useCallback(async () => {
+    /* **The guard lives here as well as on the button**, because `disabled` is a
+       property of a rendered element and this is the action. A programmatic
+       call, or a keyboard path somebody adds later, would otherwise start an
+       agent on the rough live guesses — or, on Safari and Firefox, on nothing
+       that was said at all. GPT Sol's review of the built code, finding 6. */
+    if (blocked.current) return;
     setBusy(true);
     setRefusal(null);
     setGaveUp(false);
@@ -186,17 +242,33 @@ export function NewSessionPanel({ api }: { api: NewSessionApi }): ReactNode {
           </label>
           <textarea
             id="new-session-prompt"
+            ref={box}
             value={prompt}
             rows={4}
             disabled={busy}
+            /* `readOnly`, NOT `disabled`, while the transcript is on its way:
+               `disabled` drops the selection, and the selection is the caret the
+               words are about to be inserted at. */
+            readOnly={dictate.readOnly}
             onChange={(e) => setPrompt(e.target.value)}
             placeholder="What should it do? This is the whole prompt the agent wakes up with."
             className="tw:w-full tw:rounded-md tw:border tw:border-rule tw:bg-panel tw:p-2 tw:text-[14px] tw:text-ink tw:disabled:opacity-50"
           />
           <div className="tw:mt-1.5 tw:flex tw:flex-wrap tw:items-center tw:gap-2">
-            <Button variant="loud" onClick={() => void start()} disabled={busy || prompt.trim() === ""}>
+            {/* **`sendBlocked`, not `readOnly`.** Pressing this while the
+                microphone is still on would start an agent on the rough live
+                guesses — or, on Safari and Firefox, on nothing that was said at
+                all. And the button is DISABLED as well as guarded: a correct
+                guard behind a lit button is a press that does nothing and says
+                nothing, which is the worse half of the pair. */}
+            <Button
+              variant="loud"
+              onClick={() => void start()}
+              disabled={busy || prompt.trim() === "" || dictate.sendBlocked}
+            >
               {busy ? "Asking…" : "Start it"}
             </Button>
+            <DictationControl dictation={dictate.dictation} toggle={dictate.toggle} />
             <span className="tw:text-[12px] tw:text-ink-faint">
               No name and no directory: Claude titles the conversation itself, and the server picks the
               directory from its own allowlist.

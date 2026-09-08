@@ -2,13 +2,14 @@
 
 Status as of 2026-09-08: **researched proposal; implementation has not begun**. This is a plan-only
 change. The baseline inspected was `4adcdfd62703b6565a27a03c50f20f8a215f1bd8`; the shared checkout
-may advance underneath it. Final upstream reconciliation checked `3e2e3bd4` (see below). Evidence includes source inspection, two independent subsystem audits,
+may advance underneath it. The original reconciliation checked `3e2e3bd4`; the Fable revision also
+checked subsequent dictation integration at `3ba58fc5` (see below). Evidence includes source inspection, two independent subsystem audits,
 a focused test run, a read of the real checkpoint's metadata, and primary technical references.
 Review results and limitations are recorded at the end. An unchecked box below does not imply that
 its entire subsystem is absent: many stages deliberately connect machinery that already exists.
 
 Up: [plans.md](../project/plans.md). Governing direction:
-[orchestrator-direction.md](../project/orchestrator-direction.md).
+[overseer-direction.md](../project/overseer-direction.md).
 
 ## Goal and scope
 
@@ -29,12 +30,33 @@ Preserve Greg's explicit ordering:
 > attention triage, then perhaps box vitals and throttling, then account usage limits, then scheduler
 > (ideally we'd build a bunch of these in parallel with engineering-manager.md)
 >
-> — Greg, 2026-09-08, [direction](../project/orchestrator-direction.md#the-order-of-work)
+> — Greg, 2026-09-08, [direction](../project/overseer-direction.md#the-order-of-work)
 
 The first repairs make existing buttons and monitoring trustworthy; they are not a new security
 programme ahead of attention. Put a useful attention view in Greg's hands before building durable
 receipts, a job admission framework, or model-driven coordination. Each stage has a stopping point.
 The later stages are a menu after those milestones, not permission to build every possible feature.
+
+**Executable default after Fable's review:** use these delivery cuts, then consult each named stage
+for its tests and acceptance criteria. Section order is a reference order, not a single dependency chain.
+
+- **First useful delivery:** Baseline's small fixes → Failure containment → the read-only Overseer
+  status card. Stop and ship a page that honestly reports supervision and stale data. Full execution
+  identity, process kills, work classification and prose inference do not gate this delivery.
+- **Attention delivery:** render the daemon's mechanical Attention list, then integrate Wave 2's
+  prose detector. Wire Work evidence alongside it as enrichment. Ship the mechanical slice as useful
+  but incomplete; only the prose slice completes the commissioned attention milestone.
+- **Parallel control repairs:** Delivery uncertainty can start independently. Fix Box contracts with
+  its identity safeguards before enabling repaired destructive/targeted confirmations; keep these
+  prerequisites off the read-only path. Session continuity follows verified execution identity.
+- **Next product delivery:** Resource history → Admission visibility → Usage visibility. Measure
+  whether enforcement is needed; it is not an automatic prerequisite for showing usage. Continue
+  the already commissioned Wave 2 work in parallel and integrate anything already proven.
+- **Later, when needed:** durable receipts and launch admission → scheduling; selected recovery and
+  proposed assistance follow their stated dependencies. There is no obligation to build the menu.
+
+Each delivery is a valid stopping point. Finishing the status card does not claim that attention,
+the repaired controls, or the active Wave 2 commitments are complete.
 
 **This plan does not authorise autonomous steering, permission approval, arbitrary process kills,
 account switching, or automatic resumption of all sessions.** The standing autonomy decision permits
@@ -79,11 +101,20 @@ The running services were not restarted after this merge. Neither an upstream co
 file proves deployment. If `dev` advances again, repeat this small reconciliation at Baseline;
 there is no reason to restart the whole investigation or discard earlier regression evidence.
 
+**Fable-revision reconciliation, `3ba58fc5`:** dictation code has now landed for New session and
+steering, with transcription routes and the explicit browser-leaf import exception enforced by
+`tests/fleet-imports.test.ts`. Preserve those controls and the narrowed boundary; do not port them
+again. Wave 2 records that real microphone/phone success remains unverified and plain tailnet HTTP
+is not a secure context. Its Stage F also now defines the realtime partner as a separate model
+briefed about the selected session, which may hand that agent a message. Reuse that product decision.
+These commits do not repair the two early client findings: the failed-poll deadline and recent
+messages' handle-only effect remain. This later integration was not in Fable's reviewed candidate.
+
 ## Start with these references
 
 | Reference | Why the implementing agent needs it |
 |---|---|
-| [Direction and constraints](../project/orchestrator-direction.md) | Ownership seam, Greg's priorities, autonomy, observed failure modes, and existing wide-review backlog. Read especially Two tenses, Attention, Order of work, and Backlog. |
+| [Direction and constraints](../project/overseer-direction.md) | Ownership seam, Greg's priorities, autonomy, observed failure modes, and existing wide-review backlog. Read especially Two tenses, Attention, Order of work, and Backlog. |
 | [Original dashboard plan](260907e-agent-fleet-dashboard.md) | What the dashboard slices intended, what was actually delivered, and earlier review findings. |
 | [Overseer store/clock plan](260908b-overseer-store-and-clock.md) | Recovery contracts and evidence for the existing daemon. Do not implement O1 from scratch. |
 | [Whole-approach Astra review](260908b-whole-approach-review-astra-v2.md) | Original A9–A30 findings. Recheck against current code; several are already closed. |
@@ -144,13 +175,13 @@ Do not promote an easy peripheral task merely because its ratio is high.
 | Stage label | Value | Effort | Score | Depends on / placement |
 |---|---:|---:|---:|---|
 | Baseline | 5 | 1 | 5.0 | First; establish versions and failing controls |
-| Execution identity | 5 | 3 | 1.7 | Baseline; required before identity-dependent joins/writes |
+| Execution identity | 5 | 3 | 1.7 | Baseline; required for verified continuity and newly enabled identity-dependent writes, not read-only status |
 | Box contracts | 5 | 2 | 2.5 | Execution identity; repair existing functionality |
-| Delivery uncertainty | 5 | 2 | 2.5 | Box contracts; local queue safety and truthful UI |
+| Delivery uncertainty | 5 | 2 | 2.5 | Baseline; queue quarantine can ship independently of Box contracts |
 | Failure containment | 5 | 1 | 5.0 | Baseline; small bounds before new UI |
-| Overseer status | 5 | 2 | 2.5 | Failure containment + execution identity; first new visible value, can develop alongside repairs |
-| Work evidence | 4 | 2 | 2.0 | Overseer status; wire existing classifier |
-| Attention inbox | 5 | 3 | 1.7 | Status + work; first mechanical slice |
+| Overseer status | 5 | 2 | 2.5 | Failure containment; global status and explicitly claimed history need no verified execution |
+| Work evidence | 4 | 2 | 2.0 | Overseer status; enrichment alongside attention, not its gate |
+| Attention inbox | 5 | 3 | 1.7 | Status + daemon Attention producer; inspect first, guard any answer separately |
 | Attention completeness | 5 | 3 | 1.7 | Inbox + current Wave 2 detector; **first complete attention milestone** |
 | Responsive collection | 5 | 3 | 1.7 | Baseline; measure before/after |
 | Resource history | 4 | 2 | 2.0 | Work + responsive collection |
@@ -173,14 +204,11 @@ Do not promote an easy peripheral task merely because its ratio is high.
 | Operational finish | 5 | 3 | 1.7 | Each shipped service slice; off-box monitoring needs destination |
 | Optional convenience | 2–4 | 2–5 | varies | Only after use identifies the next bottleneck |
 
-The practical first batch is Baseline through Attention completeness, plus Session continuity where parallel capacity permits. The next
-batch makes collection/admission cheaper and adds usage. The section order below is the executable default: after Attention completeness, do only the
-responsive-collection work required to take useful vitals, then Resource history → Admission
-visibility → decide on enforcement → Usage visibility. Session continuity may run in parallel with
-those if an agent owns its files; full transport/source-ordering/refactoring follows usage unless a
-specific failure promotes it. Launch protocol and recovery are later consumers, not dependencies
-for the first attention milestone. **It is successful to stop there.** Scheduling
-and judgement should not hold that batch hostage.
+Follow the delivery cuts under Goal and scope. Fable estimated the old first batch at roughly
+eighteen agent-days; it hid a much earlier useful stop. Do not turn those cuts back into one
+release. After attention, do only the responsive-collection work required to take useful vitals,
+then history, admission visibility and usage. Full transport/source-ordering/refactoring follows
+usage unless a specific failure promotes it. Launch protocol and recovery are later consumers.
 
 ## Contracts to preserve throughout
 
@@ -247,17 +275,28 @@ and judgement should not hold that batch hostage.
   freeze/reset the clock or generate intentionally fresh fixture times. Add a distinct assertion
   that receiving an **old** cached snapshot does not clear the stale banner. Do not increase timeout
   thresholds just to satisfy a stale fixture.
-- [ ] Add a test harness seam for `handler`: construct a request handler from injected runtime state,
-  routes and static root, leaving binding/timers in the executable entry point. Keep it a small
-  composition extraction, not an HTTP framework rewrite. This enables actual client→route tests.
+- [ ] Reuse `browserFetch(routes)` and `makeActionRoutes` in `tests/fleet-actions-route.test.ts`
+  for real client→route tests. That join already exists; do not extract the whole HTTP handler merely
+  to repeat it. Composition/URL-prefix checks belong to Access review when needed.
+- [ ] Bring forward two small client repairs, each with a failing regression first. In
+  `NewSessionPanel`, apply the absolute discovery deadline to failed polls too; preserve the created
+  id/manual refresh and never relaunch because discovery failed. In `useRecentMessages`, re-read on
+  a changed claimed `claudeSessionId` under the same row id, clear the old view, and prevent an old
+  in-flight response from replacing the new view (including manual reads). An unchanged snapshot
+  must not trigger another transcript read. This fixes an observable claim change; it does **not**
+  prove that an unchanged launch claim still identifies the current execution.
 - [ ] Capture focused suite output and run one deliberate wrong-request negative control. Fix only
   scoped defects; baseline failures elsewhere are recorded and investigated separately.
 
-**Acceptance:** another agent can distinguish the code under test from the serving process; a route
-composition test reaches the same queue instance the refresh drainer uses. Runtime inspection has
-not restarted anything. **Cost ceiling:** one small stage; no instrumentation platform.
+**Acceptance:** another agent can distinguish code under test from the serving process; the existing
+client→route harness remains usable, perpetual failed discovery stops, and a changed conversation
+claim cannot retain the old transcript view. Runtime inspection has not restarted anything.
+**Cost ceiling:** one small stage; no instrumentation platform.
 
 ### Stage: Execution identity — distinguish a running process from an old launch claim
+
+This is a foundation for verified continuity and writes, not a prerequisite for a read-only status
+card or an explicitly claimed observation. Develop it alongside those earlier deliveries.
 
 - [ ] Reproduce a new Claude child started under an unchanged shell/pane whose tmux
   `CLAUDE_SESSION_ID` still names the old conversation. Current `diff.ts` documents this blind spot;
@@ -319,7 +358,11 @@ distinct: a pane survives more than one execution.
 changing a candidate generation, recipient identity, or preview shape prevents the unreviewed effect.
 `FLEET_ACT_ENABLED` remains an operational gate; repairing code does not silently turn it on.
 **Simpler alternative rejected:** adding `pids` alone fixes today's refusal but leaves PID reuse and
-unknown previews as valid confirmation targets.
+unknown previews as valid confirmation targets. Fable suggested PID plus elapsed age; that is also
+insufficient: preview a one-second-old process, replace it, and leave the preview open until the
+replacement is two seconds old. Its age passes that comparison although its identity differs.
+Retain the bounded volatile preview binding and actual process-start evidence, but do not make
+read-only status wait for them. This is local request binding, not a durable workflow engine.
 
 ### Stage: Delivery uncertainty — stop saying that failure means no effect
 
@@ -374,8 +417,12 @@ without postponing useful attention behind full performance optimisation.
 - [ ] Render heartbeat age, source snapshot age, and status durations with observed versus `≥` lower
   bound formatting. Show a stale-source warning even if the daemon's heartbeat is advancing. Missing
   or unreadable history must not hide the independently available fleet rows.
-- [ ] Join history to rows with generation-aware identity; do not match by title or session handle
-  alone. Display historical/unmatched sessions separately rather than attaching old ages to new work.
+- [ ] First ship global heartbeat/source status without a row join. For optional history matching,
+  require the existing generation tuple (`tmuxServerPid`, `paneId`, `panePid`) and matching claimed
+  conversation id; label this as **claimed history**, not verified current execution. A child can
+  change while that tuple stays fixed. Show the observation interval rather than asserting that the
+  current child has worked/blocked for that duration. Missing/mismatched evidence remains separate
+  history; it must not hide current fleet rows. Upgrade joins only after Execution identity lands.
 - [ ] Replace `OrchestratorPanel`'s hardcoded daemon-absent narrative/roadmap with this status card,
   existing queue controls, and short explanations. Do not invent a chat recipient: a daemon/store
   existing still does not mean there is an agent capable of receiving a message.
@@ -384,8 +431,9 @@ without postponing useful attention behind full performance optimisation.
   Browser-check all states with injected fixtures.
 
 **Acceptance:** the web page can say *Overseer last updated 12 minutes ago; fleet source last updated
-15 minutes ago* and *blocked for at least 20 minutes* honestly. Failure of this projection leaves
-Sessions usable. This is the cheapest major new capability.
+15 minutes ago* honestly. Claimed history is clearly distinct from a verified current duration;
+*blocked for at least 20 minutes* needs evidence of continuity. Failure of this projection leaves
+Sessions usable. This is the cheapest major new capability and the first delivery's stop line.
 
 ### Stage: Work evidence — connect the classifier that is already written
 
@@ -407,6 +455,12 @@ says cannot tell rather than idle. No new full fleet collector or model call exi
 
 ### Stage: Attention inbox — a useful first version without model calls
 
+- [ ] The **daemon** produces question/dialog and duration evidence using the existing `AttentionList`
+  type and the checkpoint integration commissioned in Wave 2 Stage A. The type exists; check whether
+  its producer/persistence has landed before wiring it. Fleet's `/api/overseer` boundary validates/projects it;
+  the browser renders it. Fleet may add visibility cards for a stale heartbeat/source or unreadable
+  checkpoint, but must not build a second question detector from `needs-you`. Reuse `wire.ts`.
+  Work evidence enriches these cards when available; a missing classifier does not hide questions.
 - [ ] Derive attention cards from verified current questions, historical duration, stale supervision,
   permission/launch defects, and explicitly reported completion when available. Start with the
   first four; absent completion evidence is not a completed task.
@@ -418,10 +472,21 @@ says cannot tell rather than idle. No new full fleet collector or model call exi
   time cannot outrank measured duration by pretending it is exact.
 - [ ] Freeze an opened card's identity, wording and options. Incoming changes show an Update available
   marker and invalidate the old submission; they must not move a button under a finger. Answering
-  uses the existing guarded route and only supported agent-question dialogs.
+  uses the existing guarded route and only supported agent-question dialogs. Claimed/unverifiable
+  cards remain inspectable through detail/manual terminal paths; they cannot acquire answer authority
+  from a read-only history join. Only expose an answer control whose fresh target checks establish
+  the required identity. Full continuity improvements must not gate viewing the list.
 - [ ] Do not remove a card when Send is pressed. Mark submission pending/uncertain, and resolve only
   on fresh matching evidence that the question changed/disappeared. Preserve an unresolved outcome
   if the session vanishes. Group one shared outage separately from its affected sessions.
+- [ ] As an optional follow-on after the question inbox, add cheap work-context hints only when current evidence supports them: observed current work
+  in the primary checkout, or elapsed time since a verifiable push. Treat them as context for human
+  review, not proof of misdirection. `meta.dir` is a launch directory and can remain primary after
+  `EnterWorktree`; do not use it as current-directory evidence. A commit time is not a push time.
+  If the needed evidence is absent, record unknown and defer the hint instead of adding a collector
+  or fabricating a warning. Read-only/planning work in primary is allowed and must not be called a bug.
+  Wave 2 explicitly defers misdirection; these hints must not expand its completion criteria or delay
+  its already commissioned prose-question detection.
 - [ ] Add desktop and phone tests for keyboard focus, reordered background list, changed dialog,
   one affected session disappearing, and stale source. Review with Greg after a working v1 exists;
   continue independent reliability work while awaiting optional presentation feedback.
@@ -444,6 +509,12 @@ commitment.** Add the next slice before claiming attention triage is complete; p
   is one classification in flight, at most four changed sessions per five-minute batch, and an
   explicit daily token/call ceiling in configuration. Tune from measured useful yield; these are
   proposed starting bounds, not provider quota facts. Exhaustion leaves unclassified evidence visible.
+- [ ] Use the existing `scripts/run-claude.ts` wrapper for an out-of-session Claude classifier.
+  Record its configured model and credential/account source without secrets. The machine login may
+  share the Max quota being monitored: a quota refusal becomes an explicit classification-unavailable
+  state with retained last-good evidence/age and backoff, never a successful zero-result scan.
+  Mechanical supervision remains independent of model availability. Do not silently fall back to
+  paid API credentials or another account; a different provider follows the agreed gateway policy.
 - [ ] Render inferred prose cards distinctly, with exact bounded evidence and why they were surfaced.
   Their first action is opening detail/manual response, not automatic routing or steering. Preserve
   immutable card material and draft identity. Do not turn a detector into authority to answer Greg.
@@ -567,9 +638,8 @@ medium-term and outside this batch. No unattended credential changes.
 - [ ] Refresh recent messages on meaningful new snapshot/turn evidence, with one request in flight,
   cancellation on identity change, and an explicit last-read clock/error. Keep the existing bounded
   reader and manual refresh; do not start transcript polling per row.
-- [ ] In `NewSessionPanel`, enforce the absolute lookup deadline before every outcome branch,
-  including failed polls. At timeout show the created id and manual refresh path; never relaunch
-  because discovery failed. Test perpetual error, late discovery, component unmount and duplicate tap.
+- [ ] Preserve Baseline's discovery deadline and conversation-claim refresh regressions; extend
+  them for late discovery, component unmount and duplicate tap. Do not redo those earlier fixes.
 - [ ] Give `useActions` the state transport's visibility/online behaviour, pending refresh handling,
   fetch abort and last-good age. Keep its separate data cost/clock and never refresh target identity
   as a side effect of confirming an action.
@@ -837,6 +907,9 @@ hard budget; 36 sessions do not imply 36 model calls each minute. No proposal be
 - [ ] Verify existing origin checks, CSP/anti-framing and action attribution on real composed routes,
   including failures/static responses. Fix exact-path/method handling for state/messages/live as
   appropriate; a prefix match must not unintentionally widen an API route.
+- [ ] If composition tests need it, extract `handler` construction with injected state/routes/static
+  root, leaving binding/timers in the executable entry point. Prove production composition shares the
+  queue with the refresh drainer. Reuse existing route tests; no framework rewrite or duplicate harness.
 - [ ] Verify hostile transcript strings render as text, unknown action variants remain disabled and
   unsupported permission dialogs do not acquire an answer path. Do not replace this with generic
   token authentication that every same-user agent can read.
@@ -886,8 +959,8 @@ Each needs its own thin implementation stage, contract tests and browser accepta
 |---|---|---|
 | Read-only Codex/harness visibility | Show wrapper receipt/process evidence as batch work; explicitly no stdin steering. Reuse WorkReading. | Already assigned in Wave 2: integrate its adapter, inspect installed output and official docs, and keep batch steering explicitly unsupported. |
 | More useful broadcast | Editable exact message and selected recipients, queued through the same target guards, with per-recipient receipt. | Current broadcast is specifically resource staggering. Add after its existing path works; decide whether selected-only suffices before arbitrary filters. |
-| Dictation in message boxes | One short voice-to-editable-text path reused across New/Steer/Answer; deliberate Send remains separate. | Already assigned in Wave 2. Integrate that work; verify secure context, credential/cost handling and the no-`src/` boundary. Dictation precedes live voice chat. |
-| Live conversation with the Overseer | A bounded session/action that reads the store and proposes actions. | No persistent brain exists; clarify the actual recipient and authority before putting a chat box over a daemon. |
+| Dictation in message boxes | Preserve the landed New/Steer controls; deliberate Send remains separate. | Wave 2 code landed by `3ba58fc5`; integrate its secure-context/real-device verification. Reuse the tested browser-leaf import exception, not an absolute no-`src/` rule. Rename is deliberately excluded. Any additional input follows its own frozen identity/material contract. |
+| Live conversation about the selected session | Reuse Wave 2 Stage F's separately briefed realtime model, which can read context and propose a message to the selected agent. | Already described by Greg and gated on working dictation; do not reopen who the partner is. Define the bounded handoff and authority using existing guarded delivery, and never imply that a daemon itself converses. |
 | Richer session navigation | Saved filters, grouping by repository/worktree, clear links to receipt/artifacts. | Add only after search/selection and phone continuity solve observed friction; no kanban/project management system. |
 | Multi-account operation | Show explicitly configured account identities first; controlled job/account assignment second. | Medium-term by Greg. Verify isolated config directories empirically, never migrate credentials or round-robin live conversations automatically. |
 | Browser SSE | One transport implementation preserving fallback/lifecycle/freshness semantics. | Existing 5s polling is adequate until measurements say otherwise. Server SSE is already needed by the daemon and is repaired independently. |
@@ -952,6 +1025,12 @@ source expects 2; identify the running binary/service before diagnosing migratio
   full-suite memory refusal and broad-check limitations: sandbox IPC/database access and an existing
   client/API build-revision mismatch. No full-repository green result is claimed.
 - [x] Committed the seven named plan/review/evidence artifacts as `acc13c1f9cc05cd4d4ac69faedf15ec63b72787b` and pushed to `origin/dev`. Review artifacts record candidate closure; no runtime code or services were changed by this work.
+- [x] At Greg's request, [Fable reviewed](260908f-overseer-and-fleet-improvement-roadmap-review-fable.md)
+  the complete committed plan via the Claude wrapper (`claude-fable-5-1`, exit 0, successful result,
+  nonempty answer). Its **REVISE** verdict prompted earlier status delivery, explicit attention
+  ownership, and two small client fixes brought forward. The
+  [disposition](260908f-overseer-and-fleet-improvement-roadmap-review-fable-disposition.md) records
+  every finding, the retained kill/preview safeguards, and validation of this plan revision.
 
 When implementation starts, record each completed stage's commit, focused tests, integrated gate
 result, browser evidence (where applicable), deployment revision, and any remaining unknown. Update

@@ -54,6 +54,10 @@ import { isAdmin } from "../admin.js";
 import type { LibraryEntry, LibraryHit } from "../types.js";
 import { AddArticle } from "./AddArticle.js";
 import { ADDED_NOTE, CARD_NOTES, CHIP_ORDER, DEFAULT_BY, libraryColumns } from "./library-columns.js";
+/* The shelf's own Feedback control, in the masthead row below — the same
+   trigger the corner and the dock draw, in a third shape. FeedbackButton.tsx §
+   `FEEDBACK_SHAPE.masthead`. */
+import { FeedbackTrigger } from "./FeedbackButton.js";
 import { DataTable, naturalDirections, useSortedTable } from "./lib/DataTable.js";
 import { capRows } from "./lib/row-cap.js";
 import { isAllNatural, sinkLast, sortingFromUrl, sortingToUrl } from "./lib/table-sort.js";
@@ -309,8 +313,31 @@ export function Library({
      sort would pick its fifty out of the wrong order. lib/row-cap.ts. */
   const capped = capRows(sorted, SHELF_ROW_CAP[view], expanded);
 
+  /* **`+ var(--safe-top)`, since 2026-09-08, and it is a precondition rather
+     than a tidy-up.** `index.html` carries `viewport-fit=cover`, so on an
+     installed phone the document is laid out across the whole physical screen
+     and every page has to add back the edge it faces (styles/tokens.css). Every
+     other signed-in `<main>` does — `ProfilePage`, `PrivacyPage`, `ContactPage`
+     and `ChangelogPage` at `3.5rem + --safe-top`, `Metadata` and `Tweets` at
+     `2.5rem + --safe-top` — and this page's bare `pt-10` was the one that did
+     not, so on an iPhone the shelf's own `<h1>` sat at y=40 inside a 59px
+     inset: under the clock. Measured 2026-09-08 with the insets stood up in
+     Chrome, because they are `0px` on every machine we develop on and no
+     screenshot from this box shows it.
+
+     It matters *here* because the Feedback button moved into the header row
+     below. `.fb-button` was `top: var(--safe-top)` and cleared the notch on its
+     own; a control in that row inherits whatever this `<main>` says, so moving
+     it without this line would have put it under the status bar on the very
+     device Greg filed the report from.
+
+     **The number is still this page's own** — 2.5rem, exactly what `pt-10` was
+     — because HomeLogo.tsx § Why the corner is free records that a page's top
+     clearance is its own business and there is no shared constant. This adds
+     the inset and changes nothing on a desktop, where `env(safe-area-inset-top)`
+     is `0px`. */
   return (
-    <main className="tw:mx-auto tw:max-w-4xl tw:px-6 tw:pt-10 tw:font-sans">
+    <main className="tw:mx-auto tw:max-w-4xl tw:px-6 tw:pt-[calc(2.5rem_+_var(--safe-top))] tw:font-sans">
       <header className="tw:mb-8">
         {/* The masthead links are deliberately the quietest thing on the page —
             same faint-until-hovered treatment as the back-link in Masthead.tsx,
@@ -359,7 +386,26 @@ export function Library({
               labels are already visible, where the tooltip adds a sentence
               rather than naming the button. */}
           <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
-            <div className="tw:flex tw:items-baseline tw:gap-4">
+            {/* **`ml-auto`, so this group is right-aligned on its own line
+                too.** The row above is `flex-wrap` + `justify-between`, and
+                `space-between` puts a *single* item on a line at that line's
+                start — so as soon as this group wrapped, which is every phone,
+                it sat hard against the left margin with the width of the page
+                empty to its right.
+
+                That was invisible while the group was only `Profile` and
+                `Admin`, and stopped being invisible on 2026-09-08 when the
+                Feedback trigger joined it: Greg's report asks for that button
+                in the **top right**, and on the phone he filed it from the
+                answer was the top left. GPT Sol caught it in review; measured
+                at 390px, the group ran 24→250 in a 366px column.
+
+                `ml-auto` and not `justify-end` on the parent, which would push
+                the wordmark about on the unwrapped line. On that line this
+                changes nothing — `justify-between` had already put the free
+                space here — so it costs one class and only acts once the row
+                has wrapped. */}
+            <div className="tw:ml-auto tw:flex tw:items-baseline tw:gap-4">
               {/* Home is where a global thing gets a way in. The profile page
                   holds what is true of the reader on every article, so a link to
                   it from inside one article would be a link nobody finds —
@@ -393,7 +439,7 @@ export function Library({
               >
                 <Link
                   href={PROFILE_HREF}
-                  className="tw:inline-flex tw:items-center tw:gap-1.5 tw:text-xs tw:text-ink-faint tw:no-underline tw:hover:text-highlight"
+                  className="tw:inline-flex tw:items-center tw:gap-1.5 tw:text-xs tw:text-ink-faint tw:no-underline tw:pointer-coarse:min-h-10 tw:hover:text-highlight"
                 >
                   <User size={13} />
                   Profile
@@ -411,7 +457,7 @@ export function Library({
                 >
                   <Link
                     href={ADMIN_HREF}
-                    className="tw:inline-flex tw:items-center tw:gap-1.5 tw:text-xs tw:text-ink-faint tw:no-underline tw:hover:text-highlight"
+                    className="tw:inline-flex tw:items-center tw:gap-1.5 tw:text-xs tw:text-ink-faint tw:no-underline tw:pointer-coarse:min-h-10 tw:hover:text-highlight"
                   >
                     <Shield size={13} />
                     Admin
@@ -429,6 +475,34 @@ export function Library({
                   *link* gates nothing: `/design` is still open to anybody signed
                   in, deliberately, for the reason admin.md gives about the Admin
                   link beside this one. */}
+              {/* **Feedback, last in the row and therefore right-most**, since
+                  2026-09-08:
+                  > Show the Feedback button in the top right of the logged in
+                  > Homepage
+                  > — Greg, 2026-09-07 (SPIDERYARN-READING2-2C)
+
+                  **It was already in the top right, and that is the point.**
+                  The corner trigger drew on this page at every width with
+                  nothing painted over it — but as a bare `--ink-faint` glyph
+                  fixed to the *window*, a hand's width from this cluster of
+                  identically-styled controls, and with its label given up
+                  entirely below 731px. Two top-rights, and this is the one a
+                  reader looks at. App.tsx stops drawing the corner one here.
+
+                  Last rather than first because this row is right-aligned, so
+                  last is nearest the corner the button used to occupy and the
+                  place Greg's report points at. Ahead of nothing else: `Admin`
+                  is only drawn for the administrator, so for an ordinary reader
+                  the row reads `Profile · Feedback`.
+
+                  Inside the `TooltipGroup` above, so its card opens instantly
+                  once a neighbour's has — it is the same kind of chrome and
+                  should not feel like a different one. The shape it wears is
+                  `FEEDBACK_SHAPE.masthead` in FeedbackButton.tsx, which is
+                  where the classes and the reasoning live; nothing about a
+                  report changes, since `FeedbackHost` has always sent
+                  `slug: null` from every page that is not an article. */}
+              <FeedbackTrigger variant="masthead" />
             </div>
           </TooltipGroup>
         </div>

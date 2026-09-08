@@ -70,6 +70,9 @@ function row(over: Partial<FleetRow> = {}): FleetRow {
     worktree: null,
     meta: { version: "legacy" },
     startedAt: "2026-09-08T00:00:00.000Z",
+    /* The arm the collector produces before `readPauses` has run. Not `none`:
+       a fixture is in no position to claim we looked everywhere. */
+    pause: { kind: "cannot-tell", why: "the fixture did not say", cause: "rate-limits-not-collected" },
     status: IDLE,
     paneId: PANE_A,
     panePid: PANE_PID,

@@ -93,9 +93,11 @@
  * intact. Nothing here renders a bare number: it renders a number wearing its
  * caveat, and `Explain` is how it wears it.
  */
-import { useCallback, useState, type ReactNode } from "react";
+import { useCallback, useRef, useState, type ReactNode } from "react";
 
 import { ActionOutcomeCard, SessionActions, SessionQueue } from "./ActionButtons";
+import { DictationControl, useFleetDictation } from "./DictationControl";
+import { PauseLine } from "./PauseLine";
 import { RecentMessages, useRecentMessages } from "./RecentMessages";
 import { Handles, Handoff, LaunchMode, QuestionCard, StatusPill, Uptime } from "./SessionParts";
 import { Explain } from "./Tooltip";
@@ -103,6 +105,9 @@ import { hasDeliverable, queueFor, type ActionOutcome } from "./actions-client";
 import { transcriptAge, type MessagesApi, type MessagesView } from "./messages-client";
 import { NAME_RULE_TEXT, looksLikeAName, type RenameApi, type RenameOutcome } from "./rename-client";
 import type { SteerApi, SteerOutcome } from "./steer-client";
+
+/** The refusal arm, so the headline table below is keyed by a real union. */
+type SteerFailure = Extract<SteerOutcome, { ok: false }>;
 import type { FleetGate, FleetRow, FleetStatus } from "./types";
 import type { ActionsUi } from "./useActions";
 import { Button, Card, Mono, cx } from "./ui";
@@ -158,9 +163,11 @@ function Outcome({
       </div>
     );
   }
+  const said = DELIVERY_HEADLINE[outcome.delivery.kind];
   return (
     <div className="tw:mt-2 tw:rounded-lg tw:border tw:border-alarm/40 tw:bg-alarm-wash tw:p-3 tw:text-[13px]">
-      <p className="tw:font-medium tw:text-alarm-ink">Nothing was sent.</p>
+      <p className="tw:font-medium tw:text-alarm-ink">{said.head}</p>
+      {said.body === null ? null : <p className="tw:mt-1 tw:font-medium tw:text-alarm-ink">{said.body}</p>}
       {/* Verbatim. Every word of this is the server's. */}
       <p className="tw:mt-1 tw:break-words tw:text-ink">{outcome.why}</p>
       <p className="tw:mt-1 tw:text-[12px] tw:text-ink-faint">
@@ -199,6 +206,44 @@ function Outcome({
     </div>
   );
 }
+
+/**
+ * THE HEADLINE ON A REFUSAL, WHICH IS NOT ALWAYS "NOTHING WAS SENT".
+ *
+ * It was, for every refusal, until 2026-09-08 — and that sentence is false in
+ * the most expensive direction available. `steer.ts` distinguishes three
+ * outcomes and the route sends them; the browser was dropping the field, so a
+ * **partial** delivery — the text landed in that agent's input box and the
+ * Enter did not — rendered as *"Nothing was sent."*, which invites exactly the
+ * retry that appends to the half-sent text instead of replacing it. There is no
+ * way to take the first one back. Instance 5 of
+ * docs/postmortems/260908b, and the server's own comment beside the field had
+ * already named the consumer it needed.
+ *
+ * A `Record` over the closed union rather than a chain of ifs, so a fifth arm
+ * in `DeliveryReading` fails the build here instead of quietly taking the last
+ * branch. `not-told` is deliberately the same words as `unknown` minus the
+ * cause: both mean *we cannot say what reached the pane*, and the difference —
+ * whether the server had an opinion — changes nothing a person would do.
+ */
+const DELIVERY_HEADLINE: Record<SteerFailure["delivery"]["kind"], { head: string; body: string | null }> = {
+  none: { head: "Nothing was sent.", body: null },
+  partial: {
+    head: "PART of it was sent.",
+    body:
+      "The text reached that session's input box and the Enter did not, so it is sitting there unsent. Do NOT send it again — a second message would be added to the end of the first. Go and look: the terminal is the only place this can be fixed.",
+  },
+  unknown: {
+    head: "It is not known whether anything was sent.",
+    body:
+      "The attempt failed in a way that cannot say what reached the pane. Look at the session before trying again — if the text is sitting in its input box, sending again would add to it rather than replace it.",
+  },
+  "not-told": {
+    head: "It is not known whether anything was sent.",
+    body:
+      "The server refused without saying what became of the keystrokes. Treat that as unknown rather than as nothing: look at the session before sending again.",
+  },
+};
 
 /**
  * **Why this dialog is not tappable**, said before you tap rather than after.
@@ -426,6 +471,24 @@ export function SessionDetail({
 }): ReactNode {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
+  /** The composer, so the dictation knows where the caret is. */
+  const box = useRef<HTMLTextAreaElement>(null);
+  /* **Named, so the vocabulary leads with this session's own words.** Somebody
+     dictating here is very often about to say the handle on the screen in front
+     of them, or the worktree it is working in — and the server promotes the
+     named session to the front of the term list for exactly that. */
+  const dictate = useFleetDictation({
+    value: text,
+    onChange: setText,
+    box,
+    context: { kind: "session", sessionId: row.id },
+  });
+  /* Read at the moment of sending rather than captured in a closure: a
+     `useCallback` listing `dictate` would rebuild on every render, and this hook
+     re-renders while somebody is talking. The question is always "is it blocked
+     NOW", which is what a ref answers. */
+  const blocked = useRef(dictate.sendBlocked);
+  blocked.current = dictate.sendBlocked;
   const [outcome, setOutcome] = useState<SteerOutcome | null>(null);
   /**
    * The server's own sentence, once it has told us answering is switched off.
@@ -489,7 +552,15 @@ export function SessionDetail({
     [row, send, steer],
   );
 
+  /* **The submit rule at the action boundary, not only on the button.**
+     `disabled` stops a pointer; it does not stop a programmatic call, and it
+     does not stop a keyboard path somebody adds later. The invariant is that a
+     message never leaves this box while the microphone is on or the transcript
+     is still in flight — on Safari and Firefox the box holds nothing that was
+     said until the transcript lands. GPT Sol's review of the built code,
+     finding 6. */
   const onSend = useCallback(() => {
+    if (blocked.current) return;
     void send(() => steer.message(row, text), true);
   }, [row, send, steer, text]);
 
@@ -553,6 +624,8 @@ export function SessionDetail({
   const offerQueue = row.status.kind !== "idle" || hasDeliverable(waiting);
 
   const onQueue = useCallback(async (): Promise<void> => {
+    /* Same guard, same reason. See `onSend`. */
+    if (blocked.current) return;
     setBusy(true);
     const result = await actions.api.queueMessage(row, text);
     setQueueOutcome(result);
@@ -580,6 +653,7 @@ export function SessionDetail({
           down inside Recent messages. */}
       <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-x-2 tw:gap-y-1">
         <StatusPill status={row.status} />
+        <PauseLine pause={row.pause} status={row.status} now={now} />
         <LastWrote view={reading.view} status={row.status} now={now} />
         <Uptime row={row} now={now} className="tw:ml-auto" />
       </div>
@@ -664,9 +738,14 @@ export function SessionDetail({
             </label>
             <textarea
               id="steer-text"
+              ref={box}
               value={text}
               rows={3}
               disabled={busy || unaddressable !== null}
+              /* `readOnly`, NOT `disabled`, for the ~2 seconds the transcript is
+                 in flight: `disabled` drops the selection, and the selection is
+                 the caret the words are about to be spliced at. */
+              readOnly={dictate.readOnly}
               onChange={(e) => setText(e.target.value)}
               placeholder="e.g. pull the latest dev and carry on"
               className="tw:w-full tw:rounded-md tw:border tw:border-rule tw:bg-panel tw:p-2 tw:text-[14px] tw:text-ink tw:disabled:opacity-50"
@@ -675,7 +754,20 @@ export function SessionDetail({
               {/* THE LABELS CARRY THE DIFFERENCE NOW, so the paragraph that
                   used to explain it is a tap on Queue. "Send" and "Queue it"
                   were two words that did not say which was slower. */}
-              <Button variant="loud" onClick={onSend} disabled={busy || text.trim() === "" || unaddressable !== null}>
+              {/* **`sendBlocked`, not `readOnly`** — they are not the same
+                  thing and the second is the one everybody forgets. `readOnly`
+                  is the two seconds AFTER the press to stop; `armed` is the
+                  microphone still being on. Guard only the first and Send now
+                  types the rough live guesses into a live agent's pane, or on
+                  Safari and Firefox types nothing that was said at all. And the
+                  button is disabled as well as guarded: a correct guard behind a
+                  lit button is a press that does nothing and says nothing, which
+                  is the worse half of the pair. */}
+              <Button
+                variant="loud"
+                onClick={onSend}
+                disabled={busy || text.trim() === "" || unaddressable !== null || dictate.sendBlocked}
+              >
                 {busy ? "Sending…" : "Send now"}
               </Button>
               {/* The second gesture, not a fallback for the first — and absent on
@@ -690,7 +782,10 @@ export function SessionDetail({
                   }}
                   placement="top"
                 >
-                  <Button onClick={() => void onQueue()} disabled={busy || text.trim() === "" || unaddressable !== null}>
+                  <Button
+                    onClick={() => void onQueue()}
+                    disabled={busy || text.trim() === "" || unaddressable !== null || dictate.sendBlocked}
+                  >
                     Queue (~73s)
                   </Button>
                 </Explain>
@@ -701,6 +796,15 @@ export function SessionDetail({
                   a two-line message arrives as two, the first half a sentence. */}
               <span className="tw:text-[12px] tw:text-ink-faint">One line — a newline would submit it early.</span>
             </div>
+            {/* On its own row rather than in with the send buttons: it grows a
+                status line, a level meter and sometimes a failure sentence, and
+                a control that changes width should not be pushing Send now
+                around under a thumb. */}
+            <DictationControl
+              dictation={dictate.dictation}
+              toggle={dictate.toggle}
+              className="tw:mt-1.5"
+            />
             {offerQueue ? null : (
               <p className="tw:mt-1 tw:text-[12px] tw:text-ink-faint">
                 It is at a prompt, so Send is all there is to do here. Queue comes back when it is working, or when

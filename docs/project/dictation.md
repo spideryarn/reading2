@@ -301,12 +301,21 @@ the reader are one line of code with no branch to get wrong.
 
 ```tsx
 const box = useRef<HTMLTextAreaElement>(null);
-const dictate = useDictationField({ value, onChange, box, context: { kind: "article", slug } });
+const dictate = useDictationField({
+  value, onChange, box,
+  context: { kind: "article", slug },
+  transcribe: sendForTranscription,
+});
 
 <textarea ref={box} readOnly={dictate.readOnly} … />
 <DictationButton dictation={dictate.dictation} toggle={dictate.toggle} />
 <DictationStrip dictation={dictate.dictation} />
 ```
+
+`transcribe` is always `sendForTranscription` from
+[`dictation-upload.ts`](../../src/web/dictation-upload.ts) in this app, and it is a parameter rather
+than something the hook imports — see [The hook does not know which server it is talking
+to](#the-hook-does-not-know-which-server-it-is-talking-to) below.
 
 `context` is the only thing a caller has to decide, and it says **where** rather than **what**:
 `{ kind: "article", slug }` or `{ kind: "profile" }`. The server turns that into words — see
@@ -338,6 +347,30 @@ parent renders it open *or* shut, as `FeedbackButton` does — closing it unmoun
 `useDictation`'s cleanup never runs and the microphone keeps recording behind a shut dialog. One
 effect on the open flag fixes it, calling `dictation.toggle` (not the field wrapper's `toggle`,
 which puts the focus back into a box that is no longer on screen).
+
+## The hook does not know which server it is talking to
+
+**Since 2026-09-08, `useDictation` takes a `transcribe` function rather than importing one**, and is
+generic in whatever `context` that function wants. It snapshots the context when a press starts,
+travels it on a kept recording, and never looks inside — all the care described above is unchanged;
+only the knowledge of *where the words go* has left.
+
+That is not tidiness. Greg asked for the fleet dashboard's message boxes to get this feature, and to
+**reuse** it rather than copy it — *"Borrow (or better still reuse) from Spideryarn"*. The fleet tool
+([overseer-direction.md](overseer-direction.md)) must run with this product's server absent,
+and one import stood in the way of all ~3,000 lines: `useDictation` called `sendForTranscription`,
+which calls `apiFetch`, which reaches Supabase, Sentry, the offline store and the billing plan. That
+one edge measured **21 files and 16,054 lines** behind a hook that needs six. Cutting it took
+`useDictation.ts`'s whole closure to **8 files, 2,938 lines and `react`**.
+
+So the contract is [`transcriber.ts`](../../src/web/transcriber.ts) — two types, no imports — and the
+tool that borrows it is pinned by `tests/fleet-imports.test.ts`, which fails if the list of `src/`
+files the fleet reaches changes at all. The plan and the numbers are
+[260908f § Stage E](../plans/260908f-orchestrator-wave-2-write-path-usage-limits-box-health-history-attention-inbox-codex-adapter.md).
+
+**What the fleet did NOT take is the chrome.** `DictationStrip.tsx` and `MicLevel.tsx` render against
+this app's hand-written class names, so importing them typechecks, builds, and draws an unstyled
+button. Reuse the machinery, write the chrome — worth knowing before adding a class name to either.
 
 ## The audio leaves the machine now
 

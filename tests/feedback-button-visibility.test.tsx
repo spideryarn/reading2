@@ -77,6 +77,9 @@ globalThis.fetch = (async (input: RequestInfo | URL) => {
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const { App } = await import("../src/web/App.js");
+/* After the mocks, like `App` above and for the same reason: this module mounts
+   `FeedbackDialog`, which reaches for a Supabase session on the way in. */
+const { FEEDBACK_TRIGGER_SELECTOR } = await import("../src/web/FeedbackButton.js");
 
 let host: HTMLDivElement;
 let root: Root;
@@ -100,10 +103,30 @@ afterEach(() => {
   host.remove();
 });
 
+/**
+ * **Any shape of trigger, not one named class.**
+ *
+ * This file is about *who* gets a button, and it was written when `.fb-button`
+ * was the only answer. It has been the wrong question twice since: the reading
+ * view's moved into the bar on 2026-09-06, and the shelf's into its own
+ * masthead row on 2026-09-08 — at which point the signed-in **control case**
+ * here went red while the app was behaving correctly, because the shelf now
+ * draws `.fb-masthead`.
+ *
+ * That is the failure worth naming, and it is not the noisy direction. Had the
+ * control been an absence assertion instead, the same drift would have made it
+ * pass *harder* — a file whose every line says "no button here" agrees
+ * enthusiastically with a class nobody renders any more, which is what
+ * docs/reusable/silent-success.md is about. So the selector is
+ * `FEEDBACK_TRIGGER_SELECTOR`, derived from `FEEDBACK_SHAPE` itself, and the
+ * three absence cases below are the ones that most needed it.
+ */
+const triggers = () => document.querySelectorAll(FEEDBACK_TRIGGER_SELECTOR);
+
 describe("the Feedback button", () => {
   it("is not drawn for a reader who is not signed in", async () => {
     await show("/");
-    expect(document.querySelector(".fb-button")).toBeNull();
+    expect(triggers()).toHaveLength(0);
   });
 
   /**
@@ -119,13 +142,17 @@ describe("the Feedback button", () => {
    */
   it("is not drawn for an anonymous reader on a shared article", async () => {
     await show("/read/a-piece");
-    expect(document.querySelector(".fb-button")).toBeNull();
+    expect(triggers()).toHaveLength(0);
   });
 
   it("is drawn for a signed-in reader — the control for the assertions above", async () => {
     session.user = { id: "reader-1", email: "reader@example.com" };
     await show("/");
-    expect(document.querySelector(".fb-button")).not.toBeNull();
+    /* On the shelf this is the masthead shape, since 2026-09-08. *Which* shape
+       is tests/dock-corner-controls.test.tsx's question — this file only asks
+       that a signed-in reader is offered one at all, which is what makes it the
+       control for the two absences above. */
+    expect(triggers()).toHaveLength(1);
   });
 
   /* A second signed-in route, so the claim is "every signed-in page" rather than
@@ -140,6 +167,12 @@ describe("the Feedback button", () => {
   it("is drawn on a signed-in page that is not the shelf", async () => {
     session.user = { id: "reader-1", email: "reader@example.com" };
     await show("/privacy");
+    expect(triggers()).toHaveLength(1);
+    /* Named here and nowhere else in this file: `/privacy` is one of the pages
+       that still draws the **corner** shape, and since 2026-09-08 the shelf
+       above does not. Asserting the class on this case is what keeps "a second
+       signed-in route" meaning a second *kind* of page rather than two spellings
+       of the same one — the mistake the note above records when `/design` left. */
     expect(document.querySelector(".fb-button")).not.toBeNull();
   });
 });

@@ -1,0 +1,24 @@
+  answer. A closed gutter is pointer-events: none — so the tap falls through to the cell — which is the finger's version
+  of "hovering blank gutter still reveals the icons" that gutter.css already documents for a pointer. The reader who prods
+  the empty column gets the controls.
+
+  I found that by catching a defect in the new test: it asserted that tapping a closed gutter does not select, and passed
+  — but only because jsdom doesn't implement pointer-events. A green assertion about a state a browser cannot produce.
+  Rewritten against the open "…" panel, which takes its hit-testing back on purpose (it's opaque, and the paragraph behind
+  it mustn't be pressable through it) and so is the state the exclusion entry actually defends. Mutating the entry away
+  now makes it red.
+
+  The full suite is still running in tmux with no failures so far; the box refused a couple of new vitest starts on memory
+  pressure, which is the admission guard, not a test result.
+
+✻ Waiting for 1 background agent to finish
+
+───────────────────────────────────────────────────────────────────────────────────────────── fb2g-gutter-icons-on-touch ─
+❯ 
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  [Opus 5 (1M context)] worktrees/gutter-icons-on-touch (worktree-gutter-icons-on-touch) ⑂ gutter-icons-on-touch · ██░░…
+  ⏵⏵ auto mode on · gh auth login for PR status · 2 shells · ← for agents
+                                                                                                                     /rc
+
+  ● main
+  ◯ general-purpose  Adding band-covers fallback to check script                               13m 39s · ↓ 206.3k tokens

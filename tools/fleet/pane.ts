@@ -3,7 +3,7 @@
  *
  * READ-ONLY BY CONSTRUCTION, like the rest of tools/fleet. Nothing here sends a
  * keystroke; it works out what *would* be sent, and hands that to a caller that
- * has its own decision to make. See docs/project/orchestrator-direction.md for
+ * has its own decision to make. See docs/project/overseer-direction.md for
  * the direction and the measured constraints, and
  * docs/plans/260907e-agent-fleet-dashboard.md § v0.4 for the slice.
  *

@@ -7,7 +7,7 @@
  * The register in `current.json` is the only copy that survives, which is why
  * `meta.dir` is carried whole rather than reconstructed from a transcript path:
  * that path is a slugified cwd and is lossy, and `repo` is not derivable from
- * it at all. docs/project/orchestrator-direction.md § The store.
+ * it at all. docs/project/overseer-direction.md § The store.
  *
  * ## It lives OUTSIDE the repo, and that is not tidiness
  *
@@ -105,6 +105,9 @@ import {
 import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
 
+import type { AttentionItem, AttentionList, StoredUsage } from "../fleet/wire.js";
+import { parseAnswerability } from "./attention-memory.js";
+import { parseUsageReport } from "./usage.js";
 import type { SessionKind, SessionMeta } from "../../scripts/gjd-remote-tmux.js";
 import {
   REGISTER_ROW_FIELDS,
@@ -151,7 +154,7 @@ export { isProcessAlive, type LockHolder };
  * `now - NaN` renders as a blank or a nonsense age rather than as an error —
  * the WRONG half of the rule, not the poorer half. The bump makes that consumer
  * say *I cannot read this*, which is what
- * docs/project/orchestrator-direction.md § The seam is a file tells it to do
+ * docs/project/overseer-direction.md § The seam is a file tells it to do
  * with a schema it does not know.
  *
  * **Nothing is migrated.** An old checkpoint is refused, the log is replayed,
@@ -380,9 +383,115 @@ export type Checkpoint = {
   /** So a reader can say *the Overseer is dead* rather than showing a stale register as current. */
   heartbeat: { pid: number; instanceId: string; startedAt: string; lastTickAt: string | null; ticks: number };
   register: readonly RegisterEntry[];
+  /**
+   * WHAT NEEDS GREG — the attention inbox, produced by `attention-pass.ts` and
+   * rendered by the dashboard, which imports the type from `tools/fleet/wire.ts`
+   * rather than re-declaring it.
+   *
+   * **NO SCHEMA BUMP, and the file's own rule is what decides it.** A reader that
+   * ignored this field draws no inbox, which is POORER rather than WRONG — unlike
+   * schema 2's `statusSince`, where a consumer written against schema 1 would
+   * `Date.parse` a pair and render `NaN` as a blank age. Adding a field is not a
+   * bump, and a version that changes on every addition is one nobody checks.
+   *
+   * **It carries its own clock**, and that is not redundant with `writtenAt`. The
+   * pass costs model calls and does not run on every tick, so the list published
+   * here can be older than the checkpoint around it: `scannedAt` says when it was
+   * determined, `writtenAt` says when it was last written down, and only the
+   * first can tell a calm fleet from a pass that stopped running.
+   */
+  attention: AttentionList;
+  /**
+   * HOW CLOSE THIS ACCOUNT IS TO A LIMIT, produced by `usage.ts` and rendered by
+   * the dashboard, which imports the type from `tools/fleet/wire.ts`.
+   *
+   * **No schema bump, for the same reason `attention` was not one**: a reader
+   * that ignores this draws no usage panel, which is poorer rather than wrong.
+   *
+   * **The store REMEMBERS and the pass JUDGES, and the split is deliberate.**
+   * The report is held whole, exactly as it was collected, and the store never
+   * merges two of them. Which of a new report and a stored one should survive is
+   * a judgement that needs the current account and the new scan's coverage —
+   * both of which the pass has and this file does not:
+   *
+   *     a report whose scan was COMPLETE always supersedes; one whose scan was
+   *     INCOMPLETE supersedes only if what is stored is also incomplete or absent.
+   *
+   * That is the whole of the carry-forward this field was added for, and it lives
+   * in the caller. An earlier design had the store remembering individual
+   * rejections with their expiries and re-checking each one's attribution; it was
+   * dropped because it needed a second representation of a rejection inside the
+   * store and the store would have had to learn what account is logged in now.
+   * A held report carries its own `account` and `collectedAt`, so a stale
+   * attribution is visible rather than remembered as a fact.
+   *
+   * **A held report is not a fresh one and says so.** `collectedAt` is inside the
+   * report; `writtenAt` on the checkpoint is when it was last written down. Only
+   * the first can tell a quiet account from a pass that stopped running, which is
+   * why a scan costing 30–45 seconds is not run on every tick.
+   */
+  usage: StoredUsage;
 };
 
-export type CheckpointUpdate = { lastGoodSnapshotAt: string | null; tick: boolean };
+/**
+ * What a checkpoint carries before any usage pass has run.
+ *
+ * The `none` arm rather than an empty report, for the reason
+ * [`StoredUsage`](../fleet/wire.ts) gives: a report saying *no limits found* is a
+ * claim, and it is the most reassuring possible lie for a probe that has never
+ * looked.
+ */
+export function usageNotYetRun(at: string): StoredUsage {
+  return {
+    kind: "none",
+    why:
+      "no usage pass has run in this Overseer yet, so no account has been read. This instant is when " +
+      "the checkpoint was written, not when anything was scanned.",
+    at,
+  };
+}
+
+/**
+ * The list a checkpoint carries before any pass has run.
+ *
+ * `scannedAt` is the checkpoint's own instant, and `why` says so in as many
+ * words, because the field's contract is *when we tried* and nothing tried. The
+ * alternative — a `kind: "list"` with no items — would say *nothing needs Greg*,
+ * which is a claim, and the most reassuring possible lie for a probe that has
+ * never run.
+ */
+export function attentionNotYetRun(at: string): AttentionList {
+  return {
+    kind: "unknown",
+    why:
+      "no attention pass has run in this Overseer yet, so nothing has been looked at. This instant is " +
+      "when the checkpoint was written, not when anything was scanned.",
+    scannedAt: at,
+  };
+}
+
+export type CheckpointUpdate = {
+  lastGoodSnapshotAt: string | null;
+  tick: boolean;
+  /**
+   * A new attention list, or omitted to keep the one the store already holds.
+   *
+   * Omitted is the normal case: the pass is paid for and runs less often than a
+   * tick, so most writes carry no new list. Keeping the old one is right — the
+   * questions have not gone away because we did not look — and honest, because
+   * the list says when it was scanned.
+   */
+  attention?: AttentionList;
+  /**
+   * A new usage report, or omitted to keep the one the store already holds.
+   *
+   * Omitted is the normal case and more so than for `attention`: a full scan is
+   * 30–45 seconds over ~2.9 GB, so it runs on its own slow timer rather than on a
+   * tick. **The caller decides whether a new report supersedes a stored one** —
+   * see `Checkpoint.usage` — and simply omits this when it should not.
+   */
+  usage?: StoredUsage;
+};
 
 export type CheckpointRead =
   | { kind: "checkpoint"; checkpoint: Checkpoint }
@@ -991,8 +1100,184 @@ function parseCheckpoint(u: unknown): ParseResult<Checkpoint> {
       cursor: { events: cursorEvents, bytes: cursorBytes },
       heartbeat: { pid, instanceId, startedAt: heartbeatStartedAt, lastTickAt, ticks },
       register,
+      attention: parseAttentionList(u["attention"], writtenAt),
+      usage: parseStoredUsage(u["usage"], writtenAt),
     },
   };
+}
+
+/**
+ * Read the usage report back, **degrading rather than failing the checkpoint** —
+ * the same decision as `parseAttentionList` below and for the same reason: the
+ * report is regenerated by the next scan, so a malformed one that forced a full
+ * log replay would pay the expensive remedy for the cheap problem.
+ *
+ * **The body is parsed by `usage.ts`, not here, and that is deliberate.** A
+ * `UsageReport` is an account, a cache reading union, a scan union carrying an
+ * array of rejections, and a verdict whose `activeLimit` is a nullable one of
+ * those. Every arm of that is knowledge the producer has and this file does not,
+ * and a consumer-written parser is a second hand-written declaration of one type
+ * — the class this whole seam exists to refuse. It fails in the quiet direction
+ * too: a field silently absent reads as a report that merely says less. Same
+ * argument that put `RateLimitHit.id` on the producer rather than having this
+ * file compose a key by hand.
+ *
+ * So this function owns exactly two things — that the wrapper is well-formed, and
+ * that **every failure becomes `none` with a reason** rather than a report that
+ * says nothing is wrong.
+ */
+function parseStoredUsage(u: unknown, writtenAt: string): StoredUsage {
+  if (u === undefined) {
+    return {
+      kind: "none",
+      why: "this checkpoint carries no usage report: it was written before the Overseer had one.",
+      at: writtenAt,
+    };
+  }
+  const bad = (why: string): StoredUsage => ({ kind: "none", why: `the stored usage report was unusable: ${why}`, at: writtenAt });
+  if (!isRecord(u)) return bad("it is not an object");
+  if (u["kind"] === "none") {
+    return typeof u["why"] === "string" && isIsoTimestamp(u["at"])
+      ? { kind: "none", why: u["why"], at: u["at"] }
+      : bad("a none arm with no reason or no instant");
+  }
+  if (u["kind"] !== "report") return bad(`kind ${JSON.stringify(u["kind"])} is neither "report" nor "none"`);
+  const report = parseUsageReport(u["report"]);
+  // `null` on the FIRST mismatch rather than a partial report: a half-parsed
+  // reading is the one thing worse than no reading, because it is indistinguishable
+  // from a complete one that found less.
+  return report === null ? bad("the report is not one this build can read") : { kind: "report", report };
+}
+
+/**
+ * Read the attention list back, **degrading rather than failing the checkpoint**.
+ *
+ * The opposite decision from the register above, and the difference is whether
+ * there is a second copy. The register is the thing there is none of — losing an
+ * entry silently turns a fleet of thirty-six into thirty-five — so a bad entry
+ * fails the whole checkpoint and the log is replayed. The attention list is
+ * regenerated by the next pass at the cost of a few model calls, so a malformed
+ * one that forced a full replay would be paying the expensive remedy for the
+ * cheap problem.
+ *
+ * **What it must not do is come back as an empty list.** Absent, malformed and
+ * *nothing needs you* are three different facts, and the third is a claim. So
+ * every failure lands in the `unknown` arm carrying the reason, which is what
+ * the dashboard renders as "could not tell" rather than as a calm fleet.
+ *
+ * **EXHAUSTIVE, and it used not to be.** GPT Sol's finding 3: the first version
+ * checked the evidence discriminant, two ids and a timestamp, and then cast the
+ * rest. `{"id":"x","sessionId":"$1","waitingSince":"…","evidence":{"kind":
+ * "dialog"}}` was written into a real checkpoint, came back as a valid
+ * `kind:"list"`, and `inboxLines()` threw on the missing `duplicates`. A dialog
+ * arm with no question and no options also crossed the evidence boundary — the
+ * one boundary this whole design is built to hold. So every field and every
+ * union arm is parsed, and the first mismatch degrades the whole list.
+ */
+function parseAttentionList(u: unknown, writtenAt: string): AttentionList {
+  if (u === undefined) {
+    return {
+      kind: "unknown",
+      why: "this checkpoint carries no attention list: it was written before the Overseer had one.",
+      scannedAt: writtenAt,
+    };
+  }
+  const bad = (why: string): AttentionList => ({ kind: "unknown", why: `the stored list was unusable: ${why}`, scannedAt: writtenAt });
+  if (!isRecord(u)) return bad("it is not an object");
+  const scannedAt = u["scannedAt"];
+  if (!isIsoTimestamp(scannedAt)) return bad("scannedAt is not an ISO timestamp");
+  if (u["kind"] === "unknown") {
+    return typeof u["why"] === "string"
+      ? { kind: "unknown", why: u["why"], scannedAt }
+      : bad("an unknown list with no reason");
+  }
+  if (u["kind"] !== "list") return bad(`kind ${JSON.stringify(u["kind"])} is neither "list" nor "unknown"`);
+  if (!isNonNegativeInteger(u["sessionsScanned"])) return bad("sessionsScanned is not a count");
+  // Absent on a list written before the field existed. Read as 0 rather than
+  // refused: the field says how much we FAILED to judge, and a producer that
+  // never had it made no claim either way — refusing the whole list over it would
+  // pay the expensive remedy for the cheap problem, which is this parser's rule.
+  const unreadable = u["sessionsUnreadable"];
+  if (unreadable !== undefined && !isNonNegativeInteger(unreadable)) return bad("sessionsUnreadable is not a count");
+  const rawItems = u["items"];
+  if (!Array.isArray(rawItems)) return bad("items is not an array");
+  const items: AttentionItem[] = [];
+  for (const raw of rawItems) {
+    const item = parseAttentionItem(raw);
+    if (item === null) return bad("an item is not one this build can read");
+    items.push(item);
+  }
+  return {
+    kind: "list",
+    items,
+    sessionsScanned: u["sessionsScanned"],
+    sessionsUnreadable: typeof unreadable === "number" ? unreadable : 0,
+    scannedAt,
+  };
+}
+
+const ATTENTION_KINDS: readonly string[] = ["irreversible", "product", "technical", "other"];
+
+/** Every field, every arm. `null` on the first mismatch — see `parseAttentionList`. */
+function parseAttentionItem(u: unknown): AttentionItem | null {
+  if (!isRecord(u)) return null;
+  const id = u["id"];
+  const sessionId = u["sessionId"];
+  const sessionName = u["sessionName"];
+  const kind = u["kind"];
+  if (typeof id !== "string" || typeof sessionId !== "string" || typeof sessionName !== "string") return null;
+  if (typeof kind !== "string" || !ATTENTION_KINDS.includes(kind)) return null;
+  const waitingSince = u["waitingSince"];
+  if (!isIsoTimestamp(waitingSince)) return null;
+  const evidence = parseAttentionEvidence(u["evidence"]);
+  if (evidence === null) return null;
+  const answerability = parseAnswerability(u["answerability"]);
+  if (answerability === null) return null;
+  const rawDuplicates = u["duplicates"];
+  if (!Array.isArray(rawDuplicates)) return null;
+  const duplicates: { sessionId: string; sessionName: string; waitingSince: string }[] = [];
+  for (const d of rawDuplicates) {
+    if (!isRecord(d)) return null;
+    if (typeof d["sessionId"] !== "string" || typeof d["sessionName"] !== "string") return null;
+    if (!isIsoTimestamp(d["waitingSince"])) return null;
+    duplicates.push({ sessionId: d["sessionId"], sessionName: d["sessionName"], waitingSince: d["waitingSince"] });
+  }
+  return {
+    id,
+    sessionId,
+    sessionName,
+    waitingSince,
+    kind: kind as AttentionItem["kind"],
+    evidence,
+    answerability,
+    duplicates,
+  };
+}
+
+/**
+ * The evidence union, both arms in full.
+ *
+ * **This is the boundary the whole design is built to hold**, so a `dialog` with
+ * no question and no options must not cross it: it would arrive at a renderer as
+ * something observed and enumerable, and that is the arm that gets the easy
+ * affordance.
+ */
+function parseAttentionEvidence(u: unknown): AttentionItem["evidence"] | null {
+  if (!isRecord(u)) return null;
+  if (u["kind"] === "dialog") {
+    const question = u["question"];
+    const options = u["options"];
+    if (typeof question !== "string" || !Array.isArray(options)) return null;
+    if (!options.every((o) => typeof o === "string")) return null;
+    return { kind: "dialog", question, options: options as string[] };
+  }
+  if (u["kind"] === "prose") {
+    const excerpt = u["excerpt"];
+    const why = u["why"];
+    if (typeof excerpt !== "string" || typeof why !== "string") return null;
+    return { kind: "prose", excerpt, why };
+  }
+  return null;
 }
 
 /**
@@ -1340,6 +1625,36 @@ class Store implements OverseerStore {
   /** THIS INSTANCE'S ticks, reset by a restart on purpose: a counter that survives one cannot tell a day of smooth running from two hundred restarts. `instanceId` and `startedAt` beside it say which instance is counting. */
   private ticks = 0;
   private lastTickAt: string | null = null;
+  /**
+   * The last attention list a caller handed in, held so a write that carries no
+   * new one does not blank the inbox.
+   *
+   * **Not restored across a restart, deliberately.** It could be — the previous
+   * checkpoint holds one — and it must not be: the durations in it are
+   * first-seen instants for questions that may have been answered while we were
+   * down, and republishing them would report a wait we cannot vouch for. That is
+   * the `13m` bug in `StatusSince` above, one level up, and the honest answer is
+   * the same as the one the register gives: say we do not know, and look again.
+   */
+  private attention: AttentionList;
+  /**
+   * The last usage report, **restored from the previous checkpoint** — the
+   * opposite of `attention` above, and the contrast is the rule rather than an
+   * inconsistency.
+   *
+   * A wait is about **continuous observation**: `waitingSince` is a first-seen
+   * instant, and a gap we were absent for is a gap in which the question may have
+   * been answered, so republishing it claims a wait nobody watched. A rate-limit
+   * rejection is about **text**, and carries its own machine-readable
+   * `resetsAt`: it was true before the restart and it is true after it. Throwing
+   * it away would mean re-reading 2.9 GB to learn something we already knew.
+   *
+   * What it is NOT is fresh. `collectedAt` inside the report says when it was
+   * taken and `account` says whose it was, so a restored report that is now stale
+   * or belongs to a different login is visible as such rather than remembered as
+   * a fact — the judgement is the pass's, which has both halves.
+   */
+  private usage: StoredUsage;
   private closed = false;
 
   constructor(input: {
@@ -1351,6 +1666,8 @@ class Store implements OverseerStore {
     fd: number;
     bytes: number;
     events: number;
+    /** From the previous checkpoint when there was a readable one; absent on a cold or rebuilt start. */
+    usage?: StoredUsage;
   }) {
     this.root = input.root;
     this.lock = input.lock;
@@ -1361,6 +1678,8 @@ class Store implements OverseerStore {
     this.fd = input.fd;
     this.bytes = input.bytes;
     this.events = input.events;
+    this.attention = attentionNotYetRun(input.now().toISOString());
+    this.usage = input.usage ?? usageNotYetRun(input.now().toISOString());
   }
 
   get register(): SessionRegister {
@@ -1435,7 +1754,21 @@ class Store implements OverseerStore {
       // The register is taken from the fold rather than from the caller, so a
       // caller cannot hand in a register that disagrees with the log.
       register: [...this.registerMap.values()],
+      // The attention list DOES come from the caller, and that is the difference
+      // between the two: the register is folded from events this store owns,
+      // while the list is a judgement made outside it. Held across writes that
+      // carry no new one, because the questions have not gone away because we
+      // did not look — and the list says when it was scanned, so a held one
+      // cannot pass itself off as fresh.
+      attention: update.attention ?? this.attention,
+      // Same rule as the list above, and it matters more here because the scan
+      // is 30-45 seconds rather than a few model calls: most writes carry no new
+      // report, and holding the last one is right because an account has not
+      // stopped being rate-limited just because nobody looked.
+      usage: update.usage ?? this.usage,
     };
+    if (update.attention !== undefined) this.attention = update.attention;
+    if (update.usage !== undefined) this.usage = update.usage;
     writeAtomically(join(this.root, CHECKPOINT_FILE), this.root, `${JSON.stringify(checkpoint, null, 2)}\n`);
     return { ok: true, checkpoint };
   }
@@ -1609,7 +1942,30 @@ export function openStore(options: OpenStoreOptions = {}): OpenStoreResult {
     };
     return {
       ok: true,
-      store: new Store({ root, lock, now, opening, register, fd, bytes: size, events }),
+      store: new Store({
+        root,
+        lock,
+        now,
+        opening,
+        register,
+        fd,
+        bytes: size,
+        events,
+        // RESTORED ACROSS A RESTART, which is the opposite of what `attention`
+        // does two fields away — and the contrast is the rule, not an
+        // inconsistency. A wait is about CONTINUOUS OBSERVATION: a question's
+        // first-seen instant cannot survive a gap in which it may have been
+        // answered. A rate-limit rejection is about TEXT, with a machine-readable
+        // `resetsAt`: it was true before the restart, it is true after it, and
+        // re-finding it costs 30-45 seconds of reading 2.9 GB.
+        //
+        // Only from a checkpoint we could actually read. A rebuilt or cold start
+        // has no report and must say so rather than inherit one. Spread rather
+        // than `: undefined`, so the key is ABSENT rather than present-and-empty —
+        // `exactOptionalPropertyTypes` is on precisely so those two cannot be
+        // confused, and this is the case it is guarding.
+        ...(read.kind === "checkpoint" ? { usage: read.checkpoint.usage } : {}),
+      }),
     };
   } catch (cause) {
     release();

@@ -121,7 +121,7 @@ export function statusLabel(status: FleetStatus): { text: string; detail: string
 /**
  * Which of the three bands a status belongs to. Lower sorts higher.
  *
- * The bands are Greg's, out of docs/project/orchestrator-direction.md: the
+ * The bands are Greg's, out of docs/project/overseer-direction.md: the
  * first question the page answers is *does anyone need something from me*, and
  * the second is *what is actually moving*. Everything else is one band, because
  * a screen with seven ranks is a screen nobody reads the bottom of.
@@ -396,6 +396,38 @@ export const CONSEQUENCE_LABEL: Record<FleetConsequence, string> = {
 };
 
 /** The longer version, for the card the badge carries. */
+/**
+ * The second half of the card — what a reader could NOT have guessed by
+ * pressing the control (docs/project/tooltips.md).
+ *
+ * **A Record rather than one sentence for all four, because one sentence said
+ * the same thing twice on the arm that matters.** `unknown`'s `what` already
+ * explains that the classifier is written to be wrong in one direction only and
+ * that anything it cannot place is drawn as loudly as a permanent choice — so a
+ * `how` repeating both, which is what shipped, filled the slot reserved for new
+ * information with an echo. Found in a screenshot rather than in a review:
+ * rendered together the two paragraphs read as one point made twice, and
+ * neither is wrong on its own.
+ *
+ * The three classified arms keep the one-direction sentence, because for those
+ * it IS the unguessable part: a reader looking at "Yes, and don't ask again"
+ * has no way to know the label was matched by a rule that deliberately errs
+ * loud.
+ */
+export const CONSEQUENCE_HOW: Record<FleetConsequence, string> = {
+  decline:
+    "Worked out from the wording of the label, which is all the terminal gives us. It is written to be wrong in one direction only, so anything it cannot classify is drawn as loudly as a permanent choice.",
+  once: "Worked out from the wording of the label, which is all the terminal gives us. It is written to be wrong in one direction only, so anything it cannot classify is drawn as loudly as a permanent choice.",
+  persistent:
+    "Worked out from the wording of the label, which is all the terminal gives us. It is written to be wrong in one direction only, so anything it cannot classify is drawn as loudly as a permanent choice.",
+  /* NOT a repeat of `what`. What a reader cannot guess here is that the badge
+     says nothing about THIS option in particular — every option on an
+     AskUserQuestion is unclassified, because the agent writes its own labels
+     and none of them says "yes". */
+  unknown:
+    "The wording of the label is all the terminal gives us, and this one matches nothing the classifier knows. On a question an agent wrote itself, that is normal and every option will say the same — it is the answer to how far this goes, not a judgement about this option against the others.",
+};
+
 export const CONSEQUENCE_WHAT: Record<FleetConsequence, string> = {
   decline: "Refuses this one thing. The session carries on and asks again next time.",
   once: "Approves this action and nothing after it.",

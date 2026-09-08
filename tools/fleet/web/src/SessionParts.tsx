@@ -33,6 +33,7 @@ import type {
 import {
   CONSEQUENCE_LABEL,
   CONSEQUENCE_TONE,
+  CONSEQUENCE_HOW,
   CONSEQUENCE_WHAT,
   formatDuration,
   optionHint,
@@ -268,7 +269,7 @@ function Consequence({ consequence }: { consequence: FleetConsequence }): ReactN
       tip={{
         head: "How far this goes",
         what: CONSEQUENCE_WHAT[consequence],
-        how: "Worked out from the wording of the label, which is all the terminal gives us. It is written to be wrong in one direction only, so anything it cannot classify is drawn as loudly as a permanent choice.",
+        how: CONSEQUENCE_HOW[consequence],
       }}
       placement="left"
       className="tw:shrink-0"

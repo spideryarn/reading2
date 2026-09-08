@@ -92,7 +92,7 @@ listed here; the names under each are files in `docs/project/`.
   `feedback.md` (the Feedback button, and where a bug report goes) ·
   `feedback-reports.md` (and what an agent does with one afterwards) ·
   `hetzner-remote-server-box.md` (the always-on box, and `gjd-remote`) ·
-  `orchestrator-direction.md` (where the fleet dashboard is going, and what talking to a session
+  `overseer-direction.md` (where the fleet dashboard is going, and what talking to a session
   actually costs) ·
   `changelog.md` (turning deploys into the public `/changelog`) ·
   `worktrees.md` (one tree per agent, and how to start one) ·
@@ -183,7 +183,7 @@ lands before the code that matches it, and breaks production for the minutes in 
 **But there are three standards, not one** — Greg, 2026-09-08: *"Briefly broken is fine for dev, have
 a slightly higher standard for the orchestrator and its web interface, and a higher standard still
 for keeping things working in prod."* The middle tier is the easy one to miss;
-[orchestrator-direction.md](docs/project/orchestrator-direction.md#a-higher-bar-for-robustness-here-than-elsewhere-and-its-ceiling)
+[overseer-direction.md](docs/project/overseer-direction.md#a-higher-bar-for-robustness-here-than-elsewhere-and-its-ceiling)
 says why the thing you reach for when something else is broken cannot run on the same licence.
 What we are not trading away is design: write code that will still be good to work with in six
 months. It loosens nothing in **Real data belongs to the reader** below.

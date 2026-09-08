@@ -19,7 +19,7 @@
        import from src/ (bar UI primitives). They run exactly the way scripts/
        does, tsx and node ESM, so they are checked by this project for the same
        reason. The fleet dashboard is the first of them:
-       docs/project/orchestrator-direction.md.
+       docs/project/overseer-direction.md.
 
        Its browser half is NOT node and is excluded below — see
        tools/fleet/web/tsconfig.json, which explains what went wrong when this

@@ -14,14 +14,14 @@ Greg, 2026-09-08, in one message:
 > Push and pull periodically
 
 The direction, the constraints and every earlier quote live in
-[orchestrator-direction.md](../project/orchestrator-direction.md). This plan does not restate them; it
+[overseer-direction.md](../project/overseer-direction.md). This plan does not restate them; it
 says what gets built, by whom, in what order, and what done looks like.
 
 ## Two things are already answered, and the answer changes the work
 
 **Usage limits: there is no API, and the admin key would not help.** Greg offered one; the research
 was done and hand-verified earlier the same day, and is written up in
-[§ Can we call an API instead? Mostly no, and not with an admin key](../project/orchestrator-direction.md#can-we-call-an-api-instead-mostly-no-and-not-with-an-admin-key).
+[§ Can we call an API instead? Mostly no, and not with an admin key](../project/overseer-direction.md#can-we-call-an-api-instead-mostly-no-and-not-with-an-admin-key).
 The short version: every `/v1/organizations/*` usage endpoint reports **Console API-key spend**, not
 subscription quota — Anthropic's own FAQ says *"This API only tracks Claude Code usage on the Claude
 API"* — and admin keys are minted for a Console organisation, which a personal Max subscription may
@@ -50,7 +50,7 @@ named.
 
 | item | session | why |
 |---|---|---|
-| **1. securing the write path** | `claude-agents-dashboard` | A9, A10, A11, A6 are all `owner: dashboard` in [§ The backlog](../project/orchestrator-direction.md#securing-the-live-write-path-a-stage-but-not-the-top-one). The write path is `routes-*.ts` and `steer.ts`. **A6 already landed** (`0a5a3008`, CSP + anti-framing). |
+| **1. securing the write path** | `claude-agents-dashboard` | A9, A10, A11, A6 are all `owner: dashboard` in [§ The backlog](../project/overseer-direction.md#securing-the-live-write-path-a-stage-but-not-the-top-one). The write path is `routes-*.ts` and `steer.ts`. **A6 already landed** (`0a5a3008`, CSP + anti-framing). |
 | **2. usage limits** | `w2-usage-limits` | Account-level, not pane-level. Collector and 429 ground truth here; the `FleetStatus` arm is the dashboard's. |
 | **3. box-health 24h history + swap** | `fleet-health-history` | Retained in the dashboard process, against the direction doc's assignment — see below. |
 | **4. attention inbox** | **split** | The Overseer decides what needs Greg and why; the dashboard renders and collects the tap. |
@@ -85,7 +85,7 @@ a test that fails when the two drift**, which is second best and much better tha
 
 ### Where the health history lives, and the one thing owed in return
 
-[§ Two tenses](../project/orchestrator-direction.md#two-tenses-the-seam-between-the-overseer-and-the-dashboard)
+[§ Two tenses](../project/overseer-direction.md#two-tenses-the-seam-between-the-overseer-and-the-dashboard)
 assigns the vitals history to the Overseer's past tense, and `daemon.ts` says outright *"No health
 history and no local collection"*. **It is being built in the dashboard process instead**, and the
 argument for that beat the doc: the reading already exists in-process there, **there is one collector
@@ -108,26 +108,34 @@ not be flattened to numbers on the way to disk** — a stored `null` cannot tell
 ## Ordering, and why it is not Greg's list order
 
 Greg's list is a list, not a ranking — he ranked this work explicitly earlier the same day
-([§ The order of work](../project/orchestrator-direction.md#the-order-of-work)): *"attention triage,
+([§ The order of work](../project/overseer-direction.md#the-order-of-work)): *"attention triage,
 then perhaps box vitals and throttling, then account usage limits, then scheduler"*, and separately
 put the write path in as *"a stage, but it doesn't have to be the top-priority."* Nothing has changed
 that. So on the Overseer's side the order is **attention first**, and the write path stays where he
 put it.
 
-## Where this stands, 13:55 on 2026-09-08
+## Where this stands, 2026-09-08T14:36Z
 
-**Important work left**, and it is the implementation of five of the six stages. What is finished is
-the part that had to be finished first: **every seam is agreed and every contract is a type**, so the
-six sessions can now build in parallel without a negotiation between them.
+**Done enough to stop here.** All six workstreams have landed on `dev`, and what remains is either
+Greg's to decide, Greg's to test, or explicitly deferred. Nothing is half-built and nothing is
+blocked on another session.
 
 | | landed | what remains |
 |---|---|---|
-| **A** attention | the five types, verbatim, in `wire.ts` (`4d5cc454`) | the classifier, and the evaluation that justifies it |
-| **B** usage | the dashboard's `Pause` contract (`f1c34e96`) | the collector and the 429 ground truth |
-| **C** harness | shape agreed with the dashboard; two live findings (below) | `harness.ts`, and moving `steer.ts`'s refusal to read it |
-| **D** health | seam agreed (`refreshOnce`, not `server.ts`); `lock.ts` extracted for it | retention and the drawing |
-| **E/F** dictation | file split agreed with the dashboard | all of it |
+| **A** attention | **DONE** (`c87ff8f9`) — classifier, held-out evaluation, two Sol rounds, `Checkpoint.attention` | the transcript slice and the consequence floor, both deferred with reasons |
+| **B** usage | **DONE** (`95c2f49a`, `c6300462`) — `usage.ts`, `parseUsageReport`, two Sol rounds | the open question below, which is Greg's |
+| **B′** the store half | **DONE** (`0bbeb54f`) — `Checkpoint.usage`, `usage-carry.ts`, restore-across-restart | the pass that calls `chooseUsage`, **unowned** |
+| **C** harness | **DONE** (`5c2e31cb`), worktree torn down | the `steer.ts` argv parser, **unowned** |
+| **D** health | **DONE** — `health-history.ts`, `HealthHistory.tsx`, `routes-health-history.ts` | its worktree is still standing |
+| **E** dictation | **DONE** (`c2d19b93`) — `DictationControl.tsx`, `dictation-client.ts`, 330 tests | **only Greg can test the real microphone** |
+| **F** realtime dialog | designed, gated on E | not started, deliberately |
+| **#1** write path | A6, A9 and A10 (`0a5a3008`, `91e1f3a0`, `2bfe48dc`) | the dashboard's own list |
 | **A5** | **closed**, no code | nothing |
+
+**Two things are unowned rather than unfinished**, and both are follow-ups a review named rather than
+work anybody started: the pass that calls `chooseUsage` (so the usage report is actually collected on
+a timer and written to the checkpoint), and the shared Claude-argv parser replacing `recogniseClaude`
+and `isClaudeForSession`, which Sol logged as the seventeenth hand-written join.
 
 **Three things landed that were not in the plan**, all of them because the work turned them up:
 
@@ -143,12 +151,137 @@ six sessions can now build in parallel without a negotiation between them.
    union in Stage A is load-bearing rather than fastidious, and why a `prose` item gets **no answer
    control at all** in v1.
 
-**And one cost finding, which is not engineering:** `w2-harness-adapter` found **two orphaned paid
-`gpt-5.6-sol --effort high` reviews running under `ppid 1`**, attributable to no session, which
-nothing on the dashboard can see or stop. Related to a trap already recorded — a killed codex run
+**And one cost finding, which is not engineering — stated with its timestamp, because that turned out
+to matter.** **Every time below is UTC**, which is not pedantry — the box runs BST, and a mislabelled
+hour is the fourth instance of the error this section is about. At **~12:30 UTC** `w2-harness-adapter`
+found **two orphaned paid `gpt-5.6-sol --effort high` reviews running under `ppid 1`**: the Bash-tool
+shell had been reaped, leaving 45-minute jobs reparented to init, attributable to no session and
+invisible to `work.ts`, which only walks *down* from a pane. **At 13:05 UTC there were none** — every
+`ppid 1` process on the box was a system daemon.
+So the finding is **real but transient**: not a leak that accumulates, but a window during which a
+paid job cannot be attributed or stopped. Related to a trap already recorded — a killed codex run
 still writes its `--output` file, so a stale review is indistinguishable from a fresh one and both the
 exit code and file-exists pass. An orphan whose output path is later reused is that trap with a long
 fuse.
+
+The one genuinely long-lived orphan is `bash /tmp/fake-codex-qAz9Um/codex`, reparented **6 days 20
+hours** ago at 1.7 MB. That is the **fake** codex from a test harness — the same one whose existence
+shaped the decision not to peel shells in `work.ts` — leaked from a test run last week. Harmless, and
+a live specimen of what the recogniser is built to refuse.
+
+### "There are none" is a reading, not a property
+
+The sharpest thing Stage C produced, and it generalises past Codex. At **11:58** the honest answer was
+zero Codex panes, exactly as the brief predicted — a Codex here is always a Claude session's child.
+By **12:15** there were three, two of them a bare interactive `codex` TUI under a `bash -l`. The
+module nearly shipped a comment asserting that an interactive Codex had never existed on this box,
+**minutes before two did**.
+
+Nothing was wrong with the first reading. What was wrong was the tense it was about to be written in.
+The same fragility applies to *"35 `auto`, 1 `default`"* earlier the same day, and to every count in
+this doc: **the honest form of a fleet measurement is the timestamp**, and a sentence that drops it
+has converted an observation into a claim about the world.
+
+**And knowing the lesson did not prevent it, one paragraph later.** The orphan finding above was
+written as *"two orphaned reviews are running"*, which was false by the time anybody read it — by the
+same author, minutes after writing the rule down. Then the correction repeated the shape a third time:
+two agents walked the process table, both reported zero orphans, and called that corroboration —
+except the walks were at **13:03 and 13:05 UTC**, **two minutes apart**. They looked an hour apart
+because one was quoted in BST and the other in UTC. Two readings two minutes apart are one observation
+with a wide error bar, and the sequence was backwards in the draft as well.
+
+**And a fourth, found by auditing rather than by noticing.** The three-column measurement table
+labelled its last column `13:30 UTC`; the reading was taken between a launch at 13:28 **local** and a
+clock check at 13:32 **local**, so it was **~12:30 UTC** — local time wearing a UTC label. The
+committed files were clean, because those timestamps came from `date -u` beside the capture. **The
+wrong numbers were all in prose**, which is the tell: the machine-produced ones survived and the
+hand-written ones did not.
+
+**So the lesson does not transfer by being remembered, and the reason is that it keeps changing
+clothes**: counting a population, then corroborating a claim, then mistaking co-located readings for
+independent ones, then mislabelling a timezone. Four instances in one stage, two of them *after* the
+rule had been written down by the person who then broke it. The version that catches all four is
+mechanical rather than remembered — **the instant a fleet number was taken travels with the number, in
+one timezone, as a field**, the way `collectedAt`, `scannedAt` and `waitingSince` are fields in every
+type built today rather than habits. The audit is the evidence for that: **every timestamp produced by
+`date -u` beside its capture was right, and every one typed into prose was wrong.** So if the attention
+work ever surfaces fleet counts to Greg, the count and its instant must be one value, not a sentence a
+person assembles. What actually
+settled the orphan question was not a second reading at all but a **mechanism**: an orphan appears
+when a Bash-tool shell is reaped mid-run and leaves when the job ends, so the population is bounded by
+concurrent reviews rather than growing. That argument would hold with zero readings, which is what
+makes it the evidence.
+
+### An incomplete observation may not be read as a negative one
+
+**Three modules, three authors, arrived at separately, and stated here once so it is not restated
+three times locally.** Each found it in its own material and none of them was looking for a general
+rule:
+
+- **The health history** (`fleet-health-history`): *a gap must render as a gap, never a line drawn
+  across it.* An interpolated line through the ninety minutes the box was thrashing answers Greg's
+  actual question — *"were there disruptions I should know about?"* — with a confident **no**.
+- **The dashboard's improvement on it**: a gap has **two** causes and they must not draw identically.
+  *Absence means nothing was running. An `unknown` band means we were alive and could not tell.* If
+  the retention appends only on success, the case Greg most needs — *the box was up and health
+  collection has been broken for six hours* — becomes invisible.
+- **The usage collector** (`w2-usage-limits`): `absenceGap`, and the rule that **when it is non-null
+  this scan is not entitled to contradict what is already known.** A scan that fell over has not
+  discovered that a rate limit lifted.
+
+The same shape turns up in the types rather than the data three more times the same day: `≥` on a
+duration that is a lower bound, an unpriced call keeping a money total from printing as a figure, and
+`verdict.activeLimit` staying `null` while `level === "limited"` — **being limited can be established
+while *which* limit binds is not.** Which generalises to the sentence worth keeping:
+
+> **A composite verdict must be able to be certain about one part and uncertain about another, and a
+> type that forces them to agree will make one of them lie.**
+
+**This is a `docs/reusable/` candidate rather than a project fact**, and it is deliberately not
+written there yet — those edits go one approved set at a time and no set is open. Greg's call.
+
+### A positive control proves the step it wraps, and nothing above it
+
+**The most expensive thing found today, and it got past two people.** The attention pass published
+`{"kind":"list","items":[],"sessionsScanned":1}` — a confident *nothing needs you* — built from one
+ended turn whose single classification had returned a 429. The internal breakdown was **green
+throughout**, because every row genuinely did enter a bucket.
+
+`sessionsScanned` and the breakdown are a real positive control **on the walk**. They cannot be a
+control on the *judgement*, and the difference is invisible from inside: the accounting proves
+something was looked at and says nothing about whether looking succeeded. When
+[`w2-attention-inbox`](#stage-a-the-attention-list-the-deciding-half) reported that control as
+closing the gap, the Overseer agreed with it in writing — *"stronger than the field I designed"* —
+which it was, about the walk. **Neither of us asked what it could not see.** So the lesson is not
+"they built it too shallow"; it is that a control is named for the thing it guards and reviewed for
+the thing you hoped it guarded.
+
+**And the cache turned a bad pass into a standing condition.** The failed verdict was stored under
+the tail's fingerprint, so every later pass answered from memory, made zero model calls, and repeated
+the same wrong silence for as long as that agent stayed quiet. The dashboard agent's phrasing is the
+one to keep: **a wrong answer that is cheap to repeat outlives the condition that caused it.** Hence
+the rule now in the code beside the cache — *an `unreadable` verdict is never cached; a failure is a
+reason to look again, not a fact to remember.*
+
+**The base rate is why this class matters here more than elsewhere.** The dashboard read **0
+`needs-you` rows out of 24** on the held-out capture while four sessions were genuinely waiting.
+*Nothing needs you* is the cheapest possible thing to be wrong about, because it is what a broken
+probe, an empty fleet and a calm fleet all say.
+
+### The fix for a caveat that is always on is to scope the question, not to raise a threshold
+
+`PauseLine` drew *"waiting? unknown"* on **29 of 32 rows** — found by running a live collection, not
+by reading the code, and fixed in `2bfe48dc` under the title *a caveat on 29 of 32 cards is wallpaper,
+not a caveat*. The repair that held was not a confidence threshold. It was **scoping what the field
+answers**: `Pause` answers *why is this session not doing anything*, and on a row that is visibly
+doing something **the question does not arise**.
+
+That is the rule the new `AttentionList` count is being added under, and it is why its two constraints
+are load-bearing rather than fussy: the count is a fact about the **pass**, not about any row, so it
+belongs on the list header and only when it is true — and deliberate skips must stay out of it,
+because a number that is non-zero on nearly every pass could not be rendered under this rule at all.
+A permanent caveat is A17 wearing different clothes: healthy operation spending most of its time
+alarming, which teaches Greg to read past the one that matters.
 
 ## Stages
 
@@ -157,7 +290,7 @@ Each ends with the tree green and committed, and would make sense as a stopping 
 ### Stage A — the attention list, the deciding half
 
 **The premise triage was about to be built on is wrong**, and it was measured:
-[§ `idle` is the bug](../project/orchestrator-direction.md#idle-is-the-bug-the-vocabulary-describes-the-pane-not-the-work).
+[§ `idle` is the bug](../project/overseer-direction.md#idle-is-the-bug-the-vocabulary-describes-the-pane-not-the-work).
 `needs-you` means *Claude Code says a dialog is open*; ten of fifteen sessions genuinely waiting on
 Greg had ended their turn handing him a decision **in prose, ending in a full stop**, and not one
 showed as needing him. So the first thing this stage owes is a way to see those.
@@ -257,7 +390,7 @@ draft, it is a regression.
 **Three — `waitingSince` is first-seen, not last-seen, and it is why the store had to come first.**
 The pane says a dialog is open; it cannot say for how long. Duration is a fact only something with a
 memory can produce, which is the whole reason
-[§ The order of work](../project/orchestrator-direction.md#the-order-of-work) says attention triage
+[§ The order of work](../project/overseer-direction.md#the-order-of-work) says attention triage
 *arrives* first but cannot be *built* first.
 
 **Four — the producer sorts, and the renderer must not.** *"Do not reorder or replace a card's options
@@ -270,6 +403,245 @@ what it can verify, Sol for evidence in the tree, Fable for wording and defaults
 irreversible) is a real part of the design, but it is a **decision the Overseer acts on**, not
 something the phone renders — and shipping it as a field invites a UI that shows Greg a queue of
 things it has decided not to ask him. It lands when something answers, not when something lists.
+
+#### Stage A, built — and what the measurement says
+
+Landed 2026-09-08. `tools/overseer/turn-tail.ts` cuts the tail of an ended turn out of a pane,
+`attention-classify.ts` asks one small model one closed question about it, `attention.ts` groups and
+ranks, `attention-pass.ts` walks the fleet and holds the budget, `attention-memory.ts` remembers what
+was already decided, and the list rides on `Checkpoint.attention` in `~/.overseer/current.json`. **No
+`STORE_SCHEMA` bump**: a reader that ignores the field draws no inbox, which is *poorer* rather than
+*wrong*, and that is the store's own stated rule. `npx tsx scripts/overseer.ts attention` runs a pass
+by hand; `--dry` reads the panes and costs a pass without spending anything.
+
+**The evaluation is the point of the stage rather than a footnote**, because a list that only
+reproduced `needs-you` would be a failure. Method: capture every live pane ONCE, to disk; run the
+classifier against those bytes; and — with no sight of the classifier's output — have a Fable
+subagent read the same captures cold and say for each session whether it is genuinely waiting on
+Greg. One capture, two readers, because a fleet of thirty changes underneath you and a second capture
+would make every disagreement ambiguous between *the classifier was wrong* and *the box moved*.
+
+**It was done twice, and the second one is the one that counts.** GPT Sol reviewed the first and was
+right that it would not carry a general claim: the dashboard snapshot behind its `needs-you` number
+was collected 3m20s after the panes were frozen, and its "7 of 9" was three stochastic readings of
+the same three examples — repeatability, not population recall. So the whole thing was re-run on a
+**fresh, held-out capture**, after every fix, with the dashboard state fetched concurrently.
+
+| | first capture, 12:40 | **held-out capture, 13:50** |
+|---|---|---|
+| Sessions | 32 | 25 |
+| Fable: genuinely waiting on Greg | 3 (+1 cannot-tell) | **4** (no cannot-tell) |
+| **`needs-you` found** | 0 of 3 | **0 of 4** — 0 `needs-you` rows out of 24 |
+| Classifier, three cold runs | found 2, 2, 3 of the 3; 2 invented | **found 4, 4, 4 of the 4; 0 invented** |
+| Sessions the two readers agreed on | 30 of 32 | **25 of 25** |
+
+The four the held-out capture found — `claude-agents-dashboard`, `fb2g-gutter-icons-on-touch`,
+`gjd-remote-on-remote-box`, `overseer-orchestrator-design-and` — are the same four in all three runs
+and the same four Fable named, and **every one of them read as `idle` on the dashboard**.
+
+**What that does and does not support, and Sol was right to push twice.** The defensible sentence is:
+*on this held-out capture the classifier matched Fable's four positives, repeatably, while the nearest
+dashboard snapshot showed none of them as `needs-you`.* **The numbers are not what they look like.**
+"4 of 4, three times" is **four positives read three times**, not twelve independent ones, and the
+zero inventions are **twenty-one negatives read three times**, not sixty-three. Three runs measure
+REPEATABILITY; they do not enlarge the population. Seven positives across two captures is not a
+population, both ground truths come from one model family, and the second capture is smaller and
+calmer than the first. The next gate is a third capture with a human adjudicating rather than Fable.
+
+**Two clocks that are not the same clock.** The dashboard collects every ~65s and serves the cache,
+so `/api/state` cannot be sampled at the same instant as a pane: the held-out comparison's snapshot
+was collected **54 seconds** before the capture, against 3m20s for the first. That is **nearby, not
+simultaneous**, and the word matters — a session can end a turn in 54 seconds, and on a fleet this
+size several do.
+
+**Where it wobbles, and I said this wrong twice before Sol corrected it.** The SET of flagged sessions
+was identical across the three held-out runs. The `kind` was not: `fb2g-gutter-icons-on-touch` came
+back `irreversible`, `other` and `technical` on the same tail. **Those are not adjacent buckets.**
+`irreversible` is first in the ranking and `other` is last, so that spread is the whole axis, and the
+honest statement is that **presence is stable and RANKING IS UNVALIDATED** — not that the wobble is
+confined to somewhere cheap. It is still the cheaper of the two failures, because a misplaced item is
+on the list and a missed one is invisible; but "cheaper" is not "measured", and nothing here measures
+the ranking.
+
+**And on the arm that matters, the answer is sharper than *it wobbles*.** No session in either capture
+produced an `irreversible` verdict from an obvious case, so two tails were **derived from a real
+capture by one stated change** and classified eight times each: *"Say the word and I'll push it to
+main"* → `irreversible` 8 of 8; *"Say the word and I'll remove the worktree"*, with and without the
+uncommitted-work clause → `irreversible` 8 of 8 both ways. Then the arguable one, which
+`orchestrator-setup` asked for and which is the finding: *"The migration is written and reviewed and
+I have not run it. Say the word and I'll run it."* → **`technical` 8 of 8**. Not noisy — confidently
+and consistently wrong.
+
+**That settles the sampling question in the direction that does not flatter us.** Majority-of-three
+would not fix the migration case; **it would ratify it**. Which is Fable's warning arriving as a
+measurement rather than a principle: a vote is a machine for laundering confidence into agreement,
+and the confident mistake is the one you most want caught. Nor is the fix more context —
+`orchestrator-setup` pointed out that `meta.dir` tells you whose *code*, not whose *data*, and
+[database.md § `DATABASE_URL=…` does not do what it looks like](../project/database.md#database_url-npm-run-dbmigrate-does-not-do-what-it-looks-like)
+is a whole section about a migration that hit the wrong database and printed `✓ migrations applied`.
+A classifier handed the tree would answer *"local, therefore technical"* with more confidence and the
+same wrongness.
+
+**A mechanical consequence floor is the proposed fix, and it is half a fix.** The idea: a tail whose
+offered action matches a small reviewed list is floored at *cannot tell*, which the model may raise
+and may not lower — the same shape as everything else that has held here, where the lock is enforced
+by the kernel and the wire types by the compiler. Probed against four derived tails, and the answer
+is that **the vocabulary hypothesis holds in one failure and not the other**:
+
+| derived tail | catchable word | 8 runs |
+|---|---|---|
+| "The migration is written… Say the word and I'll run it." | migration | `technical` 8 — **the floor would catch it** |
+| "…rewrites every article's slug in place; the old ones are not kept anywhere." | none | `irreversible` 2, `technical` 5, `other` 1 — **the floor would miss it** |
+| "…goes to all 214 registered readers; there is no way to unsend it." | none | `irreversible` 8 — right without help |
+| "a migration in a scratch worktree against my own local Supabase" | migration | `irreversible` 8 — over-cautious already |
+
+So the floor is worth building and must not be sold as guarding the top of the ranking: the case it
+misses is the one that is *also* noisy, and the case it would over-flag is one the model already
+over-flags on its own. **Floor plus a visible "this list may be under-ranked" line, not floor
+instead of it.** Ordering agreed with `orchestrator-setup`: transcripts first (they buy presence),
+then the floor, then nothing about giving the classifier more context until the floor proves
+insufficient.
+
+**What a pass costs, corrected.** A cold pass over 25 sessions: **10 model calls, $0.0036**, on
+`openai/gpt-5.6-luna` through OpenRouter (32 sessions / 11 calls / $0.0039 on the first capture). A
+re-run against identical captures is **0 calls** — the cache works. **But "0 calls at steady state"
+was wrong and Sol caught it**: over 4.5 minutes on the live fleet, **8 of 12 ended-turn tails were new
+or changed**, because a session that ends a turn mints a tail. At the 2-minute cadence that is a few
+calls a pass, and the honest arithmetic is roughly **$0.50–$1.00/day** rather than the $0.21 first
+claimed. Still cheap; four times cheap.
+
+**And a cost trap worth carrying forward, in three cases rather than the two first written down.**
+`usage.cost` alone reports **$0.00000 for a pass that cost money**: this box's key is BYOK, so the
+gateway charges its own account nothing and the real figure is in
+`usage.cost_details.upstream_inference_cost`. **But adding the two together is the other half of the
+same bug** — on an ordinary call `upstream == cost`, one sum reported twice, so a naive sum doubles
+the bill, and the first draft here did exactly that while fixing the first half. The repo had already
+solved all of it in **`src/ai-spend.ts`** (not `ai-call.ts`, which is what was first claimed here),
+whose `normaliseByokUpstream` insists on `=== true` *"because that is what keeps 'we were not told'
+from being read as 'yes'"* — and which names a **third case**: `cost: 0` **and** a real upstream
+figure **without** `is_byok`. Its answer is to record the call as **unpriced** rather than guess.
+`callCost` mirrors all three with the citation; unpriced calls stay out of the total and are counted,
+and a total containing one prints as a floor. *That is the same rule `StatusSince` reached from the
+other direction the same day — a quantity that is a lower bound must not be able to render as a
+reading — and two instances found separately are what make it a rule rather than a preference.*
+
+**The floor on recall this design cannot lift — and the one it can.** Claude Code draws on the
+terminal's *alternate screen*, which has no scrollback, so `capture-pane -S -80` and a bare capture
+return the same ~25 lines (measured). A turn that asked and then printed forty lines has pushed its
+own question off the top. **That is a property of the PANE, not of the session**, and
+`orchestrator-setup` measured the difference at 13:15: of the 25 most recently modified of 268
+transcripts on the box, **25 of 25 had a retrievable turn-ending assistant text**, and **5 of 25 —
+20% — were longer than 25 lines**, the longest 47. So one session in five has a tail this capture
+cannot see in full, and the transcript has it exactly, untruncated and ANSI-free, at
+`~/.claude/projects/<slugified-cwd>/<session-id>.jsonl`. **The next slice.** It does not replace the
+`dialog` arm — the harness draws those and they are not in the transcript — which lines the two
+sources up with the evidence union already published.
+
+**GPT Sol reviewed this twice before it landed and would not approve it either time. Nine findings
+across the two rounds, all real, all fixed** — which is the second review earning its keep, since a
+plan-stage review could not have found any of them. The second round mattered as much as the first:
+three of its findings were **holes in the fixes**, including one that would have let the worst bug
+survive an upgrade.
+
+1. **A classifier failure published a false *nothing needs you*.** One ended turn, one 429, and the
+   result was `{"kind":"list","items":[],"sessionsScanned":1}` — with `breakdownBalances()` green
+   throughout, because every row *did* enter a bucket. The accounting proves the walk happened; it
+   cannot prove the judgement did. Worse, the failed verdict was **cached**, so every later pass over
+   an unchanged fleet answered from memory, made zero calls, and repeated the same wrong silence.
+   Now: an `unreadable` verdict is never cached, and an EMPTY list with anything unclassified becomes
+   `unknown`. **Incompleteness suppresses the claim of absence and never the items** — a partial list
+   costs an agent wall-clock, and an empty one on evidence we did not get is a false claim about
+   Greg's obligations.
+2. **A scan of nothing drew as a calm fleet**, which the wire type's own comment forbids. And the
+   test that was supposed to catch it asserted only that the two results *differed* — which they did,
+   by the count, while both were still `kind: "list"`. A check answering a weaker question than the
+   one it is named for.
+3. **An unrecognised dialog counted as a pane we understood.** A harness dialog-format change would
+   have turned every question on the box into a calm fleet. Measured while fixing it: none of the six
+   `dialog-*` captures carries the `⏵⏵` footer, because Claude Code takes it away with the input box,
+   so the signal is the dialog's key-hint line — `pane.ts`'s own *"the one marker that prose never
+   produces by accident"*. It is a second copy of a private function and the duplication is declared
+   and pinned against all six fixtures.
+4. **`waitingSince` survived exactly the unobserved gap the store refuses to span.** `store.ts` will
+   not republish the previous list after a restart; `attention.json` quietly undid that by persisting
+   the waits, so a question answered during downtime and asked again came back *"waiting since"* a
+   moment nobody observed. The waits now carry the epoch that observed them and are dropped when it
+   changes; **the verdicts are kept**, because a verdict is about text and a wait is about continuous
+   observation.
+5. **Both parsers cast rather than parsed.** `{"evidence":{"kind":"dialog"}}` crossed the evidence
+   boundary with no question and no options, and `inboxLines()` threw on a missing `duplicates`.
+   Every field and every arm is parsed now, in both.
+6. **`readTurnTail` did not return only what the agent said.** The backward walk ran past an earlier
+   `❯` in the scrollback — *Greg's own last message* — so a turn that said "Done." could be handed to
+   the classifier with "Should I deploy this now?" attached to the front and become a confident card
+   quoting a question nobody's agent asked, with the fingerprint caching the contamination. **The
+   worst of the six**, and the one furthest from anything a plan could have anticipated.
+7. **A shutdown released the store's lock with a pass still in flight**, so a `Restart=always` daemon
+   could have two writers on `attention.json`. The pass is awaited before the lock is released, and
+   the write is atomic.
+
+**And then the second round, which is why one review is not enough.** Three of these are holes in the
+fixes above rather than new ground:
+
+8. **The 429 could still survive an upgrade.** The pass had stopped *writing* an `unreadable`
+   verdict, and a memory file from an older build could still *hold* one — read back as a cache hit,
+   never added to `unclassified`, publishing the same false calm indefinitely. **A fix that only
+   covers newly-written records is not a fix.** `CacheableVerdict` now excludes the arm at the type
+   level, so neither a writer nor a reader can express it, and a file holding one is refused whole.
+9. **The completeness field was counting the wrong things**: distinct fingerprints rather than
+   affected sessions (two sessions sharing one failed tail is two sessions unjudged), it omitted a
+   session with no pane, and an empty list plus an unparseable pane printed *"nothing needs you"* with
+   a caveat under it **retracting the claim**. Keyed on `sessionsUnreadable` now, so that case is
+   `unknown`; and a partial list says **"at least N"** rather than N with a footnote.
+10. **A per-process epoch was not enough, and the exception path was still open.** A daemon can
+    outlive a tmux restart, after which `$1` names a different session — this repo already treats
+    `tmuxServerPid` as the generation, and it is in the epoch now. The `catch` path called
+    `stopHere()` before the await that the normal path did. And `overseer attention` is **read-only by
+    default** with `--write` as the opt-in, because it does not honour the daemon's lock and an atomic
+    rename stops a torn file rather than a lost update.
+
+**One accounting point of Sol's, which is about the register rather than the code.** Adding the
+Overseer's seam to `tests/no-undeclared-spend.test.ts`'s ALLOWED map exempts it; it does not record
+what it spends, and that file says so in as many words — *a green test is not a register*. There is
+now an `UNMETERED_SPEND` entry in `src/spend-declarations.ts` naming the account, the per-pass cost
+and why neither seam can be used.
+
+**How to run this again**, because a measurement nobody can repeat is an anecdote. The capture/replay
+is in the CLI rather than in a throwaway script for exactly that reason:
+
+```
+npx tsx scripts/overseer.ts attention --dry --capture-to /tmp/panes      # freeze the fleet, spend nothing
+npx tsx scripts/overseer.ts attention --panes /tmp/panes --out /tmp/run.json --no-write
+```
+
+Then hand `/tmp/panes` to a Fable subagent with no sight of `/tmp/run.json`, ask it per session
+whether that session is genuinely waiting on Greg and why, and compare. **Order matters**: an
+agreement produced by letting the second reader see the first one's answer is worth nothing.
+
+**Tests**: 109 across six files, plus a type-level half in `tests/overseer-attention.test.ts` that
+goes red at `npm run typecheck` and cannot at `npm test` (vitest strips types) — it asserts that no
+field reaches both arms of the evidence union, and that a `confidence` or a `routeTo` will not
+compile. Every fixture under `tests/fixtures/overseer-turn-tails/` is a real capture.
+**Mutation-checked: 22 deliberate breakages of the finished code, 22 of 22 caught** — and six of them
+reinstate Sol's findings exactly, which is the only way to know that tests written after a fix would
+have caught the bug before it.
+
+**Two things named rather than claimed as done.** The `prose` arm gets no answer control in v1, and
+the reason is now stronger than *it is inferred rather than observed*: finding 6 means a card could
+have quoted **Greg's own last message back at him as his agent's question**, so a button would have
+acted on his sentence. And the dialog key-hint recogniser is a declared second copy of `pane.ts`'s
+private `isFooter`; `claude-agents-dashboard` is exporting it, and the swap is one import and a
+deletion — **the fixtures stay**, because they are what would catch the export itself drifting.
+
+**Still open, and named rather than left to be discovered.** One live pane came back `unreadable` on
+the held-out capture: a session with no status line at all above its input box, after a `/clear`. The
+arm did its job — it said so instead of guessing — and it is a real gap in the recogniser, and if that
+session had been one of the four it would have been a silent miss rather than a visible one. And
+`duplicates: []` remains a positive claim ("nobody else is asking") that can only be made about the
+sessions actually read; a pass skips Codex panes and mid-turn ones, so within one pass it means "none
+of the ones I read". The dashboard is declining the field as `readonly [...] | null` for the
+version-skew case; the same caution applies inside a single pass.
+
 
 ### Stage B — usage limits, and the reading that refuses to lie
 
@@ -290,6 +662,278 @@ test that feeds it an expired `resets_at` and watches it refuse. And a **positiv
 that finds no 429s anywhere must be distinguishable from a probe that is broken
 ([silent-success.md](../reusable/silent-success.md)).
 
+#### What landed (2026-09-08, `w2-usage-limits`)
+
+- **`tools/overseer/usage.ts`** — pure parsers plus one collector, in `health.ts`'s shape. Every
+  reading has an `unknown` arm carrying `why` in a person's words.
+- **Every type that a renderer sees is declared in `tools/fleet/wire.ts`**, not here, and imported
+  back — the seam owner (`claude-agents-dashboard`) asked for the field names before it built its
+  FleetStatus arm, and got them. `usage.ts` keeps only the runtime values (`KNOWN_USAGE_WINDOWS`,
+  `isKnownUsageWindow`), because wire.ts may hold none.
+- **`tests/overseer-usage.test.ts`**, 90 tests, against real 429 records lifted out of real
+  transcripts on this box. Plus **three mutation passes**: the finished code was broken 22 ways, one
+  at a time, and every one now turns the suite red. The first pass is the one worth remembering —
+  **seven of round 1's ten fixes had no test at all**, so the code was right and nothing would have
+  noticed it going wrong again. (The tests were written after the implementation, not red-first; the
+  mutation passes are the substitute and they are in the review prompts.)
+- **`npx tsx scripts/overseer.ts usage [--since-hours N] [--json]`** — a subcommand on the existing
+  CLI rather than a second one. It prints the positive control on every run, including when the
+  answer is "none".
+
+**Four things the plan did not know, in descending order of how much they matter:**
+
+1. **A transcript 429 carries no account id, and this box holds rejections from accounts that are no
+   longer logged in.** Found by running the collector against the live box, not by reading. 27
+   `seven_day` rejections from 2026-09-07 all recorded `resetsAt` 2026-09-12T18:00Z while the
+   logged-in account's cache said its `seven_day` window was 22% used and resets
+   2026-09-15T04:59Z — so the first honest-looking version reported **LIMITED for an account with
+   78% of its week left**. **This is the cost of "record the account and build no rotation" being
+   cheaper than it looked**: recording the account is not enough when the ground-truth source does
+   not record it too.
+
+   The repair went through **three** versions, and the third is the lesson. The first set such a
+   rejection aside as "another account's" and reported `ok`. GPT Sol refused it — *"cache
+   disagreement is not proof that a rejection belongs to another account"* — and it was right: the
+   contradiction is certain, but which of the two observations is foreign is not, and these are
+   undocumented fields with no stability contract. So the second **raises an ambiguity rather than
+   making an attribution**: `unknown`, never `ok`, with both observations and the previous-account
+   explanation named as likely. Turning an ambiguity into a confident negative is the same defect as
+   a zero reading as healthy, approached from the other side — worth saying out loud, because the
+   first version was written by someone (me) who had spent all day guarding the other direction and
+   did not notice.
+
+   **And the second version then re-made the same mistake one level down.** It implemented the
+   ambiguity with a function returning `null` for both *"the two observations agree"* and *"the
+   comparison was impossible"*, and both callers read `null` as a live rejection — so an
+   unattributable rejection was promoted to `limited`, and **a test written an hour after fixing the
+   identical error one level up defended it**. Sol's round 2 found it. Understanding a principle,
+   having just applied it, and having written it down, is not protection against violating it in the
+   next function.
+
+   The precondition is now the strict one: `attributeCache` requires the account to be readable, both
+   `accountUuid`s to be non-null and equal, the cache to have been fetched *after* the rejection, and
+   `auth status.orgId` to agree with `.oauthAccount.organizationUuid`. "Not proven to be somebody
+   else's" is not "proven to be ours".
+2. **There are ~1,770 transcripts and 2.9 GB of them, not ~80.** A full-history scan is 875k lines
+   and finds 140 rejections in exactly three record shapes. **The default window is 8 days and the
+   full scan is 30-45s**, which is deliberate: it was 24h (~240 files, ~570 MB, 2-10s) until GPT Sol
+   pointed out that an unexpired `seven_day` rejection two days old sits in a file a 24h window
+   excludes, so the scan returned `none` and the verdict `ok` for an account that was in fact
+   limited. A cheap answer that can be wrong in the calm direction is the thing this stage exists to
+   refuse. A chunked buffer search rather than `readline` is what keeps even that affordable —
+   9.9s → 1.8s on identical input, because only a line carrying a marker is ever turned into a
+   string.
+
+   **The same scan, on the same code, took 1.8s and then 9.7s two hours apart** — a 5x spread that
+   is entirely box load, not the scan. Record it as a measurement about *the box*: this project has
+   twice made a design decision from a timing taken on a quiet machine, and a number from here
+   carries a range or it carries nothing. It is also why the dashboard reads a published report
+   rather than calling `scanForRateLimits` on its own 73-second refresh loop.
+
+   **An incremental scan was proposed and withdrawn**, and the reasoning is worth keeping because it
+   will be proposed again. A full pass is 30-45s; the incremental version needs per-file byte offsets
+   (not an mtime watermark — a transcript is appended to constantly, so "files whose mtime moved" is
+   nearly every active file every pass and the saving evaporates), rewrite detection, carry-forward
+   expiry, and a new class of bug where the store's memory and the filesystem disagree. Nobody had
+   measured the cost it was meant to avoid. Simplest version first: full scan on a slow timer.
+   **The precondition if it is ever built** — transcripts appear to be append-only, but that is *no
+   counter-evidence*, not *proven*: 42 active files hashed over ten minutes on one box and one Claude
+   Code version, 0 shrank and 0 prefixes changed, and 0 of 1,772 files end without a trailing
+   newline. Anything built on it needs two cheap invariants that would notice otherwise — size never
+   decreasing, and the byte at the stored offset still being a newline.
+
+   **What the store keeps instead is memory, not speed.** A `seven_day` rejection found at 13:00 and
+   resetting on Friday is still in force at 13:05 even if the 13:05 scan fell over; without memory a
+   failed scan degrades an honest report from "limited until Friday, last confirmed 13:00" to "cannot
+   tell". The collector reports what *this* scan found, including that it was incomplete; the store
+   remembers what has not yet expired. A carry-forward needs a stable key for a rejection, and
+   `RateLimitHit` has no id: `transcriptPath` + `hitAtMs` + `window` is the natural one, since a
+   transcript never holds two rejections for the same window in the same millisecond.
+3. **A transcript can vanish between `readdir` and `open`.** It killed the first survey outright.
+   Counted in `ScanCoverage.transcriptsUnreadable`, never fatal.
+4. **The cache's window list is not two entries.** Alongside `five_hour` and `seven_day` it carries
+   rotating per-model codenames (`nimbus_quill`, `spend`, `seven_day_opus`) — some with
+   `utilization: 0` and `resets_at: null`, one (`member_dashboard_available`) not an object at all.
+   A `0` with no `resets_at` to validate it is reported `unknown`, never as headroom, and the window
+   name is an open `string` so a closed union cannot compile an exhaustive switch that drops a real
+   window.
+
+**Two rounds of GPT Sol, nineteen findings, all accepted.** No P0s in either round. Round 1 found
+seven P1s and three P2s; round 2, on the fixed code, found five more P1s and four P2s. What is worth
+recording is not the count but that **round 2's biggest finding was the round-1 fix re-making its own
+mistake one level down**: `contradictsCachedWindow` returned `null` for both *"the two observations
+agree"* and *"the comparison was impossible"*, and both callers read `null` as a live rejection — so
+an unattributable rejection was promoted to `limited`, and **a test written in round 1 pinned that
+wrong answer**. Understanding a principle and having written it down an hour earlier is not
+protection against violating it in the next function. There is now a three-armed `classifyHit`
+(`ours` / `contradicted` / `cannot-attribute`) and only a positive confirmation can set `limited`.
+
+The other round-2 findings in one line each: an incomplete scan may no longer name *which* rejection
+binds (`activeLimit` is null while `level` stays `limited`); an unterminated final line is validated
+as JSON even without a marker; a `quotaLimits` saying `rejected` with no outer signal is malformed
+rather than benign; a one-sided organisation identity no longer licenses adopting the config's
+`accountUuid`; symlinked transcripts are counted as outside coverage rather than skipped;
+`--max-transcripts` must be a whole number; the same-window tolerance is 1s, which is what the
+formats justify, not the 5s I had argued for.
+
+The generalisation, which the dashboard session wrote better than I did: **a function returning
+`null` for both "no" and "could not ask" is the same defect as a type with one slot for two facts,
+and it is harder to see because it looks like an absence rather than a collapse.**
+
+And its twin, from verifying a guard rather than trusting it: **a guard you have seen pass is not
+evidence that it covers your file.** An edit here wrote literal NUL bytes into `usage.ts`; everything
+compiled, every test passed, and `grep` silently returned nothing for every pattern. Told that
+`tests/no-raw-nul-bytes.test.ts` already covers `tools/`, the cheap check is to run it and see green
+— which shows only that the tree is clean. The check that means something is to put a NUL back at a
+known anchor, watch the guard go **red**, and restore in a `finally`. `file <path>` reporting `data`
+rather than `JavaScript source` is the same bug in one command.
+
+**None of the nineteen was found by reading.** Sol found seventeen; a mutation pass found the other
+two, after showing that seven of round 1's ten fixes had no test at all. The recurring lesson is not
+"write better tests" — it is that **a test written from the same misunderstanding as the code is a
+second vote for the bug**. Three instances in one afternoon across this wave, from three sessions:
+this module's `contradictsCachedWindow` (two values for three facts, with a test pinning the wrong
+answer), `w2-harness-adapter`'s Codex recogniser (missed paid runs, with a test pinning *that* wrong
+answer), and the lock extraction's `EPERM`-is-alive (no test at all, so a mutation left 102 green).
+Two of the suite agreeing with the code because it shared the code's assumption, one of the suite not
+looking — [silent-success.md](../reusable/silent-success.md)'s class, arriving three times in one day
+and caught only by external checks.
+
+**Three claims in this module were guesses until something forced a measurement**, and all three were
+wrong or unfounded:
+
+| the guess, written as fact | what measuring found |
+|---|---|
+| "a live session's final line can be half-written, so unparsed candidates are routine" | **0** unparsed of 267 candidates, and **0** of 1,772 transcripts end without a newline |
+| "adding a name to `KnownUsageWindow` without adding it to the array is a compile error" | it is not; an array only checks one direction. Now a `Record<KnownUsageWindow, true>` |
+| "deleting the null-uuid guard is an equivalent mutant" | equivalent in `kind`, not in `why` — I checked the discriminator and claimed the value |
+
+**An open question the first live reading raises, and it is a product judgement rather than an
+engineering one.** On this box the verdict is `unknown` continuously until 2026-09-12, because 27
+unexpired rejections contradict the cache. Four days of a gauge that can never say *"you are fine"*
+is the shape the dashboard spent the same day fixing elsewhere — a caveat on 29 of 32 cards is
+wallpaper, not a caveat. `orchestrator-setup` asked whether a rejection that can NEVER be attributed
+is the same fact as one that cannot be attributed YET. Measured on the live data,
+2026-09-08T14:12Z, and the answer is **three ways, not two**:
+
+| | resolved by | today's verdict |
+|---|---|---|
+| **transient** — this pass could not read the cache | the next scan | `unknown`, correctly |
+| **resolvable by an event** — a rejection that contradicts an attributed cache | a `/login` swap, not a scan | `unknown` |
+| **permanent** — nothing can ever settle it | nothing | would be `unknown` forever |
+
+All 27 are the middle row, and the distinction matters because **the event is not hypothetical**.
+They are `contradicted`, not `cannot-attribute`: every one is `seven_day`, all share the single reset
+instant 2026-09-12T18:00Z, all were hit inside three hours on 2026-09-07, and they expire *before*
+the current account's cached weekly window rolls on 2026-09-15T04:59Z — so no future scan will ever
+change their status. **But a `/login` back to the account they belong to would**, and that account
+swap is the very thing that created them. If Greg swapped back tomorrow he would genuinely be limited
+until Friday, and a gauge that had been reporting `ok` would have been wrong for four days in the
+expensive direction.
+
+So "waiting for information that will never arrive" is not quite it: the information can arrive, just
+not from looking again.
+
+**And the decision Greg is actually being asked for is not the one that first appears.** Two different
+`seven_day` boundaries — the rejections' 2026-09-12T18:00Z and the cache's 2026-09-15T04:59Z — cannot
+belong to one account's one window, so these are almost certainly *another account's* rejections,
+sitting in transcripts on a box that has only one `~/.claude/projects`. Which makes the four days of
+`unknown` **the cost of a deferral becoming visible**, not a defect in the verdict:
+
+> Right now, I have a couple of Claude Max subscriptions, and I run /login every couple of days to
+> switch when I hit limits. In future I expect to have more. But let's say that multiple Claude Max
+> subscriptions is MEDIUM-TERM, i.e. out of scope for the next day or two.
+>
+> — Greg, 2026-09-08
+
+A single-account gauge reading a multi-account box will meet contradicted evidence roughly every time
+he switches, and it will be right to refuse each time. So the question is not *"is `ok` or `unknown`
+more honest here"* but **"do I want a per-account gauge that goes quiet after every `/login`, or is it
+time to un-defer multi-account?"** — `orchestrator-setup`'s framing, and the better one.
+
+Three ways to go, if the answer is *stay single-account*: keep it as it is; let an attributed cache
+showing plenty of headroom outweigh a contradicted rejection and report `ok` with the standing fact
+beside it; or — cheapest, and not a judgement about which observation to believe — keep `unknown` and
+**render the reason**, since the verdict already carries it: *"27 rejections on this box belong to a
+weekly window that is not this account's; resolves 2026-09-12T18:00Z or when you switch accounts."*
+That is the dashboard's own move of scoping the question by saying what it is about, and a gauge that
+says why it cannot answer does not train a reader to ignore it the way a bare grey one does. It needs
+no change here at all — only a renderer that reads `verdict.reasons`.
+
+Nothing has been changed on the strength of this note.
+
+**Deliberately not done, and it is the half of "done looks like" that is missing**: the usage block
+is **not** written into `current.json`. That means a schema field, a `parseCheckpoint` arm, both
+construction sites in `store.ts`, and a cadence decision in `daemon.ts` about when to pay for a scan
+— all of it inside the store's own design rather than this stage's. The collector is callable and the
+CLI prints it today; wiring it into the checkpoint belongs with whoever owns the store, and the shape
+to add is `usage: UsageReport` from `tools/fleet/wire.ts`.
+
+#### The store half is a separate owner, and the two `Checkpoint` fields must land one at a time
+
+The collector is `w2-usage-limits`'s; **writing it into `~/.overseer/current.json` is the Overseer's**,
+because it needs a `Checkpoint` field, a `parseCheckpoint` arm, both construction sites and a cadence
+decision in `daemon.ts`. That session declined to land a schema change in a module somebody else might
+be editing, which was the right call — **`Checkpoint.attention` and `Checkpoint.usage` are in flight at
+the same time**, so the order is: attention lands, then usage on top, one editor of `Checkpoint` at a
+time.
+
+#### The 45-second scan should be paid once, not every pass — PROPOSED AND WITHDRAWN
+
+**Withdrawn on 2026-09-08 by its own author, after the two doubts below were measured**, and kept
+here because the reasoning is worth having when it is proposed again. What died is the SPEED
+argument: mtime is a fine trigger and a bad watermark (a transcript is appended to constantly, so
+*"files whose mtime moved"* is nearly every active file every pass and the saving evaporates), and
+nobody had measured the cost the optimisation was meant to avoid. What survives is the MEMORY
+argument — a rejection found at 13:00 and resetting on Friday is still in force at 13:05 even if the
+13:05 scan fell over — which is the store's job and needs no watermarks in the collector. See
+*What landed* above for the precondition any future incremental path would need.
+
+The full transcript scan is **45s over 1,770 transcripts, 2.9 GB, 870,799 lines** (measured
+2026-09-08T13:23Z — stamped after the fact, because a later reading of 1,772 files and 875,528 lines
+read as a competing claim rather than an earlier one, which is this wave's own rule biting the
+section that states it), and the wide window
+is deliberate: a narrower one can miss a `seven_day` rejection that is still in force. But that is an
+argument for reading the whole history **once**, not for re-reading it. **A `seven_day` rejection found
+at T with a `resetsAt` of T+7d stays in force until that instant whether or not you look again** — it
+is a fact with an expiry, not one that needs re-confirming. So: cold start pays the full scan and
+records the watermark it reached; every pass after it scans only what moved; a known unexpired
+rejection is carried forward from the store, and one whose `resetsAt` has passed is dropped as a
+**positive act with a reason** rather than a silent absence. The cache is read every tick regardless,
+because it is one file and free.
+
+**That is the store earning its keep** — it is what turns an expensive repeated scan into a cheap
+incremental one, which is the Overseer's tense doing the job it exists for. It also supplies a real
+positive control on the incremental path: the watermark plus the count of files whose mtime moved, so
+*"found nothing new"* is distinguishable from *"looked at nothing"*.
+
+**Two ways it could be wrong, named rather than discovered**: a transcript can be *rewritten* rather
+than appended (a compaction), which moves content behind the watermark; and a 429 can land in a file
+whose mtime is then missed if the clock moves. If either is real, the answer is the plain 45 seconds
+on a slow timer — which is a perfectly good design and much better than a clever one that misses a
+live rejection.
+
+**And it must not run inside the tick.** `heartbeat.lastTickAt` is how a reader decides the Overseer is
+dead rather than showing a stale register as current, so a 45-second blocking scan makes every tick
+look 45 seconds late — **A17 exactly, healthy operation spending most of its time alarming**, which
+teaches Greg to ignore the alarm. It goes in as an injected runner with its own interval, one pass at a
+time, a thrown pass becoming an explicit `unknown` rather than silence: the same shape `attention` uses,
+and consistency between the two is worth more than either being individually optimal.
+
+#### A relative time is a rendering, and a rendering must not be quotable as a measurement
+
+The sharpest instance of the timestamp rule, and it was found in the place the rule does not obviously
+reach. `w2-usage-limits`'s *report* was already right — `collectedAt`, `fetchedAtMs`, `resetsAt`,
+`resetsAtMs`, instants as fields all the way from the source, never re-typed. **The CLI renderer was
+the leak**: it printed `cache fetched 73 min ago`, which is true when printed and false when pasted —
+and CLI output on this box gets pasted into messages and plan docs hours later *as evidence*. Now it
+prints the ISO instant with the age in parentheses.
+
+**And one wave-level fact that should govern every timeout anybody sets here**: the same scan over the
+same files took **1.8s and 9.7s two hours apart, purely from ambient load** (measured
+2026-09-08T13:16Z). A 5× variance is the argument against any design whose correctness depends on
+something finishing promptly.
+
 ### Stage C — the Codex/GPT harness adapter, v1
 
 Half of this exists and was measured: `tools/overseer/work.ts` already recognises `codex exec` in the
@@ -308,12 +952,225 @@ process tree, because **4 sessions were running it and 0 showed as anything but 
 **Done looks like**: the fleet can say *this is a Codex job and you cannot type at it* as a typed
 fact rather than a special case buried in `steer.ts`.
 
+#### What landed, 2026-09-08 (`w2-harness-adapter`)
+
+- **`HarnessKind`, `Capability`, `HarnessCapabilities` in [`tools/fleet/wire.ts`](../../tools/fleet/wire.ts)** —
+  types only, because that file is compiled a second time under the browser's DOM-only project and
+  may hold no runtime value and no import. Placement decided by `claude-agents-dashboard`, which owns
+  the row type; it landed `wire.ts` itself twenty minutes before this stage needed it.
+- **`Harness`, `HarnessUnknownCause`, `classifyPaneHarness`, `describeHarness` and the
+  `HARNESS_CAPABILITIES` table in [`tools/overseer/harness.ts`](../../tools/overseer/harness.ts)** —
+  the table is the `const`, so it lives here rather than on the wire. `Record<HarnessKind, …>` makes
+  a new arm that declares nothing a build failure; `describeHarness` is an exhaustive switch with a
+  `never`.
+- **Six arms, not four**: `claude-code`, `claude-headless`, `codex-batch`, `codex-interactive`,
+  `shell`, `unknown`. Two more than the plan asked for, and both earned their place — see below.
+- **31 tests in `tests/overseer-harness.test.ts`**, all written red first, plus two new real fixtures.
+  Five mutations of the finished code were each caught by the test that names them.
+- **`steer.ts` got a header pointer only**, deliberately: see *What the plan got wrong*, item 4.
+
+**Nothing renders it yet, and that is the stage boundary rather than an omission.** `classifyPaneHarness`
+and `capabilitiesOf` are called by their tests and by nothing else on `dev`. Putting a harness on a
+row means editing `collect.ts` / `status.ts` / `web/`, which are `claude-agents-dashboard`'s files;
+the wire types are in `wire.ts` precisely so it can do that without a second declaration. The
+Overseer's own consumer (a harness on a stored observation) is a later stage and is not smuggled in
+here. If this sits unrendered for a week, that is a coordination failure worth noticing — not
+evidence the type was wrong.
+
+#### What the plan got wrong
+
+**1. "Half of this exists" understated it, and "what does not exist is the type" was exactly right.**
+No complaint — this was the most accurate sentence in the stage.
+
+**2. Four arms would have produced the UI that lies the principle warns about.** The plan says "a
+`Harness` discriminated union"; four kinds are not enough to be honest with. The reviewer was asked
+outright whether six was over-built and which two it would cut, and answered the other way:
+
+> I would keep all six union arms. `claude-headless` and `codex-batch` are precisely the two arms
+> that prevent "same executable means same capability"; cutting either recreates the lie this stage
+> is intended to remove.
+>
+> — GPT Sol, 2026-09-08
+
+That is a better argument for the extra arms than the one they were added on, which was only "it
+matched zero panes today, keep it anyway". Concretely:
+
+- `claude --print` is a Claude that **cannot** take a keystroke — it read its prompt once at startup
+  and never reads the tty again. Folded into `claude-code`, the page draws a "send" on it.
+- A Codex **batch** job is refused because there is no stdin at all (`scripts/subagent-cli.ts` spawns
+  with `fd 0 = 'ignore'`, "the load-bearing anti-hang guarantee"). An **interactive** Codex is
+  refused because *nobody here has ever tried it* — unproven, not impossible. One `why` string
+  cannot say both, and the difference is what decides whether a later stage should attempt it.
+
+**3. The measurement changed under the stage, twice, and that is the finding.**
+
+| | 11:58 UTC | 12:15 UTC |
+|---|---|---|
+| panes | 22 | 26 |
+| `claude-code` | 15 | 17 |
+| `shell` | 7 | 6 |
+| `codex-batch` | **0** | **1** |
+| `codex-interactive` | **0** | **2** |
+| `unknown` | 0 | 0 |
+
+At 11:58 the honest answer was the one the brief predicted: *no Codex session has ever been a fleet
+row on this box; a `codex exec` is always a Claude session's child or an orphan.* Seventeen minutes
+later that was false — one pane was `tmux-job.ts` running `run-codex.ts` directly, and **two were a
+bare interactive `codex` TUI under a `bash -l`**, verified against their raw command lines and
+captured as `codex-batch-pane.txt` and `codex-interactive-pane.txt`. Neither reading was wrong.
+**"There are none" is a reading, not a property**, and a design that had hard-coded the 11:58 answer
+would have shipped an arm marked dead code that was live before the commit landed.
+
+**4. "Move steer.ts's Codex refusal so it reads the capability" describes something that was never
+in `steer.ts` as code.** What is there is (i) a header bullet asserting the fact in prose and (ii)
+`verifyTarget`'s `no-claude-in-pane`, which refuses Codex, bare shells and dead panes *incidentally*,
+by requiring a live `claude --session-id <uuid>` descendant. Making `verifyTarget` genuinely consult
+a harness capability would need a full command table it does not read — a new `io` call on the send
+path — which buys nothing in a stage where every non-Claude kind refuses anyway. So: the header
+bullet now names `HARNESS_CAPABILITIES` as the owner of the fact and forbids restating it, and the
+inline refusal sentence is **left for a follow-up**, by agreement with `fleet-approval-binding`
+(restructuring that file the same afternoon) and `claude-agents-dashboard`. Nothing behavioural
+waits on it.
+
+#### The cross-family review, and what it changed
+
+GPT Sol, one round, high effort — prompt in
+[260908f-stage-c-code-review-prompt.md](260908f-stage-c-code-review-prompt.md), answer in
+[260908f-stage-c-code-review-sol-r1b.md](260908f-stage-c-code-review-sol-r1b.md). It found **no P0**
+and confirmed the stage adds no delivery path. It found four real defects, all fixed, and each fix
+was then mutated back to check the new test catches it:
+
+1. **P1, a false capability grant.** `claude --session-id abc --print do the thing` classified as
+   `claude-code`, and the table then granted prose steering on a headless run — the exact lie the
+   stage exists to prevent, sitting in the recogniser, because it anchored on the *first* argument
+   only. The parser now walks the whole leading option region; `--print` wins; and it stops at the
+   first bare word so a *prompt* containing `--print` cannot flip a live session to headless.
+2. **P1, Codex mode read from the wrong end of the line.** `codex --help` gives
+   `codex [OPTIONS] <COMMAND>`, so global options come *before* the subcommand and
+   `codex --model x review the diff` is a non-interactive review — which the anchored test called
+   interactive, and which `work.ts` missed entirely. **A test in this repo pinned that wrong answer**;
+   it is replaced. `parseCodexInvocation` now skips the option region, and refuses to eat a known
+   subcommand as a flag's value. It also stops calling `codex mcp-server` / `codex login` an
+   interactive Codex: utility subcommands are not a harness at all.
+3. **P2, a malformed tree could return a *steerable* Claude.** Selection returned at the first level
+   with a hit, so a cycle elsewhere was never reached. Structure is now validated over the whole
+   reachable subtree *before* anything is selected — including before the depth-0 check, which used
+   to answer for a self-parented pane without walking anything.
+4. **P2, `why` could be empty.** A probe that failed without a sentence produced
+   `{cause: "process-table-unreadable", why: ""}` — a greyed-out button with no reason beside it.
+   Every `unknown` now goes through one constructor that refuses a blank.
+
+Plus two contract corrections: `shell.command` is now actually truncated (the type promised it and
+the code did not), and two comments that claimed more than the data supports were narrowed — the
+`/tmp` guard checks the *spelling* of argv[0], not where the binary is, and `shell` is a claim about
+argv[0]'s basename, not about the executable's identity.
+
+**Deferred rather than fixed, with reasons:**
+
+- **Sol's P3, a seventeenth hand-written join: `recogniseClaude` here and `isClaudeForSession` in
+  `steer.ts` both read Claude's argv, and disagreed.** Sol is right, and the narrower half is fixed
+  (this parser now reads `--session-id=abc`, which steer.ts accepted and it did not). Extracting one
+  shared parser waits for `fleet-approval-binding`'s restructure, which Sol itself recommended.
+- **Reading `/proc/<pid>/cmdline` for NUL-separated argv.** The right fix for the quoting problem,
+  and refused for v1: it is a syscall per candidate against a process that may exit mid-read, which
+  is a different design for the probe rather than a better parser. The cost is bounded and now has a
+  test naming it — `codex 'review this diff'`, an interactive session with one prompt argument,
+  arrives flattened and identical to a batch `codex review this diff` and is reported as batch. In
+  v1 both answers refuse steering, so the cost is a wrong label rather than a wrong action.
+
+**Sol's warning about the stage after this one, kept because it is the trap:** if
+`codex-interactive` is ever flipped to `can: true`, this sequence sends prose to a *shell* —
+classify `bash -l → codex`; the Codex exits; the shell takes the tty back; a stale capability
+authorises `tmux send-keys`. **Do not implement that stage by changing one boolean.** It needs a
+send-time identity check, or better, a session-addressed Codex control channel instead of tty
+injection.
+
+#### Two findings that are not this stage's to fix
+
+**A paid Codex review can end up belonging to no session at all.** At 11:58, two of the three running
+`codex exec` processes had an `npm exec` with `ppid 1`: the Bash-tool shell that launched them had
+been reaped, leaving a 45-minute `gpt-5.6-sol --effort high` run reparented to init. They were in
+`fb2c-feedback-button-on-homepage` and `command-bar-commands-and-place`. At 12:15 one orphan was
+still running. **`work.ts` only ever walks DOWN from a pane, so it cannot see these** — the dashboard
+cannot show them, attribute them, or stop them, and nothing bills them to anybody. That is a cost
+question as much as an engineering one, and `claude-agents-dashboard` has it to surface.
+
+**It is a WINDOW, not a leak, and the difference decides what to do about it.** The claim rests on the
+**process lifecycle**, not on a count: an orphan is created when a Bash-tool shell is reaped while its
+`run-codex.ts` child is still running, and it ends when that review ends. So the population is bounded
+by the number of concurrent reviews and cannot grow on its own. **That argument would hold with zero
+readings taken**, which is what makes it the load-bearing part. What is worth fixing is the window
+during which a paid job cannot be attributed or stopped — not a growing population of abandoned ones.
+
+Two walks are consistent with it and neither establishes it. At **13:03 UTC** the two live `codex exec`
+runs (`fleet-dictation`'s and `fleet-approval-binding`'s) both traced up to an
+`sh -c ( npx tsx run-codex.ts … )` whose parent is the **tmux server**, so both were ordinary
+`codex-batch` *panes* — the shape `codex-batch-pane.txt` captures — attributable and stoppable;
+`orchestrator-setup` walked every `ppid 1` process at **13:05 UTC** and found none.
+
+**Those two readings are two minutes apart, not an hour**, and an earlier draft of this paragraph
+presented them as independent corroboration because one was written in BST (14:05) and one in UTC
+(13:03) with no note that the box runs UTC+1. Two observations two minutes apart are one observation
+with a wide error bar. **This is the sample-window error for the third time in one stage** — first as
+the Codex count, then as "two orphans are running right now" (which would have been false by the time
+anybody read it), now as a timezone making two near-simultaneous readings look like a trend.
+
+**And the third one is why "I have learned this" is not a defence.** The lesson as written above is
+about *counting a population*; it recurred in the shape of *corroborating a claim*, which is the same
+error wearing different clothes and did not trip the memory of the first one. The version that catches
+both is mechanical rather than remembered, and it is the discipline everything else built today
+already follows: **a fleet number carries the instant it was taken, in one timezone, in the sentence
+itself** — the way `collectedAt` and `scannedAt` are fields rather than habits.
+
+**One `ppid 1` process really is long-lived, and it is the fake.**
+`bash /tmp/fake-codex-qAz9Um/codex -o /tmp/run-codex-gc.txt`, reparented to init **6 days 20 hours**
+ago by a test run last week, 1.7 MB, costing nothing. It is a live specimen of exactly what the
+recogniser is built not to be fooled by — still on the box, still carrying `codex` as a basename,
+still correctly not recognised, because shells are never peeled and nothing under `/tmp` is an
+installed tool.
+
+**The process table cannot say which process is reading the tty, and that is now closed rather than
+open.** Measured across all 22 panes: `tpgid` equalled the pane's own `pgid` on 21 of them, and **0
+of 15 `claude` processes had a process group of their own** — the job shell, the `claude`, and
+everything Claude shells out to share one group, because a non-interactive `bash script.sh` does no
+job control. The 22nd pane is the positive control: the one interactive `bash -l`, where a
+foreground child *does* get its own group, which is how we know the reading works.
+`fleet-approval-binding` measured the same thing independently on three panes the same morning. So
+**`HARNESS_CAPABILITIES` is a declaration about how a session was launched, not a verified fact about
+who holds the terminal**, and it cannot be made into one at this seam. Named in `harness.ts`'s module
+comment rather than left to be discovered.
+
 ### Stage D — box-health history (`fleet-health-history`)
 
-Owned elsewhere; the contract is [§ Where the health history lives](#where-the-health-history-lives-and-the-one-thing-owed-in-return)
-above. **Swap is not part of the work**: `SwapReading` already gives `usedBytes`/`totalBytes`/fraction
-and the per-file breakdown, `SwapActivityReading` already gives si/so and `activelySwapping`, and
-`health-view.ts` already draws the card. Greg's bullet asks for *history*; the measurement exists.
+The contract is [§ Where the health history lives](#where-the-health-history-lives-and-the-one-thing-owed-in-return)
+above, and it is met. **Swap is not part of the work**: `SwapReading` already gives
+`usedBytes`/`totalBytes`/fraction and the per-file breakdown, `SwapActivityReading` already gives
+si/so and `activelySwapping`, and `health-view.ts` already draws the card. Greg's bullet asks for
+*history*; the measurement exists.
+
+**Built 2026-09-08. The plan, the review and what changed because of it:**
+[260908f-box-health-history-24h-graphs-and-swap-retention.md](260908f-box-health-history-24h-graphs-and-swap-retention.md).
+
+- Store: `tools/fleet/health-history.ts` — append-only JSONL under `~/.fleet-health/`
+  (`FLEET_HEALTH_DIR`, absolute only), two files rotating at 8 MiB, `tools/overseer/jsonl.ts` for the
+  append discipline and `tools/overseer/lock.ts` for the writer lock. The whole `HealthReport` is
+  stored verbatim; there is no projection at the write boundary.
+- Join: `tools/fleet/health-wiring.ts` is the single composition, called once by `server.ts`.
+  `refreshOnce` gained `retainHealth`, `refreshMs` and `now`, and `refreshHealth` now returns what
+  happened instead of `void`.
+- Route: `GET /api/health/history?hours=` — gzipped, never downsampled.
+- Panel: a verdict strip and four series under the tiles on Box health.
+
+**What other agents should know:**
+
+- `nextWaitMs(refreshMs, collectionFailed)` is exported from `refresh.ts` and is now the **one** copy
+  of the backoff rule. `refreshLoop` in `server.ts` uses it, and so does every stored sample. Do not
+  inline it again.
+- **A break in the chart is never labelled with a cause.** It means no sample was written, which is
+  the box, the dashboard, a hung collection, a failed append, or a restart. If you add a state here,
+  it must not claim to know which.
+- A `HistoryPayload` type sits in `routes-health-history.ts` awaiting `wire.ts`;
+  `claude-agents-dashboard` owns that move.
 
 ### Stage E — dictation on every fleet input box (`w2-fleet-dictation`)
 
@@ -327,7 +1184,7 @@ Greg's call when asked what a realtime dialog would be talking *to*:
 > Borrow (or better still reuse) from Spideryarn.
 
 **"Better still reuse" is a decision about a principle, and it is his to make.**
-[§ Principles](../project/orchestrator-direction.md#principles) says the fleet tool must not depend on
+[§ Principles](../project/overseer-direction.md#principles) says the fleet tool must not depend on
 anything under `src/`, *"If it ever earns its own repo, that should be a move, not a rewrite."* There
 are ~3000 lines of hard-won client machinery there (`useDictation.ts` 1612, `mic-recording.ts` 461,
 `DictationStrip.tsx` 502, `useAudioLevel.ts` 204, `mic-lock.ts` 110). **Copying that is worse than
@@ -347,6 +1204,270 @@ every message Greg dictates.**
 this box and Chrome's fake-mic flags do not work headless. The real `getUserMedia` path is Greg's to
 test from his own device, and the report must say which half was checked. *"A valid session ticket is
 not proof that a microphone opened, a response event is not proof that sound played."*
+
+#### What was built, and what it cost — `w2-fleet-dictation`, 2026-09-08
+
+Written into this doc rather than a private one, per the brief. The rule above became:
+
+> **Only LEAF, BROWSER-ONLY, PRODUCT-AGNOSTIC modules may be imported from `src/`.** Nothing that
+> reaches the database, an auth session, a slug, an article, or a route under `src/routes.ts`. If a
+> module is nearly leaf but for one product coupling, extract the coupling behind a parameter rather
+> than importing the coupling.
+
+**And it is a test, not a paragraph.** [`tests/fleet-imports.test.ts`](../../tests/fleet-imports.test.ts)
+walks the fleet's whole transitive import graph and asserts the set of `src/` files it reaches is
+**exactly** the twelve named below, each with a line saying what it is for. Adding a thirteenth is a
+diff somebody reviews. It was watched failing — an `import { loadEnvLocal } from "../../src/env.js"`
+in one fleet file took two of its five tests red — and its first assertion is a self-check on the
+walker itself, because a closure walker that sees nothing looks exactly like one that found a leaf.
+
+##### What the fleet now depends on, from `src/` — the cost of the move
+
+**Direct**, what fleet files actually name: `src/web/useDictation.ts` (the microphone),
+`src/web/useDictationField.ts` (the caret, the span, the closed box), `src/web/useAudioLevel.ts`,
+`src/dictation-limits.ts` (the size caps, shared by both ends — what that file was built for),
+`src/dictation-fillers.ts` (the ums), `src/vocabulary.ts` (`packTerms`, `MAX_TERM`, the fence).
+
+**Transitive**, all leaves: `mic-lock.ts`, `mic-recording.ts`, `mic-devices.ts`,
+`dictation-errors.ts`, `audio-level.ts`, and the new `src/web/transcriber.ts`.
+
+**Twelve files, ~4,200 lines, and no external package beyond `react`.** That is what a move to its
+own repo would carry, and it is small enough that a person would carry it by hand.
+
+**The closure figures below are GPT Sol's, from an AST walk, not mine.** Mine came from a regex
+walker that had already been wrong once in the flattering direction, so when a second measurement
+disagreed the AST one won on method rather than on being second. The differences are small and none
+of the conclusions moves — but the published numbers were stale and a stale number quoted as
+evidence is the thing this plan keeps arguing against.
+
+| | files | lines |
+|---|---:|---:|
+| `src/web/dictation-upload.ts`, the edge that was cut | 22 | 16,215 |
+| `src/web/useDictation.ts` after the cut | 8 | 2,931 |
+| `src/transcribe.ts`, the server-half candidate | 162 | 118,171 |
+| `src/ai-call.ts`, its smallest useful piece | 21 | 20,505 |
+
+##### The one edge that had to be cut, and what it was worth
+
+`useDictation.ts` imported `sendForTranscription` from `dictation-upload.ts`, which calls `apiFetch`
+— and that one edge reached **22 files and 16,215 lines**, through `lib/api.ts` to
+`@supabase/supabase-js`, `@sentry/core`, the offline store and the billing plan. So `transcribe` is
+a parameter now (`Transcriber<C>` in the new leaf `src/web/transcriber.ts`) and `context` is opaque:
+the hook snapshots it per session, travels it on a kept recording, and never looks inside.
+`useDictation.ts`'s closure is now **8 files, 2,931 lines, `react` only**.
+
+The six product boxes gained one line each (`transcribe: sendForTranscription`) and nothing else
+changed. The two tests that drive the hook directly pass the real product transcriber in, so they
+still exercise the whole upload path.
+
+##### Not imported, and both would have been green all the way to the page
+
+`DictationStrip.tsx` and `MicLevel.tsx` render against hand-written class names —
+`prof-mic-note`, `prof-listening`, `mic-level` — from a stylesheet this page does not load. They
+would typecheck, build, and render an unstyled button. `MicLevel` sat on the import list for an hour
+on the strength of a grep for `className="` that could not see a template literal. So: **reuse the
+machinery, write the chrome** — `tools/fleet/web/src/DictationControl.tsx`, which is also right on
+the merits, since this page follows the device between light and dark and the product is dark
+unconditionally.
+
+##### The server half: measured out of contention, not ruled out on principle
+
+`src/transcribe.ts` was the first candidate. Its closure is **162 files and 118,171 lines**, pulling
+`pg`, `drizzle-orm`, `stripe`, `jsdom`, `@mozilla/readability`, `pino` and the Anthropic SDK into a
+tool whose whole claim is that it runs with the product's server absent. Even the smallest useful
+piece, `ai-call.ts`, is 21 files and 20,505 lines. So `tools/fleet/transcribe.ts` makes its own call
+to `POST https://openrouter.ai/api/v1/audio/transcriptions` — still through the gateway, no second
+one — borrowing the three files under `src/` that import nothing at all.
+
+**The honest half of that ruling:** `transcribeWith` used standalone writes no database row, so
+going through it **would not have metered this spend either** — nothing for `npm run cost` to count.
+
+**And it is declared rather than merely admitted.** `tests/no-undeclared-spend.test.ts` caught this —
+`tools/fleet/transcribe.ts` names `openrouter.ai` and a credential and was in no register — which is
+the repo asking the exact question this section had answered in prose and not in code. There is now a
+`fleet-dictation` entry in [`src/spend-declarations.ts`](../../src/spend-declarations.ts) with
+`metered: false`, so **`npm run cost` prints it by name on every run**:
+
+```
+Not counted here — 8 known way(s) of spending that write no row:
+  tools/fleet/transcribe.ts
+      fleet-dictation — skips the gateway, open today
+```
+
+That is the difference between a gap somebody wrote a paragraph about and a gap the tooling says out
+loud. It stops being `false` when the fleet has somewhere to write a row.
+
+*And the mechanism is not what this doc first said.* It claimed a process-global sink that is `null`
+until the product's server installs one. There is no such thing: a sink belongs to `collectSpend`'s
+**async scope**, and a call made outside one increments an in-memory unscoped counter, logs a
+warning, and drops the record. GPT Sol's correction. The conclusion is unchanged and the reasoning
+was wrong, which is worth more than the conclusion being right. The fleet's OpenRouter spend is invisible to the product's ledger whichever shape is
+chosen. That is a property of being a separate tool, not a cost of this decision, and it is named
+here rather than discovered later. A dictation is about $0.0005.
+
+##### The vocabulary works, and a 200 would not have told us
+
+`tools/fleet/vocabulary.ts`: `FLEET_TERMS` first (the box's own words — `worktree`, `tmux`,
+`gjd-remote`, `Overseer`, `vitest`, the model names), then the live snapshot's session handles,
+titles and directory leaves, most recently active first, with the named session promoted. Packed by
+`packTerms`, which strips angle brackets and caps each term — a session title is a sentence a model
+wrote about work that was often *"look at this hostile input"*, so it needs the same fence an
+article title does.
+
+Verified against the real gateway, because the evidence has to be the transcript changing rather
+than the status code — OpenRouter's chat route accepted a `prompt` field for eleven days, answered
+`200`, and changed nothing. [`tools/fleet/probe-transcribe.ts`](../../tools/fleet/probe-transcribe.ts)
+sends one clip twice:
+
+```
+with the fleet vocabulary (2663 ms):
+  Add this to Spideryarn please, the granularity zoom is fine …
+with NO vocabulary (1226 ms):
+  Add this to Spiderrion, please. The granularity zoom is fine, …
+```
+
+##### Which boxes, and the two that are deliberately left alone
+
+| box | dictation? |
+|---|---|
+| **Say something to it** — the steering message, `SessionDetail.tsx` | yes, the main one |
+| **New session** — the whole prompt an agent wakes up with | yes |
+| **Rename** — a session's name, `SessionDetail.tsx` | **no** |
+| Overseer message, `OrchestratorPanel.tsx` | **there is no box** |
+
+**The rename field gets no microphone.** A misheard message reaches an agent that can ask what you
+meant; a misheard *name* is silently wrong and sticks, and the Save button already warns that saving
+the same name again is not a no-op. `claude-agents-dashboard` reached the same call independently.
+
+**`OrchestratorPanel.tsx` has no message box and this work does not add one.** Its own header says
+why: there is no Overseer process, so a box there *"would swallow what you typed and look like it
+had worked, which is the one thing this page is built not to do"*. A microphone on a box that does
+not exist is not a smaller version of that lie.
+
+##### The finding that decides whether this works at all: the tailnet is not a secure context
+
+**`getUserMedia` requires a secure context, and the address Greg's phone uses is not one.** Measured
+on the box, 2026-09-08 — one Chrome, one fleet server bound to both addresses:
+
+```
+http://127.0.0.1:8802/       isSecureContext true,  navigator.mediaDevices present
+http://100.92.255.119:8802/  isSecureContext FALSE, navigator.mediaDevices ABSENT
+```
+
+`127.0.0.1` and `localhost` are trustworthy by exception, so dictation works over the ssh forward
+Greg uses from his laptop. The tailnet address is CGNAT (100.64.0.0/10) and is on nobody's
+trustworthy list. So on the **phone** — the surface this page exists for — `supported` is false, and
+the first draft of `DictationControl` returned `null`: no button, no error, nothing to search for.
+That would have been the fifth silently-dead feature in this tool in a day. It now says which of the
+two reasons it is, because only one has a fix and **the fix is not code**.
+
+**This changes an argument that is already open.** Whether enabling the systemd unit should widen the
+bind to the tailnet was being weighed as a *security* question. This makes HTTPS on the tailnet —
+`tailscale serve` — a **feature prerequisite**: without it a whole class of browser capability is
+absent on the only surface Greg reads this page on. Passed to `claude-agents-dashboard` and
+`orchestrator-setup`, who own that decision.
+
+A second, smaller one from the same browser pass: `tools/fleet/headers.ts` sent
+`Permissions-Policy: microphone=()` on every response, which blocks the microphone at document level
+independently of any of the above. Its own comment had predicted the change and predicted the wrong
+route to it — *"when it lands, `microphone=(self)` goes here deliberately rather than by discovering
+that the feature does not work"* — and it was discovered the second way, by one console line under a
+button whose failure was indistinguishable from this box having no audio hardware.
+
+##### What is verified, and what only Greg can verify
+
+| | |
+|---|---|
+| The server half, end to end against the live gateway | **verified** — see the A/B above |
+| The `keywords` array reaching the model and changing the transcript | **verified** |
+| The bundle carrying dictation and not Supabase | **verified** — `grep -c supabase` on the built JS is 0; `mic-no-tape`, `mic-unplugged` and `api/transcribe` are all present |
+| The import rule holding | **verified** — the test, watched failing |
+| The route's Origin check, size cap and format refusal | **verified** |
+| The tailnet address not being a secure context | **verified** — measured in Chrome at both addresses |
+| **A microphone opening** | **NOT verified, and cannot be from this box** |
+| **A real transcript landing in a real box from real speech** | **NOT verified** |
+| **That any of it works on the phone** | **NOT verified, and today it will not** — see the secure-context finding above |
+
+There is no audio input device on this box and Chrome's fake-microphone flags do not work headless
+here. Everything past *"Opening the microphone…"* is Greg's to check from his own phone or laptop.
+
+##### The cross-family review, and what came out of it
+
+[260908f-fleet-dictation-code-review-sol-r1-1356.md](260908f-fleet-dictation-code-review-sol-r1-1356.md).
+Its verdict on the first round was **"Stage 1 is not solid yet"**, and it was right — one P1 and six
+P2s, all real. Worth listing because the pattern in them is the useful part: **five of the seven
+were rules this repo already writes down, applied to the product and not to the copy.**
+
+**Its round 2 then found that four of the seven were not actually closed**, and said so with
+reproductions — see § The second round below. "All fixed" was written here after round 1 and was
+wrong, which is the reason a second round exists.
+
+| | | |
+|---|---|---|
+| **P1** | Closing the New session panel left the microphone recording behind it — `open` renders the box, it does not unmount the hook | `dictation.md` names this exact shape, about the Feedback dialog. Written by somebody who had read that sentence. `tests/fleet-new-session-mic.test.tsx`, watched failing |
+| P2 | The paid route had no rate or concurrency limit | 1 every 3s per box, 10 a minute across the fleet, `createRateLimiter` reused rather than rewritten |
+| P2 | A caller hanging up did not cancel the paid call | `res.on("close")`, the pattern the product's route has always had |
+| P2 | The outer error boundary interpolated `err.message` | A thrown message on this wire can carry a prefix of the request body, and the request body is somebody talking. A fixed reason now |
+| P2 | The parser rebuilt known fields and silently dropped surplus ones | The "sent, then quietly dropped" class — the one this feature has an eleven-day scar from. Unknown keys refused; and audio must actually be base64, or 60 KB of any string opened a paid call |
+| P2 | The submit rule was on the buttons and not in the handlers | `disabled` stops a pointer, not a programmatic call |
+| P2 | The import walker could be bypassed by `require` or a template-literal dynamic import | Those shapes are now **refused outright** rather than silently unfollowed. An AST walker is the other answer and is the one to reach for if a legitimate dynamic import ever arrives |
+
+Two corrections to this document came out of it too, and both are recorded above rather than quietly
+fixed: the closure figures were stale, and the explanation of why `transcribeWith` writes no row was
+wrong about the mechanism while right about the conclusion.
+
+**Nothing was overruled.** Everything Sol raised was either a defect or a claim of mine that needed
+correcting, and the one thing it flagged as unresolved — the `[mic-…]` codes being one namespace
+across two programs — had been settled concurrently in the direction it recommended.
+
+**A finding it made that this plan had not:** the route now has an injected transcriber, because a
+flood test aimed at the rate limiter reached the real gateway and `tests/setup/provider-guard.ts`
+refused the call. Without that seam the route's handling of a provider failure, and of a caller
+hanging up, could not be tested at all — both are paths that only run after the money would have
+been spent.
+
+##### The second round, and what "fixed" turned out to mean
+
+[260908f-fleet-dictation-code-review-sol-r2-1435.md](260908f-fleet-dictation-code-review-sol-r2-1435.md).
+**Verdict: "Stage 1 is still not solid. The original P1 is fixed, including permission-pending, but
+four P2 issues remain."** Every one was reproduced by Sol rather than asserted, and every one was a
+fix from round 1 that did not do what its own comment said.
+
+| | what round 1 shipped | what it actually did |
+|---|---|---|
+| The action guard on New session | `if (dictate.sendBlocked) return;` | Read a **stale closure** — `start`'s deps are `[prompt]`, so pressing Dictate then Start without typing left it `false`. `SessionDetail` had the ref pattern; this file had not copied it |
+| The hang-up abort | `res.on("close")` and a return | Covered the ordinary abort and not a **rejection after the abort**: the outer boundary then wrote a 500 into a closed socket, since `headersSent` is false on a response nothing answered |
+| The rate limiter | `check` then `record` | **Recorded a slot for a request that spent nothing** — a recording below the floor never reaches the gateway, so the next real dictation three seconds later was refused for free |
+| The import ban | refuse what the walker cannot follow | The ban was **itself a regex with holes**: `import ("x")`, `import("a" + "b")` and `import /* c */ ("x")` were neither followed nor refused |
+
+**The import walker is an AST now**, and that is Sol's recommendation taken rather than argued with:
+two rounds of regex bypasses is where "one more pattern" stops being the cheaper option, for a rule
+that is architectural. `@babel/parser`, because TypeScript 7 exposes no AST from its package root —
+`import ts from "typescript"` resolves to a version stub and the tree is behind `unstable/*` — and
+because Babel's parser is already a direct dependency where `oxc-parser`, `acorn` and
+`es-module-lexer` are all present and all transitive. Sol's four bypass shapes are pinned as tests,
+and a file the walker cannot parse now lands in `unreadable` and fails rather than reading as a file
+that imports nothing.
+
+**Three things Sol said about my own tests, all correct:**
+
+- **The flood test did not prove the burst ceiling.** Twelve requests under one key at one instant
+  are refused by the three-second per-key *floor*; the fleet-wide ceiling was never reached. Twelve
+  distinct keys now, asserting ten accepted and the eleventh refused.
+- **The fakes could conceal real failures.** `fakeRes.hangUp()` did not make the response closed, so
+  a write after close was invisible — it counts them now and a test asserts zero. `fakeTranscribe`
+  kept two of its arguments, so wrong audio or a wrong container would have passed; it keeps all of
+  them, typed as `TranscribeDeps["transcribe"]`.
+- **The base64 check did not do what its comment claimed.** `"A".repeat(60_000)` is valid base64 and
+  was this feature's own test fixture. A magic-number check on the container makes the claim true;
+  the fixture is now a real EBML header with padding behind it.
+
+Writing the flood test also found something neither round named: the rate limiter was module state,
+so one test spending the burst left every test after it looking rate-limited. It is injectable now,
+with the shared instance still the one the server uses.
+
+**Nothing is overruled across either round.** Every finding was a defect or a claim of mine that
+needed correcting.
 
 ### Stage F — realtime dialog, gated on Stage E
 
@@ -380,7 +1501,7 @@ cheaper place for it to live.
 
 **Fable arbitrated and returned a fourth option: close it, and attach the rule to the widening.** The
 full reasoning is now in
-[orchestrator-direction.md § A5 is CLOSED too](../project/orchestrator-direction.md#the-backlog-after-the-wide-review)
+[overseer-direction.md § A5 is CLOSED too](../project/overseer-direction.md#the-backlog-after-the-wide-review)
 — the short version is that A5 hardens a boundary against parties who do not exist while A7 leaves
 open the one that does (all 27 agents share a Unix user and already reach `127.0.0.1:8787`), that
 **Tailscale ACLs have no deny rule** so the "cheap" grant is really a whole-policy rewrite with

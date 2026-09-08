@@ -7,7 +7,7 @@
  *     npx tsx scripts/overseer.ts events --limit 40   # what the fleet did
  *     npx tsx scripts/overseer.ts notes  --limit 20   # what the Overseer's own day was like
  *
- * Direction: docs/project/orchestrator-direction.md. Stage S4 of
+ * Direction: docs/project/overseer-direction.md. Stage S4 of
  * docs/plans/260908b-overseer-store-and-clock.md.
  *
  * **`status` is not a nicety on top of the daemon; it is the half that makes
@@ -24,11 +24,14 @@
  * `console.log` rather than src/log.ts: this is a CLI, and that is the rule —
  * docs/project/logging.md.
  */
+import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { attentionRunner, DEFAULT_MAX_CALLS, runAttentionCommand } from "../tools/overseer/attention-cli.js";
 import { runOverseer, TICK_MS } from "../tools/overseer/daemon.js";
+import type { AttentionList } from "../tools/fleet/wire.js";
 import type { OverseerEvent } from "../tools/overseer/diff.js";
 import { describeNote, openConditions, readNotes, type DaemonNote } from "../tools/overseer/notes.js";
 import {
@@ -43,6 +46,7 @@ import {
   type RegisterEntry,
   type StatusSince,
 } from "../tools/overseer/store.js";
+import { collectUsage, type UsageReport } from "../tools/overseer/usage.js";
 
 /** Where the daemon looks for the dashboard unless told otherwise. */
 export const DEFAULT_FLEET_URL = "http://127.0.0.1:8787";
@@ -283,6 +287,13 @@ export function statusLines(root: string, nowMs: number = Date.now()): string[] 
 
   if (checkpoint !== null) {
     lines.push("", registerSummary(checkpoint.register), ...attentionLines(checkpoint.register, nowMs));
+    // THE INBOX, NOT THE STATUSES. The block above ranks sessions by the state
+    // their pane is in; this one says what has been ASKED. They are different
+    // questions, and the whole of § `idle` is the bug is that the first cannot
+    // answer the second: every session genuinely waiting on Greg on 2026-09-08
+    // showed as `idle`, because `needs-you` means a dialog is drawn and their
+    // decisions were sentences ending in full stops.
+    lines.push("", ...inboxLines(checkpoint.attention, nowMs));
   } else if (read.kind === "unusable") {
     // Said out loud rather than left as an absence: a missing block reads as an
     // empty fleet to anybody who has not counted the blocks before.
@@ -344,6 +355,57 @@ function attentionLines(register: readonly RegisterEntry[], nowMs: number): stri
 }
 
 /**
+ * The attention inbox, as the checkpoint carries it.
+ *
+ * **Three outcomes, three sentences, and never a blank.** A list; a calm fleet,
+ * which is an empty list WITH the count that proves something looked; and *could
+ * not tell*, which is what a broken probe or a pass that never ran produces.
+ * Printing nothing for the second and third is how an empty inbox comes to mean
+ * both "all clear" and "the thing that was supposed to look is dead" —
+ * docs/reusable/silent-success.md, and § The failure to design against, which
+ * names *the Overseer silently dead while the page says "nothing needs you"* as
+ * one of the two failures worth designing against.
+ */
+export function inboxLines(list: AttentionList, nowMs: number): string[] {
+  if (list.kind === "unknown") return [`inbox       COULD NOT TELL — ${list.why}`];
+  const age = describeAge(nowMs - Date.parse(list.scannedAt));
+  // ONLY WHEN NON-ZERO. A caveat printed on every healthy pass is one Greg learns
+  // to read past, which is A17 — an alarm that is usually wrong is worse than no
+  // alarm — and would be worse than not having the number at all.
+  //
+  // AT LEAST N, rather than N and a retraction. An empty list cannot reach here
+  // with anything unjudged — `buildAttentionList` returns `unknown` for that —
+  // so the only incomplete case left is a list that found something, and the
+  // honest form of it is a floor rather than a figure with a caveat under it.
+  // The same rule the money uses one file over: a quantity that is a lower bound
+  // must not be able to render as a reading.
+  if (list.items.length === 0) {
+    return [`inbox       nothing needs you, out of ${list.sessionsScanned} sessions looked at ${age} ago`];
+  }
+  const lines =
+    list.sessionsUnreadable === 0
+      ? [`inbox       ${list.items.length} waiting, out of ${list.sessionsScanned} sessions looked at ${age} ago`]
+      : [
+          `inbox       AT LEAST ${list.items.length} waiting, out of ${list.sessionsScanned} sessions looked at ${age} ago`,
+          `            ${list.sessionsUnreadable} session(s) could not be judged at all, so there may be more`,
+        ];
+  for (const item of list.items) {
+    const waited = describeAge(nowMs - Date.parse(item.waitingSince));
+    const also = item.duplicates.length === 0 ? "" : ` (+${item.duplicates.length} asking the same)`;
+    lines.push(`            ${item.kind.padEnd(12)} ${waited.padStart(6)}  ${item.sessionName}${also}`);
+    // The evidence kind is printed because it is the difference between a
+    // question the harness DREW and one we INFERRED from a turn's tail, and a
+    // person reading this needs to know which they are looking at.
+    lines.push(`            ${" ".repeat(12)} ${" ".repeat(6)}  ${item.evidence.kind}: ${oneLine(item)}`);
+  }
+  return lines;
+}
+
+function oneLine(item: { evidence: { kind: "dialog"; question: string } | { kind: "prose"; why: string } }): string {
+  return (item.evidence.kind === "dialog" ? item.evidence.question : item.evidence.why).replace(/\s+/g, " ").slice(0, 110);
+}
+
+/**
  * How long it has been in this state, marked when that is a floor.
  *
  * A `switch` with a `never`, rather than a ternary, so a third arm on
@@ -373,20 +435,127 @@ function describeAge(ms: number): string {
   return `${Math.round(minutes / 60)}h`;
 }
 
+/**
+ * Render a usage report for a person.
+ *
+ * THE POSITIVE CONTROL IS PRINTED EVERY TIME, including — especially — when
+ * the answer is "no limits hit". A bare "no limits hit" is the same sentence a
+ * probe that opened nothing would print, and the whole point of
+ * `ScanCoverage` is that the two must not read alike
+ * (docs/reusable/silent-success.md). Likewise an expired cached window prints
+ * its `why`, never a percentage: there is no percentage on that arm to print.
+ */
+function usageLines(report: UsageReport): string[] {
+  const out: string[] = [];
+  const a = report.account;
+  out.push(
+    a.kind === "value"
+      ? `account   ${a.email ?? "?"}  ${a.subscriptionType ?? "?"}  tier ${a.rateLimitTier ?? "?"}  uuid ${a.accountUuid ?? "?"}`
+      : a.kind === "logged-out"
+        ? `account   NOT LOGGED IN (projects dir ${a.projectsDirectory ?? "?"})`
+        : `account   could not tell: ${a.why}`,
+  );
+  out.push(`verdict   ${report.verdict.level.toUpperCase()}`);
+  for (const reason of report.verdict.reasons) out.push(`          ${reason}`);
+
+  if (report.cache.kind === "unknown") {
+    out.push(`cache     could not tell: ${report.cache.why}`);
+  } else {
+    // THE INSTANT, IN UTC, NEXT TO THE AGE. "73 min ago" is only true at the
+    // moment it is printed, and these lines get pasted into messages and plan
+    // docs hours later — the wave's own rule, after four hand-typed timestamps
+    // went wrong in one day. `fetchedAtMs` is a field all the way from
+    // `~/.claude.json`, so the absolute form costs nothing and cannot drift.
+    out.push(
+      `cache     fetched ${new Date(report.cache.fetchedAtMs).toISOString()} (${Math.round(report.cache.ageMs / 60_000)} min before this reading), account ${report.cache.accountUuid ?? "?"}`,
+    );
+    for (const w of report.cache.windows) {
+      if (w.kind === "value") out.push(`          ${w.window}: ${w.utilizationPercent}% used, resets ${w.resetsAt}`);
+      else if (w.kind === "expired") out.push(`          ${w.window}: EXPIRED — ${w.why}`);
+      else out.push(`          ${w.window}: unknown — ${w.why}`);
+    }
+  }
+
+  const c = report.rateLimits.coverage;
+  out.push(
+    `scanned   ${c.transcriptsOpened}/${c.transcriptsSelected} of ${c.transcriptsFound} transcripts, ${c.linesScanned} lines, ${c.candidateLines} candidates, ${c.tookMs}ms` +
+      `${c.transcriptsUnreadable > 0 ? `, ${c.transcriptsUnreadable} unreadable` : ""}` +
+      `${c.malformedCandidates > 0 ? `, ${c.malformedCandidates} MALFORMED` : ""}` +
+      `${c.truncatedByLimit ? ", TRUNCATED by --max-transcripts" : ""}`,
+  );
+  switch (report.rateLimits.kind) {
+    case "hits":
+      for (const h of report.rateLimits.hits.slice(0, 10)) {
+        out.push(
+          `429       ${h.hitAt ?? "?"}  ${h.window}  resets ${new Date(h.resetsAtMs).toISOString()}  conversation ${h.claudeSessionId ?? "?"}`,
+        );
+      }
+      if (report.rateLimits.hits.length > 10) out.push(`          (${report.rateLimits.hits.length - 10} more)`);
+      break;
+    case "none":
+      out.push("429       none in the scanned window — believable only against the `scanned` line above");
+      break;
+    case "unknown":
+      out.push(`429       could not tell: ${report.rateLimits.why}`);
+      break;
+    default: {
+      const never: never = report.rateLimits;
+      throw new Error(String(never));
+    }
+  }
+  out.push(`took      ${report.tookMs}ms, at ${report.collectedAt}`);
+  return out;
+}
+
 const HELP = [
   "overseer — the fleet's history, and the daemon that records it",
   "",
-  "  npx tsx scripts/overseer.ts run [--url URL] [--tick-ms N]",
+  "  npx tsx scripts/overseer.ts run [--url URL] [--tick-ms N] [--no-attention]",
   "  npx tsx scripts/overseer.ts status",
   "  npx tsx scripts/overseer.ts events [--limit N]",
   "  npx tsx scripts/overseer.ts notes [--limit N]",
+  "  npx tsx scripts/overseer.ts usage [--since-hours N] [--max-transcripts N] [--json]",
+  "  npx tsx scripts/overseer.ts attention [--max-calls N] [--dry] [--json]",
+  "                                        [--capture-to DIR | --panes DIR] [--out FILE] [--write]",
   "",
   `The store is $OVERSEER_STORE_DIR, or ~/.overseer. The dashboard is ${DEFAULT_FLEET_URL} unless --url says otherwise.`,
+  "",
+  "`attention` reads every live pane and says what needs Greg. --dry makes no model calls and no",
+  "paid pass. It does NOT write the store's memory unless you pass --write: the daemon holds the",
+  "lock and this command does not honour it, so two writers is the default you do not want.",
 ].join("\n");
 
 function flag(argv: readonly string[], name: string): string | undefined {
   const at = argv.indexOf(name);
   return at === -1 ? undefined : argv[at + 1];
+}
+
+/**
+ * A numeric flag that must be a positive finite number, or an explicit refusal.
+ *
+ * Three arms rather than `number | undefined`, because "not given" and "given
+ * as nonsense" have to lead to different behaviour: the first takes the
+ * default, the second must stop. `Number("nope")` is `NaN`, `Number("")` is 0
+ * and `Number(undefined)` is `NaN` — all of which used to sail through and
+ * silently disable the bound they were meant to set.
+ */
+function positiveNumberFlag(
+  argv: readonly string[],
+  name: string,
+  opts: { integer?: boolean } = {},
+): { kind: "absent" } | { kind: "value"; value: number } | { kind: "invalid"; why: string } {
+  const at = argv.indexOf(name);
+  if (at === -1) return { kind: "absent" };
+  const raw = argv[at + 1];
+  if (raw === undefined || raw.startsWith("--")) return { kind: "invalid", why: `${name} needs a number after it` };
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value <= 0) {
+    return { kind: "invalid", why: `${name} must be a positive number, got ${JSON.stringify(raw)}` };
+  }
+  if (opts.integer === true && !Number.isInteger(value)) {
+    return { kind: "invalid", why: `${name} counts whole transcripts, so it must be a whole number, got ${JSON.stringify(raw)}` };
+  }
+  return { kind: "value", value };
 }
 
 async function main(argv: readonly string[]): Promise<number> {
@@ -416,6 +585,55 @@ async function main(argv: readonly string[]): Promise<number> {
       for (const note of read.notes) console.log(`${note.at}  ${describeNote(note)}`);
       return 0;
     }
+    case "attention":
+      return await runAttentionCommand({
+        root,
+        maxCalls: Number(flag(argv, "--max-calls") ?? DEFAULT_MAX_CALLS),
+        dry: argv.includes("--dry"),
+        json: argv.includes("--json"),
+        // READ-ONLY BY DEFAULT, and `--write` is the opt-in — GPT Sol's second
+        // round. The daemon holds the store's lock and this command does not
+        // honour it, so a hand run against a live daemon's root was a second
+        // writer on `attention.json`: an atomic rename stops a torn file and does
+        // nothing about a lost update or a duplicated call. Refusing by default
+        // costs a person nothing (the daemon is the producer) and cannot be wrong.
+        write: argv.includes("--write"),
+        out: flag(argv, "--out") ?? null,
+        panes: flag(argv, "--panes") ?? null,
+        captureTo: flag(argv, "--capture-to") ?? null,
+      });
+    case "usage": {
+      // A command rather than a daemon block for the same reason the header
+      // gives for the rest of this file: there is no scheduler here yet, and the
+      // honest simplest version of "how close are we to a limit" is something a
+      // person or another agent can run and read. It does not touch the store.
+      // `Number(flag)` used to go straight into the options, so
+      // `--max-transcripts nope` produced NaN, every comparison against it was
+      // false, and the bound silently vanished — GPT Sol's finding 10. A flag
+      // that quietly does the opposite of what it says is worse than no flag.
+      const sinceHours = positiveNumberFlag(argv, "--since-hours");
+      // INTEGER, because this one is a COUNT. `--max-transcripts 0.5` passed the
+      // positive-number check and then `slice(0, 0.5)` selected zero
+      // transcripts — a flag that reads as "scan at most half a file" and
+      // behaves as "scan nothing". GPT Sol's round-2 finding 7. `--since-hours`
+      // stays fractional on purpose; half an hour is a sensible window.
+      const maxTranscripts = positiveNumberFlag(argv, "--max-transcripts", { integer: true });
+      if (sinceHours.kind === "invalid") {
+        console.error(`✗ ${sinceHours.why}\n\n${HELP}`);
+        return 1;
+      }
+      if (maxTranscripts.kind === "invalid") {
+        console.error(`✗ ${maxTranscripts.why}\n\n${HELP}`);
+        return 1;
+      }
+      const report = await collectUsage({
+        ...(sinceHours.kind === "absent" ? {} : { sinceMs: sinceHours.value * 3600_000 }),
+        ...(maxTranscripts.kind === "absent" ? {} : { maxTranscripts: maxTranscripts.value }),
+      });
+      if (argv.includes("--json")) console.log(JSON.stringify(report, null, 2));
+      else console.log(usageLines(report).join("\n"));
+      return 0;
+    }
     case "run": {
       const controller = new AbortController();
       // SIGTERM is what systemd sends and SIGINT is what a person sends; both
@@ -428,6 +646,24 @@ async function main(argv: readonly string[]): Promise<number> {
         });
       }
       const tickMs = flag(argv, "--tick-ms");
+      // The attention pass is wired in HERE rather than inside the daemon,
+      // because it reads tmux and calls a paid model and daemon.ts does neither.
+      // With no key it is absent, and the store then publishes a list that says
+      // nothing has looked — which is not the same as an empty one.
+      // The epoch is one continuous run of observation, and a restart mints a new
+      // one — which is exactly when the persisted WAITS must be dropped, because a
+      // first-seen instant cannot span a gap nobody watched. The verdicts survive
+      // it; see `memoryForEpoch`.
+      const attentionRun = argv.includes("--no-attention")
+        ? null
+        : attentionRunner(root, `daemon-${randomUUID()}`);
+      if (attentionRun === null) {
+        console.log(
+          argv.includes("--no-attention")
+            ? "attention: off (--no-attention)"
+            : "attention: off — OPENROUTER_API_KEY is not set, so nothing will look at what needs you",
+        );
+      }
       const outcome = await runOverseer({
         root,
         baseUrl: flag(argv, "--url") ?? process.env["OVERSEER_FLEET_URL"] ?? DEFAULT_FLEET_URL,
@@ -435,6 +671,7 @@ async function main(argv: readonly string[]): Promise<number> {
         // Absent rather than undefined: `exactOptionalPropertyTypes` tells those
         // apart, and absent is what "take the default" means.
         ...(tickMs === undefined ? {} : { tickMs: Number(tickMs) }),
+        ...(attentionRun === null ? {} : { attention: { run: attentionRun } }),
       });
       switch (outcome.kind) {
         case "refused":
