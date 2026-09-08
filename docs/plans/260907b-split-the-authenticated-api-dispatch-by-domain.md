@@ -1,12 +1,14 @@
 # The authenticated API's dispatch becomes enumerable — and the matrix test that has to come first
 
-Status as of 2026-09-07: **the expensive part is behind us; what remains is mechanical.** Stages 1,
-1b, 1c, 2, 3a, 3b, 3c, 4a, 4b and 5 are landed and reviewed. `AUTH_ROUTES` holds **25 of the 81
-guards** (billing, jobs/uploads, referee, search); **56 remain**, and **chat is the next slice — and
-it is claimed by 260907e** (`docs/plans/260908a-chat-and-live-sessions-join-the-route-table.md`).
-Check `ListAgents` and ask before starting any slice: referee was built twice, in parallel, eleven
-minutes apart, because both plans queued it and neither session announced. Biome on
-`serveAuthenticatedApi`: **244 → 234 → 183 → 164 → 153**.
+Status as of 2026-09-08: **the expensive part is behind us; what remains is mechanical.** Stages 1,
+1b, 1c, 2, 3a, 3b, 3c, 4a, 4b and 5 are landed and reviewed. `AUTH_ROUTES` holds **37 of the 81
+guards** — billing, jobs/uploads, referee and search from this plan, plus chat and live from
+260907e (`docs/plans/260908a-chat-and-live-sessions-join-the-route-table.md`), which landed on `dev`
+at 04:47. **44 remain, and `/api/comments` is next and unclaimed.** Whoever takes it inherits the
+control described below already pointing at their own domain, which will go red the moment they move
+it — that is the handoff, not a bug. Check `ListAgents` and ask before starting any slice: referee
+was built twice, in parallel, eleven minutes apart, because both plans queued it and neither session
+announced. Biome on `serveAuthenticatedApi`: **244 → 234 → 183 → 164 → 153**.
 
 **Five holes have been found inside this plan's own safety net, and all five are fixed** — the
 `const` hole in `literalConstants` (stage 3c), the last-match-wins AST extractor (the merge), the
@@ -844,6 +846,44 @@ not matter, and every one it deletes is a difference it can no longer report. Ea
 to ignore — whitespace, the binding name, the trailing `return;`, comments — buys precision and sells
 coverage, and the sale is silent. The four rewrites this plan normalises are each justified in §
 *Stage 3b*; comments never were, and that is the whole bug.
+
+### A gate slower than the tree is a report about a tree that no longer exists
+
+Measured on the night of 2026-09-08, when this plan and 260907e were both pushing into `dev`.
+
+The full gate takes **24 minutes**. In the 55 minutes between merging `origin/dev` at 03:37 and going
+to push, `dev` gained **74 commits** — 44 of them non-merge — from the other worktrees. So the green
+`EXIT=0` I held was a true statement about a tree that had stopped existing before I could act on it.
+Re-merging and re-gating would have produced another true statement about another tree that had
+stopped existing. **That is not caution; it is a treadmill that never converges**, and the commits it
+would re-check were gated by the agents who wrote them.
+
+What I did instead, and would do again: after the second merge, run the **contract test** and a **full
+typecheck** (1,615 files, four tsconfigs), and push on those.
+
+**260907e made the opposite call and paid for the measurement.** They re-ran the full gate after
+merging, twice. Both runs went red and **neither red was theirs** — the first was three fleet-dashboard
+tests sharing a `11111111-…` uuid, already fixed on `dev` by its owner before the diagnosis finished;
+the second was a job-deadline suite timing out at 30s under load 35, which passes 9 of 9 alone. About
+**55 minutes of gate time and 20 minutes of attention to establish "not mine."** The extra gate found
+nothing about their change that the targeted runs had not.
+
+**Their refinement, which is the part worth carrying, and which corrects me:** choose the targeted
+re-run from **what the merge brought in**, not from what your change was about. Mine happened to be
+both — `dev` landed a route change and my change is in the file that reads route changes — so the
+contract test was the right target and not merely the cheap one. Had `dev` instead landed an edit to
+`dispatchAuthRoute` or to `send`, the contract test would have been the **wrong** target and would
+still have been green. Read the merge's file list first and pick from that. In their words:
+
+> On a tree moving every 45 seconds, "I re-ran the thing my change is about" can be a comfortable
+> answer to a question nobody asked.
+
+**The cost of being wrong here is real and should be named**, not waved past: a merge can land
+something that only the full suite would catch, and this trade will eventually let one through. The
+bet is that a red found by the next agent's gate, on a shared trunk that builds nothing, is cheaper
+than an hour per push spent re-establishing facts about vanished trees. If that stops being true —
+`main` deploys from `dev`, or the fleet quietens down — the trade should be revisited rather than
+inherited.
 
 ### The normaliser should refuse, not rely on a hand check
 
