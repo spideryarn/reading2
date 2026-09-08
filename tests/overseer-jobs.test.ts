@@ -47,15 +47,8 @@ import {
   type Occurrence,
   type OccurrenceId,
 } from "../tools/overseer/jobs.js";
-import {
-  describeReport,
-  schedulerTick,
-  type JobSpawn,
-  type LostRecord,
-  type OccurrenceLog,
-  type SchedulerReport,
-  type SpawnJob,
-} from "../tools/overseer/scheduler.js";
+import type { JobSpawn, SpawnJob } from "../tools/overseer/jobs.js";
+import { describeReport, schedulerTick, type LostRecord, type OccurrenceLog, type SchedulerReport } from "../tools/overseer/scheduler.js";
 import {
   EVENTS_FILE,
   LOCK_FILE,

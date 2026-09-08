@@ -128,6 +128,19 @@ function SessionCard({
             "finished" or "blocked and nobody has noticed". It renders nothing
             when there is nothing to say. PauseLine.tsx has the reasoning. */}
         <PauseLine pause={row.pause} status={row.status} now={now} />
+        {/* THE OVERSEER'S BADGE. Drawn only for the one session that holds the
+            claim — the header carries the absent state, which is the one a
+            per-row badge structurally cannot show. Nothing is drawn for a role
+            this page does not know: it is not the Overseer, and a badge for it
+            would read as one. */}
+        {row.role.kind === "overseer" ? (
+          <span
+            className="tw:rounded tw:bg-ink/10 tw:px-1.5 tw:py-0.5 tw:text-[11px] tw:font-semibold tw:tracking-wide tw:uppercase tw:text-ink-soft"
+            title="This session holds the Overseer claim — the box has exactly one."
+          >
+            Overseer
+          </span>
+        ) : null}
         <Uptime row={row} now={now} className="tw:ml-auto" />
       </div>
 

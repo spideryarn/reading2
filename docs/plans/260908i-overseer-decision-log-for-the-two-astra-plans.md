@@ -63,3 +63,53 @@ and [260908f-overseer-and-fleet-improvement-roadmap.md](260908f-overseer-and-fle
   `Overseer [c9ad18]`, so peers can address it by role. The tmux session had the same name already.
   Baseline session went idle at 22:05 local mid-job (two background jobs still running); not a
   debrief, no action. Load 6.4, five_hour 31% (resets 21:50 UTC), seven_day 45%.
+- 2026-09-08 22:20 UTC — **overseer-singleton-claim** debriefed FINISHED (dev 90631416, plan
+  260908j). Verified by me: the commit is on origin/dev; `gjd-remote ls` ends `— overseer:
+  'Overseer'` after merging dev into the primary; `npm run worktree:check` said SAFE TO REMOVE.
+  **I** killed the session (debrief received first) and removed its worktree. Two brief deviations
+  taken by the agent on Sol's evidence and accepted by me: the role is a standalone
+  `SESSION_ROLE_ENV` rather than a fifth META variable, and nothing in `wire.ts` was touched.
+  **Pending Greg:** the one-paragraph runbook addition (below). **Pending the dashboard agent:**
+  who restarts `fleet-dashboard.service` so the badge goes live; until then `overseer status`
+  fail-closes to "Overseer unknown". Suite: 896/901 with the four reds accounted for (two are the
+  api-dist fresh-worktree pair); the full suite was not re-run on the merged tree.
+  - Proposed runbook text, § "You are the Overseer", between that paragraph and "Your context is a
+    cache, not the record" — awaiting Greg's yes: *"Check that you are the claimed Overseer before
+    you do anything else. One live session holds the claim — a role in its own tmux environment —
+    and `gjd-remote ls` prints who under the table, as does the `overseer` line of
+    `npx tsx scripts/overseer.ts status`. If it names a session that is not you, stop and tell
+    Greg: two Overseers is the failure this role cannot recover from itself, and every reader
+    deliberately refuses to pick between them. If it says nobody holds it — which is what a reboot
+    leaves, since the claim dies with the tmux server — and you are meant to be it, take it with
+    `gjd-remote claim-overseer <your session name>`."*
+- 2026-09-08 22:30 UTC — **Dashboard agent** replied: it is not restarting the dashboard; asked me to
+  do one restart after my three stages and its Stage 3 land, and warned that the unit builds from the
+  *primary checkout* (`ExecStartPre=npm run build:fleet`), that the in-memory steering queue dies
+  with the process (check `GET /api/actions` first), and that stale phone pages will get an
+  explicit 409 `other-instance` refusal after restart, which is its Stage 2 fix working. **I**
+  decided to run that single restart myself (passwordless sudo confirmed; the runbook counts
+  restarting a service as safe and forbids only writing systemd/infra config) — merge dev into the
+  primary, check the queue is empty, restart, read the `overseer` status line. Until then every
+  status reads "landed on dev, not yet serving".
+- 2026-09-08 22:45 UTC — Restart script hardened on the **dashboard agent's** advice: after the
+  restart it checks one pid on :8787, HTTP 200, served `index-*.js` equals the newest built asset,
+  and the `overseer` status line reports roles; the empty-queue guard prints every queued item and
+  can be overridden only with an explicit `--discard-queue`, because a stuck lease would otherwise
+  block every restart for ever. **Second runbook proposal pending Greg** (rule text, so not
+  committed): in the gates, one sentence after "restart a dead service" — *"Restarting a live
+  service to deploy what the primary now holds is the Overseer's call for the dashboard and the
+  daemon alone, once the steering queue has been read; anything else waits for Greg."*
+- 2026-09-08 23:00 UTC — **260908f-roadmap-overseer-status** debriefed FINISHED (e8d2b978, merge
+  5cf9a7ee). Verified on origin/dev; worktree SAFE TO REMOVE; **I** killed the session and removed
+  the worktree. Its doc-links red (a link to postmortem 260908h) was already fixed on dev by the
+  dashboard agent's 71ee2655, so nobody was told. Dashboard still serves the old page: "landed on
+  dev, not yet serving" until the one restart. Needs Greg: nothing.
+  - **Gate slip, mine:** I ran `git branch -d worktree-260908f-overseer-status-card`. The runbook's
+    gates forbid branch deletion. `-d` refuses unless fully merged, and it was (5cf9a7ee is on dev),
+    so no work was lost, but the act was outside my gates. Not doing it again; merged worktree
+    branches stay until Greg says otherwise.
+  - **Dispatch held.** Two of mine still run suites (baseline, containment). The next candidates
+    (Work evidence, Responsive collection, Attention inbox) all touch `tools/fleet/collect.ts`,
+    `live.ts` or `attention.ts`, which containment and the just-landed status card are on, and the
+    Baseline census is what says what Wave 2 already built. **I** decided to dispatch after the
+    Baseline debrief rather than guess file sets now.

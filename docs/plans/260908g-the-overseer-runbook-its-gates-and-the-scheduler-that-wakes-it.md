@@ -595,7 +595,11 @@ gates cannot happen without Greg anyway.
   append-fsync-act-append runner with the store passed in (SP-2), the deterministic-only arming path
   (SP-4), and the `RuleEvent` arm with a **round-trip** test (SP-9). Rule 2 rides on it, proposing
   and never killing. See § What 3a landed below.
-- **3b — rule 1.** Small, observe-only, reading the raw payload rather than widening `ObservedRow`.
+- **3b — the protocol's own file, then rule 1. DONE, 2026-09-08.** Two commits. The first moves the
+  rule protocol out of `scheduler.ts` into `rule-protocol.ts` and pins that instead, because pinning
+  the whole scheduler made every rule's authorisation hostage to a log sentence. The second is rule
+  1: small, observe-only, reading the raw payload rather than widening `ObservedRow`. See § What 3b
+  part 1 landed and § What 3b part 2 landed.
 - **3c — the review surface.** A bounded rule-event projection into `current.json`, the independent
   fleet-side parser, the wire type, and the Overseer panel. **This is the gate on 3d, not a
   nice-to-have.**
@@ -1014,6 +1018,115 @@ agrees with itself is a fixture** — the same animal as a test that shares an a
 it checks, and a sharper statement of it, because the ancestry join was not weak. It answered a
 different question competently.
 
+#### The first real series, and it does not support the claim I made from one reading
+
+147 samples, 20:56–22:09 on 2026-09-08, 30 seconds apart.
+
+```
+samples where NO agent was reachable:  0 of 147
+reachable fraction of agents:          min 0.12   max 0.86   mean 0.59
+agents 4–8, working 1–7, load ratio1 0.04–0.55, oracle_unknown 0 throughout
+```
+
+**The sharpest thing I said did not reproduce once.** *"At the limit it does not degrade, it
+refuses"* — the `total === 0` branch — is structurally real and was **never reached**, including
+during a stretch at load ratio 0.55 with seven of eight agents working. And the mean reachable
+fraction is **0.59**, so most agents usually *are* reachable, which makes the original *"3 of 15"*
+a bad moment reported as a condition — twice over, since the denominator was wrong as well.
+
+The bad case is real but it is a **tail**: the worst sample was 1 of 8 reachable, at 22:07.
+
+**And the cheap fix lands in the middle, which neither party predicted.** Of the 33 samples with a
+positive oracle reading, the server's `background-work` agreed in **17** and did not in **16** — so
+it catches roughly half. Cheap and *partly* useful. Whether half of a tail case justifies crossing a
+refusal somebody wrote deliberately is the dashboard owner's call, with their cost side; my instinct
+is that it does not obviously.
+
+**The confound I reported was not one, and how I got it wrong is the day's own error again.** I said
+`joins_disagree` was 1 early and 0 later, and wondered whether a fix had landed in the window. The
+owner checked: no fix landed, `readShellState` is unchanged, and that item was never built. Then the
+data: **the disagreements never stopped.** The last is at 22:11:09 — the most recent sample — and
+there are fourteen separate bursts across the whole 73 minutes. I had looked at the last three lines
+of the file and reported a tail as a trend, which is the truncated-grep-becomes-an-exhaustive-list
+mistake in a new costume.
+
+The useful half came out of the same check. The identity
+`joins_disagree == working_but_at_prompt − server_bg_work` holds in **150 of 151** samples, so a
+disagreement is exactly *"an at-prompt row in plain `idle`"* — which is precisely what the
+`readShellState` diagnosis predicts. Their one-line cause is confirmed numerically, from data that
+did not assume it.
+
+#### The tail has a cause, and it argues the other way
+
+Asked whether the 1-of-8 sample coincided with anything nameable. It does, and reporting it matters
+because it cuts against the case I had been making against myself:
+
+```
+21:26  agents=4  reachable=3  working=1  ratio1=0.11     0.75 reachable
+21:46  agents=6  reachable=2  working=4  ratio1=0.12
+22:06  agents=8  reachable=2  working=6  ratio1=0.55
+22:11  agents=8  reachable=1  working=7  ratio1=0.56     0.12 reachable
+```
+
+**All 18 samples at or below 25% reachable are at 7 or 8 agents.** Reachability falls monotonically
+as the fleet fills, and the low period is the box getting busy — partly with agents this very job
+dispatched. So the bad case is **load-dependent, not random**: it appears exactly when a resource
+broadcast would matter.
+
+That means *"0 of 147 with nothing reachable"* and *"mean 0.59"* are both true and both dominated by
+an idle box. **The conditional picture at eight agents is much worse than the unconditional one**,
+and reporting only the unconditional number was one-sided in the other direction.
+
+**What is deliberately not concluded.** The obvious next sentence — *at the 20–35 agents this box is
+designed for, the bad case is the normal case* — is an unearned extrapolation from a range of four to
+eight, and that is the mistake this plan has spent all day catching rather than committing. It is a
+hypothesis with an obvious test, which is whether the overnight run reaches those counts at all.
+
+#### Nobody had measured the number the whole premise rests on
+
+The dashboard's owner offered a fact against their own stage: that four-to-eight agents was *"all of
+today"*, so eight is the high-water mark rather than a low sample, and the box may simply never reach
+the busy regime. **It is wrong, and checking it re-opened the question instead of closing it.**
+
+Reconstructed from `~/.overseer/events.jsonl` — 599 events, 0 unreadable, spanning 08:32 to 21:11 —
+by maintaining a live set across `session-seen`, `tmux-session-gone` and `session-replaced`:
+
+```
+PEAK live tmux sessions: 33, at 12:35:06
+  of which shells: 15, status-unknown: 0   =>  18 AGENTS at peak
+and it is not a spike: the reconstruction sat at 20+ sessions for much of the day
+```
+
+**The box ran eighteen agents this lunchtime.** The sampler's four-to-eight is not all of today, it
+is the quietest 73 minutes of it — measurement began at 20:56, hours after the peak. So the series is
+unrepresentative in the direction that weakens the finding, which is the third time today an
+instrument of mine has been biased against its own case.
+
+What it settles and what it does not: it kills *"the box may never get there"* — eighteen is within a
+factor of two of the 20–35 this design assumes, so **the premise is nearly met already**. It does
+*not* show reachability is bad at eighteen, because there is no sample there; the sampler did not
+exist at 12:35. The hypothesis stays unearned. What changed is that the regime is **reachable rather
+than imaginary**, so the overnight run can actually test it.
+
+Caveats, because this is a reconstruction and not a census: `session-seen` fires on change rather than
+every tick, so the live set inherits any gap in the log; the log covers today only; and the
+agent/shell split uses `status.kind !== "shell"`, which agreed with an independent hand count at
+20:25 (8 agents, 7 shells, 15 rows) — one cross-check, not a validation.
+
+**The thing worth taking away is not the number, it is that nobody had it.** Eighteen concurrent
+agents is the quantity this entire plan is written around, and this is the first time it has been
+measured. Several pages above were argued about a four-to-eight box while planning for a 20–35 one.
+
+Caveats that belong next to the number rather than under it: 73 minutes is not a night; the box went
+from very quiet to busy inside it, so this is **one transition rather than a representative day**;
+and the sampler reads the snapshot the dashboard publishes, so an interval when the dashboard was
+restarting is *missing* rather than recorded as bad.
+
+**Why this is in the plan rather than only in a message.** The instrument was built to decide
+somebody else's stage, and it has now argued against the finding that motivated it. That is the
+outcome the series was for, and a plan that recorded only the readings supporting the work would be
+the same defect as a check that shares an assumption with its code.
+
 #### The Overseer sees less of the fleet than the fleet sends, and the rules should not fix that by widening the differ
 
 The three fields the rules most want are all outside `ObservedRow`: `permissionMode`, `pause`, and
@@ -1095,6 +1208,256 @@ more than one a day, a proposal inbox becomes the two-hundred-entry log this des
 survive, and rule 2 must act rather than propose. Today n=1. **The events rule 2 writes are how that
 rate gets measured**, so the observation is not merely a record, it is the instrument that decides
 the next version.
+
+#### What 3b part 1 landed: the protocol has its own file, and the pin follows it
+
+`tools/overseer/rule-protocol.ts` now holds the whole of what decides *whether and how a rule
+acts* — `startRule`'s disposition switch, `runProposingRule` and `runActingRule`, the shared
+`intend` (append-fsync-then-act), `settleRule`, and the fail-closed `record`. `scheduler.ts`'s rule
+arm is now one line: a call into it. `RULE_SOURCES` swapped `tools/overseer/scheduler.ts` for
+`tools/overseer/rule-protocol.ts`; `JobSpawn` and `SpawnJob` moved to `jobs.ts`, which already owns
+`JobOutcome`, so the pinned file need not import the unpinned one.
+
+**Re-pinned: `6a62bed1e623` → `95485a7dbe6f`.** Nothing the rule decides changed and no knob in the
+spec moved — one document in the list was swapped for another, and two of the three files had their
+prose corrected to name the new one.
+
+**The pair, demonstrated rather than asserted.** A test that only proves *editing the protocol
+disarms the rules* would also pass if `RULE_SOURCES` named the whole repository, so
+`tests/overseer-rules.test.ts` § "what a rule's pin covers, and what it deliberately does not"
+asserts both directions over a real temporary checkout that is really edited, and checks each is
+non-vacuous first (`describeReport` and `sweep` are confirmed to be in `scheduler.ts`; the ordering
+and the disposition switch are confirmed to be in `rule-protocol.ts`). Both were watched red before
+the move — the first on its assertion, the second because the file did not yet exist.
+
+Then the same three mutations against the live tree, with `npx tsx scripts/overseer-pins.ts` as the
+oracle:
+
+| mutation | pin |
+| --- | --- |
+| `describeReport`'s `dispatched` sentence reworded | **unchanged** — the false trip is gone |
+| `sweep`'s signature edited | **unchanged** |
+| `startRule`'s `switch (spec.disposition)` weakened to `as string` | **stale**, `95485a7dbe6f` → `9342726da4d6` |
+
+**And a near-miss worth more than the result.** The first attempt at mutation one used `sed`, and
+the `grep -c` that was meant to prove the edit had landed answered `0` because its pattern was wrong
+— so for one command I had "the mutation did nothing AND the pin is current", which is exactly the
+shape of the no-op mutation 3a shipped. What saved it was checking the file with `cat -A` rather
+than believing the grep. **The mutation harness now asserts on the file's own bytes before and
+after, and prints its sha256**; a mutation check whose landing is verified by a second fallible
+pattern is two chances to be told nothing.
+
+**What the split does NOT fix, said out loud.** The three pinned files are still shared by every
+rule, so adding rule 1 in part 2 re-pinned rule 2: `rules.ts` holds both rules' arithmetic and
+`rule-work.ts` both observers. It is a far smaller version of the problem — rules change rarely,
+log sentences change constantly — and the note is at `RULE_SOURCES`. Splitting the per-rule halves
+into per-rule files is the move if a third rule makes it bite.
+
+#### What 3b part 2 landed: rule 1, observing only, and the specimen that blinded the fleet
+
+`RuleId` is a union; `RuleSpec`, `RuleObservation` and `RuleFinding` are unions with one arm per
+rule; `decideRule` dispatches and `store.ts` parses each finding by its own `kind`. The shipped job
+is `launch-mode`, every fifteen minutes, `disposition: "propose"`, pinned `a648c4bfbe4c` —
+and `wedged-work` re-pinned `95485a7dbe6f` → `a3dcfd98b110`, because the three pinned files are
+shared.
+
+**Two knobs, both hashed.** `minSessions: 1` — the firing condition is data inside the fingerprint
+rather than a literal in an `if`, which is the whole of SP-1. `maxCollectionAgeSeconds: 300` — rule
+1 reads a cached payload rather than commanding a fresh look, so it can be handed a reading from
+before the thing it is checking, and past that age the answer is `cannot-tell` rather than a clean
+bill. Measured the same evening: `/api/state` served collections between 4s and 113s old.
+
+**Where I disagree with the plan, and it is the section above this one.** § "The Overseer sees less
+of the fleet than the fleet sends" says the resolution is that the daemon already holds the raw
+payload, so rule 1 should read that and open no second HTTP client. I took the GET instead, and the
+constraint that section actually cares about is untouched: nothing here widens `ObservedRow` or
+opens `observation.ts`, and the modes are read by this stage's own narrow parser with its own
+unknown arms. Three reasons. Reading the daemon's held payload is *more* plumbing, not less —
+`daemon.ts`, `scripts/overseer.ts` and `rule-work.ts` all have to learn about a mutable holder.
+It makes rule 1 blind exactly when the Overseer's own transport is down, which is when the box is
+least well. And, decisively, **it gives the rules two different ways to look at the fleet where one
+already works**: rule 2 asks the dashboard over HTTP from `rule-work.ts`, and a second mechanism for
+rule 1 is the "second way to do the same thing" this repo keeps paying for. `/api/state` serves a
+cached string and does not make the box collect — `source.ts`'s own fallback poller hits it every 15
+seconds, against rule 1's once every 15 minutes.
+
+**A specimen was made, the rule fired against it, and it is gone.** A tmux session launched exactly
+as `gjd-remote new-claude` launches one, minus `--permission-mode auto` — which is precisely the
+regression this rule alarms on. Its pane read `⏸ manual mode on`; the collector at 21:47:19Z put
+`{"kind":"not-auto","mode":"manual mode"}` on row `$2543`; and the SHIPPED job, through the real
+observer, the real protocol and a real store, wrote a `rule-intended` that round-tripped out of a
+second store with **5 events replayed, 0 unreadable**:
+
+```
+relaunch 1 of 9 agent session(s) that did not come up in auto mode and will stall at the next
+unapprovable call — needs a person: a running session cannot be switched into auto mode, so the only
+remedy is kill-and-relaunch. specimen-3b-launch-mode ($2543, manual mode). 0 more could not be read.
+```
+
+with `auto: 8, notAuto: 1, cannotTell: 0, notApplicable: 8, rows: 17, collectionAgeSeconds: 16`. The
+session was killed immediately afterwards and `gjd-remote ls` confirmed healthy.
+
+**And that first specimen blinded every reader of the fleet for ten minutes.** I created the tmux
+session by hand with `GJD_REPO=spideryarn2`, which is neither an `owner/name` slug nor the sanctioned
+literal `unknown`. `parseMeta` in `scripts/gjd-remote-tmux.ts` fails the **entire listing** on one
+malformed row rather than dropping that row — deliberately, because a partial session list is read as
+permission by every caller:
+
+> has GJD_REPO='spideryarn2', which is neither an owner/name slug nor 'unknown'
+
+From **21:37:12Z to 21:47:19Z** by the dashboard's own clocks, `gjd-remote ls` printed nothing, the
+collector failed with that sentence, and `overseer status` said *"Overseer unknown — the dashboard's
+last collection failed"* — another agent's freshly landed guard working exactly as designed.
+**Fourteen healthy sessions were invisible to every reader of the fleet.** The collector had already
+backed off, so its last failed attempt was 21:42:12, and it recovered on its own next cycle without
+anything being restarted. Another session noticed and told the Overseer, which repaired it in place
+with `tmux set-environment` rather than killing the specimen, so the reading above survived.
+
+Four things follow, and the first is the one worth keeping:
+
+- **The test specimen for the rule that watches the fleet blinded every reader of the fleet,
+  including the dashboard and the Overseer's own status.** Same shape as the dependency already
+  recorded — rule 2 goes blind when the dashboard is down — but sharper, because here the thing that
+  broke observability was the test of the thing meant to restore it. **The blast radius of one
+  malformed session is every consumer of the listing.**
+- **`parseMeta`'s fail-whole behaviour is not being changed.** It is shared machinery and the choice
+  is reasoned. What is written down here is its cost, where the next person launching a specimen will
+  meet it. The general lesson — the single collector is a deliberate purchase and this is its blast
+  radius — is the Overseer's own note in
+  [overseer-direction.md](../project/overseer-direction.md) § Two tenses.
+- **The guard is code now, not a habit:
+  [`scripts/overseer-launch-mode-specimen.ts`](../../scripts/overseer-launch-mode-specimen.ts).**
+  `start` builds the session with the whole metadata quartet, then runs `gjd-remote ls` and **kills
+  the specimen and exits non-zero** if the listing will not run — printing what the reader said,
+  because the reader is what has the reason. It refuses a listing that succeeds *without* the
+  specimen in it too: that is not evidence the specimen is fine, it is evidence the check could not
+  have seen a problem with it. The runner is injected so both refusals are exercised in
+  `tests/overseer-rules.test.ts`; the only way to exercise them for real is to blind the fleet again.
+  The reasoning is not about this incident — a rule whose specimens are anomalous sessions will keep
+  producing anomalous sessions, and the fleet's readers are strict by design, so this recurs every
+  time anybody tests rule 1. Stage 3b is the first of those times, not the only one.
+- **It labels the specimen `GJD_REPO=unknown`, not `spideryarn/reading2`.** Both are accepted.
+  `unknown` is the honest one: the specimen is not doing that repo's work, it exists to be an
+  anomaly, and borrowing the repo would put it in that repo's listings and counts. `REPO_UNKNOWN` is
+  imported rather than typed, so the sanctioned value cannot drift from the one the reader accepts.
+
+The script was then run end to end on its own account: `start` → pane reads `⏸ manual mode on`,
+`gjd-remote ls` lists it as `(unknown) · idle` → `stop`. Two things it turned up that a reading of it
+would not have. `claude` with **no** `--permission-mode` flag at all came up in *auto* mode in this
+checkout, so "just leave the flag off" makes a healthy session and a demonstration that proves
+nothing — the script passes `--permission-mode default` explicitly. And `tmux has-session` writes
+*"can't find session"* to stderr on the ordinary absent case, which read as an error from a script
+whose whole job is to be trusted about whether it broke something.
+
+**Mutation check: nine mutations, every one caught, and each flips a value rather than setting one.**
+Beside the pin test — which fires on any source edit and is therefore not evidence about behaviour —
+each was caught by at least one behavioural test.
+
+| mutation | caught by |
+| --- | --- |
+| `cannot-tell` counted as `auto` | 3 tests, incl. the round trip |
+| `cannot-tell` counted as `not-auto` | 4 tests, incl. the unrecognised-arm one |
+| an unrecognised wire arm read as `not-auto` | "AN ARM THIS BUILD DOES NOT KNOW IS `cannot-tell`" |
+| `minSessions` ignored | "THE THRESHOLD IS REAL" |
+| `maxCollectionAgeSeconds` ignored | 2 tests, incl. the durable `refused` |
+| never-collected read as a clean bill | "A DASHBOARD THAT HAS NEVER COLLECTED…" |
+| shells counted as agent sessions | 3 tests |
+| the launch-mode finding given no parser | the round trip |
+| `cannotTell` parsed back as `0` | the round trip |
+
+**One hole found by adding the second rule, and it had been open since 3a.** `store.ts`'s
+`const RULE_IDS = new Set(["wedged-work"] satisfies RuleId[])` checks that its members ARE rule ids
+and says nothing about whether they are ALL of them — the same not-exhaustive hole as the destructure
+SC-4 was about, in a different costume, and the only moment it could have been found is the moment a
+second id existed. It is a `Record<RuleId, true>` now. The same reasoning made `RULE_SPEC_ENCODERS`
+one table per arm: `keyof RuleSpec` over a union is only the fields the arms SHARE, so the single
+mapped table 3a shipped would have silently stopped covering every threshold the moment there were
+two rules.
+
+**What is still not true.** Rule 1 has no reversible action and never will have one: you cannot type
+`/permission-mode auto` into a running session and an unattended process may not answer its dialog, so
+`disposition: "propose"` here is not a placeholder for 3d. And the events it writes reach nobody yet —
+3c is the review surface, and until it lands a proposal is a line in a JSONL file. That is the same
+sentence this plan already writes about rule 2, and it is the reason 3c is a gate rather than a
+nice-to-have.
+
+#### The code review of 3b, and the two findings that were the same mistake one level in
+
+GPT Sol, 2026-09-08, on the two commits together. Blocked, no P0, four P1s, and the two best of them
+say the same thing: **counting the arms separately buys nothing if the thing downstream branches on
+has fewer arms than the count.** All six were taken; the answer is
+`docs/plans/260908g-stage3b-code-review-sol.md`.
+
+**F1 (P1) — `cannot-tell` collapsed into a durable `nothing-to-do`.** With one unreadable agent
+session and no known drift, `decideLaunchMode` returned `nothing`, which settles as `nothing-to-do`
+— whose discriminant says *the rule looked and there is nothing wrong*. The four counts survived in
+the prose and the field every consumer reads had collapsed them. **This is the exact failure rule 1
+exists to prevent, one level further in than I was looking**, and my own mutation check could not
+see it because every mutation I wrote was inside the counting, not the deciding. The decision is
+three-valued now: propose if the known drift meets the threshold; `cannot-tell` if the unreadable
+ones *could* have carried it; `nothing` only when neither is true. `notApplicable` stays outside the
+arithmetic.
+
+**F2 (P1) — the observer trusted rows from a payload that says its own collection failed.**
+`refresh.ts` keeps a failed collection's error **beside the previous snapshot**, so `/api/state` goes
+on serving the sessions it last managed to see with a non-null `error`. `admissible.ts` refuses such
+a payload for the daemon's pipeline; `fleetStateObserver` never read the field. Sol reproduced a
+proposal to relaunch a stale session. It is now `cannot-see`, and `error` must be **present and
+null** — a producer that stopped sending it is one we cannot ask.
+
+**And that is the outage I caused, read back at me.** From 21:37Z to 21:47Z this box served exactly
+that payload — old rows, `error` set — and my rule would have proposed on them for the first five
+minutes, until the staleness threshold caught up. The test fixture omitted `error` entirely, so it
+could never have exercised the case.
+
+**F3 (P1) — the fingerprint claim was stronger than the mechanism.** Two sentences of mine were
+false. `rule-protocol.ts` does not fsync: it trusts `RuleLog.append`, and the `fsyncSync` is in
+unpinned `store.ts`, so **deleting it leaves every pin current** and the test that reads the intent
+back through a second descriptor proves process-visible bytes rather than crash durability. And
+`scheduler.ts` still owns the authorisation gate, the lease, the sweep and the reservation, so an
+edit there can change *whether* a rule runs and *how often* — including permitting overlap — without
+moving a rule's fingerprint; my comment claimed no edit to that file could change "whether or how a
+rule acts". A self-verifying pin cannot protect its whole verifier, so the boundary is stated
+instead: `rule-jobs.ts` § **What the fingerprint does NOT cover** names all three gaps (durability,
+lifecycle, and `"safe-to-kill"`'s meaning, which was already a 3d precondition) and says closing one
+means extracting a small stable module — worth doing the day something acts, not while both rules
+can only propose.
+
+**F4 (P1) — the specimen-maker could kill a stranger.** tmux resolves a bare `-t name` by exact
+match **and then by prefix**, so with the specimen absent and an `overseer-launch-mode-specimen-old`
+on the box, `has-session` says yes and `stop` kills the other session. This repo has been bitten by
+it before (`tests/gjd-remote-tmux.test.ts`). Every target is `=name` now; `has-session` treats only
+exit status 1 as absent rather than swallowing "no tmux server" as "no session"; and the listing
+check parses the row's first field instead of `String.includes`, which the longer name also
+satisfied. **A guard written to stop me damaging the box could itself have damaged the box.**
+
+**F5 (P2) — an event could contradict itself.** `ruleId` and `finding.kind` were each checked and
+never checked against each other, so a line claiming `ruleId: "launch-mode"` with a `wedged-work`
+finding parsed perfectly and came back as a launch-mode run carrying another rule's arithmetic. The
+parser refuses the pair now. The type-level version — job id correlated with spec kind — is not
+built; the durable half is the one that matters, because nothing in the process can produce the bad
+shape and only the disk can.
+
+**F6 (P2) — the encoder tables prove presence, not that a value is hashed.**
+`newKnob: () => "newKnob:"` compiles, appears in `RULE_SPEC_HASHED_FIELDS`, and passes the
+label-order test, while every later change to that knob leaves the hash where it was. There is now a
+derived test that perturbs every non-discriminant field of both shipped specs and requires the
+canonical form to move. Sol's related catch in the same family: `parseRuleOutcome`'s `switch` on a
+raw string was not compiler-linked to `RuleOutcome["kind"]`, and the `KillPolicy` check was two
+literals — both are keyed tables now, like `RULE_IDS`. **Three instances of one shape in one
+review**, and the shape is *a guard that enumerates today's cases without asking the compiler
+whether they are all of them*.
+
+**One correction of mine that Sol improved.** I argued the GET beats reading the daemon's held
+payload partly on availability. He is right that this is overstated — if `/api/state` is unreachable
+the direct observer fails while a previously accepted payload might still be usable — and he named a
+better argument I had missed: **a held SSE payload's `servedAt` is frozen, so it would look
+permanently fresh** unless age plumbing were added, whereas a GET recomposes it. The staleness
+threshold is only meaningful because the reading is re-served. Verdict unchanged, reasoning replaced.
+
+Re-pinned: `wedged-work` `a3dcfd98b110` → `bebaeb2561c0`, `launch-mode` `a648c4bfbe4c` →
+`898a5c1ab3f1`. Eight further mutations, all caught; the specimen-maker was re-run start-to-stop
+against the real box afterwards.
 
 ### Stage 4 — the deferral queue
 

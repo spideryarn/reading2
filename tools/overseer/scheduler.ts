@@ -16,22 +16,22 @@
  *
  *     detect  ──▶  append `rule-intended` and fsync it  ──▶  act  ──▶  append `rule-settled`
  *
- * **The scheduler owns that sequence** (GPT Sol's SP-2): `SpawnJob` cannot carry
- * it, because it is handed no store and its `JobOutcome` has nowhere for a
- * finding to go, and a runner given an `append` and trusted to call it first is
- * a runner that can be written the other way round. What a caller supplies is a
- * **capability** — looking (`ProposingRuleWork`), or looking and acting
- * (`ActingRuleWork`) — and nothing else. See `runProposingRule`.
+ * **That sequence is NOT in this file — it is `rule-protocol.ts`**, which every
+ * rule job pins by digest, and this file calls into it. `SpawnJob` could not
+ * carry it (GPT Sol's SP-2): it is handed no store and its `JobOutcome` has
+ * nowhere for a finding to go. What a caller supplies is a **capability** —
+ * looking (`ProposingRuleWork`), or looking and acting (`ActingRuleWork`) — and
+ * nothing else.
  *
- * **This file is pinned**, as a `documents` entry of every rule job
- * (`rule-jobs.ts` § RULE_SOURCES). It used to be left out as shared machinery,
- * and GPT Sol's SC-2 is that the argument falls the wrong way here: this is the
- * code that interprets the hashed `disposition`, so an edit that bypassed the
- * dispatch below used to leave every rule's authorised hash perfectly current.
- * The protocol that decides whether to act is more load-bearing than the
- * threshold it reads. The cost — a change to ordering that has nothing to do
- * with any rule still disarms every rule until somebody re-pins — is accepted
- * for that reason and for no other.
+ * **THIS FILE IS DELIBERATELY NOT PINNED, AND THAT IS A FIX RATHER THAN AN
+ * OVERSIGHT.** Stage 3a put the whole of it in `RULE_SOURCES`, because it was
+ * then the code interpreting the hashed `disposition` (SC-2). Right in
+ * principle and far too broad in practice: it also carries session dispatch,
+ * the sweep and `describeReport`'s wording, so every rule's authorisation was
+ * hostage to a file that changes for reasons having nothing to do with rules —
+ * it re-pinned twice in one session. 3b moved the protocol out instead. Same
+ * guarantee, far fewer false trips; `rule-protocol.ts`'s header has the
+ * argument and `tests/overseer-rules.test.ts` asserts both directions.
  *
  * ## Three gates, and only one of them is about the clock
  *
@@ -56,9 +56,11 @@
  * "spawn and try again later", not "log a warning and carry on": a store that
  * cannot record what we are about to do is a store that cannot tell anybody it
  * happened, and an unrecorded run is the one failure the whole design is arranged
- * against. `record()` below turns every way an append can fail — a refusal, a
- * throw from the filesystem — into one closed door, and `tests/overseer-jobs.test.ts`
- * makes the append fail and asserts nothing was spawned.
+ * against. `record()` — imported from `rule-protocol.ts`, where it is pinned,
+ * because fail-closed is the whole of the append-before-act guarantee — turns
+ * every way an append can fail into one closed door, and
+ * `tests/overseer-jobs.test.ts` makes the append fail and asserts nothing was
+ * spawned.
  *
  * ## The window this CANNOT close, said out loud
  *
@@ -96,7 +98,7 @@
  * ones become an `unrecorded` report and the completion, which lands after the
  * tick has returned, goes to `onLostRecord`.
  */
-import type { JobEvent, OverseerEvent, RuleEvent } from "./diff.js";
+import type { OverseerEvent } from "./diff.js";
 import {
   authorisationOf,
   definitionHash,
@@ -107,81 +109,16 @@ import {
   standingOf,
   type AuthorisedJob,
   type JobDefinition,
-  type JobOutcome,
+  type JobSpawn,
   type Occurrence,
   type OccurrenceHistory,
   type OccurrenceId,
   type OccurrenceIndex,
   type OccurrenceKey,
+  type SpawnJob,
 } from "./jobs.js";
-import { decideRule, describeRuleOutcome, type RuleObservation, type RuleOutcome, type RuleSpec } from "./rules.js";
+import { record, startRule, type ActingRuleWork, type ProposingRuleWork } from "./rule-protocol.js";
 import type { AppendResult } from "./store.js";
-
-/**
- * What the runner says when it is asked to start a job.
- *
- * **It returns a result and does not throw**, and the two arms are different
- * facts: `refused` means *this did not start and I know it* (a precondition
- * failed, the binary is missing), which is a settled outcome. A throw is not in
- * the contract, and when one happens anyway the scheduler records `unknown`
- * rather than `refused` — because a function that broke its own contract is not
- * evidence about whether a process exists.
- *
- * `done` settles when the work does. A promise that never settles is not an
- * error here; it is the case the lease exists for.
- */
-export type JobSpawn =
-  | { readonly kind: "spawned"; readonly pid: number; readonly done: Promise<JobOutcome> }
-  | { readonly kind: "refused"; readonly why: string };
-
-export type SpawnJob = (definition: JobDefinition, key: OccurrenceKey) => JobSpawn;
-
-/**
- * **LOOKING, AND NOTHING ELSE — the whole capability a proposing rule is given.**
- *
- * There is no `act` on this type, and that absence is the point. The first
- * version of this stage gave every rule run an actor and separated proposing
- * from acting with a runtime `switch (spec.disposition)`, which GPT Sol's SC-2
- * called *"precisely the conditional boundary the claim said had been avoided"*
- * — and he was right: a process that holds an actor is one edit away from
- * reaching it. Now a proposing rule is run by `runProposingRule`, which is
- * handed one of these, so there is no actor **in the process** to reach.
- *
- * The ordering that follows is the scheduler's and is not injectable, which is
- * SP-2: a runner handed `record` and trusted to append before it acts is a
- * runner that can be written the other way round, and *"a rule that acted and
- * then failed to append has taken an action nobody can review"* is the gate-1
- * failure the ordering exists to prevent.
- */
-export type ProposingRuleWork = {
-  /**
-   * The pid an in-process run is recorded under.
-   *
-   * The daemon's own, because it is the only truthful positive pid under the
-   * current schema (GPT Sol's Q1). Injected rather than read from `process`,
-   * so this module goes on having no globals.
-   */
-  readonly selfPid: number;
-  /** LOOK. Reads the box, over HTTP, and never acts — `killRoute`'s dry run for rule 2. */
-  readonly observe: (spec: RuleSpec) => Promise<RuleObservation>;
-};
-
-/**
- * **LOOKING AND ACTING — a strictly larger capability, and nothing in this build
- * constructs one.**
- *
- * `scripts/overseer.ts` hands the daemon a `ProposingRuleWork` and `daemon.ts`
- * has no option that could carry this, so the only callers are tests. Stage 3d
- * is what wires it, and it cannot do so by flipping a disposition: an acting
- * rule that dies between its action and its settlement leaves an unpaired
- * `rule-intended` and becomes eligible again, which needs the durable rule-run
- * index named as a precondition on 3d in
- * `docs/plans/260908g-the-overseer-runbook-its-gates-and-the-scheduler-that-wakes-it.md`.
- */
-export type ActingRuleWork = ProposingRuleWork & {
-  /** ACT on a proposal the scheduler has ALREADY recorded and fsynced. */
-  readonly act: (spec: RuleSpec, what: string) => Promise<RuleOutcome>;
-};
 
 /**
  * What the scheduler needs from the store, and no more.
@@ -591,197 +528,26 @@ function start(input: TickInput, definition: JobDefinition, key: OccurrenceKey, 
       }
       return spawn(definition, key);
     }
-    case "rule": {
-      // THE DISPOSITION CHOOSES A RUNNER AND A CAPABILITY, not a branch inside
-      // one runner that holds both. `runProposingRule` is handed an object with
-      // no `act` on it; `runActingRule` needs `input.acting`, which no shipped
-      // wiring supplies. So bypassing this switch does not reach an actor — it
-      // reaches an absent one — and since `scheduler.ts` is now in
-      // `RULE_SOURCES`, editing the switch at all moves every rule's pin.
-      const spec = work.rule;
-      switch (spec.disposition) {
-        case "propose": {
-          const rules = input.rules;
-          if (rules === undefined) {
-            return { kind: "refused", why: "this daemon was started with no rule runner, so a deterministic rule cannot be run here" };
-          }
-          return runProposingRule(input, rules, spec, id);
-        }
-        case "act": {
-          const acting = input.acting;
-          if (acting === undefined) {
-            return {
-              kind: "refused",
-              why:
-                `this daemon holds no actor, so the ${spec.kind} rule's "act" disposition cannot be carried out here — ` +
-                "the capability is absent from the process rather than declined by it",
-            };
-          }
-          return runActingRule(input, acting, spec, id);
-        }
-        default: {
-          const never: never = spec.disposition;
-          throw new Error(`no runner for rule disposition ${JSON.stringify(never)}`);
-        }
-      }
-    }
+    case "rule":
+      // HANDED STRAIGHT OVER TO THE PINNED PROTOCOL, which is what reads the
+      // hashed `disposition` and chooses a runner and a capability. Nothing
+      // about WHAT a rule may do is decided here.
+      //
+      // **That is narrower than "no edit to this file can change how a rule
+      // behaves", which is what this comment used to claim and is false** (GPT
+      // Sol's finding 3 on 3b). This file still owns the authorisation gate,
+      // the lease, `sweep`'s release of an expired one, and the reservation —
+      // so an edit here can change WHETHER a rule runs and HOW OFTEN, including
+      // letting two runs overlap, without moving any rule's fingerprint. What
+      // the pin covers is the rule's own policy and the append-before-act
+      // protocol; the scheduler and the store are a reviewed execution base
+      // outside it. `rule-jobs.ts` § What the fingerprint does NOT cover.
+      return startRule({ store: input.store, now: input.now }, work.rule, id, { rules: input.rules, acting: input.acting });
     default: {
       const never: never = work;
       throw new Error(`no way to start job work ${JSON.stringify(never)}`);
     }
   }
-}
-
-/**
- * **THE TWO-PHASE RULE PROTOCOL: detect, append the intent and fsync it, act
- * only if that landed, append the ending.**
- *
- * GPT Sol's SP-2, and it is the ordering `dispatch` above already uses for
- * spawning, one layer in — *"the same machinery generalised rather than new
- * machinery"*. Gate 1 wants the decision recorded **before** the action, so a
- * rule that acted and then failed to write it down has taken an action nobody
- * can review, which is the failure the whole arrangement is against.
- *
- * The scheduler owns the sequence rather than handing a runner an `append` and
- * trusting it, because a runner given both halves can be written the other way
- * round and nothing would catch it.
- *
- * **Three things are deliberately NOT symmetrical:**
- *
- *  - A rule with nothing to say, or one that could not look, appends **one**
- *    terminal event. There was no intent, so there is nothing to fail closed
- *    on, and writing an intent nobody had would put a decision in the log that
- *    was never taken.
- *  - **A proposing rule is a different function with a smaller capability.**
- *    `runProposingRule` below is handed an object that has no `act` on it, so
- *    there is no actor for it to decline to call. That is GPT Sol's SC-2: the
- *    old single runner separated the two dispositions with a `switch` while
- *    holding both halves, which is a conditional wearing the clothes of a
- *    boundary.
- *  - The occurrence's own outcome is `failed` only when the **protocol** broke
- *    (an append lost, an actor that threw). A rule that ran and was refused is
- *    a run that completed; what it decided is in `rule-settled`, which is the
- *    record for that question.
- *
- * `intend` is the half both runners share, and it is shared deliberately: it is
- * the half that must be **identical**, because a proposing runner that recorded
- * its decision differently from the acting one would make the log's two families
- * of rule mean two different things.
- */
-type Intent =
-  /** There is a plan, and it is already on the disk. */
-  | { readonly kind: "proposed"; readonly what: string }
-  /** There was nothing to do, nothing could be seen, or the intent would not land. Already settled; the caller has nothing left to decide. */
-  | { readonly kind: "settled"; readonly outcome: JobOutcome };
-
-async function intend(input: TickInput, look: ProposingRuleWork, spec: RuleSpec, id: OccurrenceId): Promise<Intent> {
-  let observation: RuleObservation;
-  try {
-    observation = await look.observe(spec);
-  } catch (cause) {
-    // A THROW FROM THE OBSERVER IS NOT A SIGHTING. It is the same fact as a
-    // refusal from the far end — we could not look — and it must not be
-    // flattened into an empty candidate list, which would read as "nothing
-    // is wedged".
-    observation = { kind: "cannot-see", why: `looking at the fleet threw instead of answering: ${messageOf(cause)}` };
-  }
-  const decision = decideRule(spec, observation);
-  if (decision.kind !== "propose") {
-    return {
-      kind: "settled",
-      outcome: settleRule(
-        input,
-        id,
-        spec,
-        decision.kind === "nothing" ? { kind: "nothing-to-do", why: decision.why } : { kind: "refused", why: decision.why },
-      ),
-    };
-  }
-
-  // (1) THE INTENT, AND NOTHING IS DONE ABOUT IT UNTIL IT IS ON THE DISK.
-  const intended = record(input.store, [
-    {
-      kind: "rule-intended",
-      at: input.now().toISOString(),
-      occurrenceId: id,
-      ruleId: spec.kind,
-      what: decision.what,
-      finding: decision.finding,
-    },
-  ]);
-  if (!intended.ok) {
-    // FAIL CLOSED. The action is not attempted, and the occurrence ends as a
-    // failure so that a run which decided something and did nothing about it
-    // is visible rather than looking like a quiet success.
-    return {
-      kind: "settled",
-      outcome: { kind: "failed", why: `the rule's intent could not be recorded, so nothing was done about it: ${intended.why}` },
-    };
-  }
-  return { kind: "proposed", what: decision.what };
-}
-
-/**
- * A rule that may only propose, run by code that **holds no actor**.
- *
- * There is no `switch` here declining to act and no callback being left
- * uncalled: `look` is a `ProposingRuleWork`, whose type has no `act` member, and
- * `scripts/overseer.ts` builds exactly that and nothing more. So the sentence
- * *"rule 2 cannot kill anything"* is a statement about what this process
- * contains rather than about which branch it takes.
- */
-function runProposingRule(input: TickInput, look: ProposingRuleWork, spec: RuleSpec, id: OccurrenceId): JobSpawn {
-  const done = (async (): Promise<JobOutcome> => {
-    const intent = await intend(input, look, spec, id);
-    if (intent.kind === "settled") return intent.outcome;
-    return settleRule(input, id, spec, { kind: "proposed", what: intent.what });
-  })();
-  return { kind: "spawned", pid: look.selfPid, done };
-}
-
-/**
- * A rule that may act, run by code that holds the actor — **and nothing outside
- * the tests constructs one of these.**
- *
- * It exists so the protocol has its third step and the ordering can be tested
- * against a real actor, which is what proves the append-before-act sequence. 3d
- * is what wires it, behind the preconditions the plan names.
- */
-function runActingRule(input: TickInput, work: ActingRuleWork, spec: RuleSpec, id: OccurrenceId): JobSpawn {
-  const done = (async (): Promise<JobOutcome> => {
-    const intent = await intend(input, work, spec, id);
-    if (intent.kind === "settled") return intent.outcome;
-
-    // (2) THE ACTION, and it is reached only because the intent is fsynced.
-    let outcome: RuleOutcome;
-    try {
-      outcome = await work.act(spec, intent.what);
-    } catch (cause) {
-      // A THROW IS NOT A REFUSAL, the same distinction `dispatch` draws about
-      // spawning: an actor that broke its contract has told us nothing about
-      // whether the action landed.
-      outcome = { kind: "failed", why: `the actor threw instead of answering: ${messageOf(cause)}` };
-    }
-
-    // (3) THE ENDING.
-    return settleRule(input, id, spec, outcome);
-  })();
-  return { kind: "spawned", pid: work.selfPid, done };
-}
-
-/** Write down how a rule's run ended, and say so in the occurrence when even that could not be written down. */
-function settleRule(input: TickInput, id: OccurrenceId, spec: RuleSpec, outcome: RuleOutcome): JobOutcome {
-  const wrote = record(input.store, [
-    { kind: "rule-settled", at: input.now().toISOString(), occurrenceId: id, ruleId: spec.kind, outcome },
-  ]);
-  if (!wrote.ok) {
-    return { kind: "failed", why: `the rule ${describeRuleOutcome(outcome)} and that could not be recorded: ${wrote.why}` };
-  }
-  return outcome.kind === "failed" ? { kind: "failed", why: outcome.why } : { kind: "exited", code: 0 };
-}
-
-function messageOf(cause: unknown): string {
-  return cause instanceof Error ? cause.message : String(cause);
 }
 
 /**
@@ -800,17 +566,6 @@ function lostReports(
 ): readonly SchedulerReport[] {
   if (wrote.ok) return [];
   return [{ kind: "unrecorded", jobId, occurrenceId: id, fact, why: wrote.why }];
-}
-
-/** Every way an append can fail, as one closed door. A refusal and a thrown filesystem error mean the same thing to a caller that must not proceed. */
-function record(store: OccurrenceLog, events: readonly (JobEvent | RuleEvent)[]): { ok: true } | { ok: false; why: string } {
-  try {
-    const result = store.append(events);
-    if (result.ok) return { ok: true };
-    return { ok: false, why: `the store refused the append (${result.reason})` };
-  } catch (cause) {
-    return { ok: false, why: `the append threw: ${cause instanceof Error ? cause.message : String(cause)}` };
-  }
 }
 
 /** One report as a line for the daemon's log. The stuck ones are shouted, because they are the ones that used to be silent. */
