@@ -990,8 +990,16 @@ Three consequences, none of them theoretical:
   verify path in `provision.sh` is this stage's.
 
 **And one honest consequence of the fix**, flagged rather than buried: an `ExecStart` in the primary
-checkout means both processes run whatever is on `dev` at that moment, **including a red `dev`** —
-which is [open-questions.md § Q12](../project/open-questions.md#q12) arriving from a third direction.
+checkout means both processes run whatever is on `dev` at that moment, **including a red `dev`**.
+
+**Greg settled that question the same evening**, and the answer supports this choice while narrowing
+it. *"Briefly broken is fine for dev, have a slightly higher standard for the orchestrator and its
+web interface, and a higher standard still for keeping things working in prod"* — so `dev` keeps the
+licence, and a service tracking it inherits that licence rather than being entitled to refuse it. The
+counterweight is the middle tier: **these two processes are held to a higher bar than the code they
+happen to be running from**, which is why the unit's job is to come back up rather than to validate
+what it is starting. Recorded in
+[orchestrator-direction.md § A higher bar](../project/orchestrator-direction.md#a-higher-bar-for-robustness-here-than-elsewhere-and-its-ceiling).
 
 **The reboot criterion cannot be met by an agent, and will not be claimed.** *"An actual reboot with
 no intervening login"* means rebooting a box carrying ~27 live sessions and ~15 worktrees of other

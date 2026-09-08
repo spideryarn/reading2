@@ -373,6 +373,22 @@ Greg, 2026-09-08, asked for this to be written down:
 
 Both halves matter, and the second one stops the first becoming an excuse for gold-plating.
 
+**Later the same day he made it a gradient, and named the web interface**, closing
+[open-questions.md](open-questions.md)'s Q12:
+
+> Briefly broken is fine for dev, have a slightly higher standard for the orchestrator and its web
+> interface, and a higher standard still for keeping things working in prod.
+>
+> — Greg, 2026-09-08
+
+Two things follow that a reader of the paragraph above would not have known. **The licence in
+[AGENTS.md](../../AGENTS.md) does apply to `dev`** — that was genuinely in question, and the argument
+against it (a red trunk is inherited silently by every worktree that pulls, and agents cannot consent
+to absorbing that the way beta readers consented) was put to him and ranked below moving fast anyway.
+That is his call and this is the record of it. **And the dashboard is in the middle tier with the
+daemon, not the bottom one with the product** — which matters because the dashboard is the half that
+looks like an ordinary web page and is therefore the half where the product's habits creep in.
+
 **Why higher than the product's bar.** [CLAUDE.md](../../CLAUDE.md) says this is a beta and speed
 still wins — that a thing being briefly broken is not the end of the world. That is a judgement
 about *readers*, who are few and know what they signed up for. It does not transfer here, because
