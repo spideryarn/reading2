@@ -31,6 +31,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { UseDictation } from "../src/web/useDictation.js";
 import { DictationControl } from "../tools/fleet/web/src/DictationControl";
+import { sendForTranscription } from "../tools/fleet/web/src/dictation-client";
 
 let host: HTMLDivElement;
 let root: Root;
@@ -91,6 +92,75 @@ function withSecureContext(secure: boolean, run: () => void): void {
     else Reflect.deleteProperty(window as unknown as Record<string, unknown>, "isSecureContext");
   }
 }
+
+/* ------------------------------------------------------------------ *
+ * The client half of POST /api/transcribe.
+ * ------------------------------------------------------------------ */
+
+describe("what the browser makes of the server's answer", () => {
+  const blob = { size: 100_000, arrayBuffer: async () => new ArrayBuffer(8) } as unknown as Blob;
+
+  function withFetch(reply: { status: number; body: unknown }) {
+    const original = globalThis.fetch;
+    globalThis.fetch = (async () => ({
+      ok: reply.status >= 200 && reply.status < 300,
+      status: reply.status,
+      json: async () => {
+        if (reply.body === undefined) throw new SyntaxError("not json");
+        return reply.body;
+      },
+    })) as unknown as typeof fetch;
+    return () => {
+      globalThis.fetch = original;
+    };
+  }
+
+  it("does not turn an unreadable 200 into a transcript of nothing", async () => {
+    /* **`text: ""` means somebody pressed the button and said nothing**, and the box must be left
+       exactly as it was. A server answering `{}` means something else entirely, and collapsing the
+       two showed either the misleading "we heard no speech" line or — on Chromium — left the rough
+       live guesses standing as if they were the real transcript.
+
+       The server already draws this distinction when OpenRouter does it to us
+       (`tests/fleet-transcribe.test.ts`, "tells 'answered nonsense' apart from 'never answered'");
+       the client was undoing it one hop later. GPT Sol, 2026-09-08. */
+    const restore = withFetch({ status: 200, body: {} });
+    try {
+      const r = await sendForTranscription(blob, "audio/webm", { kind: "new-session" });
+      expect(r.ok).toBe(false);
+      expect(r.ok === false && r.message).toContain("[mic-unreadable]");
+    } finally {
+      restore();
+    }
+  });
+
+  it("still treats an empty string as the success it is", async () => {
+    /* The other half, and the reason the check has to be on the TYPE rather than on emptiness. */
+    const restore = withFetch({ status: 200, body: { text: "" } });
+    try {
+      expect(await sendForTranscription(blob, "audio/webm", { kind: "new-session" })).toEqual({
+        ok: true,
+        text: "",
+      });
+    } finally {
+      restore();
+    }
+  });
+
+  it("shows the server's own sentence, never the raw body", async () => {
+    /* An unparsed body is somebody else's HTML — a proxy's, a captive portal's — and putting it on
+       screen is how a stack trace ends up rendered as an error message. */
+    const restore = withFetch({ status: 503, body: { error: "Dictation is not configured. [mic-not-set-up]" } });
+    try {
+      const r = await sendForTranscription(blob, "audio/webm", { kind: "new-session" });
+      expect(r.ok === false && r.message).toContain("[mic-not-set-up]");
+      /* 503 is "nothing you can do", so no Retry button. */
+      expect(r.ok === false && r.retryable).toBe(false);
+    } finally {
+      restore();
+    }
+  });
+});
 
 describe("when a microphone cannot be opened", () => {
   it("never renders nothing", () => {

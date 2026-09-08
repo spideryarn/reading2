@@ -51,7 +51,7 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 /**
  * **All of `tools/`, not just `tools/fleet/`.**
  *
- * The principle is about the box utilities as a family — orchestrator-direction.md
+ * The principle is about the box utilities as a family — overseer-direction.md
  * says *"it runs on the box, spans repos, and must not depend on the product
  * database or on anything under `src/`"* — and `tools/overseer/` arrived on
  * 2026-09-08 under exactly that sentence. A rule scoped to one directory is one

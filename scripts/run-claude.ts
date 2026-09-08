@@ -465,6 +465,8 @@ export async function probeAuth(
 ): Promise<AuthStatus | undefined> {
   const run = await runChild({
     bin: 'claude', argv: ['auth', 'status', '--json'], timeoutMs, stream: false, env, cwd,
+    // A probe takes no prompt at all, so fd 0 is closed. See ChildStdin.
+    stdin: { kind: 'closed' },
   });
   if (run.spawnError || run.timedOut) return undefined;
   return parseAuthStatus(run.stdout);
@@ -623,6 +625,12 @@ async function main(): Promise<void> {
     stream: false,
     env,
     cwd,
+    /* `claude -p` takes its prompt on argv and has no `-` sentinel, so this wrapper keeps fd 0
+       closed exactly as before. **It therefore keeps argv's 128 KB ceiling too**, which is a real
+       limit on `--prompt-file` here and is not one anybody has hit yet; the fix that removed it
+       from run-codex.ts does not transfer, because it depends on the CLI offering a stdin path.
+       docs/plans/260908g-…-execve.md. */
+    stdin: { kind: 'closed' },
   });
 
   const parsed = parseResultEvent(run.stdout);

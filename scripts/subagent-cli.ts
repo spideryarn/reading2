@@ -201,20 +201,52 @@ export interface RunResult {
  * clean exit, non-zero, timeout-kill, spawn failure, capture overflow — resolves to a RunResult the
  * caller classifies, so callers fail closed rather than on an unhandled throw.
  */
+/**
+ * **What fd 0 may be. Two shapes, and deliberately not Node's `StdioOptions`.**
+ *
+ * The invariant this type exists to hold:
+ *
+ * > fd 0 is never inherited. It is either closed, or attached to a finite,
+ * > already-complete regular file that must reach EOF.
+ *
+ * It was `'ignore'` unconditionally until 2026-09-08, and the comment called that the load-bearing
+ * anti-hang guarantee — correctly: a `codex exec` that inherits an open pipe on fd 0 wedges on
+ * *"Reading additional input from stdin…"* until something kills it. Measured, rather than
+ * inherited folklore: a pipe nobody closes wedged for a full 60 seconds, was SIGKILLed, and wrote
+ * no answer file (docs/plans/260908g-…-execve.md).
+ *
+ * What changed is that argv turned out to have a ceiling of its own — a single argument may not
+ * exceed Linux's `MAX_ARG_STRLEN`, 128 KB — so a large prompt could not travel that way at all.
+ * A regular file is the way to hand one over **without** giving the guarantee up: reading it
+ * returns EOF because the file has an end, not because a writer remembered to close it. There is no
+ * writer whose lifetime can accidentally hold the input open, which a pipe has and is exactly the
+ * thing the 60-second arm demonstrates.
+ *
+ * A union rather than `number | 'ignore'`, and never Node's own `StdioOptions`, so that
+ * `'inherit'` and `'pipe'` are not spellable here at all. GPT Sol's design review, 2026-09-08.
+ */
+export type ChildStdin =
+  | { kind: 'closed' }
+  /** An open fd on a regular file that is complete. The CALLER opens and closes it. */
+  | { kind: 'file'; fd: number };
+
 export function runChild(opts: {
   bin: string; argv: string[]; timeoutMs: number; stream: boolean; env: NodeJS.ProcessEnv;
   /** Where the child runs. `codex exec` takes a `--cd` flag; `claude -p` has none, so for that
    *  wrapper the working directory *is* the repo it reviews. */
   cwd?: string;
+  /** Required, so a new caller cannot inherit fd 0 by leaving an argument off. See {@link ChildStdin}. */
+  stdin: ChildStdin;
 }): Promise<RunResult> {
   return new Promise((settle) => {
+    const fd0 = opts.stdin.kind === 'closed' ? 'ignore' : opts.stdin.fd;
     const child = spawn(opts.bin, opts.argv, {
       cwd: opts.cwd,
       // Never the implicit inherit: see sanitisedEnv. Required rather than defaulted, so a new
       // caller cannot get the whole parent environment by leaving an argument off.
       env: opts.env,
-      // fd 0 = 'ignore' is the load-bearing anti-hang guarantee. Never inherit or pipe stdin here.
-      stdio: opts.stream ? ['ignore', 'inherit', 'inherit'] : ['ignore', 'pipe', 'pipe'],
+      // fd 0 is 'ignore' or a complete regular file, and never anything else — see ChildStdin.
+      stdio: opts.stream ? [fd0, 'inherit', 'inherit'] : [fd0, 'pipe', 'pipe'],
       // Own process group, so a kill reaches the CLI *and everything it spawned* (its MCP stdio
       // servers). Without this they outlive the kill and reparent to init. POSIX only.
       detached: process.platform !== 'win32',
