@@ -497,6 +497,39 @@ Types and pure functions. No I/O.
 - **Done:** against the captured real snapshots, the right events come out; a duplicate produces
   nothing; a 35-of-36 payload is rejected whole rather than diffed.
 
+**✅ LANDED 2026-09-08.** `tools/overseer/` — `observation.ts`, `admissible.ts`, `diff.ts`, 1014
+lines. **Every import in all three is `import type`**, so the directory has no runtime dependency at
+all, does no I/O, and nothing at module scope does anything. 168 tests; typecheck green on all four
+projects. Six mutations, all caught.
+
+Three things it decided or discovered that are worth more than the code:
+
+- **The fixtures cannot catch the bug they were captured for, and this is now in their README.**
+  The 51-versus-2 noise ratio was summed over the *untrimmed* capture; the eight committed files hold
+  only `idle`, `working`, `needs-you` and `shell`, **none of which has a volatile field**. So a differ
+  comparing whole status objects structurally passes every real pair, and the mutation that proves the
+  canonical key matters was caught only by a *constructed* countdown case. A good correction to this
+  plan's brief, which had asserted the opposite.
+- **A clock that goes backwards is `reject`, not `duplicate`.** The brief said duplicate when
+  `collectedAt` "has not advanced", which covers equal and earlier alike. Equal has an innocent
+  explanation every minute; earlier has none — a second producer, an NTP step, a cached body served
+  after a fresher one. Calling it a duplicate stalls the history silently for as long as the skew
+  lasts; rejecting is visible and self-clearing.
+- **The producer moved mid-build and the typecheck caught it within the hour.** `fleetState()` grew a
+  fifth parameter, `answeringEnabled`, correctly without a schema bump per the producer's own rule.
+  Nothing else changed, because the parser ignores unknown fields — but it is the drift the fixtures
+  README warns about, happening live, between two agents.
+
+The `claudeSessionId` correction arrived mid-build and cost about forty minutes: `ObservedRow`
+carries `claimedConversationId`, a **branded** string so that using it as an identity requires a cast
+and the cast is where the reader meets the doc comment. `sessionKey` encodes the pair as
+`$1991 claims:<uuid>` — **the word `claims` is in the key** so that a human grepping the log does not
+read that half as verified either. The asymmetry is documented on the event under the heading
+*"`session-replaced` FIRING IS EVIDENCE; ITS SILENCE IS NOT"*, and there is a test named
+**"KNOWN BLIND SPOT: a replacement the tmux environment did not notice produces nothing"** that
+asserts the empty result, so the limitation is pinned where someone will read it rather than left in
+prose.
+
 ### S3 — the store: single writer, checkpoint, crash recovery
 
 - One `events.jsonl`, truncate-to-newline on open, the exclusive lock, and `current.json` as a

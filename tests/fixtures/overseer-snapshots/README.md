@@ -37,6 +37,12 @@ exercising the branches below:
 
 - **No `unknown` status at all**, in 596 rows. So no `cause` value appears here, and the whole unknown
   arm is unexercised by real data.
+- **No `waiting` status in the trimmed files**, and this one is easy to miss because the measurement
+  above is about `waiting.secondsLeft`. The 51-versus-2 ratio was summed over the *untrimmed* capture;
+  the eight files kept here hold only `idle`, `working`, `needs-you` and `shell`, none of which has a
+  volatile field. **So the noise these fixtures exist to warn about cannot be reproduced from them** —
+  a differ that compares whole status objects structurally passes every real pair. Found while writing
+  S2's tests, 2026-09-08; the countdown case there is constructed for exactly this reason.
 - **`shell.busy` is always `true`.** The `false` branch never occurred.
 - **One tmux generation only** (`tmuxServerPid: 132280` throughout). So the *different world* case —
   the one a reboot produces, and the reason the diff refuses to run across a generation boundary —

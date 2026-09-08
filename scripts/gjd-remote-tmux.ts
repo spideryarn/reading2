@@ -158,7 +158,9 @@ export type AgentStatus = "busy" | "idle" | "waiting";
  * fault genuinely becomes a different fault. Note in particular that
  * `unrecognised-agent-status` deliberately does NOT vary with the status name
  * it found — a box that reports two unfamiliar statuses in turn has one problem,
- * not two.
+ * not two. The name is not discarded, though: it is carried beside the cause in
+ * `SessionState`'s `reportedStatus`, which is where a consumer that wants the
+ * transition rather than the diagnosis should look.
  *
  * The first five are `sessionState`'s, and are all "we could not tell", of
  * which four are the box's doing and one is a hand-set environment variable.
@@ -172,7 +174,7 @@ export type SessionUnknownCause =
   | "not-a-session-id"
   /** `claude agents --json` could not be run or could not be trusted, so nothing about any Claude row is known. */
   | "agents-unavailable"
-  /** Claude Code reported a status this version has no arm for. Never the name of that status — see above. */
+  /** Claude Code reported a status this version has no arm for. Never the name of that status — that rides in `reportedStatus`. */
   | "unrecognised-agent-status"
   /** The process table says a Claude is alive, the agents list does not mention it, and neither is discarded. */
   | "running-but-unlisted"
@@ -235,7 +237,37 @@ export type SessionState =
    * construction site is free to forget, and a forgotten cause is exactly the
    * silent collapse this union is built to prevent.
    */
-  | { kind: "unknown"; why: string; cause: SessionUnknownCause };
+  | {
+      kind: "unknown";
+      why: string;
+      cause: SessionUnknownCause;
+      /**
+       * The status token Claude Code actually printed, when the fault was that
+       * we had no arm for it. Set at exactly one construction site
+       * (`unrecognised-agent-status`) and absent everywhere else.
+       *
+       * IT LOOKS LIKE IT CONTRADICTS THE RULE ABOVE, AND IT DOES NOT. The rule
+       * — a field anything diffs must not carry what varies for reasons the
+       * consumer does not care about — was aimed at OUR WORDING: `why` is
+       * rewritten by us and interpolates the box's error text, so two sentences
+       * a minute apart can describe one unchanging situation. This is the
+       * BOX'S OBSERVATION, and it changes only when the box says something
+       * different. `cause` stays the stable diagnostic category ("we have one
+       * unrecognised-status problem"); this records what was seen.
+       *
+       * WITHOUT IT A REAL TRANSITION IS LOST. A future Claude Code reports
+       * `compacting` and then `waiting-for-input`: both collapse to the same
+       * cause, so a watcher keyed on `cause` alone sees one unchanging session
+       * while the source moved twice. GPT Sol's S1-1, resolved in the Overseer's
+       * S2 because that is where the transition key is defined —
+       * docs/plans/260908b-overseer-store-and-clock.md.
+       *
+       * Optional so that every other construction site — here and in
+       * tools/fleet — stays untouched: a required field would be a sixth thing
+       * for each of them to get wrong about a fault it never observed.
+       */
+      reportedStatus?: string;
+    };
 
 /**
  * The fields tmux itself knows, in the order the parser expects.
@@ -954,6 +986,11 @@ export function sessionState(s: Session, agents: Map<string, string> | null): Se
       kind: "unknown",
       cause: "unrecognised-agent-status",
       why: `Claude Code calls this '${status}', which this version does not know`,
+      // The only site that sets it, and the only one that has anything to set
+      // it from. See `reportedStatus` on the union: the cause says which fault
+      // this is, the token says what the box saw, and a watcher needs both or
+      // it reads two successive unfamiliar statuses as one unchanging session.
+      reportedStatus: status,
     };
   }
 

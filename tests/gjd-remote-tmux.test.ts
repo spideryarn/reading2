@@ -561,6 +561,33 @@ describe("sessionState", () => {
       expect(a.why).not.toBe(b.why);
       expect(a.cause).toBe(b.cause);
     });
+
+    /**
+     * ...AND THE TOKEN IS NOT THROWN AWAY, which is the other half of the same
+     * argument and was added for the Overseer's S2 (GPT Sol's S1-1).
+     *
+     * The cause says WHICH FAULT this is and must not move when the box reports
+     * two unfamiliar statuses in turn — the test above. But a watcher keyed on
+     * the cause alone then sees one unchanging session while the source moved
+     * twice, and `compacting` followed by `waiting-for-input` is a real
+     * transition that would be permanently lost. The rule the cause obeys was
+     * about OUR wording; this is the box's own observation, and it changes only
+     * when the box says something different.
+     */
+    it("keeps the status token the box actually reported, beside the cause", () => {
+      const a = unknownOf(sessionState(session(), agents("compacting")));
+      const b = unknownOf(sessionState(session(), agents("rewinding")));
+      expect(a.reportedStatus).toBe("compacting");
+      expect(b.reportedStatus).toBe("rewinding");
+    });
+
+    it("sets it at that one clause and nowhere else", () => {
+      // Optional on purpose: every other construction site describes a fault it
+      // has no token for, and a required field would be a sixth thing for each
+      // of them to invent an answer to.
+      expect(unknownOf(sessionState(session(), null)).reportedStatus).toBeUndefined();
+      expect(unknownOf(sessionState(session({ claudeId: "not-a-uuid" }), new Map())).reportedStatus).toBeUndefined();
+    });
   });
 });
 
