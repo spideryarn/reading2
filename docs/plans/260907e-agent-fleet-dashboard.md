@@ -1990,6 +1990,59 @@ line.
 **Not started.** Written up rather than bolted on, because the correction touches every timestamp the
 client parses and the naive version silently breaks a measurement that is currently right.
 
+### 🔴 Stage v0.6f: the attention inbox has a producer and no consumer
+
+**This is a live instance of the class this whole plan spent 2026-09-08 removing**, and it is mine.
+
+`w2-attention-inbox` built the deciding half — `tools/overseer/attention.ts`, ranked, duplicate-
+collapsed, with a `sessionsUnreadable` floor and an `unknown` arm that refuses to publish a calm
+inbox off an incomplete pass. The types are in `wire.ts` (`AttentionList`, `AttentionItem`,
+`AttentionEvidence`, `AttentionKind`, `AttentionAnswerability`). The seam was negotiated in detail:
+they decide and sort, this page renders, and I said so.
+
+**And nothing renders it.** Measured 2026-09-08 16:05:
+
+    grep -rln "AttentionList|AttentionItem" tools/fleet/web/src/   →  (nothing)
+    grep -rn  "attention"                   tools/fleet/web/src/   →  (nothing)
+
+Worse than a missing component: **the fleet server cannot see the data at all.** The list is written
+to `~/.overseer/current.json` as a field on `Checkpoint`, and nothing in `tools/fleet/` reads that
+file — `grep -rln "Checkpoint" tools/fleet/` finds nothing. So there are two missing edges, not one,
+and the type check cannot see either: a type nobody imports is not an error.
+
+That is exactly
+[260908b](../postmortems/260908b-the-parts-were-all-tested-and-none-of-the-joins-were.md)'s **Class
+A**, a missing join — *"the edge does not exist; the detector is a question about the graph, and no
+type can express 'somebody must call this'"* — and it was created **on the day the postmortem was
+written**, by the person who wrote it, through the mechanism the postmortem names: two halves each
+internally coherent, each reviewed, joined by an agreement in a conversation rather than by code.
+
+`wire.ts` does not help here and was never going to. It holds the SHAPE across a boundary that
+exists; it has no opinion about a boundary nobody crossed.
+
+- [ ] **The fleet server reads the Overseer's checkpoint.** A reader with a `CheckpointRead`-shaped
+      result — `read` / `absent` / `unreadable{why}` — because a missing or stale `~/.overseer/`
+      must render as *the coordinator is not running*, never as an empty inbox. The Overseer's own
+      store already takes `Checkpoint | null` whole for this reason.
+- [ ] **A route or a field on `/api/state`.** Prefer the field: the inbox is the thing the page
+      exists to show, and a second request for it is a second thing that can be stale on its own.
+- [ ] **The client parse, deriving rather than adopting** — `duplicates` declined to
+      `readonly [...] | null` as agreed, `sessionsUnreadable` defaulted to `0`.
+- [ ] **The render, holding three agreements made with `w2-attention-inbox` and `orchestrator-setup`
+      and written down here so they survive the conversation:**
+      **(a)** a `prose` item gets **no answer control at all** in v1 — it is inferred from a pane
+      tail, and their `readTurnTail` bug proved a card could quote *Greg's own last message* back as
+      an agent's question, so a button would have acted on his sentence;
+      **(b)** the producer sorts and the renderer must not re-sort;
+      **(c)** `sessionsUnreadable` renders **only when non-zero**, and when it does the count reads
+      as a floor — *"AT LEAST 4 need you… (1 could not be judged, so there may be more)"* — because
+      a sentence and its retraction in the same block is worse than either.
+- [ ] **A test that fails if nothing imports it.** The lesson of the class is that the join is the
+      thing to check, and the check is *who reads this?*
+
+**Cost of leaving it:** the wave's headline feature is invisible, and it will stay invisible while
+looking finished from either end. Every part has tests and passes them.
+
 ### Later: the coordinator agent
 
 The orchestrator is eventually a program, not Greg (his call, 2026-09-08). Nothing here builds it,
