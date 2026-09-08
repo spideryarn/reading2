@@ -1198,7 +1198,16 @@ the thing that was stopping you is not satisfied.
 So, in this order, and the order matters:
 
 ```
-# 1. Stop the hand-run daemon FIRST. It holds ~/.overseer/overseer.lock, and the unit
+# 0. PULL THE PRIMARY FIRST, and this step was missing until 11:20.
+#    The unit's WorkingDirectory and ExecStart are /home/greg/code/spideryarn2 — the
+#    PRIMARY checkout, not this worktree — so the service runs whatever is sitting
+#    there when it starts. Measured 2026-09-08 11:18: the primary was at d0588a63
+#    while dev was eleven commits further on, so enabling without this step would
+#    start the Overseer on code without S7-04, S7-F1 or S7-F2 — every P1 fixed today,
+#    unfixed in the thing that actually runs.
+cd /home/greg/code/spideryarn2 && git merge origin/dev && npm install
+
+# 1. Stop the hand-run daemon. It holds ~/.overseer/overseer.lock, and the unit
 #    will refuse to start while it does — correctly, and it names the file when it does.
 tmux kill-session -t s5-overseer2-0935-2399531
 
@@ -1214,6 +1223,20 @@ npx tsx scripts/overseer.ts status
 # 4. And the one that proves Restart=always does its job, which nothing has yet observed:
 sudo systemctl kill -s KILL overseer.service && sleep 8 && systemctl status overseer.service
 ```
+
+**Step 0 is the one that would have embarrassed us**, and it was found by the other agent preparing
+its own cutover rather than by anyone reviewing this plan. **"Updating the primary checkout is a deploy
+step nobody owns"** is the general form, and it applies to both services for the same reason: putting
+`ExecStart` in the primary was a deliberate choice — a worktree can be removed out from under a
+service — and the cost of that choice is that **the primary is now a deployment target with no
+deployment process.** Nothing pulls it, nothing watches it, and its staleness is invisible from
+inside the unit.
+
+Worth noting what makes this survivable: the failure is **loud and immediate** rather than silent. A
+daemon running old code writes a schema-1 checkpoint that the current CLI refuses by name, which is
+the `CANNOT TELL` arm doing exactly its job. That is the difference between a stale service and a
+stale *bundle* — the fleet dashboard's equivalent mistake serves an old page with no error anywhere,
+which is why that one needed a rebuild on every start and this one does not.
 
 **Step 4 is the one worth actually running**, because it is the only assertion in this stage that is
 currently backed by a file rather than by a behaviour. `Restart=always` is asserted by the unit, by
