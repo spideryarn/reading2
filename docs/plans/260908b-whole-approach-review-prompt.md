@@ -35,7 +35,7 @@ Two things are being built at once, by two different agents:
 ## What to read
 
 Repository `spideryarn2`, this worktree. Read from git at revision
-`{{REV}}`.
+`40f531d5744876fa03b556fdc34d0b19725ad935`.
 
 Start here:
 - `docs/project/orchestrator-direction.md` — **the most important file.** The standing direction:
@@ -47,9 +47,13 @@ Then the two plans:
 - `docs/plans/260908b-overseer-store-and-clock.md` — the Overseer's first stage, planned.
 
 Then the code that exists:
-- `tools/fleet/` — `server.ts`, `collect.ts`, `status.ts`, `health.ts`, `steer.ts`, `pane.ts`,
-  `live.ts`, `config.ts`, and `web/` (a React client). Note `steer.ts` is built but deliberately
-  not routed: nothing can currently write to a session.
+- `tools/fleet/` — `server.ts`, `collect.ts`, `status.ts`, `health.ts`, `steer.ts`,
+  `routes-steer.ts`, `pane.ts`, `live.ts`, `config.ts`, and `web/` (a React client).
+  **The write path is LIVE**: `POST /api/steer/message` and `POST /api/steer/answer` deliver
+  keystrokes into a running agent's tmux pane. Delivery was verified end to end with a nonce
+  generated inside the sending script and written only to a file — it appeared once in the target
+  pane and zero times in an unrelated one, and the far-end Claude answered it as a user turn.
+  **This is the single most important thing in this review to look at.**
 - `scripts/gjd-remote-tmux.ts` and `scripts/gjd-remote.ts` — the existing box tooling that owns
   session inventory, launching and killing. The Overseer is meant to reuse it, not fork it.
 
@@ -74,6 +78,16 @@ Useful background, as needed:
   Steering a live session or killing anything still needs a human.
 - **Delivery to a session is `tmux send-keys`** — the only channel proven to work. The Claude inbox
   socket was tried and does not deliver; that claim was retracted after a false positive.
+- **The steer route never looks anything up.** `paneId`, `sessionId`, `claudeSessionId`, `panePid`
+  and the session's status all come from the REQUEST BODY, not from live tmux, because they are what
+  the person could see when they tapped. If the server re-read them at send time, its `verifyTarget`
+  guard would be comparing the box against itself and every check would pass unconditionally. So the
+  design is deliberate — and it means **the server's safety rests on the client sending
+  stale-but-honest claims, and nothing server-side can detect a client that "helpfully" refreshes
+  first.** The author wants this judged specifically.
+- **The CSRF defence is a JSON content-type check, `Origin === Host`, and a hostname allowlist**
+  against DNS rebinding. That stops the browser-as-confused-deputy case and nothing else: anything on
+  the tailnet that sets its own headers is indistinguishable from the dashboard.
 - Planned later stages: attention triage, reboot recovery, usage-limit visibility, a job scheduler,
   a decision log, and eventually creating and killing agents.
 
@@ -82,8 +96,11 @@ Useful background, as needed:
 Anything you think matters. The list below is a prompt, not a boundary — **add categories we did not
 think to name.**
 
-- **Security.** The honest position is that anything reaching the dashboard can run code on the box,
-  and the mitigation is that nothing can reach it. Is that defensible as the fleet grows, as write
+- **Security — and this is now the headline question.** Reachability-as-access-control was chosen
+  when it was guarding a read-only list of session titles. **It is now guarding a write path into 36
+  autonomous agent sessions**, from a phone, with no authentication. Is that still a defensible
+  trade, or is it the thing we are simply wrong about? The honest position is that anything reaching
+  the dashboard can run code on the box, and the mitigation is that nothing can reach it. Is that defensible as the fleet grows, as write
   actions land, and as it moves to a phone? What is the cheapest thing that would materially reduce
   the blast radius without becoming a login page Greg does not want? Note a real asymmetry: the
   *readers* of this page are one person, but the *content* rendered on it — session titles, pending
