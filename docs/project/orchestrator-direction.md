@@ -211,6 +211,43 @@ ordering, not an oversight, and it should not be quietly promoted.
 So the near-term usage-limit work is **visibility** — how close is the current account, and what
 should stop when it is near — and not rotation.
 
+### What is actually observable about usage limits
+
+Researched and then re-verified by hand on 2026-09-08, because the headline finding is the kind that
+is easy to believe and wrong in a specific way.
+
+- **`~/.claude.json` → `.cachedUsageUtilization`** is the polling target. Per-window `utilization`
+  percentages with an ISO `resets_at` — `five_hour`, `seven_day`, and a set of per-model windows —
+  plus `fetchedAtMs` and the `accountUuid`. Verified present and populated.
+- **It is a CACHE, and a stale entry reads exactly like a current one.** Checked live: the file was
+  48 minutes old and its `five_hour` window had reset 27 minutes earlier, so the `utilization: 70`
+  in it described a window that no longer existed. The file always parses and always yields a
+  plausible number; nothing in it announces that the number is void.
+  **So `resets_at` is not decoration, it is the validity check** — a reading whose `resets_at` is in
+  the past must be reported as *unknown*, never as a percentage. Same shape as everything else in
+  [silent-success.md](../reusable/silent-success.md), and the same rule `health.ts` already follows:
+  a field that can say *I could not tell* beats a zero that reads as healthy.
+- **A real 429 is written into the session's own transcript**, with `"error":"rate_limit"`,
+  `"isApiErrorMessage":true`, `apiErrorStatus: 429`, and a `quotaLimits` object carrying
+  `rateLimitType` (`five_hour` / `seven_day`) and a `resetsAt` unix timestamp. Found in real
+  transcripts on this box, both variants. This is exact, greppable, and carries a machine-readable
+  reset — **the cheapest reliable signal available**, and unlike the cache it cannot be stale.
+- **`claude auth status`** returns JSON non-interactively with `email`, `orgId` and
+  `subscriptionType`; `.oauthAccount` in the same file adds `organizationRateLimitTier`. That is how
+  the Overseer knows *which* account a reading belongs to — which matters the moment there is more
+  than one.
+- **There is no `claude usage` subcommand** (verified: it falls through to top-level help), and no
+  pre-warning text was found in any transcript — only post-hoc 429s. So *"approaching the limit"* has
+  to be derived from the cache, and the cache is the untrustworthy source. **Treat the transcript 429
+  as the ground truth and the cache as a hint**, not the other way round.
+
+**Multiple accounts on one box is mechanically possible.** `CLAUDE_CONFIG_DIR` isolates config,
+credentials and the projects directory — verified empirically by pointing it at a scratch directory
+(`loggedIn:false`, isolated `projectsDirectory`, real credentials confirmed untouched). Running two
+accounts *concurrently*, each logged in under its own config dir, follows from that but has **not**
+been tested. Recorded because it is what a medium-term rotation would be built on; it is not a reason
+to build one now.
+
 ## The four capabilities, and what each really needs
 
 **Seeing the fleet.** The cheapest thing here and the first slice. Note the data problem in
