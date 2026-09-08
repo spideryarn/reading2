@@ -234,8 +234,10 @@ GPT Sol, 2026-09-08, on the built code. No P0s; every finding below was checked 
   **All three controls in the row get it**, on `narrow-window.css`'s own argument about the two
   order rows: a floor given to one control is a bug report about the one beside it. `Profile` and
   `Admin` were always 16px, so that part is a pre-existing condition fixed in passing rather than a
-  regression of this change. Verified under Chrome's mobile emulation, where `(pointer: coarse)`
-  genuinely matches — `hasTouch` alone does not flip it: all three at exactly 40px, same `top`.
+  regression of this change. Verified under Chrome with `hasTouch`, `isMobile` and a 3x scale factor
+  set together, where `(pointer: coarse)` genuinely matches: all three at exactly 40px, same `top`.
+  ([browser-testing-playwright.md](../project/browser-testing-playwright.md) says `hasTouch` alone
+  suffices; this ran with all three and did not test that separately.)
 
 **And one thing it changed that was not code**: an earlier draft of this doc said the unfindability
 *was* the bug, which states an inference about Greg's experience as an observation. See § What was

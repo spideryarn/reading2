@@ -323,9 +323,11 @@ describe("the Feedback button, in the shelf masthead", () => {
        since 2026-08-28, and `pointer-coarse` rather than `any-pointer-coarse`
        is narrow-window.css § a coarse pointer's convention: sizes follow the
        primary pointer, so a trackpad-equipped iPad is not given 40px of chrome
-       it will never touch. Verified at 40px in Chrome under mobile emulation,
-       where `(pointer: coarse)` genuinely matches — `hasTouch` alone does not
-       flip it. GPT Sol, P2. */
+       it will never touch. Verified at 40px in Chrome with `hasTouch`,
+       `isMobile` and a 3x scale factor set together, where `(pointer: coarse)`
+       genuinely matches; docs/project/browser-testing-playwright.md says
+       `hasTouch` on its own is enough, which was not separately tested here.
+       GPT Sol, P2. */
     expect(
       btn.classList.contains("tw:pointer-coarse:min-h-10"),
       "a phone control back under the touch floor",
