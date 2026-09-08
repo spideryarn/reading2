@@ -71,6 +71,60 @@
 import { createHash } from "node:crypto";
 
 import type { OverseerEvent } from "./diff.js";
+import { canonicalRuleSpec, type RuleSpec } from "./rules.js";
+
+/**
+ * WHAT A JOB ACTUALLY IS, and it is in the fingerprint.
+ *
+ * Two arms, because two things wear the word "job": one starts a Claude session
+ * on the box and one runs a deterministic rule inside the daemon. They differ
+ * in what they cost, in what they may do, and in who dispatches them, so they
+ * are a discriminated union rather than a flag beside a nullable spec.
+ *
+ * **`rule` carries its whole configuration**, which is GPT Sol's SP-1: a
+ * dispatcher that selected executable code by `definition.id` would leave the
+ * authorised pin valid across a changed threshold or a changed action. The spec
+ * is data, `definitionHash` hashes it, and a moved knob refuses the job.
+ */
+export type JobWork =
+  /** A Claude session, started by `SpawnJob`. What the standing jobs are. */
+  | { readonly kind: "session" }
+  /** A deterministic rule, run in process by the scheduler's two-phase protocol. No model calls, no session. */
+  | { readonly kind: "rule"; readonly rule: RuleSpec };
+
+/**
+ * A job definition narrowed to the rule arm, at the type level.
+ *
+ * This is half of what makes the deterministic-only arming path structural
+ * rather than a filter (SP-4): `ruleJobs()` returns these, so a session job
+ * cannot be handed to that path without changing a declared type, which is a
+ * visible edit rather than something a future job falls through. The other half
+ * is that the path supplies no `SpawnJob` at all — see `scheduler.ts`.
+ */
+export type RuleJobDefinition = JobDefinition & { readonly work: Extract<JobWork, { kind: "rule" }> };
+
+/** An authorised job whose work is a rule, by construction. */
+export type AuthorisedRuleJob = { readonly definition: RuleJobDefinition; readonly authorisedHash: DefinitionHash };
+
+/**
+ * The canonical form of a job's work.
+ *
+ * Exhaustive on purpose: a third arm stops this compiling, which is the only
+ * thing that stops a new kind of job being invisible to the fingerprint that
+ * authorises it.
+ */
+function canonicalWork(work: JobWork): string {
+  switch (work.kind) {
+    case "session":
+      return "work:session";
+    case "rule":
+      return `work:rule\n${canonicalRuleSpec(work.rule)}`;
+    default: {
+      const never: never = work;
+      throw new Error(`no canonical form for job work ${JSON.stringify(never)}`);
+    }
+  }
+}
 
 /**
  * One scheduled job, as data.
@@ -109,6 +163,16 @@ export type JobDefinition = {
    * and it is required rather than optional so that a new job has to say so.
    */
   readonly documents: readonly JobDocument[];
+  /**
+   * WHAT THIS JOB IS — a session to start, or a rule to run — with every knob
+   * the rule has.
+   *
+   * Required rather than optional, and hashed: an optional field defaulting to
+   * `session` would make "somebody has not decided yet" and "this starts a
+   * Claude session" the same value, which is the bag-of-optionals shape the
+   * rest of this module refuses.
+   */
+  readonly work: JobWork;
 };
 
 /**
@@ -143,23 +207,62 @@ export const DEFINITION_HASH_LENGTH = 12;
  * as the canonical form: its key order follows insertion order, so two objects
  * a reader would call identical can produce two hashes.
  *
- * Adding a field to `JobDefinition` without adding it here is the failure this
- * is exposed to; the destructure below is exhaustive so the compiler says so.
+ * Adding a field to `JobDefinition` without adding it to `DEFINITION_ENCODERS`
+ * is the failure this is exposed to, and the mapped type there is what makes the
+ * compiler say so.
  */
 export function definitionHash(definition: JobDefinition): DefinitionHash {
-  const { id, everyMs, leaseMs, what, documents } = definition;
-  const canonical = [
-    `id:${id.length}:${id}`,
-    `everyMs:${everyMs}`,
-    `leaseMs:${leaseMs}`,
-    `what:${what.length}:${what}`,
-    // THE COUNT FIRST, then each entry length-prefixed like the strings above:
-    // without the count, a job with one document could hash the same as a job
-    // with two whose paths concatenate to the same bytes.
-    `documents:${documents.length}`,
-    ...documents.map((document) => `document:${document.path.length}:${document.path}:${document.sha256.length}:${document.sha256}`),
-  ].join("\n");
+  const canonical = JOB_DEFINITION_HASHED_FIELDS.map((field) => encodeDefinitionField(definition, field)).join("\n");
   return createHash("sha256").update(canonical, "utf8").digest("hex").slice(0, DEFINITION_HASH_LENGTH) as DefinitionHash;
+}
+
+/**
+ * HOW EACH FIELD IS ENCODED — one entry per field, and the compiler counts them.
+ *
+ * **A destructure would not.** This was `const { id, everyMs, … } = definition`,
+ * and destructuring is not exhaustive in TypeScript: a seventh field on
+ * `JobDefinition` compiles perfectly and never reaches the fingerprint that
+ * authorises the job — GPT Sol's SC-4, and SP-1 by another route. A mapped type
+ * over `keyof JobDefinition` cannot be satisfied by an object literal missing a
+ * key, so **a new field is a compile error until somebody says how it is
+ * hashed**.
+ *
+ * The declaration order is the encoding order and the bytes are unchanged from
+ * the destructured version, deliberately: this refactor re-pinned nothing.
+ */
+const DEFINITION_ENCODERS: { readonly [K in keyof JobDefinition]-?: (value: JobDefinition[K]) => string } = {
+  id: (id) => `id:${id.length}:${id}`,
+  everyMs: (everyMs) => `everyMs:${everyMs}`,
+  leaseMs: (leaseMs) => `leaseMs:${leaseMs}`,
+  what: (what) => `what:${what.length}:${what}`,
+  // THE WORK, INCLUDING EVERY KNOB OF A RULE. GPT Sol's SP-1: without this a
+  // rule's threshold or its chosen action could move while the pin that
+  // authorised it stayed valid, which is gate 3's prohibition wearing the
+  // clothes of an implementation detail.
+  work: (work) => canonicalWork(work),
+  // THE COUNT FIRST, then each entry length-prefixed like the strings above:
+  // without the count, a job with one document could hash the same as a job
+  // with two whose paths concatenate to the same bytes.
+  documents: (documents) =>
+    [
+      `documents:${documents.length}`,
+      ...documents.map((document) => `document:${document.path.length}:${document.path}:${document.sha256.length}:${document.sha256}`),
+    ].join("\n"),
+};
+
+/**
+ * The fields the fingerprint covers, in encoding order.
+ *
+ * Derived from the table rather than typed out, and exported so a test can hold
+ * it against a `JobDefinition`'s own keys — which is what makes reverting to a
+ * destructure a red test rather than a silent loss of coverage.
+ */
+export const JOB_DEFINITION_HASHED_FIELDS = Object.keys(DEFINITION_ENCODERS) as readonly (keyof JobDefinition)[];
+
+/** One field, through its own encoder. The cast is the same known limitation `rules.ts` § encodeRuleField explains, and is sound for the same reason. */
+function encodeDefinitionField<K extends keyof JobDefinition>(definition: JobDefinition, field: K): string {
+  const encode = DEFINITION_ENCODERS[field] as (value: JobDefinition[K]) => string;
+  return encode(definition[field]);
 }
 
 /**
@@ -257,6 +360,33 @@ export function occurrenceId(key: OccurrenceKey): OccurrenceId {
  * here at all: that is `unknown`.
  */
 export type JobOutcome = { readonly kind: "exited"; readonly code: number } | { readonly kind: "failed"; readonly why: string };
+
+/**
+ * What the runner says when it is asked to start a job.
+ *
+ * **It returns a result and does not throw**, and the two arms are different
+ * facts: `refused` means *this did not start and I know it* (a precondition
+ * failed, the binary is missing), which is a settled outcome. A throw is not in
+ * the contract, and when one happens anyway the scheduler records `unknown`
+ * rather than `refused` — because a function that broke its own contract is not
+ * evidence about whether a process exists.
+ *
+ * `done` settles when the work does. A promise that never settles is not an
+ * error here; it is the case the lease exists for.
+ *
+ * **It lives here rather than in `scheduler.ts` because BOTH starters answer in
+ * it** — the session dispatcher and the rule protocol — and the rule protocol is
+ * a pinned file that must not import the scheduler. A type in the module that
+ * already owns `JobOutcome` and `JobDefinition` is the shared leaf; the
+ * alternative was a second type meaning the same thing on the rule side, which
+ * is the twin-declaration failure this area keeps writing up.
+ */
+export type JobSpawn =
+  | { readonly kind: "spawned"; readonly pid: number; readonly done: Promise<JobOutcome> }
+  | { readonly kind: "refused"; readonly why: string };
+
+/** How a session job is started. The rule protocol is the other starter, and it is not one of these — see `scheduler.ts` § `TickInput.spawn`. */
+export type SpawnJob = (definition: JobDefinition, key: OccurrenceKey) => JobSpawn;
 
 /**
  * Why an `unknown` occurrence is unknown, and whether anybody wrote that down.
@@ -708,6 +838,13 @@ export function foldOccurrences(
       case "session-wait-restarted":
       case "session-row-changed":
       case "session-pane-replaced":
+      // AND THE RULE ARMS. A rule event is addressed BY an occurrence id and
+      // says nothing about that occurrence's lifecycle — the reservation, the
+      // start and the finish around it are the job events above. Folding one
+      // here would let a finding move a run's state, which is a different
+      // record silently editing this one.
+      case "rule-intended":
+      case "rule-settled":
         break;
       default: {
         const never: never = event;

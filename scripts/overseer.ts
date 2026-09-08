@@ -32,6 +32,10 @@ import { fileURLToPath } from "node:url";
 import { attentionRunner, DEFAULT_MAX_CALLS, runAttentionCommand } from "../tools/overseer/attention-cli.js";
 import { runOverseer, TICK_MS, type DaemonOptions } from "../tools/overseer/daemon.js";
 import { gjdRemoteDispatch, jobsEnabled, JOBS_ENABLED_VAR } from "../tools/overseer/dispatch.js";
+import { describeRuleJobs, ruleJobs } from "../tools/overseer/rule-jobs.js";
+import { RULES_ENABLED_VAR, ruleWork, rulesEnabled } from "../tools/overseer/rule-work.js";
+import { describeRuleOutcome } from "../tools/overseer/rules.js";
+import type { ProposingRuleWork } from "../tools/overseer/rule-protocol.js";
 import { describeStandingJobs, standingJobs } from "../tools/overseer/standing-jobs.js";
 import type { AttentionList } from "../tools/fleet/wire.js";
 import type { OverseerEvent } from "../tools/overseer/diff.js";
@@ -199,6 +203,8 @@ const EVENT_KINDS: Record<OverseerEvent["kind"], true> = {
   "job-occurrence-finished": true,
   "job-occurrence-refused": true,
   "job-occurrence-unknown": true,
+  "rule-intended": true,
+  "rule-settled": true,
 };
 
 /**
@@ -276,6 +282,14 @@ export function describeEvent(event: OverseerEvent): string {
     // type: we do not know that it did not run.
     case "job-occurrence-unknown":
       return `${when}  unknown    ${event.occurrenceId} — ${event.why}`;
+    // THE RULES' TWO ARMS, and the pair is the ordering: what it was about to
+    // do, then what became of it. A log with an `intended` and no `settled` is
+    // a rule that was interrupted between the two, which is exactly the shape
+    // appending the intent first exists to make visible.
+    case "rule-intended":
+      return `${when}  intends    ${event.occurrenceId} ${event.ruleId} — ${event.what}`;
+    case "rule-settled":
+      return `${when}  rule       ${event.occurrenceId} ${event.ruleId} — ${describeRuleOutcome(event.outcome)}`;
     default: {
       const never: never = event;
       throw new Error(String(never));
@@ -592,6 +606,10 @@ const HELP = [
   `THE SCHEDULER IS OFF unless ${JOBS_ENABLED_VAR}=1. Armed, it dispatches the standing jobs in`,
   "docs/project/overseer.md as real Claude sessions on this box, so turning it on is Greg's",
   "decision and not a side effect of starting the daemon. `status` says which it is.",
+  "",
+  `${RULES_ENABLED_VAR}=1 is the OTHER arming: the deterministic rules and nothing else. A daemon`,
+  "started that way is handed no session dispatcher at all, so it cannot start a Claude session and",
+  "cannot spend anything. It is the switch to use to watch a rule fire.",
 ].join("\n");
 
 /**
@@ -612,11 +630,29 @@ const HELP = [
  * "on with nothing to do" are different states and this returns different
  * sentences for them.
  */
+/**
+ * **Which of the three armings this daemon is under.**
+ *
+ * `rules-only` is GPT Sol's SP-4. There was one global switch; arming it
+ * supplied both standing jobs, and both were immediately due — so *"watch each
+ * rule fire for real"* could not be done without starting paid model sessions
+ * under a gate 4 the plan admits is unbuilt.
+ *
+ * **The separation is a capability, not a filter.** Under `rules-only` the
+ * daemon is handed no `SpawnJob` at all, so nothing in that process can create
+ * a Claude session however due a job is; and `ruleJobs()` returns
+ * `AuthorisedRuleJob[]`, a type a session job cannot inhabit. A filter that a
+ * future job could fall through is what this deliberately is not.
+ */
+export type SchedulerArming = "off" | "rules-only" | "all";
+
 export function schedulerWiring(env: NodeJS.ProcessEnv): {
+  /** True for either arming. Kept because the status page and the start note both ask the yes/no question. */
   armed: boolean;
+  arming: SchedulerArming;
   detail: string;
   problems: readonly string[];
-  /** What the definitions WOULD be, armed or not — so a disarmed daemon can still say what it is not running. */
+  /** What the definitions WOULD be under a full arming — so a disarmed daemon can still say what it is not running. */
   definitions: readonly AuthorisedJob[];
   /**
    * **What `runOverseer` is actually given**, ready to spread — and `undefined`
@@ -627,15 +663,42 @@ export function schedulerWiring(env: NodeJS.ProcessEnv): {
    */
   jobs: DaemonOptions["jobs"] | undefined;
 } {
-  const armed = jobsEnabled(env);
-  const built = standingJobs(repoRoot());
+  const root = repoRoot();
+  const standing = standingJobs(root);
+  const rules = ruleJobs(root);
+  const arming: SchedulerArming = jobsEnabled(env) ? "all" : rulesEnabled(env) ? "rules-only" : "off";
+  const sessionDetail = describeStandingJobs({ armed: arming === "all", enableVar: JOBS_ENABLED_VAR, jobs: standing });
+  const ruleDetail = describeRuleJobs({ armed: arming !== "off", enableVar: RULES_ENABLED_VAR, jobs: rules });
+  const problems = [...standing.problems, ...rules.problems];
+  const definitions = [...standing.jobs, ...rules.jobs];
+  const work = (): ProposingRuleWork => ruleWork({ baseUrl: fleetUrl(env), selfPid: process.pid });
   return {
-    armed,
-    detail: describeStandingJobs({ armed, enableVar: JOBS_ENABLED_VAR, jobs: built }),
-    problems: built.problems,
-    definitions: built.jobs,
-    jobs: armed ? { definitions: built.jobs, spawn: gjdRemoteDispatch({ repoRoot: repoRoot() }) } : undefined,
+    armed: arming !== "off",
+    arming,
+    detail:
+      arming === "rules-only"
+        ? // THE ONE SENTENCE THAT MATTERS MOST HERE. A reader must not have to
+          // infer from an absent job list that no session can start; it is a
+          // property of what this process was handed, so it is said out loud.
+          `deterministic rules only (${RULES_ENABLED_VAR}=1): ${ruleDetail}. ` +
+          `NO SESSION DISPATCHER WAS BUILT, so no job in this daemon can start a Claude session — ${sessionDetail}`
+        : `${sessionDetail}; rules: ${ruleDetail}`,
+    problems,
+    definitions,
+    jobs:
+      arming === "all"
+        ? { definitions, spawn: gjdRemoteDispatch({ repoRoot: root }), rules: work() }
+        : arming === "rules-only"
+          ? // NO `spawn` KEY AT ALL. Not `spawn: undefined`, not a spawner that
+            // refuses: the capability is absent from the process.
+            { definitions: rules.jobs, rules: work() }
+          : undefined,
   };
+}
+
+/** Where the dashboard is, for a rule that needs to ask it something. One reading, so the daemon and its rules cannot disagree about the address. */
+function fleetUrl(env: NodeJS.ProcessEnv): string {
+  return env["OVERSEER_FLEET_URL"] ?? DEFAULT_FLEET_URL;
 }
 
 function flag(argv: readonly string[], name: string): string | undefined {
@@ -822,7 +885,10 @@ async function main(argv: readonly string[]): Promise<number> {
       if (usageOff) console.log("usage: off (--no-usage)");
 
       const wiring = schedulerWiring(process.env);
-      console.log(`scheduler: ${wiring.armed ? "ARMED" : "OFF"} — ${wiring.detail}`);
+      // THE ARMING, not a yes/no. "off", "deterministic rules only" and "armed"
+      // are three states and the middle one is the whole of SP-4; printing two
+      // of them would put a reader back where they started.
+      console.log(`scheduler: ${wiring.arming === "all" ? "ARMED" : wiring.arming === "rules-only" ? "RULES ONLY" : "OFF"} — ${wiring.detail}`);
       for (const problem of wiring.problems) console.error(`✗ ${problem}`);
       const outcome = await runOverseer({
         root,

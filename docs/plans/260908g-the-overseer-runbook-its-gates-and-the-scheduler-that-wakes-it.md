@@ -224,7 +224,7 @@ way it worked this morning, and nothing half-built is load-bearing.
 |---|---|
 | **1** — the runbook and the gates | **done**, `dev`. `docs/project/overseer.md`, four gates. The `/overseer` skill was deleted on 2026-09-08 — see the stage. |
 | **2** — the scheduler and the watchdog | **done**, `dev`, after two GPT Sol rounds. **Armed by `OVERSEER_JOBS_ENABLED` and OFF.** |
-| **3** — the three deterministic rules | **designed and reviewed, 2026-09-08 evening**, split 3a–3d. Fable arbitrated how much each rule may act; Sol blocked the first draft with four P0s, all accepted. The acting rule is now last, behind two named preconditions. |
+| **3** — the three deterministic rules | **3a done, 2026-09-08 evening; Sol's code review answered the same night.** The protocol and rule 2 are built, fired against the live specimen, and green. 3b–3d not started. Fable arbitrated how much each rule may act; Sol blocked the first draft with four P0s, all accepted, then reviewed the code and raised four more — four fixed, three deferred onto 3d. The acting rule is still last, now behind **five** named preconditions. |
 | **4** — the deferral queue | **not started.** |
 | **5** — reboot revival | **not started.** Needs a new verb: `gjd-remote resume` is `attach`. |
 | **6** — CLI ergonomics, and the rename | **the rename is done**; the CLI is not started. |
@@ -235,6 +235,12 @@ way it worked this morning, and nothing half-built is load-bearing.
 fire about thirty seconds after it is armed**, because neither has ever run. The dispatch path has
 never been executed for real — only through an injected spawner — so the first arming is also the
 first live test of it.
+
+**There is now a second switch, and it is the safe one.** `OVERSEER_RULES_ENABLED=1` arms the
+deterministic rules and nothing else: the daemon is handed no session dispatcher at all, so it
+cannot start a Claude session or spend anything, and a session job that reached it would be refused
+rather than run. That is the switch to use to watch a rule fire — GPT Sol's SP-4, and it is why
+*"watch each rule fire for real"* no longer means arming the paid jobs.
 
 ### Stage 7 — gate 4's global budget
 
@@ -321,6 +327,12 @@ No model calls. Each is a scheduled job from Stage 2 over primitives that alread
   it and it will look exactly like the thing that doc says to clean up. Leave it until Stage 3 has
   fired against it, then kill it and record that it was the first thing the rule caught. Its cost for
   as long as it stands is 2.9 MB and one tmux session.
+
+  **The rule fired against it at 20:10 on 2026-09-08** — pid 2282035, `cwd-deleted`, 19.9 hours, in
+  a `rule-intended` event that round-trips out of the store. So the condition for killing it is met
+  and **it is still alive**, deliberately: 3a's brief said not to, and the first thing the rule
+  caught is now a line in a log rather than a story, which was the point of keeping it. Whoever kills
+  it should quote the event.
 - **Box pressure and usage proximity.** Vitals already exist in `health.ts`; usage already exists in
   `usage.ts`. The action is the existing staggered `resource-broadcast`, **and then the half that is
   always forgotten: check later that they woke up.** Greg asked for this explicitly. A pause that
@@ -416,9 +428,17 @@ something. Two findings changed the shape.
 **1. The seam for an in-process job already exists, and needs no new type.** `SpawnJob` is
 `(definition, key) => JobSpawn`, and nothing in `scheduler.ts` or `jobs.ts` knows that today's only
 implementation shells out to `gjd-remote`. A rule job is an `AuthorisedJob` plus a dispatcher that
-switches on `definition.id`. **So Stage 3 adds no scheduler machinery at all** — which is what a good
-seam is supposed to buy, and it is worth saying out loud because the plan had budgeted for widening
-one.
+switches on `definition.id`. ~~**So Stage 3 adds no scheduler machinery at all**~~ — which is what a
+good seam is supposed to buy, and it is worth saying out loud because the plan had budgeted for
+widening one.
+
+**Both halves of that were wrong, and 3a proved it twice over.** Sol's SP-2 demolished the
+conclusion: `SpawnJob` has no store and its `JobOutcome` has nowhere for a finding to go, so the
+scheduler grew a two-phase rule protocol. And SP-1 demolished the premise: switching on
+`definition.id` is precisely the hole, because the id is in the fingerprint and nothing about what
+the id then selected is. What landed switches on the definition's own hashed `work` arm, and the
+seam widened after all. Struck rather than deleted, because a plan that quietly drops the sentence a
+review corrected is how the next reader concludes the review was about something else.
 
 **2. `resource-broadcast` cannot reach the sessions that cause the load, and fails hardest exactly
 when it is needed most.** `broadcastRoute` keeps only recipients whose `drainGate` is `{kind:"now"}`.
@@ -570,13 +590,16 @@ gates cannot happen without Greg anyway.
 
 #### Build order, revised twice
 
-- **3a — the rule protocol, with rule 2 as its first consumer.** Sol's recommended order and it is
-  right: the authorisation that covers the implementation (SP-1), the two-phase
+- **3a — the rule protocol, with rule 2 as its first consumer. DONE, 2026-09-08.** Sol's recommended
+  order and it is right: the authorisation that covers the implementation (SP-1), the two-phase
   append-fsync-act-append runner with the store passed in (SP-2), the deterministic-only arming path
   (SP-4), and the `RuleEvent` arm with a **round-trip** test (SP-9). Rule 2 rides on it, proposing
-  and never killing. Done when the rule has fired against pid 2282035 and the event round-trips out
-  of the store saying `proposed: kill, rule cwd-deleted, needs confirm`.
-- **3b — rule 1.** Small, observe-only, reading the raw payload rather than widening `ObservedRow`.
+  and never killing. See § What 3a landed below.
+- **3b — the protocol's own file, then rule 1. DONE, 2026-09-08.** Two commits. The first moves the
+  rule protocol out of `scheduler.ts` into `rule-protocol.ts` and pins that instead, because pinning
+  the whole scheduler made every rule's authorisation hostage to a log sentence. The second is rule
+  1: small, observe-only, reading the raw payload rather than widening `ObservedRow`. See § What 3b
+  part 1 landed and § What 3b part 2 landed.
 - **3c — the review surface.** A bounded rule-event projection into `current.json`, the independent
   fleet-side parser, the wire type, and the Overseer panel. **This is the gate on 3d, not a
   nice-to-have.**
@@ -586,9 +609,314 @@ gates cannot happen without Greg anyway.
   that abandoning 3d half-built, with automatic broadcasting and no wake accounting, is worse than
   not starting it.
 
-**What this ordering buys** is that the acting rule is last and behind two named preconditions rather
+  **Five preconditions, not two.** The three below came out of Sol's code review of 3a and are
+  deferred here rather than dropped, because each is about *acting* and none of them can bite until
+  something acts. They are written down as conditions on this stage, not as a to-do list, so 3d
+  cannot start by satisfying itself.
+
+  1. **A durable rule-run index — SC-1 in full, and it is why 3d cannot be built by flipping a
+     disposition.** An acting rule that dies between its action and its settlement leaves a
+     `rule-intended` that is replayed on the next boot and folded into no durable state; the
+     occurrence eventually becomes eligible again, so the action can happen twice. The fix is an
+     index that retains unpaired intents across checkpoints and holds such an occurrence for explicit
+     reconciliation — or an idempotency key and a downstream receipt. An `AbortSignal` is not a
+     substitute: it addresses shutdown, not uncertain outcomes. (The *live* half of SC-1 is fixed —
+     the daemon awaits its in-process rule runs — and that fixes nothing here.)
+  2. **The policy's meaning has to be inside the fingerprint — SC-2's second half.** `"safe-to-kill"`
+     is a hashed word whose meaning lives in `tools/fleet/actions.ts` and `routes-actions.ts`, which
+     no rule pin covers, so **changing what that policy selects changes what the rule proposes
+     without changing its fingerprint.** Pinning `scheduler.ts` closed the protocol half of SC-2 and
+     leaves this one open. It crosses into the fleet dashboard's territory — the policy is theirs,
+     not ours — so it needs their owner as well as ours, which is a reason to raise it before 3d
+     rather than during it.
+  3. **Occurrence lineage has to be separated from behavioural authorisation — SC-3.** `lastRunOf`
+     ignores every occurrence whose definition hash differs from the current one, so a re-pin makes a
+     job **immediately due even with an old-hash occurrence in flight**. Sol exercised it against a
+     live in-flight `get-ready-to-deploy` under the old pin and got `last: never`, then due
+     immediately. Today's re-pins are harmless only because neither standing job has ever run —
+     **luck, not design** — and 3d re-pins an *acting* rule, where a duplicate is a duplicate action.
+     Wants same-job unsettled legacy occurrences held across hash changes, and an explicit
+     compatibility mapping for a semantic no-op rehash.
+
+**What this ordering buys** is that the acting rule is last and behind named preconditions rather
 than behind a flag — which is what the gates were asking for all along, and which the original
 ordering would have reached only by accident.
+
+#### What 3a landed, 2026-09-08, and the four places it contradicts what is written above
+
+Built, green, and **fired for real** against the live specimen — a real daemon, the real dashboard's
+real dry run, against a scratch `OVERSEER_STORE_DIR` rather than `~/.overseer`, because the live
+Overseer holds that store's exclusive lock. The evidence is one line, read back out of the log by
+`overseer events` after a restart that replayed 17 events with **0 unreadable**, which is the round
+trip rather than the append:
+
+```
+20:10:15  rule  wedged-work@2026-09-08T20:10:15.373Z#210968a360b9 wedged-work —
+          proposed: kill 4 of 4 candidate process(es) — rule cwd-deleted — needs confirm;
+          oldest is pid 2282033 (sh -c ( 'npx' 'playwright@1.62.1' 'install' 'webkit' ) …) at 19.9h
+```
+
+pid **2282035** is the second entry in that event's `finding.processes`; it was still alive when this
+was written, and nothing in this build could have ended it. (By the end of the review fixes that
+night it and its three siblings were gone, ended by something else — see below.)
+
+**What exists now.** `tools/overseer/rules.ts` (pure: the spec, the finding, the decision),
+`rule-work.ts` (the impure half: the dashboard's dry run — and, until the code review, an actor that
+refused), `rule-jobs.ts` (the definition and its pin), the `RuleEvent` arm across all six places SP-9
+names, the rule runners in `scheduler.ts`, and `scripts/overseer-pins.ts` — which prints every job's
+current fingerprint, because re-pinning had become a thing you found out by reading a refusal.
+
+**Four things here were wrong or incomplete, and each is corrected in place above rather than left
+standing:**
+
+1. **"The rule's own source file" is two files, not one** — and, after the code review, three.
+   SP-1's fix pins the implementation in `documents`. Pinning only `rules.ts` would have left the
+   actor — the thing that decides whether a proposal becomes a kill — outside the fingerprint, which
+   is SP-1 word for word one file along. `scheduler.ts` was left out on `standing-jobs.ts`'s argument
+   that shared machinery in a pin is a tripwire that mostly fires falsely; **that was wrong, and
+   SC-2 says why in one line — it is the code that interprets the hashed `disposition`.** It is
+   pinned now, and the argument is written out at `RULE_SOURCES`.
+2. **`definitionHash` gaining `work` re-pinned the standing jobs too.** `07eaeebbfc76` →
+   `bfc37addeea1` and `858c70da4976` → `8aa20daa8b85`. Nothing either job does changed; the
+   definition now says out loud that it starts a session, and saying so moved the hash. That is the
+   mechanism, not a cost.
+3. **The deterministic-only arming is a capability, not a filter.** `OVERSEER_RULES_ENABLED=1` hands
+   the daemon **no `SpawnJob` at all**, so no code in that process can create a session however due
+   a job is; a session job meets a `refused` naming the missing dispatcher. `ruleJobs()` also
+   returns `AuthorisedRuleJob[]`, which a session job cannot inhabit — two independent guards, one
+   at the type level and one at the capability level. The plan's *"a filter a future job could fall
+   through"* is exactly what this is not.
+4. **The checkpoint still says only `off` or `armed`.** Rules-only reads as `armed` with a detail
+   sentence that begins *"deterministic rules only … NO SESSION DISPATCHER WAS BUILT"*. Widening
+   `scheduler.kind` is a persisted-schema change and was not worth it for 3a; **if 3c projects rule
+   events into `current.json` it should widen this at the same time**, because a third arming that
+   only a sentence distinguishes is one restatement away from being lost.
+
+**And one thing the plan got right that is worth confirming, because it was a claim rather than a
+measurement:** `killRoute`'s dry run really does answer with `etimeSeconds` on every candidate and
+spends no limiter. Measured on this box: 753 processes scanned, 4 candidates, sub-second.
+
+**The mutation check**, run because this job has twice shipped something called from nothing but its
+own tests. Five deliberate breakages, all caught: the threshold ignored (4 tests), the threshold off
+by one at its boundary (2), the intent appended **after** the action instead of before (2), a
+`cannot-see` rendered as `nothing-to-do` (2), and `disposition: "propose"` no longer gating the
+actor (1). The one worth reporting is the fourth-and-a-half: **deleting the `parseEvent` branch for
+the rule family compiles cleanly** — the only complaint is two now-unused functions, which would not
+exist at all if the branch had simply never been written — and the round-trip test catches it as
+`unreadableLines: 2`. SP-9 is exactly right, and an append-only test would have passed.
+
+**One test was too weak and was strengthened when the mutation exposed it.** Asserting the finished
+log's order cannot tell append-then-act from act-then-append, because both leave the same two lines
+in the same order. The test now reads the file **from inside the actor**, which is the one moment
+that distinguishes them.
+
+#### Verified again independently, and one outcome arrived by accident
+
+*"Done, all tests pass"* is a claim rather than a result, so the stage was re-run from outside the
+session that built it: 7 files / 271 tests green (245 baseline + 26 new, exactly as reported),
+`npm run typecheck` exit 0, and a rules-only daemon started by hand against a scratch
+`OVERSEER_STORE_DIR`.
+
+The ledger reads, in order, and this is the whole design visible in five lines:
+
+```
+reserved   wedged-work@…#210968a360b9 — lease until 20:28:47
+started    wedged-work@…#210968a360b9 — pid 126654
+intends    wedged-work@…#210968a360b9 — kill 4 of 4 candidate process(es) — rule cwd-deleted
+           — needs confirm; oldest is pid 2282033 (…playwright@1.62.1 install webkit…) at 20.2h
+rule       wedged-work@…#210968a360b9 — proposed: kill 4 of 4 …
+finished   wedged-work@…#210968a360b9 — exit 0
+```
+
+`intends` is a **separate event appended before** the settlement, so the fail-closed ordering is not
+a claim about the code, it is a thing you can read off the disk.
+
+**And the third outcome was got by luck rather than design, which is the part worth keeping.** The
+first verification run happened to land while the fleet dashboard was restarting, and the rule
+settled as:
+
+> `refused: could not reach the fleet API at http://127.0.0.1:8787/api/actions/box: fetch failed`
+
+So `refused`, `proposed` and `nothing-to-do` have now all been *seen* rendering differently on a real
+box, rather than only in tests — which is exactly the property the direction doc asks for and the one
+a suite is least able to prove.
+
+It also surfaces a real dependency nobody had written down: **rule 2 goes blind whenever the
+dashboard is down**, because its only eye is that HTTP route. It says so distinctly instead of
+reporting an empty candidate list, which is the right behaviour and the reason `cannot-see` exists as
+its own arm. But it is the same shape as A27 and as the deaf-Overseer asymmetry in `provision.sh`:
+**the thing you reach for when something is broken shares a dependency with the thing that broke.**
+Worth naming in 3c, where the review surface will have the same problem.
+
+#### The code review of 3a, and the finding I had already seen and talked myself out of
+
+Sol reviewed the shipped code (`docs/plans/260908g-stage3a-code-review-sol.md`) and blocked it **as a
+reusable protocol for acting rules**, while agreeing the shipped rule is safe today. That distinction
+is the right one and it is the one this plan's ordering already assumed.
+
+**SC-2 is the finding that matters, and I had it in my hands.** Reading the diff I noticed that
+`disposition` is a runtime `switch` rather than a type-level guarantee — and then argued myself out
+of it: *the conditional is on hashed data, so changing it changes the hash and the job is refused.*
+That is wrong, and Sol says why in one line: **`scheduler.ts`, which interprets the hashed
+disposition, was deliberately left out of `RULE_SOURCES`.** So a change that bypasses the switch
+leaves the rule's authorised hash perfectly current. The fingerprint guards the threshold and not the
+thing that decides whether to act on it.
+
+I had even written the suspicion into the review prompt — *"the protocol that decides whether to act
+is arguably more load-bearing than the rule whose threshold it reads"* — and then shipped the
+opposite. **This is a different failure from the day's others**: not an unchecked claim, but a
+checked observation reasoned away. The others were cured by looking; this one needed somebody else.
+
+Four fixes, all of which make a claim true that is currently false:
+
+- **SC-4** — `definitionHash` and `ruleSpecHash` **destructure**, and destructuring is not exhaustive
+  in TypeScript, so a new field is silently outside the fingerprint. This defeats SP-1 directly, and
+  the test named "every knob" enumerates today's fields by hand. Replaced with exact mapped types, so
+  a new key is a compile error until its encoding is supplied.
+- **SC-2's cheap half** — a `runProposingRule` handed only `observe`, so the absence of an actor is
+  structural rather than conditional, and `scheduler.ts` goes into `RULE_SOURCES`.
+- **SC-5** — the round-trip test uses `JSON.parse(line) as OverseerEvent`, so it proves the parse
+  branch *exists* and not that it parses *correctly*. Asserted through `readEvents` instead.
+- **SC-1's live half** — `runRule` returns a hot promise the daemon never awaits, and the shutdown
+  path assumes every job is a separate process. An orderly shutdown can close the store mid-`observe`
+  and lose the settlement, leaving a `started` occurrence with no ending. Nothing acts, so nothing is
+  dangerous; it manufactures exactly the unaccountable-run noise Stage 2 exists to make meaningful.
+
+**Three findings are deferred to 3d with named conditions rather than dropped**, because each is
+about *acting* and 3d is the acting stage: SC-1 in full (an acting rule that dies between action and
+settlement leaves an unpaired intent and becomes eligible again — **this is why 3d cannot be built by
+flipping a disposition**); SC-2's second half (the meaning of `"safe-to-kill"` lives in unpinned
+fleet code, so the policy can change without changing the fingerprint); and SC-3.
+
+**SC-3 deserves its own sentence, because its safety today is luck.** `lastRunOf` ignores every
+occurrence whose definition hash differs, so a re-pin makes a job **immediately due even with an
+old-hash occurrence in flight** — Sol exercised it and got `last: never`, then due. Today's re-pin is
+harmless only because neither standing job has ever run. That is not design, and it is a live trap
+for every later re-pin.
+
+#### What the four fixes actually did, 2026-09-08 night
+
+Built and green: **7 files / 276 tests**, up from 271 — five net new, and one deleted. Every one of
+them was watched going red first. `npm run typecheck` exit 0.
+
+**SC-4 — the encoders are a mapped type now, and the guarantee is real.** `RULE_SPEC_ENCODERS` and
+`DEFINITION_ENCODERS` are `{ [K in keyof T]-?: (value: T[K]) => string }`, so a new field is a
+compile error until somebody says how it is hashed. The runtime half is
+`RULE_SPEC_HASHED_FIELDS`/`JOB_DEFINITION_HASHED_FIELDS`, derived from the tables and held against
+the type's own keys by a test — so **reverting to a destructure deletes the export and takes the test
+with it**, which is the one thing a runtime test can say about a compile-time property. One honest
+limitation: a destructure that still named every field would be invisible to the runtime test; what
+the mapped type stops is the *next* field, which is the failure SC-4 is actually about.
+
+**SC-2 — the capability is split, and `scheduler.ts` is pinned.** `RuleWork` became two types:
+`ProposingRuleWork` (`selfPid`, `observe`) and `ActingRuleWork` (that plus `act`), run by two
+functions, reached through two separate `TickInput` fields. `runProposingRule` **has no actor in
+scope**; `runActingRule` needs `input.acting`, which `daemon.ts` has no option for and no shipped
+wiring supplies, so an `"act"` spec meets a refusal naming the missing actor — the same shape as a
+session job in a process with no `spawn`. `refusingActor` is **deleted**: a refusing actor is a
+capability the process holds, and Sol is right that that is a conditional wearing the clothes of a
+boundary. The test that asserted it refused politely is replaced by one asserting the shipped wiring
+has no `act` key at all.
+
+**The pins.** `wedged-work` `210968a360b9` → **`6a62bed1e623`**, and *nothing the rule decides
+changed*: `scheduler.ts` joined `RULE_SOURCES`, `rule-work.ts` lost its actor, and `rules.ts`
+relabelled the first line of the canonical spec. The standing jobs did **not** move —
+`bfc37addeea1` and `8aa20daa8b85` are unchanged, because the definition encoding is byte-identical to
+the destructured one it replaced. That was deliberate: a refactor that re-pinned two jobs for no
+behavioural reason is exactly the false tripwire this stage keeps arguing against.
+
+**SC-5 — the round trip goes through `parseEvent` now.** The test helper reads
+`store.readEvents(0)` and asserts `unreadable` is empty, rather than casting a `JSON.parse`. The
+proposal test asserts the whole `finding` — every denominator, not the conclusion — and that the
+settled sentence is the intended one. Proved by mutation: a `parseEvent` that accepts the event and
+returns `processes: []` was green before and is red now.
+
+**SC-1's live half — the daemon holds its rule runs and waits for them.** `schedulerTick` hands each
+in-process rule run to `onRuleRun`; the daemon keeps them in a self-emptying set and awaits them in
+`settleInFlight` (which was `settlePasses`, and the name was part of how this got in — a rule run is
+in-process too). The wait is bounded by `RULE_SETTLE_GRACE_MS`, fifteen seconds against a
+ten-second observer timeout, because `Restart=always` means a hung observer would otherwise cost a
+daemon that will not die. **The bound is an outcome, not a give-up**: every run still unsettled gets
+the same durable `job-record-lost` note a failed completion append gets. Sessions are deliberately
+not tracked — a child with a durable reservation is exactly what the old comment described, and it
+was right about half the cases.
+
+**The mutation check.** Three deliberate breakages, all caught. Reverting the encoders to a
+destructure: caught by *"THE FIELD LIST IS THE TYPE'S OWN"* (the export vanishes) and by *"THE PIN IS
+CURRENT"*. Letting the `"act"` arm fall back to the looking capability: caught by *"AN ACTING SPEC
+MEETS A REFUSAL…"* and, now that `scheduler.ts` is pinned, by *"THE PIN IS CURRENT"* — **which is the
+fingerprint doing the thing it could not do before this change**. Corrupting a parsed `finding`:
+caught by the round-trip test.
+
+**And one test was quietly broken and is worth naming.** *"editing the IMPLEMENTATION moves the
+fingerprint"* tampered with a digest by replacing its last character with `0` — a no-op whenever the
+digest already ended in `0`, which `rules.ts` did after the first edit of this session. A
+one-in-sixteen test that had been green by luck. It flips to `1` when it has to now.
+
+**pid 2282035 was gone by the end of this work**, along with 2282033/4/6 — the whole specimen family.
+Nothing here could have ended it: the build holds no actor, and no kill was run from this session. It
+is worth knowing that the live specimen this rule was sized against no longer exists, so a future
+demonstration needs a new one.
+
+#### Three pushbacks from the implementer, and how each was settled
+
+All three are good, and one improves on Sol's own fix. Settled by me rather than inherited, which is
+the point of asking for them.
+
+**1. The SC-4 test is a proxy, and they said so themselves.** A destructure that still names all four
+fields is behaviourally identical to the mapped type, and no runtime test can see the difference —
+what the new test actually catches is the *deletion of the exported field list*, which a revert
+entails as written. **The real guarantee is compile-time only.** Accepted as stated: the value is
+that a *new* field cannot be silently omitted, which was SC-4's actual complaint, and the honest note
+is better than a test claiming more than it does.
+
+**2. Pinning `scheduler.ts` is over-broad, and this is a better answer than Sol's.** Sol offered two
+fixes and the implementer took the pin, then argued the cost Sol had not priced: `scheduler.ts` also
+carries session dispatch, the sweep, and `describeReport`'s wording, so **every rule's authorisation
+is now hostage to a file that changes for reasons having nothing to do with rules.** It re-pinned
+twice in one session; with three rules, editing a log sentence would disarm all three.
+
+They also refused Sol's alternative — *"move the disposition interpretation into pinned rule-specific
+code"* — because it gives every rule its own copy of the append-before-act ordering, which is exactly
+what SP-2 refused. That is right.
+
+**Decision: 3b splits the rule protocol out of `scheduler.ts` into its own file and pins that.** Same
+guarantee, far fewer false trips, and it is first in 3b rather than a note. The failure mode
+meanwhile is fail-safe — a stale pin *refuses* the job with a message — so it is annoying rather than
+dangerous, which is why it waits for 3b instead of reopening 3a.
+
+**3. `refusingActor` was deleted, taking defence in depth from two guards to one.** Beyond the letter
+of the brief, correctly flagged for me to decide rather than absorb. **Accepted, and it is my call
+now, not theirs:** the structural guard — the acting capability being absent from the process — is
+strictly stronger than a polite refusal, and an unwired refusing actor is a liability rather than a
+belt, because it looks like protection and invites somebody to wire it up. One real guard beats one
+real guard plus a decorative one.
+
+#### The mutation that was a no-op one time in sixteen
+
+Reported by the implementer and worth more than the fix it came from. A test asserting *"editing the
+implementation moves the fingerprint"* tampered with a digest by replacing its **last character with
+`0`** — which does nothing at all whenever the digest already ends in `0`. It had been passing by
+luck, and the luck ran out on an unrelated edit, so it went red for a reason that had nothing to do
+with the change being made.
+
+**A mutation test whose mutation is sometimes a no-op is a test that is sometimes not a test**, and
+nothing about it looks wrong: it is green, it is specific, and it names the right property. Same
+family as everything else today, and the narrowest instance of it — the check was not weak, it was
+*probabilistically absent*. Fixed to flip the character rather than set it.
+
+#### The specimen died on its own, after the rule had caught it
+
+pid 2282035 and its family (2282033/4/6) are **gone**, confirmed independently. Nothing in this build
+could have ended them — it holds no acting capability, and `daemon.jsonl` records no kill — so
+something else on the box did it, twenty hours in.
+
+The demonstration had already happened: the rule proposed against it at 20:26, and that event is in
+the ledger. But two consequences stand. **The four-hour threshold was sized against exactly one
+specimen and that specimen no longer exists**, so it remains the guess Sol called it, now without
+even the one case. And Greg's instruction — leave it standing as a test case — was overtaken by
+events rather than followed, so **a future demonstration needs a new specimen**, which is a thing to
+make deliberately rather than wait for.
 
 #### SP-11, and a number I sent to somebody else
 
@@ -655,13 +983,149 @@ The second is the one at a prompt, and its pause is not `background-work` — it
 between them at all. `background-work` is real and does occur (observed at 20:25 with
 `sinceMs: 326418`); what is unproven is that it *coincides* with being reachable.
 
-**One reading of two rows is not a refutation**, and it is recorded here as an open question rather
+**One reading of two rows is not a refutation**, and it stays recorded as an open question rather
 than an answer: the overnight series says how often the two coincide, and `joins_disagree` makes the
-misses visible instead of leaving them to be inferred from a total. If they rarely coincide the
-cheap fix is cheap and nearly useless rather than cheap and sufficient. **The likeliest error is
-mine** — the column treats Claude's own `idle` as at-a-prompt-and-messageable, and if `idle` there
-can also mean something a broadcast should not interrupt, the column measures something looser than
-reachability.
+misses visible instead of leaving them to be inferred from a total.
+
+**The cause was found within minutes, and it is one line.** I had flagged the likeliest error as
+mine — that the column might be treating Claude's own `idle` as reachable when `idle` could mean
+something a broadcast should not interrupt. It does not. `status` is computed as
+`baseStatus === "idle" && hasUnfinishedLocalBash ? "shell" : baseStatus`, read out of the 2.1.263
+binary and verified against it, so **`shell` is a subset of `idle` rather than something beside
+it**, and both mean the turn has ended. The column measures reachability, and if anything
+conservatively.
+
+The error was in `pause.ts`'s `readShellState`:
+
+```ts
+if (entry.status !== "shell") return { kind: "not-background-work" };
+```
+
+The store's `idle` — the *direct* evidence of being at a prompt — is read and then collapsed into a
+negative, so `background-work` names only the `shell` subset. That is why my two working rows came
+back with the **identical `cannot-tell` reason string**: the collapse showing through. The proposed
+cheap fix named a field that could not pick out the rows it was meant to pick out.
+
+Its author calls it *"the lossy-join half of `260908b` occurring inside the fix for it"* — the
+producer said the careful thing and the consumer threw it away, in a module written that morning to
+close exactly that class. The cheap fix survives as a different change: stop reducing the store's
+status to a boolean about background work.
+
+**What did the catching is worth more than what was caught.** The disagreement was found because a
+second join was built *so that it could contradict the first*, after an ancestry join had returned
+zero unknowns and the wrong answer. **Two joins that disagree are a measurement; one join that
+agrees with itself is a fixture** — the same animal as a test that shares an assumption with the code
+it checks, and a sharper statement of it, because the ancestry join was not weak. It answered a
+different question competently.
+
+#### The first real series, and it does not support the claim I made from one reading
+
+147 samples, 20:56–22:09 on 2026-09-08, 30 seconds apart.
+
+```
+samples where NO agent was reachable:  0 of 147
+reachable fraction of agents:          min 0.12   max 0.86   mean 0.59
+agents 4–8, working 1–7, load ratio1 0.04–0.55, oracle_unknown 0 throughout
+```
+
+**The sharpest thing I said did not reproduce once.** *"At the limit it does not degrade, it
+refuses"* — the `total === 0` branch — is structurally real and was **never reached**, including
+during a stretch at load ratio 0.55 with seven of eight agents working. And the mean reachable
+fraction is **0.59**, so most agents usually *are* reachable, which makes the original *"3 of 15"*
+a bad moment reported as a condition — twice over, since the denominator was wrong as well.
+
+The bad case is real but it is a **tail**: the worst sample was 1 of 8 reachable, at 22:07.
+
+**And the cheap fix lands in the middle, which neither party predicted.** Of the 33 samples with a
+positive oracle reading, the server's `background-work` agreed in **17** and did not in **16** — so
+it catches roughly half. Cheap and *partly* useful. Whether half of a tail case justifies crossing a
+refusal somebody wrote deliberately is the dashboard owner's call, with their cost side; my instinct
+is that it does not obviously.
+
+**The confound I reported was not one, and how I got it wrong is the day's own error again.** I said
+`joins_disagree` was 1 early and 0 later, and wondered whether a fix had landed in the window. The
+owner checked: no fix landed, `readShellState` is unchanged, and that item was never built. Then the
+data: **the disagreements never stopped.** The last is at 22:11:09 — the most recent sample — and
+there are fourteen separate bursts across the whole 73 minutes. I had looked at the last three lines
+of the file and reported a tail as a trend, which is the truncated-grep-becomes-an-exhaustive-list
+mistake in a new costume.
+
+The useful half came out of the same check. The identity
+`joins_disagree == working_but_at_prompt − server_bg_work` holds in **150 of 151** samples, so a
+disagreement is exactly *"an at-prompt row in plain `idle`"* — which is precisely what the
+`readShellState` diagnosis predicts. Their one-line cause is confirmed numerically, from data that
+did not assume it.
+
+#### The tail has a cause, and it argues the other way
+
+Asked whether the 1-of-8 sample coincided with anything nameable. It does, and reporting it matters
+because it cuts against the case I had been making against myself:
+
+```
+21:26  agents=4  reachable=3  working=1  ratio1=0.11     0.75 reachable
+21:46  agents=6  reachable=2  working=4  ratio1=0.12
+22:06  agents=8  reachable=2  working=6  ratio1=0.55
+22:11  agents=8  reachable=1  working=7  ratio1=0.56     0.12 reachable
+```
+
+**All 18 samples at or below 25% reachable are at 7 or 8 agents.** Reachability falls monotonically
+as the fleet fills, and the low period is the box getting busy — partly with agents this very job
+dispatched. So the bad case is **load-dependent, not random**: it appears exactly when a resource
+broadcast would matter.
+
+That means *"0 of 147 with nothing reachable"* and *"mean 0.59"* are both true and both dominated by
+an idle box. **The conditional picture at eight agents is much worse than the unconditional one**,
+and reporting only the unconditional number was one-sided in the other direction.
+
+**What is deliberately not concluded.** The obvious next sentence — *at the 20–35 agents this box is
+designed for, the bad case is the normal case* — is an unearned extrapolation from a range of four to
+eight, and that is the mistake this plan has spent all day catching rather than committing. It is a
+hypothesis with an obvious test, which is whether the overnight run reaches those counts at all.
+
+#### Nobody had measured the number the whole premise rests on
+
+The dashboard's owner offered a fact against their own stage: that four-to-eight agents was *"all of
+today"*, so eight is the high-water mark rather than a low sample, and the box may simply never reach
+the busy regime. **It is wrong, and checking it re-opened the question instead of closing it.**
+
+Reconstructed from `~/.overseer/events.jsonl` — 599 events, 0 unreadable, spanning 08:32 to 21:11 —
+by maintaining a live set across `session-seen`, `tmux-session-gone` and `session-replaced`:
+
+```
+PEAK live tmux sessions: 33, at 12:35:06
+  of which shells: 15, status-unknown: 0   =>  18 AGENTS at peak
+and it is not a spike: the reconstruction sat at 20+ sessions for much of the day
+```
+
+**The box ran eighteen agents this lunchtime.** The sampler's four-to-eight is not all of today, it
+is the quietest 73 minutes of it — measurement began at 20:56, hours after the peak. So the series is
+unrepresentative in the direction that weakens the finding, which is the third time today an
+instrument of mine has been biased against its own case.
+
+What it settles and what it does not: it kills *"the box may never get there"* — eighteen is within a
+factor of two of the 20–35 this design assumes, so **the premise is nearly met already**. It does
+*not* show reachability is bad at eighteen, because there is no sample there; the sampler did not
+exist at 12:35. The hypothesis stays unearned. What changed is that the regime is **reachable rather
+than imaginary**, so the overnight run can actually test it.
+
+Caveats, because this is a reconstruction and not a census: `session-seen` fires on change rather than
+every tick, so the live set inherits any gap in the log; the log covers today only; and the
+agent/shell split uses `status.kind !== "shell"`, which agreed with an independent hand count at
+20:25 (8 agents, 7 shells, 15 rows) — one cross-check, not a validation.
+
+**The thing worth taking away is not the number, it is that nobody had it.** Eighteen concurrent
+agents is the quantity this entire plan is written around, and this is the first time it has been
+measured. Several pages above were argued about a four-to-eight box while planning for a 20–35 one.
+
+Caveats that belong next to the number rather than under it: 73 minutes is not a night; the box went
+from very quiet to busy inside it, so this is **one transition rather than a representative day**;
+and the sampler reads the snapshot the dashboard publishes, so an interval when the dashboard was
+restarting is *missing* rather than recorded as bad.
+
+**Why this is in the plan rather than only in a message.** The instrument was built to decide
+somebody else's stage, and it has now argued against the finding that motivated it. That is the
+outcome the series was for, and a plan that recorded only the readings supporting the work would be
+the same defect as a check that shares an assumption with its code.
 
 #### The Overseer sees less of the fleet than the fleet sends, and the rules should not fix that by widening the differ
 
@@ -744,6 +1208,178 @@ more than one a day, a proposal inbox becomes the two-hundred-entry log this des
 survive, and rule 2 must act rather than propose. Today n=1. **The events rule 2 writes are how that
 rate gets measured**, so the observation is not merely a record, it is the instrument that decides
 the next version.
+
+#### What 3b part 1 landed: the protocol has its own file, and the pin follows it
+
+`tools/overseer/rule-protocol.ts` now holds the whole of what decides *whether and how a rule
+acts* — `startRule`'s disposition switch, `runProposingRule` and `runActingRule`, the shared
+`intend` (append-fsync-then-act), `settleRule`, and the fail-closed `record`. `scheduler.ts`'s rule
+arm is now one line: a call into it. `RULE_SOURCES` swapped `tools/overseer/scheduler.ts` for
+`tools/overseer/rule-protocol.ts`; `JobSpawn` and `SpawnJob` moved to `jobs.ts`, which already owns
+`JobOutcome`, so the pinned file need not import the unpinned one.
+
+**Re-pinned: `6a62bed1e623` → `95485a7dbe6f`.** Nothing the rule decides changed and no knob in the
+spec moved — one document in the list was swapped for another, and two of the three files had their
+prose corrected to name the new one.
+
+**The pair, demonstrated rather than asserted.** A test that only proves *editing the protocol
+disarms the rules* would also pass if `RULE_SOURCES` named the whole repository, so
+`tests/overseer-rules.test.ts` § "what a rule's pin covers, and what it deliberately does not"
+asserts both directions over a real temporary checkout that is really edited, and checks each is
+non-vacuous first (`describeReport` and `sweep` are confirmed to be in `scheduler.ts`; the ordering
+and the disposition switch are confirmed to be in `rule-protocol.ts`). Both were watched red before
+the move — the first on its assertion, the second because the file did not yet exist.
+
+Then the same three mutations against the live tree, with `npx tsx scripts/overseer-pins.ts` as the
+oracle:
+
+| mutation | pin |
+| --- | --- |
+| `describeReport`'s `dispatched` sentence reworded | **unchanged** — the false trip is gone |
+| `sweep`'s signature edited | **unchanged** |
+| `startRule`'s `switch (spec.disposition)` weakened to `as string` | **stale**, `95485a7dbe6f` → `9342726da4d6` |
+
+**And a near-miss worth more than the result.** The first attempt at mutation one used `sed`, and
+the `grep -c` that was meant to prove the edit had landed answered `0` because its pattern was wrong
+— so for one command I had "the mutation did nothing AND the pin is current", which is exactly the
+shape of the no-op mutation 3a shipped. What saved it was checking the file with `cat -A` rather
+than believing the grep. **The mutation harness now asserts on the file's own bytes before and
+after, and prints its sha256**; a mutation check whose landing is verified by a second fallible
+pattern is two chances to be told nothing.
+
+**What the split does NOT fix, said out loud.** The three pinned files are still shared by every
+rule, so adding rule 1 in part 2 re-pinned rule 2: `rules.ts` holds both rules' arithmetic and
+`rule-work.ts` both observers. It is a far smaller version of the problem — rules change rarely,
+log sentences change constantly — and the note is at `RULE_SOURCES`. Splitting the per-rule halves
+into per-rule files is the move if a third rule makes it bite.
+
+#### What 3b part 2 landed: rule 1, observing only, and the specimen that blinded the fleet
+
+`RuleId` is a union; `RuleSpec`, `RuleObservation` and `RuleFinding` are unions with one arm per
+rule; `decideRule` dispatches and `store.ts` parses each finding by its own `kind`. The shipped job
+is `launch-mode`, every fifteen minutes, `disposition: "propose"`, pinned `a648c4bfbe4c` —
+and `wedged-work` re-pinned `95485a7dbe6f` → `a3dcfd98b110`, because the three pinned files are
+shared.
+
+**Two knobs, both hashed.** `minSessions: 1` — the firing condition is data inside the fingerprint
+rather than a literal in an `if`, which is the whole of SP-1. `maxCollectionAgeSeconds: 300` — rule
+1 reads a cached payload rather than commanding a fresh look, so it can be handed a reading from
+before the thing it is checking, and past that age the answer is `cannot-tell` rather than a clean
+bill. Measured the same evening: `/api/state` served collections between 4s and 113s old.
+
+**Where I disagree with the plan, and it is the section above this one.** § "The Overseer sees less
+of the fleet than the fleet sends" says the resolution is that the daemon already holds the raw
+payload, so rule 1 should read that and open no second HTTP client. I took the GET instead, and the
+constraint that section actually cares about is untouched: nothing here widens `ObservedRow` or
+opens `observation.ts`, and the modes are read by this stage's own narrow parser with its own
+unknown arms. Three reasons. Reading the daemon's held payload is *more* plumbing, not less —
+`daemon.ts`, `scripts/overseer.ts` and `rule-work.ts` all have to learn about a mutable holder.
+It makes rule 1 blind exactly when the Overseer's own transport is down, which is when the box is
+least well. And, decisively, **it gives the rules two different ways to look at the fleet where one
+already works**: rule 2 asks the dashboard over HTTP from `rule-work.ts`, and a second mechanism for
+rule 1 is the "second way to do the same thing" this repo keeps paying for. `/api/state` serves a
+cached string and does not make the box collect — `source.ts`'s own fallback poller hits it every 15
+seconds, against rule 1's once every 15 minutes.
+
+**A specimen was made, the rule fired against it, and it is gone.** A tmux session launched exactly
+as `gjd-remote new-claude` launches one, minus `--permission-mode auto` — which is precisely the
+regression this rule alarms on. Its pane read `⏸ manual mode on`; the collector at 21:47:19Z put
+`{"kind":"not-auto","mode":"manual mode"}` on row `$2543`; and the SHIPPED job, through the real
+observer, the real protocol and a real store, wrote a `rule-intended` that round-tripped out of a
+second store with **5 events replayed, 0 unreadable**:
+
+```
+relaunch 1 of 9 agent session(s) that did not come up in auto mode and will stall at the next
+unapprovable call — needs a person: a running session cannot be switched into auto mode, so the only
+remedy is kill-and-relaunch. specimen-3b-launch-mode ($2543, manual mode). 0 more could not be read.
+```
+
+with `auto: 8, notAuto: 1, cannotTell: 0, notApplicable: 8, rows: 17, collectionAgeSeconds: 16`. The
+session was killed immediately afterwards and `gjd-remote ls` confirmed healthy.
+
+**And that first specimen blinded every reader of the fleet for ten minutes.** I created the tmux
+session by hand with `GJD_REPO=spideryarn2`, which is neither an `owner/name` slug nor the sanctioned
+literal `unknown`. `parseMeta` in `scripts/gjd-remote-tmux.ts` fails the **entire listing** on one
+malformed row rather than dropping that row — deliberately, because a partial session list is read as
+permission by every caller:
+
+> has GJD_REPO='spideryarn2', which is neither an owner/name slug nor 'unknown'
+
+From **21:37:12Z to 21:47:19Z** by the dashboard's own clocks, `gjd-remote ls` printed nothing, the
+collector failed with that sentence, and `overseer status` said *"Overseer unknown — the dashboard's
+last collection failed"* — another agent's freshly landed guard working exactly as designed.
+**Fourteen healthy sessions were invisible to every reader of the fleet.** The collector had already
+backed off, so its last failed attempt was 21:42:12, and it recovered on its own next cycle without
+anything being restarted. Another session noticed and told the Overseer, which repaired it in place
+with `tmux set-environment` rather than killing the specimen, so the reading above survived.
+
+Four things follow, and the first is the one worth keeping:
+
+- **The test specimen for the rule that watches the fleet blinded every reader of the fleet,
+  including the dashboard and the Overseer's own status.** Same shape as the dependency already
+  recorded — rule 2 goes blind when the dashboard is down — but sharper, because here the thing that
+  broke observability was the test of the thing meant to restore it. **The blast radius of one
+  malformed session is every consumer of the listing.**
+- **`parseMeta`'s fail-whole behaviour is not being changed.** It is shared machinery and the choice
+  is reasoned. What is written down here is its cost, where the next person launching a specimen will
+  meet it. The general lesson — the single collector is a deliberate purchase and this is its blast
+  radius — is the Overseer's own note in
+  [overseer-direction.md](../project/overseer-direction.md) § Two tenses.
+- **The guard is code now, not a habit:
+  [`scripts/overseer-launch-mode-specimen.ts`](../../scripts/overseer-launch-mode-specimen.ts).**
+  `start` builds the session with the whole metadata quartet, then runs `gjd-remote ls` and **kills
+  the specimen and exits non-zero** if the listing will not run — printing what the reader said,
+  because the reader is what has the reason. It refuses a listing that succeeds *without* the
+  specimen in it too: that is not evidence the specimen is fine, it is evidence the check could not
+  have seen a problem with it. The runner is injected so both refusals are exercised in
+  `tests/overseer-rules.test.ts`; the only way to exercise them for real is to blind the fleet again.
+  The reasoning is not about this incident — a rule whose specimens are anomalous sessions will keep
+  producing anomalous sessions, and the fleet's readers are strict by design, so this recurs every
+  time anybody tests rule 1. Stage 3b is the first of those times, not the only one.
+- **It labels the specimen `GJD_REPO=unknown`, not `spideryarn/reading2`.** Both are accepted.
+  `unknown` is the honest one: the specimen is not doing that repo's work, it exists to be an
+  anomaly, and borrowing the repo would put it in that repo's listings and counts. `REPO_UNKNOWN` is
+  imported rather than typed, so the sanctioned value cannot drift from the one the reader accepts.
+
+The script was then run end to end on its own account: `start` → pane reads `⏸ manual mode on`,
+`gjd-remote ls` lists it as `(unknown) · idle` → `stop`. Two things it turned up that a reading of it
+would not have. `claude` with **no** `--permission-mode` flag at all came up in *auto* mode in this
+checkout, so "just leave the flag off" makes a healthy session and a demonstration that proves
+nothing — the script passes `--permission-mode default` explicitly. And `tmux has-session` writes
+*"can't find session"* to stderr on the ordinary absent case, which read as an error from a script
+whose whole job is to be trusted about whether it broke something.
+
+**Mutation check: nine mutations, every one caught, and each flips a value rather than setting one.**
+Beside the pin test — which fires on any source edit and is therefore not evidence about behaviour —
+each was caught by at least one behavioural test.
+
+| mutation | caught by |
+| --- | --- |
+| `cannot-tell` counted as `auto` | 3 tests, incl. the round trip |
+| `cannot-tell` counted as `not-auto` | 4 tests, incl. the unrecognised-arm one |
+| an unrecognised wire arm read as `not-auto` | "AN ARM THIS BUILD DOES NOT KNOW IS `cannot-tell`" |
+| `minSessions` ignored | "THE THRESHOLD IS REAL" |
+| `maxCollectionAgeSeconds` ignored | 2 tests, incl. the durable `refused` |
+| never-collected read as a clean bill | "A DASHBOARD THAT HAS NEVER COLLECTED…" |
+| shells counted as agent sessions | 3 tests |
+| the launch-mode finding given no parser | the round trip |
+| `cannotTell` parsed back as `0` | the round trip |
+
+**One hole found by adding the second rule, and it had been open since 3a.** `store.ts`'s
+`const RULE_IDS = new Set(["wedged-work"] satisfies RuleId[])` checks that its members ARE rule ids
+and says nothing about whether they are ALL of them — the same not-exhaustive hole as the destructure
+SC-4 was about, in a different costume, and the only moment it could have been found is the moment a
+second id existed. It is a `Record<RuleId, true>` now. The same reasoning made `RULE_SPEC_ENCODERS`
+one table per arm: `keyof RuleSpec` over a union is only the fields the arms SHARE, so the single
+mapped table 3a shipped would have silently stopped covering every threshold the moment there were
+two rules.
+
+**What is still not true.** Rule 1 has no reversible action and never will have one: you cannot type
+`/permission-mode auto` into a running session and an unattended process may not answer its dialog, so
+`disposition: "propose"` here is not a placeholder for 3d. And the events it writes reach nobody yet —
+3c is the review surface, and until it lands a proposal is a line in a JSONL file. That is the same
+sentence this plan already writes about rule 2, and it is the reason 3c is a gate rather than a
+nice-to-have.
 
 ### Stage 4 — the deferral queue
 

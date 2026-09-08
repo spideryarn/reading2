@@ -393,6 +393,28 @@ depends on the dashboard being up. Hence two clocks in the state file rather tha
 apart exactly when something is wrong, and a single number would hide the case where the Overseer is
 alive but deaf. **A dead dashboard is a fact the Overseer records, not a silence it sits in.**
 
+**What one eye costs, measured 2026-09-08.** The single collector is a deliberate purchase — a
+collection costs the box around twelve seconds of transcript grepping, and this is the box that hit
+load 391 in a morning — so one eye is the right trade and this is the price of it, stated once so
+nobody has to rediscover it. A hand-made tmux session with `GJD_REPO=spideryarn2`, which is neither
+an `owner/name` slug nor the sanctioned `unknown`, made `parseMeta` refuse the **whole** listing; for
+about twenty minutes `gjd-remote ls`, the dashboard's collector and `overseer status` could
+simultaneously say nothing about a box carrying fourteen healthy sessions.
+
+**The refusal is right and should not be softened.** A short list read as a complete one is worse
+than no list, it named the session and the variable, and the repair was one `tmux set-environment`.
+What the incident actually shows is not that `parseMeta` is too strict but that **we bought a single
+point of failure on purpose, and its blast radius is every reader at once** — which is the same fact
+as *"when the dashboard is down the Overseer has nothing at all"*, arriving by a different door. The
+twenty minutes was how long it took a person to look, not how long the diagnosis took.
+
+**And the way it arrived is worth more than the incident.** The malformed session was a *specimen*,
+made deliberately to test the rule that watches for sessions in the wrong launch mode — so the test
+of the thing meant to watch the fleet blinded every watcher of the fleet. That is not bad luck: a
+rule whose specimens are anomalous sessions will keep producing anomalous sessions, and the fleet's
+readers are strict by design. The guard belongs in whatever *makes* a specimen — run `gjd-remote ls`
+and refuse to proceed on a non-zero exit — rather than in the memory of whoever is making one.
+
 **Divergence, 2026-09-08: the vitals history is being built in the DASHBOARD, not here.** The bullet
 above assigns it to the Overseer and `daemon.ts` says outright *"No health history and no local
 collection"*; both are now describing an intention rather than the code. Agreed between the two

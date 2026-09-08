@@ -73,7 +73,11 @@
    these types reaches `node:child_process` transitively, and this project has no
    node types. See wire.ts's header. */
 import type { QueuedItemView as QueuedItemViewWire, QueueView as QueueViewWire } from "../../wire.js";
-import { steerTargetBody, type SteerTargetBody } from "./steer-client";
+/* `DeliveryReading` and `parseDelivery` come from steer-client.ts for the same
+   reason `steerTargetBody` does: there is one vocabulary for what became of a
+   send, and a second copy of it here would be the twin this whole plan is
+   about. No cycle — steer-client.ts imports `./types` and nothing else. */
+import { parseDelivery, steerTargetBody, type DeliveryReading, type SteerTargetBody } from "./steer-client";
 import type { FleetRow } from "./types";
 
 export const ACTIONS_URL = "api/actions";
@@ -861,7 +865,32 @@ export type ActionOutcome =
    */
   | { ok: true; kind: "queue-cleared"; removed: QueueItemView[]; keptInFlight: QueueItemView | null; unreadable: number }
   | { ok: true; kind: "accepted" }
-  | { ok: false; code: string; why: string; status: number | null; from: "server" | "client" };
+  /**
+   * **A FAILURE IS NOT THE SAME THING AS AN ABSENCE OF EFFECT**, and this arm
+   * had no field in which to say so.
+   *
+   * `from: "client"` means the reply never arrived — the fetch threw, or the
+   * body would not parse. The request itself may well have run: these actions
+   * delete worktrees, kill processes and type sentences into other people's
+   * conversations, and none of that can be taken back. The page printed
+   * "Nothing happened." over every one of them, which is the sentence that
+   * sends a person to press it again.
+   *
+   * `delivery` is REQUIRED, and its four arms are the ones steer-client.ts
+   * already established. Optional would let a producer omit it silently and
+   * leave the renderer picking a default, which is the same defect wearing a
+   * question mark. `not-told` is the arm for a body that carried no delivery —
+   * and, because `parseDelivery` folds them together, for one that carried a
+   * word this build cannot read.
+   *
+   * **What this field is NOT.** `Delivery` is about keystrokes: it is minted by
+   * `fire()` in steer.ts from a sequence of `tmux send-keys` calls. It has no
+   * opinion about whether a queue changed, a worktree went, or a process died.
+   * A whole-action outcome is a different fact and there is no field for it
+   * yet — do not borrow this one for it, and see `ACTION_DELIVERY_COPY` in
+   * ActionButtons.tsx, which is where the temptation actually lands.
+   */
+  | { ok: false; code: string; why: string; status: number | null; from: "server" | "client"; delivery: DeliveryReading };
 
 export type QueueOp = "cancelled" | "revived" | "abandoned";
 
@@ -901,7 +930,8 @@ export type BoxOutcome =
       result: unknown;
       why: string | null;
     }
-  | { ok: false; code: string; why: string; status: number | null; from: "server" | "client" };
+  /** Same arm, same reasoning, and here the request kills processes. See `ActionOutcome`. */
+  | { ok: false; code: string; why: string; status: number | null; from: "server" | "client"; delivery: DeliveryReading };
 
 export type FeedOutcome = { ok: true; feed: ActionsFeed } | { ok: false; why: string };
 
@@ -940,7 +970,17 @@ function parseSent(v: unknown): string[][] {
   return out;
 }
 
-type Posted = { response: Response; parsed: unknown } | { failure: { code: string; why: string; status: number | null } };
+/**
+ * `delivery` on the failure half because **this is where the fact is known**.
+ *
+ * Both failures below are the same fact — no answer came back — and the honest
+ * reading of that is `unknown`, never `none`. `none` would be this browser
+ * claiming, on no evidence at all, that a request it never heard the end of had
+ * no effect.
+ */
+type Posted =
+  | { response: Response; parsed: unknown }
+  | { failure: { code: string; why: string; status: number | null; delivery: DeliveryReading } };
 
 async function postJson(url: string, body: unknown, fetchImpl: typeof fetch): Promise<Posted> {
   let response: Response;
@@ -954,7 +994,16 @@ async function postJson(url: string, body: unknown, fetchImpl: typeof fetch): Pr
       body: JSON.stringify(body),
     });
   } catch (cause) {
-    return { failure: { code: "unreachable", why: `this browser could not reach the dashboard: ${describe(cause)}`, status: null } };
+    // The request may have been received and acted on; what failed is our
+    // hearing the answer. `unknown`, and it is not a hedge.
+    return {
+      failure: {
+        code: "unreachable",
+        why: `this browser could not reach the dashboard: ${describe(cause)}`,
+        status: null,
+        delivery: { kind: "unknown" },
+      },
+    };
   }
   let parsed: unknown;
   try {
@@ -965,6 +1014,9 @@ async function postJson(url: string, body: unknown, fetchImpl: typeof fetch): Pr
         code: "not-json",
         why: `the server answered ${response.status} and the body was not JSON: ${describe(cause)}`,
         status: response.status,
+        // A status arrived and the words did not. Whatever it did, it did not
+        // tell us — and an unreadable body is not a body that said `none`.
+        delivery: { kind: "unknown" },
       },
     };
   }
@@ -972,7 +1024,10 @@ async function postJson(url: string, body: unknown, fetchImpl: typeof fetch): Pr
 }
 
 /** The server's own words when it gave any, and which of us wrote them. */
-function refusal(response: Response, parsed: unknown): { ok: false; code: string; why: string; status: number; from: "server" | "client" } {
+function refusal(
+  response: Response,
+  parsed: unknown,
+): { ok: false; code: string; why: string; status: number; from: "server" | "client"; delivery: DeliveryReading } {
   const why = isRecord(parsed) && typeof parsed["why"] === "string" ? parsed["why"] : null;
   const code = isRecord(parsed) && typeof parsed["code"] === "string" ? parsed["code"] : null;
   return {
@@ -981,6 +1036,12 @@ function refusal(response: Response, parsed: unknown): { ok: false; code: string
     why: why ?? `the server answered ${response.status} without saying why`,
     status: response.status,
     from: why === null ? "client" : "server",
+    /* `parseDelivery`, so a word this build has never heard of lands on
+       `not-told` rather than on the first branch of a chain of ifs. Most
+       refusals on these routes carry no `delivery` at all and are meant not to:
+       nothing had been sent when they were written, and the route inventing a
+       `none` would be worse than its silence. */
+    delivery: parseDelivery(isRecord(parsed) ? parsed["delivery"] : undefined),
   };
 }
 
