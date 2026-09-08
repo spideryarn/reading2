@@ -22,6 +22,7 @@ import {
   tmuxServerPid,
   toRows,
   worktreeOf,
+  collectWithDeadline,
   type FleetSnapshot,
 } from "../tools/fleet/collect.js";
 import { parseBinds } from "../tools/fleet/config.js";
@@ -224,6 +225,61 @@ describe("parseBinds", () => {
   });
 });
 
+describe("collectWithDeadline — a collection that never comes back", () => {
+  const snap: FleetSnapshot = {
+    rows: [],
+    collectedAt: "2026-09-08T03:00:00.000Z",
+    tookMs: 12,
+    tmuxServerPid: 132280,
+  };
+
+  /**
+   * THE ONE BEHAVIOUR NO REAL TMUX CAN ARRANGE, and the reason `run` is a
+   * parameter. A promise that never settles is what a SIGTERM'd `bash` stuck in
+   * uninterruptible IO looks like from here, and it is what stopped the server's
+   * refresh loop dead on 2026-09-08 — silently, because nothing threw.
+   */
+  it("gives up on a promise that never settles, instead of waiting for it", async () => {
+    let settled = false;
+    const never = () => new Promise<FleetSnapshot>(() => {});
+    const caught = await collectWithDeadline(never, 10).then(
+      () => {
+        settled = true;
+        return null;
+      },
+      (e: unknown) => e as Error,
+    );
+    expect(settled).toBe(false);
+    expect(caught?.message).toContain("has been abandoned");
+    // The sentence names the likely cause and warns that any rows on screen are
+    // old, because it is what a person reads on a phone at 3am.
+    expect(caught?.message).toContain("wedged");
+    expect(caught?.message).toContain("previous one");
+  });
+
+  it("returns the snapshot untouched when the collection is in time", async () => {
+    // The positive half. Without it this passes on a build where the deadline
+    // is zero and every collection is abandoned.
+    await expect(collectWithDeadline(() => Promise.resolve(snap), 5_000)).resolves.toEqual(snap);
+  });
+
+  it("lets the collection's own error through rather than reporting a timeout", async () => {
+    // A failure and a hang are different events and the sentence must not blur
+    // them: "tmux is not running" is actionable, "abandoned after 120s" is not.
+    await expect(collectWithDeadline(() => Promise.reject(new Error("no server running")), 5_000)).rejects.toThrow(
+      "no server running",
+    );
+  });
+
+  it("waits the whole deadline before giving up", async () => {
+    // The assertion that stops the deadline being decorative: a race that
+    // rejects immediately would pass every test above.
+    const began = Date.now();
+    await collectWithDeadline(() => new Promise<FleetSnapshot>(() => {}), 60).catch(() => {});
+    expect(Date.now() - began).toBeGreaterThanOrEqual(50);
+  });
+});
+
 describe("fleetState — the one wire shape", () => {
   const snap: FleetSnapshot = {
     rows: [],
@@ -231,6 +287,38 @@ describe("fleetState — the one wire shape", () => {
     tookMs: 12_000,
     tmuxServerPid: 132280,
   };
+
+  /**
+   * A COLLECTOR THAT HAS STOPPED TRYING, TOLD APART FROM A BOX WITH NOTHING TO
+   * SAY — the distinction the payload could not make until 2026-09-08.
+   *
+   * Found in the field, not here: the `orchestrator-setup` session saw
+   * `collectedAt` roughly thirty minutes stale with `error: null`. `refreshLoop`
+   * chains from the end of each run, so a `collect()` that never SETTLES stops
+   * the loop for good and throws nothing on the way out — no error to report,
+   * and the last good timestamp left standing. It reads as a calm box.
+   *
+   * `attemptedAt` is the fact that keeps moving. Fresh with a stale
+   * `collectedAt` means *the source is failing*; both stale means *the collector
+   * is down*. Those are different events and the Overseer's watchdog acts
+   * differently on them.
+   */
+  it("distinguishes a stalled collector from a quiet box", () => {
+    const stale = "2026-09-08T03:00:00.000Z";
+    const now = "2026-09-08T03:31:00.000Z";
+
+    // The shape that was indistinguishable from healthy: old data, no error.
+    const stalled = fleetState({ ...snap, collectedAt: stale }, null, null, 60_000, true);
+    expect(stalled.attemptedAt).toBeNull();
+
+    // The same data, with the loop still going round. Same rows, same clock,
+    // same null error — and now a reader can tell which of the two it is.
+    const trying = fleetState({ ...snap, collectedAt: stale }, null, null, 60_000, true, now);
+    expect(trying.collectedAt).toBe(stale);
+    expect(trying.error).toBeNull();
+    expect(trying.attemptedAt).toBe(now);
+    expect(trying.attemptedAt).not.toBe(trying.collectedAt);
+  });
 
   it("says NEVER COLLECTED with a null clock rather than an empty box", () => {
     // The window that matters: a just-restarted dashboard, before the first

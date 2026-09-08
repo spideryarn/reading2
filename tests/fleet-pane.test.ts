@@ -706,28 +706,26 @@ describe("what answering would DO: a permission, or a turn in a conversation", (
   });
 
   /**
-   * A REAL AGENT QUESTION THE PARSER CANNOT SEE, AND IT IS NOT `gate`'S DOING.
+   * A REAL AGENT QUESTION IN TWO COLUMNS, WHICH THE PARSER WAS BLIND TO.
+   *
    * Captured live from another agent's session on 2026-09-08, read-only. In a
    * wide pane, `AskUserQuestion` lays its options out in two columns with a
    * preview box on the right, and it indents the wrapped continuation of an
    * option's label to `digitCol + 2` — one column SHALLOWER than the label
-   * itself. `gapsAreContinuations` requires at least `labelCol`, so the run is
-   * cut and the whole dialog is reported as `none`.
+   * itself. `gapsAreContinuations` required at least `labelCol`, so the run was
+   * cut and the whole dialog reported `none`: **a blocked session showing as
+   * not blocked**, which is the dashboard being blind to the thing it is for.
+   * The corpus could not have caught it, because every dialog captured until
+   * that day was drawn in one column.
    *
-   * That is the safe direction — a blocked session shows as not blocked, which
-   * costs a glance at the terminal — but it is the dashboard being blind to
-   * exactly the thing it is for, and the corpus could not have caught it
-   * because every captured dialog until now was drawn in one column. The
-   * fixture is kept, and named `refused-`, so the day somebody loosens that
-   * rule this test goes red and tells them what they have fixed rather than
-   * letting it pass in silence.
-   *
-   * Deliberately NOT fixed here: this file's whole bias is against reporting a
-   * question that is not there, and loosening the continuation rule is a change
-   * to that bias, not to this discrimination.
+   * Two halves, and fixing either alone would have been worse than fixing
+   * neither: the run, and the LABELS, which in this layout carry the right-hand
+   * preview box glued on. Option 2's label came out as
+   * `Write a PendingLabelsFile    │ - "structureHash": "847fa44562a719b9",`,
+   * and that is what a person would have read on their phone.
    */
-  it("still cannot read a two-column agent question, and this is the reason why", () => {
-    const text = fixture("refused-ask-user-question-two-column.txt");
+  it("reads a two-column agent question, options and all", () => {
+    const text = fixture("dialog-ask-user-question-two-column.txt");
     // Positive: it is a real, well-formed dialog — header, cursor, three
     // numbered options at one digit column, and the select-menu footer.
     expect(text).toMatch(/^ ☐ Repair$/m);
@@ -735,7 +733,8 @@ describe("what answering would DO: a permission, or a turn in a conversation", (
     expect(text).toMatch(/^ {2}3\. Leave it red, write it up/m);
     expect(text).toMatch(/^Enter to select · ↑\/↓ to navigate/m);
 
-    // The one line that loses it, and the off-by-one that does it.
+    // The geometry that used to lose it, asserted so a future reader can see
+    // the off-by-one rather than take it on trust.
     const lines = cleanLines(text);
     const option1 = lines.findIndex((l) => l.text.startsWith("❯ 1. Re-stamp"));
     expect(option1).toBeGreaterThan(0);
@@ -744,7 +743,71 @@ describe("what answering would DO: a permission, or a turn in a conversation", (
     expect(wrapped.trimStart()).toMatch(/^\(Recommended\)/);
     expect(wrapped.length - wrapped.trimStart().length).toBe((labelCol ?? 0) - 1);
 
-    expect(parsePane(text)).toEqual({ kind: "none" });
+    const q = parsePane(text);
+    expect(q.kind).toBe("question");
+    if (q.kind !== "question") return;
+    // THE LABELS ARE THE LABELS, with no second column glued to them.
+    expect(q.options.map((o) => o.label)).toEqual([
+      "Re-stamp structureHash",
+      "Write a PendingLabelsFile",
+      "Leave it red, write it up",
+    ]);
+    expect(q.options.map((o) => o.key)).toEqual([
+      { via: "digit", digit: "1" },
+      { via: "digit", digit: "2" },
+      { via: "digit", digit: "3" },
+    ]);
+    // And it is an agent's own question, so it is answerable.
+    expect(q.gate).toEqual({ kind: "conversation" });
+  });
+
+  /**
+   * The other direction, and the reason the loosening is bounded.
+   *
+   * A continuation must still be indented deeper than the option MARKER. A line
+   * starting at or left of the digit column is a new top-level thing, and a run
+   * that spans one is a run we made up — which is what the old rule was really
+   * protecting, `labelCol` having been a proxy for it that the widget itself
+   * does not respect.
+   */
+  it("still refuses a run that spans a line at the menu's own left edge", () => {
+    const menu = [
+      "Do you want to proceed?",
+      "",
+      "❯ 1. Yes",
+      "  Something else entirely, at the digit column",
+      "  2. No",
+      "",
+      "Enter to select · ↑/↓ to navigate · Esc to cancel",
+      "",
+    ].join("\n");
+
+    /* Asserted on the KEYS rather than on `kind`, and that is the whole point of
+       this test rather than a detail of it. `parseNumbered` refusing does not
+       make the pane a `none`: `parseCursor` gets a look next, and here it takes
+       all three lines as a cursor menu whose first label is the literal text
+       "1. Yes". So "the numbered run was refused" and "nothing was found" are
+       different claims, and only the first one is what the digit-column rule is
+       responsible for. A test asserting `none` would have gone green the day
+       somebody broke `parseCursor` instead. */
+    const spanned = parsePane(menu);
+    if (spanned.kind === "question") {
+      expect(spanned.options.every((o) => o.key.via !== "digit")).toBe(true);
+    }
+
+    // The paired positive: the same line indented one column further —
+    // `digitCol + 1`, which is the loosest thing the new rule admits — and the
+    // numbered parser takes it, digits and all.
+    const ok = parsePane(
+      menu.replace("  Something else entirely, at the digit column", "   Something else entirely, at the digit column"),
+    );
+    expect(ok.kind).toBe("question");
+    if (ok.kind !== "question") return;
+    expect(ok.options.map((o) => o.key)).toEqual([
+      { via: "digit", digit: "1" },
+      { via: "digit", digit: "2" },
+    ]);
+    expect(ok.options.map((o) => o.label)).toEqual(["Yes", "No"]);
   });
 
   /**

@@ -65,6 +65,33 @@ export type FleetState = {
    * it would be *wrong* about, which is this file's own rule.
    */
   answeringEnabled: boolean;
+  /**
+   * When a collection was last **attempted**, which is a different fact from
+   * `collectedAt` and answers a question nothing here could answer before.
+   *
+   * `collectedAt` says when data last ARRIVED. `error` says why the last attempt
+   * failed. Neither says whether the collector is still trying — and on
+   * 2026-09-08 the `orchestrator-setup` session caught the gap in the field:
+   * `collectedAt` roughly **thirty minutes stale with `error: null`**, which
+   * reads as a calm, healthy, slightly-quiet box.
+   *
+   * The cause is in `refreshLoop`: a collection that never SETTLES throws
+   * nothing, so `lastError` stays null and the chained loop simply stops. On a
+   * box under memory pressure a `bash` child that has been sent SIGTERM at the
+   * 60-second mark can sit in uninterruptible IO for a long time, and
+   * `promisify(execFile)` waits for it. Silence, indefinitely, wearing the last
+   * good timestamp.
+   *
+   * Two consumers need the difference and they act on it differently. A person
+   * reading the page needs "the box is quiet" told apart from "we stopped
+   * looking". The Overseer's freshness watchdog needs **the source is down**
+   * told apart from **the source is lying** — and `attemptedAt` fresh with
+   * `collectedAt` stale is precisely the second one.
+   *
+   * Null until the first attempt, for the same reason `collectedAt` is: a
+   * timestamp invented here would be a claim nobody made.
+   */
+  attemptedAt: string | null;
 };
 
 export function fleetState(
@@ -73,9 +100,11 @@ export function fleetState(
   health: HealthReport | null,
   refreshMs: number,
   answeringEnabled: boolean,
+  attemptedAt: string | null = null,
 ): FleetState {
   return {
     schema: 1,
+    attemptedAt,
     rows: snapshot?.rows ?? [],
     tmuxServerPid: snapshot?.tmuxServerPid ?? null,
     // NOT `snapshot?.collectedAt ?? new Date().toISOString()`, however tempting
