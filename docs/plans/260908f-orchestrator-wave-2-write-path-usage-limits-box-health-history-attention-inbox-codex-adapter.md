@@ -502,6 +502,160 @@ this box and Chrome's fake-mic flags do not work headless. The real `getUserMedi
 test from his own device, and the report must say which half was checked. *"A valid session ticket is
 not proof that a microphone opened, a response event is not proof that sound played."*
 
+#### What was built, and what it cost — `w2-fleet-dictation`, 2026-09-08
+
+Written into this doc rather than a private one, per the brief. The rule above became:
+
+> **Only LEAF, BROWSER-ONLY, PRODUCT-AGNOSTIC modules may be imported from `src/`.** Nothing that
+> reaches the database, an auth session, a slug, an article, or a route under `src/routes.ts`. If a
+> module is nearly leaf but for one product coupling, extract the coupling behind a parameter rather
+> than importing the coupling.
+
+**And it is a test, not a paragraph.** [`tests/fleet-imports.test.ts`](../../tests/fleet-imports.test.ts)
+walks the fleet's whole transitive import graph and asserts the set of `src/` files it reaches is
+**exactly** the twelve named below, each with a line saying what it is for. Adding a thirteenth is a
+diff somebody reviews. It was watched failing — an `import { loadEnvLocal } from "../../src/env.js"`
+in one fleet file took two of its five tests red — and its first assertion is a self-check on the
+walker itself, because a closure walker that sees nothing looks exactly like one that found a leaf.
+
+##### What the fleet now depends on, from `src/` — the cost of the move
+
+**Direct**, what fleet files actually name: `src/web/useDictation.ts` (the microphone),
+`src/web/useDictationField.ts` (the caret, the span, the closed box), `src/web/useAudioLevel.ts`,
+`src/dictation-limits.ts` (the size caps, shared by both ends — what that file was built for),
+`src/dictation-fillers.ts` (the ums), `src/vocabulary.ts` (`packTerms`, `MAX_TERM`, the fence).
+
+**Transitive**, all leaves: `mic-lock.ts`, `mic-recording.ts`, `mic-devices.ts`,
+`dictation-errors.ts`, `audio-level.ts`, and the new `src/web/transcriber.ts`.
+
+**Twelve files, ~4,200 lines, and no external package beyond `react`.** That is what a move to its
+own repo would carry, and it is small enough that a person would carry it by hand.
+
+##### The one edge that had to be cut, and what it was worth
+
+`useDictation.ts` imported `sendForTranscription` from `dictation-upload.ts`, which calls `apiFetch`
+— and that one edge reached **21 files and 16,054 lines**, through `lib/api.ts` to
+`@supabase/supabase-js`, `@sentry/core`, the offline store and the billing plan. So `transcribe` is
+a parameter now (`Transcriber<C>` in the new leaf `src/web/transcriber.ts`) and `context` is opaque:
+the hook snapshots it per session, travels it on a kept recording, and never looks inside.
+`useDictation.ts`'s closure is now **8 files, 2,938 lines, `react` only**.
+
+The six product boxes gained one line each (`transcribe: sendForTranscription`) and nothing else
+changed. The two tests that drive the hook directly pass the real product transcriber in, so they
+still exercise the whole upload path.
+
+##### Not imported, and both would have been green all the way to the page
+
+`DictationStrip.tsx` and `MicLevel.tsx` render against hand-written class names —
+`prof-mic-note`, `prof-listening`, `mic-level` — from a stylesheet this page does not load. They
+would typecheck, build, and render an unstyled button. `MicLevel` sat on the import list for an hour
+on the strength of a grep for `className="` that could not see a template literal. So: **reuse the
+machinery, write the chrome** — `tools/fleet/web/src/DictationControl.tsx`, which is also right on
+the merits, since this page follows the device between light and dark and the product is dark
+unconditionally.
+
+##### The server half: measured out of contention, not ruled out on principle
+
+`src/transcribe.ts` was the first candidate. Its closure is **161 files and 118,082 lines**, pulling
+`pg`, `drizzle-orm`, `stripe`, `jsdom`, `@mozilla/readability`, `pino` and the Anthropic SDK into a
+tool whose whole claim is that it runs with the product's server absent. Even the smallest useful
+piece, `ai-call.ts`, is 20 files and 20,344 lines. So `tools/fleet/transcribe.ts` makes its own call
+to `POST https://openrouter.ai/api/v1/audio/transcriptions` — still through the gateway, no second
+one — borrowing the three files under `src/` that import nothing at all.
+
+**The honest half of that ruling:** `transcribeWith` *is* free of the database at runtime, because
+`ai-spend.ts` writes through a sink that is `null` unless the product's server installs one. Which
+means going through it **would not have metered this spend either** — no `ai_calls` row, nothing for
+`npm run cost`. The fleet's OpenRouter spend is invisible to the product's ledger whichever shape is
+chosen. That is a property of being a separate tool, not a cost of this decision, and it is named
+here rather than discovered later. A dictation is about $0.0005.
+
+##### The vocabulary works, and a 200 would not have told us
+
+`tools/fleet/vocabulary.ts`: `FLEET_TERMS` first (the box's own words — `worktree`, `tmux`,
+`gjd-remote`, `Overseer`, `vitest`, the model names), then the live snapshot's session handles,
+titles and directory leaves, most recently active first, with the named session promoted. Packed by
+`packTerms`, which strips angle brackets and caps each term — a session title is a sentence a model
+wrote about work that was often *"look at this hostile input"*, so it needs the same fence an
+article title does.
+
+Verified against the real gateway, because the evidence has to be the transcript changing rather
+than the status code — OpenRouter's chat route accepted a `prompt` field for eleven days, answered
+`200`, and changed nothing. [`tools/fleet/probe-transcribe.ts`](../../tools/fleet/probe-transcribe.ts)
+sends one clip twice:
+
+```
+with the fleet vocabulary (2663 ms):
+  Add this to Spideryarn please, the granularity zoom is fine …
+with NO vocabulary (1226 ms):
+  Add this to Spiderrion, please. The granularity zoom is fine, …
+```
+
+##### Which boxes, and the two that are deliberately left alone
+
+| box | dictation? |
+|---|---|
+| **Say something to it** — the steering message, `SessionDetail.tsx` | yes, the main one |
+| **New session** — the whole prompt an agent wakes up with | yes |
+| **Rename** — a session's name, `SessionDetail.tsx` | **no** |
+| Overseer message, `OrchestratorPanel.tsx` | **there is no box** |
+
+**The rename field gets no microphone.** A misheard message reaches an agent that can ask what you
+meant; a misheard *name* is silently wrong and sticks, and the Save button already warns that saving
+the same name again is not a no-op. `claude-agents-dashboard` reached the same call independently.
+
+**`OrchestratorPanel.tsx` has no message box and this work does not add one.** Its own header says
+why: there is no Overseer process, so a box there *"would swallow what you typed and look like it
+had worked, which is the one thing this page is built not to do"*. A microphone on a box that does
+not exist is not a smaller version of that lie.
+
+##### The finding that decides whether this works at all: the tailnet is not a secure context
+
+**`getUserMedia` requires a secure context, and the address Greg's phone uses is not one.** Measured
+on the box, 2026-09-08 — one Chrome, one fleet server bound to both addresses:
+
+```
+http://127.0.0.1:8802/       isSecureContext true,  navigator.mediaDevices present
+http://100.92.255.119:8802/  isSecureContext FALSE, navigator.mediaDevices ABSENT
+```
+
+`127.0.0.1` and `localhost` are trustworthy by exception, so dictation works over the ssh forward
+Greg uses from his laptop. The tailnet address is CGNAT (100.64.0.0/10) and is on nobody's
+trustworthy list. So on the **phone** — the surface this page exists for — `supported` is false, and
+the first draft of `DictationControl` returned `null`: no button, no error, nothing to search for.
+That would have been the fifth silently-dead feature in this tool in a day. It now says which of the
+two reasons it is, because only one has a fix and **the fix is not code**.
+
+**This changes an argument that is already open.** Whether enabling the systemd unit should widen the
+bind to the tailnet was being weighed as a *security* question. This makes HTTPS on the tailnet —
+`tailscale serve` — a **feature prerequisite**: without it a whole class of browser capability is
+absent on the only surface Greg reads this page on. Passed to `claude-agents-dashboard` and
+`orchestrator-setup`, who own that decision.
+
+A second, smaller one from the same browser pass: `tools/fleet/headers.ts` sent
+`Permissions-Policy: microphone=()` on every response, which blocks the microphone at document level
+independently of any of the above. Its own comment had predicted the change and predicted the wrong
+route to it — *"when it lands, `microphone=(self)` goes here deliberately rather than by discovering
+that the feature does not work"* — and it was discovered the second way, by one console line under a
+button whose failure was indistinguishable from this box having no audio hardware.
+
+##### What is verified, and what only Greg can verify
+
+| | |
+|---|---|
+| The server half, end to end against the live gateway | **verified** — see the A/B above |
+| The `keywords` array reaching the model and changing the transcript | **verified** |
+| The bundle carrying dictation and not Supabase | **verified** — `grep -c supabase` on the built JS is 0; `mic-no-tape`, `mic-unplugged` and `api/transcribe` are all present |
+| The import rule holding | **verified** — the test, watched failing |
+| The route's Origin check, size cap and format refusal | **verified** |
+| The tailnet address not being a secure context | **verified** — measured in Chrome at both addresses |
+| **A microphone opening** | **NOT verified, and cannot be from this box** |
+| **A real transcript landing in a real box from real speech** | **NOT verified** |
+| **That any of it works on the phone** | **NOT verified, and today it will not** — see the secure-context finding above |
+
+There is no audio input device on this box and Chrome's fake-microphone flags do not work headless
+here. Everything past *"Opening the microphone…"* is Greg's to check from his own phone or laptop.
+
 ### Stage F — realtime dialog, gated on Stage E
 
 **The conversation partner is not the agent itself**, and that misreading is the expensive one: an

@@ -278,6 +278,52 @@ export type HarnessCapabilities = {
 };
 
 /* ------------------------------------------------------------------ *
+ * Dictation: POST /api/transcribe.
+ * ------------------------------------------------------------------ */
+
+/**
+ * A recording, on its way to be turned into words.
+ *
+ * **`audio` is base64 of somebody talking in Greg's room**, which is a class of
+ * payload nothing else on this server handles. Three rules follow it everywhere
+ * it goes: it is never logged, its size is never logged either (a running tally
+ * of request sizes is a picture of when somebody was talking), and it is held
+ * for one request and then dropped.
+ *
+ * `format` is the container word, not a MIME type — `formatOf` in
+ * `src/dictation-limits.ts` maps one to the other in the browser, and the server
+ * checks the result against the same closed list. A wrong container is not a
+ * rejection, it is a transcript of noise.
+ */
+export type TranscribeRequest = {
+  audio: string;
+  format: string;
+  /**
+   * Which box this came from, so the vocabulary can be built for it.
+   *
+   * `session` names a tmux handle the snapshot already knows — the server looks
+   * it up rather than trusting it, so the worst a crafted value can do is miss.
+   * `new-session` is the box that starts an agent, which relates to no session
+   * yet and gets the fleet-wide list.
+   */
+  context: { kind: "session"; sessionId: string } | { kind: "new-session" };
+};
+
+/**
+ * What came back.
+ *
+ * **An empty `text` is a success**, not a failure: somebody who pressed the
+ * button and said nothing must have their box left exactly as it was rather
+ * than be told something went wrong.
+ *
+ * A failure is `{ error }` with the sentence in it, and the HTTP status carries
+ * whether a second identical request could work — read off the number rather
+ * than out of the prose, because the prose is freely rewritable and the branch
+ * is not.
+ */
+export type TranscribeResponse = { text: string };
+
+/* ------------------------------------------------------------------ *
  * The attention inbox. Produced by the Overseer, rendered by the page.
  *
  * The premise it corrects was measured on the live fleet 2026-09-08 and is

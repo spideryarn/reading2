@@ -1133,3 +1133,9 @@ becoming reachable from anywhere that is not a device Greg controls.
 - **This is not Spideryarn.** It runs on the box, spans repos, and must not depend on the product
   database or on anything under `src/`. If it ever earns its own repo, that should be a move, not a
   rewrite.
+  <br>↳ The one narrowing of this, and what it cost:
+  [260908f § Stage E](../plans/260908f-orchestrator-wave-2-write-path-usage-limits-box-health-history-attention-inbox-codex-adapter.md).
+  Greg asked for the product's voice dictation to be **reused** rather than copied, so leaf,
+  browser-only, product-agnostic modules may be imported and nothing else may.
+  `tests/fleet-imports.test.ts` names the twelve files that reach and fails on a thirteenth — the
+  list is the cost of the move, and it is meant to be reviewed rather than extended.

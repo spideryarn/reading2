@@ -6,10 +6,19 @@
  * adopts dictation like so:
  *
  * ```tsx
- * const dictate = useDictationField({ value, onChange, box, context: { kind: "article", slug } })
+ * const dictate = useDictationField({
+ *   value, onChange, box,
+ *   context: { kind: "article", slug },
+ *   transcribe: sendForTranscription,
+ * })
  * <textarea ref={box} readOnly={dictate.readOnly} … />
  * <DictationStrip {...dictate.strip} />
  * ```
+ *
+ * `transcribe` is the seam that lets the fleet dashboard reuse this file rather
+ * than copy it; the product's answer is always `sendForTranscription` from
+ * [dictation-upload.ts](./dictation-upload.ts). [transcriber.ts](./transcriber.ts)
+ * says why it is a parameter.
  *
  * ## One span, and that is the whole idea
  *
@@ -53,11 +62,8 @@
  * chat composer.
  */
 import { type RefObject, useCallback, useRef } from "react";
-import {
-  type DictationContext,
-  type UseDictation,
-  useDictation,
-} from "./useDictation.js";
+import type { Transcriber } from "./transcriber.js";
+import { type UseDictation, useDictation } from "./useDictation.js";
 
 export interface UseDictationField {
   dictation: UseDictation;
@@ -71,19 +77,28 @@ export interface UseDictationField {
   toggle(): void;
 }
 
-export function useDictationField({
+export function useDictationField<C>({
   value,
   onChange,
   onCommit,
   box,
   context,
+  transcribe,
 }: {
   value: string;
   onChange(next: string): void;
   /** Blur, Cmd/Ctrl+Enter, or the end of a dictation. Optional. */
   onCommit?(): void;
   box: RefObject<HTMLTextAreaElement | HTMLInputElement | null>;
-  context: DictationContext;
+  /**
+   * Where this dictation is going, passed through to {@link transcribe}
+   * untouched. Generic because this file is shared with the fleet dashboard,
+   * whose context names a session rather than an article — see
+   * [transcriber.ts](./transcriber.ts).
+   */
+  context: C;
+  /** How a recording becomes words. The product passes `sendForTranscription`. */
+  transcribe: Transcriber<C>;
 }): UseDictationField {
   /**
    * The value as of *now*, rather than as of the last render.
@@ -221,6 +236,7 @@ export function useDictationField({
       commit.current?.();
     },
     context,
+    transcribe,
   });
 
   const toggle = useCallback(() => {
