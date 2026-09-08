@@ -288,3 +288,39 @@ thing the original sentence's reasoning does not cover. So the licence really is
 than on `main`, for a reason that has nothing to do with readers.
 
 Raised jointly with `spideryarn2-4c`, which had read it the same way.
+
+---
+
+## Q13 — A new `docs/reusable/` note: a name is evidence, not an identity <a id="q13"></a>
+
+**Proposed, not written.** `docs/reusable/` wording is a rule, so a new note there wants approval one
+set at a time ([edit-important-docs.md](../reusable/edit-important-docs.md)). Two agents reached this
+independently on 2026-09-08 and agreed one of us should write it rather than both.
+
+**The shape.** In a system where a name is assigned by one mechanism and consumed by another, the
+name is *evidence about* identity — with its own provenance, its own decay, and its own failure to
+be unique — and code that treats it as identity addresses the wrong object silently. Five instances
+in one night, all in the fleet work, none of which looked like the others at the time:
+
+- **Five processes in one chain carry `run-codex.ts`; exactly one carries `codex exec`.** A
+  recogniser matching the wrapper counts one review five times. The visible name appears at every
+  depth of the chain; the thing itself appears once.
+- **`claudeSessionId` is set before Claude runs and never updated**, so a pane whose conversation was
+  replaced keeps the old one. A uuid that *changes* is evidence; a uuid that *does not* is not.
+- **Renaming a session without clearing `GJD_PROVISIONAL`** gets it renamed straight back by
+  `adoptTitles` — the name is owned by a mechanism that will reassert it.
+- **`dir` and `branch` arrive as two independent claims off one row**, and nothing downstream put
+  them back together: the check runs in the directory, the sweep removes by branch. Two names for one
+  thing, trusted separately.
+- **`repo` is not one value** — across a single snapshot it was the repo, `null`, the literal string
+  `"unknown"`, and a different repo entirely.
+
+**The rule it would carry.** When you match on a name, ask three things: *who wrote it, when, and
+what would make it stale.* Prefer a key you can **verify** over one you can only **read** — and when
+a name occurs at several depths of one structure, matching it counts one thing many times, which
+reads as a busy system rather than as a bug.
+
+**Why it is not just [silent-success.md](../reusable/silent-success.md).** That doc is about a check
+that reports success while doing nothing. This is about code that does exactly what it says, to the
+wrong object — every step succeeds, and the answer is about something else. The two meet only in
+that both produce a confident, wrong, quiet result.

@@ -34,6 +34,11 @@ three and the classifier would have been built to find it there.
   source …snapshot…` → `timeout` → `npm exec` → `sh -c 'tsx'` → `node …/.bin/tsx` → `node
   --require …/preflight.cjs` → `codex exec`. `claude --print` sits at exactly the same depth
   through the same chain.
+- **The depth is not a constant, and that is the actual lesson.** Measured again later the same
+  morning: **7** for a `codex exec` dispatched without the `timeout` wrapper, **5** for a plain
+  `npx vitest run`, **3** for a suite under `scripts/tmux-job.ts`. Every wrapper an agent happens to
+  type adds a level, so the only safe rule is to walk the whole tree — a limit tuned to 8 would have
+  been tuned to one person's typing habits.
 - **Five processes in that chain carry the words `run-codex.ts`, and exactly one carries `codex
   exec`.** A recogniser that matched the wrapper would count one review five times.
 - **The pane can be older than its Claude.** `quiet-claude-pane` has a pane 115341 s old holding a

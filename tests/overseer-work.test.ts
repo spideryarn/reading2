@@ -126,6 +126,22 @@ describe("recognising a command line", () => {
     expect(found?.id).toBe("vitest");
   });
 
+  test("vitest's --run flag counts as well as its run subcommand (constructed)", () => {
+    // Every instance measured on this box used `run`; `--run` is here on a
+    // reviewer's word that vitest treats the two as the same thing, so it is
+    // pinned rather than left as an untested belief.
+    expect(recogniseCommand("node /home/greg/code/x/node_modules/.bin/vitest --run")?.id).toBe("vitest");
+    expect(recogniseCommand("node /home/greg/code/x/node_modules/.bin/vitest --run tests/a.test.ts")?.id).toBe("vitest");
+  });
+
+  test("the debian nodejs shim is peeled as well as node (constructed)", () => {
+    // `/usr/bin/nodejs` exists on this box and `/usr/bin/node` is the one every
+    // tool actually uses - it appeared as argv[0] zero times in 40 samples. It
+    // is in LAUNCHERS on the strength of the binary existing, so it needs a test
+    // saying so; mutation testing found that removing it broke nothing.
+    expect(recogniseCommand("/usr/bin/nodejs /home/greg/code/x/node_modules/.bin/vitest run")?.id).toBe("vitest");
+  });
+
   test("a pane's own interactive claude is not headless work, even when the prompt says --print", () => {
     // The whole prompt is argv on this box, so a session asked about `--print`
     // wears the word. Anchoring to the FIRST argument is what stops that.
@@ -269,14 +285,38 @@ describe("classifying a real pane", () => {
   });
 
   test("a command line longer than the cap is truncated (constructed)", () => {
-    const long = `codex exec ${"x".repeat(COMMAND_KEPT * 2)}`;
+    // THE CAP IS PINNED TO ITS VALUE, not to itself. Asserting
+    // `length === COMMAND_KEPT + 3` passes for any cap at all, which mutation
+    // testing showed by changing 400 to 40 and to 4000 with every test still
+    // green. 400 is a decision - long enough to keep a `codex exec` line's model
+    // and prompt opening, short enough that a 2 kB chrome line does not go into
+    // an append-only history - so it is the value that has to be defended.
+    expect(COMMAND_KEPT).toBe(400);
+    const long = `codex exec ${"x".repeat(1000)}`;
     const parsed = parseProcessTable(`  100     1  9 bash pane\n  200   100  9 ${long}\n`, NOW_MS);
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) return;
     const reading = classifyPaneWork(100, { read: true, rows: parsed.rows, atMs: NOW_MS });
     expect(reading.kind).toBe("child-work");
     if (reading.kind !== "child-work") return;
-    expect(reading.jobs[0].command.length).toBe(COMMAND_KEPT + 3);
+    expect(reading.jobs[0].command).toHaveLength(403);
+    expect(reading.jobs[0].command.endsWith("...")).toBe(true);
+  });
+
+  test("the cap keeps what a reader needs and drops what they do not", () => {
+    // The two real command lines the cap has to sit between. A `codex exec` line
+    // must survive with its model still legible; the browser's must not arrive
+    // whole. Both are taken from the captures rather than invented.
+    const codex = raw("codex-review-under-pane")
+      .split("\n")
+      .find((l) => l.includes("codex exec"));
+    expect(codex).toBeDefined();
+    expect((codex ?? "").length).toBeLessThan(COMMAND_KEPT);
+    const chrome = raw("browser-pane")
+      .split("\n")
+      .find((l) => l.includes("--type=renderer"));
+    expect(chrome).toBeDefined();
+    expect((chrome ?? "").length).toBeGreaterThan(COMMAND_KEPT);
   });
 });
 
@@ -327,43 +367,59 @@ describe("a reading that could not be taken never renders as a reading", () => {
 });
 
 describe("the tree is a moment, and a moment can be malformed", () => {
-  test("a cycle REACHABLE FROM THE PANE terminates instead of hanging (constructed)", () => {
-    // The first version of this test put the cycle off to one side, where the
-    // walk never went - so removing the `visited` set broke nothing any test
-    // could see. The cycle has to be inside the pane's own subtree to bite.
-    const table = [
-      "  100     1  900 bash /home/greg/gjd-remote/jobs/x.sh",
-      "  200   100  800 claude --session-id abc",
-      "  300   200  700 sh -c loop",
-      "  400   300  700 sh -c loop",
-      // 300's parent is 400 as well as 400's being 300: a table that came out of
-      // a store rather than out of a kernel.
-      "  350   400  700 sh -c loop-back",
-      "  360   350  700 sh -c loop-back",
-    ].join("\n");
-    const parsed = parseProcessTable(table, NOW_MS);
-    expect(parsed.ok).toBe(true);
-    if (!parsed.ok) return;
-    const rows = [...parsed.rows, { pid: 400, ppid: 360, command: "sh -c loop", started: { known: false } as const }];
-    // 400 now appears under two parents, which is the shape a merged or replayed
-    // table takes. The walk must visit each pid once and return.
+  test("a duplicate pid reaching the classifier is cannot-tell, not no-child-work (constructed)", () => {
+    // `parseProcessTable` refuses this, but a `ProcessTableReading` is an
+    // ordinary value that a store replay or a merge of two readings can build.
+    // Keeping the second row silently would drop a subtree and then answer
+    // confidently about whatever was left.
+    const rows = [
+      { pid: 100, ppid: 1, command: "bash pane", started: { known: false } as const },
+      { pid: 200, ppid: 100, command: "codex exec --model x", started: { known: false } as const },
+      { pid: 200, ppid: 100, command: "sh -c something-else", started: { known: false } as const },
+    ];
     const reading = classifyPaneWork(100, { read: true, rows, atMs: NOW_MS });
-    expect(reading.kind).toBe("no-child-work");
-    if (reading.kind !== "no-child-work") return;
-    expect(reading.inspected).toBe(5);
+    expect(reading.kind).toBe("cannot-tell");
+    if (reading.kind !== "cannot-tell") return;
+    expect(reading.cause).toBe("malformed-process-table");
+    expect(reading.why).toMatch(/200 appears twice/);
   });
 
-  test("a self-parented pane is not its own descendant (constructed)", () => {
+  test("a pane that descends from itself is cannot-tell, not a tidy no-child-work (constructed)", () => {
+    // THE ONLY REACHABLE CYCLE IS ONE THE PANE IS IN. Every process has exactly
+    // one ppid, so a ring of processes whose parents are all inside the ring can
+    // never be entered from outside it - the first version of this test built
+    // such a ring off to one side and proved nothing, because the walk never
+    // went there. A pane that is its own ancestor is the real case, and the
+    // answer has to be that these rows are not an ancestry.
+    const rows = [
+      { pid: 100, ppid: 200, command: "bash pane", started: { known: false } as const },
+      { pid: 200, ppid: 100, command: "sh -c child", started: { known: false } as const },
+    ];
+    const reading = classifyPaneWork(100, { read: true, rows, atMs: NOW_MS });
+    expect(reading.kind).toBe("cannot-tell");
+    if (reading.kind !== "cannot-tell") return;
+    expect(reading.cause).toBe("malformed-process-table");
+    expect(reading.why).toMatch(/came back to pid 100/);
+  });
+
+  test("a self-parented pane is malformed rather than quiet (constructed)", () => {
     const table = ["  100     1  900 bash pane", "  100   100  900 bash pane"].join("\n");
-    // Same pid twice is refused before the walk ever sees it.
+    // Same pid twice never gets past the parser.
     expect(parseProcessTable(table, NOW_MS).ok).toBe(false);
     const single = parseProcessTable("  100   100  900 bash pane\n", NOW_MS);
     expect(single.ok).toBe(true);
     if (!single.ok) return;
     const reading = classifyPaneWork(100, { read: true, rows: single.rows, atMs: NOW_MS });
-    expect(reading.kind).toBe("no-child-work");
-    if (reading.kind !== "no-child-work") return;
-    expect(reading.inspected).toBe(0);
+    expect(reading.kind).toBe("cannot-tell");
+    if (reading.kind !== "cannot-tell") return;
+    expect(reading.cause).toBe("malformed-process-table");
+  });
+
+  test("a real deep tree is walked without being called a cycle", () => {
+    // The negative half of the two tests above: the genuine eight-deep codex
+    // chain must not trip the loop detector.
+    const reading = classifyPaneWork(PANE["codex-review-under-pane"], readingOf("codex-review-under-pane"));
+    expect(reading.kind).toBe("child-work");
   });
 
   test("an orphaned child whose parent is gone is not attributed to a pane", () => {
@@ -383,6 +439,15 @@ describe("the tree is a moment, and a moment can be malformed", () => {
     expect(reading.kind).toBe("cannot-tell");
     if (reading.kind !== "cannot-tell") return;
     expect(reading.cause).toBe("pane-not-in-table");
+  });
+
+  test("a walking reading says when it was taken", () => {
+    // Without this, "no child work" read forty minutes ago and "no child work"
+    // read a second ago are the same sentence.
+    const quiet = classifyPaneWork(PANE["quiet-claude-pane"], readingOf("quiet-claude-pane"));
+    expect(quiet.kind === "cannot-tell" ? null : quiet.atMs).toBe(NOW_MS);
+    const busy = classifyPaneWork(PANE["codex-review-under-pane"], readingOf("codex-review-under-pane"));
+    expect(busy.kind === "cannot-tell" ? null : busy.atMs).toBe(NOW_MS);
   });
 });
 
@@ -409,7 +474,23 @@ describe("the probe, against this box's real process table", () => {
     const self = reading.rows.find((r) => r.pid === process.pid);
     expect(self).toBeDefined();
     const verdict = classifyPaneWork(self?.ppid ?? null, reading);
+    // NOT merely `not cannot-tell`, which was the first version of this
+    // assertion and passed for a walk that inspected nothing at all - a review
+    // caught it. Walking from this process's parent must reach this process.
     expect(verdict.kind).not.toBe("cannot-tell");
+    if (verdict.kind === "cannot-tell") return;
+    expect(verdict.inspected).toBeGreaterThan(0);
+    expect(verdict.paneCommand).not.toBe("");
+  });
+
+  test("output that exits 0 but is not a process table is a failure", () => {
+    // `echo` takes ps's own argv and prints it back: status 0, one line, and not
+    // a pid/ppid/etimes/args row. The conversion from a parse failure into a
+    // read failure had no direct cover until a review pointed at it.
+    const reading = probeProcessTable({ bin: "echo" });
+    expect(reading.read).toBe(false);
+    if (reading.read) return;
+    expect(reading.why).toMatch(/was not a process table/);
   });
 
   test("a probe pointed at a binary that does not exist fails loudly", () => {
