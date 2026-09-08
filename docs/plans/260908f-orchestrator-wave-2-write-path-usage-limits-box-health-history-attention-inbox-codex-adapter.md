@@ -172,6 +172,23 @@ The same fragility applies to *"35 `auto`, 1 `default`"* earlier the same day, a
 this doc: **the honest form of a fleet measurement is the timestamp**, and a sentence that drops it
 has converted an observation into a claim about the world.
 
+**And knowing the lesson did not prevent it, one paragraph later.** The orphan finding above was
+written as *"two orphaned reviews are running"*, which was false by the time anybody read it — by the
+same author, minutes after writing the rule down. Then the correction repeated the shape a third time:
+two agents walked the process table and reported zero orphans **two minutes apart** (13:03 and 13:05
+UTC — the box runs BST, so 14:05 and 13:03 are two minutes, not an hour), and called that
+corroboration. It is one observation with a wide error bar.
+
+**So the lesson does not transfer by being remembered, and the reason is that it keeps changing
+clothes**: first counting a population, then corroborating a claim, then mistaking co-located readings
+for independent ones. The version that catches all three is mechanical rather than remembered — **the
+instant a fleet number was taken travels with the number, as a field**, the way `collectedAt`,
+`scannedAt` and `waitingSince` are fields in every type built today rather than habits. What actually
+settled the orphan question was not a second reading at all but a **mechanism**: an orphan appears
+when a Bash-tool shell is reaped mid-run and leaves when the job ends, so the population is bounded by
+concurrent reviews rather than growing. That argument would hold with zero readings, which is what
+makes it the evidence.
+
 ## Stages
 
 Each ends with the tree green and committed, and would make sense as a stopping point.
