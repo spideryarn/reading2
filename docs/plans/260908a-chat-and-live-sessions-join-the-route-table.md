@@ -657,3 +657,24 @@ in a commit whose whole subject is that assertions about moved code must be chec
 
 **F12 — P3. `git diff --check` failed** on a whitespace-only line and a misindented comment left by
 the script that inserted the twelve keys. Fixed.
+
+## The gate
+
+`npm run check` on the final tree, 2026-09-08 03:14–03:45: **typecheck, build, cycles, chain,
+conflicts and committed all clean.** The suite ran **828 files passed, 1 skipped, 1 failed** —
+15,511 tests passed of 15,547.
+
+The one failure is **not this slice's**: `tests/step-failure-seam.test.ts`, a job-deadline suite that
+touches no route, timed out at 30 s while the box was at load 35 with 27 users on it. Re-run alone:
+**9 of 9 green.** That is the shape
+[postgres-suites-fail-from-contention](../project/testing.md) describes, and re-running the file
+alone rather than believing the batch is the whole remedy.
+
+An earlier run of the same gate failed on `tests/fixture-ids.test.ts` — three fleet-dashboard tests
+sharing the uuid `11111111-…`. Also not this slice's, and by the time it was diagnosed the session
+that owns those files had already fixed it on `dev`; a second merge cleared it. **Fifteen minutes
+went into proving a red was somebody else's**, which is the cost the box's contention imposes on
+every slice and is worth stating rather than absorbing silently.
+
+Complexity: 136 findings against the repo, of which `serveAuthenticatedApi` is now **125** against a
+ceiling of 25 — 153 before this slice.
