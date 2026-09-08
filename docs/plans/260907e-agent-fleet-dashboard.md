@@ -632,6 +632,23 @@ Added 2026-09-08, after the steering route was wired (`c06438b7`).
   commit, **zero** rows carried the last two, so the Send button would have been dead on arrival and
   the 400 would have looked like a bug in the route.
 
+Added 2026-09-08 04:35, closing the one gap both UI and route agents named in the same words.
+
+- **The client's own body-builder produces a body the real server accepts.** Both agents reported
+  that every wire assertion on either side was against *that side's restatement* of the contract —
+  so if `parseTarget` and `steerMessageBody` disagreed, every test on both sides stays green and the
+  first real tap 400s. Run for real: a throwaway session, `parseFleetState` applied to the server's
+  own payload, the row handed to the client's `steerMessageBody`, and the result POSTed. **200**,
+  and the nonce (generated in the script, written only to a file) appears **once** in the target
+  pane and **zero** times in a control pane. The body the client sends is exactly
+  `claudeSessionId, paneId, panePid, sessionId, status, text`.
+- **The answering refusal is real on the live server**, not just in tests: `503`,
+  `answering-disabled`, with the sentence that names the hazard and the way round it.
+- **A live blocked row now carries its material.** Captured from the running dashboard:
+  `{"q":"question","material":"read","opts":["unknown","unknown","unknown","unknown","unknown"]}` —
+  an `AskUserQuestion` whose five custom labels all classify conservatively, which is the right
+  answer and the one the UI must render as *at least* as alarming as `persistent`.
+
 - **`spideryarn.com` uses Namecheap nameservers** (`dns1.registrar-servers.com`), serving Vercel at
   `76.76.21.21`. Cloudflare's partial/CNAME zone setup is Business-plan-only ($200/mo), per
   [Cloudflare's own docs](https://developers.cloudflare.com/dns/zone-setups/partial-setup/) — hence
