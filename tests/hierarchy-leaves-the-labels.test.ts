@@ -166,3 +166,37 @@ describe("checkCoverage's home", () => {
     expect(code(generateHierarchy)).not.toContain("checkCoverage");
   });
 });
+
+/**
+ * **And the pass itself is gone, not just its coverage check.**
+ *
+ * The two are separate claims and only one of them was pinned. `checkCoverage`
+ * moving is what stops every ingest failing; `generateLabels` no longer being
+ * called is *the whole change* — the 79.5–92% of the step's wall clock that
+ * docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md exists to
+ * remove. Nothing asserted it, and `DEFAULT_INGEST_STEPS` not naming `labels`
+ * is a different sentence: that says the step is not *scheduled*, not that the
+ * structure stage has stopped buying them itself. A `generateHierarchy` that
+ * called `generateLabels` again would satisfy every other test in the tree.
+ *
+ * **`code()`, and this is the case that needs it most.** The paragraph
+ * src/hierarchy.ts writes where the call used to be says *"`generateLabels` was
+ * called at this line"* — so a check that read the raw source would fail
+ * against a comment recording the removal, and the natural "fix" would be to
+ * weaken the assertion. Stripping comments is what keeps the two apart.
+ *
+ * Added by stage 3, 2026-09-08.
+ */
+describe("the label pass", () => {
+  it("is not bought by generateHierarchy any more", () => {
+    expect(code(generateHierarchy)).not.toContain("generateLabels");
+    /* The premise, so this cannot pass over a `code()` that returned nothing
+       useful: the function really is the one that used to make the call, and it
+       still builds the tree. */
+    expect(code(generateHierarchy)).toContain("buildTree");
+  });
+
+  it("is bought by the labels step, which is where it went", () => {
+    expect(code(STEPS.labels.run)).toContain("generateLabels");
+  });
+});
