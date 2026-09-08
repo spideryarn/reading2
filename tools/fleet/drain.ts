@@ -75,9 +75,9 @@
  * test drives the whole pass with fabricated rows and no tmux. There are ~35
  * live agent sessions on this box doing other people's work.
  */
-import type { SpokenAction } from "./actions.js";
+import { renderMessage, renderSpoken, type SpokenAction } from "./actions.js";
 import type { FleetRow, FleetSnapshot } from "./collect.js";
-import { nothingWasSent, type QueuedItem, type QueuedPayload, type SteeringQueue } from "./queue.js";
+import { nothingWasSent, type QueuedItem, type SteeringQueue } from "./queue.js";
 import type { RefusalCode, SteerTarget, sendMessage as realSendMessage } from "./steer.js";
 
 /**
@@ -265,9 +265,16 @@ type Sendable = { ok: true; text: string; what: string } | { ok: false; why: str
  * whether the drain may deliver it, rather than inheriting a yes or, worse, a
  * silent no.
  */
-function sendable(payload: QueuedPayload): Sendable {
+function sendable(item: QueuedItem): Sendable {
+  const payload = item.payload;
   if (payload.kind === "message") {
-    return { ok: true, text: payload.text, what: `message (${payload.text.length} characters)` };
+    // RENDERED HERE, at the moment of the send, from the speaker the item has
+    // carried since the request. Everything a person or a coordinator says to
+    // one session comes through this function, so this is the line that decides
+    // whether the agent can tell whose instruction it is reading.
+    const rendered = renderMessage(payload.text, item.speaker);
+    if (!rendered.ok) return { ok: false, why: rendered.why };
+    return { ok: true, text: rendered.text, what: `message (${payload.text.length} characters)` };
   }
   const action = payload.action;
   // The annotation is the guard, and it is where the compile error lands: widen
@@ -279,8 +286,10 @@ function sendable(payload: QueuedPayload): Sendable {
   switch (effect) {
     case "spoken":
       // The action's OWN words, which is the whole reason `SpokenAction.text`
-      // exists as a reviewed sentence rather than being assembled from a label.
-      return { ok: true, text: action.text, what: `action ${action.id}` };
+      // exists as a reviewed sentence rather than being assembled from a label,
+      // behind the line that says who is asking for them. `renderSpoken` keeps
+      // the one named exception: a slash command must be first on the line.
+      return { ok: true, text: renderSpoken(action, item.speaker), what: `action ${action.id}` };
     default: {
       const never: never = effect;
       return { ok: false, why: `'${String(never)}' is not something the drain knows how to type` };
@@ -301,7 +310,7 @@ function held(sessionId: string, reason: DrainHoldReason, item: QueuedItem | nul
  * nothing else inside it.
  */
 function deliverOne(row: FleetRow, address: { paneId: string; claudeSessionId: string }, item: QueuedItem, deps: DrainDeps): DrainOutcome {
-  const words = sendable(item.payload);
+  const words = sendable(item);
   if (!words.ok) {
     // Settled `refused` rather than left leased: it will never become
     // deliverable, so leaving it would be exactly the promise this stage exists

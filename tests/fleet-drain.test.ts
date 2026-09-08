@@ -117,6 +117,18 @@ const REFUSED: SteerResult = {
 
 type Sent = { target: SteerTarget; text: string; declaredStatus: FleetStatus };
 
+/**
+ * The line `renderSpoken` puts in front of Greg's own words.
+ *
+ * **Written out here rather than imported from actions.ts on purpose.** An
+ * expectation built from the same constant the code renders from agrees with
+ * the code whatever the code says — including saying nothing — so it would go
+ * on passing with the prefix deleted, which is the exact failure this file
+ * exists to catch. The string is the contract; a change to it should have to
+ * come here and be read.
+ */
+const GREG = "[Greg, via the fleet dashboard] ";
+
 /** The delivery module as a recorder, and optionally as a thing that fails. */
 function harness(over: { result?: SteerResult | ((t: SteerTarget, text: string) => SteerResult); queue?: SteeringQueue } = {}) {
   let clock = 1_000_000;
@@ -225,6 +237,7 @@ describe("the route and the drain share one queue", () => {
       panePid: PANE_PID,
       status: { kind: "idle" },
       mode: "enqueue",
+      speaker: "greg",
       text: "please push what you have",
     });
     expect(enqueued.status).toBe(200);
@@ -233,10 +246,58 @@ describe("the route and the drain share one queue", () => {
     const result = routes.drain(snap([row()]));
 
     expect(sent).toHaveLength(1);
-    expect(sent[0]?.text).toBe("please push what you have");
+    // ATTRIBUTED, and this is the assertion the unit tests could not make.
+    // `renderSpoken` had six passing test callers and no product ones, so every
+    // one of them proved the prefix and none of them proved that anything a
+    // person or a coordinator can actually reach goes through it. The join is
+    // route → queue → drain → transport, and only a test that crosses all four
+    // can see it. See § S1 in docs/postmortems/260908b-….md (instance 8).
+    expect(sent[0]?.text).toBe("[Greg, via the fleet dashboard] please push what you have");
     expect(sent[0]?.target.paneId).toBe(PANE_A);
     expect(sent[0]?.target.sessionId).toBe(SESSION_A);
     expect(result.outcomes.map((o) => o.kind)).toEqual(["delivered"]);
+  });
+
+  it("types the Overseer's disclaimer at the pane when the Overseer is the one queuing", async () => {
+    // THE SAME PATH, THE OTHER SPEAKER, and the one that matters: an automated
+    // coordinator's message arrives as an ordinary user turn, which is the most
+    // authoritative thing in an agent's context. `speaker` has to survive the
+    // route, the queue and the drain, because the prefix is rendered at
+    // DELIVERY — so an item that carried the speaker only as far as the enqueue
+    // would pass a route test and still be typed bare twenty minutes later.
+    const sent: Sent[] = [];
+    let clock = 1_000_000;
+    const routes = makeActionRoutes({
+      queue: new SteeringQueue({ now: () => clock }),
+      sendMessage: (target, text, declaredStatus) => {
+        sent.push({ target, text, declaredStatus });
+        return SENT_OK;
+      },
+      now: () => clock,
+      limiter: createRateLimiter({ minIntervalMs: 0, burstMax: 1_000, burstWindowMs: 1 }),
+      log: () => {},
+    } satisfies Partial<ActionDeps>);
+
+    const enqueued = await post((req, res) => routes.handle(req, res), {
+      paneId: PANE_A,
+      sessionId: SESSION_A,
+      claudeSessionId: CONVO_A,
+      panePid: PANE_PID,
+      status: { kind: "idle" },
+      mode: "enqueue",
+      speaker: "overseer",
+      actionId: "pull",
+    });
+    expect(enqueued.status).toBe(200);
+
+    routes.drain(snap([row()]));
+
+    expect(sent).toHaveLength(1);
+    expect(sent[0]?.text.startsWith("[The Overseer — an automated coordinator, NOT Greg.")).toBe(true);
+    // And the action's own reviewed words are still in there, unaltered.
+    const pull = actionById("pull");
+    expect(pull?.effect).toBe("spoken");
+    expect(sent[0]?.text.endsWith(pull?.effect === "spoken" ? pull.text : " ")).toBe(true);
   });
 
   it("reaches the same queue from handleActionRequest and drainSharedQueues", async () => {
@@ -275,7 +336,7 @@ describe("the route and the drain share one queue", () => {
 describe("drainOnce delivers", () => {
   it("sends a queued message to an idle session, addressed by the row", () => {
     const { deps, queue, sent } = harness();
-    queue.enqueueMessage({ sessionId: SESSION_A, claudeSessionId: CONVO_A }, "have a look at the failing test first");
+    queue.enqueueMessage({ sessionId: SESSION_A, claudeSessionId: CONVO_A }, "have a look at the failing test first", "greg");
 
     const result = drainOnce(snap([row()]), deps);
 
@@ -285,7 +346,7 @@ describe("drainOnce delivers", () => {
     // and steer.ts would refuse the send rather than misdirect it — but the
     // person would see an unexplained refusal for every message forever.
     expect(sent[0]?.target).toEqual({ paneId: PANE_A, sessionId: SESSION_A, claudeSessionId: CONVO_A, panePid: PANE_PID });
-    expect(sent[0]?.text).toBe("have a look at the failing test first");
+    expect(sent[0]?.text).toBe(`${GREG}have a look at the failing test first`);
     expect(sent[0]?.declaredStatus).toEqual(IDLE);
     expect(result.outcomes.map((o) => o.kind)).toEqual(["delivered"]);
     // Settled, so it is gone rather than waiting to be sent again.
@@ -294,20 +355,20 @@ describe("drainOnce delivers", () => {
 
   it("sends a spoken action's words, not its label or its summary", () => {
     const { deps, queue, sent } = harness();
-    queue.enqueueAction({ sessionId: SESSION_A, claudeSessionId: CONVO_A }, "run-checks");
+    queue.enqueueAction({ sessionId: SESSION_A, claudeSessionId: CONVO_A }, "run-checks", "greg");
     const action = actionById("run-checks");
 
     drainOnce(snap([row()]), deps);
 
     expect(action?.effect).toBe("spoken");
-    expect(sent[0]?.text).toBe(action?.effect === "spoken" ? action.text : "NOT A SPOKEN ACTION");
+    expect(sent[0]?.text).toBe(action?.effect === "spoken" ? `${GREG}${action.text}` : "NOT A SPOKEN ACTION");
     expect(sent[0]?.text).not.toBe(action?.label);
     expect(sent[0]?.text).not.toBe(action?.summary);
   });
 
   it("carries panePid when the row has one, and leaves it out when it does not", () => {
     const { deps, queue, sent } = harness();
-    queue.enqueueMessage({ sessionId: SESSION_A, claudeSessionId: CONVO_A }, "one");
+    queue.enqueueMessage({ sessionId: SESSION_A, claudeSessionId: CONVO_A }, "one", "greg");
     drainOnce(snap([row({ panePid: null })]), deps);
     // `panePid` is optional so a pid tmux would not tell us degrades to "no
     // respawn check" rather than making the row unsteerable — steer.ts's rule,
@@ -320,30 +381,30 @@ describe("drainOnce delivers", () => {
   it("delivers at most one item per session per pass", () => {
     // The point of the queue: the agent gets a turn between instructions.
     const { deps, queue, sent } = harness();
-    queue.enqueueMessage({ sessionId: SESSION_A, claudeSessionId: CONVO_A }, "first");
-    queue.enqueueMessage({ sessionId: SESSION_A, claudeSessionId: CONVO_A }, "second");
+    queue.enqueueMessage({ sessionId: SESSION_A, claudeSessionId: CONVO_A }, "first", "greg");
+    queue.enqueueMessage({ sessionId: SESSION_A, claudeSessionId: CONVO_A }, "second", "greg");
 
     drainOnce(snap([row()]), deps);
-    expect(sent.map((s) => s.text)).toEqual(["first"]);
+    expect(sent.map((s) => s.text)).toEqual([`${GREG}first`]);
     expect(queue.size(SESSION_A)).toBe(1);
 
     drainOnce(snap([row()]), deps);
-    expect(sent.map((s) => s.text)).toEqual(["first", "second"]);
+    expect(sent.map((s) => s.text)).toEqual([`${GREG}first`, `${GREG}second`]);
   });
 
   it("drains two sessions in one pass, and neither gets the other's item", () => {
     const { deps, queue, sent } = harness();
-    queue.enqueueMessage({ sessionId: SESSION_A, claudeSessionId: CONVO_A }, "for A");
-    queue.enqueueMessage({ sessionId: SESSION_B, claudeSessionId: CONVO_B }, "for B");
+    queue.enqueueMessage({ sessionId: SESSION_A, claudeSessionId: CONVO_A }, "for A", "greg");
+    queue.enqueueMessage({ sessionId: SESSION_B, claudeSessionId: CONVO_B }, "for B", "greg");
 
     const result = drainOnce(snap([row(), row({ id: SESSION_B, paneId: PANE_B, claudeSessionId: CONVO_B })]), deps);
 
     expect(sent).toHaveLength(2);
     const forA = sent.find((s) => s.target.sessionId === SESSION_A);
     const forB = sent.find((s) => s.target.sessionId === SESSION_B);
-    expect(forA?.text).toBe("for A");
+    expect(forA?.text).toBe(`${GREG}for A`);
     expect(forA?.target.paneId).toBe(PANE_A);
-    expect(forB?.text).toBe("for B");
+    expect(forB?.text).toBe(`${GREG}for B`);
     expect(forB?.target.paneId).toBe(PANE_B);
     expect(result.considered).toBe(2);
     expect(result.rows).toBe(2);
@@ -371,7 +432,7 @@ describe("drainOnce holds", () => {
     // `drainGate`'s `later` arm, and the reason the queue exists at all:
     // keystrokes sent to a busy Claude do not queue themselves anywhere useful.
     const { deps, queue, sent } = harness();
-    queue.enqueueMessage({ sessionId: SESSION_A, claudeSessionId: CONVO_A }, "wait for me");
+    queue.enqueueMessage({ sessionId: SESSION_A, claudeSessionId: CONVO_A }, "wait for me", "greg");
 
     const result = drainOnce(snap([row({ status: WORKING })]), deps);
 
@@ -389,7 +450,7 @@ describe("drainOnce holds", () => {
     // sending, being refused, and destroying the item; and repeated passes
     // would eat the whole queue while the agent sat on one question.
     const { deps, queue, sent } = harness();
-    queue.enqueueMessage({ sessionId: SESSION_A, claudeSessionId: CONVO_A }, "the answer is 2");
+    queue.enqueueMessage({ sessionId: SESSION_A, claudeSessionId: CONVO_A }, "the answer is 2", "greg");
 
     const result = drainOnce(snap([row({ status: { kind: "needs-you" } })]), deps);
 
@@ -406,7 +467,7 @@ describe("drainOnce holds", () => {
   it("does not type at a shell or at a session whose Claude has exited", () => {
     for (const status of [SHELL, NO_CLAUDE]) {
       const { deps, queue, sent } = harness();
-      queue.enqueueMessage({ sessionId: SESSION_A, claudeSessionId: CONVO_A }, "hello");
+      queue.enqueueMessage({ sessionId: SESSION_A, claudeSessionId: CONVO_A }, "hello", "greg");
       const result = drainOnce(snap([row({ status })]), deps);
       expect(sent, status.kind).toHaveLength(0);
       expect(queue.size(SESSION_A)).toBe(1);
@@ -417,7 +478,7 @@ describe("drainOnce holds", () => {
 
   it("does not deliver into a conversation the pane has since been resumed into", () => {
     const { deps, queue, sent } = harness();
-    queue.enqueueMessage({ sessionId: SESSION_A, claudeSessionId: CONVO_A }, "for the old conversation");
+    queue.enqueueMessage({ sessionId: SESSION_A, claudeSessionId: CONVO_A }, "for the old conversation", "greg");
 
     const result = drainOnce(snap([row({ claudeSessionId: CONVO_RESUMED })]), deps);
 
@@ -433,7 +494,7 @@ describe("drainOnce holds", () => {
     // person to clear, over a row that will very likely have a pane again in
     // sixty seconds.
     const { deps, queue, sent } = harness();
-    queue.enqueueMessage({ sessionId: SESSION_A, claudeSessionId: CONVO_A }, "hello");
+    queue.enqueueMessage({ sessionId: SESSION_A, claudeSessionId: CONVO_A }, "hello", "greg");
 
     const result = drainOnce(snap([row({ paneId: null })]), deps);
 
@@ -450,7 +511,7 @@ describe("drainOnce holds", () => {
 
   it("holds a row whose conversation the collector could not name", () => {
     const { deps, queue, sent } = harness();
-    queue.enqueueMessage({ sessionId: SESSION_A, claudeSessionId: CONVO_A }, "hello");
+    queue.enqueueMessage({ sessionId: SESSION_A, claudeSessionId: CONVO_A }, "hello", "greg");
     const result = drainOnce(snap([row({ claudeSessionId: null })]), deps);
     expect(sent).toHaveLength(0);
     expect(queue.size(SESSION_A)).toBe(1);
@@ -477,7 +538,7 @@ describe("drainOnce fails honestly", () => {
       sent: [],
     };
     const { deps, queue, sent } = harness({ result: asking });
-    queue.enqueueMessage({ sessionId: SESSION_A, claudeSessionId: CONVO_A }, "hello");
+    queue.enqueueMessage({ sessionId: SESSION_A, claudeSessionId: CONVO_A }, "hello", "greg");
 
     const result = drainOnce(snap([row()]), deps);
 
@@ -503,7 +564,7 @@ describe("drainOnce fails honestly", () => {
       const { deps, queue, sent } = harness({
         result: { ...REFUSED, delivery, sent: [["send-keys", "-t", PANE_A, "-l", "--", "…"]] },
       });
-      queue.enqueueMessage({ sessionId: SESSION_A, claudeSessionId: CONVO_A }, "hello");
+      queue.enqueueMessage({ sessionId: SESSION_A, claudeSessionId: CONVO_A }, "hello", "greg");
 
       const result = drainOnce(snap([row()]), deps);
 
@@ -522,7 +583,7 @@ describe("drainOnce fails honestly", () => {
     // The queue's own guard, checked directly: the type stops a caller passing
     // the wrong evidence, and this stops an `as` somewhere else walking past it.
     const { queue } = harness();
-    const added = queue.enqueueMessage({ sessionId: SESSION_A, claudeSessionId: CONVO_A }, "hello");
+    const added = queue.enqueueMessage({ sessionId: SESSION_A, claudeSessionId: CONVO_A }, "hello", "greg");
     expect(added.ok).toBe(true);
     const leased = queue.next(SESSION_A, { status: IDLE, claudeSessionId: CONVO_A });
     expect(leased.kind).toBe("ready");
@@ -541,7 +602,7 @@ describe("drainOnce fails honestly", () => {
         throw new Error("tmux went away");
       },
     });
-    queue.enqueueMessage({ sessionId: SESSION_A, claudeSessionId: CONVO_A }, "hello");
+    queue.enqueueMessage({ sessionId: SESSION_A, claudeSessionId: CONVO_A }, "hello", "greg");
 
     const first = drainOnce(snap([row()]), deps);
     expect(sent).toHaveLength(1);
@@ -568,19 +629,19 @@ describe("drainOnce fails honestly", () => {
         return SENT_OK;
       },
     });
-    queue.enqueueMessage({ sessionId: SESSION_A, claudeSessionId: CONVO_A }, "for A");
-    queue.enqueueMessage({ sessionId: SESSION_B, claudeSessionId: CONVO_B }, "for B");
+    queue.enqueueMessage({ sessionId: SESSION_A, claudeSessionId: CONVO_A }, "for A", "greg");
+    queue.enqueueMessage({ sessionId: SESSION_B, claudeSessionId: CONVO_B }, "for B", "greg");
 
     const result = drainOnce(snap([row(), row({ id: SESSION_B, paneId: PANE_B, claudeSessionId: CONVO_B })]), deps);
 
-    expect(sent.map((s) => s.text)).toEqual(["for A", "for B"]);
+    expect(sent.map((s) => s.text)).toEqual([`${GREG}for A`, `${GREG}for B`]);
     expect(outcomesFor(result, SESSION_A).map((o) => o.kind)).toEqual(["threw"]);
     expect(outcomesFor(result, SESSION_B).map((o) => o.kind)).toEqual(["delivered"]);
   });
 
   it("holds an item that has waited too long rather than delivering it unasked", () => {
     const { deps, queue, sent, tick } = harness();
-    queue.enqueueMessage({ sessionId: SESSION_A, claudeSessionId: CONVO_A }, "run the checks");
+    queue.enqueueMessage({ sessionId: SESSION_A, claudeSessionId: CONVO_A }, "run the checks", "greg");
     tick(31 * 60_000);
 
     const result = drainOnce(snap([row()]), deps);
@@ -592,7 +653,7 @@ describe("drainOnce fails honestly", () => {
 
   it("says what happened in one line, without a word of what was said", () => {
     const { deps, queue } = harness();
-    queue.enqueueMessage({ sessionId: SESSION_A, claudeSessionId: CONVO_A }, "a secret plan nobody should log");
+    queue.enqueueMessage({ sessionId: SESSION_A, claudeSessionId: CONVO_A }, "a secret plan nobody should log", "greg");
     const line = summariseDrain(drainOnce(snap([row()]), deps));
     expect(line).toContain("delivered=1");
     expect(line).not.toContain("secret");
@@ -612,7 +673,7 @@ describe("drainOnce is bounded", () => {
   it("sends at most MAX_SENDS_PER_PASS items, however many are queued", () => {
     const { deps, queue, sent } = harness();
     const all = rows(MAX_SENDS_PER_PASS + 2);
-    for (const r of all) queue.enqueueMessage({ sessionId: r.id, claudeSessionId: CONVO_A }, `for ${r.id}`);
+    for (const r of all) queue.enqueueMessage({ sessionId: r.id, claudeSessionId: CONVO_A }, `for ${r.id}`, "greg");
 
     const result = drainOnce(snap(all), deps);
 
@@ -645,7 +706,7 @@ describe("drainOnce is bounded", () => {
       now: () => clock,
     };
     const all = rows(3);
-    for (const r of all) queue.enqueueMessage({ sessionId: r.id, claudeSessionId: CONVO_A }, `for ${r.id}`);
+    for (const r of all) queue.enqueueMessage({ sessionId: r.id, claudeSessionId: CONVO_A }, `for ${r.id}`, "greg");
 
     const result = drainOnce(snap(all), deps);
 
@@ -683,7 +744,7 @@ describe("drainOnce takes turns between passes", () => {
     // thirty minutes later its item is stale and gone.
     const all = fourRows();
     const { deps, queue, sent } = harness({ result: (t) => (t.sessionId === LAST ? SENT_OK : REFUSED) });
-    for (const r of all) queue.enqueueMessage({ sessionId: r.id, claudeSessionId: CONVO_A }, `for ${r.id}`);
+    for (const r of all) queue.enqueueMessage({ sessionId: r.id, claudeSessionId: CONVO_A }, `for ${r.id}`, "greg");
 
     drainOnce(snap(all), deps);
     expect(sent.map((s) => s.target.sessionId)).toEqual([IDS[0], IDS[1], IDS[2]]);
@@ -701,7 +762,7 @@ describe("drainOnce takes turns between passes", () => {
     // and the same four rows are candidates every time.
     const all = fourRows();
     const { deps, queue, sent } = harness({ result: REFUSED });
-    for (const r of all) queue.enqueueMessage({ sessionId: r.id, claudeSessionId: CONVO_A }, `for ${r.id}`);
+    for (const r of all) queue.enqueueMessage({ sessionId: r.id, claudeSessionId: CONVO_A }, `for ${r.id}`, "greg");
 
     for (let pass = 0; pass < 2; pass += 1) drainOnce(snap(all), deps);
 
@@ -713,7 +774,7 @@ describe("drainOnce takes turns between passes", () => {
     // honest fallback is the top of the snapshot rather than nothing at all.
     const all = fourRows();
     const { deps, queue, sent } = harness({ result: REFUSED });
-    for (const r of all) queue.enqueueMessage({ sessionId: r.id, claudeSessionId: CONVO_A }, `for ${r.id}`);
+    for (const r of all) queue.enqueueMessage({ sessionId: r.id, claudeSessionId: CONVO_A }, `for ${r.id}`, "greg");
 
     drainOnce(snap(all), deps);
     const before = sent.length;
@@ -731,7 +792,7 @@ describe("drainOnce takes turns between passes", () => {
 describe("drainOnce checks which tmux server it is looking at", () => {
   it("delivers nothing at all when the snapshot cannot say", () => {
     const { deps, queue, sent } = harness();
-    queue.enqueueMessage({ sessionId: SESSION_A, claudeSessionId: CONVO_A }, "hello");
+    queue.enqueueMessage({ sessionId: SESSION_A, claudeSessionId: CONVO_A }, "hello", "greg");
 
     const result = drainOnce(snap([row()], { tmuxServerPid: null }), deps);
 
@@ -748,7 +809,7 @@ describe("drainOnce checks which tmux server it is looking at", () => {
     // A restart re-issues `$…` and `%…` together, so the handle at the head of
     // this queue now names somebody else's session.
     const { deps, queue, sent } = harness();
-    queue.enqueueMessage({ sessionId: SESSION_A, claudeSessionId: CONVO_A }, "hello");
+    queue.enqueueMessage({ sessionId: SESSION_A, claudeSessionId: CONVO_A }, "hello", "greg");
     drainOnce(snap([row({ status: WORKING })]), deps);
 
     const after = drainOnce(snap([row()], { tmuxServerPid: TMUX_GENERATION + 1 }), deps);
@@ -774,7 +835,7 @@ describe("an enacted action cannot be queued", () => {
   it("is refused by the queue, in a sentence naming the alternative", () => {
     const { queue } = harness();
     for (const id of ["remove-worktree", "kill-session"]) {
-      const out = queue.enqueueAction({ sessionId: SESSION_A, claudeSessionId: CONVO_A }, id);
+      const out = queue.enqueueAction({ sessionId: SESSION_A, claudeSessionId: CONVO_A }, id, "greg");
       expect(out.ok, id).toBe(false);
       if (!out.ok) {
         expect(out.rule).toBe("enacted-not-deliverable");
@@ -784,7 +845,7 @@ describe("an enacted action cannot be queued", () => {
     }
     expect(queue.size(SESSION_A)).toBe(0);
     // Paired positive: a spoken action still goes in.
-    expect(queue.enqueueAction({ sessionId: SESSION_A, claudeSessionId: CONVO_A }, "push").ok).toBe(true);
+    expect(queue.enqueueAction({ sessionId: SESSION_A, claudeSessionId: CONVO_A }, "push", "greg").ok).toBe(true);
   });
 
   it("is refused by the route with a code the page can act on", async () => {

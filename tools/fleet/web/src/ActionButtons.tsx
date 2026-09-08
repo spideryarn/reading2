@@ -75,6 +75,7 @@ import { useCallback, useState, type ReactNode } from "react";
 
 import { RawValue } from "./RawValue";
 import {
+  actingWarning,
   boxActions,
   queueFor,
   sessionActions,
@@ -333,6 +334,30 @@ function Unrecognised({ actions }: { actions: ClientAction[] }): ReactNode {
   );
 }
 
+/**
+ * The line in front of a button that is going to refuse.
+ *
+ * **TOLD, NOT INFERRED, AND THEN READ.** `FLEET_ACT_ENABLED` is off by default,
+ * so on the live page every enacted action and every broadcast answers 409
+ * `acting-disabled` on the second tap. The route has always sent the flag,
+ * under a comment saying the alternative is *"a person discovering it by
+ * tapping and getting a 503"* — and nothing read it, so that is what the page
+ * did. `actingWarning` returns the SERVER'S sentence, never one written here,
+ * and returns null when the server said nothing rather than warning on silence.
+ *
+ * The buttons stay pressable: a dry run is not gated by the flag, and what it
+ * shows is worth having even when the second tap will refuse.
+ */
+function ActingOff({ feed }: { feed: ActionsFeed | null }): ReactNode {
+  const why = actingWarning(feed);
+  if (why === null) return null;
+  return (
+    <p className="tw:mb-1.5 tw:px-1 tw:text-[12px] tw:break-words tw:text-alarm-ink">
+      This server will not act: {why} A dry run still works, and the second press will be refused.
+    </p>
+  );
+}
+
 /* ------------------------------------------------------------------ *
  * One session's actions.
  * ------------------------------------------------------------------ */
@@ -468,6 +493,7 @@ export function SessionActions({
             These are not sentences. This tool runs a command — a directory deleted, a process signalled — and it
             happens whether or not the agent cooperates. Each one asks twice.
           </p>
+          <ActingOff feed={feed} />
           <div className="tw:flex tw:flex-wrap tw:gap-1.5">
             {enacted.map((action) => (
               <Button key={action.id} variant="danger" disabled={disabled} onClick={() => press(action)}>
@@ -493,12 +519,33 @@ export function SessionActions({
  * The queue.
  * ------------------------------------------------------------------ */
 
+/**
+ * Who put this in the queue, as a sentence — or null when it was Greg, which is
+ * the unremarkable case, and when the server did not say.
+ *
+ * **The words it will actually arrive with.** The server prefixes a spoken item
+ * at delivery with a line naming its sender, so an item queued by an automated
+ * coordinator is going to reach that agent announcing itself as one. Showing it
+ * here means the person holding the Cancel button is reading the same thing the
+ * agent will.
+ *
+ * Silence is not an accusation: a server that sent no `speaker` gets no
+ * sentence, exactly as `stale` and `stuck` get no claim made for them.
+ */
+function queuedBy(item: QueueItemView): string | null {
+  return item.speaker === "overseer" ? "Queued by the Overseer, an automated coordinator — it will arrive saying so." : null;
+}
+
 function itemLine(item: QueueItemView): { what: string; detail: string | null } {
   if (item.payload.kind === "action") {
     return { what: item.payload.label, detail: item.payload.text };
   }
   if (item.payload.kind === "message") {
-    return { what: "Your message", detail: item.payload.text };
+    // NOT "Your message" WHEN IT IS NOT YOURS. The queue is one ordered list per
+    // session and anything that can reach the route can add to it, so the
+    // possessive was a claim this page had no basis for the moment a coordinator
+    // could queue anything.
+    return { what: item.speaker === "overseer" ? "A message" : "Your message", detail: item.payload.text };
   }
   return { what: "Something this page cannot read", detail: item.payload.why };
 }
@@ -588,6 +635,7 @@ function QueueItem({
       {line.detail === null ? null : (
         <p className="tw:mt-1 tw:text-[12px] tw:break-words tw:text-ink-soft">{line.detail}</p>
       )}
+      {queuedBy(item) === null ? null : <p className="tw:mt-1 tw:text-[12px] tw:break-words tw:text-ink-faint">{queuedBy(item)}</p>}
       {/*
         ONE SENTENCE, CHOSEN BY `itemState`. The alarm colour on the two that
         mean an instruction is not going anywhere — the honest reading is that
@@ -897,6 +945,7 @@ export function BoxActions({
         Every one of these asks the box what it <em>would</em> do first, and shows you that answer before it does
         anything.
       </p>
+      <ActingOff feed={feed} />
       <div className="tw:flex tw:flex-wrap tw:gap-1.5">
         {actions.map((action) => (
           <Button
@@ -965,9 +1014,26 @@ export function BoxActions({
                   </p>
                 ) : null}
                 {preview.why === null ? null : <p className="tw:mt-1 tw:break-words tw:text-ink">{preview.why}</p>}
-                <div className="tw:mt-1">
-                  <RawValue value={preview.would} depth={0} />
-                </div>
+                {/*
+                  **A CONFIRMATION THAT CANNOT SAY WHAT IT WOULD DO MUST NOT
+                  LOOK LIKE ONE THAT CAN.** For the life of this panel the
+                  server sent no field of this name and `RawValue` drew the
+                  literal grey word "null" — an answer, in the same type as a
+                  real preview, in front of `kill-test-suites`. So the empty
+                  case is now a sentence in the alarm colour that names what is
+                  missing, and it is deliberately NOT filled in from anything
+                  this page could guess.
+                */}
+                {preview.result === null || preview.result === undefined ? (
+                  <p className="tw:mt-1 tw:font-medium tw:text-alarm-ink">
+                    This server did not say what it would destroy, so there is no Confirm below — the terminal and{" "}
+                    <Mono>gjd-remote</Mono> can still do it.
+                  </p>
+                ) : (
+                  <div className="tw:mt-1">
+                    <RawValue value={preview.result} depth={0} />
+                  </div>
+                )}
               </>
             ) : (
               <>
@@ -982,7 +1048,17 @@ export function BoxActions({
           </div>
 
           <div className="tw:mt-2 tw:flex tw:flex-wrap tw:gap-2">
-            {preview !== null && preview.ok ? (
+            {/*
+              **A DRY RUN THAT SAID NOTHING IS NOT A DRY RUN**, and it gets the
+              same treatment as one that failed: no Confirm. The rule above is
+              this file's own — "doing this without knowing what it would touch
+              is the one thing worth refusing" — and an `ok` answer with no
+              `result` in it leaves the person exactly as uninformed, while
+              looking like an answer. Every arm of the route fills `result`, so
+              this is unreachable against a server of this vintage; it is the
+              honest reading of an older one.
+            */}
+            {preview !== null && preview.ok && preview.result !== null && preview.result !== undefined ? (
               <Button
                 variant={pending.effect === "enacted" ? "danger" : "loud"}
                 disabled={busy}
@@ -1011,15 +1087,36 @@ export function BoxActions({
             done.ok ? "tw:border-work/40 tw:bg-work-wash" : "tw:border-alarm/40 tw:bg-alarm-wash",
           )}
         >
+          {/*
+            "Done." IS A CLAIM, AND IT IS THE SERVER'S TO MAKE. A server that
+            answered the second tap with a dry run has done nothing, and saying
+            "Done." over that is the reassuring half of a contradiction — the
+            same defect § Stage v0.5f names for "Queued." over a cancel. The
+            answer's own `dryRun` decides; a server that did not say gets the
+            heading that does not know.
+          */}
           <p className={cx("tw:font-medium", done.ok ? "tw:text-work-ink" : "tw:text-alarm-ink")}>
-            {done.ok ? "Done." : "Nothing happened."}
+            {!done.ok ? "Nothing happened." : !done.dryRunStated ? "The server answered." : done.dryRun ? "Nothing was done." : "Done."}
           </p>
           {done.ok ? (
             <>
+              {done.dryRunStated && done.dryRun ? (
+                <p className="tw:mt-1 tw:font-medium tw:text-alarm-ink">
+                  It answered with a dry run, so this is still only what it WOULD do. Nothing on the box has changed.
+                </p>
+              ) : !done.dryRunStated ? (
+                <p className="tw:mt-1 tw:text-unknown-ink">
+                  It did not say whether that was a dry run, so this page cannot tell you whether anything happened.
+                </p>
+              ) : null}
               {done.why === null ? null : <p className="tw:mt-1 tw:break-words tw:text-ink">{done.why}</p>}
-              <div className="tw:mt-1">
-                <RawValue value={done.would} depth={0} />
-              </div>
+              {done.result === null || done.result === undefined ? (
+                <p className="tw:mt-1 tw:text-ink-soft">It said nothing about what it touched.</p>
+              ) : (
+                <div className="tw:mt-1">
+                  <RawValue value={done.result} depth={0} />
+                </div>
+              )}
               <p className="tw:mt-1 tw:text-ink-faint">
                 What the server did, in its own words. A broadcast is a request: nothing here can prove an agent read
                 it.

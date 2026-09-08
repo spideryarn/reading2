@@ -294,6 +294,20 @@ export type QueueItemView = {
    * this is asked rather than computed here.
    */
   stuck: boolean | null;
+  /**
+   * WHO QUEUED IT, or null when the server did not say.
+   *
+   * The server renders a line naming the sender in front of the words at
+   * delivery, so this is not decoration: it is what the receiving agent will be
+   * told, shown to the person who can still cancel it. It is also the field
+   * that stops this page calling every queued message "Your message" — which it
+   * did, and which is a false claim about anything an automated coordinator put
+   * there.
+   *
+   * `null` rather than a default for the reason `stale` is: a server too old to
+   * send it has made no claim, and this page must not make one on its behalf.
+   */
+  speaker: "greg" | "overseer" | null;
 };
 
 /**
@@ -401,6 +415,7 @@ export function parseQueue(v: unknown): QueueView | null {
       invalidated: str(item["invalidated"]),
       stale: flag(item["stale"]),
       stuck: flag(item["stuck"]),
+      speaker: item["speaker"] === "greg" || item["speaker"] === "overseer" ? item["speaker"] : null,
     });
   }
   return {
@@ -432,6 +447,14 @@ export type ActionsFeed = {
   unreadableActions: number;
   queues: QueueView[];
   queuesOffered: boolean;
+  /**
+   * Whether this server will act at all, as it said. See `ActingReading`.
+   *
+   * Read rather than inferred: `FLEET_ACT_ENABLED` is off by default, so on the
+   * live page every enacted button and every broadcast refuses — and until this
+   * field was parsed the only way to find that out was to press one.
+   */
+  acting: ActingReading;
 };
 
 /**
@@ -507,6 +530,52 @@ function parseCatalogue(raw: unknown): { reading: CatalogueReading; actions: Cli
   return { reading: { kind: "read" }, actions, unreadable };
 }
 
+/**
+ * Whether this server will actually DO anything, in its own words.
+ *
+ * `FLEET_ACT_ENABLED` gates every enacted action and every broadcast, and it is
+ * off by default. The route sends the flag under a comment that says exactly
+ * why — *"TOLD, NOT INFERRED: the page cannot honestly warn about a flag it has
+ * never been told, and the alternative is a person discovering it by tapping
+ * and getting a 503"* — and for the life of the feature this parser did not
+ * read it, so the alternative is what happened.
+ *
+ * Three arms rather than a boolean, for the reason `CatalogueReading` has
+ * three: *off* and *this server never said* are different sentences, and a
+ * `false` that meant both would either cry wolf at every older server or say
+ * nothing at the one place a warning is owed.
+ */
+export type ActingReading =
+  /** It said acting is on. The buttons will be tried. */
+  | { kind: "on" }
+  /** It said acting is off, in `why` — which is the server's sentence, never one written here. */
+  | { kind: "off"; why: string }
+  /** No `acting` field. Nothing is claimed, and nothing is warned. */
+  | { kind: "not-told" };
+
+const ACTING_OFF_FALLBACK =
+  "this server did not say why, only that acting is switched off";
+
+function parseActing(raw: unknown): ActingReading {
+  if (!isRecord(raw)) return { kind: "not-told" };
+  const enabled = raw["enabled"];
+  if (enabled === true) return { kind: "on" };
+  if (enabled === false) return { kind: "off", why: str(raw["why"]) ?? ACTING_OFF_FALLBACK };
+  return { kind: "not-told" };
+}
+
+/**
+ * The one sentence to put in front of a button that will refuse, or null.
+ *
+ * Null when acting is on AND when the server never said — silence is not a
+ * warning, and a page that warned on silence would put a red line on every
+ * older server for ever.
+ */
+export function actingWarning(feed: ActionsFeed | null): string | null {
+  if (feed === null || feed.acting.kind !== "off") return null;
+  return feed.acting.why;
+}
+
 export function parseActionsFeed(raw: unknown): ActionsFeed | null {
   if (!isRecord(raw)) return null;
   const catalogue = parseCatalogue(raw["actions"]);
@@ -526,6 +595,7 @@ export function parseActionsFeed(raw: unknown): ActionsFeed | null {
     unreadableActions,
     queues,
     queuesOffered: Array.isArray(rawQueues),
+    acting: parseActing(raw["acting"]),
   };
 }
 
@@ -549,6 +619,25 @@ export function queueFor(feed: ActionsFeed | null, sessionId: string): QueueView
  * ------------------------------------------------------------------ */
 
 /**
+ * WHO IS SPEAKING, and from this page it is always a person.
+ *
+ * The server prepends a line saying which of Greg and the Overseer sent a
+ * message, because every message reaches an agent as an ordinary user turn and
+ * a coordinator's suggestion must not read as an instruction from Greg
+ * (tools/fleet/actions.ts § `Speaker`). `parseSpeaker` defaults an absent field
+ * to the WEAKER claim, so omitting it here would be safe — and would mean every
+ * message a person taps out arrived labelled as an automated coordinator's.
+ * Saying it is both the honest answer and the one the server's comment asks
+ * for: "a caller that wants Greg's authority has to ask for it in as many
+ * words."
+ *
+ * A literal rather than a parameter because this bundle only ever runs in front
+ * of a person. The day something automated posts these bodies it will not be
+ * this file, and it will have to say so itself.
+ */
+const GREG = "greg" as const;
+
+/**
  * Pressing an action button.
  *
  * `steerTargetBody` is imported, not copied: the five identity fields have one
@@ -558,21 +647,44 @@ export function queueFor(feed: ActionsFeed | null, sessionId: string): QueueView
  * which is what makes one ordered queue possible (queue.ts § QueuedPayload:
  * "two queues cannot promise that").
  */
-export type SessionActionBody = SteerTargetBody & { kind: "action"; actionId: string };
-export type SessionMessageBody = SteerTargetBody & { kind: "message"; text: string };
+export type SessionActionBody = SteerTargetBody & { kind: "action"; actionId: string; speaker: "greg" };
+export type SessionMessageBody = SteerTargetBody & { kind: "message"; text: string; speaker: "greg" };
 
 export function sessionActionBody(row: FleetRow, actionId: string): SessionActionBody {
-  return { ...steerTargetBody(row), kind: "action", actionId };
+  return { ...steerTargetBody(row), kind: "action", actionId, speaker: GREG };
 }
 
 export function sessionMessageBody(row: FleetRow, text: string): SessionMessageBody {
-  return { ...steerTargetBody(row), kind: "message", text };
+  return { ...steerTargetBody(row), kind: "message", text, speaker: GREG };
 }
 
-export type BoxActionBody = { actionId: string; dryRun: boolean };
+/**
+ * `mode`, WHICH IS THE FIELD THE ROUTE READS.
+ *
+ * This said `dryRun: boolean` until 2026-09-08 and the route has only ever
+ * parsed `mode` — so every box action ever pressed on this page was a dry run,
+ * including the one behind the second tap, and the panel then said "Done."
+ * over it. `parseMode` defaults this route to `dry-run`, which is why the
+ * mismatch was survivable rather than dangerous; it is still a button that has
+ * never once done what it says.
+ *
+ * `confirm` is the second half of the same silence. The route refuses a `run`
+ * of an action whose `needsConfirm` is true unless the body says so, and this
+ * page never said so — so even a body that had reached the route as a run would
+ * have been refused `confirm-required`. It is `!dryRun` rather than a parameter
+ * because on this page the only thing that asks for a real run IS the second
+ * tap: `commit` runs after the person has read the preview, which is exactly
+ * the claim the field makes. A caller that wants to run without confirming
+ * should not be calling this function.
+ *
+ * `speaker` is sent for the same reason `sessionActionBody` sends one: a
+ * broadcast is rendered with the sender's name in front of it, and an absent
+ * field means the weaker claim.
+ */
+export type BoxActionBody = { actionId: string; mode: "dry-run" | "run"; confirm: boolean; speaker: "greg" };
 
 export function boxActionBody(actionId: string, dryRun: boolean): BoxActionBody {
-  return { actionId, dryRun };
+  return { actionId, mode: dryRun ? "dry-run" : "run", confirm: !dryRun, speaker: GREG };
 }
 
 /**
@@ -637,7 +749,28 @@ function queueOp(v: unknown): QueueOp | null {
  * instead of the reply would hide it.
  */
 export type BoxOutcome =
-  | { ok: true; dryRun: boolean; dryRunStated: boolean; would: unknown; why: string | null }
+  | {
+      ok: true;
+      dryRun: boolean;
+      dryRunStated: boolean;
+      /**
+       * WHAT THE BOX DID, OR WOULD DO, in the server's own structure — the
+       * steps, the candidate pids, the recipients, the sample sentence.
+       *
+       * **One name, and it is the server's** (`routes-actions.ts` §
+       * What a box action answers). This used to read `would ?? result`, and
+       * neither of those was a field any route had ever sent, so the panel a
+       * person reads before pressing *kill* rendered the literal grey word
+       * "null" — every 200 answered, every test passed, and the two hand-written
+       * declarations simply disagreed about a word. An alias here is what made
+       * that survivable; there is one name now on purpose.
+       *
+       * `null` means the server sent nothing under it, which the panel says out
+       * loud rather than drawing as an empty preview.
+       */
+      result: unknown;
+      why: string | null;
+    }
   | { ok: false; code: string; why: string; status: number | null; from: "server" | "client" };
 
 export type FeedOutcome = { ok: true; feed: ActionsFeed } | { ok: false; why: string };
@@ -784,7 +917,7 @@ export function makeActionsApi(fetchImpl: typeof fetch = fetch): ActionsApi {
            it cannot tell — it does not fall back to what it asked for. */
         dryRun: stated ? parsed["dryRun"] === true : dryRun,
         dryRunStated: stated,
-        would: parsed["would"] ?? parsed["result"] ?? null,
+        result: parsed["result"] ?? null,
         why: typeof parsed["why"] === "string" ? parsed["why"] : null,
       };
     },
