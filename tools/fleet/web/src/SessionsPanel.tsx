@@ -60,7 +60,7 @@ import type { RenameApi } from "./rename-client";
 import type { SteerApi } from "./steer-client";
 import type { ActionsUi } from "./useActions";
 import { Card, SectionHeading, cx, toneClasses } from "./ui";
-import type { FleetRow } from "./types";
+import type { AnsweringReading, FleetRow } from "./types";
 import {
   ORDERINGS,
   ORDERING_LABELS,
@@ -307,12 +307,12 @@ export function SessionsPanel({
    */
   unreadableRows: number;
   /**
-   * Whether the server says answering a dialog will do anything, or null when
-   * it did not say. **Passed straight through to the detail pane** — the list
-   * cards have no answer buttons, so nothing here reads it. types.ts §
-   * `answeringEnabled`.
+   * Whether the server says answering a dialog will do anything — the four-arm
+   * reading, since silence is not a yes. **Passed straight through to the detail
+   * pane**; the list cards have no answer buttons, so nothing here reads it.
+   * types.ts § `AnsweringReading`.
    */
-  answeringEnabled: boolean | null;
+  answeringEnabled: AnsweringReading;
   /**
    * Which tmux server every `$…` and `%…` below belongs to. Passed through for
    * the same reason: it is drawn beside the handles in the detail pane, which

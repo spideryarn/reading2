@@ -75,6 +75,7 @@ import {
 import { makeNewSessionApi, parseLaunch, type NewSessionApi } from "../tools/fleet/web/src/new-session-client";
 import { looksLikeAName, makeRenameApi, renameBody, type RenameApi } from "../tools/fleet/web/src/rename-client";
 import {
+  checkLanding,
   makeSteerApi,
   parseDelivery,
   parseVerified,
@@ -238,14 +239,28 @@ function state(over: Partial<FleetState> = {}): FleetState {
        server had been sending for a day were simply absent from it — and from
        the page.
 
-       `null` for `answeringEnabled` rather than `true`, for the same reason
-       `attention` above is `not-asked`: it is what `parseFleetState` produces
-       for a payload that does not carry the field, so a fixture that does not
-       care about the flag gets the page a real older server would draw. A
-       fixture that cares about the hold passes `false` and asserts on the card.
+       `not-reported` for `answeringEnabled` rather than `enabled`, for the same
+       reason `attention` above is `not-asked`: it is what `parseFleetState`
+       produces for a payload that does not carry the field, so a fixture that
+       does not care about the flag gets the page a real older server would draw.
+
+       **Since GPT Sol's M3 that arm withholds the answer buttons**, so a test
+       about answering has to say `{ kind: "enabled" }` out loud — which is the
+       right way round. The buttons are the one control the page fails CLOSED on
+       (types.ts § `AnsweringReading`: the kill switch is older than the field,
+       so silence is not evidence that a tap would land), and a fixture that
+       silently supplied permission would be testing a page nobody runs.
        `tmuxServerPid` is a real-looking pid because the tmux server on this box
        is pid 132280 and the detail pane prints it verbatim. */
-    answeringEnabled: null,
+    answeringEnabled: { kind: "not-reported" },
+    /* Same argument as `pause` and `attention` above: `not-reported` is what
+       `readAttemptClock` returns for a payload that has collected but carries no
+       attempt clock, so a fixture that does not care gets the reading the page
+       would really build off an older server. `never-attempted` would be a
+       positive claim — *this collector has not started one* — that no fixture is
+       in a position to make, and `attempted` would quietly assert the loop is
+       alive in every staleness test. tools/fleet/attempt-clock.ts. */
+    attemptedAt: { kind: "not-reported", why: "the fixture did not say" },
     tmuxServerPid: 132280,
     ...over,
   };
@@ -301,7 +316,15 @@ function manualTransport(): {
  * read fails as itself instead of as a chain of optional accesses that quietly
  * assert nothing.
  */
-type WirePayload = { [K in keyof FleetStateWire]?: FleetStateWire[K] | undefined };
+/* **BOTH HOLES ARE `unknown` HERE, AND THAT IS THE FIXTURE'S HONEST ANSWER.**
+   This used to name neither and inherit two `= unknown` defaults from the wire
+   type; those defaults are gone (GPT Sol's M2), because a caller inheriting a
+   hole it did not know about is how a hole stops being reviewed. A payload
+   fixture is raw JSON on its way into `parseFleetState`, so `unknown` is what
+   its rows and its health genuinely are — not a placeholder. */
+type WirePayload = {
+  [K in keyof FleetStateWire<unknown, unknown>]?: FleetStateWire<unknown, unknown>[K] | undefined;
+};
 
 function wire(over: WirePayload): FleetState {
   const read = parseFleetState({ schema: 1, rows: [], ...over }, Date.now());
@@ -2505,6 +2528,11 @@ describe("what is actually being approved", () => {
     act(() =>
       feed.push(
         state({
+          /* SAID OUT LOUD, because the page fails closed on this now: the answer
+             buttons are drawn only on a positive `enabled`, so a test about
+             whether they appear has to state the permission it assumes rather
+             than inherit it. types.ts § `AnsweringReading`. */
+          answeringEnabled: { kind: "enabled" },
           rows: [
             steerable({
               id: "$a",
@@ -2534,6 +2562,8 @@ describe("answering, and the dialogs it is not offered for", () => {
     act(() =>
       feed.push(
         state({
+          // The permission this half assumes, stated. See the loop-menu test above.
+          answeringEnabled: { kind: "enabled" },
           rows: [
             steerable({
               id: "$a",
@@ -2554,6 +2584,10 @@ describe("answering, and the dialogs it is not offered for", () => {
     act(() =>
       feed.push(
         state({
+          /* AND ON THIS HALF TOO, so that the zero below is the GATE's doing
+             rather than the flag's. A negative that could be produced by either
+             of two causes proves neither. */
+          answeringEnabled: { kind: "enabled" },
           rows: [
             steerable({
               id: "$a",
@@ -2703,11 +2737,13 @@ describe("answering, and the dialogs it is not offered for", () => {
       transport: feed.transport,
       steer: refusingSteer({ ok: false, code: "answering-disabled", why, status: 503, from: "server", delivery: { kind: "none" } }),
     });
-    // `conversation`, so the buttons are there to be taken away. The whole
-    // server being switched off is a fact the page cannot know until it asks.
+    // `conversation` AND `enabled`, so the buttons are there to be taken away.
+    // This test is about the server changing its mind at the moment of the tap:
+    // it said answering was on, and refused anyway.
     act(() =>
       feed.push(
         state({
+          answeringEnabled: { kind: "enabled" },
           rows: [
             steerable({
               id: "$a",
@@ -2818,7 +2854,13 @@ describe("the rule about sending the server its own claims back", () => {
   }
 
   it("hands `question` back byte-identical, extra fields and all", async () => {
-    const parsed = wire({ rows: [wireRow], collectedAt: state().collectedAt });
+    /* `answeringEnabled: true` on the RAW PAYLOAD, not on a parsed fixture:
+       these two tests drive the real parser and the real steer api, and the
+       page draws answer buttons only on a positive reading of this field
+       (types.ts § `AnsweringReading`). An honest server sends it; omitting it
+       here would be testing the page an older server draws, which has no
+       buttons to click. */
+    const parsed = wire({ rows: [wireRow], collectedAt: state().collectedAt, answeringEnabled: true });
     expect(parsed.rows).toHaveLength(1);
 
     const recorded = recordingFetch({ status: 200, body: { ok: true, op: "answer", sent: [["tmux", "send-keys"]] } });
@@ -2877,7 +2919,13 @@ describe("the rule about sending the server its own claims back", () => {
     /* If the client refreshed first, every guard in steer.ts would be comparing
        the box against itself and would pass unconditionally — routes-steer.ts
        says so at length. So the only request an answer may make is the answer. */
-    const parsed = wire({ rows: [wireRow], collectedAt: state().collectedAt });
+    /* `answeringEnabled: true` on the RAW PAYLOAD, not on a parsed fixture:
+       these two tests drive the real parser and the real steer api, and the
+       page draws answer buttons only on a positive reading of this field
+       (types.ts § `AnsweringReading`). An honest server sends it; omitting it
+       here would be testing the page an older server draws, which has no
+       buttons to click. */
+    const parsed = wire({ rows: [wireRow], collectedAt: state().collectedAt, answeringEnabled: true });
     const recorded = recordingFetch({ status: 200, body: { ok: true, op: "answer", sent: [] } });
     vi.stubGlobal("fetch", recorded.impl);
 
@@ -6121,15 +6169,23 @@ describe("the composer production uses turns a checkpoint on disk into a questio
    ========================================================================== */
 
 describe("answeringEnabled, told rather than discovered by tapping", () => {
-  it("keeps 'off' apart from 'this server never said'", () => {
-    expect(wire({ answeringEnabled: true }).answeringEnabled).toBe(true);
-    expect(wire({ answeringEnabled: false }).answeringEnabled).toBe(false);
-    /* THE THIRD ANSWER, and the reason this is not a boolean. A server built
-       before the flag sends nothing, and both `true` and `false` would be
-       claims made on its behalf — one invites the tap the hold exists to
-       prevent, the other prints a warning nothing supports. */
-    expect(wire({}).answeringEnabled).toBeNull();
-    expect(malformed({ answeringEnabled: "yes" }).answeringEnabled).toBeNull();
+  it("keeps four answers apart, and rounds none of them up to a yes", () => {
+    expect(wire({ answeringEnabled: true }).answeringEnabled).toEqual({ kind: "enabled" });
+    expect(wire({ answeringEnabled: false }).answeringEnabled).toEqual({ kind: "disabled" });
+    /* THE TWO THAT ARE NEITHER, and the reason this is not a boolean. A server
+       built before the flag sends nothing; a server sending nonsense has said
+       something this build cannot read. They are different things to go and
+       check, so they stay apart — and NEITHER is permission (GPT Sol's M3: the
+       kill switch predates the field, so silence is consistent with the hold
+       being on). */
+    expect(wire({}).answeringEnabled).toEqual({ kind: "not-reported" });
+    const unreadable = malformed({ answeringEnabled: "yes" }).answeringEnabled;
+    expect(unreadable.kind).toBe("unreadable");
+    /* A malformed value USED to become `null` and therefore permission to draw
+       the control — the fail-open path, arriving through the arm meant for an
+       older server. */
+    expect(malformed({ answeringEnabled: null }).answeringEnabled.kind).toBe("unreadable");
+    expect(malformed({ answeringEnabled: 1 }).answeringEnabled.kind).toBe("unreadable");
   });
 
   it("says answering is off BEFORE anybody taps, and withholds the buttons", () => {
@@ -6141,7 +6197,7 @@ describe("answeringEnabled, told rather than discovered by tapping", () => {
     act(() =>
       feed.push(
         state({
-          answeringEnabled: true,
+          answeringEnabled: { kind: "enabled" },
           rows: [
             steerable({
               id: "$a",
@@ -6160,7 +6216,7 @@ describe("answeringEnabled, told rather than discovered by tapping", () => {
     act(() =>
       feed.push(
         state({
-          answeringEnabled: false,
+          answeringEnabled: { kind: "disabled" },
           rows: [
             steerable({
               id: "$a",
@@ -6183,13 +6239,29 @@ describe("answeringEnabled, told rather than discovered by tapping", () => {
     expect(container.querySelector<HTMLTextAreaElement>("#steer-text")?.disabled).toBe(false);
   });
 
-  it("still offers the buttons when the server never said, rather than inventing a hold", () => {
+  /**
+   * **THE ARM THAT REVERSED, AND WHY.**
+   *
+   * This test used to be called *"still offers the buttons when the server never
+   * said, rather than inventing a hold"*, and it asserted the opposite of what
+   * it asserts now. My reasoning was that refusing on silence would invent a
+   * hold nobody declared. GPT Sol's M3 corrected it on a fact rather than a
+   * preference: **the kill switch predates the state field in history**, so a
+   * server old enough not to send this is a server that can have answering
+   * switched off with no way to say so. Silence is therefore not evidence that
+   * answering works, and this is the one control where acting on that costs a
+   * person a 503 and costs the hold its whole purpose.
+   *
+   * The page says the third thing rather than picking one of the first two: the
+   * sentence must not read as *a hold was declared*, because none was.
+   */
+  it("withholds the buttons when the server never said, without claiming a hold", () => {
     const feed = manualTransport();
     mountFull({ transport: feed.transport });
     act(() =>
       feed.push(
         state({
-          answeringEnabled: null,
+          answeringEnabled: { kind: "not-reported" },
           rows: [
             steerable({
               id: "$a",
@@ -6202,8 +6274,160 @@ describe("answeringEnabled, told rather than discovered by tapping", () => {
       ),
     );
     openSession("an old server's row");
-    expect(container.querySelectorAll("button.answer").length).toBeGreaterThan(0);
-    expect(container.textContent).not.toContain("Answering is switched off");
+    expect(container.querySelectorAll("button.answer")).toHaveLength(0);
+    const text = container.textContent ?? "";
+    expect(text).toContain("could not be established");
+    /* NOT the declared-hold sentence: nobody switched anything off, and saying
+       they did would be a claim about the box made off an absence. */
+    expect(text).not.toContain("Answering is switched off");
+    /* And the composer is untouched, exactly as under a declared hold. */
+    expect(container.querySelector<HTMLTextAreaElement>("#steer-text")?.disabled).toBe(false);
+  });
+
+  it("keeps 'never said' apart from 'said something unreadable' on the page", () => {
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport });
+    act(() =>
+      feed.push(
+        state({
+          answeringEnabled: { kind: "unreadable", why: 'the server sent "yes" where this page reads true or false' },
+          rows: [
+            steerable({
+              id: "$a",
+              title: "a garbled row",
+              status: { kind: "needs-you" },
+              question: question({ gate: { kind: "conversation" } }),
+            }),
+          ],
+        }),
+      ),
+    );
+    openSession("a garbled row");
+    const text = container.textContent ?? "";
+    expect(container.querySelectorAll("button.answer")).toHaveLength(0);
+    /* The server's own unreadable value, quoted, because "we could not read it"
+       and "it did not say" send a reader to two different places. */
+    expect(text).toContain("could not be read");
+    expect(text).toContain('"yes"');
+    expect(text).not.toContain("did not say whether answering is switched on");
+  });
+});
+
+describe("attemptedAt — a loop that stopped, apart from a run that hung", () => {
+  /**
+   * **THE LOSSY JOIN THAT WAS DECLINED, AND THE DIAGNOSTIC IT COST.**
+   *
+   * The client named `attemptedAt` in its `Omit<>` and read nothing, on the
+   * reasoning that `readAttemptClock` is a runtime value and so could not be
+   * shared with a browser project. It is not: what that project cannot tolerate
+   * is a NODE dependency. So the helper moved to `tools/fleet/attempt-clock.ts`,
+   * a leaf with no imports, and both sides import the one implementation rather
+   * than growing a second hand-written three-arm parse. GPT Sol's M5.
+   *
+   * The fault it restores is the one v0.4j leaned on: a collection that never
+   * settles throws nothing, so `error` stays null and the masthead reads calm
+   * while `collectedAt` goes thirty minutes stale.
+   */
+  it("reads the three arms off a real payload, not off a hand-built fixture", () => {
+    /* THROUGH `parseFleetState`, because that is the path a payload takes and
+       the shape of the reading is decided there. */
+    const collectedAt = "2026-09-08T12:00:00Z";
+    expect(wire({ collectedAt, attemptedAt: "2026-09-08T12:09:00Z" }).attemptedAt).toEqual({
+      kind: "attempted",
+      /* Verbatim: `wire()` supplies no `servedAt`, so the skew is unmeasured and
+         the correction is zero rather than a guess. See `ClockSkew`. */
+      at: "2026-09-08T12:09:00Z",
+    });
+    /* A server too old to report it, which must NEVER read as "never attempted"
+       — that would print "wedged" over every older server. `collectedAt` is what
+       separates the two, and it is the whole inference. */
+    expect(wire({ collectedAt }).attemptedAt.kind).toBe("not-reported");
+    /* Neither: nothing has ever arrived and nothing has ever been started, and a
+       consumer does the same thing about both. */
+    expect(wire({ collectedAt: null }).attemptedAt).toEqual({ kind: "never-attempted" });
+  });
+
+  it("shifts the attempt clock onto this browser's clock, like every other timestamp", () => {
+    /* A phone whose clock is three minutes behind the box's. The reading has to
+       arrive already corrected, because what it is compared against downstream
+       is `useNow()` — mixing the two clocks is what held the STALE banner on
+       permanently before v0.4j. */
+    const receivedAt = Date.parse("2026-09-08T12:00:00Z");
+    const read = parseFleetState(
+      {
+        schema: 1,
+        rows: [],
+        /* `toISOString()` form exactly: `readClockSkew` refuses anything else
+           rather than letting a loose parse shift the whole page by years. */
+        servedAt: "2026-09-08T12:03:00.000Z",
+        collectedAt: "2026-09-08T11:50:00Z",
+        attemptedAt: "2026-09-08T12:02:00Z",
+      },
+      receivedAt,
+    );
+    if (!read.ok) throw new Error(read.why);
+    const clock = read.state.attemptedAt;
+    expect(clock.kind).toBe("attempted");
+    if (clock.kind !== "attempted") throw new Error("unreachable");
+    expect(Date.parse(clock.at)).toBe(Date.parse("2026-09-08T11:59:00Z"));
+  });
+
+  it("says WHICH kind of stale a stale snapshot is", () => {
+    const now = Date.parse("2026-09-08T12:10:00Z");
+    const stale = { collectedAt: "2026-09-08T12:00:00Z" };
+
+    /* A run that began after the last success and has not come back. This is the
+       silent stall: `error` is null and every other line on the masthead is
+       calm, so without this sentence a wedged collector reads as a quiet box. */
+    const hung = freshness({
+      state: state({ ...stale, attemptedAt: { kind: "attempted", at: "2026-09-08T12:08:00Z" } }),
+      receivedAt: now,
+      error: null,
+      failures: 0,
+      now,
+    });
+    expect(hung.stale).toBe(true);
+    expect(hung.why).toContain("has not finished");
+
+    /* Nothing has been started since the last success: the loop itself is gone,
+       which is a different thing to go and look at. */
+    const stopped = freshness({
+      state: state({ ...stale, attemptedAt: { kind: "attempted", at: "2026-09-08T11:59:00Z" } }),
+      receivedAt: now,
+      error: null,
+      failures: 0,
+      now,
+    });
+    expect(stopped.why).toContain("the loop itself has stopped");
+    expect(stopped.why).not.toContain("has not finished");
+
+    /* And a server that does not report it says so, rather than being reported
+       as permanently wedged. */
+    const silent = freshness({
+      state: state({ ...stale, attemptedAt: { kind: "not-reported", why: "this server does not report it" } }),
+      receivedAt: now,
+      error: null,
+      failures: 0,
+      now,
+    });
+    expect(silent.why).toContain("cannot be told");
+    expect(silent.why).not.toContain("has not finished");
+    expect(silent.why).not.toContain("the loop itself has stopped");
+  });
+
+  it("says nothing about attempts on a snapshot that is not stale", () => {
+    /* Fable's rule: a caveat stays on screen only if it would change what you do
+       in the next ten seconds. On a fresh snapshot there is nothing to diagnose. */
+    const now = Date.now();
+    const fresh = freshness({
+      state: state({ attemptedAt: { kind: "attempted", at: new Date(now).toISOString() } }),
+      receivedAt: now,
+      error: null,
+      failures: 0,
+      now,
+    });
+    expect(fresh.stale).toBe(false);
+    expect(fresh.why).toBeNull();
   });
 });
 
@@ -6230,7 +6454,7 @@ describe("tmuxServerPid, the namespace the handles live in", () => {
   });
 });
 
-describe("verified — which pane the keystrokes actually reached", () => {
+describe("verified — what was true of the target in the moment before sending", () => {
   it("refuses half an address rather than filling the missing half in", () => {
     const whole = { paneId: "%2108", sessionId: "$1643", panePid: 4242, claudePid: 4243 };
     expect(parseVerified(whole)).toEqual({ kind: "verified", ...whole });
@@ -6266,7 +6490,7 @@ describe("verified — which pane the keystrokes actually reached", () => {
       buttonSaying("Send now")?.click();
     });
     const text = container.textContent ?? "";
-    expect(text).toContain("IT WENT SOMEWHERE ELSE");
+    expect(text).toContain("IT WAS NOT THE SESSION YOU TAPPED");
     expect(text).toContain("%9999");
   });
 
@@ -6283,9 +6507,97 @@ describe("verified — which pane the keystrokes actually reached", () => {
     });
     const text = container.textContent ?? "";
     expect(text).toContain("Sent.");
-    expect(text).toContain("Landed in");
     expect(text).toContain("%2108");
-    expect(text).not.toContain("IT WENT SOMEWHERE ELSE");
+    expect(text).not.toContain("IT WAS NOT THE SESSION YOU TAPPED");
+  });
+
+  /* --- M1: it is a PRE-SEND check, and the page must not call it delivery --- */
+
+  it("compares the pane's pid, so a respawn under the same handles is not agreement", () => {
+    const target = { paneId: "%2108", sessionId: "$1643", panePid: 4242 };
+    const verified = { kind: "verified", paneId: "%2108", sessionId: "$1643", claudePid: 5 } as const;
+
+    /* THE CASE THE FIRST VERSION MISSED. `tmux respawn-pane` and a resume both
+       keep the pane and session handles and replace the process underneath, so
+       comparing only those two says "same address" and calls it "same program". */
+    const respawned = checkLanding({ ...verified, panePid: 9999 }, target);
+    expect(respawned.kind).toBe("disagrees");
+    if (respawned.kind !== "disagrees") throw new Error("unreachable");
+    expect(respawned.differing).toEqual(["pane pid"]);
+
+    const same = checkLanding({ ...verified, panePid: 4242 }, target);
+    expect(same.kind).toBe("agrees");
+    if (same.kind !== "agrees") throw new Error("unreachable");
+    /* And it SAYS which fields it used, because a comparison that named none
+       reads identically to one that compared nothing. */
+    expect(same.compared).toEqual(["session", "pane", "pane pid"]);
+    expect(same.unchecked).toEqual([]);
+  });
+
+  it("records a field it could not compare rather than counting it as a match", () => {
+    /* A row with no pid never claimed one, and the server treats that as "no
+       respawn check" — so the honest reading is that the process was not
+       compared, not that it agreed. */
+    const check = checkLanding(
+      { kind: "verified", paneId: "%2108", sessionId: "$1643", panePid: 4242, claudePid: 5 },
+      { paneId: "%2108", sessionId: "$1643", panePid: null },
+    );
+    expect(check.kind).toBe("agrees");
+    if (check.kind !== "agrees") throw new Error("unreachable");
+    expect(check.unchecked).toEqual(["pane pid"]);
+    expect(check.compared).toEqual(["session", "pane"]);
+  });
+
+  it("does not claim delivery, because nothing measured the pane after the send", async () => {
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport, steer: recordingSteer().api });
+    act(() => feed.push(state({ rows: [steerable({ id: "$a", title: "a session", paneId: "%2108" })] })));
+    openSession("a session");
+    const box = container.querySelector<HTMLTextAreaElement>("#steer-text");
+    if (!box) throw new Error("no message box");
+    typeInto(box, "carry on");
+    await act(async () => {
+      buttonSaying("Send now")?.click();
+    });
+    const text = container.textContent ?? "";
+    /* `verifyTarget` runs BEFORE the capture and before the send-keys calls and
+       is never recomputed, so both of these are assertions the page cannot
+       support. They were on screen until 2026-09-08. */
+    expect(text).not.toContain("Landed in");
+    expect(text).not.toContain("keys were typed at");
+    expect(text).toContain("immediately before the keys went");
+    expect(text).toContain("not a receipt");
+    /* And it names what it used, so "checked" cannot be read as "checked
+       everything". */
+    expect(text).toContain("session, pane and pane pid");
+  });
+
+  it("checks the outcome against the row that was TAPPED, not the row on screen now", async () => {
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport, steer: recordingSteer().api });
+    act(() =>
+      feed.push(state({ rows: [steerable({ id: "$a", title: "a session", paneId: "%2108", panePid: 4242 })] })),
+    );
+    openSession("a session");
+    const box = container.querySelector<HTMLTextAreaElement>("#steer-text");
+    if (!box) throw new Error("no message box");
+    typeInto(box, "carry on");
+    await act(async () => {
+      buttonSaying("Send now")?.click();
+    });
+    expect(container.textContent ?? "").not.toContain("IT WAS NOT THE SESSION YOU TAPPED");
+
+    /* THE ROW MOVES UNDER THE CARD. The detail pane is keyed by session id, so
+       this outcome survives — and a comparison against the LIVE row would now
+       shout that a perfectly-aimed send went somewhere else, on the strength of
+       a pane handle that changed after the keys had already gone. */
+    act(() =>
+      feed.push(state({ rows: [steerable({ id: "$a", title: "a session", paneId: "%3000", panePid: 7777 })] })),
+    );
+    const text = container.textContent ?? "";
+    expect(text).not.toContain("IT WAS NOT THE SESSION YOU TAPPED");
+    /* It still names the address the send was actually aimed at, not the new one. */
+    expect(text).toContain("%2108");
   });
 });
 
@@ -6395,8 +6707,72 @@ describe("resolution and startedDir — what new-session actually did", () => {
        setup lock — the thing that once let this dashboard start an agent in a
        checkout a setup run was rewriting. It is not a plumbing detail. */
     expect(text).toContain("outside the repo's setup lock");
+    expect(text).toContain("Started with");
     /* And the ordinary path gets no such line, because a caveat drawn on every
        row is one nobody reads. */
     expect(text).not.toContain("Started in /home");
+  });
+
+  /**
+   * **ONE CARD MUST NOT BE IN TWO TENSES ABOUT WHETHER ANYTHING RAN.**
+   *
+   * The server assigns `resolution` when the record is minted, while it is still
+   * `starting`, and keeps it on a failure (routes-new.ts) — so the `-d` line
+   * said *"Started with `-d`"* underneath *"Starting…"* and underneath
+   * *"Failed. Nothing was started."* The second of those is the expensive one:
+   * the headline says nothing ran and the line below it says it started. GPT
+   * Sol's M4.
+   */
+  /** One `-d` launch in whichever state, taken all the way to text on the page. */
+  async function renderDashD(over: Record<string, unknown>): Promise<string> {
+    const record = parseLaunch({
+      id: "L12",
+      state: "starting",
+      name: "loose",
+      dir: "/tmp/somewhere",
+      resolution: "dir",
+      startedDir: null,
+      promptBytes: 9,
+      requestedAt: "",
+      finishedAt: null,
+      error: null,
+      maybeStarted: false,
+      note: null,
+      ...over,
+    });
+    if (record === null) throw new Error("the fixture did not parse");
+    const feed = manualTransport();
+    mountFull({
+      transport: feed.transport,
+      newSession: fakeNewSession({
+        start: async () => ({ accepted: true, launch: record }),
+        poll: async () => ({ ok: true, feed: { busy: false, retryAfterMs: 0, launches: [record] } }),
+      }),
+    });
+    act(() => feed.push(state({ rows: [] })));
+    openNewSession();
+    type("new-session-prompt", "start me");
+    await act(async () => {
+      buttonSaying("Start it")?.click();
+    });
+    return container.textContent ?? "";
+  }
+
+  it("does not say a -d launch STARTED while it is still starting", async () => {
+    const text = await renderDashD({});
+    expect(text).toContain("Starting…");
+    /* The caveat is still drawn — which door was used is known from the moment
+       the record is minted, and it is the tense that was wrong, not the fact. */
+    expect(text).toContain("outside the repo's setup lock");
+    expect(text).not.toContain("Started with");
+  });
+
+  it("does not say a -d launch STARTED after it failed", async () => {
+    /* The one that cost the most to read: "Failed. Nothing was started." with
+       "Started with -d" directly beneath it, on one card. */
+    const text = await renderDashD({ state: "failed", error: "gjd-remote refused", finishedAt: "" });
+    expect(text).toContain("Failed. Nothing was started.");
+    expect(text).toContain("outside the repo's setup lock");
+    expect(text).not.toContain("Started with");
   });
 });

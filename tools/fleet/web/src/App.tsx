@@ -33,7 +33,7 @@ import { httpNewSessionApi, type NewSessionApi } from "./new-session-client";
 import { httpRenameApi, type RenameApi } from "./rename-client";
 import { httpSteerApi, type SteerApi } from "./steer-client";
 import type { Transport } from "./transport";
-import { CLOCK_SKEW_UNMEASURED, type ClockSkew } from "./types";
+import { ANSWERING_NOT_REPORTED, CLOCK_SKEW_UNMEASURED, type ClockSkew } from "./types";
 import { cx } from "./ui";
 import { useActions } from "./useActions";
 import { useFleetState } from "./useFleetState";
@@ -166,13 +166,14 @@ export function App({
               now={now}
               collected={feed.state?.collectedAt != null}
               unreadableRows={feed.state?.unreadableRows ?? 0}
-              /* **`?? null` IS THE HONEST DEFAULT FOR BOTH**, and it is not the
-                 same as `?? false`/`?? 0`. Before the first payload arrives
-                 this page has been told nothing, and inventing `false` here
-                 would print "answering is switched off" over a server that has
-                 said no such thing — the mirror of the drop this stage repairs.
-                 types.ts § `answeringEnabled`. */
-              answeringEnabled={feed.state?.answeringEnabled ?? null}
+              /* **NEITHER DEFAULT IS `false`/`0`.** Before the first payload
+                 arrives this page has been told nothing, and inventing `false`
+                 here would print "answering is switched off" over a server that
+                 has said no such thing — the mirror of the drop this stage
+                 repairs. `ANSWERING_NOT_REPORTED` says the true thing instead,
+                 and withholds the control while it says it. types.ts §
+                 `AnsweringReading`. */
+              answeringEnabled={feed.state?.answeringEnabled ?? ANSWERING_NOT_REPORTED}
               tmuxServerPid={feed.state?.tmuxServerPid ?? null}
               order={order}
               onOrder={(next) => setParam("order", next === "status" ? null : next)}

@@ -32,6 +32,7 @@
  * silently rounded a new state to "idle" would be the exact lie the status
  * module exists to prevent.
  */
+import { readAttemptClock, type AttemptClock } from "../../attempt-clock.js";
 import type {
   AttentionAnswerability,
   AttentionEvidence,
@@ -43,6 +44,8 @@ import type {
   Pause,
   PauseUnknownCause,
 } from "../../wire.js";
+
+export type { AttemptClock };
 
 export type {
   AttentionAnswerability,
@@ -278,10 +281,20 @@ export type FleetRow = {
  * and `grep -c tmuxServerPid` in this file both returned **zero**. Neither end
  * could go red, because each was internally consistent.
  *
- * So every field the server sends is in this type unless it is NAMED in the
- * `Omit<>` below, and `parseFleetState`'s object literal does not compile until
- * each one is either parsed or named. Dropping a field is now a line somebody
- * has to write and a reviewer can see.
+ * So every REQUIRED field the server sends is in this type unless it is NAMED
+ * in the `Omit<>` below, and `parseFleetState`'s object literal does not compile
+ * until each one is either parsed or named. Dropping a field is now a line
+ * somebody has to write and a reviewer can see.
+ *
+ * **"Required" is doing real work in that sentence** and it was missing from it
+ * for a day (GPT Sol's M2). An OPTIONAL key on the wire type slips through
+ * untouched: this `Omit<>` carries the `?` across with it, the parse's object
+ * literal is free to omit it, and the field ships to a browser that never reads
+ * it — the exact drop this derivation exists to prevent, through the one door it
+ * does not cover. Which is why the wire type may not have one:
+ * `tests/fleet-compile-guards.test.ts` refuses an optional top-level key on it,
+ * and `npm run typecheck` is the gate. Nothing here has to defend against it,
+ * but nobody should believe this paragraph promises more than it does.
  *
  * **This is a derivation and not an adoption, and the difference is the whole
  * design.** Several fields are deliberately WEAKER here than on the wire,
@@ -308,24 +321,21 @@ export type FleetState = Omit<
   | "answeringEnabled"
   | "refreshMs"
   | "attention"
+  /* Re-typed too, and it was DECLINED for a day on reasoning that did not hold.
+     The entry here used to say that `readAttemptClock` is a runtime value, so it
+     could not live in wire.ts, so both sides could not share one — and therefore
+     the client would not read `attemptedAt` at all. The middle step is the wrong
+     one: what the browser project cannot tolerate is a NODE dependency, and "no
+     runtime values" is wire.ts's own rule about its own file. A leaf module with
+     no imports has neither problem, so `attempt-clock.ts` exists and both sides
+     import it. GPT Sol's M5. */
+  | "attemptedAt"
   /* Declined: READ AT THE BOUNDARY AND NOT CARRIED. `schema` decides whether to
      believe the payload at all (`parseFleetState` refuses anything else), and
      `servedAt` is consumed into `clockSkew` below — carrying either would be a
      second copy of a decision already made. */
   | "schema"
   | "servedAt"
-  /* Declined: NOT READ, and this is the one entry that is a debt rather than a
-     decision. `attemptedAt` distinguishes "the box is quiet" from "we stopped
-     looking" — the fault it was added for is a collection that never settles,
-     which throws nothing, so `error` stays null and the masthead says calm. To
-     read it honestly a client needs the three arms of `readAttemptClock`
-     (state.ts): absent means EITHER never attempted OR a server too old to
-     report it, and only `collectedAt` separates them. That helper is a runtime
-     value, so it cannot live in wire.ts, and giving both sides one home for it
-     is a decision about a shared runtime module that v0.8b did not make. Named
-     here so the drop is reviewable rather than silent, which is the whole point
-     of this list. */
-  | "attemptedAt"
 > & {
   rows: FleetRow[];
   /**
@@ -339,17 +349,26 @@ export type FleetState = Omit<
    */
   refreshMs: number | null;
   /**
-   * **Whether tapping an option would do anything**, or the fact that this
-   * server never said.
-   *
-   * Three states rather than two, and the third is why this is not `boolean`:
-   * a server built before the flag existed has made NO CLAIM, and defaulting to
-   * `true` invites the tap the hold exists to prevent while defaulting to
-   * `false` prints a warning nobody has any basis for. `SessionDetail`'s
-   * `HeldBack` draws the difference — the same discipline `parseGate` applies
-   * to `unknown`.
+   * **Whether tapping an option would do anything** — see `AnsweringReading`,
+   * which is four arms rather than a boolean and fails CLOSED.
    */
-  answeringEnabled: boolean | null;
+  answeringEnabled: AnsweringReading;
+  /**
+   * **WHEN A COLLECTION WAS LAST STARTED**, as the three-arm reading rather than
+   * the raw string — `readAttemptClock` in tools/fleet/attempt-clock.ts, the one
+   * the server and the Overseer daemon also call.
+   *
+   * `collectedAt` says when data last ARRIVED and cannot tell a stopped
+   * collector from a quiet box; this is what separates them. The fault it exists
+   * for is a collection that never settles: it throws nothing, so `error` stays
+   * null and the masthead says calm while the snapshot goes half an hour stale.
+   * `Header.freshness` is the consumer — it says which of the two a STALE
+   * snapshot is.
+   *
+   * Shifted onto this browser's clock like every other server timestamp here.
+   * See `ClockSkew`.
+   */
+  attemptedAt: AttemptClock;
   /**
    * **The attention inbox** — what the Overseer says needs Greg, or the reason
    * there is no such list.
@@ -387,6 +406,84 @@ export type FleetState = Omit<
    */
   clockSkew: ClockSkew;
 };
+
+/* ------------------------------------------------- can we answer at all -- */
+
+/**
+ * **WHETHER `POST /api/steer/answer` WILL DO ANYTHING, AS FOUR ANSWERS.**
+ *
+ * A boolean-ish read of the raw field is what this was until 2026-09-08, and it
+ * FAILED OPEN twice over: an absent field became `null` and `null` still offered
+ * the buttons, and a malformed `"yes"` landed in the same `null` and therefore
+ * also became permission to offer a control.
+ *
+ * The argument for offering them on silence was mine and it was wrong. It ran:
+ * refusing on an older server's silence would invent a hold nobody declared.
+ * GPT Sol's correction is factual and beats it — **the kill switch predates the
+ * state field in history**, so a server old enough not to send this is a server
+ * that can have answering switched off with no way to say so. Silence is
+ * therefore not evidence that answering works; it is the absence of evidence
+ * either way, and this is the one control where acting on that costs a person a
+ * 503 and the hold its entire purpose.
+ *
+ * **So only a positive `enabled` offers the buttons.** The other three say that
+ * availability could not be established, which is a different sentence from
+ * *a hold was declared* — and `not-reported` and `unreadable` stay apart so the
+ * page can be accurate about which happened rather than lumping them into one
+ * shrug. Same discipline as `parseGate`'s `unknown` and `AttentionFeed`'s
+ * `not-asked`: "I could not tell" must never become the way through.
+ *
+ * **Failing closed costs nothing real here, and that is worth knowing before
+ * somebody re-opens it.** `not-reported` is close to unreachable in practice:
+ * this server serves the bundle that talks to it, so the two always ship
+ * together and a browser reading a payload from a server older than its own code
+ * is not a state the deployment produces. The arm exists because the type must
+ * be able to say it, not because it is expected.
+ */
+export type AnsweringReading =
+  /** The server said yes. The ONLY arm that offers a control. */
+  | { kind: "enabled" }
+  /** The server said no. A hold was declared, and the page says so in those words. */
+  | { kind: "disabled" }
+  /** No such field. A server that predates it — and it may still be switched off. */
+  | { kind: "not-reported" }
+  /** The field is there and is not a boolean. A payload we cannot read, not a claim. */
+  | { kind: "unreadable"; why: string };
+
+/**
+ * Read the flag without letting silence or nonsense become a yes.
+ *
+ * `=== true` / `=== false` rather than truthiness, for the reason the whole
+ * union exists. Absence is `undefined` because this is JSON — a key that is not
+ * there reads as `undefined` and nothing else does — so an explicit `null`, a
+ * `"yes"` and a `0` are all *present and unreadable* rather than *not reported*,
+ * which is the honest split: one is a server that never heard of the field, the
+ * other is a server whose answer this build cannot interpret.
+ */
+/**
+ * **NOBODY HAS SAID ANYTHING YET**, which is what the page holds before its
+ * first payload arrives.
+ *
+ * A named value for the same reason `CLOCK_SKEW_UNMEASURED` is one, and with the
+ * same rule attached: it is not a claim that answering is off, and it must never
+ * be the value a real payload rounds to. It is `not-reported` because that is
+ * literally what has happened — no server has reported anything — and it
+ * withholds the buttons, which before the first payload is free, since there are
+ * no rows to open.
+ */
+export const ANSWERING_NOT_REPORTED: AnsweringReading = { kind: "not-reported" };
+
+export function readAnswering(raw: unknown): AnsweringReading {
+  if (!isRecord(raw)) return { kind: "unreadable", why: "the payload is not an object" };
+  const value = raw["answeringEnabled"];
+  if (value === true) return { kind: "enabled" };
+  if (value === false) return { kind: "disabled" };
+  if (value === undefined) return { kind: "not-reported" };
+  return {
+    kind: "unreadable",
+    why: `the server sent ${JSON.stringify(value)} where this page reads true or false`,
+  };
+}
 
 /* --------------------------------------------------------- the clocks -- */
 
@@ -1289,15 +1386,29 @@ export function parseFleetState(raw: unknown, receivedAt: number): FleetStateRea
          the only honest sentence is *this page cannot tell you which tmux
          server these are*. There is nothing a reader would do differently. */
       tmuxServerPid: typeof raw["tmuxServerPid"] === "number" && Number.isFinite(raw["tmuxServerPid"]) ? raw["tmuxServerPid"] : null,
-      /* **TOLD, NOT INFERRED — and `null` is a third answer, not a default.**
-         The server had been sending this for a day and this parser did not read
-         it, so a person tapped an option and got a 503, which is precisely the
-         outcome the field exists to prevent (wire.ts § `answeringEnabled`).
-         `=== true` / `=== false` rather than truthiness: an absent field is a
-         server that has made no claim, and both `true` and `false` would be
-         claims made on its behalf — one invites the tap, the other prints a
-         warning nothing supports. */
-      answeringEnabled: raw["answeringEnabled"] === true ? true : raw["answeringEnabled"] === false ? false : null,
+      /* **TOLD, NOT INFERRED — and it FAILS CLOSED.** The server had been
+         sending this for a day and this parser did not read it, so a person
+         tapped an option and got a 503, which is precisely the outcome the field
+         exists to prevent (wire.ts § `answeringEnabled`). See
+         `AnsweringReading`: four arms, and only a positive `enabled` is
+         permission to draw a control. */
+      answeringEnabled: readAnswering(raw),
+      /* **BOTH CLOCKS SHIFTED BEFORE THE READING IS TAKEN**, not after. The
+         helper's whole job is to compare `attemptedAt` against `collectedAt`,
+         and the comparison downstream is against this browser's `now` — so they
+         have to enter it already in browser terms or the reading would be one
+         clock and its consumer another. `ClockSkew` says why the correction
+         belongs at the boundary.
+
+         `str()` collapses "the field is absent" and "the server sent null" onto
+         the same `null`, which is exactly what `readAttemptClock` says it wants:
+         the raw-JSON distinction between the two dies in the first thing that
+         normalises one to the other, and a guard that survives only until
+         somebody reasonable touches the pipe is not a guard. */
+      attemptedAt: readAttemptClock({
+        attemptedAt: shiftToBrowserClock(str(raw["attemptedAt"]), clockSkew),
+        collectedAt: shiftToBrowserClock(str(raw["collectedAt"]), clockSkew),
+      }),
       rows,
       unreadableRows,
       health: raw["health"] ?? null,

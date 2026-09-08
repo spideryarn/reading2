@@ -81,6 +81,25 @@ function launchLine(record: LaunchRecord): { tone: "work" | "needs" | "alarm" | 
   return { tone: "needs", head: "Failed. Nothing was started.", body: "" };
 }
 
+/**
+ * How to say "this went in through `-d`" without claiming it started.
+ *
+ * A `Record` over the closed `LaunchState` rather than a ternary, so that a
+ * fourth state — if `LaunchRecord` ever grows one — fails the build here instead
+ * of quietly inheriting the past tense, which is the tense that lies. Only
+ * `started` is a confirmed start; `starting` has not finished, and `failed`
+ * covers both "refused" and "the answer was lost", neither of which may be
+ * reported as a thing that happened.
+ */
+const DASH_D_VERB: Record<LaunchRecord["state"], string> = {
+  starting: "Using",
+  started: "Started with",
+  /* Not "attempted and did not start": `maybeStarted` says a Claude may well be
+     running, and the headline above already draws that distinction. This line is
+     only about which door was used. */
+  failed: "Attempted with",
+};
+
 const TONE_BORDER: Record<"work" | "needs" | "alarm" | "idle", string> = {
   work: "tw:border-l-work",
   needs: "tw:border-l-needs",
@@ -125,11 +144,18 @@ function Launch({ record }: { record: LaunchRecord }): ReactNode {
           an agent in a checkout `gjd-remote setup` was rewriting. `repo` is the
           ordinary path and gets no line, because a caveat drawn on every row is
           one nobody reads; `null` gets none either, since an older server made
-          no claim. new-session-client.ts § `LaunchResolution`. */}
+          no claim. new-session-client.ts § `LaunchResolution`.
+
+          **THE VERB IS THE STATE'S, NOT THE FIELD'S.** The server assigns
+          `resolution` when the record is minted, while it still says `starting`,
+          and keeps it when the launch fails (routes-new.ts) — so this line said
+          *"Started with `-d`"* on a card whose headline said *"Starting…"* or
+          *"Failed. Nothing was started."* One card, two tenses, contradicting
+          each other about whether anything ran. GPT Sol's M4. */}
       {record.resolution === "dir" ? (
         <p className="tw:mt-1 tw:text-[12px] tw:break-words tw:text-alarm-ink">
-          Started with <Mono>-d</Mono>: outside the repo's setup lock, and without reading its setup
-          status.
+          {DASH_D_VERB[record.state]} <Mono>-d</Mono>: outside the repo's setup lock, and without
+          reading its setup status.
         </p>
       ) : null}
       <p className="tw:mt-1 tw:text-[12px] tw:text-ink-faint">

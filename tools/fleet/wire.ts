@@ -922,7 +922,7 @@ export type Delivery = "none" | "partial" | "unknown";
  * made: *we looked at the store and there was nothing there* is a statement
  * about the box, and a server that has never heard of the file is in no
  * position to make it. It is the same ambiguous-negative mistake `Pause`'s
- * `none` arm is built to avoid, and the same one `readAttemptClock` in state.ts
+ * `none` arm is built to avoid, and the same one `readAttemptClock` in attempt-clock.ts
  * exists to unpick for `attemptedAt`.
  *
  * A field that is PRESENT and unreadable is a fifth thing, and it is not on
@@ -977,19 +977,48 @@ export type AttentionFeed =
  * stage. Everything OUTSIDE those two fields is shared, and that is where all
  * six dropped fields were.
  *
- * ## Adding a field here is the point
+ * ## Adding a field here is the point — AND THE GUARANTEE IS NARROWER THAN IT LOOKS
  *
  * A field added to this type lands in both twins: the server's `FleetState` in
  * `state.ts` is this type with its holes filled, and the client's in
  * `web/src/types.ts` is `Omit<>` of it — so a new field is not in the `Omit`,
  * it lands in the client type, and the parser's object literal stops compiling
  * until somebody either reads the field or writes its name in the list. Proved
- * by mutation, both ends red, before this comment was written.
+ * by mutation, both ends red.
+ *
+ * **That holds for a REQUIRED, top-level field and for nothing else**, and the
+ * first version of this comment claimed it flatly. GPT Sol's M2, and it is
+ * right: add `diagnostic?: string` here and BOTH sides still compile. The
+ * server's object literal in `fleetState()` may omit an optional key, and the
+ * client's parse is an object literal for a type whose key is optional too, so
+ * neither end is forced to notice. A field added optionally is exactly the
+ * lossy join this whole file exists to make un-writable, arriving through the
+ * one door the mechanism does not cover.
+ *
+ * So the mechanism is held to its own claim by a compile guard rather than by
+ * this paragraph: **`tests/fleet-compile-guards.test.ts` refuses an optional
+ * top-level key on this type**, and `npm run typecheck` is what fails. A guard
+ * described as stronger than it is, is this repo's most repeated defect of the
+ * week; the honest version is *required fields are carried by construction, and
+ * optional ones are refused at the door*.
+ *
+ * Nested optionality is not covered and is not meant to be: a `?` inside `Row`
+ * or inside `AttentionFeed` is that type's own business, and the drop this
+ * mechanism is about was always a whole field going missing from the payload.
  *
  * Adding a field is still **not a `schema` bump**: that rule is `schema`'s own
  * and it is about consumers that ignore what they do not know.
+ *
+ * ## No defaults on the two parameters
+ *
+ * `Row = unknown, Health = unknown` used to be written here, and it meant a
+ * caller could name neither and inherit both holes silently — including the
+ * caller who did not realise there were holes. They are the two fields that
+ * cannot be shared and a consumer has to say what it is putting in them, so
+ * every use site now writes both out. `unknown` is still the right answer for
+ * `Health` on the client; it is just no longer the answer nobody chose.
  */
-export type FleetState<Row = unknown, Health = unknown> = {
+export type FleetState<Row, Health> = {
   /**
    * The payload's shape, so a stored snapshot can be read back by code that has
    * moved on. Bump it when a consumer that ignored the change would be WRONG
@@ -1043,9 +1072,10 @@ export type FleetState<Row = unknown, Health = unknown> = {
    * slightly-quiet box.
    *
    * **DO NOT READ THIS FIELD DIRECTLY FROM A PAYLOAD — use `readAttemptClock`**
-   * in state.ts. It was added without a schema bump, so a server that predates
-   * it sends nothing, and a consumer that read "absent" as "never attempted"
-   * would report every old server as permanently wedged.
+   * in attempt-clock.ts, which the server, the Overseer and the browser client
+   * all import. It was added without a schema bump, so a server that predates it
+   * sends nothing, and a consumer that read "absent" as "never attempted" would
+   * report every old server as permanently wedged.
    */
   attemptedAt: string | null;
   /**

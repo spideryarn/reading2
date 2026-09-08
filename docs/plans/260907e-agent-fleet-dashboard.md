@@ -1797,8 +1797,9 @@ subagent would have found working code and either invented a problem or reported
 a plan's factual claims before acting on them, especially the ones marked urgent** — urgency is what
 makes a stale claim get acted on without checking.
 
-The other five live ones: `SteerResponse.verified` (which pane a keystroke actually reached, dropped
-by `steer-client.ts`), `answeringEnabled`/`tmuxServerPid` (absent from the client's `FleetState`),
+The other five live ones: `SteerResponse.verified` (which pane the send was aimed at, as the server
+verified it in the moment BEFORE typing — not where the keystrokes ended up; dropped by
+`steer-client.ts`), `answeringEnabled`/`tmuxServerPid` (absent from the client's `FleetState`),
 `LaunchRecord.resolution`/`startedDir`, `SteeringQueue.clear()`, and `/api/agents`.
 
 **There are two classes here and they want different things, which is the whole design of this
@@ -1828,10 +1829,14 @@ stage.** Confusing them gets you a linter for a problem the compiler should have
       because **a server too old to send a field has made no claim**, and returning the wire type
       verbatim would force `parseQueue` to invent `false` or `0` for it. That is instance 16, the
       one this whole stage is about, reintroduced by the fix for it. The form that works is
-      `Omit<QueueViewWire, …the fields it re-types or declines…> & { … }`: a new wire field is not in
-      the `Omit`, so it lands in the client type and the object literal stops compiling, and the
-      escape hatch is **adding a name to a list** — a named, reviewable decision rather than a
-      silence. The twin is derived, not deleted, and that turned out to be the correct end state
+      `Omit<QueueViewWire, …the fields it re-types or declines…> & { … }`: a new **required** wire field
+      is not in the `Omit`, so it lands in the client type and the object literal stops compiling,
+      and the escape hatch is **adding a name to a list** — a named, reviewable decision rather than
+      a silence. *(An OPTIONAL wire field crosses untouched — GPT Sol's M2, 2026-09-08. Both object
+      literals may omit it, so neither end goes red. The mechanism is therefore paired with a
+      compile guard in `tests/fleet-compile-guards.test.ts` that refuses an optional top-level key on
+      the shared wire state; the guarantee is "required fields are carried by construction, optional
+      ones are refused at the door", and this line said the first half only.)* The twin is derived, not deleted, and that turned out to be the correct end state
       rather than an interim one.
 - [x] **Prove it against the original shape, not a tidied one.** Done twice, and the second time by
       hand. Adding one field to `QueueView` in `wire.ts` turns **both** ends red —
@@ -1863,8 +1868,12 @@ stage.** Confusing them gets you a linter for a problem the compiler should have
       fill them (`collect.ts`'s `FleetRow`, `health.ts`'s `HealthReport`) reach `node:child_process`,
       which wire.ts may not import; the server fills them with its own types and the client with its
       projection. Everything outside those two fields is shared, and that is where all six dropped
-      fields were. Proved by mutation: one field added to the wire type turns the server project, the
-      client project *and* the fixtures red, judged by `npm run typecheck`'s exit code.
+      fields were. Proved by mutation: one **required** field added to the wire type turns the server
+      project, the client project *and* the fixtures red, judged by `npm run typecheck`'s exit code.
+      An **optional** one turns none of those red — measured 2026-09-08, and the reason the compile
+      guard above exists. `FleetState<Row, Health>` also lost its `= unknown` defaults that day, so a
+      caller has to say what it is putting in each hole rather than inherit two it may not know are
+      there.
 - [ ] **`FleetRow` will NOT migrate the way the others do, and whoever starts it should know
       first.** `FleetRow.meta` resolves to `scripts/gjd-remote-tmux.ts`'s `SessionMeta` (`kind:
       SessionKind; repo: string; dir: string`) while the client's says all three nullable — and
@@ -1888,11 +1897,16 @@ stage.** Confusing them gets you a linter for a problem the compiler should have
       `stuck`, `deliverable`, `invalidated`) was repaired by hand on the night of 2026-09-08, four
       separate times; **that treadmill is the argument for this stage**, not a reason to think the
       area is now safe.
-      **What v0.8b did NOT read: `attemptedAt`.** It is named in the client type's `Omit<>` with its
-      reason, so the drop is reviewable rather than silent — reading it honestly needs
+      **`attemptedAt` was declined in v0.8b and read in v0.8b's fix pass**, and the reasoning for
+      declining it was wrong rather than merely cautious. It ran: reading it honestly needs
       `readAttemptClock`'s three arms (absent means either *never attempted* or *a server too old to
-      report it*), which is a runtime value wire.ts cannot hold, so giving both sides one home for it
-      is a decision about a shared runtime module rather than a line of parsing.
+      report it*), that is a runtime value, wire.ts cannot hold a runtime value, so both sides cannot
+      share one. The middle step does not follow — **what the browser project cannot tolerate is a
+      NODE dependency; "no runtime values" is wire.ts's own rule about its own file.** So
+      `tools/fleet/attempt-clock.ts` is a leaf module with no imports, the server, the Overseer
+      daemon and the browser all import the one implementation, and `Header.freshness` says which
+      kind of stale a stale snapshot is: a run that began and hung, or a loop that stopped. GPT Sol's
+      M5.
 - [ ] **`would` is a different failure from the rest and needs a different check.** Both ends are
       internally consistent and disagree about a *name*, so an "unread field" sweep cannot see it —
       only a shared type can. Fix it by importing the type, not by renaming one end and moving on.
