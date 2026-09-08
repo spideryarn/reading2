@@ -667,6 +667,21 @@ one — borrowing the three files under `src/` that import nothing at all.
 **The honest half of that ruling:** `transcribeWith` used standalone writes no database row, so
 going through it **would not have metered this spend either** — nothing for `npm run cost` to count.
 
+**And it is declared rather than merely admitted.** `tests/no-undeclared-spend.test.ts` caught this —
+`tools/fleet/transcribe.ts` names `openrouter.ai` and a credential and was in no register — which is
+the repo asking the exact question this section had answered in prose and not in code. There is now a
+`fleet-dictation` entry in [`src/spend-declarations.ts`](../../src/spend-declarations.ts) with
+`metered: false`, so **`npm run cost` prints it by name on every run**:
+
+```
+Not counted here — 8 known way(s) of spending that write no row:
+  tools/fleet/transcribe.ts
+      fleet-dictation — skips the gateway, open today
+```
+
+That is the difference between a gap somebody wrote a paragraph about and a gap the tooling says out
+loud. It stops being `false` when the fleet has somewhere to write a row.
+
 *And the mechanism is not what this doc first said.* It claimed a process-global sink that is `null`
 until the product's server installs one. There is no such thing: a sink belongs to `collectSpend`'s
 **async scope**, and a call made outside one increments an in-memory unscoped counter, logs a
