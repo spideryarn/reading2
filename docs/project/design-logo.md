@@ -76,7 +76,7 @@ The wordmark is drawn **twice**, with deliberately different inner markup:
 
 | | Where | Wrapper round the letters | Face |
 | --- | --- | --- | --- |
-| `HomeLogo` | fixed top-left, shelf-adjacent pages | `.logo-text` | Trebuchet MS 600 |
+| `HomeLogo` | fixed top-left, shelf-adjacent pages | `.logo-text` | Geist Variable 600 |
 | `DockHome` | left end of the reading view's bottom bar | `.dock-btn-label` | Geist Variable |
 
 Both spread `useLogoAnimation()` onto their `<a>`, so *when* an animation runs has one
@@ -88,18 +88,27 @@ hidden by the 731px query, and the dock's word is owned by the bar's own fit lad
 that reaches for `.logo-text` works perfectly in the corner and does nothing at all on the reading
 view, which is the copy most readers see most often. `tests/logo-animation.test.tsx` fails on it.
 
-### The two copies are not the same typeface
+### The two copies were not the same typeface
 
-Found while writing this, by two agents independently, and **not introduced by this work**:
-[`styles/tokens.css`](../../styles/tokens.css) gives `.logo-text` — the corner copy only —
-`--font-brand` (Trebuchet MS), `font-weight: 600` and the orange. `.dock-btn-label` gets none of
-that and inherits Geist from `--font-ui`.
+Found while writing this, by two agents independently, and not introduced by this work:
+[`styles/tokens.css`](../../styles/tokens.css) gave `.logo-text` — the corner copy only —
+`--font-brand`, which was Trebuchet MS, while `.dock-btn-label` inherited Geist from `--font-ui`.
+So the app's own name was set in a different face depending on which page you were on. Dock.tsx's
+own comment claims the two are "same glyph, same word, same colour", and it was right about all
+three things it names and silent about the fourth.
 
-Dock.tsx's own comment claims the two are "same glyph, same word, same colour", and it is right
-about all three things it names and silent about the fourth. Left alone deliberately: changing which
-face the reading view's wordmark is set in is a visible design change nobody asked for. The
-consequences here are that **no animation may use the variable weight axis** — only one copy has one
-— and that every animation wants looking at in both places rather than one.
+**Settled on 2026-09-08.** It was raised to Greg as an observation rather than fixed, on the grounds
+that changing the reading view's face is a visible design change nobody asked for; his answer was to
+change the *other* one. `--font-brand` now resolves to `--font-sans`, so both copies are Geist and
+what still separates them is `.logo-text`'s weight and orange. Two things follow for this file:
+
+- **The variable weight axis is now available to an animation**, which it was not while one copy was
+  a two-weight face. Nothing here uses it yet, and anything that does must still be checked in both
+  places — `.dock-btn-label` does not set 600, so the two copies start from different weights even
+  in one face.
+- **`font-weight: 600` is drawn rather than synthesised.** Trebuchet ships 400 and 700 and the
+  browser was faux-bolding the wordmark; Geist is variable across 100–900. The corner wordmark is
+  very slightly lighter and cleaner than it was, which is the visible half of this change.
 
 ## What a phone sees
 
@@ -184,8 +193,12 @@ the set is worth keeping: **thirteen is right, and nothing needed replacing** �
 held in reserve were each conditional on a sibling disappointing, and the two that did disappoint
 disappointed on numbers rather than on concept.
 
-**`/design` cannot show you everything.** Its gallery draws the corner copy's face — Trebuchet — so a
-fault specific to Geist is one only the reading view will show you.
+**`/design` cannot show you everything**, and it could show you less before 2026-09-08 than it can
+now. Its gallery draws both wrappers, and until that date they were two different faces, so a fault
+specific to Geist was one only the reading view would show you. Both are Geist now (§ The two copies
+were not the same typeface), which closes that particular gap and leaves the ones the gallery never
+covered: the dock's 40px clip, the coarse-pointer layout, and the narrow window that takes the word
+away entirely.
 
 ### The traps that cost time here
 
