@@ -1,0 +1,124 @@
+{
+  "attempts": [
+    {
+      "attemptId": "8380e7ff-bb2e-468b-affe-5b5a0ef82142",
+      "pass": "direct",
+      "skipped": null,
+      "reportedRows": 2,
+      "quotations": 4
+    },
+    {
+      "attemptId": "fddbb89d-ed8c-47b3-953d-cfba0d0c75bd",
+      "pass": "claims",
+      "skipped": "not a direct pass — this tool answers a question about group one only",
+      "reportedRows": 0,
+      "quotations": 0
+    }
+  ],
+  "checks": [
+    {
+      "attemptId": "8380e7ff-bb2e-468b-affe-5b5a0ef82142",
+      "rowIndex": 0,
+      "field": "sourceQuote",
+      "host": "sites.stat.columbia.edu",
+      "url": "https://sites.stat.columbia.edu/gelman/research/published/cargocult.pdf",
+      "chars": 313,
+      "digest": "5e5c7e03",
+      "klass": "missingFromExtract",
+      "page": {
+        "outcome": "unsupported",
+        "inReadability": false,
+        "inWholeBody": false,
+        "inSpacedBody": false,
+        "recovered": false
+      }
+    },
+    {
+      "attemptId": "8380e7ff-bb2e-468b-affe-5b5a0ef82142",
+      "rowIndex": 0,
+      "field": "articleReferenceQuote",
+      "host": "sites.stat.columbia.edu",
+      "url": "https://sites.stat.columbia.edu/gelman/research/published/cargocult.pdf",
+      "chars": 115,
+      "digest": "f5b10c71",
+      "klass": "inExtract",
+      "page": null
+    },
+    {
+      "attemptId": "8380e7ff-bb2e-468b-affe-5b5a0ef82142",
+      "rowIndex": 1,
+      "field": "sourceQuote",
+      "host": "atticusli.com",
+      "url": "https://atticusli.com/replication-crisis/feynman-cargo-cult-science/",
+      "chars": 75,
+      "digest": "223c409c",
+      "klass": "inExtract",
+      "page": null
+    },
+    {
+      "attemptId": "8380e7ff-bb2e-468b-affe-5b5a0ef82142",
+      "rowIndex": 1,
+      "field": "articleReferenceQuote",
+      "host": "atticusli.com",
+      "url": "https://atticusli.com/replication-crisis/feynman-cargo-cult-science/",
+      "chars": 74,
+      "digest": "6632aef7",
+      "klass": "missingFromExtract",
+      "page": {
+        "outcome": "blocked",
+        "inReadability": false,
+        "inWholeBody": false,
+        "inSpacedBody": false,
+        "recovered": false
+      }
+    }
+  ],
+  "pages": [
+    {
+      "host": "atticusli.com",
+      "finalHost": null,
+      "outcome": "blocked",
+      "detail": "forbidden"
+    },
+    {
+      "host": "sites.stat.columbia.edu",
+      "finalHost": "sites.stat.columbia.edu",
+      "outcome": "unsupported",
+      "detail": "served a PDF"
+    }
+  ],
+  "summary": {
+    "quotations": 4,
+    "belowFloor": 0,
+    "noExtract": 0,
+    "inExtract": 2,
+    "observedFailures": 2,
+    "recovered": 0,
+    "notRecovered": 0,
+    "notAttempted": 2,
+    "byReadability": 0,
+    "byWholeBody": 0,
+    "byBoth": 0,
+    "readabilityOnly": 0,
+    "wholeBodyOnly": 0,
+    "spacedBodyOnly": 0,
+    "outcomes": {
+      "ok": 0,
+      "unsupported": 1,
+      "blocked": 1,
+      "timed-out": 0,
+      "too-big": 0,
+      "not-found": 0,
+      "failed": 0,
+      "budget-exhausted": 0
+    }
+  },
+  "budget": {
+    "concurrency": 3,
+    "maxFetches": 24,
+    "maxBytesTotal": 50331648,
+    "maxElapsedMs": 300000,
+    "perFetchMaxBytes": 4194304,
+    "perFetchTimeoutMs": 20000
+  }
+}

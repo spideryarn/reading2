@@ -50,30 +50,65 @@
  * not; both are still on the page, in *Where it is*, where they belong now that
  * nobody is waiting for them.
  *
- * ## Nothing here decides whether a send will be allowed
+ * ## What this file decides, and what it does not
  *
- * The two buttons post and show whatever comes back. In particular this file
- * does NOT reimplement `steerableStatus` to grey out a shell: the server's
- * refusal carries the sentence that explains it — *"it is a shell, which would
- * EXECUTE the message"* — and a second copy here would be a rule to keep in
- * step with one that is already written down and enforced. The one thing that
- * IS checked locally is whether the row has the identifiers at all, because
- * that is a fact about the payload on screen rather than a claim about the box.
+ * **It does not decide REFUSALS.** The two buttons post and show whatever comes
+ * back; the server owns `steerableStatus`, and its refusal carries the sentence
+ * that explains it, so a second copy of that rule here would be one more thing
+ * to keep in step. Nothing below claims the box would turn something away.
+ *
+ * **It does decide WHAT TO OFFER**, which is a different question and a product
+ * one. Two things follow from it, and both look at `status.kind`:
+ *
+ *  - `Queue` is absent on an idle session unless something deliverable is
+ *    already waiting — see `offerQueue`, which has the whole argument.
+ *  - **A shell gets one sentence and none of the controls.** This reverses what
+ *    this header said until 2026-09-08, and the reason is worth keeping: the
+ *    old rule was written to stop the page reimplementing a refusal, and it was
+ *    right about that. But the page ALREADY branches on `status.kind` to draw
+ *    the SHELL badge, so hiding the composer on the same branch adds no second
+ *    source of truth — and offering fifteen buttons and a text box that cannot
+ *    work, under a badge saying they cannot, is the more expensive lie. Fable
+ *    ruled it, 2026-09-08. If the server one day lets a shell be typed at, this
+ *    is one condition to delete, not a rule to unpick.
+ *
+ * The one thing checked locally beyond that is whether the row has the
+ * identifiers at all (`unaddressable`), because that is a fact about the
+ * payload on screen rather than a claim about the box.
+ *
+ * ## The clutter pass, and the rule it left behind
+ *
+ * 2026-09-08: a needs-you detail view measured **3,398px at 390px wide — four
+ * screens, 31 buttons** — much of it permanent inline prose. Fable's rule, and
+ * it is the one to apply to the next field rather than re-deriving:
+ *
+ * > A caveat stays on screen only if it would change what you do on this screen
+ * > in the next ten seconds. If it only changes what you would *believe*, it
+ * > lives one tap away, attached to the fact it qualifies.
+ *
+ * With two corollaries that did most of the work: **an honest label replaces a
+ * paragraph** (`Queue (~73s)` says what a sentence was saying; `Ask it to…`
+ * says these may be declined), and **the tap is on the number, never on a
+ * separate help link** — which is what keeps the tool's non-negotiable rule
+ * intact. Nothing here renders a bare number: it renders a number wearing its
+ * caveat, and `Explain` is how it wears it.
  */
-import { useCallback, useState, type ReactNode } from "react";
+import { useCallback, useRef, useState, type ReactNode } from "react";
 
 import { ActionOutcomeCard, SessionActions, SessionQueue } from "./ActionButtons";
-import { RecentMessages } from "./RecentMessages";
+import { DictationControl, useFleetDictation } from "./DictationControl";
+import { PauseLine } from "./PauseLine";
+import { RecentMessages, useRecentMessages } from "./RecentMessages";
 import { Handles, LaunchMode, QuestionCard, StatusPill, Uptime } from "./SessionParts";
 import { Explain } from "./Tooltip";
 import { hasDeliverable, queueFor, type ActionOutcome } from "./actions-client";
-import type { MessagesApi } from "./messages-client";
+import { transcriptAge, type MessagesApi, type MessagesView } from "./messages-client";
 import { NAME_RULE_TEXT, looksLikeAName, type RenameApi, type RenameOutcome } from "./rename-client";
 import type { SteerApi, SteerOutcome } from "./steer-client";
-import type { FleetGate, FleetRow } from "./types";
+import type { FleetGate, FleetRow, FleetStatus } from "./types";
 import type { ActionsUi } from "./useActions";
 import { Button, Card, Mono, cx } from "./ui";
-import { statusLabel, whereLine } from "./view";
+import { formatDuration, statusLabel, whereLine } from "./view";
 
 /** A heading inside the detail. Quieter than the panel headings outside it. */
 function Section({ title, children }: { title: string; children: ReactNode }): ReactNode {
@@ -239,8 +274,17 @@ function RenameField({ row, rename }: { row: FleetRow; rename: RenameApi }): Rea
   }, [rename, row, trimmed]);
 
   return (
-    <div className="tw:mt-2">
-      <label className="tw:text-[11px] tw:font-semibold tw:tracking-widest tw:text-ink-faint tw:uppercase" htmlFor="rename-name">
+    /* BEHIND A DISCLOSURE, because renaming from a phone is rare and the field
+       was the fourth thing on every session page. Fable's ruling, 2026-09-08:
+       the name is the heading; a rename is a deliberate act you are willing to
+       open something for. The one-name rule came with it — there is no longer
+       an italic "no title yet" above a box holding the real name, which showed
+       two names for one session and made the placeholder look like the truth. */
+    <details className="tw:mt-2">
+      <summary className="tw:cursor-pointer tw:rounded-md tw:px-1 tw:py-1 tw:text-[12px] tw:text-ink-faint tw:hover:text-ink-soft">
+        Rename
+      </summary>
+      <label className="tw:sr-only" htmlFor="rename-name">
         Name
       </label>
       <div className="tw:mt-1 tw:flex tw:flex-wrap tw:items-center tw:gap-2">
@@ -290,7 +334,42 @@ function RenameField({ row, rename }: { row: FleetRow; rename: RenameApi }): Rea
           ) : null}
         </div>
       )}
-    </div>
+    </details>
+  );
+}
+
+/**
+ * When this session last wrote to its transcript, beside the badge.
+ *
+ * **The one number that tells a working session from a stuck one**, and until
+ * now it was the first line of *Recent messages*, a screen and a half down a
+ * four-screen page. Fable named it as the thing missing from the header.
+ *
+ * It draws in the loud colour when a WORKING session has been silent past the
+ * threshold, which is the same judgment `transcriptAge` already makes for the
+ * note further down — asked of it rather than recomputed here, so the header
+ * and the section cannot disagree about whether a session has gone quiet.
+ *
+ * Nothing is drawn while the read is in flight, and nothing is drawn when the
+ * server did not say. An age invented from silence would be worse than no age.
+ */
+function LastWrote({ view, status, now }: { view: MessagesView | null; status: FleetStatus; now: number }): ReactNode {
+  if (view === null || view.kind !== "found" || view.lastModified === null) return null;
+  const age = transcriptAge(view.lastModified, status, now);
+  if (age.kind === "unstated") return null;
+  const ms = Math.max(0, now - Date.parse(view.lastModified));
+  return (
+    <Explain
+      tip={{
+        head: "Last wrote",
+        what: `${formatDuration(ms)} ago`,
+        how: "When this session last added anything to its own transcript. A session the box calls working that has written nothing for a long time is either on one very long tool call or is not the conversation this row thinks it is.",
+      }}
+      placement="bottom"
+      className={cx("tw:text-[12px]", age.kind === "suspect" ? "tw:text-alarm-ink" : "tw:text-ink-faint")}
+    >
+      wrote {formatDuration(ms)} ago
+    </Explain>
   );
 }
 
@@ -324,6 +403,24 @@ export function SessionDetail({
 }): ReactNode {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
+  /** The composer, so the dictation knows where the caret is. */
+  const box = useRef<HTMLTextAreaElement>(null);
+  /* **Named, so the vocabulary leads with this session's own words.** Somebody
+     dictating here is very often about to say the handle on the screen in front
+     of them, or the worktree it is working in — and the server promotes the
+     named session to the front of the term list for exactly that. */
+  const dictate = useFleetDictation({
+    value: text,
+    onChange: setText,
+    box,
+    context: { kind: "session", sessionId: row.id },
+  });
+  /* Read at the moment of sending rather than captured in a closure: a
+     `useCallback` listing `dictate` would rebuild on every render, and this hook
+     re-renders while somebody is talking. The question is always "is it blocked
+     NOW", which is what a ref answers. */
+  const blocked = useRef(dictate.sendBlocked);
+  blocked.current = dictate.sendBlocked;
   const [outcome, setOutcome] = useState<SteerOutcome | null>(null);
   /**
    * The server's own sentence, once it has told us answering is switched off.
@@ -337,6 +434,17 @@ export function SessionDetail({
   const label = statusLabel(row.status);
   const where = whereLine(row);
   const dir = row.meta.version === 1 ? row.meta.dir : null;
+
+  /**
+   * **One transcript read, two places on the page.** The section at the bottom
+   * draws the turns; the header draws how long ago this session last wrote,
+   * which is the number that tells a working session from a stuck one. Held
+   * here rather than in each, because two reads of a multi-megabyte file to
+   * draw one line would cost more than the clutter it removes — and because a
+   * header and a section disagreeing about an age is exactly the sort of drift
+   * this module keeps writing postmortems about.
+   */
+  const reading = useRecentMessages(messages, row);
 
   /**
    * **The only local refusal.** `paneId` is the address and `claudeSessionId`
@@ -376,7 +484,15 @@ export function SessionDetail({
     [row, send, steer],
   );
 
+  /* **The submit rule at the action boundary, not only on the button.**
+     `disabled` stops a pointer; it does not stop a programmatic call, and it
+     does not stop a keyboard path somebody adds later. The invariant is that a
+     message never leaves this box while the microphone is on or the transcript
+     is still in flight — on Safari and Firefox the box holds nothing that was
+     said until the transcript lands. GPT Sol's review of the built code,
+     finding 6. */
   const onSend = useCallback(() => {
+    if (blocked.current) return;
     void send(() => steer.message(row, text), true);
   }, [row, send, steer, text]);
 
@@ -440,6 +556,8 @@ export function SessionDetail({
   const offerQueue = row.status.kind !== "idle" || hasDeliverable(waiting);
 
   const onQueue = useCallback(async (): Promise<void> => {
+    /* Same guard, same reason. See `onSend`. */
+    if (blocked.current) return;
     setBusy(true);
     const result = await actions.api.queueMessage(row, text);
     setQueueOutcome(result);
@@ -461,18 +579,23 @@ export function SessionDetail({
         </p>
       )}
 
+      {/* THE HEADER IS FOUR THINGS ON ONE LINE, and the third of them is new.
+          badge · up · last-wrote. "Last wrote" is what distinguishes a working
+          session from a stuck one and it used to be buried a screen and a half
+          down inside Recent messages. */}
       <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-x-2 tw:gap-y-1">
         <StatusPill status={row.status} />
+        <PauseLine pause={row.pause} now={now} />
+        <LastWrote view={reading.view} status={row.status} now={now} />
         <Uptime row={row} now={now} className="tw:ml-auto" />
       </div>
 
-      <h2
-        className={cx(
-          "tw:mt-1.5 tw:text-[17px] tw:leading-snug tw:font-medium tw:break-words",
-          row.title === null && "tw:text-ink-faint tw:italic",
-        )}
-      >
-        {row.title ?? "no title yet"}
+      {/* ONE NAME, NOT TWO. It used to draw an italic "no title yet" here and
+          the real tmux name in the rename box underneath, so a session with no
+          Claude title showed a placeholder where its name is and its name
+          where a placeholder would be. */}
+      <h2 className="tw:mt-1.5 tw:text-[17px] tw:leading-snug tw:font-medium tw:break-words">
+        {row.title ?? row.name}
       </h2>
       {label.detail === null ? null : (
         <p className="tw:mt-1 tw:text-[13px] tw:break-words tw:text-unknown-ink">{label.detail}</p>
@@ -492,146 +615,215 @@ export function SessionDetail({
           SessionsPanel, so switching sessions resets the box. */}
       <RenameField row={row} rename={rename} />
 
-      {/* ------------------------------------------- 1. what it needs -- */}
-      <Section title="What it needs from you">
-        {row.question !== null ? (
-          <>
-            <HeldBack why={answeringOff} gate={row.question.gate} />
-            <QuestionCard
-              question={row.question}
-              onAnswer={
-                unaddressable === null && answeringOff === null && row.question.gate.kind === "conversation"
-                  ? onAnswer
-                  : null
-              }
-              busy={busy}
-            />
-          </>
-        ) : row.status.kind === "needs-you" ? (
+      {/* -------------------------------------------- 1. what it needs -- */}
+      {/* THE EMPTY CASE IS GONE, HEADING AND ALL. It used to draw a section
+          titled "What it needs from you" containing the sentence "Nothing. It
+          is not asking you anything." — a section whose entire content was the
+          news that it had no content, on every working, idle and shell page.
+          The badge in the header already says which of those this is. What
+          survives is the needs-you sentence, which is not an empty state: it
+          is the content of that state, and it says where to go instead. */}
+      {row.question !== null ? (
+        <Section title="What it needs from you">
+          <HeldBack why={answeringOff} gate={row.question.gate} />
+          <QuestionCard
+            question={row.question}
+            onAnswer={
+              unaddressable === null && answeringOff === null && row.question.gate.kind === "conversation"
+                ? onAnswer
+                : null
+            }
+            busy={busy}
+          />
+        </Section>
+      ) : row.status.kind === "needs-you" ? (
+        <Section title="What it needs from you">
           <p className="tw:text-[13px] tw:text-ink-soft">
-            It is waiting for a person, and no dialog could be read off the pane — so there is nothing
-            here to press. A message below may be what it is waiting for; otherwise the terminal is the
-            place to look.
+            Waiting for a person, and no dialog could be read off the pane. See the last thing it said,
+            below — or open the terminal.
           </p>
-        ) : (
-          <p className="tw:text-[13px] tw:text-ink-soft">Nothing. It is not asking you anything.</p>
-        )}
-        {unaddressable === null ? null : (
-          <p className="tw:mt-2 tw:text-[13px] tw:text-alarm-ink">{unaddressable}</p>
-        )}
-      </Section>
+        </Section>
+      ) : null}
 
-      {/* ------------------------------------------------- 2. actions -- */}
-      <Section title="Do something to it">
-        <SessionActions
-          row={row}
-          feed={actions.feed}
-          api={actions.api}
-          asked={actions.asked}
-          error={actions.error}
-          unaddressable={unaddressable}
-          onChanged={actions.refresh}
-        />
-      </Section>
+      {unaddressable === null ? null : (
+        <p className="tw:mt-2 tw:text-[13px] tw:text-alarm-ink">{unaddressable}</p>
+      )}
 
-      {/* ------------------------------------------------ 3. steering -- */}
-      <Section title="Say something to it">
-        <label className="tw:sr-only" htmlFor="steer-text">
-          A message to send to this session
-        </label>
-        <textarea
-          id="steer-text"
-          value={text}
-          rows={3}
-          disabled={busy || unaddressable !== null}
-          onChange={(e) => setText(e.target.value)}
-          placeholder="e.g. pull the latest dev and carry on"
-          className="tw:w-full tw:rounded-md tw:border tw:border-rule tw:bg-panel tw:p-2 tw:text-[14px] tw:text-ink tw:disabled:opacity-50"
-        />
-        <div className="tw:mt-1.5 tw:flex tw:flex-wrap tw:items-center tw:gap-2">
-          <Button variant="loud" onClick={onSend} disabled={busy || text.trim() === "" || unaddressable !== null}>
-            {busy ? "Sending…" : "Send"}
-          </Button>
-          {/* The second gesture, not a fallback for the first — and absent on
-              an idle session, where it would be the first one, slower. See
-              `offerQueue`. */}
-          {offerQueue ? (
-            <Button onClick={() => void onQueue()} disabled={busy || text.trim() === "" || unaddressable !== null}>
-              Queue it
-            </Button>
-          ) : null}
-          {/* The newline rule is the server's and is checked there. It is worth
-              saying up front because it is surprising: Claude Code's input box
-              submits on Enter, so a two-line message would arrive as two, the
-              first of them half a sentence. */}
-          <span className="tw:text-[12px] tw:text-ink-faint">One line — a newline would submit it early.</span>
-        </div>
-        {/* The delay is said out loud wherever Queue is offered, and in
-            seconds: "shortly" is the word that would make somebody press it and
-            then wait. ~73 seconds is the real cadence of a drain pass — the
-            collection takes about 13 and the loop then waits 60 from the end of
-            it (tools/fleet/drain.ts). */}
-        <p className="tw:mt-1 tw:text-[12px] tw:text-ink-faint">
-          {offerQueue
-            ? "Send types it at the pane now. Queue puts it in the line below with anything else you have pressed, in order, to go when the session is next at a prompt — which is checked about every 73 seconds, so a queued message is never immediate."
-            : "Send types it at the pane now, which is all there is to do here: it is at a prompt, so queueing the same words would send the same keystrokes up to 73 seconds later. Queue comes back when it is working, or when something is already waiting in front of you."}
+      {/* A SHELL GETS ONE SENTENCE AND NONE OF THE CONTROLS. See the header's
+          "what this file decides, and what it does not". */}
+      {row.status.kind === "shell" ? (
+        <p className="tw:mt-3 tw:text-[13px] tw:text-ink-soft">
+          A shell. Nothing can be typed at it: a shell would <em>run</em> the message rather than read it. The
+          transcript and the identifiers below are still worth having; there is nothing here to press.
         </p>
-      </Section>
+      ) : (
+        <>
+          {/* -------------------------------------------- 2. steering -- */}
+          {/* ABOVE THE BUTTONS NOW. The commonest thing a needs-you session
+              wants is an answer in prose, and it was the third section down
+              behind fifteen buttons. Fable, 2026-09-08: a question in chat is
+              answered by typing, and that is what the composer is for. */}
+          <Section title="Say something to it">
+            <label className="tw:sr-only" htmlFor="steer-text">
+              A message to send to this session
+            </label>
+            <textarea
+              id="steer-text"
+              ref={box}
+              value={text}
+              rows={3}
+              disabled={busy || unaddressable !== null}
+              /* `readOnly`, NOT `disabled`, for the ~2 seconds the transcript is
+                 in flight: `disabled` drops the selection, and the selection is
+                 the caret the words are about to be spliced at. */
+              readOnly={dictate.readOnly}
+              onChange={(e) => setText(e.target.value)}
+              placeholder="e.g. pull the latest dev and carry on"
+              className="tw:w-full tw:rounded-md tw:border tw:border-rule tw:bg-panel tw:p-2 tw:text-[14px] tw:text-ink tw:disabled:opacity-50"
+            />
+            <div className="tw:mt-1.5 tw:flex tw:flex-wrap tw:items-center tw:gap-2">
+              {/* THE LABELS CARRY THE DIFFERENCE NOW, so the paragraph that
+                  used to explain it is a tap on Queue. "Send" and "Queue it"
+                  were two words that did not say which was slower. */}
+              {/* **`sendBlocked`, not `readOnly`** — they are not the same
+                  thing and the second is the one everybody forgets. `readOnly`
+                  is the two seconds AFTER the press to stop; `armed` is the
+                  microphone still being on. Guard only the first and Send now
+                  types the rough live guesses into a live agent's pane, or on
+                  Safari and Firefox types nothing that was said at all. And the
+                  button is disabled as well as guarded: a correct guard behind a
+                  lit button is a press that does nothing and says nothing, which
+                  is the worse half of the pair. */}
+              <Button
+                variant="loud"
+                onClick={onSend}
+                disabled={busy || text.trim() === "" || unaddressable !== null || dictate.sendBlocked}
+              >
+                {busy ? "Sending…" : "Send now"}
+              </Button>
+              {/* The second gesture, not a fallback for the first — and absent on
+                  an idle session, where it would be the first one, slower. See
+                  `offerQueue`. */}
+              {offerQueue ? (
+                <Explain
+                  tip={{
+                    head: "Queue",
+                    what: "Goes when the session is next at a prompt.",
+                    how: "It joins the line below with anything else you have pressed, in order. The line is checked about every 73 seconds — a collection takes around 13 and the loop then waits 60 from the end of it — so a queued message is never immediate. Send types it at the pane now instead, which jumps whatever is already waiting.",
+                  }}
+                  placement="top"
+                >
+                  <Button
+                    onClick={() => void onQueue()}
+                    disabled={busy || text.trim() === "" || unaddressable !== null || dictate.sendBlocked}
+                  >
+                    Queue (~73s)
+                  </Button>
+                </Explain>
+              ) : null}
+              {/* The newline rule is the server's and is checked there. It stays
+                  VISIBLE, unlike the rest: it changes what a thumb does in the
+                  next two seconds. Claude Code's input box submits on Enter, so
+                  a two-line message arrives as two, the first half a sentence. */}
+              <span className="tw:text-[12px] tw:text-ink-faint">One line — a newline would submit it early.</span>
+            </div>
+            {/* On its own row rather than in with the send buttons: it grows a
+                status line, a level meter and sometimes a failure sentence, and
+                a control that changes width should not be pushing Send now
+                around under a thumb. */}
+            <DictationControl
+              dictation={dictate.dictation}
+              toggle={dictate.toggle}
+              className="tw:mt-1.5"
+            />
+            {offerQueue ? null : (
+              <p className="tw:mt-1 tw:text-[12px] tw:text-ink-faint">
+                It is at a prompt, so Send is all there is to do here. Queue comes back when it is working, or when
+                something is already waiting in front of you.
+              </p>
+            )}
+          </Section>
 
-      {outcome === null ? null : <Outcome outcome={outcome} onRefresh={onRefresh} />}
-      {queueOutcome === null ? null : <ActionOutcomeCard outcome={queueOutcome} onRefresh={actions.refresh} />}
+          {outcome === null ? null : <Outcome outcome={outcome} onRefresh={onRefresh} />}
+          {queueOutcome === null ? null : <ActionOutcomeCard outcome={queueOutcome} onRefresh={actions.refresh} />}
 
-      {/* --------------------------------------------- 4. the queue -- */}
-      <Section title="Waiting to go to it">
-        <SessionQueue
-          sessionId={row.id}
-          feed={actions.feed}
-          api={actions.api}
-          asked={actions.asked}
-          error={actions.error}
-          onChanged={actions.refresh}
-        />
-      </Section>
+          {/* --------------------------------------------- 3. actions -- */}
+          {/* "ASK IT TO…", not "Do something to it". The verb says these are
+              requests an agent may decline, which is what the deleted
+              paragraph said in two sentences. The destructive group keeps its
+              own heading inside — "Force" — and stays next to this rather than
+              below the queue, so the loud red block is never separated from
+              the strip it is the exception to. */}
+          <Section title="Ask it to…">
+            <SessionActions
+              row={row}
+              feed={actions.feed}
+              api={actions.api}
+              asked={actions.asked}
+              error={actions.error}
+              unaddressable={unaddressable}
+              onChanged={actions.refresh}
+            />
+          </Section>
+
+          {/* --------------------------------------------- 4. the queue -- */}
+          <Section title="Waiting to go to it">
+            <SessionQueue
+              sessionId={row.id}
+              feed={actions.feed}
+              api={actions.api}
+              asked={actions.asked}
+              error={actions.error}
+              onChanged={actions.refresh}
+            />
+          </Section>
+        </>
+      )}
 
       {/* ------------------------------------- 5. the conversation -- */}
       {/* Drawn for EVERY row, whatever its status. A shell has no transcript
           and the honest answer there is the reader's own sentence, not a
           section that quietly removed itself. See RecentMessages.tsx. */}
       <Section title="Recent messages">
-        <RecentMessages row={row} now={now} api={messages} />
+        <RecentMessages row={row} now={now} reading={reading} />
       </Section>
 
       {/* --------------------------------------------- 6. where it is -- */}
-      <Section title="Where it is">
-        {where === null ? (
-          <p className="tw:text-[13px] tw:text-ink-faint">no repo recorded</p>
-        ) : (
-          <p className="tw:text-[13px] tw:break-words tw:text-ink-soft">{where}</p>
-        )}
-        {dir === null ? (
-          <p className="tw:mt-1 tw:text-[13px] tw:text-ink-faint">
-            no working directory recorded — this session predates the launcher writing one down
+      {/* COLLAPSED. This is what you read when two rows look the same, not what
+          you came for — and it was four ids, a path, a repo line and two
+          paragraphs of caveat at the bottom of every page. The summary carries
+          the repo, which is the part anybody scans for. */}
+      <details className="tw:mt-3">
+        <summary className="tw:cursor-pointer tw:rounded-md tw:px-1 tw:py-1 tw:text-[11px] tw:font-semibold tw:tracking-widest tw:text-ink-faint tw:uppercase tw:hover:text-ink-soft">
+          Where it is{where === null ? "" : ` — ${where}`}
+        </summary>
+        <div className="tw:mt-1 tw:border-l tw:border-rule tw:pl-3">
+          {where === null ? <p className="tw:text-[13px] tw:text-ink-faint">no repo recorded</p> : null}
+          {dir === null ? (
+            <p className="tw:mt-1 tw:text-[13px] tw:text-ink-faint">
+              no working directory recorded — this session predates the launcher writing one down
+            </p>
+          ) : (
+            <Explain
+              tip={{
+                head: "Working directory",
+                what: dir,
+                how: "The only place the full path exists. The name above is its last segment, and two worktrees can differ by a word — so this is what tells them apart, and what a transcript would be found from.",
+              }}
+              placement="top"
+              className="tw:mt-1 tw:block tw:text-[13px] tw:break-words tw:text-ink-soft"
+            >
+              <Mono>{dir}</Mono>
+            </Explain>
+          )}
+          <Handles row={row} full />
+          <p className="tw:mt-1 tw:text-[11px] tw:text-ink-faint">
+            Session handle, pane handle, the pane's pid and the conversation's own id. All four go back
+            to the server with anything you send, exactly as they arrived, so it can check the pane is
+            still the one you were looking at.
           </p>
-        ) : (
-          <Explain
-            tip={{
-              head: "Working directory",
-              what: dir,
-              how: "The only place the full path exists. The name above is its last segment, and two worktrees can differ by a word — so this is what tells them apart, and what a transcript would be found from.",
-            }}
-            placement="top"
-            className="tw:mt-1 tw:block tw:text-[13px] tw:break-words tw:text-ink-soft"
-          >
-            <Mono>{dir}</Mono>
-          </Explain>
-        )}
-        <Handles row={row} full />
-        <p className="tw:mt-1 tw:text-[11px] tw:text-ink-faint">
-          Session handle, pane handle, the pane's pid and the conversation's own id. All four go back
-          to the server with anything you send, exactly as they arrived, so it can check the pane is
-          still the one you were looking at.
-        </p>
-      </Section>
+        </div>
+      </details>
     </Card>
   );
 }

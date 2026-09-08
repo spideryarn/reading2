@@ -101,11 +101,20 @@
  *
  * ## An image is rehosted as a unit — the trap that makes this a no-op
  *
- * A browser handed a rewritten `src` and an untouched `srcset` prefers the
+ * A browser handed a rewritten `src` and an untouched `srcset` takes the
  * `srcset`, and **goes on hot-linking the publisher while the page looks
  * completely fixed**. Same for a `<source>` inside a `<picture>`, which beats
  * the `<img>` outright. So `src` is replaced and `srcset`, `sizes` and every
- * sibling `<source>` are removed together. 260829b § trap 1, src/assets.ts § 2,
+ * sibling `<source>` are removed together — `dropCandidates`, which is the only
+ * copy of that list.
+ *
+ * **"Prefers" is too weak, and the weaker word is what let a bug through.** With
+ * `w` descriptors the `src` is not a lower-ranked candidate, it is *not a
+ * candidate at all* — so a `srcset` entry that will not load falls back to
+ * nothing and the `<img>` draws blank. That is why the fallback for an image we
+ * could not deliver keeps the `src` **alone** rather than putting the
+ * publisher's markup back as it was; see `ImagePlacement`'s `unverified` and
+ * SPIDERYARN-READING2-2B. 260829b § trap 1, src/assets.ts § 2,
  * and `tests/rehost.test.ts` asserts the *absence of the publisher's host*
  * rather than the presence of ours, because a rewritten `src` proves nothing
  * about the four other places a URL hides.
@@ -353,27 +362,70 @@ export interface RehostSources {
 }
 
 /**
- * What is to become of one `<img>` we found — **and `null` is the third answer
+ * What is to become of one `<img>` we found — **and `null` is the fourth answer
  * and the commonest one.**
  *
- * A union rather than `string | null`, because the two non-null cases are the
- * two halves of the rule in the header and a boolean between them would be
- * exactly the wrong way to say it: *put our copy in* and *take the publisher's
- * out and put nothing in yet* differ in one attribute write and in everything
- * that attribute means.
+ * A union rather than `string | null`, because the non-null cases are halves of
+ * the rule in the header and a boolean between them would be exactly the wrong
+ * way to say it: *put our copy in* and *take the publisher's out and put nothing
+ * in yet* differ in one attribute write and in everything that attribute means.
+ *
+ * The three of them agree on everything except `src`: each drops the `<source>`
+ * elements, the `srcset` and the `sizes`, so that whatever `src` ends up saying
+ * is the only thing the browser can act on (`dropCandidates`).
  *
  * `null` — an image we hold no copy of, or one the manifest records as `failed`,
  * or one the step never looked at — is *leave this element completely alone*.
- * It goes on hot-linking, exactly as every image does today.
+ * It goes on hot-linking, exactly as every image does today, **including any
+ * `<source>` that hot-links with it**: we never looked at that image, so we have
+ * nothing better to offer and no grounds to take anything away.
  */
 export type ImagePlacement =
   /** Our copy is in hand. */
   | { kind: "ours"; src: string }
   /** We hold a copy and are fetching it; the publisher must not be asked. */
-  | { kind: "waiting" };
+  | { kind: "waiting" }
+  /**
+   * **We hold a copy and could not deliver it, so the publisher serves this one
+   * after all — but their `<picture>` does not come back whole.**
+   *
+   * *Leave it exactly as it was* is right for a bare `<img>`: the publisher's URL
+   * is what a reader had before any of this existed, and a delivery failure of
+   * ours must not cost them the picture. It is wrong the moment that `<img>` has
+   * company, because **a candidate is chosen before a byte moves and that choice
+   * is never reconsidered** — a `<source>` on `type`, a `srcset` entry on width
+   * — so restoring the markup verbatim can restore one that cannot work, with
+   * the perfectly good `src` beneath it unreachable.
+   *
+   * SPIDERYARN-READING2-2B is that case: `asteriskmag.com` serves its AVIF
+   * variants as `text/plain` with `nosniff`, Chrome's ORB blocks them
+   * (`net::ERR_BLOCKED_BY_ORB`, measured), and `<picture>` offers no way down to
+   * the PNG. Our copy of that PNG is the cure — and if we cannot hand it over,
+   * the next best thing is the publisher's own `<img>`, which works.
+   *
+   * So this keeps the publisher's `src` and drops every other candidate: the
+   * `<source>` elements, and the `<img>`'s own `srcset` and `sizes` with them.
+   *
+   * **Keeping `srcset` would have been the same bug one level down.** The step
+   * that fetched and sniffed this image looked at `img[src]` and nothing else,
+   * so the responsive candidates are exactly as unchecked as the `<source>` is;
+   * and a `srcset` with `w` descriptors does not merely outrank `src`, it
+   * removes it from the candidate set altogether, so a broken candidate has
+   * nothing to fall back to. Measured in Chrome, on this article's own markup:
+   * with the publisher's `600w, 1920w` present and unreachable, `naturalWidth`
+   * is `0` and `currentSrc` is the broken candidate; with it gone, the `src`
+   * draws. GPT Sol found this in review, 2026-09-08.
+   *
+   * What is left is the one URL the pipeline actually fetched and sniffed, at
+   * the cost of the resolutions we were never in a position to vouch for.
+   */
+  | { kind: "unverified" };
 
 /** The one `waiting`, since it carries nothing. */
 const WAITING: ImagePlacement = { kind: "waiting" };
+
+/** The one `unverified`, for the same reason. */
+const UNVERIFIED: ImagePlacement = { kind: "unverified" };
 
 /** An `<img>` into every marked `<figure>` we hold bytes for. */
 function fillFigures(parsed: HTMLElement, srcFor: (ref: string) => StoredSrc | null): boolean {
@@ -422,25 +474,30 @@ function fillFigures(parsed: HTMLElement, srcFor: (ref: string) => StoredSrc | n
  * keyed the manifest through that same expression, and a `getAttribute` written
  * out here instead would miss every entry that carries an `&amp;`, silently.
  *
- * **The removals are the point, and they are the same on both branches.** Three
- * places a publisher's URL survives a rewritten `src`: `srcset`, which a browser
- * *prefers*; `sizes`, meaningless once its `srcset` is gone and misleading left
- * behind; and every `<source>` of an enclosing `<picture>`, which outranks the
- * `<img>` altogether. Miss one and the page hot-links exactly as before while
- * looking completely fixed. 260829b § trap 1.
+ * **The removals are the point, and they are the same on all three branches.**
+ * Three places a publisher's URL survives a rewritten `src`: `srcset`, which a
+ * browser *prefers* — and which, with `w` descriptors, replaces `src` rather
+ * than merely outranking it; `sizes`, meaningless once its `srcset` is gone and
+ * misleading left behind; and every `<source>` of an enclosing `<picture>`,
+ * which outranks the `<img>` altogether. Miss one and the page hot-links exactly
+ * as before while looking completely fixed. 260829b § trap 1.
  *
- * That is why `waiting` and `ours` share this loop rather than having one each:
- * they differ in a single attribute write, and the four lines that actually
- * close the leak must not be able to drift apart between two copies of them.
+ * That is why the branches share this loop rather than having one each: they
+ * differ in a single attribute write, and the lines that actually close the leak
+ * must not be able to drift apart between copies of them. `dropCandidates` is
+ * the one copy.
+ *
+ * **`unverified` is the third branch and it is here for a different reason** —
+ * the publisher *is* serving that image, so their `src` stays where the other
+ * two branches rewrite or remove it. Everything beside the `src` goes for the
+ * same reason as ever: we did not check it. Whether the publisher's spare
+ * candidates are to be trusted is one question, and answering it in two places
+ * is how one of them comes to answer it differently. See `ImagePlacement`.
  *
  * **Attributes and void elements only, so not one character of rendered text
  * moves** — `<source>` is void and contributes none, which is what makes
  * removing it legal on a path where comment anchors are counted in characters
  * (src/web/annotate.ts). An `<img>` we hold no copy of is not touched at all.
- *
- * `closest("picture")` rather than the parent, because the spec's shape — the
- * `<img>` as a direct child — is a fact about well-formed markup rather than
- * about the html a publisher wrote and three passes have since rewritten.
  */
 function swapImages(
   parsed: HTMLElement,
@@ -455,21 +512,73 @@ function swapImages(
     const placement = placementFor(url);
     if (placement === null) continue;
 
+    /* **All three branches drop every candidate but `src`**, and differ only in
+       what `src` then says. Keeping that shared — one call, not three copies of
+       two `removeAttribute`s — is what stops the leak-closing removals drifting
+       apart the next time one branch is edited. */
+    const stripped = dropCandidates(img);
+
+    /* **`unverified` is the one branch that may leave the element alone.** The
+       publisher is serving this image after all, so their `src` stays exactly as
+       they wrote it — and an `<img>` that had no candidates to drop is not a
+       change at all. */
+    if (placement.kind === "unverified") {
+      changed = stripped || changed;
+      continue;
+    }
+
     if (placement.kind === "ours") img.setAttribute("src", placement.src);
     /* **No `src` at all, rather than an empty one or a transparent pixel.** An
        empty `src` resolves against the document and fetches the reading view
        itself; a placeholder pixel would be a picture we invented. The
        publisher's own `width`/`height` are left exactly as they are, so a
        browser can still reserve the box. GPT Sol, 2026-09-06. */
-    else img.removeAttribute("src");
-    img.removeAttribute("srcset");
-    img.removeAttribute("sizes");
-    for (const source of img.closest("picture")?.querySelectorAll("source") ?? []) {
-      source.remove();
+    else if (placement.kind === "waiting") img.removeAttribute("src");
+    /* **Named rather than left as an `else`**, so that a fourth placement is a
+       compile error here instead of quietly inheriting `waiting`'s behaviour —
+       which would blank an image rather than show it, and would do it on the
+       draw the reader is looking at. */
+    else {
+      const never: never = placement;
+      throw new Error(`rehost: unhandled image placement ${String(never)}`);
     }
     changed = true;
   }
   return changed;
+}
+
+/**
+ * Every way this `<img>` could load a URL other than its own `src` — its
+ * `srcset`, its `sizes`, and the `<source>` elements of the `<picture>` it is
+ * in — gone, and whether there were any.
+ *
+ * One helper rather than a line in each branch of `swapImages` because these
+ * removals are a single rule (*`src` is the only candidate we ever leave
+ * behind*) that all three placements obey, and three copies of it would be
+ * three chances to close the leak in two of them.
+ *
+ * The return value is what lets `unverified` keep `rebuild`'s promise that an
+ * article nothing happened to comes back as **the very same block objects**: a
+ * bare `<img>` with nothing to drop is not a change, and saying it was would
+ * re-render prose on every delivery failure.
+ *
+ * `closest("picture")` rather than the parent, for the reason `swapImages`
+ * gives: the spec's shape is a fact about well-formed markup, not about html a
+ * publisher wrote and three passes have since rewritten.
+ */
+function dropCandidates(img: Element): boolean {
+  let removed = false;
+  for (const attr of ["srcset", "sizes"]) {
+    if (!img.hasAttribute(attr)) continue;
+    img.removeAttribute(attr);
+    removed = true;
+  }
+  const sources = img.closest("picture")?.querySelectorAll("source") ?? [];
+  for (const source of sources) {
+    source.remove();
+    removed = true;
+  }
+  return removed;
 }
 
 /** What one figure's `<img>` needs: where the bytes are, and how big they are. */
@@ -517,11 +626,17 @@ function cssEscape(value: string): string {
  * is a different fact and is recorded in the manifest rather than discovered
  * here. PdfFigureNote.tsx.
  *
- * **An image whose bytes will not load is left exactly as it was too** — and for
- * that half "exactly as it was" is the publisher's own URL, still working, which
- * is why it needs no sentence and no state of its own. 260829b § trap 8 is the
- * correction that a delivery failure and a pipeline failure are different
- * things; for the article's own images they happen to have the same remedy.
+ * **An image whose bytes will not load falls back to the publisher's own URL**,
+ * still working, which is why it needs no sentence and no state of its own.
+ * 260829b § trap 8 is the correction that a delivery failure and a pipeline
+ * failure are different things; for the article's own images they happen to have
+ * the same remedy.
+ *
+ * It falls back to the `src` and to nothing else, though — see `unverified`,
+ * which is what this hands `swapImages` for such an image. "Left exactly as it
+ * was" was the old wording here and it was wrong by one attribute: the
+ * publisher's other candidates are unchecked, and one of them being unusable is
+ * SPIDERYARN-READING2-2B.
  */
 export async function rehostImages(
   article: Article,
@@ -565,7 +680,14 @@ export async function rehostImages(
       figure: figureFor,
       image: (url) => {
         const src = got.get(url);
-        return src === undefined ? null : { kind: "ours", src };
+        if (src !== undefined) return { kind: "ours", src };
+        /* **Not `null`, for the images we meant to serve and could not.** `null`
+           is *we never had a copy of this*, and it restores the publisher's
+           markup whole — every unchecked candidate with it, one of which can be
+           the only one a browser will consider. `unverified` gives back the one
+           URL this pipeline actually fetched. `wanted.images` is the test
+           because it is exactly the set the first draw blanked. */
+        return wanted.images.has(url) ? UNVERIFIED : null;
       },
     }),
   );
@@ -823,9 +945,12 @@ async function figureSources(
  * The images' bytes, by the URL they replace — **not awaited by the prose.**
  *
  * A URL absent from the answer is how a failure is spelled here too, and it
- * means the same thing it means everywhere else in this file: leave that
- * element as the publisher wrote it. The second draw rebuilds from the original
- * html, so *leaving it alone* is literally all that has to happen.
+ * hands the reader back to the publisher. The second draw rebuilds from the
+ * original html, so most of *leaving it alone* is literally nothing happening —
+ * but not all of it: an image we meant to serve and could not comes back as
+ * `unverified` rather than `null`, which keeps the publisher's `src` and drops
+ * the candidates we never checked. Restoring those verbatim is the bug
+ * SPIDERYARN-READING2-2B was.
  *
  * **Its own `AbortController`, downstream of the load's**, for two jobs at once:
  * `IMAGE_WAIT_MS` has to stop these without stopping the figures, and the load

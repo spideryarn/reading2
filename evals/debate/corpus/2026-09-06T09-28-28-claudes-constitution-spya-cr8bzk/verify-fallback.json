@@ -1,0 +1,254 @@
+{
+  "attempts": [
+    {
+      "attemptId": "c48c6c4c-fd92-4ced-92aa-03d15af9f3d7",
+      "pass": "direct",
+      "skipped": null,
+      "reportedRows": 6,
+      "quotations": 12
+    },
+    {
+      "attemptId": "91f6ec69-efb3-4d97-bdb0-28e9fed09b3b",
+      "pass": "claims",
+      "skipped": "not a direct pass — this tool answers a question about group one only",
+      "reportedRows": 0,
+      "quotations": 0
+    }
+  ],
+  "checks": [
+    {
+      "attemptId": "c48c6c4c-fd92-4ced-92aa-03d15af9f3d7",
+      "rowIndex": 0,
+      "field": "sourceQuote",
+      "host": "lawfaremedia.org",
+      "url": "https://www.lawfaremedia.org/article/the-code-is-not-the-law--why-claude-s-constitution-misleads",
+      "chars": 230,
+      "digest": "82eab27b",
+      "klass": "inExtract",
+      "page": null
+    },
+    {
+      "attemptId": "c48c6c4c-fd92-4ced-92aa-03d15af9f3d7",
+      "rowIndex": 0,
+      "field": "articleReferenceQuote",
+      "host": "lawfaremedia.org",
+      "url": "https://www.lawfaremedia.org/article/the-code-is-not-the-law--why-claude-s-constitution-misleads",
+      "chars": 34,
+      "digest": "04773932",
+      "klass": "missingFromExtract",
+      "page": {
+        "outcome": "ok",
+        "inReadability": false,
+        "inWholeBody": true,
+        "inSpacedBody": true,
+        "recovered": true
+      }
+    },
+    {
+      "attemptId": "c48c6c4c-fd92-4ced-92aa-03d15af9f3d7",
+      "rowIndex": 1,
+      "field": "sourceQuote",
+      "host": "lawfaremedia.org",
+      "url": "https://www.lawfaremedia.org/article/interpreting-claude-s-constitution",
+      "chars": 197,
+      "digest": "ae5186ea",
+      "klass": "inExtract",
+      "page": null
+    },
+    {
+      "attemptId": "c48c6c4c-fd92-4ced-92aa-03d15af9f3d7",
+      "rowIndex": 1,
+      "field": "articleReferenceQuote",
+      "host": "lawfaremedia.org",
+      "url": "https://www.lawfaremedia.org/article/interpreting-claude-s-constitution",
+      "chars": 67,
+      "digest": "b688b7bf",
+      "klass": "inExtract",
+      "page": null
+    },
+    {
+      "attemptId": "c48c6c4c-fd92-4ced-92aa-03d15af9f3d7",
+      "rowIndex": 2,
+      "field": "sourceQuote",
+      "host": "oversightboard.com",
+      "url": "https://www.oversightboard.com/news/claudes-constitution-needs-a-bill-of-rights-and-oversight/",
+      "chars": 161,
+      "digest": "d4dec16b",
+      "klass": "inExtract",
+      "page": null
+    },
+    {
+      "attemptId": "c48c6c4c-fd92-4ced-92aa-03d15af9f3d7",
+      "rowIndex": 2,
+      "field": "articleReferenceQuote",
+      "host": "oversightboard.com",
+      "url": "https://www.oversightboard.com/news/claudes-constitution-needs-a-bill-of-rights-and-oversight/",
+      "chars": 58,
+      "digest": "1ed01e8a",
+      "klass": "missingFromExtract",
+      "page": {
+        "outcome": "ok",
+        "inReadability": false,
+        "inWholeBody": true,
+        "inSpacedBody": true,
+        "recovered": true
+      }
+    },
+    {
+      "attemptId": "c48c6c4c-fd92-4ced-92aa-03d15af9f3d7",
+      "rowIndex": 3,
+      "field": "sourceQuote",
+      "host": "windowsontheory.org",
+      "url": "https://windowsontheory.org/2026/01/27/thoughts-on-claudes-constitution/",
+      "chars": 199,
+      "digest": "64c7dcc7",
+      "klass": "inExtract",
+      "page": null
+    },
+    {
+      "attemptId": "c48c6c4c-fd92-4ced-92aa-03d15af9f3d7",
+      "rowIndex": 3,
+      "field": "articleReferenceQuote",
+      "host": "windowsontheory.org",
+      "url": "https://windowsontheory.org/2026/01/27/thoughts-on-claudes-constitution/",
+      "chars": 33,
+      "digest": "3ba10d4e",
+      "klass": "missingFromExtract",
+      "page": {
+        "outcome": "ok",
+        "inReadability": false,
+        "inWholeBody": true,
+        "inSpacedBody": true,
+        "recovered": true
+      }
+    },
+    {
+      "attemptId": "c48c6c4c-fd92-4ced-92aa-03d15af9f3d7",
+      "rowIndex": 4,
+      "field": "sourceQuote",
+      "host": "thezvi.substack.com",
+      "url": "https://thezvi.substack.com/p/claudes-constitutional-structure",
+      "chars": 284,
+      "digest": "bc147425",
+      "klass": "missingFromExtract",
+      "page": {
+        "outcome": "ok",
+        "inReadability": true,
+        "inWholeBody": true,
+        "inSpacedBody": true,
+        "recovered": true
+      }
+    },
+    {
+      "attemptId": "c48c6c4c-fd92-4ced-92aa-03d15af9f3d7",
+      "rowIndex": 4,
+      "field": "articleReferenceQuote",
+      "host": "thezvi.substack.com",
+      "url": "https://thezvi.substack.com/p/claudes-constitutional-structure",
+      "chars": 134,
+      "digest": "4304e825",
+      "klass": "missingFromExtract",
+      "page": {
+        "outcome": "ok",
+        "inReadability": true,
+        "inWholeBody": true,
+        "inSpacedBody": true,
+        "recovered": true
+      }
+    },
+    {
+      "attemptId": "c48c6c4c-fd92-4ced-92aa-03d15af9f3d7",
+      "rowIndex": 5,
+      "field": "sourceQuote",
+      "host": "blog.mattglassman.net",
+      "url": "https://blog.mattglassman.net/immediate-broad-reaction-to-a-first-reading-of-the-claude-constitution/",
+      "chars": 235,
+      "digest": "43748716",
+      "klass": "inExtract",
+      "page": null
+    },
+    {
+      "attemptId": "c48c6c4c-fd92-4ced-92aa-03d15af9f3d7",
+      "rowIndex": 5,
+      "field": "articleReferenceQuote",
+      "host": "blog.mattglassman.net",
+      "url": "https://blog.mattglassman.net/immediate-broad-reaction-to-a-first-reading-of-the-claude-constitution/",
+      "chars": 64,
+      "digest": "8ecb19d1",
+      "klass": "missingFromExtract",
+      "page": {
+        "outcome": "ok",
+        "inReadability": false,
+        "inWholeBody": true,
+        "inSpacedBody": true,
+        "recovered": true
+      }
+    }
+  ],
+  "pages": [
+    {
+      "host": "oversightboard.com",
+      "finalHost": "oversightboard.com",
+      "outcome": "ok",
+      "detail": "read"
+    },
+    {
+      "host": "thezvi.substack.com",
+      "finalHost": "thezvi.substack.com",
+      "outcome": "ok",
+      "detail": "read"
+    },
+    {
+      "host": "lawfaremedia.org",
+      "finalHost": "lawfaremedia.org",
+      "outcome": "ok",
+      "detail": "read"
+    },
+    {
+      "host": "blog.mattglassman.net",
+      "finalHost": "blog.mattglassman.net",
+      "outcome": "ok",
+      "detail": "read"
+    },
+    {
+      "host": "windowsontheory.org",
+      "finalHost": "windowsontheory.org",
+      "outcome": "ok",
+      "detail": "read"
+    }
+  ],
+  "summary": {
+    "quotations": 12,
+    "belowFloor": 0,
+    "noExtract": 0,
+    "inExtract": 6,
+    "observedFailures": 6,
+    "recovered": 6,
+    "notRecovered": 0,
+    "notAttempted": 0,
+    "byReadability": 2,
+    "byWholeBody": 6,
+    "byBoth": 2,
+    "readabilityOnly": 0,
+    "wholeBodyOnly": 4,
+    "spacedBodyOnly": 0,
+    "outcomes": {
+      "ok": 5,
+      "unsupported": 0,
+      "blocked": 0,
+      "timed-out": 0,
+      "too-big": 0,
+      "not-found": 0,
+      "failed": 0,
+      "budget-exhausted": 0
+    }
+  },
+  "budget": {
+    "concurrency": 3,
+    "maxFetches": 24,
+    "maxBytesTotal": 50331648,
+    "maxElapsedMs": 300000,
+    "perFetchMaxBytes": 4194304,
+    "perFetchTimeoutMs": 20000
+  }
+}

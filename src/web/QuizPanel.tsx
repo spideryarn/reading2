@@ -64,6 +64,7 @@ import { DictationButton, DictationStrip } from "./DictationStrip.js";
 import { JobProgress } from "./JobProgress.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { TooltipGroup } from "./Tooltip.js";
+import { sendForTranscription } from "./dictation-upload.js";
 import { type UseDictationField, useDictationField } from "./useDictationField.js";
 import { armActivation } from "./activation.js";
 import { useRenderCount } from "./perf.js";
@@ -233,6 +234,7 @@ export function QuizPanel({
     onChange: setTyped,
     box,
     context: { kind: "article", slug: owner.slug },
+    transcribe: sendForTranscription,
   });
 
   /**

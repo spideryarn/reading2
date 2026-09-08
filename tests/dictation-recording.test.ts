@@ -23,6 +23,7 @@ import { act, createElement, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetMicrophoneLock } from "../src/web/mic-lock.js";
+import { sendForTranscription } from "../src/web/dictation-upload.js";
 import { useDictation } from "../src/web/useDictation.js";
 
 /* See the same note in tests/dictation-phases.test.ts: the auth header cannot
@@ -234,6 +235,11 @@ function drive() {
       onTranscript: (t) => transcripts.push(t),
       onEnd: () => ends.push(1),
       context: { kind: "profile" },
+      /* The product's own transcriber, so the fake `fetch` below is still
+         reached through the whole real upload path. It is a parameter
+         rather than an import inside the hook since 2026-09-08 —
+         src/web/transcriber.ts says why. */
+      transcribe: sendForTranscription,
     });
     return null;
   }

@@ -250,31 +250,18 @@ export const ACTION_ERROR_STATUS: Record<ActionErrorCode, number> = {
   cooldown: 429,
 };
 
-/** What a queued item looks like on the wire, with the queue's own staleness rule applied. */
 /**
- * One item as the page reads it, with the two judgments only the queue can make.
+ * What a queued item and a queue look like ON THE WIRE.
  *
- * `stale` and `stuck` are both the QUEUE's rules asked rather than recomputed
- * (`isStale`, `isStuck`), because both are comparisons against limits the page
- * has never been told, and a page that guessed either would draw a recovery
- * button a moment before or after the server would honour it.
+ * Both are in `./wire.js` and re-exported here, because the browser imports the
+ * same two declarations — `web/src/actions-client.ts` derives its parsed view
+ * from `QueueView` rather than keeping a twin of it. A field added below is a
+ * compile error in `parseQueue` until somebody reads it or names it in that
+ * file's `Omit<>`. docs/postmortems/260908b.
  */
-export type QueuedItemView = QueuedItem & { stale: boolean; stuck: boolean };
+import type { QueueView } from "./wire.js";
 
-export type QueueView = {
-  sessionId: string;
-  items: QueuedItemView[];
-  /**
-   * How many of `items` could still reach a pane — `SteeringQueue.isDeliverable`
-   * counted, which is neither `items.length` nor `items.length` minus the
-   * obvious ones. The page uses it to decide whether anything is genuinely
-   * ahead of a new message; see the comment on the field's producer.
-   */
-  deliverable: number;
-  volatile: true;
-  warning: string;
-  since: number;
-};
+export type { QueuedItemView, QueueView } from "./wire.js";
 
 /** One step, after it ran. */
 export type StepStatus = "passed" | "failed" | "failed-ignored";

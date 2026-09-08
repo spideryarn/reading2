@@ -293,6 +293,39 @@
   --hint-h: 0px;
 
   /**
+   * **How much room the hint is taking *right now*** — `--hint-h` while it is
+   * on screen, and `0` once it has slid away with the dock.
+   *
+   * The pair is `--dock-space` and `--dock-bottom` one row down: a **resting**
+   * number that reserves document space and must never move, and a **current**
+   * number that furniture positions itself against. Splitting the hint the same
+   * way is what stops the two being confused, and they were.
+   *
+   * **The bug that bought this, 2026-09-08.** `.mode-band` and the table's
+   * overflow fade both sit at
+   * `calc(max(var(--dock-bottom), var(--safe-bottom)) + <hint>)` — already
+   * following the bar down, because a panel that stopped at the bar's resting
+   * height would show a strip of article through the gap. They read `--hint-h`,
+   * which does not follow anything: it stays 3.5rem while
+   * `narrow-window.css` § a small device translates the hint off the screen. So
+   * on an uninstalled iPhone with the bar gone, the band stopped 56px above the
+   * bottom of the screen with nothing in the gap — the same defect as the empty
+   * top bar of `SPIDERYARN-READING2-2E`, at the other end of the page and for
+   * the same reason: room reserved for furniture that is not there.
+   *
+   * It was reachable in Plain before any of this and became reachable in every
+   * side-by-side band mode when the dock learnt to hide in one
+   * (docs/plans/260908e-…). GPT Sol found it reviewing that change; nothing
+   * measured it before, because the hint renders only on an uninstalled iPhone
+   * and no headless run had one.
+   *
+   * `--hint-h` stays what `.reader`'s `padding-bottom` and the three dialogs
+   * read. **Document padding must not change on scroll** — it would resize the
+   * document under `stepBar` while it is deciding whether the reader scrolled.
+   */
+  --hint-now: var(--hint-h);
+
+  /**
    * **How much room the way-back chip takes at the bottom left**, and 0 when
    * there is no chip — `--hint-h`'s arrangement, for the same reason: only the
    * thing that is drawn knows whether it is drawn, and only a variable can tell

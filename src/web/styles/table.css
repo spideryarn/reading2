@@ -244,7 +244,10 @@ thead th.pin-left { z-index: 35; }
      `max(…, --safe-bottom)` so it stops at the home indicator rather than
      running behind it — see the same expression on `.mode-band`, where it
      matters more because that one holds controls. */
-  bottom: calc(max(var(--dock-bottom), var(--safe-bottom)) + var(--hint-h));
+  /* `--hint-now` rather than `--hint-h`, for the reason `.mode-band` gives at
+     the same expression: the resting number does not follow the hint off the
+     screen, so the fade stopped 56px up with nothing under it. */
+  bottom: calc(max(var(--dock-bottom), var(--safe-bottom)) + var(--hint-now));
   width: 2rem;
   z-index: 20;
   pointer-events: none;

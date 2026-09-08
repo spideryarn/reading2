@@ -32,6 +32,7 @@
  */
 import { useRef } from "react";
 import { DictationButton, DictationStrip } from "./DictationStrip.js";
+import { sendForTranscription } from "./dictation-upload.js";
 import { useDictationField } from "./useDictationField.js";
 
 export function ProfileBox({
@@ -76,6 +77,7 @@ export function ProfileBox({
     onCommit,
     box,
     context: { kind: "profile" },
+    transcribe: sendForTranscription,
   });
   const dictation = dictate.dictation;
 

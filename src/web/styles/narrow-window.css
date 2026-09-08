@@ -434,6 +434,27 @@
        way out of every mode, and it joined this switch because 124px of a
        390px viewport was desperate. A laptop has the room. */
     --dock-bottom: 0px;
+    /* **The three of these are one state and are declared together**, which
+       they were not until 2026-09-08 and which is what went wrong twice in one
+       afternoon. The bar leaves; the install hint that sits on it leaves with
+       it; and the room the hint was reserving stops being reserved, or the mode
+       band goes on stopping 3.5rem above the bottom of the screen for a strip
+       that is no longer drawn (tokens.css § `--hint-now`).
+
+       They used to be three rules with three conditions — this one, plus two
+       keyed on `:not(:has(<band>))` — and the conditions drifted the moment
+       this plan narrowed what `<band>` meant. GPT Sol, second code review,
+       2026-09-08: with the dock brought home by a *dialog* or by
+       `.install-hint:focus-within`, the hint stayed off-screen and its room
+       stayed unreserved, because the two hint rules excluded only a covering
+       band. The sharpest form of that is the guard holding the bar still so a
+       keyboard reader does not lose the focused control, while the strip
+       *containing* that control slides away underneath them.
+
+       One state, declared here and restored whole in the guard below. There is
+       no third rule to keep in step any more. */
+    --hint-now: 0px;
+    --install-hint-transform: translateY(calc(100% + var(--dock-space)));
   }
   /* The same guard for the bottom bar, and it needs two conditions rather than
      one. `:focus-within` is the keyboard half — a reader tabbing along thirteen
@@ -449,12 +470,18 @@
 
      **One `:has()` with two arguments rather than two selectors, and that is
      about specificity rather than brevity.** `:has()` takes the specificity of
-     its most specific argument, so this is `.dock:focus-within` — (0,3,0),
-     which beats `:root[data-bars="hidden"]`'s (0,2,0) outright. Written as two
-     selectors the drawer branch would be (0,2,0), a *tie*, and would win only
-     by being further down the file: a guard that holds because of source order
-     is a guard that goes quiet the day somebody reorders the file. GPT Sol
-     caught the tie, 2026-08-28.
+     its most specific argument — here `.dock:focus-within`, (0,2,0) — which
+     with the outer `:root` makes the whole selector (0,3,0), beating
+     `:root[data-bars="hidden"]`'s (0,2,0) outright. Written as two selectors
+     the drawer branch would be `:root:has(.dock-drawer)`, (0,2,0), a *tie*
+     decided only by being further down the file: a guard that holds because of
+     source order is a guard that goes quiet the day somebody reorders the file.
+     GPT Sol caught the tie, 2026-08-28.
+
+     (This paragraph said `.dock:focus-within` *itself* was (0,3,0) until
+     2026-09-08, which is the whole selector's number rather than the argument's.
+     Harmless while nothing competed, and it is exactly the sentence a later
+     change reasons from — one did, and got the same figure wrong the same way.)
 
      **The three dialogs are here on a second pass, and for a different reason
      from the first three.** They cannot lose a control mid-press — they are
@@ -465,10 +492,88 @@
      screen with nothing under it. Bringing the bar back is the cheaper of the
      two fixes and the better one — a dialog is open because the reader stopped
      reading, which is exactly when the chrome should come back. */
-  /* **And `.mode-band`, 2026-08-31.** Both bars need it, for the reason the
-     guard above sets out at length: the top one carries the close button and
-     this one carries the mode switch, and a reader in a mode with a keyboard up
-     could reach neither once they had slid away. */
+  /* **And the mode band, 2026-08-31 — but not merely for being open.** Greg:
+
+     > on mobile I did find that I sometimes struggled to get back to the main
+     > text (e.g. within the Search mode when the keyboard was open)
+
+     This was `.mode-band`, flat, for a week, and on the day it was written that
+     was exactly right: the crossover at which a band stops sharing the window
+     with the article and covers it instead was `MODE_MIN + PROSE_MIN`, of which
+     layout.ts § `MODE_PROSE_FLOOR` says *"no iPhone made has ever cleared it,
+     in either orientation"*. So on a phone, **a band open** and **a band over
+     the whole screen** were the same sentence, and a dock that slid away left
+     the reader holding a full-screen panel with no way out of it.
+
+     **2026-09-06 split that number** so a landscape iPhone could show a mode
+     and the article side by side (§ a band with no room, and Greg's own ask
+     there), and the two sentences came apart. The guard went on answering the
+     old one and pinned 40px of a 390px viewport over an article the reader
+     could have scrolled the bar back with — `SPIDERYARN-READING2-2F`,
+     2026-09-07: *"The dock used to disappear on iPhone and only reappear when I
+     scroll … But now it seems to be there the whole time."*
+
+     So the argument says the half that was load-bearing, and only that:
+     **`:where(.reader.band-covers) .mode-band`** — the band *is* the screen, so
+     the dock is the only way out and stays. That is every phone in portrait,
+     and the whole of Greg's August case. The masthead is gone here too
+     (§ a band with no room), so there is no other chrome to reach for; and
+     several of the covering panels' scrollers set `overscroll-behavior:
+     contain` — `.summ-scroll` and the Ideas, Timeline, Quiz and Debate lists,
+     for example — so a swipe inside one does not chain to the document, and a
+     reader whose dock had slid away would have no gesture that brought it back.
+
+     **For example, and not an inventory.** Plenty of band scrollers have no
+     containment at all (`.gloss-list`, `.srch-hits`, `.chat-scroll`,
+     `.ref-panel`, `.diag-scroll`, and others). Several is all the argument
+     needs: the guard has to hold for the panels that trap, and holding it for
+     the ones that do not costs a bar nobody was going to scroll away. This
+     comment claimed *every* band scroller on 2026-09-08 and then claimed a
+     complete list of the exceptions; GPT Sol struck both, in that order.
+
+     Where it does not hold, the article is beside the band and the dock hides
+     and returns on scroll exactly as it does in plain — which is the behaviour
+     being asked for, not a new one.
+
+     **`.mode-band:focus-within` was the obvious second argument and it is not
+     here, because a browser said so.** It was in the plan as the *"when the
+     keyboard was open"* half; measured at 844 × 390 on 2026-09-08 it pinned the
+     dock permanently in two of five modes, because **Search and Chat put focus
+     in their field when they open and nothing takes it out again**
+     (`input.srch-input`, `textarea.chat-input` — read back as
+     `document.activeElement` after eight wheel events). A guard that fires for
+     the whole life of a mode is the guard this change is removing, restored
+     under another name in the two modes a reader spends longest in. Glossary,
+     Outline and Summary were unaffected, which is what makes it a proxy rather
+     than a condition.
+
+     The case it was covering is real and is not covered: a landscape phone,
+     keyboard up, dock already gone. It is left because the article is beside
+     the band and scrolls, and because the dock only leaves after 24px of
+     *downward* travel — a reader who just tapped a field they could see has not
+     done that. The version that would be right rather than nearly right is a
+     measured one: `useVisualViewport`'s `bottomInset` is the true *"a keyboard
+     is up"*, and wiring it to a root attribute is what to build if this bites.
+
+     **`:where()` around the two classes, and it is what keeps the specificity
+     this guard has always had.** `:has()` takes its most specific *argument*,
+     and the most specific one here was `.dock:focus-within` — (0,2,0), which
+     with the outer `:root` makes the whole selector (0,3,0). Written plainly,
+     `.reader.band-covers .mode-band` would be (0,3,0) on its own and take the
+     guard to (0,4,0). Nothing competes today, so it would not have broken
+     anything; it would have made the sentence above this one false, which is
+     worse in a file whose comments are the only record of why the numbers are
+     what they are. `:where()` contributes zero, so the argument is `.mode-band`
+     at (0,1,0), the maximum is `.dock:focus-within` again, and the guard is the
+     (0,3,0) it was — still beating `:root[data-bars="hidden"]`'s (0,2,0)
+     outright. GPT Sol caught the arithmetic, 2026-09-08; an earlier version of
+     this comment claimed `.dock:focus-within` was (0,3,0), which is the whole
+     selector rather than the argument.
+
+     docs/plans/260908e-the-dock-hides-on-scroll-in-a-mode-unless-the-band-is-the-whole-screen.md
+     has the measurements either side, and
+     tests/the-dock-hides-in-a-mode-beside-the-article.test.ts fails if any rule
+     in this query goes back to asking whether a band is merely open. */
   :root:has(
     .dock-drawer,
     .dock:focus-within,
@@ -476,9 +581,16 @@
     .cmt-dialog,
     .chat-dialog,
     .annotate-dialog,
-    .mode-band
+    :where(.reader.band-covers) .mode-band
   ) {
+    /* **All three, or none.** Whatever brings the bar back brings the hint back
+       and gives it its room again — see the note on the rule above for the
+       states where declaring only the first was wrong. A guard that restores
+       one third of a state is how the dock ended up home with its own hint
+       translated off the bottom of the screen. */
     --dock-bottom: var(--dock-space);
+    --hint-now: var(--hint-h);
+    --install-hint-transform: translateY(0px);
   }
 
   /* **And when a mode opens, the dock arrives rather than slides.**
@@ -512,8 +624,23 @@
      transitions on `.mode-band`, so this only ever fires on that switch.
 
      GPT Sol found the ordering reviewing the first fix, 2026-09-03, and
-     predicted it from the CSS alone. */
-  :root:has(.mode-band) .dock {
+     predicted it from the CSS alone.
+
+     **`.band-covers` on it since 2026-09-08**, with the guard above and for the
+     same reason. Everything written here is about a bar that came back *because
+     a panel opened*, which is now only true where the band took the screen.
+     Where the article is beside it the dock hides and returns on scroll like
+     any other bar, and killing its transition there would make it snap on every
+     change of direction — a defect, rather than the decision this rule is.
+
+     `:where()` for the same reason as the guard above, and here it matters
+     more: spelled plainly this would go from (0,3,0) to (0,5,0), and the only
+     other rule that sets this element's `transition` is `.dock` itself in
+     dock.css at (0,1,0). Nothing would have broken — but a rule that quietly
+     climbs two steps is a rule nobody can reason about the next time something
+     does compete, and this file's whole method is that the number is written
+     down. GPT Sol, 2026-09-08. */
+  :root:has(:where(.reader.band-covers) .mode-band) .dock {
     transition: none;
   }
 
@@ -524,19 +651,22 @@
      here; since it leaves the screen entirely while you scroll, its resting
      height stopped being the scarce thing and § a coarse pointer grows it
      instead. */
-  /* The install hint goes with the bar it sits on, or it is left floating over
-     the article with a bar-shaped hole under it. Its own height as well as the
-     bar's, because it is above the bar rather than behind it, and `100%` of a
-     one-line strip is the only way to say that without knowing the number.
-     Its `:focus-within` is in the guard above, so a reader tabbing to the
-     dismiss button does not lose it mid-press. */
-  /* `:where()` around the guard so this keeps the specificity it had. Nothing
-     competes for this element's `transform` today, but the rule twenty lines up
-     — where a tie *would* have been decided by source order — is why the habit
-     is worth keeping in the same query. GPT Sol, 2026-08-31. */
-  :root[data-bars="hidden"]:where(:not(:has(.mode-band))) .install-hint {
-    transform: translateY(calc(100% + var(--dock-space)));
-  }
+  /* **The install hint's two rules were here and are gone**, 2026-09-08.
+
+     There used to be a `.install-hint { transform: … }` and a
+     `:root { --hint-now: 0px }`, each carrying its own copy of
+     `:not(:has(<band>))` — a hand-kept negation of a guard six arms long, which
+     is why they only ever tracked one of the six. They are now two declarations
+     in the two rules that own the state (§ the bar leaves, and the guard), and
+     `.install-hint` in dock.css reads `--install-hint-transform`. Three
+     conditions became one. GPT Sol proposed the shape in the first code review
+     and showed what the half-measure still broke in the second.
+
+     The reasoning they carried is worth keeping: the hint travels with the bar
+     it sits on, or it is left floating over the article with a bar-shaped hole
+     under it; and it moves by its own height *as well as* the bar's, because it
+     stands above the bar rather than behind it — `100%` of a one-line strip is
+     the only way to say that without knowing the number. */
   .masthead { padding-top: calc(0.6rem + var(--safe-top)); padding-bottom: 0.55rem; }
   .root-gist { margin-top: 0.35rem; }
 }

@@ -27,11 +27,37 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-const SRC = new URL("../src/", import.meta.url).pathname;
+const ROOT = new URL("../", import.meta.url).pathname;
+
+/**
+ * **Both trees, because the namespace is wherever the codes are READ.**
+ *
+ * `src/` is the product. `tools/` is the fleet dashboard, which grew its own
+ * dictation on 2026-09-08 by reusing the product's microphone
+ * (docs/plans/260908f-… § Stage E) and therefore its own `[mic-…]` sentences on
+ * a server of its own.
+ *
+ * Two programs is an implementation fact; **one person quoting one string is
+ * the use case.** Greg is on a phone reading `[mic-offline]`, and he does not
+ * know — and should not have to know — which of the two produced it. If that
+ * code ever means two things, the family has failed at exactly the moment it is
+ * being used, which is the failure this whole file exists to stop.
+ *
+ * `claude-agents-dashboard` settled it in those words, 2026-09-08, having spent
+ * that morning finding that `tools/` was in nobody's lint allowlist and that
+ * 15,000 lines were checked by nothing. A rule that holds because one person
+ * remembered it is a rule with a shelf life.
+ */
+const TREES = [`${ROOT}src/`, `${ROOT}tools/`];
 
 /** Every `.ts`/`.tsx` under `src/`. */
 function sourceFiles(dir: string, out: string[] = []): string[] {
   for (const name of readdirSync(dir)) {
+    /* `tools/fleet/web/dist/` is a vite build, and a minified bundle contains
+       every one of these codes with no sentence a person wrote around it. It is
+       not source and must not be scanned; `src/` never had a build inside it, so
+       this line arrived with `tools/`. */
+    if (name === "dist" || name === "node_modules") continue;
     const path = join(dir, name);
     if (statSync(path).isDirectory()) {
       sourceFiles(path, out);
@@ -100,7 +126,21 @@ export function sentenceAround(text: string, at: number): string | null {
  * too much.
  */
 function withoutComments(text: string): string {
-  return text.replace(/\/\*[\s\S]*?\*\//g, "");
+  return (
+    text
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      /* **`//` comments too, but only where they start the line.** `src/` writes
+         block comments almost throughout, so this was not needed until `tools/`
+         joined the scan and its house style is `//`.
+
+         Line-start only, and deliberately: stripping every `//` would cut
+         `"https://openrouter.ai/api/v1/audio/transcriptions"` in half inside a
+         string literal, and a scanner that quietly mangles the text it is
+         reading is worse than one that misses a case. A trailing `// …` after
+         code is the residue, and it surfaces in `skipped` rather than being
+         mis-read as copy. */
+      .replace(/^[ \t]*\/\/.*$/gm, "")
+  );
 }
 
 /** Codes the scanner found but could not read a sentence around. See below. */
@@ -109,7 +149,7 @@ export const skipped: string[] = [];
 export function sentencesInTree(): MicSentence[] {
   const found: MicSentence[] = [];
   skipped.length = 0;
-  for (const file of sourceFiles(SRC)) {
+  for (const file of TREES.flatMap((tree) => sourceFiles(tree))) {
     const text = withoutComments(readFileSync(file, "utf8"));
     const codes = /\[mic-[a-z-]+\]/g;
     let m: RegExpExecArray | null = codes.exec(text);
@@ -121,14 +161,14 @@ export function sentencesInTree(): MicSentence[] {
          every explanatory comment in `useDictation.ts`. A sentence recovered
          from one is not copy and must not be compared as though it were. */
       if (sentence?.endsWith(m[0])) {
-        found.push({ code: m[0], sentence, file: file.slice(SRC.length) });
+        found.push({ code: m[0], sentence, file: file.slice(ROOT.length) });
       } else {
         /* **Recorded rather than dropped.** A code the scanner cannot resolve
            to a sentence is not a code that is fine — it is one this file is
            blind to, and a collision hiding behind it would never be reported.
            The count assertion catches the scanner failing *entirely*; this
            catches it failing for one message. GPT Sol's code review, T1. */
-        skipped.push(`${file.slice(SRC.length)}: ${m[0]}`);
+        skipped.push(`${file.slice(ROOT.length)}: ${m[0]}`);
       }
       m = codes.exec(text);
     }
