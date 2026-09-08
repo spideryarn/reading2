@@ -265,6 +265,175 @@ describe("the schema keeps the promises the plan makes", () => {
     });
   });
 
+  /**
+   * **The one thing standing between a delete and somebody's bill.**
+   *
+   * `ingest_events.article_id` is `on delete set null`, and usage is priced live
+   * from `articles.visibility` — a public ingest costs half a slot, a private one
+   * a full one. So without this trigger, destroying a public article turns its
+   * charged rows unresolvable, an unresolvable row is charged full price, and the
+   * owner's usage goes **up** for having thrown something away.
+   *
+   * It is here rather than only in tests/billing-half-units.test.ts because the
+   * trigger is drift: drizzle's snapshot knows the column and knows nothing about
+   * the trigger, exactly like the guards in 0001, so a generated migration that
+   * dropped and recreated `articles` would take it away in silence. **This is the
+   * assertion that would notice** — do not delete it for looking like a test of
+   * Postgres, which is what the header of this file is about.
+   */
+  it("deleting an article freezes what it cost onto its charged rows", async () => {
+    await inRollback(async (c) => {
+      await seed(c);
+      await c.query("update spideryarn.articles set visibility = 'public' where id = $1", [ART_1]);
+      /* The id is carried rather than the row re-found by owner, so a leftover
+         row from some killed run cannot make this pass or fail for a reason that
+         is not about the trigger. */
+      const charged = await c.query<{ id: string }>(
+        `insert into spideryarn.ingest_events (owner_id, succeeded_at, article_id)
+         values ($1, now(), $2) returning id`,
+        [OWNER, ART_1],
+      );
+      const eventId = charged.rows[0]!.id;
+      const priceOf = async () =>
+        (
+          await c.query<{ article_id: string | null; v: string | null }>(
+            `select article_id, article_visibility_at_delete as v
+               from spideryarn.ingest_events where id = $1`,
+            [eventId],
+          )
+        ).rows;
+
+      /* Null while the article exists: there is nothing here for
+         `articles.visibility` to disagree with, which is the whole reason a
+         deletion-only snapshot is not a competing source of truth. */
+      expect(await priceOf()).toEqual([{ article_id: ART_1, v: null }]);
+
+      await c.query("delete from spideryarn.articles where id = $1", [ART_1]);
+
+      /* And the row survives the delete with its price on it — `set null`, so
+         the ledger may not lose an ingest, and the article it can no longer
+         reach is remembered as having been public. */
+      expect(await priceOf()).toEqual([{ article_id: null, v: "public" }]);
+    });
+  });
+
+  /**
+   * **Postgres does not index the referencing side of a foreign key**, and this
+   * one is read on the way out of existence: the freeze trigger's
+   * `update ... where article_id = OLD.id` has to find an article's charged rows.
+   * The ledger is append-only and unbounded, so without an index that is a
+   * sequential scan per article deleted — and the way it eventually fails is a
+   * delete hitting the runtime role's two-minute statement timeout, which is not
+   * a failure anybody would connect back to a missing index. GPT Sol's F7,
+   * 2026-09-07.
+   *
+   * **Partial on `is not null`**, because the rows that can never match are
+   * exactly the ones with no article, and those are the ones that accumulate.
+   *
+   * Unlike the triggers, an index *is* in drizzle's snapshot, so this is not a
+   * drift guard against a regenerated table — it pins the `where` clause, which
+   * is the part a later edit would drop without anything looking wrong.
+   */
+  it("the ledger's article_id is indexed, so deleting an article does not scan it", async () => {
+    const { rows } = await pool!.query<{ indexdef: string }>(
+      `select indexdef from pg_indexes
+        where schemaname = 'spideryarn'
+          and tablename = 'ingest_events'
+          and indexname = 'ingest_events_article_id_live'`,
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.indexdef).toMatch(/WHERE \(article_id IS NOT NULL\)/);
+  });
+
+  /**
+   * **"The two are never both readable" is a constraint now, not a comment.**
+   *
+   * `article_visibility_at_delete` is only safe as a *second* answer to what an
+   * ingest cost because it is unreadable while the live one exists. The original
+   * CHECK restricted the vocabulary and nothing else, so a row could carry a
+   * live public article and a frozen `'private'` at the same time — harmless
+   * today, because the `coalesce` in `isPublicPrice` puts the live column first,
+   * and a trap for whoever changes that order later. GPT Sol's F9, 2026-09-07.
+   *
+   * What makes the constraint possible is that the freeze trigger now unlinks
+   * and stamps in ONE statement, instead of stamping and leaving the foreign
+   * key's `on delete set null` to unlink afterwards.
+   */
+  it("a charged row may not carry both a live article and a frozen price", async () => {
+    await inRollback(async (c) => {
+      await seed(c);
+      await expectViolation(c, /ingest_events_frozen_only_after_unlink/, () =>
+        c.query(
+          `insert into spideryarn.ingest_events
+             (owner_id, succeeded_at, article_id, article_visibility_at_delete)
+           values ($1, now(), $2, 'private')`,
+          [OWNER, ART_1],
+        ),
+      );
+
+      /* And it cannot be reached the other way round either. Stamping a price
+         onto a row whose article is still there is the exact write every comment
+         about this column calls impossible. */
+      const charged = await c.query<{ id: string }>(
+        `insert into spideryarn.ingest_events (owner_id, succeeded_at, article_id)
+         values ($1, now(), $2) returning id`,
+        [OWNER, ART_1],
+      );
+      const eventId = charged.rows[0]!.id;
+      await expectViolation(c, /ingest_events_frozen_only_after_unlink/, () =>
+        c.query(
+          `update spideryarn.ingest_events
+              set article_visibility_at_delete = 'private' where id = $1`,
+          [eventId],
+        ),
+      );
+    });
+  });
+
+  /**
+   * **Losing the article without recording what it was must fail loudly.**
+   *
+   * Nothing in the product writes this, and that is the point: a stray
+   * `update ingest_events set article_id = null` — an operator at three in the
+   * morning, or the freeze trigger having drifted away — turns a half-price
+   * public charge into a full-price unresolvable one, and nothing about the
+   * resulting row looks wrong afterwards. GPT Sol's F8, 2026-09-07.
+   *
+   * The second half of this case is as load-bearing as the first: the guard must
+   * NOT refuse the legitimate unlink, which arrives carrying the frozen price in
+   * the same statement. A guard that also broke deletion would be found within
+   * the hour; one that quietly allowed the stray write would not.
+   */
+  it("a charged row cannot lose its article without recording what it was", async () => {
+    await inRollback(async (c) => {
+      await seed(c);
+      const charged = await c.query<{ id: string }>(
+        `insert into spideryarn.ingest_events (owner_id, succeeded_at, article_id)
+         values ($1, now(), $2) returning id`,
+        [OWNER, ART_1],
+      );
+      const eventId = charged.rows[0]!.id;
+
+      await expectViolation(c, /without a frozen price/, () =>
+        c.query("update spideryarn.ingest_events set article_id = null where id = $1", [eventId]),
+      );
+
+      /* Both columns in one statement: the shape the freeze trigger uses. */
+      await c.query(
+        `update spideryarn.ingest_events
+            set article_id = null, article_visibility_at_delete = 'public'
+          where id = $1`,
+        [eventId],
+      );
+      const { rows } = await c.query<{ article_id: string | null; v: string | null }>(
+        `select article_id, article_visibility_at_delete as v
+           from spideryarn.ingest_events where id = $1`,
+        [eventId],
+      );
+      expect(rows).toEqual([{ article_id: null, v: "public" }]);
+    });
+  });
+
   it("the queue_state row cannot be deleted", async () => {
     await inRollback(async (c) => {
       // The CHECK stops a SECOND row. Nothing in SQL can stop the row going

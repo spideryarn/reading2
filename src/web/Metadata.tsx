@@ -120,6 +120,14 @@
  * interface now says out loud. docs/project/library.md § Archive, and Undo is
  * the confirmation.
  *
+ * **And since 2026-09-07 the word has something of its own to name**:
+ * `DeletePermanently`, in a section below Archive, which really does destroy
+ * the article — the first irreversible act on a reader's own data anywhere in
+ * this product. It is on this page and on no other, which is Greg's decision
+ * rather than an omission: the shelf card's buttons are hover-revealed and
+ * adjacent, and on a phone they are all tap targets.
+ * docs/plans/260906h-delete-an-article-permanently.md.
+ *
  * ## The fifth pass, 2026-08-27: rename it from here
  *
  * Greg:
@@ -226,6 +234,7 @@ import {
   ScanLine,
   Tag,
   Target,
+  Trash2,
   TriangleAlert,
   Undo2,
   Upload,
@@ -253,7 +262,7 @@ import { forgetSummaries } from "./link-facts.js";
 import { Dock } from "./Dock.js";
 import { Link } from "./Link.js";
 import { atParam } from "./params.js";
-import { LIBRARY_HREF, PROFILE_HREF, carriedSearch, readHref } from "./router.js";
+import { LIBRARY_HREF, PROFILE_HREF, carriedSearch, navigate, readHref } from "./router.js";
 import { cameOffADisk, SourceLink, webSource } from "./SourceLink.js";
 import { articleStats } from "./stats.js";
 import { EditableTitle, useArticleRename } from "./TitleEditor.js";
@@ -263,6 +272,7 @@ import { useNow } from "./useNow.js";
 import { SLOW_AFTER_MS } from "./useSlow.js";
 import { useExperimental } from "./useExperimental.js";
 import { apiFetch, failure, readJson, statusOf } from "./lib/api.js";
+import { cachedReaderNow, forgetCachedReader } from "./lib/cached-shelf.js";
 import { AccessSharing, asArticleSharing } from "./AccessSharing.js";
 import { CARD } from "./card.js";
 import { ProfileBox } from "./ProfileBox.js";
@@ -435,6 +445,19 @@ export function Metadata({
    */
   const [provenance, setProvenance] = useState<ArticleMetadata | null>(null);
   const [provenanceError, setProvenanceError] = useState<string | null>(null);
+  /**
+   * **Did that answer come off the network, or out of our own cupboard?**
+   *
+   * `apiFetch` answers a GET whose transport failed from the saved copy, with a
+   * real `Response`, status 200 and `x-spideryarn-offline: copy`
+   * (lib/api.ts § `attempt`) — so every caller downstream carries on unchanged,
+   * which is exactly the point of it and exactly the trap for one control.
+   * `DeletePermanently` below may not be offered over a body saved yesterday:
+   * it cannot say whether the article is still there, still ours, or already
+   * gone, and destroying something is not a decision to take on a guess.
+   * Nothing else on this page cares, and nothing else reads this.
+   */
+  const [provenanceOffline, setProvenanceOffline] = useState(false);
   const [slow, setSlow] = useState(false);
   /**
    * **On `useOrderedRead`, because nine rows below can now ask for this again.**
@@ -456,11 +479,14 @@ export function Metadata({
   const readProvenance = useCallback<ArtefactRead>(
     async (current) => {
       try {
-        const answer = await readJson<ArticleMetadata>(
-          await apiFetch(`/api/metadata/${encodeURIComponent(slug)}`),
-        );
+        const res = await apiFetch(`/api/metadata/${encodeURIComponent(slug)}`);
+        /* Read off the `Response` before `readJson` consumes it — see
+           `provenanceOffline` above. */
+        const copy = res.headers.get("x-spideryarn-offline") === "copy";
+        const answer = await readJson<ArticleMetadata>(res);
         if (!current()) return;
         setProvenance(answer);
+        setProvenanceOffline(copy);
         setProvenanceError(null);
       } catch (e) {
         if (!current()) return;
@@ -476,6 +502,7 @@ export function Metadata({
   useEffect(() => {
     setProvenance(null);
     setProvenanceError(null);
+    setProvenanceOffline(false);
     setSlow(false);
     const timer = setTimeout(() => setSlow(true), LOADING_AFTER_MS);
     void reload();
@@ -1055,6 +1082,38 @@ export function Metadata({
             archivedAt={provenance?.archivedAt}
             failed={Boolean(provenanceError)}
             fixture={showingFixture}
+          />
+        </Section>
+
+        {/* ------------------------------------------ 11. destroying it --
+            Under Archive, and last of everything, because it is the only act
+            on this page that cannot be taken back. Greg, 2026-09-06:
+            *"probably only visible for now from within Metadata for that
+            article, underneath Archive, with appropriate UI styling"*. The
+            shelf card deliberately has no such button — its controls are
+            hover-revealed and adjacent, and on a phone they are all tap
+            targets. docs/plans/260906h-delete-an-article-permanently.md. */}
+        <Section label="Delete this article">
+          <DeletePermanently
+            slug={slug}
+            /* **`||`, not `??`, and a browser pass is what found that.** An
+               article whose extraction produced no title carries `""` rather
+               than null — an ordinary URL paste did it — and `??` keeps the
+               empty string, so the question read *Delete “” for ever?* and the
+               one safeguard in it was gone. Naming the article is the cheap
+               ninety per cent of type-the-title: it makes the reader read
+               *which* one. The slug is a poor name and a far better nothing. */
+            title={meta.title?.trim() || slug}
+            known={provenance !== null}
+            offline={provenanceOffline}
+            failed={Boolean(provenanceError)}
+            fixture={showingFixture}
+            /* Off the same fetch the sharing card reads, so the two cannot
+               disagree about whether this article is public. **False where the
+               store could not say**, and that is the right way round: the extra
+               sentence is an additional warning, so not drawing it is the
+               understatement rather than the false claim. */
+            shared={asArticleSharing(provenance?.sharing)?.visibility === "public"}
           />
         </Section>
       </main>
@@ -2395,11 +2454,18 @@ function ArchiveArticle({
 
                  **Not the destructive red**, which it wore until 2026-09-04.
                  Red is this app's word for *this cannot be undone*, and the
-                 paragraph directly below promises the opposite for ever. There
-                 is now no destructive tint anywhere on this page, which is the
-                 honest answer: the one thing here that cannot be un-rung is
-                 publishing, and that is guarded by a question rather than by a
-                 colour (AccessSharing.tsx). */
+                 paragraph directly below promises the opposite for ever.
+
+                 That used to end *"there is now no destructive tint anywhere on
+                 this page"*, and since 2026-09-07 there is exactly one:
+                 `DeletePermanently` below, on **Delete for ever** inside its
+                 confirm step and nowhere else. That is the sentence above
+                 finally being paid rather than contradicted — the one control
+                 on this page that genuinely cannot be un-rung is the one thing
+                 wearing the colour that means it, and Archive keeping the quiet
+                 treatment is what makes the difference legible. Publishing is
+                 still guarded by a question rather than a colour
+                 (AccessSharing.tsx), because unshare exists. */
               "tw:text-muted-foreground tw:hover:bg-accent/40 tw:hover:text-foreground tw:focus-visible:bg-accent/40 tw:focus-visible:text-foreground"
         }`}
       >
@@ -2442,6 +2508,521 @@ function ArchiveArticle({
           className="tw:mt-3 tw:mb-0 tw:inline-flex tw:items-center tw:gap-1 tw:text-sm tw:text-destructive"
         >
           <TriangleAlert size={12} /> Couldn't confirm that — {error}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------------- *
+ *  Delete permanently
+ * ---------------------------------------------------------------------- */
+
+/**
+ * **What is destroyed, said once**, because the reader reads it at rest and
+ * again inside the question — and two copies of this sentence would drift.
+ *
+ * It names the reader's own work first and ours second, which is the order the
+ * loss is felt in. Everything in it is true of the cascade: comments, notes,
+ * highlights, questions, chats, summaries and the hierarchy all hang off the
+ * article by a foreign key and go with it (docs/plans/260906h § *What survives
+ * a delete, deliberately* has the short list that does not, none of which is
+ * anything the reader would look for afterwards).
+ *
+ * **And it points at Archive rather than gating on it.** The recorded design
+ * wanted Delete offered only over an already-archived article, so *"offer to
+ * just archive instead"* became structural; Greg overruled that on 2026-09-06
+ * — a gate is a greyed-out control that needs explaining and doubles the trip
+ * for somebody who meant it. This sentence is the steering that gate was for.
+ */
+const DELETE_ERASES =
+  "This erases the article and everything you have done with it — your comments, notes, " +
+  "highlights, questions and chats, its summaries and hierarchy — and it cannot be undone. " +
+  "If you only want it off the shelf, Archive above does that and can be reversed.";
+
+/** Said only when we KNOW it is public — see `shared` at the call site. */
+const DELETE_SHARED = "It is shared, so anyone with the link will find nothing there afterwards.";
+
+/**
+ * **The one promise this feature cannot keep, said before it is broken.**
+ *
+ * Stage E removes the stored objects, and everything in this app's own database
+ * goes with the article — but a file that has already reached the reader's
+ * machine is on the reader's machine. Two of those are ours to name because we
+ * put them there: the copy this browser saved so the article opens offline
+ * (lib/offline-store.ts), and any export the reader has taken. There is a
+ * third, `src/routes.ts:605`, where authenticated plates and assets are served
+ * `immutable` for a year, so a browser may go on painting an image out of its
+ * HTTP cache after the article is gone — that one is a bug to fix rather than a
+ * fact to state, and it is this sentence's business only until it is fixed.
+ *
+ * Said in `docs/project/privacy.md` too, in the same plain words. A "delete
+ * permanently" that quietly means "except the copies" is exactly the kind of
+ * claim that page exists to stop us making.
+ */
+const DELETE_DEVICE_COPIES =
+  "Anything already on a device stays there: the copy this browser saved so the article " +
+  "opens offline, and any export you have taken. We cannot recall those.";
+
+/**
+ * Everything the reader is agreeing to, and the way out of agreeing to it.
+ *
+ * A component rather than four lines repeated in two branches — the rest state
+ * shows the first two, and the question shows all of them, because the extra
+ * warnings belong beside the press that acts rather than beside the press that
+ * opens a question.
+ */
+function WhatDeleteDoes({ shared, full }: { shared: boolean; full: boolean }) {
+  return (
+    <>
+      <p className="tw:mt-3 tw:mb-0 tw:text-sm tw:text-muted-foreground">
+        {DELETE_ERASES}
+        {shared ? ` ${DELETE_SHARED}` : ""}
+      </p>
+      {full ? (
+        <p className="tw:mt-3 tw:mb-0 tw:text-sm tw:text-muted-foreground">
+          {DELETE_DEVICE_COPIES}
+        </p>
+      ) : null}
+      {full ? (
+        <p className="tw:mt-3 tw:mb-0 tw:text-sm tw:text-muted-foreground">
+          {/* **The offer that turns an irreversible act into a recoverable
+              one**, and the archive note asked for it by name. A button that
+              scrolls, not `<a href="#sec-export">`: this app routes its own
+              anchors and keeps `#` out of an address bar it deliberately keeps
+              clean (PageContents.tsx says the same thing at length).
+
+              Scoped to the enclosing `<main>` rather than `document`, for
+              PageContents' reason: two of these pages mounted at once carry
+              duplicate ids and a document-wide lookup scrolls to the wrong one.
+              Export is offered under exactly the gate this control is —
+              `hasShelfRow` — so the section is always there to scroll to. */}
+          <button
+            type="button"
+            onClick={(e) =>
+              e.currentTarget
+                .closest("main")
+                ?.querySelector<HTMLElement>("#sec-export")
+                ?.scrollIntoView({ behavior: "smooth", block: "start" })
+            }
+            className="tw:cursor-pointer tw:border-0 tw:bg-transparent tw:p-0 tw:text-sm tw:text-highlight tw:underline tw:underline-offset-4 tw:focus-visible:outline-none tw:focus-visible:text-highlight"
+          >
+            Export it first
+          </button>{" "}
+          if you might want any of it afterwards.
+        </p>
+      ) : null}
+    </>
+  );
+}
+
+/** A message with a full stop on the end, whatever the server sent. */
+function ended(message: string): string {
+  const said = message.trim();
+  return /[.!?]$/.test(said) ? said : `${said}.`;
+}
+
+/**
+ * **Is that article still on the server?** — and the two answers that are
+ * neither "yes" nor "no".
+ *
+ * This exists because the obvious re-read is wrong in a way nothing would show
+ * you. `apiFetch` answers a GET whose transport failed out of the saved copy,
+ * with a real `Response`, status 200 and `x-spideryarn-offline: copy`
+ * (lib/api.ts § `attempt`) — which is exactly right for every other caller and
+ * catastrophic for this one: the naive version reports *"still here,
+ * untouched"* about an article that has been destroyed, and the reader believes
+ * it. GPT Sol's F6.
+ *
+ * So: **only a fresh server 404 proves it went, and only a fresh server 200
+ * proves it survived.** A copy, a transport failure, a 500, a 401 — none of
+ * those is evidence in either direction, and they all come back `"unknown"`,
+ * whose sentence says so rather than guessing.
+ *
+ * The body is never read. The status and one header are the whole answer, and
+ * parsing a body we are not going to render would only add a way to fail.
+ */
+type Survival = "gone" | "here" | "unknown";
+
+async function stillOnTheServer(slug: string): Promise<Survival> {
+  try {
+    const res = await apiFetch(`/api/metadata/${encodeURIComponent(slug)}`);
+    if (res.headers.get("x-spideryarn-offline") === "copy") return "unknown";
+    if (res.status === 404) return "gone";
+    /* **200 and nothing else**, and this was `res.ok` until 2026-09-08 ⟨Sol,
+       F24⟩ — which also takes 201, 202, 204 and 206. A re-read answered
+       `204 No Content` therefore made this control say *"still here,
+       untouched"* about an article that had just been destroyed, which is the
+       exact sentence the paragraph above exists to prevent. The comment said
+       *only a fresh server 200*; now the code does too. */
+    if (res.status === 200) return "here";
+    return "unknown";
+  } catch {
+    /* No status, and there never will be one for this request. */
+    return "unknown";
+  }
+}
+
+/**
+ * Destroy this article, for good — the other ending, beside Archive above.
+ *
+ * Greg, 2026-09-06:
+ *
+ * > We have a way to Archive documents, which is great. I think we also need a
+ * > way to delete them permanently (probably only visible for now from within
+ * > Metadata for that article, underneath Archive, with appropriate UI
+ * > styling). Obviously be extra-careful to make sure that people can only
+ * > delete articles they own, etc.
+ *
+ * The store was built the other way round on purpose — `schema.ts` says *"Never
+ * a delete; Greg chose archive + Undo"* — so this is the first irreversible act
+ * a reader can perform on their own data here. `DELETE /api/library/:slug`
+ * (src/routes.ts), `ShelfStore.destroy` (src/store/pg-shelf.ts), and the whole
+ * argument in docs/plans/260906h-delete-an-article-permanently.md.
+ *
+ * ## It inherits `ArchiveArticle`'s three states, and adds two
+ *
+ * Never offer a button over a state we have not established, and every refusal
+ * below is that one rule. `known` is *the metadata request has landed*; the
+ * fixture refuses for the reason it does above; **`failed` refuses on its own**
+ * rather than only when `known` is false, because a failed *refresh* keeps the
+ * previous answer and would otherwise leave deletion offered over metadata the
+ * client explicitly failed to re-establish (⟨Sol, F23⟩, at the branch).
+ *
+ * The first of the two new ones is **`offline`**: `apiFetch` answers a GET whose
+ * transport failed from the saved copy with a real 200 (`provenanceOffline` at
+ * the call site), and a body saved yesterday cannot say whether this article is
+ * still there, still ours, or already gone. Archive can be wrong about that and
+ * be put right by pressing Put back; this cannot.
+ *
+ * The second is **`uncertain`**, and it is the only one that arrives *after* a
+ * press: the DELETE did not come back and the server would not say what is
+ * there now, so there is nothing honest left to offer (⟨Sol, F26⟩; the state is
+ * declared below).
+ *
+ * In every one of them the control is **absent**, not disabled — a dimmed
+ * *Delete permanently* still claims there is something here to delete.
+ *
+ * ## Two steps, no modal, and the second one is somewhere else
+ *
+ * No dialog, for `AccessSharing`'s reason: there is no dialog component in this
+ * app, and a modal is machinery (focus trap, restore, escape, scroll lock) for
+ * an interruption, which this is not. The row is replaced in place by the
+ * question.
+ *
+ * **The confirm button must not land where the trigger was**, or a double-click
+ * destroys an article. At rest the trigger is the card's first element; in the
+ * question it is the heading, and the button that destroys sits under three
+ * paragraphs of it. That is the whole guard, and
+ * tests/metadata-delete-permanently.test.tsx asserts the structure rather than
+ * a pixel, because jsdom has no layout.
+ *
+ * Nothing is auto-focused, for the other half of the same hazard: a `Space`
+ * held down on a button fires its click on keyup, so a control that took focus
+ * here would be activated by the press that opened it. The trigger is unmounted
+ * outright rather than relabelled — deliberately the **opposite** of
+ * `ArchiveArticle`, which keeps one `<button>` across both its states so that
+ * focus survives a press. There, keeping focus is a kindness; here it is the
+ * bug.
+ *
+ * ## And afterwards, the answer is a fresh read, not the request's exit code
+ *
+ * `ArchiveArticle`'s catch block is the lesson and this is the harder version
+ * of it: a failed request is not proof that nothing was written, so we ask —
+ * but only the server may answer. `stillOnTheServer` above.
+ *
+ * And the other half of the same rule, which took a second review to land: a
+ * *successful* request is not proof that anything **was** written either. The
+ * route answers `{ destroyed: slug }`, and the client requires it to name this
+ * slug before it believes a word of it — see the check in `destroy`.
+ *
+ * A **409** is the exception, and it is one because it is already a fresh
+ * server answer that deleted nothing: `destroy` refuses on the live-job check
+ * before it reaches the `DELETE` statement (src/store/pg-shelf.ts §
+ * `importRunning`). So there is nothing to re-read, and the reader stays in the
+ * question, where they can stop the import in the band above and press again.
+ * The sentence is the server's own, unwrapped — it says what is in the way and
+ * what to do about it, and a *"Couldn't delete it —"* in front of it would add
+ * a lead it does not need (`ExportSection` makes the same call about the 413).
+ */
+function DeletePermanently({
+  slug,
+  title,
+  known,
+  offline,
+  failed,
+  fixture,
+  shared,
+}: {
+  slug: string;
+  /** For the question, so the reader reads WHICH article they are destroying. */
+  title: string;
+  /** The metadata request has landed — `provenance !== null` at the call site. */
+  known: boolean;
+  /** …but out of the cupboard rather than off the network. See the header. */
+  offline: boolean;
+  failed: boolean;
+  /** This address has no article of its own — `showingFixture` at the call site. */
+  fixture: boolean;
+  /** Known to be public. False where the store could not say — see the call site. */
+  shared: boolean;
+}) {
+  const [asking, setAsking] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  /**
+   * **We asked, and we no longer know** — `ArchiveArticle`'s `at: undefined`,
+   * for the act that cannot be pressed twice on a guess.
+   *
+   * Set only from the re-read's `"unknown"`: the DELETE did not come back and
+   * the server would not say what is there now. A separate flag rather than a
+   * fourth value on `error`, because the two questions are different — `error`
+   * is *what to tell the reader*, this is *whether there is anything left to
+   * offer them* — and the branch below has to be readable as the second one.
+   *
+   * One-way. Nothing here clears it, because nothing here can learn the answer:
+   * the reader is told to reload, and a reload is what re-establishes the state.
+   */
+  const [uncertain, setUncertain] = useState(false);
+
+  /**
+   * Retire the cached set of the reader who pressed, then go to the library.
+   *
+   * **In that order, and awaited.** Invalidating `/api/library` alone is not
+   * enough — metadata, comments, chat, search, glossary and illustrated are all
+   * cacheable (lib/api.ts § `cacheable`) — and navigating first would let the
+   * shelf paint a card for an article that no longer exists, which
+   * `offline-store.ts` points out looks exactly like a delete that failed.
+   * `forgetCachedReader` never throws.
+   *
+   * **`reader` is captured before the DELETE goes out, not looked up here.** By
+   * the time this runs a round trip has gone by, and an account switch inside it
+   * would send us to empty the *new* reader's drawer while leaving the old one
+   * holding the destroyed article — cached-shelf.ts § *The reader is an argument*
+   * has both halves of that and the limit of the repair. ⟨Sol, F27.⟩
+   */
+  async function leave(reader: string | null): Promise<void> {
+    await forgetCachedReader(reader);
+    navigate(LIBRARY_HREF);
+  }
+
+  async function destroy(): Promise<void> {
+    /* Before anything is sent. See `leave` above. */
+    const reader = cachedReaderNow();
+    setBusy(true);
+    setError(null);
+    try {
+      const answer = await readJson<{ destroyed?: unknown }>(
+        await apiFetch(`/api/library/${encodeURIComponent(slug)}`, { method: "DELETE" }),
+      );
+      /**
+       * **The route names what it destroyed, and we make it.** ⟨Sol, F25.⟩
+       *
+       * This parsed `{ destroyed }` and threw it away until 2026-09-08, so a
+       * *status* was the whole of the proof — and `readJson` deliberately turns
+       * an empty successful body into `{}` (lib/api.ts), which means a `204`, a
+       * `{}`, or a body naming somebody else's slug all read as *deleted*. On
+       * any of those the reader's entire cached set was retired and they were
+       * taken to their library, over a request that may have deleted nothing.
+       * That is the silent success this repo keeps writing up
+       * (docs/reusable/silent-success.md), in the one place where being wrong
+       * cannot be walked back.
+       *
+       * The throw is not a dead end: it drops into the catch below, which asks
+       * the server what is actually there. So a route that really did delete
+       * and merely answered oddly still ends with the reader in their library —
+       * by evidence rather than by assumption.
+       */
+      if (answer.destroyed !== slug) {
+        throw new Error("The server did not confirm which article was deleted");
+      }
+      await leave(reader);
+      /* No `setBusy(false)`: the article is gone and we are on our way out.
+         Re-enabling a button over a destroyed article is the one state this
+         component must never draw. */
+    } catch (e) {
+      /* An import is in the way. A fresh refusal, nothing written — see the
+         header on why this one does not re-read. */
+      if (statusOf(e) === 409) {
+        setError(ended((e as Error).message));
+        setBusy(false);
+        return;
+      }
+      const survival = await stillOnTheServer(slug);
+      if (survival === "gone") {
+        /* The response was lost on the way back, but the delete landed. Saying
+           "that failed" here would be this control's one dishonest sentence. */
+        await leave(reader);
+        return;
+      }
+      if (survival === "unknown") {
+        /* **We do not know, so we offer nothing.** ⟨Sol, F26.⟩ Until
+           2026-09-08 this set the honest sentence and then left `asking` true
+           and put `busy` back to false, so *Delete for ever* stood enabled
+           directly under an admission that we could not say whether the
+           article still existed — the one thing this component's header
+           forbids, done in its own error path. A second press from there sends
+           another DELETE for something that may already be gone. */
+        setError("Couldn't tell whether that worked. Reload the page.");
+        setUncertain(true);
+        setBusy(false);
+        return;
+      }
+      setError(
+        `Couldn't delete it — ${ended((e as Error).message)} The article is still here, untouched.`,
+      );
+      setBusy(false);
+    }
+  }
+
+  /* Known, and still impossible: nothing under this address is ours to destroy.
+     First, for `ArchiveArticle`'s reason — it is a refusal rather than an
+     ignorance. */
+  if (fixture) {
+    return (
+      <div className={`${CARD} tw:p-4`}>
+        <p className="tw:m-0 tw:text-sm tw:text-muted-foreground">
+          This address has no article of its own — the reading view is showing the example fixture,
+          so there is nothing here to delete.
+        </p>
+      </div>
+    );
+  }
+
+  /* **The reader has already pressed, and we cannot say what happened.** Second,
+     because it is the strongest claim on this card: it outranks *this page is a
+     saved copy* and *we could not check this article*, both of which are about
+     what we know now, while this one is about what we may already have done. No
+     control of any kind — not the confirm, not Keep it, and not the trigger,
+     which would invite the second DELETE. Only a reload settles it. */
+  if (uncertain) {
+    return (
+      <div className={`${CARD} tw:p-4`}>
+        <p
+          role="alert"
+          className="tw:m-0 tw:inline-flex tw:items-start tw:gap-1 tw:text-sm tw:text-destructive"
+        >
+          <TriangleAlert size={12} /> {error ?? "Couldn't tell whether that worked. Reload the page."}
+        </p>
+      </div>
+    );
+  }
+
+  /* A saved copy of this page is not evidence about the article. No button, not
+     a disabled one. */
+  if (offline) {
+    return (
+      <div className={`${CARD} tw:p-4`}>
+        <p className="tw:m-0 tw:text-sm tw:text-muted-foreground">
+          This page is a saved copy, so we can't tell you what is really on the server — and
+          deleting something for good is not a thing to do on a guess. Reload once you are back
+          online.
+        </p>
+      </div>
+    );
+  }
+
+  /* In flight, or it failed. Neither establishes that there is an article here,
+     so neither may offer a button.
+
+     **`|| failed`, and it was `!known` alone until 2026-09-08** ⟨Sol, F23⟩. A
+     failed *first* load leaves `provenance` null and both halves agree; a
+     failed **refresh** does not, because `readProvenance` deliberately keeps
+     the previous answer so the page does not empty out over one lost
+     revalidation (see its header). Every row in *Generate it again* can fire
+     one. So this control arrived at `known=true, failed=true` — a state the
+     first load cannot produce — and went on offering deletion over metadata
+     the client had explicitly failed to re-establish, in the window where the
+     article may have been destroyed elsewhere or changed hands. Keeping the
+     stale rows is right for everything else on this page and wrong for exactly
+     this one. */
+  if (!known || failed) {
+    return (
+      <div className={`${CARD} tw:p-4`}>
+        <p
+          className="tw:m-0 tw:text-sm tw:text-muted-foreground"
+          /* `alert` only when there is something to hear, exactly as above. */
+          {...(failed ? { role: "alert" as const } : {})}
+        >
+          {failed
+            ? "Couldn't check this article, so there is nothing safe to offer here. Reload the page."
+            : "Checking…"}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`${CARD} tw:p-4`}>
+      {asking ? (
+        /* The question, standing exactly where the trigger stood — so the
+           second press of a double-click lands on a heading. Naming the title
+           is the cheap 90% of type-the-title-to-confirm: it costs the reader
+           nothing and it makes them read WHICH article. */
+        <h3 className="tw:m-0 tw:text-sm tw:font-semibold tw:text-foreground">
+          Delete “{title}” for ever?
+        </h3>
+      ) : (
+        /* Quiet at rest, like Archive and Export: the same shape, because it is
+           the same kind of row, and the heading above already carries the
+           weight. The red is spent below, on the press that acts. */
+        <button
+          type="button"
+          onClick={() => {
+            setAsking(true);
+            setError(null);
+          }}
+          className="tw:inline-flex tw:items-center tw:gap-2 tw:rounded-md tw:border tw:border-border tw:bg-transparent tw:px-3 tw:py-1.5 tw:text-sm tw:text-muted-foreground tw:hover:bg-accent/40 tw:hover:text-foreground tw:focus-visible:outline-none tw:focus-visible:bg-accent/40 tw:focus-visible:text-foreground"
+        >
+          <Trash2 size={14} />
+          {/* **Never bare "Delete"**, which on this page and on the shelf meant
+              archive for nine days and cost a bug report
+              (SPIDERYARN-READING2-19, `ArchiveArticle` above). */}
+          Delete permanently
+        </button>
+      )}
+
+      <WhatDeleteDoes shared={shared} full={asking} />
+
+      {asking ? (
+        <div className="tw:mt-4 tw:flex tw:items-center tw:gap-2">
+          {/* **The one solid-destructive control on this page**, and the reason
+              the tint means anything: red is this app's word for *this cannot
+              be undone*, and this is the only thing here that cannot. */}
+          <Button
+            type="button"
+            variant="destructive"
+            size="sm"
+            disabled={busy}
+            onClick={() => void destroy()}
+          >
+            <Trash2 size={14} />
+            {busy ? "Deleting…" : "Delete for ever"}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            disabled={busy}
+            onClick={() => {
+              setAsking(false);
+              setError(null);
+            }}
+          >
+            Keep it
+          </Button>
+        </div>
+      ) : null}
+
+      {/* `alert`: it arrives without the reader looking for it, it contradicts
+          what they just pressed, and one of its three sentences is an admission
+          that we do not know what happened. */}
+      {error ? (
+        <p
+          role="alert"
+          className="tw:mt-3 tw:mb-0 tw:inline-flex tw:items-start tw:gap-1 tw:text-sm tw:text-destructive"
+        >
+          <TriangleAlert size={12} /> {error}
         </p>
       ) : null}
     </div>
