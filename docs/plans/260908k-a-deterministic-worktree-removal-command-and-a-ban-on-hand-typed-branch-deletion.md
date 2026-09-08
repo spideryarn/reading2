@@ -352,6 +352,50 @@ GPT Sol's verdict on the first draft was *"not ready to build"*. Nine findings, 
 
 Finding 4 is the one that would have shipped a command that refused the case it was built for.
 
+## And what the review of the *code* changed
+
+GPT Sol's verdict on the built code was *"not safe to land as written"*
+([review](260908k-a-deterministic-worktree-removal-command-and-a-ban-on-hand-typed-branch-deletion-code-review-sol.md)).
+Eight findings. **The worst of them was created by fixing the plan review's second finding**: told that
+the landed proof must be *retaken* rather than re-read, I moved it after `git worktree remove` — and
+that call deletes the worktree's HEAD reflog, so a proof that then found an unlanded detached commit
+was announcing a loss it had already caused. Reproduced: `git reflog --all` names the commit before
+the removal and nothing names it after; `git fsck --unreachable` is all that is left.
+
+| # | Finding | What changed |
+|---|---|---|
+| 1 | the proof ran **after** the destructive call | the whole proof completes first; a refusal now costs nothing |
+| 2 | the "retaken" proof was a snapshot passed through — ABA on the branch | `proveAndDeleteBranch` re-reads the reflog; residual window named in the code |
+| 3 | `--ignore-missing` and swallowed read failures both read as "landed" | flag dropped; `reachableOids` returns `cannot-tell` on any failed read |
+| 4 | ghost force-removal races a restored directory | **no `--force` anywhere in the file** — measured, a plain removal clears an absent registration by itself |
+| 5 | `authorised` waived the floor even when a signal was unknown | `shouldWaiveFloor` requires `authorised && idle` |
+| 6 | `--dry-run` skipped the proof, so it promised what a real run would refuse | proof runs before the dry-run return |
+| 7 | a lock with **no reason** was not restored after a failed removal | `relock` handles the reasonless case |
+| 8 | the hook required `git` per *payload*, not per command | `git`, `branch` and the flag must land in one segment |
+
+**Two of its findings I checked and answered back, with measurements.**
+
+- **The `--force --force` data loss (plan finding 1) does not exist as stated**, and Sol agreed on the
+  static case: git's worktree validator requires `<path>/.git` to point back at the admin entry, and a
+  present-and-prunable registration is *by definition* one where that is missing. What Sol then
+  reproduced is a different thing — a *genuine* ghost whose directory is restored between the listing
+  and the removal — and that is real. It is closed by dropping force entirely rather than by
+  classifying harder.
+- **"A stable same-uid pid whose cwd is unreadable is an unknown" (code finding 5) is right in
+  general and wrong here, and the count says so.** Walked on this box: of 208 same-uid processes, 202
+  readable, 1 gone mid-walk, **6 permanently opaque — `systemd --user`, `(sd-pam)`, two `sshd`, two
+  `postgrest`**. Blocking on those makes the scan report an unknown on *every* run, which takes the
+  owner waiver — the point of the whole feature — with it. They are counted and printed instead.
+  Conflating "exited" with "opaque" was a genuine bug and is fixed; it was found by an end-to-end
+  test, after every unit test with a fake `/proc` passed.
+
+**What is knowingly not built**, so it is a decision rather than an oversight: the ABA window between
+the final reflog read and the `update-ref -d` compare-and-swap. Closing it needs an
+`update-ref --stdin` transaction held open across the re-read, which means an async child process in
+an otherwise synchronous script. The exposure is a peer moving a branch away and back, twice, in two
+adjacent process spawns, on a branch whose worktree has just been removed. Named in
+`deleteRefIfUnmoved`'s docstring rather than left for the next reader to find.
+
 ## Stages
 
 Each ends with a GPT Sol review of the code, per `engineering-manager.md`.

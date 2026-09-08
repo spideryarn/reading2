@@ -20,18 +20,24 @@
  * everything passes the same assertions as one that works.
  */
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { listWorktrees } from "../scripts/worktree-admin.js";
+import { parseStat } from "../scripts/worktree-inuse.js";
 import {
   classifyRegistration,
   deleteRefIfUnmoved,
+  gitRemoveWorktree,
   landedProof,
+  proveAndDeleteBranch,
   reachableOids,
+  relock,
   removeWorktree,
+  shouldWaiveFloor,
 } from "../scripts/worktree-remove.js";
 
 let root: string;
@@ -116,8 +122,54 @@ describe("the landed proof", () => {
 
     const trunk = git(["rev-parse", "origin/dev"], primary);
     const oids = reachableOids(primary, "worktree-moved-back", wt);
-    expect(oids).toContain(stray);
-    expect(landedProof(primary, oids, trunk).kind).toBe("not-landed");
+    if (oids.kind !== "ok") throw new Error(`expected ok, got ${oids.why}`);
+    expect(oids.oids).toContain(stray);
+    expect(landedProof(primary, oids.oids, trunk).kind).toBe("not-landed");
+  });
+
+  it("REFUSES: a BRANCH reflog it could not read is `cannot-tell`, never an empty history", () => {
+    /* The first version folded every read failure into `?? ""`, so a reflog that
+       errored was indistinguishable from a branch that had never moved — and
+       that difference is the whole guard. */
+    const oids = reachableOids(primary, "no-such-branch-at-all", null);
+    expect(oids.kind).toBe("cannot-tell");
+  });
+
+  it("REFUSES: a WORKTREE HEAD reflog it could not read is `cannot-tell` too", () => {
+    /* Added because a mutation that dropped exactly this check left all 36 other
+       tests green — the branch-side test above covered its own half and nothing
+       covered this one. This is the half that guards detached work. */
+    const wt = landedWorktree("worktree-head-unreadable");
+    const notAWorktree = path.join(root, "not-a-git-tree");
+    mkdirSync(notAWorktree);
+
+    expect(reachableOids(primary, "worktree-head-unreadable", wt).kind).toBe("ok");
+    expect(reachableOids(primary, "worktree-head-unreadable", notAWorktree).kind).toBe("cannot-tell");
+  });
+
+  it("REFUSES: a missing object is `cannot-tell`, not `landed`", () => {
+    /* `--ignore-missing` pretends an invalid object was never supplied — measured,
+       a landed oid plus a nonexistent one returns count 0, exit 0. So it is not
+       passed, and a corrupt reflog entry now leaves the branch alone. */
+    const trunk = git(["rev-parse", "origin/dev"], primary);
+    const proof = landedProof(primary, [trunk, "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"], trunk);
+    expect(proof.kind).toBe("cannot-tell");
+  });
+
+  it("REFUSES an A→B→A branch: the tip is back where we proved, the reflog is not", () => {
+    /* The ABA the compare-and-swap alone cannot see. `proveAndDeleteBranch`
+       re-reads the reflog rather than reusing a snapshot, which is what catches
+       the excursion. */
+    const wt = landedWorktree("worktree-aba");
+    const landed = git(["rev-parse", "HEAD"], wt);
+    commit(wt, "excursion.txt", "unlanded", "an excursion");
+    git(["reset", "--hard", "--quiet", landed], wt);
+    expect(git(["rev-parse", "refs/heads/worktree-aba"], primary)).toBe(landed);
+
+    const trunk = git(["rev-parse", "origin/dev"], primary);
+    const steps: string[] = [];
+    expect(proveAndDeleteBranch(primary, "worktree-aba", trunk, steps, false)).toBe(false);
+    expect(git(["rev-parse", "--verify", "refs/heads/worktree-aba"], primary)).toBe(landed);
   });
 
   it("control: the same branch, judged on its tip alone, looks landed", () => {
@@ -306,5 +358,161 @@ describe("removeWorktree", () => {
     const out = removeWorktree(primary, "worktree-never-existed", LONG_AGO);
     expect(out.ok).toBe(false);
     expect(out.steps.join("\n")).toContain("no such branch");
+  });
+
+  /* ------------------------------------------------------------------ *
+   * The ordering. These are the tests that would have caught a proof    *
+   * that ran AFTER the destructive call and "refused" a loss it had     *
+   * already caused.                                                     *
+   * ------------------------------------------------------------------ */
+
+  it("REFUSES, WITHOUT REMOVING, work reachable only from the worktree's own HEAD reflog", () => {
+    /* Measured: `git worktree remove` deletes `.git/worktrees/<name>/logs/HEAD`,
+       and a detached commit made in there is then named by nothing at all —
+       `git reflog --all` loses it, `git fsck --unreachable` is all that is left.
+       So the proof must be COMPLETE before the removal, and this asserts that the
+       tree, the branch and the reflog are all still there afterwards. */
+    const wt = landedWorktree("worktree-detached-work");
+    git(["checkout", "--quiet", "--detach"], wt);
+    commit(wt, "detached.txt", "made on a detached head, never pushed", "detached unlanded work");
+    const stray = git(["rev-parse", "HEAD"], wt);
+    git(["checkout", "--quiet", "worktree-detached-work"], wt);
+
+    const out = removeWorktree(primary, "worktree-detached-work", LONG_AGO);
+
+    expect(out.ok).toBe(false);
+    expect(existsSync(wt)).toBe(true);
+    expect(git(["rev-parse", "--verify", "refs/heads/worktree-detached-work"], primary)).not.toBe("");
+    /* The point of the whole test: the only name for that commit survives. */
+    expect(git(["reflog", "show", "--format=%H", "HEAD"], wt).split("\n")).toContain(stray);
+  });
+
+  it("REFUSES a detached worktree whose only work is in its HEAD reflog", () => {
+    /* No branch at all, so a branch-shaped proof has nothing to look at and the
+       first version skipped the proof entirely. */
+    const wt = landedWorktree("worktree-fully-detached");
+    git(["checkout", "--quiet", "--detach"], wt);
+    commit(wt, "loose.txt", "never landed", "loose work on a detached head");
+    const entries = listWorktrees(primary).filter((e) => !e.main);
+    expect(entries.some((e) => e.branch === undefined)).toBe(true);
+
+    /* Named by path is not supported, so drive it the way a session would: from
+       inside the tree, with no --branch. */
+    const out = removeWorktree(wt, undefined, LONG_AGO);
+    expect(out.ok).toBe(false);
+    expect(existsSync(wt)).toBe(true);
+  });
+
+  it("a --dry-run refuses the same unlanded reflog a real run would", () => {
+    /* The dry run used to return before the proof, so it promised a removal that
+       the real run would refuse — after already destroying the worktree. */
+    const wt = landedWorktree("worktree-dry-unlanded");
+    const landed = git(["rev-parse", "HEAD"], wt);
+    commit(wt, "u.txt", "unlanded", "unlanded");
+    git(["reset", "--hard", "--quiet", landed], wt);
+
+    const out = removeWorktree(primary, "worktree-dry-unlanded", { ...LONG_AGO, dryRun: true });
+    expect(out.ok).toBe(false);
+    expect(out.steps.join("\n")).not.toContain("would remove");
+  });
+
+  it("the OWNER removes its own tree under the floor — the whole point of the command", () => {
+    /* The one path no other test reached: `opts.pid` unused meant the ownership
+       proof was never exercised end to end. The lock names THIS process, with its
+       real start time out of /proc, so `ancestry` finds it and the floor lifts. */
+    const wt = landedWorktree("worktree-owned");
+    const mine = parseStat(readFileSync(`/proc/${process.pid}/stat`, "utf8"));
+    if (mine === null) throw new Error("could not read this process's start time");
+    git(["worktree", "lock", "--reason", `claude session owned (pid ${process.pid} start ${mine.start})`, wt], primary);
+
+    /* No LONG_AGO: this tree was made seconds ago and a third party would be
+       refused. The control below proves that. */
+    const out = removeWorktree(primary, "worktree-owned", { pid: process.pid });
+
+    expect(out.steps.join("\n")).toContain("its own session is asking");
+    expect(out.ok).toBe(true);
+    expect(existsSync(wt)).toBe(false);
+  });
+
+  it("control: the same young tree, asked for by anyone else, is refused", () => {
+    const wt = landedWorktree("worktree-not-owned");
+    git(["worktree", "lock", "--reason", "claude session other (pid 999999 start 1)", wt], primary);
+
+    const out = removeWorktree(primary, "worktree-not-owned", {});
+    expect(out.ok).toBe(false);
+    expect(out.steps.join("\n")).toContain("floor");
+    expect(existsSync(wt)).toBe(true);
+  });
+});
+
+describe("shouldWaiveFloor", () => {
+  const owner = { session: "x", pid: 1, start: 1 };
+
+  it("REFUSES to waive when the owner is asking but something could not be checked", () => {
+    /* Authorisation alone was enough in the first version, so the one branch that
+       skips the floor also swallowed every uncertainty. */
+    expect(
+      shouldWaiveFloor({
+        standing: { kind: "asking", owner },
+        inUse: { kind: "unknown", why: ["a process would not say where it is"] },
+        authorised: true,
+      }),
+    ).toBe(false);
+  });
+
+  it("control: waives when the owner is asking and both signals were conclusive", () => {
+    expect(
+      shouldWaiveFloor({ standing: { kind: "asking", owner }, inUse: { kind: "idle", notes: [] }, authorised: true }),
+    ).toBe(true);
+  });
+
+  it("never waives for a third party, however idle the tree looks", () => {
+    expect(
+      shouldWaiveFloor({ standing: { kind: "unlocked" }, inUse: { kind: "idle", notes: [] }, authorised: false }),
+    ).toBe(false);
+  });
+});
+
+describe("relock", () => {
+  it("restores a lock that had NO reason, which is still a lock", () => {
+    /* The restore used to be conditional on there being a reason, so
+       `git worktree lock <path>` was silently downgraded to unlocked by a failed
+       removal. */
+    const wt = landedWorktree("worktree-reasonless");
+    git(["worktree", "lock", wt], primary);
+    git(["worktree", "unlock", wt], primary);
+    expect(listWorktrees(primary).find((e) => e.path === wt)?.locked).toBe(false);
+
+    const steps: string[] = [];
+    relock(primary, wt, undefined, steps);
+
+    expect(steps.join("\n")).toContain("restored the lock");
+    expect(listWorktrees(primary).find((e) => e.path === wt)?.locked).toBe(true);
+  });
+});
+
+describe("gitRemoveWorktree", () => {
+  it("clears an ABSENT registration without any --force at all", () => {
+    /* Measured, and it is what lets the ghost path drop `--force --force`: a
+       ghost whose directory came back between the listing and the removal was
+       force-deleted with whatever was in it. */
+    const wt = landedWorktree("worktree-absent");
+    rmSync(wt, { recursive: true, force: true });
+
+    expect(gitRemoveWorktree(primary, wt).ok).toBe(true);
+    expect(listWorktrees(primary).some((e) => e.path === wt)).toBe(false);
+  });
+
+  it("REFUSES a directory that came back at a registered path, rather than deleting it", () => {
+    /* The ghost race, as far as it can be arranged in one process: the
+       registration is stale, the path holds somebody else's files, and with no
+       force git revalidates and refuses. */
+    const wt = landedWorktree("worktree-restored");
+    renameSync(wt, `${wt}-away`);
+    mkdirSync(wt);
+    writeFileSync(path.join(wt, "the-only-copy.json"), "{}");
+
+    expect(gitRemoveWorktree(primary, wt).ok).toBe(false);
+    expect(existsSync(path.join(wt, "the-only-copy.json"))).toBe(true);
   });
 });

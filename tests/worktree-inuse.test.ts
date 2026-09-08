@@ -34,7 +34,8 @@ import {
 interface FakeProc {
   ppid?: number;
   start: number;
-  cwd?: string | { unreadable: string };
+  /** A path, `{opaque}` for a process the kernel hides, or absent for gone. */
+  cwd?: string | { opaque: string };
   uid?: number;
   command?: string;
 }
@@ -55,9 +56,9 @@ function fakeProc(table: Record<number, FakeProc>, self = 1000): ProcTable {
     },
     cwd(pid) {
       const p = table[pid];
-      if (p === undefined || p.cwd === undefined) return { kind: "unreadable", why: "gone" };
+      if (p === undefined || p.cwd === undefined) return { kind: "gone" };
       if (typeof p.cwd === "string") return { kind: "path", path: p.cwd };
-      return { kind: "unreadable", why: p.cwd.unreadable };
+      return { kind: "opaque", why: p.cwd.opaque };
     },
     uid(pid) {
       const p = table[pid];
@@ -134,14 +135,14 @@ describe("ownerStanding", () => {
     const proc = fakeProc({ 500: { start: 777, command: "claude" }, 90: { ppid: 1, start: 9 } });
     const standing = ownerStanding(proc, reason, ancestry(proc, 90));
     expect(standing.kind).toBe("alive");
-    expect(composeInUse(standing, { kind: "checked", found: [], unknown: 0 }).kind).toBe("in-use");
+    expect(composeInUse(standing, { kind: "checked", found: [], opaque: 0 }).kind).toBe("in-use");
   });
 
   it("ALLOWS: the owner is alive and is in the asker's ancestor chain — the owner is asking", () => {
     const proc = fakeProc({ 500: { ppid: 1, start: 777 }, 90: { ppid: 500, start: 9 } });
     const standing = ownerStanding(proc, reason, ancestry(proc, 90));
     expect(standing.kind).toBe("asking");
-    expect(composeInUse(standing, { kind: "checked", found: [], unknown: 0 }).kind).toBe("idle");
+    expect(composeInUse(standing, { kind: "checked", found: [], opaque: 0 }).kind).toBe("idle");
   });
 
   it("ALLOWS: the pid is gone, so the lock is stale", () => {
@@ -169,7 +170,7 @@ describe("ownerStanding", () => {
     const proc = fakeProc({ 90: { ppid: 1, start: 9 } });
     const standing = ownerStanding(proc, "do not touch, mid-migration", ancestry(proc, 90));
     expect(standing.kind).toBe("unrecognised");
-    expect(composeInUse(standing, { kind: "checked", found: [], unknown: 0 }).kind).toBe("unknown");
+    expect(composeInUse(standing, { kind: "checked", found: [], opaque: 0 }).kind).toBe("unknown");
   });
 
   it("an unlocked worktree is not an owned one", () => {
@@ -184,7 +185,7 @@ describe("cwdUsersUnder", () => {
   it("REFUSES: a peer's process is sitting in the tree", () => {
     const proc = fakeProc({ 700: { start: 1, cwd: `${TREE}/src`, command: "vitest" } });
     const scan = cwdUsersUnder(proc, TREE, new Set());
-    expect(scan).toMatchObject({ kind: "checked", unknown: 0 });
+    expect(scan).toMatchObject({ kind: "checked", opaque: 0 });
     if (scan.kind === "checked") expect(scan.found.map((f) => f.pid)).toEqual([700]);
   });
 
@@ -195,7 +196,7 @@ describe("cwdUsersUnder", () => {
     });
     const chain = ancestry(proc, 90).map((a: ProcId) => a.pid);
     const scan = cwdUsersUnder(proc, TREE, new Set(chain));
-    expect(scan).toMatchObject({ kind: "checked", unknown: 0 });
+    expect(scan).toMatchObject({ kind: "checked", opaque: 0 });
     if (scan.kind === "checked") expect(scan.found).toEqual([]);
   });
 
@@ -213,19 +214,34 @@ describe("cwdUsersUnder", () => {
     if (scan.kind === "checked") expect(scan.found.map((f) => f.pid)).toEqual([71]);
   });
 
-  it("REFUSES via unknown: our own process whose cwd will not be read", () => {
-    /* Not `found`, and emphatically not an absence. It costs the caller the age
-       floor rather than clearing it. */
-    const proc = fakeProc({ 700: { start: 1, cwd: { unreadable: "EACCES" } } });
+  it("COUNTS, and does not block on, our own process whose cwd the kernel hides", () => {
+    /* Measured on this box 2026-09-09: 6 of 208 same-uid processes are
+       permanently opaque — systemd --user, (sd-pam), two sshd, two postgrest.
+       None has ever been in a worktree, and blocking on them made the scan report
+       an unknown on every single run, which took the owner waiver with it. So the
+       count is reported and the verdict stands. */
+    const proc = fakeProc({ 700: { start: 1, cwd: { opaque: "EACCES" } } });
     const scan = cwdUsersUnder(proc, TREE, new Set());
-    expect(scan).toMatchObject({ kind: "checked", unknown: 1 });
-    expect(composeInUse({ kind: "unlocked" }, scan).kind).toBe("unknown");
+    expect(scan).toMatchObject({ kind: "checked", opaque: 1 });
+    const verdict = composeInUse({ kind: "unlocked" }, scan);
+    expect(verdict.kind).toBe("idle");
+    if (verdict.kind === "idle") expect(verdict.notes.join(" ")).toContain("would not let us inspect");
+  });
+
+  it("treats a process that EXITED as an absence, not as something it could not read", () => {
+    /* The two were folded together, and the gone case fires constantly: a real
+       run of the scan reported one every time, from processes that came and went
+       between the listing and the read. */
+    const proc = fakeProc({ 700: { start: 1 } });
+    const scan = cwdUsersUnder(proc, TREE, new Set());
+    expect(scan).toMatchObject({ kind: "checked", found: [], opaque: 0 });
+    expect(composeInUse({ kind: "unlocked" }, scan).kind).toBe("idle");
   });
 
   it("ignores other users' processes — 575 of the box's 910 are not ours to block on", () => {
-    const proc = fakeProc({ 700: { start: 1, cwd: { unreadable: "EACCES" }, uid: 0 } });
+    const proc = fakeProc({ 700: { start: 1, cwd: { opaque: "EACCES" }, uid: 0 } });
     const scan = cwdUsersUnder(proc, TREE, new Set());
-    expect(scan).toMatchObject({ kind: "checked", found: [], unknown: 0 });
+    expect(scan).toMatchObject({ kind: "checked", found: [], opaque: 0 });
   });
 
   it("does not match a sibling directory whose name starts with the tree's", () => {
@@ -244,7 +260,7 @@ describe("cwdUsersUnder", () => {
 /* -------------------------------------------------------------- composition -- */
 
 describe("composeInUse", () => {
-  const clear: CwdScan = { kind: "checked", found: [], unknown: 0 };
+  const clear: CwdScan = { kind: "checked", found: [], opaque: 0 };
   const stale: OwnerStanding = { kind: "stale", owner: { session: "demo", pid: 1, start: 1 }, why: "pid 1 is gone" };
 
   it("is idle only when BOTH signals are conclusively clear", () => {
@@ -259,13 +275,13 @@ describe("composeInUse", () => {
   });
 
   it("an active signal outranks an unknown one", () => {
-    const busy: CwdScan = { kind: "checked", found: [{ pid: 7, command: "vitest" }], unknown: 3 };
+    const busy: CwdScan = { kind: "checked", found: [{ pid: 7, command: "vitest" }], opaque: 3 };
     const verdict = composeInUse({ kind: "unrecognised", reason: "x" }, busy);
     expect(verdict.kind).toBe("in-use");
   });
 
   it("names the pid and the command, so the refusal can be acted on", () => {
-    const busy: CwdScan = { kind: "checked", found: [{ pid: 7, command: "npm run dev" }], unknown: 0 };
+    const busy: CwdScan = { kind: "checked", found: [{ pid: 7, command: "npm run dev" }], opaque: 0 };
     const verdict = composeInUse(stale, busy);
     if (verdict.kind !== "in-use") throw new Error("expected in-use");
     expect(verdict.reasons.join(" ")).toContain("pid 7");

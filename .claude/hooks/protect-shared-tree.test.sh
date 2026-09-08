@@ -61,13 +61,25 @@ EOF'
   check 2 "buried mid-compound"     'npm test; git branch -D worktree-x; npm run typecheck'
   check 2 "newline-separated"       'git worktree remove x
 git branch -D worktree-x'
+  # Measured as a bypass before the carry was added: the split put the word in
+  # one segment and the flag in the next.
+  check 2 "line-continuation"       'git branch \
+-D worktree-x'
+  check 2 "piped into xargs"        'git branch --list | xargs -n1 git branch -D'
+  check 2 "the = form"              'git branch --delete=worktree-x'
   check 2 "over-refusal: a grep that quotes it" 'grep -rn "git branch -D" docs/'
+  # A long cluster is a valid deletion; an earlier three-letter bound missed it.
+  check 2 "long flag cluster"       'git branch -vvvvD worktree-x'
 
   echo "--- controls: must be $ctrl ---"
   # The rule needs the word `git` SOMEWHERE in the payload, so a command that
   # merely quotes the flags without it is allowed. That is the line between
   # over-refusing usefully and refusing prose.
   check "$ctrl" "quoted, no git anywhere" 'grep -rn "branch -D" docs/'
+  # The rule is per-COMMAND: the tool, the noun and the flag must land in one
+  # segment. Measured as a false refusal before that was required per segment.
+  check "$ctrl" "git in one, quote in the next" 'git status && grep -n "branch -D" notes.txt'
+  check "$ctrl" "reading the doc about it"      'git log --oneline -3 && cat docs/project/worktrees.md | grep "branch -D"'
   # These are the daily commands. The first draft of this rule matched the whole
   # payload and refused the second one, which is why the match is per-command.
   check "$ctrl" "show-current"          'git branch --show-current'

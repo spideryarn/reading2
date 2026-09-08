@@ -32,19 +32,27 @@
  *
  * ## Three things this file does that hand-typed git does not
  *
- * **A ghost is an ABSENT path, never a present one.** `ghosts()` in
- * `worktree-admin.ts` counts `!present || prunable`, and a ghost is removed with
- * `--force --force`. So a worktree whose directory is still there, full of files,
- * but whose `.git` link is broken, was force-deleted. Here, present-and-prunable
- * is `UNKNOWN` and names `git worktree repair`.
+ * **A ghost is an ABSENT path, and nothing here ever passes `--force`.**
+ * `ghosts()` in `worktree-admin.ts` counts `!present || prunable`, and unregisters
+ * with `--force --force`. Two things were wrong with inheriting that: a *present*
+ * prunable registration is a broken admin link over what may be a full directory,
+ * and even a genuine ghost can have its directory put back between the listing and
+ * the removal — reproduced, and force-deleted with it. Measured: a plain
+ * `git worktree remove` clears an absent registration on its own, so there is no
+ * case here that needs a force at all, and git revalidates at the moment it acts.
  *
- * **The landed proof is retaken after the removal, and includes the reflogs.**
- * `--is-ancestor` on the tip, taken during `gather()`, proves only that the tip
- * had landed *then*: a peer can resume the tree, commit, and leave it clean again
- * before the deletion. And a branch that once pointed at `U` and was moved back
- * passes a tip test while `U` survives only in the branch and worktree reflogs —
- * both of which removal is about to delete. So every reflog oid goes into the
- * proof, the worktree's own read **before** its directory goes.
+ * **The landed proof is COMPLETE before anything is destroyed, and it includes
+ * the reflogs.** `--is-ancestor` on the tip proves only that the tip has landed:
+ * a branch that once pointed at `U` and was moved back passes it while `U`
+ * survives only in the branch and worktree reflogs. `git worktree remove` deletes
+ * the worktree's HEAD reflog — measured, a detached commit made in there is named
+ * by `git reflog --all` before the removal and by nothing after it. So proving
+ * *after* the removal is not carefulness, it is announcing a loss you have
+ * already caused; the proof runs first, and a refusal costs nothing.
+ *
+ * The branch deletion then re-reads the branch reflog and re-proves, because a
+ * peer can move a branch away and back between the two, leaving the tip equal and
+ * the reflog longer.
  *
  * **The deletion is compare-and-swap.** `git branch -D` deletes whatever the ref
  * points at now. `git update-ref -d <ref> <expected-oid>` fails if it moved.
@@ -65,7 +73,7 @@ import { statSync } from "node:fs";
 import path from "node:path";
 
 import { TRUNK_BRANCH } from "./deploy-checks.js";
-import { forceRemoveThrowawayWorktree, listWorktrees, type WorktreeEntry } from "./worktree-admin.js";
+import { listWorktrees, type WorktreeEntry } from "./worktree-admin.js";
 import { blockers, fetchTrunkSha, gather as checkGather, primaryRoot } from "./worktree-check.js";
 import {
   ancestry,
@@ -195,30 +203,57 @@ export function classifyRegistration(entry: WorktreeEntry): Registration {
 
 /* ------------------------------------------------------------------ proof -- */
 
-/** Every oid this branch is known to have pointed at, tip and reflogs alike. */
-export function reachableOids(cwd: string, branch: string, worktreePath: string | null): string[] {
+export type Oids =
+  | { kind: "ok"; oids: string[] }
+  /** A source could not be read. Never "we read it and it was empty". */
+  | { kind: "cannot-tell"; why: string };
+
+/**
+ * Every oid this worktree and its branch are known to have pointed at.
+ *
+ * **The worktree's own HEAD reflog is the reason this is not just the tip.** It
+ * lives in `.git/worktrees/<name>/logs/HEAD` and `git worktree remove` deletes
+ * it — measured: a detached commit made in a worktree and then checked away from
+ * is named by `git reflog --all` before the removal and by nothing at all after
+ * it, surviving only as an unreachable object awaiting gc. So it is collected
+ * here, and the proof that uses it runs **before** anything is destroyed.
+ *
+ * **A read that fails is `cannot-tell`, not an empty list.** The first version
+ * folded every failure into `?? ""`, so a `reflog show` that errored was
+ * indistinguishable from a branch that had never moved — and the difference is
+ * the whole guard.
+ *
+ * The one degradation it cannot see: with `core.logAllRefUpdates=false`, or after
+ * reflog expiry, `reflog show` succeeds and returns nothing, and this correctly
+ * reports what it read. The promise is then "every commit named by the tip and by
+ * the reflogs that exist", which is what the caller prints — not "everything it
+ * ever pointed at", which no amount of care can establish from a repo that did
+ * not record it.
+ */
+export function reachableOids(cwd: string, branch: string | undefined, worktreePath: string | null): Oids {
   const oids = new Set<string>();
 
-  const tip = tryGit(["rev-parse", "--verify", `refs/heads/${branch}`], cwd);
-  if (tip !== null) oids.add(tip);
+  if (branch !== undefined) {
+    const tip = tryGit(["rev-parse", "--verify", `refs/heads/${branch}`], cwd);
+    if (tip === null) return { kind: "cannot-tell", why: `could not read the tip of ${branch}` };
+    oids.add(tip);
 
-  /* The branch's own reflog: every commit this ref has pointed at. */
-  const branchLog = tryGit(["reflog", "show", "--format=%H", `refs/heads/${branch}`], cwd);
-  for (const line of (branchLog ?? "").split("\n")) if (line.trim() !== "") oids.add(line.trim());
-
-  /* The worktree's HEAD reflog lives in `.git/worktrees/<name>/logs/HEAD` and is
-     deleted along with the worktree, so it MUST be read before removal. It is the
-     only record of a commit reached by a detached checkout in there. */
-  if (worktreePath !== null) {
-    const headLog = tryGit(["reflog", "show", "--format=%H", "HEAD"], worktreePath);
-    for (const line of (headLog ?? "").split("\n")) if (line.trim() !== "") oids.add(line.trim());
+    const branchLog = tryGit(["reflog", "show", "--format=%H", `refs/heads/${branch}`], cwd);
+    if (branchLog === null) return { kind: "cannot-tell", why: `could not read the reflog of ${branch}` };
+    for (const line of branchLog.split("\n")) if (line.trim() !== "") oids.add(line.trim());
   }
 
-  return [...oids];
+  if (worktreePath !== null) {
+    const headLog = tryGit(["reflog", "show", "--format=%H", "HEAD"], worktreePath);
+    if (headLog === null) return { kind: "cannot-tell", why: `could not read the HEAD reflog of ${worktreePath}` };
+    for (const line of headLog.split("\n")) if (line.trim() !== "") oids.add(line.trim());
+  }
+
+  return { kind: "ok", oids: [...oids] };
 }
 
 export type LandedProof =
-  | { kind: "landed" }
+  | { kind: "landed"; checked: number }
   | { kind: "not-landed"; count: number }
   | { kind: "cannot-tell"; why: string };
 
@@ -227,31 +262,45 @@ export type LandedProof =
  *
  * One `rev-list`, not one `merge-base` per oid: the question is "how many commits
  * are reachable from any of these and not from the trunk", and git answers it in
- * a single walk. `--ignore-missing` because a reflog can name a commit that has
- * already been garbage-collected, and a missing object is not an unlanded one.
+ * a single walk. Measured: all-landed gives 0, one unlanded gives 1.
  *
- * A failure to answer is `cannot-tell`, which leaves the branch alone. This is the
- * last guard before a deletion, so it does not get to shrug in the permissive
- * direction.
+ * **No `--ignore-missing`, and that is a correction.** The first version passed
+ * it, and its documented meaning is to pretend an invalid object was never
+ * supplied — measured, a landed oid plus a nonexistent one returns count 0, exit
+ * 0. So a corrupt or missing object read out of a reflog would have proved
+ * "landed" and deleted the branch. Without the flag, git says `fatal: bad
+ * object`, this returns `cannot-tell`, and the branch is left alone. The cost is
+ * that a genuinely damaged repository stops auto-deleting branches, which is the
+ * direction to fail in.
+ *
+ * A failure to answer is `cannot-tell`. This is the last guard before a deletion,
+ * so it does not get to shrug in the permissive direction.
  */
 export function landedProof(cwd: string, oids: readonly string[], trunkSha: string): LandedProof {
   if (oids.length === 0) return { kind: "cannot-tell", why: "no commits could be read for this branch" };
-  const r = spawnSync("git", ["rev-list", "--ignore-missing", "--count", ...oids, "--not", trunkSha], {
-    cwd,
-    encoding: "utf8",
-  });
+  const r = spawnSync("git", ["rev-list", "--count", ...oids, "--not", trunkSha], { cwd, encoding: "utf8" });
   if (r.status !== 0) return { kind: "cannot-tell", why: `git rev-list failed: ${`${r.stderr ?? ""}`.trim()}` };
   const count = Number.parseInt(`${r.stdout ?? ""}`.trim(), 10);
   if (!Number.isFinite(count)) return { kind: "cannot-tell", why: `git rev-list printed ${`${r.stdout ?? ""}`.trim()}` };
-  return count === 0 ? { kind: "landed" } : { kind: "not-landed", count };
+  return count === 0 ? { kind: "landed", checked: oids.length } : { kind: "not-landed", count };
 }
 
 /**
  * Delete the ref only if it still points where we proved.
  *
- * `git branch -D` deletes whatever is there now. `update-ref -d <ref> <old>` is
- * the compare-and-swap, and it is the difference between "the branch we proved"
- * and "the branch that happens to have this name".
+ * `git branch -D` deletes whatever is there now; `update-ref -d <ref> <old>` is
+ * the compare-and-swap.
+ *
+ * **The residual race, stated rather than glossed.** A CAS on the tip cannot see
+ * an A→B→A: a peer that moved the branch away and back leaves the tip equal and
+ * the reflog longer. That is why the caller re-collects the reflog and re-proves
+ * immediately before calling this — so a peer's excursion is caught by the reflog
+ * even though the tip looks untouched. What remains is the gap between that final
+ * read and this call: two adjacent process spawns, in which a peer would have to
+ * move a branch whose worktree has just been removed, twice. Closing it properly
+ * needs an `update-ref --stdin` transaction held open across the re-read, which
+ * means an async child process in an otherwise synchronous script; that was
+ * weighed and not built. GPT Sol raised it, 2026-09-09.
  */
 export function deleteRefIfUnmoved(cwd: string, branch: string, expected: string): { ok: boolean; why: string } {
   const r = spawnSync("git", ["update-ref", "-d", `refs/heads/${branch}`, expected], { cwd, encoding: "utf8" });
@@ -278,7 +327,8 @@ export interface Liveness {
 export function liveness(worktreePath: string, lockReason: string | undefined, pid = process.pid): Liveness {
   const proc = procTable();
   if (proc === null) {
-    const standing: OwnerStanding = lockReason === undefined ? { kind: "unlocked" } : { kind: "unrecognised", reason: lockReason };
+    const standing: OwnerStanding =
+      lockReason === undefined ? { kind: "unlocked" } : { kind: "unrecognised", reason: lockReason };
     return {
       standing,
       inUse: { kind: "unknown", why: ["this platform has no /proc, so nothing could be checked for running processes"] },
@@ -289,6 +339,22 @@ export function liveness(worktreePath: string, lockReason: string | undefined, p
   const standing = ownerStanding(proc, lockReason, chain);
   const scan = cwdUsersUnder(proc, worktreePath, new Set(chain.map((a) => a.pid)));
   return { standing, inUse: composeInUse(standing, scan), authorised: ownerIsAsking(standing) };
+}
+
+/**
+ * **May this caller skip the 24-hour floor?**
+ *
+ * Only when the owner is asking *and* both liveness signals were conclusive.
+ * Authorisation alone is not enough: an owner beside a same-uid process whose cwd
+ * would not be read is an `unknown`, and an unknown must cost you the floor —
+ * otherwise the one branch that skips the floor is also the one that swallows
+ * every uncertainty, which is failing open for exactly the caller most likely to
+ * be in a hurry. GPT Sol's fifth finding on the code, 2026-09-09.
+ *
+ * Its own function so it can be tested without arranging an unreadable process.
+ */
+export function shouldWaiveFloor(live: Liveness): boolean {
+  return live.authorised && live.inUse.kind === "idle";
 }
 
 /* --------------------------------------------------------------- removal -- */
@@ -308,6 +374,14 @@ export interface RemoveOutcome {
   steps: string[];
 }
 
+/** A refusal: nothing has been touched, and `steps` says why. */
+type Refusal = { ok: false; steps: string[] };
+
+function refuse(steps: string[], ...lines: string[]): Refusal {
+  for (const l of lines) steps.push(l);
+  return { ok: false, steps };
+}
+
 function shortBranch(ref: string | undefined): string | undefined {
   if (ref === undefined) return undefined;
   return ref.startsWith("refs/heads/") ? ref.slice("refs/heads/".length) : ref;
@@ -324,91 +398,174 @@ function refExists(cwd: string, branch: string): string | null {
 }
 
 /**
+ * `git worktree remove`, with **no `--force`, ever, on any path through this
+ * file**.
+ *
+ * Two things follow from that, and the second was a surprise worth writing down.
+ *
+ * git refuses a tree with modified or untracked files on its own terms, so our
+ * checks have a second pair of eyes that does not share their assumptions. Its
+ * limit is that git does not refuse over *ignored* files, which is exactly the
+ * case `worktree:check` exists for.
+ *
+ * And **an absent directory does not need `--force` either** — measured, a plain
+ * `git worktree remove` on a ghost exits 0 and clears the registration. So the
+ * ghost path uses this too, rather than `forceRemoveThrowawayWorktree`'s
+ * `--force --force`. That closes a race GPT Sol reproduced on 2026-09-09: a
+ * registration classified as a ghost, whose directory is put back before the
+ * removal runs, was force-deleted along with whatever was in it. With no force,
+ * git revalidates at the moment it acts and refuses.
+ */
+export function gitRemoveWorktree(primary: string, worktreePath: string): { ok: boolean; why: string } {
+  const rm = spawnSync("git", ["worktree", "remove", worktreePath], { cwd: primary, encoding: "utf8" });
+  if (rm.status === 0) return { ok: true, why: `removed ${worktreePath}` };
+  return { ok: false, why: `refused by git: ${`${rm.stdout ?? ""}${rm.stderr ?? ""}`.trim()}` };
+}
+
+/**
+ * Prove, then delete, one branch — the shared tail of the ordinary path and the
+ * orphan one, so orphan cleanup cannot drift into a weaker check.
+ *
+ * The reflog is re-read here rather than reused from the pre-removal snapshot.
+ * That is the difference between "retaken" and "re-read", and the first version
+ * only claimed the former: it passed the pre-removal oids straight through, so a
+ * peer's A→B→A on the branch left the CAS satisfied and the excursion invisible.
+ */
+export function proveAndDeleteBranch(primary: string, branch: string, trunkSha: string, steps: string[], dryRun: boolean): boolean {
+  const tip = refExists(primary, branch);
+  if (tip === null) {
+    steps.push(`branch ${branch} does not exist — nothing to delete`);
+    return true;
+  }
+
+  const oids = reachableOids(primary, branch, null);
+  if (oids.kind === "cannot-tell") {
+    steps.push(`left branch ${branch}: could not read its history — ${oids.why}`);
+    return false;
+  }
+  const proof = landedProof(primary, oids.oids, trunkSha);
+  if (proof.kind === "cannot-tell") {
+    steps.push(`left branch ${branch}: could not prove it landed — ${proof.why}`);
+    return false;
+  }
+  if (proof.kind === "not-landed") {
+    steps.push(
+      `left branch ${branch}: ${proof.count} commit${proof.count === 1 ? "" : "s"} it has pointed at are not on origin/${TRUNK_BRANCH}`,
+    );
+    steps.push("  the tip and every reflog entry are in that count — a branch that was moved back still counts");
+    return false;
+  }
+  steps.push(`ok   every commit ${branch} names (${proof.checked} checked, tip and reflog) is on origin/${TRUNK_BRANCH}`);
+
+  if (dryRun) {
+    steps.push(`would delete branch ${branch}`);
+    return true;
+  }
+  const del = deleteRefIfUnmoved(primary, branch, tip);
+  steps.push(del.why);
+  return del.ok;
+}
+
+/** Resolved target, or the reason there isn't one. */
+type Target =
+  | { kind: "worktree"; entry: WorktreeEntry; branch: string | undefined }
+  | { kind: "orphan-branch"; branch: string }
+  | { kind: "refused"; steps: string[] };
+
+function resolveTarget(cwd: string, primary: string, wanted: string | undefined, entries: readonly WorktreeEntry[]): Target {
+  if (wanted === undefined) {
+    const here = currentToplevel(cwd);
+    const entry = entries.find((e) => here !== null && path.resolve(e.path) === here);
+    if (entry === undefined) {
+      return { kind: "refused", steps: ["could not tell which worktree you are in; name one with --branch <name>"] };
+    }
+    if (entry.main) {
+      return {
+        kind: "refused",
+        steps: [
+          "refused: you are in the primary checkout, which is not a worktree",
+          "  name the one you mean: npm run worktree:remove -- --branch <name>",
+        ],
+      };
+    }
+    return { kind: "worktree", entry, branch: shortBranch(entry.branch) };
+  }
+
+  const entry = entries.find((e) => shortBranch(e.branch) === wanted);
+  if (entry !== undefined) return { kind: "worktree", entry, branch: shortBranch(entry.branch) };
+  if (refExists(primary, wanted) === null) {
+    return { kind: "refused", steps: [`no worktree is on branch ${wanted}, and no such branch exists`] };
+  }
+  return { kind: "orphan-branch", branch: wanted };
+}
+
+/**
  * Remove one worktree, or clean up one orphaned `worktree-*` branch.
  *
- * Every refusal returns `ok: false` with the reasons in `steps`; every check that
- * passed is in `steps` too, so the output says what was looked at rather than only
- * what went wrong.
+ * **The order is the safety property.** Everything that could refuse runs, and
+ * the landed proof is *completed*, before the first destructive call. The first
+ * version proved after removing the worktree, which reads as more careful and is
+ * the opposite: `git worktree remove` deletes the tree's HEAD reflog, so a proof
+ * that then noticed an unlanded detached commit was announcing a loss it had
+ * already caused. Measured, and GPT Sol's first finding on the code.
+ *
+ * Every refusal returns `ok: false` with its reasons in `steps`; every check that
+ * passed is in `steps` too, so the output says what was looked at rather than
+ * only what went wrong.
  */
 export function removeWorktree(cwd: string, wanted: string | undefined, opts: RemoveOptions = {}): RemoveOutcome {
   const steps: string[] = [];
   const dryRun = opts.dryRun === true;
   const primary = primaryRoot(cwd);
-  const entries = listWorktrees(cwd);
+  const target = resolveTarget(cwd, primary, wanted, listWorktrees(cwd));
 
-  /* --- 1. which tree? ------------------------------------------------- */
-  let entry: WorktreeEntry | undefined;
-  if (wanted === undefined) {
-    const here = currentToplevel(cwd);
-    entry = entries.find((e) => here !== null && path.resolve(e.path) === here);
-    if (entry === undefined) {
-      steps.push("could not tell which worktree you are in; name one with --branch <name>");
-      return { ok: false, steps };
-    }
-    if (entry.main) {
-      steps.push("refused: you are in the primary checkout, which is not a worktree");
-      steps.push("  name the one you mean: npm run worktree:remove -- --branch <name>");
-      return { ok: false, steps };
-    }
-  } else {
-    entry = entries.find((e) => shortBranch(e.branch) === wanted);
+  if (target.kind === "refused") return { ok: false, steps: target.steps };
+
+  /* --- an orphaned branch: no tree to judge, same proof and same CAS ---- */
+  if (target.kind === "orphan-branch") {
+    steps.push(`no worktree is on branch ${target.branch} — treating it as an orphaned branch`);
+    const trunk = fetchTrunkSha(primary);
+    if (trunk.kind === "failed") return refuse(steps, `refused: ${trunk.why}`);
+    steps.push(`ok   fetched origin/${TRUNK_BRANCH} — ${trunk.sha.slice(0, 8)}`);
+    const ok = proveAndDeleteBranch(primary, target.branch, trunk.sha, steps, dryRun);
+    return { ok, steps };
   }
 
-  const branch = entry === undefined ? wanted : shortBranch(entry.branch);
+  const { entry, branch } = target;
 
-  /* --- 1b. an orphaned branch with no worktree ------------------------ */
-  if (entry === undefined) {
-    if (wanted === undefined) {
-      steps.push("no worktree and no --branch: nothing to do");
-      return { ok: false, steps };
-    }
-    if (refExists(primary, wanted) === null) {
-      steps.push(`no worktree is on branch ${wanted}, and no such branch exists`);
-      return { ok: false, steps };
-    }
-    steps.push(`no worktree is on branch ${wanted} — treating it as an orphaned branch`);
-    return { ...finishBranch(primary, wanted, null, steps, dryRun), steps };
-  }
-
-  /* --- 2. what kind of registration is it? ---------------------------- */
+  /* --- what kind of registration is it? -------------------------------- */
   const reg = classifyRegistration(entry);
-  if (reg.kind === "skip") {
-    steps.push(`refused: ${reg.why}`);
-    return { ok: false, steps };
-  }
-  if (reg.kind === "unknown") {
-    steps.push(`refused: ${reg.why}`);
-    steps.push(`  ${reg.fix}`);
-    return { ok: false, steps };
-  }
+  if (reg.kind === "skip") return refuse(steps, `refused: ${reg.why}`);
+  if (reg.kind === "unknown") return refuse(steps, `refused: ${reg.why}`, `  ${reg.fix}`);
+
   if (reg.kind === "ghost") {
     steps.push(`the directory at ${entry.path} is gone; this is a stale registration`);
     if (dryRun) {
       steps.push(`would unregister it, and would leave branch ${branch ?? "(none)"} alone`);
       return { ok: true, steps };
     }
-    const r = forceRemoveThrowawayWorktree(entry.path, primary);
-    steps.push(r.ok ? `unregistered the ghost at ${entry.path}` : `FAILED to unregister ${entry.path}: ${r.out}`);
+    /* No --force: if the directory came back between the listing and now, git
+       revalidates and refuses rather than deleting what is in it. */
+    const rm = gitRemoveWorktree(primary, entry.path);
+    steps.push(rm.why);
+    if (!rm.ok) return { ok: false, steps };
     steps.push(`left branch ${branch ?? "(none)"} alone — the tree is gone, but its commits are not this command's to judge`);
-    return { ok: r.ok, steps };
+    return { ok: true, steps };
   }
 
-  /* --- 3. a fresh trunk, once, as a sha ------------------------------- */
+  /* --- a fresh trunk, once, as a sha ----------------------------------- */
   const trunk = fetchTrunkSha(primary);
   if (trunk.kind === "failed") {
-    steps.push(`refused: ${trunk.why}`);
-    steps.push("  a stale remote-tracking ref answers a question about an hour ago");
-    return { ok: false, steps };
+    return refuse(steps, `refused: ${trunk.why}`, "  a stale remote-tracking ref answers a question about an hour ago");
   }
   steps.push(`ok   fetched origin/${TRUNK_BRANCH} — ${trunk.sha.slice(0, 8)}`);
 
-  /* --- 4. would deleting this directory lose anything? ---------------- */
+  /* --- would deleting this directory lose anything? -------------------- */
   let found: ReturnType<typeof blockers>;
   try {
     found = blockers(checkGather(entry.path, trunk.sha));
   } catch (err) {
-    steps.push(`refused: worktree:check could not judge this tree: ${(err as Error).message}`);
-    return { ok: false, steps };
+    return refuse(steps, `refused: worktree:check could not judge this tree: ${(err as Error).message}`);
   }
   if (found.length > 0) {
     steps.push(`refused, re-checked just now — ${found.length} blocker${found.length === 1 ? "" : "s"}:`);
@@ -420,146 +577,117 @@ export function removeWorktree(cwd: string, wanted: string | undefined, opts: Re
   }
   steps.push("ok   nothing here that is not also on the trunk (npm run worktree:check's whole judgement)");
 
-  /* --- 5/6. is anybody using it, and did its owner ask? --------------- */
+  /* --- is anybody using it, and did its owner ask? --------------------- */
   const live = liveness(entry.path, entry.lockReason, opts.pid ?? process.pid);
   if (live.inUse.kind === "in-use") {
     steps.push("refused: this worktree is in use");
     for (const r of live.inUse.reasons) steps.push(`  ${r}`);
     return { ok: false, steps };
   }
-  if (live.authorised) steps.push("ok   its own session is asking — the 24h floor does not apply");
+
+  /* **Authorised is not enough on its own.** The floor is waived only when the
+     owner is asking AND both liveness signals were conclusive. An owner beside a
+     same-uid process whose cwd would not be read is an unknown, and an unknown
+     costs you the floor — otherwise `unknown` fails open for exactly the caller
+     most likely to be in a hurry. GPT Sol's fifth finding on the code. */
+  const waived = shouldWaiveFloor(live);
+  if (waived) steps.push("ok   its own session is asking, and nothing else is in it — the 24h floor does not apply");
   else if (live.inUse.kind === "idle") for (const n of live.inUse.notes) steps.push(`ok   ${n}`);
 
-  /* --- 7. the age floor, for everybody but the owner ------------------ */
-  if (!live.authorised) {
+  if (!waived) {
     if (live.inUse.kind === "unknown") for (const w of live.inUse.why) steps.push(`·    could not check: ${w}`);
-    const minIdle = opts.minIdleHours ?? MIN_IDLE_HOURS;
-    const activity = lastActivityAt(entry.path, branch);
-    if (activity === null) {
-      steps.push("refused: could not tell when this tree was last active");
-      return { ok: false, steps };
-    }
-    const now = opts.now ?? Math.floor(Date.now() / 1000);
-    const idleHours = (now - activity.at) / 3600;
-    if (idleHours < minIdle) {
-      steps.push(`refused: ${activity.signal} ${describeIdle(idleHours)} ago — under the ${minIdle}h floor`);
-      steps.push("  nothing running in it is not the same as finished. Either its own session removes it,");
-      steps.push(`  or it waits out the floor. See docs/project/worktrees.md § Removing one.`);
-      return { ok: false, steps };
-    }
-    steps.push(`ok   ${activity.signal} ${describeIdle(idleHours)} ago — over the ${minIdle}h floor`);
+    if (live.authorised) steps.push("·    its own session is asking, but something could not be checked, so the floor still applies");
+    const floor = ageFloor(entry.path, branch, opts);
+    if (floor !== null) return refuse(steps, ...floor);
+    steps.push(`ok   ${idleLine(entry.path, branch, opts)}`);
   }
 
-  /* --- 8. the proof, read while the worktree still exists ------------- */
-  const oids = branch === undefined ? [] : reachableOids(primary, branch, entry.path);
-  const tip = branch === undefined ? null : refExists(primary, branch);
+  /* --- THE PROOF, COMPLETED BEFORE ANYTHING IS DESTROYED --------------- */
+  const oids = reachableOids(primary, branch, entry.path);
+  if (oids.kind === "cannot-tell") {
+    return refuse(steps, `refused: could not read this tree's history — ${oids.why}`);
+  }
+  const proof = landedProof(primary, oids.oids, trunk.sha);
+  if (proof.kind === "cannot-tell") {
+    return refuse(steps, `refused: could not prove this tree's commits have landed — ${proof.why}`);
+  }
+  if (proof.kind === "not-landed") {
+    return refuse(
+      steps,
+      `refused: ${proof.count} commit${proof.count === 1 ? "" : "s"} this tree names are not on origin/${TRUNK_BRANCH}`,
+      "  that counts the branch tip, the branch reflog, and THIS WORKTREE'S HEAD reflog —",
+      "  which `git worktree remove` deletes, so a detached commit made in here and",
+      "  checked away from would otherwise become unreachable with nothing naming it.",
+    );
+  }
+  steps.push(`ok   every commit this tree names (${proof.checked} checked, incl. its HEAD reflog) is on origin/${TRUNK_BRANCH}`);
 
   if (dryRun) {
     steps.push(`would remove ${entry.path}`);
-    steps.push(
-      branch === undefined
-        ? "  detached HEAD — there would be no branch to delete"
-        : `  and would prove and delete branch ${branch} (${oids.length} oid${oids.length === 1 ? "" : "s"} in the proof)`,
-    );
+    steps.push(branch === undefined ? "  detached HEAD — there would be no branch to delete" : `  and would delete branch ${branch}`);
     return { ok: true, steps };
   }
 
-  /* --- 9. unlock, stopping if we cannot -------------------------------- */
+  /* --- unlock, stopping if we cannot ----------------------------------- */
   const originalLock = entry.lockReason;
   if (entry.locked) {
     const un = spawnSync("git", ["worktree", "unlock", entry.path], { cwd: primary, encoding: "utf8" });
-    if (un.status !== 0) {
-      steps.push(`refused: could not unlock ${entry.path}: ${`${un.stderr ?? ""}`.trim()}`);
-      return { ok: false, steps };
-    }
+    if (un.status !== 0) return refuse(steps, `refused: could not unlock ${entry.path}: ${`${un.stderr ?? ""}`.trim()}`);
     steps.push(`unlocked ${entry.path}${originalLock === undefined ? "" : ` (was: ${originalLock})`}`);
   }
 
-  /* --- 10. git's own judgement, on its own terms ----------------------- */
-  const rm = spawnSync("git", ["worktree", "remove", entry.path], { cwd: primary, encoding: "utf8" });
-  if (rm.status !== 0) {
-    steps.push(`refused by git: ${`${rm.stdout ?? ""}${rm.stderr ?? ""}`.trim()}`);
-    if (entry.locked && originalLock !== undefined) {
-      const re = spawnSync("git", ["worktree", "lock", "--reason", originalLock, entry.path], {
-        cwd: primary,
-        encoding: "utf8",
-      });
-      steps.push(re.status === 0 ? "restored the lock" : `could NOT restore the lock: ${`${re.stderr ?? ""}`.trim()}`);
-    }
+  /* --- git's own judgement, on its own terms --------------------------- */
+  const rm = gitRemoveWorktree(primary, entry.path);
+  if (!rm.ok) {
+    steps.push(rm.why);
+    if (entry.locked) relock(primary, entry.path, originalLock, steps);
     return { ok: false, steps };
   }
-  steps.push(`removed ${entry.path}`);
+  steps.push(rm.why);
 
-  /* --- 11. and only now, the branch ------------------------------------ */
+  /* --- and only now, the branch ---------------------------------------- */
   if (branch === undefined) {
     steps.push("detached HEAD — no branch to delete");
     return { ok: true, steps };
   }
-  return { ...finishBranch(primary, branch, { oids, tip, trunkSha: trunk.sha }, steps, false), steps };
+  return { ok: proveAndDeleteBranch(primary, branch, trunk.sha, steps, false), steps };
 }
 
 /**
- * Prove and delete a branch. Shared by the ordinary path and the orphan one, so
- * the orphan cleanup cannot drift into a weaker check than the removal's.
+ * Put the lock back after a failed removal, so a tree that survives is not left
+ * less protected than it was found.
  *
- * `pre` is what was read before the worktree went; `null` means there was no
- * worktree, so the trunk is fetched here instead.
+ * **A lock with no reason is still a lock.** The first version restored only when
+ * there was a reason to restore, so `git worktree lock <path>` with no `--reason`
+ * — which is a real state — was silently downgraded to unlocked. GPT Sol's
+ * seventh finding.
  */
-function finishBranch(
-  primary: string,
-  branch: string,
-  pre: { oids: string[]; tip: string | null; trunkSha: string } | null,
-  steps: string[],
-  dryRun: boolean,
-): { ok: boolean } {
-  let oids: string[];
-  let tip: string | null;
-  let trunkSha: string;
+export function relock(primary: string, worktreePath: string, reason: string | undefined, steps: string[]): void {
+  const args = reason === undefined ? ["worktree", "lock", worktreePath] : ["worktree", "lock", "--reason", reason, worktreePath];
+  const re = spawnSync("git", args, { cwd: primary, encoding: "utf8" });
+  steps.push(re.status === 0 ? "restored the lock" : `could NOT restore the lock: ${`${re.stderr ?? ""}`.trim()}`);
+}
 
-  if (pre === null) {
-    const trunk = fetchTrunkSha(primary);
-    if (trunk.kind === "failed") {
-      steps.push(`refused: ${trunk.why}`);
-      return { ok: false };
-    }
-    steps.push(`ok   fetched origin/${TRUNK_BRANCH} — ${trunk.sha.slice(0, 8)}`);
-    trunkSha = trunk.sha;
-    oids = reachableOids(primary, branch, null);
-    tip = refExists(primary, branch);
-  } else {
-    ({ oids, tip } = pre);
-    trunkSha = pre.trunkSha;
-  }
+/** The refusal lines when a third party is under the floor, or `null` if it is clear. */
+function ageFloor(worktreePath: string, branch: string | undefined, opts: RemoveOptions): string[] | null {
+  const minIdle = opts.minIdleHours ?? MIN_IDLE_HOURS;
+  const activity = lastActivityAt(worktreePath, branch);
+  if (activity === null) return ["refused: could not tell when this tree was last active"];
+  const idleHours = ((opts.now ?? Math.floor(Date.now() / 1000)) - activity.at) / 3600;
+  if (idleHours >= minIdle) return null;
+  return [
+    `refused: ${activity.signal} ${describeIdle(idleHours)} ago — under the ${minIdle}h floor`,
+    "  nothing running in it is not the same as finished. Either its own session removes it,",
+    "  or it waits out the floor. See docs/project/worktrees.md § Removing one.",
+  ];
+}
 
-  if (tip === null) {
-    steps.push(`branch ${branch} does not exist — nothing to delete`);
-    return { ok: true };
-  }
-
-  /* Retaken here, not re-read from the earlier gather: a peer can commit to this
-     branch between that check and this deletion. */
-  const proof = landedProof(primary, oids, trunkSha);
-  if (proof.kind === "cannot-tell") {
-    steps.push(`left branch ${branch}: could not prove it landed — ${proof.why}`);
-    return { ok: false };
-  }
-  if (proof.kind === "not-landed") {
-    steps.push(
-      `left branch ${branch}: ${proof.count} commit${proof.count === 1 ? "" : "s"} it has pointed at are not on origin/${TRUNK_BRANCH}`,
-    );
-    steps.push("  the tip and every reflog entry are in that count — a branch that was moved back still counts");
-    return { ok: false };
-  }
-  steps.push(`ok   every commit ${branch} has pointed at (${oids.length} checked) is on origin/${TRUNK_BRANCH}`);
-
-  if (dryRun) {
-    steps.push(`would delete branch ${branch}`);
-    return { ok: true };
-  }
-
-  const del = deleteRefIfUnmoved(primary, branch, tip);
-  steps.push(del.why);
-  return { ok: del.ok };
+function idleLine(worktreePath: string, branch: string | undefined, opts: RemoveOptions): string {
+  const minIdle = opts.minIdleHours ?? MIN_IDLE_HOURS;
+  const activity = lastActivityAt(worktreePath, branch);
+  if (activity === null) return "idle for an unknown time";
+  const idleHours = ((opts.now ?? Math.floor(Date.now() / 1000)) - activity.at) / 3600;
+  return `${activity.signal} ${describeIdle(idleHours)} ago — over the ${minIdle}h floor`;
 }
 
 /* ------------------------------------------------------------------- cli -- */

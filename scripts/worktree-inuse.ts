@@ -27,7 +27,17 @@
  * makes this safe against pid reuse**: "that pid exists" is not the test, "that
  * pid exists and was started at that instant" is. When that exact pair appears in
  * the **ancestor chain** of the process asking for the removal, the owner itself
- * is asking — evidence no other session on the box can manufacture.
+ * is asking.
+ *
+ * **It is cooperative evidence, not an unforgeable capability**, and the
+ * difference matters enough to write down. Another same-uid session can read a
+ * common ancestor's pid and start time out of `/proc` and write a lock reason
+ * naming it; nothing here would tell the difference. It raises the bar from "any
+ * agent may delete any tree" to "an agent must deliberately forge a lock", which
+ * is the useful part, and it is not a security boundary. In the other direction a
+ * legitimate owner can *miss* authorisation — a pid namespace, or a supervisor
+ * that detached the session from this process tree — and then it waits out the
+ * age floor like anyone else. GPT Sol, 2026-09-09.
  *
  * ## Vetoes, never permissions
  *
@@ -66,10 +76,11 @@
  * hit is the fact they are missing. Excluding self and ancestors removes the case
  * that was firing. And it is a veto second to an exact signal, not the verdict.
  *
- * The 575 are handled by not pretending: **UID first**, then readability. A
- * confirmed foreign uid is ignored; a stable **same-uid** pid whose cwd cannot be
- * read is an `unknown` that costs you the age floor, not an absence that clears
- * you. Failing closed on all 575 would refuse every removal for ever.
+ * The 575 are handled by not pretending: **UID first**, then readability, and
+ * three outcomes rather than two — a foreign uid is ignored, an exited process is
+ * an absence, and a same-uid process the kernel will not let us inspect is
+ * counted and printed. `cwdUsersUnder` carries the count that settles the last
+ * one.
  */
 
 import { readdirSync, readFileSync, readlinkSync, statSync } from "node:fs";
@@ -100,8 +111,12 @@ export interface LockOwner extends ProcId {
 export interface ProcTable {
   /** `/proc/<pid>/stat`, or `null` if there is no such process. */
   stat(pid: number): string | null;
-  /** `/proc/<pid>/cwd` resolved, or a reason it could not be. */
-  cwd(pid: number): { kind: "path"; path: string } | { kind: "unreadable"; why: string };
+  /**
+   * `/proc/<pid>/cwd` resolved, or why not — and **"gone" and "opaque" are
+   * different facts**. A process that exited between the listing and the read is
+   * an absence; one the kernel will not let us inspect is a hole in the answer.
+   */
+  cwd(pid: number): { kind: "path"; path: string } | { kind: "gone" } | { kind: "opaque"; why: string };
   /** The uid owning `<pid>`, or `null` if it could not be read. */
   uid(pid: number): number | null;
   /** Every pid currently in the table. */
@@ -228,7 +243,7 @@ export interface CwdUser {
 }
 
 export type CwdScan =
-  | { kind: "checked"; found: CwdUser[]; unknown: number }
+  | { kind: "checked"; found: CwdUser[]; opaque: number }
   | { kind: "cannot-tell"; why: string };
 
 /**
@@ -241,11 +256,27 @@ export type CwdScan =
  * the chain was `bash → bash → claude → bash → tmux: server → init`, and the tmux
  * server's own cwd was `/home/greg`, outside every worktree.
  *
- * **`unknown` counts same-uid processes we could not read**, and it is not the
- * same as `found.length === 0`. A foreign uid is ignored — those are root's and
- * other users', and 575 of the box's 910 processes are unreadable for that reason.
- * A *same-uid* pid we cannot read is a gap in the answer, and the caller falls back
- * to the age floor rather than calling it clear.
+ * **Three outcomes per process, not two, and the third one was measured rather
+ * than reasoned about.** A foreign uid is ignored: those are root's and other
+ * users', and 575 of the box's 910 processes are unreadable for that reason. A
+ * same-uid process that has *exited* is an absence. What is left is the same-uid
+ * process the kernel will not let us inspect, and the honest question is whether
+ * that is a hole worth blocking on.
+ *
+ * **It is not, and here is the count.** Walked on this box, 2026-09-09: of 208
+ * same-uid processes, 202 readable, 1 gone mid-walk, and **6 permanently opaque —
+ * `systemd --user`, `(sd-pam)`, two `sshd`, two `postgrest`**. Every one is a
+ * daemon whose credentials or dumpable flag make the kernel refuse, none of them
+ * has ever been in a worktree, and they are there on every run. Treating them as
+ * an unknown made the scan report one every single time, which took the owner
+ * waiver with it — an alarm that can never be cleared, which is precisely the
+ * `/logs/` mistake `worktree-check.ts` already tells at length.
+ *
+ * So they are **counted and printed**, not blocked on. GPT Sol argued the other
+ * way (its fifth finding, 2026-09-09: *"a stable same-UID PID whose cwd is
+ * unreadable is an unknown"*) and the argument is right in general; the count is
+ * what settles it here. What remains genuinely unknown — no `/proc` at all, or a
+ * listing that failed — is still `cannot-tell`, and still costs you the floor.
  */
 export function cwdUsersUnder(proc: ProcTable, root: string, excluded: ReadonlySet<number>): CwdScan {
   let pids: number[];
@@ -258,7 +289,7 @@ export function cwdUsersUnder(proc: ProcTable, root: string, excluded: ReadonlyS
   const me = proc.self();
   const prefix = root.endsWith(path.sep) ? root : root + path.sep;
   const found: CwdUser[] = [];
-  let unknown = 0;
+  let opaque = 0;
 
   for (const pid of pids) {
     if (excluded.has(pid)) continue;
@@ -268,15 +299,20 @@ export function cwdUsersUnder(proc: ProcTable, root: string, excluded: ReadonlyS
     if (uid === null || uid !== me) continue;
 
     const cwd = proc.cwd(pid);
-    if (cwd.kind === "unreadable") {
-      unknown += 1;
+    /* Exited between the listing and here. An absence, not a hole: a process
+       that no longer exists is not using this directory. Counting it as an
+       unknown made the scan report one on almost every run — measured, and it
+       took the owner waiver with it. */
+    if (cwd.kind === "gone") continue;
+    if (cwd.kind === "opaque") {
+      opaque += 1;
       continue;
     }
     if (cwd.path !== root && !cwd.path.startsWith(prefix)) continue;
     found.push({ pid, command: proc.command(pid) });
   }
 
-  return { kind: "checked", found, unknown };
+  return { kind: "checked", found, opaque };
 }
 
 /* --------------------------------------------------------- composition -- */
@@ -329,10 +365,12 @@ export function composeInUse(standing: OwnerStanding, scan: CwdScan): InUse {
     unknowns.push(scan.why);
   } else {
     for (const u of scan.found) reasons.push(`a process is running inside it — pid ${u.pid} (${u.command})`);
-    if (scan.unknown > 0) {
-      unknowns.push(`${scan.unknown} of your own processes would not say what directory they are in`);
-    } else if (scan.found.length === 0) {
-      notes.push("no process of yours has its working directory inside it");
+    if (scan.found.length === 0) {
+      notes.push(
+        scan.opaque === 0
+          ? "no process of yours has its working directory inside it"
+          : `no process of yours has its working directory inside it (${scan.opaque} the kernel would not let us inspect)`,
+      );
     }
   }
 
@@ -372,10 +410,11 @@ export function procTable(): ProcTable | null {
         return { kind: "path", path: readlinkSync(`/proc/${pid}/cwd`, "utf8") };
       } catch (err) {
         const code = (err as NodeJS.ErrnoException).code;
-        /* ESRCH/ENOENT is a process that exited between the listing and here, not
-           a process hiding from us. Only a live-but-opaque one is an unknown. */
-        if (code === "ENOENT" || code === "ESRCH") return { kind: "unreadable", why: "gone" };
-        return { kind: "unreadable", why: code ?? "unreadable" };
+        /* ENOENT/ESRCH is a process that exited between the listing and here.
+           EACCES/EPERM is one the kernel will not let us inspect — a different
+           fact, and the caller must not confuse them. */
+        if (code === "ENOENT" || code === "ESRCH") return { kind: "gone" };
+        return { kind: "opaque", why: code ?? "unreadable" };
       }
     },
     uid: (pid) => {
