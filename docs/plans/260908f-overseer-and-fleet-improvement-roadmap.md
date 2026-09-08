@@ -586,7 +586,7 @@ read-only status wait for them. This is local request binding, not a durable wor
 - [ ] Change response/UI outcomes into operation-specific variants: steering has refused-before-effect, keys-submitted, partial and
   outcome-unknown; process actions distinguish command-exited from effect-observed, plus partial
   and unknown; broadcasts aggregate those per recipient. Do not reintroduce a generic submitted/Done
-  arm that conflates transport with process outcome. Preserve route `delivery` details. Inspect `PlanRun.completed` and actual step results: `killRoute` currently labels intended PIDs as killed even when the run is incomplete. Report attempted versus observed effects explicitly. Never show `Nothing happened` for a
+  arm that conflates transport with process outcome. Preserve route `delivery` details. Inspect `PlanRun.completed` and actual step results: `killRoute` currently labels intended PIDs as killed even when the run is incomplete. *(Corrected 2026-09-08 by the dashboard agent building this stage: `run.completed` is always true on that route, because `planKillProcesses` makes every step best-effort and `judgeStep` never maps best-effort to failed. The real defect was one level down — the intent list was reported while the per-step evidence sat discarded in the same response. Fixed in 854fac4b; do not look for a `completed:false` path.)* Report attempted versus observed effects explicitly. Never show `Nothing happened` for a
   network error or unreadable response. Show per-recipient counts for broadcasts.
 - [ ] Quarantine a queue target after partial/unknown delivery; later items cannot drain into an
   uncertain input buffer. Preserve target generation and the uncertain item for inspection. Manual
@@ -604,18 +604,125 @@ refresh; late error/timeout never invites a blind retry. Test cancel/revive agai
 
 ### Stage: Failure containment — the smallest bounds before richer monitoring
 
-- [ ] Add a single-flight latch around owned collection attempts: a caller deadline does not release
+**Status, 2026-09-08: built, and reviewed by GPT Sol twice.** (An earlier draft of this line claimed the work had landed on
+`dev`, twice, while it was still uncommitted. Sol caught it both times; the second attempt at a
+self-verifying wording — *"in the commit that carries this paragraph"* — names a commit but says
+nothing about whether it was pushed, which is the part that was false. So: no claim here at all, and
+`git log -- tools/fleet/refresh.ts` is the answer.) Four bounds, each with a test that was watched red first — most of them by
+mutating the fix back out and re-running, since the tests were written alongside the code.
+**The running dashboard and daemon still serve the old code until they are restarted**; nothing
+here is live until then.
+
+**Sol's review changed the answer, not just the wording, and the P1 is the thing to read.** The
+first draft destroyed an SSE subscriber the moment `res.write` returned `false`. That is wrong in a
+way no test in this repo could have caught, because every test drove a double that returned `false`
+because it was told to: a real `ServerResponse` has a **16 KB high-water mark** and a fleet snapshot
+is **~59 KB**, so `false` is what a perfectly healthy client returns on its first frame, every time.
+That draft would have disconnected every subscriber on every collection — **the Overseer daemon
+included**, which would have recorded a genuine `sse-stream` degraded edge and dropped to polling for
+sixty seconds, over and over. Sol measured it against a real response object (`writableLength: 60524`
+after one 59 KB write) rather than arguing about it. The lesson is the one
+[silent-success.md](../reusable/silent-success.md) keeps making: *the double agreed with the code
+because it shared the code's assumption.*
+
+- [x] Add a single-flight latch around owned collection attempts: a caller deadline does not release
   the underlying attempt. Repeated refreshes report the stuck child and retain old data, with no
   second child started until the first settles. Test never-settling, late-success and late-failure
   probes; late results must not overwrite a newer observation. Full cancellation follows later.
-- [ ] For SSE, use the simplest bounded policy first: after `write(false)`, close/destroy that
+  <br>`singleFlightCollect` in [`tools/fleet/refresh.ts`](../../tools/fleet/refresh.ts), wired at
+  module scope in `server.ts` (a latch built per call latches nothing). It keeps the child promise,
+  races `collectWithDeadline` over that *same* promise rather than making a second call, and refuses
+  to start a sibling while one is in flight — the caller gets `collectionStillRunning`, which
+  `refreshOnce` puts in `lastError` beside the previous snapshot.
+  **A late child's answer is logged and dropped, whichever way it went** — and the first draft of
+  this got it wrong, which is worth recording. Handing a late SUCCESS to the next caller looks like
+  thrift: it is a real snapshot that cost twelve seconds, and `collectedAt` carries its real age.
+  But `refreshOnce` gives whatever `collect()` resolves with to `drain()`, which aims tmux
+  keystrokes at the panes those rows name and decides *whether to send now* from each row's
+  `status` — and `refresh.ts` already has the rule for that, six lines from the bottom of the file:
+  **stale rows are how the right text reaches the wrong session.** A snapshot that arrived eight
+  minutes after it was asked for is stale rows by construction. Using it for the page but not for
+  the drain would mean teaching `refreshOnce` a third kind of outcome, which is a mechanism, and
+  this stage is the smallest bound rather than a rewrite. Twelve seconds is cheaper than that.
+  So the plan's *"late results must not overwrite a newer observation"* holds in its strongest
+  form — **a late result never reaches an observation at all** — and there is no sequence counter,
+  because there is nothing to sequence. `tests/fleet-refresh.test.ts` asserts it as *a late snapshot
+  never reaches keep, publish or the drain*, and the assertion bites: putting the delivery path back
+  turns it red.
+- [x] For SSE, use the simplest bounded policy first: after `write(false)`, close/destroy that
   subscriber and remove it. The next connection receives the latest cached snapshot. Prove no
   further heartbeat/snapshot writes or retained subscriber remain; do not call false a dropped frame.
-- [ ] Cancel unsuccessful SSE response bodies or keep a short deadline while consuming them, so
+  <br>**Built as written, then corrected: the plan's own instruction was the P1.** *Close/destroy on
+  `write(false)`* is wrong for the reason in the status paragraph above — `false` is the normal case
+  for a 59 KB frame, not a symptom. What landed is the policy that reads Node's contract literally:
+  `writeUnlessFull` in [`tools/fleet/live.ts`](../../tools/fleet/live.ts) marks the subscriber
+  `waitingToDrain` and **writes nothing more until `drain`**, which is the memory bound (at most one
+  outstanding frame per subscriber); `DRAIN_DEADLINE_MS` (30s, two heartbeats) is what turns that
+  from a hope into a bound, destroying a socket that has not moved a byte. `destroy()`, not `end()`:
+  `end` writes a final chunk and waits for it to flush, and the client we are giving up on is the one
+  that is not flushing. It is still true that `writeUnlessFull` is the **one** place a `false` is
+  acted on — `broadcastFrame` and `subscribe` each used to have a path that ignored it.
+  **Measured in three runs, not one — and the third is the one that matters**, because measuring only
+  the wedged case is how the destroy-on-false draft looked good. 5,000 × 59 KB snapshots:
+  **(A)** a wedged socket, as shipped — one frame, **58.9 KB**, then destroyed at the deadline;
+  **(B)** the old skip-and-keep policy — **287.8 MB** and still climbing;
+  **(C)** a *healthy* socket whose `write` returns `false` every single time — **200 of 200 frames
+  delivered, never disconnected.** (C) is the control Sol asked for; under the destroy-on-false draft
+  it delivers one frame and hangs up. (`heapUsed` under-reports (B) badly — V8 keeps the
+  concatenations as rope strings — so `writableLength` is the honest measure.)
+- [x] Cancel unsuccessful SSE response bodies or keep a short deadline while consuming them, so
   error headers plus an unfinished body cannot prevent the Overseer's polling fallback. Bound
   incomplete frame and poll body sizes. Test each with a controlled source and raw Writable.
-- [ ] Surface these conditions through existing error/age UI. Keep the later responsiveness and
+  <br>[`tools/overseer/source.ts`](../../tools/overseer/source.ts): `discardBody` cancels rather
+  than drains on both unsuccessful paths, `readBounded` replaces `response.text()` on the poll
+  (`MAX_POLL_BYTES`, 4 MB), and `sseFrames` now takes a bound and throws on an incomplete frame that
+  passes it (`MAX_FRAME_CHARS`, 4 M characters) — thrown rather than flagged, because its one caller
+  already catches into *this stream is broken, close it and fall back*.
+  **The frame bound was wrong the first time and the test could not have seen it.** It checked the
+  whole newly-appended chunk before extracting complete frames, so four small valid frames arriving
+  in one TCP segment were an "overflow" — while every test in the file pushed one frame per `push`.
+  Sol found it with 136 characters of four good frames under a 64-character limit. The rule is now
+  per-frame and per-tail: a single frame whose terminator lies beyond the bound is refused, and the
+  bound is applied to what is *left over* once every complete frame has been taken out.
+  **The stream half was a genuine indefinite park, and the test shows it:** with a 503 whose body
+  never ends, the fallback was never reached at all — the run took the test's own 5,000 ms abort and
+  produced one message. The silence deadline is cleared one line above that `await`, so nothing was
+  left to fire. The poll half was bounded but wasteful: it burned the whole 3 s poll timeout waiting
+  for a body it never reads, which on the fallback transport is the difference between one late
+  observation and none.
+- [x] Surface these conditions through existing error/age UI. Keep the later responsiveness and
   transport stages for comprehensive lifecycle work; do not turn this small repair into a rewrite.
+  <br>**No new channel, and no new code for this bullet** — which is the intended answer for three
+  of the four, and an honest gap for the fourth.
+  The stuck child becomes `lastError` and renders in the error-and-age UI that already exists. The
+  source's new sentences ride the existing `stream-closed` / `poll-failed` messages, which
+  `daemon.ts` already turns into `sse-stream` / `poll` condition edges carrying `why` verbatim.
+  **`attemptedAt` keeps its meaning, and that took two goes.** The first draft advanced it on every
+  loop turn, on the argument that *the loop is turning and getting nowhere* is worth distinguishing
+  from *the loop has stopped*. Sol's round-2 P1 killed it with the consequence: **five things read
+  that field as the moment a collection began** — `web/src/Header.tsx`, `attempt-clock.ts`, and the
+  Overseer's `daemon.ts`, `observation.ts` and `notes.ts` — so with a child wedged for seven minutes
+  the page would have rendered *a collection was started 0s ago* while `lastError` said the opposite.
+  Changing a field's meaning means migrating its consumers, and those consumers are five files in
+  three ownership areas, which is a bigger change than this whole stage.
+  So the latch got an `onStart` callback and `server.ts` writes `attemptedAt` from that: the field
+  advances exactly when a child actually starts, every existing reader stays correct, and **not one
+  file outside this stage's set had to be touched.** A wedged collector now reads: `attemptedAt`
+  frozen at the wedged child's start, the page saying *started 7 minutes ago*, `lastError` saying
+  why. All three true at once.
+  **The gap, stated precisely on the third attempt:** a subscriber that is *destroyed* is observed
+  downstream perfectly well — the Overseer sees its stream end and opens an `sse-stream` condition
+  like any other closure — but **the backpressure-specific cause is not distinguishable**, and a
+  *pause* that drains within thirty seconds is not surfaced at all. The first draft here claimed it
+  showed in the live count `server.ts` logs (false: `refreshOnce` reads that count *before*
+  `publish()`, the call that can drop one); the second overcorrected to "not surfaced anywhere"
+  (too broad, per Sol's round 2). A short pause does not need surfacing — it is bounded and
+  self-healing — and giving `live.ts` a logger would hand a module with deliberately no import side
+  effects a dependency. What is genuinely missing is only the *why*.
+
+**Not built, deliberately:** cancellation. The latch bounds the *number* of children at one, which
+is the cheap half; killing the wedged one is a later stage, and a `SIGTERM` to a child in
+uninterruptible IO proves nothing anyway (`source.ts`'s own header, 2026-09-08).
 
 **Acceptance:** repeated failure cannot accumulate collectors or unlimited socket/parse buffers,
 and an error stream cannot trap supervision forever. This advances Sol's early priority advice
