@@ -1,27 +1,33 @@
 # The Overseer's store, and the clock it gives everything else
 
-**Status 2026-09-08, 09:35: the Overseer runs, and has never yet run where it will live.** S1, S2,
-S3, S4 and S6 are landed, reviewed and green; S5 (the systemd units) is being built now; S3-03 and
-two smaller findings are stage S7, in flight. Evidence: `npm run typecheck` reports **0** failures
-across all four projects, **292 tests pass** across the eight Overseer files, and `tools/overseer/`
-plus `scripts/overseer.ts` is 5,830 lines.
+**Status 2026-09-08, 11:15: the Overseer is recording into `~/.overseer` right now, and one command
+away from surviving a reboot.** S1–S7 are landed, reviewed and green. Evidence: `npm run typecheck`
+reports **0** failures across all four projects, **326 tests pass across nine Overseer files**, and
+the daemon has been running against its production store since 09:35 — 79 events, 21 sessions, at a
+measured **156 MB RSS and 2 seconds of CPU over 363 seconds**, roughly half of that `tsx` starting up.
 
-**The live run, quoted here because its store was a scratch directory that will be deleted with the
-session.** Against the real dashboard on `:8787`, 2026-09-08 07:30–07:52 UTC, store root
-`scratchpad/overseer-live`: **43 events in 22 minutes — 30 `session-seen`, 8 `session-status`, 5
-`tmux-session-gone`** — and three of those five name the daemon's own earlier incarnations
-(`overseer-live-…`, `overseer-degrade-…`, `overseer-restart-…`), each with `why:
-"absent-from-snapshot"`. Its `daemon.jsonl` holds 3 `daemon-started` and 2 `daemon-stopped`, so one
-run ended without writing a stopping note, which is the `kill -9` the recovery test used.
+**What is done that was not done this morning.** `~/.overseer` exists and is being written to; every
+earlier run used a scratch root that dies with its session. `kill -9` recovery was proved against that
+real store — the lock reclaimed, a crash note written, and the restart producing two events rather
+than twenty-four, which is the whole point of the persisted baseline.
 
-**And the thing that number does not say, found by checking rather than by remembering:
-`~/.overseer` does not exist.** `overseer status` against the default root reports *"NEVER RUN — no
-checkpoint and no notes"*. Every run so far has been against a scratch root, which was right for a
-test and means the production store is empty and unproven. **Naming the root is part of the claim** —
-"the daemon has been run" and "the daemon has been run where it will live" are different sentences,
-and only the first was ever true. Closing that is S5's acceptance, not a separate task: the unit sets
-`OVERSEER_STORE_DIR=/home/greg/.overseer` explicitly, and the evidence it must produce is events in
-*that* file.
+**The one thing standing between here and a reboot-proof fleet is a command no agent may run.**
+`sudo systemctl enable` is refused for agents on this box, by two different mechanisms, in two
+different sessions. Neither agent hand-wrote the symlink to get around it, which was right: a
+criterion satisfied by circumventing the thing stopping you is not satisfied. § The four commands that
+finish S5 has the sequence, and the installed `overseer.service` has been verified byte-identical to
+the repo copy, so it is safe as written.
+
+**Four P1s were found *after* this plan's own review said it was done**, three by a second
+cross-family review and one by running the tool and reading its output as a stranger would. All four
+are fixed. They are worth reading as a set, in § S7's own review, because three of the four are the
+same defect wearing different clothes: **a producer that said the careful thing and a consumer that
+flattened it.**
+
+**And two of the four traced back to claims in briefs I wrote** — one asserting a mechanism that
+cannot happen, one compressing a design with a reason into a constant without one. Both are recorded
+where they happened rather than only here, because a brief is the one artefact in this workflow that
+nothing reviews.
 
 **Both P0s are closed**, one in the differ and one in the store's lock, each after a review round that
 found the first fix insufficient. Every Sol finding is either fixed or refused with reasons in this
