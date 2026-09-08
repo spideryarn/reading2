@@ -1,0 +1,275 @@
+/**
+ * **The evidence that the chat slice is a move**, in one script rather than two.
+ *
+ * `260907e-capture-referee.mjs.txt` captured and normalised handler bodies; a
+ * separate script counted returns. GPT Sol's F3 on the chat plan asked for one
+ * verifier "whose new return rail can be reviewed", because the rail decides
+ * what the comparison refuses and a reviewer cannot check that across two files
+ * run in the right order by somebody who knows to.
+ *
+ *     cp docs/plans/260908a-verify-move.mjs.txt /tmp/x/verify.mjs
+ *     node verify.mjs before src/routes.ts before.json
+ *     # …move the guards…
+ *     node verify.mjs after  src/routes.ts after.json
+ *     node verify.mjs diff   before.json after.json
+ *
+ * It is committed as `.txt` so nothing in the repo tries to lint or typecheck
+ * it, and copied out to be run — copy it immediately before running so the file
+ * that produced the evidence and the file in the tree cannot drift.
+ *
+ * ## What it compares, and what it refuses to compare
+ *
+ * `before` cuts each body out of `if (<matcher> && req.method === "<M>") { … }`
+ * in the chain. `after` cuts it out of the matching `AUTH_ROUTES` row, starting
+ * **past the arrow** — the first `{` after `handler:` is the parameter
+ * destructuring, and taking that as the body is a capture that succeeds while
+ * measuring nothing.
+ *
+ * Both go through the same normaliser, so a difference in the output is a
+ * difference in the code and not a difference in the wrapper. It applies only
+ * what the table's shape forces: the matcher identifier becomes `captures`,
+ * comments and whitespace collapse, and **one** trailing argumentless `return;`
+ * is dropped, because a guard has to return and a handler simply ends.
+ *
+ * ## The rail
+ *
+ * GPT Sol corrected the model both migration plans were using: a *retained*
+ * early `return;` in a table handler does not fall through, because
+ * `dispatchAuthRoute` returns `true` after the handler either way. **The
+ * dangerous transformation is removing a return**, so later statements in the
+ * same handler execute — and `.replace(/return;\s*$/, "")` tolerates that
+ * silently, because it only ever looks at the end.
+ *
+ * So this refuses automatic comparison for any guard whose **own function
+ * scope** holds a return other than exactly one final argumentless `return;`.
+ * Returns inside nested arrow functions belong to those functions and are
+ * excluded. A refused guard is not a failure: it is a guard that a person has
+ * to account for by some other means, and the plan doc says which. What would
+ * be a failure is a refused guard nobody noticed, so `diff` exits non-zero if
+ * any refusal is unaccounted for in `EXPECTED_REFUSALS`.
+ *
+ * **More than one match is a fact to fail on, not one to resolve by picking.**
+ * An earlier extractor in this repo kept the last match and inspected a
+ * duplicated block's second copy while the mutation sat in the first, and went
+ * green. Every lookup here counts its matches and throws on two.
+ */
+import { readFileSync, writeFileSync } from "node:fs";
+
+/**
+ * The twelve, in the order the chain has them, with the text of the row's
+ * `pattern:`. A regex literal for a matcher only one row uses; a constant name
+ * for one two rows share.
+ */
+const GUARDS = [
+  ["chat", "GET", "CHAT_PATTERN"],
+  ["chat", "POST", "CHAT_PATTERN"],
+  ["chatCancel", "POST", String.raw`/^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)\/cancel$/`],
+  ["chatLiveTool", "POST", String.raw`/^\/api\/chat\/([\w.%-]+)\/live-tool$/`],
+  ["chatLive", "POST", String.raw`/^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)\/live$/`],
+  ["liveSessionConnected", "POST", String.raw`/^\/api\/live\/([\w-]+)\/connected$/`],
+  ["liveSessionUsage", "POST", String.raw`/^\/api\/live\/([\w-]+)\/usage$/`],
+  ["liveSessionClose", "POST", String.raw`/^\/api\/live\/([\w-]+)\/close$/`],
+  ["chatSpoken", "POST", String.raw`/^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)\/spoken$/`],
+  ["chatStop", "POST", String.raw`/^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)\/stop$/`],
+  ["oneThread", "PATCH", "ONE_THREAD_PATTERN"],
+  ["oneThread", "DELETE", "ONE_THREAD_PATTERN"],
+];
+
+/**
+ * The guards the rail is expected to refuse, and why, so a refusal that was not
+ * anticipated is a failure rather than a line of output.
+ */
+const EXPECTED_REFUSALS = {
+  "chat GET":
+    "two returns: the `?summary=1` early exit and the final one. Accounted for by " +
+    "tests/the-query-string-does-not-decide-the-route.test.ts, which asserts both branches — " +
+    "delete the early return and the summary reply carries a transcript. Watched, not argued.",
+};
+
+const escape = (s) => s.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
+
+/** Every index at which `needle` occurs, so two can be a failure rather than a choice. */
+function occurrences(haystack, needle) {
+  const at = [];
+  for (let i = haystack.indexOf(needle); i !== -1; i = haystack.indexOf(needle, i + 1)) at.push(i);
+  return at;
+}
+
+/** The one index at which `needle` occurs. Throws on nought or more than one. */
+function only(haystack, needle, what) {
+  const at = occurrences(haystack, needle);
+  if (at.length !== 1) throw new Error(`${what}: expected exactly one match, found ${at.length}`);
+  return at[0];
+}
+
+/** Walk braces from the first `{` at or after `from`; return the body inside. */
+function blockAt(src, from) {
+  const open = src.indexOf("{", from);
+  if (open === -1) throw new Error("no block after that position");
+  let depth = 0;
+  for (let i = open; i < src.length; i++) {
+    if (src[i] === "{") depth++;
+    else if (src[i] === "}") {
+      depth--;
+      if (depth === 0) return src.slice(open + 1, i);
+    }
+  }
+  throw new Error("unbalanced braces");
+}
+
+/** Everything the table's shape forces, and nothing else. */
+function normalise(body, matcher) {
+  return body
+    .replace(new RegExp(`\\b${matcher}\\b`, "g"), "captures")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/.*$/gm, "")
+    .replace(/return;\s*$/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Blank out comments and the *contents* of strings and templates, keeping the
+ * offsets, so `"return"` in a message is not counted and a `{` inside a template
+ * does not move the depth.
+ */
+function blank(b) {
+  return b
+    .replace(/\/\*[\s\S]*?\*\//g, (m) => " ".repeat(m.length))
+    .replace(/\/\/[^\n]*/g, (m) => " ".repeat(m.length))
+    .replace(/"(?:[^"\\\n]|\\.)*"/g, (m) => `"${" ".repeat(m.length - 2)}"`)
+    .replace(/'(?:[^'\\\n]|\\.)*'/g, (m) => `'${" ".repeat(m.length - 2)}'`)
+    .replace(/`(?:[^`\\]|\\.)*`/g, (m) => `\`${" ".repeat(m.length - 2)}\``);
+}
+
+/**
+ * The returns belonging to this guard's own scope.
+ *
+ * A `{` opens a nested *function* body when the text before it ends in `=>`;
+ * the only nested callables in these twelve are arrows, and a `function`
+ * keyword anywhere in a body is reported so this assumption cannot rot quietly.
+ */
+function ownScopeReturns(body) {
+  const b = blank(body);
+  if (/\bfunction\b/.test(b)) {
+    throw new Error("a `function` keyword: the rail only understands arrows, so check this by hand");
+  }
+  const out = [];
+  let depth = 0;
+  const fnDepths = [];
+  for (let i = 0; i < b.length; i++) {
+    const c = b[i];
+    if (c === "{") {
+      depth++;
+      if (b.slice(Math.max(0, i - 40), i).trimEnd().endsWith("=>")) fnDepths.push(depth);
+    } else if (c === "}") {
+      if (fnDepths.at(-1) === depth) fnDepths.pop();
+      depth--;
+    } else if (
+      b.startsWith("return", i) &&
+      !/[\w$]/.test(b[i - 1] ?? "") &&
+      !/[\w$]/.test(b[i + 6] ?? "")
+    ) {
+      if (fnDepths.length === 0) {
+        const rest = body.slice(i + 6);
+        const semi = rest.indexOf(";");
+        if (semi === -1) throw new Error("a return with no semicolon; check this by hand");
+        out.push({ argument: rest.slice(0, semi).trim(), after: body.slice(i + 6 + semi + 1).trim() });
+      }
+      i += 5;
+    }
+  }
+  return out;
+}
+
+/**
+ * The rail. `null` means comparable; a string means refused, and says why.
+ *
+ * Exactly one return, argumentless, with nothing after it. Anything else is a
+ * fact to fail on rather than one to resolve by picking.
+ */
+function railVerdict(body) {
+  const returns = ownScopeReturns(body);
+  if (returns.length === 0) return "no return at all in the guard's own scope";
+  if (returns.length > 1) return `${returns.length} returns in the guard's own scope`;
+  const [r] = returns;
+  if (r.argument !== "") return `the return carries a value: \`return ${r.argument};\``;
+  if (r.after !== "") return "the return is not the last statement";
+  return null;
+}
+
+function capture(mode, file) {
+  const src = readFileSync(file, "utf8");
+  const out = {};
+  for (const [matcher, method, pattern] of GUARDS) {
+    const key = `${matcher} ${method}`;
+    let at;
+    if (mode === "before") {
+      at = only(src, `if (${matcher} && req.method === "${method}") {`, key);
+    } else {
+      const re = new RegExp(`method: "${method}",\\s*\\n\\s*pattern: ${escape(pattern)},\\s*\\n`, "g");
+      const hits = [...src.matchAll(re)];
+      if (hits.length !== 1) throw new Error(`${key}: expected one table row, found ${hits.length}`);
+      /* Past the arrow, not merely past `handler:` — the first `{` after the key
+         is the parameter destructuring (`{ request: { res } }`). */
+      at = src.indexOf("=>", hits[0].index) + 2;
+    }
+    const body = blockAt(src, at);
+    out[key] = {
+      normalised: normalise(body, matcher),
+      /* The rail is computed from the chain body only. Its whole purpose is to
+         decide, before the move, which guards may be compared afterwards. */
+      refused: mode === "before" ? railVerdict(body) : undefined,
+    };
+  }
+  return out;
+}
+
+function diff(beforeFile, afterFile) {
+  const before = JSON.parse(readFileSync(beforeFile, "utf8"));
+  const after = JSON.parse(readFileSync(afterFile, "utf8"));
+  let bad = 0;
+
+  const keys = Object.keys(before);
+  if (keys.length !== Object.keys(after).length) throw new Error("the two captures differ in size");
+
+  for (const key of keys) {
+    const refused = before[key].refused ?? null;
+    if (refused) {
+      const why = EXPECTED_REFUSALS[key];
+      if (!why) {
+        console.log(`REFUSED, UNACCOUNTED  ${key.padEnd(24)} ${refused}`);
+        bad++;
+      } else {
+        console.log(`refused, accounted    ${key.padEnd(24)} ${refused}`);
+      }
+      continue;
+    }
+    if (before[key].normalised === after[key].normalised) {
+      console.log(`identical             ${key.padEnd(24)} ${before[key].normalised.length} chars`);
+    } else {
+      console.log(`*** DIFFERS ***       ${key}`);
+      console.log(`  before: ${before[key].normalised}`);
+      console.log(`  after : ${after[key].normalised}`);
+      bad++;
+    }
+  }
+  console.log(bad === 0 ? "\nthe move is a move" : `\n${bad} problem(s)`);
+  return bad;
+}
+
+const [, , mode, a, b] = process.argv;
+if (mode === "diff") {
+  process.exit(diff(a, b) === 0 ? 0 : 1);
+} else if (mode === "before" || mode === "after") {
+  const captured = capture(mode, a);
+  writeFileSync(b, JSON.stringify(captured, null, 2));
+  console.log(`${mode}: ${Object.keys(captured).length} bodies -> ${b}`);
+  for (const [k, v] of Object.entries(captured)) {
+    const rail = v.refused ? `  RAIL REFUSES: ${v.refused}` : "";
+    console.log(`  ${k.padEnd(24)} ${String(v.normalised.length).padStart(5)} chars${rail}`);
+  }
+} else {
+  console.error("usage: verify.mjs before|after <routes.ts> <out.json>   |   diff <before> <after>");
+  process.exit(2);
+}

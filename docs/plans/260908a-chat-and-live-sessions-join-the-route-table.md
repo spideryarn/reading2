@@ -11,8 +11,10 @@ which is where the method, the capture/normalise script and the two corrections 
 were written down. **Read that one first if you have read neither** — this doc says what is
 different about chat, not what the recipe is.
 
-> **Status: plan written, not built.** Nothing in `src/routes.ts` has been touched. Awaiting the
-> plan-stage review before any code, because the block contains routes the security map names.
+> **Status, 2026-09-08 02:30: built.** Plan reviewed, Stage 1 written and reviewed, Stage 2 moved
+> the twelve, Stage 3 updated the contract. The status line below each stage is the current one; this
+> line said *plan written, not built* until the work was done, which GPT Sol flagged as stale
+> (260908a stage 1 review § F8).
 
 ## Claimed
 
@@ -422,3 +424,168 @@ Both halves matter. A file that only demonstrated the red would leave the reader
 also covers the lock — which is precisely the belief that produced the earlier test
 `tests/turn-order.test.ts` warns about, the one that passed with the lock removed. Demonstrating the
 green is what makes the disclaimer in this file's header a measurement rather than a modesty.
+
+## Stage 2, as built — and the corruption the body diff could not have caught
+
+The twelve moved as one contiguous block, verified contiguous by the script before anything was cut:
+each guard's end offset is the next one's start, so *"the chain's last twelve"* is a measurement
+rather than a reading. `CHAT_PATTERN` and `ONE_THREAD_PATTERN` are new module-scope constants,
+because those matchers have two rows each; the other eight are written into their single rows, which
+is the rule the constants' own comment states.
+
+**The verifier says the move is a move.** Eleven bodies identical, one refused and accounted for:
+
+```
+refused, accounted    chat GET                 2 returns in the guard's own scope
+identical             chat POST                163 chars
+identical             chatCancel POST          127 chars
+identical             chatLiveTool POST        175 chars
+identical             chatLive POST            130 chars
+identical             liveSessionConnected POST 55 chars
+identical             liveSessionUsage POST    72 chars
+identical             liveSessionClose POST    72 chars
+identical             chatSpoken POST          212 chars
+identical             chatStop POST            125 chars
+identical             oneThread PATCH          258 chars
+identical             oneThread DELETE         162 chars
+
+the move is a move
+```
+
+### The bug in the first attempt, which is the useful part of this stage
+
+The generator renamed the matcher identifier to `captures` with a global `\bchat\b`. It rewrote
+**English**:
+
+- *"The reading view needs one thing from chat"* became *"one thing from captures"*.
+- The citation `docs/plans/260826ab-chat-as-gateway.md` became `260826ab-captures-as-gateway.md` — a
+  link to a file that does not exist.
+
+**The body diff cannot catch this**, and that is the point worth keeping. The normaliser strips
+comments before comparing, precisely so that re-indenting or re-wrapping a comment is not reported
+as a code change — so a comment silently rewritten is invisible to the very check whose job is to
+prove the move was a move. It was caught by reading the generated rows before applying them, which is
+not a mechanism.
+
+The fix is in the generator now: match on a copy with comments and string contents blanked, then
+splice at those offsets in the original, so the rename touches identifiers and never prose. **Anyone
+repeating this recipe on another domain inherits the fixed version** —
+[260908a-verify-move.mjs.txt](260908a-verify-move.mjs.txt) is the verifier;
+[260907e-capture-referee.mjs.txt](260907e-capture-referee.mjs.txt) is its predecessor and does *not*
+have the fix, because it only ever normalised for comparison and never generated code.
+
+### `chat` GET: the mutation, not the argument
+
+The rail refused it, so the plan review (F2) required a watched mutation instead of the hand argument
+the plan originally proposed. The early `return;` was deleted from the moved handler and
+`tests/the-query-string-does-not-decide-the-route.test.ts` run:
+
+```
+× reaches the summaries branch when it carries ?summary=1
+AssertionError: expected { id: 'spya-cue56u', …(5) } to not have property "messages"
+1 failed | 2 passed (3)
+```
+
+Both `send` calls execute, the second overwrites the first, and the summary reply arrives carrying
+the full transcript. The return was restored and the file is green. **The other exit is therefore
+covered by a test rather than by a paragraph**, which is what F2 asked for and is better than what
+the plan proposed.
+
+### Comments that moved with their routes
+
+Two blocks in the chain explained routes rather than the chain, and went to the table with them: the
+live-session accounting comment (*"they are NOT under `/api/chat/`"*), and the live-conversation
+ticket comment. The second needed rewriting rather than relocating, because **chain dispatch order
+splits the pair it describes** — the ticket is now four rows above `spoken`, with the three
+`/api/live/` rows between. The rewritten comment says so, and says why the table must not be sorted
+into subject order to fix it.
+
+Three comments elsewhere were stale and are corrected: the chain's *"`liveSessionClose` is now the
+last matcher this chain declares"* (it is `commentMark` now, and comments are the next slice), and
+the table's two *"twenty-five guards"* counts. The first of those two now **refuses to carry a
+count at all** — it changes once per slice, and `EXPECTED_AUTH_ROUTES` is the inventory.
+
+## Stage 3, as built — red first, and one check that could not fail
+
+**Red first.** With the twelve moved and nothing else touched, the contract test failed **exactly the
+two expectations Sol's F1 named, and only those**: *answers the moved domains from the table* and
+*keeps the table in the chain's order*. **324 passed of 326** — so `EXPECTED_AUTH_ROUTES`, the
+81-route inventory, needed no edit, which is the evidence that the move changed no route's identity.
+
+Both lists took the same twelve pair keys, generated rather than typed. Green at **326 of 326**.
+
+**The `moved` prefix list is inert in this tree, and saying so is the point.** `/api/chat` and
+`/api/live` are added, but the filter beside them is the blind version — 260907b's `pathish` fix is
+committed on their branch and not yet pushed. So that line cannot fail here yet, and a green run is
+not evidence the move is complete.
+
+**So it was checked, with a control.** The filter was temporarily un-blinded locally (the same
+backslash-stripping idea as their fix) and the contract test run:
+
+- with `/api/chat` and `/api/live` in `moved`: **326 passed** — no chat or live guard is left in the
+  chain.
+- with `/api/comments` added, a domain still entirely in the chain: **red**, *"a moved route is still
+  a guard in the chain as well as a row in the table"*, six guards found.
+
+The second run is what makes the first mean anything. Both probes were reverted; **this tree ships
+the filter exactly as `dev` has it**, because the fix is 260907b's to land and duplicating it is how
+the referee slice got built twice.
+
+## The Stage 1 review, and the P1 it caught in a file I had just committed
+
+`docs/plans/260908a-stage1-review-sol.md`, against commit `ccd3ac8c`. Verdict: **stage is sound with
+these changes.** Five findings, all accepted, all verified here first.
+
+**F4 — P1. The committed stage broke a repository test, and Sol ran it rather than reasoning to it.**
+`tests/chat-thread-delete-route.test.ts` carried a line-anchored `**Blind to.**`, which is reserved
+vocabulary: `tests/store-migration-registry.test.ts` requires every file containing it to appear in
+`STORE_CONVERSIONS`. Reproduced here — and running the **whole** file rather than Sol's filtered case
+found a **second** failure it had not reached: *leaves no file that the import graph can reach and
+nothing accounts for*, because the new test reaches a condemned module through `scratchArticleInPg`
+and had no verdict in `STORE_MIGRATION`.
+
+Both fixed honestly rather than quietly:
+
+- the marker is renamed to `**Outside this oracle.**`, outside the vocabulary. Sol's own advice was
+  *"do not add a historically false `STORE_CONVERSIONS` entry"*, and it is right: this file is not a
+  conversion, it was written five days after the filesystem store was deleted.
+- a `STORE_MIGRATION` entry says exactly that, and is marked **`evidence: "static-only"`**. That
+  field was not in the first attempt, and a third assertion caught it — the default is `"dynamic"`,
+  which claims the instrumented witness watched the file run, and that witness is a dated measurement
+  from 2026-09-03. A file that did not exist cannot have been watched. **13 of 13 green** afterwards.
+
+**F5 — P2. The general argument I put in the umbrella plan was wrong in three ways.** It said the
+public dispatch is the one thing before `requireUser` (it is not — the Stripe webhook's exact-path
+branch at `src/routes.ts:6381` also runs there), that a *different* literal prefix implies a
+*disjoint* one (it does not — `/api/public/foo` is a different literal prefix inside the public
+namespace), and it therefore listed an incomplete set of ways it could stop being true. Rewritten in
+260907b as the narrow claim: **two** pre-auth claims, named and cited, with the four ways they could
+change. The wrong version is kept above the right one, because it is the version anybody would write.
+
+**F6 — P3, accepted.** The lane comment said nothing goes near Storage. `scratchArticleInPg` reaches
+it through `loadArticleIntoPg` → `storeRawSource`. Corrected, with a note that it was copied from the
+neighbouring entry without checking — which is how it got there.
+
+**F7 — P3, accepted.** `expect(article.copied).toContain("blocks")` was cargo, copied from the
+sibling file; thread deletion reads no block. Removed.
+
+**F8 — P3, accepted.** The plan's status line still said *plan written, not built*. Refreshed.
+
+**One thing in the review I am recording rather than acting on.** Sol notes the second oracle case is
+timing-sensitive under mutation 1 — the background deletion *could* finish before the second `it`
+reads, so the first assertion is the reliable one. That is right, and it does not weaken the stage:
+the first case is the oracle, and the second observed red is a bonus rather than the mechanism. It is
+worth knowing that a future flake there would mean the race resolved the other way, not that the
+route regressed.
+
+## Where the file stands
+
+| | Lines | Complexity of `serveAuthenticatedApi` |
+|---|---|---|
+| before this slice | 8,575 | 153 |
+| after it | **8,651** | **125** |
+
+Seventy-six lines longer and twenty-eight points simpler, which is the trade this migration has been
+making all along and the reason § *What the fifth sweep will measure* exists in 260907e. Biome's
+ceiling is 25, so the function is still five times over it; `:2349` at 77 and `:2591` at 36 are
+untouched by this migration and will survive it.

@@ -581,6 +581,26 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "Already on Postgres via a hoisted flag and `scratchArticleInPg` — its docstring is the one " +
       "the other converted suites cite for why the flag must be set in `vi.hoisted`.",
   },
+  "tests/chat-thread-delete-route.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["fixture-loader"],
+    /* **`static-only`, and it has to be.** `evidence: "dynamic"` claims the
+       instrumented run watched this file execute something, and that witness is
+       a dated measurement from 2026-09-03 — five days before this file existed.
+       The default is `dynamic`, so leaving the field off would have made a claim
+       no witness backs, which is what § `keeps evidence honest about which
+       witness backs each verdict` refused. */
+    evidence: "static-only",
+    reason:
+      "**Not a conversion.** Written 2026-09-08, after the filesystem store was deleted, as the " +
+      "red-first oracle for `DELETE /api/chat/:slug/:threadId` before the chat guards moved into " +
+      "`AUTH_ROUTES` (docs/plans/260908a-chat-and-live-sessions-join-the-route-table.md). It has " +
+      "an entry here because the import graph can reach a condemned module through " +
+      "`scratchArticleInPg`, and a file the graph reaches with no verdict is a hole rather than a " +
+      "clean file — so this is the verdict: the seeder's copy step, and nothing else. It is " +
+      "deliberately absent from `STORE_CONVERSIONS`, which records conversions that happened; " +
+      "adding it there would be a historically false claim (GPT Sol, 260908a stage 1 review § F4).",
+  },
   "tests/chat-spoken-route.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["fixture-loader"],
@@ -2367,9 +2387,13 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      seeds two conversations under a slug of its own and asserts, after the
      route deletes one, that the store kept **exactly** the other — an exact
      list rather than a membership check, which a neighbouring run writing to
-     `chat_threads` under the same slug could falsify. Nothing goes near GoTrue
-     or the Storage bucket: no model is called and the article comes out of the
-     committed corpus. */
+     `chat_threads` under the same slug could falsify. No model is called, so no
+     ledger row — but it does reach the Storage bucket, through
+     `scratchArticleInPg` → `loadArticleIntoPg` → `storeRawSource` for the
+     fixture's `raw.json`. That does not change the lane: the write is
+     content-addressed and nothing here asserts on bucket state. (An earlier
+     draft of this comment said Storage was untouched, copied from the neighbour
+     above without checking; GPT Sol, 260908a stage 1 review § F6.) */
   "tests/chat-thread-delete-route.test.ts": "private-postgres",
   "tests/checkpoints-durable-resume.test.ts": "private-postgres",
   "tests/claim-session-postgres.test.ts": "private-postgres",

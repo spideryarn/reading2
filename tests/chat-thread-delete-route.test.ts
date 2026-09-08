@@ -69,9 +69,10 @@
  * body diff is the only thing standing between the migration and that
  * deletion.
  *
- * **Blind to.** Everything about ordering and exclusion under concurrency; the
- * `articleId` scoping inside `threadsFor`; and — with one owner seeding one
- * article — whether the owner predicate in `ownedSlug` is doing any work, for
+ * **Outside this oracle.** Everything about ordering and exclusion under
+ * concurrency; the `articleId` scoping inside `threadsFor`; and — with one
+ * owner seeding one article — whether the owner predicate in `ownedSlug` is
+ * doing any work, for
  * the same reason tests/the-query-string-does-not-decide-the-route.test.ts
  * records against its own mutation 2. tests/owner-isolation.test.ts holds that.
  */
@@ -147,7 +148,6 @@ beforeAll(async () => {
      anybody else is invisible and the route answers 404, which looks exactly
      like a broken matcher. */
   article = await scratchArticleInPg(SLUG, { ownerId: TEST_OWNER });
-  expect(article.copied).toContain("blocks");
 
   /* **Two conversations, not one.** With a single thread the reply after a
      successful delete is `{ threads: [] }`, and an empty list is what several

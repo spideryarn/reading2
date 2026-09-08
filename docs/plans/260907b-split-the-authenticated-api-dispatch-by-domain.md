@@ -778,32 +778,47 @@ the opposite: *removing* a return and letting later statements in the same handl
 refusal boundary is right either way, and it will force deliberate handling of chat GET and of the
 existing `similar`/`projection` promise returns.
 
-### Every remaining slice is provably unreachable before `requireUser`, and it can be argued once
+### What runs before `requireUser`, stated once so no slice re-derives it
 
 Written here rather than in a slice's own plan, because it is not about any one slice and a later
 author should not have to open a chat plan to find it. Added by 260907e on 2026-09-08 at 260907b's
-suggestion.
+suggestion — and **narrowed the same night, because the first draft was wrong in three ways that GPT
+Sol found** (260908a stage 1 review § F5). The wrong version is worth stating, because it is the
+version anybody would write:
 
-`src/public/routes.ts:183` claims the public namespace with
-`path === "/api/public" || path.startsWith("/api/public/")`. That is a **literal** prefix, so **any**
-namespace whose own prefix is a literal other than `/api/public` cannot satisfy either clause, and
-the public dispatch — the one thing that runs before `requireUser` — cannot reach it. Every domain
-left in the queue qualifies: `/api/chat`, `/api/live`, `/api/comments`, `/api/glossary`, and the
-rest.
+> *`src/public/routes.ts` gates on a literal prefix, so any namespace whose prefix is a literal other
+> than `/api/public` is unreachable before the gate.*
 
-This is **exhaustive rather than inferential**, which is the distinction worth keeping. The
-disjointness argument the contract test makes between *guards* is a corpus check over a finite set of
-witnesses — good, but a check. This one is a statement about two literal string prefixes and needs no
-witnesses at all.
+Three faults. The public dispatch is **not the only thing before the gate**; a *different* literal
+prefix does not imply a *disjoint* one — `/api/public/foo` is a different literal prefix and is
+inside the public namespace; and the exceptions it listed were therefore not the complete set.
 
-**So no slice needs to re-derive it, and no slice should skip it silently instead.** Confirmed
-independently by GPT Sol reviewing the chat plan, 2026-09-08:
+**The correct statement.** `serveApi` makes exactly **two** claims before `requireUser`, and they are
+adjacent in the source:
 
-> Public dispatch only claims `/api/public` and `/api/public/*`; chat/live proceed through the single
-> `requireUser` call.
+1. `isPublicNamespace(path)` (`src/routes.ts:6357`), which is
+   `path === "/api/public" || path.startsWith("/api/public/")`.
+2. `path === WEBHOOK_PATH` (`:6381`), which is exactly `/api/webhooks/stripe` — Stripe has no bearer
+   token to present, and the signature is over the bytes as they arrived.
 
-If a future namespace is ever added to the public dispatcher, or its claim stops being a literal
-prefix, this section is what stops being true — and it is the only thing that has to be rechecked.
+So a namespace is unreachable before the gate exactly when none of its paths is `/api/public`, sits
+under `/api/public/`, or **is** `/api/webhooks/stripe`. Every domain left in the queue satisfies that
+by its first segment alone: `chat`, `live`, `comments`, `glossary`, `article`, `reader`, `library`
+and the rest are each neither `public` nor `webhooks`. That is an argument from two string
+comparisons, not a corpus check — which is what makes it worth writing down once instead of
+witnessing per slice.
+
+**And here is the complete set of ways it stops being true**, which is the part the first draft got
+wrong by omission:
+
+- a **third** pre-auth claim is added to `serveApi`;
+- either existing claim is **widened** — `isPublicNamespace` stops being a literal prefix, or the
+  webhook comparison becomes a prefix or a pattern;
+- the **dispatch order** changes, so something else runs before the gate;
+- a queued namespace is **moved or renamed** under `/api/public/`, or onto the webhook path.
+
+Any of those four, and this section is what has to be rechecked. None of them is invisible: all four
+are edits to the twenty-odd lines around `src/routes.ts:6357`.
 
 ## Where stage 3 stands, and what the next slice costs
 

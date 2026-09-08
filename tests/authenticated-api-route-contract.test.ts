@@ -1897,7 +1897,21 @@ describe("the authenticated API's route contract", () => {
       expect(sorted(parsed.guards.filter((g) => g.fromTable).map((g) => pairKey(g.method, g.match))))
         .toEqual(
           sorted([
-            // search, 260907b stage 5
+            // chat and the live sessions, 260908a
+            "GET regex /^\\/api\\/chat\\/([\\w.%-]+)$/",
+            "POST regex /^\\/api\\/chat\\/([\\w.%-]+)$/",
+            "POST regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)\\/cancel$/",
+            "POST regex /^\\/api\\/chat\\/([\\w.%-]+)\\/live-tool$/",
+            "POST regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)\\/live$/",
+            "POST regex /^\\/api\\/live\\/([\\w-]+)\\/connected$/",
+            "POST regex /^\\/api\\/live\\/([\\w-]+)\\/usage$/",
+            "POST regex /^\\/api\\/live\\/([\\w-]+)\\/close$/",
+            "POST regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)\\/spoken$/",
+            "POST regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)\\/stop$/",
+            "PATCH regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
+            "DELETE regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
+    
+        // search, 260907b stage 5
             "GET regex /^\\/api\\/search\\/([\\w.%-]+)$/",
             "POST regex /^\\/api\\/search\\/([\\w.%-]+)$/",
             "PATCH regex /^\\/api\\/search\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
@@ -1928,7 +1942,21 @@ describe("the authenticated API's route contract", () => {
             "GET literal /api/billing/usage",
           ]),
         );
-      const moved = ["/api/billing", "/api/jobs", "/api/uploads", "/api/referee", "/api/search"];
+      /* **Two prefixes for one slice, and `chatLive` belongs to the first.**
+         `/api/chat/:slug/:threadId/live` is a chat path whose last segment
+         happens to read like the other namespace; sorting these twelve by the
+         word "live" would put it in the wrong list and the filter would then
+         pass while a guard was still in the chain. Nine under `/api/chat`,
+         three under `/api/live`. 260907b flagged it before the slice was cut. */
+      const moved = [
+        "/api/billing",
+        "/api/jobs",
+        "/api/uploads",
+        "/api/referee",
+        "/api/search",
+        "/api/chat",
+        "/api/live",
+      ];
       expect(
         parsed.guards.filter(
           (g) => !g.fromTable && moved.some((p) => describeMatch(g.match).includes(p)),
@@ -1961,6 +1989,19 @@ describe("the authenticated API's route contract", () => {
         parsed.guards.filter((g) => g.fromTable).map((g) => pairKey(g.method, g.match)),
         "the table's rows are the bottom of the chain in the order it had them; a domain is prepended, never appended, and the interleave inside jobs/uploads is not to be tidied",
       ).toEqual([
+        // chat and the live sessions, 260908a
+        "GET regex /^\\/api\\/chat\\/([\\w.%-]+)$/",
+        "POST regex /^\\/api\\/chat\\/([\\w.%-]+)$/",
+        "POST regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)\\/cancel$/",
+        "POST regex /^\\/api\\/chat\\/([\\w.%-]+)\\/live-tool$/",
+        "POST regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)\\/live$/",
+        "POST regex /^\\/api\\/live\\/([\\w-]+)\\/connected$/",
+        "POST regex /^\\/api\\/live\\/([\\w-]+)\\/usage$/",
+        "POST regex /^\\/api\\/live\\/([\\w-]+)\\/close$/",
+        "POST regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)\\/spoken$/",
+        "POST regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)\\/stop$/",
+        "PATCH regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
+        "DELETE regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
         // search, 260907b stage 5
         "GET regex /^\\/api\\/search\\/([\\w.%-]+)$/",
         "POST regex /^\\/api\\/search\\/([\\w.%-]+)$/",
