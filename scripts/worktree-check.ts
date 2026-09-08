@@ -847,11 +847,21 @@ export type ListenerScan = { kind: "checked"; found: Listener[] } | { kind: "can
  * `node_modules` and its served bundle all live inside. Nothing would be lost.
  * The page would simply stop existing, and this check would have said SAFE.
  *
- * Scoped to *listening* processes on purpose. A worktree with an agent's shell
- * sitting in it is the normal state of this box, and a check that fires on that
- * fires always, which is the `/logs/` mistake above told a second time. A bound
- * port is the narrow case that actually matters: something outside this machine
- * is relying on it.
+ * Scoped to *listening* processes on purpose, and there are numbers behind that
+ * rather than an instinct. The `orchestrator-setup` session built the broader
+ * version — every process whose cwd is under the tree — and measured it on this
+ * box before discarding it: **it fired on 8 of the 13 worktrees, against 2 that
+ * actually had a server in them.** A worktree with an agent's shell sitting in
+ * it is the normal state here, so that check fires almost always, which is the
+ * `/logs/` mistake above told a second time. A bound port is the narrow case
+ * that actually matters: something outside this machine is relying on it.
+ *
+ * The same measurement found the other reason: **`/proc/<pid>/cwd` is
+ * unreadable for 575 of the box's 910 processes.** A cwd sweep cannot even SEE
+ * most of the box, so it would have been silently blind rather than wrong,
+ * which is the worse of the two. It works here because a listening pid on this
+ * box is one of greg's, and the readlink either succeeds or the process is not
+ * ours to block on.
  *
  * **`cannot-tell` is not a blocker**, which is the one place this file does not
  * fail closed, and it is deliberate. `ss` is Linux-only, so on the Mac the

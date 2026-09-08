@@ -767,6 +767,12 @@ export function planRemoveWorktree(action: EnactedAction, input: { dir: string; 
       action,
       steps: [
         {
+          argv: ["git", "-C", dir, "rev-parse", "--abbrev-ref", "HEAD"],
+          cwd: primaryDir,
+          why: "Is that branch the one actually checked out in that directory? dir and branch arrive from the page as two independent claims, and only this makes them one.",
+          pass: { kind: "stdout-has-line", line: input.branch },
+        },
+        {
           argv: ["npm", "run", "worktree:check"],
           cwd: dir,
           why: "Is anything in here that exists nowhere else? git status cannot answer this: data/ and .env.local are gitignored, and an unknown counts as a blocker.",

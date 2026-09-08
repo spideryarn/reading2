@@ -390,7 +390,13 @@ export function QuestionCard({
         </p>
       ) : null}
 
-      {compact ? null : <Material material={question.material} compact={asked === null} />}
+      {/* NEVER compact here, and it used to be `asked === null`, which was a
+          bug the moment a dialog could be un-tappable in the detail view. Being
+          unable to press a button is exactly when you most need to READ what is
+          being asked — you are about to go and answer it in the terminal. The
+          collapsed form belongs to the list card, and the list card is the
+          `compact` branch above. */}
+      {compact ? null : <Material material={question.material} compact={false} />}
 
       {!compact && question.options.length > 0 ? (
         <>
