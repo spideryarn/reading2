@@ -18,6 +18,7 @@
  */
 import type { ReactNode } from "react";
 
+import { AttentionPanel } from "./AttentionPanel";
 import { Dock } from "./Dock";
 import { Header, SHELL, freshness } from "./Header";
 import { HealthPanel } from "./HealthPanel";
@@ -106,27 +107,47 @@ export function App({
           does not look like a bug, it looks like the list ends there. */}
       <main className={cx(SHELL, "tw:pt-3 tw:pb-[calc(var(--dock-space)+1rem)]")}>
         {mode === "sessions" ? (
-          /* **`collected` is not `rows.length > 0`, and that is the point.** An
-             empty list is only a claim about the box once a collection has
-             finished; before that the server answers `rows: []` with
-             `collectedAt: null`, and drawing "No sessions." over it would tell
-             Greg the box is idle while thirty-six agents run on it. */
-          <SessionsPanel
-            rows={rows}
-            now={now}
-            collected={feed.state?.collectedAt != null}
-            unreadableRows={feed.state?.unreadableRows ?? 0}
-            order={order}
-            onOrder={(next) => setParam("order", next === "status" ? null : next)}
-            selectedId={selectedId}
-            onSelect={(id) => setParam("sel", id)}
-            steer={steer}
-            rename={rename}
-            actions={actions}
-            messages={messagesApi}
-            newSession={newSession}
-            onRefresh={feed.refresh}
-          />
+          <>
+            {/* **ABOVE THE LIST, because it is the answer and the list is the
+                material.** A `needs-you` badge means only that Claude Code says
+                a dialog is open, and ten of the fifteen sessions really waiting
+                on Greg on 2026-09-08 carried no such badge — they had ended a
+                turn handing him a decision in sentences. So the ranked inbox
+                goes first and the list stays underneath it, unchanged.
+
+                It takes the SAME `onSelect` the list does: tapping a card picks
+                that session and the detail pane answers it. There is no second
+                write path here — AttentionPanel.tsx, agreement (a).
+
+                It draws nothing at all when the server did not look, which is
+                what every payload from before this field says. */}
+            <AttentionPanel
+              attention={feed.state?.attention ?? { kind: "not-asked" }}
+              now={now}
+              onSelect={(id) => setParam("sel", id)}
+            />
+            {/* **`collected` is not `rows.length > 0`, and that is the point.**
+                An empty list is only a claim about the box once a collection has
+                finished; before that the server answers `rows: []` with
+                `collectedAt: null`, and drawing "No sessions." over it would
+                tell Greg the box is idle while thirty-six agents run on it. */}
+            <SessionsPanel
+              rows={rows}
+              now={now}
+              collected={feed.state?.collectedAt != null}
+              unreadableRows={feed.state?.unreadableRows ?? 0}
+              order={order}
+              onOrder={(next) => setParam("order", next === "status" ? null : next)}
+              selectedId={selectedId}
+              onSelect={(id) => setParam("sel", id)}
+              steer={steer}
+              rename={rename}
+              actions={actions}
+              messages={messagesApi}
+              newSession={newSession}
+              onRefresh={feed.refresh}
+            />
+          </>
         ) : null}
         {mode === "health" ? (
           <div className="tw:mx-auto tw:max-w-3xl">

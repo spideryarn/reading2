@@ -30,7 +30,8 @@
  * stubbed `fetch`, because parsing an answer is a different job from delivering
  * one.
  */
-import { globSync, readFileSync } from "node:fs";
+import { globSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { act } from "react";
@@ -83,12 +84,22 @@ import { readHealthStats } from "../tools/fleet/web/src/health-view";
 import { fetchFleetState } from "../tools/fleet/web/src/transport";
 import type { Transport, TransportSink } from "../tools/fleet/web/src/transport";
 import {
+  parseAttention,
   parseFleetState,
   parsePause,
   parseStatus,
+  type AttentionItem,
+  type AttentionList,
   type FleetState,
   type FleetStatus,
 } from "../tools/fleet/web/src/types";
+/* The NODE side, imported into a jsdom test on purpose: the join test below
+   walks a checkpoint on a real disk through the real reader and the real
+   payload composer before it renders anything. `statePayload` is the function
+   `server.ts` calls — it lives in state.ts precisely so a test can drive it,
+   because server.ts binds ports at import time and can never be imported. */
+import { readAttention } from "../tools/fleet/attention";
+import { statePayload } from "../tools/fleet/state";
 import {
   CONSEQUENCE_RANK,
   CONSEQUENCE_TONE,
@@ -188,6 +199,14 @@ function state(over: Partial<FleetState> = {}): FleetState {
        when it is absent, and the staleness threshold then falls back to the
        cadence the page has watched happen — see `freshness`. */
     refreshMs: null,
+    /* Same argument as `pause` above. `not-asked` is what `parseAttention`
+       produces for a payload with no `attention` field, so a fixture that does
+       not care about the inbox gets the page the client would really build —
+       and the panel draws nothing, which is why every existing assertion about
+       what is on screen still means what it meant. Defaulting to
+       `no-coordinator` would make every fixture quietly assert that
+       `~/.overseer/` was looked at and is empty. */
+    attention: { kind: "not-asked" },
     ...over,
   };
 }
@@ -4816,5 +4835,537 @@ describe("renaming a session", () => {
     await makeRenameApi(impl).rename(NAMED, "x");
     expect(calls).toEqual(["api/sessions/rename"]);
     expect(calls).not.toContain("api/state");
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * The attention inbox: the producer's ranked list, on the page.
+ * ------------------------------------------------------------------ */
+
+/** An item, with only the interesting field named at each call site. */
+function attentionItem(over: Partial<AttentionItem> & { id: string }): AttentionItem {
+  return {
+    sessionId: `$${over.id}`,
+    sessionName: over.id,
+    waitingSince: new Date(Date.now() - 4 * 60_000).toISOString(),
+    kind: "technical",
+    evidence: { kind: "prose", excerpt: "Say the word and I'll drop it.", why: "it named an action and stopped" },
+    answerability: { kind: "phone" },
+    duplicates: [],
+    ...over,
+  };
+}
+
+function attentionList(over: Partial<Extract<AttentionList, { kind: "list" }>> = {}): AttentionList {
+  return {
+    kind: "list",
+    items: [],
+    sessionsScanned: 32,
+    sessionsUnreadable: 0,
+    scannedAt: new Date(Date.now() - 90_000).toISOString(),
+    ...over,
+  };
+}
+
+/** Mount the page with one attention feed on it, and hand back what it says. */
+function showing(attention: FleetState["attention"]): string {
+  const feed = manualTransport();
+  mount(feed.transport);
+  act(() => feed.push(state({ attention })));
+  return container.textContent ?? "";
+}
+
+/** A published feed, with the checkpoint's own clock — a different one from the list's. */
+function published(list: AttentionList, writtenAt: string = new Date().toISOString()): FleetState["attention"] {
+  return { kind: "published", list, coordinatorWrittenAt: writtenAt };
+}
+
+/** How long ago, as an ISO string, for the two clocks this panel reads. */
+function agoIso(ms: number): string {
+  return new Date(Date.now() - ms).toISOString();
+}
+
+describe("the attention inbox, off the wire", () => {
+  it("reads an ABSENT field as `not-asked` and a PRESENT broken one as unreadable", () => {
+    /* The distinction the fifth arm exists for. The field was added without a
+       schema bump, so a server built before it sends no `attention` at all and
+       *did not look* is the truth about it. A field that IS there and will not
+       parse is a server that did look and a page that cannot read the answer —
+       calling that "nobody asked" would be false, and it draws nothing, which
+       is worse than a line. GPT Sol's finding 4. */
+    expect(parseAttention(undefined)).toEqual({ kind: "not-asked" });
+    expect(parseAttention({ kind: "not-asked" })).toEqual({ kind: "not-asked" });
+
+    for (const raw of [null, "the coordinator is fine", 7, [], {}, { kind: "an-arm-from-2027" }]) {
+      expect(parseAttention(raw), JSON.stringify(raw)).toMatchObject({ kind: "feed-unreadable" });
+    }
+  });
+
+  it("reads the two no-list arms as themselves, which are different facts", () => {
+    expect(parseAttention({ kind: "checkpoint-absent" })).toEqual({ kind: "checkpoint-absent" });
+    expect(parseAttention({ kind: "checkpoint-unreadable", why: "it is empty" })).toEqual({
+      kind: "checkpoint-unreadable",
+      why: "it is empty",
+    });
+    /* An unreadable with no reason is still an unreadable. The arm is the fact;
+       the sentence is the courtesy. */
+    expect(parseAttention({ kind: "checkpoint-unreadable" })).toMatchObject({ kind: "checkpoint-unreadable" });
+  });
+
+  it("reads a published list whole, in the producer's order", () => {
+    const list = attentionList({
+      items: [attentionItem({ id: "second-oldest" }), attentionItem({ id: "oldest" })],
+    });
+    const feed = parseAttention(published(list));
+    expect(feed.kind).toBe("published");
+    if (feed.kind !== "published" || feed.list.kind !== "list") throw new Error("expected a published list");
+    expect(feed.list.items.map((i) => i.sessionName)).toEqual(["second-oldest", "oldest"]);
+  });
+
+  it("refuses a published feed with no readable clock rather than inventing one", () => {
+    /* Without it there is no age on the reading, and an inbox with no age is
+       the failure this panel is about: a list that stopped being produced looks
+       exactly like a calm fleet. `feed-unreadable` rather than `not-asked` —
+       the server did look. */
+    expect(parseAttention({ kind: "published", list: attentionList(), coordinatorWrittenAt: "8th Sept" })).toMatchObject(
+      { kind: "feed-unreadable" },
+    );
+  });
+
+  it("degrades a malformed list to `unknown` rather than to an empty one", () => {
+    /* The same call the server-side reader makes, for the same reason: absent,
+       malformed and *nothing needs you* are three different facts and only the
+       third is a claim. The reason travels with it. */
+    const writtenAt = new Date().toISOString();
+    for (const list of [
+      "not an object",
+      { kind: "list", items: [], sessionsScanned: 3, sessionsUnreadable: 0 },
+      { kind: "list", items: {}, sessionsScanned: 3, sessionsUnreadable: 0, scannedAt: writtenAt },
+      { kind: "list", items: [], sessionsScanned: -1, sessionsUnreadable: 0, scannedAt: writtenAt },
+      { kind: "unknown", scannedAt: writtenAt },
+      { kind: "brand-new-arm", scannedAt: writtenAt },
+    ]) {
+      const feed = parseAttention({ kind: "published", coordinatorWrittenAt: writtenAt, list });
+      expect(feed, JSON.stringify(list)).toMatchObject({ kind: "published", list: { kind: "unknown" } });
+    }
+  });
+
+  it("refuses a list with no `sessionsUnreadable`, because zero is a claim", () => {
+    /* Zero says every judgement the pass attempted succeeded, which is the
+       strongest claim the field can make — and a producer that never had the
+       field made none at all. Reading the absence as zero is the very mistake
+       the field exists to prevent, wearing the fix's name. Self-clearing: the
+       pass runs every two minutes. Same refusal as tools/fleet/attention.ts. */
+    const writtenAt = new Date().toISOString();
+    const scannedAt = agoIso(90_000);
+    const feed = parseAttention({
+      kind: "published",
+      coordinatorWrittenAt: writtenAt,
+      list: { kind: "list", items: [], sessionsScanned: 32, scannedAt },
+    });
+    expect(feed).toMatchObject({ kind: "published", list: { kind: "unknown" } });
+    if (feed.kind !== "published" || feed.list.kind !== "unknown") return;
+    expect(feed.list.why).toContain("completeness");
+    expect(feed.list.scannedAt).toBe(scannedAt);
+  });
+
+  it("degrades the WHOLE list when one item will not parse", () => {
+    /* Not "drop it and count", which is what `rows` gets. An inbox of 4 out of 5
+       says *these are the ones that need you* and is then wrong about the fifth
+       — a short inbox is a negative claim about everything not in it. */
+    const list = attentionList({ items: [attentionItem({ id: "fine" })] });
+    const wire = JSON.parse(JSON.stringify(published(list))) as { list: { items: unknown[] } };
+    wire.list.items.push({ id: "half-a-card", sessionId: "$9" });
+    expect(parseAttention(wire)).toMatchObject({ kind: "published", list: { kind: "unknown" } });
+  });
+
+  it("refuses a dialog with no question, so it cannot arrive wearing the observed arm", () => {
+    /* The one boundary the whole inbox is built to hold. `dialog` means the
+       harness SAW a dialog and enumerated it; a half-built one crossing here
+       would be drawn as something observed. GPT Sol's finding against the
+       store's first parser, on this side of the wire. */
+    const list = attentionList({
+      items: [attentionItem({ id: "x", evidence: { kind: "dialog", question: "Drop it?", options: ["Yes"] } })],
+    });
+    const wire = JSON.parse(JSON.stringify(published(list))) as { list: { items: { evidence: unknown }[] } };
+    const first = wire.list.items[0];
+    if (first === undefined) throw new Error("the fixture lost its item");
+    first.evidence = { kind: "dialog" };
+    expect(parseAttention(wire)).toMatchObject({ kind: "published", list: { kind: "unknown" } });
+  });
+
+  it("never fails the whole payload over a bad inbox", () => {
+    /* The session list is the more important half. A page that went blank on a
+       malformed field would have stopped saying what is running on the box. */
+    const read = parseFleetState({ schema: 1, rows: [], attention: { kind: "published", list: 7 } });
+    expect(read.ok).toBe(true);
+    if (!read.ok) return;
+    expect(read.state.attention).toMatchObject({ kind: "feed-unreadable" });
+  });
+});
+
+describe("the attention inbox, on the page", () => {
+  it("draws nothing at all when the server did not look", () => {
+    const text = showing({ kind: "not-asked" });
+    expect(text).not.toContain("waiting on you");
+    expect(text).not.toContain("checkpoint");
+    expect(text).not.toContain("no ranked list");
+  });
+
+  it("says no checkpoint was published, without claiming the coordinator is down", () => {
+    const text = showing({ kind: "checkpoint-absent" });
+    expect(text).toContain("no Overseer checkpoint has been published here");
+    /* NOT "the coordinator is not running": an absent file proves only that
+       nothing was published at the path we looked at. */
+    expect(text).not.toContain("is not running");
+    /* THE DISTINCTION THE ARM EXISTS FOR. It must never read as a calm fleet. */
+    expect(text).not.toContain("nothing is waiting on you");
+  });
+
+  it("says the published inbox could not be read, with the reason one tap away", () => {
+    const text = showing({ kind: "checkpoint-unreadable", why: "current.json is not JSON: unexpected token" });
+    expect(text).toContain("could not be read");
+    /* `Explain` writes the same sentence into an sr-only span, so the reason is
+       on the page for a screen reader and for this test without a pointer. It is
+       a component's fault rather than an agent's, so it changes what you would
+       BELIEVE rather than what you would do — one tap away is where it belongs. */
+    expect(text).toContain("unexpected token");
+    expect(text).not.toContain("nothing is waiting on you");
+  });
+
+  it("says when the page itself could not read what the server sent", () => {
+    /* The fifth state, and it is about this build rather than about the box —
+       so it says reload rather than saying anything about the fleet. */
+    const text = showing({ kind: "feed-unreadable", why: "this page does not know the inbox \"v2\"" });
+    expect(text).toContain("this page could not read the inbox");
+    expect(text).toContain("reload");
+    expect(text).not.toContain("nothing is waiting on you");
+  });
+
+  it("puts an `unknown` list's own reason ON SCREEN, because the three cases differ in what you do", () => {
+    /* `unknown` arrives from three places — no pass has run yet, a pass ran and
+       failed, a stored list was unreadable — and the producer keeps them as one
+       arm on purpose, because what it means is *nobody can tell you*. But "no
+       pass has run yet" means wait and "the gateway returned 429" means go and
+       look, and that is a difference in what you do in the next ten seconds. So
+       the producer's sentence is the line, not a label with the sentence behind
+       a disclosure. */
+    const noPassYet = showing(
+      published({
+        kind: "unknown",
+        why: "no attention pass has run in this Overseer yet, so nothing has been looked at.",
+        scannedAt: new Date().toISOString(),
+      }),
+    );
+    expect(noPassYet).toContain("no ranked list");
+    expect(noPassYet).toContain("no attention pass has run in this Overseer yet");
+    expect(noPassYet).not.toContain("nothing is waiting on you");
+
+    const itFailed = showing(
+      published({
+        kind: "unknown",
+        why: "the gateway returned 429 before anything was judged",
+        scannedAt: new Date().toISOString(),
+      }),
+    );
+    expect(itFailed).toContain("the gateway returned 429 before anything was judged");
+  });
+
+  it("says nothing is waiting only with both counts and both clocks behind it", () => {
+    const text = showing(published(attentionList({ items: [], sessionsScanned: 32 })));
+    expect(text).toContain("nothing is waiting on you");
+    /* **HOW MANY AND WHEN, always.** "Nothing needs you" out of 32 sessions and
+       out of 2 are different facts, and the scan's age is the one this panel
+       must never hide: the pass costs model calls and runs every two minutes, so
+       a list that stopped being produced looks exactly like a calm fleet. */
+    expect(text).toContain("32 sessions");
+    expect(text).toContain("scanned 1m 30s ago");
+  });
+
+  it("lets a stale scan REPLACE the reassurance rather than qualify it", () => {
+    /* GPT Sol's finding 8. `published` means published at some time, not
+       currently, and "nothing is waiting on you" with a caveat under it is read
+       as "nothing is waiting on you" — the caveat is the half a reader skips. */
+    const text = showing(
+      published(attentionList({ items: [], sessionsScanned: 32, scannedAt: agoIso(20 * 60_000) })),
+    );
+    expect(text).toContain("the attention pass last ran");
+    expect(text).not.toContain("nothing is waiting on you");
+  });
+
+  it("tells a stopped daemon apart from a stopped pass, because they are different faults", () => {
+    /* The two clocks fail independently: `coordinatorWrittenAt` moves every ~30s
+       whether or not the pass ran, `scannedAt` only when the paid pass runs. A
+       panel reading one of them would call the other one calm. */
+    const text = showing(
+      published(attentionList({ items: [], sessionsScanned: 32, scannedAt: agoIso(20 * 60_000) }), agoIso(20 * 60_000)),
+    );
+    expect(text).toContain("the Overseer stopped checkpointing");
+    expect(text).not.toContain("the attention pass last ran");
+    expect(text).not.toContain("nothing is waiting on you");
+  });
+
+  it("calls zero sessions scanned a broken probe rather than a quiet fleet", () => {
+    const text = showing(published(attentionList({ items: [], sessionsScanned: 0 })));
+    expect(text).toContain("broken probe");
+    expect(text).not.toContain("nothing is waiting on you");
+  });
+
+  it("draws a card each, in the producer's order, and does not re-sort", () => {
+    /* Agreement (b). The producer ranks by consequence and then by how long it
+       has waited; this fixture is deliberately in the order NEITHER of those
+       local rules would produce — the technical one is first and it is also the
+       newest — so a renderer that sorted by anything at all would flip it. */
+    const feed = manualTransport();
+    mount(feed.transport);
+    act(() =>
+      feed.push(
+        state({
+          attention: published(
+            attentionList({
+              items: [
+                attentionItem({
+                  id: "newest-and-technical",
+                  kind: "technical",
+                  waitingSince: agoIso(60_000),
+                }),
+                attentionItem({
+                  id: "oldest-and-irreversible",
+                  kind: "irreversible",
+                  waitingSince: agoIso(3 * 3600_000),
+                }),
+              ],
+            }),
+          ),
+        }),
+      ),
+    );
+    expect(titlesOnScreen()).toEqual(["newest-and-technical", "oldest-and-irreversible"]);
+    expect(container.textContent).toContain("2 waiting on you");
+    expect(container.textContent).toContain("waiting 1m");
+    expect(container.textContent).toContain("waiting 3h");
+  });
+
+  it("renders a dialog's question and options as text, with no way to answer them here", () => {
+    /* Agreement (a): no answer control on any card in v1. A `prose` item is
+       inferred from a pane tail, and the producer's own `readTurnTail` bug
+       proved a card could quote Greg's last message back as an agent's
+       question — so a button beside one would have acted on his own sentence.
+       The same rule covers `dialog`, because the detail pane is where a dialog
+       is answered with the material it would approve drawn beside it. */
+    const text = showing(
+      published(
+        attentionList({
+          items: [
+            attentionItem({
+              id: "schema-move",
+              evidence: { kind: "dialog", question: "Drop the sessions table?", options: ["Yes, drop it", "No"] },
+            }),
+          ],
+        }),
+      ),
+    );
+    expect(text).toContain("Drop the sessions table?");
+    expect(text).toContain("Yes, drop it");
+    const buttons = [...container.querySelectorAll("button")].map((b) => b.textContent ?? "");
+    expect(buttons.some((b) => b.includes("Yes, drop it"))).toBe(false);
+  });
+
+  it("leads a prose item with the `why` and puts the excerpt behind a disclosure", () => {
+    /* **THE CARD IS INVERTED FROM HOW IT WAS FIRST BUILT, and live data decided
+       it.** On 2026-09-08 the real list carried two `prose` items whose excerpts
+       were 1,116 and 1,736 characters — 17 and 21 lines, one of them a table of
+       process states. Rendered in the flow, one card is 21 lines tall on a 390px
+       phone and the second item is off the bottom of the screen.
+
+       The `why` is one human-written sentence and is what a person acts on; the
+       excerpt is what they check the inference against, which changes what they
+       would BELIEVE rather than what they would do in the next ten seconds.
+       This fixture is the real one, whitespace and all. */
+    const excerpt = [
+      "               my stuff                state        RSS",
+      "    Supabase stack (12 containers)   up           ~382 MB",
+      "    Flask :3000                      listening    —",
+      "",
+      "  Say the word and I'll shut it down.",
+    ].join("\n");
+    const text = showing(
+      published(
+        attentionList({
+          items: [
+            attentionItem({
+              id: "gjd-remote",
+              evidence: {
+                kind: "prose",
+                excerpt,
+                why: "The agent says the stack is idle and explicitly waits for the person to say whether it should shut down.",
+              },
+            }),
+          ],
+        }),
+      ),
+    );
+    expect(text).toContain("The agent says the stack is idle and explicitly waits");
+    expect(text).toContain("inferred from its last turn");
+    expect(text).toContain("show the last 5 lines of its screen");
+
+    /* **NOT PRESENTED AS A QUOTATION.** The producer picks the excerpt by
+       POSITION in the pane rather than by whether it contains the sentence the
+       `why` is about — which is why the live item this fixture is copied from
+       has a table of process states under a claim about what its agent said,
+       with a correct `why`. An unlabelled excerpt that does not contain the
+       relevant sentence teaches a reader to distrust a `why` that was right, so
+       the disclosure says what the text actually is. The hedge is on the
+       excerpt and never on the `why`. */
+    expect(text).toContain("taken by position rather than by search");
+    expect(text).not.toContain("may not be true");
+
+    /* Behind the disclosure, in a `<pre>` — not merely present somewhere. A
+       test that only asserted on `textContent` would pass just as happily with
+       21 lines of terminal output in the flow, which is the layout this
+       inversion exists to prevent. */
+    const pre = container.querySelector("details pre");
+    expect(pre).not.toBeNull();
+    expect(pre?.textContent).toContain("Supabase stack (12 containers)");
+    /* And the whitespace survives, because it is a table. */
+    expect(pre?.textContent).toContain("               my stuff");
+  });
+
+  it("reads the count as a floor when something could not be judged, and is silent when nothing was", () => {
+    /* Agreement (c). The count is a floor and the retraction is its own quiet
+       line — a sentence and its retraction in the same block is worse than
+       either — and it renders ONLY when non-zero, or it becomes the wallpaper
+       PauseLine.tsx measured 29 of 32 rows carrying. */
+    const withUnreadable = showing(
+      published(attentionList({ items: [attentionItem({ id: "one" })], sessionsScanned: 32, sessionsUnreadable: 1 })),
+    );
+    expect(withUnreadable).toContain("at least 1 waiting on you");
+    expect(withUnreadable).toContain("1 of 32 could not be judged, so there may be more");
+
+    const clean = showing(
+      published(attentionList({ items: [attentionItem({ id: "one" })], sessionsScanned: 32, sessionsUnreadable: 0 })),
+    );
+    expect(clean).toContain("1 waiting on you");
+    expect(clean).not.toContain("at least");
+    expect(clean).not.toContain("could not be judged");
+  });
+
+  it("selects the session when a card is tapped, rather than adding a second write path", () => {
+    const feed = manualTransport();
+    mount(feed.transport);
+    act(() =>
+      feed.push(
+        state({
+          attention: published(attentionList({ items: [attentionItem({ id: "worktree-x", sessionId: "$1643" })] })),
+        }),
+      ),
+    );
+    openSession("worktree-x");
+    /* The SAME hash parameter the list writes, so the existing SessionDetail
+       machinery does the answering. Nothing new writes to the box. */
+    expect(window.location.hash).toBe("#sessions?sel=%241643");
+  });
+});
+
+describe("the join: a checkpoint on disk reaches the page", () => {
+  /**
+   * **THE DETECTOR FOR THE CLASS OF BUG THIS STAGE FIXED**, and it is one test
+   * on purpose.
+   *
+   * Both halves of this were built, reviewed and tested on 2026-09-08, and
+   * nothing joined them: the attention pass had been publishing a ranked list
+   * for hours and `grep -rln "Checkpoint" tools/fleet/` found nothing. That is
+   * Class A of docs/postmortems/260908b — *the edge does not exist, and no type
+   * can express "somebody must call this"* — so the check has to be a question
+   * about the graph rather than about either end: **who reads this?**
+   *
+   * **It drives `statePayload`, which is the whole reason that function was
+   * moved out of server.ts.** An earlier version of this test called
+   * `readAttention` and `fleetState` itself, and that is green-by-construction:
+   * it had rebuilt the missing edge inside the test, so it would have stayed
+   * green after production stopped making it. GPT Sol's sharpest finding on this
+   * stage. `server.ts` binds ports at import time and can never be imported, so
+   * the composition had to come out of it for anything to be able to check it —
+   * the same move `health-wiring.ts` made, for the same reason.
+   *
+   * Nothing below is faked. A real checkpoint is written to a real directory,
+   * `statePayload` composes the bytes production composes, `parseFleetState` is
+   * the browser, and the assertion is on text in the DOM. Four separate
+   * mutations — the server-side read, the payload field, the client parse, the
+   * panel render — each turned THIS assertion red, and each file was restored
+   * byte-identical afterwards.
+   */
+  it("walks a real checkpoint to a question on screen", () => {
+    const root = mkdtempSync(join(tmpdir(), "fleet-web-attention-join-"));
+    try {
+      writeFileSync(
+        join(root, "current.json"),
+        `${JSON.stringify({
+          schema: 2,
+          writtenAt: new Date().toISOString(),
+          lastGoodSnapshotAt: null,
+          cursor: { events: 1, bytes: 2 },
+          heartbeat: { pid: 1, instanceId: "i", startedAt: new Date().toISOString(), lastTickAt: null, ticks: 1 },
+          register: [],
+          attention: {
+            kind: "list",
+            items: [
+              {
+                id: "join-1",
+                sessionId: "$1643",
+                sessionName: "worktree-schema-move",
+                waitingSince: agoIso(7 * 60_000),
+                kind: "irreversible",
+                evidence: {
+                  kind: "dialog",
+                  question: "Shall I drop the sessions table and re-run the migration?",
+                  options: ["Yes", "No, stop"],
+                },
+                answerability: { kind: "phone" },
+                duplicates: [],
+              },
+            ],
+            sessionsScanned: 32,
+            sessionsUnreadable: 0,
+            scannedAt: agoIso(30_000),
+          },
+          usage: { kind: "none", why: "none", at: new Date().toISOString() },
+        })}\n`,
+        "utf8",
+      );
+
+      /* THE FUNCTION PRODUCTION GOES THROUGH. `statePayload()` in server.ts is
+         one call to this with the same shape of deps; the only difference is
+         which directory the reader is pointed at. */
+      const payload = JSON.parse(
+        statePayload({
+          snapshot: null,
+          error: null,
+          health: null,
+          refreshMs: 60_000,
+          answeringEnabled: true,
+          attemptedAt: null,
+          readAttention: () => readAttention(root),
+        }),
+      ) as unknown;
+
+      const read = parseFleetState(payload);
+      expect(read.ok, read.ok ? "" : read.why).toBe(true);
+      if (!read.ok) return;
+
+      const feed = manualTransport();
+      mount(feed.transport);
+      act(() => feed.push(read.state));
+
+      /* THE ASSERTION THAT MUST BE THE ONE THAT BREAKS. Everything above it is
+         setup that succeeds under all four mutations; this is the sentence a
+         person reads off the page, and it exists nowhere between here and the
+         bytes on disk except by the edges being joined. */
+      expect(container.textContent).toContain("Shall I drop the sessions table and re-run the migration?");
+      expect(container.textContent).toContain("worktree-schema-move");
+      expect(container.textContent).toContain("1 waiting on you");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });
