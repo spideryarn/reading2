@@ -16,7 +16,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
 
 import { STALL_AFTER_MS, daemonStanding, describeEvent, readEventTail, statusLines } from "../scripts/overseer.js";
-import type { OverseerEvent } from "../tools/overseer/diff.js";
+import type { SessionEvent } from "../tools/overseer/diff.js";
 import {
   CHECKPOINT_FILE,
   EVENTS_FILE,
@@ -59,6 +59,7 @@ function checkpointAt(agoMs: number, pid = 4242): Checkpoint {
     // Same reasoning one field down: a daemon with no usage pass wired in
     // publishes "nothing has looked", never a report saying no limits were found.
     usage: usageNotYetRun(new Date(NOW - agoMs).toISOString()),
+    jobs: { occurrences: [] },
   };
 }
 
@@ -172,11 +173,11 @@ describe("telling a dead daemon from a quiet one", () => {
 describe("reading the event log without disturbing the daemon", () => {
   test("the tail is the last N events, and unreadable lines are counted", () => {
     const root = tempRoot();
-    const events: OverseerEvent[] = [1, 2, 3].map((n) => ({
+    const events: SessionEvent[] = [1, 2, 3].map((n) => ({
       kind: "tmux-session-gone",
       at: `2026-09-08T07:0${n}:00.000Z`,
       tmuxServerPid: 132280,
-      key: `$${n} none` as OverseerEvent["key"],
+      key: `$${n} none` as SessionEvent["key"],
       identity: { tmuxId: `$${n}`, claimedConversationId: null },
       name: `session-${n}`,
       why: "absent-from-snapshot",
@@ -196,11 +197,11 @@ describe("reading the event log without disturbing the daemon", () => {
   });
 
   test("every event kind renders as a sentence naming the session", () => {
-    const gone: OverseerEvent = {
+    const gone: SessionEvent = {
       kind: "tmux-session-gone",
       at: "2026-09-08T07:01:00.000Z",
       tmuxServerPid: 132280,
-      key: "$1 none" as OverseerEvent["key"],
+      key: "$1 none" as SessionEvent["key"],
       identity: { tmuxId: "$1", claimedConversationId: null },
       name: "overseer-o1-store",
       why: "tmux-server-changed",
@@ -214,11 +215,11 @@ describe("reading the event log without disturbing the daemon", () => {
     // "changed" on its own is unreadable: a rename and a move to another
     // worktree are the same event kind, and the field list is the only thing in
     // the line that tells a person which one happened.
-    const changed: OverseerEvent = {
+    const changed: SessionEvent = {
       kind: "session-row-changed",
       at: "2026-09-08T07:01:00.000Z",
       tmuxServerPid: 132280,
-      key: "$1 none" as OverseerEvent["key"],
+      key: "$1 none" as SessionEvent["key"],
       identity: { tmuxId: "$1", claimedConversationId: null },
       fields: ["name", "worktree"],
       row: {
@@ -243,11 +244,11 @@ describe("reading the event log without disturbing the daemon", () => {
   });
 
   test("a pane replacement names both pids, because that is the whole fact", () => {
-    const pane: OverseerEvent = {
+    const pane: SessionEvent = {
       kind: "session-pane-replaced",
       at: "2026-09-08T07:01:00.000Z",
       tmuxServerPid: 132280,
-      key: "$1 none" as OverseerEvent["key"],
+      key: "$1 none" as SessionEvent["key"],
       identity: { tmuxId: "$1", claimedConversationId: null },
       previousPaneId: "%1",
       previousPanePid: 4242,

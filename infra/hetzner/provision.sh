@@ -1503,6 +1503,99 @@ RestartSec=10
 WantedBy=multi-user.target
 FLEET_DASHBOARD_UNIT
 
+install_unit overseer-watchdog.service <<'OVERSEER_WATCHDOG_SERVICE_UNIT'
+# Overseer watchdog: a periodic check that the Overseer daemon is still
+# writing its heartbeat. scripts/overseer-watchdog.ts,
+# docs/project/overseer-direction.md.
+#
+# THIS IS A LOCAL WATCHDOG, NOT THE OFF-BOX DEAD-MAN CHECK. If the host loses
+# power or the kernel, this timer disappears with the thing it watches and
+# nobody is told -- that failure mode is "A27" in overseer-direction.md and
+# remains OPEN. What this closes is narrower: the ordinary case where the box
+# itself is fine but the daemon has stopped ticking -- crashed, wedged, or
+# never started -- which would otherwise sit silent until somebody happens to
+# run `overseer status` by hand.
+#
+# A SYSTEM unit with User=@USER@, not a systemd USER unit -- the same reason as
+# overseer.service. A user unit does not start at boot unless lingering is
+# enabled for the account, and nothing in this repo enables it, so a
+# user-level watchdog would be dead at exactly the moment it is needed: after
+# a reboot, before anyone has logged in to start anything by hand.
+#
+# Type=oneshot, and no Restart=. This unit runs once per timer tick
+# (overseer-watchdog.timer) and exits; a Restart= here would fight the timer
+# -- two different mechanisms both trying to decide "run this again" -- and
+# turn a single failed health check into a crash loop instead of the one
+# clear journal line it is meant to produce.
+#
+# No [Install] section: this service is never enabled or started on its own,
+# only ever triggered by the timer. Enabling a bare service alongside its
+# timer is how the two drift -- somebody enables the service by habit,
+# forgets the timer, and it silently runs once at boot and never again.
+#
+# @USER@ is substituted at install time by infra/hetzner/provision.sh. The
+# checked-in file keeps the placeholder rather than one box's username;
+# tests/systemd-units.test.ts compares these bytes against the heredoc in that
+# script, because two copies of a unit file is exactly how one of them goes
+# stale.
+[Unit]
+Description=Overseer watchdog -- checks the Overseer daemon's heartbeat and snapshot clock
+Documentation=file:///home/@USER@/code/spideryarn2/docs/project/overseer-direction.md
+
+[Service]
+Type=oneshot
+User=@USER@
+Group=@USER@
+
+# The PRIMARY checkout, never a worktree -- same reasoning as overseer.service:
+# `git worktree remove` deletes a worktree, and an ExecStart pointing into one
+# is a check that disappears when somebody tidies up.
+WorkingDirectory=/home/@USER@/code/spideryarn2
+
+# HOME explicitly, because storeRoot() falls back to ~/.overseer and a run
+# that inherited a different HOME would quietly check a store nobody writes.
+Environment=HOME=/home/@USER@
+# Absolute on purpose, matching overseer.service: tools/overseer/store.ts
+# REFUSES a relative OVERSEER_STORE_DIR, because a relative one resolves
+# differently for systemd and for a person in a worktree.
+Environment=OVERSEER_STORE_DIR=/home/@USER@/.overseer
+
+# The checkout's own tsx, not `npx tsx` -- npx with no local install goes to
+# the network and fetches SOME tsx; this path either exists or fails loudly.
+ExecStart=/home/@USER@/code/spideryarn2/node_modules/.bin/tsx scripts/overseer-watchdog.ts
+OVERSEER_WATCHDOG_SERVICE_UNIT
+
+install_unit overseer-watchdog.timer <<'OVERSEER_WATCHDOG_TIMER_UNIT'
+# Runs overseer-watchdog.service on a plain interval.
+# docs/project/overseer-direction.md, scripts/overseer-watchdog.ts.
+#
+# @USER@ is substituted at install time by infra/hetzner/provision.sh; see the
+# note in overseer.service. tests/systemd-units.test.ts compares these bytes
+# against the heredoc in that script.
+[Unit]
+Description=Timer for overseer-watchdog.service
+Documentation=file:///home/@USER@/code/spideryarn2/docs/project/overseer-direction.md
+
+[Timer]
+# Shortly after boot, not only on the steady interval below -- so a daemon
+# that failed to come back up after a reboot is caught within a couple of
+# minutes rather than after a full period of silence.
+OnBootSec=2min
+# Off the END of the previous run, the same "chain, not fixed interval" shape
+# overseer-direction.md documents for the dashboard's own collector -- a timer
+# is not something this can overlap with itself on a slow box.
+OnUnitActiveSec=5min
+# Missed runs come out better than being skipped, per
+# overseer-direction.md § "The scheduler": if the box was off across a
+# scheduled tick, this fires once on the next boot rather than staying quiet
+# until the following interval boundary.
+Persistent=true
+Unit=overseer-watchdog.service
+
+[Install]
+WantedBy=timers.target
+OVERSEER_WATCHDOG_TIMER_UNIT
+
 # The dashboard's bind list. The unit falls back to LOOPBACK ALONE -- the one
 # address that is right on every box and cannot fail to bind -- and this file is
 # the only way the tailnet address, which only this machine has, ever reaches
@@ -1549,13 +1642,22 @@ case "$fleet_ip" in
 esac
 
 systemctl daemon-reload
-# THE OVERSEER ONLY. The fleet dashboard's unit is installed and deliberately
-# left disabled: the page is up under scripts/tmux-job.ts and its owner asked to
-# read the unit before it is ever switched on. Enabling it here would mean two
-# supervisors racing for :8787 at the next boot, and the loser's failure looks
-# exactly like a crash. Enable it by hand once the tmux job is stopped.
+# THE OVERSEER AND ITS WATCHDOG. The fleet dashboard's unit is installed and
+# deliberately left disabled: the page is up under scripts/tmux-job.ts and its
+# owner asked to read the unit before it is ever switched on. Enabling it here
+# would mean two supervisors racing for :8787 at the next boot, and the
+# loser's failure looks exactly like a crash. Enable it by hand once the tmux
+# job is stopped.
+#
+# The watchdog has no such conflict -- it is a oneshot check, not a second
+# supervisor for anything already running -- so it is enabled alongside the
+# Overseer it watches. `enable` alone, not `--now`: this only makes both
+# survive the NEXT boot, the same restraint overseer.service's own comment
+# explains -- provisioning does not know a live box's running state and has
+# no business restarting it.
 systemctl enable overseer.service
-echo "overseer enabled; fleet-dashboard installed but NOT enabled (its owner's call)"
+systemctl enable overseer-watchdog.timer
+echo "overseer + watchdog timer enabled; fleet-dashboard installed but NOT enabled (its owner's call)"
 
 echo "=== ssh ==="
 systemctl start apt-daily.timer apt-daily-upgrade.timer 2>/dev/null || true

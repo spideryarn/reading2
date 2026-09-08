@@ -60,6 +60,7 @@
  */
 import type { SessionMeta, SessionState } from "../../scripts/gjd-remote-tmux.js";
 import type { AdmissibleSnapshot } from "./admissible.js";
+import type { DefinitionHash, JobOutcome, OccurrenceId } from "./jobs.js";
 import type { FreshSnapshot, ObservedRow, ObservedStatus } from "./observation.js";
 
 /**
@@ -271,13 +272,22 @@ export function statusKey(status: SessionState): StatusKey {
 export type GoneReason = "absent-from-snapshot" | "tmux-server-changed";
 
 /**
- * What the differ writes down.
+ * WHAT GOES IN `events.jsonl` — two families, and only the first is the
+ * differ's.
  *
- * Every arm carries the identity and the key, so a reader of the log never has
- * to recompute one, and the `at`/`tmuxServerPid` pair so an event can be placed
- * in a world as well as in time. `tmuxServerPid` is the generation the EVENT'S
+ * The **session arms** are what this module writes down. Every one of them
+ * carries the identity and the key, so a reader of the log never has to
+ * recompute one, and the `at`/`tmuxServerPid` pair so an event can be placed in
+ * a world as well as in time. `tmuxServerPid` is the generation the EVENT'S
  * session belonged to — the old one for a gone event across a boundary — since
  * an address is meaningless without it.
+ *
+ * The **`job-occurrence-*` arms** at the bottom are the scheduler's, are
+ * produced nowhere in this file, and carry no session identity at all. They
+ * share this union so they share the store — its lock, its torn-line repair and
+ * its atomic checkpoint — and so that every consumer's exhaustive `never` check
+ * forces a decision about them rather than a `default:` that quietly drops them.
+ * Their own comment says why the order they are appended in is the design.
  *
  * `session-replaced` is not accompanied by a `tmux-session-gone` and a
  * `session-seen`. Emitting those two would be false twice over: the tmux
@@ -311,7 +321,7 @@ export type GoneReason = "absent-from-snapshot" | "tmux-server-changed";
  * Note also that `meta.dir` will not find that transcript: `EnterWorktree`
  * moves the file to the worktree's slug while `dir` names the primary.
  */
-export type OverseerEvent =
+export type SessionEvent =
   | {
       kind: "session-seen";
       at: string;
@@ -519,6 +529,93 @@ export type OverseerEvent =
     };
 
 /**
+ * THE SCHEDULER'S FIVE ARMS, and the seam between deciding to run something and
+ * having run it.
+ *
+ * Kept as their own union so `diff()` can go on returning `SessionEvent[]` — it
+ * produces none of these — while the store, the log and every exhaustive
+ * consumer see one `OverseerEvent`.
+ */
+export type JobEvent =
+  /**
+   * A second family in the log, and the seam
+   * between deciding to run something and having run it.
+   *
+   * **Nothing in this module produces them.** `diff()` is about snapshots;
+   * these are written by `scheduler.ts`, and they are here rather than in a new
+   * file because `Checkpoint` already carries non-session subjects (`usage`,
+   * `attention`) so the precedent exists — and because a second log would be a
+   * second copy of the torn-line repair, the lock and the atomic checkpoint,
+   * which were expensive to get right once. Greg's call, 2026-09-08.
+   *
+   * They carry no `key`, `identity` or `tmuxServerPid`: an occurrence is not
+   * about a session and inventing a session identity for it would be a lie in
+   * the one file that is meant to be greppable. `store.ts`'s parser branches on
+   * the kind before it reads the session fields, for that reason.
+   *
+   * **The ORDER is the design, and it is the whole of GPT Sol's S5.**
+   * `job-occurrence-reserved` is appended and fsynced BEFORE anything is
+   * spawned, so a crash cannot produce a run nobody recorded. What it cannot do
+   * is make the spawn window rarer: a `reserved` with nothing after it means
+   * *either* "never spawned" *or* "spawned and died before we could say so", and
+   * the honest resolution is `unknown` — visible, reported, and **never
+   * retried**. `jobs.ts` derives that from the instance id; see `foldOccurrences`.
+   */
+  | {
+      kind: "job-occurrence-reserved";
+      at: string;
+      /** The whole key, spread rather than nested, so `grep` finds a job id in the log without a JSON parser. */
+      jobId: string;
+      scheduledAt: string;
+      definitionHash: DefinitionHash;
+      occurrenceId: OccurrenceId;
+      /** WHICH DAEMON claimed it. Without this a reservation left by a dead instance is indistinguishable from one in flight. */
+      instanceId: string;
+      /** Written down at reservation rather than recomputed, so editing a definition cannot move a lease already running. */
+      leaseUntil: string;
+      /** The authorised instruction, copied into the log: what actually ran must be recoverable from the history alone. */
+      what: string;
+    }
+  | {
+      kind: "job-occurrence-started";
+      at: string;
+      occurrenceId: OccurrenceId;
+      /** The child's pid, which is the only handle a later instance has on a run it did not start. */
+      pid: number;
+      /** Re-stated from the start, because a lease is measured from the reservation and a reader of one line should not have to find the other. */
+      leaseUntil: string;
+    }
+  | {
+      kind: "job-occurrence-finished";
+      at: string;
+      occurrenceId: OccurrenceId;
+      outcome: JobOutcome;
+    }
+  | {
+      kind: "job-occurrence-refused";
+      at: string;
+      occurrenceId: OccurrenceId;
+      /** A refusal is a FACT — we know it did not run. That is what separates it from `unknown`. */
+      why: string;
+    }
+  | {
+      kind: "job-occurrence-unknown";
+      at: string;
+      occurrenceId: OccurrenceId;
+      /** Why nobody can say what happened: a lease that ran out, or a reservation left behind by an instance that died. */
+      why: string;
+    };
+
+/**
+ * Everything the Overseer's log holds.
+ *
+ * One union over two families, so `store.ts` has one parser, one append and one
+ * fold entry point — and so a new arm in either family is a compile error in
+ * every consumer rather than a line the fold quietly steps over.
+ */
+export type OverseerEvent = SessionEvent | JobEvent;
+
+/**
  * The row fields the register keeps, in the order an event lists them.
  *
  * **AN ORDERED LIST rather than a set**, because `fields` on an event is part of
@@ -657,7 +754,7 @@ export type HoldReason = "generation-unreadable";
  * with no session in it would be the first thing to make that union incoherent.
  */
 export type DiffOutcome =
-  | { kind: "diffed"; events: OverseerEvent[]; baseline: Baseline }
+  | { kind: "diffed"; events: SessionEvent[]; baseline: Baseline }
   | { kind: "held"; why: HoldReason; reason: string };
 
 /**
@@ -798,7 +895,7 @@ export function diff(previous: Baseline | null, next: AdmissibleSnapshot): DiffO
   const before = new Map(previousSnapshot.rows.map((row) => [row.id, row]));
   const after = new Map(nextSnapshot.rows.map((row) => [row.id, row]));
 
-  const events: OverseerEvent[] = [];
+  const events: SessionEvent[] = [];
 
   for (const row of previousSnapshot.rows) {
     // Only the tmux session going removes a row. Claude exiting does NOT — the
@@ -980,7 +1077,7 @@ function sameMeta(a: SessionMeta, b: SessionMeta): boolean {
   return a.kind === b.kind && a.repo === b.repo && a.dir === b.dir;
 }
 
-function seen(row: ObservedRow, at: string, tmuxServerPid: number | null): OverseerEvent {
+function seen(row: ObservedRow, at: string, tmuxServerPid: number | null): SessionEvent {
   return {
     kind: "session-seen",
     at,
@@ -991,7 +1088,7 @@ function seen(row: ObservedRow, at: string, tmuxServerPid: number | null): Overs
   };
 }
 
-function gone(row: ObservedRow, at: string, tmuxServerPid: number | null, why: GoneReason): OverseerEvent {
+function gone(row: ObservedRow, at: string, tmuxServerPid: number | null, why: GoneReason): SessionEvent {
   return {
     kind: "tmux-session-gone",
     at,

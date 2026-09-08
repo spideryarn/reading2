@@ -112,12 +112,24 @@ import type { SessionKind, SessionMeta } from "../../scripts/gjd-remote-tmux.js"
 import {
   REGISTER_ROW_FIELDS,
   statusKey,
+  type JobEvent,
   type OverseerEvent,
   type RegisterRowField,
+  type SessionEvent,
   type SessionIdentity,
   type SessionKey,
   type StatusKey,
 } from "./diff.js";
+import {
+  adoptOccurrence,
+  foldOccurrences,
+  occurrenceId as occurrenceIdOf,
+  type DefinitionHash,
+  type JobOutcome,
+  type Occurrence,
+  type OccurrenceId,
+  type OccurrenceIndex,
+} from "./jobs.js";
 import { truncateToLastLine, writeAll, writeAtomically, type JsonlRepair } from "./jsonl.js";
 import {
   isProcessAlive,
@@ -431,6 +443,30 @@ export type Checkpoint = {
    * why a scan costing 30–45 seconds is not run on every tick.
    */
   usage: StoredUsage;
+  /**
+   * WHAT THE SCHEDULER HAS RUN, AND WHAT IT CANNOT ACCOUNT FOR.
+   *
+   * **No schema bump**, by this file's own rule: a reader that ignores this
+   * draws no jobs panel, which is poorer rather than wrong — unlike schema 2's
+   * `statusSince`, where a consumer written against schema 1 would have rendered
+   * `NaN`. A checkpoint written before this field existed parses with an empty
+   * list, which is also the truth about it: those logs contain no occurrence
+   * events.
+   *
+   * **A fold, like the register, and not a sample.** These are what
+   * `foldOccurrences` holds — every unsettled run, the newest settled run per
+   * job, and a bounded tail of the ones nobody can account for. So a run whose
+   * `leaseUntil` has passed while it is still `reserved` or `started` is visible
+   * to a reader of this file without asking the daemon anything, and that is the
+   * point: S6's failure was a job that had silently stopped running while every
+   * surface stayed green.
+   *
+   * **`stuck` itself is deliberately not stored.** It is a state read against a
+   * clock, and a boolean written at `writtenAt` would go on saying "fine" for as
+   * long as the daemon was dead — which is the shape of the bug rather than a
+   * report of it. `stuckOccurrences()` in jobs.ts is the reader's one line.
+   */
+  jobs: { occurrences: readonly Occurrence[] };
 };
 
 /**
@@ -541,6 +577,16 @@ export type OverseerStore = {
    * first time a write was refused.
    */
   readonly usage: StoredUsage;
+  /**
+   * Live, like `register`: `append` folds into it, so the scheduler cannot hold
+   * a view of what has run that disagrees with the log.
+   *
+   * **This is what the scheduler asks before it dispatches**, rather than a
+   * field it keeps for itself. The in-memory overlap guard it replaces was a
+   * promise the daemon remembered, and remembering was the defect: nothing
+   * survived a restart and nothing released when the work never came back.
+   */
+  readonly occurrences: OccurrenceIndex;
   append(events: readonly OverseerEvent[]): AppendResult;
   checkpoint(update: CheckpointUpdate): CheckpointResult;
   readEvents(fromByte?: number): ReadEvents;
@@ -784,12 +830,132 @@ const EVENT_KINDS: Record<OverseerEvent["kind"], true> = {
   "session-wait-restarted": true,
   "session-row-changed": true,
   "session-pane-replaced": true,
+  "job-occurrence-reserved": true,
+  "job-occurrence-started": true,
+  "job-occurrence-finished": true,
+  "job-occurrence-refused": true,
+  "job-occurrence-unknown": true,
 };
 
 /** The watched row fields, as a set, so a `fields` list read off the disk can be checked against it. */
 const ROW_FIELDS = new Set<string>(REGISTER_ROW_FIELDS);
 
 const GONE_REASONS = new Set(["absent-from-snapshot", "tmux-server-changed"]);
+
+const JOB_KINDS: Record<JobEvent["kind"], true> = {
+  "job-occurrence-reserved": true,
+  "job-occurrence-started": true,
+  "job-occurrence-finished": true,
+  "job-occurrence-refused": true,
+  "job-occurrence-unknown": true,
+};
+
+function isJobKind(kind: string): kind is JobEvent["kind"] {
+  return Object.hasOwn(JOB_KINDS, kind);
+}
+
+/** A field that is a non-empty string. Ids and hashes are opaque here; what makes an id well-formed is `occurrenceId()`, checked below. */
+function isName(u: unknown): u is string {
+  return typeof u === "string" && u !== "";
+}
+
+/**
+ * How a run ended, off the disk.
+ *
+ * Two arms, and neither is a bare number: `exitCode: 0` and "the runner said it
+ * broke" must not be able to arrive in one slot, because a zero read out of the
+ * second is the most reassuring possible lie about a job that failed.
+ */
+function parseOutcome(u: unknown): ParseResult<JobOutcome> {
+  if (!isRecord(u)) return { ok: false, reason: "outcome is not an object" };
+  const kind = u["kind"];
+  if (kind === "exited") {
+    const code = u["code"];
+    if (typeof code !== "number" || !Number.isInteger(code)) {
+      return { ok: false, reason: "outcome.code is not an integer" };
+    }
+    return { ok: true, value: { kind: "exited", code } };
+  }
+  if (kind === "failed") {
+    const why = u["why"];
+    if (typeof why !== "string") return { ok: false, reason: "outcome.why is not a string" };
+    return { ok: true, value: { kind: "failed", why } };
+  }
+  return { ok: false, reason: `outcome kind ${JSON.stringify(kind)} is not one this version knows` };
+}
+
+/**
+ * One occurrence event off the disk.
+ *
+ * **The id is RECOMPUTED from the key rather than trusted**, on the reservation
+ * where the key lives. It is derived data, so a file where the two disagree has
+ * been hand-edited or written by something that is not this module — and every
+ * later event in the log addresses that run by its id. Accepting a mismatch
+ * would attach a whole run's history to an address nothing else uses, which is a
+ * plausible history rather than a broken one: the failure this store exists to
+ * refuse.
+ */
+function parseJobEvent(kind: JobEvent["kind"], u: Record<string, unknown>, at: string): ParseResult<JobEvent> {
+  const id = u["occurrenceId"];
+  if (!isName(id)) return { ok: false, reason: "occurrenceId is not an id" };
+  const occurrence = id as OccurrenceId;
+  switch (kind) {
+    case "job-occurrence-reserved": {
+      const jobId = u["jobId"];
+      const scheduledAt = u["scheduledAt"];
+      const hash = u["definitionHash"];
+      const instanceId = u["instanceId"];
+      const leaseUntil = u["leaseUntil"];
+      const what = u["what"];
+      if (!isName(jobId)) return { ok: false, reason: "jobId is not a job id" };
+      if (!isIsoTimestamp(scheduledAt)) return { ok: false, reason: "scheduledAt is not an ISO timestamp" };
+      if (!isName(hash)) return { ok: false, reason: "definitionHash is not a hash" };
+      if (!isName(instanceId)) return { ok: false, reason: "instanceId is not an instance id" };
+      if (!isIsoTimestamp(leaseUntil)) return { ok: false, reason: "leaseUntil is not an ISO timestamp" };
+      if (typeof what !== "string") return { ok: false, reason: "what is not a string" };
+      const expected = occurrenceIdOf({ jobId, scheduledAt, definitionHash: hash as DefinitionHash });
+      if (expected !== occurrence) {
+        return { ok: false, reason: `occurrenceId ${JSON.stringify(id)} is not the id of its own key (${expected})` };
+      }
+      return {
+        ok: true,
+        value: {
+          kind,
+          at,
+          jobId,
+          scheduledAt,
+          definitionHash: hash as DefinitionHash,
+          occurrenceId: occurrence,
+          instanceId,
+          leaseUntil,
+          what,
+        },
+      };
+    }
+    case "job-occurrence-started": {
+      const pid = u["pid"];
+      const leaseUntil = u["leaseUntil"];
+      if (!isPidLike(pid)) return { ok: false, reason: "pid is not a pid" };
+      if (!isIsoTimestamp(leaseUntil)) return { ok: false, reason: "leaseUntil is not an ISO timestamp" };
+      return { ok: true, value: { kind, at, occurrenceId: occurrence, pid, leaseUntil } };
+    }
+    case "job-occurrence-finished": {
+      const outcome = parseOutcome(u["outcome"]);
+      if (!outcome.ok) return { ok: false, reason: outcome.reason };
+      return { ok: true, value: { kind, at, occurrenceId: occurrence, outcome: outcome.value } };
+    }
+    case "job-occurrence-refused":
+    case "job-occurrence-unknown": {
+      const why = u["why"];
+      if (typeof why !== "string") return { ok: false, reason: "why is not a string" };
+      return { ok: true, value: { kind, at, occurrenceId: occurrence, why } };
+    }
+    default: {
+      const never: never = kind;
+      return { ok: false, reason: `no parser for ${String(never)}` };
+    }
+  }
+}
 
 /**
  * One event off the disk, validated per kind.
@@ -809,6 +975,14 @@ function parseEvent(u: unknown): ParseResult<OverseerEvent> {
   }
   const at = u["at"];
   if (!isIsoTimestamp(at)) return { ok: false, reason: "at is not an ISO timestamp" };
+
+  // THE JOB FAMILY BRANCHES FIRST, and it has to: those arms carry no session
+  // key, identity or tmux generation, so the three checks below would refuse
+  // every one of them. Inventing a session identity to satisfy a common parser
+  // is the alternative, and it would put a fabricated tmux handle into a log
+  // whose whole value is that a person can grep it and believe what it says.
+  if (isJobKind(kind)) return parseJobEvent(kind, u, at);
+
   const key = u["key"];
   if (typeof key !== "string" || key === "") return { ok: false, reason: "key is not a session key" };
   const identity = parseIdentity(u["identity"]);
@@ -819,7 +993,7 @@ function parseEvent(u: unknown): ParseResult<OverseerEvent> {
   }
   const common = { at, key: key as SessionKey, identity: identity.value, tmuxServerPid };
 
-  switch (kind as OverseerEvent["kind"]) {
+  switch (kind as SessionEvent["kind"]) {
     case "session-seen": {
       const row = parseRow(u["row"]);
       if (!row.ok) return { ok: false, reason: row.reason };
@@ -1102,6 +1276,8 @@ function parseCheckpoint(u: unknown): ParseResult<Checkpoint> {
     seen.add(entry.value.key);
     register.push(entry.value);
   }
+  const jobs = parseJobs(u["jobs"]);
+  if (!jobs.ok) return { ok: false, reason: jobs.reason };
   return {
     ok: true,
     value: {
@@ -1113,8 +1289,109 @@ function parseCheckpoint(u: unknown): ParseResult<Checkpoint> {
       register,
       attention: parseAttentionList(u["attention"], writtenAt),
       usage: parseStoredUsage(u["usage"], writtenAt),
+      jobs: { occurrences: jobs.value },
     },
   };
+}
+
+/**
+ * The scheduler's occurrences out of a checkpoint.
+ *
+ * **STRICT, where `attention` and `usage` beside it are tolerant**, and the
+ * asymmetry is the rule rather than an oversight. Those two are judgements
+ * about the world and a missing one is honestly reported as *nobody looked*. An
+ * occurrence is a claim that something either did or did not run, and quietly
+ * dropping a malformed `reserved` would delete the only record that a job was in
+ * flight — after which the scheduler would cheerfully start a second one. So a
+ * `jobs` block that will not parse refuses the whole checkpoint, which costs a
+ * replay of the log and rebuilds the index from the events themselves.
+ *
+ * ABSENT is not malformed: a checkpoint written before this field existed has no
+ * occurrences to lose, because its log has no occurrence events in it.
+ */
+function parseJobs(u: unknown): ParseResult<Occurrence[]> {
+  if (u === undefined) return { ok: true, value: [] };
+  if (!isRecord(u)) return { ok: false, reason: "jobs is not an object" };
+  const raw = u["occurrences"];
+  if (!Array.isArray(raw)) return { ok: false, reason: "jobs.occurrences is not an array" };
+  const occurrences: Occurrence[] = [];
+  const seen = new Set<string>();
+  for (const [index, entry] of raw.entries()) {
+    const parsed = parseOccurrence(entry);
+    if (!parsed.ok) return { ok: false, reason: `jobs.occurrences[${index}]: ${parsed.reason}` };
+    if (seen.has(parsed.value.id)) return { ok: false, reason: `jobs.occurrences has ${parsed.value.id} twice` };
+    seen.add(parsed.value.id);
+    occurrences.push(parsed.value);
+  }
+  return { ok: true, value: occurrences };
+}
+
+/** One folded occurrence off the disk. Every field the scheduler reads is checked; the id is recomputed from the key, as it is for the event. */
+function parseOccurrence(u: unknown): ParseResult<Occurrence> {
+  if (!isRecord(u)) return { ok: false, reason: "not an object" };
+  const key = u["key"];
+  if (!isRecord(key)) return { ok: false, reason: "key is not an object" };
+  const jobId = key["jobId"];
+  const scheduledAt = key["scheduledAt"];
+  const hash = key["definitionHash"];
+  if (!isName(jobId)) return { ok: false, reason: "key.jobId is not a job id" };
+  if (!isIsoTimestamp(scheduledAt)) return { ok: false, reason: "key.scheduledAt is not an ISO timestamp" };
+  if (!isName(hash)) return { ok: false, reason: "key.definitionHash is not a hash" };
+  const parsedKey = { jobId, scheduledAt, definitionHash: hash as DefinitionHash };
+  const id = u["id"];
+  const expected = occurrenceIdOf(parsedKey);
+  if (id !== expected) return { ok: false, reason: `id ${JSON.stringify(id)} is not the id of its own key (${expected})` };
+  const reservedAt = u["reservedAt"];
+  const instanceId = u["instanceId"];
+  const what = u["what"];
+  if (!isIsoTimestamp(reservedAt)) return { ok: false, reason: "reservedAt is not an ISO timestamp" };
+  if (!isName(instanceId)) return { ok: false, reason: "instanceId is not an instance id" };
+  if (typeof what !== "string") return { ok: false, reason: "what is not a string" };
+  const common = { id: expected, key: parsedKey, reservedAt, instanceId, what };
+  const kind = u["kind"];
+  switch (kind) {
+    case "reserved":
+    case "started": {
+      const leaseUntil = u["leaseUntil"];
+      if (!isIsoTimestamp(leaseUntil)) return { ok: false, reason: "leaseUntil is not an ISO timestamp" };
+      if (kind === "reserved") return { ok: true, value: { kind, ...common, leaseUntil } };
+      const startedAt = u["startedAt"];
+      const pid = u["pid"];
+      if (!isIsoTimestamp(startedAt)) return { ok: false, reason: "startedAt is not an ISO timestamp" };
+      if (!isPidLike(pid)) return { ok: false, reason: "pid is not a pid" };
+      return { ok: true, value: { kind, ...common, leaseUntil, startedAt, pid } };
+    }
+    case "finished": {
+      const finishedAt = u["finishedAt"];
+      if (!isIsoTimestamp(finishedAt)) return { ok: false, reason: "finishedAt is not an ISO timestamp" };
+      const outcome = parseOutcome(u["outcome"]);
+      if (!outcome.ok) return { ok: false, reason: outcome.reason };
+      return { ok: true, value: { kind, ...common, finishedAt, outcome: outcome.value } };
+    }
+    case "refused": {
+      const refusedAt = u["refusedAt"];
+      const why = u["why"];
+      if (!isIsoTimestamp(refusedAt)) return { ok: false, reason: "refusedAt is not an ISO timestamp" };
+      if (typeof why !== "string") return { ok: false, reason: "why is not a string" };
+      return { ok: true, value: { kind, ...common, refusedAt, why } };
+    }
+    case "unknown": {
+      const why = u["why"];
+      if (typeof why !== "string") return { ok: false, reason: "why is not a string" };
+      const source = u["source"];
+      if (!isRecord(source)) return { ok: false, reason: "source is not an object" };
+      if (source["kind"] === "derived") {
+        return { ok: true, value: { kind, ...common, why, source: { kind: "derived" } } };
+      }
+      const noticedAt = source["noticedAt"];
+      if (source["kind"] !== "recorded" || !isIsoTimestamp(noticedAt)) {
+        return { ok: false, reason: "source is neither derived nor recorded-with-an-instant" };
+      }
+      return { ok: true, value: { kind, ...common, why, source: { kind: "recorded", noticedAt } } };
+    }
+    default:
+      return { ok: false, reason: `kind ${JSON.stringify(kind)} is not an occurrence state this version knows` };
+  }
 }
 
 /**
@@ -1459,6 +1736,18 @@ export function foldEvents(
         }
         break;
       }
+      // THE SCHEDULER'S ARMS, NAMED AND DECIDED RATHER THAN DEFAULTED. The
+      // register is sessions and an occurrence is not one, so nothing happens
+      // here — and it says so, because a `default:` would absorb them and would
+      // absorb the next arm anybody adds. Occurrences fold in `foldOccurrences`
+      // (jobs.ts), out of the same events, into a different index; `Store` calls
+      // both on every append.
+      case "job-occurrence-reserved":
+      case "job-occurrence-started":
+      case "job-occurrence-finished":
+      case "job-occurrence-refused":
+      case "job-occurrence-unknown":
+        break;
       default: {
         const never: never = event;
         throw new Error(`no fold for event ${JSON.stringify(never)}`);
@@ -1641,6 +1930,8 @@ class Store implements OverseerStore {
   readonly instanceId: string;
   readonly opening: StoreOpening;
   private readonly registerMap: Map<SessionKey, RegisterEntry>;
+  /** The second fold over the same events. See `OverseerStore.occurrences`. */
+  private readonly occurrenceMap: Map<OccurrenceId, Occurrence>;
   private readonly lock: HeldLock;
   private readonly nowFn: () => Date;
   private readonly fd: number;
@@ -1687,6 +1978,7 @@ class Store implements OverseerStore {
     now: () => Date;
     opening: StoreOpening;
     register: Map<SessionKey, RegisterEntry>;
+    occurrences: Map<OccurrenceId, Occurrence>;
     fd: number;
     bytes: number;
     events: number;
@@ -1699,6 +1991,7 @@ class Store implements OverseerStore {
     this.nowFn = input.now;
     this.opening = input.opening;
     this.registerMap = input.register;
+    this.occurrenceMap = input.occurrences;
     this.fd = input.fd;
     this.bytes = input.bytes;
     this.events = input.events;
@@ -1708,6 +2001,10 @@ class Store implements OverseerStore {
 
   get register(): SessionRegister {
     return this.registerMap;
+  }
+
+  get occurrences(): OccurrenceIndex {
+    return this.occurrenceMap;
   }
 
   /** What a usage pass has to compare its fresh reading against. See `OverseerStore.usage`. */
@@ -1755,6 +2052,12 @@ class Store implements OverseerStore {
       this.bytes = fstatSync(this.fd).size;
       this.events += events.length;
       foldEvents(events, this.registerMap);
+      // BOTH FOLDS, OVER THE SAME BATCH AND AFTER THE SAME `fsync`. The second
+      // one is why the scheduler can ask the store what has run instead of
+      // remembering it: an occurrence reaches the index only once its event is
+      // on the disk, so a reservation that is visible is a reservation that
+      // survived the crash it was written for.
+      foldOccurrences(events, this.occurrenceMap, this.instanceId);
     }
     return { ok: true, appended: events.length, cursor: { events: this.events, bytes: this.bytes } };
   }
@@ -1795,6 +2098,10 @@ class Store implements OverseerStore {
       // report, and holding the last one is right because an account has not
       // stopped being rate-limited just because nobody looked.
       usage: update.usage ?? this.usageHeld,
+      // FROM THE FOLD, like the register and for the same reason: a caller
+      // cannot hand in a list of occurrences that disagrees with the log it was
+      // folded from.
+      jobs: { occurrences: [...this.occurrenceMap.values()] },
     };
     if (update.attention !== undefined) this.attention = update.attention;
     if (update.usage !== undefined) this.usageHeld = update.usage;
@@ -1926,6 +2233,13 @@ export function openStore(options: OpenStoreOptions = {}): OpenStoreResult {
 
     let start: StoreStart;
     let register: Map<SessionKey, RegisterEntry>;
+    // THE SECOND FOLD, AND THE INSTANCE ID IS THE POINT. `lock.holder.instanceId`
+    // belongs to the daemon starting right now, so every reservation in the log
+    // written by an earlier one derives as `unknown` — which is the honest
+    // reading of "reserved, and then the daemon that reserved it stopped
+    // existing". A fold that did not know whose instance it was would read those
+    // as runs in flight and hold their jobs for ever.
+    const occurrences = new Map<OccurrenceId, Occurrence>();
     let events: number;
 
     if (replayed.kind === "refused") {
@@ -1939,7 +2253,16 @@ export function openStore(options: OpenStoreOptions = {}): OpenStoreResult {
       // The tail folds ONTO the checkpoint's register rather than replacing it.
       register = new Map();
       for (const entry of usable.register) register.set(entry.key, entry);
+      // THROUGH `adoptOccurrence`, not straight in: the checkpoint stores a fold,
+      // and the fold called it `reserved` because the instance that wrote it was
+      // the one folding. Restoring that verbatim would carry "in flight" across
+      // the restart that disproves it.
+      for (const occurrence of usable.jobs.occurrences) {
+        const adopted = adoptOccurrence(occurrence, lock.holder.instanceId);
+        occurrences.set(adopted.id, adopted);
+      }
       foldEvents(replayed.events, register);
+      foldOccurrences(replayed.events, occurrences, lock.holder.instanceId);
       events = usable.cursor.events + replayed.events.length;
       start = {
         kind: "resumed",
@@ -1955,6 +2278,7 @@ export function openStore(options: OpenStoreOptions = {}): OpenStoreResult {
             ? read.why
             : "checkpoint-malformed";
       register = foldEvents(replayed.events, new Map());
+      foldOccurrences(replayed.events, occurrences, lock.holder.instanceId);
       events = replayed.events.length;
       // COLD means there was nothing to rebuild FROM, not merely that the
       // checkpoint was missing: a daemon that replayed a thousand events has a
@@ -1977,6 +2301,7 @@ export function openStore(options: OpenStoreOptions = {}): OpenStoreResult {
         now,
         opening,
         register,
+        occurrences,
         fd,
         bytes: size,
         events,

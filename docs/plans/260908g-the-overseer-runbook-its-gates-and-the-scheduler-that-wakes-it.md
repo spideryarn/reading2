@@ -233,10 +233,16 @@ Done when: the doc exists, `tests/doc-links.test.ts` is green, and the direction
 
 Interval jobs in `tools/overseer/daemon.ts`, with the schedule as data. Occurrence identity in the
 store per A25 — a job run gets an id recorded **before** dispatch, so a crash between deciding and
-spawning is visible on restart rather than silently lost or silently repeated. Overlap prevention
-reuses the `attentionRunning` idiom already there. One systemd **system** timer as the dead-man check
-on the Overseer's heartbeat, added to `infra/hetzner/provision.sh` and covered by
-`tests/systemd-units.test.ts`.
+spawning is visible on restart rather than silently lost or silently repeated. One systemd **system**
+timer as the dead-man check on the Overseer's heartbeat, added to `infra/hetzner/provision.sh` and
+covered by `tests/systemd-units.test.ts`.
+
+**This paragraph used to end "Overlap prevention reuses the `attentionRunning` idiom already there",
+which S6 then demolished** — and the implementing agent flagged that the sentence was still standing
+here, contradicting this plan's own § The review two screens further down. It is struck rather than
+quietly deleted, because a plan that silently drops the thing a review corrected is how the next
+reader concludes the review was about something else. **The scheduler path has no in-memory guard at
+all**: overlap is the durable lease, so there is no field that can stay non-null for ever.
 
 Done when: a job with a 60-second interval is watched firing, watched *not* firing while a previous
 run is in flight, and watched catching up after the daemon is killed and restarted across its due
@@ -306,6 +312,28 @@ dependency**, which is the existing convention and was itself a researched decis
 already exist; what is missing is a session-friendly way to call them, since today they are reachable
 over HTTP and from a browser. Then `OrchestratorPanel.tsx` → the Overseer, which Greg approved once
 the wave-2 worktrees had calmed down.
+
+## Two judgement calls the implementation raised, and how they went
+
+**A `stuck` lease RELEASES the job rather than holding it.** The brief said `stuck` must be visible
+and reported, and did not say whether the job may then run again. Holding is S6 wearing a different
+hat — a guard that can only tighten — so the lease releases: the unaccountable run is written down as
+`unknown` permanently, and the *next* run is a different occurrence at a different instant, which
+makes it a new occurrence rather than a retry of the one we cannot account for. That distinction is
+what keeps "never auto-retry `unknown`" true while still letting the job live.
+
+**`Checkpoint.jobs` keeps only the 50 most recent unknowns, and the number is arbitrary.** Flagged
+by the implementer as arbitrary, which it is. It is nevertheless safe in the direction that matters:
+**`events.jsonl` keeps every unknown for ever**, and the checkpoint is a convenience view that exists
+so `current.json` does not grow by one entry per crash. So the bound can lose an *alarm* on a very
+unlucky box, never a *record*. The thing that would make it wrong is an acknowledgement mechanism —
+once somebody can mark an unknown as seen, retention should follow that rather than a count.
+
+**And one it did not have to raise, because the types made it.** `stuck` is not stored. It is
+`started` plus a deadline that has passed, so the same bytes are `in-flight` a minute earlier; a
+stored `stuck: boolean` would go on saying "fine" for exactly as long as the daemon was dead. That is
+the same distinction the direction doc draws for `statusSince` between an observed transition and a
+lower bound, arrived at independently.
 
 ## The watchdog is honest and its verdict reaches nobody
 

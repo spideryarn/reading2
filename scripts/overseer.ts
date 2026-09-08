@@ -178,6 +178,11 @@ const EVENT_KINDS: Record<OverseerEvent["kind"], true> = {
   "session-wait-restarted": true,
   "session-row-changed": true,
   "session-pane-replaced": true,
+  "job-occurrence-reserved": true,
+  "job-occurrence-started": true,
+  "job-occurrence-finished": true,
+  "job-occurrence-refused": true,
+  "job-occurrence-unknown": true,
 };
 
 /**
@@ -238,6 +243,23 @@ export function describeEvent(event: OverseerEvent): string {
       return `${when}  changed    ${event.row.name} (${event.identity.tmuxId}) — ${event.fields.join(", ")}`;
     case "session-pane-replaced":
       return `${when}  new pane   ${event.identity.tmuxId} — pid ${event.previousPanePid ?? "none"} → ${event.panePid}`;
+    // THE SCHEDULER'S ARMS. A run is addressed by its occurrence id, which
+    // carries the job, the instant and the definition hash, so one line of this
+    // log is enough to find every other line about the same run.
+    case "job-occurrence-reserved":
+      return `${when}  reserved   ${event.occurrenceId} — lease until ${event.leaseUntil}`;
+    case "job-occurrence-started":
+      return `${when}  started    ${event.occurrenceId} — pid ${event.pid}`;
+    case "job-occurrence-finished":
+      return `${when}  finished   ${event.occurrenceId} — ${
+        event.outcome.kind === "exited" ? `exit ${event.outcome.code}` : `failed: ${event.outcome.why}`
+      }`;
+    case "job-occurrence-refused":
+      return `${when}  refused    ${event.occurrenceId} — ${event.why}`;
+    // "unknown" AND NOT "failed", in the log a person reads as well as in the
+    // type: we do not know that it did not run.
+    case "job-occurrence-unknown":
+      return `${when}  unknown    ${event.occurrenceId} — ${event.why}`;
     default: {
       const never: never = event;
       throw new Error(String(never));

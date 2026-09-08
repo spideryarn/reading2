@@ -770,6 +770,84 @@ describe("stopping", () => {
   });
 });
 
+describe("the scheduler on the daemon's clock", () => {
+  /** Real milliseconds, only so the timers under test actually fire. The daemon's own clock is still the fake one. */
+  const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+  const JOB = { id: "prod-the-overseer", everyMs: 60_000, leaseMs: 120_000, what: "say hello" };
+
+  test("a job whose work never settles is dispatched, reported STUCK, and dispatched again — while the heartbeat goes on ticking", async () => {
+    // The daemon-level statement of GPT Sol's S6. The in-memory
+    // `attentionRunning` idiom this replaces would have produced exactly one
+    // dispatch, no report at all, a healthy heartbeat, and a job that never ran
+    // again — which is the picture a working fleet also makes.
+    const root = tempRoot();
+    const clock = fakeClock("2026-09-08T02:48:40.000Z");
+    const lines: string[] = [];
+    const spawned: number[] = [];
+
+    const outcome = await runOverseer({
+      root,
+      baseUrl: "http://127.0.0.1:0",
+      signal: new AbortController().signal,
+      now: clock.now,
+      tickMs: 5,
+      log: (line) => lines.push(line),
+      source: () =>
+        (async function* () {
+          yield payload(fixture("session-new-before"));
+          await sleep(40);
+          // Past the two-minute lease, on the daemon's own clock.
+          clock.advance(180_000);
+          await sleep(40);
+        })(),
+      jobs: {
+        intervalMs: 5,
+        definitions: [JOB],
+        spawn: () => {
+          spawned.push(spawned.length);
+          // NEVER SETTLES. This is the hung model subprocess the whole lease
+          // exists for, and it is the one shape the old guard could not survive.
+          return { kind: "spawned", pid: 9191, done: new Promise<never>(() => undefined) };
+        },
+      },
+    });
+
+    expect(outcome.kind).toBe("stopped");
+    expect(spawned.length).toBeGreaterThanOrEqual(2);
+    expect(lines.some((line) => line.includes("STUCK"))).toBe(true);
+
+    // REPORTED DURABLY, not only on a console somebody was not keeping.
+    const notes = readNotes(root).notes;
+    const unaccounted = notes.filter((note) => note.kind === "job-unaccounted");
+    expect(unaccounted.length).toBeGreaterThanOrEqual(1);
+    expect(unaccounted[0]?.kind === "job-unaccounted" && unaccounted[0].reason).toBe("lease-expired");
+
+    // AND THE TICK LOOP WAS NEVER BLOCKED — the heartbeat is the thing a reader
+    // uses to tell a dead Overseer from a quiet one, so a scheduler that stalled
+    // it would replace one blindness with another.
+    const read = readCheckpoint(root);
+    expect(read.kind).toBe("checkpoint");
+    if (read.kind !== "checkpoint") return;
+    expect(read.checkpoint.heartbeat.ticks).toBeGreaterThan(0);
+    expect(read.checkpoint.jobs.occurrences.length).toBeGreaterThan(0);
+  });
+
+  test("a daemon given no jobs writes no occurrences at all", async () => {
+    // The option is absent in every other test in this file, so this asserts
+    // what those tests silently rely on — and it is the check that would catch a
+    // scheduler wired into the tick loop unconditionally.
+    const root = tempRoot();
+    const { events } = await run(root, async function* () {
+      yield payload(fixture("session-new-before"));
+    });
+    expect(events.filter((event) => event.kind.startsWith("job-occurrence"))).toEqual([]);
+    const read = readCheckpoint(root);
+    if (read.kind !== "checkpoint") throw new Error("expected a checkpoint");
+    expect(read.checkpoint.jobs.occurrences).toEqual([]);
+  });
+});
+
 describe("the fixtures this file leans on", () => {
   test("the captured pair really is one new session, so the counts above mean what they say", () => {
     const before = rowsOf(editableFixture("session-new-before")).map((row) => row["id"]);

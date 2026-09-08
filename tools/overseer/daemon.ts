@@ -59,7 +59,9 @@ import type { AttentionList, StoredUsage, UsageReport } from "../fleet/wire.js";
 import { chooseUsage } from "./usage-carry.js";
 import { admissible, type AdmissibleSnapshot } from "./admissible.js";
 import { baselineOf, diff, sessionKey, type Baseline, type OverseerEvent, type SessionIdentity } from "./diff.js";
+import type { JobDefinition } from "./jobs.js";
 import { conditionTracker, describeNote, openNoteLog, type DaemonNote } from "./notes.js";
+import { describeReport, schedulerTick, type SpawnJob } from "./scheduler.js";
 import { parseAttempt, parseObservation, type JsonValue, type ObservedAttemptClock, type ObservedRow } from "./observation.js";
 import { fleetSource, type SourceMessage, type SourceOptions, type Transport } from "./source.js";
 import {
@@ -325,6 +327,24 @@ export type DaemonOptions = {
    * as the fresh one. A daemon given no runner publishes `usageNotYetRun`.
    */
   usage?: { intervalMs?: number; run: () => Promise<UsageReport> };
+  /**
+   * THE SCHEDULED JOBS, and the schedule as data.
+   *
+   * Injected like the two passes above and for the same reason: dispatching a
+   * job means creating a process, and this file's whole job is to keep folding
+   * when other things are broken. What it supplies is the clock and the store;
+   * `scheduler.ts` supplies the ordering; the caller supplies what a job
+   * actually does.
+   *
+   * **This path does NOT use the `attentionRunning` idiom two fields up.** That
+   * guard is an in-memory promise, and a job whose work never settles would
+   * leave it non-null for ever — every later tick correctly declining to
+   * overlap, the heartbeat green, and the job silently never running again (GPT
+   * Sol's S6). Scheduled jobs are guarded by a durable lease instead, and an
+   * overdue one is reported rather than skipped. The attention and usage guards
+   * are deliberately left exactly as they were: they belong to another stage.
+   */
+  jobs?: { intervalMs?: number; definitions: readonly JobDefinition[]; spawn: SpawnJob };
 };
 
 /**
@@ -355,6 +375,21 @@ export const ATTENTION_INTERVAL_MS = 120_000;
  * limit sooner, and a rate limit that has just been hit does not clear for hours.
  */
 export const USAGE_INTERVAL_MS = 300_000;
+
+/**
+ * How often the scheduler looks: every tick's worth, 30 seconds.
+ *
+ * **It is deliberately the cheapest of the three timers**, and it can be,
+ * because a tick that finds nothing due does no I/O at all — it reads a map the
+ * store already holds and compares two numbers. The interval is therefore the
+ * granularity of the schedule rather than a cost, and the shortest job anyone
+ * has asked for is five minutes.
+ *
+ * It is a SEPARATE timer from the heartbeat rather than a line inside it,
+ * because a spawn is a syscall and `lastTickAt` is how a reader tells a dead
+ * Overseer from a quiet one. Astra's A17, the same argument the usage scan makes.
+ */
+export const JOBS_INTERVAL_MS = 30_000;
 
 export type DaemonOutcome =
   | { kind: "refused"; refusal: StoreRefusal }
@@ -617,6 +652,45 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
         }, usageOptions.intervalMs ?? USAGE_INTERVAL_MS);
   usageTicker?.unref?.();
 
+  /*
+   * The scheduler, on its own timer.
+   *
+   * NO IN-MEMORY GUARD AROUND IT, and that absence is the design rather than an
+   * omission. `schedulerTick` is synchronous: it appends, spawns, appends, and
+   * returns — it does not await the work, so there is no promise to hold and
+   * nothing to leave non-null. Overlap is prevented by the LEASE the tick reads
+   * out of the store, which a restart survives and which releases on its own
+   * deadline. That pair of properties is exactly what `attentionRunning` lacks,
+   * and adding a guard here "for symmetry" would put the bug back.
+   *
+   * Every report is written down, including the boring ones, at two volumes: a
+   * line in the log for all of them, and a durable `daemon.jsonl` note for the
+   * two that mean a run cannot be accounted for. A stuck job that produced only
+   * a console line would be a stuck job nobody could prove afterwards.
+   */
+  const jobOptions = options.jobs;
+  const jobsTicker =
+    jobOptions === undefined
+      ? null
+      : setInterval(() => {
+          if (halted() !== null) return;
+          for (const report of schedulerTick({ definitions: jobOptions.definitions, store, spawn: jobOptions.spawn, now })) {
+            log(describeReport(report));
+            if (report.kind === "stuck" || report.kind === "unaccounted") {
+              write({
+                kind: "job-unaccounted",
+                at: now().toISOString(),
+                instanceId: store.instanceId,
+                jobId: report.jobId,
+                occurrenceId: report.occurrenceId,
+                reason: report.kind === "stuck" ? "lease-expired" : "reservation-abandoned",
+                why: report.why,
+              });
+            }
+          }
+        }, jobOptions.intervalMs ?? JOBS_INTERVAL_MS);
+  jobsTicker?.unref?.();
+
   /**
    * Wait for a pass in flight, if there is one.
    *
@@ -698,6 +772,12 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     clearInterval(ticker);
     if (attentionTicker !== null) clearInterval(attentionTicker);
     if (usageTicker !== null) clearInterval(usageTicker);
+    // NOT AWAITED, unlike the two passes, because there is nothing to await: a
+    // dispatched job is a separate process with a durable reservation behind it,
+    // so a shutdown mid-run leaves a record rather than a second writer. What it
+    // does leave is an occurrence that may not get its `finished` — which is the
+    // lease's case, and the next daemon reports it.
+    if (jobsTicker !== null) clearInterval(jobsTicker);
   }
 
   /**

@@ -155,6 +155,90 @@ describe.each(UNITS)("$file", ({ file, delimiter }) => {
   });
 });
 
+describe("the overseer watchdog service and timer", () => {
+  // Not folded into `UNITS`/`describe.each` above: that block's shared
+  // assertions assume a long-running Restart=always daemon (Restart=always,
+  // WantedBy=multi-user.target in [Install]), and the watchdog is
+  // deliberately the opposite of that -- a oneshot check triggered by its
+  // timer, with no [Install] section of its own. Forcing it through the same
+  // assertions would mean giving it Restart=always, which is exactly the
+  // mistake the service file's own comment warns against: it would fight the
+  // timer over who decides "run this again".
+  const service = unitFromRepo("overseer-watchdog.service");
+  const timer = unitFromRepo("overseer-watchdog.timer");
+
+  it("service is byte-for-byte what provision.sh will install", () => {
+    expect(heredocBody(PROVISION, "OVERSEER_WATCHDOG_SERVICE_UNIT")).toBe(service);
+  });
+
+  it("timer is byte-for-byte what provision.sh will install", () => {
+    expect(heredocBody(PROVISION, "OVERSEER_WATCHDOG_TIMER_UNIT")).toBe(timer);
+  });
+
+  it("service is a SYSTEM unit, not a user one", () => {
+    // Same reasoning as overseer.service: a user unit needs
+    // `loginctl enable-linger`, which nothing in this repo enables, so a
+    // user-level watchdog would be dead exactly when it is needed -- after a
+    // reboot, before anyone has logged in.
+    expect(section(service, "Service")).toContain("User=@USER@");
+  });
+
+  it("service is oneshot and does not fight the timer with its own Restart=", () => {
+    expect(section(service, "Service")).toContain("Type=oneshot");
+    expect(section(service, "Service").some((l) => l.startsWith("Restart="))).toBe(false);
+  });
+
+  it("service has no [Install] section -- only the timer is ever enabled", () => {
+    expect(section(service, "Install")).toEqual([]);
+  });
+
+  it("service runs out of the primary checkout and never a worktree", () => {
+    const lines = section(service, "Service");
+    const execStart = lines.filter((l) => l.startsWith("ExecStart="));
+    expect(execStart).toHaveLength(1);
+    expect(execStart[0]).toMatch(/^ExecStart=\/home\/@USER@\/code\/spideryarn2\/node_modules\/\.bin\/tsx /);
+    expect(lines).toContain("WorkingDirectory=/home/@USER@/code/spideryarn2");
+    expect(service).not.toMatch(/worktrees\//);
+  });
+
+  it("service names an absolute store, because a relative one is refused at startup", () => {
+    expect(section(service, "Service")).toContain("Environment=OVERSEER_STORE_DIR=/home/@USER@/.overseer");
+  });
+
+  it("service's doc comment says what this is NOT -- the off-box dead-man check", () => {
+    // A29/A27 in overseer-direction.md: a local timer disappears with the box
+    // on power loss, and nothing here closes that. The unit file is exactly
+    // the place someone reads once and assumes more coverage than exists.
+    expect(service).toMatch(/NOT THE OFF-BOX DEAD-MAN CHECK/);
+    expect(service).toMatch(/A27/);
+  });
+
+  it("timer is installed by enabling the TIMER, not the service", () => {
+    expect(section(timer, "Install")).toContain("WantedBy=timers.target");
+    expect(section(timer, "Unit")).not.toContain("WantedBy=multi-user.target");
+  });
+
+  it("timer names the service it triggers", () => {
+    expect(section(timer, "Timer")).toContain("Unit=overseer-watchdog.service");
+  });
+
+  it("timer catches up missed runs rather than skipping them", () => {
+    // overseer-direction.md § "The scheduler": missed runs come out better
+    // than either systemd's OnCalendar= one-shot catch-up or cron's silent
+    // skip, so this is the same choice made for the store's own interval
+    // scheduling.
+    expect(section(timer, "Timer")).toContain("Persistent=true");
+  });
+
+  it("timer parses as a valid systemd unit", () => {
+    expect(section(timer, "Timer").some((l) => l.startsWith("OnUnitActiveSec="))).toBe(true);
+  });
+
+  it("provision.sh enables the watchdog timer, not just installs it", () => {
+    expect(PROVISION).toContain("systemctl enable overseer-watchdog.timer");
+  });
+});
+
 describe("the overseer unit", () => {
   const unit = unitFromRepo("overseer.service");
 

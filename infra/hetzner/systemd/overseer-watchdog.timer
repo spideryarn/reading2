@@ -1,0 +1,28 @@
+# Runs overseer-watchdog.service on a plain interval.
+# docs/project/overseer-direction.md, scripts/overseer-watchdog.ts.
+#
+# @USER@ is substituted at install time by infra/hetzner/provision.sh; see the
+# note in overseer.service. tests/systemd-units.test.ts compares these bytes
+# against the heredoc in that script.
+[Unit]
+Description=Timer for overseer-watchdog.service
+Documentation=file:///home/@USER@/code/spideryarn2/docs/project/overseer-direction.md
+
+[Timer]
+# Shortly after boot, not only on the steady interval below -- so a daemon
+# that failed to come back up after a reboot is caught within a couple of
+# minutes rather than after a full period of silence.
+OnBootSec=2min
+# Off the END of the previous run, the same "chain, not fixed interval" shape
+# overseer-direction.md documents for the dashboard's own collector -- a timer
+# is not something this can overlap with itself on a slow box.
+OnUnitActiveSec=5min
+# Missed runs come out better than being skipped, per
+# overseer-direction.md § "The scheduler": if the box was off across a
+# scheduled tick, this fires once on the next boot rather than staying quiet
+# until the following interval boundary.
+Persistent=true
+Unit=overseer-watchdog.service
+
+[Install]
+WantedBy=timers.target
