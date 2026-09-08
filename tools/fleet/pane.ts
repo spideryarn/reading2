@@ -43,6 +43,12 @@
  * carry a hash of it so identity is compared on the body rather than on the
  * sentence. The regression fixtures are `dialog-file-write-hello.txt` and
  * `dialog-file-write-goodbye.txt`, which differ in exactly one word.
+ *
+ * THE THIRD QUESTION, ADDED 2026-09-08 AND THE REASON `gate` EXISTS. The two
+ * above are about whether there is a dialog and what it is about. This one is
+ * about what answering it would DO — approve a tool call, or take a turn in a
+ * conversation with an agent that asked. They are not the same act and they do
+ * not deserve the same answer, and the whole argument is in `PaneGate` below.
  */
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -117,6 +123,185 @@ export type PaneMaterial =
   | { kind: "unreadable"; why: string };
 
 /**
+ * WHAT ANSWERING THIS DIALOG DOES — which is not the same as what it asks.
+ *
+ * Answering a dialog from the phone was switched off at the route on
+ * 2026-09-08, because two independent cross-family reviews found the same hole:
+ * a forged or mis-bound approval could grant a permission the person never saw.
+ * Blanket-off is too broad, and Greg said so:
+ *
+ * > Yes auto mode is the default. But mightn't there be other reasons why it
+ * > needs to answer with multiple choice to a session?
+ * >
+ * > — Greg, 2026-09-08
+ *
+ * Not every numbered dialog is a permission grant. Fable drew the line, and the
+ * line is the whole of this design:
+ *
+ * > Pane text as executable UI is acceptable when execution means "a user
+ * > turn", and not acceptable when it means "grant a permission". A forged menu
+ * > can then make Greg send the digit "2" to an agent that was going to
+ * > misbehave anyway; it cannot mint an approval.
+ * >
+ * > — Fable, 2026-09-08
+ *
+ * SO THIS CLASSIFIES THE CONSEQUENCE, NOT THE SENDER. Provenance is exactly
+ * what a pane capture cannot give us — that is Sol's finding and it has not
+ * gone away. What it can give us is what the screen would DO if a digit landed
+ * on it, and that is enough to separate the two cases Fable separates.
+ *
+ * TWO OF THE THREE ARMS ARE THE SAME DECISION. `permission` and `unknown` both
+ * mean "not a thumb on a phone"; only `conversation` unlocks anything. So
+ * `conversation` is the arm that must be EARNED by positive evidence and
+ * everything else falls to `unknown` — which is why the care here goes into the
+ * evidence for `conversation` rather than into naming every other kind of
+ * dialog precisely. Callers should ask `grantsPermission` rather than switch on
+ * `kind` themselves, so the conservative default is structural rather than a
+ * rule each caller has to remember.
+ *
+ * WHERE THE HARNESS'S OWN SETTINGS MENUS LAND, AND WHY THEY ARE NOT A FOURTH
+ * ARM. The `/loop` cloud-schedule prompt and the model selector are neither a
+ * tool permission nor an agent's question: answering one changes the harness's
+ * configuration — the default model for every session after this one, or a
+ * cloud schedule that goes on running after this session is closed. They are a
+ * genuinely different third thing, and they still land in `unknown`, for two
+ * reasons. The first is evidence: `/loop` is drawn by the same select-menu
+ * widget as an agent's own question and proposes no body at all, so a
+ * `configuration` arm would be reached by a guess, and an arm nothing can
+ * reliably reach is an untested guard wearing the clothes of a fact. The second
+ * is that it would change no behaviour: a cloud schedule that outlives the
+ * session is at least as consequential as one tool approval, so a caller has to
+ * refuse it exactly as it refuses `permission`. `unknown` says the true thing —
+ * we could not tell — and produces the right behaviour for the right reason.
+ */
+export type PaneGate =
+  /**
+   * Answering can hand the harness a capability it does not have: a tool-use
+   * approval, or trust in a folder. `why` names the signal that fired.
+   */
+  | { kind: "permission"; why: string }
+  /**
+   * Answering is a turn in a conversation. The AGENT asked, with options it
+   * wrote itself (`AskUserQuestion`), and the digit reaches a model that is
+   * already in the loop. This is the only arm that is safe to tap, and the only
+   * one reached by positive evidence rather than by falling through.
+   */
+  | { kind: "conversation" }
+  /**
+   * We could not tell. **Treat exactly as `permission`** — this arm is
+   * conservative, not neutral, and it is where every dialog we have not
+   * positively identified ends up, the harness's own settings menus included.
+   */
+  | { kind: "unknown"; why: string };
+
+/**
+ * The one question a caller should be asking, so the conservative default lives
+ * here instead of in each of them.
+ *
+ * Written as "is it NOT a conversation" rather than as a list of the arms that
+ * are dangerous, because that is the direction that stays correct when a fourth
+ * arm arrives: a new kind of dialog is refused by default and somebody has to
+ * argue it into `conversation`, rather than being waved through because nobody
+ * remembered to add it to a list.
+ *
+ * A TYPE PREDICATE, so the caller that refuses has `why` in its hand inside the
+ * branch and does not have to re-narrow to build its own sentence. Refusing
+ * without saying which signal fired is how a person on a phone learns nothing
+ * from being told no.
+ */
+export function grantsPermission(gate: PaneGate): gate is Exclude<PaneGate, { kind: "conversation" }> {
+  return gate.kind !== "conversation";
+}
+
+/**
+ * The `AskUserQuestion` widget's header row: a ballot box, then the short name
+ * the agent gave its own question — `☐ Colour`, `☐ Repair`, `☐ How to finish`.
+ *
+ * THIS IS THE EVIDENCE THE WHOLE SAFE ARM RESTS ON, from three real captures on
+ * 2026-09-08: two live sessions of other agents' and one provoked in a throwaway
+ * of my own. No permission dialog on this box draws it — they open with the tool
+ * they are asking about (`Bash command`, `Create file`, `Edit file`) or with
+ * `Accessing workspace:`.
+ *
+ * MATCHED ON THE FIRST LINE OF THE BODY ONLY, NEVER ANYWHERE IN IT, and that is
+ * not fussiness. `☐ ` is ordinary markdown for an unticked to-do, so a `Create
+ * file` dialog proposing a checklist has one in its diff. Searching the body
+ * would turn that permission dialog into a conversation — the one direction that
+ * costs an approval rather than a refusal.
+ *
+ * U+2610 SURVIVES `DECORATION` BY A HAIR: that class stops at U+25FF and
+ * resumes at U+2B1B, so the ballot box is not blanked into a space. Widen
+ * `DECORATION` and this rule stops firing silently, and a real agent question
+ * becomes `unknown` — safe, but the feature is gone. `cleanLines` has a test
+ * that keeps the character.
+ */
+const AGENT_QUESTION_HEADER = /^\s*☐\s+\S/;
+
+/**
+ * Yes at the top, no at the bottom: the shape of an approval.
+ *
+ * Read off `consequence` rather than off the words, so it shares its reading of
+ * English with the field the client renders instead of drifting from it. It is
+ * a SECOND, INDEPENDENT permission signal, and it exists because the first one
+ * — an option that widens the session's own permissions — is a strong tell that
+ * Claude Code is under no obligation to keep offering. A permission dialog that
+ * some day carries only `Yes` and `No` is still caught here.
+ *
+ * An agent's own question that happened to offer `Yes` then `No` would be read
+ * as a permission and refused. That is the cheap direction, and it is the one
+ * this whole module is biased towards.
+ */
+function isApprovalShape(options: readonly PaneOption[]): boolean {
+  if (options.length < 2) return false;
+  return options[0]?.consequence === "once" && options[options.length - 1]?.consequence === "decline";
+}
+
+/**
+ * What answering this dialog would do, from the body and the labels and nothing
+ * else.
+ *
+ * PURE, AND DELIBERATELY BLIND TO THE FOOTER, which is the best single
+ * discriminator on the screen — a permission dialog says `Esc to cancel · Tab
+ * to amend`, an agent's question says `Enter to select · ↑/↓ to navigate`. It
+ * is not used because the footer is not one of the fields a client sends back,
+ * so routes-steer.ts could not recompute this the way it recomputes
+ * `consequence`, and a field only one of the two computations can see is a
+ * field that can disagree with itself. If the footer is ever worth having, the
+ * fix is to carry it in `PaneQuestion` so BOTH sides read the same thing — not
+ * to classify here and trust the answer over the wire.
+ *
+ * PERMISSION IS TESTED FIRST so that any overlap lands on the safe side. A
+ * dialog that looked like both would be a dialog we do not understand.
+ */
+export function classifyGate(material: PaneMaterial, options: readonly PaneOption[]): PaneGate {
+  const widening = options.find((o) => o.consequence === "persistent");
+  if (widening) {
+    return {
+      kind: "permission",
+      why: `an option widens what the session will approve on its own: "${widening.label}"`,
+    };
+  }
+  if (isApprovalShape(options)) {
+    return {
+      kind: "permission",
+      why: "the options are an approval followed by a refusal, which is the shape of a permission prompt",
+    };
+  }
+  if (material.kind !== "read") {
+    return {
+      kind: "unknown",
+      why: `the dialog's body is ${material.kind}, so the header that identifies an agent's own question is not there to check`,
+    };
+  }
+  const header = material.text.split("\n").find((l) => l.trim() !== "") ?? "";
+  if (AGENT_QUESTION_HEADER.test(header)) return { kind: "conversation" };
+  return {
+    kind: "unknown",
+    why: "the dialog's body does not open with the header an agent's own question carries",
+  };
+}
+
+/**
  * The answer. `none` is not an error and not an absence of data — it is the
  * assertion that this pane is not asking anything, which is what almost every
  * pane on the box is doing at any moment.
@@ -134,10 +319,26 @@ export type PaneMaterial =
  * renders this should read as "here are the options" rather than "there are
  * four", and if that ever matters enough, the fix is a `truncated` flag here
  * rather than a guess in the caller.
+ *
+ * `gate` IS WHAT ANSWERING WOULD DO, and it is the field that decides whether a
+ * person may tap this from a phone at all. It is derived from `material` and
+ * `options`, both of which are already on the wire and already re-checked by
+ * routes-steer.ts, so it can be recomputed rather than believed. See `PaneGate`.
  */
 export type PaneQuestion =
   | { kind: "none" }
-  | { kind: "question"; prompt: string; material: PaneMaterial; options: PaneOption[] };
+  | { kind: "question"; prompt: string; material: PaneMaterial; options: PaneOption[]; gate: PaneGate };
+
+/**
+ * The one place a question is built, so the two parsers below cannot come to
+ * different conclusions about the same screen.
+ *
+ * `gate` is not a parameter: a caller that could pass its own would be a caller
+ * that could pass `conversation`.
+ */
+function question(prompt: string, material: PaneMaterial, options: PaneOption[]): PaneQuestion {
+  return { kind: "question", prompt, material, options, gate: classifyGate(material, options) };
+}
 
 /**
  * Strip ANSI escapes.
@@ -554,12 +755,11 @@ function parseNumbered(lines: readonly Line[]): PaneQuestion {
   if (!gapsAreContinuations(lines, run)) return { kind: "none" };
   if (!tailIsDialogLike(lines, last.index)) return { kind: "none" };
 
-  return {
-    kind: "question",
-    prompt: promptAbove(lines, first.index),
-    material: materialAbove(lines, first.index),
-    options: run.map((o) => toOption(o.label, numberedKey(o, cursorAt))),
-  };
+  return question(
+    promptAbove(lines, first.index),
+    materialAbove(lines, first.index),
+    run.map((o) => toOption(o.label, numberedKey(o, cursorAt))),
+  );
 }
 
 /**
@@ -591,12 +791,11 @@ function parseCursorMenu(lines: readonly Line[]): PaneQuestion {
   if (run.some((o) => o.label.length > 200)) return { kind: "none" };
   if (!tailIsDialogLike(lines, last.index)) return { kind: "none" };
 
-  return {
-    kind: "question",
-    prompt: promptAbove(lines, at),
-    material: materialAbove(lines, at),
-    options: run.map((o) => toOption(o.label, arrowKey(o.index, at))),
-  };
+  return question(
+    promptAbove(lines, at),
+    materialAbove(lines, at),
+    run.map((o) => toOption(o.label, arrowKey(o.index, at))),
+  );
 }
 
 /**

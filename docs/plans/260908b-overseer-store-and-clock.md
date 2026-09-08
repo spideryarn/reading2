@@ -1,9 +1,13 @@
 # The Overseer's store, and the clock it gives everything else
 
-**Status 2026-09-08, 05:00: S1 landed and reviewed clean; S2 landed with a P0 outstanding; S3–S5 not
-started.** Evidence: `tools/overseer/` holds three modules and 1,014 lines, `npm run typecheck` is
-green on four projects, and 168 tests pass — **and Sol's review of S2 found a P0 and five P1s that
-the suite passes straight through.** The next session starts at § S2's review, not at S3.
+**Status 2026-09-08, 08:00: S1, S2 (fixed), S3 and S6 are landed and green; S4 is being built; S5
+not started.** Evidence: `npm run typecheck` reports **0** failures across the tree and 241 tests
+pass over the seven affected files, at `001deace`. Sol's reviews of the S2 fixes and of S3 are
+running now; S6 is landed but **not finished** — its reclassification measurement and its mutation
+sweep are outstanding, because the agent building it hit the account session limit.
+
+Greg, 2026-09-08, on the remaining work: *"Reprioritise as you see fit, work in parallel where you
+can."* What that changed is in § The order, reconsidered.
 
 The standing direction is [orchestrator-direction.md](../project/orchestrator-direction.md) — read it
 first; it holds the constraints, Greg's horizon, and the seam with the fleet dashboard, and it
@@ -581,6 +585,121 @@ not** — it validates nothing and risks implying verification it does not perfo
 brand instead on an opaque admissible-snapshot type (S2-07), so that `diff()` cannot be handed a
 snapshot `admissible()` never blessed — which is currently only a comment.
 
+### What landed, and the three things the work turned up
+
+**S2's eight findings are all addressed**, red-first, with 69 tests where there were 40.
+[260908b-s2fix-review-prompt.md](260908b-s2fix-review-prompt.md) is the narrowly-scoped check of the
+fixes, per [engineering-manager.md](../reusable/engineering-manager.md)'s round-two rule — discovery
+is closed on this stage; only the fixes are in scope.
+
+**The tolerance was wrong twice, and the second correction was not mine.** I told the implementer it
+must exceed collection jitter (~70s). Six live collections refuted that: the implied deadline holds
+to **72 milliseconds**, including across a **130-second gap where a collection was missed entirely**,
+because jitter *cancels* — the producer derives `secondsLeft` from a real deadline, so both terms
+move together. The implementer then named the term that actually moves it, which neither of us had:
+**the difference in collection duration between two snapshots**, since the countdown is read early in
+a run and `collectedAt` is stamped at its end. 95 ms in the new capture, ~2.1 s in the old one, ~5 s
+worst case. Hence 10 s.
+
+And the mutation that survived the first sweep was **that constant**: raising 10 s back to 120 s left
+the entire suite green, because every constructed restart moved the deadline by minutes. **A constant
+is code**, and this is the stage's own lesson landing on the stage.
+
+**S3 met its bar and got smaller than planned.** 35 tests, 15 mutations, 15 caught. The two that
+survived the first sweep were both real: a checkpoint written straight to its final path — now caught
+by asserting the **inode changes**, which is the observable difference between rename-replace and
+write-in-place — and a **relative `meta.dir`** accepted in a checkpoint, which is Sol's S2-06 arriving
+on the recovery path it was always about.
+
+Three of its calls are worth keeping in this file rather than only in the code:
+
+- **`foldEvents` is exported and the register is a fold of the log.** That is what makes
+  disposability a property of the code rather than a promise: a rejected checkpoint costs a replay,
+  not a fleet.
+- **`opening.start` is `cold | rebuilt | resumed`**, three arms because a daemon that replayed a
+  thousand events has a baseline and must not announce itself as cold — the same distinction this
+  codebase keeps drawing between having looked and being unable to.
+- **The caller never supplies the register.** `checkpoint()` takes it from the store's own fold, so a
+  caller cannot write a checkpoint that disagrees with the log.
+
+**A finding the plan did not have: `lastSeenAlive` can only be a floor, never a reading.** With
+events-not-samples, an idle session emits nothing for hours, so liveness is `lastGoodSnapshotAt` plus
+register membership. **Anything rendering "blocked for 40 minutes" from `lastSeenAlive` alone is
+wrong** — and that is exactly what triage will reach for first, which is why it is written here and
+not only in a comment.
+
+**S6's fixtures are the best artefact of the night, and the reason is that they are real.** A
+dispatched `codex exec` sits **eight levels below the pane**: pane → `claude` → the Bash tool's
+`bash -c` → `timeout` → `npm exec` → `sh -c 'tsx'` → `node .bin/tsx` → `node --require preflight.cjs`
+→ `codex exec`. A hand-written fixture would have put it at two or three and the classifier would
+have been built to look there. Three more that kill an obvious implementation: **five processes in
+that chain carry `run-codex.ts` and exactly one carries `codex exec`**, so a recogniser matching the
+wrapper counts one review five times; **one pane held three concurrent Bash-tool children**, two of
+them running `sleep`, so *"is there a bash under this pane"* says nothing; and **the pane can be
+older than its Claude** — 115341 s against 75741 s — so pane age is not session age.
+
+**The duplicated stage, and whose fault it was.** `worktree:check` could not see a running process,
+and both agents fixed it. Theirs landed (`f3817060`); mine was discarded, its diff kept at
+`scratchpad/mgr-agentD-worktree-check.patch`. **The cause was mine**: I told the dashboard agent the
+gap was *"worth a line in your plan doc"* and never said I was fixing it, which is
+[announce before taking a queued slice](../reusable/engineering-manager.md) failing in the one
+direction a shared public finding makes easy. Two measurements from the discarded work are worth
+keeping, because they independently justify the design that landed: **`/proc/<pid>/cwd` is unreadable
+for 575 of the box's 910 processes**, and **a cwd-based rule fired on 8 of the box's 13 worktrees**
+against 2 that actually had servers — so "listening processes only" is not a shortcut, it is the
+correct signal.
+
+### The order, reconsidered — and the constraint that deleted work
+
+Greg, 2026-09-08: *"Reprioritise as you see fit, work in parallel where you can."* Three changes.
+
+**S2's P0 is not negotiable and nothing follows it.** It is landed code that can write a history
+that is plausible and false, and S3 is the stage that writes histories to disk. Fixing it after the
+store exists means the store's first real test writes corrupt history.
+
+**S3 got smaller, because of a constraint from the dashboard agent.** Greg's robustness ceiling —
+*"if the orchestrator broke I could just ssh in and use Claude Code in the terminal"* — was read back
+as a design rule: **no state that only this process knows how to reconstruct.** So the store is
+**disposable**. If `~/.overseer/` is missing, empty, or truncated, the Overseer starts cold, says so
+plainly, and runs. It never refuses to start, and there is no repair step. That deleted a whole class
+of recovery machinery this plan was about to acquire.
+
+> *disposable* has to include **truncated**, not just missing. A file cut off mid-line by an OOM kill
+> is the case that actually happens here, and it is the one that tempts a repair step. If a
+> half-written last line costs you the last line and nothing else, you have it right.
+>
+> — the fleet dashboard agent, 2026-09-08
+
+**S6 is new, and it is the only part of § `idle` is the bug that needs nothing from anyone else.**
+Four live sessions were mid-`codex exec` and every one of them showed as `idle`. That is mechanical,
+not a judgement, so it is buildable today — and it does **not** need an arm on `SessionState`. The
+seam both agents agreed on:
+
+> **The dashboard reports the pane; the Overseer decides what the work is.** `panePid` is a fact
+> about a pane; "this session is waiting 40 minutes on a paid review" is a judgement about work, and
+> judgements belong on the Overseer's side. Adding a `SessionState` arm would encode a conclusion in
+> a field whose whole job is to report an observation.
+>
+> — agreed between this agent and the fleet dashboard agent, 2026-09-08
+
+So S2-fix, S3 and S6 run in parallel; S4 and S5 follow, in that order, because S5 is the stage that
+actually answers Greg's opening requirement — *a way to (re)start it if it gets killed*.
+
+### A fact that landed underneath this stage: a session can be renamed
+
+`POST /api/sessions/rename` landed on 2026-09-08, after S2. **A session's name can now change without
+`gjd-remote ls` having run**, and renaming also clears `GJD_PROVISIONAL` — without which `adoptTitles`
+renames it straight back.
+
+This does **not** break the diff: `SessionIdentity` is the tmux handle plus `claimedConversationId`
+and has never included the name, which is the same conclusion for the same reason as the
+`claudeSessionId` correction above. Two consequences it does have:
+
+- The register must hold the name as **last observed**, refreshed every snapshot, not written once at
+  first sighting — otherwise reboot recovery offers Greg a name he deliberately changed.
+- **A rename currently produces no event at all.** It is a deliberate act by a person and it is
+  invisible to the history. Folded into S2's review round rather than opened as its own stage.
+
 ### S3 — the store: single writer, checkpoint, crash recovery
 
 - One `events.jsonl`, truncate-to-newline on open, the exclusive lock, and `current.json` as a
@@ -593,6 +712,33 @@ snapshot `admissible()` never blessed — which is currently only a comment.
 - SSE with poll fallback, the freshness watchdog, degradation and restoration events. **No health
   history and no local collection.**
 - **Done:** run against the live dashboard and show the log and the checkpoint — real output.
+
+**The staleness threshold is a measured number, not a guessed one, and getting it wrong is the
+failure that teaches Greg to ignore the alarm.** Astra's A17 is that the dashboard's own client calls
+data stale at 30s while collection waits 60s after a ~12s run, so *healthy operation spends most of
+its time alarming*. Measured here over six consecutive collections, 2026-09-08 05:43–05:50 UTC:
+
+- The interval is **65.0s**, very regular — not the ~70s the fixtures README claims, and not the
+  60s `refreshMs` advertises.
+- **One interval in six was 130s** — a collection was simply missed, with no error and no gap in the
+  data. So a missed collection is *ordinary*, and any threshold under about 150s fires on a healthy
+  fleet.
+
+So the watchdog fires on a multiple of the **observed** cadence, and `refreshMs` is a hint rather than
+the contract. A17's real lesson is not the number; it is that an alarm which is usually wrong is worse
+than no alarm, because it is the same picture as a quiet page over a dead box.
+
+**Degradation and restoration are events, and they pair with S2-01's held baseline.** The three ways
+the Overseer can stop knowing things — the SSE dropped, the poll failed, and the generation went
+unreadable so the baseline is held — are different causes with the same symptom, and the whole point
+of this codebase's `unknown`-with-a-cause discipline is that they must not collapse into one silence.
+
+**A read CLI ships with S4, and it is not a nicety.** After S1–S5 Greg has a daemon recording events
+and no way to look at them — which fails his NOW goal, *"staying up-to-date on progress
+automatically"*, while every stage passes. The dashboard owns the page and this stage does not build
+one, so the simplest honest version is a command: what is the Overseer doing, and what has it seen.
+It also makes S4's own "show the log and the checkpoint" criterion something a person can re-run
+rather than something an agent pasted once.
 
 ### S5 — deployment that actually survives a reboot
 
@@ -607,7 +753,69 @@ down until the next login, with `Restart=always` never getting a chance to matte
 - **Done, all four:** enabled and active; `kill -9` recovery; **an actual reboot with no intervening
   login**; and the executable path proven to survive worktree removal.
 
+**Measured on the live box, 2026-09-08 — the ground S5 stands on is worse than the plan assumed.**
+There are **no systemd units on this box at all**: `/etc/systemd/system/` holds only stock ones and
+`~/.config/systemd/user/` is empty. And the fleet dashboard — the Overseer's only data source — is
+itself a `scripts/tmux-job.ts` job whose entrypoint lives **inside a worktree**:
+
+```
+421175  132280  sh -c ( env FLEET_BIND=... npx tsx tools/fleet/server.ts )
+        > /home/greg/code/spideryarn2/.claude/worktrees/fleet-dashboard-v01/logs/tmux-jobs/…
+```
+
+Three consequences, none of them theoretical:
+
+- **`npm run worktree:check` will call `fleet-dashboard-v01` safe to delete, and it is not** —
+  provable from the type rather than guessed at. `CheckFacts` in
+  [`scripts/worktree-check.ts`](../../scripts/worktree-check.ts) has no process or pid member, every
+  field it does have is about version-control state or ignored files, and `blockers()` is a pure
+  function of `CheckFacts`. So no care elsewhere can make it notice a running process. Removing that
+  worktree takes down the page and the Overseer's source together —
+  [worktrees.md](../project/worktrees.md)'s own warning arriving through a door it does not cover.
+  **Being fixed in this run**, since long-running jobs out of worktrees are now normal here and this
+  will recur.
+- **Its ppid is `132280` — the tmux server, the same number we use as the generation marker.** So a
+  reboot takes the tmux server, every session, and the dashboard, in one go. Which means the ceiling
+  argument — *"if the orchestrator broke I could just ssh in"* — is currently doing more work than it
+  looks: after a reboot there is no page to fall back **from**.
+- So the unit S5 builds should be **generic**, and the dashboard should get one too. Offered to the
+  dashboard agent rather than done unilaterally; the page's contents are theirs, the install-and-
+  verify path in `provision.sh` is this stage's.
+
+**And one honest consequence of the fix**, flagged rather than buried: an `ExecStart` in the primary
+checkout means both processes run whatever is on `dev` at that moment, **including a red `dev`** —
+which is [open-questions.md § Q12](../project/open-questions.md#q12) arriving from a third direction.
+
+**The reboot criterion cannot be met by an agent, and will not be claimed.** *"An actual reboot with
+no intervening login"* means rebooting a box carrying ~27 live sessions and ~15 worktrees of other
+people's uncommitted work. That is Greg's to run, not an agent's. What S5 *can* prove without it, and
+what it will report instead: the unit is a **system** unit, `systemctl is-enabled` says `enabled`, and
+the symlink is present in `multi-user.target.wants` — which is precisely the evidence Sol's F7 was
+about, since the whole finding was that a *user* unit would show none of those. The reboot itself
+stays outstanding and is named as outstanding.
+
 **Reboot-resume of the sessions themselves is O4, a later stage.** This one only makes it possible.
+
+### S6 — work, not panes: the Codex subprocess arm
+
+Independent of S3–S5, and running in parallel with them.
+
+The pure classifier takes a process-table snapshot and the pane pid; a thin adapter reads the real
+table. Splitting them is the point — the judgement is testable against captured fixtures and the I/O
+is not in it. **A pane pid that is null, dead, or unreadable is a "could not tell" arm carrying why**,
+never "no subprocess found", which is a different claim and the dangerous one.
+
+- **Done:** fixtures captured from this box's real process table, and a number — how many of the live
+  sessions this reclassifies, checked by hand that they really are mid-review.
+
+**Not in S6:** the prose-question case. *"Has this agent asked Greg something?"* is a judgement, not a
+parse — ten of fifteen sessions genuinely waiting on Greg had ended their turn in full stops, and a
+mechanical check found one of twenty-three. That one is the Overseer's short-lived model calls, later.
+
+**Also not in S6, but now owned here:** the `needs-you` sub-kind. *An agent asked me something* and
+*the harness wants a permission* are different work items — and on this box the second is nearly
+always a **launch defect**, because auto mode should have handled it. So it is not a queue item for
+Greg at all; the action is to fix how that session was started.
 
 ## What this stage is not
 

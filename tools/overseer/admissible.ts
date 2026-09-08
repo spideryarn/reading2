@@ -19,6 +19,11 @@
  * a continuous alarm about two entirely healthy processes — GPT Sol's F6,
  * docs/plans/260908b-overseer-store-and-clock.md.
  *
+ * **It is `duplicate` only if the payload agrees**, though. Two bodies that
+ * disagree under one `collectedAt` are not a repeat of anything, and since
+ * 2026-09-08 they are a `reject` naming the inconsistency — see
+ * `collectionDisagreement` below, and GPT Sol's S2-05.
+ *
  * **`reject` means the payload cannot be believed**, and its causes are all
  * things the producer really does emit:
  *
@@ -44,19 +49,50 @@
  * and the case it was imagined to catch — a regressed 35-of-36 payload — would
  * be non-empty anyway and is the strict parser's job.
  */
-import type { FreshSnapshot, ObservedSnapshot, ParseResult } from "./observation.js";
+import type { FreshSnapshot, ObservedRow, ObservedSnapshot, ParseResult } from "./observation.js";
+
+/**
+ * The brand, declared and never exported, so the shape below cannot be written
+ * anywhere but in this file.
+ *
+ * `declare` because it is a type-level marker with no runtime existence: there
+ * is no such property on any snapshot, and nothing ever reads one.
+ */
+declare const ADMISSIBLE: unique symbol;
+
+/**
+ * A snapshot this function accepted, and the only thing `diff()` will take.
+ *
+ * THE BRAND IS THE GATE, and the comment it replaces was not one. `FreshSnapshot`
+ * used to say "`admissible()` is the only thing that mints one" while being an
+ * ordinary intersection type any caller could build with a spread — so the
+ * clock's monotonicity and `error === null`, both decided here, were promises
+ * rather than facts by the time `diff()` read them. GPT Sol's S2-07, and the
+ * brand it recommends spending instead of the one on `claimedConversationId`,
+ * which validated nothing.
+ *
+ * What the brand asserts, exactly: this snapshot parsed, its producer had
+ * really collected, its last collection did not fail, and its clock is at or
+ * beyond the last one accepted. What it does NOT assert is that its contents
+ * are true about the box — nothing at this stage can know that.
+ *
+ * A cast can still forge one, as a cast can forge anything. The difference is
+ * that a forgery has to be written down as a cast, in a module whose every
+ * other line is `import type`, where it is one grep away.
+ */
+export type AdmissibleSnapshot = FreshSnapshot & { readonly [ADMISSIBLE]: "admissible" };
 
 /**
  * The verdict, with the sentence that goes in the log beside it.
  *
- * `accept` carries the snapshot, narrowed to `FreshSnapshot` — so a caller
- * cannot reach a snapshot this function refused, and `diff()` cannot be handed
- * the startup placeholder however carelessly the call is written. The reason is
- * on every arm, including `accept`: a history that says only "accepted" cannot
- * be read backwards to work out what the daemon thought it was doing.
+ * `accept` carries the snapshot, branded — so a caller cannot reach a snapshot
+ * this function refused, and `diff()` cannot be handed the startup placeholder
+ * however carelessly the call is written. The reason is on every arm, including
+ * `accept`: a history that says only "accepted" cannot be read backwards to
+ * work out what the daemon thought it was doing.
  */
 export type Admissibility =
-  | { verdict: "accept"; reason: string; snapshot: FreshSnapshot }
+  | { verdict: "accept"; reason: string; snapshot: AdmissibleSnapshot }
   | { verdict: "duplicate"; reason: string }
   | { verdict: "reject"; reason: string };
 
@@ -72,7 +108,7 @@ export type Admissibility =
  * gets a verdict from the same function as everything else; see the module
  * comment.
  */
-export function admissible(previous: FreshSnapshot | null, next: ParseResult<ObservedSnapshot>): Admissibility {
+export function admissible(previous: AdmissibleSnapshot | null, next: ParseResult<ObservedSnapshot>): Admissibility {
   if (!next.ok) return { verdict: "reject", reason: `the payload is not a snapshot: ${next.reason}` };
 
   const snapshot = next.value;
@@ -94,15 +130,36 @@ export function admissible(previous: FreshSnapshot | null, next: ParseResult<Obs
     };
   }
 
-  // The narrowing above is what makes this cast-free: `clock.collected` is
-  // true, so the snapshot satisfies `FreshSnapshot`.
+  // The narrowing above is what makes the `FreshSnapshot` half cast-free:
+  // `clock.collected` is true, so the snapshot satisfies it. THE CAST IS THE
+  // BRAND AND NOTHING ELSE — the one place in the Overseer where an
+  // `AdmissibleSnapshot` comes into existence, after every rule above has run.
+  const bless = (fresh: FreshSnapshot): AdmissibleSnapshot => fresh as AdmissibleSnapshot;
   const fresh: FreshSnapshot = { ...snapshot, clock: snapshot.clock };
 
   if (previous === null) {
-    return { verdict: "accept", reason: "the first collection this Overseer has seen", snapshot: fresh };
+    return { verdict: "accept", reason: "the first collection this Overseer has seen", snapshot: bless(fresh) };
   }
 
   if (fresh.clock.atMs === previous.clock.atMs) {
+    // EQUAL CLOCKS ARE ONLY A DUPLICATE IF THE PAYLOAD AGREES, and until
+    // 2026-09-08 this arm did not look (GPT Sol's S2-05). A successful payload
+    // wearing a `collectedAt` is a copy of one collection — the SSE cache and a
+    // poll both serve the same `statePayload()` — so two bodies that disagree
+    // under one clock are not a repeat of anything. They are two producers on
+    // one port, or a reboot the clock did not record, and the disagreement is
+    // the only evidence of it there will ever be. Calling that a duplicate
+    // throws the evidence away and goes quiet, which is this codebase's worst
+    // failure shape rather than its safest one.
+    const disagreement = collectionDisagreement(previous, fresh);
+    if (disagreement !== null) {
+      return {
+        verdict: "reject",
+        reason:
+          `two different collections claim the same clock (${fresh.clock.at}): ${disagreement}. ` +
+          `The producer makes equal-clock payloads identical, so this is a contract failure rather than a repeat.`,
+      };
+    }
     return {
       verdict: "duplicate",
       reason: `the same collection as the last one (${fresh.clock.at}), which is what a reconnect and a poll both give`,
@@ -128,5 +185,47 @@ export function admissible(previous: FreshSnapshot | null, next: ParseResult<Obs
     };
   }
 
-  return { verdict: "accept", reason: `a collection from ${fresh.clock.at}`, snapshot: fresh };
+  return { verdict: "accept", reason: `a collection from ${fresh.clock.at}`, snapshot: bless(fresh) };
+}
+
+/**
+ * What two payloads wearing one clock disagree about, or null if they agree.
+ *
+ * WHAT IS COMPARED IS THE COLLECTION, NOT THE PAYLOAD, and the difference is
+ * the whole design of this function. `health` is re-probed on its own schedule
+ * and is carried verbatim by this module precisely because it is not
+ * interpreted here; `refreshMs` and `answeringEnabled` describe the dashboard's
+ * configuration rather than its reading of the box. Comparing those would let
+ * the Overseer reject a perfectly ordinary duplicate over a field it has
+ * declared it does not read — a false alarm that would stall the history, which
+ * is the same silence this rule exists to prevent, arrived at from the other
+ * side.
+ *
+ * So the comparison is `rows`, `tmuxServerPid` and `tookMs`: everything the
+ * collection with that `collectedAt` on it actually said about the box.
+ *
+ * Serialised rather than walked field by field. The rows carry `question` as
+ * opaque JSON, which no structural comparison written here could keep up with,
+ * and both bodies are built by the same parser in the same field order from
+ * payloads the same producer serialised — so identical collections give
+ * identical strings, and the only false positive available is a producer that
+ * reordered its own keys between two responses.
+ */
+function collectionDisagreement(previous: FreshSnapshot, next: FreshSnapshot): string | null {
+  if (previous.tmuxServerPid !== next.tmuxServerPid) {
+    return `the tmux generation is ${String(previous.tmuxServerPid)} in one and ${String(next.tmuxServerPid)} in the other`;
+  }
+  if (previous.rows.length !== next.rows.length) {
+    return `one lists ${previous.rows.length} sessions and the other ${next.rows.length}`;
+  }
+  if (previous.tookMs !== next.tookMs) {
+    return `one took ${previous.tookMs}ms to collect and the other ${next.tookMs}ms`;
+  }
+  const differing = next.rows.find((row, index) => rowText(row) !== rowText(previous.rows[index]));
+  if (differing !== undefined) return `the row for ${differing.id} (${differing.name}) differs`;
+  return null;
+}
+
+function rowText(row: ObservedRow | undefined): string {
+  return JSON.stringify(row ?? null);
 }

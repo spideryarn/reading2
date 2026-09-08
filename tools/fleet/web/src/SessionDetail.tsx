@@ -6,14 +6,25 @@
  * and anything else that might be useful. Allow me to send steering messages to
  * it, answer its questions, etc"*.
  *
- * ## Four sections, in the order the question is usually asked
+ * ## Six sections, in the order the question is usually asked
  *
  *  1. **What it needs from you**, which is the reason the page exists, so it is
  *     first and it is the only thing here drawn in the loud colour.
- *  2. **Say something to it** — a message, delivered as keystrokes at the pane.
- *  3. **Recent messages**, which does not exist yet and says so. See below.
- *  4. **Where it is**, the identifiers and the directory, last because they are
+ *  2. **Do something to it** — the vocabulary as buttons (ActionButtons.tsx),
+ *     with the two classes of action kept apart: a sentence the agent may
+ *     ignore, and a command that runs whether or not it cooperates.
+ *  3. **Say something to it** — a message, typed at the pane now, or queued to
+ *     go in order with everything else pressed.
+ *  4. **Waiting to go to it** — the queue, because a queue you cannot see
+ *     surprises you an hour later in somebody else's conversation.
+ *  5. **Recent messages**, which does not exist yet and says so. See below.
+ *  6. **Where it is**, the identifiers and the directory, last because they are
  *     what you read when two rows look the same rather than what you came for.
+ *
+ * The session's **name** is editable in place under the title, because it is a
+ * property of the session rather than something you do to it — and only here,
+ * never on the list cards, where forty text inputs on a phone would be the
+ * whole page. `RenameField` below carries the one rule nobody would guess.
  *
  * ## The slot, and why it is empty rather than plausible
  *
@@ -39,10 +50,14 @@
  */
 import { useCallback, useState, type ReactNode } from "react";
 
+import { ActionOutcomeCard, SessionActions, SessionQueue } from "./ActionButtons";
 import { Handles, QuestionCard, StatusPill, Uptime } from "./SessionParts";
 import { Explain } from "./Tooltip";
+import type { ActionOutcome } from "./actions-client";
+import { NAME_RULE_TEXT, looksLikeAName, type RenameApi, type RenameOutcome } from "./rename-client";
 import type { SteerApi, SteerOutcome } from "./steer-client";
-import type { FleetRow } from "./types";
+import type { FleetGate, FleetRow } from "./types";
+import type { ActionsUi } from "./useActions";
 import { Button, Card, Mono, cx } from "./ui";
 import { statusLabel, whereLine } from "./view";
 
@@ -114,45 +129,153 @@ function Outcome({ outcome, onRefresh }: { outcome: SteerOutcome; onRefresh: () 
 }
 
 /**
- * **Answering a dialog is held back, and the page says so before you tap.**
+ * **Why this dialog is not tappable**, said before you tap rather than after.
  *
- * Two cross-family reviews found the same class of problem in the same week.
- * One is fixed — the captured question now carries the material, so an approval
- * binds to what was shown. The other is not fixable at all: **screen text is not
- * provenance.** An agent given hostile input can PRINT a plausible menu, and a
- * parser reading a terminal cannot tell that from a real one.
+ * The page used to hold ALL answering back, which was too broad and was Greg's
+ * push-back: *"mightn't there be other reasons why it needs to answer with
+ * multiple choice to a session etc?"* It does — an agent's own
+ * `AskUserQuestion` is a turn in a conversation, not a permission grant, and
+ * refusing it bought nothing. So this card now appears for **one dialog at a
+ * time**, and for a `conversation` dialog it does not appear at all.
  *
- * Whether to ship answering anyway is Greg's call. So the buttons are built,
- * they are the real thing, and they will work unchanged the moment the flag
- * flips — and until then this card sits above them. **It is marked rather than
- * disabled** because the page must not claim to know a server setting it has
- * not asked about: press one and the server's own sentence arrives, naming the
- * hazard and the way round it (`gjd-remote resume <name>`). After that the
- * options stop being buttons, because a control that refuses every time is
- * worse than one that explains itself.
+ * Three cases, and they are genuinely three:
  *
- * Sending a MESSAGE is unaffected, and that distinction is drawn here rather
- * than left to be discovered by tapping.
+ *  - `why` non-null — the server has already refused a tap, and its own words
+ *    are shown verbatim. This is sticky, because a control that refuses every
+ *    time you press it is worse than one that says why it is not a control.
+ *  - `permission` — answering would grant a capability. Not offered.
+ *  - `unknown` — we could not tell, **including because the server never said**.
+ *    Treated exactly as `permission`, which is the whole discipline: "I could
+ *    not tell" must not become the way through.
+ *
+ * Sending a MESSAGE is unaffected in every case, and that distinction is drawn
+ * here rather than left to be discovered by tapping.
  */
-function HeldBack({ why }: { why: string | null }): ReactNode {
+function HeldBack({ why, gate }: { why: string | null; gate: FleetGate }): ReactNode {
   if (why !== null) {
     return (
       <div className="tw:mt-2 tw:rounded-lg tw:border tw:border-alarm/40 tw:bg-alarm-wash tw:p-3 tw:text-[13px]">
-        <p className="tw:font-medium tw:text-alarm-ink">Answering is switched off on this server.</p>
+        <p className="tw:font-medium tw:text-alarm-ink">The server would not answer this.</p>
         {/* Verbatim. It names the hazard and the way round it. */}
         <p className="tw:mt-1 tw:break-words tw:text-ink">{why}</p>
       </div>
     );
   }
+  if (gate.kind === "conversation") return null;
   return (
     <div className="tw:mt-2 tw:rounded-lg tw:border tw:border-unknown/40 tw:bg-unknown-wash tw:p-3 tw:text-[13px]">
-      <p className="tw:font-medium tw:text-unknown-ink">Answering is held back.</p>
-      <p className="tw:mt-1 tw:text-ink-soft">
-        This menu was read off a terminal, and screen text is not proof of what is being asked: an
-        agent handling hostile input can print a plausible dialog of its own. The options below are
-        real and will work the moment the server allows it — press one and it will tell you where it
-        stands. Sending a message, further down, is not affected.
+      <p className="tw:font-medium tw:text-unknown-ink">
+        {gate.kind === "permission" ? "This one grants a permission, so it is not a button." : "Not offered: I could not tell what this is."}
       </p>
+      <p className="tw:mt-1 tw:break-words tw:text-ink-soft">{gate.why}</p>
+      <p className="tw:mt-1 tw:text-ink-soft">
+        This menu was read off a terminal, and screen text is not proof of what is being asked. Sending
+        a digit can be a turn in a conversation; it must never be an approval. Answer it in the
+        terminal — <code className="tw:font-mono">gjd-remote resume &lt;name&gt;</code> — or send a
+        message below, which is not affected.
+      </p>
+    </div>
+  );
+}
+
+/**
+ * The session's name, editable in place.
+ *
+ * ## Save is NOT disabled when the text is unchanged, and that is the design
+ *
+ * Renaming a session to the name it already has is legal and is not a no-op: it
+ * clears the session's *provisional* flag, which is the thing that otherwise
+ * lets `gjd-remote ls` rename it back to Claude's own title later. So
+ * re-submitting the same name is the gesture for *keep this one*, and a Save
+ * greyed out because nothing has been typed would make the useful case the
+ * impossible one. The hint under the box says so, because nobody would guess it.
+ *
+ * **What is deliberately not drawn:** which sessions are provisional. That
+ * would be the natural place for a *save to keep this name* nudge, and it would
+ * be a guess — the payload carries no such field today. A hint invented from a
+ * plausible heuristic is worse than no hint, because it would be right most of
+ * the time.
+ *
+ * ## The local check refuses only what the rule plainly refuses
+ *
+ * It saves the common typo a round trip and decides nothing else: anything it
+ * lets through the server judges, and when the server refuses, **its sentence
+ * goes on screen verbatim** — it spells out the rule, and it knows which
+ * session already holds a taken name, which this page cannot.
+ */
+function RenameField({ row, rename }: { row: FleetRow; rename: RenameApi }): ReactNode {
+  const [name, setName] = useState(row.name);
+  const [busy, setBusy] = useState(false);
+  const [outcome, setOutcome] = useState<RenameOutcome | null>(null);
+
+  const trimmed = name.trim();
+  /* Empty is the one thing worth saying before a round trip, separately from
+     the shape rule, because "type something" and "that shape is not allowed"
+     are different sentences. */
+  const localWhy =
+    trimmed === "" ? "A session needs a name." : looksLikeAName(trimmed) ? null : NAME_RULE_TEXT;
+
+  const save = useCallback(async (): Promise<void> => {
+    setBusy(true);
+    const result = await rename.rename(row, trimmed);
+    setOutcome(result);
+    // The name the SERVER settled on, so the box shows what is true of the box.
+    if (result.ok) setName(result.name);
+    setBusy(false);
+  }, [rename, row, trimmed]);
+
+  return (
+    <div className="tw:mt-2">
+      <label className="tw:text-[11px] tw:font-semibold tw:tracking-widest tw:text-ink-faint tw:uppercase" htmlFor="rename-name">
+        Name
+      </label>
+      <div className="tw:mt-1 tw:flex tw:flex-wrap tw:items-center tw:gap-2">
+        <input
+          id="rename-name"
+          type="text"
+          value={name}
+          disabled={busy}
+          onChange={(e) => setName(e.target.value)}
+          className="tw:h-7 tw:min-w-0 tw:flex-1 tw:rounded-md tw:border tw:border-rule tw:bg-panel tw:px-2 tw:font-mono tw:text-[13px] tw:text-ink tw:disabled:opacity-50"
+        />
+        {/* Never disabled on "unchanged". See the header. */}
+        <Button onClick={() => void save()} disabled={busy || localWhy !== null}>
+          {busy ? "Saving…" : "Save"}
+        </Button>
+      </div>
+      <p className="tw:mt-1 tw:text-[12px] tw:text-ink-faint">
+        {localWhy ?? "Saving the same name again is not a no-op — it also stops the name being changed back later."}
+      </p>
+      {outcome === null ? null : outcome.ok ? (
+        <p className="tw:mt-1 tw:text-[12px] tw:text-work-ink">
+          {outcome.was === null ? (
+            <>
+              Renamed to <Mono>{outcome.name}</Mono>.
+            </>
+          ) : (
+            <>
+              Renamed from <Mono>{outcome.was}</Mono> to <Mono>{outcome.name}</Mono>.
+            </>
+          )}{" "}
+          The list catches up at the next collection.
+        </p>
+      ) : (
+        <div className="tw:mt-1 tw:rounded-lg tw:border tw:border-alarm/40 tw:bg-alarm-wash tw:p-2.5 tw:text-[13px]">
+          <p className="tw:font-medium tw:text-alarm-ink">Not renamed.</p>
+          {/* Verbatim. It spells out the rule, or names who has the name. */}
+          <p className="tw:mt-1 tw:break-words tw:text-ink">{outcome.why}</p>
+          <p className="tw:mt-1 tw:text-[12px] tw:text-ink-faint">
+            <Mono>{outcome.code}</Mono>
+            <span className="tw:px-1">·</span>
+            {outcome.from === "server" ? "said by the dashboard server" : "said by this browser"}
+          </p>
+          {outcome.code === "no-such-session" ? (
+            <p className="tw:mt-1 tw:text-[12px] tw:text-ink-soft">
+              The box no longer lists this session under the handle this page is holding. Refresh and look again.
+            </p>
+          ) : null}
+        </div>
+      )}
     </div>
   );
 }
@@ -161,12 +284,17 @@ export function SessionDetail({
   row,
   now,
   steer,
+  rename,
+  actions,
   onRefresh,
   onBack,
 }: {
   row: FleetRow;
   now: number;
   steer: SteerApi;
+  rename: RenameApi;
+  /** The vocabulary, the queues, and the four requests that touch them. */
+  actions: ActionsUi;
   /** Ask the box for a fresh snapshot — offered after a 409, which means stale. */
   onRefresh: () => void;
   /** Non-null only when the list is not on screen beside this, i.e. one pane. */
@@ -206,7 +334,13 @@ export function SessionDetail({
       setBusy(true);
       const result = await run();
       setOutcome(result);
-      if (!result.ok && result.code === "answering-disabled") setAnsweringOff(result.why);
+      // Both are sticky, and for the same reason: neither will come right by
+      // pressing again. `answering-disabled` is the whole server switched off;
+      // `grants-permission` is this dialog, and it can only change when the
+      // dialog does — at which point the row is replaced and this state with it.
+      if (!result.ok && (result.code === "answering-disabled" || result.code === "grants-permission")) {
+        setAnsweringOff(result.why);
+      }
       if (result.ok && clear) setText("");
       setBusy(false);
     },
@@ -223,6 +357,31 @@ export function SessionDetail({
   const onSend = useCallback(() => {
     void send(() => steer.message(row, text), true);
   }, [row, send, steer, text]);
+
+  /**
+   * **Two buttons, because they are two different things.**
+   *
+   * Send types the message at the pane now, which is what you want for a
+   * session sitting at a prompt and is useless for one that is working —
+   * keystrokes into a busy Claude Code land in whatever the terminal is doing.
+   * Queue puts it in the same ordered list the action buttons feed, so that
+   * *"actually do X instead"* lands after the button that said do X and before
+   * the one that said push. queue.ts: two queues cannot promise that, which is
+   * why a queued message and a queued action go to one endpoint.
+   *
+   * Neither is offered as the automatic one. The server decides whether a send
+   * is allowed and says why when it is not, and a page that silently converted
+   * one gesture into the other would be answering a question nobody asked.
+   */
+  const [queueOutcome, setQueueOutcome] = useState<ActionOutcome | null>(null);
+  const onQueue = useCallback(async (): Promise<void> => {
+    setBusy(true);
+    const result = await actions.api.queueMessage(row, text);
+    setQueueOutcome(result);
+    if (result.ok) setText("");
+    setBusy(false);
+    actions.refresh();
+  }, [actions, row, text]);
 
   return (
     <Card
@@ -254,14 +413,24 @@ export function SessionDetail({
         <p className="tw:mt-1 tw:text-[13px] tw:break-words tw:text-unknown-ink">{label.detail}</p>
       )}
 
+      {/* Beside the title, because it is a property of this session rather than
+          something you do to it — and NOT on the list cards, where forty text
+          inputs on a phone would be the whole page. Keyed by the row up in
+          SessionsPanel, so switching sessions resets the box. */}
+      <RenameField row={row} rename={rename} />
+
       {/* ------------------------------------------- 1. what it needs -- */}
       <Section title="What it needs from you">
         {row.question !== null ? (
           <>
-            <HeldBack why={answeringOff} />
+            <HeldBack why={answeringOff} gate={row.question.gate} />
             <QuestionCard
               question={row.question}
-              onAnswer={unaddressable === null && answeringOff === null ? onAnswer : null}
+              onAnswer={
+                unaddressable === null && answeringOff === null && row.question.gate.kind === "conversation"
+                  ? onAnswer
+                  : null
+              }
               busy={busy}
             />
           </>
@@ -279,7 +448,20 @@ export function SessionDetail({
         )}
       </Section>
 
-      {/* ------------------------------------------------ 2. steering -- */}
+      {/* ------------------------------------------------- 2. actions -- */}
+      <Section title="Do something to it">
+        <SessionActions
+          row={row}
+          feed={actions.feed}
+          api={actions.api}
+          asked={actions.asked}
+          error={actions.error}
+          unaddressable={unaddressable}
+          onChanged={actions.refresh}
+        />
+      </Section>
+
+      {/* ------------------------------------------------ 3. steering -- */}
       <Section title="Say something to it">
         <label className="tw:sr-only" htmlFor="steer-text">
           A message to send to this session
@@ -297,17 +479,38 @@ export function SessionDetail({
           <Button variant="loud" onClick={onSend} disabled={busy || text.trim() === "" || unaddressable !== null}>
             {busy ? "Sending…" : "Send"}
           </Button>
+          {/* The second gesture, not a fallback for the first. See `onQueue`. */}
+          <Button onClick={() => void onQueue()} disabled={busy || text.trim() === "" || unaddressable !== null}>
+            Queue it
+          </Button>
           {/* The newline rule is the server's and is checked there. It is worth
               saying up front because it is surprising: Claude Code's input box
               submits on Enter, so a two-line message would arrive as two, the
               first of them half a sentence. */}
           <span className="tw:text-[12px] tw:text-ink-faint">One line — a newline would submit it early.</span>
         </div>
+        <p className="tw:mt-1 tw:text-[12px] tw:text-ink-faint">
+          Send types it at the pane now. Queue puts it in the line below with anything else you have pressed, in
+          order, to go when the session is next at a prompt.
+        </p>
       </Section>
 
       {outcome === null ? null : <Outcome outcome={outcome} onRefresh={onRefresh} />}
+      {queueOutcome === null ? null : <ActionOutcomeCard outcome={queueOutcome} onRefresh={actions.refresh} />}
 
-      {/* ---------------------------------------- 3. the empty slot -- */}
+      {/* --------------------------------------------- 4. the queue -- */}
+      <Section title="Waiting to go to it">
+        <SessionQueue
+          sessionId={row.id}
+          feed={actions.feed}
+          api={actions.api}
+          asked={actions.asked}
+          error={actions.error}
+          onChanged={actions.refresh}
+        />
+      </Section>
+
+      {/* ---------------------------------------- 5. the empty slot -- */}
       <Section title="Recent messages">
         <div className="tw:rounded-lg tw:border tw:border-dashed tw:border-rule-strong tw:p-3 tw:text-[13px] tw:text-ink-soft">
           <p className="tw:font-medium tw:text-ink">Recent messages are not wired up yet.</p>
@@ -328,7 +531,7 @@ export function SessionDetail({
         </div>
       </Section>
 
-      {/* --------------------------------------------- 4. where it is -- */}
+      {/* --------------------------------------------- 6. where it is -- */}
       <Section title="Where it is">
         {where === null ? (
           <p className="tw:text-[13px] tw:text-ink-faint">no repo recorded</p>

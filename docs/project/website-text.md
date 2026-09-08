@@ -76,6 +76,10 @@ component nothing renders.
 The Contact page is the one place in the chrome that spells the address, and it says the Feedback
 button is the better route anyway.
 
+**One entry in the row carries a mark**, and it is the only one that does. Greg, 2026-09-07:
+*"create a brief /opensource page in the footer with links to/from various other pages, using GitHub
+logo to indicate."* See [§ The open-source page](#the-open-source-page).
+
 ## The contact page
 
 [`ContactPage.tsx`](../../src/web/ContactPage.tsx) at `/contact`, since 2026-09-05, because Greg
@@ -115,6 +119,32 @@ see § The footer above. The plan
 ([260905c](../plans/260905c-contact-page-and-a-warmer-feedback-thank-you.md)) names that as a
 judgment call Greg can overrule in one line, along with the decision not to add it to `SiteNav`,
 whose top bar was measured tight at the 320px reflow width.
+
+## The open-source page
+
+[`/opensource`](../../src/web/OpenSourcePage.tsx), since 2026-09-07. Greg:
+
+> create a brief /opensource page in the footer with links to/from various other pages, using GitHub
+> logo to indicate.
+
+Four short paragraphs in `/privacy`'s shape rather than the marketing shell — the repository, the
+MIT licence, the docs folder and the vision doc, that most of the codebase was written by AI agents,
+and a pointer at `/privacy` and `/changelog`. **Everything on it is already true in
+[README.md](../../README.md)** § *Contributing* and § *Working here*, which owns those facts; the
+page is the reader-facing half-page of them, and a claim that appears only there is a claim nothing
+else can check.
+
+**The mark is a component of ours, and had to be.** [icons.md](icons.md) says Lucide and only
+Lucide, and that stands — but Lucide dropped its brand glyphs before the v1 we are on, so
+`lucide-react@1.34.0` exports nothing matching `/github/i`. There is no icon to import and no second
+icon library to add, so [`GitHubMark.tsx`](../../src/web/GitHubMark.tsx) sits beside
+[`GoogleMark.tsx`](../../src/web/GoogleMark.tsx) and for the reason that file gives. It differs from
+its neighbour in one way that matters: GitHub's is a monochrome mark published to be used as one, so
+it takes `currentColor` and goes faint with the row it is in, where Google's four-colour asset may
+not be recoloured at all.
+
+**Not on `SiteNav`**, and not on the landing page: it is a page somebody looks for by name, and the
+top bar was measured tight at the 320px reflow width when `/contact` wanted a place there too.
 
 ## The privacy policy
 

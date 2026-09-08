@@ -9,9 +9,10 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-import { parseObservation, type FreshSnapshot, type JsonValue } from "../tools/overseer/observation.js";
+import { admissible, type AdmissibleSnapshot } from "../tools/overseer/admissible.js";
+import { parseObservation, type JsonValue } from "../tools/overseer/observation.js";
 
-/** The eight files, named so a typo is a compile error rather than an ENOENT at run time. */
+/** The ten files, named so a typo is a compile error rather than an ENOENT at run time. */
 export type FixtureName =
   | "status-change-before"
   | "status-change-after"
@@ -20,7 +21,9 @@ export type FixtureName =
   | "session-new-before"
   | "session-new-after"
   | "duplicate-first"
-  | "duplicate-second";
+  | "duplicate-second"
+  | "waiting-first"
+  | "waiting-second";
 
 export const EVERY_FIXTURE: readonly FixtureName[] = [
   "status-change-before",
@@ -31,6 +34,8 @@ export const EVERY_FIXTURE: readonly FixtureName[] = [
   "session-new-after",
   "duplicate-first",
   "duplicate-second",
+  "waiting-first",
+  "waiting-second",
 ];
 
 /**
@@ -56,18 +61,24 @@ export function rowsOf(snapshot: Record<string, JsonValue>): Record<string, Json
 }
 
 /**
- * A fixture through the real parser, refusing loudly rather than returning a
- * half-built object — a fixture that stopped parsing is the whole warning in
- * that README, and a test helper that swallowed it would hide it.
+ * A fixture through the real parser AND the real gate, refusing loudly rather
+ * than returning a half-built object — a fixture that stopped parsing is the
+ * whole warning in that README, and a test helper that swallowed it would hide
+ * it.
+ *
+ * IT GOES THROUGH `admissible()` BECAUSE IT HAS TO. `diff()` takes an
+ * `AdmissibleSnapshot`, a branded type only that function can mint, so there is
+ * no shortcut here even for a test — which is the point of the brand (S2-07).
+ * The gate is called with no predecessor, so every rule but the clock-ordering
+ * one still runs: a fixture with a non-null `error`, a null clock or an
+ * unparseable field throws here rather than reaching a differ.
  */
-export function freshFixture(name: FixtureName): FreshSnapshot {
+export function freshFixture(name: FixtureName): AdmissibleSnapshot {
   return freshFrom(rawFixture(name), name);
 }
 
-export function freshFrom(payload: JsonValue, label: string): FreshSnapshot {
-  const parsed = parseObservation(payload);
-  if (!parsed.ok) throw new Error(`${label} did not parse: ${parsed.reason}`);
-  const { clock } = parsed.value;
-  if (!clock.collected) throw new Error(`${label} has no collectedAt, so it is not a collection`);
-  return { ...parsed.value, clock };
+export function freshFrom(payload: JsonValue, label: string): AdmissibleSnapshot {
+  const verdict = admissible(null, parseObservation(payload));
+  if (verdict.verdict !== "accept") throw new Error(`${label} is not a collection: ${verdict.reason}`);
+  return verdict.snapshot;
 }

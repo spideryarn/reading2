@@ -1,0 +1,2 @@
+1244269       1  564476 bash /tmp/fake-codex-qAz9Um/codex -o /tmp/run-codex-gc.txt
+1244270 1244269  564476 bash /tmp/fake-codex-qAz9Um/codex -o /tmp/run-codex-gc.txt

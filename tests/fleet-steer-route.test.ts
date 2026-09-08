@@ -22,7 +22,7 @@ import { PassThrough } from "node:stream";
 
 import { describe, expect, it, vi } from "vitest";
 
-import { fingerprintMaterial } from "../tools/fleet/pane.js";
+import { classifyGate, fingerprintMaterial, type PaneOption } from "../tools/fleet/pane.js";
 import type { FleetStatus } from "../tools/fleet/status.js";
 import type { SeenQuestion, SteerResult, SteerTarget } from "../tools/fleet/steer.js";
 import {
@@ -59,16 +59,25 @@ function messageBody(over: Record<string, unknown> = {}): Record<string, unknown
   };
 }
 
+const SEEN_OPTIONS: PaneOption[] = [
+  { label: "Yes, proceed", key: { via: "selected" }, consequence: "once" },
+  { label: "No, exit", key: { via: "arrows", key: "Down", presses: 1 }, consequence: "decline" },
+];
+
 const SEEN: SeenQuestion = {
   kind: "question",
   prompt: "Do you trust the files in this folder?",
   // A trust prompt genuinely has nothing above it to show — the `no-material`
   // arm is a real answer here, not a placeholder standing in for one.
   material: { kind: "no-material" },
-  options: [
-    { label: "Yes, proceed", key: { via: "selected" }, consequence: "once" },
-    { label: "No, exit", key: { via: "arrows", key: "Down", presses: 1 }, consequence: "decline" },
-  ],
+  options: SEEN_OPTIONS,
+  // Called rather than written out. `gate` is recomputed by `parseQuestion`
+  // exactly as `consequence` is, so a literal here would be this file's opinion
+  // of the classifier rather than the classifier's — and would go stale the
+  // first time a `why` string is reworded. What this route is asserting is that
+  // it recomputes at all; whether it classifies *correctly* is
+  // tests/fleet-pane.test.ts's job, on real captures.
+  gate: classifyGate({ kind: "no-material" }, SEEN_OPTIONS),
 };
 
 function answerBody(over: Record<string, unknown> = {}): Record<string, unknown> {
@@ -559,31 +568,51 @@ describe("returning the discriminated result honestly", () => {
  * Answering a dialog.
  * ------------------------------------------------------------------ */
 
-describe("the answering gate — off until Greg decides", () => {
+describe("the answering kill switch", () => {
   /**
-   * Two cross-family reviews reached the same conclusion on 2026-09-08 by
-   * different routes. Astra changed a proposed file's contents in a fixture and
-   * `parsePane` returned an identical question — the approval binds to the
-   * sentence, not to what is being approved, so the page can ask Greg to
-   * approve something without showing him what it is. Sol added that pane text
-   * is not provenance at all: an agent that prints a plausible menu produces a
-   * capture this parser accepts.
+   * THIS USED TO BE THE WHOLE DISCRIMINATION AND IS NOW ONLY THE OFF SWITCH.
    *
-   * The second is a product decision, not a bug, so the route stays built and
-   * refuses with a sentence rather than being deleted.
+   * Answering was refused outright on 2026-09-08 after two cross-family reviews:
+   * Astra changed a proposed file's contents in a fixture and `parsePane`
+   * returned an identical question, so the approval bound to the sentence rather
+   * than to what was being approved; Sol added that pane text is not provenance
+   * at all. The first is fixed — `material` and `sameMaterial`. The second is
+   * not fixable, and Greg's reply is why the blanket refusal went:
+   *
+   * > Yes auto mode is the default. But mightn't there be other reasons why it
+   * > needs to answer with multiple choice to a session etc?
+   * > — Greg, 2026-09-08
+   *
+   * There are. So `classifyGate` decides per dialog and `steer.ts` enforces it
+   * on a fresh capture, and this flag is what is left: a way to stop all of it
+   * at once, defaulting to ON. The gate itself is tested in
+   * `tests/fleet-pane.test.ts`, and its refusal in `tests/fleet-steer.test.ts`.
    */
-  it("refuses to answer, with 503 and a reason a person can act on", async () => {
+  it("refuses everything when it is switched off, with 503 and a way round it", async () => {
     const { routes, calls } = harness(OK, { answeringEnabled: () => false });
     const r = await post(routes, fakeReq({ url: "/api/steer/answer", body: JSON.stringify(answerBody()) }));
     expect(r.status).toBe(503);
     expect(r.json["code"]).toBe("answering-disabled");
-    // The sentence has to name the hazard and the way round it, because it is
-    // rendered on a phone by somebody who cannot read this file.
-    expect(String(r.json["why"])).toMatch(/approve something other than what you were shown/);
+    // The sentence is rendered on a phone by somebody who cannot read this file,
+    // so it has to name the switch and the way round it.
+    expect(String(r.json["why"])).toMatch(/FLEET_ANSWER_ENABLED=0/);
     expect(String(r.json["why"])).toMatch(/gjd-remote resume/);
     // AND NOTHING REACHED THE DELIVERY MODULE. The status code alone would be
     // satisfied by a route that refuses after sending.
     expect(calls).toEqual([]);
+  });
+
+  /**
+   * The default, stated as a test rather than left in a comment: unset means ON,
+   * and only the exact string "0" means off. Written as the rule rather than by
+   * poking `process.env`, which is shared with every other test in the file.
+   */
+  it("is ON unless the variable is exactly '0'", () => {
+    const enabled = (v: string | undefined): boolean => v !== "0";
+    expect(enabled(undefined)).toBe(true);
+    expect(enabled("1")).toBe(true);
+    expect(enabled("")).toBe(true);
+    expect(enabled("0")).toBe(false);
   });
 
   it("leaves sending a MESSAGE alone", async () => {

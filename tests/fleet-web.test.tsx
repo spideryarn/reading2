@@ -49,7 +49,18 @@ import {
   choosePanes,
   spreadIntoColumns,
 } from "../tools/fleet/web/src/fit";
+import {
+  cancelBody,
+  makeActionsApi,
+  parseAction,
+  parseActionsFeed,
+  parseQueue,
+  sessionActionBody,
+  sessionMessageBody,
+  type ActionsApi,
+} from "../tools/fleet/web/src/actions-client";
 import { makeNewSessionApi, parseLaunch, type NewSessionApi } from "../tools/fleet/web/src/new-session-client";
+import { looksLikeAName, makeRenameApi, renameBody, type RenameApi } from "../tools/fleet/web/src/rename-client";
 import { steerMessageBody, type SteerApi, type SteerOutcome } from "../tools/fleet/web/src/steer-client";
 import { readHealthStats } from "../tools/fleet/web/src/health-view";
 import { fetchFleetState } from "../tools/fleet/web/src/transport";
@@ -208,8 +219,26 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+/**
+ * The page, with every write path faked.
+ *
+ * All four seams are injected rather than left to their defaults, so that no
+ * test in this file can reach `fetch` by accident — a suite that quietly made
+ * real requests would pass and would tell you nothing about the seams it
+ * thought it was exercising. The handful of tests that DO want the real wire
+ * stub `fetch` and render `<App>` themselves.
+ */
 function mount(transport: Transport): void {
-  act(() => root.render(<App transport={transport} />));
+  act(() =>
+    root.render(
+      <App
+        transport={transport}
+        rename={fakeRename()}
+        actionsApi={recordingActions().api}
+        actionsPollMs={3_600_000}
+      />,
+    ),
+  );
 }
 
 /** Every card's heading, in the order they appear on the page. */
@@ -269,6 +298,7 @@ describe("the list", () => {
                   { label: "Yes, and don't ask again", key: { via: "digit", digit: "2" }, consequence: "persistent" },
                   { label: "No, tell Claude what to do differently", key: { via: "selected" }, consequence: "decline" },
                 ],
+                gate: { kind: "permission", why: "one of the options would stop it asking again" },
               },
             }),
           ],
@@ -488,7 +518,7 @@ describe("the modes", () => {
     window.location.hash = "#orchestrator";
     const feed = manualTransport();
     mount(feed.transport);
-    expect(container.textContent).toContain("There is no orchestrator yet.");
+    expect(container.textContent).toContain("Everything queued, across the fleet");
   });
 });
 
@@ -635,7 +665,15 @@ describe("the escaping this rewrite exists for", () => {
               title: "<img src=x onerror=alert(1)>",
               repo: "<script>alert(2)</script>",
               status: { kind: "needs-you" },
-              question: { prompt: "<b>bold?</b>", options: [], material: { kind: "no-material" } },
+              question: {
+                prompt: "<b>bold?</b>",
+                options: [],
+                material: { kind: "no-material" },
+                // Hostile text in the gate's own sentence too: it is rendered,
+                // so it is a surface, and this file's whole job is that every
+                // surface escapes.
+                gate: { kind: "unknown", why: "<script>alert(3)</script>" },
+              },
             }),
           ],
         }),
@@ -1221,19 +1259,100 @@ function fakeNewSession(over: Partial<NewSessionApi> = {}): NewSessionApi {
   };
 }
 
-function mountFull(args: { transport: Transport; steer?: SteerApi; newSession?: NewSessionApi }): void {
+/** A rename api that accepts everything and changes nothing. */
+function fakeRename(over: Partial<RenameApi> = {}): RenameApi {
+  return { rename: async (_row, name) => ({ ok: true, name, was: null }), ...over };
+}
+
+/**
+ * A feed as the actions route sends one, with only the interesting part named.
+ *
+ * Written as the **wire shape** rather than as `ActionsFeed`, so every test that
+ * uses it goes through `parseActionsFeed` — which is the thing that has to be
+ * right, and the thing a hand-built `ActionsFeed` would skip past.
+ */
+function actionsWire(over: { actions?: unknown[]; queues?: unknown[] } = {}): Record<string, unknown> {
+  return { actions: over.actions ?? [], queues: over.queues ?? [] };
+}
+
+/**
+ * An actions api that records every call and answers as the route does.
+ *
+ * `feed` is a function rather than a value so a test can change what the server
+ * says between calls — which is what makes "the queue is re-read after a
+ * mutation" observable rather than assumed.
+ */
+function recordingActions(
+  feedOf: () => Record<string, unknown> = () => actionsWire(),
+  over: Partial<ActionsApi> = {},
+): {
+  api: ActionsApi;
+  calls: { op: string; arg: string; second?: string | boolean }[];
+  feeds: () => number;
+} {
+  const calls: { op: string; arg: string; second?: string | boolean }[] = [];
+  let feeds = 0;
+  const api: ActionsApi = {
+    feed: async () => {
+      feeds += 1;
+      const read = parseActionsFeed(feedOf());
+      if (read === null) return { ok: false, why: "the fixture is not this API" };
+      return { ok: true, feed: read };
+    },
+    run: async (row, actionId) => {
+      calls.push({ op: "run", arg: actionId, second: row.id });
+      return { ok: true, kind: "queued", position: 1, why: null };
+    },
+    queueMessage: async (row, text) => {
+      calls.push({ op: "queueMessage", arg: text, second: row.id });
+      return { ok: true, kind: "queued", position: 1, why: null };
+    },
+    cancel: async (sessionId, itemId) => {
+      calls.push({ op: "cancel", arg: sessionId, second: itemId });
+      return { ok: true, kind: "accepted" };
+    },
+    box: async (actionId, dryRun) => {
+      calls.push({ op: "box", arg: actionId, second: dryRun });
+      return { ok: true, dryRun, dryRunStated: true, would: [], why: null };
+    },
+    ...over,
+  };
+  return { api, calls, feeds: () => feeds };
+}
+
+function mountFull(args: {
+  transport: Transport;
+  steer?: SteerApi;
+  newSession?: NewSessionApi;
+  rename?: RenameApi;
+  actionsApi?: ActionsApi;
+}): void {
   act(() =>
     root.render(
       <App
         transport={args.transport}
         steer={args.steer ?? recordingSteer().api}
         newSession={args.newSession ?? fakeNewSession()}
+        rename={args.rename ?? fakeRename()}
+        actionsApi={args.actionsApi ?? recordingActions().api}
+        /* An hour, so the poll never fires inside a test. The poll itself is
+           tested on its own; leaving it live here would make every other test
+           in the file depend on a timer. */
+        actionsPollMs={3_600_000}
       />,
     ),
   );
 }
 
-/** A dialog with a body to approve, as the server sends one. */
+/**
+ * A dialog with a body to approve, as the server sends one.
+ *
+ * **Its `gate` defaults to `permission`, and that is on purpose**: what this
+ * fixture describes IS a permission prompt — it has a "don't ask again" option
+ * and a diff above it. A `conversation` default would have been the convenient
+ * one, and every test about tapping would have gone on passing while the
+ * discrimination went untested. Tests that want a tappable dialog say so.
+ */
 function question(over: Partial<FleetState["rows"][number]["question"] & object> = {}): NonNullable<
   FleetState["rows"][number]["question"]
 > {
@@ -1245,6 +1364,7 @@ function question(over: Partial<FleetState["rows"][number]["question"] & object>
       { label: "Yes, and don't ask again", key: { via: "digit", digit: "2" }, consequence: "persistent" },
       { label: "No", key: { via: "selected" }, consequence: "decline" },
     ],
+    gate: { kind: "permission", why: "one of the options would stop it asking again" },
     ...over,
   };
 }
@@ -1639,7 +1759,7 @@ describe("what is actually being approved", () => {
               id: "$a",
               title: "a loop menu",
               status: { kind: "needs-you" },
-              question: question({ material: { kind: "no-material" } }),
+              question: question({ material: { kind: "no-material" }, gate: { kind: "conversation" } }),
             }),
           ],
         }),
@@ -1651,21 +1771,175 @@ describe("what is actually being approved", () => {
   });
 });
 
-describe("answering, which is held back at the server", () => {
-  it("says so before anybody taps, and says a message is different", () => {
+describe("answering, and the dialogs it is not offered for", () => {
+  /**
+   * THE DISCRIMINATION, on the page. The same `steerable` row, twice, with only
+   * the gate different — so a build that offered buttons unconditionally, or
+   * refused unconditionally, fails one half of this whichever way it went.
+   */
+  it("offers buttons for an agent's own question and not for a permission prompt", () => {
     const feed = manualTransport();
     mountFull({ transport: feed.transport });
     act(() =>
-      feed.push(state({ rows: [steerable({ id: "$a", title: "asking", status: { kind: "needs-you" }, question: question() })] })),
+      feed.push(
+        state({
+          rows: [
+            steerable({
+              id: "$a",
+              title: "an agent asking",
+              status: { kind: "needs-you" },
+              question: question({ gate: { kind: "conversation" } }),
+            }),
+          ],
+        }),
+      ),
     );
-    openSession("asking");
+    openSession("an agent asking");
+    expect(container.querySelectorAll("button.answer").length).toBeGreaterThan(0);
+    // No standing caution above a dialog that is genuinely answerable — the
+    // blanket warning was the thing Greg pushed back on.
+    expect(container.textContent).not.toContain("not a button");
+
+    act(() =>
+      feed.push(
+        state({
+          rows: [
+            steerable({
+              id: "$a",
+              title: "an agent asking",
+              status: { kind: "needs-you" },
+              question: question({ gate: { kind: "permission", why: "one option would stop it asking again" } }),
+            }),
+          ],
+        }),
+      ),
+    );
     const text = container.textContent ?? "";
-    /* Not discovered by tapping. Screen text is not provenance — an agent given
-       hostile input can print a plausible menu — and whether to ship answering
-       anyway is Greg's call. */
-    expect(text).toContain("Answering is held back");
-    expect(text).toContain("screen text is not proof");
-    expect(text).toContain("Sending a message, further down, is not affected");
+    expect(container.querySelectorAll("button.answer")).toHaveLength(0);
+    expect(text).toContain("grants a permission, so it is not a button");
+    expect(text).toContain("one option would stop it asking again");
+    expect(text).toContain("gjd-remote resume");
+    // The options are still READABLE, which is the positive half: taking the
+    // buttons away must not take the information away.
+    expect(text).toContain("Yes, and don't ask again");
+  });
+
+  /**
+   * "I could not tell" is treated exactly as `permission`, and a server too old
+   * to send `gate` at all lands there.
+   *
+   * Asserted through **`parseFleetState`, not through a hand-built row**,
+   * because that is the only path an older server's payload actually takes: the
+   * component fixtures in this file are typed values that never meet the
+   * parser, so a test built from one would be asserting my opinion of the
+   * default rather than the default. `parseGate` failing towards `unknown` is
+   * the whole safety property — the convenient direction would have been the
+   * one that makes the buttons appear.
+   */
+  it("reads a question with no gate as one it could not classify", () => {
+    const parsed = parseFleetState({
+      schema: 1,
+      collectedAt: new Date().toISOString(),
+      rows: [
+        {
+          id: "$a",
+          name: "a",
+          title: "asking",
+          startedAt: new Date().toISOString(),
+          status: { kind: "needs-you" },
+          // Exactly what a server built before 2026-09-08 sends: a question
+          // with everything except the field that decides tappability.
+          question: {
+            kind: "question",
+            prompt: "Do you want to proceed?",
+            material: { kind: "no-material" },
+            options: [{ label: "Yes", key: { via: "digit", digit: "1" }, consequence: "once" }],
+          },
+        },
+      ],
+    });
+    if (!parsed.ok) throw new Error(parsed.why);
+    const gate = parsed.state.rows[0]?.question?.gate;
+    expect(gate?.kind).toBe("unknown");
+    expect(gate?.kind === "unknown" ? gate.why : "").toContain("did not say");
+
+    // The paired positive, so this cannot pass by everything parsing to unknown.
+    const good = parseFleetState({
+      schema: 1,
+      collectedAt: new Date().toISOString(),
+      rows: [
+        {
+          id: "$a",
+          name: "a",
+          title: "asking",
+          startedAt: new Date().toISOString(),
+          status: { kind: "needs-you" },
+          question: {
+            kind: "question",
+            prompt: "Which colour?",
+            material: { kind: "no-material" },
+            options: [{ label: "Blue", key: { via: "digit", digit: "1" }, consequence: "unknown" }],
+            gate: { kind: "conversation" },
+          },
+        },
+      ],
+    });
+    if (!good.ok) throw new Error(good.why);
+    expect(good.state.rows[0]?.question?.gate.kind).toBe("conversation");
+  });
+
+  /**
+   * Every arm off the wire, one assertion each.
+   *
+   * Added after a mutation found the hole: with only "no gate ⇒ unknown" and
+   * "conversation ⇒ conversation" above, a `parseGate` that returned
+   * `conversation` for EVERYTHING except a missing field left all 155 tests
+   * green — and that build offers buttons on every permission dialog on the
+   * box. The arm nobody asserted was the one that mattered.
+   */
+  it("keeps each gate arm distinct, and rounds an unrecognised one down", () => {
+    const gateOf = (gate: unknown) => {
+      const parsed = parseFleetState({
+        schema: 1,
+        collectedAt: new Date().toISOString(),
+        rows: [
+          {
+            id: "$a",
+            name: "a",
+            title: "asking",
+            startedAt: new Date().toISOString(),
+            status: { kind: "needs-you" },
+            question: {
+              kind: "question",
+              prompt: "Do you want to proceed?",
+              material: { kind: "no-material" },
+              options: [{ label: "Yes", key: { via: "digit", digit: "1" }, consequence: "once" }],
+              gate,
+            },
+          },
+        ],
+      });
+      if (!parsed.ok) throw new Error(parsed.why);
+      const out = parsed.state.rows[0]?.question?.gate;
+      if (out === undefined) throw new Error("the row parsed without a question");
+      return out;
+    };
+
+    const permission = gateOf({ kind: "permission", why: "one option would stop it asking again" });
+    expect(permission.kind).toBe("permission");
+    expect(permission.kind === "permission" ? permission.why : "").toBe("one option would stop it asking again");
+
+    const cannotTell = gateOf({ kind: "unknown", why: "the body did not start with a header" });
+    expect(cannotTell.kind).toBe("unknown");
+    expect(cannotTell.kind === "unknown" ? cannotTell.why : "").toBe("the body did not start with a header");
+
+    expect(gateOf({ kind: "conversation" }).kind).toBe("conversation");
+
+    // An arm from a NEWER server. Rounded down rather than up, and the sentence
+    // names what it did not recognise so the page is not merely mysterious.
+    const future = gateOf({ kind: "configuration", why: "changes a harness setting" });
+    expect(future.kind).toBe("unknown");
+    expect(future.kind === "unknown" ? future.why : "").toContain("configuration");
   });
 
   it("shows the server's 503 in the server's own words, and stops offering buttons after it", async () => {
@@ -1678,8 +1952,21 @@ describe("answering, which is held back at the server", () => {
       transport: feed.transport,
       steer: refusingSteer({ ok: false, code: "answering-disabled", why, status: 503, from: "server" }),
     });
+    // `conversation`, so the buttons are there to be taken away. The whole
+    // server being switched off is a fact the page cannot know until it asks.
     act(() =>
-      feed.push(state({ rows: [steerable({ id: "$a", title: "asking", status: { kind: "needs-you" }, question: question() })] })),
+      feed.push(
+        state({
+          rows: [
+            steerable({
+              id: "$a",
+              title: "asking",
+              status: { kind: "needs-you" },
+              question: question({ gate: { kind: "conversation" } }),
+            }),
+          ],
+        }),
+      ),
     );
     openSession("asking");
     expect(container.querySelectorAll("button.answer").length).toBeGreaterThan(0);
@@ -1690,7 +1977,7 @@ describe("answering, which is held back at the server", () => {
 
     const text = container.textContent ?? "";
     expect(text).toContain("gjd-remote resume");
-    expect(text).toContain("Answering is switched off on this server");
+    expect(text).toContain("The server would not answer this");
     /* A control that refuses every time you press it is worse than one that
        explains itself, so the options go back to being a list — and the list is
        still there, which is the positive half of this pair. */
@@ -1738,6 +2025,11 @@ describe("the rule about sending the server its own claims back", () => {
       { label: "Yes", key: { via: "digit", digit: "1" }, consequence: "once" },
       { label: "No, tell Claude what to do differently", key: { via: "selected" }, consequence: "decline" },
     ],
+    // `conversation`, because this pair of tests is about the round trip and
+    // needs a button to press. What is on the wire is what goes back, and that
+    // is the assertion — the gate decides whether the button exists, and is
+    // tested for that above.
+    gate: { kind: "conversation" },
     capturedAt: "2026-09-08T12:00:04.113Z",
   };
 
@@ -1782,9 +2074,21 @@ describe("the rule about sending the server its own claims back", () => {
     vi.stubGlobal("fetch", recorded.impl);
 
     const feed = manualTransport();
-    // The REAL steer api, so this test exercises the bytes on the wire rather
-    // than a seam that could be right while the wire is wrong.
-    act(() => root.render(<App transport={feed.transport} newSession={fakeNewSession()} />));
+    /* The REAL steer api, so this test exercises the bytes on the wire rather
+       than a seam that could be right while the wire is wrong. Every OTHER
+       write path is faked, so the only call this stubbed `fetch` sees is the
+       one under test — which is what lets the assertion below count them. */
+    act(() =>
+      root.render(
+        <App
+          transport={feed.transport}
+          newSession={fakeNewSession()}
+          rename={fakeRename()}
+          actionsApi={recordingActions().api}
+          actionsPollMs={3_600_000}
+        />,
+      ),
+    );
     act(() => feed.push(parsed));
     openSession("asking about an edit");
 
@@ -1823,7 +2127,17 @@ describe("the rule about sending the server its own claims back", () => {
     vi.stubGlobal("fetch", recorded.impl);
 
     const feed = manualTransport();
-    act(() => root.render(<App transport={feed.transport} newSession={fakeNewSession()} />));
+    act(() =>
+      root.render(
+        <App
+          transport={feed.transport}
+          newSession={fakeNewSession()}
+          rename={fakeRename()}
+          actionsApi={recordingActions().api}
+          actionsPollMs={3_600_000}
+        />,
+      ),
+    );
     act(() => feed.push(parsed));
     openSession("asking about an edit");
     await act(async () => {
@@ -1831,6 +2145,13 @@ describe("the rule about sending the server its own claims back", () => {
     });
 
     expect(recorded.calls.map((c) => c.url)).toEqual(["api/steer/answer"]);
+    /* Stated separately, and about the URL that would actually do the damage.
+       The assertion above is exact and would catch a refresh today; it would
+       stop catching one the moment somebody legitimately added a second call
+       to this path, and `api/state` is the one that must never appear whatever
+       else does. */
+    expect(recorded.calls.map((c) => c.url)).not.toContain("api/state");
+    expect(recorded.calls).toHaveLength(1);
   });
 
   it("sends the status object the server sent, not the one this build parsed it into", () => {
@@ -2168,5 +2489,820 @@ describe("the list card, in the narrow column beside an open detail", () => {
     } finally {
       undo();
     }
+  });
+});
+
+/* ===================================================================== *
+ * v0.5 — the action buttons, the queue, and the box.
+ * ===================================================================== */
+
+/**
+ * The catalogue as `tools/fleet/actions.ts` serialises it.
+ *
+ * Written out as wire objects rather than built from the client's own types,
+ * because the thing under test is the parse — a fixture typed as `ClientAction`
+ * would agree with the parser by construction, which is the shape of check
+ * docs/reusable/silent-success.md is about.
+ */
+const CONTINUE_WIRE = {
+  effect: "spoken",
+  id: "continue",
+  scope: "session",
+  label: "Continue",
+  summary: "Resume, after saying in one sentence what is being resumed.",
+  text: "Carry on with the task you were given. Before you do, say in one sentence what you are resuming.",
+  form: "prose",
+  needsConfirm: false,
+};
+
+const COMPACT_WIRE = {
+  effect: "spoken",
+  id: "compact",
+  scope: "session",
+  label: "Compact",
+  summary: "/compact, told what to keep and what to drop.",
+  text: "/compact Keep the original brief, the plan doc and where you are in it.",
+  form: "slash-command",
+  needsConfirm: true,
+};
+
+const REMOVE_WORKTREE_WIRE = {
+  effect: "enacted",
+  id: "remove-worktree",
+  scope: "session",
+  label: "Remove worktree",
+  summary: "Delete this agent's working tree, after the check that git cannot do.",
+  needsConfirm: true,
+  gate: "npm run worktree:check must exit 0 inside the tree first. git status is not that check.",
+};
+
+const KILL_SUITES_WIRE = {
+  effect: "enacted",
+  id: "kill-test-suites",
+  scope: "box",
+  label: "Kill test suites",
+  summary: "SIGTERM every vitest runner on the box.",
+  needsConfirm: true,
+  gate: "Each pid must satisfy the vitest-runner rule and none of the standing refusals.",
+};
+
+const BROADCAST_WIRE = {
+  effect: "broadcast",
+  id: "resource-broadcast",
+  scope: "box",
+  label: "Broadcast: ease off, staggered",
+  summary: "Tell every steerable session the box is loaded, each with its own resume time.",
+  needsConfirm: true,
+  stagger: { minMinutes: 5, windowMinutes: 60 },
+};
+
+/** One queue, as queue.ts's `QueueSnapshot` serialises. */
+function queueWire(over: { sessionId?: string; items?: unknown[]; warning?: string | null } = {}): Record<string, unknown> {
+  const wire: Record<string, unknown> = {
+    sessionId: over.sessionId ?? "$1643",
+    items: over.items ?? [],
+    volatile: true,
+    since: 1_757_000_000_000,
+  };
+  if (over.warning !== null) {
+    wire["warning"] =
+      over.warning ?? "Queued items live in the fleet server's memory. Restarting it discards every one of them.";
+  }
+  return wire;
+}
+
+function itemWire(over: { id: string; payload: unknown; leasedAt?: number }): Record<string, unknown> {
+  return {
+    id: over.id,
+    sessionId: "$1643",
+    claudeSessionId: "117e181a-155b-435a-b95b-e74220678d1a",
+    payload: over.payload,
+    enqueuedAt: 1_757_000_000_500,
+    leasedAt: over.leasedAt ?? null,
+  };
+}
+
+/** Every button on the page, by its words. */
+function buttonLabels(): string[] {
+  return [...container.querySelectorAll<HTMLButtonElement>("button")].map((b) => b.textContent ?? "");
+}
+
+async function clickSaying(text: string): Promise<void> {
+  const button = buttonSaying(text);
+  if (!button) {
+    throw new Error(`no button saying ${JSON.stringify(text)}; the page has ${JSON.stringify(buttonLabels())}`);
+  }
+  await act(async () => {
+    button.click();
+  });
+}
+
+describe("the action buttons, which are the server's vocabulary", () => {
+  const ROW = steerable({ id: "$1643", title: "the one with buttons" });
+
+  function openWith(
+    actions: unknown[],
+    over: { queues?: unknown[]; api?: ReturnType<typeof recordingActions> } = {},
+  ): ReturnType<typeof recordingActions> {
+    const rec = over.api ?? recordingActions(() => actionsWire({ actions, queues: over.queues ?? [] }));
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport, actionsApi: rec.api });
+    act(() => feed.push(state({ rows: [ROW] })));
+    openSession("the one with buttons");
+    return rec;
+  }
+
+  it("draws exactly the actions the server sent, and nothing it invented", async () => {
+    openWith([CONTINUE_WIRE, COMPACT_WIRE, REMOVE_WORKTREE_WIRE, KILL_SUITES_WIRE]);
+    await act(async () => {});
+
+    // The session-scope ones are here…
+    expect(buttonLabels()).toContain("Continue");
+    expect(buttonLabels()).toContain("Compact");
+    expect(buttonLabels()).toContain("Remove worktree");
+    /* …and the BOX one is not, because it is not addressed to a session. The
+       negative is paired with the positives above: the list is not empty, it is
+       filtered. */
+    expect(buttonLabels()).not.toContain("Kill test suites");
+  });
+
+  it("has no hand-written list: a server offering nothing offers no buttons", async () => {
+    openWith([]);
+    await act(async () => {});
+    expect(container.textContent).toContain("This server offers no actions for a session.");
+    // The words that would have come from a local copy of the catalogue.
+    expect(buttonLabels()).not.toContain("Continue");
+  });
+
+  it("tells a server that sent no catalogue from one that sent an empty one", async () => {
+    const rec = recordingActions(() => ({ queues: [] }));
+    openWith([], { api: rec });
+    await act(async () => {});
+    expect(container.textContent).toContain("This server sent no list of actions at all");
+  });
+
+  it("sends a one-tap action straight through, with the row's own identifiers", async () => {
+    const rec = openWith([CONTINUE_WIRE]);
+    await act(async () => {});
+    await clickSaying("Continue");
+    expect(rec.calls.filter((c) => c.op === "run")).toEqual([{ op: "run", arg: "continue", second: "$1643" }]);
+    expect(container.textContent).toContain("Queued — number 1 in the line.");
+  });
+
+  it("shows the exact words before sending anything that asks twice", async () => {
+    const rec = openWith([COMPACT_WIRE]);
+    await act(async () => {});
+    await clickSaying("Compact");
+
+    // Nothing has been sent…
+    expect(rec.calls.filter((c) => c.op === "run")).toHaveLength(0);
+    // …and the words that WOULD be sent are on the page, verbatim.
+    expect(container.textContent).toContain(COMPACT_WIRE.text);
+    expect(container.textContent).toContain("Claude Code runs it — the agent cannot decline it.");
+
+    await clickSaying("Yes — compact");
+    expect(rec.calls.filter((c) => c.op === "run")).toEqual([{ op: "run", arg: "compact", second: "$1643" }]);
+  });
+
+  it("keeps an enacted action apart from a spoken one, in words and not only in colour", async () => {
+    openWith([CONTINUE_WIRE, REMOVE_WORKTREE_WIRE]);
+    await act(async () => {});
+    const text = container.textContent ?? "";
+    expect(text).toContain("Each of these types a sentence into its input box.");
+    expect(text).toContain("This tool runs a command — a directory deleted, a process signalled");
+    // The colour is carried too, but it is never the only carrier.
+    expect(buttonSaying("Remove worktree")?.className).toContain("alarm");
+  });
+
+  it("says, before you confirm an enacted action, that a working session queues it rather than doing it", async () => {
+    openWith([REMOVE_WORKTREE_WIRE]);
+    await act(async () => {});
+    await clickSaying("Remove worktree");
+    expect(container.textContent).toContain(REMOVE_WORKTREE_WIRE.gate);
+    expect(container.textContent).toContain(
+      "waits its turn in the queue rather than happening now — so pressing it and walking away is not the same as it being done",
+    );
+  });
+
+  it("lets a confirm be backed out of, without sending anything", async () => {
+    const rec = openWith([REMOVE_WORKTREE_WIRE]);
+    await act(async () => {});
+    await clickSaying("Remove worktree");
+    expect(container.textContent).toContain("Confirm: Remove worktree");
+    await clickSaying("Cancel");
+    expect(container.textContent).not.toContain("Confirm: Remove worktree");
+    // The button is still there to press — backing out is not giving up.
+    expect(buttonLabels()).toContain("Remove worktree");
+    expect(rec.calls.filter((c) => c.op === "run")).toHaveLength(0);
+  });
+
+  it("asks twice for an action whose gravity the server did not state", async () => {
+    /* `needsConfirm` absent. The mild default would be the wrong one: an
+       action nobody described must not be one tap. */
+    const undescribed = { ...CONTINUE_WIRE, id: "mystery", label: "Mystery", needsConfirm: undefined };
+    const rec = openWith([undescribed]);
+    await act(async () => {});
+    await clickSaying("Mystery");
+    expect(rec.calls.filter((c) => c.op === "run")).toHaveLength(0);
+    expect(container.textContent).toContain("Confirm: Mystery");
+  });
+
+  it("names an action it cannot classify, and refuses to offer it as a button", async () => {
+    const strange = { id: "reboot-the-box", scope: "session", label: "Reboot", effect: "detonate" };
+    openWith([CONTINUE_WIRE, strange]);
+    await act(async () => {});
+    expect(container.textContent).toContain("reboot-the-box");
+    expect(container.textContent).toContain('this page does not know the action kind "detonate"');
+    // Named, but not pressable — while the one it does understand still is.
+    expect(buttonLabels()).not.toContain("Reboot");
+    expect(buttonLabels()).toContain("Continue");
+  });
+
+  it("shows the server's refusal in the server's own words", async () => {
+    const rec = recordingActions(() => actionsWire({ actions: [CONTINUE_WIRE] }), {
+      run: async () => ({
+        ok: false,
+        code: "pane-moved",
+        why: "pane %1646 is in session $1643 now, not $1",
+        status: 409,
+        from: "server",
+      }),
+    });
+    openWith([CONTINUE_WIRE], { api: rec });
+    await act(async () => {});
+    await clickSaying("Continue");
+    expect(container.textContent).toContain("Nothing happened.");
+    expect(container.textContent).toContain("pane %1646 is in session $1643 now, not $1");
+    expect(container.textContent).toContain("said by the dashboard server");
+  });
+});
+
+describe("the queue, which is the feature and so is on screen", () => {
+  const ROW = steerable({ id: "$1643", title: "the one with a queue" });
+
+  function openQueue(items: unknown[], over: { warning?: string | null } = {}): ReturnType<typeof recordingActions> {
+    const rec = recordingActions(() =>
+      actionsWire({
+        actions: [CONTINUE_WIRE],
+        queues: [queueWire({ items, ...(over.warning === undefined ? {} : { warning: over.warning }) })],
+      }),
+    );
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport, actionsApi: rec.api });
+    act(() => feed.push(state({ rows: [ROW] })));
+    openSession("the one with a queue");
+    return rec;
+  }
+
+  it("shows what is waiting, in order, with what each one would say", async () => {
+    openQueue([
+      itemWire({ id: "q1", payload: { kind: "action", action: { ...CONTINUE_WIRE } } }),
+      itemWire({ id: "q2", payload: { kind: "message", text: "and then look at the eval corpus" } }),
+    ]);
+    await act(async () => {});
+    const text = container.textContent ?? "";
+    expect(text).toContain(CONTINUE_WIRE.text);
+    expect(text).toContain("and then look at the eval corpus");
+    // In order: the action was queued first and is drawn first.
+    expect(text.indexOf(CONTINUE_WIRE.text)).toBeLessThan(text.indexOf("and then look at the eval corpus"));
+  });
+
+  it("cancels one item, naming the session and the item off the snapshot", async () => {
+    const rec = openQueue([itemWire({ id: "q1", payload: { kind: "message", text: "hello" } })]);
+    await act(async () => {});
+    await clickSaying("Cancel");
+    expect(rec.calls.filter((c) => c.op === "cancel")).toEqual([{ op: "cancel", arg: "$1643", second: "q1" }]);
+  });
+
+  it("re-reads the queue after a press, rather than assuming what it did", async () => {
+    let items: unknown[] = [];
+    const rec = recordingActions(() => actionsWire({ actions: [CONTINUE_WIRE], queues: [queueWire({ items })] }));
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport, actionsApi: rec.api });
+    act(() => feed.push(state({ rows: [ROW] })));
+    openSession("the one with a queue");
+    await act(async () => {});
+
+    expect(container.textContent).toContain("Nothing is waiting.");
+    const before = rec.feeds();
+
+    /* The server accepts the press AND the queue it hands back afterwards has
+       the item in it — which is the only way the page can be right about this.
+       If the client did not re-read, the item would never appear. */
+    items = [itemWire({ id: "q9", payload: { kind: "message", text: "the newly queued thing" } })];
+    await clickSaying("Continue");
+    await act(async () => {});
+
+    /* The VISIBLE claim first, deliberately. A mutation that dropped the
+       re-read reddens the counter below too, and a test that fails on the
+       counter tells you a call was not made; this one tells you the person did
+       not see the thing they just queued, which is the claim in the name. */
+    expect(container.textContent).toContain("the newly queued thing");
+    expect(container.textContent).not.toContain("Nothing is waiting.");
+    expect(rec.feeds()).toBeGreaterThan(before);
+  });
+
+  it("carries the server's own warning that a restart discards the lot", async () => {
+    openQueue([itemWire({ id: "q1", payload: { kind: "message", text: "hello" } })]);
+    await act(async () => {});
+    expect(container.textContent).toContain(
+      "Queued items live in the fleet server's memory. Restarting it discards every one of them.",
+    );
+  });
+
+  it("says it anyway when the server did not, rather than showing a queue with no note on it", async () => {
+    openQueue([itemWire({ id: "q1", payload: { kind: "message", text: "hello" } })], { warning: null });
+    await act(async () => {});
+    expect(container.textContent).toContain("assume they do not");
+  });
+
+  it("says an item on its way out may not be recallable", async () => {
+    openQueue([itemWire({ id: "q1", payload: { kind: "message", text: "hello" }, leasedAt: 1_757_000_001_000 })]);
+    await act(async () => {});
+    expect(container.textContent).toContain("Being delivered now.");
+    expect(container.textContent).toContain("there is no receipt for a keystroke");
+    /* And Cancel is still offered: whether a lease can be cancelled is the
+       server's rule, not this page's. */
+    expect(buttonLabels()).toContain("Cancel");
+  });
+
+  it("counts the items it could not read rather than quietly shortening the queue", async () => {
+    openQueue([itemWire({ id: "q1", payload: { kind: "message", text: "hello" } }), { id: "q2" }]);
+    await act(async () => {});
+    expect(container.textContent).toContain("1 more item is in this queue and could not be read");
+    // And the one it could read is still there — it is short, not empty.
+    expect(container.textContent).toContain("hello");
+  });
+});
+
+describe("queueing a message, in one line with the buttons", () => {
+  const ROW = steerable({ id: "$1643", title: "the one being told things" });
+
+  it("sends the typed text to the same queue the buttons feed", async () => {
+    const rec = recordingActions(() => actionsWire({ actions: [CONTINUE_WIRE] }));
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport, actionsApi: rec.api });
+    act(() => feed.push(state({ rows: [ROW] })));
+    openSession("the one being told things");
+    await act(async () => {});
+
+    const box = container.querySelector<HTMLTextAreaElement>("#steer-text");
+    if (!box) throw new Error("no message box");
+    typeInto(box, "actually do the other thing");
+    await clickSaying("Queue it");
+
+    expect(rec.calls.filter((c) => c.op === "queueMessage")).toEqual([
+      { op: "queueMessage", arg: "actually do the other thing", second: "$1643" },
+    ]);
+  });
+
+  it("keeps Send and Queue as two gestures rather than choosing for you", async () => {
+    const steer = recordingSteer();
+    const rec = recordingActions(() => actionsWire({ actions: [CONTINUE_WIRE] }));
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport, steer: steer.api, actionsApi: rec.api });
+    act(() => feed.push(state({ rows: [ROW] })));
+    openSession("the one being told things");
+    await act(async () => {});
+
+    const box = container.querySelector<HTMLTextAreaElement>("#steer-text");
+    if (!box) throw new Error("no message box");
+    typeInto(box, "say this now");
+    await clickSaying("Send");
+
+    // Send still types at the pane, and did NOT quietly become a queue.
+    expect(steer.calls).toHaveLength(1);
+    expect(steer.calls[0]?.arg).toBe("say this now");
+    expect(rec.calls.filter((c) => c.op === "queueMessage")).toHaveLength(0);
+  });
+});
+
+describe("the box, which says what it would do before it does it", () => {
+  function openBox(actions: unknown[], over: Partial<ActionsApi> = {}): ReturnType<typeof recordingActions> {
+    const rec = recordingActions(() => actionsWire({ actions }), over);
+    window.location.hash = "#health";
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport, actionsApi: rec.api });
+    act(() => feed.push(state({ health: { verdict: { level: "strained", reasons: [] } } })));
+    return rec;
+  }
+
+  it("asks what it would do, and does not do it, on the first press", async () => {
+    const rec = openBox([KILL_SUITES_WIRE]);
+    await act(async () => {});
+    await clickSaying("Kill test suites");
+
+    expect(rec.calls.filter((c) => c.op === "box")).toEqual([{ op: "box", arg: "kill-test-suites", second: true }]);
+    expect(container.textContent).toContain("What it would do");
+    expect(container.textContent).toContain(KILL_SUITES_WIRE.gate);
+  });
+
+  it("only then does it, on the second press", async () => {
+    const rec = openBox([KILL_SUITES_WIRE]);
+    await act(async () => {});
+    await clickSaying("Kill test suites");
+    await clickSaying("Yes — kill test suites");
+
+    expect(rec.calls.filter((c) => c.op === "box")).toEqual([
+      { op: "box", arg: "kill-test-suites", second: true },
+      { op: "box", arg: "kill-test-suites", second: false },
+    ]);
+    expect(container.textContent).toContain("Done.");
+  });
+
+  it("offers no Confirm at all when the dry run could not answer", async () => {
+    const rec = openBox([KILL_SUITES_WIRE], {
+      box: async () => ({
+        ok: false,
+        code: "ps-failed",
+        why: "ps exited 1 and said nothing",
+        status: 500,
+        from: "server",
+      }),
+    });
+    await act(async () => {});
+    await clickSaying("Kill test suites");
+
+    expect(container.textContent).toContain("It could not tell you.");
+    expect(container.textContent).toContain("ps exited 1 and said nothing");
+    // The refusal, and the fallback that still works.
+    expect(buttonLabels()).not.toContain("Yes — kill test suites");
+    expect(buttonLabels()).toContain("Cancel");
+    expect(rec.calls.filter((c) => c.op === "box" && c.second === false)).toHaveLength(0);
+  });
+
+  it("says so loudly when a dry run comes back saying it was not one", async () => {
+    /* The worst thing this panel could get wrong: believing our own request
+       instead of the reply, and reporting a kill as a question. */
+    openBox([KILL_SUITES_WIRE], {
+      box: async () => ({ ok: true, dryRun: false, dryRunStated: true, would: ["killed 4"], why: null }),
+    });
+    await act(async () => {});
+    await clickSaying("Kill test suites");
+    expect(container.textContent).toContain("The server says that was NOT a dry run.");
+    expect(container.textContent).toContain("Treat this as already done and check the box.");
+  });
+
+  it("will not claim a dry run when the server never said it was one", async () => {
+    openBox([KILL_SUITES_WIRE], {
+      box: async () => ({ ok: true, dryRun: true, dryRunStated: false, would: [], why: null }),
+    });
+    await act(async () => {});
+    await clickSaying("Kill test suites");
+    expect(container.textContent).toContain("did not say whether that was a dry run");
+  });
+
+  it("tells you how far apart the pauses are spread, before broadcasting", async () => {
+    openBox([BROADCAST_WIRE]);
+    await act(async () => {});
+    await clickSaying("Broadcast: ease off, staggered");
+    expect(container.textContent).toContain("between 5 and 60 minutes");
+    expect(container.textContent).toContain("Nothing here can prove an agent read it");
+  });
+
+  it("keeps the buttons when the health reading itself could not be taken", async () => {
+    const rec = recordingActions(() => actionsWire({ actions: [KILL_SUITES_WIRE] }));
+    window.location.hash = "#health";
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport, actionsApi: rec.api });
+    act(() => feed.push(state({ health: null })));
+    await act(async () => {});
+    // A box you cannot read is a box you are MORE likely to want to act on.
+    expect(container.textContent).toContain("No box health data.");
+    expect(buttonLabels()).toContain("Kill test suites");
+  });
+});
+
+describe("the Overseer tab, which no longer says it is empty", () => {
+  it("shows what is queued across the fleet, and against which session", async () => {
+    const rec = recordingActions(() =>
+      actionsWire({
+        actions: [BROADCAST_WIRE],
+        queues: [
+          queueWire({
+            sessionId: "$1643",
+            items: [itemWire({ id: "q1", payload: { kind: "message", text: "pull latest first" } })],
+          }),
+        ],
+      }),
+    );
+    window.location.hash = "#orchestrator";
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport, actionsApi: rec.api });
+    act(() => feed.push(state({ rows: [steerable({ id: "$1643", title: "the busy one" })] })));
+    await act(async () => {});
+
+    expect(container.textContent).toContain("1 thing is waiting, across 1 session");
+    expect(container.textContent).toContain("the busy one");
+    expect(container.textContent).toContain("pull latest first");
+  });
+
+  it("draws a queue whose session is not in the snapshot rather than dropping it", async () => {
+    const rec = recordingActions(() =>
+      actionsWire({
+        queues: [
+          queueWire({
+            sessionId: "$9999",
+            items: [itemWire({ id: "q1", payload: { kind: "message", text: "still waiting" } })],
+          }),
+        ],
+      }),
+    );
+    window.location.hash = "#orchestrator";
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport, actionsApi: rec.api });
+    act(() => feed.push(state({ rows: [] })));
+    await act(async () => {});
+
+    expect(container.textContent).toContain("a session not in the latest snapshot");
+    expect(container.textContent).toContain("still waiting");
+  });
+
+  it("offers the broadcast, and refuses to draw a box that would swallow a message", async () => {
+    const rec = recordingActions(() => actionsWire({ actions: [BROADCAST_WIRE] }));
+    window.location.hash = "#orchestrator";
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport, actionsApi: rec.api });
+    act(() => feed.push(state({ rows: [] })));
+    await act(async () => {});
+
+    expect(buttonLabels()).toContain("Broadcast: ease off, staggered");
+    expect(container.textContent).toContain("There is nothing yet to send a message to.");
+    // A refusal with a way forward, not a shrug.
+    expect(container.textContent).toContain("the broadcast above is the real thing");
+  });
+});
+
+describe("the bodies these buttons post, which are pure functions of the row", () => {
+  const ACTION_ROW = steerable({
+    id: "$1643",
+    paneId: "%1646",
+    panePid: 645023,
+    claudeSessionId: "117e181a-155b-435a-b95b-e74220678d1a",
+    status: { kind: "needs-you" },
+  });
+
+  it("hands back the server's own status object, not this build's parse of it", () => {
+    const odd = row({
+      id: "$1643",
+      status: { kind: "unknown", why: "x" },
+      rawStatus: { kind: "compacting", since: 4 },
+    });
+    expect(sessionActionBody(odd, "continue")["status"]).toEqual({ kind: "compacting", since: 4 });
+  });
+
+  it("carries every identifier verbatim, and an action id beside them", () => {
+    expect(sessionActionBody(ACTION_ROW, "remove-worktree")).toEqual({
+      paneId: "%1646",
+      sessionId: "$1643",
+      claudeSessionId: "117e181a-155b-435a-b95b-e74220678d1a",
+      panePid: 645023,
+      status: { kind: "needs-you" },
+      kind: "action",
+      actionId: "remove-worktree",
+    });
+  });
+
+  it("puts a queued message and a queued action in the same shape, so one queue can hold both", () => {
+    const message = sessionMessageBody(ACTION_ROW, "do the other thing");
+    expect(message.sessionId).toBe("$1643");
+    expect(message.kind).toBe("message");
+    expect(message.text).toBe("do the other thing");
+  });
+
+  it("cancels by what was on the snapshot, and asks for nothing else", () => {
+    expect(cancelBody("$1643", "q1")).toEqual({ sessionId: "$1643", itemId: "q1" });
+  });
+
+  it("does not ask the server for fresh state before pressing a button", async () => {
+    const calls: string[] = [];
+    const impl = (async (input: RequestInfo | URL) => {
+      calls.push(String(input));
+      return {
+        ok: true,
+        status: 200,
+        statusText: "",
+        json: async () => ({ ok: true, queued: true, position: 1 }),
+      } as Response;
+    }) as unknown as typeof fetch;
+
+    await makeActionsApi(impl).run(ACTION_ROW, "continue");
+
+    expect(calls).toEqual(["api/actions/session"]);
+    // The URL that would turn every guard in steer.ts into a tautology.
+    expect(calls).not.toContain("api/state");
+  });
+});
+
+describe("what comes off the actions wire", () => {
+  it("refuses an entry with no id, since an id is what a press posts back", () => {
+    expect(parseAction({ effect: "spoken", label: "No id" })).toBeNull();
+    expect(parseAction(CONTINUE_WIRE)?.id).toBe("continue");
+  });
+
+  it("falls back to the id for a missing label rather than losing the button", () => {
+    const parsed = parseAction({ ...CONTINUE_WIRE, label: undefined });
+    expect(parsed?.label).toBe("continue");
+    expect(parsed?.effect).toBe("spoken");
+  });
+
+  it("reads a spoken action with no words as one it cannot offer", () => {
+    expect(parseAction({ ...CONTINUE_WIRE, text: undefined })?.effect).toBe("unrecognised");
+  });
+
+  it("keeps needsConfirm true unless the server said false", () => {
+    /* Narrowed rather than read off the union: the `unrecognised` arm has no
+       `needsConfirm` at all, which is the type doing its job — an action this
+       page cannot classify is not a button, so there is nothing for the field
+       to mean. */
+    const confirmOf = (v: unknown): boolean | "not-spoken" => {
+      const parsed = parseAction(v);
+      return parsed !== null && parsed.effect === "spoken" ? parsed.needsConfirm : "not-spoken";
+    };
+    expect(confirmOf({ ...CONTINUE_WIRE, needsConfirm: undefined })).toBe(true);
+    expect(confirmOf({ ...CONTINUE_WIRE, needsConfirm: "no" })).toBe(true);
+    expect(confirmOf(CONTINUE_WIRE)).toBe(false);
+  });
+
+  it("tells an absent catalogue from an empty one", () => {
+    expect(parseActionsFeed({ queues: [] })?.catalogueOffered).toBe(false);
+    expect(parseActionsFeed({ actions: [], queues: [] })?.catalogueOffered).toBe(true);
+  });
+
+  it("reads a queued action whether the server sent the whole action or only its id", () => {
+    const whole = parseQueue(
+      queueWire({ items: [itemWire({ id: "q1", payload: { kind: "action", action: CONTINUE_WIRE } })] }),
+    );
+    const flat = parseQueue(
+      queueWire({ items: [itemWire({ id: "q1", payload: { kind: "action", actionId: "continue" } })] }),
+    );
+    expect(whole?.items[0]?.payload).toEqual({
+      kind: "action",
+      actionId: "continue",
+      label: "Continue",
+      text: CONTINUE_WIRE.text,
+    });
+    expect(flat?.items[0]?.payload).toEqual({ kind: "action", actionId: "continue", label: "continue", text: null });
+  });
+});
+
+describe("renaming a session", () => {
+  const NAMED = steerable({ id: "$1643", name: "worktree-fb1v", title: "the one with a bad name" });
+
+  function openRename(rename: RenameApi): void {
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport, rename });
+    act(() => feed.push(state({ rows: [NAMED] })));
+    openSession("the one with a bad name");
+  }
+
+  function nameBox(): HTMLInputElement {
+    const el = container.querySelector<HTMLInputElement>("#rename-name");
+    if (!el) throw new Error("no rename box on the page");
+    return el;
+  }
+
+  function typeName(value: string): void {
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    if (!setter) throw new Error("this DOM has no HTMLInputElement value setter");
+    const el = nameBox();
+    act(() => {
+      setter.call(el, value);
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  }
+
+  it("starts from the name the session has", () => {
+    openRename(fakeRename());
+    expect(nameBox().value).toBe("worktree-fb1v");
+  });
+
+  it("sends the tmux handle, never the name — a name is not an address", async () => {
+    /* **The REAL rename api, over a stubbed `fetch`.** A fake `RenameApi` here
+       would be handed the row and could read `id` off it itself, so the test
+       would pass over a `renameBody` that sent `row.name` — the seam would be
+       right while the wire was wrong, which is the one thing this test's name
+       claims to rule out. */
+    const bodies: unknown[] = [];
+    const impl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      bodies.push({ url: String(input), body: JSON.parse(String(init?.body)) });
+      return {
+        ok: true,
+        status: 200,
+        statusText: "",
+        json: async () => ({ ok: true, sessionId: "$1643", name: "socratic-eval", was: "worktree-fb1v" }),
+      } as Response;
+    }) as unknown as typeof fetch;
+    vi.stubGlobal("fetch", impl);
+
+    openRename(makeRenameApi());
+    typeName("socratic-eval");
+    await clickSaying("Save");
+
+    expect(bodies).toEqual([
+      { url: "api/sessions/rename", body: { sessionId: "$1643", name: "socratic-eval" } },
+    ]);
+    expect(container.textContent).toContain("Renamed from");
+  });
+
+  it("builds the body off the row rather than off anything typed beside it", () => {
+    expect(renameBody(NAMED, "socratic-eval")).toEqual({ sessionId: "$1643", name: "socratic-eval" });
+  });
+
+  it("keeps Save live when nothing has been edited, because re-saving is not a no-op", async () => {
+    const calls: string[] = [];
+    openRename({
+      rename: async (_r, name) => {
+        calls.push(name);
+        return { ok: true, name, was: name };
+      },
+    });
+    expect(buttonSaying("Save")?.disabled).toBe(false);
+    await clickSaying("Save");
+    expect(calls).toEqual(["worktree-fb1v"]);
+    expect(container.textContent).toContain("it also stops the name being changed back later");
+  });
+
+  it("refuses a shape the rule plainly refuses, without a round trip", async () => {
+    const calls: string[] = [];
+    openRename({
+      rename: async (_r, name) => {
+        calls.push(name);
+        return { ok: true, name, was: null };
+      },
+    });
+    typeName("Worktree FB1V");
+    expect(buttonSaying("Save")?.disabled).toBe(true);
+    expect(container.textContent).toContain("Lower-case letters, digits and hyphens");
+    // And it lets a legal one through again, rather than staying stuck.
+    typeName("worktree-fb1v-2");
+    expect(buttonSaying("Save")?.disabled).toBe(false);
+    await clickSaying("Save");
+    expect(calls).toEqual(["worktree-fb1v-2"]);
+  });
+
+  it("shows the server's refusal in the server's own words", async () => {
+    openRename({
+      rename: async () => ({
+        ok: false,
+        code: "name-taken",
+        why: "the name socratic-eval already belongs to session $1701",
+        status: 409,
+        from: "server",
+      }),
+    });
+    typeName("socratic-eval");
+    await clickSaying("Save");
+    expect(container.textContent).toContain("Not renamed.");
+    expect(container.textContent).toContain("the name socratic-eval already belongs to session $1701");
+  });
+
+  it("suggests a refresh when the row turns out to be stale", async () => {
+    openRename({
+      rename: async () => ({
+        ok: false,
+        code: "no-such-session",
+        why: "there is no session $1643 on this tmux server",
+        status: 409,
+        from: "server",
+      }),
+    });
+    typeName("something-else");
+    await clickSaying("Save");
+    expect(container.textContent).toContain("Refresh and look again");
+  });
+
+  it("shows the name the server settled on, not the one that was typed", async () => {
+    openRename({ rename: async () => ({ ok: true, name: "socratic-eval-2", was: "worktree-fb1v" }) });
+    typeName("socratic-eval");
+    await clickSaying("Save");
+    expect(nameBox().value).toBe("socratic-eval-2");
+  });
+
+  it("knows the shape rule on its own", () => {
+    expect(looksLikeAName("worktree-fb1v")).toBe(true);
+    expect(looksLikeAName("9-lives")).toBe(true);
+    expect(looksLikeAName("-leading-hyphen")).toBe(false);
+    expect(looksLikeAName("Upper")).toBe(false);
+    expect(looksLikeAName("has space")).toBe(false);
+    expect(looksLikeAName("")).toBe(false);
+    expect(looksLikeAName("a".repeat(41))).toBe(true);
+    expect(looksLikeAName("a".repeat(42))).toBe(false);
+  });
+
+  it("posts to the rename route and nowhere else", async () => {
+    const calls: string[] = [];
+    const impl = (async (input: RequestInfo | URL) => {
+      calls.push(String(input));
+      return {
+        ok: true,
+        status: 200,
+        statusText: "",
+        json: async () => ({ ok: true, name: "x", was: "y" }),
+      } as Response;
+    }) as unknown as typeof fetch;
+    await makeRenameApi(impl).rename(NAMED, "x");
+    expect(calls).toEqual(["api/sessions/rename"]);
+    expect(calls).not.toContain("api/state");
   });
 });

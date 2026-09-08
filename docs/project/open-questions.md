@@ -277,45 +277,14 @@ minutes"* would settle it. That is an edit to CLAUDE.md, whose wording is a rule
 Greg's approval one set at a time ([edit-important-docs.md](../reusable/edit-important-docs.md))
 rather than an agent deciding it.
 
+**The argument from the sentence's own reasoning, added 2026-09-08**, because it is stronger than
+the argument from cost and does not depend on the hour above being typical. The licence in CLAUDE.md
+is granted with a reason attached: *"the readership is small and knows what it signed up for"*. That
+is not a claim about how much breakage costs — it is a claim about **who absorbs the cost, and
+whether they consented to it.** Readers of a beta did consent. **Agents cannot.** A red trunk is
+inherited silently by every worktree that pulls, and the cost lands as somebody debugging what they
+believe is their own breakage — which is worse than the same minutes spent knowingly, and is the one
+thing the original sentence's reasoning does not cover. So the licence really is narrower on `dev`
+than on `main`, for a reason that has nothing to do with readers.
+
 Raised jointly with `spideryarn2-4c`, which had read it the same way.
-
----
-
-## Q13 — Two additions to `silent-success.md`, awaiting approval <a id="q13"></a>
-
-Both earned on 2026-09-08 and both belong in
-[silent-success.md](../reusable/silent-success.md), which needs Greg's approval to edit — so they
-are parked here rather than landed, and two sessions agreed not to write them independently.
-
-**1. Mutation-test what you just ADDED, not only what you changed.** `sameMaterial` in
-`tools/fleet/steer.ts` existed specifically to stop an approval binding to the wrong diff — a
-known security finding. Stubbed to `return true`, **all 66 tests still passed.** For several hours
-there was a fix for a named vulnerability that was completely untested at that layer, with every
-check agreeing it was fine. Red-first only ever tests the diff; the thing you just added is
-precisely the thing no existing test was written against.
-
-**And the reason it belongs in *this* doc rather than in `testing.md`** — `spideryarn2-4c`'s
-framing, which is sharper than mine. Four guards found real problems that night (`fixture-ids`
-caught a fixture collision, `doc-links` caught a line-number citation, an exhaustive `Record`
-caught four new refusal codes, a contract test caught an invalidated control). Every one of them
-was mechanical, and every one was working. **The only broken check of the night was the one that
-found nothing.** A guard reporting a problem is a guard working; a guard reporting nothing is
-exactly the two states this codebase keeps writing comments about — "I looked and there is
-nothing" and "I could not look" — wearing one face. Silence from a guard is the same claim as
-silence from the box, and it deserves the same suspicion.
-
-**2. The shape in which a wrong claim feels most like a finding.** Two instances of one symptom, a
-plausible mechanism, and no check of where either came from. Two directions of the same error, both
-seen that night: *a mechanism proposed without provenance* (two uuid collisions read as one minting
-habit, when one was a counting-block id that hit a real `auth.users` row and the others were real
-captured conversation uuids shared on purpose), and *an instrument trusted without calibration*
-(grepping pane output for question marks, getting 1 of 23, and nearly filing it as a refutation —
-the decisions ended in full stops; the grep answered the question asked rather than the one meant).
-
-The advice is **not** "check your work", because everybody involved believed they had. It is that
-**the moment a claim feels most like a finding is the moment to buy the cheap external check** —
-exactly when it feels least necessary. In both cases the refuting evidence was one step away and
-nearly free; the expensive part was thinking to want it.
-
-Formulation developed with `spideryarn2-4c`, which is pointing at this entry rather than duplicating
-it.
