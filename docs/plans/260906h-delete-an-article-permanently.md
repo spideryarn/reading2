@@ -713,6 +713,30 @@ Two distinctions survive the caveat and are worth keeping:
 The order to re-run in, when the box is quiet: `tests/article-delete-pg.test.ts` first — 16 cases,
 and all the new work lives in it.
 
+##### Re-run on a recovered box, 2026-09-08 02:37–02:48 — all green
+
+One file at a time, load checked between each and never above 40:
+
+| | |
+|---|---|
+| `tests/article-delete-pg.test.ts` | **16/16** — the file that matters |
+| `tests/store-shelf-pg.test.ts` | 35/35 |
+| `tests/jobs.test.ts` | 65/65 |
+| `tests/one-article-for-one-address.test.ts` | 4/4 |
+| `tests/owner-isolation.test.ts` | 50/50 |
+| `tests/authenticated-api-route-contract.test.ts` | 322/322 |
+| `tests/metadata-delete-permanently.test.tsx` + `doc-links` | 46/46 |
+| `npm run typecheck` | clean |
+
+**`tests/pdf-integrity.test.ts` passes alone, 28/28**, so the twice-red case above was contention and
+not a defect — which is why it was written down as a suspicion rather than a finding. That is the
+whole value of the distinction: a red under load is not evidence, and the way to find out is to ask
+again later rather than to argue about it.
+
+`npm run check` in full is still owed, and is deliberately not run here: twenty-eight `vitest`
+processes belonging to other sessions were live on the box at the time, and the last full-suite
+attempt on a loaded box is what preceded the OOM sweep.
+
 ### Stage D — the control on the metadata page
 
 - [ ] `DeletePermanently` under `ArchiveArticle`, in its own `Section` labelled **Delete this
