@@ -56,8 +56,16 @@ export const PATH = "/api/transcribe";
  * in the first draft, which is exactly the failure
  * `tests/dictation-codes.test.ts` was written for after a bug report quoted four
  * characters that named two different problems.
+ *
+ * **And the code is `[mic-bad-request]`, not `[mic-format]`, since that test
+ * widened to scan `tools/` as well as `src/`.** `[mic-format]` already names a
+ * real and different branch — the browser encoded a container we cannot
+ * transcribe, decided in the browser, before anything is sent. This one is the
+ * server unable to read the request at all, which given our own client is a bug
+ * on our side rather than a fact about somebody's audio. Same fix (none), two
+ * causes, so two codes.
  */
-const UNREADABLE_REQUEST = "That recording could not be sent from this browser. [mic-format]";
+const UNREADABLE_REQUEST = "That recording could not be sent from this browser. [mic-bad-request]";
 
 /**
  * The body limit, which is the audio cap plus room for the JSON around it.
@@ -219,7 +227,8 @@ export function handleTranscribeRequest(
        gives up, which is indistinguishable from the box being down. */
     console.error(`transcribe: threw — ${err instanceof Error ? err.message : String(err)}`);
     if (!res.headersSent) {
-      json(res, 500, { error: "Something went wrong transcribing that. [mic-unexpected]" });
+      /* The product's wording, verbatim. See the note on UNREADABLE_REQUEST. */
+      json(res, 500, { error: "Something went wrong while transcribing that. [mic-unexpected]" });
     }
   });
   return true;

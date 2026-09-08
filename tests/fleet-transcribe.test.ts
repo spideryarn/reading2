@@ -319,6 +319,27 @@ describe("POST /api/transcribe", () => {
     expect(seen.body).toContain("forbidden-origin");
   });
 
+  it("refuses a request that is not JSON, which it inherits rather than states", async () => {
+    /* **A property this route relies on somebody else's function for.**
+       `checkOrigin` in routes-steer.ts requires `content-type: application/json`,
+       and that is half the CSRF defence: a cross-site HTML form can only send
+       three content types and this is not one of them, so requiring it forces a
+       preflight that the Origin check then fails.
+
+       Asserted here rather than assumed, because the enforcement is transitive.
+       If `checkOrigin` were ever refactored into a pure origin comparison this
+       route would lose the check with no other symptom — and it is the route
+       that takes a megabyte of audio and spends money on it. */
+    const { res, seen } = fakeRes();
+    handleTranscribeRequest(
+      fakeReq({ body: "{}", headers: { "content-type": "text/plain" } }),
+      res,
+      () => SESSIONS,
+    );
+    await seen.done;
+    expect(seen.status).toBe(415);
+  });
+
   it("does not claim a request that is not for it", () => {
     const { res } = fakeRes();
     expect(handleTranscribeRequest(fakeReq({ url: "/api/state" }), res, () => SESSIONS)).toBe(false);
@@ -348,7 +369,13 @@ describe("POST /api/transcribe", () => {
     );
     await seen.done;
     expect(seen.status).toBe(400);
-    expect(seen.body).toContain("[mic-format]");
+    /* `[mic-bad-request]`, not `[mic-format]`. They look interchangeable and are
+       not: `[mic-format]` is the BROWSER finding it encoded a container we
+       cannot transcribe, decided before anything is sent; this is the server
+       unable to read the request, which given our own client is a bug on our
+       side. `tests/dictation-codes.test.ts` scans `tools/` as well as `src/`
+       since 2026-09-08 and refused the two under one code. */
+    expect(seen.body).toContain("[mic-bad-request]");
   });
 
   it("never puts the audio or a session handle in what it answers", async () => {
