@@ -263,6 +263,17 @@ export type Route =
    */
   | { kind: "changelog" }
   /**
+   * Where the code lives, and what it is licensed under — `/opensource`. See
+   * OpenSourcePage.tsx.
+   *
+   * Greg, 2026-09-07: *"create a brief /opensource page in the footer with
+   * links to/from various other pages, using GitHub logo to indicate."* Signed
+   * out for the same reason as the four above it, and rather more so: the
+   * person who wants to know whether they can read the code has, by definition,
+   * not decided to trust us yet.
+   */
+  | { kind: "opensource" }
+  /**
    * Where Google sends the reader back — `/auth/callback`. See AuthCallback.tsx.
    *
    * **The one route that must be exempt from every rewrite in main.tsx**, and
@@ -348,6 +359,7 @@ const ADMIN_ONLY: Record<Route["kind"], boolean> = {
   pricing: false,
   contact: false,
   changelog: false,
+  opensource: false,
   callback: false,
   "not-found": false,
 };
@@ -721,6 +733,25 @@ export const CHANGELOG_HREF = "/changelog";
  */
 export const CHANGELOG_LABEL = "What’s new";
 /**
+ * The repository, the licence, and how to work on it — linked from the footer
+ * under the GitHub mark, and from `/changelog`, which points at that repository
+ * on every release.
+ *
+ * One word rather than two: Greg named it `/opensource`, and a hyphen is the
+ * kind of thing somebody types wrong when they are repeating an address aloud.
+ * OpenSourcePage.tsx.
+ *
+ * **No `OPENSOURCE_LABEL` beside `CHANGELOG_LABEL` above, yet**, and the two
+ * arrived within a day of each other so the asymmetry is worth naming rather
+ * than leaving to be noticed. *Open source* is written out in three places — the
+ * footer row, the page's `<h1>` and the browser tab — which is exactly the shape
+ * that comment argues against. It is left alone because extracting it is a
+ * change to code this branch is only merging, not a part of the work Greg asked
+ * for; the reasoning above applies to it whole, and whoever next renames either
+ * page should do both.
+ */
+export const OPENSOURCE_HREF = "/opensource";
+/**
  * The shelf of public articles.
  *
  * **Built from `PUBLIC_LIBRARY_SLUG`, not typed out**, and that is the point of
@@ -787,6 +818,9 @@ const STATIC_ROUTES: readonly (readonly [string, BareRouteKind])[] = [
      indifferent to it: `/changelog` is top level and shares a prefix with
      nothing. */
   [CHANGELOG_HREF, "changelog"],
+  /* Same shape as `/changelog` above, and indifferent to order for the same
+     reason: top level, sharing a prefix with nothing. */
+  [OPENSOURCE_HREF, "opensource"],
 ] as const;
 
 /**

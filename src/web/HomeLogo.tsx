@@ -95,17 +95,45 @@
  * docs/project/design-logo.md.
  */
 import { cn } from "@/lib/utils";
+
+import { buildDescription } from "./build-stamp.js";
 import { Link } from "./Link.js";
 import { useLogoAnimation } from "./logo-animation.js";
 import { LIBRARY_HREF } from "./router.js";
 
+/**
+ * **What the tooltip says, and why it is not a version number.**
+ *
+ * Greg asked for one here, 2026-09-07. `buildDescription` is where the answer
+ * to that is written out — the short version is that the running build cannot
+ * honestly know its own release number, and its sha is the fact it does know.
+ * So the tooltip carries the destination first, which is what a tooltip on a
+ * link is for, and the build second.
+ *
+ * **The destination survives when the build is unknown**, which is every test
+ * and every `npm run dev`: a tooltip is not the place to say *"unknown"*.
+ */
+const HOME_TITLE = "Spideryarn — back to the library";
+
 export function HomeLogo() {
   const anim = useLogoAnimation();
+  const build = buildDescription();
   return (
     <Link
       href={LIBRARY_HREF}
       className={cn("logo", "logo-home", anim.className)}
-      title="Spideryarn — back to the library"
+      /* Two lines rather than an em dash chain: the second is for the one
+         reader in a hundred who wants to know which copy they have, and it
+         should not push the sentence that matters onto a second line by
+         itself. `title` renders a newline as a newline.
+
+         **The tooltip and the hover animation both live on this element, and
+         they met at a merge.** They do not interact — one is an attribute the
+         browser reads, the other a class and a set of pointer handlers — but
+         both are about what happens when a reader points at the wordmark, so if
+         one of them ever has to give way it should be a decision rather than a
+         collision. docs/project/design-logo.md is the animation's. */
+      title={build === null ? HOME_TITLE : `${HOME_TITLE}\n(${build})`}
       {...anim.handlers}
     >
       {/* `alt=""` and not "Spideryarn": the wordmark beside it already says the

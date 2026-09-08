@@ -1,0 +1,27 @@
+/* changelog.css — the two things `/changelog`'s collapsible releases need that
+   a Tailwind utility cannot say.
+
+   Everything else on that page is utilities (ChangelogPage.tsx); this file
+   exists for the `<summary>` marker alone, and it exists at all because **we
+   import no preflight** — tailwind.css § 4. Without a reset, a `<summary>`
+   arrives with the browser's own disclosure triangle, drawn differently in
+   every engine and impossible to line up with a baseline row. The page draws
+   its own chevron, so the native one has to go in every engine that has one.
+
+   `tw:list-none` on the element covers Chrome and Firefox, which take
+   `list-style` on a summary. Safari does not: its marker is a shadow pseudo
+   element, and `::-webkit-details-marker` is the only thing that reaches it.
+   Left as a rule here rather than an arbitrary variant in the JSX because a
+   vendor pseudo element inside a `tw:[&::-webkit-details-marker]:hidden` is
+   unreadable and, in a v4 prefix build, one bracket away from silently
+   emitting nothing. */
+
+.changelog-release > summary::-webkit-details-marker {
+  display: none;
+}
+
+/* Safari again: `<summary>` is `display: list-item` by default there, and a
+   flex row that is also a list item keeps a marker box. */
+.changelog-release > summary {
+  display: flex;
+}

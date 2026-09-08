@@ -12,6 +12,9 @@
  * and its options, an unknown status showing its reason, the stale banner
  * keeping the last good rows, and agent-authored markup rendering as text.
  */
+import { readFileSync } from "node:fs";
+import path from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import {
@@ -22,10 +25,12 @@ import {
   tmuxServerPid,
   toRows,
   worktreeOf,
+  collectWithDeadline,
+  selfCheck,
   type FleetSnapshot,
 } from "../tools/fleet/collect.js";
 import { parseBinds } from "../tools/fleet/config.js";
-import { fleetState } from "../tools/fleet/state.js";
+import { fleetState, readAttemptClock } from "../tools/fleet/state.js";
 import type { FleetStatus } from "../tools/fleet/status.js";
 import { buildSessionScript, type Session } from "../scripts/gjd-remote-tmux.js";
 
@@ -150,6 +155,98 @@ describe("panesBySession", () => {
     expect(tmuxServerPid("$1 %10 100 notapid\n")).toBeNull();
   });
 
+  /**
+   * IS THIS A LISTING OF THIS BOX? — the control `generationDrift` does not
+   * provide, taken from the `orchestrator-setup` session's process probe.
+   *
+   * Their form of it: do not ask whether the output *looks* like a process
+   * table, ask whether it is a table **of this machine** — and the cheapest
+   * proof is that we are in it. The same exposure is here: a `tmux ls` pointed
+   * at another socket succeeds, every row parses, nothing errors, and the page
+   * shows a calm and entirely wrong fleet.
+   */
+  const PANES = panesBySession("$1 %10 100\n$2 %2282 200\n");
+
+  it("recognises this box by finding its own pane in the listing", () => {
+    expect(selfCheck(PANES, 132280, { TMUX: "/tmp/tmux-1000/default,132280,2279", TMUX_PANE: "%2282" })).toEqual({
+      kind: "present",
+      paneId: "%2282",
+    });
+  });
+
+  it("refuses a listing that does not contain us", () => {
+    // The realistic shape: a second tmux server, or a `-S` in a wrapper. Every
+    // handle in it is real and belongs to somebody else.
+    const out = selfCheck(PANES, 132280, { TMUX: "/tmp/tmux-1000/default,132280,2279", TMUX_PANE: "%9999" });
+    expect(out.kind).toBe("absent");
+    expect(out.kind === "absent" ? out.why : "").toContain("%9999");
+  });
+
+  it("refuses a listing of a different tmux server even when a pane matches", () => {
+    // The two checks fail differently and this is why both exist: pane handles
+    // come round again across servers, so `%2282` can be genuinely present in a
+    // listing that is nonetheless of another world.
+    const out = selfCheck(PANES, 999999, { TMUX: "/tmp/tmux-1000/default,132280,2279", TMUX_PANE: "%2282" });
+    expect(out.kind).toBe("absent");
+    expect(out.kind === "absent" ? out.why : "").toContain("different world");
+  });
+
+  it("says it cannot check rather than failing when not under tmux", () => {
+    // Every test in this file runs outside tmux, and so does anyone running the
+    // collector from a shell. An alarm nobody can clear is one somebody deletes
+    // — the `/logs/` lesson from worktree-check.ts.
+    for (const env of [{}, { TMUX: "x" }, { TMUX_PANE: "%1" }, { TMUX: "", TMUX_PANE: "" }]) {
+      expect(selfCheck(PANES, 132280, env).kind, JSON.stringify(env)).toBe("cannot-check");
+    }
+  });
+
+  it("does not compare against a server pid it could not read", () => {
+    // `tmuxServerPid` is null on a busy box (the `display-message` times out),
+    // and a null must not become "your server does not match". Falls through to
+    // the pane check, which still passes.
+    expect(selfCheck(PANES, null, { TMUX: "/tmp/tmux-1000/default,132280,2279", TMUX_PANE: "%2282" }).kind).toBe(
+      "present",
+    );
+  });
+
+  it("reads the SERVER pid out of TMUX, not the socket or the session index", () => {
+    // `TMUX` is `<socket>,<server pid>,<session index>`, and picking the wrong
+    // field is the mutation this control would otherwise survive — the peer's
+    // probe had exactly this shape of bug, matching `ppid` where it meant `pid`.
+    // Field 0 is a path and field 2 is a session index that is also a plausible
+    // small number, so both would compare unequal and refuse everything.
+    expect(selfCheck(PANES, 2279, { TMUX: "/tmp/tmux-1000/default,132280,2279", TMUX_PANE: "%2282" }).kind).toBe(
+      "absent",
+    );
+    expect(selfCheck(PANES, 132280, { TMUX: "/tmp/tmux-1000/default,132280,2279", TMUX_PANE: "%2282" }).kind).toBe(
+      "present",
+    );
+  });
+
+  /**
+   * A CONTROL ON THE CONTROL, and the reason it exists is the peer's second
+   * mutation rather than my own thinking.
+   *
+   * Their probe's control had a default that could silently become `1`, because
+   * every test passed the pid explicitly and so the default could rot while the
+   * suite stayed green. **Every test above passes `selfCheck` an explicit
+   * env**, which means all six of them would keep passing if `collect()` were
+   * changed to hand it `{}` — the check would then answer `cannot-check`
+   * forever, in production only, and the tests would say it worked.
+   *
+   * There is no seam to inject here: the wiring IS the thing under test. So this
+   * reads the source, which is the same trick `tests/fleet-rename-route.test.ts`
+   * uses for the half of a tmux invocation a fake cannot see. It is a weaker
+   * assertion than a behavioural one and it is the strongest available.
+   */
+  it("wires the real environment into the check, not an empty one", () => {
+    const src = readFileSync(path.join(import.meta.dirname, "..", "tools", "fleet", "collect.ts"), "utf8");
+    expect(src).toContain("selfCheck(listing.panes, listing.tmuxServerPid, process.env)");
+    // And that its verdict is acted on rather than computed and dropped — the
+    // failure this whole family of checks keeps having.
+    expect(src).toMatch(/if \(self\.kind === "absent"\) throw new Error/);
+  });
+
   it("refuses a collection the tmux server restarted through — Sol's F16", () => {
     // A collection is not one command: the sessions come from a bash script
     // that takes 8–12s, the panes and the generation from a `list-panes`
@@ -224,6 +321,61 @@ describe("parseBinds", () => {
   });
 });
 
+describe("collectWithDeadline — a collection that never comes back", () => {
+  const snap: FleetSnapshot = {
+    rows: [],
+    collectedAt: "2026-09-08T03:00:00.000Z",
+    tookMs: 12,
+    tmuxServerPid: 132280,
+  };
+
+  /**
+   * THE ONE BEHAVIOUR NO REAL TMUX CAN ARRANGE, and the reason `run` is a
+   * parameter. A promise that never settles is what a SIGTERM'd `bash` stuck in
+   * uninterruptible IO looks like from here, and it is what stopped the server's
+   * refresh loop dead on 2026-09-08 — silently, because nothing threw.
+   */
+  it("gives up on a promise that never settles, instead of waiting for it", async () => {
+    let settled = false;
+    const never = () => new Promise<FleetSnapshot>(() => {});
+    const caught = await collectWithDeadline(never, 10).then(
+      () => {
+        settled = true;
+        return null;
+      },
+      (e: unknown) => e as Error,
+    );
+    expect(settled).toBe(false);
+    expect(caught?.message).toContain("has been abandoned");
+    // The sentence names the likely cause and warns that any rows on screen are
+    // old, because it is what a person reads on a phone at 3am.
+    expect(caught?.message).toContain("wedged");
+    expect(caught?.message).toContain("previous one");
+  });
+
+  it("returns the snapshot untouched when the collection is in time", async () => {
+    // The positive half. Without it this passes on a build where the deadline
+    // is zero and every collection is abandoned.
+    await expect(collectWithDeadline(() => Promise.resolve(snap), 5_000)).resolves.toEqual(snap);
+  });
+
+  it("lets the collection's own error through rather than reporting a timeout", async () => {
+    // A failure and a hang are different events and the sentence must not blur
+    // them: "tmux is not running" is actionable, "abandoned after 120s" is not.
+    await expect(collectWithDeadline(() => Promise.reject(new Error("no server running")), 5_000)).rejects.toThrow(
+      "no server running",
+    );
+  });
+
+  it("waits the whole deadline before giving up", async () => {
+    // The assertion that stops the deadline being decorative: a race that
+    // rejects immediately would pass every test above.
+    const began = Date.now();
+    await collectWithDeadline(() => new Promise<FleetSnapshot>(() => {}), 60).catch(() => {});
+    expect(Date.now() - began).toBeGreaterThanOrEqual(50);
+  });
+});
+
 describe("fleetState — the one wire shape", () => {
   const snap: FleetSnapshot = {
     rows: [],
@@ -231,6 +383,92 @@ describe("fleetState — the one wire shape", () => {
     tookMs: 12_000,
     tmuxServerPid: 132280,
   };
+
+  /**
+   * A COLLECTOR THAT HAS STOPPED TRYING, TOLD APART FROM A BOX WITH NOTHING TO
+   * SAY — the distinction the payload could not make until 2026-09-08.
+   *
+   * Found in the field, not here: the `orchestrator-setup` session saw
+   * `collectedAt` roughly thirty minutes stale with `error: null`. `refreshLoop`
+   * chains from the end of each run, so a `collect()` that never SETTLES stops
+   * the loop for good and throws nothing on the way out — no error to report,
+   * and the last good timestamp left standing. It reads as a calm box.
+   *
+   * `attemptedAt` is the fact that keeps moving. Fresh with a stale
+   * `collectedAt` means *the source is failing*; both stale means *the collector
+   * is down*. Those are different events and the Overseer's watchdog acts
+   * differently on them.
+   */
+  it("distinguishes a stalled collector from a quiet box", () => {
+    const stale = "2026-09-08T03:00:00.000Z";
+    const now = "2026-09-08T03:31:00.000Z";
+
+    // The shape that was indistinguishable from healthy: old data, no error.
+    const stalled = fleetState({ ...snap, collectedAt: stale }, null, null, 60_000, true);
+    expect(stalled.attemptedAt).toBeNull();
+
+    // The same data, with the loop still going round. Same rows, same clock,
+    // same null error — and now a reader can tell which of the two it is.
+    const trying = fleetState({ ...snap, collectedAt: stale }, null, null, 60_000, true, now);
+    expect(trying.collectedAt).toBe(stale);
+    expect(trying.error).toBeNull();
+    expect(trying.attemptedAt).toBe(now);
+    expect(trying.attemptedAt).not.toBe(trying.collectedAt);
+  });
+
+  /**
+   * THE OLD SERVER MUST NOT LOOK WEDGED, which is the trap that comes with
+   * adding a field rather than bumping the schema.
+   *
+   * Raised by the `orchestrator-setup` session as soon as `attemptedAt` landed,
+   * and it is right: their watchdog reads this payload, a server predating the
+   * field sends no such key, and "absent" read as "never attempted" reports
+   * every old server as permanently stopped — the exact fault the field exists
+   * to detect, manufactured by the detector.
+   *
+   * The ambiguity is recoverable rather than merely declared, and that is the
+   * point of the helper. `attemptedAt` is written BEFORE each attempt, so a
+   * collection cannot have succeeded without one — data plus no attempt clock
+   * therefore means *this producer does not report it*, never *this producer
+   * never tried*.
+   */
+  it("does not mistake a server too old to report attempts for a stopped one", () => {
+    const old = {
+      collectedAt: "2026-09-08T03:00:00.000Z",
+      rows: [],
+      // No `attemptedAt` key at all, which is what a pre-2026-09-08 server sends.
+    };
+    const read = readAttemptClock(old);
+    expect(read.kind).toBe("not-reported");
+    expect(read.kind === "not-reported" ? read.why : "").toContain("before that field");
+
+    // The three that must NOT collapse into it.
+    expect(readAttemptClock({ attemptedAt: "2026-09-08T03:31:00.000Z", collectedAt: "2026-09-08T03:00:00.000Z" })).toEqual({
+      kind: "attempted",
+      at: "2026-09-08T03:31:00.000Z",
+    });
+    // A new server, up but not yet round the loop: reports the field as null and
+    // has no data. "Never attempted" is the true reading and is not a fault.
+    expect(readAttemptClock({ attemptedAt: null, collectedAt: null })).toEqual({ kind: "never-attempted" });
+    // A new server whose first attempt failed: attempted, no data. This is the
+    // arm that would be lost if the helper keyed off `collectedAt` first.
+    expect(readAttemptClock({ attemptedAt: "2026-09-08T03:31:00.000Z", collectedAt: null }).kind).toBe("attempted");
+  });
+
+  it("reads a payload this file actually produced, rather than a hand-built one", () => {
+    // The round trip, because the helper's whole inference rests on the ORDER
+    // `fleetState` writes these in — and a test that only ever saw hand-written
+    // objects would keep passing if that ordering assumption stopped holding.
+    const live = JSON.parse(
+      JSON.stringify(fleetState(snap, null, null, 60_000, true, "2026-09-08T03:31:00.000Z")),
+    ) as Record<string, unknown>;
+    expect(readAttemptClock(live).kind).toBe("attempted");
+
+    // And the same payload with the field stripped, which is the old server's
+    // bytes exactly.
+    const { attemptedAt: _dropped, ...withoutField } = live;
+    expect(readAttemptClock(withoutField).kind).toBe("not-reported");
+  });
 
   it("says NEVER COLLECTED with a null clock rather than an empty box", () => {
     // The window that matters: a just-restarted dashboard, before the first

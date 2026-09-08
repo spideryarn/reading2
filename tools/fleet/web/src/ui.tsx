@@ -157,6 +157,18 @@ const BUTTON_VARIANTS = {
     "tw:border tw:border-rule tw:bg-transparent tw:text-ink-soft tw:hover:border-rule-strong tw:hover:text-ink",
   /** The one the page wants you to press, and there is at most one on screen. */
   loud: "tw:border tw:border-transparent tw:bg-alarm tw:font-semibold tw:text-page tw:hover:brightness-110",
+  /**
+   * **An action whose effect is outside the conversation** — a directory
+   * deleted, a process signalled. Not `loud`: loud means *this is the one to
+   * press*, and none of these is. It reads as a sibling of `quiet` — same
+   * hairline box, same height — carrying the alarm colour, so the difference is
+   * legible without the page shouting at somebody who came to press Continue.
+   *
+   * The colour is never the only carrier: every one of these sits under its own
+   * heading saying what that class of action does, and every one asks twice.
+   */
+  danger:
+    "tw:border tw:border-alarm/50 tw:bg-transparent tw:font-medium tw:text-alarm-ink tw:hover:border-alarm tw:hover:bg-alarm-wash",
 } as const;
 
 export type ButtonVariant = keyof typeof BUTTON_VARIANTS;

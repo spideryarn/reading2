@@ -54,7 +54,9 @@ import { Handles, QuestionCard, StatusPill, Uptime } from "./SessionParts";
 import { Explain } from "./Tooltip";
 import { COLUMN_MIN_PX, chooseColumns, choosePanes, spreadIntoColumns, useContainerWidth } from "./fit";
 import type { NewSessionApi } from "./new-session-client";
+import type { RenameApi } from "./rename-client";
 import type { SteerApi } from "./steer-client";
+import type { ActionsUi } from "./useActions";
 import { Card, SectionHeading, cx, toneClasses } from "./ui";
 import type { FleetRow } from "./types";
 import {
@@ -261,6 +263,8 @@ export function SessionsPanel({
   selectedId,
   onSelect,
   steer,
+  rename,
+  actions,
   newSession,
   onRefresh,
 }: {
@@ -287,6 +291,9 @@ export function SessionsPanel({
   selectedId: string | null;
   onSelect: (id: string | null) => void;
   steer: SteerApi;
+  rename: RenameApi;
+  /** The action vocabulary and the queues. Only the detail pane uses them. */
+  actions: ActionsUi;
   newSession: NewSessionApi;
   onRefresh: () => void;
 }): ReactNode {
@@ -330,6 +337,8 @@ export function SessionsPanel({
         row={selected}
         now={now}
         steer={steer}
+        rename={rename}
+        actions={actions}
         onRefresh={onRefresh}
         onBack={panes === 1 ? () => onSelect(null) : null}
       />

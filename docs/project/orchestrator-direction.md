@@ -363,6 +363,42 @@ And on how to work:
 
 > Get product judgments from Fable primarily, and more of the technical reviews from GPT Sol
 
+## A higher bar for robustness here than elsewhere, and its ceiling
+
+Greg, 2026-09-08, asked for this to be written down:
+
+> We want a higher bar for robustness for this orchestrator work, because the orchestrator needs to
+> be the one that fixes other problems. But at the end of the day, if the orchestrator broke I could
+> just ssh in and use Claude Code in the terminal, so it still wouldn't be the end of the world.
+
+Both halves matter, and the second one stops the first becoming an excuse for gold-plating.
+
+**Why higher than the product's bar.** [CLAUDE.md](../../CLAUDE.md) says this is a beta and speed
+still wins — that a thing being briefly broken is not the end of the world. That is a judgement
+about *readers*, who are few and know what they signed up for. It does not transfer here, because
+**this is the tool you reach for when something else is wrong**. A monitoring tool that fails at the
+same time as the thing it monitors has told you nothing, and worse, has told you nothing in a way
+that looks like good news: a quiet page and a healthy box are the same picture. Every "I could not
+tell" arm in this codebase exists for that reason and they are not decoration.
+
+Concretely, the bar is:
+
+- **A reading that could not be taken must not render as a reading.** Enforced by types, not by
+  care — `unknown` carries a cause, an empty list is meaningless without a clock.
+- **The thing must survive the conditions it reports on.** It runs under `scripts/tmux-job.ts`,
+  because a backgrounded process is OOM-killed on *system* memory pressure — demonstrated
+  2026-09-08, when an orphaned copy died at load 28 while the tmux copy kept collecting.
+- **A write refuses rather than degrades.** There is no second-best action; "sent" and "did nothing"
+  must never be the same response.
+
+**And the ceiling, which is the useful half.** The fallback is `ssh` and a terminal, and it is
+complete: `gjd-remote` does everything this page does and predates it. So this is a **convenience
+with a manual fallback**, not infrastructure — which rules out the expensive answers. No high
+availability, no second box, no state that only this process knows how to reconstruct, and nothing
+that would make the ssh path harder if this were switched off tomorrow. Where a choice is between
+"correct and unavailable" and "plausible and up", take the first: being down is recoverable in one
+command, and being confidently wrong is not.
+
 ## Constraints already established
 
 These were measured on the box, mostly on 2026-09-07, and several cost real time to learn. **Read
@@ -523,6 +559,59 @@ the process table, so the Codex case is *mechanically* detectable and should be 
 model call. The prose-question case is not: **"has this agent asked Greg something?" is a judgement,
 not a parse**, and it is exactly what the Overseer's short-lived model calls are for. A ranked list
 built on `statusOf` alone would have ranked the wrong sessions, confidently.
+
+**Measured on 2026-09-08, and it corrects the second bullet above rather than confirming it.** The
+Codex arm was built, and then run against the live fleet: **40 samples 60 seconds apart over 40
+minutes, 927 session-rows. Of the 623 rows the page called `idle`, the number with child work under
+them was zero.** A live probe agrees. That zero is real rather than a broken path — a positive
+control caught a deliberately-started `vitest` at depth 5 with a correct age, and four other sessions
+*were* found working, all hand-checked, no false positives.
+
+**The reason is the interesting part, and it narrows the original claim.** Throughout a real, paid
+`codex exec`, the dashboard reported that session as **`working`, not `idle`** — because its agent
+was mid-turn in the same session. **A review inside a foreground Bash call already reads as
+`working`.** So the population the bullet above describes is not "sessions running a review"; it is
+the narrower "sessions whose agent **ended its turn** while a backgrounded review carried on", and
+how many of those exist depends on how agents happen to dispatch reviews rather than on anything
+structural. The arm is correct. Its yield is smaller and more conditional than the finding implied,
+and that is worth knowing before ranking work on top of it.
+
+**And the number that made the case is not a constant.** A dispatched `codex exec` sits eight levels
+below the pane *with a `timeout` wrapper*, seven without, five for a plain `npx vitest run`, and
+three under `scripts/tmux-job.ts`. A depth limit tuned to eight would have been tuned to one
+person's typing. What survives intact is the counting trap: **five processes in that chain carry
+`run-codex.ts` and exactly one carries `codex exec`**, so a recogniser matching the wrapper reports
+one review five times.
+
+**The best thing the sweep found was not a Codex run.** `npx playwright@1.62.1 install webkit` had
+been running **5 hours 43 minutes** under a `shell` pane, present in all 40 samples, almost certainly
+wedged, and nobody had noticed. It needs no new recogniser: **for a `shell` pane the pane's own
+command line already says what it is doing**, so reading that generalises further than growing a
+table of recognised tools. That is the shape of the whole section — the box usually already knows;
+the vocabulary is what discards it.
+
+**Who builds which half, settled between the two agents on 2026-09-08.** The mechanical half is the
+Overseer's, and *not* as a new arm on `SessionState`:
+
+> **The dashboard reports the pane; the Overseer decides what the work is.** `panePid` is a fact
+> about a pane; "this session is waiting 40 minutes on a paid review" is a judgement about work, and
+> judgements belong on the Overseer's side. Adding a `SessionState` arm would encode a conclusion in
+> a field whose whole job is to report an observation — the exact thing `sessionState` gets right.
+>
+> — agreed between this agent and the fleet dashboard agent, 2026-09-08
+
+So the Overseer takes `panePid` out of the snapshot it already receives and walks the process tree
+itself, inside `tools/overseer/`. No shared contract changes and no coordination cost.
+
+**And the `needs-you` sub-kind, which came out of the same exchange.** *An agent asked me something*
+and *the harness wants a permission* are different work items — and on this box the second is nearly
+always a **launch defect**, since auto mode should have handled it. A live capture on 2026-09-08 had
+the harness saying so in the prompt itself: *"Tip: auto mode handles these prompts for you."* So a
+permission-class dialog is not a queue item for Greg at all: **the action is to fix how that session
+was started**, pointed at a different person entirely. The dashboard agent's phrasing of the rule
+underneath it, from Fable: pane text as executable UI is acceptable when execution means *"a user
+turn"*, and not acceptable when it means *"grant a permission"* — a forged menu can then make Greg
+send a digit to an agent that was already misbehaving, but it cannot mint an approval.
 
 This also sharpens [§ Attention](#attention-and-who-the-overseer-is-really-watching): Fable said the
 expensive agent is the one working confidently on the wrong thing, and never asks. Add to it the

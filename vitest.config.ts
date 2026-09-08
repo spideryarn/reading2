@@ -1,11 +1,15 @@
-import { readFileSync } from "node:fs";
-import { availableParallelism, homedir } from "node:os";
-import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { InlineConfig } from "vitest/node";
 import { defaultExclude, defineConfig } from "vitest/config";
 
 import { TEST_LANES, type TestLane } from "./tests/store-migration-registry.js";
+import {
+  ADMISSION_POLICY_VERSION,
+  decideAdmission,
+  readMemorySnapshot,
+  readReserveBytes,
+  resolveParallelWorkers,
+} from "./vitest-admission.js";
 
 /**
  * Deliberately separate from vite.config.ts: that file mounts the /api dev
@@ -74,102 +78,53 @@ if (PRIVATE.length < 50 || SHARED.length < 3) {
   );
 }
 
-/**
- * **How many files run at once: half the machine, not all of it.**
- *
- * Vitest's default is `availableParallelism() - 1`, decided by each run in
- * ignorance of every other. That is right for a machine running one suite and
- * wrong for both of ours, where a dozen worktrees each have an agent that runs
- * `npm test` when it suits them. What it costs when they collide, and what a
- * cap costs when they don't, are measured in
- * docs/plans/260906h-cap-vitest-workers-so-one-box-can-hold-ten-suites.md.
- *
- * Three layers, narrowest first — one run, one machine, everywhere:
- *
- *     VITEST_MAX_WORKERS                        "this run is alone, go faster"
- *     ~/.config/spideryarn/vitest-max-workers   "this machine is crowded"
- *     half the cores, and at least 2
- *
- * The middle one is a **file** rather than an environment variable because the
- * variable does not arrive: measured on the box, nothing in the `env` block of
- * `~/.claude/settings.json` reaches a Claude Bash tool call, not even the
- * `CLAUDE_CODE_SCROLL_SPEED` that has been in it since the box was built. A
- * file has no propagation to be wrong about. `infra/hetzner/provision.sh`
- * writes 3 into it; a laptop has none and takes the half.
- *
- * **Why the override is read here and then deleted.** Vitest reads
- * `VITEST_MAX_WORKERS` itself, in `resolveConfig`, **after** the line that
- * turns `fileParallelism: false` into `maxWorkers: 1`, and for every project —
- * so leaving it set lets a knob for *using less of the machine* quietly
- * de-serialise the private-postgres lane below, which is serial because its
- * files share a database and a job-queue singleton. That trades a slow suite
- * for a lying one, and it had already been typed in good faith
- * (260906f ran `VITEST_MAX_WORKERS=4 npm run check`). Deleting it is the only
- * lever a config file has, since everything vitest does with it happens later.
- * `tests/vitest-worker-caps.test.ts` pins vitest's behaviour as well as ours,
- * so a release that fixes the ordering upstream turns red here rather than
- * leaving a defence nobody dares delete.
- */
-export const MACHINE_WORKERS_FILE = join(homedir(), ".config", "spideryarn", "vitest-max-workers");
 
-/** Both layers say a worker count the same way, so they are read the same way. */
-function parseWorkerCount(raw: string, source: string): number | undefined {
-  if (raw.trim() === "") return undefined;
-  const workers = Number(raw.trim());
-  if (!Number.isInteger(workers) || workers < 1) {
-    throw new Error(
-      `${source} must be a whole number of workers, 1 or more; got ${JSON.stringify(raw)}. ` +
-        "Remove it to take half of this machine's cores.",
+/**
+ * What this config asks for, and the one place the machine gets a veto.
+ *
+ * Two questions, asked in order because they are different questions: *how many
+ * workers should one run take here* — the three layers in
+ * [`vitest-admission.ts`](./vitest-admission.ts) — and *is there room for a run
+ * at all*, from the same module, which exists because the answer to the first
+ * turned out to be nearly irrelevant to memory. 87% of a run's peak RSS is
+ * spent before its first worker forks, so capping workers bounds forks and not
+ * gigabytes;
+ * docs/plans/260908b-adaptive-test-resource-limits-so-concurrent-suites-cannot-exhaust-the-box.md
+ * has the table. The second question can only ever reduce the first, or refuse.
+ *
+ * **The number logged here is what the CONFIG asked for, and is deliberately
+ * not called the resolved one.** `--maxWorkers` on the command line beats it —
+ * that is the escape hatch the cap sits at the root to preserve, and
+ * tests/vitest-worker-caps.test.ts pins it — so a line announcing itself as the
+ * final worker count would be a lie on exactly the runs somebody is debugging.
+ * GPT Sol, 2026-09-08.
+ */
+function workersForThisRun(): number {
+  const nominal = resolveParallelWorkers();
+  const decision = decideAdmission({
+    nominalWorkers: nominal,
+    snapshot: readMemorySnapshot(),
+    reserveBytes: readReserveBytes(),
+  });
+  /* A refusal is thrown rather than returned as a small number: the arithmetic
+     has said no worker fits, and the failure mode this whole file exists to
+     stop is a run that starts anyway and takes postgres down with it. It must
+     also not look like a red test — the message says so in as many words. */
+  if (decision.kind === "refuse") throw new Error(decision.message);
+  if (decision.kind === "not-applicable") return nominal;
+  if (decision.workers < nominal) {
+    const gb = (n: number) => `${(n / 1024 ** 3).toFixed(2)} GB`;
+    console.error(
+      `[vitest] memory admission: asking for ${decision.workers} of a nominal ${nominal} workers ` +
+        `(MemAvailable ${gb(decision.availableBytes)}, reserve ${gb(decision.reserveBytes)}, ` +
+        `room for ${decision.capacity}). --maxWorkers still overrides this. ` +
+        `Policy v${ADMISSION_POLICY_VERSION}, pid ${process.pid}.`,
     );
   }
-  return workers;
+  return decision.workers;
 }
 
-/**
- * Exported for `tests/vitest-worker-caps.test.ts`, which has to be able to ask
- * what this machine would do *without* the file this machine happens to have —
- * otherwise the test for the default answer is red on the box and green on the
- * laptop, which is worse than having no test.
- */
-export function resolveParallelWorkers(machineFile = MACHINE_WORKERS_FILE): number {
-  /* **Consumed once, and not remembered.** Vite evaluates this file again on a
-     watch restart, by which time the variable is gone, so `npm run test:watch`
-     started with an override falls back to the machine's number after the first
-     restart. That is a real wart and it was fixed once, by keeping the value on
-     `globalThis` — but a config file cannot tell a restart from a second vitest
-     in the same process, so the remembered value then leaked into instances
-     that never asked for it (both measured by GPT Sol, 2026-09-06). Both
-     mistakes are worth the same: a run that is faster or slower than asked.
-     Neither can reach the serial lane, which names its own `maxWorkers: 1`. So
-     the simpler wrong thing wins over the more complicated wrong thing, and
-     `tests/vitest-worker-caps.test.ts` pins the absence of the leak. */
-  const fromEnv = process.env.VITEST_MAX_WORKERS;
-  delete process.env.VITEST_MAX_WORKERS;
-  const chosen = fromEnv === undefined ? undefined : parseWorkerCount(fromEnv, "VITEST_MAX_WORKERS");
-  if (chosen !== undefined) return chosen;
-
-  /* **Only "there is no such file" is silent**, because that is the normal
-     case: a laptop has nothing to say. A file that exists and cannot be read —
-     wrong permissions, a directory where the file should be, a failing disk —
-     is a machine that *did* mean to set a policy and whose policy is not being
-     applied, and swallowing that would hand the box back a cap of 8 with
-     nothing anywhere to say why. GPT Sol, 2026-09-06. */
-  let fromFile: string | undefined;
-  try {
-    fromFile = readFileSync(machineFile, "utf8");
-  } catch (cause) {
-    if ((cause as NodeJS.ErrnoException).code !== "ENOENT") {
-      throw new Error(`${machineFile} exists but could not be read; fix it or remove it.`, { cause });
-    }
-    fromFile = undefined;
-  }
-  const machine = fromFile === undefined ? undefined : parseWorkerCount(fromFile, machineFile);
-  if (machine !== undefined) return machine;
-
-  return Math.max(2, Math.floor(availableParallelism() / 2));
-}
-
-const PARALLEL_WORKERS = resolveParallelWorkers();
+const PARALLEL_WORKERS = workersForThisRun();
 
 /**
  * What every project shares. Split out so the three differ **only** in the ways

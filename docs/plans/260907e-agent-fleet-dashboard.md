@@ -1,13 +1,114 @@
 # Agent fleet dashboard
 
-**Status as of 2026-09-08: running.** Serving on the box at `127.0.0.1:8787` and on the tailnet at
-`100.92.255.119:8787`, showing ~36 sessions with status, and rendering the pending question for
-blocked ones. Evidence: `tools/fleet/` holds seven modules, 163 tests pass across six files, and
-`curl -sN /api/live` streams a `snapshot` event. Tailscale 1.102.3 is installed and logged in.
+**Status as of 2026-09-08 09:15: important work left — one restart that is Greg's, and one queue
+that nothing drains.**
 
-**Not yet reachable from the page:** `steer.ts` (no route calls it) and the React client (in
-flight). One claim in an earlier version of this plan was **retracted** — see
+Two things, in order of how much they cost:
+
+1. **Nothing drains the action queue** —
+   [Stage v0.5f](#-stage-v05f-nothing-drains-the-queue-the-one-thing-that-is-worse-than-not-built).
+   The routes, the client and the queue are all built and tested; no production code path ever calls
+   `queue.next()`. A queued action waits thirty minutes and is dropped. A button that says *queued*
+   and means *never* is worse than no button.
+2. **The live server predates the code** — see the section below. Restarting it is Greg's.
+
+Everything else below is real but optional.
+
+Serving on `127.0.0.1:8787` and on the tailnet at `100.92.255.119:8787`, under
+`scripts/tmux-job.ts` so it survives memory pressure. ~24 sessions with status, the pending question
+for blocked ones, Box Health, a master–detail Sessions view with steering, rename, and the action
+vocabulary. Evidence: **1006 tests pass** across the fleet, overseer and worktree suites; all four
+typecheck projects are clean; a browser check at 390px reports one expected console error, no
+horizontal overflow, and the dialog card rendering its refusal rather than a button.
+
+**Verified end to end, not at the call site.** A message sent from the client's own body-builder,
+through the real server, arrives in the target pane and nowhere else — nonce generated inside the
+script and written only to a file. Starting a session through `POST /api/sessions/new` produces a
+real Claude that answers. A rename held through a real `gjd-remote ls` that renamed two *other*
+sessions in the same run.
+
+**Answering a dialog is back on, narrowed rather than blanket-off** — see
+[Stage v0.2e](#-stage-v02e-what-answering-a-dialog-does-decides-whether-it-may-be-answered-landed-2026-09-08).
+What answering *does* now decides whether it may be answered, and `unknown` is refused with
+`permission`.
+
+**One thing is still switched off:** enacted actions need `FLEET_ACT_ENABLED=1`. The catalogue, the
+queues and the dry runs are live; removing a worktree and killing a session are not. That default is
+right until Greg has looked at what the buttons say they will do.
+
+**Read Stage v0.4d first.** Fable read all 38 live panes and broke this plan's premise: the sessions actually waiting
+on Greg are hiding under `idle`, and the dialog-answering this write path was built for is a
+rounding error. That reframing is worth more than anything below it.
+
+Two claims in earlier versions of this plan were **retracted** — the inbox socket, and "no shell
+anywhere" in the launch path. Both are in
 [Evidence](#evidence-what-was-actually-tested), which records what failed as well as what worked.
+
+## The running server is older than this code, and only Greg can restart it
+
+The process on 8787 has been up since 04:34 and predates `routes-actions.ts` and `PaneGate`. The
+client is built and live; the server is not. Two visible consequences, both correct behaviour rather
+than breakage:
+
+- `GET /api/actions` **404s**, once per ten-second poll. `useActions` keeps the last good feed and
+  shows the error beside it, so the page does not break — but the action buttons, the queues and Box
+  Health's controls have nothing to render from.
+- Every dialog reads **"Not offered: I could not tell what this is — this server did not say what
+  answering this dialog would do."** That is `parseGate` failing towards `unknown`, which is the
+  designed answer for a server too old to send the field, and it means answering is currently
+  offered for nothing at all.
+
+**The fix is one restart, and it is Greg's to make** — the standing instruction here is not to
+restart or kill the live server. The job runs under `scripts/tmux-job.ts`; restart it the same way it
+was started, with `FLEET_BIND=127.0.0.1,100.92.255.119`. Once it is up, `curl -s localhost:8787/api/actions | head -c 200`
+answering with JSON rather than a 404 is the whole check.
+
+## Do not remove this worktree while the dashboard is running
+
+**`npm run worktree:check` will say `fleet-dashboard-v01` is safe to delete, and it is wrong.** That
+check asks whether any *uncommitted file* would be lost. It knows nothing about a *running process*
+whose entrypoint, `node_modules` and served files all live under the path it is about to delete —
+and the live dashboard is exactly that. Measured 2026-09-08 by the `orchestrator-setup` session:
+
+```
+421175  132280  sh -c ( env FLEET_BIND=... npx tsx tools/fleet/server.ts )
+        > .../worktrees/fleet-dashboard-v01/logs/tmux-jobs/fleet-server-0434-421054.log
+```
+
+**The page dies immediately, not at the next restart.** `serveStatic` in `server.ts` calls
+`readFileSync` on every request rather than reading the bundle into memory at boot, so the first
+request after the files go finds nothing to serve. The Node process would go on running and
+answering nothing but 404s — which is worse than being down, because the port stays open and
+anything watching the port says it is up. A textbook [silent success](../reusable/silent-success.md),
+arriving from the tidy-up direction rather than the build one.
+
+So: **move the server to the primary checkout before removing this worktree**, and prove the new one
+answers before the old one goes.
+
+## Nothing here survives a reboot, and the fallback needs the page to exist
+
+The server's ppid is `132280`, which is the tmux server itself — the same pid `collect.ts` records as
+`tmuxServerPid`, because session and pane handles are only meaningful within one tmux server and
+`generationDrift` exists to notice when that number changes mid-collection. Here it means something
+blunter: one reboot takes the tmux server, the dashboard
+and all ~36 sessions in a single stroke. There are **no systemd units on this box** —
+`/etc/systemd/system/` holds only stock ones, `~/.config/systemd/user/` is empty, and
+`loginctl show-user greg` reports `Linger=no`, so a *user* unit would not start at boot even if one
+existed. Both facts checked 2026-09-08.
+
+That matters more than it looks, because
+[orchestrator-direction.md](../project/orchestrator-direction.md) leans on *"if the orchestrator
+broke I could just ssh in and use Claude Code in the terminal"* as the reason a high robustness bar
+still has a ceiling. After a reboot there is no page to fall back **from** — and, worse, nothing to
+tell you the fleet is gone, because the thing that would have told you went with it. The ssh
+fallback is real; it just is not automatic, and this plan should stop implying that it is.
+
+`orchestrator-setup` is building a **system** unit (`User=greg`, `ExecStart` in the primary
+checkout, installed and verified by `infra/hetzner/provision.sh`) for the Overseer, and is making it
+generic so a second one can serve this dashboard. We take that offer rather than inventing a second
+mechanism. **The consequence, named rather than discovered later:** running from the primary
+checkout means booting whatever is on `dev` at that moment, including a red `dev` — which is
+[Q12](../project/open-questions.md) arriving from a direction neither session argued from.
 
 The standing direction is [orchestrator-direction.md](../project/orchestrator-direction.md); this
 plan is one implementation of it. **Read that first** — it holds the constraints, and it outlives
@@ -397,6 +498,64 @@ Two consequences, and the second is worse than the first:
       decision about this action; the other changes the session's permission posture for
       everything that follows, and they currently render as two adjacent list items.
 
+### ✅ Stage v0.2e: what answering a dialog *does* decides whether it may be answered (landed 2026-09-08)
+
+Answering was switched off outright while Greg slept. He pushed back on the shape of that, not on
+the caution:
+
+> Yes auto mode is the default. But mightn't there be other reasons why it needs to answer with
+> multiple choice to a session etc?
+>
+> — Greg, 2026-09-08
+
+He is right, and off-for-everything was the wrong answer to the wrong question. An agent's own
+`AskUserQuestion` is not a permission grant, and refusing it bought nothing at all. **Fable drew the
+line the code now implements:**
+
+> Pane text as executable UI is acceptable when execution means "a user turn", and not acceptable
+> when it means "grant a permission".
+
+A forged menu can make you send a digit to an agent that was already misbehaving; it cannot mint an
+approval. So the residual hazard Sol named — pane text is not provenance, and is not fixable — is
+**accepted for one class of dialog and refused for the other**, which is a decision rather than a
+gap.
+
+- [x] `PaneGate` in `pane.ts`: `permission` | `conversation` | `unknown`. Three arms, not four —
+      the harness's own menus (`/loop`, the model selector) are drawn by the *same widget* as
+      `AskUserQuestion`, so a `configuration` arm would be a guess wearing the clothes of a fact,
+      and it would change no behaviour because a caller must refuse it exactly as it refuses
+      `permission`.
+- [x] **`conversation` is the only arm reached by positive evidence.** The signal is the
+      `AskUserQuestion` widget's `☐ <header>` on the **first non-blank line of the body** — matching
+      it anywhere would flip a permission dialog whose diff happens to contain a markdown to-do.
+      Everything else falls through to `unknown`, which is refused alongside `permission`: being
+      unable to tell has to cost the same as knowing it is dangerous, or "I could not tell" becomes
+      the way through.
+- [x] Two independent permission signals in front of that, so overlap lands safe: any option
+      classified `persistent` (the harness offering to widen its own gate), and first-option `once`
+      + last-option `decline` read off `consequence` rather than off the words.
+- [x] **Enforced in `steer.ts`, on the fresh capture, never on the request body** — a gate computed
+      from what the client sent is a gate the client chooses. `routes-steer.ts` recomputes it in
+      `parseQuestion` exactly as it recomputes `consequence`, so the two computations cannot
+      disagree. There is a test that hands over a `seen` claiming `conversation` for a permission
+      dialog and watches it refuse.
+- [x] After `sameQuestion` rather than before it, and the order is about the sentence rather than
+      the safety — both refuse. When the dialog has been replaced, "the pane is asking something
+      else now" is true and useful; "this would grant a permission" would describe a dialog the
+      person never saw.
+- [x] `FLEET_ANSWER_ENABLED` inverted: **on unless it is exactly `0`**. It is a kill switch now, not
+      the discrimination.
+- [x] Classified correctly across the whole fixture corpus: 5 permission, 2 conversation, 3 unknown,
+      13 not-a-dialog. Three new fixtures, two of them live captures of other agents' panes.
+
+**Two things this leaves open, both named rather than closed.** The TOCTOU window — Greg taps a real
+`AskUserQuestion`, it is answered from the terminal in the milliseconds after, and a permission
+dialog takes its place — is not touched by classification at all; it is closed only by the
+re-capture, which is why the gate must read `now`. And **the arrows branch of `keysFor` is now
+unreachable in production**: every real cursor menu is a permission dialog and every real
+`AskUserQuestion` is numbered. The branch stays, tested against a synthetic capture, because that is
+a fact about today's widgets rather than a guarantee.
+
 ### Stage v0.2c: delivery has a third outcome, and it is "I do not know"
 
 Astra's A11. The nonce proved the transport *can* work; it says nothing about what happened to any
@@ -411,7 +570,7 @@ keys on time and pane, does not deduplicate it.
 - [ ] **Never an automatic keystroke retry** after an ambiguous failure. A retry is a second
       message, and there is no way to take the first one back.
 
-### Stage v0.2d: the dashboard is a privileged renderer of hostile content
+### ✅ Stage v0.2d: the dashboard is a privileged renderer of hostile content (CSP landed 2026-09-08, `0a5a3008`; the tailnet grant is Greg's)
 
 Astra's A6, which is explicit that it names an architectural exposure rather than claiming an
 exploit exists — it calls the React text rendering a good decision. What it wants *before* answer
@@ -429,18 +588,18 @@ boundary was never reachability alone. We copied the half we liked.
       only, not from the tailnet at large. Tailscale's default policy is permissive, so **the
       policy has to be read rather than assumed**. Keep the ssh forward.
 
-### Stage v0.3: status
+### ✅ Stage v0.3: status (landed 2026-09-08)
 
 - [ ] working / idle / blocked, from the two-source join in `sessionState` — never from
       `claude agents --json` alone, which is incomplete by measurement.
 - [ ] Sort blocked to the top, and show the count.
 
-### Stage v0.4: what it is blocked on
+### ✅ Stage v0.4: what it is blocked on — reading it, not answering it (landed 2026-09-08)
 
 - [ ] Scrape the pending question and its numbered options from the pane.
 - [ ] Tap an option → send that digit. The narrow, safe case, and the one that pays for the phone.
 
-### Stage v0.4b: Sessions becomes master–detail
+### ✅ Stage v0.4b: Sessions becomes master–detail (landed 2026-09-08, `44f60619`)
 
 Greg, 2026-09-08 — quoted in full in
 [orchestrator-direction.md](../project/orchestrator-direction.md#what-greg-asked-for-on-2026-09-08-in-his-own-words).
@@ -456,7 +615,7 @@ Greg, 2026-09-08 — quoted in full in
 - [ ] Narrow windows collapse to one column and the detail is a push, not a squeeze —
       [narrow-windows.md](../project/narrow-windows.md).
 
-### Stage v0.4c: recent messages
+### ✅ Stage v0.4c: recent messages (landed 2026-09-08, `ec05379c`)
 
 The detail pane's "recent messages" needs a source. Transcripts are on disk and are tens of
 megabytes; `gjd-remote ls` greps whole ones and costs 10–12s, which is the thing this tool exists
@@ -467,6 +626,36 @@ not to do.
 - [ ] `~/.claude/projects/<slug>/` is a **slugified cwd and is lossy** — resolve the path from
       `row.meta.dir` plus `row.claudeSessionId`, and say plainly when it cannot be found rather
       than showing an empty conversation.
+
+### 🔴 Stage v0.5f: NOTHING DRAINS THE QUEUE — the one thing that is worse than not built
+
+**The queue accepts items and no code path ever delivers them.** `SteeringQueue` is built, tested and
+routed; `POST /api/actions/session` defaults to `mode: "enqueue"`; the client renders the queue and
+lets you cancel. But `queue.next()` is called from `tests/fleet-actions-route.test.ts` and **from
+nowhere else in the product**. A queued action sits until it goes stale at thirty minutes and is then
+silently dropped.
+
+That is worse than the feature being absent, and it is worse in the specific way this project keeps
+writing about. An absent button teaches you to go to the terminal. A button that says *queued* and
+means *never* is a promise the page cannot keep, and the person who pressed it goes away. It is
+`silent-success.md` arriving inside the product rather than inside a check.
+
+Greg's words are what makes the queue the point rather than a nicety — *"ideally these would
+queue/steer if it's currently running, so that one could press more than one, in combination with
+messages"* — so this is the difference between v0.5 being built and v0.5 working.
+
+- [ ] A drain pass in `server.ts`'s refresh loop: for each session in the fresh snapshot, ask
+      `drainGate(row.status)`, and when it says `now`, lease one item and deliver it.
+- [ ] **One item per session per pass**, not a flush. The point of the queue is that an agent gets a
+      turn between instructions.
+- [ ] It must be handed the SAME `SteeringQueue` instance the routes use — `handleActionRequest`
+      keeps one module-level instance, so the drain goes through the same function or takes it as an
+      argument. Two instances would be two queues, and the one the page shows would be the one
+      nothing delivers from.
+- [ ] A delivered item leaves a receipt the page can render. "It was sent" and "it is still waiting"
+      are the two states the queue exists to distinguish.
+- [ ] **Until this lands, the client should say so** rather than implying delivery — one sentence
+      under the queue, not a silent omission.
 
 ### Stage v0.5: the steering vocabulary
 
@@ -516,6 +705,27 @@ Greg's list, against [diagnose-box-resources.md](../reusable/diagnose-box-resour
       The client half is stage v0.4b.
 - [ ] `gjd-remote kill`. Do not grow a second way to do either.
 - [ ] Killing needs a confirm step; it is the one irreversible action here.
+
+### ✅ Stage v0.6e: rename a session (landed 2026-09-08)
+
+Greg, 2026-09-08: *"add a way to rename sessions"*. `POST /api/sessions/rename`, addressed by tmux
+handle.
+
+**The trap, and it is the whole of the work.** `gjd-remote ls` runs `adoptTitles`, which renames any
+still-*provisional* session to Claude's own title. So a rename that does not also clear
+`GJD_PROVISIONAL` is correct on the page until somebody lists the fleet, and then silently wrong.
+Both halves go in one tmux invocation, so there is no window between them.
+
+Verified by renaming a probe and then running a real `gjd-remote ls` — which renamed two *other*
+sessions in the same run and left the probe alone.
+
+- [x] Renaming to the name it already has is **allowed**, because it still clears the flag. That is
+      how somebody pins a name Claude chose and wants kept, and a naive "is it taken?" check refuses
+      exactly that case.
+- [ ] The client half — an edit-in-place near the title in the detail pane, not a field per card.
+- [ ] The payload does not say which sessions are **provisional**, so the page cannot yet offer
+      *"save to keep this name"* on one Claude is about to rename. One field on `FleetRow` when the
+      client wants it.
 
 ### Stage v0.6b: the Orchestrator tab does something
 

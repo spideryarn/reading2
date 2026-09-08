@@ -1,6 +1,23 @@
 # The Overseer's store, and the clock it gives everything else
 
-**Status: planned, nothing built.** Evidence: there is no `tools/overseer/`.
+**Status 2026-09-08, 09:10: the Overseer runs.** S1, S2, S3, S4 and S6 are landed, reviewed and
+green; S5 (the systemd units) is being built now; S3-03 is the one deferred finding. Evidence:
+`npm run typecheck` reports **0** failures across all four projects, **245 tests pass** across the
+eight Overseer files, `tools/overseer/` plus `scripts/overseer.ts` is 5,830 lines, and the daemon has
+been run against the live dashboard — its `events.jsonl` contains a `tmux-session-gone` for its own
+previous incarnation.
+
+**Both P0s are closed**, one in the differ and one in the store's lock, each after a review round that
+found the first fix insufficient. Every Sol finding is either fixed or refused with reasons in this
+file.
+
+**What is NOT done, and is not an agent's to do:** the reboot criterion in § S5. Nobody has rebooted
+the box, and nobody should — it carries ~27 live agent sessions and ~15 worktrees of other people's
+uncommitted work. See § S5 for what is proven instead, and why that evidence is the thing Sol's F7
+was actually about.
+
+Greg, 2026-09-08, on the remaining work: *"Reprioritise as you see fit, work in parallel where you
+can."* What that changed is in § The order, reconsidered.
 
 The standing direction is [orchestrator-direction.md](../project/orchestrator-direction.md) — read it
 first; it holds the constraints, Greg's horizon, and the seam with the fleet dashboard, and it
@@ -530,6 +547,195 @@ read that half as verified either. The asymmetry is documented on the event unde
 asserts the empty result, so the limitation is pinned where someone will read it rather than left in
 prose.
 
+### S2's review: a P0, five P1s, and the suite passed through all of them
+
+[260908b-s2-code-review-sol.md](260908b-s2-code-review-sol.md). **Not fixed — S2 is landed but not
+finished**, and this section is what the next session picks up.
+
+**S2-01 (P0) — an unreadable generation silently bridges two tmux worlds.** Exactly the suspicion the
+review prompt named, which is the useful outcome of naming it. Generation `100` → `null` → `200` is
+two `unverifiable` steps, both diffed normally, so a reboot in the middle produces either silence or
+a status transition attributed *across unrelated sessions* that happen to share a reused handle.
+**A non-empty snapshot with a null generation must not advance the baseline**; an empty one may,
+because there are no handles to equate. The existing test pins the unsafe default, so the fix must
+change a test that currently passes.
+
+The five P1s, each the same shape — a value the producer would never emit, accepted here and turned
+into a fabricated event:
+
+- **S2-02** `tmuxServerPid: 132280.5` parses because it is finite, and a fractional pid reads as a
+  generation *change*. Same weak domain check on `panePid`, `secondsLeft`, `tookMs` and `refreshMs` —
+  and a zero or negative `refreshMs` would later poison the freshness watchdog S4 depends on.
+- **S2-03** a wait that is *restarted* is invisible: `secondsLeft: 60` then `3600` is one key, so the
+  history shows one uninterrupted wait. Suppressing a countdown is right; suppressing a material
+  increase is not, and the fix is comparison logic (an implied deadline with tolerance) rather than
+  key material.
+- **S2-04** `reportedStatus` is accepted on causes the producer says can never carry it, so two
+  malformed rows manufacture a status transition. Wants a local discriminated union making the
+  combination unrepresentable *after* parsing.
+- **S2-05** equal clocks are trusted as identical collections without checking the bodies agree. Two
+  payloads claiming one timestamp with different generations is contract failure, not a duplicate,
+  and it currently disappears silently.
+- **S2-06** the register fields kept *for reboot recovery* are validated more weakly here than at the
+  producer: a relative `meta.dir` parses, and a later resumer would resume a real conversation in
+  whatever directory the daemon happened to occupy.
+
+**And the verdict that matters more than any single finding:**
+
+> A parser that accepts impossible numeric domains, an admissibility gate that trusts inconsistent
+> equal-clock payloads, and a differ that loses wait resets **all pass the suite**.
+
+168 tests, six mutations caught, and three real defect classes walked through untouched. The mutations
+proved the code does what it was written to do; they could not show what it was never written to
+handle. **That is the lesson of this stage** and it belongs beside the fixtures README's own
+admission: mutation testing proves a test notices *your* change, not that the design is right.
+
+Two judgments to keep: `SessionKey` and `StatusKey` earn their brands; **`ClaimedConversationId` does
+not** — it validates nothing and risks implying verification it does not perform. Sol would spend that
+brand instead on an opaque admissible-snapshot type (S2-07), so that `diff()` cannot be handed a
+snapshot `admissible()` never blessed — which is currently only a comment.
+
+### What landed, and the three things the work turned up
+
+**S2's eight findings are all addressed**, red-first, with 69 tests where there were 40.
+[260908b-s2fix-review-prompt.md](260908b-s2fix-review-prompt.md) is the narrowly-scoped check of the
+fixes, per [engineering-manager.md](../reusable/engineering-manager.md)'s round-two rule — discovery
+is closed on this stage; only the fixes are in scope.
+
+**The tolerance was wrong twice, and the second correction was not mine.** I told the implementer it
+must exceed collection jitter (~70s). Six live collections refuted that: the implied deadline holds
+to **72 milliseconds**, including across a **130-second gap where a collection was missed entirely**,
+because jitter *cancels* — the producer derives `secondsLeft` from a real deadline, so both terms
+move together. The implementer then named the term that actually moves it, which neither of us had:
+**the difference in collection duration between two snapshots**, since the countdown is read early in
+a run and `collectedAt` is stamped at its end. 95 ms in the new capture, ~2.1 s in the old one, ~5 s
+worst case. Hence 10 s.
+
+And the mutation that survived the first sweep was **that constant**: raising 10 s back to 120 s left
+the entire suite green, because every constructed restart moved the deadline by minutes. **A constant
+is code**, and this is the stage's own lesson landing on the stage.
+
+**S3 met its bar and got smaller than planned.** 35 tests, 15 mutations, 15 caught. The two that
+survived the first sweep were both real: a checkpoint written straight to its final path — now caught
+by asserting the **inode changes**, which is the observable difference between rename-replace and
+write-in-place — and a **relative `meta.dir`** accepted in a checkpoint, which is Sol's S2-06 arriving
+on the recovery path it was always about.
+
+Three of its calls are worth keeping in this file rather than only in the code:
+
+- **`foldEvents` is exported and the register is a fold of the log.** That is what makes
+  disposability a property of the code rather than a promise: a rejected checkpoint costs a replay,
+  not a fleet.
+- **`opening.start` is `cold | rebuilt | resumed`**, three arms because a daemon that replayed a
+  thousand events has a baseline and must not announce itself as cold — the same distinction this
+  codebase keeps drawing between having looked and being unable to.
+- **The caller never supplies the register.** `checkpoint()` takes it from the store's own fold, so a
+  caller cannot write a checkpoint that disagrees with the log.
+
+**A finding the plan did not have: `lastSeenAlive` can only be a floor, never a reading.** With
+events-not-samples, an idle session emits nothing for hours, so liveness is `lastGoodSnapshotAt` plus
+register membership. **Anything rendering "blocked for 40 minutes" from `lastSeenAlive` alone is
+wrong** — and that is exactly what triage will reach for first, which is why it is written here and
+not only in a comment.
+
+**S6's fixtures are the best artefact of the night, and the reason is that they are real.** A
+dispatched `codex exec` sits **eight levels below the pane**: pane → `claude` → the Bash tool's
+`bash -c` → `timeout` → `npm exec` → `sh -c 'tsx'` → `node .bin/tsx` → `node --require preflight.cjs`
+→ `codex exec`. A hand-written fixture would have put it at two or three and the classifier would
+have been built to look there. Three more that kill an obvious implementation: **five processes in
+that chain carry `run-codex.ts` and exactly one carries `codex exec`**, so a recogniser matching the
+wrapper counts one review five times; **one pane held three concurrent Bash-tool children**, two of
+them running `sleep`, so *"is there a bash under this pane"* says nothing; and **the pane can be
+older than its Claude** — 115341 s against 75741 s — so pane age is not session age.
+
+**S6's answer is zero, and a zero needs its positive control recorded beside it — permanently.** The
+fleet dashboard agent's point, 2026-09-08, and it is the right correction to how this result was
+about to be filed:
+
+> A metric that can honestly be zero needs its *positive control* recorded next to the number,
+> permanently, not just at the moment of building. In six weeks the number will be in a dashboard and
+> the control will be in a session transcript nobody can find.
+
+So, beside the zero: **the live control** was a `vitest` deliberately started under the measuring
+agent's own pane, caught by 2 of 8 probes at depth 5 with a correct age; and **the durable controls
+are in the suite**, as real captures with real child work under them —
+`tests/fixtures/overseer-process-trees/codex-review-under-pane.txt` (a paid `codex exec`) and
+`shell-pane-running-tests.txt` (a suite 21 minutes in). Those are what make "zero" mean *there was
+none* rather than *we stopped finding any*, and they are the reason this result can be trusted
+without re-reading this file.
+
+**The general shape is worth naming: a metric that can legitimately be zero is indistinguishable from
+a broken one**, which is this codebase's recurring failure wearing a third face — after the check that
+reports success while doing nothing, and the guard whose silence is not evidence. The answer is the
+same each time: make the instrument prove it can still see.
+
+**And the arm's yield may go to zero permanently, which would not be a regression.** Whether any
+session is caught depends on how agents happen to dispatch reviews — a backgrounded review after the
+turn ends, rather than a foreground one during it — and that is a habit, not a property of anything.
+Written down so that a future zero is not read as a fault.
+
+**The duplicated stage, and whose fault it was.** `worktree:check` could not see a running process,
+and both agents fixed it. Theirs landed (`f3817060`); mine was discarded, its diff kept at
+`scratchpad/mgr-agentD-worktree-check.patch`. **The cause was mine**: I told the dashboard agent the
+gap was *"worth a line in your plan doc"* and never said I was fixing it, which is
+[announce before taking a queued slice](../reusable/engineering-manager.md) failing in the one
+direction a shared public finding makes easy. Two measurements from the discarded work are worth
+keeping, because they independently justify the design that landed: **`/proc/<pid>/cwd` is unreadable
+for 575 of the box's 910 processes**, and **a cwd-based rule fired on 8 of the box's 13 worktrees**
+against 2 that actually had servers — so "listening processes only" is not a shortcut, it is the
+correct signal.
+
+### The order, reconsidered — and the constraint that deleted work
+
+Greg, 2026-09-08: *"Reprioritise as you see fit, work in parallel where you can."* Three changes.
+
+**S2's P0 is not negotiable and nothing follows it.** It is landed code that can write a history
+that is plausible and false, and S3 is the stage that writes histories to disk. Fixing it after the
+store exists means the store's first real test writes corrupt history.
+
+**S3 got smaller, because of a constraint from the dashboard agent.** Greg's robustness ceiling —
+*"if the orchestrator broke I could just ssh in and use Claude Code in the terminal"* — was read back
+as a design rule: **no state that only this process knows how to reconstruct.** So the store is
+**disposable**. If `~/.overseer/` is missing, empty, or truncated, the Overseer starts cold, says so
+plainly, and runs. It never refuses to start, and there is no repair step. That deleted a whole class
+of recovery machinery this plan was about to acquire.
+
+> *disposable* has to include **truncated**, not just missing. A file cut off mid-line by an OOM kill
+> is the case that actually happens here, and it is the one that tempts a repair step. If a
+> half-written last line costs you the last line and nothing else, you have it right.
+>
+> — the fleet dashboard agent, 2026-09-08
+
+**S6 is new, and it is the only part of § `idle` is the bug that needs nothing from anyone else.**
+Four live sessions were mid-`codex exec` and every one of them showed as `idle`. That is mechanical,
+not a judgement, so it is buildable today — and it does **not** need an arm on `SessionState`. The
+seam both agents agreed on:
+
+> **The dashboard reports the pane; the Overseer decides what the work is.** `panePid` is a fact
+> about a pane; "this session is waiting 40 minutes on a paid review" is a judgement about work, and
+> judgements belong on the Overseer's side. Adding a `SessionState` arm would encode a conclusion in
+> a field whose whole job is to report an observation.
+>
+> — agreed between this agent and the fleet dashboard agent, 2026-09-08
+
+So S2-fix, S3 and S6 run in parallel; S4 and S5 follow, in that order, because S5 is the stage that
+actually answers Greg's opening requirement — *a way to (re)start it if it gets killed*.
+
+### A fact that landed underneath this stage: a session can be renamed
+
+`POST /api/sessions/rename` landed on 2026-09-08, after S2. **A session's name can now change without
+`gjd-remote ls` having run**, and renaming also clears `GJD_PROVISIONAL` — without which `adoptTitles`
+renames it straight back.
+
+This does **not** break the diff: `SessionIdentity` is the tmux handle plus `claimedConversationId`
+and has never included the name, which is the same conclusion for the same reason as the
+`claudeSessionId` correction above. Two consequences it does have:
+
+- The register must hold the name as **last observed**, refreshed every snapshot, not written once at
+  first sighting — otherwise reboot recovery offers Greg a name he deliberately changed.
+- **A rename currently produces no event at all.** It is a deliberate act by a person and it is
+  invisible to the history. Folded into S2's review round rather than opened as its own stage.
+
 ### S3 — the store: single writer, checkpoint, crash recovery
 
 - One `events.jsonl`, truncate-to-newline on open, the exclusive lock, and `current.json` as a
@@ -537,11 +743,209 @@ prose.
 - **Done:** the full torn-write sequence — tear, restart, append, append, read — and a second daemon
   refusing to start. Not "a torn line is skipped".
 
+### Where the hardening stopped, and how we knew
+
+Three review rounds on one mechanism — the types carrying *this snapshot passed the gate* and *this
+may stand as the world*. Round three found the private-field box still hands out the live object, so
+`Object.assign(baseline.snapshot, { tmuxServerPid: null })` compiles with no cast. Rather than fix
+it, this went to **Fable**, per
+[engineering-manager.md](../reusable/engineering-manager.md)'s rule that a P0 surviving round two is
+settled through Fable or Greg rather than past the orchestrator. It was the first time that clause
+was needed.
+
+**The verdict: stop hardening the type.** Take a small honest patch — a result union, one runtime
+assertion, three corrected comments — and decline the deep freeze.
+
+**Why the freeze is a ghost, with evidence rather than intuition.** Round two's hole was real
+*because the spread is this file's own idiom*: `{ ...snapshot, clock: snapshot.clock }` sits at
+`admissible.ts:154`, so an agent forging a brand by spread was doing what the surrounding code does.
+Round three's needs somebody to write `Object.assign` onto a value typed `readonly`. Fable grepped
+`daemon.ts`, `store.ts`, `notes.ts` and `work.ts`: **no production code mutates a snapshot anywhere**,
+and the one realistic site — a test mutating a fixture — cannot leak, because `freshFixture` re-parses
+per call. The freeze also had an unpriced cost: it would freeze structures shared with the store's
+register and walk opaque `question`/`health` JSON, which is more surface than the thing it guards.
+
+**The loop diagnosis, which is the part worth carrying elsewhere:**
+
+> Rounds 2 and 3 are the same finding at increasing resolution. TypeScript's `readonly` was never
+> runtime immutability, so asking a reviewer *"is it sound?"* will always get the next level down.
+> Freeze it and round 4 finds `structuredClone`-then-forge. That is convergence to a known limit, not
+> a chain of misses.
+>
+> — Fable, 2026-09-08
+
+**And the exit, which is a change of question rather than of code.** State the guarantee at its true
+strength in the code, and ask the next review *"is this statement accurate?"* rather than *"is this
+sound?"* — bundling it with the next stage rather than reviewing the mechanism alone. **A comment
+stronger than the code is what misleads the next agent**, which is this stage's own recurring class
+arriving in prose instead of in types. So three comments that overclaimed are being corrected, and
+the uncovered case — a nested `row.status.secondsLeft = 3600` — is **written down as uncovered**
+rather than covered.
+
+The one runtime check that does land is at the use site, not the mint: `diff()` asserts `unplaceable`
+on its `previous` once. **The type makes the guarantee at mint; JavaScript cannot hold a value still
+between mint and use, so the use site checks once.** Sol's exact example becomes a crash rather than
+a bridged reboot — correct-and-unavailable over plausible-and-up, at the one point where a mutation
+could bridge two tmux worlds.
+
+**And the redirection matters more than the ruling.** Fable's closing point is where the hazard now
+actually lives:
+
+> A wrong history is far more likely to come from the daemon's register folding, `goneWhileAway`, and
+> the checkpoint/baseline write ordering than from anyone assigning to a readonly field.
+
+That is where the next review goes.
+
+### S3's review, and the premise in it that was wrong
+
+[260908b-s3-review-sol.md](260908b-s3-review-sol.md). A P0 and four others; all five dispatched fixes
+landed, and **one finding was rejected on its premise rather than fixed** — which is the part worth
+keeping.
+
+**S3-01 (P0) — the lock was not exclusive.** Rename-plus-read-back only catches contenders that
+renamed before the read. Now `openSync(path, "wx")`: the kernel decides, in one syscall. The residual
+is **named rather than hidden** — clearing a provably-dead pid's lock cannot be made atomic without a
+primitive Node does not expose — and it is covered by a second line: **ownership is the lock file
+itself, checked two ways.** Inode-and-device identity between the held fd and the path catches a
+competitor's unlink-and-recreate *even when byte-identical*; the record's `instanceId` catches an
+in-place overwrite, which keeps the inode. Checked before the log is repaired, before the append
+handle opens, and before every write — so a start that lost the clearing race refuses rather than
+truncating a log the winner is appending to, which was the worse half of the finding.
+
+**S3-02 — replay is now all-or-nothing.** One unreadable line inside the range being replayed means
+no fold at all. A hole *before* the checkpoint's cursor does not block a resume: those bytes were
+folded when they were good, and refusing there would throw away a sound checkpoint over a line
+nothing reads again. The framing that unlocked it — not a hostile-user boundary, but a **persistence,
+version and corruption** boundary — is in the module comment, next to the sentence that makes the
+strictness affordable:
+
+> Every refusal in this file is affordable precisely because the thing on the other side of it is a
+> working daemon with no memory.
+
+**S3-06 — the cursor now saves work as a number rather than as a claim.** The checkpoint is read
+first, the log only from the cursor, positionally. `StoreOpening` gained `bytesScanned`, and the
+smoke run prints `Resumed … Read 0 bytes of the log.` A range too large to replay is a **cold start
+rather than an attempt** — the restart-loop cliff removed instead of documented.
+
+**And S3-04, which was rejected.** Sol's premise was that a resumed store must reconstruct a baseline
+from what it holds. It must not, and cannot honestly: the register keeps `lastStatusKey` rather than
+the status and has never held `title` or `question`, so anything minted from it carries **an invented
+`collectedAt` for a collection that never happened** — plausible wrongness manufactured by the
+recovery path, which is where it survives longest. The daemon instead persists **the producer's own
+wire bytes** and, on restart, re-parses and re-blesses them through `parseObservation` and
+`admissible()`.
+
+> The register answers *what is running*. The baseline answers *what did the producer last say*.
+> Different questions, and only the second is safe to re-derive, because we can keep the exact bytes.
+
+That now sits on `SessionRegister` in the code, because the temptation will recur. **The fields the
+register drops are dropped on purpose; that is what makes it safe, and it is a property to preserve
+rather than a gap to close.**
+
+**Two things about reviews follow from it**, and both agents reached them independently: a premise
+from a cross-family review **can be wrong in the same way code can**, and it is easier to miss because
+a finding arrives already framed as a defect with a fix implied. Sol found a real gap here — a
+restart genuinely could not produce `working → idle` — and named the wrong repair. Taking the gap and
+refusing the repair is the outcome to aim for.
+
+**Mutations: 29 tried, 28 caught, and the survivor reported as an equivalent mutant rather than
+banked as coverage.** Five of the original fifteen went **NO-OP** because their anchors had been
+rewritten, and were re-anchored and re-run rather than counted — *a mutation that matches nothing
+reports nothing*, which is this whole failure class in miniature.
+
+**The sharpest finding of the round is about tests, not stores.** The mutant that removed the
+absolute-path check really did create a directory in the repo root — **which then made the next run of
+that test pass for the wrong reason.** A control that poisons its own verification is worth killing on
+sight; that test now cleans up whatever happens.
+
 ### S4 — the source and the daemon
 
 - SSE with poll fallback, the freshness watchdog, degradation and restoration events. **No health
   history and no local collection.**
 - **Done:** run against the live dashboard and show the log and the checkpoint — real output.
+
+**The staleness threshold is a measured number, not a guessed one, and getting it wrong is the
+failure that teaches Greg to ignore the alarm.** Astra's A17 is that the dashboard's own client calls
+data stale at 30s while collection waits 60s after a ~12s run, so *healthy operation spends most of
+its time alarming*. Measured here over six consecutive collections, 2026-09-08 05:43–05:50 UTC:
+
+- The interval is **65.0s**, very regular — not the ~70s the fixtures README claims, and not the
+  60s `refreshMs` advertises.
+- **One interval in six was 130s** — a collection was simply missed, with no error and no gap in the
+  data. So a missed collection is *ordinary*, and any threshold under about 150s fires on a healthy
+  fleet.
+
+So the watchdog fires on a multiple of the **observed** cadence, and `refreshMs` is a hint rather than
+the contract. A17's real lesson is not the number; it is that an alarm which is usually wrong is worse
+than no alarm, because it is the same picture as a quiet page over a dead box.
+
+**Degradation and restoration are events, and they pair with S2-01's held baseline.** The three ways
+the Overseer can stop knowing things — the SSE dropped, the poll failed, and the generation went
+unreadable so the baseline is held — are different causes with the same symptom, and the whole point
+of this codebase's `unknown`-with-a-cause discipline is that they must not collapse into one silence.
+
+**A third failure mode, found the hard way on 2026-09-08: the collector can simply stop.** The
+Overseer's own sweep caught `/api/state` serving a `collectedAt` **30 minutes old with `error:
+null`**. The dashboard agent found the cause and it is worth writing down in full, because the shape
+recurs:
+
+`collect()`'s child had `timeout: 60_000`, which sends **SIGTERM** — and a `bash` in uninterruptible
+IO on a swapping box does not die on SIGTERM. `promisify(execFile)` then waited for a process that
+was never coming back. The refresh loop chains from the *end* of each run, so it never reached its
+next iteration. **Nothing threw**, so `error` stayed `null` and the last good `collectedAt` simply
+stood.
+
+So the source was **neither down nor lying — it had stopped**, and it was invisible for the reason
+this area keeps rediscovering: *the thing that would have reported the failure was the thing that had
+stopped.* A wedged collector and a quiet box were the same picture.
+
+The producer now carries **`attemptedAt`** ([`tools/fleet/state.ts`](../../tools/fleet/state.ts)) —
+when a collection was last *started*, as against when data last *arrived*, and set **before** the
+attempt precisely so that it moves while a collection does not. Three readings:
+
+| `attemptedAt` | `collectedAt` | what it means |
+|---|---|---|
+| fresh | stale | the source is failing — `error` usually says how |
+| stale | stale | **the collector is down or wedged** — the case that was invisible |
+| null / absent | — | never attempted, **or a producer too old to say** |
+
+**That last cell is the trap.** `attemptedAt` is an added field rather than a schema bump, so a server
+predating the fix sends nothing — and reading absent as *never attempted* would make an old server
+look permanently wedged, which is the always-wrong alarm A17 warns about. **Absent must mean "this
+producer cannot tell me".**
+
+**This reversed a design call, and the reversal is instructive.** The S4 agent argued — and I agreed,
+on the evidence then available — that *"the collector wedged"* and *"the payload is old"* are one
+measurement from the consumer's side, and that splitting them would be two names for one number.
+**With one clock that was right. With two clocks it is wrong**, because a failing source recovers or
+reports while a wedged collector does neither, and they want different actions. The lesson is not
+that the reasoning was bad; it is that a conclusion drawn from the fields that happen to exist is
+only as durable as that set of fields.
+
+**And the general rule the bug hands us**, in the dashboard agent's words, which now governs both
+programs' tests:
+
+> A promise that never settles is the one behaviour no real tmux can arrange — which is precisely why
+> this had no test.
+
+The failures worth defending against here are exactly the ones the real dependency **cannot be
+persuaded to perform**. They must be injected, or they will not be tested, and "untestable" is
+usually this sentence undiscovered.
+
+**Blocked, and not an agent's to unblock: the live dashboard is running stale code.** Probed
+2026-09-08 08:26 — the payload on `:8787` has no `attemptedAt`, so the process predates today's
+fixes, including the collector fix and the two-column dialog parser. So the `needs-you` count on the
+live page is still an undercount and **the `idle` re-measurement cannot be taken yet**. Restarting it
+is Greg's. Noting rather than working around it, because a number taken now would be a number about
+yesterday's code — and this is itself the argument for S5: with a unit, a restart is routine rather
+than a decision.
+
+**A read CLI ships with S4, and it is not a nicety.** After S1–S5 Greg has a daemon recording events
+and no way to look at them — which fails his NOW goal, *"staying up-to-date on progress
+automatically"*, while every stage passes. The dashboard owns the page and this stage does not build
+one, so the simplest honest version is a command: what is the Overseer doing, and what has it seen.
+It also makes S4's own "show the log and the checkpoint" criterion something a person can re-run
+rather than something an agent pasted once.
 
 ### S5 — deployment that actually survives a reboot
 
@@ -556,7 +960,94 @@ down until the next login, with `Restart=always` never getting a chance to matte
 - **Done, all four:** enabled and active; `kill -9` recovery; **an actual reboot with no intervening
   login**; and the executable path proven to survive worktree removal.
 
+**Measured on the live box, 2026-09-08 — the ground S5 stands on is worse than the plan assumed.**
+There are **no systemd units on this box at all**: `/etc/systemd/system/` holds only stock ones and
+`~/.config/systemd/user/` is empty. And the fleet dashboard — the Overseer's only data source — is
+itself a `scripts/tmux-job.ts` job whose entrypoint lives **inside a worktree**:
+
+```
+421175  132280  sh -c ( env FLEET_BIND=... npx tsx tools/fleet/server.ts )
+        > /home/greg/code/spideryarn2/.claude/worktrees/fleet-dashboard-v01/logs/tmux-jobs/…
+```
+
+Three consequences, none of them theoretical:
+
+- **`npm run worktree:check` will call `fleet-dashboard-v01` safe to delete, and it is not** —
+  provable from the type rather than guessed at. `CheckFacts` in
+  [`scripts/worktree-check.ts`](../../scripts/worktree-check.ts) has no process or pid member, every
+  field it does have is about version-control state or ignored files, and `blockers()` is a pure
+  function of `CheckFacts`. So no care elsewhere can make it notice a running process. Removing that
+  worktree takes down the page and the Overseer's source together —
+  [worktrees.md](../project/worktrees.md)'s own warning arriving through a door it does not cover.
+  **Being fixed in this run**, since long-running jobs out of worktrees are now normal here and this
+  will recur.
+- **Its ppid is `132280` — the tmux server, the same number we use as the generation marker.** So a
+  reboot takes the tmux server, every session, and the dashboard, in one go. Which means the ceiling
+  argument — *"if the orchestrator broke I could just ssh in"* — is currently doing more work than it
+  looks: after a reboot there is no page to fall back **from**.
+- So the unit S5 builds should be **generic**, and the dashboard should get one too. Offered to the
+  dashboard agent rather than done unilaterally; the page's contents are theirs, the install-and-
+  verify path in `provision.sh` is this stage's.
+
+**And one honest consequence of the fix**, flagged rather than buried: an `ExecStart` in the primary
+checkout means both processes run whatever is on `dev` at that moment, **including a red `dev`** —
+which is [open-questions.md § Q12](../project/open-questions.md#q12) arriving from a third direction.
+
+**The reboot criterion cannot be met by an agent, and will not be claimed.** *"An actual reboot with
+no intervening login"* means rebooting a box carrying ~27 live sessions and ~15 worktrees of other
+people's uncommitted work. That is Greg's to run, not an agent's. What S5 *can* prove without it, and
+what it will report instead: the unit is a **system** unit, `systemctl is-enabled` says `enabled`, and
+the symlink is present in `multi-user.target.wants` — which is precisely the evidence Sol's F7 was
+about, since the whole finding was that a *user* unit would show none of those. The reboot itself
+stays outstanding and is named as outstanding.
+
+**`Restart=always`, not `Restart=on-failure`** — the fleet dashboard agent's argument, 2026-09-08,
+and it is the ssh-ceiling argument turned round:
+
+> `on-failure` means a clean `SIGTERM` is treated as intent, and on this box the things that send a
+> clean SIGTERM are not the service's owner: a stray `pkill`, an OOM reaper that got there politely,
+> a tidy-up script, an agent killing what it thinks is its own process. Every one of those is a
+> *mistake* being read as a *decision*.
+>
+> The asymmetry is what settles it. A wrong `always` costs a process you have to stop twice —
+> annoying, thirty seconds, and the second stop is `systemctl stop`, which `always` respects. A wrong
+> `on-failure` costs a service that is silently gone at exactly the moment nobody is watching, and
+> the failure mode of *this* service is that its absence is invisible: **there is no page to tell you
+> the page is down.** Take the loud failure over the quiet one.
+
+With it, a `RestartSec` of a few seconds and a `StartLimitBurst`, so a genuinely broken build
+crash-loops visibly in the journal instead of hammering a box that has already reached load 391 once.
+
+**And the unit must not gate on a green `dev`**, which is the same agent correcting me:
+
+> A dashboard that boots from a red `dev` and is wrong about two rows is still the thing you use to
+> find out why `dev` is red; a dashboard that refuses to boot until somebody fixes `dev` is
+> unavailable exactly when it is needed. Correct-and-unavailable beats plausible-and-up **for the
+> data**, not for the process — being down is one command from recoverable only if you can see that
+> it is down.
+
 **Reboot-resume of the sessions themselves is O4, a later stage.** This one only makes it possible.
+
+### S6 — work, not panes: the Codex subprocess arm
+
+Independent of S3–S5, and running in parallel with them.
+
+The pure classifier takes a process-table snapshot and the pane pid; a thin adapter reads the real
+table. Splitting them is the point — the judgement is testable against captured fixtures and the I/O
+is not in it. **A pane pid that is null, dead, or unreadable is a "could not tell" arm carrying why**,
+never "no subprocess found", which is a different claim and the dangerous one.
+
+- **Done:** fixtures captured from this box's real process table, and a number — how many of the live
+  sessions this reclassifies, checked by hand that they really are mid-review.
+
+**Not in S6:** the prose-question case. *"Has this agent asked Greg something?"* is a judgement, not a
+parse — ten of fifteen sessions genuinely waiting on Greg had ended their turn in full stops, and a
+mechanical check found one of twenty-three. That one is the Overseer's short-lived model calls, later.
+
+**Also not in S6, but now owned here:** the `needs-you` sub-kind. *An agent asked me something* and
+*the harness wants a permission* are different work items — and on this box the second is nearly
+always a **launch defect**, because auto mode should have handled it. So it is not a queue item for
+Greg at all; the action is to fix how that session was started.
 
 ## What this stage is not
 

@@ -319,6 +319,71 @@ export function snapshotFrom(
 }
 
 /**
+ * **Is this a listing of the box we are standing on?**
+ *
+ * `generationDrift` below asks whether the world changed mid-collection. This
+ * asks something more basic that nothing here asked before: whether the tmux we
+ * just interrogated is the tmux this process lives in. A `tmux ls` pointed at
+ * another socket — `TMUX` unset in a child, a `-S` somewhere in a wrapper, a
+ * second server started by hand — **succeeds**, and returns a thousand entirely
+ * plausible sessions belonging to nobody we know. Every row parses. Nothing
+ * errors. The page shows a calm, populated, wrong fleet.
+ *
+ * The idea is the `orchestrator-setup` session's, from their process probe:
+ * do not ask whether the output *looks* like the right kind of thing, ask
+ * whether it is a reading **of this machine** — and the cheapest way to know is
+ * that we are in it. It costs one lookup in data already in hand.
+ *
+ * TWO CHECKS, BECAUSE THEY FAIL DIFFERENTLY. `TMUX` carries the server's pid, so
+ * comparing it to the listing's catches the wrong *server*; `TMUX_PANE` catches
+ * a listing of the right server that has somehow lost us, which is a listing
+ * that may have lost others.
+ *
+ * NOT BEING UNDER TMUX IS NOT A FAULT. The collector runs under `tmux-job.ts` in
+ * production and from a shell in every test, so an absent `TMUX` means "cannot
+ * check" and must not block — the `/logs/` lesson in `worktree-check.ts`, which
+ * is that an alarm nobody can clear is one somebody deletes.
+ */
+export type SelfCheck =
+  /** We are in the listing, so it is ours. */
+  | { kind: "present"; paneId: string }
+  /** Not running under tmux, so there is nothing to look for. Not a fault. */
+  | { kind: "cannot-check"; why: string }
+  /** We ARE under tmux and are not in this listing. The listing is not of our box. */
+  | { kind: "absent"; why: string };
+
+export function selfCheck(
+  panes: ReadonlyMap<string, PaneInfo>,
+  listedServerPid: number | null,
+  env: { TMUX?: string | undefined; TMUX_PANE?: string | undefined },
+): SelfCheck {
+  const pane = env.TMUX_PANE;
+  const tmux = env.TMUX;
+  if (typeof pane !== "string" || pane === "" || typeof tmux !== "string" || tmux === "") {
+    return { kind: "cannot-check", why: "this process is not running under tmux, so it cannot look for itself" };
+  }
+  // `TMUX` is `<socket>,<server pid>,<session index>`.
+  const ourServer = Number(tmux.split(",")[1]);
+  if (Number.isInteger(ourServer) && listedServerPid !== null && ourServer !== listedServerPid) {
+    return {
+      kind: "absent",
+      why:
+        `this listing is of tmux server ${listedServerPid} and this process lives in server ${ourServer} — ` +
+        `every handle in it belongs to a different world`,
+    };
+  }
+  for (const info of panes.values()) {
+    if (info.paneId === pane) return { kind: "present", paneId: pane };
+  }
+  return {
+    kind: "absent",
+    why:
+      `this process runs in pane ${pane} and that pane is not in the listing — ` +
+      `so the listing is not of this box, or it is missing rows`,
+  };
+}
+
+/**
  * Did the tmux server change under us mid-collection? The message if so, null if not.
  *
  * Pure and exported so the decision can be tested without a box, because it is
@@ -354,6 +419,65 @@ function generationNow(): number | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * How long one collection gets before a caller stops waiting for it.
+ *
+ * Generous on purpose: a collection takes 8–12 seconds normally, the child
+ * below already has its own 60-second timeout, and this box has hit load
+ * average 391. This is the backstop behind that timeout rather than a second
+ * copy of it.
+ */
+export const COLLECT_DEADLINE_MS = 120_000;
+
+/**
+ * Wait for a collection, or give up on it — but never wait forever.
+ *
+ * **`collect()` CAN FAIL TO SETTLE, AND THAT STOPPED THE SERVER'S LOOP FOR
+ * GOOD.** Its child gets `timeout: 60_000`, which sends SIGTERM, and a `bash`
+ * in uninterruptible IO on a swapping box does not die on SIGTERM.
+ * `promisify(execFile)`'s promise then waits for a process that is not coming
+ * back. In `server.ts` the refresh loop chains from the END of each run, so it
+ * never reached its next iteration — and nothing threw, so `lastError` stayed
+ * `null` while `collectedAt` sat at the last success.
+ *
+ * Observed in the field on 2026-09-08 by the `orchestrator-setup` session:
+ * roughly **thirty minutes stale with `error: null`**, self-healing when the
+ * child finally died. That is `silent-success.md` in its purest form — the
+ * thing that would have reported the fault was the thing that stopped — and it
+ * had no test because there was nothing to call.
+ *
+ * The abandoned promise is NOT cancelled, because there is nothing to cancel it
+ * with; its eventual result is ignored. What matters is that the CALLER is
+ * freed, so the next attempt happens and `attemptedAt` keeps moving even while
+ * `collectedAt` does not.
+ *
+ * `run` is a parameter so a test can hand it a promise that never settles,
+ * which is the one behaviour that cannot be arranged with a real tmux.
+ */
+export async function collectWithDeadline(
+  run: () => Promise<FleetSnapshot> = collect,
+  ms: number = COLLECT_DEADLINE_MS,
+): Promise<FleetSnapshot> {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const deadline = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => reject(new Error(collectionAbandoned(ms))), ms);
+    timer.unref?.();
+  });
+  try {
+    return await Promise.race([run(), deadline]);
+  } finally {
+    if (timer !== null) clearTimeout(timer);
+  }
+}
+
+/** The sentence a person reads when a collection was abandoned. Exported so a test can hold it. */
+export function collectionAbandoned(ms: number): string {
+  return (
+    `the collection did not finish within ${Math.round(ms / 1000)}s and has been abandoned — ` +
+    `a tmux or bash child is probably wedged; any rows shown are from the previous one`
+  );
 }
 
 export async function collect(): Promise<FleetSnapshot> {
@@ -394,6 +518,10 @@ export async function collect(): Promise<FleetSnapshot> {
   const listing = panes();
   const drift = generationDrift(generationBefore, listing.tmuxServerPid);
   if (drift) throw new Error(drift);
+  // Before anything is derived from the listing, not after: a listing of the
+  // wrong box produces rows that are individually perfect.
+  const self = selfCheck(listing.panes, listing.tmuxServerPid, process.env);
+  if (self.kind === "absent") throw new Error(`this is not a listing of this box: ${self.why}`);
   const snapshot = snapshotFrom(parsed, listing, 0);
   const rows = snapshot.rows;
 

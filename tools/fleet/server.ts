@@ -32,12 +32,14 @@ import { createServer } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { collect, type FleetSnapshot } from "./collect.js";
+import { collectWithDeadline, type FleetSnapshot } from "./collect.js";
 import { parseBinds } from "./config.js";
 import { collectHealth, type HealthReport } from "./health.js";
 import { applySecurityHeaders } from "./headers.js";
 import { broadcast, startHeartbeat, subscribe, subscriberCount } from "./live.js";
+import { handleActionRequest } from "./routes-actions.js";
 import { newSessionRoutes } from "./routes-new.js";
+import { renameRoute } from "./routes-rename.js";
 import { handleSteerRequest } from "./routes-steer.js";
 import { fleetState } from "./state.js";
 import { readRecentMessages } from "./transcript.js";
@@ -102,6 +104,14 @@ let lastError: string | null = null;
 let health: HealthReport | null = null;
 
 /**
+ * When the loop last STARTED a collection — see `attemptedAt` in state.ts.
+ *
+ * Separate from `snapshot.collectedAt` on purpose: a collector that has stopped
+ * trying and a box that has nothing new to say look identical without it.
+ */
+let attemptedAt: string | null = null;
+
+/**
  * The wire shape, in one place, so the poll and the stream cannot disagree.
  *
  * The shape itself lives in state.ts, where it can be tested without binding a
@@ -115,7 +125,14 @@ function statePayload(): string {
   // it on should be a restart, and the page should learn about it on its next
   // refresh rather than on a reload nobody performs.
   return JSON.stringify(
-    fleetState(snapshot, lastError, health, REFRESH_MS, process.env["FLEET_ANSWER_ENABLED"] === "1"),
+    fleetState(
+      snapshot,
+      lastError,
+      health,
+      REFRESH_MS,
+      process.env["FLEET_ANSWER_ENABLED"] !== "0",
+      attemptedAt,
+    ),
   );
 }
 
@@ -144,8 +161,11 @@ function refreshHealth(): void {
 }
 
 async function refresh(): Promise<void> {
+  // BEFORE the attempt, not after it, because the whole point of this field is
+  // to be moving while a collection is not.
+  attemptedAt = new Date().toISOString();
   try {
-    snapshot = await collect();
+    snapshot = await collectWithDeadline();
     lastError = null;
     console.log(
       `collected ${snapshot.rows.length} sessions in ${snapshot.tookMs}ms` +
@@ -284,6 +304,23 @@ function handler(req: import("node:http").IncomingMessage, res: import("node:htt
   // must not acquire opinions about steering that the tested modules do not
   // have, or there will be two places to read and they will diverge.
   if (handleSteerRequest(req, res)) return;
+
+  // The action vocabulary: the catalogue, the per-session queue, the box-health
+  // kills and the fleet broadcast. Mounted through `handleActionRequest` rather
+  // than through a `makeActionRoutes()` of our own, and that is not a style
+  // choice: the queue is STATE, and a second instance would be a second queue —
+  // the one the page renders would be the one nothing ever delivers from. When
+  // a drainer lands it goes through this same function for the same reason.
+  //
+  // Enacted actions are off by default (`FLEET_ACT_ENABLED=1`), so what is live
+  // here today is the catalogue, the queue and the dry runs.
+  if (handleActionRequest(req, res)) return;
+
+  // Renaming a session. A write, but a mild one — it changes a label, not a
+  // conversation — and it is the one action here whose *second half* is the
+  // part that matters: clearing `GJD_PROVISIONAL`, without which `gjd-remote
+  // ls` renames the session straight back to Claude's own title.
+  if (renameRoute().handle(req, res)) return;
 
   // Starting a session, which is the other write. `startsWith` mounts it, but
   // the route 404s any path that is not exactly this one, so the prefix cannot
