@@ -46,6 +46,7 @@ import {
   type RegisterEntry,
   type StatusSince,
 } from "../tools/overseer/store.js";
+import { collectUsage, type UsageReport } from "../tools/overseer/usage.js";
 
 /** Where the daemon looks for the dashboard unless told otherwise. */
 export const DEFAULT_FLEET_URL = "http://127.0.0.1:8787";
@@ -434,6 +435,78 @@ function describeAge(ms: number): string {
   return `${Math.round(minutes / 60)}h`;
 }
 
+/**
+ * Render a usage report for a person.
+ *
+ * THE POSITIVE CONTROL IS PRINTED EVERY TIME, including — especially — when
+ * the answer is "no limits hit". A bare "no limits hit" is the same sentence a
+ * probe that opened nothing would print, and the whole point of
+ * `ScanCoverage` is that the two must not read alike
+ * (docs/reusable/silent-success.md). Likewise an expired cached window prints
+ * its `why`, never a percentage: there is no percentage on that arm to print.
+ */
+function usageLines(report: UsageReport): string[] {
+  const out: string[] = [];
+  const a = report.account;
+  out.push(
+    a.kind === "value"
+      ? `account   ${a.email ?? "?"}  ${a.subscriptionType ?? "?"}  tier ${a.rateLimitTier ?? "?"}  uuid ${a.accountUuid ?? "?"}`
+      : a.kind === "logged-out"
+        ? `account   NOT LOGGED IN (projects dir ${a.projectsDirectory ?? "?"})`
+        : `account   could not tell: ${a.why}`,
+  );
+  out.push(`verdict   ${report.verdict.level.toUpperCase()}`);
+  for (const reason of report.verdict.reasons) out.push(`          ${reason}`);
+
+  if (report.cache.kind === "unknown") {
+    out.push(`cache     could not tell: ${report.cache.why}`);
+  } else {
+    // THE INSTANT, IN UTC, NEXT TO THE AGE. "73 min ago" is only true at the
+    // moment it is printed, and these lines get pasted into messages and plan
+    // docs hours later — the wave's own rule, after four hand-typed timestamps
+    // went wrong in one day. `fetchedAtMs` is a field all the way from
+    // `~/.claude.json`, so the absolute form costs nothing and cannot drift.
+    out.push(
+      `cache     fetched ${new Date(report.cache.fetchedAtMs).toISOString()} (${Math.round(report.cache.ageMs / 60_000)} min before this reading), account ${report.cache.accountUuid ?? "?"}`,
+    );
+    for (const w of report.cache.windows) {
+      if (w.kind === "value") out.push(`          ${w.window}: ${w.utilizationPercent}% used, resets ${w.resetsAt}`);
+      else if (w.kind === "expired") out.push(`          ${w.window}: EXPIRED — ${w.why}`);
+      else out.push(`          ${w.window}: unknown — ${w.why}`);
+    }
+  }
+
+  const c = report.rateLimits.coverage;
+  out.push(
+    `scanned   ${c.transcriptsOpened}/${c.transcriptsSelected} of ${c.transcriptsFound} transcripts, ${c.linesScanned} lines, ${c.candidateLines} candidates, ${c.tookMs}ms` +
+      `${c.transcriptsUnreadable > 0 ? `, ${c.transcriptsUnreadable} unreadable` : ""}` +
+      `${c.malformedCandidates > 0 ? `, ${c.malformedCandidates} MALFORMED` : ""}` +
+      `${c.truncatedByLimit ? ", TRUNCATED by --max-transcripts" : ""}`,
+  );
+  switch (report.rateLimits.kind) {
+    case "hits":
+      for (const h of report.rateLimits.hits.slice(0, 10)) {
+        out.push(
+          `429       ${h.hitAt ?? "?"}  ${h.window}  resets ${new Date(h.resetsAtMs).toISOString()}  conversation ${h.claudeSessionId ?? "?"}`,
+        );
+      }
+      if (report.rateLimits.hits.length > 10) out.push(`          (${report.rateLimits.hits.length - 10} more)`);
+      break;
+    case "none":
+      out.push("429       none in the scanned window — believable only against the `scanned` line above");
+      break;
+    case "unknown":
+      out.push(`429       could not tell: ${report.rateLimits.why}`);
+      break;
+    default: {
+      const never: never = report.rateLimits;
+      throw new Error(String(never));
+    }
+  }
+  out.push(`took      ${report.tookMs}ms, at ${report.collectedAt}`);
+  return out;
+}
+
 const HELP = [
   "overseer — the fleet's history, and the daemon that records it",
   "",
@@ -441,6 +514,7 @@ const HELP = [
   "  npx tsx scripts/overseer.ts status",
   "  npx tsx scripts/overseer.ts events [--limit N]",
   "  npx tsx scripts/overseer.ts notes [--limit N]",
+  "  npx tsx scripts/overseer.ts usage [--since-hours N] [--max-transcripts N] [--json]",
   "  npx tsx scripts/overseer.ts attention [--max-calls N] [--dry] [--json]",
   "                                        [--capture-to DIR | --panes DIR] [--out FILE] [--write]",
   "",
@@ -454,6 +528,34 @@ const HELP = [
 function flag(argv: readonly string[], name: string): string | undefined {
   const at = argv.indexOf(name);
   return at === -1 ? undefined : argv[at + 1];
+}
+
+/**
+ * A numeric flag that must be a positive finite number, or an explicit refusal.
+ *
+ * Three arms rather than `number | undefined`, because "not given" and "given
+ * as nonsense" have to lead to different behaviour: the first takes the
+ * default, the second must stop. `Number("nope")` is `NaN`, `Number("")` is 0
+ * and `Number(undefined)` is `NaN` — all of which used to sail through and
+ * silently disable the bound they were meant to set.
+ */
+function positiveNumberFlag(
+  argv: readonly string[],
+  name: string,
+  opts: { integer?: boolean } = {},
+): { kind: "absent" } | { kind: "value"; value: number } | { kind: "invalid"; why: string } {
+  const at = argv.indexOf(name);
+  if (at === -1) return { kind: "absent" };
+  const raw = argv[at + 1];
+  if (raw === undefined || raw.startsWith("--")) return { kind: "invalid", why: `${name} needs a number after it` };
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value <= 0) {
+    return { kind: "invalid", why: `${name} must be a positive number, got ${JSON.stringify(raw)}` };
+  }
+  if (opts.integer === true && !Number.isInteger(value)) {
+    return { kind: "invalid", why: `${name} counts whole transcripts, so it must be a whole number, got ${JSON.stringify(raw)}` };
+  }
+  return { kind: "value", value };
 }
 
 async function main(argv: readonly string[]): Promise<number> {
@@ -500,6 +602,38 @@ async function main(argv: readonly string[]): Promise<number> {
         panes: flag(argv, "--panes") ?? null,
         captureTo: flag(argv, "--capture-to") ?? null,
       });
+    case "usage": {
+      // A command rather than a daemon block for the same reason the header
+      // gives for the rest of this file: there is no scheduler here yet, and the
+      // honest simplest version of "how close are we to a limit" is something a
+      // person or another agent can run and read. It does not touch the store.
+      // `Number(flag)` used to go straight into the options, so
+      // `--max-transcripts nope` produced NaN, every comparison against it was
+      // false, and the bound silently vanished — GPT Sol's finding 10. A flag
+      // that quietly does the opposite of what it says is worse than no flag.
+      const sinceHours = positiveNumberFlag(argv, "--since-hours");
+      // INTEGER, because this one is a COUNT. `--max-transcripts 0.5` passed the
+      // positive-number check and then `slice(0, 0.5)` selected zero
+      // transcripts — a flag that reads as "scan at most half a file" and
+      // behaves as "scan nothing". GPT Sol's round-2 finding 7. `--since-hours`
+      // stays fractional on purpose; half an hour is a sensible window.
+      const maxTranscripts = positiveNumberFlag(argv, "--max-transcripts", { integer: true });
+      if (sinceHours.kind === "invalid") {
+        console.error(`✗ ${sinceHours.why}\n\n${HELP}`);
+        return 1;
+      }
+      if (maxTranscripts.kind === "invalid") {
+        console.error(`✗ ${maxTranscripts.why}\n\n${HELP}`);
+        return 1;
+      }
+      const report = await collectUsage({
+        ...(sinceHours.kind === "absent" ? {} : { sinceMs: sinceHours.value * 3600_000 }),
+        ...(maxTranscripts.kind === "absent" ? {} : { maxTranscripts: maxTranscripts.value }),
+      });
+      if (argv.includes("--json")) console.log(JSON.stringify(report, null, 2));
+      else console.log(usageLines(report).join("\n"));
+      return 0;
+    }
     case "run": {
       const controller = new AbortController();
       // SIGTERM is what systemd sends and SIGINT is what a person sends; both

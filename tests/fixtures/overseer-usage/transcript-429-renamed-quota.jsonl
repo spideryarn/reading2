@@ -1,0 +1,1 @@
+{"type":"assistant","timestamp":"2026-09-08T10:00:00.000Z","sessionId":"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee","error":"rate_limit","isApiErrorMessage":true,"apiErrorStatus":429,"quotaLimitsV2":{"status":"rejected","resetsAt":1788880000,"windowKind":"five_hour"},"message":{"role":"assistant","content":[{"type":"text","text":"You've hit your session limit"}]}}
