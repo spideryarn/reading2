@@ -114,25 +114,28 @@ put the write path in as *"a stage, but it doesn't have to be the top-priority."
 that. So on the Overseer's side the order is **attention first**, and the write path stays where he
 put it.
 
-## Where this stands, 2026-09-08T14:25Z
+## Where this stands, 2026-09-08T14:36Z
 
-**Important work left**, and it is now the last mile of three stages rather than all of six. What is
-finished is the part that had to be finished first: **every seam is agreed and every contract is a
-type**, so no session is waiting on another to decide anything.
+**Done enough to stop here.** All six workstreams have landed on `dev`, and what remains is either
+Greg's to decide, Greg's to test, or explicitly deferred. Nothing is half-built and nothing is
+blocked on another session.
 
 | | landed | what remains |
 |---|---|---|
-| **A** attention | the five types (`4d5cc454`); classifier built, evaluated and Sol-reviewed | **the push** — `Checkpoint.attention` is not on dev yet |
-| **B** usage | **DONE** (`95c2f49a`) — `usage.ts`, `UsageReport`, 19 Sol findings taken | `Checkpoint.usage` on my side, behind A |
-| **C** harness | **DONE** (`5c2e31cb`), worktree torn down | nothing; the `steer.ts` argv parser is unowned |
-| **D** health | seam agreed (`refreshOnce`, not `server.ts`); `lock.ts` extracted for it | retention and the drawing |
-| **E** dictation | the server half — `transcribe.ts`, `routes-transcribe.ts`, `vocabulary.ts` | the client half, and Greg's own mic test |
+| **A** attention | **DONE** (`c87ff8f9`) — classifier, held-out evaluation, two Sol rounds, `Checkpoint.attention` | the transcript slice and the consequence floor, both deferred with reasons |
+| **B** usage | **DONE** (`95c2f49a`, `c6300462`) — `usage.ts`, `parseUsageReport`, two Sol rounds | the open question below, which is Greg's |
+| **B′** the store half | **DONE** (`0bbeb54f`) — `Checkpoint.usage`, `usage-carry.ts`, restore-across-restart | the pass that calls `chooseUsage`, **unowned** |
+| **C** harness | **DONE** (`5c2e31cb`), worktree torn down | the `steer.ts` argv parser, **unowned** |
+| **D** health | **DONE** — `health-history.ts`, `HealthHistory.tsx`, `routes-health-history.ts` | its worktree is still standing |
+| **E** dictation | **DONE** (`c2d19b93`) — `DictationControl.tsx`, `dictation-client.ts`, 330 tests | **only Greg can test the real microphone** |
 | **F** realtime dialog | designed, gated on E | not started, deliberately |
-| **#1** write path | A6 (`0a5a3008`), A9/A10 work landing (`91e1f3a0`, `2bfe48dc`) | the dashboard's own stage list |
+| **#1** write path | A6, A9 and A10 (`0a5a3008`, `91e1f3a0`, `2bfe48dc`) | the dashboard's own list |
 | **A5** | **closed**, no code | nothing |
 
-**The queue on `Checkpoint` is the only ordering constraint left in the wave**: `attention` lands,
-then `usage` on top, one editor of that type at a time. Everything else can finish in any order.
+**Two things are unowned rather than unfinished**, and both are follow-ups a review named rather than
+work anybody started: the pass that calls `chooseUsage` (so the usage report is actually collected on
+a timer and written to the checkpoint), and the shared Claude-argv parser replacing `recogniseClaude`
+and `isClaudeForSession`, which Sol logged as the seventeenth hand-written join.
 
 **Three things landed that were not in the plan**, all of them because the work turned them up:
 
