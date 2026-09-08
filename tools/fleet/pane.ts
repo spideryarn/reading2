@@ -26,8 +26,26 @@
  * and one of the fixtures here is a live pane doing exactly that while idle.
  * A naive "line starts with a digit and a dot" parser calls that a four-option
  * menu.
+ *
+ * THE SECOND DANGEROUS CASE, found by experiment on 2026-09-08 and the reason
+ * `material` exists. Until then a question was a `prompt` plus its options, and
+ * `prompt` was only the text between the LAST horizontal rule and the options.
+ * Claude Code rules off the thing it is proposing — the diff, the command, the
+ * destination path — from the sentence that asks about it, so `prompt` was
+ * "Do you want to create notes.md?" and the file's contents were thrown away.
+ * Two captures of the same dialog, one writing `hello` and one writing
+ * `goodbye`, produced byte-identical questions and byte-identical options.
+ *
+ * That is two failures, not one. `sameQuestion` in steer.ts would accept an
+ * answer aimed at one action and deliver it to a materially different one; and
+ * the page would ask Greg on his phone to approve something without showing him
+ * what it was. Both fixes are the same fix: carry the dialog's whole body, and
+ * carry a hash of it so identity is compared on the body rather than on the
+ * sentence. The regression fixtures are `dialog-file-write-hello.txt` and
+ * `dialog-file-write-goodbye.txt`, which differ in exactly one word.
  */
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 
 /**
  * What to send to choose an option.
@@ -46,12 +64,68 @@ export type OptionKey =
   | { via: "arrows"; key: "Down" | "Up"; presses: number }
   | { via: "selected" };
 
-export type PaneOption = { label: string; key: OptionKey };
+/**
+ * What saying yes to this option COSTS, which is not the same as what it does.
+ *
+ * "Yes" and "Yes, and don't ask again for: curl …" arrive as two adjacent lines
+ * that look alike and read alike, and they are not alike at all: the first is a
+ * decision about one action, the second changes the session's permission posture
+ * for everything that comes after it, including things nobody has proposed yet.
+ * On a phone they are two buttons a thumb-width apart. So the difference is a
+ * field the client can render on, rather than a substring the client is trusted
+ * to notice.
+ *
+ * `unknown` IS THE DEFAULT AND IS NOT A BUG. Every label we have not met before
+ * lands here, and the client must treat it as "at least as serious as
+ * persistent" rather than as "probably fine". Classifying an unrecognised label
+ * as `once` would be the whole failure in one line, so nothing falls through to
+ * `once`: it is reached only by a label that says nothing but yes.
+ */
+export type OptionConsequence =
+  /** This action, and nothing after it. */
+  | "once"
+  /** Changes what the session will approve on its own from now on. */
+  | "persistent"
+  /** Refuses. */
+  | "decline"
+  /** Not a label we recognise. Treat as at least `persistent`. */
+  | "unknown";
+
+export type PaneOption = { label: string; key: OptionKey; consequence: OptionConsequence };
+
+/**
+ * WHAT IS ACTUALLY BEING APPROVED — the diff, the command, the path — as
+ * opposed to the sentence that asks about it.
+ *
+ * THREE ARMS, NOT A NULLABLE STRING, and the reason is what the page does with
+ * each. `read` is "here is the body, and here is its hash". `no-material` is a
+ * positive claim that this dialog proposes nothing — a menu, where the options
+ * are the whole of the question — and it is safe to render with no body.
+ * `unreadable` is "there is a dialog here and we could not see what it is
+ * about", which must make the page REFUSE rather than draw a confident empty
+ * box. Collapse the last two into `null` or `""` and the two are the same
+ * pixels, which is exactly how somebody approves a write they never saw.
+ *
+ * `text` AND `fingerprint` ARE BOTH NEEDED, and neither substitutes for the
+ * other. `sameQuestion` compares fingerprints, because comparing prose across
+ * two captures is fragile and because a hash is the whole body in one field.
+ * The page shows `text`, because a hash tells a person nothing.
+ */
+export type PaneMaterial =
+  | { kind: "read"; text: string; fingerprint: string }
+  | { kind: "no-material" }
+  | { kind: "unreadable"; why: string };
 
 /**
  * The answer. `none` is not an error and not an absence of data — it is the
  * assertion that this pane is not asking anything, which is what almost every
  * pane on the box is doing at any moment.
+ *
+ * `prompt` IS THE HEADLINE, `material` IS THE EVIDENCE. `prompt` is the last
+ * section of the dialog — usually one sentence, "Do you want to create
+ * notes.md?" — and it is kept because it is the right thing to put in a list of
+ * blocked sessions. It is NOT enough to decide on, and it is not what identity
+ * is compared on. See the header comment for the day that distinction was worth.
  *
  * `options` IS WHAT IS ON THE SCREEN, WHICH IS NOT ALWAYS ALL OF THEM. A long
  * menu scrolls: the model selector shows four rows and a `… +1 model` line, and
@@ -63,7 +137,7 @@ export type PaneOption = { label: string; key: OptionKey };
  */
 export type PaneQuestion =
   | { kind: "none" }
-  | { kind: "question"; prompt: string; options: PaneOption[] };
+  | { kind: "question"; prompt: string; material: PaneMaterial; options: PaneOption[] };
 
 /**
  * Strip ANSI escapes.
@@ -96,12 +170,31 @@ export function stripAnsi(s: string): string {
  */
 const DECORATION = /[─-╿▀-▟■-◿⬛-⬜]/g;
 
+/**
+ * A rule drawn out of dashed box-drawing characters, U+254C–U+254F and
+ * U+2504–U+250B.
+ *
+ * THIS IS THE DIFFERENCE BETWEEN A DIALOG AND HALF OF ONE. Claude Code draws
+ * the outside of a permission dialog with the solid `─`, and the separators
+ * INSIDE it — above and below a diff, around a command — with the dashed `╌`.
+ * So the topmost rule above the options tells us which we are looking at: solid
+ * means we can see the whole box and the material above the diff is real;
+ * dashed means the capture begins in the middle of the dialog, its top border
+ * having scrolled off, and whatever we can see of the material is a fragment.
+ * A fragment shown as if it were the whole thing is the failure this module
+ * exists to prevent, so that case becomes `unreadable`.
+ */
+const DASHED_RULE = /^[\s╌-╏┄-┋]+$/;
+
+/** Solid means the dialog's own border; dashed means a separator inside it. */
+type RuleStyle = "none" | "solid" | "dashed";
+
 /** One line of the pane, cleaned, with the columns preserved. */
 type Line = {
   /** Decorations replaced by spaces, so indent is unchanged and comparable. */
   text: string;
-  /** True when the raw line held nothing but decoration and whitespace — a horizontal rule. */
-  isRule: boolean;
+  /** Non-`none` when the raw line held nothing but decoration and whitespace. */
+  rule: RuleStyle;
 };
 
 /**
@@ -117,7 +210,9 @@ export function cleanLines(capture: string): Line[] {
     .split("\n")
     .map((raw) => {
       const text = raw.replace(DECORATION, " ").replace(/\s+$/, "");
-      return { text, isRule: text.trim() === "" && raw.trim() !== "" };
+      const isRule = text.trim() === "" && raw.trim() !== "";
+      const rule: RuleStyle = !isRule ? "none" : DASHED_RULE.test(raw) ? "dashed" : "solid";
+      return { text, rule };
     });
 }
 
@@ -131,8 +226,15 @@ export function cleanLines(capture: string): Line[] {
  * absolutely be a numbered list. This is the guard that saves us from
  * `none-idle-with-prose-numbered-list.txt`, where the pane really does contain
  * a well-formed 1–4 list.
+ *
+ * EXPORTED SINCE 2026-09-08 because steer.ts needs the same line for the
+ * opposite question. This file asks "is the input box in the way of calling
+ * this a dialog?"; `inputSurface` in steer.ts asks "is the input box THERE,
+ * before we type free text at this pane?" — Sol's F2. Two callers, one
+ * definition, because a second regex that drifted from this one would fail in
+ * the direction that types a message into a permission dialog.
  */
-function isInputPrompt(text: string): boolean {
+export function isInputPrompt(text: string): boolean {
   return /^\s*❯(\s|$)/.test(text);
 }
 
@@ -215,9 +317,9 @@ function tailIsDialogLike(lines: readonly Line[], lastOption: number): boolean {
  * transcript above it.
  */
 function promptAbove(lines: readonly Line[], firstOption: number): string {
-  let start = Math.max(0, firstOption - 10);
+  let start = Math.max(0, firstOption - PROMPT_WINDOW);
   for (let i = firstOption - 1; i >= start; i--) {
-    if (lines[i]?.isRule) {
+    if (lines[i]?.rule !== "none") {
       start = i + 1;
       break;
     }
@@ -228,6 +330,161 @@ function promptAbove(lines: readonly Line[], firstOption: number): string {
     .filter((t) => t !== "")
     .join(" ")
     .trim();
+}
+
+/** How far above the options `promptAbove` will look when no rule bounds it. */
+const PROMPT_WINDOW = 10;
+
+/**
+ * How far above the options to look for the dialog's top border.
+ *
+ * Wide enough for the shapes measured on this box — the folder-trust dialog is
+ * twelve lines of body, and a permission dialog with a diff can be more — and
+ * bounded so that a menu with no border at all does not swallow the transcript
+ * above it. Over-reaching is the cheap direction: it shows the person a few
+ * lines of transcript they did not need, and it makes the fingerprint change
+ * when the transcript does, which costs a refusal rather than a wrong approval.
+ */
+const MATERIAL_WINDOW = 40;
+
+/**
+ * A stable name for a body of text.
+ *
+ * NOT TRUNCATED. A short hash would be plenty against accidental collision, and
+ * truncating invites the question of how short is short enough for a value that
+ * gates a keystroke into somebody's session. Sixty-four hex characters costs a
+ * line of JSON and closes the question.
+ */
+export function fingerprintMaterial(text: string): string {
+  return createHash("sha256").update(text, "utf8").digest("hex");
+}
+
+/**
+ * What the dialog is proposing: its whole body, above the options.
+ *
+ * BOUNDED BY THE DIALOG'S TOP BORDER, not by the last rule. `promptAbove` takes
+ * the last rule on purpose — it wants the final section, the question sentence.
+ * That is the wrong boundary for the material, and taking it was the bug: for a
+ * file write the last rule sits under the diff, so everything the write would
+ * actually do lands above it and was dropped.
+ *
+ * The body deliberately INCLUDES the prompt sentence. Two fields that each hold
+ * half a screen invite a caller to render one of them; `text` is meant to be
+ * the whole of what the person needs to read, and `prompt` a headline for a
+ * list.
+ *
+ * Rules inside the body are dropped rather than kept as blank lines, so the
+ * fingerprint does not move when Claude Code changes its box drawing. Blank
+ * lines that were really blank ARE kept — a diff whose blank lines vanished
+ * would be a different file that hashed the same.
+ */
+function materialAbove(lines: readonly Line[], firstOption: number): PaneMaterial {
+  const start = Math.max(0, firstOption - MATERIAL_WINDOW);
+  let top = -1;
+  for (let i = start; i < firstOption; i++) {
+    if (lines[i]?.rule !== "none") {
+      top = i;
+      break;
+    }
+  }
+
+  if (top === -1) {
+    // No rule at all. Either the dialog genuinely has no box — the `/loop`
+    // scheduling menu is a question and four options and nothing else — or the
+    // box is off screen. They are told apart by what is above the prompt: a
+    // borderless menu that has a transcript above it gives us no way to say
+    // where the transcript stops, so we say we could not read it rather than
+    // guess a boundary and present the guess as the thing being approved.
+    const promptStart = Math.max(0, firstOption - PROMPT_WINDOW);
+    const transcriptAbove = lines.slice(start, promptStart).some((l) => l.text.trim() !== "");
+    if (transcriptAbove) {
+      return {
+        kind: "unreadable",
+        why: "no rule above the options, so the dialog's body cannot be told from the transcript above it",
+      };
+    }
+    return { kind: "no-material" };
+  }
+
+  if (lines[top]?.rule === "dashed") {
+    return {
+      kind: "unreadable",
+      why: "the capture begins inside the dialog — its top border has scrolled off, so what is being"
+        + " proposed is only partly on screen",
+    };
+  }
+
+  const body: string[] = [];
+  for (let i = top + 1; i < firstOption; i++) {
+    const line = lines[i];
+    if (!line || line.rule !== "none") continue;
+    body.push(line.text);
+  }
+  while (body[0]?.trim() === "") body.shift();
+  while (body[body.length - 1]?.trim() === "") body.pop();
+  const text = body.join("\n");
+  if (text.trim() === "") {
+    return {
+      kind: "unreadable",
+      why: "the dialog's border is on screen but there is nothing between it and the options",
+    };
+  }
+  return { kind: "read", text, fingerprint: fingerprintMaterial(text) };
+}
+
+/**
+ * Phrases that mean "and change what you approve from now on".
+ *
+ * Matched as substrings of a lower-cased label with curly apostrophes folded
+ * flat, because Claude Code writes `don’t` (U+2019) and everybody's memory of
+ * the string writes `don't`. Checked BEFORE the refusal test on purpose: a
+ * hypothetical "No, and don't ask again" is both, and of the two facts the
+ * posture change is the one a person must not miss.
+ *
+ * "for this session" is here and "this session only" deliberately is not. The
+ * first is a permission granted for the rest of the session; the second is the
+ * `/loop` menu declining to make anything permanent.
+ */
+const PERSISTENT_MARKERS = [
+  "don't ask again",
+  "auto mode",
+  "accept edits",
+  "for this session",
+  "for the rest of this session",
+  "during this session",
+  "always allow",
+  "allow all",
+  "yes to all",
+  "i trust this folder",
+  "trust the files",
+];
+
+/** A refusal. `no, and tell Claude what to do differently` is one of these. */
+const DECLINE = /^(no\b|don't\b|do not\b|cancel\b|reject\b|exit\b|abort\b)/;
+
+/** The only labels that get to be `once`: the ones that say nothing but yes. */
+const BARE_YES = /^yes(,? (proceed|once|allow (this )?once|just this once))?[.!]?$/;
+
+/**
+ * What one option costs, from its label and nothing else.
+ *
+ * Label text is all we have — the pane does not tell us what a digit is wired
+ * to — so this is a reading of English, and it is written to be wrong in one
+ * direction only. Anything unrecognised is `unknown`, which the client must
+ * treat as at least as serious as `persistent`. Nothing reaches `once` by
+ * falling through.
+ */
+export function classifyConsequence(label: string): OptionConsequence {
+  const flat = label.toLowerCase().replace(/[’‘]/g, "'");
+  if (PERSISTENT_MARKERS.some((m) => flat.includes(m))) return "persistent";
+  if (DECLINE.test(flat)) return "decline";
+  if (BARE_YES.test(flat)) return "once";
+  return "unknown";
+}
+
+/** One parsed option line, with both of the things a caller has to know about it. */
+function toOption(label: string, key: OptionKey): PaneOption {
+  return { label, key, consequence: classifyConsequence(label) };
 }
 
 /**
@@ -300,7 +557,8 @@ function parseNumbered(lines: readonly Line[]): PaneQuestion {
   return {
     kind: "question",
     prompt: promptAbove(lines, first.index),
-    options: run.map((o) => ({ label: o.label, key: numberedKey(o, cursorAt) })),
+    material: materialAbove(lines, first.index),
+    options: run.map((o) => toOption(o.label, numberedKey(o, cursorAt))),
   };
 }
 
@@ -336,7 +594,8 @@ function parseCursorMenu(lines: readonly Line[]): PaneQuestion {
   return {
     kind: "question",
     prompt: promptAbove(lines, at),
-    options: run.map((o) => ({ label: o.label, key: arrowKey(o.index, at) })),
+    material: materialAbove(lines, at),
+    options: run.map((o) => toOption(o.label, arrowKey(o.index, at))),
   };
 }
 

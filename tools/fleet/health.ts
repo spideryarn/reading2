@@ -49,10 +49,23 @@ export type LoadReading =
     }
   | { kind: "unknown"; why: string };
 
+/**
+ * BYTES, and the name says so — it did not, and the page drew "10298 GiB of
+ * 31337 GiB" on a 32 GB box.
+ *
+ * The source is `free -b` and `swapon --bytes`, chosen so no unit suffix has to
+ * be parsed; the fields were then named `…KiB` anyway, and a renderer that
+ * multiplied by 1024 was doing the only sensible thing with the name it was
+ * given. Disk really is KiB (`df -k`) and `rssKiB` really is KiB (`ps`), which
+ * is why this could not be fixed by picking one convention: two of the four
+ * readings genuinely disagree with the other two, so each one carries its unit
+ * in its name. Found in a browser, 2026-09-08 — no test could have, because
+ * every test asserted the parse against the same wrong name.
+ */
 export type MemoryReading =
   | {
       kind: "value";
-      totalKiB: number;
+      totalBytes: number;
       /**
        * `available`, NOT `free`. The doc is emphatic: Linux spends idle RAM on
        * cache and hands it back on demand, so `free` near zero is normal and
@@ -60,8 +73,8 @@ export type MemoryReading =
        * would be exactly the kind of "confidently wrong number" the doc warns
        * about — the box would look starved when it is merely caching well.
        */
-      availableKiB: number;
-      /** availableKiB / totalKiB, for the verdict and for a bar on the page. */
+      availableBytes: number;
+      /** availableBytes / totalBytes, for the verdict and for a bar on the page. */
       availableFraction: number;
     }
   | { kind: "unknown"; why: string };
@@ -69,9 +82,9 @@ export type MemoryReading =
 export type SwapReading =
   | {
       kind: "value";
-      totalKiB: number;
-      usedKiB: number;
-      /** usedKiB / totalKiB. "Swap is a cliff, not a slope" — see the verdict. */
+      totalBytes: number;
+      usedBytes: number;
+      /** usedBytes / totalBytes. "Swap is a cliff, not a slope" — see the verdict. */
       usedFraction: number;
       /** Per-file breakdown from `swapon --show`, e.g. two swap files after mitigation. */
       areas: number;
@@ -80,6 +93,7 @@ export type SwapReading =
   | { kind: "none" }
   | { kind: "unknown"; why: string };
 
+/** KiB, genuinely: the source is `df -k`. Not a slip; see MemoryReading above. */
 export type DiskReading =
   | { kind: "value"; totalKiB: number; usedKiB: number; availableKiB: number; usePercent: number }
   | { kind: "unknown"; why: string };
@@ -184,13 +198,17 @@ export function parseMemory(freeOut: string): MemoryReading {
   if (!line) return { kind: "unknown", why: `free -b output had no "Mem:" line: ${freeOut.trim()}` };
   const cols = line.trim().split(/\s+/).slice(1).map(Number);
   // total used free shared buff/cache available — `available` is the 6th column.
-  const totalKiB = cols[0];
-  const availableKiB = cols[5];
-  if (totalKiB === undefined || availableKiB === undefined || ![totalKiB, availableKiB].every(Number.isFinite)) {
+  const totalBytes = cols[0];
+  const availableBytes = cols[5];
+  if (
+    totalBytes === undefined ||
+    availableBytes === undefined ||
+    ![totalBytes, availableBytes].every(Number.isFinite)
+  ) {
     return { kind: "unknown", why: `free -b's Mem line did not have 6 numeric columns: ${line.trim()}` };
   }
-  if (totalKiB <= 0) return { kind: "unknown", why: `free -b reported a non-positive total: ${line.trim()}` };
-  return { kind: "value", totalKiB, availableKiB, availableFraction: availableKiB / totalKiB };
+  if (totalBytes <= 0) return { kind: "unknown", why: `free -b reported a non-positive total: ${line.trim()}` };
+  return { kind: "value", totalBytes, availableBytes, availableFraction: availableBytes / totalBytes };
 }
 
 /**
@@ -207,8 +225,8 @@ export function parseSwap(swaponOut: string): SwapReading {
     .map((l) => l.trim())
     .filter((l) => l.length > 0 && !l.startsWith("NAME"));
   if (lines.length === 0) return { kind: "none" };
-  let totalKiB = 0;
-  let usedKiB = 0;
+  let totalBytes = 0;
+  let usedBytes = 0;
   for (const line of lines) {
     const cols = line.split(/\s+/);
     // NAME TYPE SIZE USED PRIO
@@ -217,11 +235,11 @@ export function parseSwap(swaponOut: string): SwapReading {
     if (!Number.isFinite(size) || !Number.isFinite(used)) {
       return { kind: "unknown", why: `swapon --show --bytes had a non-numeric SIZE/USED column: ${line}` };
     }
-    totalKiB += size;
-    usedKiB += used;
+    totalBytes += size;
+    usedBytes += used;
   }
-  if (totalKiB <= 0) return { kind: "unknown", why: `swapon --show --bytes summed to a non-positive total` };
-  return { kind: "value", totalKiB, usedKiB, usedFraction: usedKiB / totalKiB, areas: lines.length };
+  if (totalBytes <= 0) return { kind: "unknown", why: `swapon --show --bytes summed to a non-positive total` };
+  return { kind: "value", totalBytes, usedBytes, usedFraction: usedBytes / totalBytes, areas: lines.length };
 }
 
 /** `df -k /` to totals. `-k` for the same reason as `-b` above: exact numbers, no suffix to re-parse. */
@@ -374,9 +392,21 @@ export function computeVerdict(input: {
 }): Verdict {
   const reasons: string[] = [];
   let level: HealthLevel = "ok";
+  /**
+   * Every level anything asked for, kept because the final answer needs to know
+   * whether `critical` was ever *measured* — and asking `level` cannot tell it.
+   *
+   * `raise` assigns `level` from inside a closure, so TypeScript's control-flow
+   * analysis still believes `level` is the literal `"ok"` it was initialised to
+   * and calls a later `level === "critical"` impossible. An array of
+   * `HealthLevel` has no such narrowing, and it is the more honest record
+   * anyway: `level` is a summary, this is what was actually observed.
+   */
+  const raised: HealthLevel[] = [];
   const raise = (next: HealthLevel, reason: string) => {
     const order: HealthLevel[] = ["ok", "strained", "critical", "unknown"];
     if (order.indexOf(next) > order.indexOf(level)) level = next;
+    raised.push(next);
     reasons.push(reason);
   };
 
@@ -441,9 +471,23 @@ export function computeVerdict(input: {
   if (!coreReadable) {
     // Load, memory AND swap all failed: there is no basis for any of "ok",
     // "strained" or "critical", so say so rather than default to the first.
-    level = "unknown";
+    //
+    // BUT UNCERTAINTY MAY ADD DOUBT AND MAY NEVER ERASE A BAD READING SOMEBODY
+    // MANAGED TO TAKE. The disk comes from `df`, a different command that can
+    // succeed while all three of these fail — and this used to relabel a
+    // known-critical disk as `unknown`, which the new-session route then read
+    // as "no reason not to start another agent". GPT Sol's F12.
+    //
+    // `measured` is a separate binding rather than a test on `level` because
+    // the two are different questions and were sharing one variable: `level`
+    // holds HOW BAD IT IS, and this block is about WHETHER WE COULD TELL. That
+    // conflation is also why `raise`'s order array puts `unknown` above
+    // `critical` — harmless while nothing raises to unknown, and exactly the
+    // wrong ranking the moment something does.
     reasons.unshift("could not establish the core reading (load, memory and swap all failed) — this is not the same as the box being fine");
-  } else if (reasons.length === 0) {
+    return { level: raised.includes("critical") ? "critical" : "unknown", reasons };
+  }
+  if (reasons.length === 0) {
     reasons.push("load, memory and swap all look fine");
   }
 

@@ -114,9 +114,12 @@ export async function fetchFleetState(
   } catch (cause) {
     throw new Error(`the server's answer was not JSON: ${describeError(cause)}`);
   }
-  const state = parseFleetState(body);
-  if (state === null) throw new Error("the server answered something that is not the fleet API");
-  return state;
+  /* The reason, not just the refusal. A payload from a schema this build cannot
+     read looks exactly like a healthy one on the wire, so the banner has to say
+     which of the three things was wrong — types.ts § parseFleetState. */
+  const read = parseFleetState(body);
+  if (!read.ok) throw new Error(read.why);
+  return read.state;
 }
 
 /**

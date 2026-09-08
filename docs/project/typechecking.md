@@ -84,6 +84,30 @@ ways this bites, both met on 2026-09-04:
 
 The habit that follows: after editing a test file, run `npm run typecheck` and not only the file.
 
+### A guard you rely on, that only this gate can enforce
+
+The two cases above are accidents — a type error nobody wanted. There is a third, deliberate one, and
+it is the more dangerous because it looks like extra safety rather than a gap: **a test written so
+that the type system, not the assertions, is what catches the mistake.**
+
+The live example is `tests/gjd-remote-tmux.test.ts`, where the fixture of unknown causes is annotated
+as an exhaustive `Record` over `SessionUnknownCause`. Add a cause to the union and the file stops
+compiling until somebody accounts for it — which is exactly the intent, and it fired for real on
+2026-09-08 when a seventh cause arrived. But **`npm test` reports 126 passed while that guard is
+broken**, because vitest strips the annotation without reading it.
+
+So the rule, which is the one above stated the other way round: **a type-level guard is a lint, not a
+test.** Two things follow.
+
+- **Write it where its gate runs**, and say in the file that `npm test` cannot see it — otherwise the
+  next reader adds a case, sees green, and believes the guard held.
+- **"All tests pass" from any agent says nothing about a type-level guarantee.** When the thing you
+  are relying on is exhaustiveness, a `never` check, or a branded type, the evidence is
+  `npm run typecheck` and only that.
+
+This is worth more care than an ordinary type error, because the whole point of such a guard is that
+somebody *stops thinking* about the class it covers.
+
 ### The `@/` alias, and where it may live
 
 shadcn generates its imports as `@/lib/utils`, so the alias had to exist before any component landed
