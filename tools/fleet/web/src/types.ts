@@ -382,10 +382,16 @@ export const CLOCK_SKEW_UNMEASURED: ClockSkew = {
 /**
  * The skew a payload implies, given when this browser received it.
  *
- * `servedAt − receivedAt` is skew plus network latency, and latency here is
- * milliseconds on a tailnet against thresholds of minutes — which is why
- * `servedAt` exists rather than `collectedAt` or `attemptedAt` being reused.
- * Either of those is up to a full cadence older than the answer, and that
+ * `servedAt − receivedAt` is not the skew alone. With a one-way latency `L`
+ * (box → browser) it is `serverOffset − browserOffset − L`, so the measurement
+ * UNDERSTATES the skew by `L` and the conversion maps server-send onto
+ * browser-receipt — which means every age computed off a shifted timestamp is
+ * short by `L` rather than long. That is fine here and the sign is the reason:
+ * `L` is milliseconds on a tailnet against thresholds of minutes, and it errs
+ * towards calling things fresher, never towards a manufactured alarm.
+ *
+ * It is `servedAt` that is read, and not `collectedAt` or `attemptedAt`, because
+ * either of those is up to a full cadence older than the answer — and that
  * genuine snapshot age cannot be told apart from skew. state.ts § `servedAt`.
  */
 export function readClockSkew(raw: unknown, receivedAt: number): ClockSkew {
@@ -395,21 +401,46 @@ export function readClockSkew(raw: unknown, receivedAt: number): ClockSkew {
       why: "this server does not say what time it answered, so the difference between its clock and this device's cannot be measured",
     };
   }
-  const servedAt = Date.parse(raw["servedAt"]);
-  if (!Number.isFinite(servedAt)) {
+  /* **`iso`, NOT `Date.parse`.** `Date.parse` reads `"0"` as the year 2000,
+     accepts date-only strings, and is allowed to accept anything else an
+     implementation fancies — and each of those would arrive as a `known` skew
+     and shift every timestamp on the page by years, in the direction of "the
+     box's clock is broken". The producer writes `toISOString()` (state.ts §
+     `servedAt`), so that is what this reads, and the same predicate the inbox
+     already refuses its timestamps with. GPT Sol's K6, 2026-09-08. */
+  const servedAt = iso(raw["servedAt"]);
+  if (servedAt === null) {
     return { kind: "unknown", why: "the server sent a time of answering this page could not read" };
   }
-  return { kind: "known", ms: servedAt - receivedAt };
+  return { kind: "known", ms: Date.parse(servedAt) - receivedAt };
 }
 
 /**
  * One server timestamp, in this browser's terms. **The whole of the fix.**
  *
- * Shifts the STRING rather than returning a number, because most of these stay
- * strings all the way to the screen and some of them are read as wall-clock
- * times rather than as ages. Displaying a shifted `pause.resetsAt` is CORRECT
- * for a reader: a phone five minutes fast should show a 06:30 reset as 06:35,
- * because 06:35 is when it will happen by the clock they are looking at.
+ * **SHIFT A VALUE THAT REACHES THE SCREEN THROUGH A LOCAL WALL-CLOCK FORMATTER
+ * OR AS AN AGE. NEVER SHIFT ONE THAT IS PRINTED AS AN ABSOLUTE INSTANT** — that
+ * manufactures a UTC time nothing happened at, and it is still wrong about the
+ * reader's timezone anyway.
+ *
+ * **The rule shipped one round too broad, and this is the corrected version.**
+ * It used to argue only the first half — that a phone five minutes fast should
+ * show a 06:30 reset as 06:35 — which is true of `pause.resetsAt`, because
+ * `PauseLine` renders it through `clockTime()` and the reader is comparing it
+ * against the watch on their wrist. It is false of anything printed as the ISO
+ * string it is: a transcript turn's `at` went to the screen verbatim, so the
+ * shift turned `12:00:00Z` into `12:05:00Z` — not *the phone's wall clock*, but
+ * an assertion about a different absolute instant that nothing happened at.
+ * GPT Sol's K4, 2026-09-08; messages-client.ts § `withClockSkew` holds the
+ * other end, and carries a corrected NUMBER beside the untouched string rather
+ * than moving it.
+ *
+ * Shifts the STRING rather than returning a number, because the values this is
+ * still right for stay strings all the way to their formatter, and one of them
+ * has to stay in the shape `iso` accepts: `parseAttention`'s shifted `writtenAt`
+ * becomes a degraded list's `scannedAt`, which the type promises came out of
+ * `toISOString()`. `shiftMsToBrowserClock` below is the same conversion for the
+ * callers that never had a string.
  *
  * Anything unparseable is returned untouched, for the same reason `startedAt`
  * survives as `""` — this function's job is to move a time, not to decide
@@ -419,7 +450,24 @@ export function shiftToBrowserClock(value: string | null, skew: ClockSkew): stri
   if (value === null || skew.kind === "unknown" || skew.ms === 0) return value;
   const at = Date.parse(value);
   if (!Number.isFinite(at)) return value;
-  return new Date(at - skew.ms).toISOString();
+  return new Date(shiftMsToBrowserClock(at, skew)).toISOString();
+}
+
+/**
+ * The same conversion on a number, for the callers that never had a string.
+ *
+ * **The arithmetic lives here once.** Three places need it — the string form
+ * above, `browserMsOf` in messages-client.ts, and the chart's axis labels in
+ * HealthHistory.tsx, whose samples arrive as epoch milliseconds — and a second
+ * copy of `at - skew.ms` is a second chance to get the sign the wrong way
+ * round. It is the sign, specifically: `skew.ms` is the SERVER's clock minus
+ * this browser's, so a server ahead of us means subtracting to come back.
+ *
+ * An `unknown` skew shifts by zero, which is the whole discipline of the type:
+ * nobody measured it, so nothing is invented.
+ */
+export function shiftMsToBrowserClock(at: number, skew: ClockSkew): number {
+  return skew.kind === "unknown" ? at : at - skew.ms;
 }
 
 /* ------------------------------------------------------------- parsing -- */
@@ -434,6 +482,29 @@ function str(v: unknown): string | null {
 
 function num(v: unknown, fallback: number): number {
   return typeof v === "number" && Number.isFinite(v) ? v : fallback;
+}
+
+/**
+ * A timestamp spelled the one way this fleet spells one.
+ *
+ * The same check `isIsoTimestamp` makes in tools/overseer/store.ts, and
+ * deliberately as strict: every timestamp in the inbox was written by
+ * `toISOString()` and was refused by that function on the way into the
+ * checkpoint, so anything else arriving here did not come from the producer. A
+ * lenient version would accept a string `Date.parse` can read and the age
+ * arithmetic cannot reason about, which is how a duration on screen becomes
+ * confidently wrong rather than absent.
+ *
+ * **It sits up here, with the general helpers, because it now guards two things
+ * and not one.** It was written for the attention inbox and `readClockSkew`
+ * borrowed it (GPT Sol's K6): the two are the same requirement, that a
+ * timestamp came out of `toISOString()` and not out of whatever `Date.parse`
+ * happens to tolerate this month.
+ */
+function iso(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const at = new Date(v);
+  return Number.isNaN(at.getTime()) || at.toISOString() !== v ? null : v;
 }
 
 /**
@@ -777,23 +848,6 @@ export function parseRow(v: unknown, skew: ClockSkew): FleetRow | null {
 }
 
 /* ------------------------------------------------- the attention inbox -- */
-
-/**
- * A timestamp spelled the one way this fleet spells one.
- *
- * The same check `isIsoTimestamp` makes in tools/overseer/store.ts, and
- * deliberately as strict: every timestamp in the inbox was written by
- * `toISOString()` and was refused by that function on the way into the
- * checkpoint, so anything else arriving here did not come from the producer. A
- * lenient version would accept a string `Date.parse` can read and the age
- * arithmetic cannot reason about, which is how a duration on screen becomes
- * confidently wrong rather than absent.
- */
-function iso(v: unknown): string | null {
-  if (typeof v !== "string") return null;
-  const at = new Date(v);
-  return Number.isNaN(at.getTime()) || at.toISOString() !== v ? null : v;
-}
 
 /** A count. Integer and non-negative: `sessionsScanned: 2.5` is not a number of sessions. */
 function count(v: unknown): number | null {
