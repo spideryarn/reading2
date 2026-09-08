@@ -344,6 +344,59 @@ test that feeds it an expired `resets_at` and watches it refuse. And a **positiv
 that finds no 429s anywhere must be distinguishable from a probe that is broken
 ([silent-success.md](../reusable/silent-success.md)).
 
+#### The store half is a separate owner, and the two `Checkpoint` fields must land one at a time
+
+The collector is `w2-usage-limits`'s; **writing it into `~/.overseer/current.json` is the Overseer's**,
+because it needs a `Checkpoint` field, a `parseCheckpoint` arm, both construction sites and a cadence
+decision in `daemon.ts`. That session declined to land a schema change in a module somebody else might
+be editing, which was the right call — **`Checkpoint.attention` and `Checkpoint.usage` are in flight at
+the same time**, so the order is: attention lands, then usage on top, one editor of `Checkpoint` at a
+time.
+
+#### The 45-second scan should be paid once, not every pass
+
+The full transcript scan is **45s over 1,770 transcripts, 2.9 GB, 870,799 lines**, and the wide window
+is deliberate: a narrower one can miss a `seven_day` rejection that is still in force. But that is an
+argument for reading the whole history **once**, not for re-reading it. **A `seven_day` rejection found
+at T with a `resetsAt` of T+7d stays in force until that instant whether or not you look again** — it
+is a fact with an expiry, not one that needs re-confirming. So: cold start pays the full scan and
+records the watermark it reached; every pass after it scans only what moved; a known unexpired
+rejection is carried forward from the store, and one whose `resetsAt` has passed is dropped as a
+**positive act with a reason** rather than a silent absence. The cache is read every tick regardless,
+because it is one file and free.
+
+**That is the store earning its keep** — it is what turns an expensive repeated scan into a cheap
+incremental one, which is the Overseer's tense doing the job it exists for. It also supplies a real
+positive control on the incremental path: the watermark plus the count of files whose mtime moved, so
+*"found nothing new"* is distinguishable from *"looked at nothing"*.
+
+**Two ways it could be wrong, named rather than discovered**: a transcript can be *rewritten* rather
+than appended (a compaction), which moves content behind the watermark; and a 429 can land in a file
+whose mtime is then missed if the clock moves. If either is real, the answer is the plain 45 seconds
+on a slow timer — which is a perfectly good design and much better than a clever one that misses a
+live rejection.
+
+**And it must not run inside the tick.** `heartbeat.lastTickAt` is how a reader decides the Overseer is
+dead rather than showing a stale register as current, so a 45-second blocking scan makes every tick
+look 45 seconds late — **A17 exactly, healthy operation spending most of its time alarming**, which
+teaches Greg to ignore the alarm. It goes in as an injected runner with its own interval, one pass at a
+time, a thrown pass becoming an explicit `unknown` rather than silence: the same shape `attention` uses,
+and consistency between the two is worth more than either being individually optimal.
+
+#### A relative time is a rendering, and a rendering must not be quotable as a measurement
+
+The sharpest instance of the timestamp rule, and it was found in the place the rule does not obviously
+reach. `w2-usage-limits`'s *report* was already right — `collectedAt`, `fetchedAtMs`, `resetsAt`,
+`resetsAtMs`, instants as fields all the way from the source, never re-typed. **The CLI renderer was
+the leak**: it printed `cache fetched 73 min ago`, which is true when printed and false when pasted —
+and CLI output on this box gets pasted into messages and plan docs hours later *as evidence*. Now it
+prints the ISO instant with the age in parentheses.
+
+**And one wave-level fact that should govern every timeout anybody sets here**: the same scan over the
+same files took **1.8s and 9.7s two hours apart, purely from ambient load** (measured
+2026-09-08T13:16Z). A 5× variance is the argument against any design whose correctness depends on
+something finishing promptly.
+
 ### Stage C — the Codex/GPT harness adapter, v1
 
 Half of this exists and was measured: `tools/overseer/work.ts` already recognises `codex exec` in the
