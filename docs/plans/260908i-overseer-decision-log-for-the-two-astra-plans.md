@@ -160,3 +160,11 @@ and [260908f-overseer-and-fleet-improvement-roadmap.md](260908f-overseer-and-fle
   pid 1178932, instance 3145d8c1, resumed from the checkpoint, reading the source over SSE.
   `overseer status` now prints `overseer  Overseer: Overseer`; `/api/state` rows carry `role`.
   Outage: 22:36:48 to 22:47:34 UTC. Both restarts verified, both services on dev code.
+- 2026-09-08 23:00 UTC — **Greg decided** the three open questions: (1) the two runbook sentences,
+  *"Ok, though keep the changes pretty minimal"* — landed as one three-line claim check and one
+  restart sentence, trimmed from the agents' proposals; (2) an unattended rule asserting
+  `confirm: true`: *"Probably no for now"* — propose-only stands, coordinator told; (3) arming the
+  scheduler: *"Yes, I'm thinking get-ready-to-deploy every 6h, and feedback-sweep every 3h (perhaps
+  offset so they don't bump into each other). Ideally these would be written in some config somewhere
+  that would be easy to edit, with an idempotent script to update them."* — handed to the coordinator
+  as the owner of `jobs.ts` and the unit; `systemctl enable`/restart of the unit stays Greg's.
