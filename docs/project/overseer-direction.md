@@ -111,17 +111,65 @@ The division that follows:
   `Restart=always`. It costs nothing when idle, which matters more than it looks: **the Overseer must
   keep working when the subscriptions are exhausted, because that is exactly when it is needed.** A
   thinking loop that burns the quota it is supposed to be rationing has a bad failure mode.
-- **A session is an action, not a residence.** When judgement is needed — is this one stuck, what is
-  the one sentence to send — the daemon spawns a short-lived Claude that reads the store, answers,
-  and exits. A persistent brain can come later and the daemon can supervise one; it should not be
-  first, because a persistent session's context is precisely the thing that does not survive the
-  reboot Greg wants survived.
+- **A permanent session, resumed by the daemon.** Settled by Greg on 2026-09-08, and it replaces
+  what this page said the same morning:
+
+  > I think I am leaning towards a permanent session plus daemon, but I don't fully understand the
+  > counterargument above. And even if the box got rebooted, presumably the daemon *could* resume
+  > that session, no?
+  >
+  > — Greg, 2026-09-08
+
+  **It could, and the counterargument was wrong in the way that mattered.** This bullet used to read
+  *"a session is an action, not a residence"*, on the grounds that a persistent context is exactly
+  what a reboot destroys. It is not: `claude --resume <id>` replays the transcript out of
+  `~/.claude/projects/`, which survives the tmux server and the reboot both. So the objection does
+  not hold as stated, and the short-lived-session design it was defending is dropped.
+
+  **What survives the correction is why the store is still the record, and it is three things.** A
+  resumed session recovers *the Overseer's* memory and not *the fleet's* — every other session died
+  with the tmux server and its identity lived in that server's environment, so a perfectly resumed
+  Overseer wakes with an accurate memory of yesterday and an empty box in front of it. A transcript
+  cannot be queried: *"which agents did I tell to pause, and did they wake up?"* is a grep over
+  `events.jsonl`, and is not reliably re-derivable by re-reading a conversation. And **the
+  auto-compaction Greg wants is itself what makes that conversation untrustworthy as a record**,
+  because compaction drops the boring bookkeeping first — which is a fair description of a pause
+  issued forty minutes ago.
+
+  **So the session's context is a cache of the store, and never the record.** That is what demotes
+  resume from load-bearing to convenient: if it works the session keeps its feel, and if it fails, a
+  fresh session reading `current.json` is only slightly worse. **Which means the daemon needs a
+  start-fresh path that is exercised**, not only a resume path nobody has watched fail — a resume
+  that quietly produces an empty-headed Overseer looks exactly like one that worked
+  ([silent-success.md](../reusable/silent-success.md)).
 - **The dashboard is the face**, and belongs to whoever is building it — [§ Two tenses](#two-tenses-the-seam-between-the-overseer-and-the-dashboard).
 
-**Autonomy, as of 2026-09-08: it may dispatch scheduled jobs unattended, and nothing more.** Greg's
-choice from four options, the other three being observe-and-notify-only, steering live sessions, and
-pausing/killing. So starting a `get-ready-to-deploy` session on its cadence needs no permission;
-sending a live agent a steering message, or killing anything, still does.
+**Autonomy, widened by Greg the same evening.** This page said until then that the Overseer *"may
+dispatch scheduled jobs unattended, and nothing more"* — his choice from four options, the others
+being observe-and-notify-only, steering live sessions, and pausing/killing. **That is superseded.**
+Handed a proposed list to confirm, he took all of it and added to it:
+
+> Yes, pretty much all of that Unattended list. Dispatch scheduled jobs, steer live sessions, tell
+> agents to pause/stagger/kill their own tests and/or webserver or other processes, route questions
+> to Fable/Sol and pass the answer back to the agent, and/or surface it to me as needed, spawn agents
+> with `gjd-remote new-claude`, tell an agent to debrief, decide on that basis whether to tell it to
+> keep going and/or do more/different work, close a session and remove the worktree and kill the
+> Claude Code process, etc.
+>
+> — Greg, 2026-09-08
+
+**One item goes past what was proposed, and it is the one to notice: the Overseer may remove a
+worktree itself**, not merely tell the agent living in it to. The proposal drew that line
+deliberately — an agent running `npm run worktree:check` inside its own tree *is* the check, and the
+Overseer reaching in from outside is a different act — and Greg crossed it knowingly. So the check
+has to travel with the capability: an Overseer that removes a worktree runs `worktree:check` in it
+first and refuses on anything it cannot account for, because `data/` and `.env.local` are gitignored
+and a clean `git status` will say "safe" over the top of work nothing else has a copy of
+([worktrees.md § Before you remove one](worktrees.md#before-you-remove-one)).
+
+What it may *not* do is [§ The gates](#the-gates), which is the other half of the same conversation
+and is written as principles rather than as a list, because a list of forbidden actions is a list
+somebody has to keep complete.
 
 ## The store
 
