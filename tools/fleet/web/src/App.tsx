@@ -16,8 +16,9 @@
  * below exists so a test can drive the page without a clock or a network, and
  * it is the same seam.
  */
-import type { ReactNode } from "react";
+import { useMemo, useRef, type ReactNode } from "react";
 
+import { AttentionPanel } from "./AttentionPanel";
 import { Dock } from "./Dock";
 import { Header, SHELL, freshness } from "./Header";
 import { HealthPanel } from "./HealthPanel";
@@ -25,12 +26,13 @@ import { OverseerPanel } from "./OverseerPanel";
 import { SessionsPanel } from "./SessionsPanel";
 import { httpActionsApi, type ActionsApi } from "./actions-client";
 import { useDockFit } from "./fit";
-import { httpMessagesApi, type MessagesApi } from "./messages-client";
+import { httpMessagesApi, withClockSkew, type MessagesApi } from "./messages-client";
 import { useHashState } from "./mode";
 import { httpNewSessionApi, type NewSessionApi } from "./new-session-client";
 import { httpRenameApi, type RenameApi } from "./rename-client";
 import { httpSteerApi, type SteerApi } from "./steer-client";
 import type { Transport } from "./transport";
+import { CLOCK_SKEW_UNMEASURED, type ClockSkew } from "./types";
 import { cx } from "./ui";
 import { useActions } from "./useActions";
 import { useFleetState } from "./useFleetState";
@@ -62,6 +64,21 @@ export function App({
   actionsPollMs?: number;
 }): ReactNode {
   const feed = useFleetState(transport);
+  /* **THE ONE CLOCK CORRECTION, HELD FOR THE ONE BOUNDARY THAT HAS NO CLOCK OF
+     ITS OWN.** `/api/state` carries `servedAt` and everything it holds is
+     converted into this browser's terms at the parse boundary; `/api/messages`
+     does not, and its `lastModified` is subtracted from the browser's clock in
+     two places. Same process, same box, so the skew measured on one route is
+     the truth about the other — messages-client.ts § `withClockSkew` argues
+     why that beats a second `servedAt` and a second measurement.
+
+     A ref rather than state: the wrapper below must not be rebuilt on every
+     poll (that would restart the read on every session card), and what it wants
+     is the freshest skew AT THE MOMENT AN ANSWER ARRIVES rather than the one
+     the page had when the wrapper was made. */
+  const skew = useRef<ClockSkew>(CLOCK_SKEW_UNMEASURED);
+  skew.current = feed.state?.clockSkew ?? CLOCK_SKEW_UNMEASURED;
+  const messages = useMemo(() => withClockSkew(messagesApi, () => skew.current), [messagesApi]);
   /* The second feed: the action vocabulary and the queues. A different
      resource with a different cost and a different clock — see useActions.ts.
      **It never asks /api/state**, which is what keeps the server's guards from
@@ -106,27 +123,47 @@ export function App({
           does not look like a bug, it looks like the list ends there. */}
       <main className={cx(SHELL, "tw:pt-3 tw:pb-[calc(var(--dock-space)+1rem)]")}>
         {mode === "sessions" ? (
-          /* **`collected` is not `rows.length > 0`, and that is the point.** An
-             empty list is only a claim about the box once a collection has
-             finished; before that the server answers `rows: []` with
-             `collectedAt: null`, and drawing "No sessions." over it would tell
-             Greg the box is idle while thirty-six agents run on it. */
-          <SessionsPanel
-            rows={rows}
-            now={now}
-            collected={feed.state?.collectedAt != null}
-            unreadableRows={feed.state?.unreadableRows ?? 0}
-            order={order}
-            onOrder={(next) => setParam("order", next === "status" ? null : next)}
-            selectedId={selectedId}
-            onSelect={(id) => setParam("sel", id)}
-            steer={steer}
-            rename={rename}
-            actions={actions}
-            messages={messagesApi}
-            newSession={newSession}
-            onRefresh={feed.refresh}
-          />
+          <>
+            {/* **ABOVE THE LIST, because it is the answer and the list is the
+                material.** A `needs-you` badge means only that Claude Code says
+                a dialog is open, and ten of the fifteen sessions really waiting
+                on Greg on 2026-09-08 carried no such badge — they had ended a
+                turn handing him a decision in sentences. So the ranked inbox
+                goes first and the list stays underneath it, unchanged.
+
+                It takes the SAME `onSelect` the list does: tapping a card picks
+                that session and the detail pane answers it. There is no second
+                write path here — AttentionPanel.tsx, agreement (a).
+
+                It draws nothing at all when the server did not look, which is
+                what every payload from before this field says. */}
+            <AttentionPanel
+              attention={feed.state?.attention ?? { kind: "not-asked" }}
+              now={now}
+              onSelect={(id) => setParam("sel", id)}
+            />
+            {/* **`collected` is not `rows.length > 0`, and that is the point.**
+                An empty list is only a claim about the box once a collection has
+                finished; before that the server answers `rows: []` with
+                `collectedAt: null`, and drawing "No sessions." over it would
+                tell Greg the box is idle while thirty-six agents run on it. */}
+            <SessionsPanel
+              rows={rows}
+              now={now}
+              collected={feed.state?.collectedAt != null}
+              unreadableRows={feed.state?.unreadableRows ?? 0}
+              order={order}
+              onOrder={(next) => setParam("order", next === "status" ? null : next)}
+              selectedId={selectedId}
+              onSelect={(id) => setParam("sel", id)}
+              steer={steer}
+              rename={rename}
+              actions={actions}
+              messages={messages}
+              newSession={newSession}
+              onRefresh={feed.refresh}
+            />
+          </>
         ) : null}
         {mode === "health" ? (
           <div className="tw:mx-auto tw:max-w-3xl">

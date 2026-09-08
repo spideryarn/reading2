@@ -514,10 +514,77 @@ export function buildSessionScript(opts: { agents: boolean } = { agents: false }
         proc='?'
       else
         proc=$(printf '%s\\n' "$snap" | awk -v panes="$mine" -v id="$id" '
+          # IS THIS PROCESS THE CLAUDE FOR THIS CONVERSATION?
+          #
+          # This RECOGNISES A LAUNCHER-OWNED SHAPE. It does not reconstruct
+          # argv, and it cannot: ps has already joined the command line with
+          # single spaces and destroyed the quoting, so a prompt containing a
+          # space is indistinguishable from two arguments. What makes it work
+          # anyway is that the shapes are ours -- scripts/gjd-remote.ts writes
+          # almost all of them, and it emits a bare -- before every prompt.
+          #
+          # The authority on the grammar is
+          # docs/plans/260908h-one-shared-reader-for-a-claude-command-line.md.
+          # The two TypeScript readers of the same grammar are recogniseClaude
+          # (tools/overseer/harness.ts) and isClaudeForSession
+          # (tools/fleet/steer.ts). This is the third, and it was a bare
+          # index() substring search until 2026-09-08 -- precisely the test
+          # steer.ts had already deleted as GPT Sol finding F3. Three ways that
+          # was wrong, and they do not all fail in the same direction:
+          #
+          #  - No argv[0] check, so grep -r --session-id <uuid> logs/ answered
+          #    yes, and so did a DIFFERENT conversation whose launch prompt
+          #    quotes this uuid -- and the launcher does put whole prompts into
+          #    argv, so that shape is real here. False positive: noise.
+          #  - It needed a literal space, so --session-id=<uuid> never matched
+          #    at all. False negative, and that is the expensive direction: a
+          #    live agent reads as an empty pane. No process on the box used
+          #    that spelling when this was written, so this half is durability
+          #    rather than a fire.
+          #  - It walked straight past a bare --, after which everything is
+          #    positional by definition.
+          #
+          # Duplicates: accept only when EVERY occurrence before the boundary
+          # is the same non-empty id. Two of the same id converge on one value
+          # whichever end the CLI keeps; two that differ mean the answer
+          # depends on a parser we do not own, so refuse rather than guess.
+          #
+          # Missing values are refused in the same breath, and mutation testing
+          # says the two halves of that are not worth the same. The EMPTY
+          # inline value earns its line: without it, --session-id= followed by
+          # a real --session-id would leave the real one as the first non-empty
+          # value and be accepted. The dash-leading value is an EQUIVALENT
+          # mutant -- no command line can tell it from its absence, because a
+          # dash token can never equal the uuid we want and the all-must-agree
+          # rule then refuses anyway. It stays because it states the grammar
+          # where the grammar is read, not because a test holds it.
+          function claudeForSession(a, want,   n, w, i, tok, val, bp, m, seen) {
+            if (want == "") return 0
+            n = split(a, w, " ")
+            if (n < 1) return 0
+            m = split(w[1], bp, "/")
+            if (bp[m] != "claude") return 0
+            seen = ""
+            for (i = 2; i <= n; i++) {
+              tok = w[i]
+              if (tok == "--") break
+              if (tok == "--session-id") {
+                val = (i < n) ? w[i + 1] : ""
+                i++
+                if (val ~ /^-/) return 0
+              } else if (index(tok, "--session-id=") == 1) {
+                val = substr(tok, length("--session-id=") + 1)
+              } else continue
+              if (val == "") return 0
+              if (seen == "") seen = val
+              else if (seen != val) return 0
+            }
+            return (seen == want)
+          }
           BEGIN { n=split(panes, p, "\\n"); for (i=1; i<=n; i++) if (p[i] != "") pane[p[i]]=1 }
           { a=$4; for (i=5; i<=NF; i++) a = a " " $i; A[$1]=a; E[$1]=$3; P[$1]=$2 }
           END {
-            for (q in P) if ((pane[q] || pane[P[q]]) && id != "" && index(A[q], "--session-id " id)) { print "claude"; exit }
+            for (q in P) if ((pane[q] || pane[P[q]]) && claudeForSession(A[q], id)) { print "claude"; exit }
             for (q in P) if (pane[P[q]] && index(A[P[q]], "/gjd-remote/jobs/")) {
               split(A[q], w, " ")
               if (w[1] == "sleep" && w[2] ~ /^[0-9]+$/) { r = w[2] - E[q]; if (r > 0) { print "wait:" r; exit } }

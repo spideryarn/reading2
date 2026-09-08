@@ -1966,16 +1966,33 @@ check "chrome runs"              'timeout 30 su - '"$USER_NAME"' -c "google-chro
 # the package cannot install, if this pinned version rejects the option, or if
 # the server starts and crashes.
 #
-# Nothing here or in `gjd-remote doctor` yet drives the MCP itself.
-# scripts/remote-smoke-browser.mjs imports playwright-core and supplies
-# executablePath directly, so it asserts AD-HOC Playwright capability and says
-# nothing about the MCPs -- an earlier version of this comment claimed
-# otherwise, and GPT Sol was right that it overclaimed. Closing that gap wants
-# an MCP-over-stdio navigation check; docs/project/browser-control.md records it
-# as the known hole.
+# `gjd-remote doctor` DOES drive the MCPs now, as its `browser mcp` check:
+# scripts/remote-smoke-mcp-browser.mjs speaks MCP over stdio to whatever is
+# registered and asserts a marker round-trips out of a real page. (The older
+# `browser` check remains a different subject -- remote-smoke-browser.mjs
+# imports playwright-core and supplies executablePath itself, so it asserts
+# AD-HOC Playwright and says nothing about either server.)
+#
+# That check cannot live HERE. It is a repo script, and provisioning is required
+# to work on a clean /home with no checkout at all, so provisioning gets the
+# weaker assertion and doctor gets the real one.
+#
+# So keep reading these narrowly, and note the rule stated twelve lines below,
+# at the docker check -- assert the EFFECT, not the artefact. These three are
+# artefact checks, knowingly, because the effect is out of reach at this point
+# in the box's life. What they buy is a guard on the specific text that has
+# already gone wrong once: --isolated was missing from chrome-devtools from
+# 2026-08-31 to 2026-09-08, and every check on the box stayed green
+# (docs/postmortems/260908g-a-check-asserted-registration-not-behaviour.md).
 check "playwright mcp uses system chrome" 'timeout 30 su - '"$USER_NAME"' -c "claude mcp get playwright" | grep -q -- "--browser chrome"'
 check "playwright mcp"           'timeout 30 su - '"$USER_NAME"' -c "claude mcp get playwright" | grep -q max-old-space-size'
 check "devtools mcp"             'timeout 30 su - '"$USER_NAME"' -c "claude mcp get chrome-devtools" | grep -q max-old-space-size'
+# Both servers, separately: one persistent profile supports exactly one browser,
+# and this box is for parallel sessions. The reason is stated once above BOTH
+# registrations up in `=== mcp servers ===`, and for eight days only one line
+# carried it -- so this is two checks, not one covering "the browser MCPs".
+check "playwright mcp isolated" 'timeout 30 su - '"$USER_NAME"' -c "claude mcp get playwright" | grep -q -- "--isolated"'
+check "devtools mcp isolated"   'timeout 30 su - '"$USER_NAME"' -c "claude mcp get chrome-devtools" | grep -q -- "--isolated"'
 check "docker daemon runs"       'timeout 30 docker info'
 # Assert the EFFECT, not the artefact. `id -nG | grep docker` would pass on a
 # box where the daemon is dead or the socket unreachable; running a container

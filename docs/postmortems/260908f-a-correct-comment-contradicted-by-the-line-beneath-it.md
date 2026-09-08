@@ -57,6 +57,30 @@ That is what separates this class from
 case — prose cannot fail, so nobody checks it. Here the prose **was** checked, by whoever read the
 comment to verify the code, and it passed, and it vouched for the defect underneath it.
 
+### The worst form: a documented absence looks like a decision
+
+The third instance is from later the same day, and it is the same class at its strongest.
+
+Mutation-testing the awk probe in
+[260908h](../plans/260908h-one-shared-reader-for-a-claude-command-line.md) left one survivor. I
+judged it an **equivalent mutant** — no command line can distinguish the guard from its absence —
+kept the line, and wrote into both the commit message and the awk comment that *no test holds this
+line, and here is why it cannot*. GPT Sol produced a command line that distinguishes it in about a
+minute: a hand-set `CLAUDE_SESSION_ID` beginning with a dash, which this very file documents as a
+supported case. I had checked the space I had in mind — valid uuids — and called it the whole space.
+
+**An equivalence claim is a claim about the entire input domain.** But that is not what makes it the
+worst form. A wrong equivalence claim is **self-sealing**: it tells the next reader that the missing
+test is expected, so the one gap it names is the one gap nobody will re-examine. A missing test is an
+absence somebody can notice. *A documented absence looks like a decision.*
+
+Which is uncomfortable, because writing down what a test cannot see is a **good** discipline — the
+dashboard session shipped a guard the same day whose docstring says outright that jsdom cannot see
+the bug it guards against, and that sentence is worth having. The two are the same sentence and only
+one of them is true. So the discipline is not "stop writing them"; it is that **a sentence claiming
+something is untestable has to be earned to a higher standard than the test it replaces**, because it
+is load-bearing precisely to the degree people believe it.
+
 ## Why the obvious checks could not see it
 
 - **The type system could not.** `AttentionList.sessionsUnreadable` is `number`, and `0` is a

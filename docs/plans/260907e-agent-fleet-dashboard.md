@@ -1936,7 +1936,7 @@ stage.** Confusing them gets you a linter for a problem the compiler should have
   findings, and a fresh backlog that size is how the check that would catch the next one gets
   ignored.
 
-### 🔵 Stage v0.4j: the page reads the box's clock with the phone's
+### ✅ Stage v0.4j: the page reads the box's clock with the phone's
 
 **Found by `fleet-health-history` on 2026-09-08, in their own chart, and flagged to
 everyone else.** Their version: `Math.max(serverEdgeMs, Date.now())` on the right-hand edge of the
@@ -1972,25 +1972,64 @@ line.
 
 #### What it needs
 
-- [ ] **A `servedAt` on the state payload**: the server's clock at the moment it answers. Neither
+- [x] **A `servedAt` on the state payload**: the server's clock at the moment it answers. Neither
       `collectedAt` nor `attemptedAt` can stand in — the gap between either of those and receipt is
       *genuine snapshot age*, up to a full cadence, and cannot be told apart from skew. `servedAt`
       minus `receivedAt` is skew plus network latency, and latency here is milliseconds against a
       threshold of minutes.
-- [ ] **One conversion at the parse boundary**, applied to every server timestamp the client reads —
-      `collectedAt`, `startedAt`, `lastModified`, `pause.at`, `pause.resetsAt`. Not to `receivedAt`,
-      which is already the browser's.
-- [ ] **Say it out loud when the skew is large.** A phone minutes off is worth one line on the page,
+- [x] **One conversion at the parse boundary**, applied to every server timestamp the client reads —
+      `collectedAt`, `startedAt`, `lastModified`, `pause.at`, `pause.resetsAt`, and since v0.6f
+      `attention.coordinatorWrittenAt` and `attention.list.scannedAt`. Not to `receivedAt`, which is
+      already the browser's.
+- [x] **Say it out loud when the skew is large.** A phone minutes off is worth one line on the page,
       because it is a fact about the reader's device that nothing else will ever tell them, and
       because it explains any residual oddness. Silence here would make a corrected page and a
       broken clock look identical.
-- [ ] A test that fixes the browser clock some minutes ahead of the server's and asserts the STALE
+- [x] A test that fixes the browser clock some minutes ahead of the server's and asserts the STALE
       banner does **not** appear. Watched failing first: without the correction it appears.
 
-**Not started.** Written up rather than bolted on, because the correction touches every timestamp the
-client parses and the naive version silently breaks a measurement that is currently right.
+**Built 2026-09-08**, and two things came out different from the write-up above.
 
-### 🔴 Stage v0.6f: the attention inbox has a producer and no consumer
+**`lastModified` is not on `FleetState` and never was.** It arrives on `/api/messages`, a second
+boundary with no clock of its own — so it is corrected by the skew `/api/state` measured, applied by
+a `withClockSkew` wrapper around the `MessagesApi` in App.tsx. A `servedAt` on that route too was
+rejected: it is a second measurement of one fact, the two would differ by a few milliseconds of
+latency, and a page whose transcript ages and snapshot ages were corrected by different numbers is
+harder to reason about than one corrected by the same number. The alternative was drilling a `skew`
+prop through four components that have no business knowing about clocks.
+
+**`AttentionPanel`'s tolerance shrank rather than vanishing, and the constant it left behind is a
+different fact.** `CLOCK_SKEW_MS` is deleted as the stage says. What replaces it is
+`RENDER_SLACK_MS = 5_000`, and it is not an allowance for a device: `useNow` ticks once a second, so
+a render triggered by an arriving payload compares a just-corrected timestamp against a `now` up to
+a tick old. With a hard `age < 0` refusal, a checkpoint written moments before it was served flashes
+*"at a time this page could not read"* on a healthy fleet — the alarm-a-clock-manufactures failure
+with a different clock in it. One tick plus room for a slow render, two orders of magnitude below
+the five- and six-minute thresholds it must not swallow.
+
+Every new test carries its own positive control — the same fixture minus `servedAt`, which is
+exactly the pre-stage build — because *no STALE on the page* is also what a blank page says. Two
+mutations were run: disabling the shift reds 4 of them with the intended assertions, and forcing the
+skew to `unknown` reds 5.
+
+#### v0.6f raised the price, and paid a deposit that this stage collects
+
+The attention panel decides whether to say *nothing is waiting on you* by asking how old the scan is,
+so a phone whose clock is minutes ahead can make a live inbox read as a dead one — the same alarm-a-
+clock-manufactures failure as the STALE banner, on the panel the page exists for.
+
+GPT Sol's C2 caught the sharp edge of it: `ageMs` clamped a negative age to zero, so a timestamp
+*ahead* of the browser read as **"0s ago" forever** and suppressed the staleness check permanently.
+That is fixed. What it was fixed WITH is a placeholder: a flat `CLOCK_SKEW_MS = 2 * 60_000`
+allowance, beyond which a timestamp is treated as unreadable rather than fresh. Two minutes is a
+number chosen for being obviously generous, not measured — it is wrong in the safe direction and it
+is still wrong.
+
+**This stage deletes that constant.** Once a server timestamp arrives already in browser-clock
+terms, a future `scannedAt` means a genuinely broken clock rather than an ordinary phone, and the
+panel can say so instead of tolerating a window.
+
+### ✅ Stage v0.6f: the attention inbox has a producer and no consumer
 
 **This is a live instance of the class this whole plan spent 2026-09-08 removing**, and it is mine.
 
@@ -2020,15 +2059,24 @@ internally coherent, each reviewed, joined by an agreement in a conversation rat
 `wire.ts` does not help here and was never going to. It holds the SHAPE across a boundary that
 exists; it has no opinion about a boundary nobody crossed.
 
-- [ ] **The fleet server reads the Overseer's checkpoint.** A reader with a `CheckpointRead`-shaped
-      result — `read` / `absent` / `unreadable{why}` — because a missing or stale `~/.overseer/`
-      must render as *the coordinator is not running*, never as an empty inbox. The Overseer's own
-      store already takes `Checkpoint | null` whole for this reason.
-- [ ] **A route or a field on `/api/state`.** Prefer the field: the inbox is the thing the page
+- [x] **The fleet server reads the Overseer's checkpoint** — `tools/fleet/attention.ts`, its own
+      parser, taking only `schema` / `writtenAt` / `attention`. **Both halves of what this box first
+      said were wrong and the review caught them.** It said "a `CheckpointRead`-shaped result", which
+      meant importing the Overseer's parser and closing a cycle the seam exists to prevent; and it
+      said an absent file renders as *the coordinator is not running*, which is a positive claim an
+      absent file cannot support. The arm is `checkpoint-absent` and it says **no checkpoint has been
+      published here** — the coordinator may be starting, running against another root, or failing
+      before its first write. Never an empty inbox, which was the box's one correct instinct.
+- [x] **A route or a field on `/api/state`.** Prefer the field: the inbox is the thing the page
       exists to show, and a second request for it is a second thing that can be stale on its own.
-- [ ] **The client parse, deriving rather than adopting** — `duplicates` declined to
-      `readonly [...] | null` as agreed, `sessionsUnreadable` defaulted to `0`.
-- [ ] **The render, holding three agreements made with `w2-attention-inbox` and `orchestrator-setup`
+- [x] **The client parse, deriving rather than adopting**, with its own fifth state
+      (`feed-unreadable`) for a field that is present but wrong — because "this server did not look"
+      is false about a server that looked and sent something unreadable. **`sessionsUnreadable` is
+      NOT defaulted to `0`**, which is what this box originally said: a `list` arriving without it
+      degrades to `unknown` with the reason. Zero is a positive claim that every attempted judgement
+      succeeded, and nobody made it. The same default was a live defect in the producer's own parser,
+      found by this review and fixed by `orchestrator-setup` in `290b1ac3`.
+- [x] **The render, holding three agreements made with `w2-attention-inbox` and `orchestrator-setup`
       and written down here so they survive the conversation:**
       **(a)** a `prose` item gets **no answer control at all** in v1 — it is inferred from a pane
       tail, and their `readTurnTail` bug proved a card could quote *Greg's own last message* back as
@@ -2037,11 +2085,80 @@ exists; it has no opinion about a boundary nobody crossed.
       **(c)** `sessionsUnreadable` renders **only when non-zero**, and when it does the count reads
       as a floor — *"AT LEAST 4 need you… (1 could not be judged, so there may be more)"* — because
       a sentence and its retraction in the same block is worse than either.
-- [ ] **A test that fails if nothing imports it.** The lesson of the class is that the join is the
+- [x] **A test that fails if nothing imports it.** The lesson of the class is that the join is the
       thing to check, and the check is *who reads this?*
 
 **Cost of leaving it:** the wave's headline feature is invisible, and it will stay invisible while
 looking finished from either end. Every part has tests and passes them.
+
+#### What the design review changed, and the version we are not building
+
+The first design had the fleet server call `readCheckpoint()` from `tools/overseer/store.ts` and map
+its three arms. **GPT Sol refused it, against documentation this session had not read.**
+[overseer-direction.md § the store](../project/overseer-direction.md) already said the dashboard must
+parse `current.json` itself, and gave the reason: `tools/overseer/` imports `collect.ts` and
+`status.ts` from `tools/fleet/`, so the reverse import closes a cycle between the two things the seam
+exists to keep apart.
+
+The stronger argument turned up while checking that one, and is now written into that paragraph:
+`parseCheckpoint` fails the **whole** checkpoint on one malformed register entry, so the import would
+have rendered an unrelated bad register field on this page as *the coordinator is unreadable* while
+the attention list sat there intact. Independent parsers keep the Overseer's register problems the
+Overseer's. **The file is the contract; the function is one implementation of reading it.**
+
+So `tools/fleet/attention.ts` parses only the projection this tool needs — `schema`, `writtenAt`,
+`attention` — and checks `schema` as a number it knows rather than as "not something else".
+
+Four more findings, each of which changed the shape rather than the code:
+
+- **`no-coordinator` became `checkpoint-absent`.** An absent file proves only that no checkpoint
+  exists at the configured path — not that the coordinator is down. It may be starting, running
+  against another root, or failing before its first write. Same discipline as `Pause`'s `none`.
+- **The reader must be incapable of throwing, root resolution included.** `storeRoot()` throws on a
+  relative `OVERSEER_STORE_DIR`, and `deps.publish()` in `refresh.ts` sits *outside* the try/catch
+  that guards collection — so a throw out of `statePayload()` ends the refresh loop and leaves the
+  dashboard wearing its last good timestamp. The silent stall `attemptedAt` exists to expose.
+- **`fleetState()`'s new parameter is required, not optional.** Optional-to-keep-callers-compiling
+  is precisely the escape hatch that let this bug exist: a production join that can go missing with
+  nothing going red. Backward compatibility belongs at the HTTP parse boundary, where an older
+  *server* omits the field — not in the current server's composition root.
+- **The join test as first written was green by construction.** Hand-wiring
+  `readAttention → fleetState → parseFleetState → App` inside a test stays green after `server.ts`
+  stops calling the reader: the test has rebuilt the missing edge itself. That is shape 4 from
+  [260908e](../postmortems/260908e-a-fixture-that-means-now-decays-into-the-state-it-asserts-against.md),
+  reached while fixing an instance of Class A. The payload composition therefore moves out of
+  `server.ts` into `state.ts`, and the test drives the function production composes through.
+
+#### What the first real pass taught us, which no fixture would have
+
+The Overseer was restarted onto current code at 15:36 and published a real list three minutes later.
+Measured from `~/.overseer/current.json` rather than described:
+
+    items=2 · sessionsScanned=11 · sessionsUnreadable=1 · both items `prose` · both `answerability: phone`
+
+- **`sessionsUnreadable: 1` on the first live pass.** The floor phrasing is exercised against real
+  data on day one instead of against a fixture written to agree with itself — and a wild `0` would
+  have hidden the false-zero defect in the producer's parser (fixed by `orchestrator-setup`,
+  `290b1ac3`) for longer.
+- **The excerpts are 1,116 and 1,736 characters, 17 and 21 lines**, one of them a wrapped table of
+  process states. An unbounded excerpt is a card taller than a phone. **So the card inverts:** the
+  producer's one-sentence `why` is the always-visible headline and the excerpt lives one tap away —
+  Fable's caveat rule, since the excerpt changes what you would *believe* about the inference rather
+  than what you would *do* in the next ten seconds.
+- **The excerpt is selected by position, not by whether it contains the sentence the `why` is
+  about**, which is why a process table is offered as evidence for a claim about what an agent said.
+  The producer's fix, not ours. Ours is to label the disclosure as *the tail of that session's pane*
+  rather than as a quotation — an unlabelled excerpt that does not contain the relevant sentence
+  teaches a reader to distrust a `why` that was correct. Live on the first pass, in the direction
+  that costs us the reader's confidence in the feature.
+- **No live example of two paths**: every item had zero duplicates and none was `needs-a-screen`.
+  Those are written from the type and are untested against reality; say so rather than assuming.
+
+`attention.kind === "unknown"` now arrives from three places — no pass has run yet, a pass ran and
+failed, a stored list was unreadable — each carrying its own `why`. **We do not split the arm.** The
+producer keeps it deliberately as one thing, *nobody can tell you*, and splitting it here would put
+the same reasoning in two places. The `why` is rendered on screen rather than behind a disclosure,
+because "no pass has run yet" means wait and "the pass failed" means go and look.
 
 ### Later: the coordinator agent
 

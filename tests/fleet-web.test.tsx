@@ -30,7 +30,8 @@
  * stubbed `fetch`, because parsing an answer is a different job from delivering
  * one.
  */
-import { globSync, readFileSync } from "node:fs";
+import { globSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { act } from "react";
@@ -83,17 +84,32 @@ import { readHealthStats } from "../tools/fleet/web/src/health-view";
 import { fetchFleetState } from "../tools/fleet/web/src/transport";
 import type { Transport, TransportSink } from "../tools/fleet/web/src/transport";
 import {
+  CLOCK_SKEW_UNMEASURED,
+  parseAttention,
   parseFleetState,
   parsePause,
   parseStatus,
+  readClockSkew,
+  shiftToBrowserClock,
+  type AttentionItem,
+  type ClockSkew,
+  type AttentionList,
   type FleetState,
   type FleetStatus,
 } from "../tools/fleet/web/src/types";
+/* The NODE side, imported into a jsdom test on purpose: the join test below
+   walks a checkpoint on a real disk through the real reader and the real
+   payload composer before it renders anything. `statePayload` is the function
+   `server.ts` calls — it lives in state.ts precisely so a test can drive it,
+   because server.ts binds ports at import time and can never be imported. */
+import { readAttention } from "../tools/fleet/attention";
+import { statePayload } from "../tools/fleet/state";
 import {
   CONSEQUENCE_RANK,
   CONSEQUENCE_TONE,
   ORDERINGS,
   TONE_ALARM,
+  clockNote,
   sortRows,
   triageSort,
 } from "../tools/fleet/web/src/view";
@@ -188,6 +204,19 @@ function state(over: Partial<FleetState> = {}): FleetState {
        when it is absent, and the staleness threshold then falls back to the
        cadence the page has watched happen — see `freshness`. */
     refreshMs: null,
+    /* Same argument as `pause` above. `not-asked` is what `parseAttention`
+       produces for a payload with no `attention` field, so a fixture that does
+       not care about the inbox gets the page the client would really build —
+       and the panel draws nothing, which is why every existing assertion about
+       what is on screen still means what it meant. Defaulting to
+       `no-coordinator` would make every fixture quietly assert that
+       `~/.overseer/` was looked at and is empty. */
+    attention: { kind: "not-asked" },
+    /* Same argument again. `readClockSkew` produces this for a payload with no
+       `servedAt`, so a fixture that does not care about clocks gets the state
+       the page would really build off an older server — and nothing is shifted.
+       A fixture that names a skew passes one. */
+    clockSkew: CLOCK_SKEW_UNMEASURED,
     ...over,
   };
 }
@@ -243,7 +272,7 @@ function manualTransport(): {
  * assert nothing.
  */
 function wire(over: Record<string, unknown>): FleetState {
-  const read = parseFleetState({ schema: 1, rows: [], ...over });
+  const read = parseFleetState({ schema: 1, rows: [], ...over }, Date.now());
   if (!read.ok) throw new Error(`the fixture did not parse: ${read.why}`);
   return read.state;
 }
@@ -618,8 +647,8 @@ describe("what comes off the wire", () => {
   });
 
   it("refuses a body that is not this API, rather than rendering zero sessions over it", () => {
-    expect(parseFleetState("<html>502 Bad Gateway</html>").ok).toBe(false);
-    expect(parseFleetState(null).ok).toBe(false);
+    expect(parseFleetState("<html>502 Bad Gateway</html>", Date.now()).ok).toBe(false);
+    expect(parseFleetState(null, Date.now()).ok).toBe(false);
   });
 
   it("refuses a schema it does not read, rather than showing a fleet it half-understands", () => {
@@ -627,19 +656,19 @@ describe("what comes off the wire", () => {
        became an empty list, the schema was ignored, and a 200 carrying anything
        at all rendered as a quiet box. Each refusal names itself, so the banner
        can say which of the three it was. */
-    const two = parseFleetState({ schema: 2, rows: [] });
+    const two = parseFleetState({ schema: 2, rows: [] }, Date.now());
     expect(two.ok).toBe(false);
     expect(two.ok === false ? two.why : "").toContain("schema 2");
 
-    const none = parseFleetState({ rows: [] });
+    const none = parseFleetState({ rows: [] }, Date.now());
     expect(none.ok).toBe(false);
     expect(none.ok === false ? none.why : "").toContain("no schema");
 
-    expect(parseFleetState({}).ok).toBe(false);
+    expect(parseFleetState({}, Date.now()).ok).toBe(false);
   });
 
   it("refuses a payload with no list of sessions, which is not a payload with none", () => {
-    const missing = parseFleetState({ schema: 1 });
+    const missing = parseFleetState({ schema: 1 }, Date.now());
     expect(missing.ok).toBe(false);
     expect(missing.ok === false ? missing.why : "").toContain("not the same as having none");
     // And the honest empty fleet still parses, because those are opposite claims.
@@ -1006,6 +1035,204 @@ describe("staleness, against the collector's own cadence", () => {
     // Not a number, or nonsense: the server did not say, so the page measures.
     expect(wire({ refreshMs: "soon" }).refreshMs).toBeNull();
     expect(wire({ refreshMs: -1 }).refreshMs).toBeNull();
+  });
+});
+
+/**
+ * **THE PAGE READS THE BOX'S CLOCK WITH THE PHONE'S** — v0.4j in
+ * docs/plans/260907e-agent-fleet-dashboard.md.
+ *
+ * Every age here was `browserNow − Date.parse(aServerTimestamp)`, and Greg
+ * reads this on a phone over Tailscale whose clock is not the box's. The two
+ * expensive consequences are both ALARMS A CLOCK CAN MANUFACTURE: a
+ * permanently-on STALE banner past 2m 30s of skew, and *"this may not be this
+ * session's conversation"* on every working row past thirty minutes. An alarm
+ * that is on when nothing is wrong stops being read, which is the same failure
+ * as a caveat drawn on 29 of 32 rows.
+ *
+ * **The first test here is the bug, not the fix.** "No STALE on the page" is
+ * also what a blank page says, so the skewed fixture is asserted to produce the
+ * alarm when the correction cannot see it — a payload with no `servedAt` is
+ * exactly the pre-v0.4j build, byte for byte — and then not to once it can.
+ */
+describe("the box's clock, read with the phone's", () => {
+  /**
+   * A device five minutes fast. Twice the 2m 30s staleness threshold, and the
+   * skew the plan measured mattering was three.
+   */
+  const SKEW_MS = 5 * 60_000;
+
+  /** What the server's clock said `ms` ago, by this browser's reckoning. */
+  const onTheServersClock = (ms: number = SKEW_MS): string => new Date(Date.now() - ms).toISOString();
+
+  /**
+   * A payload the server composed SKEW_MS ago by ITS clock, i.e. just now by
+   * ours — which is what a phone five minutes fast sees on every poll.
+   *
+   * `refreshMs` is named so the threshold is the server's stated 60s cadence
+   * rather than one measured off a single fixture.
+   */
+  function skewed(over: Record<string, unknown> = {}): Record<string, unknown> {
+    const at = onTheServersClock();
+    return { servedAt: at, collectedAt: at, refreshMs: 60_000, ...over };
+  }
+
+  it("cries STALE at a fresh snapshot when the server does not say what time it is", () => {
+    /* **THE POSITIVE CONTROL, AND IT IS THE BUG.** This payload is the same
+       bytes as the one below minus `servedAt`, which is exactly what a server
+       built before this stage sends — so this is the page as it was, red at a
+       snapshot the box collected seconds ago. Without this assertion the test
+       underneath passes on a page that draws nothing at all. */
+    const feed = manualTransport();
+    mount(feed.transport);
+    act(() => feed.push(wire(skewed({ servedAt: undefined }))));
+    expect(container.textContent ?? "").toContain("STALE");
+  });
+
+  it("does not, once the payload says what time the server answered", () => {
+    const feed = manualTransport();
+    mount(feed.transport);
+    act(() => feed.push(wire(skewed())));
+    expect(container.textContent ?? "").not.toContain("STALE");
+  });
+
+  it("says out loud that the device's clock is out, because otherwise a corrected page and a broken one look identical", () => {
+    const feed = manualTransport();
+    mount(feed.transport);
+    act(() => feed.push(wire(skewed())));
+    /* Quiet, and about the DEVICE rather than about the fleet — it is the one
+       fact on this page nothing else will ever tell the reader. */
+    expect(container.textContent ?? "").toContain("this device's clock is 5m ahead of the box's");
+  });
+
+  it("says nothing about the clock when the skew is small enough not to move a printed number", () => {
+    const feed = manualTransport();
+    mount(feed.transport);
+    act(() => feed.push(wire(skewed({ servedAt: onTheServersClock(5_000), collectedAt: onTheServersClock(5_000) }))));
+    expect(container.textContent ?? "").not.toContain("this device's clock");
+  });
+
+  it("corrects by ZERO, not by a guess, when the server does not say — and does not throw", () => {
+    /* An unknown skew is not a small one. `not-asked`'s rule, at the type: an
+       older server made no claim about its clock, so nothing is shifted and the
+       page says nothing about it. */
+    const collectedAt = "2026-09-08T12:00:00.000Z";
+    const read = parseFleetState({ schema: 1, rows: [], collectedAt }, Date.parse("2026-09-08T12:30:00.000Z"));
+    if (!read.ok) throw new Error(read.why);
+    expect(read.state.collectedAt).toBe(collectedAt);
+    expect(read.state.clockSkew.kind).toBe("unknown");
+    expect(clockNote(read.state.clockSkew)).toBeNull();
+  });
+
+  it("leaves `heardAge` on the browser's clock, which is the measurement a corrected `useNow` would break", () => {
+    /* **THE ONE COMPARISON THAT WAS ALREADY RIGHT.** `heardAge = now −
+       receivedAt` is two readings of the BROWSER's clock — how long since this
+       page heard anything, which is a fact about the connection — so
+       subtracting the skew from `useNow()` would corrupt it by exactly the
+       skew. This asserts the number a page whose clock had been "fixed" would
+       get wrong: five minutes instead of none. */
+    const feed = manualTransport();
+    mount(feed.transport);
+    act(() => feed.push(wire(skewed())));
+    const text = container.textContent ?? "";
+    expect(text).toContain("last heard from 0s ago");
+    expect(text).not.toContain("last heard from 5m ago");
+  });
+
+  it("shifts every timestamp the payload carries, not only the one the banner reads", () => {
+    /* A stage that corrected `collectedAt` alone would turn the banner off and
+       leave the uptime, the pause and the inbox wrong — and each of those is a
+       number somebody triages on. */
+    const at = onTheServersClock();
+    const scannedAt = new Date(Date.parse(at) - 60_000).toISOString();
+    const read = parseFleetState(
+      {
+        schema: 1,
+        servedAt: at,
+        collectedAt: at,
+        rows: [
+          {
+            id: "$a",
+            name: "a",
+            startedAt: at,
+            status: { kind: "idle" },
+            pause: { kind: "scheduled-wakeup", at, overdue: false },
+          },
+        ],
+        attention: {
+          kind: "published",
+          coordinatorWrittenAt: at,
+          list: { kind: "list", items: [], sessionsScanned: 3, sessionsUnreadable: 0, scannedAt },
+        },
+      },
+      Date.now(),
+    );
+    if (!read.ok) throw new Error(read.why);
+    const ms = (iso: string | null | undefined): number => Date.parse(iso ?? "");
+    const row0 = read.state.rows[0];
+    /* Each one lands within a second of NOW rather than five minutes behind it.
+       Asserted as an age rather than as an exact string, because the fixture's
+       own `Date.now()` and the parser's are milliseconds apart. */
+    expect(Math.abs(Date.now() - ms(read.state.collectedAt))).toBeLessThan(1_000);
+    expect(Math.abs(Date.now() - ms(row0?.startedAt))).toBeLessThan(1_000);
+    expect(row0?.pause.kind === "scheduled-wakeup" ? Math.abs(Date.now() - ms(row0.pause.at)) : Infinity).toBeLessThan(1_000);
+    const attention = read.state.attention;
+    if (attention.kind !== "published" || attention.list.kind !== "list") throw new Error("the fixture's inbox did not parse");
+    expect(Math.abs(Date.now() - ms(attention.coordinatorWrittenAt))).toBeLessThan(1_000);
+    /* And the scan keeps its own minute of age relative to the checkpoint: the
+       shift moves both by the same amount rather than collapsing them. */
+    expect(Math.abs(Date.now() - 60_000 - ms(attention.list.scannedAt))).toBeLessThan(1_000);
+  });
+
+  it("moves a rate limit's reset onto the clock the reader is looking at", () => {
+    /* Not a bug: a phone five minutes fast SHOULD show a 06:30 reset as 06:35,
+       because 06:35 is when it happens by the clock in their hand. The only
+       wrong answer here is a time on the box's clock printed beside times on
+       the phone's. */
+    const skew: ClockSkew = { kind: "known", ms: -SKEW_MS };
+    expect(shiftToBrowserClock("2026-09-08T06:30:00.000Z", skew)).toBe("2026-09-08T06:35:00.000Z");
+    /* `overdue` is untouched — it is the server's decision, made on one clock,
+       and this page never recomputes it. */
+    const pause = parsePause(
+      { kind: "rate-limited", window: "five_hour", resetsAt: "2026-09-08T06:30:00Z", overdue: true },
+      skew,
+    );
+    expect(pause.kind === "rate-limited" && pause.resetsAt).toBe("2026-09-08T06:35:00.000Z");
+    expect(pause.kind === "rate-limited" && pause.overdue).toBe(true);
+  });
+
+  it("is measured against `servedAt` and nothing else, because the other two clocks carry real age", () => {
+    /* Neither `collectedAt` nor `attemptedAt` can stand in: the gap between
+       either of them and receipt is GENUINE SNAPSHOT AGE, up to a full cadence
+       of it, and cannot be told apart from skew. A payload whose collection is
+       a minute old, on a device with no skew at all, must measure as no skew. */
+    const now = Date.now();
+    const skew = readClockSkew(
+      { servedAt: new Date(now).toISOString(), collectedAt: new Date(now - 60_000).toISOString() },
+      now,
+    );
+    expect(skew).toEqual({ kind: "known", ms: 0 });
+  });
+
+  it("puts the server's clock on the payload production actually composes", () => {
+    /* THE JOIN. `statePayload` is the function server.ts calls — a field added
+       to the type and never set would leave every client correcting by zero
+       while every type checked, which is the class this plan spent the day
+       removing. */
+    const payload: unknown = JSON.parse(
+      statePayload({
+        snapshot: null,
+        error: null,
+        health: null,
+        refreshMs: 60_000,
+        answeringEnabled: true,
+        attemptedAt: null,
+        readAttention: () => ({ kind: "not-asked" }),
+      }),
+    );
+    const servedAt = (payload as { servedAt?: unknown }).servedAt;
+    expect(typeof servedAt).toBe("string");
+    expect(Math.abs(Date.now() - Date.parse(String(servedAt)))).toBeLessThan(5_000);
   });
 });
 
@@ -2150,7 +2377,7 @@ describe("answering, and the dialogs it is not offered for", () => {
           },
         },
       ],
-    });
+    }, Date.now());
     if (!parsed.ok) throw new Error(parsed.why);
     const gate = parsed.state.rows[0]?.question?.gate;
     expect(gate?.kind).toBe("unknown");
@@ -2176,7 +2403,7 @@ describe("answering, and the dialogs it is not offered for", () => {
           },
         },
       ],
-    });
+    }, Date.now());
     if (!good.ok) throw new Error(good.why);
     expect(good.state.rows[0]?.question?.gate.kind).toBe("conversation");
   });
@@ -2211,7 +2438,7 @@ describe("answering, and the dialogs it is not offered for", () => {
             },
           },
         ],
-      });
+      }, Date.now());
       if (!parsed.ok) throw new Error(parsed.why);
       const out = parsed.state.rows[0]?.question?.gate;
       if (out === undefined) throw new Error("the row parsed without a question");
@@ -2874,6 +3101,66 @@ describe("recent messages, on the page", () => {
     openWith(messagesWire({ turns: [turnWire()] }), { status: { kind: "working" }, rawStatus: { kind: "working" } });
     await act(async () => {});
     expect(container.textContent ?? "").not.toContain("may not be this session's conversation");
+  });
+
+  /**
+   * **THE SECOND ALARM A CLOCK CAN MANUFACTURE**, and the more expensive one:
+   * it lands on EVERY working row at once, and a caveat drawn on 29 of 32 rows
+   * is one nobody reads. v0.4j.
+   *
+   * `/api/messages` carries no clock of its own, so `lastModified` is corrected
+   * with the skew `/api/state` measured — same process, same box
+   * (messages-client.ts § `withClockSkew`). Both halves are asserted here,
+   * because "no warning" is also what an empty detail pane says.
+   */
+  function openSkewed(servedAt: string | undefined): void {
+    /* Thirty-five minutes, just past `STALE_TRANSCRIPT_MS`. The transcript is
+       being written RIGHT NOW on the box's clock — `lastModified` is the
+       server's own instant of answering — so the only thing that can make this
+       row look silent is the device. */
+    const at = new Date(Date.now() - 35 * 60 * 1000).toISOString();
+    const feed = manualTransport();
+    const messages = recordingMessages(() => messagesWire({ turns: [turnWire()], lastModified: at }));
+    mountFull({ transport: feed.transport, messagesApi: messages.api });
+    act(() =>
+      feed.push(
+        wire({
+          servedAt,
+          collectedAt: at,
+          rows: [
+            {
+              id: "$a",
+              name: "a",
+              title: "a session",
+              startedAt: at,
+              status: { kind: "working" },
+              paneId: "%2108",
+              panePid: 4242,
+              claudeSessionId: "117e181a-155b-435a-b95b-e74220678d1a",
+              meta: { version: 1, kind: "claude", repo: "spideryarn/reading2", dir: "/home/greg/code/spideryarn2" },
+            },
+          ],
+        }),
+      ),
+    );
+    openSession("a session");
+  }
+
+  it("warns on a working row that is writing right now, when the server does not say what time it is", async () => {
+    /* The positive control, and it is the bug: the same bytes minus `servedAt`,
+       which is what a server built before v0.4j sends. */
+    openSkewed(undefined);
+    await act(async () => {});
+    expect(container.textContent ?? "").toContain("may not be this session's conversation");
+  });
+
+  it("does not, once the transcript's clock has been put on the reader's", async () => {
+    openSkewed(new Date(Date.now() - 35 * 60 * 1000).toISOString());
+    await act(async () => {});
+    expect(container.textContent ?? "").not.toContain("may not be this session's conversation");
+    /* And the turns are on screen, so this is a rendered pane rather than an
+       empty one agreeing with the assertion above. */
+    expect(turns().length).toBeGreaterThan(0);
   });
 
   it("says how many tool results it skipped rather than implying silence", async () => {
@@ -4506,7 +4793,7 @@ describe("why a session is paused, off the wire and on the page", () => {
      Measured: 111 minutes, on the morning of 2026-09-08. */
   it("reads an absent pause as 'could not tell', never as 'nothing is waiting'", () => {
     for (const absent of [undefined, null]) {
-      const pause = parsePause(absent);
+      const pause = parsePause(absent, CLOCK_SKEW_UNMEASURED);
       expect(pause.kind).toBe("cannot-tell");
       expect(pause.kind === "cannot-tell" && pause.why).toContain("did not say");
     }
@@ -4515,9 +4802,9 @@ describe("why a session is paused, off the wire and on the page", () => {
   it("refuses a rate limit with no reset time rather than drawing a badge over a gap", () => {
     /* An arm missing the field that makes it actionable is not that arm. The
        page can say "we could not tell"; it cannot say "back at undefined". */
-    const pause = parsePause({ kind: "rate-limited", window: "five_hour" });
+    const pause = parsePause({ kind: "rate-limited", window: "five_hour" }, CLOCK_SKEW_UNMEASURED);
     expect(pause.kind).toBe("cannot-tell");
-    const wakeup = parsePause({ kind: "scheduled-wakeup", overdue: true });
+    const wakeup = parsePause({ kind: "scheduled-wakeup", overdue: true }, CLOCK_SKEW_UNMEASURED);
     expect(wakeup.kind).toBe("cannot-tell");
   });
 
@@ -4525,10 +4812,10 @@ describe("why a session is paused, off the wire and on the page", () => {
     /* `overdue` may be set only when the reset time was actually READ, and this
        page cannot check that. A truthy-looking value that is not `true` is not
        the server saying so. */
-    const yes = parsePause({ kind: "rate-limited", window: "five_hour", resetsAt: "2026-09-08T06:30:00Z", overdue: true });
+    const yes = parsePause({ kind: "rate-limited", window: "five_hour", resetsAt: "2026-09-08T06:30:00Z", overdue: true }, CLOCK_SKEW_UNMEASURED);
     expect(yes.kind === "rate-limited" && yes.overdue).toBe(true);
     for (const fuzzy of ["true", 1, {}, undefined]) {
-      const no = parsePause({ kind: "rate-limited", window: "five_hour", resetsAt: "2026-09-08T06:30:00Z", overdue: fuzzy });
+      const no = parsePause({ kind: "rate-limited", window: "five_hour", resetsAt: "2026-09-08T06:30:00Z", overdue: fuzzy }, CLOCK_SKEW_UNMEASURED);
       expect(no.kind === "rate-limited" && no.overdue).toBe(false);
     }
   });
@@ -4537,12 +4824,12 @@ describe("why a session is paused, off the wire and on the page", () => {
     /* The usage cache carries rotating per-model codenames that appear and
        vanish without notice. A closed union here would compile an exhaustive
        switch that silently drops a real window. */
-    const pause = parsePause({ kind: "rate-limited", window: "iguana_necktie", resetsAt: "2026-09-08T06:30:00Z" });
+    const pause = parsePause({ kind: "rate-limited", window: "iguana_necktie", resetsAt: "2026-09-08T06:30:00Z" }, CLOCK_SKEW_UNMEASURED);
     expect(pause.kind === "rate-limited" && pause.window).toBe("iguana_necktie");
   });
 
   it("falls back rather than throwing on a pause kind this build has never heard of", () => {
-    const pause = parsePause({ kind: "hibernating" });
+    const pause = parsePause({ kind: "hibernating" }, CLOCK_SKEW_UNMEASURED);
     expect(pause.kind).toBe("cannot-tell");
     expect(pause.kind === "cannot-tell" && pause.why).toContain("hibernating");
   });
@@ -4816,5 +5103,678 @@ describe("renaming a session", () => {
     await makeRenameApi(impl).rename(NAMED, "x");
     expect(calls).toEqual(["api/sessions/rename"]);
     expect(calls).not.toContain("api/state");
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * The attention inbox: the producer's ranked list, on the page.
+ * ------------------------------------------------------------------ */
+
+/** An item, with only the interesting field named at each call site. */
+function attentionItem(over: Partial<AttentionItem> & { id: string }): AttentionItem {
+  return {
+    sessionId: `$${over.id}`,
+    sessionName: over.id,
+    waitingSince: new Date(Date.now() - 4 * 60_000).toISOString(),
+    kind: "technical",
+    evidence: { kind: "prose", excerpt: "Say the word and I'll drop it.", why: "it named an action and stopped" },
+    answerability: { kind: "phone" },
+    duplicates: [],
+    ...over,
+  };
+}
+
+function attentionList(over: Partial<Extract<AttentionList, { kind: "list" }>> = {}): AttentionList {
+  return {
+    kind: "list",
+    items: [],
+    sessionsScanned: 32,
+    sessionsUnreadable: 0,
+    scannedAt: new Date(Date.now() - 90_000).toISOString(),
+    ...over,
+  };
+}
+
+/** Mount the page with one attention feed on it, and hand back what it says. */
+function showing(attention: FleetState["attention"]): string {
+  const feed = manualTransport();
+  mount(feed.transport);
+  act(() => feed.push(state({ attention })));
+  return container.textContent ?? "";
+}
+
+/** A published feed, with the checkpoint's own clock — a different one from the list's. */
+function published(list: AttentionList, writtenAt: string = new Date().toISOString()): FleetState["attention"] {
+  return { kind: "published", list, coordinatorWrittenAt: writtenAt };
+}
+
+/** How long ago, as an ISO string, for the two clocks this panel reads. */
+function agoIso(ms: number): string {
+  return new Date(Date.now() - ms).toISOString();
+}
+
+describe("the attention inbox, off the wire", () => {
+  it("reads an ABSENT field as `not-asked` and a PRESENT broken one as unreadable", () => {
+    /* The distinction the fifth arm exists for. The field was added without a
+       schema bump, so a server built before it sends no `attention` at all and
+       *did not look* is the truth about it. A field that IS there and will not
+       parse is a server that did look and a page that cannot read the answer —
+       calling that "nobody asked" would be false, and it draws nothing, which
+       is worse than a line. GPT Sol's finding 4. */
+    expect(parseAttention(undefined, CLOCK_SKEW_UNMEASURED)).toEqual({ kind: "not-asked" });
+    expect(parseAttention({ kind: "not-asked" }, CLOCK_SKEW_UNMEASURED)).toEqual({ kind: "not-asked" });
+
+    for (const raw of [null, "the coordinator is fine", 7, [], {}, { kind: "an-arm-from-2027" }]) {
+      expect(parseAttention(raw, CLOCK_SKEW_UNMEASURED), JSON.stringify(raw)).toMatchObject({ kind: "feed-unreadable" });
+    }
+  });
+
+  it("reads the two no-list arms as themselves, which are different facts", () => {
+    expect(parseAttention({ kind: "checkpoint-absent" }, CLOCK_SKEW_UNMEASURED)).toEqual({ kind: "checkpoint-absent" });
+    expect(parseAttention({ kind: "checkpoint-unreadable", why: "it is empty" }, CLOCK_SKEW_UNMEASURED)).toEqual({
+      kind: "checkpoint-unreadable",
+      why: "it is empty",
+    });
+    /* An unreadable with no reason is still an unreadable. The arm is the fact;
+       the sentence is the courtesy. */
+    expect(parseAttention({ kind: "checkpoint-unreadable" }, CLOCK_SKEW_UNMEASURED)).toMatchObject({ kind: "checkpoint-unreadable" });
+  });
+
+  it("reads a published list whole, in the producer's order", () => {
+    const list = attentionList({
+      items: [attentionItem({ id: "second-oldest" }), attentionItem({ id: "oldest" })],
+    });
+    const feed = parseAttention(published(list), CLOCK_SKEW_UNMEASURED);
+    expect(feed.kind).toBe("published");
+    if (feed.kind !== "published" || feed.list.kind !== "list") throw new Error("expected a published list");
+    expect(feed.list.items.map((i) => i.sessionName)).toEqual(["second-oldest", "oldest"]);
+  });
+
+  it("refuses a published feed with no readable clock rather than inventing one", () => {
+    /* Without it there is no age on the reading, and an inbox with no age is
+       the failure this panel is about: a list that stopped being produced looks
+       exactly like a calm fleet. `feed-unreadable` rather than `not-asked` —
+       the server did look. */
+    expect(parseAttention({ kind: "published", list: attentionList(), coordinatorWrittenAt: "8th Sept" }, CLOCK_SKEW_UNMEASURED)).toMatchObject(
+      { kind: "feed-unreadable" },
+    );
+  });
+
+  it("degrades a malformed list to `unknown` rather than to an empty one", () => {
+    /* The same call the server-side reader makes, for the same reason: absent,
+       malformed and *nothing needs you* are three different facts and only the
+       third is a claim. The reason travels with it. */
+    const writtenAt = new Date().toISOString();
+    for (const list of [
+      "not an object",
+      { kind: "list", items: [], sessionsScanned: 3, sessionsUnreadable: 0 },
+      { kind: "list", items: {}, sessionsScanned: 3, sessionsUnreadable: 0, scannedAt: writtenAt },
+      { kind: "list", items: [], sessionsScanned: -1, sessionsUnreadable: 0, scannedAt: writtenAt },
+      { kind: "unknown", scannedAt: writtenAt },
+      { kind: "brand-new-arm", scannedAt: writtenAt },
+    ]) {
+      const feed = parseAttention({ kind: "published", coordinatorWrittenAt: writtenAt, list }, CLOCK_SKEW_UNMEASURED);
+      expect(feed, JSON.stringify(list)).toMatchObject({ kind: "published", list: { kind: "unknown" } });
+    }
+  });
+
+  it("refuses a list with no `sessionsUnreadable`, because zero is a claim", () => {
+    /* Zero says every judgement the pass attempted succeeded, which is the
+       strongest claim the field can make — and a producer that never had the
+       field made none at all. Reading the absence as zero is the very mistake
+       the field exists to prevent, wearing the fix's name. Self-clearing: the
+       pass runs every two minutes. Same refusal as tools/fleet/attention.ts. */
+    const writtenAt = new Date().toISOString();
+    const scannedAt = agoIso(90_000);
+    const feed = parseAttention({
+      kind: "published",
+      coordinatorWrittenAt: writtenAt,
+      list: { kind: "list", items: [], sessionsScanned: 32, scannedAt },
+    }, CLOCK_SKEW_UNMEASURED);
+    expect(feed).toMatchObject({ kind: "published", list: { kind: "unknown" } });
+    if (feed.kind !== "published" || feed.list.kind !== "unknown") return;
+    expect(feed.list.why).toContain("completeness");
+    expect(feed.list.scannedAt).toBe(scannedAt);
+  });
+
+  it("refuses a list that could not judge more sessions than it scanned", () => {
+    /* Corruption rather than a reading: `sessionsUnreadable` counts sessions the
+       pass TRIED to judge, so it is a subset of `sessionsScanned`. Refused
+       rather than clamped because the panel subtracts one from the other to say
+       how many WERE judged, and a negative there would be printed. The server's
+       reader makes the same refusal, and both are needed — this page may be
+       older or newer than the server it is reading. GPT Sol's C1. */
+    const feed = parseAttention(
+      published(attentionList({ items: [], sessionsScanned: 3, sessionsUnreadable: 4 })),
+      CLOCK_SKEW_UNMEASURED,
+    );
+    expect(feed).toMatchObject({ kind: "published", list: { kind: "unknown" } });
+    if (feed.kind !== "published" || feed.list.kind !== "unknown") return;
+    expect(feed.list.why).toContain("more than it scanned");
+  });
+
+  it("refuses a BLANK string wherever a card would draw one, not just a missing one", () => {
+    /* `""` passed a `typeof` check, so `{kind: "dialog", question: "",
+       options: []}` reached the renderer under the mechanical, observed heading
+       with nothing in it — the exact value wire.ts names as the one that must
+       not cross. Whitespace counts: on screen it is the same thing. The other
+       parsers cover missing fields; these are the present-and-empty ones.
+       GPT Sol's C4. */
+    for (const item of [
+      { id: "" },
+      { id: "x", sessionId: "   " },
+      { id: "x", sessionName: "" },
+      { id: "x", evidence: { kind: "dialog", question: "", options: [] } },
+      { id: "x", evidence: { kind: "dialog", question: "Drop it?", options: ["Yes", " "] } },
+      { id: "x", evidence: { kind: "prose", excerpt: "", why: "it stopped" } },
+      { id: "x", evidence: { kind: "prose", excerpt: "…and stopped", why: "" } },
+      { id: "x", duplicates: [{ sessionId: "", sessionName: "n", waitingSince: agoIso(60_000) }] },
+      { id: "x", duplicates: [{ sessionId: "$9", sessionName: "", waitingSince: agoIso(60_000) }] },
+    ] as Partial<AttentionItem>[]) {
+      const list = attentionList({ items: [attentionItem({ id: "x" })] });
+      const wire = JSON.parse(JSON.stringify(published(list))) as { list: { items: Record<string, unknown>[] } };
+      const first = wire.list.items[0];
+      if (first === undefined) throw new Error("the fixture lost its item");
+      Object.assign(first, item);
+      expect(parseAttention(wire, CLOCK_SKEW_UNMEASURED), JSON.stringify(item)).toMatchObject({
+        kind: "published",
+        list: { kind: "unknown" },
+      });
+    }
+  });
+
+  it("degrades the WHOLE list when one item will not parse", () => {
+    /* Not "drop it and count", which is what `rows` gets. An inbox of 4 out of 5
+       says *these are the ones that need you* and is then wrong about the fifth
+       — a short inbox is a negative claim about everything not in it. */
+    const list = attentionList({ items: [attentionItem({ id: "fine" })] });
+    const wire = JSON.parse(JSON.stringify(published(list))) as { list: { items: unknown[] } };
+    wire.list.items.push({ id: "half-a-card", sessionId: "$9" });
+    expect(parseAttention(wire, CLOCK_SKEW_UNMEASURED)).toMatchObject({ kind: "published", list: { kind: "unknown" } });
+  });
+
+  it("refuses a dialog with no question, so it cannot arrive wearing the observed arm", () => {
+    /* The one boundary the whole inbox is built to hold. `dialog` means the
+       harness SAW a dialog and enumerated it; a half-built one crossing here
+       would be drawn as something observed. GPT Sol's finding against the
+       store's first parser, on this side of the wire. */
+    const list = attentionList({
+      items: [attentionItem({ id: "x", evidence: { kind: "dialog", question: "Drop it?", options: ["Yes"] } })],
+    });
+    const wire = JSON.parse(JSON.stringify(published(list))) as { list: { items: { evidence: unknown }[] } };
+    const first = wire.list.items[0];
+    if (first === undefined) throw new Error("the fixture lost its item");
+    first.evidence = { kind: "dialog" };
+    expect(parseAttention(wire, CLOCK_SKEW_UNMEASURED)).toMatchObject({ kind: "published", list: { kind: "unknown" } });
+  });
+
+  it("never fails the whole payload over a bad inbox", () => {
+    /* The session list is the more important half. A page that went blank on a
+       malformed field would have stopped saying what is running on the box. */
+    const read = parseFleetState({ schema: 1, rows: [], attention: { kind: "published", list: 7 } }, Date.now());
+    expect(read.ok).toBe(true);
+    if (!read.ok) return;
+    expect(read.state.attention).toMatchObject({ kind: "feed-unreadable" });
+  });
+});
+
+describe("the attention inbox, on the page", () => {
+  it("draws nothing at all when the server did not look", () => {
+    const text = showing({ kind: "not-asked" });
+    expect(text).not.toContain("waiting on you");
+    expect(text).not.toContain("checkpoint");
+    expect(text).not.toContain("no ranked list");
+  });
+
+  it("says no checkpoint was published, without claiming the coordinator is down", () => {
+    const text = showing({ kind: "checkpoint-absent" });
+    expect(text).toContain("no Overseer checkpoint has been published here");
+    /* NOT "the coordinator is not running": an absent file proves only that
+       nothing was published at the path we looked at. */
+    expect(text).not.toContain("is not running");
+    /* THE DISTINCTION THE ARM EXISTS FOR. It must never read as a calm fleet. */
+    expect(text).not.toContain("nothing is waiting on you");
+  });
+
+  it("says the published inbox could not be read, with the reason one tap away", () => {
+    const text = showing({ kind: "checkpoint-unreadable", why: "current.json is not JSON: unexpected token" });
+    expect(text).toContain("could not be read");
+    /* `Explain` writes the same sentence into an sr-only span, so the reason is
+       on the page for a screen reader and for this test without a pointer. It is
+       a component's fault rather than an agent's, so it changes what you would
+       BELIEVE rather than what you would do — one tap away is where it belongs. */
+    expect(text).toContain("unexpected token");
+    expect(text).not.toContain("nothing is waiting on you");
+  });
+
+  it("says when the page itself could not read what the server sent", () => {
+    /* The fifth state, and it is about this build rather than about the box —
+       so it says reload rather than saying anything about the fleet. */
+    const text = showing({ kind: "feed-unreadable", why: "this page does not know the inbox \"v2\"" });
+    expect(text).toContain("this page could not read the inbox");
+    expect(text).toContain("reload");
+    expect(text).not.toContain("nothing is waiting on you");
+  });
+
+  it("puts an `unknown` list's own reason ON SCREEN, because the three cases differ in what you do", () => {
+    /* `unknown` arrives from three places — no pass has run yet, a pass ran and
+       failed, a stored list was unreadable — and the producer keeps them as one
+       arm on purpose, because what it means is *nobody can tell you*. But "no
+       pass has run yet" means wait and "the gateway returned 429" means go and
+       look, and that is a difference in what you do in the next ten seconds. So
+       the producer's sentence is the line, not a label with the sentence behind
+       a disclosure. */
+    const noPassYet = showing(
+      published({
+        kind: "unknown",
+        why: "no attention pass has run in this Overseer yet, so nothing has been looked at.",
+        scannedAt: new Date().toISOString(),
+      }),
+    );
+    expect(noPassYet).toContain("no ranked list");
+    expect(noPassYet).toContain("no attention pass has run in this Overseer yet");
+    expect(noPassYet).not.toContain("nothing is waiting on you");
+
+    const itFailed = showing(
+      published({
+        kind: "unknown",
+        why: "the gateway returned 429 before anything was judged",
+        scannedAt: new Date().toISOString(),
+      }),
+    );
+    expect(itFailed).toContain("the gateway returned 429 before anything was judged");
+  });
+
+  it("says nothing is waiting only with both counts and both clocks behind it", () => {
+    const text = showing(published(attentionList({ items: [], sessionsScanned: 32 })));
+    expect(text).toContain("nothing is waiting on you");
+    /* **HOW MANY AND WHEN, always.** "Nothing needs you" out of 32 sessions and
+       out of 2 are different facts, and the scan's age is the one this panel
+       must never hide: the pass costs model calls and runs every two minutes, so
+       a list that stopped being produced looks exactly like a calm fleet. */
+    expect(text).toContain("32 sessions");
+    expect(text).toContain("scanned 1m 30s ago");
+  });
+
+  it("lets a stale scan REPLACE the reassurance rather than qualify it", () => {
+    /* GPT Sol's finding 8. `published` means published at some time, not
+       currently, and "nothing is waiting on you" with a caveat under it is read
+       as "nothing is waiting on you" — the caveat is the half a reader skips. */
+    const text = showing(
+      published(attentionList({ items: [], sessionsScanned: 32, scannedAt: agoIso(20 * 60_000) })),
+    );
+    expect(text).toContain("the attention pass last ran");
+    expect(text).not.toContain("nothing is waiting on you");
+  });
+
+  it("treats a badly future timestamp as unreadable rather than as freshly scanned", () => {
+    /* **A FUTURE `scannedAt` USED TO READ AS "0s ago" FOREVER.** `ageMs` clamped
+       with `Math.max(0, …)`, so a clock that ran ahead suppressed the staleness
+       branch for exactly as long as the fault lasted, and an empty list looked
+       permanently calm — the failure this panel exists to prevent, arriving
+       through the one number it trusts. GPT Sol's C2.
+
+       Ten minutes ahead is past any plausible phone skew, so the page cannot use
+       the timestamp and must say so rather than treat it as fresh. */
+    const text = showing(
+      published(attentionList({ items: [], sessionsScanned: 32, scannedAt: agoIso(-10 * 60_000) })),
+    );
+    expect(text).not.toContain("nothing is waiting on you");
+    expect(text).toContain("at a time this page could not read");
+  });
+
+  it("refuses a timestamp half a minute ahead, now that the clocks have been reconciled", () => {
+    /* **THIS TEST USED TO ASSERT THE OPPOSITE, AND THE CHANGE IS v0.4j.** It
+       read *lets a SMALL future timestamp pass, because the phone's clock is
+       not the box's*, and it was right while the two clocks were genuinely
+       different: the panel carried a flat `CLOCK_SKEW_MS = 2 * 60_000` so that
+       an ordinary fast phone did not manufacture an alarm. Every server
+       timestamp now arrives already converted into this browser's terms
+       (types.ts § `ClockSkew`), so thirty seconds of remaining future is not a
+       phone — it is a clock that is actually wrong, and tolerating it would
+       swallow the fault the panel exists to show. */
+    const text = showing(
+      published(attentionList({ items: [], sessionsScanned: 32, scannedAt: agoIso(-30_000) })),
+    );
+    expect(text).not.toContain("nothing is waiting on you");
+    expect(text).toContain("at a time this page could not read");
+  });
+
+  it("still absorbs the page's own tick, so a checkpoint written moments before it was served does not flash", () => {
+    /* The slack that is left is not an allowance for a device nobody measured —
+       it is the granularity of this page's own clock. `useNow` ticks once a
+       second, and a render triggered by an arriving payload compares a
+       just-corrected timestamp against a `now` up to a tick old. Without it a
+       healthy fleet would flash *"at a time this page could not read"*, which is
+       the alarm-a-clock-manufactures failure with a different clock in it.
+       AttentionPanel.tsx § `RENDER_SLACK_MS`. */
+    const text = showing(
+      published(attentionList({ items: [], sessionsScanned: 32, scannedAt: agoIso(-2_000) })),
+    );
+    expect(text).toContain("nothing is waiting on you");
+    expect(text).not.toContain("at a time this page could not read");
+  });
+
+  it("tells a stopped daemon apart from a stopped pass, because they are different faults", () => {
+    /* The two clocks fail independently: `coordinatorWrittenAt` moves every ~30s
+       whether or not the pass ran, `scannedAt` only when the paid pass runs. A
+       panel reading one of them would call the other one calm. */
+    const text = showing(
+      published(attentionList({ items: [], sessionsScanned: 32, scannedAt: agoIso(20 * 60_000) }), agoIso(20 * 60_000)),
+    );
+    expect(text).toContain("the Overseer stopped checkpointing");
+    expect(text).not.toContain("the attention pass last ran");
+    expect(text).not.toContain("nothing is waiting on you");
+  });
+
+  it("will not call an INCOMPLETE empty pass a calm fleet", () => {
+    /* **THE WORST OF the C7 review's findings, GPT Sol 2026-09-08.** Agreement
+       (c) was implemented for the items-present branch only, and this branch
+       never looked at `sessionsUnreadable` at all — so a pass that judged 31
+       sessions, failed on 1, and found nothing drew "nothing is waiting on you ·
+       32 sessions", which is the one claim the floor caveat exists to withhold.
+
+       The state is NOT rejected — *we judged 31, none of them needs you, and 1
+       we could not read* is true and useful — it is rendered honestly, and it
+       REPLACES the reassurance rather than qualifying it, because a sentence
+       with a caveat under it is read as the sentence. */
+    const text = showing(
+      published(attentionList({ items: [], sessionsScanned: 32, sessionsUnreadable: 1 })),
+    );
+    expect(text).not.toContain("nothing is waiting on you");
+    expect(text).toContain("nothing among the 31 we could judge is waiting on you");
+    expect(text).toContain("1 of 32 could not be judged");
+    /* The scan's age survives into this arm too: an incomplete pass that is also
+       twenty minutes old is two facts, not one. */
+    expect(text).toContain("scanned 1m 30s ago");
+  });
+
+  it("calls zero sessions scanned a broken probe rather than a quiet fleet", () => {
+    const text = showing(published(attentionList({ items: [], sessionsScanned: 0 })));
+    expect(text).toContain("broken probe");
+    expect(text).not.toContain("nothing is waiting on you");
+  });
+
+  it("draws a card each, in the producer's order, and does not re-sort", () => {
+    /* Agreement (b). The producer ranks by consequence and then by how long it
+       has waited; this fixture is deliberately in the order NEITHER of those
+       local rules would produce — the technical one is first and it is also the
+       newest — so a renderer that sorted by anything at all would flip it. */
+    const feed = manualTransport();
+    mount(feed.transport);
+    act(() =>
+      feed.push(
+        state({
+          attention: published(
+            attentionList({
+              items: [
+                attentionItem({
+                  id: "newest-and-technical",
+                  kind: "technical",
+                  waitingSince: agoIso(60_000),
+                }),
+                attentionItem({
+                  id: "oldest-and-irreversible",
+                  kind: "irreversible",
+                  waitingSince: agoIso(3 * 3600_000),
+                }),
+              ],
+            }),
+          ),
+        }),
+      ),
+    );
+    expect(titlesOnScreen()).toEqual(["newest-and-technical", "oldest-and-irreversible"]);
+    expect(container.textContent).toContain("2 waiting on you");
+    expect(container.textContent).toContain("waiting 1m");
+    expect(container.textContent).toContain("waiting 3h");
+  });
+
+  it("renders a dialog's question and options as text, with no way to answer them here", () => {
+    /* Agreement (a): no answer control on any card in v1. A `prose` item is
+       inferred from a pane tail, and the producer's own `readTurnTail` bug
+       proved a card could quote Greg's last message back as an agent's
+       question — so a button beside one would have acted on his own sentence.
+       The same rule covers `dialog`, because the detail pane is where a dialog
+       is answered with the material it would approve drawn beside it. */
+    const text = showing(
+      published(
+        attentionList({
+          items: [
+            attentionItem({
+              id: "schema-move",
+              evidence: { kind: "dialog", question: "Drop the sessions table?", options: ["Yes, drop it", "No"] },
+            }),
+          ],
+        }),
+      ),
+    );
+    expect(text).toContain("Drop the sessions table?");
+    expect(text).toContain("Yes, drop it");
+    const buttons = [...container.querySelectorAll("button")].map((b) => b.textContent ?? "");
+    expect(buttons.some((b) => b.includes("Yes, drop it"))).toBe(false);
+  });
+
+  it("leads a prose item with the `why` and puts the excerpt behind a disclosure", () => {
+    /* **THE CARD IS INVERTED FROM HOW IT WAS FIRST BUILT, and live data decided
+       it.** On 2026-09-08 the real list carried two `prose` items whose excerpts
+       were 1,116 and 1,736 characters — 17 and 21 lines, one of them a table of
+       process states. Rendered in the flow, one card is 21 lines tall on a 390px
+       phone and the second item is off the bottom of the screen.
+
+       The `why` is one human-written sentence and is what a person acts on; the
+       excerpt is what they check the inference against, which changes what they
+       would BELIEVE rather than what they would do in the next ten seconds.
+       This fixture is the real one, whitespace and all. */
+    const excerpt = [
+      "               my stuff                state        RSS",
+      "    Supabase stack (12 containers)   up           ~382 MB",
+      "    Flask :3000                      listening    —",
+      "",
+      "  Say the word and I'll shut it down.",
+    ].join("\n");
+    const text = showing(
+      published(
+        attentionList({
+          items: [
+            attentionItem({
+              id: "gjd-remote",
+              evidence: {
+                kind: "prose",
+                excerpt,
+                why: "The agent says the stack is idle and explicitly waits for the person to say whether it should shut down.",
+              },
+            }),
+          ],
+        }),
+      ),
+    );
+    expect(text).toContain("The agent says the stack is idle and explicitly waits");
+    expect(text).toContain("inferred from its last turn");
+    expect(text).toContain("show the last 5 lines of its screen");
+
+    /* **NOT PRESENTED AS A QUOTATION.** The producer picks the excerpt by
+       POSITION in the pane rather than by whether it contains the sentence the
+       `why` is about — which is why the live item this fixture is copied from
+       has a table of process states under a claim about what its agent said,
+       with a correct `why`. An unlabelled excerpt that does not contain the
+       relevant sentence teaches a reader to distrust a `why` that was right, so
+       the disclosure says what the text actually is. The hedge is on the
+       excerpt and never on the `why`. */
+    expect(text).toContain("taken by position rather than by search");
+    expect(text).not.toContain("may not be true");
+
+    /* Behind the disclosure, in a `<pre>` — not merely present somewhere. A
+       test that only asserted on `textContent` would pass just as happily with
+       21 lines of terminal output in the flow, which is the layout this
+       inversion exists to prevent. */
+    const pre = container.querySelector("details pre");
+    expect(pre).not.toBeNull();
+    expect(pre?.textContent).toContain("Supabase stack (12 containers)");
+    /* And the whitespace survives, because it is a table. */
+    expect(pre?.textContent).toContain("               my stuff");
+  });
+
+  it("reads the count as a floor when something could not be judged, and is silent when nothing was", () => {
+    /* Agreement (c). The count is a floor and the retraction is its own quiet
+       line — a sentence and its retraction in the same block is worse than
+       either — and it renders ONLY when non-zero, or it becomes the wallpaper
+       PauseLine.tsx measured 29 of 32 rows carrying. */
+    const withUnreadable = showing(
+      published(attentionList({ items: [attentionItem({ id: "one" })], sessionsScanned: 32, sessionsUnreadable: 1 })),
+    );
+    expect(withUnreadable).toContain("at least 1 waiting on you");
+    expect(withUnreadable).toContain("1 of 32 could not be judged, so there may be more");
+
+    const clean = showing(
+      published(attentionList({ items: [attentionItem({ id: "one" })], sessionsScanned: 32, sessionsUnreadable: 0 })),
+    );
+    expect(clean).toContain("1 waiting on you");
+    expect(clean).not.toContain("at least");
+    expect(clean).not.toContain("could not be judged");
+  });
+
+  it("selects the session when a card is tapped, rather than adding a second write path", () => {
+    const feed = manualTransport();
+    mount(feed.transport);
+    act(() =>
+      feed.push(
+        state({
+          attention: published(attentionList({ items: [attentionItem({ id: "worktree-x", sessionId: "$1643" })] })),
+        }),
+      ),
+    );
+    openSession("worktree-x");
+    /* The SAME hash parameter the list writes, so the existing SessionDetail
+       machinery does the answering. Nothing new writes to the box. */
+    expect(window.location.hash).toBe("#sessions?sel=%241643");
+  });
+});
+
+describe("the composer production uses turns a checkpoint on disk into a question on screen", () => {
+  /**
+   * **THE DETECTOR FOR THE CLASS OF BUG THIS STAGE FIXED**, and it is one test
+   * on purpose.
+   *
+   * Both halves of this were built, reviewed and tested on 2026-09-08, and
+   * nothing joined them: the attention pass had been publishing a ranked list
+   * for hours and `grep -rln "Checkpoint" tools/fleet/` found nothing. That is
+   * Class A of docs/postmortems/260908b — *the edge does not exist, and no type
+   * can express "somebody must call this"* — so the check has to be a question
+   * about the graph rather than about either end: **who reads this?**
+   *
+   * **It drives `statePayload`, which is the whole reason that function was
+   * moved out of server.ts.** An earlier version of this test called
+   * `readAttention` and `fleetState` itself, and that is green-by-construction:
+   * it had rebuilt the missing edge inside the test, so it would have stayed
+   * green after production stopped making it. GPT Sol's sharpest finding on this
+   * stage. `server.ts` binds ports at import time and can never be imported, so
+   * the composition had to come out of it for anything to be able to check it —
+   * the same move `health-wiring.ts` made, for the same reason.
+   *
+   * Nothing below is faked. A real checkpoint is written to a real directory,
+   * `statePayload` composes the bytes production composes, `parseFleetState` is
+   * the browser, and the assertion is on text in the DOM. Four separate
+   * mutations — the server-side read, the payload field, the client parse, the
+   * panel render — each turned THIS assertion red, and each file was restored
+   * byte-identical afterwards.
+   *
+   * ## THE ONE EDGE IT DOES NOT COVER, and what does cover it
+   *
+   * **This test supplies `readAttention` itself**, so `server.ts`'s own binding
+   * of it into `PayloadDeps` is outside the boundary — the test would stay green
+   * if that line were deleted. It used to be named as though it were not, which
+   * is why the name is now the composer rather than "the join". Renaming it was
+   * the fix rather than chasing the edge, and deliberately (GPT Sol's C5,
+   * answered 2026-09-08):
+   *
+   * `server.ts` binds ports at import time, which is the whole reason `state.ts`
+   * exists. Extracting its deps construction only MOVES the seam — there is
+   * always a last edge at the composition root that no test reaches without
+   * starting a server. What closes the missing-join risk there is not a test but
+   * the **type**: `readAttention` is a required field of `PayloadDeps`, so
+   * omitting it is a typecheck failure rather than a page that quietly draws
+   * nothing. A deliberate stub would still compile — but *somebody wired the
+   * wrong thing on purpose* is a different and far smaller class than *nobody
+   * remembered to wire it at all*, which is the class this stage was about.
+   *
+   * **And `textContent` survives CSS**, so what is asserted below is that the
+   * text is in the DOM and not that a person can see it — a rule that hid the
+   * panel would leave this green. That is structural on purpose; whether it is
+   * legible on a 390px phone is the browser pass, which is where the evidence
+   * disclosure's own pointer bug was found and where no unit test could have.
+   */
+  it("turns a real checkpoint into a question on screen, through `statePayload`", () => {
+    const root = mkdtempSync(join(tmpdir(), "fleet-web-attention-join-"));
+    try {
+      writeFileSync(
+        join(root, "current.json"),
+        `${JSON.stringify({
+          schema: 2,
+          writtenAt: new Date().toISOString(),
+          lastGoodSnapshotAt: null,
+          cursor: { events: 1, bytes: 2 },
+          heartbeat: { pid: 1, instanceId: "i", startedAt: new Date().toISOString(), lastTickAt: null, ticks: 1 },
+          register: [],
+          attention: {
+            kind: "list",
+            items: [
+              {
+                id: "join-1",
+                sessionId: "$1643",
+                sessionName: "worktree-schema-move",
+                waitingSince: agoIso(7 * 60_000),
+                kind: "irreversible",
+                evidence: {
+                  kind: "dialog",
+                  question: "Shall I drop the sessions table and re-run the migration?",
+                  options: ["Yes", "No, stop"],
+                },
+                answerability: { kind: "phone" },
+                duplicates: [],
+              },
+            ],
+            sessionsScanned: 32,
+            sessionsUnreadable: 0,
+            scannedAt: agoIso(30_000),
+          },
+          usage: { kind: "none", why: "none", at: new Date().toISOString() },
+        })}\n`,
+        "utf8",
+      );
+
+      /* THE FUNCTION PRODUCTION GOES THROUGH. `statePayload()` in server.ts is
+         one call to this with the same shape of deps; the only difference is
+         which directory the reader is pointed at. */
+      const payload = JSON.parse(
+        statePayload({
+          snapshot: null,
+          error: null,
+          health: null,
+          refreshMs: 60_000,
+          answeringEnabled: true,
+          attemptedAt: null,
+          readAttention: () => readAttention(root),
+        }),
+      ) as unknown;
+
+      const read = parseFleetState(payload, Date.now());
+      expect(read.ok, read.ok ? "" : read.why).toBe(true);
+      if (!read.ok) return;
+
+      const feed = manualTransport();
+      mount(feed.transport);
+      act(() => feed.push(read.state));
+
+      /* THE ASSERTION THAT MUST BE THE ONE THAT BREAKS. Everything above it is
+         setup that succeeds under all four mutations; this is the sentence a
+         person reads off the page, and it exists nowhere between here and the
+         bytes on disk except by the edges being joined. */
+      expect(container.textContent).toContain("Shall I drop the sessions table and re-run the migration?");
+      expect(container.textContent).toContain("worktree-schema-move");
+      expect(container.textContent).toContain("1 waiting on you");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });

@@ -32,9 +32,27 @@
  * silently rounded a new state to "idle" would be the exact lie the status
  * module exists to prevent.
  */
-import type { Pause, PauseUnknownCause } from "../../wire.js";
+import type {
+  AttentionAnswerability,
+  AttentionEvidence,
+  AttentionFeed,
+  AttentionItem,
+  AttentionKind,
+  AttentionList,
+  Pause,
+  PauseUnknownCause,
+} from "../../wire.js";
 
-export type { Pause, PauseUnknownCause };
+export type {
+  AttentionAnswerability,
+  AttentionEvidence,
+  AttentionFeed,
+  AttentionItem,
+  AttentionKind,
+  AttentionList,
+  Pause,
+  PauseUnknownCause,
+};
 
 export type FleetStatus =
   | { kind: "needs-you" }
@@ -292,7 +310,117 @@ export type FleetState = {
    * sessions could not be read* rather than showing 38 and looking complete.
    */
   unreadableRows: number;
+  /**
+   * **The attention inbox** — what the Overseer says needs Greg, or the reason
+   * there is no such list.
+   *
+   * Never null and never absent, because every one of the five things it can
+   * say is worth saying and two of them are about us rather than about the box.
+   * See `parseAttention`, and `AttentionFeed` in wire.ts.
+   */
+  attention: AttentionView;
+  /**
+   * **What was done to every server timestamp above, and whether it could be.**
+   *
+   * Carried rather than discarded for two reasons. The page says it out loud
+   * when it is large (`clockNote` in view.ts), because a phone minutes off is a
+   * fact about the reader's device that nothing else will ever tell them — and
+   * without that line a corrected page and a broken clock look identical. And
+   * `/api/messages` is a second boundary with no clock of its own, so its
+   * `lastModified` is corrected with this one (`withClockSkew` in
+   * messages-client.ts).
+   */
+  clockSkew: ClockSkew;
 };
+
+/* --------------------------------------------------------- the clocks -- */
+
+/**
+ * **HOW FAR AHEAD OF THIS BROWSER THE SERVER'S CLOCK IS**, or the fact that we
+ * cannot say.
+ *
+ * Greg reads this page on a phone over Tailscale and the phone's clock is not
+ * the box's. Every age here was `browserNow − Date.parse(aServerTimestamp)`,
+ * which mixes two clocks and lets a fast phone manufacture alarms: a
+ * permanently-on STALE banner past ~2m 30s of skew, and *"this may not be this
+ * session's conversation"* on every working row past 30 minutes. v0.4j in
+ * docs/plans/260907e-agent-fleet-dashboard.md has the table.
+ *
+ * **THE CORRECTION BELONGS AT THE BOUNDARY, NOT AT THE CLOCK, and subtracting
+ * this from `useNow()` would be a bug rather than a shortcut.** `freshness`
+ * computes `heardAge = now − receivedAt` from two BROWSER-clock values — an
+ * honest measurement of how long since this page heard anything, which needs no
+ * correction — and shifting the page's clock would corrupt exactly that by
+ * exactly this. So a server timestamp is converted once, where it is parsed,
+ * and everything downstream compares in one clock.
+ *
+ * The `unknown` arm is the same discipline as `AttentionFeed`'s `not-asked` and
+ * `Pause`'s `cannot-tell`: a server built before `servedAt` has made no claim
+ * about its clock, and **the correction is then zero rather than a guess**. An
+ * unknown skew is not a small skew; it is one nobody measured, and the page says
+ * so at the type rather than defaulting silently.
+ */
+export type ClockSkew =
+  /** Milliseconds. Positive means the server's clock is ahead of this browser's. */
+  | { kind: "known"; ms: number }
+  /** The payload carried no readable `servedAt`. Nothing is shifted. */
+  | { kind: "unknown"; why: string };
+
+/**
+ * **NOTHING HAS BEEN MEASURED YET**, which is what the page holds before its
+ * first payload and what it falls back to between one and the next.
+ *
+ * A named value rather than an inline object at each site, so that "we have not
+ * measured this" is one fact with one sentence — and so that a reader who greps
+ * for it finds every place the page is correcting by zero on purpose.
+ */
+export const CLOCK_SKEW_UNMEASURED: ClockSkew = {
+  kind: "unknown",
+  why: "no payload has arrived yet, so the difference between this device's clock and the box's has not been measured",
+};
+
+/**
+ * The skew a payload implies, given when this browser received it.
+ *
+ * `servedAt − receivedAt` is skew plus network latency, and latency here is
+ * milliseconds on a tailnet against thresholds of minutes — which is why
+ * `servedAt` exists rather than `collectedAt` or `attemptedAt` being reused.
+ * Either of those is up to a full cadence older than the answer, and that
+ * genuine snapshot age cannot be told apart from skew. state.ts § `servedAt`.
+ */
+export function readClockSkew(raw: unknown, receivedAt: number): ClockSkew {
+  if (!isRecord(raw) || typeof raw["servedAt"] !== "string") {
+    return {
+      kind: "unknown",
+      why: "this server does not say what time it answered, so the difference between its clock and this device's cannot be measured",
+    };
+  }
+  const servedAt = Date.parse(raw["servedAt"]);
+  if (!Number.isFinite(servedAt)) {
+    return { kind: "unknown", why: "the server sent a time of answering this page could not read" };
+  }
+  return { kind: "known", ms: servedAt - receivedAt };
+}
+
+/**
+ * One server timestamp, in this browser's terms. **The whole of the fix.**
+ *
+ * Shifts the STRING rather than returning a number, because most of these stay
+ * strings all the way to the screen and some of them are read as wall-clock
+ * times rather than as ages. Displaying a shifted `pause.resetsAt` is CORRECT
+ * for a reader: a phone five minutes fast should show a 06:30 reset as 06:35,
+ * because 06:35 is when it will happen by the clock they are looking at.
+ *
+ * Anything unparseable is returned untouched, for the same reason `startedAt`
+ * survives as `""` — this function's job is to move a time, not to decide
+ * whether a field is a time. The callers already refuse what they cannot read.
+ */
+export function shiftToBrowserClock(value: string | null, skew: ClockSkew): string | null {
+  if (value === null || skew.kind === "unknown" || skew.ms === 0) return value;
+  const at = Date.parse(value);
+  if (!Number.isFinite(at)) return value;
+  return new Date(at - skew.ms).toISOString();
+}
 
 /* ------------------------------------------------------------- parsing -- */
 
@@ -506,8 +634,13 @@ export function parsePermissionMode(v: unknown): FleetPermissionMode {
  * is: a `rate-limited` with no `resetsAt` is not a rate limit we can act on, it
  * is a shape this page does not understand, and saying so beats drawing a
  * badge over a missing time.
+ *
+ * `skew` is required rather than defaulted, so a new caller has to say which
+ * clock it is holding — see `ClockSkew`. Both times here are the server's:
+ * `resetsAt` is READ AS A WALL CLOCK and `at` is read as both, so both are
+ * shifted.
  */
-export function parsePause(v: unknown): Pause {
+export function parsePause(v: unknown, skew: ClockSkew): Pause {
   if (v === undefined || v === null) {
     return {
       kind: "cannot-tell",
@@ -532,7 +665,12 @@ export function parsePause(v: unknown): Pause {
     /* `overdue` is only ever the server's. It may be set only when the reset
        time was actually read, and this page has no way to check that — so a
        missing or non-boolean value is false rather than computed here. */
-    return { kind: "rate-limited", window, resetsAt, overdue: v["overdue"] === true };
+    /* SHIFTED, and the printed time changes with it. A phone five minutes fast
+       should read a 06:30 reset as 06:35, because that is when it happens by
+       the clock in the reader's hand. `overdue` is untouched — it is the
+       server's own decision, made on one clock, and this page never recomputes
+       it. */
+    return { kind: "rate-limited", window, resetsAt: shiftToBrowserClock(resetsAt, skew) ?? resetsAt, overdue: v["overdue"] === true };
   }
 
   if (kind === "scheduled-wakeup") {
@@ -540,7 +678,7 @@ export function parsePause(v: unknown): Pause {
     if (at === null) {
       return unreadable("the server said this session has a wake-up scheduled but did not say when");
     }
-    return { kind: "scheduled-wakeup", at, overdue: v["overdue"] === true, source: "cron" };
+    return { kind: "scheduled-wakeup", at: shiftToBrowserClock(at, skew) ?? at, overdue: v["overdue"] === true, source: "cron" };
   }
 
   if (kind === "background-work") {
@@ -602,8 +740,14 @@ export function parseMeta(v: unknown): SessionMeta {
   return { version: 1, kind: str(v["kind"]), repo: str(v["repo"]), dir: str(v["dir"]) };
 }
 
-/** One row off the wire. Null when it carries no id, since an id is its address. */
-export function parseRow(v: unknown): FleetRow | null {
+/**
+ * One row off the wire. Null when it carries no id, since an id is its address.
+ *
+ * `skew` converts the row's two server timestamps — `startedAt`, and whatever
+ * `pause` carries — into this browser's terms, so that `uptime` and the pause
+ * countdown are subtractions between two readings of one clock. See `ClockSkew`.
+ */
+export function parseRow(v: unknown, skew: ClockSkew): FleetRow | null {
   if (!isRecord(v)) return null;
   const id = str(v["id"]);
   if (id === null || id === "") return null;
@@ -614,11 +758,11 @@ export function parseRow(v: unknown): FleetRow | null {
     title: str(v["title"]),
     repo: str(v["repo"]),
     worktree: str(v["worktree"]),
-    startedAt: str(v["startedAt"]) ?? "",
+    startedAt: shiftToBrowserClock(str(v["startedAt"]), skew) ?? "",
     status: parseStatus(v["status"]),
     question: parseQuestion(v["question"]),
     permissionMode: parsePermissionMode(v["permissionMode"]),
-    pause: parsePause(v["pause"]),
+    pause: parsePause(v["pause"], skew),
     meta: parseMeta(v["meta"]),
     panePid:
       typeof v["panePid"] === "number" && Number.isSafeInteger(v["panePid"]) && v["panePid"] > 0
@@ -630,6 +774,319 @@ export function parseRow(v: unknown): FleetRow | null {
     rawStatus: v["status"] ?? null,
     rawQuestion: v["question"] ?? null,
   };
+}
+
+/* ------------------------------------------------- the attention inbox -- */
+
+/**
+ * A timestamp spelled the one way this fleet spells one.
+ *
+ * The same check `isIsoTimestamp` makes in tools/overseer/store.ts, and
+ * deliberately as strict: every timestamp in the inbox was written by
+ * `toISOString()` and was refused by that function on the way into the
+ * checkpoint, so anything else arriving here did not come from the producer. A
+ * lenient version would accept a string `Date.parse` can read and the age
+ * arithmetic cannot reason about, which is how a duration on screen becomes
+ * confidently wrong rather than absent.
+ */
+function iso(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const at = new Date(v);
+  return Number.isNaN(at.getTime()) || at.toISOString() !== v ? null : v;
+}
+
+/** A count. Integer and non-negative: `sessionsScanned: 2.5` is not a number of sessions. */
+function count(v: unknown): number | null {
+  return typeof v === "number" && Number.isInteger(v) && v >= 0 ? v : null;
+}
+
+/**
+ * A string with something in it. **`""` is not a value, it is a hole.**
+ *
+ * `str` above is right for the session rows, where a blank field is a field the
+ * card simply does not draw. It is wrong for the inbox, where every string is
+ * the thing a person reads off a card and acts on:
+ * `{kind: "dialog", question: "", options: []}` passes a `typeof` check and
+ * arrives under the mechanical, observed heading with nothing in it — the exact
+ * crossing `AttentionEvidence` in wire.ts says must not happen. Whitespace is
+ * blank too, because on screen it is. GPT Sol's C4, 2026-09-08; the server's
+ * copy is `nonBlank` in tools/fleet/attention.ts.
+ */
+function nonBlank(v: unknown): string | null {
+  return typeof v === "string" && v.trim() !== "" ? v : null;
+}
+
+const ATTENTION_KINDS: readonly AttentionKind[] = ["irreversible", "product", "technical", "other"];
+
+/**
+ * **THE FIFTH STATE, and it belongs to this side of the wire only.**
+ *
+ * `AttentionFeed`'s four arms are all facts about the BOX: a list was
+ * published, no checkpoint was there, one was and could not be read, or this
+ * server did not look. `feed-unreadable` is a fact about the PAYLOAD — the
+ * server sent something under `attention` and this build cannot make sense of
+ * it — so it has no business on the shared type, and it is not `not-asked`.
+ *
+ * The distinction is exactly the one this whole panel exists to keep. **Absent
+ * means the server did not look**, which is what a build older than the field
+ * sends and which draws nothing. **Present-but-wrong means somebody looked and
+ * we cannot read the answer**, which is worth a line: it is a page and a server
+ * that have come apart, and every session on the list below may be waiting with
+ * nothing watching. Collapsing the second into the first would say *nobody
+ * asked* about a server that did.
+ */
+export type AttentionView = AttentionFeed | { kind: "feed-unreadable"; why: string };
+
+/**
+ * **THE INBOX OFF THE WIRE**, derived rather than adopted.
+ *
+ * **This is the THIRD parser for this shape, and each one crosses a boundary
+ * the last one did not.** `parseAttentionList` in tools/overseer/store.ts reads
+ * the checkpoint the Overseer wrote; `tools/fleet/attention.ts` reads that same
+ * file as a FILE, because the file is the contract and importing the Overseer's
+ * parser would close a cycle between the two tools (overseer-direction.md says
+ * so, and attention.ts's header has the rest). Between that one and this one sit
+ * `JSON.stringify`, HTTP, and a browser tab that iOS may have kept alive across
+ * a deploy. **A page must be able to read a payload from a server it is not the
+ * same age as**, and the only way to know it can is to check.
+ *
+ * Three parsers is a cost, and it buys three independent compatibility
+ * policies — which is the point rather than the price. This one refuses things
+ * the reader accepts (a `kind` from a newer server) and the reader refuses
+ * things the store accepts (a checkpoint whose schema it does not know).
+ *
+ * The DECISIONS below are the same as the other two make, deliberately:
+ *
+ *  - **A malformed list degrades to `unknown`; it does not empty.** Absent,
+ *    malformed and *nothing needs you* are three different facts and only the
+ *    third is a claim. The `unknown` arm carries the reason, and the panel draws
+ *    it as "no list" rather than as a calm fleet.
+ *  - **The first bad item degrades the whole list.** Not "drop it and count",
+ *    which is what `rows` gets — a session list of 38 out of 41 is still a list
+ *    of what is running, whereas an inbox of 4 out of 5 says *these are the ones
+ *    that need you* and is then wrong about the fifth. A short inbox is a
+ *    negative claim about everything not in it.
+ *  - **Every field and every arm, never a cast.** GPT Sol found four ways past
+ *    the first version of the store's parser, and the expensive one was a
+ *    `dialog` with no question and no options crossing the evidence boundary —
+ *    arriving at a renderer as something observed and enumerable. That boundary
+ *    is the whole design, and this is the side of it that draws the pixels.
+ *
+ * **ABSENT IS `not-asked`; PRESENT-BUT-WRONG IS `feed-unreadable`.** The field
+ * was added without a schema bump (state.ts's rule), so a server that predates
+ * it sends no `attention` at all, and reading that silence as *we looked and
+ * there was no checkpoint* would be a positive claim nobody made — the same
+ * ambiguous-negative mistake `parsePause` refuses above and `readAttemptClock`
+ * exists to unpick. But a field that IS there and will not parse is not silence
+ * either, and calling it `not-asked` would say *nobody asked* about a server
+ * that did. See `AttentionView`.
+ *
+ * **EVERY CLOCK IN HERE IS SHIFTED** (`ClockSkew`), and this is the arm where
+ * getting it wrong costs most: the panel decides whether to say *nothing is
+ * waiting on you* by asking how old the scan is, so a phone a few minutes ahead
+ * could make a live inbox read as a dead one on the panel the page exists for.
+ */
+export function parseAttention(raw: unknown, skew: ClockSkew): AttentionView {
+  /* Absent, and only absent. `null` is something a server chose to send. */
+  if (raw === undefined) return { kind: "not-asked" };
+  const unreadable = (why: string): AttentionView => ({ kind: "feed-unreadable", why });
+  if (!isRecord(raw)) return unreadable("the server sent an inbox that is not an object");
+  switch (str(raw["kind"])) {
+    case "not-asked":
+      return { kind: "not-asked" };
+    case "checkpoint-absent":
+      return { kind: "checkpoint-absent" };
+    case "checkpoint-unreadable":
+      return { kind: "checkpoint-unreadable", why: str(raw["why"]) ?? "the server gave no reason" };
+    case "published": {
+      /* The checkpoint's own clock, and a degraded list falls back to it for a
+         `scannedAt`. Without it there is no honest timestamp to build the arm
+         around, and inventing one is the mistake `fleetState` refuses to make
+         about `collectedAt`. */
+      const written = iso(raw["coordinatorWrittenAt"]);
+      if (written === null) return unreadable("the server published an inbox with no readable clock on it");
+      /* Shifted BEFORE it is used as the degraded list's fallback `scannedAt`,
+         so the two cannot end up on different clocks. `shiftToBrowserClock`
+         re-emits `toISOString()`, which is what `iso` demands. */
+      const writtenAt = shiftToBrowserClock(written, skew) ?? written;
+      return {
+        kind: "published",
+        list: parseAttentionList(raw["list"], writtenAt, skew),
+        coordinatorWrittenAt: writtenAt,
+      };
+    }
+    default:
+      return unreadable(
+        `this page does not know the inbox ${JSON.stringify(str(raw["kind"]) ?? raw["kind"] ?? null)}`,
+      );
+  }
+}
+
+/**
+ * The list itself. Never an empty `list` on failure — see `parseAttention`.
+ *
+ * `writtenAt` arrives ALREADY SHIFTED and `skew` is for everything below it, so
+ * no timestamp on this arm is left on the server's clock while its neighbour
+ * moves.
+ */
+function parseAttentionList(raw: unknown, writtenAt: string, skew: ClockSkew): AttentionList {
+  const bad = (why: string): AttentionList => ({
+    kind: "unknown",
+    why: `the published list was unusable: ${why}`,
+    scannedAt: writtenAt,
+  });
+  if (!isRecord(raw)) return bad("it is not an object");
+  const scanned = iso(raw["scannedAt"]);
+  if (scanned === null) return bad("scannedAt is not a timestamp this page can read");
+  const scannedAt = shiftToBrowserClock(scanned, skew) ?? scanned;
+  if (raw["kind"] === "unknown") {
+    /* `nonBlank` rather than `str`: the `why` is the whole of what this arm
+       draws — "no ranked list: {why}" — so a blank one renders a sentence that
+       stops at its colon. The server refuses it too; this is the boundary
+       parse, and it does not get to assume the server is this build. */
+    const why = nonBlank(raw["why"]);
+    return why === null ? bad("an unknown list with no reason") : { kind: "unknown", why, scannedAt };
+  }
+  if (raw["kind"] !== "list") {
+    return bad(`kind ${JSON.stringify(raw["kind"])} is neither "list" nor "unknown"`);
+  }
+  const sessionsScanned = count(raw["sessionsScanned"]);
+  if (sessionsScanned === null) return bad("sessionsScanned is not a count");
+  /* **A MISSING `sessionsUnreadable` IS NOT A ZERO**, and the same refusal lives
+     in tools/fleet/attention.ts. Zero is the strongest claim the field can make
+     — that every judgement the pass attempted succeeded — and a producer that
+     never had the field made no claim at all. The whole point of it is that an
+     incomplete observation may not be read as a negative one, which is the
+     mistake it would be repeating. Self-clearing: the pass runs every two
+     minutes and the next list carries it. */
+  const sessionsUnreadable = count(raw["sessionsUnreadable"]);
+  if (sessionsUnreadable === null) {
+    return {
+      kind: "unknown",
+      why:
+        "the published list predates the field that says how much of the fleet could not be judged, " +
+        "so its completeness cannot be established",
+      scannedAt,
+    };
+  }
+  /* **MORE FAILURES THAN ATTEMPTS IS CORRUPTION, NOT A READING.**
+     `sessionsUnreadable` counts sessions the pass TRIED to judge and could not,
+     so it is a subset of `sessionsScanned` and a producer reporting otherwise is
+     not reporting. Refused rather than clamped: AttentionPanel subtracts one
+     from the other to say how many WERE judged, and a negative there would be
+     printed on the page. The same check is in tools/fleet/attention.ts, and
+     both are needed — this page may be reading a server older than itself.
+     GPT Sol's C1, 2026-09-08. */
+  if (sessionsUnreadable > sessionsScanned) {
+    return bad(
+      `it says ${sessionsUnreadable} of ${sessionsScanned} sessions could not be judged, which is more than it scanned`,
+    );
+  }
+  const rawItems = raw["items"];
+  if (!Array.isArray(rawItems)) return bad("items is not an array");
+  const items: AttentionItem[] = [];
+  for (const rawItem of rawItems) {
+    const item = parseAttentionItem(rawItem, skew);
+    if (item === null) return bad("an item is not one this page can read");
+    items.push(item);
+  }
+  /* IN THE ORDER IT ARRIVED. The producer sorts — by consequence, then by how
+     long it has waited — and nothing on this side may re-sort, or the two halves
+     disagree about what is at the top. Agreed with `w2-attention-inbox`;
+     AttentionPanel.tsx holds the other end of it. */
+  return { kind: "list", items, sessionsScanned, sessionsUnreadable, scannedAt };
+}
+
+/**
+ * Every field, every arm. `null` on the first mismatch — the list then degrades
+ * whole.
+ *
+ * Both `waitingSince` and each duplicate's are shifted (`ClockSkew`): the card
+ * prints *waiting 40m* off them, and that is the number a reader triages on.
+ */
+function parseAttentionItem(raw: unknown, skew: ClockSkew): AttentionItem | null {
+  if (!isRecord(raw)) return null;
+  const id = nonBlank(raw["id"]);
+  const sessionId = nonBlank(raw["sessionId"]);
+  const sessionName = nonBlank(raw["sessionName"]);
+  if (id === null || sessionId === null || sessionName === null) return null;
+  const since = iso(raw["waitingSince"]);
+  if (since === null) return null;
+  const waitingSince = shiftToBrowserClock(since, skew) ?? since;
+  const kind = ATTENTION_KINDS.find((k) => k === raw["kind"]);
+  if (kind === undefined) return null;
+  const evidence = parseAttentionEvidence(raw["evidence"]);
+  if (evidence === null) return null;
+  const answerability = parseAnswerability(raw["answerability"]);
+  if (answerability === null) return null;
+  const rawDuplicates = raw["duplicates"];
+  if (!Array.isArray(rawDuplicates)) return null;
+  const duplicates: { sessionId: string; sessionName: string; waitingSince: string }[] = [];
+  for (const d of rawDuplicates) {
+    if (!isRecord(d)) return null;
+    const dupId = nonBlank(d["sessionId"]);
+    const dupName = nonBlank(d["sessionName"]);
+    const dupSince = iso(d["waitingSince"]);
+    if (dupId === null || dupName === null || dupSince === null) return null;
+    duplicates.push({ sessionId: dupId, sessionName: dupName, waitingSince: shiftToBrowserClock(dupSince, skew) ?? dupSince });
+  }
+  return { id, sessionId, sessionName, waitingSince, kind, evidence, answerability, duplicates };
+}
+
+/**
+ * The evidence union, both arms in full.
+ *
+ * **This is the boundary the whole inbox is built to hold.** `dialog` means the
+ * harness says a dialog is open and here are its options — mechanical, observed,
+ * enumerable. `prose` means we INFERRED from the tail of a turn that somebody is
+ * being asked something, and it may be wrong: the producer's own `readTurnTail`
+ * bug quoted Greg's last message back as an agent's question. A `dialog` with no
+ * question and no options must not cross into the renderer wearing the first
+ * arm's authority, so it is refused here rather than half-drawn there.
+ */
+function parseAttentionEvidence(raw: unknown): AttentionEvidence | null {
+  if (!isRecord(raw)) return null;
+  if (raw["kind"] === "dialog") {
+    /* **NON-BLANK, not merely a string.** An option labelled `""` is a button
+       with no words on it and a question of `""` is a heading with nothing
+       under it, both drawn as something the harness SAW and enumerated. See
+       `nonBlank`. */
+    const question = nonBlank(raw["question"]);
+    const options = raw["options"];
+    if (question === null || !Array.isArray(options)) return null;
+    if (!options.every((o) => nonBlank(o) !== null)) return null;
+    return { kind: "dialog", question, options: options as string[] };
+  }
+  if (raw["kind"] === "prose") {
+    const excerpt = nonBlank(raw["excerpt"]);
+    const why = nonBlank(raw["why"]);
+    if (excerpt === null || why === null) return null;
+    return { kind: "prose", excerpt, why };
+  }
+  return null;
+}
+
+/**
+ * Whether answering from a phone is a real option.
+ *
+ * A copy of `parseAnswerability` in tools/overseer/attention-memory.ts rather
+ * than an import of it: that module reaches `node:fs`, and this is a runtime
+ * parse at the browser's end of the wire, so there is nothing to import
+ * type-only. The rule is the one at the top of this file — the client restates
+ * the contract it renders — and the shape both sides validate against is the one
+ * in wire.ts, which both of them do import.
+ */
+function parseAnswerability(raw: unknown): AttentionAnswerability | null {
+  if (!isRecord(raw)) return null;
+  if (raw["kind"] === "phone") return { kind: "phone" };
+  /* Both arms that carry a `why` carry nothing else, so a blank one draws an
+     empty explanation on a card — worse for a reader than the arm being absent.
+     `nonBlank` rather than `str`, matching the server. */
+  const why = nonBlank(raw["why"]);
+  if (why === null) return null;
+  if (raw["kind"] === "needs-a-screen") return { kind: "needs-a-screen", why };
+  if (raw["kind"] === "unknown") return { kind: "unknown", why };
+  return null;
 }
 
 /**
@@ -668,8 +1125,15 @@ export const SCHEMA = 1;
  *
  * A row that fails to parse is counted rather than merely dropped — see
  * `unreadableRows`.
+ *
+ * **`receivedAt` IS THE BROWSER'S CLOCK AT THE MOMENT THE BODY ARRIVED**, and
+ * it is required rather than defaulted to `Date.now()` because it is not the
+ * same instant: transport.ts stamps it beside the read, and a default here
+ * would quietly measure the parse instead. Together with the payload's
+ * `servedAt` it gives the one skew every timestamp below is shifted by — see
+ * `ClockSkew`, which also says why this is not a correction to `useNow()`.
  */
-export function parseFleetState(raw: unknown): FleetStateRead {
+export function parseFleetState(raw: unknown, receivedAt: number): FleetStateRead {
   if (!isRecord(raw)) return { ok: false, why: "the server answered something that is not the fleet API" };
   if (raw["schema"] !== SCHEMA) {
     return {
@@ -683,22 +1147,38 @@ export function parseFleetState(raw: unknown): FleetStateRead {
   if (!Array.isArray(raw["rows"])) {
     return { ok: false, why: "the payload has no list of sessions in it, which is not the same as having none" };
   }
+  /* **ONE CONVERSION, HERE, AND EVERYTHING BELOW IS IN BROWSER TERMS.** Read
+     before the rows so that every timestamp in this payload is shifted by the
+     same measurement — a skew computed twice from the same numbers would still
+     be two facts, and the page compares these ages against each other. */
+  const clockSkew = readClockSkew(raw, receivedAt);
   const rows: FleetRow[] = [];
   let unreadableRows = 0;
   for (const item of raw["rows"]) {
-    const row = parseRow(item);
+    const row = parseRow(item, clockSkew);
     if (row === null) unreadableRows += 1;
     else rows.push(row);
   }
   return {
     ok: true,
     state: {
-      collectedAt: str(raw["collectedAt"]),
+      clockSkew,
+      /* SHIFTED. `collectedAge` subtracts this from the browser's clock, and
+         before v0.4j that subtraction crossed two clocks — which is how a phone
+         three minutes fast held the STALE banner on permanently. */
+      collectedAt: shiftToBrowserClock(str(raw["collectedAt"]), clockSkew),
       tookMs: num(raw["tookMs"], 0),
       error: str(raw["error"]),
       rows,
       unreadableRows,
       health: raw["health"] ?? null,
+      /* **THE JOIN THIS STAGE EXISTS TO MAKE.** A producer with no consumer is
+         the class of bug this page kept shipping, so the field is read here and
+         one test walks a checkpoint on disk all the way to text in the DOM.
+         Never throws and never fails the payload over a bad inbox: a page that
+         went blank on it would have stopped saying what is running on the box,
+         which is the more important half. */
+      attention: parseAttention(raw["attention"], clockSkew),
       /* `null` rather than a default: "the server did not say" and "the server
          says 60s" are different facts, and only the first should let the observed
          cadence win. */

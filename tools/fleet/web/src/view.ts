@@ -16,7 +16,7 @@
  * promoted because one failed agents call turns every Claude row unknown at
  * once.
  */
-import type { FleetConsequence, FleetOptionKey, FleetRow, FleetState, FleetStatus } from "./types";
+import type { ClockSkew, FleetConsequence, FleetOptionKey, FleetRow, FleetState, FleetStatus } from "./types";
 
 /**
  * Which colour language a row speaks.
@@ -73,6 +73,51 @@ export function collectedAge(state: FleetState | null, now: number): number | nu
   const at = Date.parse(state.collectedAt);
   if (!Number.isFinite(at)) return null;
   return Math.max(0, now - at);
+}
+
+/**
+ * **How far this device's clock has to be out before the page mentions it.**
+ *
+ * One minute, and the number comes from `formatDuration` above rather than from
+ * a threshold elsewhere: nothing on this page prints a duration finer than a
+ * whole minute once it is past a minute, so a skew smaller than this cannot
+ * move a number a reader can see. Past it, the correction at the parse boundary
+ * is doing visible work and the reader is entitled to know why the times on
+ * their phone and the times on the box disagree.
+ *
+ * Deliberately NOT the 2m 30s staleness threshold or the 30-minute transcript
+ * one. Those are thresholds for ALARMS, and the ages they guard are corrected
+ * now — this is not an alarm, it is a fact about the device, and tying it to a
+ * number that exists for something else would make it move for the wrong reason.
+ */
+export const CLOCK_SKEW_NOTICE_MS = 60_000;
+
+/**
+ * One quiet line about the reader's own clock, or null when there is nothing to
+ * say.
+ *
+ * **Without it a corrected page and a broken clock look identical.** Every age
+ * here is shifted into this device's terms (types.ts § `ClockSkew`), so a phone
+ * five minutes fast now reads correctly — and that is exactly why it has to be
+ * said out loud: it is the one fact on this page nothing else will ever tell
+ * the reader, and it explains any residual oddness between what this says and
+ * what a terminal on the box says.
+ *
+ * **`unknown` draws nothing.** A server too old to send `servedAt` has made no
+ * claim about its clock, and "we could not check your clock" is a sentence
+ * about us that a reader can do nothing with — the same reason
+ * `AttentionPanel` draws nothing at all for `not-asked`.
+ *
+ * Not loud, not red, and not a `Tip`: it is furniture, and an alarm here would
+ * be one more thing that is on when nothing is wrong.
+ */
+export function clockNote(skew: ClockSkew): string | null {
+  if (skew.kind === "unknown") return null;
+  if (Math.abs(skew.ms) < CLOCK_SKEW_NOTICE_MS) return null;
+  /* `skew.ms` is the server's clock minus this browser's, so a NEGATIVE skew is
+     a device running fast — which is the case that was manufacturing alarms. */
+  const direction = skew.ms < 0 ? "ahead of" : "behind";
+  return `this device's clock is ${formatDuration(Math.abs(skew.ms))} ${direction} the box's — the times here are corrected for it`;
 }
 
 /** How long a session has been up, or null when its start time is unreadable. */
