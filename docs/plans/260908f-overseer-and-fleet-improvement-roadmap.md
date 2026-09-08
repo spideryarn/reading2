@@ -1,6 +1,6 @@
 # Make the Overseer and fleet dashboard useful, dependable, and cheaper to run
 
-Status as of 2026-09-08: **researched proposal; implementation has not begun**. This is a plan-only
+Status as of 2026-09-08 evening: **implementation started, run by the Overseer** — Baseline is with session `260908f-roadmap-baseline`, Failure containment with `260908f-roadmap-failure-containment`; the log is [260908i](260908i-overseer-decision-log-for-the-two-astra-plans.md). Earlier status: researched proposal; implementation had not begun. This is a plan-only
 change. The baseline inspected was `4adcdfd62703b6565a27a03c50f20f8a215f1bd8`; the shared checkout
 may advance underneath it. The original reconciliation checked `3e2e3bd4`; the Fable revision also
 checked subsequent dictation integration at `3ba58fc5` (see below). Evidence includes source inspection, two independent subsystem audits,
