@@ -481,4 +481,21 @@ export type PauseUnknownCause =
   | "transcript-unreadable"
   | "no-conversation-id"
   | "session-store-unreadable"
-  | "rate-limits-not-collected";
+  | "rate-limits-not-collected"
+  /**
+   * A wake-up WAS found and its time could not be worked out — a recurring
+   * expression, a step, a range.
+   *
+   * The seventh arm, and it is a different shape from the other six: those are
+   * all about failing to REACH a source. This one is about reaching it and
+   * finding something we know is pending and cannot put a clock on. It is not
+   * `none`, because something is genuinely waiting; it is not
+   * `transcript-unreadable`, because the transcript read perfectly well.
+   *
+   * Added 2026-09-08 after the reader was built: the module had been mapping
+   * this case onto `transcript-unreadable` through a single named constant,
+   * with the specifics in `why`, and said so rather than editing this type
+   * unilaterally. That was the right way round — the sentence stayed true while
+   * the name was wrong, and one constant meant the repair is one line.
+   */
+  | "schedule-not-parseable";

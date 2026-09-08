@@ -102,7 +102,9 @@ export const sendForTranscription: Transcriber<FleetDictationContext> = async (
          would quote. Never the raw body: an unparsed body is somebody else's
          HTML — a proxy's, a captive portal's — and putting it on screen is how
          you get a stack trace rendered as an error message. */
-      let message = "Could not transcribe that. [mic-unexpected]";
+      /* The product's wording for this code, because a code names a branch and
+         Greg cannot tell which of the two servers he is quoting from. */
+      let message = "Something went wrong while transcribing that. [mic-unexpected]";
       try {
         const parsed = (await res.json()) as { error?: unknown };
         if (typeof parsed.error === "string" && parsed.error !== "") message = parsed.error;
@@ -129,7 +131,7 @@ export const sendForTranscription: Transcriber<FleetDictationContext> = async (
     return {
       ok: false,
       retryable: true,
-      message: "Couldn't reach this box's server to transcribe that. [mic-offline]",
+      message: "We couldn't reach the server to transcribe that. [mic-offline]",
     };
   }
 };

@@ -535,7 +535,15 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
   transcribed.current = onTranscript;
   /* A ref rather than a dependency: `context` is an object literal at every
      call site, so depending on it would rebuild `start` on every render and
-     take the whole session machinery with it. */
+     take the whole session machinery with it.
+
+     **What a session snapshots is the REFERENCE, not a copy.** That is enough
+     for every caller today, because each one passes a fresh literal of
+     primitives on every render — but a caller that held one object and mutated
+     it would find its dictation transcribed against the new value rather than
+     the one in force when the button was pressed, which is the exact bug the
+     snapshot exists to prevent. GPT Sol's review of the built code, 2026-09-08.
+     Pass a fresh object; do not mutate one you have handed over. */
   const whereRef = useRef(context);
   whereRef.current = context;
   /* The same treatment, for the same reason: a caller that writes an inline

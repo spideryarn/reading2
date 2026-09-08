@@ -672,6 +672,19 @@ walker itself, because a closure walker that sees nothing looks exactly like one
 **Twelve files, ~4,200 lines, and no external package beyond `react`.** That is what a move to its
 own repo would carry, and it is small enough that a person would carry it by hand.
 
+**The closure figures below are GPT Sol's, from an AST walk, not mine.** Mine came from a regex
+walker that had already been wrong once in the flattering direction, so when a second measurement
+disagreed the AST one won on method rather than on being second. The differences are small and none
+of the conclusions moves — but the published numbers were stale and a stale number quoted as
+evidence is the thing this plan keeps arguing against.
+
+| | files | lines |
+|---|---:|---:|
+| `src/web/dictation-upload.ts`, the edge that was cut | 22 | 16,215 |
+| `src/web/useDictation.ts` after the cut | 8 | 2,931 |
+| `src/transcribe.ts`, the server-half candidate | 162 | 118,171 |
+| `src/ai-call.ts`, its smallest useful piece | 21 | 20,505 |
+
 ##### The one edge that had to be cut, and what it was worth
 
 `useDictation.ts` imported `sendForTranscription` from `dictation-upload.ts`, which calls `apiFetch`
@@ -704,10 +717,14 @@ piece, `ai-call.ts`, is 20 files and 20,344 lines. So `tools/fleet/transcribe.ts
 to `POST https://openrouter.ai/api/v1/audio/transcriptions` — still through the gateway, no second
 one — borrowing the three files under `src/` that import nothing at all.
 
-**The honest half of that ruling:** `transcribeWith` *is* free of the database at runtime, because
-`ai-spend.ts` writes through a sink that is `null` unless the product's server installs one. Which
-means going through it **would not have metered this spend either** — no `ai_calls` row, nothing for
-`npm run cost`. The fleet's OpenRouter spend is invisible to the product's ledger whichever shape is
+**The honest half of that ruling:** `transcribeWith` used standalone writes no database row, so
+going through it **would not have metered this spend either** — nothing for `npm run cost` to count.
+
+*And the mechanism is not what this doc first said.* It claimed a process-global sink that is `null`
+until the product's server installs one. There is no such thing: a sink belongs to `collectSpend`'s
+**async scope**, and a call made outside one increments an in-memory unscoped counter, logs a
+warning, and drops the record. GPT Sol's correction. The conclusion is unchanged and the reasoning
+was wrong, which is worth more than the conclusion being right. The fleet's OpenRouter spend is invisible to the product's ledger whichever shape is
 chosen. That is a property of being a separate tool, not a cost of this decision, and it is named
 here rather than discovered later. A dictation is about $0.0005.
 
@@ -796,6 +813,37 @@ button whose failure was indistinguishable from this box having no audio hardwar
 
 There is no audio input device on this box and Chrome's fake-microphone flags do not work headless
 here. Everything past *"Opening the microphone…"* is Greg's to check from his own phone or laptop.
+
+##### The cross-family review, and what came out of it
+
+[260908f-fleet-dictation-code-review-sol-r1-1356.md](260908f-fleet-dictation-code-review-sol-r1-1356.md).
+Its verdict on the first round was **"Stage 1 is not solid yet"**, and it was right — one P1 and six
+P2s, all real, all fixed. Worth listing because the pattern in them is the useful part: **five of the
+seven were rules this repo already writes down, applied to the product and not to the copy.**
+
+| | | |
+|---|---|---|
+| **P1** | Closing the New session panel left the microphone recording behind it — `open` renders the box, it does not unmount the hook | `dictation.md` names this exact shape, about the Feedback dialog. Written by somebody who had read that sentence. `tests/fleet-new-session-mic.test.tsx`, watched failing |
+| P2 | The paid route had no rate or concurrency limit | 1 every 3s per box, 10 a minute across the fleet, `createRateLimiter` reused rather than rewritten |
+| P2 | A caller hanging up did not cancel the paid call | `res.on("close")`, the pattern the product's route has always had |
+| P2 | The outer error boundary interpolated `err.message` | A thrown message on this wire can carry a prefix of the request body, and the request body is somebody talking. A fixed reason now |
+| P2 | The parser rebuilt known fields and silently dropped surplus ones | The "sent, then quietly dropped" class — the one this feature has an eleven-day scar from. Unknown keys refused; and audio must actually be base64, or 60 KB of any string opened a paid call |
+| P2 | The submit rule was on the buttons and not in the handlers | `disabled` stops a pointer, not a programmatic call |
+| P2 | The import walker could be bypassed by `require` or a template-literal dynamic import | Those shapes are now **refused outright** rather than silently unfollowed. An AST walker is the other answer and is the one to reach for if a legitimate dynamic import ever arrives |
+
+Two corrections to this document came out of it too, and both are recorded above rather than quietly
+fixed: the closure figures were stale, and the explanation of why `transcribeWith` writes no row was
+wrong about the mechanism while right about the conclusion.
+
+**Nothing was overruled.** Everything Sol raised was either a defect or a claim of mine that needed
+correcting, and the one thing it flagged as unresolved — the `[mic-…]` codes being one namespace
+across two programs — had been settled concurrently in the direction it recommended.
+
+**A finding it made that this plan had not:** the route now has an injected transcriber, because a
+flood test aimed at the rate limiter reached the real gateway and `tests/setup/provider-guard.ts`
+refused the call. Without that seam the route's handling of a provider failure, and of a caller
+hanging up, could not be tested at all — both are paths that only run after the money would have
+been spent.
 
 ### Stage F — realtime dialog, gated on Stage E
 
