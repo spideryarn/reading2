@@ -119,6 +119,36 @@ export const WEDGED_WORK_WHAT =
  */
 export const RULE_SOURCES = ["tools/overseer/rules.ts", "tools/overseer/rule-work.ts", "tools/overseer/rule-protocol.ts"] as const;
 
+/**
+ * **One session in a mode that is not auto is worth a sentence.**
+ *
+ * There is no volume argument for a higher number: one stalled agent is one
+ * brief that will not finish tonight, and the longest single stall measured was
+ * 7.38 hours. It is a hashed knob rather than a literal in an `if` because SP-1
+ * is about the firing condition being inside the fingerprint — see
+ * `LaunchModeSpec.minSessions`.
+ */
+export const LAUNCH_MODE_MIN_SESSIONS = 1;
+
+/** **Five minutes.** How old the dashboard's own last collection may have been when it served it. See `LaunchModeSpec.maxCollectionAgeSeconds`. */
+export const LAUNCH_MODE_MAX_COLLECTION_AGE_SECONDS = 300;
+
+/**
+ * **Fifteen minutes**, the same as rule 2's, and for a related reason rather
+ * than by copying.
+ *
+ * The thing this watches is a property of a session's LAUNCH, so it does not
+ * change while a session runs: a stalled session is stalled from its first
+ * minute and stays stalled until somebody relaunches it. Checking more often
+ * buys minutes on something whose measured stalls ran to hours, and every check
+ * is a request to a dashboard on a box this fleet keeps overloading.
+ */
+export const LAUNCH_MODE_EVERY_MS = 15 * 60_000;
+
+/** The sentence in the log that says what this job is. In the fingerprint, like every other job's. */
+export const LAUNCH_MODE_WHAT =
+  "Watch for sessions that did not come up in auto mode and will stall at their next unapprovable call. Observe only: a running session cannot be switched into auto mode.";
+
 export type RuleJobId = RuleId;
 
 /**
@@ -142,7 +172,8 @@ export type RuleJobId = RuleId;
  * says when it is stale.
  */
 export const AUTHORISED_RULE_HASHES: Readonly<Record<RuleJobId, string>> = {
-  "wedged-work": "95485a7dbe6f",
+  "wedged-work": "a3dcfd98b110",
+  "launch-mode": "a648c4bfbe4c",
 };
 
 /** The spec, as it is authorised. Every knob, and `disposition: "propose"` is the one gate 3 turns on. */
@@ -155,6 +186,25 @@ export const WEDGED_WORK_SPEC: RuleSpec = {
   // runner whose capability no shipped wiring supplies, so it would meet a
   // refusal rather than a kill. And because the field is hashed, changing it is
   // not a quiet edit: the job refuses to dispatch until it is re-pinned.
+  disposition: "propose",
+};
+
+/**
+ * Rule 1's spec, as it is authorised.
+ *
+ * `disposition: "propose"` is not a placeholder for an action that is coming
+ * later: **there is no reversible act for this rule.** You cannot type
+ * `/permission-mode auto` into a running session, and answering its dialog
+ * unattended is the authority grant SP-7 is about, so the only remedy is
+ * kill-and-relaunch — the least reversible thing on the list. Rule 1 tells a
+ * person; a person decides.
+ */
+export const LAUNCH_MODE_SPEC: RuleSpec = {
+  kind: "launch-mode",
+  minSessions: LAUNCH_MODE_MIN_SESSIONS,
+  maxCollectionAgeSeconds: LAUNCH_MODE_MAX_COLLECTION_AGE_SECONDS,
+  // NEVER `"act"`, and here more firmly than for rule 2: there is nothing an
+  // actor could do about this that a person has not asked for.
   disposition: "propose",
 };
 
@@ -180,20 +230,41 @@ export function ruleJobs(repoRoot: string): RuleJobs {
   for (const path of RULE_SOURCES) {
     const read = digestDocument(repoRoot, path);
     if (!read.ok) {
-      problems.push(`rule wedged-work is not being scheduled: ${read.why}`);
+      // ONE UNREADABLE SOURCE HOLDS EVERY RULE, because the three files are
+      // shared: a fingerprint computed over a document we could not read is not
+      // a fingerprint, and scheduling the rules whose digests happened to
+      // succeed would be authorising them against a partial reading.
+      problems.push(`no deterministic rule is being scheduled: ${read.why}`);
       return { jobs: [], problems };
     }
     documents.push(read.document);
   }
-  const definition: RuleJobDefinition = {
-    id: "wedged-work",
-    everyMs: WEDGED_WORK_EVERY_MS,
-    leaseMs: RULE_LEASE_MS,
-    what: WEDGED_WORK_WHAT,
-    documents,
-    work: { kind: "rule", rule: WEDGED_WORK_SPEC },
+  // THE ORDER HERE IS THE ORDER `overseer status` PRINTS AND NOTHING ELSE. Each
+  // job carries its own interval and its own lease, so neither waits on the
+  // other; `schedulerTick` refuses a duplicate id, which is the only ordering
+  // question there is.
+  const defined: readonly RuleJobDefinition[] = [
+    {
+      id: "wedged-work",
+      everyMs: WEDGED_WORK_EVERY_MS,
+      leaseMs: RULE_LEASE_MS,
+      what: WEDGED_WORK_WHAT,
+      documents,
+      work: { kind: "rule", rule: WEDGED_WORK_SPEC },
+    },
+    {
+      id: "launch-mode",
+      everyMs: LAUNCH_MODE_EVERY_MS,
+      leaseMs: RULE_LEASE_MS,
+      what: LAUNCH_MODE_WHAT,
+      documents,
+      work: { kind: "rule", rule: LAUNCH_MODE_SPEC },
+    },
+  ];
+  return {
+    jobs: defined.map((definition) => ({ definition, authorisedHash: AUTHORISED_RULE_HASHES[definition.id as RuleJobId] as DefinitionHash })),
+    problems,
   };
-  return { jobs: [{ definition, authorisedHash: AUTHORISED_RULE_HASHES["wedged-work"] as DefinitionHash }], problems };
 }
 
 /**

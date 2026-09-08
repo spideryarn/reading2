@@ -595,7 +595,11 @@ gates cannot happen without Greg anyway.
   append-fsync-act-append runner with the store passed in (SP-2), the deterministic-only arming path
   (SP-4), and the `RuleEvent` arm with a **round-trip** test (SP-9). Rule 2 rides on it, proposing
   and never killing. See § What 3a landed below.
-- **3b — rule 1.** Small, observe-only, reading the raw payload rather than widening `ObservedRow`.
+- **3b — the protocol's own file, then rule 1. DONE, 2026-09-08.** Two commits. The first moves the
+  rule protocol out of `scheduler.ts` into `rule-protocol.ts` and pins that instead, because pinning
+  the whole scheduler made every rule's authorisation hostage to a log sentence. The second is rule
+  1: small, observe-only, reading the raw payload rather than widening `ObservedRow`. See § What 3b
+  part 1 landed and § What 3b part 2 landed.
 - **3c — the review surface.** A bounded rule-event projection into `current.json`, the independent
   fleet-side parser, the wire type, and the Overseer panel. **This is the gate on 3d, not a
   nice-to-have.**
@@ -1248,6 +1252,134 @@ rule, so adding rule 1 in part 2 re-pinned rule 2: `rules.ts` holds both rules' 
 `rule-work.ts` both observers. It is a far smaller version of the problem — rules change rarely,
 log sentences change constantly — and the note is at `RULE_SOURCES`. Splitting the per-rule halves
 into per-rule files is the move if a third rule makes it bite.
+
+#### What 3b part 2 landed: rule 1, observing only, and the specimen that blinded the fleet
+
+`RuleId` is a union; `RuleSpec`, `RuleObservation` and `RuleFinding` are unions with one arm per
+rule; `decideRule` dispatches and `store.ts` parses each finding by its own `kind`. The shipped job
+is `launch-mode`, every fifteen minutes, `disposition: "propose"`, pinned `a648c4bfbe4c` —
+and `wedged-work` re-pinned `95485a7dbe6f` → `a3dcfd98b110`, because the three pinned files are
+shared.
+
+**Two knobs, both hashed.** `minSessions: 1` — the firing condition is data inside the fingerprint
+rather than a literal in an `if`, which is the whole of SP-1. `maxCollectionAgeSeconds: 300` — rule
+1 reads a cached payload rather than commanding a fresh look, so it can be handed a reading from
+before the thing it is checking, and past that age the answer is `cannot-tell` rather than a clean
+bill. Measured the same evening: `/api/state` served collections between 4s and 113s old.
+
+**Where I disagree with the plan, and it is the section above this one.** § "The Overseer sees less
+of the fleet than the fleet sends" says the resolution is that the daemon already holds the raw
+payload, so rule 1 should read that and open no second HTTP client. I took the GET instead, and the
+constraint that section actually cares about is untouched: nothing here widens `ObservedRow` or
+opens `observation.ts`, and the modes are read by this stage's own narrow parser with its own
+unknown arms. Three reasons. Reading the daemon's held payload is *more* plumbing, not less —
+`daemon.ts`, `scripts/overseer.ts` and `rule-work.ts` all have to learn about a mutable holder.
+It makes rule 1 blind exactly when the Overseer's own transport is down, which is when the box is
+least well. And, decisively, **it gives the rules two different ways to look at the fleet where one
+already works**: rule 2 asks the dashboard over HTTP from `rule-work.ts`, and a second mechanism for
+rule 1 is the "second way to do the same thing" this repo keeps paying for. `/api/state` serves a
+cached string and does not make the box collect — `source.ts`'s own fallback poller hits it every 15
+seconds, against rule 1's once every 15 minutes.
+
+**A specimen was made, the rule fired against it, and it is gone.** A tmux session launched exactly
+as `gjd-remote new-claude` launches one, minus `--permission-mode auto` — which is precisely the
+regression this rule alarms on. Its pane read `⏸ manual mode on`; the collector at 21:47:19Z put
+`{"kind":"not-auto","mode":"manual mode"}` on row `$2543`; and the SHIPPED job, through the real
+observer, the real protocol and a real store, wrote a `rule-intended` that round-tripped out of a
+second store with **5 events replayed, 0 unreadable**:
+
+```
+relaunch 1 of 9 agent session(s) that did not come up in auto mode and will stall at the next
+unapprovable call — needs a person: a running session cannot be switched into auto mode, so the only
+remedy is kill-and-relaunch. specimen-3b-launch-mode ($2543, manual mode). 0 more could not be read.
+```
+
+with `auto: 8, notAuto: 1, cannotTell: 0, notApplicable: 8, rows: 17, collectionAgeSeconds: 16`. The
+session was killed immediately afterwards and `gjd-remote ls` confirmed healthy.
+
+**And that first specimen blinded every reader of the fleet for ten minutes.** I created the tmux
+session by hand with `GJD_REPO=spideryarn2`, which is neither an `owner/name` slug nor the sanctioned
+literal `unknown`. `parseMeta` in `scripts/gjd-remote-tmux.ts` fails the **entire listing** on one
+malformed row rather than dropping that row — deliberately, because a partial session list is read as
+permission by every caller:
+
+> has GJD_REPO='spideryarn2', which is neither an owner/name slug nor 'unknown'
+
+From **21:37:12Z to 21:47:19Z** by the dashboard's own clocks, `gjd-remote ls` printed nothing, the
+collector failed with that sentence, and `overseer status` said *"Overseer unknown — the dashboard's
+last collection failed"* — another agent's freshly landed guard working exactly as designed.
+**Fourteen healthy sessions were invisible to every reader of the fleet.** The collector had already
+backed off, so its last failed attempt was 21:42:12, and it recovered on its own next cycle without
+anything being restarted. Another session noticed and told the Overseer, which repaired it in place
+with `tmux set-environment` rather than killing the specimen, so the reading above survived.
+
+Four things follow, and the first is the one worth keeping:
+
+- **The test specimen for the rule that watches the fleet blinded every reader of the fleet,
+  including the dashboard and the Overseer's own status.** Same shape as the dependency already
+  recorded — rule 2 goes blind when the dashboard is down — but sharper, because here the thing that
+  broke observability was the test of the thing meant to restore it. **The blast radius of one
+  malformed session is every consumer of the listing.**
+- **`parseMeta`'s fail-whole behaviour is not being changed.** It is shared machinery and the choice
+  is reasoned. What is written down here is its cost, where the next person launching a specimen will
+  meet it. The general lesson — the single collector is a deliberate purchase and this is its blast
+  radius — is the Overseer's own note in
+  [overseer-direction.md](../project/overseer-direction.md) § Two tenses.
+- **The guard is code now, not a habit:
+  [`scripts/overseer-launch-mode-specimen.ts`](../../scripts/overseer-launch-mode-specimen.ts).**
+  `start` builds the session with the whole metadata quartet, then runs `gjd-remote ls` and **kills
+  the specimen and exits non-zero** if the listing will not run — printing what the reader said,
+  because the reader is what has the reason. It refuses a listing that succeeds *without* the
+  specimen in it too: that is not evidence the specimen is fine, it is evidence the check could not
+  have seen a problem with it. The runner is injected so both refusals are exercised in
+  `tests/overseer-rules.test.ts`; the only way to exercise them for real is to blind the fleet again.
+  The reasoning is not about this incident — a rule whose specimens are anomalous sessions will keep
+  producing anomalous sessions, and the fleet's readers are strict by design, so this recurs every
+  time anybody tests rule 1. Stage 3b is the first of those times, not the only one.
+- **It labels the specimen `GJD_REPO=unknown`, not `spideryarn/reading2`.** Both are accepted.
+  `unknown` is the honest one: the specimen is not doing that repo's work, it exists to be an
+  anomaly, and borrowing the repo would put it in that repo's listings and counts. `REPO_UNKNOWN` is
+  imported rather than typed, so the sanctioned value cannot drift from the one the reader accepts.
+
+The script was then run end to end on its own account: `start` → pane reads `⏸ manual mode on`,
+`gjd-remote ls` lists it as `(unknown) · idle` → `stop`. Two things it turned up that a reading of it
+would not have. `claude` with **no** `--permission-mode` flag at all came up in *auto* mode in this
+checkout, so "just leave the flag off" makes a healthy session and a demonstration that proves
+nothing — the script passes `--permission-mode default` explicitly. And `tmux has-session` writes
+*"can't find session"* to stderr on the ordinary absent case, which read as an error from a script
+whose whole job is to be trusted about whether it broke something.
+
+**Mutation check: nine mutations, every one caught, and each flips a value rather than setting one.**
+Beside the pin test — which fires on any source edit and is therefore not evidence about behaviour —
+each was caught by at least one behavioural test.
+
+| mutation | caught by |
+| --- | --- |
+| `cannot-tell` counted as `auto` | 3 tests, incl. the round trip |
+| `cannot-tell` counted as `not-auto` | 4 tests, incl. the unrecognised-arm one |
+| an unrecognised wire arm read as `not-auto` | "AN ARM THIS BUILD DOES NOT KNOW IS `cannot-tell`" |
+| `minSessions` ignored | "THE THRESHOLD IS REAL" |
+| `maxCollectionAgeSeconds` ignored | 2 tests, incl. the durable `refused` |
+| never-collected read as a clean bill | "A DASHBOARD THAT HAS NEVER COLLECTED…" |
+| shells counted as agent sessions | 3 tests |
+| the launch-mode finding given no parser | the round trip |
+| `cannotTell` parsed back as `0` | the round trip |
+
+**One hole found by adding the second rule, and it had been open since 3a.** `store.ts`'s
+`const RULE_IDS = new Set(["wedged-work"] satisfies RuleId[])` checks that its members ARE rule ids
+and says nothing about whether they are ALL of them — the same not-exhaustive hole as the destructure
+SC-4 was about, in a different costume, and the only moment it could have been found is the moment a
+second id existed. It is a `Record<RuleId, true>` now. The same reasoning made `RULE_SPEC_ENCODERS`
+one table per arm: `keyof RuleSpec` over a union is only the fields the arms SHARE, so the single
+mapped table 3a shipped would have silently stopped covering every threshold the moment there were
+two rules.
+
+**What is still not true.** Rule 1 has no reversible action and never will have one: you cannot type
+`/permission-mode auto` into a running session and an unattended process may not answer its dialog, so
+`disposition: "propose"` here is not a placeholder for 3d. And the events it writes reach nobody yet —
+3c is the review surface, and until it lands a proposal is a line in a JSONL file. That is the same
+sentence this plan already writes about rule 2, and it is the reason 3c is a gate rather than a
+nice-to-have.
 
 ### Stage 4 — the deferral queue
 
