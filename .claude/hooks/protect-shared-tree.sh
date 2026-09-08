@@ -87,4 +87,107 @@ if word_in git "$text" && word_in "$VERB" "$text"; then
   refuse "this command mentions \`git\` and \`$VERB\`"
 fi
 
+# ---------------------------------------------------------------------------
+# Branch deletion by hand.
+#
+# Added 2026-09-09, after the Overseer removed a finished worktree with
+# `git worktree remove` and `git branch -d` typed out — a sequence its own
+# runbook forbids. The job that command was doing is real, so the ban is only
+# fair with a sanctioned path beside it: `npm run worktree:remove` deletes the
+# branch itself, on a proof that everything it ever pointed at has landed, with
+# a compare-and-swap. That deletion is a `spawnSync` inside Node, not a Bash
+# tool call, so this hook never sees it and needs no exemption to let it past.
+#
+# WHY THIS ONE IS NOT A FLAT WORD MATCH like the verb above. `branch` is not a
+# rare word: `git branch --show-current` is run constantly, and matching the
+# whole payload for `branch` AND a delete flag refuses ordinary compounds —
+# `git branch --show-current && npm install -D pkg` was the case that killed the
+# first draft. So the text is split on command separators first, and both halves
+# of the pattern must land in ONE segment.
+#
+# It still over-refuses within a segment, deliberately: a commit message quoting
+# `-d` beside the word branch is refused. Reword it, or use the Write tool.
+#
+# Not covered, and not chased: git aliases, `git update-ref -d refs/heads/x`,
+# and any script whose text is not in the Bash call. This is a nudge at the
+# point absent-mindedness happens, not a boundary.
+# **The flag must START a word**, and that one detail does all the discriminating.
+# A short-flag cluster is any run of letters containing d or D — `-D`, `-df`,
+# `-vvvvD`, which is a real deletion an earlier three-letter bound let through. An
+# unbounded run would also match `-committerdate`, so what excludes
+# `git branch --sort=-committerdate` is not a length cap but the requirement that
+# the `-` be preceded by whitespace or nothing: there it is preceded by `=`.
+DELETE_FLAG='(^|[[:space:]])(--delete|-[[:alpha:]]*[dD][[:alpha:]]*)([^[:alnum:]_-]|$)'
+
+# Prove the matcher before trusting it, both directions, exactly as above — a
+# matcher that hits everything and one that hits nothing each pass one half.
+flag_in() { printf '%s' "$1" | grep -Eq "$DELETE_FLAG"; }
+flag_in 'branch -D x'                  || refuse "self-test failed: delete matcher missed -D"
+flag_in 'branch --delete x'            || refuse "self-test failed: delete matcher missed --delete"
+flag_in 'branch -df x'                 || refuse "self-test failed: delete matcher missed a -df cluster"
+flag_in 'branch -vvvvD x'              || refuse "self-test failed: delete matcher missed a long cluster"
+flag_in 'branch --sort=-committerdate' && refuse "self-test failed: delete matcher hit an ordinary --sort"
+flag_in 'branch --show-current'        && refuse "self-test failed: delete matcher hit --show-current"
+
+refuse_branch_delete() {
+  printf 'Refused by .claude/hooks/protect-shared-tree.sh: %s\n\n' "$1" >&2
+  cat >&2 <<'EOF'
+Deleting a branch by hand is banned in this repo. Nothing here needs it:
+
+  npm run worktree:remove -- --branch <name>
+
+removes the worktree AND deletes its branch, but only after proving that every
+commit the branch has ever pointed at — its tip and every reflog entry — is
+already on origin/dev, and it deletes with a compare-and-swap so a branch that
+moved under it is left alone. It also cleans up a branch whose worktree is
+already gone, so there is no stuck state this ban creates.
+
+See AGENTS.md and docs/project/worktrees.md § Removing one.
+
+The test is per-command: the word `branch` and a -d/-D/--delete flag in the SAME
+command. Either alone is fine. If you were only quoting one, reword it or use
+the Read/Write tools instead of Bash.
+EOF
+  exit 2
+}
+
+# One command per line: `&&` first (two chars, so tr cannot see it), then the
+# single-byte separators. `sed` never emits a newline here, because BSD sed on
+# Greg's Mac will not take one in a replacement.
+segments=$(printf '%s' "$text" | sed 's/&&/;/g' | tr ';|&' '\n\n\n')
+
+carry=""
+while IFS= read -r segment; do
+    # A line ending in `\` continues into the next one. Without this,
+    # `git branch \` + newline + `-D x` splits into a segment with the word and a
+    # segment with the flag, and neither matches — measured, it was a bypass, and
+    # the verb rule above has a test for exactly this shape.
+    segment="$carry$segment"
+    carry=""
+    case "$segment" in
+      *\\)
+        carry="${segment%\\} "
+        continue
+        ;;
+    esac
+
+  # All three in ONE command: the tool, the noun, the flag. Requiring the tool per
+  # segment rather than anywhere in the payload is what stops
+  # `git status && grep -n "branch -D" notes.txt` being refused — measured, it was.
+  # The cost is that `g=git; $g branch -D x` is no longer caught, which the flat
+  # rule above would catch. That trade is deliberate: a false refusal on a daily
+  # command is paid every day, and this is a nudge, not a boundary.
+  word_in git "$segment" || continue
+  word_in branch "$segment" || continue
+  printf '%s' "$segment" | grep -Eq "$DELETE_FLAG"
+  rc=$?
+  case "$rc" in
+    0) refuse_branch_delete "this looks like a hand-typed branch deletion: $segment" ;;
+    1) ;;
+    *) refuse "the branch-deletion matcher itself failed (grep exit $rc); not guessing" ;;
+  esac
+done <<EOF
+$segments
+EOF
+
 exit 0

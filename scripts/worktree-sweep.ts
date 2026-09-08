@@ -89,17 +89,27 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { statSync } from "node:fs";
 import path from "node:path";
 
 import { TRUNK_BRANCH } from "./deploy-checks.js";
-import { forceRemoveThrowawayWorktree, listWorktrees, type WorktreeEntry } from "./worktree-admin.js";
+import { listWorktrees, type WorktreeEntry } from "./worktree-admin.js";
 /* `gather` is aliased: this file has one of its own, and two functions of the
    same name at one seam is how the wrong one gets called. */
 import { blockers, type CheckFacts, fetchTrunkSha, gather as checkGather, type TrunkSha } from "./worktree-check.js";
+/* The age floor, the activity signals and the removal itself all live in
+   worktree-remove.ts now. This file classifies; that one removes. Re-exported so
+   the sweep's own tests and callers keep their import site. */
+import {
+  type Activity,
+  classifyRegistration,
+  describeIdle,
+  lastActivityAt,
+  MIN_IDLE_HOURS,
+  removeWorktree,
+  type RemoveOutcome,
+} from "./worktree-remove.js";
 
-/** A worktree is never removable while it has been touched this recently. */
-export const MIN_IDLE_HOURS = 24;
+export { type Activity, MIN_IDLE_HOURS, type RemoveOutcome };
 
 /** Everything the classifier is allowed to look at, gathered by `gatherAll()`. */
 export interface SweepFacts {
@@ -128,6 +138,11 @@ export type Verdict =
   | { kind: "ghost" }
   /** Every guard passed. */
   | { kind: "removable" }
+  /**
+   * Nothing is wrong with it, and it is under the age floor. Its own session may
+   * remove it now with `npm run worktree:remove`; nobody else may.
+   */
+  | { kind: "young"; why: string }
   /** Keep it, and here is each reason. */
   | { kind: "keep"; reasons: string[] }
   /**
@@ -155,10 +170,16 @@ export interface ClassifyOptions {
  */
 export function classifyOne(f: SweepFacts, opts: ClassifyOptions): Verdict {
   const minIdle = opts.minIdleHours ?? MIN_IDLE_HOURS;
+  let young: string | null = null;
 
-  if (f.entry.main) return { kind: "skip", why: "the primary checkout" };
-  if (f.entry.bare) return { kind: "skip", why: "a bare entry, which has no working tree" };
-  if (!f.entry.present || f.entry.prunable) return { kind: "ghost" };
+  /* `classifyRegistration` rather than a test here, so this file and the removal
+     agree on what a ghost is. It is an ABSENT directory: a *present* one that is
+     prunable has a broken admin link over what may be a full tree, and a ghost is
+     unregistered with `--force --force`. */
+  const reg = classifyRegistration(f.entry);
+  if (reg.kind === "skip") return { kind: "skip", why: reg.why };
+  if (reg.kind === "ghost") return { kind: "ghost" };
+  if (reg.kind === "unknown") return { kind: "unjudgeable", why: `${reg.why}\n              ${reg.fix}` };
   if ("error" in f.check) return { kind: "unjudgeable", why: f.check.error };
 
   /* The whole "does this hold work" judgement, in one call, made by the file
@@ -175,17 +196,23 @@ export function classifyOne(f: SweepFacts, opts: ClassifyOptions): Verdict {
          eighteen worktrees without suspicion while it meant "we just ran git in
          here"; "git was last run here 1 min ago" beside a five-day-old HEAD is
          read as wrong by the first person to see it. */
-      reasons.push(`${f.lastActivity.signal} ${describeIdle(idleHours)} ago — under the ${minIdle}h floor`);
+      young = `${f.lastActivity.signal} ${describeIdle(idleHours)} ago — under the ${minIdle}h floor`;
     }
   }
 
-  return reasons.length === 0 ? { kind: "removable" } : { kind: "keep", reasons };
-}
-
-function describeIdle(hours: number): string {
-  if (hours < 0) return "in the future";
-  if (hours < 1) return `${Math.max(1, Math.round(hours * 60))} min`;
-  return `${hours.toFixed(1)} h`;
+  if (reasons.length > 0) {
+    /* The floor joins the other reasons only when something else already keeps
+       it, so a plain `keep` never means "young" on its own. */
+    if (young !== null) reasons.push(young);
+    return { kind: "keep", reasons };
+  }
+  /* Clean, landed, nobody standing in it — and too young for this report to
+     advertise. `REMOVABLE` would then mean "old enough to advertise" rather than
+     "the removal primitive would accept it", and printing both as one word is how
+     an operator comes to read past the difference. Its own session may remove it
+     now; nobody else may, and no paste-ready command is offered for it. */
+  if (young !== null) return { kind: "young", why: young };
+  return { kind: "removable" };
 }
 
 /* ------------------------------------------------------------------ */
@@ -207,88 +234,6 @@ function currentToplevel(cwd: string): string | null {
 export function shortBranch(ref: string | undefined): string | undefined {
   if (ref === undefined) return undefined;
   return ref.startsWith("refs/heads/") ? ref.slice("refs/heads/".length) : ref;
-}
-
-/** Which signal decided `lastActivity`, so a verdict can name its evidence. */
-export interface Activity {
-  at: number;
-  /** Human-readable, for the keep reason: "HEAD last moved", "git was last run here". */
-  signal: string;
-}
-
-/**
- * The reflog **entry's own timestamp**, in unix seconds — `null` if there is none.
- *
- * `git log -g --format=%ct` looks like the way to ask this and is not: `%ct` is
- * the *committer date of the commit the entry points at*. On a worktree created
- * this second from a month-old commit it returns the month-old date, so it says
- * nothing about when the worktree was touched, and the branch-reflog signal that
- * used it duplicated the commit-date signal one line above it. `%gd` with
- * `--date=unix` prints `HEAD@{1788807113}`, which is the entry's own time.
- *
- * Reflogs can be off (`core.logAllRefUpdates=false`) or expired, and both give an
- * empty string with exit 0 — hence `null` rather than a throw, and `null`
- * everywhere is a keep.
- */
-function reflogEntryAt(wt: string, ref: string): number | null {
-  const out = tryGit(["log", "-g", "-1", "--date=unix", "--format=%gd", ref], wt);
-  const at = out === null ? null : /@\{(\d+)\}/.exec(out);
-  if (at?.[1] === undefined) return null;
-  const n = Number.parseInt(at[1], 10);
-  return Number.isFinite(n) ? n : null;
-}
-
-/**
- * When this tree was last touched: the **latest** of three independent signals,
- * because each one alone reports a live worktree as long idle, and reporting a
- * live worktree as idle is the direction that loses work.
- *
- * - **The HEAD reflog entry.** The one signal every worktree has, attached or
- *   detached, and the only one that moves on a fast-forward — a fast-forward
- *   writes no commit, so a tree created a minute ago can sit on a month-old
- *   HEAD. It is written when the worktree is created, and on every checkout,
- *   reset, commit and merge.
- * - **The branch reflog entry**, when a branch is checked out. Not redundant:
- *   `git update-ref` from elsewhere can move the checked-out branch without
- *   touching this worktree's HEAD reflog.
- * - **The admin directory's mtime**, `.git/worktrees/<name>`. The crude one —
- *   *somebody ran a git command that took a lock in here* — and kept precisely
- *   because it is crude and independent. A reflog entry inherits
- *   `GIT_COMMITTER_DATE`, so it can be backdated by an ordinary backdated
- *   commit; the mtime cannot. Until 2026-09-07 this signal was worthless for the
- *   opposite reason: `worktree:check`'s own `git status` stamped it, so every
- *   tree looked a minute old. That is fixed at its source in worktree-check.ts,
- *   and what is left over-reports activity now and then, which only ever delays
- *   a removal.
- *
- * **HEAD's commit date is gone.** It is dominated by the HEAD reflog — a commit
- * made here writes an entry at the same instant, and a commit merged in is
- * entered at merge time — and it was the signal that made the old fast-forward
- * test look covered while it could not fail.
- *
- * `null` only when all three fail, which is itself a keep.
- */
-function lastActivityAt(wt: string, branch: string | undefined): Activity | null {
-  const seen: Activity[] = [];
-
-  const head = reflogEntryAt(wt, "HEAD");
-  if (head !== null) seen.push({ at: head, signal: "HEAD last moved" });
-
-  if (branch !== undefined) {
-    const onBranch = reflogEntryAt(wt, branch);
-    if (onBranch !== null) seen.push({ at: onBranch, signal: `${branch} last moved` });
-  }
-
-  const adminDir = tryGit(["rev-parse", "--absolute-git-dir"], wt);
-  if (adminDir !== null) {
-    try {
-      seen.push({ at: Math.floor(statSync(adminDir).mtimeMs / 1000), signal: "git was last run here" });
-    } catch {
-      /* Gone or unreadable; the other signals stand, and no signal is a keep. */
-    }
-  }
-
-  return seen.reduce<Activity | null>((best, s) => (best === null || s.at > best.at ? s : best), null);
 }
 
 /**
@@ -351,83 +296,26 @@ export function classifyAll(cwd: string, opts?: { now?: number; minIdleHours?: n
 /* Removal                                                             */
 /* ------------------------------------------------------------------ */
 
-export interface RemoveOutcome {
-  ok: boolean;
-  steps: string[];
-}
-
 /**
- * Remove **one** worktree whose branch has landed, re-earning every guard first.
+ * Removal is `scripts/worktree-remove.ts`, and this is a thin forward to it.
  *
- * No bulk form and no path form: a branch name, one at a time. The
- * classification is re-run here rather than passed in, so a verdict cannot be
- * carried from an earlier decision into a later deletion.
+ * There was a second implementation here until 2026-09-09, and it had guards the
+ * other one did not — and lacked guards the other one has. Two copies of a
+ * safety judgement is the shape whose disagreements are invisible by
+ * construction, which is the same argument the header already makes for why this
+ * file has no `dirty` or `merged` check of its own.
  *
- * A ghost's branch is left alone. The directory is gone, so the registration is
- * litter — but the branch may still hold unlanded commits, and this is not the
- * command that gets to decide that.
+ * **The 24h age floor stays here, in `classifyOne`**, because its job is deciding
+ * what this file's *report* advertises — it must never hand an agent a
+ * paste-ready command that would delete a peer's five-minute-old tree. It was
+ * never the right guard on a deliberate, singular, explicitly-named removal, and
+ * `worktree:remove` applies it there only to a third party.
  */
 export function removeOne(cwd: string, branch: string, opts?: { dryRun?: boolean; now?: number }): RemoveOutcome {
-  const steps: string[] = [];
-  const rows = classifyAll(cwd, opts?.now === undefined ? {} : { now: opts.now });
-  const row = rows.find((r) => r.facts.branch === branch);
-
-  if (row === undefined) {
-    steps.push(`no worktree is on branch ${branch}`);
-    return { ok: false, steps };
-  }
-  if (row.verdict.kind === "skip") {
-    steps.push(`refused: ${row.verdict.why}`);
-    return { ok: false, steps };
-  }
-  if (row.verdict.kind === "keep") {
-    steps.push("refused, re-checked just now:");
-    for (const r of row.verdict.reasons) steps.push(`  ${r}`);
-    return { ok: false, steps };
-  }
-  if (row.verdict.kind === "unjudgeable") {
-    steps.push("refused: this tree could not be judged, and unknown counts as unsafe");
-    steps.push(`  ${row.verdict.why}`);
-    return { ok: false, steps };
-  }
-
-  const wt = row.facts.entry.path;
-  const ghost = row.verdict.kind === "ghost";
-
-  if (opts?.dryRun === true) {
-    steps.push(ghost ? `would unregister the ghost at ${wt}` : `would remove ${wt} and delete ${branch}`);
-    return { ok: true, steps };
-  }
-
-  if (ghost) {
-    const r = forceRemoveThrowawayWorktree(wt, cwd);
-    steps.push(r.ok ? `unregistered the ghost at ${wt}` : `FAILED to unregister ${wt}: ${r.out}`);
-    steps.push(`left branch ${branch} alone — the tree is gone, but its commits are not this command's to judge`);
-    return { ok: r.ok, steps };
-  }
-
-  /* `claude --worktree` locks what it creates, and a locked worktree refuses a
-     plain remove. Unlock rather than reaching for the second --force, so the
-     removal below is still git's own judgement of whether the tree is clean. */
-  if (row.facts.entry.locked) {
-    const un = spawnSync("git", ["worktree", "unlock", wt], { cwd, encoding: "utf8" });
-    steps.push(un.status === 0 ? `unlocked ${wt}` : `could not unlock ${wt} — continuing, remove will say if it matters`);
-  }
-
-  /* No --force. If git disagrees with our clean check, git wins. */
-  const rm = spawnSync("git", ["worktree", "remove", wt], { cwd, encoding: "utf8" });
-  if (rm.status !== 0) {
-    steps.push(`refused by git: ${`${rm.stdout ?? ""}${rm.stderr ?? ""}`.trim()}`);
-    return { ok: false, steps };
-  }
-  steps.push(`removed ${wt}`);
-
-  /* -D not -d: the branch has no upstream here, so -d asks the wrong question
-     and refuses work that has plainly landed. The right question was asked
-     above, against a freshly fetched trunk. */
-  const del = spawnSync("git", ["branch", "-D", branch], { cwd, encoding: "utf8" });
-  steps.push(del.status === 0 ? `deleted branch ${branch}` : `left branch ${branch}: ${`${del.stderr ?? ""}`.trim()}`);
-  return { ok: true, steps };
+  return removeWorktree(cwd, branch, {
+    ...(opts?.dryRun === undefined ? {} : { dryRun: opts.dryRun }),
+    ...(opts?.now === undefined ? {} : { now: opts.now }),
+  });
 }
 
 /* ------------------------------------------------------------------ */
@@ -447,6 +335,12 @@ export function renderClassification(rows: readonly Classified[]): string {
         break;
       case "removable":
         lines.push(`  REMOVABLE ${name}`);
+        break;
+      /* Deliberately not `keep` and deliberately not `REMOVABLE`: nothing is
+         wrong with it, and it is not this report's to hand to a third party. */
+      case "young":
+        lines.push(`  young     ${name} — safe, but its own session may remove it; nobody else yet`);
+        lines.push(`              ${verdict.why}`);
         break;
       case "keep":
         lines.push(`  keep      ${name}`);
