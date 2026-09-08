@@ -132,6 +132,27 @@ const NOT_A_ROW: Record<string, string> = {
     "The pair wrote `11111111-1111-1111-1111-111111111111` until 2026-09-08; that one is " +
     "`db-schema.test.ts`'s `OWNER` and a real `auth.users` row, so they were moved off it " +
     "rather than exempted onto it.",
+  "117e181a-155b-435a-b95b-e74220678d1a":
+    "a REAL claude conversation uuid, captured off this box on 2026-09-08 and used as the " +
+    "steerable session across the fleet dashboard's write-path tests — `fleet-steer.test.ts` " +
+    "(`UUID`), `fleet-queue.test.ts` (`CONVO`), `fleet-actions.test.ts`, and seven places in " +
+    "`fleet-web.test.tsx`. None of those files imports a store, a database module or anything " +
+    "under `src/`; `tools/fleet/` is forbidden from depending on `src/` by its own standing rule " +
+    "(orchestrator-direction.md § Principles), so there is no row to insert and none to delete. " +
+    "It names a conversation, which is the distinction the `3c67234f-…` tmux and `f1ee7000-…` " +
+    "claude entries above already draw. " +
+    "**Deliberately one id across the four files rather than four ids.** They describe the same " +
+    "session being steered, queued for, acted on and rendered, and the conversation uuid is the " +
+    "one identifier that ties those views together — `steer.ts`'s whole design is that it is the " +
+    "only id which survives a resume. Four uuids would say these fixtures differ where they do " +
+    "not, and would quietly make the tests stop describing one agent.",
+  "76667309-a22a-477c-af3b-4f16d1ce0cf0":
+    "the OTHER conversation in that same pair of files — `fleet-steer.test.ts`'s `OTHER_UUID` " +
+    "and `fleet-queue.test.ts`'s `OTHER_CONVO`. It exists to be the wrong session: both files " +
+    "assert that a message aimed at one conversation is refused when a different one is running " +
+    "in the pane, which is the defect `verifyTarget` was built for. Same reasoning as the entry " +
+    "above, and it has to stay the same id in both, because the two files are testing the two " +
+    "halves of one guard.",
 };
 
 function parse(file: string, source: string): Claim[] {
