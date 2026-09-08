@@ -674,6 +674,44 @@ log's order cannot tell append-then-act from act-then-append, because both leave
 in the same order. The test now reads the file **from inside the actor**, which is the one moment
 that distinguishes them.
 
+#### Verified again independently, and one outcome arrived by accident
+
+*"Done, all tests pass"* is a claim rather than a result, so the stage was re-run from outside the
+session that built it: 7 files / 271 tests green (245 baseline + 26 new, exactly as reported),
+`npm run typecheck` exit 0, and a rules-only daemon started by hand against a scratch
+`OVERSEER_STORE_DIR`.
+
+The ledger reads, in order, and this is the whole design visible in five lines:
+
+```
+reserved   wedged-work@…#210968a360b9 — lease until 20:28:47
+started    wedged-work@…#210968a360b9 — pid 126654
+intends    wedged-work@…#210968a360b9 — kill 4 of 4 candidate process(es) — rule cwd-deleted
+           — needs confirm; oldest is pid 2282033 (…playwright@1.62.1 install webkit…) at 20.2h
+rule       wedged-work@…#210968a360b9 — proposed: kill 4 of 4 …
+finished   wedged-work@…#210968a360b9 — exit 0
+```
+
+`intends` is a **separate event appended before** the settlement, so the fail-closed ordering is not
+a claim about the code, it is a thing you can read off the disk.
+
+**And the third outcome was got by luck rather than design, which is the part worth keeping.** The
+first verification run happened to land while the fleet dashboard was restarting, and the rule
+settled as:
+
+> `refused: could not reach the fleet API at http://127.0.0.1:8787/api/actions/box: fetch failed`
+
+So `refused`, `proposed` and `nothing-to-do` have now all been *seen* rendering differently on a real
+box, rather than only in tests — which is exactly the property the direction doc asks for and the one
+a suite is least able to prove.
+
+It also surfaces a real dependency nobody had written down: **rule 2 goes blind whenever the
+dashboard is down**, because its only eye is that HTTP route. It says so distinctly instead of
+reporting an empty candidate list, which is the right behaviour and the reason `cannot-see` exists as
+its own arm. But it is the same shape as A27 and as the deaf-Overseer asymmetry in `provision.sh`:
+**the thing you reach for when something is broken shares a dependency with the thing that broke.**
+Worth naming in 3c, where the review surface will have the same problem.
+
 #### SP-11, and a number I sent to somebody else
 
 Sol is right that *"3 of 15"* mixes eight agent sessions with seven shells, and that `working`
