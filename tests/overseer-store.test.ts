@@ -30,10 +30,18 @@ import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
 
-import { identityOf, sessionKey, statusKey, type OverseerEvent } from "../tools/overseer/diff.js";
+import {
+  REGISTER_ROW_FIELDS,
+  identityOf,
+  sessionKey,
+  statusKey,
+  type OverseerEvent,
+  type RegisterRowField,
+} from "../tools/overseer/diff.js";
 import type { ObservedRow } from "../tools/overseer/observation.js";
 import {
   CHECKPOINT_FILE,
+  ENTRY_FIELD_OWNERS,
   EVENTS_FILE,
   LOCK_FILE,
   describeOpening,
@@ -133,6 +141,37 @@ function goneEvent(row: ObservedRow, at: string): OverseerEvent {
     identity: identityOf(row),
     name: row.name,
     why: "absent-from-snapshot",
+  };
+}
+
+/**
+ * The row material moved. `fields` comes off the real differ rather than being
+ * hand-typed, so a test cannot assert about a field the differ would not watch.
+ */
+function rowChangedEvent(row: ObservedRow, at: string, fields: readonly RegisterRowField[]): OverseerEvent {
+  return {
+    kind: "session-row-changed",
+    at,
+    tmuxServerPid: GENERATION,
+    key: sessionKey(identityOf(row)),
+    identity: identityOf(row),
+    fields,
+    row,
+  };
+}
+
+function paneReplacedEvent(was: ObservedRow, now: ObservedRow, at: string): OverseerEvent {
+  if (now.panePid === null) throw new Error("a pane event needs a pid: a null is a join miss, not a respawn");
+  return {
+    kind: "session-pane-replaced",
+    at,
+    tmuxServerPid: GENERATION,
+    key: sessionKey(identityOf(now)),
+    identity: identityOf(now),
+    previousPaneId: was.paneId,
+    previousPanePid: was.panePid,
+    paneId: now.paneId,
+    panePid: now.panePid,
   };
 }
 
@@ -313,6 +352,49 @@ describe("the torn-write sequence", () => {
 
     expect(read.events).toHaveLength(1);
     expect(read.unreadable.map((line) => line.line)).toEqual([2, 3]);
+  });
+
+  test("a row change naming a field this version does not watch is unreadable", () => {
+    // THE VERSION BOUNDARY, which is the one this parser is really for. A later
+    // Overseer that watches `title` writes `fields:["title"]`, and this one must
+    // say it cannot read that line rather than fold an event whose meaning it
+    // only half understands into a register somebody acts on. An empty list is
+    // the other direction: a change that did not happen, which the differ never
+    // writes, so a file with one has been edited.
+    const root = tempRoot();
+    const store = mustOpen(root);
+    store.append([seenEvent(observedRow(), "2026-09-08T10:00:00.000Z")]);
+    const path = join(root, EVENTS_FILE);
+    const line = (fields: unknown): string => {
+      const raw = JSON.parse(
+        JSON.stringify(rowChangedEvent(observedRow(), "2026-09-08T10:01:00.000Z", ["name"])),
+      ) as Record<string, unknown>;
+      raw["fields"] = fields;
+      return `${JSON.stringify(raw)}\n`;
+    };
+    appendFileSync(path, line(["title"]));
+    appendFileSync(path, line([]));
+    appendFileSync(path, line("name"));
+
+    const read = store.readEvents();
+    expect(read.events).toHaveLength(1);
+    expect(read.unreadable.map((u) => u.line)).toEqual([2, 3, 4]);
+    expect(read.unreadable[0]?.reason).toContain("title");
+  });
+
+  test("a pane replacement with no pid is unreadable, because that is a join miss", () => {
+    const root = tempRoot();
+    const store = mustOpen(root);
+    store.append([seenEvent(observedRow(), "2026-09-08T10:00:00.000Z")]);
+    const raw = JSON.parse(
+      JSON.stringify(paneReplacedEvent(observedRow(), observedRow({ panePid: 5 }), "2026-09-08T10:01:00.000Z")),
+    ) as Record<string, unknown>;
+    raw["panePid"] = null;
+    appendFileSync(join(root, EVENTS_FILE), `${JSON.stringify(raw)}\n`);
+
+    const read = store.readEvents();
+    expect(read.events).toHaveLength(1);
+    expect(read.unreadable.map((u) => u.reason)).toEqual([expect.stringContaining("panePid")]);
   });
 
   test("a garbage line in the middle is reported rather than silently skipped", () => {
@@ -914,6 +996,146 @@ describe("the fold, which is what makes the checkpoint disposable", () => {
     expect(entry.lastStatusKey).toBe("waiting");
     // A NEW wait, so the duration a triage view reports starts again here.
     expect(entry.statusSince).toBe("2026-09-08T10:01:00.000Z");
+  });
+
+  test("a rename reaches the register AND leaves the status clock alone", () => {
+    // THE MISTAKE THIS TEST IS FOR, and it is invisible to one that only checks
+    // the name: the obvious fold is `entryOf(event.row, …)`, which rebuilds the
+    // whole entry and resets `statusSince` — so a session renamed after 40
+    // minutes of waiting comes back as having waited no time at all, and every
+    // triage view that ranks by "waiting longest" silently reorders.
+    const was = observedRow({ name: "before-the-rename" });
+    const now = observedRow({ name: "after-the-rename" });
+    const register = foldEvents(
+      [
+        seenEvent(was, "2026-09-08T10:00:00.000Z"),
+        statusEvent(was, "2026-09-08T10:01:00.000Z", { kind: "waiting", secondsLeft: 3600 }),
+        rowChangedEvent(now, "2026-09-08T10:41:00.000Z", ["name"]),
+      ],
+      new Map(),
+    );
+
+    const entry = register.get(sessionKey(identityOf(now)));
+    if (entry === undefined) throw new Error("expected the renamed session");
+    expect(entry.name).toBe("after-the-rename");
+    // Forty minutes of waiting, still forty minutes of waiting.
+    expect(entry.lastStatusKey).toBe("waiting");
+    expect(entry.statusSince).toBe("2026-09-08T10:01:00.000Z");
+    // The row was seen, so this DOES move — it means "alive at least this recently".
+    expect(entry.lastSeenAlive).toBe("2026-09-08T10:41:00.000Z");
+  });
+
+  test("every field the differ watches actually reaches the register", () => {
+    // Data-driven off `REGISTER_ROW_FIELDS`, which is the list the differ
+    // compares — so a field added there and not wired through the fold fails
+    // here rather than being watched into a register that ignores it.
+    //
+    // NOT SELF-REFERENTIAL: the constant chooses which fields to look at, and
+    // the assertion is that a real fold moved a real value. A constant with the
+    // wrong contents cannot make this pass — it can only make it check less, and
+    // `ENTRY_FIELD_OWNERS` in store.ts is what stops the list shrinking.
+    const was = observedRow();
+    const now = observedRow({
+      name: "renamed",
+      repo: "spideryarn/other",
+      worktree: "somewhere-else",
+      meta: { version: 1, kind: "claude", repo: "spideryarn/other", dir: "/somewhere/else" },
+      startedAt: "2026-09-08T09:30:00.000Z",
+    });
+    const register = foldEvents(
+      [
+        seenEvent(was, "2026-09-08T10:00:00.000Z"),
+        rowChangedEvent(now, "2026-09-08T10:05:00.000Z", REGISTER_ROW_FIELDS),
+      ],
+      new Map(),
+    );
+    const entry = register.get(sessionKey(identityOf(now)));
+    if (entry === undefined) throw new Error("expected the session");
+
+    for (const field of REGISTER_ROW_FIELDS) {
+      expect({ field, value: entry[field] }).toEqual({ field, value: now[field] });
+      // And the fixture really did change it, so a fold that did nothing at all
+      // cannot pass this loop by having been handed two identical rows.
+      expect({ field, value: entry[field] }).not.toEqual({ field, value: was[field] });
+    }
+  });
+
+  test("the renamed entry's meta is still a copy, not the caller's object", () => {
+    const now = observedRow({ meta: { version: 1, kind: "claude", repo: "r", dir: "/original" } });
+    const register = foldEvents(
+      [
+        seenEvent(observedRow(), "2026-09-08T10:00:00.000Z"),
+        rowChangedEvent(now, "2026-09-08T10:05:00.000Z", ["meta"]),
+      ],
+      new Map(),
+    );
+    if (now.meta.version !== 1) throw new Error("expected versioned metadata");
+    now.meta.dir = "/rewritten/after/the/fact";
+
+    const entry = register.get(sessionKey(identityOf(now)));
+    expect(entry?.meta).toEqual({ version: 1, kind: "claude", repo: "r", dir: "/original" });
+  });
+
+  test("a pane respawn updates the pane and nothing else", () => {
+    const was = observedRow();
+    const now = observedRow({ paneId: "%99", panePid: 999_999 });
+    const register = foldEvents(
+      [
+        seenEvent(was, "2026-09-08T10:00:00.000Z"),
+        statusEvent(was, "2026-09-08T10:01:00.000Z", { kind: "waiting", secondsLeft: 3600 }),
+        paneReplacedEvent(was, now, "2026-09-08T10:41:00.000Z"),
+      ],
+      new Map(),
+    );
+    const entry = register.get(sessionKey(identityOf(now)));
+    if (entry === undefined) throw new Error("expected the session");
+    expect([entry.paneId, entry.panePid]).toEqual(["%99", 999_999]);
+    expect(entry.name).toBe(was.name);
+    expect(entry.statusSince).toBe("2026-09-08T10:01:00.000Z");
+    expect(entry.lastSeenAlive).toBe("2026-09-08T10:41:00.000Z");
+  });
+
+  test("the census and the watched list are the same list", () => {
+    // THE LINK THAT MAKES THE COMPILE ERROR REACH THE DIFFER. `satisfies` in
+    // store.ts already ties `ENTRY_FIELD_OWNERS` to every field of
+    // `RegisterEntry`, so a new field cannot be added without being classified.
+    // This is the other half: a field classified as row material that the differ
+    // does not watch would be a register field nothing keeps current — the exact
+    // defect, arrived at the other way round.
+    //
+    // TWO CONSTANTS COMPARED, so it is worth saying why that is not circular:
+    // one end is pinned to `RegisterEntry` by the compiler and the other to the
+    // fold by the walk in "every field the differ watches actually reaches the
+    // register". Neither can be edited alone to make this pass.
+    const rowOwned = Object.entries(ENTRY_FIELD_OWNERS)
+      .filter(([, owner]) => owner === "row")
+      .map(([field]) => field);
+    expect([...rowOwned].sort()).toEqual([...REGISTER_ROW_FIELDS].sort());
+  });
+
+  test("a row change for a session the register has never seen is dropped", () => {
+    // The same rule as `session-status`: half a row is not a session, and the
+    // fields a reboot needs are only on `session-seen`. Inventing an entry from
+    // this event would put a session in the register that no `session-seen`
+    // ever established.
+    const row = observedRow();
+    const register = foldEvents([rowChangedEvent(row, "2026-09-08T10:05:00.000Z", ["name"])], new Map());
+    expect([...register.keys()]).toEqual([]);
+  });
+
+  test("a rename survives the round trip through the checkpoint file", () => {
+    const root = tempRoot();
+    const was = observedRow({ name: "before-the-rename" });
+    const now = observedRow({ name: "after-the-rename" });
+    const first = mustOpen(root);
+    first.append([seenEvent(was, "2026-09-08T10:00:00.000Z")]);
+    first.append([rowChangedEvent(now, "2026-09-08T10:05:00.000Z", ["name"])]);
+    first.close();
+
+    // No checkpoint written, so this is the REBUILD path: the register comes
+    // back out of the log, which is the case S3-03 was actually about.
+    const second = mustOpen(root);
+    expect([...second.register.values()].map((e) => e.name)).toEqual(["after-the-rename"]);
   });
 
   test("a replacement retires the old identity rather than leaving two", () => {

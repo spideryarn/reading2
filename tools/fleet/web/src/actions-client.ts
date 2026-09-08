@@ -252,6 +252,19 @@ export type QueueItemView = {
   enqueuedAt: number | null;
   /** Non-null once it has been handed out for delivery — it is going now. */
   leasedAt: number | null;
+  /**
+   * The server's sentence saying this can never be delivered, or null.
+   *
+   * Set when the tmux server restarts under the queue: every `$…` handle is
+   * re-issued, so the item names a session that no longer exists. **It is
+   * parsed here because the field existed on the wire for a day before this
+   * page read it** — the item went on being drawn as if it were waiting its
+   * turn, which is the same quiet loss the persistence warning below exists to
+   * stop. `?? null` rather than a default sentence: a server too old to send
+   * the field is not making a claim, and inventing one for it would be the
+   * opposite mistake.
+   */
+  invalidated: string | null;
 };
 
 /**
@@ -314,7 +327,13 @@ export function parseQueue(v: unknown): QueueView | null {
       unreadableItems += 1;
       continue;
     }
-    items.push({ id, payload, enqueuedAt: millis(item["enqueuedAt"]), leasedAt: millis(item["leasedAt"]) });
+    items.push({
+      id,
+      payload,
+      enqueuedAt: millis(item["enqueuedAt"]),
+      leasedAt: millis(item["leasedAt"]),
+      invalidated: str(item["invalidated"]),
+    });
   }
   return {
     sessionId,

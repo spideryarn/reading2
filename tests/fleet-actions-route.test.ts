@@ -352,6 +352,18 @@ describe("POST /api/actions/session — enqueueing", () => {
     expect(queue.size("$99001")).toBe(1);
   });
 
+  it("queues for a session that is ASKING, and says it will wait rather than go now", async () => {
+    // The two gates answer different questions, and this field answers the
+    // page's: `drainGate` permits a `needs-you` session (it is a live Claude at
+    // a live pane, so the item is a good one) while the drain holds it until
+    // the dialog is dealt with, because a message typed at a dialog answers it.
+    const { routes, queue } = harness();
+    const r = await call(routes, fakeReq({ body: sessionBody({ status: { kind: "needs-you" } }) }));
+    expect(r.status).toBe(200);
+    expect((r.json.gate as { kind: string }).kind).toBe("later");
+    expect(queue.size("$99001")).toBe(1);
+  });
+
   it("refuses now what could never drain, in steer.ts's own words", async () => {
     const { routes, queue } = harness();
     const shell = await call(routes, fakeReq({ body: sessionBody({ status: { kind: "shell", busy: false } }) }));
@@ -672,10 +684,22 @@ describe("POST /api/actions/session — enacted", () => {
   });
 
   it("enqueues rather than acting when mode is left out", async () => {
+    // THE DEFAULT IS `enqueue`, WHICH IS THE POINT: a body with no mode must
+    // never run a plan. It used to be checked with `remove-worktree`, which the
+    // queue now refuses outright (nothing drains an enacted item — queue.ts's
+    // `enacted-not-deliverable`), so the two halves are checked separately: a
+    // spoken action lands in the queue, and the enacted one is turned away
+    // without a single step running either way.
     const { io, ran } = fakeIo({});
     const { routes, queue } = harness({ io });
-    const r = await call(routes, fakeReq({ body: removeBody() }));
-    expect(r.json.op).toBe("enqueued");
+    const spoken = await call(routes, fakeReq({ body: sessionBody({ actionId: "continue" }) }));
+    expect(spoken.json.op).toBe("enqueued");
+    expect(queue.size("$99001")).toBe(1);
+
+    const enacted = await call(routes, fakeReq({ body: removeBody() }));
+    expect(enacted.status).toBe(400);
+    expect(enacted.json.code).toBe("wrong-mode");
+    expect(String(enacted.json.why)).toContain("dry-run");
     expect(queue.size("$99001")).toBe(1);
     expect(ran).toEqual([]);
   });

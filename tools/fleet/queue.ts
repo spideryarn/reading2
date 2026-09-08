@@ -20,6 +20,10 @@
  *    the queued push had not yet saved. Immediacy is worth less than order, so
  *    everything waits its turn. Killing something RIGHT NOW is deliberately not
  *    this queue's job — cancel the queue and call the action directly.
+ *    **RETRACTED IN PART, 2026-09-08:** a session-scoped *enacted* action is now
+ *    refused at enqueue time, so that ordering guarantee does not currently
+ *    extend to one. The reasoning is on the refusal itself in `enqueueAction`,
+ *    where whoever undoes it will be standing.
  *  - **one at a time**, because two messages delivered into the same input box
  *    in the same second are one message with the halves interleaved.
  *  - **visibility**, because a queue you cannot see is one that surprises you an
@@ -44,10 +48,24 @@
  * From the wide review (A11): "Never auto-retry keystrokes." A retry cannot
  * know whether the first attempt's keys arrived, and a message delivered twice
  * to an agent is worse than one delivered none.
+ *
+ * **THE ONE CASE THAT ARGUMENT DOES NOT COVER, AND IT IS `release`.** The
+ * sentence above turns on the words *cannot know*. `steer.ts` can, sometimes:
+ * `SteerFailure` carries `delivery: "none" | "partial" | "unknown"` and a `sent`
+ * list of the tmux calls that COMPLETED, and `delivery: "none"` with an empty
+ * `sent` is a positive statement that no keystroke left this process — every
+ * refusal in that file that fires before the send says so. Putting such an item
+ * back is therefore not a retry of anything; nothing was tried. It matters
+ * because without it the commonest refusal on this box — the pane started asking
+ * a question in the thirteen seconds since the collection — DESTROYS the
+ * person's instruction, one item per pass, at exactly the moment they most
+ * wanted it delivered. `partial` and `unknown` are the genuinely ambiguous arms
+ * and are still never put back. `release` refuses to be called without the
+ * transport's own word for it: see `nothingWasSent`.
  */
-import { actionById, type Action } from "./actions.js";
+import { actionById, type SpokenAction } from "./actions.js";
 import type { FleetStatus } from "./status.js";
-import { checkText, steerableStatus, type Refusal } from "./steer.js";
+import { checkText, steerableStatus, type Refusal, type SteerFailure } from "./steer.js";
 
 /* ------------------------------------------------------------------ *
  * What can be queued.
@@ -62,7 +80,14 @@ import { checkText, steerableStatus, type Refusal } from "./steer.js";
  * says "do X" and before the one that says "push", and two queues cannot
  * promise that.
  */
-export type QueuedPayload = { kind: "action"; action: Action } | { kind: "message"; text: string };
+/**
+ * **`SpokenAction`, not `Action`, and that is a boundary rather than a
+ * convenience.** An enacted action — `remove-worktree`, `kill-session` — cannot
+ * be REPRESENTED as a queued item, so nothing downstream needs a defensive
+ * branch for one and nobody can add a second way in. See `enqueueAction` for
+ * why the retreat was made and what to delete first when it is reversed.
+ */
+export type QueuedPayload = { kind: "action"; action: SpokenAction } | { kind: "message"; text: string };
 
 export type QueuedItem = {
   /** Stable for the life of the item, and what `cancel` and `settle` name. */
@@ -85,6 +110,21 @@ export type QueuedItem = {
   enqueuedAt: number;
   /** When `next()` handed it out. Null while it is waiting. */
   leasedAt: number | null;
+  /**
+   * Why this can never be delivered, or null. Set by `noteGeneration`.
+   *
+   * A tmux server restart takes every session with it and RE-ISSUES the same
+   * `$…` and `%…` handles to whatever comes next, so an item queued against the
+   * old server names a session that no longer exists — and names it with digits
+   * that now belong to somebody else. There is no per-item field that could
+   * catch that (`claudeSessionId` survives a resume, `panePid` is optional), so
+   * it is caught for the whole queue at once, when the generation changes.
+   *
+   * A SENTENCE RATHER THAN A BOOLEAN, and the item stays in the snapshot
+   * carrying it: the page shows why it will not happen. Deleting the items
+   * would be the quiet loss this file's header is about.
+   */
+  invalidated: string | null;
 };
 
 /* ------------------------------------------------------------------ *
@@ -198,6 +238,54 @@ export function drainGate(status: FleetStatus): DrainGate {
   }
 }
 
+/**
+ * May something be delivered into this session RIGHT NOW?
+ *
+ * **THIS IS A DIFFERENT QUESTION FROM `drainGate`, AND THE DIFFERENCE COST AN
+ * INSTRUCTION.** `steerableStatus` answers "may this session be steered at
+ * all", and `drainGate` is built on it, which is right for what `drainGate` is
+ * for: the enqueue route uses it to refuse an item that could never drain, and
+ * there `needs-you` really is a session you may queue for. Used to decide
+ * whether to hand an item to `sendMessage` it is WRONG, because `sendMessage`
+ * refuses a pane that is showing a dialog (`pane-is-asking`) — so the drain
+ * leased the item, the send refused it, and the person's message was destroyed
+ * at the moment they most wanted it delivered. Found by GPT Sol, 2026-09-08,
+ * before it ever ran.
+ *
+ * So the ONE difference is `needs-you`, and it is `later` rather than `never`:
+ * the agent will stop asking eventually and the instruction should go then.
+ * Refusing it permanently would lose the item just as surely, more slowly.
+ *
+ * Everything else is `drainGate`'s answer, obtained by asking it rather than by
+ * copying its list, so the two cannot drift into disagreeing about a status
+ * neither of them names. tests/fleet-queue.test.ts asserts they agree on every
+ * status except that one.
+ */
+export function deliveryGate(status: FleetStatus): DrainGate {
+  switch (status.kind) {
+    case "needs-you":
+      return {
+        kind: "later",
+        why: "it is asking you a question, and a message typed at a dialog would answer it rather than arrive as a message",
+      };
+    // Written out one per line rather than as a `default`, so an eighth
+    // `FleetStatus` stops this compiling too and somebody decides whether it
+    // may be DELIVERED to — not only whether it may be queued for. The two
+    // questions have already been confused once.
+    case "idle":
+    case "working":
+    case "waiting":
+    case "no-claude":
+    case "shell":
+    case "unknown":
+      return drainGate(status);
+    default: {
+      const never: never = status;
+      return never;
+    }
+  }
+}
+
 /* ------------------------------------------------------------------ *
  * Results.
  * ------------------------------------------------------------------ */
@@ -211,6 +299,8 @@ export type EnqueueRefusalRule =
   | "no-such-action"
   /** A box-wide action does not belong in one session's queue. */
   | "wrong-scope"
+  /** An action that runs commands rather than typing a sentence. Nothing drains those. */
+  | "enacted-not-deliverable"
   | "session-queue-full"
   | "fleet-queue-full"
   /** The same thing, pressed again within the double-tap window. */
@@ -255,6 +345,35 @@ export type NextResult =
 export type SettleOutcome = "delivered" | "refused" | "abandoned";
 
 export type SettleResult = { ok: true; item: QueuedItem; outcome: SettleOutcome } | { ok: false; why: string };
+
+/**
+ * A refusal that PROVABLY sent nothing, and the only thing `release` accepts.
+ *
+ * The intersection is not decoration: `SteerFailure` is not a discriminated
+ * union on `delivery`, so narrowing `f.delivery === "none"` at a call site
+ * narrows the property and NOT the object, and a caller cannot manufacture one
+ * of these by writing an `if`. The only way to obtain the type is
+ * `nothingWasSent`, which is one audited place rather than a rule everybody has
+ * to remember.
+ */
+export type UnsentFailure = SteerFailure & { delivery: "none" };
+
+/**
+ * The transport's own word that no keystroke left this process, or null.
+ *
+ * BOTH HALVES ARE CHECKED, not just the flag. `delivery` is a summary and
+ * `sent` is the evidence — the exact argv of every tmux call that COMPLETED —
+ * and if they ever disagree, the honest reading is the one that assumes
+ * something went out. A `delivery: "none"` with a non-empty `sent` is a bug in
+ * steer.ts, and this returns null for it rather than acting on the summary.
+ */
+export function nothingWasSent(failure: SteerFailure): UnsentFailure | null {
+  if (failure.delivery !== "none") return null;
+  if (failure.sent.length > 0) return null;
+  return failure as UnsentFailure;
+}
+
+export type ReleaseResult = { ok: true; item: QueuedItem } | { ok: false; why: string };
 
 export type CancelResult = { ok: true; item: QueuedItem } | { ok: false; why: string };
 
@@ -306,6 +425,11 @@ export class SteeringQueue {
   private readonly bySession = new Map<string, QueuedItem[]>();
   private seq = 0;
   private readonly startedAt: number;
+  /**
+   * The tmux server every `$…` in this queue belongs to, or null until the
+   * first drain pass tells us. See `noteGeneration`.
+   */
+  private generation: number | null = null;
 
   constructor(options: QueueOptions) {
     this.now = options.now;
@@ -367,6 +491,37 @@ export class SteeringQueue {
       // stagger it against the wrong denominator.
       return { ok: false, rule: "wrong-scope", why: `'${action.id}' is a box-wide action and does not belong in one session's queue` };
     }
+    // WHAT MAY BE QUEUED IS DECIDED HERE, which is why this refusal lives next
+    // to `wrong-scope` rather than in the route: whoever comes to delete it
+    // should find it beside the rule it contradicts — the header's argument,
+    // two paragraphs up, that enacted actions queue *for ordering*.
+    //
+    // That argument is right and this is a retreat from it, recorded rather
+    // than quietly dropped (2026-09-08). Delivering an enacted item means
+    // running a plan of `execFile`s that deletes a directory, from inside the
+    // refresh loop — the one code path whose failure takes the dashboard down
+    // with it — and that surface is the least-reviewed in the tool, which is
+    // exactly why `FLEET_ACT_ENABLED` is off. Ordering across a spoken action
+    // and a destructive one is worth less than not running `git worktree
+    // remove` from an unreviewed loop.
+    //
+    // **UNCONDITIONAL, not gated on that flag.** A refusal conditional on it
+    // would re-create the silent promise the day somebody turns it on: the
+    // queue would start accepting items that still nothing drains. When the
+    // drain learns to run plans, this is the first thing to delete.
+    //
+    // **THE NARROWING IS THE REAL GUARD.** `QueuedPayload` holds a
+    // `SpokenAction`, so this is not one check that could be forgotten
+    // somewhere else: an enacted action cannot be represented as a queued item
+    // at all, and the drain has no branch for one because it cannot compile a
+    // branch for a case that cannot exist.
+    if (action.effect !== "spoken") {
+      return {
+        ok: false,
+        rule: "enacted-not-deliverable",
+        why: `'${action.id}' runs commands on the box rather than typing a sentence, and nothing delivers a queued one — dry-run it to see what it would do, then run it with a confirm`,
+      };
+    }
     return this.push(target, { kind: "action", action });
   }
 
@@ -409,6 +564,13 @@ export class SteeringQueue {
       return { ok: false, rule: "double-tap", why: `the same thing was queued ${at - twin.enqueuedAt}ms ago; press again in a moment if you meant it` };
     }
 
+    // **`q1` COMES ROUND AGAIN EVERY TIME THIS PROCESS RESTARTS**, and nothing
+    // here notices. A phone left open across a restart can therefore cancel —
+    // or, when there is a route for it, settle — a DIFFERENT `q1` from the one
+    // it is showing. That is a real defect and it already applies to `cancel`;
+    // it is noted here rather than fixed because the fix is a per-process
+    // prefix on the id and every caller that stores one, which is somebody
+    // else's stage (GPT Sol, 2026-09-08).
     this.seq += 1;
     const item: QueuedItem = {
       id: `q${this.seq}`,
@@ -417,6 +579,7 @@ export class SteeringQueue {
       payload,
       enqueuedAt: at,
       leasedAt: null,
+      invalidated: null,
     };
     items.push(item);
     this.bySession.set(target.sessionId, items);
@@ -505,6 +668,14 @@ export class SteeringQueue {
     const head = items[0];
     if (!head) return { kind: "empty" };
 
+    // The tmux server this was queued against is gone, so the handle at the top
+    // of this queue names whatever came after it. Reported as `orphaned` — the
+    // same arm as a resumed conversation, because it is the same fact: the
+    // address still resolves and no longer means what it meant.
+    if (head.invalidated !== null) {
+      return { kind: "orphaned", head, why: head.invalidated };
+    }
+
     if (head.claudeSessionId !== ctx.claudeSessionId) {
       return {
         kind: "orphaned",
@@ -521,7 +692,13 @@ export class SteeringQueue {
       };
     }
 
-    const gate = drainGate(ctx.status);
+    // `deliveryGate`, NOT `drainGate`. This function is the one that hands an
+    // item to a transport, so the question it must ask is "can this be
+    // delivered right now", which is strictly narrower than "may this session
+    // be steered at all". The difference is `needs-you`, and the cost of
+    // getting it wrong here is the person's message destroyed rather than
+    // merely delayed — see `deliveryGate`.
+    const gate = deliveryGate(ctx.status);
     if (gate.kind === "never") return { kind: "blocked", head, reason: gate.reason };
     if (gate.kind === "later") return { kind: "held", head, why: gate.why };
 
@@ -546,5 +723,93 @@ export class SteeringQueue {
     }
     items.splice(at, 1);
     return { ok: true, item, outcome };
+  }
+
+  /**
+   * Put a leased item back, because the transport proved it sent nothing.
+   *
+   * **THE ONE HOLE IN "NOTHING IS EVER RETRIED", AND IT IS NOT A RETRY.** The
+   * header's argument is that a retry cannot know whether the first attempt's
+   * keys arrived. `UnsentFailure` is exactly that knowledge, and it can only be
+   * built by `nothingWasSent` out of a `SteerFailure` that says `delivery:
+   * "none"` with an empty `sent` list. Every refusal in steer.ts that fires
+   * before the two `send-keys` calls says so, and the commonest of them on this
+   * box is `pane-is-asking` — the pane started showing a dialog in the thirteen
+   * seconds since the collection. Without this, that refusal DESTROYS the
+   * person's instruction; with it, the item waits for the dialog to be answered.
+   *
+   * It goes back to the HEAD, not the back, because it never left: the order the
+   * person pressed the buttons in is the thing this whole file is for.
+   *
+   * WHAT STOPS IT LOOPING FOR EVER. Nothing, deliberately, except the two bounds
+   * that already exist: one attempt per session per pass, and `maxAgeMs`, after
+   * which it is stale and only a person can re-arm it. An item that cannot be
+   * delivered is therefore tried about twenty-five times over half an hour and
+   * then stops, visibly.
+   */
+  release(sessionId: string, itemId: string, evidence: UnsentFailure): ReleaseResult {
+    const items = this.bySession.get(sessionId);
+    const at = items?.findIndex((i) => i.id === itemId) ?? -1;
+    if (!items || at < 0) return { ok: false, why: `no item ${itemId} for ${sessionId}` };
+    const item = items[at];
+    if (!item) return { ok: false, why: `no item ${itemId} for ${sessionId}` };
+    if (item.leasedAt === null) {
+      return { ok: false, why: `${itemId} was never handed out, so there is nothing to put back` };
+    }
+    // Belt as well as braces: the type says the caller holds the transport's
+    // word for it, and this says so again at the moment of acting. The rule
+    // lives here, and a rule that is only enforced at compile time is one an
+    // `as` somewhere else can walk past.
+    if (evidence.delivery !== "none" || evidence.sent.length > 0) {
+      return { ok: false, why: `${itemId} cannot be put back: the transport did not say that nothing was sent` };
+    }
+    item.leasedAt = null;
+    // It is already at the head — `next()` only ever leases `items[0]` — but
+    // that is an invariant of another function, and this one is cheap.
+    items.splice(at, 1);
+    items.unshift(item);
+    return { ok: true, item };
+  }
+
+  /**
+   * Tell the queue which tmux server the box is running, and invalidate
+   * everything queued against a different one.
+   *
+   * WHY THE WHOLE QUEUE AT ONCE rather than a generation on each item: nothing
+   * per-item would have to be plumbed through the enqueue route, and there is
+   * no case where two items in one process were queued against two different
+   * tmux servers *and* the earlier one is still valid. One comparison, one
+   * sentence, every waiting item marked.
+   *
+   * A leased item is left alone: it is already out of reach of delivery, and
+   * `next()` will report it as in-flight and then stuck for a person.
+   *
+   * Returns how many were invalidated, for the log — silence about thirty-six
+   * items becoming undeliverable would be its own kind of quiet loss.
+   */
+  noteGeneration(tmuxServerPid: number): number {
+    if (this.generation === null) {
+      this.generation = tmuxServerPid;
+      return 0;
+    }
+    if (this.generation === tmuxServerPid) return 0;
+    const was = this.generation;
+    this.generation = tmuxServerPid;
+    let marked = 0;
+    for (const items of this.bySession.values()) {
+      for (const item of items) {
+        if (item.leasedAt !== null || item.invalidated !== null) continue;
+        item.invalidated =
+          `this was queued against tmux server ${was}, and the box is running ${tmuxServerPid} now — ` +
+          "every session handle has been re-issued, so there is no way to know what this would reach";
+        marked += 1;
+      }
+    }
+    return marked;
+  }
+
+  /** Which tmux server this queue's handles belong to, or null before the first pass. */
+  knownGeneration(): number | null {
+    return this.generation;
   }
 }

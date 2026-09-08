@@ -602,6 +602,93 @@ vocabulary check is in place (F62) — because change 1 and change 3 both alter 
 introduces the answer vocabulary, which is precisely the edit that could turn every row `unknown`
 while looking like a success.
 
+### E″ — and then the free evidence said E′ was fixing the wrong thing, 2026-09-08
+
+**E′ above is a prompt repair. The defect is in the schema, and the evidence for that was already on
+disk.** Two crosstabs, both free, both read-only, settle it. The first is over the 26 raw reported
+rows in the three real journalled runs — *real* meaning the `-check` runs are excluded, because those
+replay one synthetic `bakingreview.example` fixture twelve times and a fixture repeated is not
+evidence repeated:
+
+|  | positive | negative | neutral | unknown |
+|---|---|---|---|---|
+| `disputes` | 0 | 12 | 0 | 0 |
+| `qualifies` | 0 | **3** | **4** | 0 |
+| `extends` | 2 | 0 | 0 | 0 |
+| `corroborates` | 5 | 0 | 0 | 0 |
+| `unclear` | 0 | 0 | 0 | 0 |
+
+The second is over the 35 kept rows in `article_revisions.debate`, which is where the three bad rows
+live: `disputes` 9 negative and **2 positive**, `qualifies` 10 neutral, `extends` 5 positive,
+`corroborates` 6 positive and **1 negative**, `unclear` 2 unknown. **The three highlighted cells are
+the three bugs, and they are the only divergences in the entire corpus.**
+
+**So `valence` is two facts wearing one name.** On `disputes`, `corroborates` and `unclear` it is
+*entailed* by `relation` — 0 of 32 real rows where it says anything `relation` had not already said.
+On `qualifies` it is *open*, and the model uses the freedom correctly: `hamtyped` accepts a schedule
+only for cool kitchens and leans against; `windowsontheory` praises parts while questioning others
+and is neither. `extends` is 7 rows, all positive, and sits with the entailed group on thin evidence.
+
+**The docblock's central claim is refuted by the data.** `src/types.ts` says of `DebateRelation`:
+*"Orthogonal to `DebateValence` below, and the two must stay that way."* They were never orthogonal.
+That sentence is what hid the overlap, and it has to go.
+
+#### What this changes about the fix
+
+A wording repair can only lower a rate that a type can set to zero. The three bad rows are
+`disputes`+`positive` and `corroborates`+`negative` — **combinations that are contradictions under
+§ 4's own definition of the two fields**, not judgement calls. So:
+
+> `lean` exists only on the relations where it is open. On the others it cannot be spelled, so the
+> row that produced the red *Critical* chip over a supportive source **does not typecheck**.
+
+Concretely: `relation` keeps its five values; a `lean` rides only on `qualifies` and `extends`; the
+chip is derived for the entailed three and read from `lean` for the open ones. **What the reader sees
+barely moves** — every one of the 32 correct rows draws exactly the chip it draws today, and the
+three wrong ones become impossible. Greg's *"(+1, -1, neutral, unknown)"* chip is untouched.
+
+And the values get renamed from sentiment words to agreement words. That is not cosmetic: Fable's
+reading of the failures is **sentiment collapse** — `positive | negative` is sentiment-analysis
+vocabulary, and the cheapest reading of a passage is its polarity toward *its own* subject. A page
+negative about Geller is negative; that it therefore *agrees with* Feynman is a second hop, and the
+model skipped it. Which also explains why the bug is not stochastic after all: **it is
+article-conditional.** It needs a source population whose own polarity is opposite to its stance
+toward the article — believer pages disputing a sceptic. Feynman has one; the Constitution article
+does not, and scored 0/15. *"3/22, stochastic"* was the wrong frame.
+
+#### Why this is not the derived valence two reviews already refused
+
+F9 refused deriving the icon from `relation`; F35 refused treating an opposite pair as a
+contradiction. Both were about a **rendering** rule that silently overrides a field the model is
+still asked for — a chip that disagrees with the stored data. This is the opposite: the type stops
+asking for a stance where the stance is entailed, so there is nothing to override and nothing to
+disagree with. *Coercion is "the model said positive and we drew red". This is "on `disputes` there
+is no lean field."*
+
+F9's counter-example — an author's own later post correcting their earlier piece — does not survive
+contact with § 4 either. Under the spec's own definition that author **is** negative toward the
+earlier claim. What F9 wanted protected is that the row not read as *hostile*, and that is
+**provenance**, which the same docblock already says must not be folded into `relation`. It was never
+in `valence` to lose.
+
+#### The simpler options passed over
+
+- **E′ alone, the prompt repair.** Keeps a field that is entailed on 32 of 35 rows, and buys a paid
+  sweep to lower a rate a type sets to zero. Its wording changes 2 and 3 are still worth having as
+  free hygiene, so they ride along here; change 1 is superseded.
+- **Delete `valence` entirely.** Removes the bug by construction too, and it was the leading option
+  for about an hour. It loses the one region that carries information to fix a bug in the region that
+  carries none. Rejected on the `qualifies` column above — and it is the fallback if the union proves
+  more disruptive than it looks.
+
+#### And it removes the paid work
+
+This is the part that matters for the cut. The failure class becomes **a compile error, not a rate**,
+so C′'s repetition harness, D′'s hand-labelling and F63's live smoke run are no longer what stands
+between us and the fix. The red-then-green test is the three known packets, replayed free. The
+instruments already built stay — they are what would catch the next regression — but they stop being
+on the critical path.
+
 ### Stage B — the free instrument, and one shipped bug
 
 - `evals/debate/score.ts`: loss-reason table, the contingency table and opposite-pair mark,

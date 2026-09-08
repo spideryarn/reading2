@@ -110,6 +110,19 @@ const REQUIRED_CHECKS = [
   "git core.editor",
   "sshd",
   "password auth",
+  // The two box services, by the checks that carry the actual claim. `enabled`
+  // is true of a systemd USER unit as well, and a user unit does not start at
+  // boot without lingering — so the multi-user.target.wants symlink is the one
+  // that means "this comes back after a reboot", and the ExecStart one is what
+  // stops it pointing into a worktree that `git worktree remove` will delete.
+  "overseer starts at boot",
+  "overseer ExecStart is in the primary checkout",
+  // The dashboard's unit is installed and deliberately NOT enabled — its owner
+  // asked to read it before it is switched on, and the page is up under a tmux
+  // job meanwhile — so there is no boot check to require here. These two are
+  // the ones that would be expensive to discover on the day it is enabled.
+  "fleet dashboard ExecStart is in the primary checkout",
+  "fleet dashboard does not name FLEET_ACT_ENABLED",
 ];
 
 const problems: string[] = [];
