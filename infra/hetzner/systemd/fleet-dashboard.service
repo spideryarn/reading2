@@ -1,0 +1,89 @@
+# The fleet dashboard: the page at :8787 that shows what every agent session on
+# this box is doing. docs/plans/260907e-agent-fleet-dashboard.md.
+#
+# Until 2026-09-08 it ran as a tmux job whose entrypoint was inside a WORKTREE,
+# so `git worktree remove` took the page down and a reboot took it down with the
+# tmux server. Both are why this is a system unit in the primary checkout.
+#
+# INSTALLED BUT NOT ENABLED, on purpose and only for now. The dashboard is up
+# under scripts/tmux-job.ts and its owner asked to read this file before it is
+# ever switched on -- two supervisors on one port is a fight where the loser's
+# failure looks like a crash. `sudo systemctl enable --now fleet-dashboard` once
+# the tmux job is stopped.
+#
+# @USER@ is substituted at install time by infra/hetzner/provision.sh; see the
+# note in overseer.service.
+[Unit]
+Description=Fleet dashboard -- the page showing what every agent session is doing
+Documentation=file:///home/@USER@/code/spideryarn2/docs/project/orchestrator-direction.md
+# tailscaled as well as the network, because FLEET_BIND names a tailnet address
+# as well as loopback, and tools/fleet/server.ts treats a bind it cannot take as
+# FATAL rather than carrying on half-bound.
+After=network-online.target tailscaled.service
+Wants=network-online.target
+
+# Longer and more forgiving than the Overseer's, for one reason: at boot the
+# tailnet address may not exist yet, and every attempt before it does is a
+# legitimate failure to bind. Thirty tries ten seconds apart is five minutes of
+# patience, which is far more than tailscaled needs, and then it gives up
+# loudly instead of restarting for ever.
+StartLimitIntervalSec=900
+StartLimitBurst=30
+
+[Service]
+Type=simple
+User=@USER@
+Group=@USER@
+WorkingDirectory=/home/@USER@/code/spideryarn2
+Environment=HOME=/home/@USER@
+
+# BOTH ADDRESSES, WRITTEN OUT. Loopback alone is the quiet failure: it works
+# perfectly from the box and simply cannot be reached from Greg's phone, which
+# is the only thing the tailnet address is for. So the pair is here rather than
+# only in a file that could be missing.
+#
+# The tension, named rather than hidden: 100.92.255.119 belongs to THIS box, and
+# the next one will have a different one. The env file is how that box corrects
+# it -- provision.sh writes it from `tailscale ip -4` -- and the leading `-`
+# means a box without the file still starts on what is written here.
+Environment=FLEET_BIND=127.0.0.1,100.92.255.119
+EnvironmentFile=-/etc/fleet-dashboard.env
+
+# FLEET_ACT_ENABLED IS DELIBERATELY ABSENT, in every form, including set to
+# false. Enacted actions -- removing a worktree, killing a session -- are gated
+# behind it, and it stays unset until tools/fleet/routes-actions.ts has had a
+# GPT Sol review, which has not happened. A unit that named the variable would
+# be one edit away from enabling it, and a unit file is exactly the sort of file
+# somebody skims and completes.
+
+# BUILD THE CLIENT ONLY WHEN IT IS MISSING. tools/fleet/web/dist is gitignored,
+# so no `git pull` can ever supply it and server.ts exits 2 without it -- a
+# freshly-cloned checkout would otherwise come up dead after every reboot with
+# nobody watching. The test short-circuits on a normal boot.
+#
+# NOT an unconditional rebuild, which was the first proposal: with
+# Restart=always and RestartSec=10 that is a vite build every ten seconds for
+# the length of a crash loop, on a box that has reached load average 391.
+#
+# THE PRICE OF THE `test`, said here so the next person meets the rule rather
+# than the symptom: **deploying a client change to this service means running
+# `npm run build:fleet` in the primary checkout.** A missing build fails loudly;
+# a STALE one does not -- a `dev` that moves tools/fleet/web/ without a rebuild
+# leaves the old bundle in place and this unit serves the old page with no error
+# anywhere. There is no alarm for that, only this line.
+ExecStartPre=/bin/sh -c 'test -f tools/fleet/web/dist/index.html || /usr/bin/npm run build:fleet'
+ExecStart=/home/@USER@/code/spideryarn2/node_modules/.bin/tsx tools/fleet/server.ts
+
+# Room for that build on a loaded box. The default 90s is one contended vite
+# build away from a start that times out and then starts again, building each
+# time.
+TimeoutStartSec=600
+
+# always, not on-failure -- the reasoning is in overseer.service and applies
+# with more force here, because this page is what you look at to find out that
+# something else is wrong.
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
