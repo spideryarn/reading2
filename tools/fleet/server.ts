@@ -27,7 +27,7 @@
  * must not depend on anything under src/ (orchestrator-direction.md § Principles).
  * Worth revisiting if it grows.
  */
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { createServer } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -35,8 +35,14 @@ import { fileURLToPath } from "node:url";
 import { collect, type FleetSnapshot } from "./collect.js";
 import { parseBinds } from "./config.js";
 import { collectHealth, type HealthReport } from "./health.js";
+import { applySecurityHeaders } from "./headers.js";
 import { broadcast, startHeartbeat, subscribe, subscriberCount } from "./live.js";
-import { page } from "./page.js";
+import { newSessionRoutes } from "./routes-new.js";
+import { handleSteerRequest } from "./routes-steer.js";
+import { fleetState } from "./state.js";
+
+/** Where the built React client lives. */
+const DIST = path.join(path.dirname(fileURLToPath(import.meta.url)), "web", "dist");
 
 const PORT = Number(process.env.FLEET_PORT ?? 8787);
 
@@ -55,6 +61,24 @@ if (!parsedBinds.ok) {
   process.exit(2);
 }
 const BINDS = parsedBinds.binds;
+
+/**
+ * REFUSE TO START WITHOUT A BUILT CLIENT.
+ *
+ * There used to be a hand-written HTML page here that rendered the same
+ * snapshot with no build step, and it served as the fallback when `web/dist/`
+ * was missing. Greg removed it on 2026-09-08 — one renderer, not two.
+ *
+ * That leaves a gap worth closing rather than inheriting: without the fallback,
+ * forgetting `npm run build:fleet` means the server starts, logs two cheerful
+ * "fleet on http://…" lines, collects happily, and answers 404 to the only
+ * person who ever visits it. Failing here instead turns a mystery you meet on
+ * your phone into one line in the terminal you started it from.
+ */
+if (!existsSync(path.join(DIST, "index.html"))) {
+  console.error(`✗ no built client at ${DIST} — run \`npm run build:fleet\` first`);
+  process.exit(2);
+}
 
 /**
  * 60s, not 30s. One collection costs ~12s of grepping, so at 30s this process
@@ -76,13 +100,40 @@ let lastError: string | null = null;
  */
 let health: HealthReport | null = null;
 
-/** The wire shape, in one place, so the poll and the stream cannot disagree. */
+/**
+ * The wire shape, in one place, so the poll and the stream cannot disagree.
+ *
+ * The shape itself lives in state.ts, where it can be tested without binding a
+ * port — and where the rule that matters is written down: `collectedAt: null`
+ * means NEVER COLLECTED, and an empty `rows` is only a claim about the box when
+ * `collectedAt` is non-null.
+ */
 function statePayload(): string {
-  return JSON.stringify({
-    ...(snapshot ?? { rows: [], collectedAt: null, tookMs: 0 }),
-    error: lastError,
-    health,
-  });
+  return JSON.stringify(fleetState(snapshot, lastError, health, REFRESH_MS));
+}
+
+/**
+ * The box's vitals, refreshed whatever the fleet collection did.
+ *
+ * IT USED TO BE INSIDE THE SUCCESS BRANCH, and that had it exactly backwards.
+ * A fleet collection fails when the box is in trouble — that is when `tmux`
+ * times out and when the script gets OOM-killed — so the reading that would
+ * *explain* the failure was the one the failure prevented. Greg would have got
+ * "collection failed" next to a health block from before whatever went wrong.
+ * GPT Astra's A17, 2026-09-08.
+ *
+ * Still separately guarded, for the original reason: a health reading that
+ * throws must not cost us the session list. `collectHealth` is built not to
+ * throw — every field of it can say "I could not tell" rather than returning a
+ * zero that reads as healthy — so this catch is for the case where that is
+ * itself wrong.
+ */
+function refreshHealth(): void {
+  try {
+    health = collectHealth({ includeSwapActivity: true });
+  } catch (err) {
+    console.error(`health failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
 }
 
 async function refresh(): Promise<void> {
@@ -94,19 +145,28 @@ async function refresh(): Promise<void> {
         (subscriberCount() ? ` → ${subscriberCount()} live` : ""),
     );
     // Cheap next to the fleet collection (~200ms without the vmstat sample,
-    // which is the one command with a real wait), and separately guarded: a
-    // health reading that throws must not cost us the session list.
-    try {
-      health = collectHealth({ includeSwapActivity: true });
-    } catch (err) {
-      console.error(`health failed: ${err instanceof Error ? err.message : String(err)}`);
-    }
+    // which is the one command with a real wait).
+    refreshHealth();
     broadcast(statePayload());
   } catch (err) {
     // Keep the previous snapshot. The page shows the age, so a stale page is
     // legible; a blank one is a lie that looks like an empty box.
     lastError = err instanceof Error ? err.message : String(err);
     console.error(`collection failed: ${lastError}`);
+    // AND BROADCAST THE FAILURE. This used to return without one, so a stream
+    // subscriber saw nothing at all when a collection failed — silence, which
+    // is exactly what a healthy quiet box looks like. A poller could see
+    // `error` in the payload and a subscriber could not, which is the two
+    // shapes disagreeing after the trouble was taken to build them from one
+    // function. The Overseer (tools/overseer/, another session) consumes this
+    // stream to record fleet history, so a failure it cannot see is a gap in
+    // that history with no explanation in it.
+    //
+    // AND TAKE A HEALTH READING ANYWAY. A collection fails when the box is in
+    // trouble, so this is the moment the vitals are most worth having — and
+    // until 2026-09-08 it was the one moment they were not taken.
+    refreshHealth();
+    broadcast(statePayload());
   }
 }
 
@@ -130,6 +190,15 @@ async function refreshLoop(): Promise<void> {
 function handler(req: import("node:http").IncomingMessage, res: import("node:http").ServerResponse): void {
   const url = req.url ?? "/";
 
+  // BEFORE ANYTHING DECIDES WHAT THE RESPONSE IS. There are five response paths
+  // here and two of them live in modules built by other agents; a header set at
+  // each exit is one that will be missing from the sixth. `setHeader` survives
+  // the `writeHead` those routes do, so they need to know nothing about it.
+  // Why these headers at all: headers.ts, and GPT Astra's A6 — this page is a
+  // privileged renderer of content written by agents processing untrusted input,
+  // and it can now type into those same agents.
+  applySecurityHeaders(res);
+
   // The stream. A new subscriber gets the cached snapshot at once rather than
   // waiting up to a minute for the next refresh, so a phone opening the page is
   // never briefly blank.
@@ -147,25 +216,38 @@ function handler(req: import("node:http").IncomingMessage, res: import("node:htt
     res.end(statePayload());
     return;
   }
-  // The React client, when it has been built.
-  if (serveStatic(url, res)) return;
+  // THE ONLY WRITE PATH IN THIS TOOL: it types into live agent sessions.
+  // Before serveStatic, so that no file which ever lands under web/dist/ can
+  // shadow it — a bundle named `api/steer/message` is absurd and is exactly the
+  // kind of absurdity a build step produces once and nobody notices.
+  //
+  // Everything about whether a keystroke may go out lives in routes-steer.ts
+  // and steer.ts. This line is deliberately the whole of the wiring: the server
+  // must not acquire opinions about steering that the tested modules do not
+  // have, or there will be two places to read and they will diverge.
+  if (handleSteerRequest(req, res)) return;
 
-  // THE HAND-WRITTEN PAGE IS THE FALLBACK, and it stays for that reason.
-  // `web/dist/` only exists after `npm run build:fleet`, and a dashboard that
-  // answers 404 because somebody forgot a build step is a dashboard that is
-  // down at the moment you reach for it. This renders from the same snapshot,
-  // needs no build, and says less — which is the right way to be degraded.
-  if (url === "/" || url.startsWith("/?")) {
-    res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
-    res.end(page(snapshot, lastError));
+  // Starting a session, which is the other write. `startsWith` mounts it, but
+  // the route 404s any path that is not exactly this one, so the prefix cannot
+  // quietly widen into `/api/sessions/new/../…`.
+  //
+  // `void` because `handle` is async and never rejects — it catches its own
+  // failures and answers 500. An unhandled rejection here would be a request
+  // that hangs until the client gives up, which on a phone is indistinguishable
+  // from the box being down.
+  if (url.startsWith("/api/sessions/new")) {
+    void newSessionRoutes().handle(req, res);
     return;
   }
+
+  // The React client. There is no second renderer behind it — see the startup
+  // check below, which is what replaced one.
+  if (serveStatic(url, res)) return;
 
   res.writeHead(404, { "content-type": "text/plain" });
   res.end("not found\n");
 }
 
-const DIST = path.join(path.dirname(fileURLToPath(import.meta.url)), "web", "dist");
 
 const TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8",

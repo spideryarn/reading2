@@ -97,6 +97,17 @@ Three things worth carrying to whatever is built next:
   [`styles/dock-fit.css`](../../src/web/styles/dock-fit.css) § the bar's fit ladder, and
   [260902k](../plans/260902k-the-bottom-bar-measures-its-own-fit.md) for the shape of the argument.
   A breakpoint is right when the *window* is what changed; this bar keeps growing instead.
+- **`.controls` is usually not there at all**, since 2026-09-08. What is left in it is Hierarchy's
+  granularity pills and a visitor's read-only chip, so on every other reading view it was 44px of
+  nothing — held on screen in a band mode by the guard below, which is how a reader came to report
+  it. `Reader` draws it only when `barHasContent` ([`src/web/layout.ts`](../../src/web/layout.ts))
+  says there is something to put in it, and `:root:not(:has(:where(.reader) > .controls))` in
+  [`styles/shell.css`](../../src/web/styles/shell.css) then lets `--bar-bottom` fall to the status-bar
+  inset. Two things follow that will catch you out: **`.controls` is not a safe thing to
+  `querySelector`** — an author's prose may contain one and the sanitiser keeps it, so ask
+  `controlsBar()` in [`src/web/scroll.ts`](../../src/web/scroll.ts) — and every rule keyed on the
+  bar's *presence* now has a state where it is absent.
+  [260908a](../plans/260908a-the-top-bar-stops-being-drawn-when-it-has-nothing-in-it.md).
 - **`.controls` moves by `transform`; everything under it moves by `top`.** A bullet here used to
   say a transform on that bar computed to identity and could not be used. That was wrong, and it was
   wrong for the reason [browser-testing.md § a hidden tab](browser-testing.md) now describes: a CSS
@@ -114,6 +125,58 @@ Three things worth carrying to whatever is built next:
 
 The full account, including what the measuring harness cannot see, is
 [docs/plans/260827t-mobile-reading-view.md](../plans/260827t-mobile-reading-view.md).
+
+## What a control owes a finger
+
+`narrow-window.css` § **a coarse pointer** is where a control's size for a finger is decided, and
+until 2026-09-08 it had reached the bottom bar and one footnote link and **nothing inside a mode
+band** — because Greg was pointing at the bottom bar when he asked for it:
+
+> Also, make our button-bar at the bottom a bit easier to press, e.g. bigger buttons, slightly more
+> spaced out.
+>
+> — Greg, 2026-08-28
+
+The only other control it ever reached is the footnote's *back to your place* link
+(`footnotes.css` § a coarse pointer, 2026-09-06, 44px). Everything in a mode band was whatever
+height its text happened to be. The order rows in the glossary and quotes bands were **23px**, and
+64% of a row's own box was not on a button. That is
+what SPIDERYARN-READING2-2J was reported against
+([260908a](../plans/260908a-glossary-order-button-not-clickable-on-touch.md) — which is also honest
+that the incident was never reproduced, and that a floor is not a diagnosis).
+
+Two rules now live there beside the dock's, and both are floors rather than fixes:
+
+- **40px minimum on the two order rows**, the same number the dock's buttons answer to — Apple's
+  44pt less the hairline a neighbour shares.
+- **16px minimum on every text field**, in its own section (§ a field iOS zooms into) and under
+  **`any-pointer: coarse`** rather than `pointer: coarse`. iOS Safari zooms the whole page in when a
+  field under 16px takes focus and does not zoom back out, and every piece of this app's chrome is
+  `position: fixed` against a viewport the reader can then no longer see all of. The usual counter is
+  `maximum-scale=1` on the viewport meta, and it is not available here: it would take pinch-zoom off
+  the article. So the field moves instead — and it moves for any device with a touchscreen, because
+  one point of type is not the chrome the paragraph above is rationing, and an iPad with a Magic
+  Keyboard reports `pointer: fine` while its reader still taps the glass.
+
+  Two things about that rule are load-bearing rather than decorative. **It lists the types that
+  raise a keyboard rather than excluding the ones that do not** — the negative version reached the
+  feedback dialog's visible `type="file"` picker, a control with no keyboard and nothing to zoom.
+  And **it carries a `:root` for specificity**, said out loud rather than hidden: the fields are
+  styled by classes, `.remember .chat-input` is two of them, and a rule that loses is
+  indistinguishable from one that wins anywhere but a rendered page. This rule shipped broken twice
+  on exactly that, and a browser caught it both times while the suite stayed green.
+
+  **The utilities layer is out of reach from it.** `@layer theme, base, app, utilities` puts every
+  `tw:` class after the stylesheets, so the four Tailwind-styled fields — sign-in's email and
+  password, the shelf's search, Add URL, and the library's in-place title editor — carry
+  `tw:any-pointer-coarse:text-base` at their own call sites.
+
+[`tests/touch-controls.test.ts`](../../tests/touch-controls.test.ts) holds both, and says in its own
+header what a text scanner can and cannot prove about whether a finger lands on a button.
+
+**The band's other controls have not had this treatment**: the threshold slider is 16px tall, and
+half a dozen buttons in the glossary band are between 19 and 28. The floor went to the control that
+was reported, not to the band.
 
 ## The screen is bigger than the window: `env(safe-area-inset-*)`
 

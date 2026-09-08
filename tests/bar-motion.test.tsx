@@ -108,13 +108,27 @@ function poseTable(): void {
   document.body.append(table);
 }
 
-/** A `.controls` that never fires `transitionend` — the latching case. */
+/**
+ * A `.controls` that never fires `transitionend` — the latching case.
+ *
+ * **Inside a `.reader`, and as its direct child.** `watchBarVisibility` finds
+ * the bar through `controlsBar()` (scroll.ts) rather than through a bare
+ * `document.querySelector(".controls")`, because since 2026-09-08 the bar is
+ * not always drawn and an unscoped query then finds an author's own
+ * `<p class="controls">`. A fixture appended to `<body>`, as this was until
+ * then, is a bar the code under test cannot see — and the two cases here would
+ * have gone on asserting about a `transitionend` listener that was never
+ * attached to anything.
+ */
 function poseSilentBar(): HTMLElement {
+  const reader = document.createElement("div");
+  reader.className = "reader";
   const bar = document.createElement("div");
   bar.className = "controls";
   bar.getBoundingClientRect = () =>
     ({ top: 0, bottom: BAR_H, left: 0, right: 1440, width: 1440, height: BAR_H }) as DOMRect;
-  document.body.append(bar);
+  reader.append(bar);
+  document.body.append(reader);
   return bar;
 }
 
