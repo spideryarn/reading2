@@ -2840,6 +2840,13 @@ const rawPgArticleReader: ArticleReader = {
            No `bytes`: there are no files here, and a row count or a jsonb
            length would be a different measurement wearing the same label. */
         ranAt: run?.finishedAt?.toISOString() ?? null,
+        /* **The start of the same run, and it is not the fallback above.** The
+           refusal is about `ranAt`; this is its own field, sent so the page can
+           subtract, and it is `null` on its own rather than standing in for a
+           missing finish. `beginStepRun` writes the two together and
+           `finishStepRun` only closes a row it holds, so they cannot come from
+           two different runs — src/types.ts § `StageState.startedAt`. */
+        startedAt: run?.startedAt?.toISOString() ?? null,
         bytes: null,
       };
     });
