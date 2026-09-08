@@ -1,0 +1,67 @@
+{
+  "cachedUsageUtilization": {
+    "fetchedAtMs": 1788865920000,
+    "accountUuid": "0f5e9c11-1111-4111-8111-000000000001",
+    "utilization": {
+      "five_hour": {
+        "utilization": 70,
+        "resets_at": "2026-09-08T11:33:00.000000+00:00",
+        "limit_dollars": null,
+        "used_dollars": null,
+        "remaining_dollars": null,
+        "locked_reason": null
+      },
+      "seven_day": {
+        "utilization": 22,
+        "resets_at": "2026-09-15T04:59:59.790550+00:00",
+        "limit_dollars": null,
+        "used_dollars": null,
+        "remaining_dollars": null,
+        "locked_reason": null
+      },
+      "seven_day_opus": null,
+      "nimbus_quill": {
+        "utilization": 0,
+        "resets_at": null,
+        "limit_dollars": null,
+        "used_dollars": null,
+        "remaining_dollars": null,
+        "locked_reason": null
+      },
+      "extra_usage": {
+        "is_enabled": false,
+        "monthly_limit": null,
+        "used_credits": null,
+        "utilization": null,
+        "currency": null,
+        "decimal_places": null,
+        "disabled_reason": null,
+        "user_disabled": false,
+        "spend_limit_reached": false,
+        "credits_ever_enabled": false,
+        "daily": null,
+        "weekly": null
+      },
+      "limits": [
+        {
+          "kind": "session",
+          "group": "session",
+          "percent": 70,
+          "severity": "normal",
+          "resets_at": "2026-09-08T11:33:00.000000+00:00",
+          "scope": null,
+          "is_active": true
+        }
+      ]
+    }
+  },
+  "oauthAccount": {
+    "accountUuid": "0f5e9c11-1111-4111-8111-000000000001",
+    "emailAddress": "greg@rehearsable.ai",
+    "organizationUuid": "0f5e9c11-2222-4222-8222-000000000002",
+    "organizationName": "greg@rehearsable.ai's Organization",
+    "organizationType": "claude_max",
+    "organizationRateLimitTier": "default_claude_max_20x",
+    "userRateLimitTier": null
+  }
+}

@@ -162,6 +162,159 @@ test that feeds it an expired `resets_at` and watches it refuse. And a **positiv
 that finds no 429s anywhere must be distinguishable from a probe that is broken
 ([silent-success.md](../reusable/silent-success.md)).
 
+#### What landed (2026-09-08, `w2-usage-limits`)
+
+- **`tools/overseer/usage.ts`** — pure parsers plus one collector, in `health.ts`'s shape. Every
+  reading has an `unknown` arm carrying `why` in a person's words.
+- **Every type that a renderer sees is declared in `tools/fleet/wire.ts`**, not here, and imported
+  back — the seam owner (`claude-agents-dashboard`) asked for the field names before it built its
+  FleetStatus arm, and got them. `usage.ts` keeps only the runtime values (`KNOWN_USAGE_WINDOWS`,
+  `isKnownUsageWindow`), because wire.ts may hold none.
+- **`tests/overseer-usage.test.ts`**, 90 tests, against real 429 records lifted out of real
+  transcripts on this box. Plus **three mutation passes**: the finished code was broken 22 ways, one
+  at a time, and every one now turns the suite red. The first pass is the one worth remembering —
+  **seven of round 1's ten fixes had no test at all**, so the code was right and nothing would have
+  noticed it going wrong again. (The tests were written after the implementation, not red-first; the
+  mutation passes are the substitute and they are in the review prompts.)
+- **`npx tsx scripts/overseer.ts usage [--since-hours N] [--json]`** — a subcommand on the existing
+  CLI rather than a second one. It prints the positive control on every run, including when the
+  answer is "none".
+
+**Four things the plan did not know, in descending order of how much they matter:**
+
+1. **A transcript 429 carries no account id, and this box holds rejections from accounts that are no
+   longer logged in.** Found by running the collector against the live box, not by reading. 27
+   `seven_day` rejections from 2026-09-07 all recorded `resetsAt` 2026-09-12T18:00Z while the
+   logged-in account's cache said its `seven_day` window was 22% used and resets
+   2026-09-15T04:59Z — so the first honest-looking version reported **LIMITED for an account with
+   78% of its week left**. **This is the cost of "record the account and build no rotation" being
+   cheaper than it looked**: recording the account is not enough when the ground-truth source does
+   not record it too.
+
+   The repair went through **three** versions, and the third is the lesson. The first set such a
+   rejection aside as "another account's" and reported `ok`. GPT Sol refused it — *"cache
+   disagreement is not proof that a rejection belongs to another account"* — and it was right: the
+   contradiction is certain, but which of the two observations is foreign is not, and these are
+   undocumented fields with no stability contract. So the second **raises an ambiguity rather than
+   making an attribution**: `unknown`, never `ok`, with both observations and the previous-account
+   explanation named as likely. Turning an ambiguity into a confident negative is the same defect as
+   a zero reading as healthy, approached from the other side — worth saying out loud, because the
+   first version was written by someone (me) who had spent all day guarding the other direction and
+   did not notice.
+
+   **And the second version then re-made the same mistake one level down.** It implemented the
+   ambiguity with a function returning `null` for both *"the two observations agree"* and *"the
+   comparison was impossible"*, and both callers read `null` as a live rejection — so an
+   unattributable rejection was promoted to `limited`, and **a test written an hour after fixing the
+   identical error one level up defended it**. Sol's round 2 found it. Understanding a principle,
+   having just applied it, and having written it down, is not protection against violating it in the
+   next function.
+
+   The precondition is now the strict one: `attributeCache` requires the account to be readable, both
+   `accountUuid`s to be non-null and equal, the cache to have been fetched *after* the rejection, and
+   `auth status.orgId` to agree with `.oauthAccount.organizationUuid`. "Not proven to be somebody
+   else's" is not "proven to be ours".
+2. **There are ~1,770 transcripts and 2.9 GB of them, not ~80.** A full-history scan is 875k lines
+   and finds 140 rejections in exactly three record shapes. **The default window is 8 days and the
+   full scan is 30-45s**, which is deliberate: it was 24h (~240 files, ~570 MB, 2-10s) until GPT Sol
+   pointed out that an unexpired `seven_day` rejection two days old sits in a file a 24h window
+   excludes, so the scan returned `none` and the verdict `ok` for an account that was in fact
+   limited. A cheap answer that can be wrong in the calm direction is the thing this stage exists to
+   refuse. A chunked buffer search rather than `readline` is what keeps even that affordable —
+   9.9s → 1.8s on identical input, because only a line carrying a marker is ever turned into a
+   string.
+
+   **The same scan, on the same code, took 1.8s and then 9.7s two hours apart** — a 5x spread that
+   is entirely box load, not the scan. Record it as a measurement about *the box*: this project has
+   twice made a design decision from a timing taken on a quiet machine, and a number from here
+   carries a range or it carries nothing. It is also why the dashboard reads a published report
+   rather than calling `scanForRateLimits` on its own 73-second refresh loop.
+
+   **An incremental scan was proposed and withdrawn**, and the reasoning is worth keeping because it
+   will be proposed again. A full pass is 30-45s; the incremental version needs per-file byte offsets
+   (not an mtime watermark — a transcript is appended to constantly, so "files whose mtime moved" is
+   nearly every active file every pass and the saving evaporates), rewrite detection, carry-forward
+   expiry, and a new class of bug where the store's memory and the filesystem disagree. Nobody had
+   measured the cost it was meant to avoid. Simplest version first: full scan on a slow timer.
+   **The precondition if it is ever built** — transcripts appear to be append-only, but that is *no
+   counter-evidence*, not *proven*: 42 active files hashed over ten minutes on one box and one Claude
+   Code version, 0 shrank and 0 prefixes changed, and 0 of 1,772 files end without a trailing
+   newline. Anything built on it needs two cheap invariants that would notice otherwise — size never
+   decreasing, and the byte at the stored offset still being a newline.
+
+   **What the store keeps instead is memory, not speed.** A `seven_day` rejection found at 13:00 and
+   resetting on Friday is still in force at 13:05 even if the 13:05 scan fell over; without memory a
+   failed scan degrades an honest report from "limited until Friday, last confirmed 13:00" to "cannot
+   tell". The collector reports what *this* scan found, including that it was incomplete; the store
+   remembers what has not yet expired. A carry-forward needs a stable key for a rejection, and
+   `RateLimitHit` has no id: `transcriptPath` + `hitAtMs` + `window` is the natural one, since a
+   transcript never holds two rejections for the same window in the same millisecond.
+3. **A transcript can vanish between `readdir` and `open`.** It killed the first survey outright.
+   Counted in `ScanCoverage.transcriptsUnreadable`, never fatal.
+4. **The cache's window list is not two entries.** Alongside `five_hour` and `seven_day` it carries
+   rotating per-model codenames (`nimbus_quill`, `spend`, `seven_day_opus`) — some with
+   `utilization: 0` and `resets_at: null`, one (`member_dashboard_available`) not an object at all.
+   A `0` with no `resets_at` to validate it is reported `unknown`, never as headroom, and the window
+   name is an open `string` so a closed union cannot compile an exhaustive switch that drops a real
+   window.
+
+**Two rounds of GPT Sol, nineteen findings, all accepted.** No P0s in either round. Round 1 found
+seven P1s and three P2s; round 2, on the fixed code, found five more P1s and four P2s. What is worth
+recording is not the count but that **round 2's biggest finding was the round-1 fix re-making its own
+mistake one level down**: `contradictsCachedWindow` returned `null` for both *"the two observations
+agree"* and *"the comparison was impossible"*, and both callers read `null` as a live rejection — so
+an unattributable rejection was promoted to `limited`, and **a test written in round 1 pinned that
+wrong answer**. Understanding a principle and having written it down an hour earlier is not
+protection against violating it in the next function. There is now a three-armed `classifyHit`
+(`ours` / `contradicted` / `cannot-attribute`) and only a positive confirmation can set `limited`.
+
+The other round-2 findings in one line each: an incomplete scan may no longer name *which* rejection
+binds (`activeLimit` is null while `level` stays `limited`); an unterminated final line is validated
+as JSON even without a marker; a `quotaLimits` saying `rejected` with no outer signal is malformed
+rather than benign; a one-sided organisation identity no longer licenses adopting the config's
+`accountUuid`; symlinked transcripts are counted as outside coverage rather than skipped;
+`--max-transcripts` must be a whole number; the same-window tolerance is 1s, which is what the
+formats justify, not the 5s I had argued for.
+
+The generalisation, which the dashboard session wrote better than I did: **a function returning
+`null` for both "no" and "could not ask" is the same defect as a type with one slot for two facts,
+and it is harder to see because it looks like an absence rather than a collapse.**
+
+And its twin, from verifying a guard rather than trusting it: **a guard you have seen pass is not
+evidence that it covers your file.** An edit here wrote literal NUL bytes into `usage.ts`; everything
+compiled, every test passed, and `grep` silently returned nothing for every pattern. Told that
+`tests/no-raw-nul-bytes.test.ts` already covers `tools/`, the cheap check is to run it and see green
+— which shows only that the tree is clean. The check that means something is to put a NUL back at a
+known anchor, watch the guard go **red**, and restore in a `finally`. `file <path>` reporting `data`
+rather than `JavaScript source` is the same bug in one command.
+
+**None of the nineteen was found by reading.** Sol found seventeen; a mutation pass found the other
+two, after showing that seven of round 1's ten fixes had no test at all. The recurring lesson is not
+"write better tests" — it is that **a test written from the same misunderstanding as the code is a
+second vote for the bug**. Three instances in one afternoon across this wave, from three sessions:
+this module's `contradictsCachedWindow` (two values for three facts, with a test pinning the wrong
+answer), `w2-harness-adapter`'s Codex recogniser (missed paid runs, with a test pinning *that* wrong
+answer), and the lock extraction's `EPERM`-is-alive (no test at all, so a mutation left 102 green).
+Two of the suite agreeing with the code because it shared the code's assumption, one of the suite not
+looking — [silent-success.md](../reusable/silent-success.md)'s class, arriving three times in one day
+and caught only by external checks.
+
+**Three claims in this module were guesses until something forced a measurement**, and all three were
+wrong or unfounded:
+
+| the guess, written as fact | what measuring found |
+|---|---|
+| "a live session's final line can be half-written, so unparsed candidates are routine" | **0** unparsed of 267 candidates, and **0** of 1,772 transcripts end without a newline |
+| "adding a name to `KnownUsageWindow` without adding it to the array is a compile error" | it is not; an array only checks one direction. Now a `Record<KnownUsageWindow, true>` |
+| "deleting the null-uuid guard is an equivalent mutant" | equivalent in `kind`, not in `why` — I checked the discriminator and claimed the value |
+
+**Deliberately not done, and it is the half of "done looks like" that is missing**: the usage block
+is **not** written into `current.json`. That means a schema field, a `parseCheckpoint` arm, both
+construction sites in `store.ts`, and a cadence decision in `daemon.ts` about when to pay for a scan
+— all of it inside the store's own design rather than this stage's. The collector is callable and the
+CLI prints it today; wiring it into the checkpoint belongs with whoever owns the store, and the shape
+to add is `usage: UsageReport` from `tools/fleet/wire.ts`.
+
 ### Stage C — the Codex/GPT harness adapter, v1
 
 Half of this exists and was measured: `tools/overseer/work.ts` already recognises `codex exec` in the

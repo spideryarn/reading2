@@ -1,0 +1,7 @@
+{
+  "loggedIn": false,
+  "authMethod": null,
+  "apiProvider": null,
+  "analyticsDisabled": false,
+  "projectsDirectory": "/tmp/scratch-config/projects"
+}

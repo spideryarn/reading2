@@ -1,0 +1,11 @@
+{
+  "loggedIn": true,
+  "authMethod": "claude.ai",
+  "apiProvider": "firstParty",
+  "analyticsDisabled": false,
+  "projectsDirectory": "/home/greg/.claude/projects",
+  "email": "greg@rehearsable.ai",
+  "orgId": "0f5e9c11-2222-4222-8222-000000000002",
+  "orgName": "greg@rehearsable.ai's Organization",
+  "subscriptionType": "max"
+}

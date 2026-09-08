@@ -1,0 +1,13 @@
+{
+  "numStartups": 412,
+  "installMethod": "native",
+  "oauthAccount": {
+    "accountUuid": "0f5e9c11-1111-4111-8111-000000000001",
+    "emailAddress": "greg@rehearsable.ai",
+    "organizationUuid": "0f5e9c11-2222-4222-8222-000000000002",
+    "organizationName": "greg@rehearsable.ai's Organization",
+    "organizationType": "claude_max",
+    "organizationRateLimitTier": "default_claude_max_20x",
+    "userRateLimitTier": null
+  }
+}
