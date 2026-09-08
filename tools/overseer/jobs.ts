@@ -207,28 +207,62 @@ export const DEFINITION_HASH_LENGTH = 12;
  * as the canonical form: its key order follows insertion order, so two objects
  * a reader would call identical can produce two hashes.
  *
- * Adding a field to `JobDefinition` without adding it here is the failure this
- * is exposed to; the destructure below is exhaustive so the compiler says so.
+ * Adding a field to `JobDefinition` without adding it to `DEFINITION_ENCODERS`
+ * is the failure this is exposed to, and the mapped type there is what makes the
+ * compiler say so.
  */
 export function definitionHash(definition: JobDefinition): DefinitionHash {
-  const { id, everyMs, leaseMs, what, documents, work } = definition;
-  const canonical = [
-    `id:${id.length}:${id}`,
-    `everyMs:${everyMs}`,
-    `leaseMs:${leaseMs}`,
-    `what:${what.length}:${what}`,
-    // THE WORK, INCLUDING EVERY KNOB OF A RULE. GPT Sol's SP-1: without this a
-    // rule's threshold or its chosen action could move while the pin that
-    // authorised it stayed valid, which is gate 3's prohibition wearing the
-    // clothes of an implementation detail.
-    canonicalWork(work),
-    // THE COUNT FIRST, then each entry length-prefixed like the strings above:
-    // without the count, a job with one document could hash the same as a job
-    // with two whose paths concatenate to the same bytes.
-    `documents:${documents.length}`,
-    ...documents.map((document) => `document:${document.path.length}:${document.path}:${document.sha256.length}:${document.sha256}`),
-  ].join("\n");
+  const canonical = JOB_DEFINITION_HASHED_FIELDS.map((field) => encodeDefinitionField(definition, field)).join("\n");
   return createHash("sha256").update(canonical, "utf8").digest("hex").slice(0, DEFINITION_HASH_LENGTH) as DefinitionHash;
+}
+
+/**
+ * HOW EACH FIELD IS ENCODED — one entry per field, and the compiler counts them.
+ *
+ * **A destructure would not.** This was `const { id, everyMs, … } = definition`,
+ * and destructuring is not exhaustive in TypeScript: a seventh field on
+ * `JobDefinition` compiles perfectly and never reaches the fingerprint that
+ * authorises the job — GPT Sol's SC-4, and SP-1 by another route. A mapped type
+ * over `keyof JobDefinition` cannot be satisfied by an object literal missing a
+ * key, so **a new field is a compile error until somebody says how it is
+ * hashed**.
+ *
+ * The declaration order is the encoding order and the bytes are unchanged from
+ * the destructured version, deliberately: this refactor re-pinned nothing.
+ */
+const DEFINITION_ENCODERS: { readonly [K in keyof JobDefinition]-?: (value: JobDefinition[K]) => string } = {
+  id: (id) => `id:${id.length}:${id}`,
+  everyMs: (everyMs) => `everyMs:${everyMs}`,
+  leaseMs: (leaseMs) => `leaseMs:${leaseMs}`,
+  what: (what) => `what:${what.length}:${what}`,
+  // THE WORK, INCLUDING EVERY KNOB OF A RULE. GPT Sol's SP-1: without this a
+  // rule's threshold or its chosen action could move while the pin that
+  // authorised it stayed valid, which is gate 3's prohibition wearing the
+  // clothes of an implementation detail.
+  work: (work) => canonicalWork(work),
+  // THE COUNT FIRST, then each entry length-prefixed like the strings above:
+  // without the count, a job with one document could hash the same as a job
+  // with two whose paths concatenate to the same bytes.
+  documents: (documents) =>
+    [
+      `documents:${documents.length}`,
+      ...documents.map((document) => `document:${document.path.length}:${document.path}:${document.sha256.length}:${document.sha256}`),
+    ].join("\n"),
+};
+
+/**
+ * The fields the fingerprint covers, in encoding order.
+ *
+ * Derived from the table rather than typed out, and exported so a test can hold
+ * it against a `JobDefinition`'s own keys — which is what makes reverting to a
+ * destructure a red test rather than a silent loss of coverage.
+ */
+export const JOB_DEFINITION_HASHED_FIELDS = Object.keys(DEFINITION_ENCODERS) as readonly (keyof JobDefinition)[];
+
+/** One field, through its own encoder. The cast is the same known limitation `rules.ts` § encodeRuleField explains, and is sound for the same reason. */
+function encodeDefinitionField<K extends keyof JobDefinition>(definition: JobDefinition, field: K): string {
+  const encode = DEFINITION_ENCODERS[field] as (value: JobDefinition[K]) => string;
+  return encode(definition[field]);
 }
 
 /**

@@ -30,9 +30,10 @@ import { afterEach, describe, expect, test } from "vitest";
 import type { OverseerEvent } from "../tools/overseer/diff.js";
 import { definitionHash, type AuthorisedJob, type JobDefinition, type RuleJobDefinition } from "../tools/overseer/jobs.js";
 import { AUTHORISED_RULE_HASHES, RULE_SOURCES, WEDGED_WORK_MIN_AGE_SECONDS, describeRuleJobs, ruleJobs } from "../tools/overseer/rule-jobs.js";
-import { RULES_ENABLED_VAR, fleetObserver, refusingActor, rulesEnabled, type HttpPost } from "../tools/overseer/rule-work.js";
+import { RULES_ENABLED_VAR, fleetObserver, ruleWork, rulesEnabled, type HttpPost } from "../tools/overseer/rule-work.js";
 import {
   PROPOSAL_MAX_PROCESSES,
+  RULE_SPEC_HASHED_FIELDS,
   canonicalRuleSpec,
   decideRule,
   describeRuleOutcome,
@@ -41,7 +42,7 @@ import {
   type RuleSpec,
   type WedgedProcess,
 } from "../tools/overseer/rules.js";
-import { schedulerTick, type OccurrenceLog, type RuleWork, type SchedulerReport } from "../tools/overseer/scheduler.js";
+import { schedulerTick, type ActingRuleWork, type OccurrenceLog, type ProposingRuleWork, type SchedulerReport } from "../tools/overseer/scheduler.js";
 import { EVENTS_FILE, openStore, type AppendResult, type OverseerStore } from "../tools/overseer/store.js";
 import { schedulerWiring } from "../scripts/overseer.js";
 
@@ -121,9 +122,17 @@ function ruleJob(spec: RuleSpec = SPEC, everyMs = 60_000): AuthorisedJob {
   return { definition, authorisedHash: definitionHash(definition) };
 }
 
-/** A `RuleWork` whose observation the test decides, and which records whether the actor was reached. */
+/**
+ * An ACTING capability whose observation the test decides, and which records
+ * whether the actor was reached.
+ *
+ * The shipped daemon holds nothing like this — `schedulerWiring` supplies only
+ * the proposing half, which has no `act` on it at all (SC-2). Every test below
+ * that reaches an actor has to construct one here, which is the point: the
+ * capability is a thing a caller must go and build.
+ */
 function ruleWorkStub(observation: RuleObservation, outcome: RuleOutcome = { kind: "sent", what: "it was done" }): {
-  work: RuleWork;
+  work: ActingRuleWork;
   acted: string[];
 } {
   const acted: string[] = [];
@@ -205,6 +214,23 @@ describe("rule 2 as arithmetic, with no I/O anywhere near it", () => {
     expect(definitionHash(ruleJob({ ...SPEC, minAgeSeconds: 1 }).definition)).not.toBe(definitionHash(ruleJob().definition));
     expect(definitionHash(ruleJob({ ...SPEC, disposition: "act" }).definition)).not.toBe(definitionHash(ruleJob().definition));
   });
+
+  test("THE FIELD LIST IS THE TYPE'S OWN, so a knob added later cannot sit outside the fingerprint", () => {
+    // GPT Sol's SC-4, and the reason the test above is not enough on its own: it
+    // enumerates TODAY's fields by hand, and the destructure it was written
+    // against is not exhaustive in TypeScript, so a fifth field would compile
+    // perfectly and be silently unhashed — SP-1 reopened by one line.
+    //
+    // This asserts the two halves the mapped type buys. `RULE_SPEC_HASHED_FIELDS`
+    // is derived from the encoder table rather than typed out here, so deleting
+    // the table — reverting to a destructure — takes this test with it.
+    expect([...RULE_SPEC_HASHED_FIELDS].sort()).toEqual(Object.keys(SPEC).sort());
+    // And every field really reaches the bytes, one labelled line each, in the
+    // table's own order. A field with an encoder that dropped it would pass the
+    // check above and fail this one.
+    const labels = canonicalRuleSpec(SPEC).split("\n").map((line) => line.slice(0, line.indexOf(":")));
+    expect(labels).toEqual([...RULE_SPEC_HASHED_FIELDS]);
+  });
 });
 
 describe("the two-phase protocol, under the scheduler", () => {
@@ -237,16 +263,34 @@ describe("the two-phase protocol, under the scheduler", () => {
     expect(second.opening.unreadableLines).toBe(0);
     expect(second.opening.eventsReplayed).toBe(5);
     expect(second.occurrenceHistory.kind).toBe("intact");
-    const events = eventsFrom(root);
+    // **AND THE CONTENTS COME BACK THROUGH `parseEvent`, not through a cast.**
+    // GPT Sol's SC-5: the version of this that read `JSON.parse(line) as
+    // OverseerEvent` proved the branch existed and nothing about what it
+    // produced — a parser that returned an empty `processes`, a different
+    // `matched`, or a rewritten outcome passed it, and `foldEvents` ignores rule
+    // events, so nothing downstream would have noticed either.
+    const events = parsedEvents(second);
     const intended = events.find((e) => e.kind === "rule-intended");
     const settled = events.find((e) => e.kind === "rule-settled");
     if (intended?.kind !== "rule-intended" || settled?.kind !== "rule-settled") throw new Error("the rule events did not survive the round trip");
     expect(intended.ruleId).toBe("wedged-work");
-    expect(intended.finding.processes[0]?.pid).toBe(SPECIMEN.pid);
+    // EVERY NUMBER THE PROPOSAL RESTS ON, off the disk and through the parser —
+    // the denominators as well as the conclusion, because a finding that keeps
+    // only its conclusion cannot be argued with afterwards.
+    expect(intended.finding).toEqual({
+      kind: "wedged-work",
+      policy: "safe-to-kill",
+      minAgeSeconds: SPEC.minAgeSeconds,
+      matched: 1,
+      candidates: 2,
+      scanned: 750,
+      processes: [SPECIMEN],
+    });
+    expect(intended.what).toContain("needs confirm");
     expect(settled.outcome.kind).toBe("proposed");
-    expect(settled.outcome.kind === "proposed" && settled.outcome.what).toContain("needs confirm");
-    // NOTHING WAS TAKEN, and it could not have been: a `propose` spec has no
-    // path to the actor at all.
+    expect(settled.outcome.kind === "proposed" && settled.outcome.what).toBe(intended.what);
+    // NOTHING WAS TAKEN, and it could not have been: a `propose` spec is run by
+    // `runProposingRule`, which is handed no actor at all.
     expect(stub.acted).toEqual([]);
   });
 
@@ -258,7 +302,7 @@ describe("the two-phase protocol, under the scheduler", () => {
     schedulerTick({ definitions: [ruleJob()], store, rules: stub.work, now: clock.now });
     await settle();
     expect(rawKinds(root)).toEqual(["job-occurrence-reserved", "job-occurrence-started", "rule-settled", "job-occurrence-finished"]);
-    const settled = eventsFrom(root).find((e) => e.kind === "rule-settled");
+    const settled = parsedEvents(store).find((e) => e.kind === "rule-settled");
     expect(settled?.kind === "rule-settled" && settled.outcome.kind).toBe("nothing-to-do");
   });
 
@@ -269,7 +313,7 @@ describe("the two-phase protocol, under the scheduler", () => {
     const stub = ruleWorkStub({ kind: "cannot-see", why: "could not reach the fleet API at http://127.0.0.1:8787/api/actions/box: ECONNREFUSED" });
     schedulerTick({ definitions: [ruleJob()], store, rules: stub.work, now: clock.now });
     await settle();
-    const settled = eventsFrom(root).find((e) => e.kind === "rule-settled");
+    const settled = parsedEvents(store).find((e) => e.kind === "rule-settled");
     if (settled?.kind !== "rule-settled") throw new Error("expected a settled event");
     expect(settled.outcome.kind).toBe("refused");
     expect(settled.outcome.kind === "refused" && settled.outcome.why).toContain("could not reach the fleet API");
@@ -281,14 +325,13 @@ describe("the two-phase protocol, under the scheduler", () => {
     const root = tempRoot();
     const clock = fakeClock("2026-09-08T21:00:00.000Z");
     const store = mustOpen(root, clock.now);
-    const work: RuleWork = {
+    const work: ProposingRuleWork = {
       selfPid: 1,
       observe: () => Promise.reject(new Error("socket hang up")),
-      act: async () => ({ kind: "sent", what: "no" }),
     };
     schedulerTick({ definitions: [ruleJob()], store, rules: work, now: clock.now });
     await settle();
-    const settled = eventsFrom(root).find((e) => e.kind === "rule-settled");
+    const settled = parsedEvents(store).find((e) => e.kind === "rule-settled");
     expect(settled?.kind === "rule-settled" && settled.outcome.kind).toBe("refused");
   });
 
@@ -300,7 +343,7 @@ describe("the two-phase protocol, under the scheduler", () => {
     const real = mustOpen(root, clock.now);
     const refuseFrom = failingAfter(real, 3);
     const stub = ruleWorkStub({ kind: "seen", candidates: [SPECIMEN], scanned: 750 }, { kind: "sent", what: "killed it" });
-    schedulerTick({ definitions: [ruleJob({ ...SPEC, disposition: "act" })], store: refuseFrom, rules: stub.work, now: clock.now });
+    schedulerTick({ definitions: [ruleJob({ ...SPEC, disposition: "act" })], store: refuseFrom, acting: stub.work, now: clock.now });
     await settle();
     expect(stub.acted).toEqual([]);
     // And the run is visibly a failure rather than a quiet success: a rule that
@@ -319,7 +362,7 @@ describe("the two-phase protocol, under the scheduler", () => {
     const clock = fakeClock("2026-09-08T21:00:00.000Z");
     const store = mustOpen(root, clock.now);
     const whenActed: string[][] = [];
-    const work: RuleWork = {
+    const work: ActingRuleWork = {
       selfPid: 1,
       observe: async () => ({ kind: "seen", candidates: [SPECIMEN], scanned: 750 }),
       act: async () => {
@@ -327,11 +370,11 @@ describe("the two-phase protocol, under the scheduler", () => {
         return { kind: "sent", what: "killed 1 process" };
       },
     };
-    schedulerTick({ definitions: [ruleJob({ ...SPEC, disposition: "act" })], store, rules: work, now: clock.now });
+    schedulerTick({ definitions: [ruleJob({ ...SPEC, disposition: "act" })], store, acting: work, now: clock.now });
     await settle();
     expect(whenActed).toHaveLength(1);
     expect(whenActed[0]).toContain("rule-intended");
-    const settled = eventsFrom(root).find((e) => e.kind === "rule-settled");
+    const settled = parsedEvents(store).find((e) => e.kind === "rule-settled");
     expect(settled?.kind === "rule-settled" && settled.outcome.kind).toBe("sent");
   });
 
@@ -339,14 +382,14 @@ describe("the two-phase protocol, under the scheduler", () => {
     const root = tempRoot();
     const clock = fakeClock("2026-09-08T21:00:00.000Z");
     const store = mustOpen(root, clock.now);
-    const work: RuleWork = {
+    const work: ActingRuleWork = {
       selfPid: 1,
       observe: async () => ({ kind: "seen", candidates: [SPECIMEN], scanned: 750 }),
       act: () => Promise.reject(new Error("the route exploded")),
     };
-    schedulerTick({ definitions: [ruleJob({ ...SPEC, disposition: "act" })], store, rules: work, now: clock.now });
+    schedulerTick({ definitions: [ruleJob({ ...SPEC, disposition: "act" })], store, acting: work, now: clock.now });
     await settle();
-    const settled = eventsFrom(root).find((e) => e.kind === "rule-settled");
+    const settled = parsedEvents(store).find((e) => e.kind === "rule-settled");
     expect(settled?.kind === "rule-settled" && settled.outcome.kind).toBe("failed");
   });
 
@@ -356,6 +399,23 @@ describe("the two-phase protocol, under the scheduler", () => {
     const store = mustOpen(root, clock.now);
     const reports = schedulerTick({ definitions: [ruleJob()], store, now: clock.now });
     expect(reports.map((r) => r.kind)).toEqual(["refused"]);
+  });
+
+  test("AN ACTING SPEC MEETS A REFUSAL IN A PROCESS THAT HOLDS ONLY THE LOOKING CAPABILITY", () => {
+    // GPT Sol's SC-2, at the level it actually matters. The old arrangement gave
+    // every rule run an `act` callback and separated them with a runtime
+    // `switch` — *"precisely the conditional boundary the claim said had been
+    // avoided"*. Now the two dispositions are two runners with two capabilities,
+    // so a process handed only `observe` has no actor to reach however the
+    // switch is edited.
+    const root = tempRoot();
+    const clock = fakeClock("2026-09-08T21:00:00.000Z");
+    const store = mustOpen(root, clock.now);
+    const look: ProposingRuleWork = { selfPid: 7, observe: async () => ({ kind: "seen", candidates: [SPECIMEN], scanned: 750 }) };
+    const reports = schedulerTick({ definitions: [ruleJob({ ...SPEC, disposition: "act" })], store, rules: look, now: clock.now });
+    expect(reports.map((r) => r.kind)).toEqual(["refused"]);
+    const refusal = reports[0] as Extract<SchedulerReport, { kind: "refused" }>;
+    expect(refusal.why).toContain("no actor");
   });
 
   test("A DAEMON GIVEN NO SPAWNER CANNOT START A SESSION JOB, however due it is", () => {
@@ -392,6 +452,14 @@ describe("the shipped rule job, and its pin", () => {
     if (job === undefined) throw new Error("expected the wedged-work rule");
     expect(job.definition.id).toBe("wedged-work");
     expect(job.definition.documents.map((d) => d.path)).toEqual([...RULE_SOURCES]);
+    // AND `scheduler.ts` IS ONE OF THEM. It was deliberately left out on the
+    // argument that shared machinery in a tripwire mostly fires falsely; GPT
+    // Sol's SC-2 is that this falls the wrong way, because `scheduler.ts` is
+    // what interprets the hashed `disposition` — so a change bypassing the
+    // switch used to leave the rule's authorised hash perfectly current. The
+    // protocol that decides whether to act is more load-bearing than the
+    // threshold it reads.
+    expect([...RULE_SOURCES]).toContain("tools/overseer/scheduler.ts");
     // GATE 3. Not a comment: the field is hashed, so this is also what stops it
     // being changed quietly.
     expect(job.definition.work.rule.disposition).toBe("propose");
@@ -409,9 +477,14 @@ describe("the shipped rule job, and its pin", () => {
   test("editing the IMPLEMENTATION moves the fingerprint, which is the whole of SP-1", () => {
     const job = ruleJobs(REPO).jobs[0];
     if (job === undefined) throw new Error("expected the wedged-work rule");
+    // THE TAMPERED DIGEST HAS TO DIFFER FROM THE REAL ONE, and the first version
+    // of this only appended a `0` — so it was a no-op, and the test green, for
+    // any file whose digest happened to end in `0`. It did on 2026-09-08, one
+    // edit to `rules.ts` after this was written: a one-in-sixteen test.
+    const flip = (sha: string): string => `${sha.slice(0, -1)}${sha.endsWith("0") ? "1" : "0"}`;
     const tampered = {
       ...job.definition,
-      documents: job.definition.documents.map((d, i) => (i === 0 ? { ...d, sha256: `${d.sha256.slice(0, -1)}0` } : d)),
+      documents: job.definition.documents.map((d, i) => (i === 0 ? { ...d, sha256: flip(d.sha256) } : d)),
     };
     expect(definitionHash(tampered)).not.toBe(definitionHash(job.definition));
   });
@@ -503,21 +576,39 @@ describe("looking at the box, and the actor that refuses", () => {
     }
   });
 
-  test("the shipped actor refuses, and says whose decision it is", async () => {
-    const outcome = await refusingActor()(SPEC, "kill 1 process");
-    expect(outcome.kind).toBe("refused");
-    expect(outcome.kind === "refused" && outcome.why).toContain("Greg");
+  test("THE SHIPPED WIRING CARRIES NO ACTOR AT ALL — there is nothing to refuse with", () => {
+    // This replaces a test that asserted the shipped actor refused politely.
+    // GPT Sol's SC-2 is that a refusing actor is a runtime conditional wearing
+    // the clothes of a boundary; the answer is that the capability is not in
+    // this process. So the assertion is about a missing key rather than a
+    // returned sentence.
+    const work = ruleWork({ baseUrl: "http://127.0.0.1:8787", selfPid: 4242 });
+    expect(Object.hasOwn(work, "observe")).toBe(true);
+    expect(Object.hasOwn(work, "act")).toBe(false);
+    const wired = schedulerWiring({ [RULES_ENABLED_VAR]: "1" }).jobs?.rules;
+    expect(wired === undefined || Object.hasOwn(wired, "act")).toBe(false);
   });
 });
 
-/** Read the log back through the store's own parser. Nothing here trusts a JSON.parse of a line the test itself wrote. */
-function eventsFrom(root: string): OverseerEvent[] {
-  const path = join(root, EVENTS_FILE);
-  if (!existsSync(path)) return [];
-  const lines = readFileSync(path, "utf8").split("\n").filter((line) => line.trim() !== "");
-  const parsed: OverseerEvent[] = [];
-  for (const line of lines) parsed.push(JSON.parse(line) as OverseerEvent);
-  return parsed;
+/**
+ * **Read the log back THROUGH THE STORE'S OWN PARSER.**
+ *
+ * This used to be `JSON.parse(line) as OverseerEvent`, and GPT Sol's SC-5 is
+ * that the cast made the round-trip claim in this file's header false: it proved
+ * the parse branch *existed* — a deleted one shows up as `unreadableLines` when
+ * the store reopens — and nothing at all about whether it parsed *correctly*. A
+ * `parseEvent` that accepted a rule event and returned an empty `processes`, or
+ * a different `matched`, or rewrote the outcome, passed every assertion here,
+ * and `foldEvents` ignores rule events, so nothing else could have caught it.
+ *
+ * `readEvents` is the real reader: the same `parseEvent`, and the same
+ * all-or-nothing refusal, so a corrupted field is a red test rather than a green
+ * one.
+ */
+function parsedEvents(store: OverseerStore): readonly OverseerEvent[] {
+  const read = store.readEvents(0);
+  expect(read.unreadable).toEqual([]);
+  return read.events;
 }
 
 /** A store whose appends land until `failFrom`, and are refused from it on. Copied in shape from overseer-jobs.test.ts, which is where the idiom is explained. */

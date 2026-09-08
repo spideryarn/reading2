@@ -24,22 +24,28 @@
  * exactly as a doc is, so editing it stops the job dispatching until somebody
  * re-pins it.
  *
- * ## Which files, and the one that is deliberately NOT in the list
+ * ## Which files, and the argument that was got wrong once
  *
- * `rules.ts` (what the rule decides) and `rule-work.ts` (how it looks, and the
- * actor that refuses) are in, because between them they are the whole of what
- * this job does that no other job does. Changing `refusingActor` into one that
- * kills would otherwise leave every pin valid, which is SP-1 word for word.
+ * `rules.ts` (what the rule decides) and `rule-work.ts` (how it looks) are in,
+ * because between them they are the whole of what this job does that no other
+ * job does. Turning the observer into something that acted would otherwise
+ * leave every pin valid, which is SP-1 word for word.
  *
- * **`scheduler.ts` is out**, and that is a decision rather than an oversight.
- * It is shared machinery — every job in the daemon goes through it — so pinning
- * it would disarm every rule on an edit that had nothing to do with any rule,
- * and `standing-jobs.ts` already argues at length why a tripwire that mostly
- * fires falsely teaches whoever meets it to re-pin without reading. The line is
- * the same one drawn there: **the files that ARE this job, never the machinery
- * it runs on.** The cost is named: a change to the ordering in `scheduler.ts`
- * disarms nothing. That is accepted because such a change reaches every job
- * rather than this one, so a per-job hash was never what guarded it.
+ * **`scheduler.ts` is in too, and it was left out first time round.** The
+ * argument for leaving it out was `standing-jobs.ts`'s: it is shared machinery,
+ * every job goes through it, and a tripwire that mostly fires falsely teaches
+ * whoever meets it to re-pin without reading. GPT Sol's SC-2 is that the
+ * argument falls the wrong way *here*, because `scheduler.ts` is the code that
+ * **interprets the hashed `disposition`** — so a change that bypassed its
+ * dispatch left the rule's authorised hash perfectly current, and the
+ * fingerprint guarded the threshold while not guarding the thing that decides
+ * whether to act on it. **The protocol that decides whether to act is more
+ * load-bearing than the threshold it reads.**
+ *
+ * The cost is real and is accepted with its eyes open: an edit to the sweep, or
+ * to a report's wording, disarms every rule until somebody re-pins. That is the
+ * price of the guarantee, and `npx tsx scripts/overseer-pins.ts` prints the
+ * number to copy.
  */
 import { definitionHash, type AuthorisedRuleJob, type DefinitionHash, type JobDocument, type RuleJobDefinition } from "./jobs.js";
 import type { RuleId, RuleSpec } from "./rules.js";
@@ -89,21 +95,31 @@ export const RULE_LEASE_MS = 2 * 60_000;
 export const WEDGED_WORK_WHAT =
   "Propose, and never take, kills for work wedged on this box: the dashboard's own safe-kill dry run, filtered by age.";
 
-/** The implementation this job's authority covers. See the header for why these two and not `scheduler.ts`. */
-export const RULE_SOURCES = ["tools/overseer/rules.ts", "tools/overseer/rule-work.ts"] as const;
+/** The implementation this job's authority covers. See the header for why `scheduler.ts` is one of them, and why leaving it out was wrong. */
+export const RULE_SOURCES = ["tools/overseer/rules.ts", "tools/overseer/rule-work.ts", "tools/overseer/scheduler.ts"] as const;
 
 export type RuleJobId = RuleId;
 
 /**
  * THE AUTHORISED FINGERPRINTS.
  *
- * Pinned 2026-09-08, against `rules.ts` and `rule-work.ts` as they stood when
- * stage 3a landed. Editing either of those files, or any knob in the spec
- * below, moves this and the job stops dispatching until somebody has read what
- * changed and copied the new hash. `overseer status` prints it.
+ * Re-pinned 2026-09-08 against `rules.ts`, `rule-work.ts` and `scheduler.ts` as
+ * they stood after GPT Sol's code review of stage 3a: `210968a360b9` →
+ * `6a62bed1e623`. **Nothing the rule decides changed.** Three things moved it,
+ * and all three are the mechanism working: `scheduler.ts` joined the pinned
+ * documents (SC-2), `rule-work.ts` lost its actor so the shipped process holds
+ * no acting capability (SC-2), and `rules.ts` encodes the spec through a mapped
+ * type instead of a destructure, which relabelled the first line of the
+ * canonical form (SC-4). The standing jobs did NOT move — the definition
+ * encoding is byte-identical to the destructured one.
+ *
+ * Editing any of those files, or any knob in the spec below, moves this again
+ * and the job stops dispatching until somebody has read what changed and copied
+ * the new hash. `npx tsx scripts/overseer-pins.ts` prints it, and
+ * `overseer status` says when it is stale.
  */
 export const AUTHORISED_RULE_HASHES: Readonly<Record<RuleJobId, string>> = {
-  "wedged-work": "210968a360b9",
+  "wedged-work": "6a62bed1e623",
 };
 
 /** The spec, as it is authorised. Every knob, and `disposition: "propose"` is the one gate 3 turns on. */
@@ -111,9 +127,11 @@ export const WEDGED_WORK_SPEC: RuleSpec = {
   kind: "wedged-work",
   minAgeSeconds: WEDGED_WORK_MIN_AGE_SECONDS,
   policy: "safe-to-kill",
-  // NEVER `"act"`. `scheduler.ts` has no path from this arm to an actor, so the
-  // rule cannot kill; and because this field is hashed, changing it is not a
-  // quiet edit — the job refuses to dispatch until it is re-pinned.
+  // NEVER `"act"`. This arm selects `runProposingRule`, which is handed a
+  // capability with no actor on it — and changing the field to `"act"` selects a
+  // runner whose capability no shipped wiring supplies, so it would meet a
+  // refusal rather than a kill. And because the field is hashed, changing it is
+  // not a quiet edit: the job refuses to dispatch until it is re-pinned.
   disposition: "propose",
 };
 

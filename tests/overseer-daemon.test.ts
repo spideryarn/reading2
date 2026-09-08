@@ -853,6 +853,100 @@ describe("the scheduler on the daemon's clock", () => {
     expect(read.checkpoint.jobs.occurrences.length).toBeGreaterThan(0);
   });
 
+  /** The scheduler's own events, in order — the session ones the fixture also produces are another describe's business. */
+  const scheduledKinds = (events: readonly OverseerEvent[]): string[] =>
+    events.map((event) => event.kind).filter((kind) => kind.startsWith("job-occurrence") || kind.startsWith("rule-"));
+
+  /** A rule job, pinned to its own fingerprint. The shipped pin lives in `rule-jobs.ts` and is tested in overseer-rules.test.ts; this file is about the daemon's timers. */
+  const RULE: JobDefinition = {
+    id: "wedged-work",
+    everyMs: 60_000,
+    leaseMs: 120_000,
+    what: "propose kills for wedged work",
+    documents: [],
+    work: { kind: "rule", rule: { kind: "wedged-work", minAgeSeconds: 4 * 3600, policy: "safe-to-kill", disposition: "propose" } },
+  };
+  const RULE_AUTHORISED: AuthorisedJob = { definition: RULE, authorisedHash: definitionHash(RULE) };
+
+  test("A RULE STILL LOOKING WHEN THE DAEMON STOPS IS WAITED FOR, so its settlement is not lost", async () => {
+    // GPT Sol's SC-1, the half that bites today. `runProposingRule` returns a hot
+    // promise and the daemon used to neither retain nor await it, on a comment
+    // saying every scheduled job is a separate process — which is true of a
+    // session and false of a rule, because a rule runs INSIDE the daemon.
+    //
+    // So an orderly shutdown closed the store while `observe` was still in
+    // flight, and `rule-settled` and `job-occurrence-finished` were then written
+    // to a closed store and lost — leaving a `started` occurrence with no
+    // ending, which the next boot reads as an unaccountable run. Nothing has
+    // acted, so nothing is dangerous; it manufactures exactly the noise the
+    // occurrence ledger exists to make meaningful.
+    const root = tempRoot();
+    let look: (() => void) | null = null;
+    const { events } = await run(
+      root,
+      async function* () {
+        yield payload(fixture("session-new-before"));
+        // Long enough for the jobs ticker to dispatch and for `observe` to be
+        // called; the source then ENDS with the rule still looking.
+        await sleep(40);
+        look?.();
+      },
+      {
+        jobs: {
+          intervalMs: 5,
+          definitions: [RULE_AUTHORISED],
+          rules: {
+            selfPid: 4242,
+            // Settles only when the source says so, which is the instant before
+            // the daemon starts shutting down.
+            observe: () =>
+              new Promise((resolve) => {
+                look = () => resolve({ kind: "seen", candidates: [], scanned: 750 });
+              }),
+          },
+        },
+      },
+    );
+    // BOTH ENDINGS ARE ON THE DISK. Without the wait the run stops at
+    // `rule-settled` — the completion append lands on a closed store, throws an
+    // unhandled rejection out of a promise nobody is holding, and the occurrence
+    // is unaccountable for ever.
+    expect(scheduledKinds(events)).toEqual(["job-occurrence-reserved", "job-occurrence-started", "rule-settled", "job-occurrence-finished"]);
+  });
+
+  test("A RULE THAT NEVER SETTLES CANNOT HOLD SHUTDOWN OPEN, and the giving up is written down", async () => {
+    // The bound on the wait above, and the other half of SC-1's live part: an
+    // unbounded await would turn a hung observer into a daemon that cannot be
+    // restarted, which is a worse failure than the one being fixed. The give-up
+    // is its own durable note rather than a silent timeout, because a shutdown
+    // that abandoned a run and said nothing is the shape of every bug in this
+    // area.
+    const root = tempRoot();
+    const { notes, events } = await run(
+      root,
+      async function* () {
+        yield payload(fixture("session-new-before"));
+        await sleep(40);
+      },
+      {
+        jobs: {
+          intervalMs: 5,
+          // Short enough that the test is quick; the shipped one is measured in
+          // seconds against a ten-second observer timeout.
+          settleGraceMs: 20,
+          definitions: [RULE_AUTHORISED],
+          rules: { selfPid: 4242, observe: () => new Promise(() => undefined) },
+        },
+      },
+    );
+    expect(scheduledKinds(events)).toEqual(["job-occurrence-reserved", "job-occurrence-started"]);
+    const lost = notes.filter((note) => note.kind === "job-record-lost");
+    expect(lost.length).toBe(1);
+    expect(lost[0]?.kind === "job-record-lost" && lost[0].jobId).toBe("wedged-work");
+    expect(lost[0]?.kind === "job-record-lost" && lost[0].fact).toBe("finished");
+    expect(lost[0]?.kind === "job-record-lost" && lost[0].why).toContain("still running when the daemon stopped");
+  });
+
   test("a daemon given no jobs writes no occurrences at all", async () => {
     // The option is absent in every other test in this file, so this asserts
     // what those tests silently rely on — and it is the check that would catch a

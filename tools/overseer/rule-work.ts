@@ -3,9 +3,8 @@
  * to do about what it sees.**
  *
  * `rules.ts` is the arithmetic and `scheduler.ts` is the ordering. This file is
- * the two functions those two are given — and both are deliberately small,
- * because everything a person would want to argue with afterwards is in the
- * pure half.
+ * the one function those two are given — deliberately small, because everything
+ * a person would want to argue with afterwards is in the pure half.
  *
  * ## Looking is the dashboard's own dry run, and nothing else
  *
@@ -22,22 +21,23 @@
  * kills. Gate 3 — *never act on a job definition that changed after it was
  * authorised* — and the plan's own rule that v1 proposes and never takes.
  *
- * ## Acting, which nothing in this build does
+ * ## Acting, which this module cannot do — and it is an absence, not a refusal
  *
- * `refusingActor` is the shipped `act`, and it refuses. Two independent guards
- * therefore stand between a proposal and a kill, and neither relies on the
- * other: rule 2's hashed `disposition` is `"propose"`, so `scheduler.ts` has no
- * path from its decision to the actor at all; and if a spec did carry `"act"`,
- * this is what it would reach.
+ * There is **no actor in this file**. `ruleWork` hands the daemon `observe` and
+ * a pid, so the process holds no capability to act on a proposal, and a spec
+ * carrying `disposition: "act"` meets a refusal from `scheduler.ts` naming the
+ * actor it does not have. That replaced a `refusingActor` which answered
+ * `refused` politely: GPT Sol's SC-2 is that such a thing is a runtime
+ * conditional wearing the clothes of a boundary.
  *
- * The one that would matter if both were crossed is GPT Sol's SP-7: the kill
- * route checks `confirm: true` before it checks `FLEET_ACT_ENABLED`, and **an
- * unattended process asserting a human-facing confirmation is the authority
- * grant itself**, which is Greg's to make and nobody else's.
+ * The reason there is nothing to put here is SP-7: the kill route checks
+ * `confirm: true` before it checks `FLEET_ACT_ENABLED`, and **an unattended
+ * process asserting a human-facing confirmation is the authority grant itself**,
+ * which is Greg's to make and nobody else's.
  */
 import type { ActionId, KillPolicy } from "../fleet/actions.js";
-import type { RuleWork } from "./scheduler.js";
-import type { RuleObservation, RuleOutcome, RuleSpec, WedgedProcess } from "./rules.js";
+import type { ProposingRuleWork } from "./scheduler.js";
+import type { RuleObservation, RuleSpec, WedgedProcess } from "./rules.js";
 
 /** The env var that arms the deterministic rules ALONE. See `scripts/overseer.ts` § schedulerWiring for why that is a separate switch. */
 export const RULES_ENABLED_VAR = "OVERSEER_RULES_ENABLED";
@@ -127,7 +127,7 @@ function parseCandidate(u: unknown): WedgedProcess | null {
  * be. That is the documented way for a non-browser client to opt in
  * (`routes-steer.ts` § checkOrigin), not a bypass of anything.
  */
-export function fleetObserver(options: ObserverOptions): RuleWork["observe"] {
+export function fleetObserver(options: ObserverOptions): ProposingRuleWork["observe"] {
   const post: HttpPost = options.post ?? ((url, init) => fetch(url, init));
   const timeoutMs = options.timeoutMs ?? OBSERVE_TIMEOUT_MS;
   const url = `${options.baseUrl.replace(/\/+$/, "")}/api/actions/box`;
@@ -176,24 +176,22 @@ export function fleetObserver(options: ObserverOptions): RuleWork["observe"] {
 }
 
 /**
- * The actor this build ships: it refuses, always, and says why in a sentence a
- * person can act on.
+ * **What the daemon is handed: looking, and the pid an in-process run is
+ * recorded under. There is no actor in it.**
  *
- * Not a `throw` and not a no-op. A throw would be recorded as `failed`, which
- * means *nothing can be told about whether it happened*, and that is a lie about
- * a call that provably did nothing.
+ * This used to carry a `refusingActor` — an `act` that always answered
+ * `refused` — and GPT Sol's SC-2 is that a refusing actor is a runtime
+ * conditional in the clothes of a boundary: the process held the capability and
+ * one edit stood between it and a kill. The refusal is now structural. A daemon
+ * given this object has no `act` to call, and a spec carrying
+ * `disposition: "act"` meets a `refused` from `scheduler.ts` naming the missing
+ * actor, exactly as a session job does in a process with no `spawn`.
+ *
+ * SP-7 is why there is nothing to put here: *an unattended process asserting the
+ * `confirm: true` a kill route demands is the authority grant itself*, and that
+ * is Greg's to make. Stage 3d is where an actor gets built, and it has to build
+ * one rather than switch one on.
  */
-export function refusingActor(): RuleWork["act"] {
-  return async (spec: RuleSpec): Promise<RuleOutcome> => ({
-    kind: "refused",
-    why:
-      `nothing in this build is authorised to take a rule's action, so the ${spec.kind} proposal stands as a proposal — ` +
-      "an unattended process asserting the confirmation a kill route demands is an authority grant only Greg can make " +
-      "(GPT Sol's SP-7; stage 3d of docs/plans/260908g-the-overseer-runbook-its-gates-and-the-scheduler-that-wakes-it.md)",
-  });
-}
-
-/** What the daemon is handed: looking, refusing to act, and the pid an in-process run is recorded under. */
-export function ruleWork(options: ObserverOptions & { selfPid: number }): RuleWork {
-  return { selfPid: options.selfPid, observe: fleetObserver(options), act: refusingActor() };
+export function ruleWork(options: ObserverOptions & { selfPid: number }): ProposingRuleWork {
+  return { selfPid: options.selfPid, observe: fleetObserver(options) };
 }

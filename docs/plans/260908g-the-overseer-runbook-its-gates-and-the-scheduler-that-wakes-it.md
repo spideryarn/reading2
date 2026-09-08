@@ -224,7 +224,7 @@ way it worked this morning, and nothing half-built is load-bearing.
 |---|---|
 | **1** — the runbook and the gates | **done**, `dev`. `docs/project/overseer.md`, four gates. The `/overseer` skill was deleted on 2026-09-08 — see the stage. |
 | **2** — the scheduler and the watchdog | **done**, `dev`, after two GPT Sol rounds. **Armed by `OVERSEER_JOBS_ENABLED` and OFF.** |
-| **3** — the three deterministic rules | **3a done, 2026-09-08 evening.** The protocol and rule 2 are built, fired against the live specimen, and green. 3b–3d not started. Fable arbitrated how much each rule may act; Sol blocked the first draft with four P0s, all accepted. The acting rule is still last, behind two named preconditions. |
+| **3** — the three deterministic rules | **3a done, 2026-09-08 evening; Sol's code review answered the same night.** The protocol and rule 2 are built, fired against the live specimen, and green. 3b–3d not started. Fable arbitrated how much each rule may act; Sol blocked the first draft with four P0s, all accepted, then reviewed the code and raised four more — four fixed, three deferred onto 3d. The acting rule is still last, now behind **five** named preconditions. |
 | **4** — the deferral queue | **not started.** |
 | **5** — reboot revival | **not started.** Needs a new verb: `gjd-remote resume` is `attach`. |
 | **6** — CLI ergonomics, and the rename | **the rename is done**; the CLI is not started. |
@@ -605,7 +605,36 @@ gates cannot happen without Greg anyway.
   that abandoning 3d half-built, with automatic broadcasting and no wake accounting, is worse than
   not starting it.
 
-**What this ordering buys** is that the acting rule is last and behind two named preconditions rather
+  **Five preconditions, not two.** The three below came out of Sol's code review of 3a and are
+  deferred here rather than dropped, because each is about *acting* and none of them can bite until
+  something acts. They are written down as conditions on this stage, not as a to-do list, so 3d
+  cannot start by satisfying itself.
+
+  1. **A durable rule-run index — SC-1 in full, and it is why 3d cannot be built by flipping a
+     disposition.** An acting rule that dies between its action and its settlement leaves a
+     `rule-intended` that is replayed on the next boot and folded into no durable state; the
+     occurrence eventually becomes eligible again, so the action can happen twice. The fix is an
+     index that retains unpaired intents across checkpoints and holds such an occurrence for explicit
+     reconciliation — or an idempotency key and a downstream receipt. An `AbortSignal` is not a
+     substitute: it addresses shutdown, not uncertain outcomes. (The *live* half of SC-1 is fixed —
+     the daemon awaits its in-process rule runs — and that fixes nothing here.)
+  2. **The policy's meaning has to be inside the fingerprint — SC-2's second half.** `"safe-to-kill"`
+     is a hashed word whose meaning lives in `tools/fleet/actions.ts` and `routes-actions.ts`, which
+     no rule pin covers, so **changing what that policy selects changes what the rule proposes
+     without changing its fingerprint.** Pinning `scheduler.ts` closed the protocol half of SC-2 and
+     leaves this one open. It crosses into the fleet dashboard's territory — the policy is theirs,
+     not ours — so it needs their owner as well as ours, which is a reason to raise it before 3d
+     rather than during it.
+  3. **Occurrence lineage has to be separated from behavioural authorisation — SC-3.** `lastRunOf`
+     ignores every occurrence whose definition hash differs from the current one, so a re-pin makes a
+     job **immediately due even with an old-hash occurrence in flight**. Sol exercised it against a
+     live in-flight `get-ready-to-deploy` under the old pin and got `last: never`, then due
+     immediately. Today's re-pins are harmless only because neither standing job has ever run —
+     **luck, not design** — and 3d re-pins an *acting* rule, where a duplicate is a duplicate action.
+     Wants same-job unsettled legacy occurrences held across hash changes, and an explicit
+     compatibility mapping for a semantic no-op rehash.
+
+**What this ordering buys** is that the acting rule is last and behind named preconditions rather
 than behind a flag — which is what the gates were asking for all along, and which the original
 ordering would have reached only by accident.
 
@@ -623,23 +652,26 @@ trip rather than the append:
           oldest is pid 2282033 (sh -c ( 'npx' 'playwright@1.62.1' 'install' 'webkit' ) …) at 19.9h
 ```
 
-pid **2282035** is the second entry in that event's `finding.processes`; **it is still alive**, and
-`refusingActor` means nothing in this build could have ended it.
+pid **2282035** is the second entry in that event's `finding.processes`; it was still alive when this
+was written, and nothing in this build could have ended it. (By the end of the review fixes that
+night it and its three siblings were gone, ended by something else — see below.)
 
 **What exists now.** `tools/overseer/rules.ts` (pure: the spec, the finding, the decision),
-`rule-work.ts` (the impure half: the dashboard's dry run, and the actor that refuses),
-`rule-jobs.ts` (the definition and its pin), the `RuleEvent` arm across all six places SP-9 names,
-`runRule` in `scheduler.ts`, and `scripts/overseer-pins.ts` — which prints every job's current
-fingerprint, because re-pinning had become a thing you found out by reading a refusal.
+`rule-work.ts` (the impure half: the dashboard's dry run — and, until the code review, an actor that
+refused), `rule-jobs.ts` (the definition and its pin), the `RuleEvent` arm across all six places SP-9
+names, the rule runners in `scheduler.ts`, and `scripts/overseer-pins.ts` — which prints every job's
+current fingerprint, because re-pinning had become a thing you found out by reading a refusal.
 
 **Four things here were wrong or incomplete, and each is corrected in place above rather than left
 standing:**
 
-1. **"The rule's own source file" is two files, not one.** SP-1's fix pins the implementation in
-   `documents`. Pinning only `rules.ts` would have left `refusingActor` — the thing that decides
-   whether a proposal becomes a kill — outside the fingerprint, which is SP-1 word for word one file
-   along. Both are pinned. `scheduler.ts` deliberately is not, on `standing-jobs.ts`'s own argument
-   that shared machinery in a pin is a tripwire that mostly fires falsely.
+1. **"The rule's own source file" is two files, not one** — and, after the code review, three.
+   SP-1's fix pins the implementation in `documents`. Pinning only `rules.ts` would have left the
+   actor — the thing that decides whether a proposal becomes a kill — outside the fingerprint, which
+   is SP-1 word for word one file along. `scheduler.ts` was left out on `standing-jobs.ts`'s argument
+   that shared machinery in a pin is a tripwire that mostly fires falsely; **that was wrong, and
+   SC-2 says why in one line — it is the code that interprets the hashed `disposition`.** It is
+   pinned now, and the argument is written out at `RULE_SOURCES`.
 2. **`definitionHash` gaining `work` re-pinned the standing jobs too.** `07eaeebbfc76` →
    `bfc37addeea1` and `858c70da4976` → `8aa20daa8b85`. Nothing either job does changed; the
    definition now says out loud that it starts a session, and saying so moved the hash. That is the
@@ -757,6 +789,70 @@ occurrence whose definition hash differs, so a re-pin makes a job **immediately 
 old-hash occurrence in flight** — Sol exercised it and got `last: never`, then due. Today's re-pin is
 harmless only because neither standing job has ever run. That is not design, and it is a live trap
 for every later re-pin.
+
+#### What the four fixes actually did, 2026-09-08 night
+
+Built and green: **7 files / 276 tests**, up from 271 — five net new, and one deleted. Every one of
+them was watched going red first. `npm run typecheck` exit 0.
+
+**SC-4 — the encoders are a mapped type now, and the guarantee is real.** `RULE_SPEC_ENCODERS` and
+`DEFINITION_ENCODERS` are `{ [K in keyof T]-?: (value: T[K]) => string }`, so a new field is a
+compile error until somebody says how it is hashed. The runtime half is
+`RULE_SPEC_HASHED_FIELDS`/`JOB_DEFINITION_HASHED_FIELDS`, derived from the tables and held against
+the type's own keys by a test — so **reverting to a destructure deletes the export and takes the test
+with it**, which is the one thing a runtime test can say about a compile-time property. One honest
+limitation: a destructure that still named every field would be invisible to the runtime test; what
+the mapped type stops is the *next* field, which is the failure SC-4 is actually about.
+
+**SC-2 — the capability is split, and `scheduler.ts` is pinned.** `RuleWork` became two types:
+`ProposingRuleWork` (`selfPid`, `observe`) and `ActingRuleWork` (that plus `act`), run by two
+functions, reached through two separate `TickInput` fields. `runProposingRule` **has no actor in
+scope**; `runActingRule` needs `input.acting`, which `daemon.ts` has no option for and no shipped
+wiring supplies, so an `"act"` spec meets a refusal naming the missing actor — the same shape as a
+session job in a process with no `spawn`. `refusingActor` is **deleted**: a refusing actor is a
+capability the process holds, and Sol is right that that is a conditional wearing the clothes of a
+boundary. The test that asserted it refused politely is replaced by one asserting the shipped wiring
+has no `act` key at all.
+
+**The pins.** `wedged-work` `210968a360b9` → **`6a62bed1e623`**, and *nothing the rule decides
+changed*: `scheduler.ts` joined `RULE_SOURCES`, `rule-work.ts` lost its actor, and `rules.ts`
+relabelled the first line of the canonical spec. The standing jobs did **not** move —
+`bfc37addeea1` and `8aa20daa8b85` are unchanged, because the definition encoding is byte-identical to
+the destructured one it replaced. That was deliberate: a refactor that re-pinned two jobs for no
+behavioural reason is exactly the false tripwire this stage keeps arguing against.
+
+**SC-5 — the round trip goes through `parseEvent` now.** The test helper reads
+`store.readEvents(0)` and asserts `unreadable` is empty, rather than casting a `JSON.parse`. The
+proposal test asserts the whole `finding` — every denominator, not the conclusion — and that the
+settled sentence is the intended one. Proved by mutation: a `parseEvent` that accepts the event and
+returns `processes: []` was green before and is red now.
+
+**SC-1's live half — the daemon holds its rule runs and waits for them.** `schedulerTick` hands each
+in-process rule run to `onRuleRun`; the daemon keeps them in a self-emptying set and awaits them in
+`settleInFlight` (which was `settlePasses`, and the name was part of how this got in — a rule run is
+in-process too). The wait is bounded by `RULE_SETTLE_GRACE_MS`, fifteen seconds against a
+ten-second observer timeout, because `Restart=always` means a hung observer would otherwise cost a
+daemon that will not die. **The bound is an outcome, not a give-up**: every run still unsettled gets
+the same durable `job-record-lost` note a failed completion append gets. Sessions are deliberately
+not tracked — a child with a durable reservation is exactly what the old comment described, and it
+was right about half the cases.
+
+**The mutation check.** Three deliberate breakages, all caught. Reverting the encoders to a
+destructure: caught by *"THE FIELD LIST IS THE TYPE'S OWN"* (the export vanishes) and by *"THE PIN IS
+CURRENT"*. Letting the `"act"` arm fall back to the looking capability: caught by *"AN ACTING SPEC
+MEETS A REFUSAL…"* and, now that `scheduler.ts` is pinned, by *"THE PIN IS CURRENT"* — **which is the
+fingerprint doing the thing it could not do before this change**. Corrupting a parsed `finding`:
+caught by the round-trip test.
+
+**And one test was quietly broken and is worth naming.** *"editing the IMPLEMENTATION moves the
+fingerprint"* tampered with a digest by replacing its last character with `0` — a no-op whenever the
+digest already ended in `0`, which `rules.ts` did after the first edit of this session. A
+one-in-sixteen test that had been green by luck. It flips to `1` when it has to now.
+
+**pid 2282035 was gone by the end of this work**, along with 2282033/4/6 — the whole specimen family.
+Nothing here could have ended it: the build holds no actor, and no kill was run from this session. It
+is worth knowing that the live specimen this rule was sized against no longer exists, so a future
+demonstration needs a new one.
 
 #### SP-11, and a number I sent to somebody else
 

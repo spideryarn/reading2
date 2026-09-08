@@ -35,7 +35,7 @@ import { gjdRemoteDispatch, jobsEnabled, JOBS_ENABLED_VAR } from "../tools/overs
 import { describeRuleJobs, ruleJobs } from "../tools/overseer/rule-jobs.js";
 import { RULES_ENABLED_VAR, ruleWork, rulesEnabled } from "../tools/overseer/rule-work.js";
 import { describeRuleOutcome } from "../tools/overseer/rules.js";
-import type { RuleWork } from "../tools/overseer/scheduler.js";
+import type { ProposingRuleWork } from "../tools/overseer/scheduler.js";
 import { describeStandingJobs, standingJobs } from "../tools/overseer/standing-jobs.js";
 import type { AttentionList } from "../tools/fleet/wire.js";
 import type { OverseerEvent } from "../tools/overseer/diff.js";
@@ -671,7 +671,7 @@ export function schedulerWiring(env: NodeJS.ProcessEnv): {
   const ruleDetail = describeRuleJobs({ armed: arming !== "off", enableVar: RULES_ENABLED_VAR, jobs: rules });
   const problems = [...standing.problems, ...rules.problems];
   const definitions = [...standing.jobs, ...rules.jobs];
-  const work = (): RuleWork => ruleWork({ baseUrl: fleetUrl(env), selfPid: process.pid });
+  const work = (): ProposingRuleWork => ruleWork({ baseUrl: fleetUrl(env), selfPid: process.pid });
   return {
     armed: arming !== "off",
     arming,

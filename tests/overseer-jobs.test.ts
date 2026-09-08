@@ -30,6 +30,7 @@ import { afterEach, describe, expect, test } from "vitest";
 
 import type { JobEvent, OverseerEvent } from "../tools/overseer/diff.js";
 import {
+  JOB_DEFINITION_HASHED_FIELDS,
   UNKNOWN_RETENTION,
   adoptOccurrence,
   authorisationOf,
@@ -176,6 +177,19 @@ describe("a definition's fingerprint", () => {
     expect(definitionHash({ ...JOB, everyMs: 61_000 })).not.toBe(definitionHash(JOB));
     expect(definitionHash({ ...JOB, leaseMs: 1 })).not.toBe(definitionHash(JOB));
     expect(definitionHash({ ...JOB, id: "other" })).not.toBe(definitionHash(JOB));
+  });
+
+  test("THE FIELD LIST IS THE TYPE'S OWN, so a field added later cannot sit outside the fingerprint", () => {
+    // GPT Sol's SC-4. The assertions above name today's fields by hand, and the
+    // destructure they were written against is not exhaustive in TypeScript — so
+    // a seventh field on `JobDefinition` would compile perfectly and never reach
+    // the hash that authorises the job.
+    //
+    // `JOB_DEFINITION_HASHED_FIELDS` is derived from the encoder table rather
+    // than typed out here, so reverting to a destructure deletes the table and
+    // takes this test with it; and a new field is a compile error in the table
+    // before it is ever a red line here.
+    expect([...JOB_DEFINITION_HASHED_FIELDS].sort()).toEqual(Object.keys(JOB).sort());
   });
 
   test("cannot be fooled by a field that contains the canonical form's own separators", () => {

@@ -6,7 +6,7 @@
  * `jobs.ts`, and for the same reason: a rule that decides to propose killing
  * four processes on a shared box is a decision somebody will want to reproduce
  * exactly, from the numbers it saw, months later. The impure halves live in
- * `rule-work.ts` (looking, and acting) and `scheduler.ts` (the ordering).
+ * `rule-work.ts` (looking) and `scheduler.ts` (the ordering, and the runners).
  *
  * ## Why every knob is in here rather than in the code that runs it
  *
@@ -22,18 +22,21 @@
  * `JobDefinition`, and `definitionHash()` covers it (`canonicalRuleSpec` below
  * is what it hashes). Move the threshold from 4 hours to 4 minutes and the job
  * refuses to dispatch until a person re-pins it. **And the implementation is
- * pinned too**, as `documents` entries: this file and `rule-work.ts`, digested,
- * exactly as a standing job pins the document it is an instruction to follow.
- * See `rule-jobs.ts` for which files and why those.
+ * pinned too**, as `documents` entries: this file, `rule-work.ts` and
+ * `scheduler.ts`, digested, exactly as a standing job pins the document it is an
+ * instruction to follow. See `rule-jobs.ts` for which files and why those — the
+ * third was left out first time round, and GPT Sol's SC-2 is why that was wrong.
  *
  * ## `disposition` is the gate, and it is data
  *
- * A rule that may only propose carries `disposition: "propose"`, and
- * `scheduler.ts` has **no path from that arm to the actor** — the outcome is
- * written directly. So rule 2 cannot kill anything, and turning it into a rule
- * that could is an edit to a hashed field, which stops the job dead until
- * somebody re-pins it. That is a stronger statement than a comment saying the
- * actor is careful.
+ * A rule that may only propose carries `disposition: "propose"`, and that arm
+ * selects `runProposingRule`, **which is handed a capability with no actor on
+ * it**. So rule 2 cannot kill anything because there is nothing in the process
+ * to kill with — not because a branch declines to. Turning it into a rule that
+ * could is an edit to a hashed field, which stops the job dead until somebody
+ * re-pins it; and the runner it would then select needs a capability no shipped
+ * wiring supplies, so it would meet a refusal. That is a stronger statement than
+ * a comment saying the actor is careful.
  */
 import type { KillPolicy } from "../fleet/actions.js";
 
@@ -47,17 +50,17 @@ export type RuleId = "wedged-work";
  * because *"running it unattended is a different grant from a person clicking
  * confirm"* (the plan, § How the three rules behave). `act` exists so that the
  * protocol has its third step and the ordering can be tested; **nothing in this
- * build ships a spec that carries it**, and `rule-work.ts`'s actor refuses
- * anyway, so the two guards are independent.
+ * build ships a spec that carries it**, and nothing in this build holds an actor
+ * for it to reach, so the two guards are independent.
  */
 export type RuleDisposition = "propose" | "act";
 
 /**
  * One rule's complete configuration — every knob, as data.
  *
- * Adding a field here without adding it to `canonicalRuleSpec` is the failure
- * this type is exposed to, and the exhaustive destructure there is what makes
- * the compiler say so.
+ * Adding a field here without adding it to `RULE_SPEC_ENCODERS` is the failure
+ * this type is exposed to, and the mapped type there is what makes the compiler
+ * say so — see its header for why a destructure did not.
  */
 export type RuleSpec = {
   readonly kind: RuleId;
@@ -76,6 +79,57 @@ export type RuleSpec = {
 };
 
 /**
+ * HOW EACH KNOB IS ENCODED — one entry per field, and the compiler counts them.
+ *
+ * **This looks like ceremony and is not.** It used to be a destructure —
+ * `const { kind, minAgeSeconds, policy, disposition } = spec` — and a
+ * destructure is **not exhaustive in TypeScript**: a fifth field on `RuleSpec`
+ * compiles perfectly and is silently left out of the fingerprint, which is SP-1
+ * — the finding this whole stage exists to answer — reopened by one line. GPT
+ * Sol's SC-4, and the test named "every knob" could not have caught it, because
+ * it enumerates today's fields by hand.
+ *
+ * A mapped type over `keyof RuleSpec` cannot be satisfied by an object literal
+ * that is missing a key, so **a new knob is a compile error until somebody says
+ * how it is hashed**. That is the guarantee the comment above used to claim.
+ *
+ * The declaration order here IS the encoding order, so moving a line moves
+ * every rule's hash. That is a re-pin rather than a hazard: this file is itself
+ * a pinned document (`rule-jobs.ts` § RULE_SOURCES), so any edit to it was
+ * moving the pin anyway.
+ */
+const RULE_SPEC_ENCODERS: { readonly [K in keyof RuleSpec]-?: (value: RuleSpec[K]) => string } = {
+  kind: (kind) => `kind:${kind.length}:${kind}`,
+  minAgeSeconds: (minAgeSeconds) => `minAgeSeconds:${minAgeSeconds}`,
+  policy: (policy) => `policy:${policy.length}:${policy}`,
+  disposition: (disposition) => `disposition:${disposition.length}:${disposition}`,
+};
+
+/**
+ * The fields the fingerprint covers, in encoding order.
+ *
+ * Derived from the table rather than typed out, and exported so a test can hold
+ * it against a `RuleSpec`'s own keys — which is what makes reverting to a
+ * destructure a red test rather than a silent loss of coverage.
+ */
+export const RULE_SPEC_HASHED_FIELDS = Object.keys(RULE_SPEC_ENCODERS) as readonly (keyof RuleSpec)[];
+
+/**
+ * One field, through its own encoder.
+ *
+ * The cast is TypeScript's known limitation rather than a hole: indexing a
+ * mapped type with a generic key gives a UNION of encoders, whose parameter
+ * types intersect to `never`, so the honest call does not compile. It is sound
+ * by construction — the table is keyed by `keyof RuleSpec` and the value handed
+ * over is `spec[field]` — and it buys the thing the whole arrangement is for:
+ * each encoder receives exactly its own field's type.
+ */
+function encodeRuleField<K extends keyof RuleSpec>(spec: RuleSpec, field: K): string {
+  const encode = RULE_SPEC_ENCODERS[field] as (value: RuleSpec[K]) => string;
+  return encode(spec[field]);
+}
+
+/**
  * The canonical form `definitionHash` hashes.
  *
  * Length-prefixed like `jobs.ts`'s, and for the same reason: without it a spec
@@ -85,13 +139,7 @@ export type RuleSpec = {
  * differently.
  */
 export function canonicalRuleSpec(spec: RuleSpec): string {
-  const { kind, minAgeSeconds, policy, disposition } = spec;
-  return [
-    `rule:${kind.length}:${kind}`,
-    `minAgeSeconds:${minAgeSeconds}`,
-    `policy:${policy.length}:${policy}`,
-    `disposition:${disposition.length}:${disposition}`,
-  ].join("\n");
+  return RULE_SPEC_HASHED_FIELDS.map((field) => encodeRuleField(spec, field)).join("\n");
 }
 
 /**

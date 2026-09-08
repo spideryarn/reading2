@@ -219,7 +219,9 @@ Greg's to flip.
 
 What a rule may do is **data in its authorised definition, not a habit**: rule 2 carries
 `disposition: "propose"`, which is inside the hash, so changing it to `act` changes the fingerprint
-and the job is refused until somebody re-pins it deliberately. The proposal is written to the store
+and the job is refused until somebody re-pins it deliberately. **And a re-pin would not be enough**:
+a daemon armed this way holds no actor at all — the same absence as the missing session dispatcher —
+so an `act` rule would meet a refusal naming what this process does not have. The proposal is written to the store
 *before* anything is attempted, and a proposal that could not be recorded means the action is not
 taken — a run that decided something and did nothing about it must be visible, not a quiet success.
 
