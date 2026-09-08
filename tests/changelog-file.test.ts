@@ -259,7 +259,20 @@ describe("parseChangelog on a line that is wrong", () => {
    * usable record, and a link we cannot account for is not usable.
    */
   it("drops and reports a link that goes somewhere other than the app or this repo", () => {
-    for (const url of ["https://evil.example/phish", "//evil.example", "javascript:alert(1)"]) {
+    for (const url of [
+      "https://evil.example/phish",
+      "//evil.example",
+      /* **The same attack spelled with the other slash**, and it passed for as
+         long as this check existed: it is not `//`-prefixed, so it read as an app
+         path — while `new URL("/\\evil.example/phish", "https://www.spideryarn.com")`
+         is `https://evil.example/phish`, because the URL standard treats a
+         backslash as a slash after a special scheme. Measured in node,
+         2026-09-07; GPT Sol's review of the changelog page, P2. Written with an
+         escape rather than a literal backslash so that what this string contains
+         is legible in the source. */
+      "/\\evil.example/phish",
+      "javascript:alert(1)",
+    ]) {
       const bad = parseOf(version({ entries: [entry({ links: [{ label: "More", url }] })] }));
       expect(bad.problems.join(" "), url).toContain("is neither an app path nor a commit in");
       expect(bad.versions[0]?.entries[0]?.links, url).toEqual([]);
