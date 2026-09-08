@@ -75,15 +75,75 @@ That also settles a design question the next section would otherwise have to arg
 noise to be worked around, it is somebody's unfinished decision, and appending to it is not a
 delivery failure but an authorship one.
 
-Two things this measurement settles that reasoning would not have:
+### Reproduced live, end to end, against a session of my own
+
+The survey above says `inputSurface` *accepts* those panes. It does not say what a send would do, and
+those are different claims — a check that answers the weaker question is how this repo has spent
+most of its recent bad days. So it was done properly, on a throwaway session created for it
+(`ab-dummy-target`, `%2433`) and never on another agent's:
+
+```
+draft typed into the box, not submitted:   ❯ DRAFT-ALPHA
+sendMessage(target, "OMEGA-SENT-BY-DASHBOARD", …)  →  { ok: true, verified: {…}, sent: [2 calls] }
+the box, immediately after:                ❯ DRAFT-ALPHAOMEGA-SENT-BY-DASHBOARD
+```
+
+and four seconds later the agent had answered it:
+
+> ● I don't have anything that defines DRAFT-ALPHAOMEGA-SENT-BY-DASHBOARD — it's not a command …
+> What would you like me to do with it?
+
+**The dashboard returned a green tick for a user turn neither half of which anybody wrote.** That is
+the defect, not an inference about it.
+
+### The placeholder, which nearly broke the fix
+
+A session that has **never been messaged** draws a greyed hint in its box — `❯ Try "fix lint
+errors"` — which an emptiness rule reads as a draft. Found by creating the dummy session above,
+which is the only reason it was found at all: every one of the seventeen live panes had been used,
+so the survey could not have shown it.
+
+Three things were measured before choosing what to do:
+
+- **The hint is dim (SGR 2) and typed text is not** — on a freshly created session. So colour looked
+  like the structural answer.
+- **It is not.** `%218`'s eleven-hour-old `yes, shut it all down` is *also* dim, and so is `%2082`'s,
+  while text sent into my own dummy stayed bright. Dim does not mean "hint": it appears to follow
+  the pane's focus rather than the text's authorship, and a rule built on it would call a real draft
+  a hint — the one direction that costs a send. **Colour is abandoned**, and with it the `-e`
+  capture and the fixtures it would have needed.
+- **The hint never comes back.** After the session's first turn the empty box is bare `❯` forever,
+  on every capture taken. So the state that would be wrongly refused is exactly *a session that has
+  never been messaged at all*.
+
+**The decision, and it is a product decision rather than an engineering one.** Refuse any box with
+anything in it, hint included, and take the cost — which is that the very first message to a
+never-used session cannot be sent from the phone. That cost is close to zero in practice, because
+the dashboard's own New Session flow **requires** a prompt (`routes-new.ts`: *"Only `prompt` is
+required"*), so a session it created has already taken a turn by the time anyone would steer it;
+only a session made by `gjd-remote new-claude` with no `-p` is affected. The alternative was to
+recognise the hint by its wording, which is matching on one build's marketing copy inside the guard
+that decides whether to type into somebody's terminal. **Taking the small product loss removes all
+of the hard engineering**, which is the trade this project asks to be offered rather than to inherit
+(vision.md § Simpler first). The refusal names the case, so a person who meets it is not left
+puzzling over an empty-looking box.
+
+Two things the survey settles that reasoning would not have:
 
 - **The feature survives the fix.** Thirteen of seventeen were empty, so requiring emptiness costs
   availability on roughly a quarter of panes at any instant, and that quarter is exactly the quarter
   where sending is wrong.
-- **An empty Claude Code input box has no placeholder text in it.** The prompt line is `❯` followed
-  by a single U+00A0 and nothing else, on every one of the thirteen and on both empty-box fixtures.
-  Had there been a placeholder, "is it empty" would have been a string-matching problem against a
-  build's copy, and the honest answer would have been not to try.
+- **A USED Claude Code input box, once empty, is bare.** The prompt line is `❯` followed by a single
+  U+00A0 and nothing else, on every one of the thirteen and on both empty-box fixtures. That is not
+  true of a session which has never been messaged — see the placeholder section above, which is the
+  thing this survey could not have found and a throwaway session did.
+
+**And one thing it does not settle.** Whether `%218`, `%2082` and `%351` hold genuine unsent drafts
+is an inference, not a measurement: `%218`'s text answers, word for word, the question its agent
+asked at 2:11 AM, which is what an unsent reply looks like. But a hint and a draft are
+indistinguishable in a capture, so the honest claim is the one proved on `%2433` — **a send onto
+text in the box concatenates and submits** — and the three panes are evidence that the state is
+common rather than proof of what any one of them holds. The fix does not depend on the difference.
 
 `none-typed-numbered-message-in-input-box.txt` reproduces it with no tmux: it is a pane with a
 three-line draft in the box, and `inputSurface` returns `ok` at line 20. That fixture was added for

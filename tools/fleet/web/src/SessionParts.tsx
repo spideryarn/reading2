@@ -344,6 +344,35 @@ function Option({
 }
 
 /**
+ * The way out, when the page has decided it cannot honestly offer a button.
+ *
+ * **A REFUSAL THAT DOES NOT NAME THE NEXT MOVE IS A REFUSAL A PERSON CANNOT
+ * ACT ON.** Astra's recommendation for the incomplete-capture case was a
+ * handoff rather than a button — "a button that cannot be honest should not
+ * exist" — and taking the button away was only the first half of that. The card
+ * said "Answer it in the terminal" to somebody holding a phone in another room,
+ * with no way to get to a terminal from there.
+ *
+ * **SELECTABLE, NOT MERELY LEGIBLE.** `select-all` makes one tap take the whole
+ * command, because the reader is on a phone and is about to paste this into an
+ * ssh session on some other device. A command they have to retype from a
+ * screenshot is barely better than no command.
+ *
+ * **THE SESSION'S NAME, NEVER ITS ID.** `gjd-remote resume` takes the name —
+ * `fleet-approval-binding`, not `$1996` — and a command that looks right and
+ * cannot run is worse than none, because it is tried first.
+ */
+function Handoff({ sessionName }: { sessionName: string }): ReactNode {
+  return (
+    <p className="tw:mt-1.5">
+      <code className="tw:select-all tw:rounded tw:border tw:border-rule tw:bg-panel tw:px-1.5 tw:py-1 tw:font-mono tw:text-[12px] tw:break-all tw:text-ink">
+        gjd-remote resume {sessionName}
+      </code>
+    </p>
+  );
+}
+
+/**
  * **WHAT IS ACTUALLY BEING APPROVED.**
  *
  * The prompt is the headline and this is the evidence, and the distinction is
@@ -364,17 +393,28 @@ function Option({
  * (docs/project/narrow-windows.md, § content that cannot reflow), and it is
  * never trusted for anything but display.
  */
-function Material({ material, compact }: { material: FleetMaterial; compact: boolean }): ReactNode {
+function Material({
+  material,
+  sessionName,
+  compact,
+}: {
+  material: FleetMaterial;
+  sessionName: string;
+  compact: boolean;
+}): ReactNode {
   if (material.kind === "unreadable") {
     return (
       <div className="tw:mt-2 tw:rounded-md tw:border tw:border-alarm/50 tw:bg-alarm-wash tw:p-2 tw:text-[13px]">
         <p className="tw:font-medium tw:text-alarm-ink">What this would approve could not be read.</p>
         <p className="tw:mt-1 tw:break-words tw:text-ink">{material.why}</p>
         {compact ? null : (
-          <p className="tw:mt-1 tw:text-[12px] tw:text-ink-soft">
-            So there is nothing to answer with here — an empty box in this place would look like a
-            dialog that proposes nothing, and those are opposite claims. Answer it in the terminal.
-          </p>
+          <>
+            <p className="tw:mt-1 tw:text-[12px] tw:text-ink-soft">
+              So there is nothing to answer with here — an empty box in this place would look like a
+              dialog that proposes nothing, and those are opposite claims. Answer it in the terminal:
+            </p>
+            <Handoff sessionName={sessionName} />
+          </>
         )}
       </div>
     );
@@ -431,11 +471,18 @@ function Material({ material, compact }: { material: FleetMaterial; compact: boo
  */
 export function QuestionCard({
   question,
+  sessionName,
   onAnswer,
   busy = false,
   compact = false,
 }: {
   question: FleetQuestion;
+  /**
+   * For the handoff command when the card cannot offer a button. REQUIRED
+   * rather than optional: a call site that could omit it is a call site that
+   * renders a dead end, and the compiler is the only thing that will notice.
+   */
+  sessionName: string;
   /** Null makes this a summary. A function makes every option a button. */
   onAnswer?: ((index: number) => void) | null;
   busy?: boolean;
@@ -481,7 +528,7 @@ export function QuestionCard({
           being asked — you are about to go and answer it in the terminal. The
           collapsed form belongs to the list card, and the list card is the
           `compact` branch above. */}
-      {compact ? null : <Material material={question.material} compact={false} />}
+      {compact ? null : <Material material={question.material} sessionName={sessionName} compact={false} />}
 
       {!compact && question.options.length > 0 ? (
         <>

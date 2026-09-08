@@ -499,6 +499,7 @@ export function SessionDetail({
             <HeldBack why={answeringOff} gate={row.question.gate} />
             <QuestionCard
               question={row.question}
+              sessionName={row.name}
               onAnswer={
                 unaddressable === null && answeringOff === null && row.question.gate.kind === "conversation"
                   ? onAnswer
