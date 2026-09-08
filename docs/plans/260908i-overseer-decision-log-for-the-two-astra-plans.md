@@ -141,3 +141,9 @@ and [260908f-overseer-and-fleet-improvement-roadmap.md](260908f-overseer-and-fle
     built. (b) non-blocking — whether to arm `OVERSEER_JOBS_ENABLED`; the Baseline agent adds that
     exporting it in a shell arms nothing because `overseer.service` neither sets it nor reads an
     env file, so durable arming is a unit change plus provisioning, i.e. Greg's.
+- 2026-09-08 23:00 UTC — **Dashboard agent** asked to hold the dashboard restart: Sol returned three
+  P0s on its Stage 3, all sentences claiming more than the code knows (a timed-out kill described as
+  "could not be run", "exited" said of a spawn failure, a "partway through" the code cannot know),
+  plus a missing guard on the summary sentence; `KillReport.attempted` becomes `targeted` and the
+  `not-attempted` arm goes. Nothing of mine consumes it. **Advice to Greg:** relaunch the daemon now
+  (unaffected); restart the dashboard when the fix is on dev, or now at the cost of a second restart.
