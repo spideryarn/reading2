@@ -4199,6 +4199,43 @@ describe("what comes off the actions wire", () => {
   });
 });
 
+describe("the fixtures' own clock", () => {
+  /* THIS EXISTS BECAUSE THE SAME BUG SHIPPED TWICE IN ONE DAY, IN THIS FILE,
+     AND THREE SEPARATE SESSIONS TRIPPED OVER THE SECOND ONE.
+
+     `state()` pinned `collectedAt` to the literal 2026-09-08T12:00:00Z and
+     `messagesWire()` pinned `lastModified` to 11:59:30Z. Both meant "just now"
+     on the morning they were written. At 12:02:30Z the first crossed the
+     snapshot staleness threshold and three rendering tests began asserting that
+     the page would not say STALE about a page correctly saying STALE; a few
+     hours later the second crossed STALE_TRANSCRIPT_MS and did the same to the
+     transcript warning. Neither is a flake — they are timers, and they only
+     ever get worse.
+
+     A fixture that means "fresh" has to be computed from the clock the
+     component reads, because freshness is a relation between two times and an
+     absolute constant can only ever be one of them. This test pins that
+     property directly, so the next person who types a readable date into a
+     default gets a red suite in seconds rather than a puzzling failure hours
+     later in somebody else's branch.
+
+     It deliberately does NOT police every date in the file. `startedAt` and a
+     turn's `at` are compared against each other or rendered verbatim; they have
+     no threshold to cross and pinning them is fine. Only the two that feed a
+     staleness comparison are the hazard. */
+  it("means NOW where a fixture means 'fresh', so the suite does not rot", () => {
+    const minute = 60_000;
+
+    const collectedAt = Date.parse(state().collectedAt ?? "");
+    expect(Number.isFinite(collectedAt)).toBe(true);
+    expect(Math.abs(Date.now() - collectedAt)).toBeLessThan(minute);
+
+    const lastModified = Date.parse(String(messagesWire()["lastModified"]));
+    expect(Number.isFinite(lastModified)).toBe(true);
+    expect(Math.abs(Date.now() - lastModified)).toBeLessThan(minute);
+  });
+});
+
 describe("why a session is paused, off the wire and on the page", () => {
   /* THE ONE THAT MATTERS. `none` is a positive claim — we looked everywhere we
      can look and this session is waiting for nothing — and a server that never
