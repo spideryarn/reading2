@@ -282,10 +282,26 @@ function SeriesChart({ series, plot }: { series: SeriesPlot; plot: HistoryPlot }
   const strained = band(spec.bands.strained, spec.bands.critical);
   const critical = worseIsHigher ? band(spec.bands.critical, ceiling) : band(0, spec.bands.critical);
 
+  /* The two per-series marks are explained HERE rather than in the shared
+     legend below, because they belong to one chart each and a legend with seven
+     entries on a 390px screen is one nobody reads. Neither relies on colour
+     alone: the real peak and the swapping total are both in the sentence beside
+     the label. */
+  const extra = [
+    series.overCeiling.length > 0
+      ? `The red bar along the top is where the line ran off this axis — the axis is fixed so one spike cannot flatten the rest of the day, and the real peak is in the line above.`
+      : "",
+    spec.mark === undefined
+      ? ""
+      : `The orange bar along the bottom is where pages were actually moving to or from swap. Swap is a cliff, not a slope: 100% full and quiet is a different fact from 60% and thrashing, so the event is drawn separately from the number.`,
+  ]
+    .filter((line) => line !== "")
+    .join(" ");
+
   const tip: Tip = {
     head: spec.label,
     what: `${spec.label} over the last 24 hours, in ${spec.unit}.`,
-    how: `Amber past ${format(spec.bands.strained)} and red past ${format(spec.bands.critical)} — the same cutoffs the tiles above use, imported from one place so they cannot drift apart. A break in the line means nothing was recorded; violet means the reading could not be taken, which is never drawn as zero.`,
+    how: `Amber past ${format(spec.bands.strained)} and red past ${format(spec.bands.critical)} — the same cutoffs the tiles above use, imported from one place so they cannot drift apart. A break in the line means nothing was recorded; violet means the reading could not be taken, which is never drawn as zero.${extra === "" ? "" : ` ${extra}`}`,
   };
 
   return (
@@ -348,6 +364,23 @@ function SeriesChart({ series, plot }: { series: SeriesPlot; plot: HistoryPlot }
             />
           ))}
 
+          {/* **SWAP IS A CLIFF, NOT A SLOPE**, so the event gets its own bar
+              rather than being folded into the line. `activelySwapping` is
+              pages moving right now, which is a different fact from any
+              percentage — health.ts is emphatic that 100% full and quiet is not
+              the same as 60% and thrashing, and a chart with the number and not
+              the event would have lost exactly that. */}
+          {series.marks.map((span) => (
+            <rect
+              key={`mark-${span.fromMs}`}
+              x={x(span.fromMs)}
+              y={SERIES_H - 4}
+              width={Math.max(x(span.toMs) - x(span.fromMs), 1.5)}
+              height={4}
+              fill="var(--needs)"
+            />
+          ))}
+
           {series.segments.map((segment, index) => (
             <polyline
               key={`seg-${index}-${segment[0]?.atMs ?? index}`}
@@ -373,12 +406,19 @@ function SeriesChart({ series, plot }: { series: SeriesPlot; plot: HistoryPlot }
  * question rather than to be looked at.
  */
 function summarise(series: SeriesPlot): string {
+  /* The boolean fact gets its own clause, always — including when there were no
+     readings, because "we could not measure IO wait" and "and it was swapping
+     for three hours" are both true and neither replaces the other. */
+  const marked =
+    series.spec.mark === undefined || series.markedMs === 0
+      ? ""
+      : ` · ${series.spec.mark.label} ${describeDuration(series.markedMs)}`;
   if (series.worst === null) {
-    return "no readings in this window";
+    return `no readings in this window${marked}`;
   }
   const direction = series.spec.bands.worseIs === "lower" ? "low" : "peak";
   const now = series.latest === null ? "" : `now ${format(series.latest.value)}${series.spec.unit} · `;
-  return `${now}${direction} ${format(series.worst.value)}${series.spec.unit} at ${timeOfDay(series.worst.atMs)}`;
+  return `${now}${direction} ${format(series.worst.value)}${series.spec.unit} at ${timeOfDay(series.worst.atMs)}${marked}`;
 }
 
 function format(value: number): string {

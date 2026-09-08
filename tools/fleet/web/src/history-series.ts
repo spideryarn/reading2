@@ -107,6 +107,19 @@ export type SeriesSpec = {
   /** Where amber and red sit, and which side of them is bad. */
   bands: { strained: number; critical: number; worseIs: "higher" | "lower" };
   read(sample: HealthSampleView): Reading;
+  /**
+   * An optional second, BOOLEAN fact about the same reading, drawn as a bar
+   * along the bottom rather than as part of the line.
+   *
+   * It exists for exactly one thing, and `health.ts` explains why: **swap is a
+   * cliff, not a slope.** `activelySwapping` — pages moving right now — is a
+   * different fact from any percentage, and *"100% full and quiet is a
+   * different fact from 60% and thrashing"*. A chart that drew only IO wait
+   * would have the number and not the event; the collector already separates
+   * them, and a consumer that folded them back together would be the exact
+   * lossy join this panel is built against.
+   */
+  mark?: { label: string; of: (sample: HealthSampleView) => boolean };
 };
 
 function record(v: unknown): Record<string, unknown> | null {
@@ -228,6 +241,19 @@ export const SERIES: SeriesSpec[] = [
         const wa = num(reading, "waPercent");
         return wa === null ? { kind: "unknown", why: "the reading had no numeric waPercent" } : { kind: "value", value: wa };
       }, { skipped: "not sampled on this turn" }),
+    mark: {
+      label: "swapping",
+      /* Read STRICTLY, and only off a `value` reading. `activelySwapping !==
+         true` covers the arm being absent, the sample being a collector
+         failure, and a build that renamed the field — all of which mean *we do
+         not know that it was swapping*, which is not the same as knowing it was
+         not, but is the only thing safe to draw. */
+      of: (sample) => {
+        if (sample.kind !== "reading") return false;
+        const activity = record(sample.report["swapActivity"]);
+        return activity?.["kind"] === "value" && activity["activelySwapping"] === true;
+      },
+    },
   },
 ];
 
@@ -267,6 +293,13 @@ export type SeriesPlot = {
   latest: Point | null;
   /** The largest value present. Null when there are none. */
   peak: number | null;
+  /**
+   * Where this series' boolean second fact was true — see `SeriesSpec.mark`.
+   * Empty for every series that has none.
+   */
+  marks: Span[];
+  /** How long those marks add up to, for the sentence. 0 when there are none. */
+  markedMs: number;
   /**
    * Where the line ran off the top of the fixed axis.
    *
@@ -500,6 +533,8 @@ function plotSeries(
   const unknowns: (Span & { why: string })[] = [];
   const absences: (Span & { why: string })[] = [];
   const overCeiling: Span[] = [];
+  const marks: Span[] = [];
+  let markedMs = 0;
   let current: Point[] = [];
   let peak: number | null = null;
   let worst: Point | null = null;
@@ -523,6 +558,13 @@ function plotSeries(
     /* A span wide enough to see: from this sample to the next, or one nominal
        interval when it is the last. */
     const until = samples[i + 1]?.atMs ?? Math.min(sample.atMs + sample.nextDueMs, toMs);
+
+    /* OUTSIDE the value branch: a mark is a fact about the sample, not about
+       whether this series got a number out of it. */
+    if (spec.mark?.of(sample) === true) {
+      markedMs += until - sample.atMs;
+      joinSpan(marks, { fromMs: sample.atMs, toMs: until }, () => true);
+    }
 
     if (reading.kind === "value") {
       const point = { atMs: sample.atMs, value: reading.value };
@@ -554,7 +596,7 @@ function plotSeries(
     if (isGapStart.has(sample.atMs)) flush();
   }
   flush();
-  return { spec, segments, unknowns, absences, peak, worst, latest, overCeiling };
+  return { spec, segments, unknowns, absences, peak, worst, latest, overCeiling, marks, markedMs };
 }
 
 /* ------------------------------------------------------------------ *

@@ -34,6 +34,7 @@ type Shape = {
   memory?: number;
   swap?: number | "none";
   wa?: number | "skipped";
+  swapping?: boolean;
   level?: string;
   blindLoad?: string;
 };
@@ -51,7 +52,9 @@ function reading(atMs: number, shape: Shape = {}, nextDueMs = CADENCE): HealthSa
       memory: { kind: "value", availableFraction: shape.memory ?? 0.4 },
       swap: shape.swap === "none" ? { kind: "none" } : { kind: "value", usedFraction: shape.swap ?? 0.4 },
       swapActivity:
-        shape.wa === "skipped" ? { kind: "skipped" } : { kind: "value", waPercent: shape.wa ?? 1, activelySwapping: false },
+        shape.wa === "skipped"
+          ? { kind: "skipped" }
+          : { kind: "value", waPercent: shape.wa ?? 1, activelySwapping: shape.swapping ?? false },
       verdict: { level: shape.level ?? "ok", reasons: [] },
     },
   };
@@ -401,6 +404,61 @@ describe("describeDuration", () => {
     expect(describeDuration(30_000)).toBe("under a minute");
     expect(describeDuration(22 * 60_000)).toBe("22 min");
     expect(describeDuration(4 * 3_600_000)).toBe("4.0 h");
+  });
+});
+
+/* ================================================================== *
+ * The boolean fact beside the number.
+ * ================================================================== */
+
+describe("actively swapping", () => {
+  it("is drawn as its own thing, not folded into IO wait", () => {
+    /* "Swap is a cliff, not a slope" — health.ts. Pages moving right now is a
+       different fact from any percentage, and 100% full and quiet is not the
+       same as 60% and thrashing. A chart with the number and not the event
+       would have lost exactly that. */
+    const swapping: HealthSampleView = {
+      kind: "reading",
+      atMs: T0,
+      nextDueMs: CADENCE,
+      report: {
+        swapActivity: { kind: "value", waPercent: 0, activelySwapping: true },
+      },
+    };
+    const quiet = reading(T0 + CADENCE, { wa: 0 });
+    const plot = plotHistory(view([swapping, quiet]), T0 + 2 * CADENCE);
+    const io = seriesOf(plot, "io");
+    expect(io.marks).toHaveLength(1);
+    expect(io.markedMs).toBe(CADENCE);
+    /* And the IO wait line is still 0% at that moment — the mark did not become
+       the number, which is the tile bug the live panel already had to fix. */
+    expect(io.segments.flat()[0]?.value).toBe(0);
+  });
+
+  it("does not claim swapping when the reading could not be taken", () => {
+    /* Absent, unknown, a collector failure, a renamed field: all mean "we do not
+       know that it was swapping", which is not the same as knowing it was not,
+       and is the only thing safe to draw. */
+    const plot = plotHistory(
+      view([failed(T0), reading(T0 + CADENCE, { wa: "skipped" })]),
+      T0 + 2 * CADENCE,
+    );
+    expect(seriesOf(plot, "io").marks).toHaveLength(0);
+    expect(seriesOf(plot, "io").markedMs).toBe(0);
+  });
+
+  it("merges a run of swapping samples into one bar", () => {
+    const samples = [0, 1, 2, 3].map((i) => reading(T0 + i * CADENCE, { wa: 40, swapping: true }));
+    const plot = plotHistory(view(samples), T0 + 4 * CADENCE);
+    expect(seriesOf(plot, "io").marks).toHaveLength(1);
+  });
+
+  it("no other series carries a mark", () => {
+    const plot = plotHistory(view([reading(T0, { wa: 40, swapping: true })]), T0 + CADENCE);
+    for (const key of ["load", "memory", "swap"]) {
+      expect(seriesOf(plot, key).marks).toEqual([]);
+      expect(seriesOf(plot, key).markedMs).toBe(0);
+    }
   });
 });
 
