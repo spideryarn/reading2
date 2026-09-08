@@ -32,9 +32,27 @@
  * silently rounded a new state to "idle" would be the exact lie the status
  * module exists to prevent.
  */
-import type { Pause, PauseUnknownCause } from "../../wire.js";
+import type {
+  AttentionAnswerability,
+  AttentionEvidence,
+  AttentionFeed,
+  AttentionItem,
+  AttentionKind,
+  AttentionList,
+  Pause,
+  PauseUnknownCause,
+} from "../../wire.js";
 
-export type { Pause, PauseUnknownCause };
+export type {
+  AttentionAnswerability,
+  AttentionEvidence,
+  AttentionFeed,
+  AttentionItem,
+  AttentionKind,
+  AttentionList,
+  Pause,
+  PauseUnknownCause,
+};
 
 export type FleetStatus =
   | { kind: "needs-you" }
@@ -292,6 +310,15 @@ export type FleetState = {
    * sessions could not be read* rather than showing 38 and looking complete.
    */
   unreadableRows: number;
+  /**
+   * **The attention inbox** — what the Overseer says needs Greg, or the reason
+   * there is no such list.
+   *
+   * Never null and never absent, because every one of the five things it can
+   * say is worth saying and two of them are about us rather than about the box.
+   * See `parseAttention`, and `AttentionFeed` in wire.ts.
+   */
+  attention: AttentionView;
 };
 
 /* ------------------------------------------------------------- parsing -- */
@@ -632,6 +659,296 @@ export function parseRow(v: unknown): FleetRow | null {
   };
 }
 
+/* ------------------------------------------------- the attention inbox -- */
+
+/**
+ * A timestamp spelled the one way this fleet spells one.
+ *
+ * The same check `isIsoTimestamp` makes in tools/overseer/store.ts, and
+ * deliberately as strict: every timestamp in the inbox was written by
+ * `toISOString()` and was refused by that function on the way into the
+ * checkpoint, so anything else arriving here did not come from the producer. A
+ * lenient version would accept a string `Date.parse` can read and the age
+ * arithmetic cannot reason about, which is how a duration on screen becomes
+ * confidently wrong rather than absent.
+ */
+function iso(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const at = new Date(v);
+  return Number.isNaN(at.getTime()) || at.toISOString() !== v ? null : v;
+}
+
+/** A count. Integer and non-negative: `sessionsScanned: 2.5` is not a number of sessions. */
+function count(v: unknown): number | null {
+  return typeof v === "number" && Number.isInteger(v) && v >= 0 ? v : null;
+}
+
+/**
+ * A string with something in it. **`""` is not a value, it is a hole.**
+ *
+ * `str` above is right for the session rows, where a blank field is a field the
+ * card simply does not draw. It is wrong for the inbox, where every string is
+ * the thing a person reads off a card and acts on:
+ * `{kind: "dialog", question: "", options: []}` passes a `typeof` check and
+ * arrives under the mechanical, observed heading with nothing in it — the exact
+ * crossing `AttentionEvidence` in wire.ts says must not happen. Whitespace is
+ * blank too, because on screen it is. GPT Sol's C4, 2026-09-08; the server's
+ * copy is `nonBlank` in tools/fleet/attention.ts.
+ */
+function nonBlank(v: unknown): string | null {
+  return typeof v === "string" && v.trim() !== "" ? v : null;
+}
+
+const ATTENTION_KINDS: readonly AttentionKind[] = ["irreversible", "product", "technical", "other"];
+
+/**
+ * **THE FIFTH STATE, and it belongs to this side of the wire only.**
+ *
+ * `AttentionFeed`'s four arms are all facts about the BOX: a list was
+ * published, no checkpoint was there, one was and could not be read, or this
+ * server did not look. `feed-unreadable` is a fact about the PAYLOAD — the
+ * server sent something under `attention` and this build cannot make sense of
+ * it — so it has no business on the shared type, and it is not `not-asked`.
+ *
+ * The distinction is exactly the one this whole panel exists to keep. **Absent
+ * means the server did not look**, which is what a build older than the field
+ * sends and which draws nothing. **Present-but-wrong means somebody looked and
+ * we cannot read the answer**, which is worth a line: it is a page and a server
+ * that have come apart, and every session on the list below may be waiting with
+ * nothing watching. Collapsing the second into the first would say *nobody
+ * asked* about a server that did.
+ */
+export type AttentionView = AttentionFeed | { kind: "feed-unreadable"; why: string };
+
+/**
+ * **THE INBOX OFF THE WIRE**, derived rather than adopted.
+ *
+ * **This is the THIRD parser for this shape, and each one crosses a boundary
+ * the last one did not.** `parseAttentionList` in tools/overseer/store.ts reads
+ * the checkpoint the Overseer wrote; `tools/fleet/attention.ts` reads that same
+ * file as a FILE, because the file is the contract and importing the Overseer's
+ * parser would close a cycle between the two tools (overseer-direction.md says
+ * so, and attention.ts's header has the rest). Between that one and this one sit
+ * `JSON.stringify`, HTTP, and a browser tab that iOS may have kept alive across
+ * a deploy. **A page must be able to read a payload from a server it is not the
+ * same age as**, and the only way to know it can is to check.
+ *
+ * Three parsers is a cost, and it buys three independent compatibility
+ * policies — which is the point rather than the price. This one refuses things
+ * the reader accepts (a `kind` from a newer server) and the reader refuses
+ * things the store accepts (a checkpoint whose schema it does not know).
+ *
+ * The DECISIONS below are the same as the other two make, deliberately:
+ *
+ *  - **A malformed list degrades to `unknown`; it does not empty.** Absent,
+ *    malformed and *nothing needs you* are three different facts and only the
+ *    third is a claim. The `unknown` arm carries the reason, and the panel draws
+ *    it as "no list" rather than as a calm fleet.
+ *  - **The first bad item degrades the whole list.** Not "drop it and count",
+ *    which is what `rows` gets — a session list of 38 out of 41 is still a list
+ *    of what is running, whereas an inbox of 4 out of 5 says *these are the ones
+ *    that need you* and is then wrong about the fifth. A short inbox is a
+ *    negative claim about everything not in it.
+ *  - **Every field and every arm, never a cast.** GPT Sol found four ways past
+ *    the first version of the store's parser, and the expensive one was a
+ *    `dialog` with no question and no options crossing the evidence boundary —
+ *    arriving at a renderer as something observed and enumerable. That boundary
+ *    is the whole design, and this is the side of it that draws the pixels.
+ *
+ * **ABSENT IS `not-asked`; PRESENT-BUT-WRONG IS `feed-unreadable`.** The field
+ * was added without a schema bump (state.ts's rule), so a server that predates
+ * it sends no `attention` at all, and reading that silence as *we looked and
+ * there was no checkpoint* would be a positive claim nobody made — the same
+ * ambiguous-negative mistake `parsePause` refuses above and `readAttemptClock`
+ * exists to unpick. But a field that IS there and will not parse is not silence
+ * either, and calling it `not-asked` would say *nobody asked* about a server
+ * that did. See `AttentionView`.
+ */
+export function parseAttention(raw: unknown): AttentionView {
+  /* Absent, and only absent. `null` is something a server chose to send. */
+  if (raw === undefined) return { kind: "not-asked" };
+  const unreadable = (why: string): AttentionView => ({ kind: "feed-unreadable", why });
+  if (!isRecord(raw)) return unreadable("the server sent an inbox that is not an object");
+  switch (str(raw["kind"])) {
+    case "not-asked":
+      return { kind: "not-asked" };
+    case "checkpoint-absent":
+      return { kind: "checkpoint-absent" };
+    case "checkpoint-unreadable":
+      return { kind: "checkpoint-unreadable", why: str(raw["why"]) ?? "the server gave no reason" };
+    case "published": {
+      /* The checkpoint's own clock, and a degraded list falls back to it for a
+         `scannedAt`. Without it there is no honest timestamp to build the arm
+         around, and inventing one is the mistake `fleetState` refuses to make
+         about `collectedAt`. */
+      const writtenAt = iso(raw["coordinatorWrittenAt"]);
+      if (writtenAt === null) return unreadable("the server published an inbox with no readable clock on it");
+      return {
+        kind: "published",
+        list: parseAttentionList(raw["list"], writtenAt),
+        coordinatorWrittenAt: writtenAt,
+      };
+    }
+    default:
+      return unreadable(
+        `this page does not know the inbox ${JSON.stringify(str(raw["kind"]) ?? raw["kind"] ?? null)}`,
+      );
+  }
+}
+
+/** The list itself. Never an empty `list` on failure — see `parseAttention`. */
+function parseAttentionList(raw: unknown, writtenAt: string): AttentionList {
+  const bad = (why: string): AttentionList => ({
+    kind: "unknown",
+    why: `the published list was unusable: ${why}`,
+    scannedAt: writtenAt,
+  });
+  if (!isRecord(raw)) return bad("it is not an object");
+  const scannedAt = iso(raw["scannedAt"]);
+  if (scannedAt === null) return bad("scannedAt is not a timestamp this page can read");
+  if (raw["kind"] === "unknown") {
+    /* `nonBlank` rather than `str`: the `why` is the whole of what this arm
+       draws — "no ranked list: {why}" — so a blank one renders a sentence that
+       stops at its colon. The server refuses it too; this is the boundary
+       parse, and it does not get to assume the server is this build. */
+    const why = nonBlank(raw["why"]);
+    return why === null ? bad("an unknown list with no reason") : { kind: "unknown", why, scannedAt };
+  }
+  if (raw["kind"] !== "list") {
+    return bad(`kind ${JSON.stringify(raw["kind"])} is neither "list" nor "unknown"`);
+  }
+  const sessionsScanned = count(raw["sessionsScanned"]);
+  if (sessionsScanned === null) return bad("sessionsScanned is not a count");
+  /* **A MISSING `sessionsUnreadable` IS NOT A ZERO**, and the same refusal lives
+     in tools/fleet/attention.ts. Zero is the strongest claim the field can make
+     — that every judgement the pass attempted succeeded — and a producer that
+     never had the field made no claim at all. The whole point of it is that an
+     incomplete observation may not be read as a negative one, which is the
+     mistake it would be repeating. Self-clearing: the pass runs every two
+     minutes and the next list carries it. */
+  const sessionsUnreadable = count(raw["sessionsUnreadable"]);
+  if (sessionsUnreadable === null) {
+    return {
+      kind: "unknown",
+      why:
+        "the published list predates the field that says how much of the fleet could not be judged, " +
+        "so its completeness cannot be established",
+      scannedAt,
+    };
+  }
+  /* **MORE FAILURES THAN ATTEMPTS IS CORRUPTION, NOT A READING.**
+     `sessionsUnreadable` counts sessions the pass TRIED to judge and could not,
+     so it is a subset of `sessionsScanned` and a producer reporting otherwise is
+     not reporting. Refused rather than clamped: AttentionPanel subtracts one
+     from the other to say how many WERE judged, and a negative there would be
+     printed on the page. The same check is in tools/fleet/attention.ts, and
+     both are needed — this page may be reading a server older than itself.
+     GPT Sol's C1, 2026-09-08. */
+  if (sessionsUnreadable > sessionsScanned) {
+    return bad(
+      `it says ${sessionsUnreadable} of ${sessionsScanned} sessions could not be judged, which is more than it scanned`,
+    );
+  }
+  const rawItems = raw["items"];
+  if (!Array.isArray(rawItems)) return bad("items is not an array");
+  const items: AttentionItem[] = [];
+  for (const rawItem of rawItems) {
+    const item = parseAttentionItem(rawItem);
+    if (item === null) return bad("an item is not one this page can read");
+    items.push(item);
+  }
+  /* IN THE ORDER IT ARRIVED. The producer sorts — by consequence, then by how
+     long it has waited — and nothing on this side may re-sort, or the two halves
+     disagree about what is at the top. Agreed with `w2-attention-inbox`;
+     AttentionPanel.tsx holds the other end of it. */
+  return { kind: "list", items, sessionsScanned, sessionsUnreadable, scannedAt };
+}
+
+/** Every field, every arm. `null` on the first mismatch — the list then degrades whole. */
+function parseAttentionItem(raw: unknown): AttentionItem | null {
+  if (!isRecord(raw)) return null;
+  const id = nonBlank(raw["id"]);
+  const sessionId = nonBlank(raw["sessionId"]);
+  const sessionName = nonBlank(raw["sessionName"]);
+  if (id === null || sessionId === null || sessionName === null) return null;
+  const waitingSince = iso(raw["waitingSince"]);
+  if (waitingSince === null) return null;
+  const kind = ATTENTION_KINDS.find((k) => k === raw["kind"]);
+  if (kind === undefined) return null;
+  const evidence = parseAttentionEvidence(raw["evidence"]);
+  if (evidence === null) return null;
+  const answerability = parseAnswerability(raw["answerability"]);
+  if (answerability === null) return null;
+  const rawDuplicates = raw["duplicates"];
+  if (!Array.isArray(rawDuplicates)) return null;
+  const duplicates: { sessionId: string; sessionName: string; waitingSince: string }[] = [];
+  for (const d of rawDuplicates) {
+    if (!isRecord(d)) return null;
+    const dupId = nonBlank(d["sessionId"]);
+    const dupName = nonBlank(d["sessionName"]);
+    const dupSince = iso(d["waitingSince"]);
+    if (dupId === null || dupName === null || dupSince === null) return null;
+    duplicates.push({ sessionId: dupId, sessionName: dupName, waitingSince: dupSince });
+  }
+  return { id, sessionId, sessionName, waitingSince, kind, evidence, answerability, duplicates };
+}
+
+/**
+ * The evidence union, both arms in full.
+ *
+ * **This is the boundary the whole inbox is built to hold.** `dialog` means the
+ * harness says a dialog is open and here are its options — mechanical, observed,
+ * enumerable. `prose` means we INFERRED from the tail of a turn that somebody is
+ * being asked something, and it may be wrong: the producer's own `readTurnTail`
+ * bug quoted Greg's last message back as an agent's question. A `dialog` with no
+ * question and no options must not cross into the renderer wearing the first
+ * arm's authority, so it is refused here rather than half-drawn there.
+ */
+function parseAttentionEvidence(raw: unknown): AttentionEvidence | null {
+  if (!isRecord(raw)) return null;
+  if (raw["kind"] === "dialog") {
+    /* **NON-BLANK, not merely a string.** An option labelled `""` is a button
+       with no words on it and a question of `""` is a heading with nothing
+       under it, both drawn as something the harness SAW and enumerated. See
+       `nonBlank`. */
+    const question = nonBlank(raw["question"]);
+    const options = raw["options"];
+    if (question === null || !Array.isArray(options)) return null;
+    if (!options.every((o) => nonBlank(o) !== null)) return null;
+    return { kind: "dialog", question, options: options as string[] };
+  }
+  if (raw["kind"] === "prose") {
+    const excerpt = nonBlank(raw["excerpt"]);
+    const why = nonBlank(raw["why"]);
+    if (excerpt === null || why === null) return null;
+    return { kind: "prose", excerpt, why };
+  }
+  return null;
+}
+
+/**
+ * Whether answering from a phone is a real option.
+ *
+ * A copy of `parseAnswerability` in tools/overseer/attention-memory.ts rather
+ * than an import of it: that module reaches `node:fs`, and this is a runtime
+ * parse at the browser's end of the wire, so there is nothing to import
+ * type-only. The rule is the one at the top of this file — the client restates
+ * the contract it renders — and the shape both sides validate against is the one
+ * in wire.ts, which both of them do import.
+ */
+function parseAnswerability(raw: unknown): AttentionAnswerability | null {
+  if (!isRecord(raw)) return null;
+  if (raw["kind"] === "phone") return { kind: "phone" };
+  /* Both arms that carry a `why` carry nothing else, so a blank one draws an
+     empty explanation on a card — worse for a reader than the arm being absent.
+     `nonBlank` rather than `str`, matching the server. */
+  const why = nonBlank(raw["why"]);
+  if (why === null) return null;
+  if (raw["kind"] === "needs-a-screen") return { kind: "needs-a-screen", why };
+  if (raw["kind"] === "unknown") return { kind: "unknown", why };
+  return null;
+}
+
 /**
  * Whether the payload could be read, and what to say if it could not.
  *
@@ -699,6 +1016,13 @@ export function parseFleetState(raw: unknown): FleetStateRead {
       rows,
       unreadableRows,
       health: raw["health"] ?? null,
+      /* **THE JOIN THIS STAGE EXISTS TO MAKE.** A producer with no consumer is
+         the class of bug this page kept shipping, so the field is read here and
+         one test walks a checkpoint on disk all the way to text in the DOM.
+         Never throws and never fails the payload over a bad inbox: a page that
+         went blank on it would have stopped saying what is running on the box,
+         which is the more important half. */
+      attention: parseAttention(raw["attention"]),
       /* `null` rather than a default: "the server did not say" and "the server
          says 60s" are different facts, and only the first should let the observed
          cadence win. */

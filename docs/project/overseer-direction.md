@@ -452,6 +452,18 @@ server's JSON — tolerantly, checking `schema` as a **number it knows** rather 
 else", so that an unknown schema renders as *I cannot read this* rather than as a page with fields
 quietly missing.
 
+**There is a second reason, and on 2026-09-08 it turned out to be the stronger one.**
+`parseCheckpoint` fails the **whole** checkpoint on one malformed register entry — deliberately, and the four
+refusals in `tools/overseer/store.ts`'s own header argue for it, because a register folded across a
+hole is a plausible history that is wrong about which agents are running. But a dashboard that imported that
+parser would inherit the refusal for a field it never asked about: **an unrelated bad register entry
+would render on the page as *the coordinator is unreadable* while the attention list sat there
+perfectly intact.** Reading only the projection you need — `schema`, `writtenAt`, `attention` — means
+the Overseer's register problems stay the Overseer's register problems. The cycle argument above says
+why the import is wrong in principle; this says what it would have cost on a specific Tuesday. Found
+by GPT Sol reviewing a fleet design that had proposed exactly that import, having not read this
+paragraph.
+
 **The schema is `2`, and the bump happened the day after this was written**, which is the argument
 for that paragraph rather than a footnote to it: `statusSince` changed from a bare timestamp to the
 pair below, and a reader still pinned to `1` would have done `Date.parse` on an object, got `NaN`,

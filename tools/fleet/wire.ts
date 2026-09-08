@@ -875,3 +875,69 @@ export type PauseUnknownCause =
  * Nothing related the two declarations, so nothing noticed.
  */
 export type Delivery = "none" | "partial" | "unknown";
+
+
+/* ------------------------------------------------------------------ *
+ * Whether this server has an inbox to show, which is a different question
+ * from what is in it.
+ * ------------------------------------------------------------------ */
+
+/**
+ * **WHAT THE FLEET SERVER CAN SAY ABOUT THE ATTENTION INBOX.**
+ *
+ * `AttentionList` above is the Overseer's judgement. This is the envelope it
+ * travels in, and it exists because the dashboard and the Overseer are two
+ * processes with two lifetimes: the page is up whenever the box is, and the
+ * checkpoint that carries the list may not be there at all. Measured
+ * 2026-09-08: the producer had been publishing that file for hours and
+ * `grep -rln "Checkpoint" tools/fleet/` found nothing, so the page could not
+ * have told the two apart even in principle.
+ *
+ * **`checkpoint-absent` must never render as an empty inbox.** *Nothing has
+ * been published, so nothing has been judged* and *nothing needs you* are
+ * opposite facts, and only the second is reassuring. That is the same argument
+ * `AttentionList`'s `unknown` arm makes one level down, and `Pause`'s `none`
+ * arm makes elsewhere in this file: an absence of observation may not be read
+ * as an observation of absence.
+ *
+ * ## Every arm is named after WHAT WAS SEEN, not after what it implies
+ *
+ * The first draft called the second arm `no-coordinator`, and GPT Sol was right
+ * that this claims more than the evidence supports. **A missing
+ * `current.json` proves only that no checkpoint exists at the path we looked
+ * at.** The Overseer may be starting, may have failed before its first write,
+ * may be running against another `OVERSEER_STORE_DIR`. So the arm says what was
+ * observed — no checkpoint here — and the page's copy says the same, rather
+ * than *the coordinator is not running*. Same discipline as `Pause`'s `none`.
+ *
+ * ## Why there is a fourth arm, and why it is the parse default
+ *
+ * `not-asked` means **this server did not look**. It is what an older server
+ * that predates the field sends — the field was added without a schema bump,
+ * per state.ts's rule, so a payload from before it carries no `attention` at
+ * all — and it is therefore what a client's parser must produce when the field
+ * is ABSENT.
+ *
+ * Defaulting to `checkpoint-absent` instead would be a positive claim nobody
+ * made: *we looked at the store and there was nothing there* is a statement
+ * about the box, and a server that has never heard of the file is in no
+ * position to make it. It is the same ambiguous-negative mistake `Pause`'s
+ * `none` arm is built to avoid, and the same one `readAttemptClock` in state.ts
+ * exists to unpick for `attemptedAt`.
+ *
+ * A field that is PRESENT and unreadable is a fifth thing, and it is not on
+ * this type: it is a fact about a payload rather than about the box, so it
+ * belongs to whoever is doing the reading. `web/src/types.ts` declares it.
+ *
+ * A renderer draws NOTHING for `not-asked` — there is no fact to report — and a
+ * quiet line for `checkpoint-absent`, because that one is news.
+ */
+export type AttentionFeed =
+  /** A checkpoint was read. `coordinatorWrittenAt` is the checkpoint's clock, NOT the list's. */
+  | { kind: "published"; list: AttentionList; coordinatorWrittenAt: string }
+  /** No checkpoint at the path we looked at. Says nothing about whether the Overseer is alive. */
+  | { kind: "checkpoint-absent" }
+  /** A checkpoint is there and could not be read, parsed, or understood. */
+  | { kind: "checkpoint-unreadable"; why: string }
+  /** This server did not look. See above — the default, and never a claim about the box. */
+  | { kind: "not-asked" };

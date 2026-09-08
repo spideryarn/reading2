@@ -1990,7 +1990,7 @@ line.
 **Not started.** Written up rather than bolted on, because the correction touches every timestamp the
 client parses and the naive version silently breaks a measurement that is currently right.
 
-### 🔴 Stage v0.6f: the attention inbox has a producer and no consumer
+### ✅ Stage v0.6f: the attention inbox has a producer and no consumer
 
 **This is a live instance of the class this whole plan spent 2026-09-08 removing**, and it is mine.
 
@@ -2020,15 +2020,24 @@ internally coherent, each reviewed, joined by an agreement in a conversation rat
 `wire.ts` does not help here and was never going to. It holds the SHAPE across a boundary that
 exists; it has no opinion about a boundary nobody crossed.
 
-- [ ] **The fleet server reads the Overseer's checkpoint.** A reader with a `CheckpointRead`-shaped
-      result — `read` / `absent` / `unreadable{why}` — because a missing or stale `~/.overseer/`
-      must render as *the coordinator is not running*, never as an empty inbox. The Overseer's own
-      store already takes `Checkpoint | null` whole for this reason.
-- [ ] **A route or a field on `/api/state`.** Prefer the field: the inbox is the thing the page
+- [x] **The fleet server reads the Overseer's checkpoint** — `tools/fleet/attention.ts`, its own
+      parser, taking only `schema` / `writtenAt` / `attention`. **Both halves of what this box first
+      said were wrong and the review caught them.** It said "a `CheckpointRead`-shaped result", which
+      meant importing the Overseer's parser and closing a cycle the seam exists to prevent; and it
+      said an absent file renders as *the coordinator is not running*, which is a positive claim an
+      absent file cannot support. The arm is `checkpoint-absent` and it says **no checkpoint has been
+      published here** — the coordinator may be starting, running against another root, or failing
+      before its first write. Never an empty inbox, which was the box's one correct instinct.
+- [x] **A route or a field on `/api/state`.** Prefer the field: the inbox is the thing the page
       exists to show, and a second request for it is a second thing that can be stale on its own.
-- [ ] **The client parse, deriving rather than adopting** — `duplicates` declined to
-      `readonly [...] | null` as agreed, `sessionsUnreadable` defaulted to `0`.
-- [ ] **The render, holding three agreements made with `w2-attention-inbox` and `orchestrator-setup`
+- [x] **The client parse, deriving rather than adopting**, with its own fifth state
+      (`feed-unreadable`) for a field that is present but wrong — because "this server did not look"
+      is false about a server that looked and sent something unreadable. **`sessionsUnreadable` is
+      NOT defaulted to `0`**, which is what this box originally said: a `list` arriving without it
+      degrades to `unknown` with the reason. Zero is a positive claim that every attempted judgement
+      succeeded, and nobody made it. The same default was a live defect in the producer's own parser,
+      found by this review and fixed by `orchestrator-setup` in `290b1ac3`.
+- [x] **The render, holding three agreements made with `w2-attention-inbox` and `orchestrator-setup`
       and written down here so they survive the conversation:**
       **(a)** a `prose` item gets **no answer control at all** in v1 — it is inferred from a pane
       tail, and their `readTurnTail` bug proved a card could quote *Greg's own last message* back as
@@ -2037,11 +2046,80 @@ exists; it has no opinion about a boundary nobody crossed.
       **(c)** `sessionsUnreadable` renders **only when non-zero**, and when it does the count reads
       as a floor — *"AT LEAST 4 need you… (1 could not be judged, so there may be more)"* — because
       a sentence and its retraction in the same block is worse than either.
-- [ ] **A test that fails if nothing imports it.** The lesson of the class is that the join is the
+- [x] **A test that fails if nothing imports it.** The lesson of the class is that the join is the
       thing to check, and the check is *who reads this?*
 
 **Cost of leaving it:** the wave's headline feature is invisible, and it will stay invisible while
 looking finished from either end. Every part has tests and passes them.
+
+#### What the design review changed, and the version we are not building
+
+The first design had the fleet server call `readCheckpoint()` from `tools/overseer/store.ts` and map
+its three arms. **GPT Sol refused it, against documentation this session had not read.**
+[overseer-direction.md § the store](../project/overseer-direction.md) already said the dashboard must
+parse `current.json` itself, and gave the reason: `tools/overseer/` imports `collect.ts` and
+`status.ts` from `tools/fleet/`, so the reverse import closes a cycle between the two things the seam
+exists to keep apart.
+
+The stronger argument turned up while checking that one, and is now written into that paragraph:
+`parseCheckpoint` fails the **whole** checkpoint on one malformed register entry, so the import would
+have rendered an unrelated bad register field on this page as *the coordinator is unreadable* while
+the attention list sat there intact. Independent parsers keep the Overseer's register problems the
+Overseer's. **The file is the contract; the function is one implementation of reading it.**
+
+So `tools/fleet/attention.ts` parses only the projection this tool needs — `schema`, `writtenAt`,
+`attention` — and checks `schema` as a number it knows rather than as "not something else".
+
+Four more findings, each of which changed the shape rather than the code:
+
+- **`no-coordinator` became `checkpoint-absent`.** An absent file proves only that no checkpoint
+  exists at the configured path — not that the coordinator is down. It may be starting, running
+  against another root, or failing before its first write. Same discipline as `Pause`'s `none`.
+- **The reader must be incapable of throwing, root resolution included.** `storeRoot()` throws on a
+  relative `OVERSEER_STORE_DIR`, and `deps.publish()` in `refresh.ts` sits *outside* the try/catch
+  that guards collection — so a throw out of `statePayload()` ends the refresh loop and leaves the
+  dashboard wearing its last good timestamp. The silent stall `attemptedAt` exists to expose.
+- **`fleetState()`'s new parameter is required, not optional.** Optional-to-keep-callers-compiling
+  is precisely the escape hatch that let this bug exist: a production join that can go missing with
+  nothing going red. Backward compatibility belongs at the HTTP parse boundary, where an older
+  *server* omits the field — not in the current server's composition root.
+- **The join test as first written was green by construction.** Hand-wiring
+  `readAttention → fleetState → parseFleetState → App` inside a test stays green after `server.ts`
+  stops calling the reader: the test has rebuilt the missing edge itself. That is shape 4 from
+  [260908e](../postmortems/260908e-a-fixture-that-means-now-decays-into-the-state-it-asserts-against.md),
+  reached while fixing an instance of Class A. The payload composition therefore moves out of
+  `server.ts` into `state.ts`, and the test drives the function production composes through.
+
+#### What the first real pass taught us, which no fixture would have
+
+The Overseer was restarted onto current code at 15:36 and published a real list three minutes later.
+Measured from `~/.overseer/current.json` rather than described:
+
+    items=2 · sessionsScanned=11 · sessionsUnreadable=1 · both items `prose` · both `answerability: phone`
+
+- **`sessionsUnreadable: 1` on the first live pass.** The floor phrasing is exercised against real
+  data on day one instead of against a fixture written to agree with itself — and a wild `0` would
+  have hidden the false-zero defect in the producer's parser (fixed by `orchestrator-setup`,
+  `290b1ac3`) for longer.
+- **The excerpts are 1,116 and 1,736 characters, 17 and 21 lines**, one of them a wrapped table of
+  process states. An unbounded excerpt is a card taller than a phone. **So the card inverts:** the
+  producer's one-sentence `why` is the always-visible headline and the excerpt lives one tap away —
+  Fable's caveat rule, since the excerpt changes what you would *believe* about the inference rather
+  than what you would *do* in the next ten seconds.
+- **The excerpt is selected by position, not by whether it contains the sentence the `why` is
+  about**, which is why a process table is offered as evidence for a claim about what an agent said.
+  The producer's fix, not ours. Ours is to label the disclosure as *the tail of that session's pane*
+  rather than as a quotation — an unlabelled excerpt that does not contain the relevant sentence
+  teaches a reader to distrust a `why` that was correct. Live on the first pass, in the direction
+  that costs us the reader's confidence in the feature.
+- **No live example of two paths**: every item had zero duplicates and none was `needs-a-screen`.
+  Those are written from the type and are untested against reality; say so rather than assuming.
+
+`attention.kind === "unknown"` now arrives from three places — no pass has run yet, a pass ran and
+failed, a stored list was unreadable — each carrying its own `why`. **We do not split the arm.** The
+producer keeps it deliberately as one thing, *nobody can tell you*, and splitting it here would put
+the same reasoning in two places. The `why` is rendered on screen rather than behind a disclosure,
+because "no pass has run yet" means wait and "the pass failed" means go and look.
 
 ### Later: the coordinator agent
 
