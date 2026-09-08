@@ -352,6 +352,16 @@ Captured 2026-09-08, and several of these contradict what a hand-written fixture
 - **Two different `tookMs` fields exist** — the snapshot's (whole collection) and `health.tookMs`
   (the health probe alone, 1.2–1.8s). Easy to confuse.
 
+**And a lesson about the fixtures themselves.** That capture was taken at 02:15 and was **already the
+wrong shape by 03:40** — the dashboard landed `meta`, `claudeSessionId`, `panePid`, `schema`,
+`tmuxServerPid` and `refreshMs` in between, so the saved rows would have failed the strict parser
+S2 is built around. The measurements above survive, because status objects did not change; the
+fixtures did not.
+
+So: **capture fixtures against a producer that is still moving, and re-capture them at the moment you
+write the parser, not before.** Committing that first set would have been worse than having none —
+a test passing against a shape the producer no longer emits is a test that has stopped watching.
+
 ## Stages
 
 **Re-sliced per Sol F11**, which observed that the first draft's stopping points were not honest: its
