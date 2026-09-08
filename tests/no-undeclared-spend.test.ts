@@ -158,6 +158,12 @@ const ALLOWED: Readonly<Record<string, string>> = {
     "Reads GET /api/v1/endpoints/zdr to check that a finished run's challenger calls were served by an upstream that retains nothing — the request asked for it, and this is the only thing that can say whether it was honoured. Costs nothing and buys no inference; same reason as verify-costs.ts for why it cannot live in the declared file.",
   "evals/declared-spend.ts":
     "The bypass wrapper itself, and the guarded fetch that makes one safe.",
+  "tools/overseer/attention-classify.ts":
+    "THE OVERSEER'S OWN SEAM, and the only one outside src/. It really does buy inference — one small `openai/gpt-5.6-luna` call per newly-ended turn, ~$0.0039 for a cold pass over 32 sessions — and it cannot go through src/ai-call.ts, because docs/project/orchestrator-direction.md § Principles says the Overseer must not depend on the product database or on anything under src/. That is the whole reason it exists: the thing you reach for when the product is broken cannot be built on the product. It is not a declared bypass either, because `declaredFetch` and the register are also under src/ and evals/. So: one file, one endpoint, a hard `maxCalls` ceiling per pass, and both cost pockets read back from the gateway and printed — see `callCost`. If a second file in tools/overseer/ ever appears here, that is a fork of this seam and should be refused rather than listed.",
+  "tools/overseer/attention-cli.ts":
+    "Reads OPENROUTER_API_KEY to decide whether the attention pass can run at all, and to print a sentence a person can act on. Names no endpoint and makes no request: the key is handed to the seam above. It reads the environment rather than .env.local ON PURPOSE — src/env.ts lets the file beat the shell, a daemon's key comes from its unit file, and two precedence rules over one filename is how a process comes to talk to the wrong account and report success.",
+  "scripts/overseer.ts":
+    "Names OPENROUTER_API_KEY in one line of CLI output: the daemon says `attention: off` when there is no key, because a pass that silently never runs would publish a calm inbox forever. No transport, no value ever read.",
   "src/spend-declarations.ts": "The register. Data, not transport.",
   "tests/public-visibility-pg.test.ts":
     "A positive control for its own fetch spy — `globalThis.fetch` is mocked for the length of the assertion, so no request leaves. Listed by name because a test that really did reach a provider is a thing worth being told about.",

@@ -657,6 +657,30 @@ export type AttentionList =
       items: readonly AttentionItem[];
       /** THE POSITIVE CONTROL. Zero items out of zero scanned is a broken probe. */
       sessionsScanned: number;
+      /**
+       * Sessions we TRIED to judge and could not — a pane that would not parse, a
+       * gateway that returned 429, a tail the budget did not reach.
+       *
+       * **NEVER a session we correctly declined to judge.** A mid-turn agent is
+       * not waiting on anybody and skipping it is right rather than incomplete;
+       * so is a Codex pane, a shell, and a permission dialog. If deliberate skips
+       * landed here the number would be non-zero on almost every pass, the page
+       * would carry a permanent caveat, and Greg would learn to read past it —
+       * which is A17 again, healthy operation spending most of its time alarming.
+       * **Render a line only when it is non-zero.**
+       *
+       * It exists because suppressing the claim of ABSENCE leaves the claim of
+       * COMPLETENESS standing. A list of two says *these two need you*, which is
+       * true, and a reader takes *and only these two*, which may not be — and
+       * that inference is a negative claim about the other thirty. An incomplete
+       * observation may not be read as a negative one.
+       *
+       * Added 2026-09-08 after GPT Sol found a 429 publishing an empty list with
+       * every count green: `breakdownBalances()` proved the WALK happened and
+       * could not prove the JUDGEMENT did. A positive control proves the step it
+       * wraps and nothing above it.
+       */
+      sessionsUnreadable: number;
       scannedAt: string;
     }
   | { kind: "unknown"; why: string; scannedAt: string };
@@ -754,6 +778,23 @@ export type PauseUnknownCause =
   | "no-conversation-id"
   | "session-store-unreadable"
   | "rate-limits-not-collected"
+  /**
+   * A rate-limit scan RAN and could not answer for this session.
+   *
+   * The eighth arm, and it is a different fact from `rate-limits-not-collected`:
+   * that one means nobody looked, this one means somebody looked and the
+   * evidence did not settle it. On this box in the week of 2026-09-08 that is
+   * the ordinary case — 27 rejections belong to a Max account Greg is no longer
+   * signed into, they carry no account id, and the only artefact that could
+   * attribute them is a cache whose window disagrees. So the collector reports
+   * `unknown` rather than naming a limit it cannot attribute, and this is the
+   * cause that carries that sentence to the page.
+   *
+   * Distinct from the other one because the remedies differ: "nobody looked" is
+   * fixed by publishing a reading, and "looked and could not tell" is fixed by
+   * signing in, or by waiting for the rejections to expire.
+   */
+  | "rate-limits-unreadable"
   /**
    * A wake-up WAS found and its time could not be worked out — a recurring
    * expression, a step, a range.

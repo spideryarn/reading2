@@ -1,0 +1,24 @@
+    awaiting-Greg, not a build.
+
+  Three things worth your attention:
+
+  The box is clear now, and both parked sessions are waiting on exactly that. Load average is 4.89 with 17 GB free — last
+  night it was 134 with nothing free, which is what they paused for. fb2g has wake-ups armed for 13:47 and 14:03, so it
+  resumes on its own within the hour; fb2c is waiting on the same condition.
+
+  Each of those two has a line sitting unsent in its prompt box. fb2c shows wake up early if the box clears sooner and
+  fb2g shows go ahead and build it now, load looks fine. Both sessions are idle at the prompt, so those were typed and
+  never submitted. If they're yours, fb2g's in particular is the exact answer it's parked for — and its load premise is
+  now true. I haven't pressed enter for them; driving another session's keyboard is blocked here, and it should be.
+
+  awaiting-approval.md is unchanged — nothing in the top list, and the same three decisions in the second: the dictation
+  privacy wording that is already live and unsigned-off, the 2A uploaded-filename-in-the-public-slug question, and whether
+  to spend on settling the Socratic wording.
+
+✻ Cooked for 1m 21s · done 12:44 PM
+                                                                                  ✔ Update installed · Restart to update
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ send those two messages for me
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  [Opus 5 (1M context)] code/spideryarn2 (dev) · ██░░░░░░░░ 21%                                               /rc failed
+  ⏵⏵ auto mode on (shift+tab to cycle) · ← for agents

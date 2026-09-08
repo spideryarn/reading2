@@ -580,6 +580,7 @@ const PAUSE_CAUSES: readonly PauseUnknownCause[] = [
   "no-conversation-id",
   "session-store-unreadable",
   "rate-limits-not-collected",
+  "rate-limits-unreadable",
   "schedule-not-parseable",
 ];
 
