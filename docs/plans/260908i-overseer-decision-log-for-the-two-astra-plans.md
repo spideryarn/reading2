@@ -129,3 +129,15 @@ and [260908f-overseer-and-fleet-improvement-roadmap.md](260908f-overseer-and-fle
   the same-shaped check (a harmless `tmux-job.ts echo`) would have cost nothing. I did not ask a
   peer to run either blocked command. Nothing was lost: the store is on disk, the daemon replays
   `events.jsonl` on start, and the coordinator had read the live store with the new parser first.
+- 2026-09-08 22:50 UTC — **Dispatched** Execution identity (`260908f-roadmap-exec-identity`, store.ts
+  handed over by the coordinator until its 3c) and Usage visibility (`260908f-roadmap-usage`, carrying
+  Greg's London/Athens clock and the missing `attention.json` seam-table row the Baseline agent
+  found). **I** decided, on the census: Attention inbox/completeness are already met and are not
+  dispatched; Work evidence waits behind Execution identity (shared probe machinery); the Box
+  contracts preview half waits until the dashboard agent's Stage 4 is off the action routes. Also
+  running for Greg: `worktree-removal-script` (his 23:30 request). Load 4.9, five_hour 8%.
+  - **Carried for Greg from the coordinator (260908g):** (a) blocking its 3d — may an unattended
+    rule assert `confirm: true`? Its default if unanswered is NO, propose only, which is what is
+    built. (b) non-blocking — whether to arm `OVERSEER_JOBS_ENABLED`; the Baseline agent adds that
+    exporting it in a shell arms nothing because `overseer.service` neither sets it nor reads an
+    env file, so durable arming is a unit change plus provisioning, i.e. Greg's.
