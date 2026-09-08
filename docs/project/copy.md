@@ -454,12 +454,24 @@ the honest answer is sometimes **we do not know**:
 | The re-read settles nothing | *Couldn't tell whether that worked. Reload the page.* |
 | An import is running (409) | the server's own sentence, unwrapped: *An import is running on this article, so it cannot be deleted yet. Stop it, or wait for it to finish, then delete.* |
 
+**{the server's sentence} is sometimes ours.** The route answers `{ destroyed: slug }`, and a
+success that does not name *this* slug — a `204`, a `{}`, a different article — is refused with
+*The server did not confirm which article was deleted*, which then goes through the same re-read
+as any other failure and reaches the reader inside the first row above. Written as a sentence for a
+reader rather than a developer's assertion, because that is where it comes out.
+
 The middle one is the interesting one and it is not padding. A failed request is not proof that
 nothing was written, so the control asks again — but `apiFetch` answers a GET whose transport failed
 out of the saved copy, with a real 200 (`src/web/lib/api.ts` § `attempt`), so only a **fresh server**
 404 proves the delete landed and only a **fresh server** 200 proves it did not. Anything else has to
 say so. Writing *"nothing changed"* there would be this control's one dishonest sentence, and it is
 the same lesson `ArchiveArticle` learned from a cross-model review on 2026-08-27.
+
+**And that sentence now stands on its own**, with no *Delete for ever* and no *Keep it* under it. A
+message admitting we cannot say whether the article still exists, printed beside a live button that
+would send a second delete for it, is the page contradicting itself in the one place it must not —
+GPT Sol, reviewing the built control on 2026-09-08. The reader is told to reload, and a reload is
+what re-establishes the state.
 
 The 409 keeps the server's own words with no lead in front of them, for `ExportSection`'s reason
 about the 413: that sentence already says what happened and what to do, and *"Couldn't delete it —"*

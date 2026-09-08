@@ -253,7 +253,7 @@ import { useNow } from "./useNow.js";
 import { SLOW_AFTER_MS } from "./useSlow.js";
 import { useExperimental } from "./useExperimental.js";
 import { apiFetch, failure, readJson, statusOf } from "./lib/api.js";
-import { forgetCachedReader } from "./lib/cached-shelf.js";
+import { cachedReaderNow, forgetCachedReader } from "./lib/cached-shelf.js";
 import { AccessSharing, asArticleSharing } from "./AccessSharing.js";
 import { CARD } from "./card.js";
 import { ProfileBox } from "./ProfileBox.js";
@@ -2621,7 +2621,14 @@ async function stillOnTheServer(slug: string): Promise<Survival> {
     const res = await apiFetch(`/api/metadata/${encodeURIComponent(slug)}`);
     if (res.headers.get("x-spideryarn-offline") === "copy") return "unknown";
     if (res.status === 404) return "gone";
-    return res.ok ? "here" : "unknown";
+    /* **200 and nothing else**, and this was `res.ok` until 2026-09-08 ⟨Sol,
+       F24⟩ — which also takes 201, 202, 204 and 206. A re-read answered
+       `204 No Content` therefore made this control say *"still here,
+       untouched"* about an article that had just been destroyed, which is the
+       exact sentence the paragraph above exists to prevent. The comment said
+       *only a fresh server 200*; now the code does too. */
+    if (res.status === 200) return "here";
+    return "unknown";
   } catch {
     /* No status, and there never will be one for this request. */
     return "unknown";
@@ -2645,17 +2652,28 @@ async function stillOnTheServer(slug: string): Promise<Survival> {
  * (src/routes.ts), `ShelfStore.destroy` (src/store/pg-shelf.ts), and the whole
  * argument in docs/plans/260906h-delete-an-article-permanently.md.
  *
- * ## It inherits `ArchiveArticle`'s three states, and adds a fourth
+ * ## It inherits `ArchiveArticle`'s three states, and adds two
  *
- * Never offer a button over a state we have not established. `known` is *the
- * metadata request has landed*; `failed` and the fixture refuse for the same
- * reasons they do above. What is new is **`offline`**: `apiFetch` answers a GET
- * whose transport failed from the saved copy with a real 200
- * (`provenanceOffline` at the call site), and a body saved yesterday cannot say
- * whether this article is still there, still ours, or already gone. Archive can
- * be wrong about that and be put right by pressing Put back; this cannot. So
- * the control is **absent**, not disabled — a dimmed *Delete permanently* still
- * claims there is something here to delete.
+ * Never offer a button over a state we have not established, and every refusal
+ * below is that one rule. `known` is *the metadata request has landed*; the
+ * fixture refuses for the reason it does above; **`failed` refuses on its own**
+ * rather than only when `known` is false, because a failed *refresh* keeps the
+ * previous answer and would otherwise leave deletion offered over metadata the
+ * client explicitly failed to re-establish (⟨Sol, F23⟩, at the branch).
+ *
+ * The first of the two new ones is **`offline`**: `apiFetch` answers a GET whose
+ * transport failed from the saved copy with a real 200 (`provenanceOffline` at
+ * the call site), and a body saved yesterday cannot say whether this article is
+ * still there, still ours, or already gone. Archive can be wrong about that and
+ * be put right by pressing Put back; this cannot.
+ *
+ * The second is **`uncertain`**, and it is the only one that arrives *after* a
+ * press: the DELETE did not come back and the server would not say what is
+ * there now, so there is nothing honest left to offer (⟨Sol, F26⟩; the state is
+ * declared below).
+ *
+ * In every one of them the control is **absent**, not disabled — a dimmed
+ * *Delete permanently* still claims there is something here to delete.
  *
  * ## Two steps, no modal, and the second one is somewhere else
  *
@@ -2684,6 +2702,11 @@ async function stillOnTheServer(slug: string): Promise<Survival> {
  * `ArchiveArticle`'s catch block is the lesson and this is the harder version
  * of it: a failed request is not proof that nothing was written, so we ask —
  * but only the server may answer. `stillOnTheServer` above.
+ *
+ * And the other half of the same rule, which took a second review to land: a
+ * *successful* request is not proof that anything **was** written either. The
+ * route answers `{ destroyed: slug }`, and the client requires it to name this
+ * slug before it believes a word of it — see the check in `destroy`.
  *
  * A **409** is the exception, and it is one because it is already a fresh
  * server answer that deleted nothing: `destroy` refuses on the live-job check
@@ -2719,9 +2742,23 @@ function DeletePermanently({
   const [asking, setAsking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /**
+   * **We asked, and we no longer know** — `ArchiveArticle`'s `at: undefined`,
+   * for the act that cannot be pressed twice on a guess.
+   *
+   * Set only from the re-read's `"unknown"`: the DELETE did not come back and
+   * the server would not say what is there now. A separate flag rather than a
+   * fourth value on `error`, because the two questions are different — `error`
+   * is *what to tell the reader*, this is *whether there is anything left to
+   * offer them* — and the branch below has to be readable as the second one.
+   *
+   * One-way. Nothing here clears it, because nothing here can learn the answer:
+   * the reader is told to reload, and a reload is what re-establishes the state.
+   */
+  const [uncertain, setUncertain] = useState(false);
 
   /**
-   * Retire this reader's cached set, then go to the library.
+   * Retire the cached set of the reader who pressed, then go to the library.
    *
    * **In that order, and awaited.** Invalidating `/api/library` alone is not
    * enough — metadata, comments, chat, search, glossary and illustrated are all
@@ -2729,20 +2766,49 @@ function DeletePermanently({
    * shelf paint a card for an article that no longer exists, which
    * `offline-store.ts` points out looks exactly like a delete that failed.
    * `forgetCachedReader` never throws.
+   *
+   * **`reader` is captured before the DELETE goes out, not looked up here.** By
+   * the time this runs a round trip has gone by, and an account switch inside it
+   * would send us to empty the *new* reader's drawer while leaving the old one
+   * holding the destroyed article — cached-shelf.ts § *The reader is an argument*
+   * has both halves of that and the limit of the repair. ⟨Sol, F27.⟩
    */
-  async function leave(): Promise<void> {
-    await forgetCachedReader();
+  async function leave(reader: string | null): Promise<void> {
+    await forgetCachedReader(reader);
     navigate(LIBRARY_HREF);
   }
 
   async function destroy(): Promise<void> {
+    /* Before anything is sent. See `leave` above. */
+    const reader = cachedReaderNow();
     setBusy(true);
     setError(null);
     try {
-      await readJson<{ destroyed: string }>(
+      const answer = await readJson<{ destroyed?: unknown }>(
         await apiFetch(`/api/library/${encodeURIComponent(slug)}`, { method: "DELETE" }),
       );
-      await leave();
+      /**
+       * **The route names what it destroyed, and we make it.** ⟨Sol, F25.⟩
+       *
+       * This parsed `{ destroyed }` and threw it away until 2026-09-08, so a
+       * *status* was the whole of the proof — and `readJson` deliberately turns
+       * an empty successful body into `{}` (lib/api.ts), which means a `204`, a
+       * `{}`, or a body naming somebody else's slug all read as *deleted*. On
+       * any of those the reader's entire cached set was retired and they were
+       * taken to their library, over a request that may have deleted nothing.
+       * That is the silent success this repo keeps writing up
+       * (docs/reusable/silent-success.md), in the one place where being wrong
+       * cannot be walked back.
+       *
+       * The throw is not a dead end: it drops into the catch below, which asks
+       * the server what is actually there. So a route that really did delete
+       * and merely answered oddly still ends with the reader in their library —
+       * by evidence rather than by assumption.
+       */
+      if (answer.destroyed !== slug) {
+        throw new Error("The server did not confirm which article was deleted");
+      }
+      await leave(reader);
       /* No `setBusy(false)`: the article is gone and we are on our way out.
          Re-enabling a button over a destroyed article is the one state this
          component must never draw. */
@@ -2758,13 +2824,24 @@ function DeletePermanently({
       if (survival === "gone") {
         /* The response was lost on the way back, but the delete landed. Saying
            "that failed" here would be this control's one dishonest sentence. */
-        await leave();
+        await leave(reader);
+        return;
+      }
+      if (survival === "unknown") {
+        /* **We do not know, so we offer nothing.** ⟨Sol, F26.⟩ Until
+           2026-09-08 this set the honest sentence and then left `asking` true
+           and put `busy` back to false, so *Delete for ever* stood enabled
+           directly under an admission that we could not say whether the
+           article still existed — the one thing this component's header
+           forbids, done in its own error path. A second press from there sends
+           another DELETE for something that may already be gone. */
+        setError("Couldn't tell whether that worked. Reload the page.");
+        setUncertain(true);
+        setBusy(false);
         return;
       }
       setError(
-        survival === "here"
-          ? `Couldn't delete it — ${ended((e as Error).message)} The article is still here, untouched.`
-          : "Couldn't tell whether that worked. Reload the page.",
+        `Couldn't delete it — ${ended((e as Error).message)} The article is still here, untouched.`,
       );
       setBusy(false);
     }
@@ -2779,6 +2856,25 @@ function DeletePermanently({
         <p className="tw:m-0 tw:text-sm tw:text-muted-foreground">
           This address has no article of its own — the reading view is showing the example fixture,
           so there is nothing here to delete.
+        </p>
+      </div>
+    );
+  }
+
+  /* **The reader has already pressed, and we cannot say what happened.** Second,
+     because it is the strongest claim on this card: it outranks *this page is a
+     saved copy* and *we could not check this article*, both of which are about
+     what we know now, while this one is about what we may already have done. No
+     control of any kind — not the confirm, not Keep it, and not the trigger,
+     which would invite the second DELETE. Only a reload settles it. */
+  if (uncertain) {
+    return (
+      <div className={`${CARD} tw:p-4`}>
+        <p
+          role="alert"
+          className="tw:m-0 tw:inline-flex tw:items-start tw:gap-1 tw:text-sm tw:text-destructive"
+        >
+          <TriangleAlert size={12} /> {error ?? "Couldn't tell whether that worked. Reload the page."}
         </p>
       </div>
     );
@@ -2799,8 +2895,20 @@ function DeletePermanently({
   }
 
   /* In flight, or it failed. Neither establishes that there is an article here,
-     so neither may offer a button. */
-  if (!known) {
+     so neither may offer a button.
+
+     **`|| failed`, and it was `!known` alone until 2026-09-08** ⟨Sol, F23⟩. A
+     failed *first* load leaves `provenance` null and both halves agree; a
+     failed **refresh** does not, because `readProvenance` deliberately keeps
+     the previous answer so the page does not empty out over one lost
+     revalidation (see its header). Every row in *Generate it again* can fire
+     one. So this control arrived at `known=true, failed=true` — a state the
+     first load cannot produce — and went on offering deletion over metadata
+     the client had explicitly failed to re-establish, in the window where the
+     article may have been destroyed elsewhere or changed hands. Keeping the
+     stale rows is right for everything else on this page and wrong for exactly
+     this one. */
+  if (!known || failed) {
     return (
       <div className={`${CARD} tw:p-4`}>
         <p

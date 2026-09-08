@@ -15,7 +15,7 @@
  * metadata we are acting on came off the network) is where a control like this
  * goes wrong, and hand-written props assert the props.
  *
- * ## Four things here are not about React
+ * ## Six things here are not about React
  *
  *  - **A double-click must not delete.** The confirm button may not appear
  *    where the trigger was, so the second press of a double-click lands on
@@ -30,15 +30,23 @@
  *    `x-spideryarn-offline: copy` header (src/web/lib/api.ts § `attempt`), so
  *    the naive re-read would cheerfully report *"still here, untouched"* about
  *    an article that is gone. Three outcomes, three tests.
- *  - **The reader's cached set is retired before we navigate.** A stale shelf
- *    card that paints and then opens a 404 is the visible failure
- *    (cached-shelf.ts).
+ *  - **A successful status is not the route's answer either.** `DELETE
+ *    /api/library/:slug` replies `{ destroyed: slug }` and `readJson` turns an
+ *    empty success into `{}`, so a 204, a `{}` or a body naming a different
+ *    article would all have passed for a confirmed deletion. Three tests.
+ *  - **When we cannot say what happened, we offer nothing.** Not a disabled
+ *    button — no button, and not the trigger either, which would only invite a
+ *    second DELETE for an article that may already be gone.
+ *  - **The reader's cached set is retired before we navigate**, and it is the
+ *    drawer of the reader who *pressed*, captured before the request rather
+ *    than looked up after it. A stale shelf card that paints and then opens a
+ *    404 is the visible failure (cached-shelf.ts).
  */
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Article } from "../src/types.js";
+import type { Article, Job } from "../src/types.js";
 
 vi.mock("../src/web/lib/supabase.js", () => ({
   supabase: {
@@ -53,10 +61,13 @@ vi.mock("../src/web/lib/supabase.js", () => ({
 
 /** Every call to the cache retirement, so the order against `navigate` is visible. */
 const forgot: string[] = [];
+/** …and **whose** drawer each of those calls was told to empty. */
+const forgotFor: (string | null | undefined)[] = [];
 vi.mock("../src/web/lib/cached-shelf.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../src/web/lib/cached-shelf.js")>()),
-  forgetCachedReader: async () => {
+  forgetCachedReader: async (reader?: string | null) => {
     forgot.push(location.pathname);
+    forgotFor.push(reader);
   },
 }));
 
@@ -75,6 +86,17 @@ Object.defineProperty(window, "matchMedia", {
 });
 
 const { Metadata } = await import("../src/web/Metadata.js");
+/**
+ * **The only lever that fires a metadata *refresh*.** Every *Generate it again*
+ * row hands its `useStepJob` the page's `refresh` (Metadata.tsx §
+ * `RerunSection`), so a job this article's queue reports as `done` is what makes
+ * the page read its metadata a second time — and a second read is the only way
+ * to reach the state F23 is about. Driven through the real engine rather than
+ * by mocking the hook, exactly as tests/metadata-rerun-section.test.tsx does.
+ */
+const { jobEngine } = await import("../src/web/jobEngine.js");
+/** To move the signed-in reader under a delete that is already in flight. */
+const { rememberUser } = await import("../src/web/lib/offline-store.js");
 
 const SLUG = "a-piece";
 const TITLE = "A piece";
@@ -165,7 +187,10 @@ let root: Root;
 beforeEach(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   forgot.length = 0;
+  forgotFor.length = 0;
   asked = [];
+  jobEngine.reset();
+  rememberUser("reader-a");
   metadataAnswers = [async () => live()];
   deleteAnswer = async () =>
     new Response(JSON.stringify({ destroyed: SLUG }), {
@@ -194,6 +219,8 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
+  jobEngine.reset();
+  rememberUser(null);
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
@@ -242,6 +269,28 @@ async function press(b: HTMLButtonElement | undefined): Promise<void> {
   await settle();
 }
 
+/**
+ * **Make the page read its metadata a second time**, the way production does:
+ * a *Generate it again* row's job comes back `done` and its `onFinished` — the
+ * page's `refresh` — asks again.
+ *
+ * Two `receive` calls, because the engine treats the first list it ever sees as
+ * a baseline rather than as news (`recordCompletions`, src/web/jobEngine.ts).
+ */
+async function finishARun(): Promise<void> {
+  const job: Job = {
+    id: "job-1",
+    ownerId: "owner" as Job["ownerId"],
+    slug: SLUG,
+    steps: [{ name: "arc", label: "Doing arc", status: "done" }],
+    status: "done",
+    createdAt: "2026-09-07T00:00:00.000Z",
+  };
+  await act(async () => jobEngine.receive([]));
+  await act(async () => jobEngine.receive([job]));
+  await settle();
+}
+
 const alertText = (): string =>
   [...(section()?.querySelectorAll('[role="alert"]') ?? [])]
     .map((n) => n.textContent ?? "")
@@ -286,6 +335,43 @@ describe("Delete permanently — when it is offered at all", () => {
     await open();
     expect(trigger()).toBeUndefined();
     expect(alertText()).toContain("Reload the page");
+  });
+
+  /**
+   * **A failed REFRESH is as disqualifying as a failed first load**, and this is
+   * the case the test above cannot reach. `readProvenance` deliberately keeps
+   * the previous `provenance` when a revalidation fails — the reader keeps the
+   * rows they had rather than watching the page empty out — so the control
+   * arrives at `known=true, failed=true`, a state the first load can never
+   * produce. Everything else on this page is right to go on drawing what it had;
+   * this one may not, because the article may have gone or changed hands in the
+   * window the failure hid. ⟨Sol, F23.⟩
+   */
+  it("is withheld once a REFRESH fails, though the first load worked", async () => {
+    await open();
+    expect(trigger()).toBeTruthy();
+
+    /* The article disappears, or changes owner, and the revalidation that would
+       have told us so is the request that failed. */
+    metadataAnswers = [
+      async () =>
+        new Response(JSON.stringify({ error: "the database went away" }), { status: 500 }),
+    ];
+    await finishARun();
+
+    expect(asked.filter((a) => a.startsWith("GET /api/metadata"))).toHaveLength(2);
+    expect(trigger(), "still offered over metadata we failed to re-establish").toBeUndefined();
+    expect(alertText()).toContain("Reload the page");
+    /* And nothing is merely disabled — there is no button at all. */
+    expect(section()?.querySelectorAll("button")).toHaveLength(0);
+  });
+
+  /** The other half of the same lever: a refresh that lands leaves it offered. */
+  it("is still offered after a refresh that succeeds", async () => {
+    await open();
+    await finishARun();
+    expect(asked.filter((a) => a.startsWith("GET /api/metadata"))).toHaveLength(2);
+    expect(trigger()).toBeTruthy();
   });
 
   /**
@@ -452,6 +538,63 @@ describe("Delete permanently — what happens after the press", () => {
     expect(asked.filter((a) => a.startsWith("GET /api/metadata"))).toHaveLength(1);
   });
 
+  /**
+   * **A 2xx is not the route's answer, and the route has one.** `DELETE
+   * /api/library/:slug` replies `{ destroyed: slug }` (src/routes.ts,
+   * `ShelfStore.destroy`), and until 2026-09-08 the client parsed that and threw
+   * it away — so a 204, an empty object, or a body naming a *different* article
+   * all read as a confirmed deletion, and the reader lost their cache and their
+   * page over a request that may have deleted nothing. Exactly the shape
+   * docs/reusable/silent-success.md is about. ⟨Sol, F25.⟩
+   */
+  it("does not treat a 204 as a confirmed deletion", async () => {
+    deleteAnswer = async () => new Response(null, { status: 204 });
+    metadataAnswers = [async () => live(), async () => live()];
+
+    await open();
+    await press(trigger());
+    await press(confirmButton());
+
+    expect(location.pathname).toBe(`/read/${SLUG}/metadata`);
+    expect(forgot).toEqual([]);
+    expect(alertText()).toContain("did not confirm");
+    /* And the honest re-read ran, which is what settles it either way. */
+    expect(asked.filter((a) => a.startsWith("GET /api/metadata"))).toHaveLength(2);
+  });
+
+  it("does not treat an empty JSON body as a confirmed deletion", async () => {
+    deleteAnswer = async () =>
+      new Response("{}", { status: 200, headers: { "content-type": "application/json" } });
+    metadataAnswers = [async () => live(), async () => live()];
+
+    await open();
+    await press(trigger());
+    await press(confirmButton());
+
+    expect(location.pathname).toBe(`/read/${SLUG}/metadata`);
+    expect(forgot).toEqual([]);
+    expect(alertText()).toContain("did not confirm");
+  });
+
+  /** A success naming somebody else's article is the worst of the three. */
+  it("does not accept a success that names a different article", async () => {
+    deleteAnswer = async () =>
+      new Response(JSON.stringify({ destroyed: "another-piece" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    metadataAnswers = [async () => live(), async () => live()];
+
+    await open();
+    await press(trigger());
+    await press(confirmButton());
+
+    expect(location.pathname).toBe(`/read/${SLUG}/metadata`);
+    expect(forgot).toEqual([]);
+    expect(alertText()).toContain("did not confirm");
+    expect(alertText()).toContain("still here, untouched");
+  });
+
   /* --- the three re-read outcomes ------------------------------------- */
 
   /**
@@ -542,6 +685,29 @@ describe("Delete permanently — what happens after the press", () => {
     expect(location.pathname).toBe(`/read/${SLUG}/metadata`);
   });
 
+  /**
+   * **Only a 200 proves survival, and `res.ok` is four other statuses.** The
+   * function's own header says *"only a fresh server 200 proves it survived"*,
+   * and `return res.ok ? "here" : "unknown"` admitted 201, 202, 204 and 206 —
+   * a re-read answered `204 No Content` made the page say *"still here,
+   * untouched"* about an article that had just been destroyed. The comment and
+   * the code have to agree, and the code was the one that was wrong. ⟨Sol, F24.⟩
+   */
+  it("does not call a 204 re-read proof that the article survived", async () => {
+    deleteAnswer = async () => {
+      throw new TypeError("Failed to fetch");
+    };
+    metadataAnswers = [async () => live(), async () => new Response(null, { status: 204 })];
+
+    await open();
+    await press(trigger());
+    await press(confirmButton());
+
+    expect(alertText()).not.toContain("still here, untouched");
+    expect(alertText()).toContain("Couldn't tell whether that worked");
+    expect(location.pathname).toBe(`/read/${SLUG}/metadata`);
+  });
+
   it("admits it cannot tell when the re-read cannot reach the server either", async () => {
     deleteAnswer = async () => {
       throw new TypeError("Failed to fetch");
@@ -560,6 +726,72 @@ describe("Delete permanently — what happens after the press", () => {
     expect(alertText()).toContain("Couldn't tell whether that worked");
     expect(alertText()).toContain("Reload the page");
     expect(location.pathname).toBe(`/read/${SLUG}/metadata`);
+  });
+
+  /**
+   * **An unknown outcome takes the button away**, and this is the same rule the
+   * whole component is arranged around: never offer a control over a state we
+   * have not established. The three "cannot tell" cases above left `asking`
+   * true and put `busy` back to false, so *Delete for ever* stood enabled
+   * directly beneath a sentence admitting we did not know whether the article
+   * still existed — and a reader who pressed it again would be sending a second
+   * DELETE for an article that may already be gone. `ArchiveArticle`'s
+   * `at === undefined` branch is the shape this borrows. ⟨Sol, F26.⟩
+   */
+  it("offers no control at all once it cannot tell whether the delete worked", async () => {
+    deleteAnswer = async () => {
+      throw new TypeError("Failed to fetch");
+    };
+    metadataAnswers = [
+      async () => live(),
+      async () => {
+        throw new TypeError("Failed to fetch");
+      },
+    ];
+
+    await open();
+    await press(trigger());
+    await press(confirmButton());
+
+    expect(alertText()).toContain("Couldn't tell whether that worked");
+    /* Not a disabled button — no button. A dimmed *Delete for ever* is still
+       this page claiming there is something here to delete. */
+    expect(confirmButton()).toBeUndefined();
+    expect(trigger()).toBeUndefined();
+    expect(keepButton()).toBeUndefined();
+    expect(section()?.querySelectorAll("button")).toHaveLength(0);
+  });
+
+  /**
+   * **The drawer emptied is the one the delete belonged to.** ⟨Sol, F27, in
+   * part — see the plan for what was deliberately left.⟩
+   *
+   * `forgetCachedReader` looked the reader up itself, *after* the delete had
+   * settled, so a direct A→B sign-in landing in that window emptied B's cache
+   * and left A's holding a card for an article that no longer exists — which
+   * paints on A's next visit and opens a 404 (cached-shelf.ts § the top).
+   */
+  it("retires the drawer of the reader who pressed, not whoever is signed in after", async () => {
+    let release: ((r: Response) => void) | undefined;
+    deleteAnswer = () => new Promise<Response>((go) => (release = go));
+
+    await open();
+    await press(trigger());
+    await act(async () => confirmButton()?.click());
+
+    /* Another tab signs somebody else in while our DELETE is still out. */
+    rememberUser("reader-b");
+    await act(async () =>
+      release?.(
+        new Response(JSON.stringify({ destroyed: SLUG }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+    );
+    await settle();
+
+    expect(forgotFor).toEqual(["reader-a"]);
   });
 
   it("disables the confirm while the delete is in flight, so it cannot be sent twice", async () => {

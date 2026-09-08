@@ -407,12 +407,17 @@ these moves:
   that something got weaker — [ai-gateway.md § A key is not
   access](ai-gateway.md#a-key-is-not-access-and-the-difference-is-invisible-until-a-reader-finds-it)
 - **account deletion** or **export** grows a button, which changes decision 2 above. **The
-  per-article half of that happened on 2026-09-07 and the page has not been rewritten yet** —
-  § *Deleting an article, for good* above says exactly what is now false on it
-- **what the Archive button does** — it archives, it is called Archive since 2026-09-04, and the
-  page says so; when a real delete or an account-deletion path is built, that section is the first
-  thing to rewrite. **A real delete was built on 2026-09-07**, so that section is now overdue rather
-  than waiting. The page also says what archiving does to an article that was *shared*: it drops
+  per-article half of that happened on 2026-09-07 and the page was rewritten in the same run** —
+  § *Deleting an article, for good* above is the record of what moved and what deliberately did not.
+  What is still open here is the other two: account deletion is a mailbox and a pair of hands, and
+  the page says so; export has had a button since before this section was written and the page has
+  never mentioned it either way
+- **what Archive and Delete permanently do, and the difference between them** — Archive archives,
+  it has been called Archive since 2026-09-04, and *Deleting things* on the page now describes both
+  controls: Archive is reversible and destroys nothing, Delete permanently erases the article and
+  everything made from it with no undo, and neither can reach a copy already downloaded to a device.
+  Rewrite that section if either control changes what it does. The page also says what archiving
+  does to an article that was *shared*: it drops
   out of the public listing (`publicLibraryQuery` filters `archived_at`) and the link keeps working,
   which is [library.md](library.md#archive-and-undo-is-the-confirmation)'s split between listing and
   access. If `publicSlug` ever starts filtering too, that sentence is wrong

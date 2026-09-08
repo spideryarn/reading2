@@ -445,9 +445,17 @@ that predated `'labels'`, so the snapshot had lost a step name the database has.
 from the `.sql`; the snapshot beside this migration carries the correct list again, which is the
 repair. Left in, it would have been a second full validation scan of an unrelated table.
 
-**Correction to the review's framing of F7:** with F9 in place the FK's `SET NULL` no longer does a
-second pass — the trigger has already taken the rows — so the index answers one scan per delete, not
-two. The index is still needed, for that one.
+**Correction to the review's framing of F7 — and then a correction to the correction.** The first
+version of this paragraph said that with F9 in place the FK's `SET NULL` does no second pass at all,
+so the delete costs "one scan, not two". Sol's next review took that apart (F29, P3): the referential
+action still runs and still performs its own index-backed lookup — it simply finds nothing, because
+the trigger has already nulled the rows in the statement before it.
+
+So the accurate claim is the narrower one. **With F9 the FK still performs a second index-backed
+lookup, but it visits no matching ledger tuples; only the trigger's `UPDATE` touches rows.** What F7
+buys is that neither of those is a sequential scan of an unbounded table, which is the whole of why
+the delete stops being a statement-timeout risk. Overstating it as "one lookup" was the sort of tidy
+sentence that is easier to remember than the truth, which is why it is worth writing the truth down.
 
 #### One mutation the behavioural tests do not catch, 2026-09-06
 
@@ -724,6 +732,84 @@ strangers see, which is why it is recorded here rather than changed on the way p
 
 Not checked by the browser pass: keyboard activation held on the trigger, and where focus lands after
 the swap.
+
+#### Sol's review of the built control, 2026-09-08 — REFUSE, and the six it named
+
+The plan-stage review could not have found most of these: they are about the transitions the built
+component makes *after* a press, which is why the second review is weighted higher than the first.
+The verdict in full is
+[…-stage-d-review-sol.md](260906h-delete-an-article-permanently-stage-d-review-sol.md). Every one
+below was reproduced as a failing test before it was fixed, and each fix was then mutated back to
+confirm the suite notices — 24 cases became 32.
+
+- **F23 — a failed *refresh* left deletion offered.** `readProvenance` deliberately keeps the
+  previous `provenance` when a revalidation fails, so the reader does not watch the page empty out
+  over one lost request. `DeletePermanently` therefore reached `known=true, failed=true` — a state
+  the first load cannot produce, which is exactly why the existing failed-load test (it starts from
+  `provenance === null`) never saw it — and its refusal branch tested only `!known`. Now
+  `!known || failed`. Reaching that state in a test needs a real second read, and the only lever
+  that fires one is a *Generate it again* row's job coming back `done`, driven through
+  `jobEngine.receive` the way `tests/metadata-rerun-section.test.tsx` does it. `ArchiveArticle` has
+  the same exposure and keeps it: Archive is reversible, which is the whole difference.
+
+- **F24 — `res.ok` is five statuses and the comment claimed one.** `stillOnTheServer`'s own header
+  says only a fresh server 200 proves survival; the code also took 201, 202, 204 and 206, so a
+  `204 No Content` re-read made the page say *"still here, untouched"* about an article that had
+  just been destroyed. Now `404 → gone`, `200 → here`, everything else `unknown`.
+
+- **F25 — the route's confirmation was parsed and thrown away.** `DELETE /api/library/:slug` answers
+  `{ destroyed: slug }`, and the client believed the *status*. `readJson` deliberately turns an empty
+  successful body into `{}`, so a `204`, a `{}`, or a body naming a **different** article all read as
+  a confirmed deletion — cache retired, reader navigated away, every success assertion still green.
+  The [silent success](../reusable/silent-success.md) shape, in the one place that cannot be walked
+  back. The client now requires the answer to name this slug, and the refusal falls into the same
+  authoritative re-read as any other failure — so a route that really did delete and merely answered
+  oddly still ends with the reader in their library, by evidence rather than by assumption.
+
+- **F26 — the honest sentence was printed under a live button.** When the delete outcome *and* the
+  re-read were both inconclusive, the control set *"Couldn't tell whether that worked"* and then put
+  `busy` back to false with `asking` still true, so *Delete for ever* stood enabled directly beneath
+  an admission that we could not say whether the article still existed. The component's own rule,
+  broken in its own error path. There is now an explicit `uncertain` state rendering the sentence and
+  **no controls at all** — not the confirm, not *Keep it*, and not the trigger, which would only
+  invite a second DELETE. It is `ArchiveArticle`'s `at === undefined` branch, borrowed, and it is
+  checked before the offline and unknown branches because it is the only claim on the card about what
+  we may already have *done* rather than about what we know.
+
+- **F27 — accepted in part, and the rest declined on purpose.** Sol asked for the DELETE, the re-read
+  and the cache retirement to be bound to one captured principal. The half worth having is the cache:
+  `forgetCachedReader` looked the reader up *after* the delete had settled, so a direct A→B sign-in
+  inside that window emptied B's drawer and left A's holding a card for an article that no longer
+  exists — which paints on A's next visit and opens a 404, the exact thing `cached-shelf.ts` says
+  nothing here may go on doing. Silent and durable, and closing it cost one argument: the reader is
+  captured before the DELETE and handed in.
+
+  The other half is declined. Using one credential for both requests means letting a caller pass a
+  token into `apiFetch`, whose header argues at length that the token must be fetched per request and
+  never remembered — bfcache, backgrounded tabs and refresh races all depend on it. That is a new
+  seam in the app's single auth chokepoint, for one control, against a race that needs an account
+  switch to land inside a single round trip. And Sol's *"do not navigate or report an outcome into
+  the new reader's UI"* looks worse than what it replaces: reader B would be left sitting on the
+  metadata page of somebody else's destroyed article reading an error about it, where the library is
+  a neutral place to be. The honest limit is written into `cached-shelf.ts`: the capture narrows the
+  window to the moment before the request rather than closing it.
+
+- **F28 — `privacy.md` told two stories about its own page.** One paragraph said `PrivacyPage.tsx`
+  caught up on 2026-09-07 (it did — `0ced1d69`); two bullets in the watch-list seventy lines later
+  still said the page "has not been rewritten yet" and was "overdue". The bullets were the stale
+  half. They now say what is genuinely open — account deletion is still a mailbox, and export has had
+  a button for a while and has never been mentioned on the page either way — and the Archive bullet
+  became a bullet about *both* controls and the difference between them.
+
+- **F29 (P3)** is answered above, in the Stage B P2 section it corrects.
+
+`copy.md` gained the two sentences this changed: the *"did not confirm"* refusal, which reaches the
+reader wrapped in the ordinary *Couldn't delete it —* line, and the note that the *"cannot tell"*
+sentence now stands with nothing underneath it.
+
+**Not re-checked in a browser.** The new branch is a paragraph in the existing card, reached only by
+a failed delete followed by a failed re-read — a state the 2026-09-07 pass could not have produced
+either.
 
 ### Stage E — the bytes, by way of a blob catalogue
 

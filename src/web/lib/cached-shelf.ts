@@ -61,7 +61,23 @@ import type { LibraryEntry } from "../../types.js";
 import { forgetUser, lastKnownUser, readCached } from "./offline-store.js";
 
 /**
- * Throw away **everything** this device has cached for the signed-in reader.
+ * **Whose drawer this is, asked now** — for a caller that is about to do
+ * something long and must not ask again afterwards.
+ *
+ * A re-export with a name that says *when*, rather than a second import of
+ * `lastKnownUser` at a call site that has no other business in the offline
+ * store. `DeletePermanently` reads it before it sends its DELETE, because the
+ * same lookup made after the round trip can have moved on to a different reader
+ * — see `forgetCachedReader` below.
+ *
+ * An id. It selects a drawer and authorises nothing.
+ */
+export function cachedReaderNow(): string | null {
+  return lastKnownUser();
+}
+
+/**
+ * Throw away **everything** this device has cached for one reader.
  *
  * For the one caller that has destroyed something for good — `DeletePermanently`
  * in [Metadata.tsx](../Metadata.tsx). Invalidating `/api/library` and
@@ -70,17 +86,34 @@ import { forgetUser, lastKnownUser, readCached } from "./offline-store.js";
  * any one of them left behind is this app telling a reader that an article they
  * destroyed is still here.
  *
+ * ## The reader is an argument, and it used to be a lookup
+ *
+ * This called `lastKnownUser()` itself, which meant *whoever is signed in by the
+ * time the delete has settled* — and a direct A→B sign-in landing in that window
+ * (`rememberUser(B)` with no `forgetUser(A)`, because that only runs on a null
+ * session) emptied **B's** drawer while leaving A's holding a card for an
+ * article that no longer exists. Two failures out of one line: B loses a head
+ * start they did not need to lose, and A comes back to a shelf that paints a
+ * card which opens a 404 — the thing this module says at the top nothing here
+ * may go on doing. GPT Sol found it reviewing the built control, 2026-09-08.
+ *
+ * So the caller captures the reader **before** it starts, and hands it in. The
+ * honest limit, said out loud: that capture is still a lookup of its own rather
+ * than the `owner` that travelled with the token `apiFetch` actually used
+ * (`api.ts` § `Credential`), so it narrows the window from a whole round trip to
+ * the moment before one rather than closing it. Closing it would mean letting a
+ * caller pass a credential into `apiFetch`, which that file deliberately does
+ * not allow.
+ *
  * **Never throws.** `forgetUser` already gives up quietly where IndexedDB is
  * missing or refuses (a private window, Node), and a cache we could not clear
  * must not stop the reader being taken to their library — the delete has
  * happened either way, and the live answer is one request behind.
  *
- * Signed out, there is no drawer to empty and this does nothing. `lastKnownUser`
- * is an id and authorises nothing; it selects which drawer, exactly as it does
- * for every read and write in `api.ts`.
+ * `null` — nobody was signed in — is not an error: there is no drawer to empty
+ * and this does nothing.
  */
-export async function forgetCachedReader(): Promise<void> {
-  const reader = lastKnownUser();
+export async function forgetCachedReader(reader: string | null): Promise<void> {
   if (!reader) return;
   try {
     await forgetUser(reader);
