@@ -46,7 +46,17 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
-const FLEET = path.join(ROOT, "tools", "fleet");
+/**
+ * **All of `tools/`, not just `tools/fleet/`.**
+ *
+ * The principle is about the box utilities as a family — orchestrator-direction.md
+ * says *"it runs on the box, spans repos, and must not depend on the product
+ * database or on anything under `src/`"* — and `tools/overseer/` arrived on
+ * 2026-09-08 under exactly that sentence. A rule scoped to one directory is one
+ * that a sibling directory silently escapes, which is the shape of the gap that
+ * left 15,000 lines of `tools/` linted by nothing until somebody looked.
+ */
+const TOOLS = path.join(ROOT, "tools");
 
 /**
  * **Every file under `src/` the fleet dashboard reaches, and why it is allowed.**
@@ -144,10 +154,10 @@ function filesUnder(dir: string): string[] {
   return out;
 }
 
-/** Every file the fleet reaches, transitively, as repo-relative paths. */
+/** Every file the box utilities reach, transitively, as repo-relative paths. */
 function fleetClosure(): Set<string> {
   const seen = new Set<string>();
-  const queue = filesUnder(FLEET);
+  const queue = filesUnder(TOOLS);
   while (queue.length > 0) {
     const f = queue.pop() as string;
     if (seen.has(f)) continue;
@@ -176,7 +186,7 @@ describe("what the fleet dashboard imports from src/", () => {
     /* A walker that silently skips a shape reports the same clean result as one
        that found nothing to report. So the shapes it cannot read are banned. */
     const offenders: string[] = [];
-    for (const f of filesUnder(FLEET)) {
+    for (const f of filesUnder(TOOLS)) {
       offenders.push(...unfollowableImports(readFileSync(f, "utf8"), path.relative(ROOT, f)));
     }
     expect(offenders).toEqual([]);
