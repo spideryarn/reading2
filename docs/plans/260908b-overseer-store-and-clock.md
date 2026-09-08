@@ -1224,6 +1224,35 @@ npx tsx scripts/overseer.ts status
 sudo systemctl kill -s KILL overseer.service && sleep 8 && systemctl status overseer.service
 ```
 
+**Measured again at 12:15, and it is worse than "stale" — the primary is MIXED, and the mismatch is
+in the store's schema.** The primary had picked up `observation.ts` and `diff.ts` by then, but
+`tools/overseer/store.ts` there still reads `STORE_SCHEMA = 1` while the live `~/.overseer` is
+schema 2. So this is not a version behind; it is a build that disagrees with the data on disk about
+what the data is.
+
+**What that build actually does was run rather than reasoned about**, against a copy of the live store:
+
+```
+cd /home/greg/code/spideryarn2 && OVERSEER_STORE_DIR=<copy> npx tsx scripts/overseer.ts status
+```
+
+It printed a **complete, confident, entirely plausible report** — `daemon RUNNING`, 20 sessions in the
+register, 128 events, durations against every row — and **said nothing at all about the checkpoint it
+could not parse.** `parseCheckpoint` rejected it on the schema line, `openStore` did the designed
+thing and rebuilt the register by replaying `events.jsonl` from byte 0, and the old renderer had
+nowhere to put the fact. Not one `≥` appears in its output, because `StatusSince` does not exist in
+that build: every duration that is a floor prints as a measurement, which is S7-F4 exactly, silently
+back.
+
+**And that is the general lesson, not a detail of this deployment: the arm that reports the problem is
+part of what has not been deployed.** The current build answers the same question with *"CANNOT TELL —
+there IS a current.json and this build cannot parse it"*, because the renderer was changed to take
+`CheckpointRead` whole. Grep the two: the primary's `scripts/overseer.ts` has **zero** cannot-parse
+paths and the current one has three. **A stale build cannot report its own staleness**, so "is the
+deployed copy current?" is never answerable from the deployed copy's own output — which is why step 0
+is a gate rather than hygiene, and why the check that verifies it (`diff` against the repo,
+[hetzner-remote-server-box.md](../project/hetzner-remote-server-box.md)) has to run from outside.
+
 **Step 0 is the one that would have embarrassed us**, and it was found by the other agent preparing
 its own cutover rather than by anyone reviewing this plan. **"Updating the primary checkout is a deploy
 step nobody owns"** is the general form, and it applies to both services for the same reason: putting

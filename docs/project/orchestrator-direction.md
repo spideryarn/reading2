@@ -190,14 +190,21 @@ alive but deaf. **A dead dashboard is a fact the Overseer records, not a silence
 
 Written 2026-09-08, once the Overseer existed and the sentence *"the Overseer writes a current-state
 file, the dashboard reads and renders it"* stopped being a plan and became something that needed a
-shape. Four files, all under `OVERSEER_STORE_DIR` (default `~/.overseer`):
+shape. Five files, all under `OVERSEER_STORE_DIR` (default `~/.overseer`):
 
 | file | what it is | who may read it |
 |---|---|---|
 | `current.json` | the checkpoint: two clocks, the cursor, the heartbeat, and the session register | anyone, any time |
 | `events.jsonl` | the append-only history the register is a fold of | anyone, any time |
 | `daemon.jsonl` | the daemon's own facts — started, stopped, conditions degraded and restored | anyone, any time |
+| `last-snapshot.json` | the differ's baseline — the last snapshot seen, so a restart emits changes rather than re-announcing the fleet | the daemon only |
 | `overseer.lock` | the single-writer claim | the daemon only |
+
+**This table said "four files" until 2026-09-08 12:15, and `last-snapshot.json` was the one missing**
+— the file that exists precisely so a restart does not re-announce all 21 sessions as new. It is the
+daemon's private working state rather than part of the seam, which is why it was easy to leave out
+and why it is listed anyway: a reader deciding what `~/.overseer` contains should not have to discover
+a fifth file by running `ls`.
 
 **Reads are lock-free and writers are single**, which is what makes this a seam rather than a
 coupling: `readCheckpoint()` takes no lock, and the daemon is the only writer of any of them. A
