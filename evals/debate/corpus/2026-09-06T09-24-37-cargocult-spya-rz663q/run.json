@@ -1,0 +1,55 @@
+{
+  "runId": "2026-09-06T09-24-37",
+  "startedAt": "2026-09-06T09:24:39.911Z",
+  "slug": "cargocult-spya-rz663q",
+  "model": "anthropic/claude-sonnet-5",
+  "sourceHash": "b575dff238ed648a.dd64d05f4c045d91.5c63b9373f64e9a9",
+  "completed": true,
+  "error": null,
+  "elapsedMs": 72627,
+  "webSearches": 10,
+  "kept": {
+    "direct": 0,
+    "claims": 3
+  },
+  "cost": {
+    "kind": "measured",
+    "nanos": 275888000,
+    "unpriced": 0,
+    "calls": 2,
+    "callIds": [
+      "gen-1788686680-qMQ3NoSYyrEm6mtpeBxo",
+      "gen-1788686719-2YX1H1jopLFeWrOEExgV"
+    ],
+    "webSearches": 10,
+    "problems": []
+  },
+  "costLine": "$0.2759 over 2 call(s)",
+  "ledgerRunId": "5edc16a0-cb02-4225-8fab-c2ad401a930e",
+  "journalFile": "output/debate-runs/2026-09-06T09-24-37-cargocult-spya-rz663q/journal.jsonl",
+  "journalWriteFailures": 0,
+  "reconciliation": {
+    "attempts": [
+      {
+        "attemptId": "8380e7ff-bb2e-468b-affe-5b5a0ef82142",
+        "pass": "direct",
+        "response": "body",
+        "outcome": "ok",
+        "failure": null,
+        "status": "captured"
+      },
+      {
+        "attemptId": "fddbb89d-ed8c-47b3-953d-cfba0d0c75bd",
+        "pass": "claims",
+        "response": "body",
+        "outcome": "ok",
+        "failure": null,
+        "status": "captured"
+      }
+    ],
+    "captured": 2,
+    "unmatchedStarts": 0,
+    "orphanEvents": 0,
+    "complete": true
+  }
+}
