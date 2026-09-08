@@ -32,9 +32,11 @@ const STEPS: Step[] = [
   { stage: "v0.1", what: "A page listing the sessions, read-only.", state: "done" },
   { stage: "v0.3", what: "Status: working, idle, blocked — and why.", state: "done" },
   { stage: "v0.4", what: "What a blocked session is asking, read off its pane.", state: "done" },
-  { stage: "v0.2", what: "Send a steering message to one session, by tmux keystroke.", state: "next" },
-  { stage: "v0.5", what: "The recurring instructions as buttons rather than free text.", state: "later" },
-  { stage: "v0.6", what: "Create and kill agents, through gjd-remote rather than a second way.", state: "later" },
+  { stage: "v0.2", what: "Send a steering message to one session, by tmux keystroke.", state: "done" },
+  { stage: "v0.4b", what: "Pick a session and see it at length: answer it, or say something to it.", state: "done" },
+  { stage: "v0.6", what: "Start an agent, through gjd-remote rather than a second way. Killing is not built.", state: "done" },
+  { stage: "v0.4c", what: "Recent messages, from the tail of a session's own transcript.", state: "next" },
+  { stage: "v0.5", what: "The recurring instructions as buttons rather than free text, queued rather than raced.", state: "later" },
   { stage: "v0.7", what: "The decision log: what was decided for you, and how sure the model was.", state: "later" },
 ];
 
@@ -56,9 +58,9 @@ export function OrchestratorPanel(): ReactNode {
       <Card className="tw:border-l-4 tw:border-l-unknown tw:p-4">
         <h2 className="tw:font-medium">There is no orchestrator yet.</h2>
         <p className="tw:mt-2 tw:text-[13px] tw:text-ink-soft">
-          This tab is a placeholder and shows nothing real. Everything on this page today is
-          read-only: it can tell you a session is blocked and what it is asking, and it cannot
-          answer for you.
+          This tab is a placeholder and shows nothing real. What the Sessions tab can do is done by
+          a person pressing a button: answer a dialog, send a sentence, start an agent. Nothing
+          decides any of that on your behalf, and nothing here is watching while you are not.
         </p>
       </Card>
 

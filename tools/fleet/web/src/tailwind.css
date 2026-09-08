@@ -65,6 +65,37 @@
   --font-ui: "Geist Variable", system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
   --font-mono: "Geist Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
 
+  /* ------------------------------------------------------------ geometry --
+     ONE RADIUS AND ONE CONTROL HEIGHT, which is the whole of
+     docs/project/controls.md's numbers section: the controls on a page do not
+     need a scale, they need to agree with each other. 8px is the product's
+     `rounded-md`, and 28px is its chip height (`h-7`) — the size its shelf
+     settled on for everything that sits in a row of other controls. */
+  --radius: 8px;
+  --control-h: 28px;
+
+  /* The screen is bigger than the window. Every one of these is `0px` on every
+     machine we develop on, so a mis-typed `env()` name falls back to the same
+     `0px` and looks perfect — there is nothing to see until it is on a phone
+     (docs/project/narrow-windows.md § env(safe-area-inset-*)). They are tokens
+     rather than four literals because three pieces of chrome each add the one
+     edge they face, and the fourth (`body`) must add none: a fixed bar is
+     positioned against the VIEWPORT, so padding on `body` does not move it. */
+  --safe-top: env(safe-area-inset-top);
+  --safe-right: env(safe-area-inset-right);
+  --safe-bottom: env(safe-area-inset-bottom);
+  --safe-left: env(safe-area-inset-left);
+
+  /* The bottom bar — Dock.tsx, ported from the product's src/web/styles/dock.css
+     and tokens.css. `--dock-h` is the bar; `--dock-space` is the room it takes
+     at rest, which is the bar plus whatever the home indicator has already
+     claimed, and it is what `main` reserves so the last card does not finish
+     underneath it. The product also has a `--dock-bottom` that goes to `0px`
+     while the bar slides away as you read; this tool has no equivalent, because
+     nothing here is a long enough read to be worth clearing the screen for. */
+  --dock-h: 3rem;
+  --dock-space: calc(var(--dock-h) + var(--safe-bottom));
+
   /* Surfaces, lightest first. On a light ground the greys run the ordinary way;
      the dark block below reverses them, which is the one thing that trips
      people writing a second theme. */
@@ -102,9 +133,18 @@
      this* — but a step darker, so a stale banner over a page of orange rows is
      still legible as a different kind of thing. */
   --alarm: oklch(0.5 0.19 28);
+  --alarm-ink: oklch(0.44 0.18 28);
   --alarm-wash: color-mix(in oklab, oklch(0.5 0.19 28) 12%, var(--panel));
 
   --focus: oklch(0.55 0.17 42);
+
+  /* The lift under a floating surface. A token rather than a literal because
+     the two themes need different shadows for the same effect: on a light page
+     a shadow is a shadow, and on a near-black one it has to be darker and
+     wider or the tooltip reads as a flat patch. */
+  --shadow-float:
+    0 1px 2px rgb(0 0 0 / 0.12),
+    0 8px 24px -6px rgb(0 0 0 / 0.18);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -140,9 +180,14 @@
     --quiet-wash: oklch(0.25 0 0);
 
     --alarm: oklch(0.7 0.19 27);
+    --alarm-ink: oklch(0.78 0.16 27);
     --alarm-wash: color-mix(in oklab, oklch(0.7 0.19 27) 16%, var(--panel));
 
     --focus: oklch(0.72 0.16 48);
+
+    --shadow-float:
+      0 1px 2px rgb(0 0 0 / 0.5),
+      0 8px 24px -6px rgb(0 0 0 / 0.65);
   }
 }
 
@@ -171,6 +216,7 @@
   --color-quiet: var(--quiet);
   --color-quiet-wash: var(--quiet-wash);
   --color-alarm: var(--alarm);
+  --color-alarm-ink: var(--alarm-ink);
   --color-alarm-wash: var(--alarm-wash);
 
   --font-sans: var(--font-ui);
@@ -195,10 +241,26 @@
     font-size: 15px;
     line-height: 1.45;
     -webkit-text-size-adjust: 100%;
-    /* Under the notch and the home indicator, without any content landing
-       there. `env()` resolves to 0px where there is nothing to avoid. */
-    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
-      env(safe-area-inset-left);
+    /* **No safe-area padding here any more**, and that is a fix rather than a
+       simplification. `body` used to carry all four insets; the moment a
+       `position: fixed` bar arrived, two of them were wrong in opposite
+       directions. A fixed bar is positioned against the VIEWPORT, so padding on
+       `body` cannot move it off the home indicator — and the sticky masthead
+       above answers to the viewport too once the page scrolls, so its `top: 0`
+       slid under the notch however much room `body` had reserved.
+       docs/project/narrow-windows.md's rule is that every piece of fixed or
+       sticky chrome adds the edge it faces, so each of them does: `.masthead`
+       the top, `.dock` the bottom, and `main` the two sides. */
+  }
+
+  /* **`cursor: pointer` on every button, because preflight stopped saying it.**
+     Tailwind v4 dropped v3's `button { cursor: pointer }` and shadcn does not
+     set it, so in the product all 59 buttons on the shelf had `cursor: default`
+     for months — docs/project/controls.md, which is where this rule comes from.
+     Written once here rather than as a `tw:cursor-pointer` per call site, which
+     is the version that goes stale the first time somebody forgets. */
+  button:not(:disabled) {
+    cursor: pointer;
   }
 
   /* One focus treatment, drawn rather than suppressed. The product's own
@@ -221,5 +283,392 @@
       transition-duration: 0.01ms !important;
       scroll-behavior: auto !important;
     }
+  }
+}
+
+/* =========================================================== ported chrome ==
+   Everything below is a port of the product's own bottom bar and hover panel,
+   re-opened as a second `@layer app` block rather than spliced into the one
+   above — a layer can be re-opened, and the order inside a layer is source
+   order, so this lands exactly where it reads. */
+@layer app {
+  /* ------------------------------------------------------------ masthead --
+     The sticky top strip. It adds `--safe-top` itself; see `body` above for
+     why that inset could not stay on the body. */
+  .masthead {
+    position: sticky;
+    top: 0;
+    z-index: 44;
+    padding-top: var(--safe-top);
+    border-bottom: 1px solid var(--rule);
+    background: color-mix(in oklab, var(--page) 92%, transparent);
+    backdrop-filter: blur(8px);
+  }
+
+  /* ---------------------------------------------------------------- dock --
+     PORTED FROM src/web/styles/dock.css and src/web/styles/dock-fit.css, which
+     is where every measurement below comes from — diff them if this ever looks
+     wrong. What changed in the port, and why:
+
+      - **The active state is neutral, not the brand orange.** In the product a
+        lit dock button is `--highlight`, and `--highlight` means nothing else.
+        Here orange already means "needs you", so an orange Sessions button
+        would read as a session status. The four hues in this palette are
+        meanings; chrome must not borrow one. A lit button is `--ink` on
+        `--panel`, with the same 2px inset cap.
+      - **No `--dock-bottom`.** The product's bar slides off the screen while
+        you read a long article. Nothing on this page is a long read.
+      - **Two rungs on the fit ladder, not three**, because there are four
+        buttons rather than fifteen. dock-fit.ts has the arithmetic.
+
+     `position: fixed`, so a sideways scroll cannot drag it — which is free,
+     since `fixed` is viewport-relative and a bar spanning the viewport has
+     nowhere to drift to. */
+  .dock {
+    position: fixed;
+    left: 0;
+    bottom: 0;
+    width: 100vw;
+    /* `--dock-space`, not `--dock-h`: the bar's own height plus whatever the
+       home indicator has claimed, spent as padding below the buttons so they
+       sit above it rather than under it. */
+    height: var(--dock-space);
+    z-index: 96;
+    display: flex;
+    align-items: stretch;
+    gap: 0.15rem;
+    /* The bottom term is in the shorthand deliberately: a `padding-bottom`
+       longhand declared before a `padding` shorthand is silently reset by it,
+       which is how the product lost the home indicator's padding twice.
+       **No right-hand term** — the trailing gutter is a real child
+       (`.dock-tail`), because Chrome leaves a flex container's trailing padding
+       out of its scrollable overflow and the fit ladder measures exactly that. */
+    padding: 0 0 var(--safe-bottom) calc(0.4rem + var(--safe-left));
+    background: var(--panel-raised);
+    border-top: 1px solid var(--rule-strong);
+    font-family: var(--font-ui);
+    font-size: 0.78rem;
+    /* **The floor under the fit ladder, at every width and not inside a media
+       query.** Past the last rung the row may still not fit, and this is what
+       makes that an honest overflow you can drag rather than a silent clip —
+       the failure that had five of the product's six modes unpressable on a
+       phone with nothing on screen to say so. No visible scrollbar: a trough
+       across the bottom of every window would be chrome about chrome. */
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+  }
+  .dock::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Nothing may shrink; growing into space that is already there is free.
+     `flex-shrink: 0` rather than `flex: none`, because `none` also pins
+     `flex-grow` and would out-specify the coarse-pointer rule below that lets
+     the buttons share a wide bar. */
+  .dock > *:not(.dock-gap) {
+    flex-shrink: 0;
+  }
+  .dock-gap {
+    flex: 1;
+  }
+  /* The trailing gutter as content rather than as padding (see `.dock`), and
+     the ladder's font-metric probe: it is `rem`-sized and rung-independent, so
+     it moves when a reader changes their browser's default font size and never
+     when a rung is applied. dock-fit.ts § when it re-measures. */
+  .dock-tail {
+    flex: none;
+    width: calc(0.4rem + var(--safe-right));
+  }
+
+  .dock-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    padding: 0 0.6rem;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    color: var(--ink-faint);
+    font: inherit;
+    text-decoration: none;
+    /* The active marker is an INSET top border rather than a real one, so
+       switching modes cannot shift the row by a pixel. */
+    box-shadow: inset 0 2px 0 transparent;
+    transition:
+      color 0.12s,
+      background-color 0.12s,
+      box-shadow 0.12s;
+  }
+  .dock-btn:hover {
+    color: var(--ink);
+    background: var(--panel);
+  }
+  .dock-btn:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: -2px;
+  }
+  .dock-btn.on {
+    color: var(--ink);
+    background: var(--panel);
+    box-shadow: inset 0 2px 0 var(--ink);
+  }
+
+  /* The count a mode carries — Sessions wears the "needs you" tally, which is
+     the one number worth seeing from inside another mode. Ported from
+     `.dock-count`; `.hot` is its `.pending`. */
+  .dock-count {
+    min-width: 1.05rem;
+    padding: 0 0.25rem;
+    border-radius: 999px;
+    background: var(--rule-strong);
+    color: var(--ink-soft);
+    font-size: 0.68rem;
+    font-weight: 600;
+    line-height: 1.5;
+    text-align: center;
+  }
+  .dock-count.hot {
+    background: var(--needs);
+    color: var(--page);
+  }
+
+  /* The modes as ONE control rather than three buttons that happen to be
+     adjacent. Exactly one is on at a time, and three separate-looking buttons
+     where only one ever lights up reads as three toggles you could turn on
+     together; the hairline box is the sighted half of what `role="radiogroup"`
+     already promises a screen reader.
+
+     `flex: none` is load-bearing and not tidiness: this clips its own overflow
+     for the rounded corners, and a flex item that clips and is allowed to
+     shrink does not get narrower, it gets SHORTER — it deletes buttons off its
+     right-hand end with no scrollbar and no sign anything is missing. */
+  .dock-modes {
+    display: inline-flex;
+    align-items: stretch;
+    flex: none;
+    /* Inset rather than added: the bar has no vertical room to spare, so this
+       is margin, or the frame would grow the bar. */
+    margin: 0.35rem 0.25rem;
+    border: 1px solid var(--rule-strong);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  /* Hairlines BETWEEN the buttons, never on the ends — the n-1 rules a
+     segmented control needs, still right when a fourth mode is added. */
+  .dock-modes .dock-btn + .dock-btn {
+    border-left: 1px solid var(--rule);
+  }
+  /* Inside the frame the selected state is the fill; the inset cap belongs to
+     the bar's other buttons, where it means "this is the page you are on", and
+     keeping both would draw a stray 2px bar across one segment. */
+  .dock-modes .dock-btn,
+  .dock-modes .dock-btn.on {
+    box-shadow: none;
+    border-radius: 0;
+  }
+  /* Inset, so the frame's `overflow: hidden` cannot clip it. */
+  .dock-modes .dock-btn:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: -2px;
+  }
+
+  /* --- the fit ladder. Which rung is on is MEASURED (dock-fit.ts), never a
+     width in this file: the product had a `max-width: 1100px` here that was
+     right for six modes and silently ran the last buttons off the edge at
+     thirteen. The label gives way, never the button — every button keeps an
+     `aria-label` and a tooltip, so losing the word costs a sighted reader a
+     hover and a screen-reader user nothing, where a dropped button costs both
+     of them the mode. */
+
+  /* Rung 1 — the app cluster gives up its word and never gets it back at a
+     lower rung. Refresh is the word worth losing first: it is the one control
+     here whose glyph is unambiguous without it. Listed at both rungs rather
+     than at rung 1 alone, because a bar wears exactly one rung class — a rule
+     written only for rung 1 would let the word reappear at rung 2, which is the
+     opposite of what this rung is for. */
+  .dock.dock-fit-1 .dock-app .dock-btn-label,
+  .dock.dock-fit-2 .dock-app .dock-btn-label {
+    display: none;
+  }
+
+  /* Rung 2 — the modes go to glyphs too, and everything closes up. */
+  .dock.dock-fit-2 .dock-btn-label {
+    display: none;
+  }
+  .dock.dock-fit-2 .dock-btn {
+    padding-inline: 0.5rem;
+  }
+
+  /* **And the mode you are actually in keeps its word, even at the last rung.**
+     Greg's argument in the product was that the bar is what tells you which
+     mode you are in, and a highlighted glyph alone does not say the name. The
+     product restores this at its middle rung only, because at its last rung the
+     bar is already scrolling and a word you have to drag sideways to read is
+     pure cost. Here there are four buttons, and at 390px the glyph row plus one
+     word still fits — so the same argument applies with none of the cost.
+     Higher specificity than the hides above, deliberately: it is meant to win. */
+  .dock.dock-fit-2 .dock-btn.on .dock-btn-label {
+    display: inline;
+  }
+
+  /* Sized for a thumb. `pointer: coarse`, not `any-pointer` — this is about how
+     big a control is, and `any-pointer` is true of a laptop with a touchscreen
+     nobody touches, which would put 56px of chrome on a desktop. */
+  @media (pointer: coarse) {
+    :root {
+      --dock-h: 3.5rem;
+    }
+    /* Grow to share the bar, never shrink below the floor. `.dock-modes` grows
+       as three buttons against each loose button's one, so a wide bar spreads
+       it in proportion to what is inside rather than handing the segment the
+       same share as a single icon. */
+    .dock-modes {
+      flex: 3 0 auto;
+    }
+    .dock > .dock-btn,
+    .dock-modes .dock-btn {
+      flex: 1 0 auto;
+    }
+    /* 40px — Apple's 44pt minimum less the hairline a segment shares with its
+       neighbour. A floor, not a cap, so a count can still widen a button. */
+    .dock-btn {
+      min-width: 2.5rem;
+    }
+  }
+
+  /* ------------------------------------------------------ the session list --
+     A card you can open, without a button inside a button.
+
+     The heading holds the only real control; `::after` stretches that control's
+     hit area across the whole card, which is the "stretched link" pattern and
+     the only way to get a thumb-sized target without wrapping the card in a
+     `<button>` — which would nest the status pill's explanation inside another
+     button. Invalid HTML, and a screen reader reads the pair as one control
+     whose name is every word on the card.
+
+     `.explain` is lifted above the overlay so its own tap still opens its card.
+     That is the one place on a card where a tap does something other than open
+     the session, and it is the place a reader taps when they want to know what
+     the word means. */
+  .session-card {
+    position: relative;
+  }
+  .session-open {
+    border: none;
+    background: none;
+    padding: 0;
+    font: inherit;
+    color: inherit;
+    text-align: inherit;
+  }
+  .session-open::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: var(--radius);
+  }
+  /* Drawn on the CARD rather than round the two words of the title: the target
+     is the card, so the ring that says "this is focused" has to be too. */
+  .session-open:focus-visible {
+    outline: none;
+  }
+  .session-open:focus-visible::after {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+  .session-card .explain {
+    position: relative;
+    z-index: 1;
+  }
+  /* The row you are looking at. A ring rather than a fill, so a `needs-you`
+     card keeps its orange wash and does not change meaning when it is picked. */
+  .session-card.on {
+    box-shadow: 0 0 0 2px var(--ink-faint);
+  }
+  .session-card:hover {
+    border-color: var(--rule-strong);
+  }
+
+  /* An option of a dialog, as a button. Not `.dock-btn` and not `Button`: those
+     are one line tall and this is a sentence off somebody's terminal, which on
+     a phone wraps to three. */
+  .answer {
+    font: inherit;
+    color: inherit;
+  }
+
+  /* ------------------------------------------------------------- tooltip --
+     PORTED FROM src/web/styles/tooltip.css. Tooltip.tsx, over Floating UI,
+     which positions and ships no styles of its own — everything visual is here.
+     The one change is the radius: 5px there, `--radius` here, so this page has
+     one radius rather than one and a bit. */
+  .tooltip-anchor {
+    /* Frontmost, dock included. A tooltip is always about the thing you are
+       pointing at, so anything in front of it is a hover that appears to do
+       nothing. */
+    z-index: 100;
+    /* The pointer may not enter a card: a panel that landed under the pointer
+       would hold itself open over the thing it is about. */
+    pointer-events: none;
+  }
+  .tooltip {
+    position: relative; /* the arrow is measured against this box */
+    /* 22rem is the width this was designed at; the `min()` stops it becoming
+       the whole of a narrow window. `shift` keeps a panel on screen, but
+       shifting a 352px box inside a 390px viewport pins it to one edge with
+       nowhere left to go — capping the width is what lets it stay near the
+       thing it is about. */
+    max-width: min(22rem, calc(100vw - 1.75rem));
+    padding: 0.6rem 0.75rem 0.55rem;
+    border: 1px solid var(--rule-strong);
+    border-radius: var(--radius);
+    background: var(--panel-raised);
+    box-shadow: var(--shadow-float);
+    font-family: var(--font-ui);
+    /* No `transform-origin`: `useTransitionStyles` writes a placement-aware one
+       inline, so the card grows out of the control it belongs to. */
+  }
+  .tip-head {
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin-bottom: 0.25rem;
+  }
+  .tip-body p {
+    margin: 0 0 0.4rem;
+    font-size: 0.82rem;
+    line-height: 1.45;
+    color: var(--ink);
+  }
+  /* The last paragraph is always the one a reader could not have worked out by
+     pressing the control — where the number comes from, or what it does not
+     promise. Quieter, because it is the footnote. */
+  .tip-body p.tip-how {
+    color: var(--ink-soft);
+  }
+  .tip-body p:last-child {
+    margin-bottom: 0;
+  }
+
+  /* The trigger of an explanation: a control whose whole job is to answer
+     "what does this word mean?". `help` rather than `pointer`, because pressing
+     it navigates nowhere and changes nothing. */
+  .explain {
+    cursor: help;
+    border: none;
+    background: none;
+    padding: 0;
+    font: inherit;
+    color: inherit;
+    text-align: inherit;
+  }
+  .explain:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+    border-radius: 4px;
   }
 }

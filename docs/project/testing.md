@@ -597,6 +597,35 @@ nothing wrong and passed when re-run alone. `bob-link-preview@example.invalid` c
 anything. [`tests/fixture-ids.test.ts`](../../tests/fixture-ids.test.ts) catches the *id* half of
 this; nothing yet catches the email half, which is why it is written down here.
 
+## What a brand-new test file owes the two registries
+
+Three gates in `tests/store-migration-registry.test.ts` fire on files that are not conversions at
+all, and each one reads as something else when it does. Written down on 2026-09-08 after a new
+route test tripped two of them inside twenty minutes of being committed.
+
+1. **A lane, or the database looks broken.** A file absent from `TEST_LANES` defaults to `unit`,
+   whose `DATABASE_URL` is poisoned on purpose. A Postgres suite then fails on
+   `ECONNREFUSED 127.0.0.1:1`, which reads as *the database is down* rather than *this file is
+   unregistered*. § *Three lanes, and which one your test is in* is where to look; the entry goes in
+   `TEST_LANES`.
+2. **Two bold markers are reserved vocabulary** — the words *Blind to* and *Mutation*, bolded and
+   followed by a full stop, at the start of a line. They are how a store conversion shows its
+   working, and any file containing one must appear in `STORE_CONVERSIONS`. If your file is not a
+   conversion — anything written after the filesystem store went on 2026-09-05 is not — **do not add
+   the entry to silence the gate**; that records a history that did not happen. Say the same thing
+   in different words: *Outside this oracle* was the phrasing used the first time this came up.
+3. **A verdict in `STORE_MIGRATION`, if the import graph can reach a condemned module through your
+   file** — which it can as soon as you use `scratchArticleInPg`. Without one, § *leaves no file that
+   the import graph can reach and nothing accounts for* names your file as a hole. And set
+   **`evidence: "static-only"`**: the field defaults to `"dynamic"`, which claims the instrumented
+   witness watched your file execute, and that witness is a dated measurement from 2026-09-03. A
+   file written since cannot have been watched, and § *keeps `evidence` honest about which witness
+   backs each verdict* is what says so.
+
+The shape all three share: **the registry is a record of a migration, and a new file is not part of
+it** — so every one of these is a gate asking you to say what your file *is*, and each has a wrong
+answer that is easier than the right one.
+
 ## Rendering a component, without a testing library
 
 `tests/job-failure.test.ts` renders `JobProgress` with **`renderToStaticMarkup` from

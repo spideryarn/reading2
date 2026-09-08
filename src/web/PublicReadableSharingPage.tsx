@@ -130,7 +130,7 @@ export function PublicReadableSharingPage({ signedIn }: { signedIn: boolean }) {
           distinction nothing draws. */}
       <SiteNav here="features" signedIn={signedIn} />
 
-      <main className="tw:mx-auto tw:max-w-2xl tw:px-6 tw:pt-10 tw:pb-4">
+      <main className="tw:mx-auto tw:max-w-2xl tw:px-6 tw:pt-10">
         <Link
           href={PUBLIC_LIBRARY_HREF}
           className="tw:mb-6 tw:inline-flex tw:items-center tw:gap-1 tw:text-xs tw:text-ink-faint tw:no-underline tw:hover:text-highlight"
@@ -388,7 +388,7 @@ export function PublicReadableSharingPage({ signedIn }: { signedIn: boolean }) {
       </main>
 
       <div className="tw:mx-auto tw:max-w-2xl tw:px-6">
-        <SiteFooter variant="marketing" />
+        <SiteFooter />
       </div>
     </div>
   );

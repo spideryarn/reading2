@@ -273,8 +273,16 @@ describe("one address, one article", () => {
    * `EnqueueRequest.retryOf`): `retryJob` reads the failed job, refuses what is
    * not retryable, and then calls `enqueue` with the old job's slug, url and this
    * field. Everything under test is downstream of that call, so building the
-   * request directly tests the same code with no queue fixture in the way — and
-   * the id it repeats is never looked up.
+   * request directly tests the same code with no queue fixture in the way.
+   *
+   * **The id it repeats is not looked up *here*, and that stopped being true of
+   * `enqueue` in general on 2026-09-08.** `enqueueIn` now locks the retried
+   * attempt and requires it to still exist, because a delete committing between
+   * `retryJob`'s read and this insert would otherwise rebuild the article the
+   * reader destroyed (GPT Sol's F40,
+   * docs/plans/260906h-delete-an-article-permanently.md). Both cases below are
+   * handed back before any insert, which is why they never reach that lock and
+   * why they still pass with no attempt row behind the id.
    *
    * ## The interleaving, and why it needs a spy
    *

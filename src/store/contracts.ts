@@ -624,6 +624,50 @@ export interface ShelfStore {
    * one behind.
    */
   recordOpen(slug: string): Promise<void>;
+
+  /**
+   * **Destroy this article, for good.** The one irreversible act a reader can
+   * perform on their own data.
+   *
+   * `patch({archived: true})` above is the reversible ending, and it was the
+   * only one until 2026-09-06 — `src/db/schema.ts` still says *"Never a delete;
+   * Greg chose archive + Undo"* about the rest of the store, and that is still
+   * the rule everywhere else. This is the exception, decided with the archive
+   * in front of it: archive **is** the grace period, so there is no `deleted_at`
+   * and no thirty-day purge, because a soft delete would be a second archive
+   * under another name and the reader who wanted the thing gone would still
+   * have it. docs/plans/260906h-delete-an-article-permanently.md.
+   *
+   * ## Three answers, and each of them is load-bearing
+   *
+   * - **404** for a slug that is not the reader's, and for one that is not
+   *   there. Never 403: a 403 confirms the article exists, and the whole point
+   *   of the owner filter is that a stranger learns nothing. It falls out of
+   *   `ownedSlug` rather than being a second decision.
+   * - **409** while an import is running on the article. The database will not
+   *   refuse this on its own — every foreign key declares an `onDelete`, so a
+   *   live job's next write simply lands on a cascaded-away revision — and the
+   *   job's quota slot is the thing that cannot be recovered afterwards. See
+   *   the implementation for why refusing is the *cheap* answer rather than the
+   *   cautious one.
+   * - **`{ destroyed }`**, naming the slug that no longer exists.
+   *
+   * **The article's *finished* jobs go with it**, and that is not merely tidying.
+   * `jobs` is keyed by slug text, carries no foreign key, and is invisible to the
+   * cascade — and a terminal row keeps the failed attempt's URL, so Retry on one
+   * would queue a job for the destroyed slug whose worker calls
+   * `lockOrCreateArticle` and remakes the article. GPT Sol's F20; the whole
+   * argument, including why a terminal job cannot leak a quota slot where a live
+   * one can, is at `deleteTerminalJobs` in src/store/pg-shelf.ts.
+   *
+   * **Never the entry**, which is what makes this different from `patch`.
+   * `patch` returns the card as it now stands, so a caller cannot get away with
+   * assuming what the write did; there is no card here, and handing back a
+   * `LibraryEntry` for a row that has gone would be a shape the client could
+   * render. The slug is the only thing left to say, and the client's next move
+   * is to forget it.
+   */
+  destroy(slug: string): Promise<{ destroyed: string }>;
 }
 
 /**

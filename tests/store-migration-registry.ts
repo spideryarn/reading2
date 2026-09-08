@@ -581,6 +581,26 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "Already on Postgres via a hoisted flag and `scratchArticleInPg` — its docstring is the one " +
       "the other converted suites cite for why the flag must be set in `vi.hoisted`.",
   },
+  "tests/chat-thread-delete-route.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["fixture-loader"],
+    /* **`static-only`, and it has to be.** `evidence: "dynamic"` claims the
+       instrumented run watched this file execute something, and that witness is
+       a dated measurement from 2026-09-03 — five days before this file existed.
+       The default is `dynamic`, so leaving the field off would have made a claim
+       no witness backs, which is what § `keeps evidence honest about which
+       witness backs each verdict` refused. */
+    evidence: "static-only",
+    reason:
+      "**Not a conversion.** Written 2026-09-08, after the filesystem store was deleted, as the " +
+      "red-first oracle for `DELETE /api/chat/:slug/:threadId` before the chat guards moved into " +
+      "`AUTH_ROUTES` (docs/plans/260908a-chat-and-live-sessions-join-the-route-table.md). It has " +
+      "an entry here because the import graph can reach a condemned module through " +
+      "`scratchArticleInPg`, and a file the graph reaches with no verdict is a hole rather than a " +
+      "clean file — so this is the verdict: the seeder's copy step, and nothing else. It is " +
+      "deliberately absent from `STORE_CONVERSIONS`, which records conversions that happened; " +
+      "adding it there would be a historically false claim (GPT Sol, 260908a stage 1 review § F4).",
+  },
   "tests/chat-spoken-route.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["fixture-loader"],
@@ -2297,6 +2317,14 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      bounded loop gave up. No GoTrue and no bucket: the owner is the dev one the
      clone already seeds, and the article comes out of the committed corpus. */
   "tests/article-cache-call-site.test.ts": "private-postgres",
+  /* Stage C of the permanent-delete plan, 2026-09-06. It seeds its own owner,
+     its own article, its own jobs and its own ledger rows, and one of its cases
+     deliberately races a delete against an enqueue on a **third** connection it
+     takes out of `pgReady`'s pool. Two concurrent runs of that against one
+     database would contend on the same fixed slug and the same `billing_accounts`
+     row, so the private lane is not a preference here — it is what makes the
+     race the test is measuring the only race in it. No GoTrue and no bucket. */
+  "tests/article-delete-pg.test.ts": "private-postgres",
   "tests/article-rows-snapshot.test.ts": "private-postgres",
   "tests/billing-admission.test.ts": "private-postgres",
   "tests/billing-checkout.test.ts": "private-postgres",
@@ -2362,6 +2390,19 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      bucket: no model is called and the article comes out of the committed
      corpus. */
   "tests/chat-spoken-route.test.ts": "private-postgres",
+  /* Written 2026-09-08 for the chat slice of the `AUTH_ROUTES` migration
+     (docs/plans/260908a-chat-and-live-sessions-join-the-route-table.md). It
+     seeds two conversations under a slug of its own and asserts, after the
+     route deletes one, that the store kept **exactly** the other — an exact
+     list rather than a membership check, which a neighbouring run writing to
+     `chat_threads` under the same slug could falsify. No model is called, so no
+     ledger row — but it does reach the Storage bucket, through
+     `scratchArticleInPg` → `loadArticleIntoPg` → `storeRawSource` for the
+     fixture's `raw.json`. That does not change the lane: the write is
+     content-addressed and nothing here asserts on bucket state. (An earlier
+     draft of this comment said Storage was untouched, copied from the neighbour
+     above without checking; GPT Sol, 260908a stage 1 review § F6.) */
+  "tests/chat-thread-delete-route.test.ts": "private-postgres",
   "tests/checkpoints-durable-resume.test.ts": "private-postgres",
   "tests/claim-session-postgres.test.ts": "private-postgres",
   "tests/comment-referee-mark.test.ts": "private-postgres",
@@ -2918,6 +2959,14 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
   },
   "tests/billing-quota-race.test.ts": {
     "0b111a99-0000-4000-8000-00000000c0da": { kind: "seeded" },
+  },
+  /* Stage C of the permanent-delete plan, 2026-09-06. `seedAuthUser` in
+     `beforeEach`, deleted again in `afterAll`, and it needs the row three times
+     over: the articles, the ingest events, and — the one that found this —
+     `billing_accounts`, which `pgShelfStore.destroy` creates through
+     `lockBillingAccount` before it deletes anything. */
+  "tests/article-delete-pg.test.ts": {
+    "de1e1e00-0000-4000-8000-0000000000a1": { kind: "seeded" },
   },
   "tests/db-referee-criteria.test.ts": {
     "7ac042a4-7c19-44a6-ab6d-448acc5909b8": { kind: "seeded" },

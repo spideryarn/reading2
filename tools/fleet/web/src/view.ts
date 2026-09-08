@@ -16,10 +16,19 @@
  * promoted because one failed agents call turns every Claude row unknown at
  * once.
  */
-import type { FleetOptionKey, FleetRow, FleetState, FleetStatus } from "./types";
+import type { FleetConsequence, FleetOptionKey, FleetRow, FleetState, FleetStatus } from "./types";
 
-/** Which colour language a row speaks. */
-export type Tone = "needs" | "work" | "idle" | "unknown";
+/**
+ * Which colour language a row speaks.
+ *
+ * `alarm` is the fifth and is not a session status: it is the red the masthead
+ * uses for staleness, borrowed by Box health for a `critical` reading. It is in
+ * this union rather than in a second one so that a tone is a tone everywhere —
+ * `toneClasses` in ui.tsx is a `Record` over exactly these names, so a sixth is
+ * a type error at every call site at once rather than a quiet fall-through to
+ * grey.
+ */
+export type Tone = "needs" | "work" | "idle" | "unknown" | "alarm";
 
 /**
  * A duration in milliseconds, as the shortest sentence that is still true.
@@ -193,9 +202,15 @@ export function whereLine(row: FleetRow): string | null {
 /**
  * What to press to choose an option, said in one short phrase.
  *
- * **This page sends nothing.** The phrase is here so a person reading the
- * dashboard on a phone knows what they would have to do at the terminal, not
- * because anything on this page will do it — steering is tools/fleet/steer.ts.
+ * **It describes the keystroke, not the button.** Since 2026-09-08 the detail
+ * pane can answer a dialog, and the phrase sits beside the button that does it
+ * — so it says what would be typed at the terminal, which is the thing a reader
+ * cannot see and the one fact that makes the answer checkable afterwards.
+ *
+ * `unrecognised` means THIS BUILD cannot describe the keystroke, and nothing
+ * may be disabled on the strength of it: the object that goes back to the
+ * server is the server's own, so a newer server may understand a key this one
+ * has no words for (types.ts § `rawQuestion`).
  */
 export function optionHint(key: FleetOptionKey): string {
   switch (key.via) {
@@ -213,3 +228,178 @@ export function optionHint(key: FleetOptionKey): string {
     }
   }
 }
+
+/* ------------------------------------------------------------- ordering -- */
+
+/**
+ * The ways the list can be sorted.
+ *
+ * Greg, 2026-09-08: *"list all the sessions in the left-hand column, with
+ * different ways to order them (how long they've been running, status (the
+ * default), anything else that might be ueful, etc)"*.
+ *
+ * **`status` is the default and it is the one the page is for** — see the head
+ * of SessionsPanel.tsx. The others exist because the questions they answer are
+ * real ones and the triage order cannot answer them: *what has been running all
+ * night*, *what did I just start*, *where is the one in that worktree*. Each is
+ * a different first sort key over the same rows, and every one of them falls
+ * back to the same tiebreak so that two rows never swap places between renders
+ * for no reason.
+ *
+ * A `Record` keyed by the union rather than a list of objects with a `key`, so
+ * a fifth ordering is a type error at the label table, the sorter and the
+ * control at once.
+ */
+export type Ordering = "status" | "longest" | "newest" | "name" | "where";
+
+export const ORDERINGS: readonly Ordering[] = ["status", "longest", "newest", "name", "where"];
+
+export const ORDERING_LABELS: Record<Ordering, string> = {
+  status: "Status",
+  longest: "Longest running",
+  newest: "Newest",
+  name: "Name",
+  where: "Repo and worktree",
+};
+
+/** An ordering off the URL, or the default for anything this build does not know. */
+export function parseOrdering(value: string | undefined): Ordering {
+  return (ORDERINGS as readonly string[]).includes(value ?? "") ? (value as Ordering) : "status";
+}
+
+/** What a row is called, for sorting and for the list. Never the empty string. */
+export function rowLabel(row: FleetRow): string {
+  return row.title ?? row.name;
+}
+
+/**
+ * Start time as a number, with the unparseable ones pushed to one end.
+ *
+ * `NaN` is the hazard the whole of `triageSort`'s comment is about: every
+ * comparison with it is false and a comparator that subtracts two of them
+ * returns `NaN`, which sorts as "equal to everything" — so the row lands
+ * wherever the sort happened to walk and the page looks fine. One helper, so
+ * there is one place that decides.
+ */
+function startedMs(row: FleetRow): number | null {
+  const at = Date.parse(row.startedAt);
+  return Number.isFinite(at) ? at : null;
+}
+
+/** Ascending by start time; a row with no readable start time sorts last. */
+function byStart(a: FleetRow, b: FleetRow, oldestFirst: boolean): number {
+  const at = startedMs(a);
+  const bt = startedMs(b);
+  if (at === null && bt === null) return 0;
+  if (at === null) return 1;
+  if (bt === null) return -1;
+  return oldestFirst ? at - bt : bt - at;
+}
+
+/**
+ * The rows in the order the reader asked for. **Copies rather than sorting in
+ * place**, because the argument is somebody's snapshot and a poll handing the
+ * same array to two renderers is how that becomes a bug you only see under
+ * load.
+ *
+ * Every arm ends at the same tiebreak — the tmux handle, which is unique and
+ * stable — so a list of identically-named sessions has a fixed order rather
+ * than whatever the sort walked into.
+ */
+export function sortRows(rows: readonly FleetRow[], order: Ordering): FleetRow[] {
+  if (order === "status") return triageSort(rows);
+  const compare = (a: FleetRow, b: FleetRow): number => {
+    switch (order) {
+      case "longest":
+        return byStart(a, b, true);
+      case "newest":
+        return byStart(a, b, false);
+      case "name":
+        return rowLabel(a).localeCompare(rowLabel(b), undefined, { sensitivity: "base" });
+      case "where": {
+        /* A session with no repo goes last rather than sorting under the empty
+           string, where it would sit above everything and look like the most
+           important thing on the page. */
+        const aw = whereLine(a);
+        const bw = whereLine(b);
+        if (aw === null && bw === null) return 0;
+        if (aw === null) return 1;
+        if (bw === null) return -1;
+        return aw.localeCompare(bw, undefined, { sensitivity: "base" });
+      }
+      default: {
+        const never: never = order;
+        return never;
+      }
+    }
+  };
+  return [...rows].sort((a, b) => compare(a, b) || a.id.localeCompare(b.id));
+}
+
+/* ---------------------------------------------------- what an option does -- */
+
+/**
+ * How alarming a tone is, as a number.
+ *
+ * It exists so that the rule below can be CHECKED rather than remembered. Two
+ * tones can be equally alarming — `idle` and `work` are both "nothing to see
+ * here" — so this is a rank, not an ordering of the union.
+ */
+export const TONE_ALARM: Record<Tone, number> = {
+  idle: 0,
+  work: 0,
+  unknown: 1,
+  needs: 2,
+  alarm: 3,
+};
+
+/**
+ * How far an option reaches, ranked — and **`unknown` is not the mild one.**
+ *
+ * `classifyConsequence` in tools/fleet/pane.ts is a reading of English off a
+ * terminal, written to be wrong in one direction only: nothing falls through to
+ * `once`, and anything it does not recognise is `unknown`. Its own comment says
+ * the client must treat `unknown` as **at least as serious as `persistent`**.
+ *
+ * **The trap this table exists to avoid**: draw `persistent` in red and
+ * `unknown` in neutral grey, and the conservative default becomes the least
+ * alarming badge on screen — so a new Claude Code label ("Yes, and remember
+ * this") would classify as `unknown` and render as the safest-looking thing
+ * there. The guarantee would be exactly inverted, silently, by a colour choice.
+ *
+ * So the rule is written as an inequality over these tables and the suite holds
+ * it, rather than as a comment asking the next person to be careful.
+ */
+export const CONSEQUENCE_RANK: Record<FleetConsequence, number> = {
+  decline: 0,
+  once: 1,
+  persistent: 2,
+  unknown: 3,
+};
+
+export const CONSEQUENCE_TONE: Record<FleetConsequence, Tone> = {
+  decline: "idle",
+  once: "idle",
+  persistent: "alarm",
+  /* At least as alarming as `persistent`, by the rule above. Equal rather than
+     louder: shouting more about the one we are unsure of than about the one we
+     know is persistent would train a reader to ignore both. */
+  unknown: "alarm",
+};
+
+/** What the badge says. Short — it sits at the end of an option's own sentence. */
+export const CONSEQUENCE_LABEL: Record<FleetConsequence, string> = {
+  decline: "declines",
+  once: "this time only",
+  persistent: "and from now on",
+  unknown: "unclassified — assume it is from now on",
+};
+
+/** The longer version, for the card the badge carries. */
+export const CONSEQUENCE_WHAT: Record<FleetConsequence, string> = {
+  decline: "Refuses this one thing. The session carries on and asks again next time.",
+  once: "Approves this action and nothing after it.",
+  persistent: "Approves this AND changes what the session will approve on its own from now on, without asking.",
+  unknown:
+    "The label is not one this page recognises, so nobody can say how far it reaches. It is drawn as loudly as a persistent choice on purpose: the classifier is written to be wrong in one direction only, so a new wording arrives here rather than in the mild bucket.",
+};

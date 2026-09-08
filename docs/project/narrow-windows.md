@@ -126,6 +126,80 @@ Three things worth carrying to whatever is built next:
 The full account, including what the measuring harness cannot see, is
 [docs/plans/260827t-mobile-reading-view.md](../plans/260827t-mobile-reading-view.md).
 
+## What a control owes a finger
+
+`narrow-window.css` § **a coarse pointer** is where a control's size for a finger is decided, and
+until 2026-09-08 it had reached the bottom bar and one footnote link and **nothing inside a mode
+band** — because Greg was pointing at the bottom bar when he asked for it:
+
+> Also, make our button-bar at the bottom a bit easier to press, e.g. bigger buttons, slightly more
+> spaced out.
+>
+> — Greg, 2026-08-28
+
+The only other control it ever reached is the footnote's *back to your place* link
+(`footnotes.css` § a coarse pointer, 2026-09-06, 44px). Everything in a mode band was whatever
+height its text happened to be. The order rows in the glossary and quotes bands were **23px**, and
+64% of a row's own box was not on a button. That is
+what SPIDERYARN-READING2-2J was reported against
+([260908a](../plans/260908a-glossary-order-button-not-clickable-on-touch.md) — which is also honest
+that the incident was never reproduced, and that a floor is not a diagnosis).
+
+Two rules now live there beside the dock's, and both are floors rather than fixes:
+
+- **40px minimum on the two order rows**, the same number the dock's buttons answer to — Apple's
+  44pt less the hairline a neighbour shares.
+- **16px minimum on every text field**, in its own section (§ a field iOS zooms into) and under
+  **`any-pointer: coarse`** rather than `pointer: coarse`. iOS Safari zooms the whole page in when a
+  field under 16px takes focus and does not zoom back out, and every piece of this app's chrome is
+  `position: fixed` against a viewport the reader can then no longer see all of. The usual counter is
+  `maximum-scale=1` on the viewport meta, and it is not available here: it would take pinch-zoom off
+  the article. So the field moves instead — and it moves for any device with a touchscreen, because
+  one point of type is not the chrome the paragraph above is rationing, and an iPad with a Magic
+  Keyboard reports `pointer: fine` while its reader still taps the glass.
+
+  Two things about that rule are load-bearing rather than decorative. **It lists the types that
+  raise a keyboard rather than excluding the ones that do not** — the negative version reached the
+  feedback dialog's visible `type="file"` picker, a control with no keyboard and nothing to zoom.
+  And **it carries a `:root` for specificity**, said out loud rather than hidden: the fields are
+  styled by classes, `.remember .chat-input` is two of them, and a rule that loses is
+  indistinguishable from one that wins anywhere but a rendered page. This rule shipped broken twice
+  on exactly that, and a browser caught it both times while the suite stayed green.
+
+  **The utilities layer is out of reach from it.** `@layer theme, base, app, utilities` puts every
+  `tw:` class after the stylesheets, so the four Tailwind-styled fields — sign-in's email and
+  password, the shelf's search, Add URL, and the library's in-place title editor — carry
+  `tw:any-pointer-coarse:text-base` at their own call sites.
+
+  **`<select>` joined it on 2026-09-08**, working the second report of the same bug
+  (SPIDERYARN-READING2-2H, the Feedback dialog zooming on an iPhone — which the `textarea` half had
+  already fixed). The composer's stance picker was still 13.28px, measured in Chrome after the rule
+  shipped, because `select` was named nowhere in it: the heading above says *the types that raise a
+  keyboard*, and a `<select>` on iOS raises a wheel picker instead. **That framing is narrower than
+  the behaviour** — iOS zooms on *focus*, whatever kind of thing the control opens.
+
+  What establishes that is WebKit's source rather than the widely copied
+  `input, select, textarea` recipe: `WKContentViewInteraction.mm` says a non-text control such as a
+  `<select>` "can be zoomed immediately" on focus and then takes the same zoom path a text field
+  takes, and `WKWebViewIOS.mm` computes the target scale as `16 / nodeFontSize` — **1.20× at
+  13.28px**, which is the size the composer's stance picker actually was. **But that scaling is
+  gated to WebKit's small-screen idiom**, so it is an iPhone claim, not an iPad one; the rule is
+  load-bearing on a phone and harmless on a tablet. Still reasoned rather than measured — nobody
+  here has run that Safari build, this box has no iOS device, and Chromium reproduces the zoom for
+  no control at all.
+
+  It carries `:not([hidden])` for the specificity as well as the semantics: a bare `:root select`
+  **ties** with `.chat-live-mic select` at (0,1,1), and a tie here is settled only by import order,
+  which is the dependence that broke this rule twice. `:disabled` is deliberately **not** excluded —
+  a control changes disabled state, and excluding it would make its type jump size as it did.
+
+[`tests/touch-controls.test.ts`](../../tests/touch-controls.test.ts) holds both, and says in its own
+header what a text scanner can and cannot prove about whether a finger lands on a button.
+
+**The band's other controls have not had this treatment**: the threshold slider is 16px tall, and
+half a dozen buttons in the glossary band are between 19 and 28. The floor went to the control that
+was reported, not to the band.
+
 ## The screen is bigger than the window: `env(safe-area-inset-*)`
 
 `index.html` carries `viewport-fit=cover`, so on an iPhone the document is laid out across the whole

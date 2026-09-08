@@ -37,7 +37,7 @@
  * So it now carries the shell the other two do: `.site`, `SiteNav here="pricing"`
  * (a third value, and the *Sign in* link stays on this page because this page
  * has its own panel — SiteBits.tsx says why that matters), a hero with the glow,
- * and `SiteFooter variant="marketing"`. The four *How it works* paragraphs are
+ * and a `SiteFooter`. The four *How it works* paragraphs are
  * folded into `Faq` below rather than sitting above it twice.
  *
  * ## This page can take money now, and the flow moved rather than being copied
@@ -224,7 +224,7 @@ export function PricingPage({ readerId }: { readerId: string | null }) {
             and the row can drop its own link by itself. `marketing` since
             2026-09-04, when this page joined the other two: the tighter measure
             read as the page having been cut off. */}
-        <SiteFooter variant="marketing" />
+        <SiteFooter />
       </main>
     </div>
   );
@@ -394,7 +394,7 @@ function Faq() {
             Stripe's own hosted billing page, which only `/profile` links to,
             because that link needs a Stripe customer to open and this page has
             no idea whether you have one. */}
-        <Answer q="How do I cancel?">
+        <Answer q="How do I cancel?" wide>
           {/* Greg's, moved from *How it works*, word for word. */}
           Cancel whenever you like, from{" "}
           <Link href="/profile" className="tw:text-highlight">
@@ -409,9 +409,16 @@ function Faq() {
 }
 
 /** One question and its answer, as a panel. */
-function Answer({ q, children }: { q: string; children: ReactNode }) {
+function Answer({ q, children, wide }: { q: string; children: ReactNode; wide?: boolean }) {
   return (
-    <div className="site-panel site-panel-hover tw:p-6">
+    /* **`wide` is for the odd one out**, and there is exactly one because the
+       grid is two columns and there are seven questions. Without it the last
+       answer sits alone in the left column with an empty cell beside it, which
+       reads as a tile that failed to load rather than as the end of a list.
+
+       `lg:`, because that is where the grid becomes two columns at all — below
+       it every tile is already full width and a span would be a no-op. */
+    <div className={`site-panel site-panel-hover tw:p-6 ${wide ? "tw:lg:col-span-2" : ""}`}>
       {/* `h3` under the section's `h2`, so the outline reads as a list of
           questions rather than as eight new sections. */}
       <h3 className="tw:mb-2 tw:font-prose tw:text-base tw:text-foreground">{q}</h3>
@@ -492,7 +499,7 @@ function PlansForAStranger() {
           than a lookalike. */}
       <section
         id={SIGN_IN_ID}
-        className="site-panel tw:mt-8 tw:max-w-2xl tw:scroll-mt-20 tw:p-6 tw:sm:p-8"
+        className="site-panel tw:mt-8 tw:scroll-mt-20 tw:p-6 tw:sm:p-8"
       >
         <p className="tw:mb-5 tw:text-sm">
           {/* [tissue] Both halves, as on the landing page: the same controls

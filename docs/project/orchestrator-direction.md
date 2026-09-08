@@ -241,6 +241,41 @@ is easy to believe and wrong in a specific way.
   to be derived from the cache, and the cache is the untrustworthy source. **Treat the transcript 429
   as the ground truth and the cache as a hint**, not the other way round.
 
+### Can we call an API instead? Mostly no, and not with an admin key
+
+Greg offered, 2026-09-08: *"If absolutely necessary I can provide an Anthropic admin key in the
+.env.local that gets pushed by gjd-remote to this box."* **The answer is that it would not help, so
+do not ask him for one.** Researched the same day, sources in the answer below.
+
+- **The Admin API is the wrong billing system.** Every usage and cost endpoint under
+  `/v1/organizations/*` — including the Claude-Code-specific `usage_report/claude_code` — reports
+  **Console API-key spend**, in daily aggregates, an hour behind. Anthropic's own FAQ says it flatly:
+  *"This API only tracks Claude Code usage on the Claude API."* It has no 5-hour or 7-day window, no
+  `resets_at`, and nothing shaped like the subscription quota that actually throttles Claude Code
+  here. Independently, **admin keys are minted for a Console organization and are documented as
+  unavailable for individual accounts**, so a personal Max subscription may have nothing to attach
+  one to.
+- **The documented `anthropic-ratelimit-*` headers are also API-key-shaped** — organisation RPM and
+  TPM, described entirely in terms of workspaces and usage tiers. They do not describe subscription
+  traffic.
+- **What does carry the real numbers is undocumented**: an `anthropic-ratelimit-unified-*` header
+  family (5h and 7d utilisation, reset, and which window is currently binding) returned on ordinary
+  OAuth-authenticated requests, and a `GET /api/oauth/usage` endpoint using the session's own token.
+  Multiply corroborated, including in Anthropic's own `claude-code` issue tracker. Almost certainly
+  where `cachedUsageUtilization` comes from — which explains why that cache goes stale: it is a
+  snapshot of headers from the *last* call, not a polled value.
+  **Treat as unsupported.** It is unversioned and unannounced, the endpoint is currently reported
+  returning persistent 429s for Max users, and there is evidence of fingerprinting against callers
+  that are not Claude Code. Nobody found a successful response body to confirm the shape.
+- **OpenTelemetry is documented and supported but carries no quota metric** — sessions, tokens and
+  cost, which is spend rather than headroom.
+
+**So the design stands where [the section above](#what-is-actually-observable-about-usage-limits)
+left it**, and the research is what makes that a decision rather than a shrug: the transcript 429 is
+ground truth, the local cache is a hint that must be checked against its own `resets_at`, and there
+is no supported API that would do better. Revisit if Anthropic ships the feature request asking for
+these headers to be exposed to hooks and statuslines.
+
 **Multiple accounts on one box is mechanically possible.** `CLAUDE_CONFIG_DIR` isolates config,
 credentials and the projects directory — verified empirically by pointing it at a scratch directory
 (`loggedIn:false`, isolated `projectsDirectory`, real credentials confirmed untouched). Running two
@@ -274,6 +309,95 @@ is to make the decisions visible so a bad threshold shows up.
 **Creating and killing agents.** `gjd-remote` already does both
 (`new-claude`, `kill`) and has the hard-won safety properties — see
 [hetzner-remote-server-box.md](hetzner-remote-server-box.md). Reuse it; do not grow a second way.
+
+## What Greg asked for on 2026-09-08, in his own words
+
+The first three capabilities above got concrete on the day the read-only page started working.
+Quoted rather than paraphrased, because the specifics are the point — several of them name a
+mechanism, and a paraphrase would lose it.
+
+> For the `Sessions` mode, ideally list all the sessions in the left-hand column, with different
+> ways to order them (how long they've been running, status (the default), anything else that might
+> be ueful, etc). And then if I click on a session, show much more information about it in the right
+> column, e.g. input it requires from me, the recent messages, and anything else that might be
+> useful. Allow me to send steering messages to it, answer its questions, etc
+
+> I want a way to add a New session, with a text input box, perhaps using `gjd-remote new-claude
+> -p ...` so that I can still use that machinery to manage things.
+
+That parenthesis is load-bearing rather than a preference. Session identity lives in the tmux
+environment `new-claude` pins at launch, so a session started any other way is classified as a bare
+**shell** and arrives on the page anonymous and unsteerable. Reuse is not tidiness here; it is the
+difference between a row that works and a row that does not.
+
+> Ideally reuse the same machinery for voice-dictation and live-chat that we use in Spideryarn, for
+> any session-input-message boxes (e.g. new session, steering messages, answering questions, etc)
+
+See [dictation.md](dictation.md) and [live-conversation.md](live-conversation.md). Note the standing
+rule that this tool does not reach into `src/` (Principles, below) — so this is a *port*, and the
+question of whether the boundary should move is a real one to answer rather than assume.
+
+> Add action-buttons we can take in a given Session, e.g. continue, compact, pull, push, remove
+> worktree, exit, run unix sleep for 1h/3h/5h/10h, get input from Fable/GPT Sol and then use your
+> judgment, and anything else you can think of. (And ideally these would queue/steer if it's
+> currently running, so that one could press more than one, in combination with messages)
+
+**"Queue" is the hard word in that sentence**, and it is the right instinct: an agent that is
+working cannot be typed at usefully, and pressing three buttons should not race. It also crosses a
+line the doc already draws — most of these are *sentences you would type*, but `remove worktree` has
+an effect outside the conversation and should be an action the tool takes itself.
+
+> Add action-buttons that we can take in Box Health (see
+> [diagnose-box-resources.md](../reusable/diagnose-box-resources.md)), e.g. kill anything that's
+> safe to do, send a broadcast message to all agents telling them about box resources and asking
+> them to pause for a staggered period of up to an hour and/or kill stuff they can easily restart,
+> kill all the running tests
+
+**Staggered** is the word to build against. Thirty-six agents told to pause for an hour all resume
+in the same second, and the box falls over at the far end instead of the near one.
+
+> Add functionality to the Orchestrator tab, e.g. send a message to the Orchestrator (reusing
+> voice-dictation/live-realtime/etc), send a broadcast message to all agents.
+
+And on how to work:
+
+> Get product judgments from Fable primarily, and more of the technical reviews from GPT Sol
+
+## A higher bar for robustness here than elsewhere, and its ceiling
+
+Greg, 2026-09-08, asked for this to be written down:
+
+> We want a higher bar for robustness for this orchestrator work, because the orchestrator needs to
+> be the one that fixes other problems. But at the end of the day, if the orchestrator broke I could
+> just ssh in and use Claude Code in the terminal, so it still wouldn't be the end of the world.
+
+Both halves matter, and the second one stops the first becoming an excuse for gold-plating.
+
+**Why higher than the product's bar.** [CLAUDE.md](../../CLAUDE.md) says this is a beta and speed
+still wins — that a thing being briefly broken is not the end of the world. That is a judgement
+about *readers*, who are few and know what they signed up for. It does not transfer here, because
+**this is the tool you reach for when something else is wrong**. A monitoring tool that fails at the
+same time as the thing it monitors has told you nothing, and worse, has told you nothing in a way
+that looks like good news: a quiet page and a healthy box are the same picture. Every "I could not
+tell" arm in this codebase exists for that reason and they are not decoration.
+
+Concretely, the bar is:
+
+- **A reading that could not be taken must not render as a reading.** Enforced by types, not by
+  care — `unknown` carries a cause, an empty list is meaningless without a clock.
+- **The thing must survive the conditions it reports on.** It runs under `scripts/tmux-job.ts`,
+  because a backgrounded process is OOM-killed on *system* memory pressure — demonstrated
+  2026-09-08, when an orphaned copy died at load 28 while the tmux copy kept collecting.
+- **A write refuses rather than degrades.** There is no second-best action; "sent" and "did nothing"
+  must never be the same response.
+
+**And the ceiling, which is the useful half.** The fallback is `ssh` and a terminal, and it is
+complete: `gjd-remote` does everything this page does and predates it. So this is a **convenience
+with a manual fallback**, not infrastructure — which rules out the expensive answers. No high
+availability, no second box, no state that only this process knows how to reconstruct, and nothing
+that would make the ssh path harder if this were switched off tomorrow. Where a choice is between
+"correct and unavailable" and "plausible and up", take the first: being down is recoverable in one
+command, and being confidently wrong is not.
 
 ## Constraints already established
 
@@ -318,6 +442,188 @@ these before designing anything that talks to a session.**
   deferred building one on 2026-09-08. See [cron-scheduler.md](cron-scheduler.md), which says the
   same thing from the product side.
 
+## Attention, and who the Overseer is really watching
+
+Fable was asked on 2026-09-08 to arbitrate the design of attention triage, and **rejected the
+framing** before answering it. The reframing is the most useful thing anyone has said about this
+system so far, so it is recorded here rather than in a plan:
+
+> "Attention triage" as posed is about the agents that are **blocked**. But a blocked agent is the
+> cheapest thing on the box. It burns no quota, no CPU, no reviewer time; its only cost is
+> wall-clock and a worktree … The agent that costs real money is the one that is **working,
+> confidently, on the wrong thing** — forty minutes into the hard version of a feature Greg would
+> have cut, or building in the primary checkout, or re-running a red suite that is red because the
+> box is swapping. It never asks. It never appears on a "needs you" list. With 36 sessions it is
+> statistically certain one or two are doing this right now.
+>
+> — Fable, 2026-09-08
+
+**So the scarce resource is not attention to questions; it is attention to direction.** The question
+surface still gets built — it is where the taps go — but it is the small, boring half. The proxies
+for misdirection already exist in what we collect: plan-doc name, last commit, time since a push,
+whether the session is in the primary checkout.
+
+### Three surfaces, not one page
+
+- **The inbox — act.** One question at a time, not a ranked list of sessions. **The unit is the
+  question, not the session**: at 11pm nobody cares which of 36 asked. A card shows the question, its
+  options, the agent's recommendation, one line of context, and two actions — answer, or skip.
+  Sorted by *kind* first (irreversible, product, technical, other) and only then by age, because
+  the agent that has waited longest is the one for whom ten more minutes matters least. **Age is a
+  tie-breaker, not a rank.**
+- **The log — calibrate.** What was decided on Greg's behalf since he last looked, by whom, and what
+  landed. This is his own first bullet from § What we are going towards, and it is the 8am surface.
+- **The roster — look.** The full fleet, for when you want to look around.
+
+Two things the inbox does that a list cannot: **collapse duplicates** (with 36 agents on one box
+several hit the same wall at once — "tests are red, is it me?" — so answer once and apply to all,
+and a repeated duplicate is the strongest available signal that a *policy* is missing), and **mark
+which questions are answerable from a phone at all**, since one whose answer needs reading a diff
+just makes him feel behind.
+
+### Push almost nothing
+
+Two categories only, per Fable: **something irreversible or externally visible** (a deploy, a
+production write, spending money, a push to `main`, removing a worktree with uncommitted work), and
+**the box or the Overseer dying**. An agent blocked on a question is *not* enough to push, at any
+duration.
+
+> notification blindness is a one-way door. Once he learns the buzz is usually an agent asking
+> whether it may run `npm test`, the buzz that says "about to push to main" is lost too, and no
+> ranking buys that back.
+>
+> — Fable, 2026-09-08
+
+Every other failure here is recovered by waiting; that one is not. The named escape hatch, if agents
+sit too long: one daytime nudge, *"N things have waited more than two hours"*, at most every two
+hours — and the signal that the strict version was wrong is a median wait past ~4 hours, or Greg
+saying "I'd have wanted to know sooner" twice.
+
+### Route by who has the information, not by confidence
+
+Greg's rule in [§ What we are going towards](#what-we-are-going-towards) says agents should escalate
+below a confidence threshold. Fable's amendment: **confidence is the wrong hinge** — a model's
+self-reported confidence is its least reliable output, and a threshold on it is exactly the tuned
+parameter this design should not have. Route on *who holds the information*, with reversibility as
+the override:
+
+- **The Overseer answers only what it can verify**, never what it must judge — "pull latest" is
+  always yes; "are the tests red because of me?" is answered by checking other trees; "is the box
+  overloaded?" from vitals it already has; and a question already answered today for another session
+  gets the same answer.
+- **Sol** for technical questions whose evidence is in the tree; **Fable** for wording, defaults, and
+  whether a case can be dropped.
+- **Greg** for anything irreversible or externally visible, anything changing a rule doc, anything
+  where the routed model *disagreed with the agent's own recommendation* (**disagreement is the
+  signal, not a low score**), and any question of the form *would a small product tweak remove a lot
+  of this engineering?* — because his answer to those is often a fifth option nobody offered.
+
+Two disciplines keep this honest: every non-Greg answer is **attributed** on delivery ("Fable via the
+Overseer, not Greg") so the agent weights it correctly, and every one is **vetoable after the fact**
+from the log. A veto is just a steering message.
+
+### `idle` is the bug: the vocabulary describes the pane, not the work
+
+**Measured on the live fleet, 2026-09-08, and it invalidates the premise triage was about to be built
+on.** `needs-you` means *Claude Code says a dialog is open*. That is not the question Greg needs
+answering, and there are at least two populations of sessions that are anything but idle while the
+page calls them idle:
+
+- **Sessions that finished a turn by asking Greg something in prose.** Fable read all 38 live panes:
+  **ten of fifteen** sessions genuinely waiting on him had ended their turn handing him a decision in
+  sentences, and **not one of them showed as needing him**. A mechanical check found 1 of 23 by
+  grepping for question marks — because the decisions end in full stops.
+- **Sessions waiting on a Codex subprocess.** **4 running `codex exec`, 0 Codex tmux sessions**: a
+  review runs inside a Claude session's Bash tool, so a session waiting 15–45 minutes on a paid
+  review reads as `idle` for the whole of it.
+
+- **Sessions with a dialog open that the status does not know about.** `needs-you` is derived from
+  `claude agents --json`; the pending question is scraped from the pane. **They are different
+  sources**, so a row can be honestly `working` while a numbered dialog is on screen. Found by GPT
+  Sol reviewing the steering path, where its consequence is worse than a mis-sorted list: a steering
+  message beginning "1" arriving while a dialog is up **is an approval**, and the route returned 200.
+
+The dashboard agent's phrasing is the finding, and it is worth keeping exactly:
+
+> our vocabulary describes the pane, and the thing Greg wants to know is about the work.
+>
+> — 2026-09-08
+
+**Three cases, three different reasons, and none of them is a bug in `sessionState`** — which is the
+point. It reports faithfully what its two sources say. The gap is between *what the box can observe
+about a pane* and *what a person needs to know about a piece of work*, and no amount of care inside
+the status function closes it.
+
+**The two halves need different machinery, and that is the useful part.** Subprocess ancestry is in
+the process table, so the Codex case is *mechanically* detectable and should be — a status arm, not a
+model call. The prose-question case is not: **"has this agent asked Greg something?" is a judgement,
+not a parse**, and it is exactly what the Overseer's short-lived model calls are for. A ranked list
+built on `statusOf` alone would have ranked the wrong sessions, confidently.
+
+**Who builds which half, settled between the two agents on 2026-09-08.** The mechanical half is the
+Overseer's, and *not* as a new arm on `SessionState`:
+
+> **The dashboard reports the pane; the Overseer decides what the work is.** `panePid` is a fact
+> about a pane; "this session is waiting 40 minutes on a paid review" is a judgement about work, and
+> judgements belong on the Overseer's side. Adding a `SessionState` arm would encode a conclusion in
+> a field whose whole job is to report an observation — the exact thing `sessionState` gets right.
+>
+> — agreed between this agent and the fleet dashboard agent, 2026-09-08
+
+So the Overseer takes `panePid` out of the snapshot it already receives and walks the process tree
+itself, inside `tools/overseer/`. No shared contract changes and no coordination cost.
+
+**And the `needs-you` sub-kind, which came out of the same exchange.** *An agent asked me something*
+and *the harness wants a permission* are different work items — and on this box the second is nearly
+always a **launch defect**, since auto mode should have handled it. A live capture on 2026-09-08 had
+the harness saying so in the prompt itself: *"Tip: auto mode handles these prompts for you."* So a
+permission-class dialog is not a queue item for Greg at all: **the action is to fix how that session
+was started**, pointed at a different person entirely. The dashboard agent's phrasing of the rule
+underneath it, from Fable: pane text as executable UI is acceptable when execution means *"a user
+turn"*, and not acceptable when it means *"grant a permission"* — a forged menu can then make Greg
+send a digit to an agent that was already misbehaving, but it cannot mint an approval.
+
+This also sharpens [§ Attention](#attention-and-who-the-overseer-is-really-watching): Fable said the
+expensive agent is the one working confidently on the wrong thing, and never asks. Add to it the
+agent that *did* ask and whose asking is invisible.
+
+### Remote Control fails quietly, which is A27's shape again
+
+**8 of 23 live sessions had Remote Control broken**, measured 2026-09-08 — the feature that was
+originally offered as the reason this dashboard might be unnecessary. It is reliable at launch and
+unreliable an hour later, which is exactly when you would reach for it, and **the only evidence
+anywhere is one word at the bottom of a terminal nobody is looking at.**
+
+So the redundancy argument was right about launch and wrong about steady state. Recorded here rather
+than only in the dashboard's plan because it is the same shape as **A27**: a thing that reports fine
+until the moment it is needed, with no signal reaching anyone. Two local heartbeats cannot report the
+box disappearing, and a status bar cannot report its own channel dying.
+
+### Does the augmentation principle apply?
+
+Partly, and not the obvious part. In reading, the understanding *is* the product, so a summary that
+replaces it defeats the point; in supervising, the **decision** is the product, and it is fine for
+the Overseer to summarise what 36 sessions did overnight. What carries over is the other half:
+**never hide that a decision was made, or who made it.** The thing to refuse is a tool that makes the
+fleet *look* supervised — a calm page, a green count — when judgement was quietly substituted.
+
+### The failure to design against
+
+**Notification blindness**, because it is the only one that cannot be undone by waiting. And its
+sibling, which this project keeps meeting: **the Overseer silently dead while the page says "nothing
+needs you"** — an absence reported as success. Hence the heartbeat, and hence *"the Overseer was last
+seen 40 minutes ago"* belongs where the count would be, not in a footer.
+
+### Things the framing was missing
+
+Fable's list, kept because each is a candidate stage: an answer that lands in a dead pane looks
+exactly like one that worked, **so a card should disappear when the session's status changes, not
+when Send is pressed**; *finishing* is attention too, so "done, green, ready to remove" belongs in
+the inbox as a one-tap and shrinks the roster; **every answer Greg gives is a candidate rule**, and
+the third identical answer should say so, which is how the inbox shrinks over weeks without anyone
+designing a threshold; steering costs the target its context, so batch it and time it for idle; and
+quiet hours are one line of config.
+
 ## Access
 
 **Tailscale for now** (Greg, 2026-09-08) — the server binds a private interface, and reachability is
@@ -330,6 +636,165 @@ at the network layer; an HTTP identity header is not.** Verify the `Cf-Access-Jw
 issuer, this application's `aud`, algorithm, expiry, clock skew, fail closed when JWKS is
 unavailable — and never trust `Cf-Access-Authenticated-User-Email` on its own. Add CSRF protection
 on mutations too: an Access cookie proves who the browser belongs to, not that a human pressed Send.
+
+## The backlog, after the wide review
+
+**GPT 6 Astra reviewed the whole approach on 2026-09-08** at Greg's request — Overseer and dashboard
+together, wide brief. Its verdict: *"The direction is worth pursuing, but the live write path has
+outgrown the original security argument."* It endorsed the daemon, the fleet layer and one collector,
+and asked us to change the assumptions around authorisation, approval context, delivery receipts and
+recovery **before** adding autonomous coordination. Full text:
+[260908b-whole-approach-review-astra-v2.md](../plans/260908b-whole-approach-review-astra-v2.md).
+
+Two caveats on reading it. It reviewed revision `35e4d368`, so **`bad6eee5` and the new-session route
+postdate it** — its A15 complaint that `FleetRow` loses the directory and metadata was fixed while it
+was running. And where it says *"I am identifying an architectural exposure, not claiming an exploit
+exists"*, that distinction is its own and should survive being quoted.
+
+Ordered by value against effort, with the owner named because two agents are building here.
+
+### Securing the live write path — a stage, but not the top one
+
+**Greg, 2026-09-08: "Let's include it as a stage, but it doesn't have to be the top-priority."**
+Astra put this block first, ahead of everything Greg had ordered, on the grounds that the write path
+was designed when it was read-only. Greg has read that argument and ranked it anyway, which is his
+call to make — the tailnet is small, the devices are his, and the fleet's actual failure so far has
+been resource collapse rather than anything hostile. So this is scheduled work rather than a stop.
+
+**A9 is the exception worth watching**, because it is not a hardening item: an approval that binds to
+the question sentence rather than to the diff is wrong even with no attacker at all — it can show
+Greg one thing and approve another after an ordinary re-render.
+
+| | what | owner |
+|---|---|---|
+| **A9** | **Approval must bind to the material, not the sentence.** Astra changed a proposed file's contents from `hello` to `goodbye` and the pane parser returned an identical question and options — it keeps *"Do you want to create notes.md?"* and discards the diff. So an approval can be accepted after the thing being approved has changed, and the phone can ask for approval without showing what it is. Bind to command, diff, destination and permission scope; hand off to a terminal when the capture is incomplete; and make *"yes once"* and *"auto-approve this session"* visibly different. | dashboard |
+| **A10** | A live Claude descendant does not prove an **empty input box owns the keystrokes** — the text may append to a draft, hit a modal, or reach a foreground program. Make arbitrary prose a narrower capability than answering a recognised dialog. | dashboard |
+| **A11** | Delivery needs an **uncertain** state. A nonce proves the transport *can* work; it says nothing about later requests. Action IDs, and five states — accepted, keys submitted, reception observed, refused, outcome unknown — with a repeat retrieving the receipt. **Never auto-retry keystrokes.** | dashboard |
+| **A5** | **Reachability, but narrower.** The reference system we copied checked callers against `owner-logins.txt` before POSTs — *its write boundary was never reachability alone*, and we took the half we liked. The cheap fix is a device-scoped tailnet grant, not a login page. Tailscale's default policy is permissive, so verify rather than assume. | both |
+| **A6** | Treat the dashboard as a **privileged renderer of hostile content**: CSP and anti-framing before answer buttons. Origin checks do not stop a malicious page framing the real one. | dashboard |
+| **A11b** | **A steering attempt has three outcomes, not two**, and the dashboard already reports them: `delivery: "none" \| "partial" \| "unknown"`. **`partial` means the text landed and the Enter did not** — the message is sitting in that agent's input box, unsent, and will be prepended to whatever it types next. When the Overseer records steering attempts, this is the distinction to keep: a flat "failed" is wrong in the most expensive direction, because it invites a retry that would append to the half-sent text rather than replace it. | overseer |
+| **A12** | **An Overseer message must not acquire Greg's authority** by arriving as a user turn. A worker can meet malicious instructions, report them, and get them back as authoritative steering. Display *Greg requested* / *Overseer proposed* / *policy authorised* distinctly. A model's recommendation must not mint its own approval. | overseer |
+
+### Then — so the box does not collapse again
+
+| | what | owner |
+|---|---|---|
+| **A13** | **Resource admission before richer triage.** After a load-391 incident the most useful automation is *declining to start expensive work*: caps on concurrent heavy tests, browser jobs and reviews, and no-overlap defaults. Attribute consumption to jobs including children — counting sessions misses most of it. Note: **`SIGSTOP` does not release resident memory**, so pausing is not relief. | overseer |
+| **A17** | **Alarm semantics must match normal operation.** The client calls data stale at 30s while collection waits 60s after a ~12s run, so *healthy operation spends most of its time alarming* — which teaches Greg to ignore it. Also, health refresh sits after successful fleet collection, so the failure that most needs explaining can prevent a fresh health reading. | both |
+| **A27** | **Something off-box must notice the box disappearing.** Two local heartbeats cannot report total host failure. A minimal external dead-man check, deliberately tested. Nobody had thought of this. | overseer |
+
+### Then — O1, corrected
+
+A14, A15 and A16 are already folded into
+[260908b](../plans/260908b-overseer-store-and-clock.md) — they overlap Sol's findings and mostly
+agree with them. Astra adds two things Sol did not: **a drained or freshly rebooted box legitimately
+has zero sessions**, so rejecting every empty snapshot could preserve a fleet of ghosts forever; and
+**"timestamp advanced" is not a complete freshness contract** across clock corrections and restarts,
+so prefer a source generation and sequence.
+
+**A26 changes the goal of recovery**, and is the sharpest thing said about O4:
+
+> "Restore 36 sessions" may recreate the incident. The useful target is restoring valuable work with
+> understood state.
+>
+> — Astra, 2026-09-08
+
+So reboot recovery produces a **queue** — what was interrupted, where its files and transcripts are,
+what evidence survives, what it proposes next — resumed gradually under resource admission, with
+shells given a manual path rather than pretended to be resumable agents.
+
+### Then — the inbox, which both reviewers reached independently
+
+Astra's A19–A20 and Fable's answer agree, having been asked different questions: **the phone is a
+decision inbox, not a ranked list of sessions.** Astra adds the interaction rule Fable did not —
+*do not reorder or replace a card's options while his finger is approaching them*, and preserve
+drafts across phone suspension. Its notification default matches Fable's near-zero position: wake for
+suspected destructive activity or imminent data loss; notify in waking hours for a decision blocking
+valuable work or a persistent loss of visibility; digest everything else. **Group correlated events —
+thirty agents hitting one quota limit is one incident, not thirty notifications.** Keep transcript
+excerpts off the lock screen.
+
+**A18 independently confirms Fable on confidence**: ranking by self-reported confidence promotes
+exactly the confident mistakes you most want caught. Rank by consequence and reversibility; treat
+confidence as an annotation until it has been measured.
+
+### Later, and deliberately not now
+
+**A21 — narrow operational actions before conversational authority.** The earliest unattended actions
+should be: defer new jobs, reduce monitoring frequency, deduplicate alerts, restart a failed
+dashboard or Overseer. **Explicitly not** generic *keep going*, *pull latest*, *remove the worktree*
+or *approve the prompt* buttons — "their consequences depend too heavily on context", which is a
+direct contradiction of [§ The four capabilities](#the-four-capabilities-and-what-each-really-needs)
+and is the better argument.
+
+**A22 — a small event protocol before agent-to-agent routing.** Start with `progress`, `blocked`,
+`decision`, `completed`, carrying event and job ids and artifact references, and **distinguish
+self-reported claims from independently observed facts**. Defer the READY/LAND/GATE state machine
+until those words have precise meanings — *"READY must not silently mean reviewed, tested, merged and
+safe to deploy."*
+
+**A23 — coordinate shared resources, not just conversations.** Worktrees do not isolate the shared
+database, the dev server, test capacity or version control. Lightweight declarations — *using the
+shared test database*, *ready to land revision X* — may save more than more messaging. **Display
+honestly that a claim file is a coordination aid, not a lock.**
+
+**A25 — a scheduler needs occurrence identity.** A `dispatched` flag cannot close the crash window
+between recording a launch and performing it. Reserve the identifiers now, build when scheduling
+arrives. **Pin the job definition revision that was authorised, so editing a doc cannot silently
+enlarge unattended authority** — which matters here, where the jobs *are* documents.
+
+**A30 — put a budget and a success measure on the Overseer itself.** Interruptions per day, time
+valuable work spends blocked, tasks needing rework, resource time spent on supervision. And bound the
+judgement calls: **thirty-six sessions must not trigger thirty-six model reviews a minute.**
+
+### What Astra says to defer outright
+
+Exhaustive transcript mining, a general multi-agent chat network, a custom terminal, predictive quota
+optimisation, and multi-box scheduling. *"Keep polling if it is adequate. None of those is necessary
+to find out whether this system actually saves Greg attention."*
+
+**And A7 is not a feature at all** — every agent shares one Unix user with passwordless sudo, so one
+compromised agent already reaches its peers and the control machinery. Greg's call, 2026-09-08:
+deferred, and written up in
+[§ Appendix: security and hardening, deferred](#appendix-security-and-hardening-deferred).
+
+## Appendix: security and hardening, deferred
+
+**Greg, 2026-09-08, on the item below: "let's add this to an appendix on future security/hardening
+in orchestrator-direction, but ignore it for now."** So this is a record, not a backlog — nothing
+here is scheduled, and it is written down because the reasoning is expensive to rediscover and
+because the day one of these matters is not the day to work it out.
+
+**One compromised agent already has the box.** Every agent runs as the same Unix user with
+passwordless sudo, so any one of them reaches its peers, their files, their worktrees and the control
+machinery. GPT 6 Astra, 2026-09-08, on what follows from that:
+
+> Network controls reduce entry points; they do not contain a compromised agent … A dashboard token
+> stored under that same user would not establish an isolation boundary.
+
+Two consequences worth holding on to:
+
+- **A token is not a boundary here.** Any credential the dashboard could check is readable by
+  everything it would be protecting against. So the honest description of "reachability is the access
+  control" is that it keeps *strangers* out, and there is currently nothing between one agent and
+  another. That is a fair trade today — the agents are ours and the box is private — and it stops
+  being one the moment an agent processes something hostile with enough leverage.
+- **The first real containment work is not authentication.** Astra's ordering: review which
+  production credentials and privileged operations routine agents actually need, and keep
+  control-service configuration and deployment out of ordinary writable worktrees. Reducing broad
+  sudo changes the possible damage far more than any number of HTTP header checks. **None of this
+  requires user accounts or RBAC in the product.**
+
+The related items, all deferred with it and each already argued in
+[§ The backlog](#the-backlog-after-the-wide-review) where they sit in priority order: device-scoped
+tailnet grants rather than whole-tailnet reachability (**A5**), CSP and anti-framing on a page that
+renders agent-authored text (**A6**), and keeping Overseer-authored messages from acquiring Greg's
+authority by arriving as ordinary user turns (**A12**).
+
+**What would make this urgent**, so the trigger is written down rather than felt: an agent handling
+genuinely untrusted input with real leverage — a reader's uploaded article reaching an agent's shell,
+a public issue tracker feeding a job, a dependency with a post-install script — or the dashboard
+becoming reachable from anywhere that is not a device Greg controls.
 
 ## Principles
 
