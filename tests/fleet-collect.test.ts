@@ -104,8 +104,13 @@ describe("toRows", () => {
   });
 
   it("gives a session the status pass missed an unknown with a reason", () => {
+    // `cause` says OUR BUG rather than "the box could not tell us", which is
+    // what every other unknown means. Nothing else in the union names this one,
+    // so anything reading these identifiers can separate a defect of ours from
+    // a box that is having a bad day — see `SessionUnknownCause`.
     expect(toRows([session()], NO_STATUS)[0]?.status).toEqual({
       kind: "unknown",
+      cause: "no-status-derived",
       why: "no status was derived for this session",
     });
   });
@@ -232,7 +237,7 @@ describe("fleetState — the one wire shape", () => {
     // collection has finished. `rows: []` on its own reads as "nothing is
     // running" — and the Overseer, which folds these into a history, would
     // record thirty-six sessions vanishing at once. The null is the message.
-    const s = fleetState(null, null, null, 60_000);
+    const s = fleetState(null, null, null, 60_000, false);
     expect(s.collectedAt).toBeNull();
     expect(s.rows).toEqual([]);
     expect(s.error).toBeNull();
@@ -245,13 +250,13 @@ describe("fleetState — the one wire shape", () => {
     // Asserted as `toBeNull`, not as `not.toBeString`: a negative assertion is
     // satisfied by undefined, by 0, and by the field disappearing altogether,
     // so it would go on passing through exactly the change it is meant to catch.
-    expect(fleetState(null, null, null, 60_000).collectedAt).toBeNull();
+    expect(fleetState(null, null, null, 60_000, false).collectedAt).toBeNull();
   });
 
   it("keeps the previous rows and clock when a refresh failed", () => {
     // Stale-and-labelled beats blank. The page shows the age; a blank page is
     // the one reading nobody investigates.
-    const s = fleetState(snap, "tmux: connection refused", null, 60_000);
+    const s = fleetState(snap, "tmux: connection refused", null, 60_000, false);
     expect(s.collectedAt).toBe(snap.collectedAt);
     expect(s.error).toBe("tmux: connection refused");
   });
@@ -260,7 +265,15 @@ describe("fleetState — the one wire shape", () => {
     // The page flipped to STALE at 30s while the server collected every 60s, so
     // it cried wolf for most of every cycle. A threshold derived from the
     // server's own interval cannot drift away from it.
-    expect(fleetState(snap, null, null, 60_000).refreshMs).toBe(60_000);
+    expect(fleetState(snap, null, null, 60_000, false).refreshMs).toBe(60_000);
+  });
+
+  it("tells the page whether answering is switched on, rather than leaving it to guess", () => {
+    // The page cannot honestly warn about a server flag it has never been told
+    // about: without this it either hedges, or somebody finds out by tapping —
+    // and the whole point of the hold is that nobody should tap.
+    expect(fleetState(snap, null, null, 60_000, false).answeringEnabled).toBe(false);
+    expect(fleetState(snap, null, null, 60_000, true).answeringEnabled).toBe(true);
   });
 });
 

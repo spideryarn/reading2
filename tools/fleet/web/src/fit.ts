@@ -212,25 +212,66 @@ export function chooseColumns(width: number, max = COLUMN_MAX): number {
 }
 
 /**
- * A ref to hang on the container, and the number of columns its width affords.
+ * **The narrowest the detail pane may be drawn**, in CSS pixels.
+ *
+ * The detail carries a question's prompt and its option labels, both of which
+ * are sentences off somebody's terminal, plus a text box to type a message
+ * into. Below this it stops being a pane and becomes a column of two-word
+ * lines, at which point the list beside it is costing more than it gives.
+ *
+ * **Derived, like everything else here**: the width at which the page draws two
+ * panes is `COLUMN_MIN_PX + DETAIL_MIN_PX + PANE_GAP_PX` and is written down
+ * nowhere else. docs/project/narrow-windows.md — *"the breakpoint is derived,
+ * not chosen"*.
+ */
+export const DETAIL_MIN_PX = 380;
+
+/** The gutter between the two panes, in pixels — `gap-x-5`, which is 1.25rem. */
+export const PANE_GAP_PX = 20;
+
+/**
+ * One pane or two, in `width`.
+ *
+ * **The detail is a PUSH, not a squeeze** (docs/project/narrow-windows.md, and
+ * the rule this file already follows for columns): where there is not room for
+ * both, opening a session replaces the list rather than compressing it, and a
+ * button brings the list back. A squeezed two-pane layout on a 390px phone is
+ * two columns of nothing.
+ *
+ * `0` — jsdom, a detached node, a box that has not been laid out — is one pane,
+ * for the same reason `chooseColumns` answers one column: the honest response
+ * to "how wide is this?" when the answer is "it is not on screen" is to change
+ * nothing.
+ */
+export function choosePanes(width: number): 1 | 2 {
+  if (!Number.isFinite(width) || width <= 0) return 1;
+  return width >= COLUMN_MIN_PX + DETAIL_MIN_PX + PANE_GAP_PX ? 2 : 1;
+}
+
+/**
+ * A ref to hang on a container, and how wide it is.
+ *
+ * **The one measurement in this file**, so `useColumns` and `choosePanes` cannot
+ * come to disagree about how much room there is — they are two readings of one
+ * number rather than two observers.
  *
  * A `ResizeObserver` on the container rather than a listener on the window,
- * because the thing that decides this is how much room the list has — which a
+ * because what decides both answers is how much room the list has — which a
  * scrollbar appearing, or browser zoom, changes without the window resizing.
- * Coalesced through `requestAnimationFrame` for the reason above.
- *
- * **It cannot feed back on itself**: the column count changes what is *inside*
- * the container and never the container's own width, which is `100%` of `main`.
+ * Coalesced through `requestAnimationFrame`, because a `ResizeObserver` fires
+ * *during* layout and writing style from it synchronously is how you get "loop
+ * completed with undelivered notifications".
  *
  * ## A CALLBACK REF, and it has to be
  *
  * The obvious version is a `useRef` read inside a `useEffect(…, [max])`, and it
  * was wrong in a way nothing caught: **the element the ref points at is not
- * there when that effect first runs.** `SessionsPanel` returns an early "No
- * sessions." card before any data has arrived, so on the first mount there is
- * no container to measure; the effect reads `null`, gives up, and — because
- * `max` never changes — never runs again. The list then sits at one column for
- * the life of the tab, with a 740px card and half the window empty beside it.
+ * there when that effect first runs.** `SessionsPanel` returns an early
+ * "Collecting…" card before any data has arrived, so on the first mount there
+ * is no container to measure; the effect reads `null`, gives up, and — because
+ * its dependencies never change — never runs again. The list then sits at one
+ * column for the life of the tab, with a 740px card and half the window empty
+ * beside it.
  *
  * Two things made it invisible. It fails only when the panel's first render is
  * the empty one, which is *always* true in the browser and *never* true in a
@@ -244,20 +285,15 @@ export function chooseColumns(width: number, max = COLUMN_MAX): number {
  * effect below depends on the element rather than on the render that mounted
  * it.
  */
-export function useColumns(max = COLUMN_MAX): {
-  ref: (node: HTMLDivElement | null) => void;
-  columns: number;
-} {
-  const [ref, setRef] = useState<HTMLDivElement | null>(null);
-  const [columns, setColumns] = useState(1);
+export function useContainerWidth(): { ref: (node: HTMLDivElement | null) => void; width: number } {
+  const [node, setNode] = useState<HTMLDivElement | null>(null);
+  const [width, setWidth] = useState(0);
 
   useEffect(() => {
-    const el = ref;
+    const el = node;
     if (!el) return;
     let raf = 0;
-    const measure = (): void => {
-      setColumns(chooseColumns(el.clientWidth, max));
-    };
+    const measure = (): void => setWidth(el.clientWidth);
     const soon = (): void => {
       if (raf) return;
       raf = requestAnimationFrame(() => {
@@ -274,9 +310,25 @@ export function useColumns(max = COLUMN_MAX): {
       ro?.disconnect();
       if (!ro) window.removeEventListener("resize", soon);
     };
-  }, [ref, max]);
+  }, [node]);
 
-  return { ref: setRef, columns };
+  return { ref: setNode, width };
+}
+
+/**
+ * The column count for a container, measured.
+ *
+ * A thin reading of `useContainerWidth` — the measuring, and the long story
+ * about why it is a callback ref, live there. **It cannot feed back on
+ * itself**: the column count changes what is *inside* the container and never
+ * the container's own width, which is `100%` of `main`.
+ */
+export function useColumns(max = COLUMN_MAX): {
+  ref: (node: HTMLDivElement | null) => void;
+  columns: number;
+} {
+  const { ref, width } = useContainerWidth();
+  return { ref, columns: chooseColumns(width, max) };
 }
 
 /**

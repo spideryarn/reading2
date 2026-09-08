@@ -141,6 +141,65 @@ export type SessionProc =
 export type AgentStatus = "busy" | "idle" | "waiting";
 
 /**
+ * WHY a session's state could not be determined — the contract for MACHINES,
+ * where `why` is the contract for PEOPLE.
+ *
+ * Every one of these is a different fault with a different owner, and the
+ * sentences beside them are written for whoever reads the screen: they get
+ * reworded, they interpolate the box's own error text, and two calls a minute
+ * apart can produce two different sentences about one unchanging situation.
+ * That is fine for a person and useless for anything that COMPARES two
+ * statuses — a watcher diffing consecutive collections reads a reworded
+ * sentence as a state TRANSITION, and its history shows sessions flapping while
+ * nothing at all has happened.
+ *
+ * So these strings are stable identifiers for the CAUSE, never for the wording:
+ * change a sentence freely, and change one of these only when the underlying
+ * fault genuinely becomes a different fault. Note in particular that
+ * `unrecognised-agent-status` deliberately does NOT vary with the status name
+ * it found — a box that reports two unfamiliar statuses in turn has one problem,
+ * not two. The name is not discarded, though: it is carried beside the cause in
+ * `SessionState`'s `reportedStatus`, which is where a consumer that wants the
+ * transition rather than the diagnosis should look.
+ *
+ * The first five are `sessionState`'s, and are all "we could not tell", of
+ * which four are the box's doing and one is a hand-set environment variable.
+ * `no-status-derived` is the odd one out and is deliberately named so it cannot
+ * be mistaken for them: it means OUR OWN BUG (see tools/fleet/collect.ts), a
+ * join that cannot fail, and if it ever appears the page is telling you about
+ * this code rather than about the machine.
+ */
+export type SessionUnknownCause =
+  /** `CLAUDE_SESSION_ID` was set by hand to something that is not a session id, so it joins to nothing. */
+  | "not-a-session-id"
+  /** `claude agents --json` could not be run or could not be trusted, so nothing about any Claude row is known. */
+  | "agents-unavailable"
+  /** Claude Code reported a status this version has no arm for. Never the name of that status — that rides in `reportedStatus`. */
+  | "unrecognised-agent-status"
+  /** The process table says a Claude is alive, the agents list does not mention it, and neither is discarded. */
+  | "running-but-unlisted"
+  /** The process probe itself did not run, so "nothing is running" was never established. */
+  | "process-probe-unavailable"
+  /** Not the box's fault: a status pass that should have covered this session did not. Our bug, on the page. */
+  | "no-status-derived"
+  /**
+   * Nobody observed anything: a CLIENT asserted this status in a request body.
+   *
+   * This is named for the fault in the same sense as the six above, because the
+   * fault here is **the absence of an observation**. A status arriving in a
+   * request is not a reading — it is "this is what the page was showing when
+   * the person tapped" — so a parser must stamp this rather than keep whatever
+   * cause the client sent. Keeping one would launder a browser's string into a
+   * field whose entire purpose is to say what the BOX saw, and the page could
+   * no longer tell an asserted fault from an observed one. Same class of error
+   * as inventing a `collectedAt` for a collection that never ran.
+   *
+   * The client's own sentence survives in `why`, which is what a refusal
+   * renders, so nothing a person reads is lost.
+   */
+  | "client-declared";
+
+/**
  * The state a person actually wants off `gjd-remote ls`: is this one finished,
  * is it thinking, is it stuck on a question only they can answer, or has it not
  * started yet.
@@ -168,7 +227,47 @@ export type SessionState =
    * doing something, not so anything can decide which to kill.
    */
   | { kind: "shell"; busy: boolean | null }
-  | { kind: "unknown"; why: string };
+  /**
+   * Nobody could say. `why` is the sentence a person reads; `cause` is the
+   * identifier anything comparing two statuses must use instead of it — the
+   * distinction is `SessionUnknownCause`'s doc comment, and it is the whole
+   * reason the field exists.
+   *
+   * `cause` is REQUIRED on purpose. An optional one is a field every new
+   * construction site is free to forget, and a forgotten cause is exactly the
+   * silent collapse this union is built to prevent.
+   */
+  | {
+      kind: "unknown";
+      why: string;
+      cause: SessionUnknownCause;
+      /**
+       * The status token Claude Code actually printed, when the fault was that
+       * we had no arm for it. Set at exactly one construction site
+       * (`unrecognised-agent-status`) and absent everywhere else.
+       *
+       * IT LOOKS LIKE IT CONTRADICTS THE RULE ABOVE, AND IT DOES NOT. The rule
+       * — a field anything diffs must not carry what varies for reasons the
+       * consumer does not care about — was aimed at OUR WORDING: `why` is
+       * rewritten by us and interpolates the box's error text, so two sentences
+       * a minute apart can describe one unchanging situation. This is the
+       * BOX'S OBSERVATION, and it changes only when the box says something
+       * different. `cause` stays the stable diagnostic category ("we have one
+       * unrecognised-status problem"); this records what was seen.
+       *
+       * WITHOUT IT A REAL TRANSITION IS LOST. A future Claude Code reports
+       * `compacting` and then `waiting-for-input`: both collapse to the same
+       * cause, so a watcher keyed on `cause` alone sees one unchanging session
+       * while the source moved twice. GPT Sol's S1-1, resolved in the Overseer's
+       * S2 because that is where the transition key is defined —
+       * docs/plans/260908b-overseer-store-and-clock.md.
+       *
+       * Optional so that every other construction site — here and in
+       * tools/fleet — stays untouched: a required field would be a sixth thing
+       * for each of them to get wrong about a fault it never observed.
+       */
+      reportedStatus?: string;
+    };
 
 /**
  * The fields tmux itself knows, in the order the parser expects.
@@ -866,12 +965,14 @@ export function sessionState(s: Session, agents: Map<string, string> | null): Se
   // but there IS a session, and reporting it as a shell would be a claim rather
   // than an admission.
   if (!SESSION_UUID.test(s.claudeId)) {
-    return { kind: "unknown", why: "its CLAUDE_SESSION_ID is not a Claude session id" };
+    return { kind: "unknown", cause: "not-a-session-id", why: "its CLAUDE_SESSION_ID is not a Claude session id" };
   }
 
   if (s.proc.kind === "wait") return { kind: "waiting", secondsLeft: s.proc.secondsLeft };
 
-  if (agents === null) return { kind: "unknown", why: "the box could not say what Claude is doing" };
+  if (agents === null) {
+    return { kind: "unknown", cause: "agents-unavailable", why: "the box could not say what Claude is doing" };
+  }
 
   const status = agents.get(s.claudeId);
   if (status === "waiting") return { kind: "needs-you" };
@@ -881,14 +982,23 @@ export function sessionState(s: Session, agents: Map<string, string> | null): Se
   // Not a guess: the wrong half of that coin flip is a session reported as
   // finished while it sits waiting for somebody.
   if (status !== undefined) {
-    return { kind: "unknown", why: `Claude Code calls this '${status}', which this version does not know` };
+    return {
+      kind: "unknown",
+      cause: "unrecognised-agent-status",
+      why: `Claude Code calls this '${status}', which this version does not know`,
+      // The only site that sets it, and the only one that has anything to set
+      // it from. See `reportedStatus` on the union: the cause says which fault
+      // this is, the token says what the box saw, and a watcher needs both or
+      // it reads two successive unfamiliar statuses as one unchanging session.
+      reportedStatus: status,
+    };
   }
 
   if (s.proc.kind === "claude") {
-    return { kind: "unknown", why: "its Claude is running, but Claude Code did not list it" };
+    return { kind: "unknown", cause: "running-but-unlisted", why: "its Claude is running, but Claude Code did not list it" };
   }
   if (s.proc.kind === "unknown") {
-    return { kind: "unknown", why: "the box could not look at what is running in it" };
+    return { kind: "unknown", cause: "process-probe-unavailable", why: "the box could not look at what is running in it" };
   }
   return { kind: "no-claude" };
 }

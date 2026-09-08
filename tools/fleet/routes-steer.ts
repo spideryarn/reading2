@@ -41,10 +41,11 @@ import type { IncomingHttpHeaders, IncomingMessage, ServerResponse } from "node:
 import type { Readable } from "node:stream";
 
 import { addressableHost } from "./origin.js";
-import type { OptionKey, PaneOption } from "./pane.js";
+import { classifyConsequence, fingerprintMaterial, type OptionKey, type PaneMaterial, type PaneOption } from "./pane.js";
 import type { FleetStatus } from "./status.js";
 import {
   answerQuestion as realAnswerQuestion,
+  describeSend,
   sendMessage as realSendMessage,
   type RefusalCode,
   type SeenQuestion,
@@ -108,7 +109,27 @@ export type SteerOp = "message" | "answer";
 /** What the client gets back. `ok:false` always carries a code and a sentence. */
 export type SteerResponse =
   | { ok: true; op: SteerOp; verified: Verified; sent: readonly (readonly string[])[] }
-  | { ok: false; code: RefusalCode | RouteErrorCode; why: string };
+  | {
+      ok: false;
+      code: RefusalCode | RouteErrorCode;
+      why: string;
+      /**
+       * WHAT HAPPENED TO THE KEYSTROKES, when the delivery module got as far as
+       * having an opinion. Absent for anything refused before that.
+       *
+       * A refusal is not one thing, and treating it as one is how a person ends
+       * up sending a message twice. `"none"` means nothing left this box.
+       * `"partial"` means the TEXT LANDED AND THE ENTER DID NOT, so it is
+       * sitting in that agent's input box waiting for the next keystroke to
+       * submit it — the one case where "try again" is the worst available
+       * advice. `"unknown"` means the call timed out or died on a signal and we
+       * genuinely cannot say.
+       *
+       * It is here rather than only in the log because the person who pressed
+       * the button is the one who needs it, and they are on a phone.
+       */
+      delivery?: "none" | "partial" | "unknown";
+    };
 
 /**
  * A refusal's HTTP status.
@@ -141,6 +162,24 @@ export const REFUSAL_STATUS: Record<RefusalCode, number> = {
   "question-gone": 409,
   "question-changed": 409,
   "send-failed": 409,
+  // The session is not at a text input box — a dialog is up, or something has
+  // been shelled out to in the foreground. GPT Sol's F2: a message beginning
+  // "1" arriving at a numbered dialog is an approval, and the route returned
+  // 200 for it. The world moved between the page and the send, so 409.
+  "not-at-input": 409,
+  "pane-is-asking": 409,
+  // THE TWO THAT ARE NOT 5xx AND MUST NOT BE, which is a stronger statement
+  // than the rest of this table.
+  //
+  // `send-partial` means the text landed and the Enter did not, so the message
+  // is SITTING IN THE PERSON'S INPUT BOX waiting for the next keystroke to
+  // submit it. `send-unknown` means we do not know whether it landed. Neither
+  // is retryable, and a 5xx is precisely what every retry loop in the world
+  // retries — which here would submit the half-typed message it was trying to
+  // recover from. So they are 4xx, and the code in the body carries the
+  // distinction for anything that cares.
+  "send-partial": 409,
+  "send-unknown": 409,
 };
 
 /* ------------------------------------------------------------------ *
@@ -385,7 +424,22 @@ export function parseStatus(v: unknown): FleetStatus | null {
     case "unknown": {
       const why = asString(o.why);
       if (why === null) return null;
-      return { kind: "unknown", why };
+      // `cause` IS OVERWRITTEN, NOT VALIDATED, and that is the odd one out in
+      // this function on purpose.
+      //
+      // Every other arm here checks a value the client is in a position to
+      // know, because it describes what the page was showing. `cause` describes
+      // what the BOX observed — and this status did not come from the box, it
+      // came from a browser saying what it had on screen. Writing one of
+      // `sessionState`'s six real causes here would assert that the box
+      // reported a fault when the box was never asked, which is the same lie as
+      // inventing a `collectedAt` for a collection that never happened
+      // (state.ts). So it gets the seventh, which names exactly what is true:
+      // nobody observed this.
+      //
+      // The client's own prose survives in `why`, which is what the refusal
+      // sentence renders, so nothing a person would read is lost.
+      return { kind: "unknown", cause: "client-declared", why };
     }
     default:
       return null;
@@ -425,6 +479,43 @@ export function parseOptionKey(v: unknown): OptionKey | null {
   }
 }
 
+/**
+ * What the dialog was actually asking about — the diff, the command, the path.
+ *
+ * STRICT, AND THE FINGERPRINT IS REBUILT RATHER THAN BELIEVED. The client sends
+ * both the text and its hash, and this recomputes the hash from the text and
+ * refuses if they disagree. Not because a lying client is the threat — a client
+ * that wanted to lie would send a consistent pair — but because a body that can
+ * disagree with itself has two answers to the same question, and something
+ * downstream will eventually read the wrong one. The same reasoning as
+ * `parseOptionKey`, which rebuilds a key rather than accepting one.
+ *
+ * `null` (a 400) on anything malformed, rather than defaulting to `unreadable`.
+ * A default would turn "your client sent nonsense" into "the box could not be
+ * read", which is a different fact with a different remedy.
+ */
+export function parseMaterial(v: unknown): PaneMaterial | null {
+  const o = asRecord(v);
+  if (!o) return null;
+  switch (asString(o.kind)) {
+    case "read": {
+      const text = asString(o.text);
+      const fingerprint = asString(o.fingerprint);
+      if (text === null || fingerprint === null) return null;
+      if (fingerprint !== fingerprintMaterial(text)) return null;
+      return { kind: "read", text, fingerprint };
+    }
+    case "no-material":
+      return { kind: "no-material" };
+    case "unreadable": {
+      const why = asString(o.why);
+      return why === null ? null : { kind: "unreadable", why };
+    }
+    default:
+      return null;
+  }
+}
+
 /** The dialog the client says it is showing. */
 export function parseQuestion(v: unknown): SeenQuestion | null {
   const o = asRecord(v);
@@ -432,6 +523,12 @@ export function parseQuestion(v: unknown): SeenQuestion | null {
   if (asString(o.kind) !== "question") return null;
   const prompt = asString(o.prompt);
   if (prompt === null) return null;
+  // THE FIELD THAT MAKES AN APPROVAL MEAN SOMETHING. Until 2026-09-08 the
+  // question was the sentence and nothing else, so two writes of the same path
+  // with different contents compared equal and an answer meant for one would
+  // have been delivered to the other. See pane.ts's `materialAbove`.
+  const material = parseMaterial(o.material);
+  if (material === null) return null;
   const raw = o.options;
   if (!Array.isArray(raw) || raw.length === 0 || raw.length > 64) return null;
   const options: PaneOption[] = [];
@@ -441,9 +538,15 @@ export function parseQuestion(v: unknown): SeenQuestion | null {
     const label = asString(opt.label);
     const key = parseOptionKey(opt.key);
     if (label === null || key === null) return null;
-    options.push({ label, key });
+    // RECOMPUTED, NOT READ OFF THE WIRE. `consequence` is a pure function of
+    // the label, so accepting the client's copy creates a field that can
+    // disagree with itself — and this is the field that distinguishes "yes,
+    // once" from "yes, and stop asking me", which is the difference between a
+    // decision about one action and a change to the session's permission
+    // posture for everything after it.
+    options.push({ label, key, consequence: classifyConsequence(label) });
   }
-  return { kind: "question", prompt, options };
+  return { kind: "question", prompt, material, options };
 }
 
 /**
@@ -797,11 +900,23 @@ export function makeSteerRoutes(overrides: Partial<SteerDeps> = {}): SteerRoutes
     }
 
     if (!result.ok) {
-      deps.log(`steer ${op}: refused pane=${target.paneId} code=${result.reason.code} why=${result.reason.why}`);
+      // `describeSend`, never `result.sent` — THE ARGV IS THE MESSAGE, and this
+      // file's header promises the message is never logged. A refusal that
+      // leaked it into the log would be the promise broken at the one moment
+      // somebody is reading the log to find out what went wrong.
+      deps.log(
+        `steer ${op}: refused pane=${target.paneId} code=${result.reason.code} ` +
+          `delivery=${result.delivery} landed=${describeSend(result.sent)} why=${result.reason.why}`,
+      );
       respond(res, REFUSAL_STATUS[result.reason.code], {
         ok: false,
         code: result.reason.code,
         why: result.reason.why,
+        // Carried to the CLIENT, not just to the log, because the person who
+        // pressed the button is the one who needs it and they are on a phone.
+        // "partial" means their text is sitting in that agent's input box, and
+        // "try again" is the worst available advice.
+        delivery: result.delivery,
       });
       return;
     }

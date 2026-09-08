@@ -275,6 +275,100 @@ browser-as-confused-deputy case only. The rest is still reachability, and reacha
 guarding a write path into ~36 agent sessions rather than a list of titles. That trade should be
 re-decided rather than inherited.
 
+### 🔵 Stage v0.4d: the inbox is under "idle", not under "needs you" — READ THIS FIRST
+
+**Fable's finding, 2026-09-08, and it is the most useful thing anybody said all day.** Asked for a
+product judgment on whether answering dialogs from a phone is worth building, it went and read all
+38 live panes instead of reasoning from the abstract, and came back with the premise broken.
+
+**The numbers.** 38 panes: 8 batch shells, 5 `gjd-remote` sleep timers with no Claude started yet,
+**25 interactive Claude sessions** — 2 `needs-you`, 7 working, 16 idle.
+
+**1. Twenty-four of the twenty-five are in auto mode.** So a numbered permission dialog is already
+answered by a classifier, not by Greg. The single session sitting on one, `fb2f-…`, is also the
+single session *not* in auto mode — and its eight siblings, launched from the same batch within two
+minutes, all entered it (their transcripts carry an `auto_mode` record; fb2f's does not).
+
+> That is a launch defect, not a product gap. — Fable
+
+And the answer Greg would give that dialog is almost certainly its option 3, *"Yes, and switch to
+auto mode"* — the one that hands the session to the classifier and makes the phone irrelevant
+afterwards. **So the case we built the write path for is one session in twenty-five, caused by a
+bug, and the right answer to it removes the need for the button.**
+
+**2. The real blocked-on-Greg population is hiding under `idle`.** Ten of the fifteen idle panes
+Fable read end their turn by handing him a decision in prose:
+
+> "both loosen a safety classifier, which is why they're yours" · "One decision I left for you" ·
+> "F63's single paid smoke run, still yours to call" · "Say the word and I'll shut it down" ·
+> "if you'd rather I land it on typecheck plus that one file, say so — otherwise I'll hold the push"
+
+**None of these is a dialog. None of them appears on the page as needing him.** Our status
+vocabulary calls them `idle`, which is the word for "nothing is happening", and the whole reason
+`status.ts` exists is that we refuse to let two different facts share one word. We did it anyway,
+one level up.
+
+**3. Each one already has a proposed answer sitting in its input box** — the harness's suggested
+reply, in Greg's voice, rendered dim. Fable's favourite was *"make the button floor any-pointer too
+— I use a keyboard case"*: a fact about Greg that the model guessed. Ten one-line decisions, each
+with a plausible and possibly-wrong answer attached, is exactly the shape a phone is good at, and
+exactly the *augment rather than replace* shape this project is supposed to have.
+
+- [ ] **`idle` splits.** A session that ended its turn with a question is `waiting for you`, and it
+      belongs at the top with the blocked ones. `status.ts` is another session's file — coordinate.
+- [ ] **The unit on the page becomes the question, not the session.** The direction doc already says
+      this; the list does not do it yet.
+- [ ] **Show the harness's suggested reply**, with "send this" and "say something else". Do not
+      send it silently and do not hide that it was written by a model rather than by Greg.
+- [ ] Find out why `fb2f` did not enter auto mode when its eight siblings did. **That one
+      investigation removes more blocked hours than the entire write route.**
+
+**The line Fable drew, which answers Sol's F6 better than anything I had:**
+
+> Pane text as executable UI is acceptable when execution means "a user turn", and not acceptable
+> when it means "grant a permission". A forged menu can then make Greg send the digit "2" to an
+> agent that was going to misbehave anyway; it cannot mint an approval.
+
+An `AskUserQuestion` menu — the agent's own question — is on the right side of that line, and its
+material is *already fully visible* to the parser, because the option text is below the rule rather
+than above it. The permission dialog is on the wrong side. **That is a much sharper rule than
+"answering is off".**
+
+**The one question only Greg can answer** (Fable's framing, and I agree it is the right one):
+
+> Is the auto-mode classifier the fleet's permission gate, officially — every session in auto mode,
+> and any session that is not is a defect?
+
+If yes, phone dialog-answering should not exist at all. If no — if some sessions are kept in default
+mode as a deliberate human gate — then those are precisely the sessions where a half-read tap at 2am
+is the least trustworthy thing on the box, and the answer is still "not from the phone"; what
+changes is that the launcher needs a way to say which sessions are which.
+
+**What Fable did not verify, in its own words:** that the dim input text is a suggested-reply
+feature (inferred from the SGR and the first-person voice), why `fb2f` missed auto mode, what
+"/rc failed" means on 10 of 24 sessions, and whether auto mode still escalates some commands to a
+prompt — which would put a small residue back into the dialog case.
+
+**And what I checked myself afterwards, because a claim that decides a design should not rest on one
+model's reading:**
+
+- **Auto mode: confirmed, and stronger.** Counted mechanically across all 38 panes at 04:05:
+  **23 of 23** interactive Claude sessions had "auto mode on" in the status bar; 15 panes were
+  shells or sleep timers. Fable said 24 of 25 with one exception; by the time I counted, the
+  exception was gone. Either way the conclusion holds and is not marginal.
+- **Idle-hiding-an-inbox: confirmed by inspection, not by my count.** My first check grepped the
+  last lines of each pane for a question mark and found **1 of 23**, which looked like a refutation.
+  It was not — it was a worse instrument. Reading one pane properly showed a session whose turn
+  ended *"My only recommendation is about packaging: Stage E … It's a plan doc of its own"* — a
+  decision handed to Greg, ending in a full stop. **Fable read the meaning; I grepped the
+  punctuation, and the punctuation was not the signal.** Its 10-of-15 is better evidence than my
+  1-of-23, and the discrepancy is worth recording because it is also the *feature's* central
+  difficulty: **"has this agent asked Greg something?" is a judgement, not a parse.** A regex will
+  not build this stage. Something has to read the turn.
+- The suggested reply in the input box is real; I saw one (`❯ make Stage E its own plan doc`). I
+  could not count them reliably — the panes redraw between captures — so the "ten with a proposed
+  answer attached" figure stays Fable's observation rather than a measured one.
+
 ### 🔴 Stage v0.2b: an approval must bind to what is being approved — BLOCKS v0.4
 
 **Found by GPT Astra, 2026-09-08, by experiment rather than by reading**, and confirmed here
@@ -349,7 +443,7 @@ boundary was never reachability alone. We copied the half we liked.
 ### Stage v0.4b: Sessions becomes master–detail
 
 Greg, 2026-09-08 — quoted in full in
-[orchestrator-direction.md](../project/orchestrator-direction.md#what-greg-asked-for-on-2026-09-08).
+[orchestrator-direction.md](../project/orchestrator-direction.md#what-greg-asked-for-on-2026-09-08-in-his-own-words).
 
 - [ ] Left column: every session, with orderings — how long it has been running, **status
       (default)**, and whatever else earns its place.
@@ -429,6 +523,28 @@ Greg's list, against [diagnose-box-resources.md](../reusable/diagnose-box-resour
 - [ ] Broadcast to all agents — the same mechanism as v0.5c's resource broadcast, so there is one
       implementation of "say this to everybody" and not two.
 
+### Stage v0.6c: the other harnesses are invisible, not read-only
+
+The horizon says **NOW/SOON: multiple model-families/harnesses — Claude Code and Claude agents now,
+OpenAI Codex/GPT soon**. This plan has been recording that Codex rows are shown *read-only* because
+`scripts/subagent-cli.ts:216` spawns them with `fd 0 = 'ignore'` so they cannot receive keystrokes.
+
+**That was the wrong shape of the problem.** Checked 2026-09-08 04:20: there were **4 running
+`codex exec` processes and 0 Codex tmux sessions.** Codex does not get a session here — it runs as
+a subprocess inside the Bash tool of the Claude session that asked for a review. So it is not a row
+that needs disabling; it is **work in flight that the fleet page cannot see at all.**
+
+That matters more than it sounds, because a GPT Sol review is 15–45 minutes of wall clock and real
+money, and the session that launched it looks *idle* the whole time. Two of tonight's own sessions
+were in exactly that state.
+
+- [ ] Show a session's in-flight subprocesses — at minimum a paid review, which is the expensive,
+      slow, invisible one. `pgrep -af "codex exec"` plus ancestry to the pane pid is the same walk
+      `steer.ts` already does in `descendsFrom`; reuse it rather than writing a second one.
+- [ ] A session waiting on a review is not `idle`. Same defect as v0.4d, different cause.
+- [ ] Only then ask whether Codex deserves rows of its own. It probably does not while it has no
+      sessions — a row per subprocess is a different product from a row per agent.
+
 ### Stage v0.7+: the decision log
 
 Deferred by Greg on 2026-09-08 — "eventually both, start simple, defer this to a middle stage".
@@ -478,6 +594,13 @@ Run on the box, 2026-09-07, before this plan was written.
 - **Remote Control is already on for most sessions.** 11 of 19 had a non-null `bridgeSessionId`
   with no flag passed; `claude --remote-control <name>` sets it explicitly (tested with a throwaway
   session, since killed).
+- **…but it does not stay working, and that is the strongest argument for this tool existing at
+  all.** Counted 2026-09-08 04:15: **8 of 23** live interactive sessions showed `/rc failed` in
+  their status bar. A third of the fleet, silently — the only evidence anywhere is one word at the
+  bottom of a terminal nobody is looking at. So "Remote Control already does this" is true of a
+  session at launch and unreliable of the same session an hour later, which is precisely when you
+  reach for a phone. Noticed by Fable while it was reading the panes for something else; counted
+  independently afterwards.
 - **The Hetzner cloud firewall allows SSH, mosh and ICMP only.** Read from `infra/hetzner/main.tf`.
   Not verified against live Hetzner state — the box has no `hcloud` CLI and no Hetzner token by
   design. **Greg should confirm with `hcloud firewall list` from the Mac.**
@@ -508,6 +631,76 @@ Added 2026-09-08, after the steering route was wired (`c06438b7`).
   seven are shells and legacy sessions, which are the rows that *should* be unsteerable. Before this
   commit, **zero** rows carried the last two, so the Send button would have been dead on arrival and
   the 400 would have looked like a bug in the route.
+
+Added 2026-09-08 04:35, closing the one gap both UI and route agents named in the same words.
+
+- **The client's own body-builder produces a body the real server accepts.** Both agents reported
+  that every wire assertion on either side was against *that side's restatement* of the contract —
+  so if `parseTarget` and `steerMessageBody` disagreed, every test on both sides stays green and the
+  first real tap 400s. Run for real: a throwaway session, `parseFleetState` applied to the server's
+  own payload, the row handed to the client's `steerMessageBody`, and the result POSTed. **200**,
+  and the nonce (generated in the script, written only to a file) appears **once** in the target
+  pane and **zero** times in a control pane. The body the client sends is exactly
+  `claudeSessionId, paneId, panePid, sessionId, status, text`.
+- **The answering refusal is real on the live server**, not just in tests: `503`,
+  `answering-disabled`, with the sentence that names the hazard and the way round it.
+- **A live blocked row now carries its material.** Captured from the running dashboard:
+  `{"q":"question","material":"read","opts":["unknown","unknown","unknown","unknown","unknown"]}` —
+  an `AskUserQuestion` whose five custom labels all classify conservatively, which is the right
+  answer and the one the UI must render as *at least* as alarming as `persistent`.
+
+- **A `claudeSessionId` on a row does NOT mean a Claude exists**, and this surprised everyone who
+  looked at it. `CLAUDE_SESSION_ID` is written into the tmux environment by `tmux new-session -e …`
+  **before Claude runs at all** — so a `gjd-remote new-claude --wait 6h` session carries a
+  conversation uuid for six hours while its pane runs `sleep 21600`. Measured on the live payload
+  2026-09-08 04:45: **30 of 35 rows carry a uuid, and 5 of those are `waiting`** with no process to
+  match. Two consequences:
+  - **Steering is protected twice over, by accident rather than design.** `steerableStatus` refuses
+    `waiting`, and `verifyTarget` independently requires a live `claude --session-id <uuid>`
+    descended from the pane. Either alone would do; it is worth knowing both are load-bearing.
+  - **Anything that reads a transcript by uuid must not treat its absence as "this agent has said
+    nothing".** It usually means the agent has not started.
+- **The id also outlives the conversation, which is the harder half.** The tmux environment is set
+  once and never updated, so if a pane's Claude exits and someone starts a fresh one, the row still
+  names the *first* conversation. A transcript reader keyed on it then returns real, well-formed,
+  correctly-attributed turns from a conversation that is not on screen — the most convincing wrong
+  answer available. `transcript.ts` reports `lastModified` for exactly this: **a transcript last
+  written hours ago on a row the collector calls `working` is this bug**, and the page must say so.
+- **The transcript is not where `meta.dir` says it is, most of the time.** Building the slug from
+  the launch directory found the file for only **7 of 30** sessions with a uuid. Not lossy
+  slugification — `EnterWorktree` writes a `relocated` record and *moves the file* to the worktree's
+  slug while `meta.dir` still names the primary. So the uuid is the identity and the directory is
+  only a hint: try the slug, else scan. Being wrong about the slug then costs milliseconds instead
+  of an answer.
+- **Reading the tail is three orders of magnitude cheaper than the alternative.** Biggest transcript
+  on the box is **33.0 MB**; a 12-turn read takes **262 KB (0.79%) in 4.5 ms**. Across all 35 live
+  rows: 318 ms total, mean 9.1 ms, 13 needing the directory scan. `gjd-remote ls`, which greps whole
+  transcripts, takes 10–12 s.
+- **Tool traffic is ~80% of a transcript by volume** (census of one real 33 MB file: 2718 `tool_use`,
+  2718 `tool_result`, 1353 `thinking`, against 1017 assistant text blocks and 280 typed user turns).
+  Tool *results* are dropped — that is where hostile web content lives — and the count is reported so
+  the page can say "and 40 tool results" rather than implying silence.
+- **Rendering every `role: "user"` record as Greg is wrong more than four times in five.** Measured
+  across two real transcripts: `human` 64, `task-notification` 319, `peer` 4, `auto-continuation` 2.
+  And a peer message carries *both* `isMeta: true` and `origin.kind: "peer"`, so checking `isMeta`
+  first labels every message from another agent "injected" — which the agent building it did, and
+  caught.
+
+- **Run the server under `scripts/tmux-job.ts`, not backgrounded from a session — demonstrated
+  rather than argued, 2026-09-08 04:39.** An earlier, orphaned copy of the server that had been
+  started with a plain `&` was OOM-killed while the box was at load 28 with 21 GB of swap in use.
+  The tmux-job copy, on the same box at the same moment, kept collecting. Backgrounded processes are
+  killed on *system* memory pressure rather than their own, so the dashboard would have gone down
+  precisely when it was most worth looking at — and the only evidence would have been a phone
+  showing a connection error indistinguishable from a Tailscale hiccup. Start it with:
+
+  ```
+  npx tsx scripts/tmux-job.ts --name fleet-server env FLEET_BIND=127.0.0.1,$(tailscale ip -4) \
+    npx tsx tools/fleet/server.ts
+  ```
+
+  The `env` prefix matters: the variable does not otherwise reach the child, and the failure is
+  quiet — the server binds loopback only, so it works from the box and not from the phone.
 
 - **`spideryarn.com` uses Namecheap nameservers** (`dns1.registrar-servers.com`), serving Vercel at
   `76.76.21.21`. Cloudflare's partial/CNAME zone setup is Business-plan-only ($200/mo), per

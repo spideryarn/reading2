@@ -225,7 +225,11 @@ export function toRows(
     // default that reads as calm. There is no legitimate way to get here — the
     // two lists come from one parse — so if it ever shows up on the page, the
     // page is telling you about a real bug rather than about the box.
-    status: status.get(s.id) ?? { kind: "unknown", why: "no status was derived for this session" },
+    status: status.get(s.id) ?? {
+      kind: "unknown",
+      cause: "no-status-derived",
+      why: "no status was derived for this session",
+    },
   }));
 }
 

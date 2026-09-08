@@ -79,15 +79,6 @@ export type StatusedSession = {
 };
 
 /**
- * An empty answer from the box — "I asked Claude Code, and it listed nothing".
- *
- * A probe, used once below, and NEVER WRITTEN TO. It is the difference between
- * that sentence and "I could not ask Claude Code", which is the distinction the
- * whole of gjd-remote-tmux.ts is built around.
- */
-const LISTED_NOTHING: Map<string, string> = new Map();
-
-/**
  * One session's status, with the box's own reason folded in when there is one.
  *
  * The enrichment is deliberately narrow. Two different unknowns arrive here
@@ -97,18 +88,22 @@ const LISTED_NOTHING: Map<string, string> = new Map();
  * ask about — and appending "claude: command not found" to the first blames the
  * wrong thing on a row that is not broken in that way.
  *
- * Telling them apart by matching `sessionState`'s wording would put a copy of
- * its sentences in this file, and they would drift. So instead we ask it again
- * with the empty map: **a reason that survives the box having answered is not
- * the box's silence talking.** That reads the source's structure rather than
- * its prose, and it costs one more call to a pure function.
+ * **They must be told apart by structure, never by wording.** Matching
+ * `sessionState`'s sentences would put a copy of them in this file and they
+ * would drift; and prose is not a thing to compare in the first place, because
+ * a sentence can be reworded while the situation it describes has not changed
+ * at all. `cause` is that structure — a stable identifier for the fault, with
+ * `why` left as the sentence for the reader — so the test is one field.
+ *
+ * This used to be cleverer: it asked `sessionState` a second time with an empty
+ * map, on the principle that **a reason that survives the box having answered
+ * is not the box's silence talking**. That reasoning is right and is why the
+ * distinction is drawn at all; the trick is no longer how it is drawn.
  */
 export function statusOf(s: Session, agents: Map<string, string> | null, agentsWhy: string | null): FleetStatus {
   const state = sessionState(s, agents);
-  if (state.kind !== "unknown" || agents !== null || agentsWhy === null) return state;
-  const asIfAnswered = sessionState(s, LISTED_NOTHING);
-  if (asIfAnswered.kind === "unknown" && asIfAnswered.why === state.why) return state;
-  return { kind: "unknown", why: `${state.why}: ${agentsWhy}` };
+  if (state.kind !== "unknown" || state.cause !== "agents-unavailable" || agentsWhy === null) return state;
+  return { kind: "unknown", cause: state.cause, why: `${state.why}: ${agentsWhy}` };
 }
 
 /**

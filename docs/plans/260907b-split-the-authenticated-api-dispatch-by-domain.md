@@ -3,10 +3,18 @@
 Status as of 2026-09-07: **the expensive part is behind us; what remains is mechanical.** Stages 1,
 1b, 1c, 2, 3a, 3b, 3c, 4a, 4b and 5 are landed and reviewed. `AUTH_ROUTES` holds **25 of the 81
 guards** (billing, jobs/uploads, referee, search); **56 remain**, and **chat is the next slice — and
-it is claimed by 260907e**, which takes it on waking at 05:17. Check `ListAgents` and ask before
-starting any slice: referee was built twice, in parallel, eleven minutes apart, because both plans
-queued it and neither session announced. Biome on `serveAuthenticatedApi`: **244 → 234 → 183 → 164 →
-153**.
+it is claimed by 260907e** (`docs/plans/260908a-chat-and-live-sessions-join-the-route-table.md`).
+Check `ListAgents` and ask before starting any slice: referee was built twice, in parallel, eleven
+minutes apart, because both plans queued it and neither session announced. Biome on
+`serveAuthenticatedApi`: **244 → 234 → 183 → 164 → 153**.
+
+**Five holes have been found inside this plan's own safety net, and all five are fixed** — the
+`const` hole in `literalConstants` (stage 3c), the last-match-wins AST extractor (the merge), the
+referee grace window that spared a row regardless of its lock (stage 4a), the leftover-guard filter
+that could not see a regex route (below), and the body diff's blindness to comment prose (260907e,
+below). Four of the five were found by asking what it would take to make the check fail, and the
+fifth by reading a diff nobody had asked to be read. **None was found by reading the check itself.**
+That is the transferable result of this job, more than the migration is.
 
 **This supersedes an earlier "done enough to stop here."** That recommendation rested on a cost
 estimate that was wrong — see § *Fable settles the end-state, and corrects the price*. The remaining
@@ -748,6 +756,43 @@ vitest reported three files passing rather than complaining about the fourth. Re
 passed` count against the number of paths you passed; when a test is load-bearing evidence, that
 count is part of the evidence.
 
+### The leftover-guard filter could not see a regex route, and so never fired
+
+Found 2026-09-08 while answering a peer's question about which prefixes chat spans — so, by luck
+again rather than by method. § *answers the moved domains from the table, not from the chain*
+filtered chain guards with `describeMatch(g.match).includes(prefix)`. `describeMatch` renders a regex
+as `regex /${m.source}/`, and **`source` keeps its escapes**, so `/^\/api\/chat\/…$/` renders with
+`\/` between every segment and the literal substring `/api/chat` never occurs in it. The filter could
+only ever catch a **literal** route left behind — which is why nobody noticed: jobs, uploads and
+billing are literals, and they were the first domains to move.
+
+**Measured rather than reasoned:** adding `/api/chat` to `moved` with all nine `/api/chat` guards
+still in the chain left the suite **green at 326**.
+
+**Scope, precisely** (260907e's correction — an earlier draft here overstated it). The *whole* test is
+not vacuous: the exact `toEqual` above it, the complete set of table pair keys, is real, does bite,
+and is the part a stage edits. **Only the `moved` prefix filter below it was dead.** But within its
+own remit it was worse than "weak": since a regex route can never match, the filter has been unable
+to catch **the one failure it exists for** — a route that is in the table *and* still in the chain —
+for **every slice since jobs and uploads**. Referee and search each passed a review in which that
+assertion could not have failed. Recorded in those terms because the next sweep will otherwise read
+"a leftover check has guarded this since stage 3a" as coverage, and it was not.
+
+Fixed with a `pathish(match)` helper that drops the backslashes; the result is only ever searched for
+a prefix, so `\w` → `w` is harmless. The same probe now fails, naming all nine guards.
+
+**And it has a control now, because the assertion passes in two different worlds** — when there is
+nothing to find, and when it *cannot* find anything. The control requires the filter to find at least
+one `/api/chat` guard still in the chain. It is deliberately a landmine: **it fails the moment chat
+moves**, telling whoever moved it to repoint the control at the next unmigrated regex domain. A
+control that never has to be maintained is one nobody checks is still true.
+
+This is the fourth silent success found inside this job's own safety net, after the `const` hole in
+`literalConstants`, the last-match-wins AST extractor, and the grace window that spared a row
+regardless of its lock. The pattern is stable enough to name: **every one was a check that passed for
+a reason unrelated to the thing it claimed to verify**, and every one was found by asking what it
+would take to make it fail — never by reading it.
+
 ### The four slices that need an oracle written before they move
 
 Sol's stage 5 review answered the question stage 5 raised. The **"once, not per domain" ruling holds**
@@ -766,6 +811,39 @@ that the next one will be. Sol went looking, and named the gaps:
 Covered, and safe to move on the existing recipe: **chat POST** (`chat-route.test.ts:114` awaits
 `handleApi` then requires frames and stored rows), **quiz mark**, the live-session routes, and the
 non-streaming domains — glossary, ideas, quotes, timeline, arc, sketch, illustrated.
+
+### The body diff was blind to comments, and a generator corrupted English through it
+
+Found 2026-09-08 by **260907e**, in the chat slice, and it is a hole in the recipe *this* plan hands
+to every remaining slice rather than in any stage this plan built.
+
+Their move generator rewrote the matcher binding with a global `\bchat\b` → `captures`. Inside code
+that is exactly the substitution the move requires. Inside **prose** it is vandalism: a comment
+reading *"one thing from chat"* became *"one thing from captures"*, and a citation turned into a link
+to a file that does not exist. **Every body still diffed clean**, because their normaliser stripped
+comments before comparing. The check whose entire job is to prove that a move is only a move was
+blind by construction to a whole class of change the move can make.
+
+**This plan got the same thing right by luck, not by specification.** Stage 5's brief said nothing
+about comments either way; the agent implementing it happened to choose the stricter reading and
+compared prose token-for-token (§ *Stage 5*, which records that it "was stricter than the brief
+asked"). Referee, in stage 4b, was compared the same way. So the recipe below has been silently
+relying on an implementer's taste at the exact point where it claims to be mechanical.
+
+**The recipe is now explicit: the body comparison compares comment text.** 260907e's verifier does,
+and they watched it catch that exact corruption while the code body still reported `identical` — the
+red-first discipline applied to the checker rather than to the test. It is committed as
+`docs/plans/260908a-verify-move.mjs.txt` and supersedes the referee-era one for every remaining
+slice. Two related fixes of theirs travel with it: a refusal used to skip the **whole** body
+comparison rather than narrowing it, so any change anywhere in a refused guard printed "refused,
+accounted" (Sol's F10); now every body is compared, and the expected refusal is matched against the
+refusal's own words, so an explanation covering two returns cannot silently cover three.
+
+Worth naming what makes this the fifth of a kind. A normaliser exists to delete differences that do
+not matter, and every one it deletes is a difference it can no longer report. Each thing you teach it
+to ignore — whitespace, the binding name, the trailing `return;`, comments — buys precision and sells
+coverage, and the sale is silent. The four rewrites this plan normalises are each justified in §
+*Stage 3b*; comments never were, and that is the whole bug.
 
 ### The normaliser should refuse, not rely on a hand check
 
@@ -831,7 +909,9 @@ referee slice paid the only one. Sol confirmed that in the stage 4b review — *
 remaining prerequisite… I found no other test reading the `searches` or `oneRun` dispatch syntax"* —
 and gave the recipe: four ordered pair-keys added red-first, two shared module-scope matcher
 constants, four handlers prepended in GET/POST/PATCH/DELETE order, bodies compared while normalising
-**both** `slugPart` and `part` uses, `EXPECTED_AUTH_ROUTES` and the lifetime oracle untouched.
+**both** `slugPart` and `part` uses, `EXPECTED_AUTH_ROUTES` and the lifetime oracle untouched. Read
+that recipe together with § *The body diff was blind to comments*: **comment text is compared, never
+stripped**, which this stage got right without being told to.
 
 **It is now a contiguous suffix, which it was not when 260907e queued it.** That plan's § *The next
 slice* warns search is "not adjacent to the table" because referee's eight guards sat between them;
