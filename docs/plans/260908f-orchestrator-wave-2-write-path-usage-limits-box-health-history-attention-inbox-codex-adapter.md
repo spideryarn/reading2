@@ -114,16 +114,16 @@ put the write path in as *"a stage, but it doesn't have to be the top-priority."
 that. So on the Overseer's side the order is **attention first**, and the write path stays where he
 put it.
 
-## Where this stands, 2026-09-08T13:42Z
+## Where this stands, 2026-09-08T14:25Z
 
-**Important work left**, and it is now the last mile of four stages rather than all of six. What is
+**Important work left**, and it is now the last mile of three stages rather than all of six. What is
 finished is the part that had to be finished first: **every seam is agreed and every contract is a
 type**, so no session is waiting on another to decide anything.
 
 | | landed | what remains |
 |---|---|---|
 | **A** attention | the five types (`4d5cc454`); classifier built, evaluated and Sol-reviewed | **the push** — `Checkpoint.attention` is not on dev yet |
-| **B** usage | the dashboard's `Pause` contract (`f1c34e96`) and `pause.ts` | **the push**, then `Checkpoint.usage` on my side, behind A |
+| **B** usage | **DONE** (`95c2f49a`) — `usage.ts`, `UsageReport`, 19 Sol findings taken | `Checkpoint.usage` on my side, behind A |
 | **C** harness | **DONE** (`5c2e31cb`), worktree torn down | nothing; the `steer.ts` argv parser is unowned |
 | **D** health | seam agreed (`refreshOnce`, not `server.ts`); `lock.ts` extracted for it | retention and the drawing |
 | **E** dictation | the server half — `transcribe.ts`, `routes-transcribe.ts`, `vocabulary.ts` | the client half, and Greg's own mic test |
@@ -805,6 +805,35 @@ wrong or unfounded:
 | "adding a name to `KnownUsageWindow` without adding it to the array is a compile error" | it is not; an array only checks one direction. Now a `Record<KnownUsageWindow, true>` |
 | "deleting the null-uuid guard is an equivalent mutant" | equivalent in `kind`, not in `why` — I checked the discriminator and claimed the value |
 
+**An open question the first live reading raises, and it is a product judgement rather than an
+engineering one.** On this box the verdict is `unknown` continuously until 2026-09-12, because 27
+unexpired rejections contradict the cache. Four days of a gauge that can never say *"you are fine"*
+is the shape the dashboard spent the same day fixing elsewhere — a caveat on 29 of 32 cards is
+wallpaper, not a caveat. `orchestrator-setup` asked whether a rejection that can NEVER be attributed
+is the same fact as one that cannot be attributed YET. Measured on the live data,
+2026-09-08T14:12Z, and the answer is **three ways, not two**:
+
+| | resolved by | today's verdict |
+|---|---|---|
+| **transient** — this pass could not read the cache | the next scan | `unknown`, correctly |
+| **resolvable by an event** — a rejection that contradicts an attributed cache | a `/login` swap, not a scan | `unknown` |
+| **permanent** — nothing can ever settle it | nothing | would be `unknown` forever |
+
+All 27 are the middle row, and the distinction matters because **the event is not hypothetical**.
+They are `contradicted`, not `cannot-attribute`: every one is `seven_day`, all share the single reset
+instant 2026-09-12T18:00Z, all were hit inside three hours on 2026-09-07, and they expire *before*
+the current account's cached weekly window rolls on 2026-09-15T04:59Z — so no future scan will ever
+change their status. **But a `/login` back to the account they belong to would**, and that account
+swap is the very thing that created them. If Greg swapped back tomorrow he would genuinely be limited
+until Friday, and a gauge that had been reporting `ok` would have been wrong for four days in the
+expensive direction.
+
+So "waiting for information that will never arrive" is not quite it: the information can arrive, just
+not from looking again. **Whether four days of `unknown` is honest or merely useless is Greg's call**,
+and the two options are to keep it as it is, or to let an attributed cache showing plenty of headroom
+outweigh a contradicted rejection and report `ok` with the standing fact named beside it. Nothing has
+been changed on the strength of this note.
+
 **Deliberately not done, and it is the half of "done looks like" that is missing**: the usage block
 is **not** written into `current.json`. That means a schema field, a `parseCheckpoint` arm, both
 construction sites in `store.ts`, and a cadence decision in `daemon.ts` about when to pay for a scan
@@ -832,7 +861,10 @@ argument — a rejection found at 13:00 and resetting on Friday is still in forc
 13:05 scan fell over — which is the store's job and needs no watermarks in the collector. See
 *What landed* above for the precondition any future incremental path would need.
 
-The full transcript scan is **45s over 1,770 transcripts, 2.9 GB, 870,799 lines**, and the wide window
+The full transcript scan is **45s over 1,770 transcripts, 2.9 GB, 870,799 lines** (measured
+2026-09-08T13:23Z — stamped after the fact, because a later reading of 1,772 files and 875,528 lines
+read as a competing claim rather than an earlier one, which is this wave's own rule biting the
+section that states it), and the wide window
 is deliberate: a narrower one can miss a `seven_day` rejection that is still in force. But that is an
 argument for reading the whole history **once**, not for re-reading it. **A `seven_day` rejection found
 at T with a `resetsAt` of T+7d stays in force until that instant whether or not you look again** — it
