@@ -473,16 +473,32 @@ still running. **`work.ts` only ever walks DOWN from a pane, so it cannot see th
 cannot show them, attribute them, or stop them, and nothing bills them to anybody. That is a cost
 question as much as an engineering one, and `claude-agents-dashboard` has it to surface.
 
-**It is a WINDOW, not a leak, and the difference decides what to do about it.** `orchestrator-setup`
-checked at 14:05 and found none; independently re-checked at 13:03 UTC, the two live `codex exec`
-runs (`fleet-dictation`'s and `fleet-approval-binding`'s) both trace up to `sh -c ( npx tsx
-run-codex.ts … )` whose parent is the **tmux server**, so both are ordinary `codex-batch` *panes* —
-the shape `codex-batch-pane.txt` captures — and both are attributable and stoppable. So orphans do
-not accumulate: they appear when a Bash-tool shell is reaped mid-run and they leave when the job
-ends. What is worth fixing is the window during which a paid job cannot be attributed or stopped,
-not a growing population of them. **"Two orphans are running right now" would have been false by the
-time anybody read it** — the same sample-window error as the Codex count above, one paragraph after
-writing it down.
+**It is a WINDOW, not a leak, and the difference decides what to do about it.** The claim rests on the
+**process lifecycle**, not on a count: an orphan is created when a Bash-tool shell is reaped while its
+`run-codex.ts` child is still running, and it ends when that review ends. So the population is bounded
+by the number of concurrent reviews and cannot grow on its own. **That argument would hold with zero
+readings taken**, which is what makes it the load-bearing part. What is worth fixing is the window
+during which a paid job cannot be attributed or stopped — not a growing population of abandoned ones.
+
+Two walks are consistent with it and neither establishes it. At **13:03 UTC** the two live `codex exec`
+runs (`fleet-dictation`'s and `fleet-approval-binding`'s) both traced up to an
+`sh -c ( npx tsx run-codex.ts … )` whose parent is the **tmux server**, so both were ordinary
+`codex-batch` *panes* — the shape `codex-batch-pane.txt` captures — attributable and stoppable;
+`orchestrator-setup` walked every `ppid 1` process at **13:05 UTC** and found none.
+
+**Those two readings are two minutes apart, not an hour**, and an earlier draft of this paragraph
+presented them as independent corroboration because one was written in BST (14:05) and one in UTC
+(13:03) with no note that the box runs UTC+1. Two observations two minutes apart are one observation
+with a wide error bar. **This is the sample-window error for the third time in one stage** — first as
+the Codex count, then as "two orphans are running right now" (which would have been false by the time
+anybody read it), now as a timezone making two near-simultaneous readings look like a trend.
+
+**And the third one is why "I have learned this" is not a defence.** The lesson as written above is
+about *counting a population*; it recurred in the shape of *corroborating a claim*, which is the same
+error wearing different clothes and did not trip the memory of the first one. The version that catches
+both is mechanical rather than remembered, and it is the discipline everything else built today
+already follows: **a fleet number carries the instant it was taken, in one timezone, in the sentence
+itself** — the way `collectedAt` and `scannedAt` are fields rather than habits.
 
 **One `ppid 1` process really is long-lived, and it is the fake.**
 `bash /tmp/fake-codex-qAz9Um/codex -o /tmp/run-codex-gc.txt`, reparented to init **6 days 20 hours**
