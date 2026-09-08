@@ -15,6 +15,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  generationDrift,
   panesBySession,
   sessionScript,
   snapshotFrom,
@@ -147,6 +148,31 @@ describe("panesBySession", () => {
     expect(tmuxServerPid("")).toBeNull();
     expect(tmuxServerPid("$1 %10 100\n")).toBeNull();
     expect(tmuxServerPid("$1 %10 100 notapid\n")).toBeNull();
+  });
+
+  it("refuses a collection the tmux server restarted through — Sol's F16", () => {
+    // A collection is not one command: the sessions come from a bash script
+    // that takes 8–12s, the panes and the generation from a `list-panes`
+    // afterwards. A tmux restart in between joins old sessions to new pane
+    // handles — `$1643` and `%1646` come round again — and stamps the result
+    // with the NEW generation, which is the very label that claims the handles
+    // are consistent. Every row looks ordinary; nothing errors.
+    const why = generationDrift(132280, 999999);
+    expect(why).not.toBeNull();
+    expect(String(why)).toMatch(/tmux server restarted during this collection/);
+    // The positive half: the same generation is not drift, so this cannot pass
+    // by the function having become "always refuse".
+    expect(generationDrift(132280, 132280)).toBeNull();
+  });
+
+  it("treats a generation it could not read as unverifiable, not as drift", () => {
+    // A tmux busy enough to time out a `display-message` is exactly the box
+    // this tool is for, so "I could not tell" must not blank the dashboard at
+    // the moment it is most wanted. The snapshot carries a null
+    // `tmuxServerPid`, which already says unverifiable to anything reading it.
+    expect(generationDrift(null, 132280)).toBeNull();
+    expect(generationDrift(132280, null)).toBeNull();
+    expect(generationDrift(null, null)).toBeNull();
   });
 
   it("carries the pane's pid, which is what catches a respawn", () => {

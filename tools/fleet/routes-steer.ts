@@ -93,6 +93,14 @@ export type RouteErrorCode =
   | "body-too-large"
   | "rate-limited"
   | "method-not-allowed"
+  /**
+   * Answering a dialog is switched off pending a decision Greg has to make —
+   * see the long comment at the dispatch. It is a `RouteErrorCode` rather than a
+   * `RefusalCode` on purpose: nothing about the box or the request was wrong, so
+   * refreshing and trying again will not help, and a client that retries on 409
+   * must not retry on this.
+   */
+  | "answering-disabled"
   | "internal";
 
 export type SteerOp = "message" | "answer";
@@ -518,7 +526,12 @@ export function parseAnswerBody(raw: unknown): Parsed<AnswerRequest> {
 
 export type RateVerdict = { ok: true } | { ok: false; why: string; retryAfterMs: number };
 
-export type RateLimiter = { check(key: string, now: number): RateVerdict };
+export type RateLimiter = {
+  /** Reads only. Asking whether a send is allowed must not itself cost a slot. */
+  check(key: string, now: number): RateVerdict;
+  /** Spends a slot. Called once the request has reached the delivery module. */
+  record(key: string, now: number): void;
+};
 
 /**
  * A floor per pane and a ceiling for the box.
@@ -543,7 +556,32 @@ export function createRateLimiter(
 ): RateLimiter {
   const lastByKey = new Map<string, number>();
   let recent: number[] = [];
+  /**
+   * TESTING AND SPENDING ARE TWO OPERATIONS, and they used to be one.
+   *
+   * `check` recorded a slot the moment it said yes — before the target shape,
+   * the text, the declared status, the live verification or the delivery had
+   * been looked at. So six well-formed but bogus requests spent the whole
+   * fleet's allowance and locked out a real one for ten seconds, without a
+   * single keystroke having gone anywhere. GPT Sol's F18.
+   *
+   * Now `check` only reads. `record` is called once the request has reached the
+   * delivery module, which is the point at which it has cost the box something
+   * — three tmux commands with ten-second timeouts — and may have typed. A
+   * request refused before that (bad origin, unparseable body, an id that is
+   * not an id) is free, which is what it should be: it cost us nothing.
+   */
+  const spend = (key: string, now: number): void => {
+    lastByKey.set(key, now);
+    recent.push(now);
+    // The map is keyed by pane id, which is unbounded over a long uptime.
+    // Forget anything far older than its own floor.
+    if (lastByKey.size > 256) {
+      for (const [k, t] of lastByKey) if (now - t > opts.minIntervalMs * 20) lastByKey.delete(k);
+    }
+  };
   return {
+    record: spend,
     check(key, now) {
       const prev = lastByKey.get(key);
       if (prev !== undefined && now - prev < opts.minIntervalMs) {
@@ -561,13 +599,6 @@ export function createRateLimiter(
           why: `${recent.length} sends across the fleet in the last ${opts.burstWindowMs}ms is the ceiling`,
           retryAfterMs: Math.max(1, opts.burstWindowMs - (now - oldest)),
         };
-      }
-      lastByKey.set(key, now);
-      recent.push(now);
-      // The map is keyed by pane id, which is unbounded over a long uptime.
-      // Forget anything far older than its own floor.
-      if (lastByKey.size > 256) {
-        for (const [k, t] of lastByKey) if (now - t > opts.minIntervalMs * 20) lastByKey.delete(k);
       }
       return { ok: true };
     },
@@ -591,6 +622,16 @@ export type SteerDeps = {
   now: () => number;
   limiter: RateLimiter;
   log: (line: string) => void;
+  /**
+   * Whether tapping an option may reach the delivery module at all. See the
+   * long comment at the dispatch for why the answer is currently no.
+   *
+   * A DEP RATHER THAN A `process.env` READ AT THE DISPATCH, so a test can drive
+   * both sides of it without mutating the environment — a test that sets an env
+   * var leaks into every other test in the file when it forgets to unset it,
+   * and the failure looks like a flake rather than a bug.
+   */
+  answeringEnabled: () => boolean;
 };
 
 export function realSteerDeps(): SteerDeps {
@@ -600,6 +641,10 @@ export function realSteerDeps(): SteerDeps {
     now: () => Date.now(),
     limiter: createRateLimiter(),
     log: (line) => console.log(line),
+    // Read per request, not once at construction: flipping it is then a server
+    // restart rather than a rebuild, and nothing here caches a decision that
+    // Greg may want to change in a hurry.
+    answeringEnabled: () => process.env["FLEET_ANSWER_ENABLED"] === "1",
   };
 }
 
@@ -672,6 +717,47 @@ export function makeSteerRoutes(overrides: Partial<SteerDeps> = {}): SteerRoutes
         `pid=${target.panePid ?? "-"} declared=${request.declaredStatus.kind} ${shape}`,
     );
 
+    // ANSWERING A DIALOG IS OFF, AND THIS IS A PRODUCT DECISION WAITING FOR
+    // GREG RATHER THAN A BUG WAITING FOR A FIX.
+    //
+    // Two independent cross-family reviews on 2026-09-08 reached the same
+    // conclusion about tapping an option from a phone, by different routes.
+    //
+    //  - GPT Astra ran an experiment: it changed a proposed file's contents in
+    //    a pinned fixture and `parsePane` returned an IDENTICAL question and
+    //    identical options. `promptAbove` stops at a horizontal rule, and
+    //    Claude Code puts one between the diff and the question — so the
+    //    approval binds to "Do you want to create notes.md?" and the content
+    //    being written is discarded. **The page can ask Greg to approve
+    //    something without showing him what it is.**
+    //  - GPT Sol found six more, of which one is not fixable by tightening
+    //    anything here: pane text is not provenance. An agent that has printed
+    //    a plausible menu — deliberately, or because it was processing hostile
+    //    input — produces a capture this parser accepts, and Sol's words are
+    //    "keep dialog answering read-only unless there is a structured, trusted
+    //    source of question identity, or explicitly accept that pane text is
+    //    executable UI".
+    //
+    // That last one is Greg's call and he is asleep. So the route stays built,
+    // tested and reachable, and refuses with a sentence saying why — which is
+    // better than deleting it (the work survives and the client can render the
+    // reason) and much better than shipping it (the failure mode is a wrong
+    // approval, and there is no way to take one back).
+    //
+    // `FLEET_ANSWER_ENABLED=1` turns it on for anybody who wants to test it.
+    // Sending a MESSAGE is unaffected; stages v0.2b and v0.2c in the plan are
+    // what turn this on for real.
+    if (op === "answer" && !deps.answeringEnabled()) {
+      const why =
+        "answering a dialog is disabled: the captured question does not include what is being approved, " +
+        "so tapping an option could approve something other than what you were shown. " +
+        "Use `gjd-remote resume <name>` and answer it in the terminal. " +
+        "See docs/plans/260907e-agent-fleet-dashboard.md stage v0.2b.";
+      deps.log(`steer answer: refused code=answering-disabled pane=${target.paneId}`);
+      respond(res, 503, { ok: false, code: "answering-disabled", why });
+      return;
+    }
+
     const rate = deps.limiter.check(target.paneId, deps.now());
     if (!rate.ok) {
       deps.log(`steer ${op}: refused code=rate-limited pane=${target.paneId} why=${rate.why}`);
@@ -687,6 +773,13 @@ export function makeSteerRoutes(overrides: Partial<SteerDeps> = {}): SteerRoutes
     // EVERY FIELD BELOW COMES OUT OF THE BODY. Nothing here asks tmux who is in
     // that pane — see the header. The delivery module does the asking, and it
     // compares what it finds against these claims.
+    // SPENT HERE, not at the check above. From this line on the request costs
+    // the box three tmux commands and may type into a pane, which is what the
+    // allowance is protecting. Everything refused before this point — a bad
+    // origin, an unparseable body, an id that is not an id — was free, and
+    // charging for it let six bogus requests lock out a real one. Sol's F18.
+    deps.limiter.record(target.paneId, deps.now());
+
     let result: SteerResult;
     try {
       result =
