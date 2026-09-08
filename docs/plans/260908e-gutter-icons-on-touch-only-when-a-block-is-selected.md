@@ -1,6 +1,6 @@
 # The gutter waits to be asked on a finger too
 
-Status as of 2026-09-08: **investigating.**
+Status as of 2026-09-08: **reviewed, not yet built.** GPT Sol's plan review returned three P0s and changed the design materially — read § What the plan review changed before § What gets built, which is superseded in three places and marked where.
 
 From [SPIDERYARN-READING2-2G](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-2G),
 2026-09-07 17:42 UTC, `build_commit=c0fb04a4`:
@@ -196,6 +196,13 @@ gate rather than a fix.
 
 ## What gets built
 
+> **Superseded in three places by § What the plan review changed, at the foot of this doc**: the
+> `tr.row-active` prefix becomes `:where(tr.row-active)` and the three restatement rules and the
+> `.failed` addition go with it; `0.653` becomes a number to be measured against `--panel`; and the
+> `<tr>` handler gains an explicit surface, an exclusion list and a `detail !== 0` guard. What is
+> below is kept as written because the review is easier to follow against it.
+
+
 **One `onClick` and three CSS rules**, all three of them inside the `@media (hover: none)` block that
 already exists. Nothing outside that query changes, so a pointer device is untouched by construction.
 
@@ -334,3 +341,109 @@ refused because it would work *by a platform quirk this box cannot exercise* —
 Chromium's emulated hover is not the same behaviour — so the check that says it works would be a
 check that could never have gone red. That is [silent-success.md](../reusable/silent-success.md)'s
 whole subject, and gutter.css has shipped two hover-only affordances that a desktop harness passed.
+
+## What the plan review changed
+
+GPT Sol reviewed the plan before anything was built
+(`scripts/run-codex.ts --model gpt-5.6-sol --effort high`; prompt and answer in the session
+scratchpad as `fb2g-sol-plan-prompt.md` / `fb2g-sol-plan-answer.md`, exit 0). Its verdict was **do not
+build this as written**, and it was right on every P0. The diagnosis and the state-versus-affordance
+framing survive; the mechanism does not.
+
+### P0 — 0.653 stops being compliant on exactly the row it now lives on
+
+The plan said 0.653 is kept because it is the compliant setting. **On a selected row that is false,
+and this file already knew it.** gutter.css:584 records the second of its two deliberate shortfalls:
+0.653 measures **2.77:1** over a tinted row, and `tr.row-active td.text` paints `--panel`
+([prose.css](../../src/web/styles/prose.css):122). Today that is a corner case — a row you happen to
+be hovering. After this change **the selected row is the only place an affordance is ever visible**,
+so the change converts a documented local shortfall into the normal path, and then calls it
+compliant. 1.4.11 does not stop applying because a control is revealed on selection rather than
+permanently.
+
+I had read that comment and not connected it to the row I was about to make the only lit one.
+
+**So the opacity is a measurement, not an inheritance**: measure the rendered pixels against the
+selected row's own `--panel` and take the value that reaches 3:1 there. `--panel` resolves through
+`--sidebar`, which is not written anywhere in `src/`, so this is a browser measurement rather than an
+arithmetic one. The old number's *other* half still holds and still bounds the answer from above —
+the reader's bookmark must go on leading the column, and 0.868 over `--page` is where that inverts.
+
+### P0 — the reveal must not depend on sticky `:hover`
+
+The reproduction showed sticky `tr:hover` landing on the tapped row and I concluded the two gates
+agree. **That was tested for an ordinary tap only.** On a *handled* tap — a glossary term, an
+external link, a footnote marker — the click is swallowed at document capture
+([`useHoverCard.ts`](../../src/web/useHoverCard.ts):602,
+[`ProseHoverCard.tsx`](../../src/web/ProseHoverCard.tsx):350), so the selection handler never runs
+while sticky hover still lands. The gutter then opens at full strength on a row nothing selected —
+the gate defeated by the mechanism the plan chose to lean on.
+
+So `tr:hover` goes behind `@media (hover: hover)`, which is what the sibling change did to
+`glossary.css` and `quotes.css` this morning. The plan's argument for not doing this is withdrawn:
+it rested on an agreement that only holds for the taps I happened to measure.
+
+### P0 — `<tr>` makes the selection policy an accident of propagation
+
+Sol walked every kind of tap and the outcomes do not form a rule: plain prose selects; an internal
+link selects the row it is leaving and then jumps away from it (stale); a zoom button selects before
+opening the lightbox; a gist cell selects and jumps; a glossary term, external link or footnote
+selects *nothing* because the click never arrives; a gutter control selects nothing because it calls
+`stopPropagation()`. Some of those are right and some are wrong, and which is which is decided by
+event plumbing rather than by a decision.
+
+**Selection gets an explicit surface and an explicit exclusion list** — non-interactive content
+inside `td.text`, with links, marks, the zoom control, gutter controls and gist cells named as not
+selecting. Written as policy, it can be tested; written as propagation, it can only be discovered.
+
+### P1 — `:where()` deletes the whole exception ladder
+
+The specificity table was right as far as it went and **incomplete**: the four `:focus-visible`
+reveals (gutter.css:513) and the permalink's own hover/focus rule (:524) are also (0,2,0) and also
+lose, so "three rules are below that" was false. More usefully, Sol named the shape problem — five
+corrective restatements is the design telling you something — and the fix:
+
+> consider a low-specificity touch reveal using `:where(tr.row-active)`. Then `.has`, `[data-open]`,
+> `.failed`, and `:focus-visible` can win naturally instead of being copied into an exception ladder.
+
+`:where()` contributes nothing, so `:where(tr.row-active) .blk-permalink` is **(0,1,0)** — the same
+weight as the base rule it must beat, and it beats it on source order alone, while losing to every
+(0,2,0) rule that should win. **Three restatement rules and the `.failed` addition all disappear**,
+and with them the deliberate `:focus-visible` regression (§ P2.8), which no longer exists to be
+argued about. This is strictly better than what the plan proposed and it is Sol's, not mine.
+
+### P1 — two claims that were simply wrong
+
+- **"A failed copy is one of only two state marks that stay."** `.blk-permalink.failed` sets
+  `opacity: 1` at (0,2,0), so under `:where()` it correctly wins — meaning a copy that fails on row A
+  after the reader has tapped row B **reappears on the unselected row A** for its 1.5 s, at
+  `pointer-events: none`. That is a *third* transient state the plan did not account for. Kept rather
+  than suppressed — telling the reader their copy failed is the whole point of that rule, and a
+  non-interactive alert on the row it belongs to is where it belongs — but it is named now instead of
+  being found later.
+- **"The `onClick` is a no-op on a pointer device."** False for a click that no pointer produced: a
+  keyboard or assistive-technology activation fires `click` with no preceding `mouseenter`, so the
+  handler would set `row-active`, paint the wash and move `activeChain`
+  ([`TableView.tsx`](../../src/web/TableView.tsx):650) on input that never touched the row. Guarded on
+  `detail !== 0`, which is what distinguishes a real pointer click from a synthesised one, so that the
+  claim becomes true rather than being quietly dropped.
+
+### P2 — the discoverability argument was overstated, and is rewritten as a cost
+
+Fable's *"the tap that reveals the column is a tap they were making anyway"* is unsupported:
+[touch.md](../project/touch.md):16 has prose touch as ordinary scrolling, not as tapping. The
+`--panel` wash confirms a tap after it happens; it cannot teach a reader that untapped prose is
+hiding anything. Sol accepts shipping without a hint **because the administrator asked for this
+specific behaviour** — which is the right reason — but it is an accepted cost, not a solved one, and
+§ Discoverability is corrected to say so. The browser run sharpened the price: the permalink, the
+chat door and the "?" have **no route anywhere in the app except that gutter icon**, so this is
+two taps instead of one with no fallback.
+
+### What was held rather than taken
+
+**Staying in `(hover: none)` rather than moving to `(any-pointer: coarse)`.** Sol's semantic point is
+right — an interaction rule should ask whether a coarse pointer exists, not which one is primary —
+but it also says the swap is not one token: on a hybrid, mouse hover and a persisted touch selection
+need separate state, and `hoveredRow` is already carrying two meanings once a click can write it.
+That is a bigger change than this report, so the conclusion is **narrowed** instead: this fixes the
+device Greg reported from, and § What is still open says a Magic Keyboard iPad is untouched by it.
