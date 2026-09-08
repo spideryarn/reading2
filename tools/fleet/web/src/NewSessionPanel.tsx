@@ -182,6 +182,17 @@ export function NewSessionPanel({ api }: { api: NewSessionApi }): ReactNode {
    * `dictation.toggle`, not the field wrapper's `toggle`, which would put the
    * focus back into a box that is no longer on screen.
    */
+  /* **Read at the moment of sending, not captured when `start` was built.**
+     `start`'s dependency list is `[prompt]`, so a `dictate.sendBlocked` read
+     inside it is whatever it was when the prompt last changed — and the case
+     that matters is somebody pressing Dictate and then Start without typing,
+     where the closure still holds `false`. The DOM `disabled` was protective and
+     the action-boundary guard, which is the one that survives a programmatic
+     call, was not. GPT Sol's round 2, finding 1; `SessionDetail` had the ref
+     pattern already and this file did not copy it. */
+  const blocked = useRef(dictate.sendBlocked);
+  blocked.current = dictate.sendBlocked;
+
   const armed = dictate.dictation.armed;
   const stopMic = dictate.dictation.toggle;
   useEffect(() => {
@@ -194,7 +205,7 @@ export function NewSessionPanel({ api }: { api: NewSessionApi }): ReactNode {
        call, or a keyboard path somebody adds later, would otherwise start an
        agent on the rough live guesses — or, on Safari and Firefox, on nothing
        that was said at all. GPT Sol's review of the built code, finding 6. */
-    if (dictate.sendBlocked) return;
+    if (blocked.current) return;
     setBusy(true);
     setRefusal(null);
     setGaveUp(false);
