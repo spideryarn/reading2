@@ -276,6 +276,8 @@ export function SessionsPanel({
   now,
   collected,
   unreadableRows,
+  answeringEnabled,
+  tmuxServerPid,
   order,
   onOrder,
   selectedId,
@@ -304,6 +306,19 @@ export function SessionsPanel({
    * see. types.ts § `unreadableRows`.
    */
   unreadableRows: number;
+  /**
+   * Whether the server says answering a dialog will do anything, or null when
+   * it did not say. **Passed straight through to the detail pane** — the list
+   * cards have no answer buttons, so nothing here reads it. types.ts §
+   * `answeringEnabled`.
+   */
+  answeringEnabled: boolean | null;
+  /**
+   * Which tmux server every `$…` and `%…` below belongs to. Passed through for
+   * the same reason: it is drawn beside the handles in the detail pane, which
+   * is the only place the handles themselves are written out.
+   */
+  tmuxServerPid: number | null;
   order: Ordering;
   onOrder: (order: Ordering) => void;
   /** The session the URL names, whether or not the box still lists it. */
@@ -361,6 +376,8 @@ export function SessionsPanel({
         key={selected.id}
         row={selected}
         now={now}
+        answeringEnabled={answeringEnabled}
+        tmuxServerPid={tmuxServerPid}
         steer={steer}
         rename={rename}
         actions={actions}

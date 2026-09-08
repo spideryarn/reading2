@@ -166,6 +166,14 @@ export function App({
               now={now}
               collected={feed.state?.collectedAt != null}
               unreadableRows={feed.state?.unreadableRows ?? 0}
+              /* **`?? null` IS THE HONEST DEFAULT FOR BOTH**, and it is not the
+                 same as `?? false`/`?? 0`. Before the first payload arrives
+                 this page has been told nothing, and inventing `false` here
+                 would print "answering is switched off" over a server that has
+                 said no such thing — the mirror of the drop this stage repairs.
+                 types.ts § `answeringEnabled`. */
+              answeringEnabled={feed.state?.answeringEnabled ?? null}
+              tmuxServerPid={feed.state?.tmuxServerPid ?? null}
               order={order}
               onOrder={(next) => setParam("order", next === "status" ? null : next)}
               selectedId={selectedId}

@@ -33,6 +33,7 @@ import { describe, expect, it } from "vitest";
 
 import { ACTIONS, type EnactedAction } from "../tools/fleet/actions.js";
 import { classifyGate, type PaneGate } from "../tools/fleet/pane.js";
+import type { QueuedItem } from "../tools/fleet/wire.js";
 import { RENAME_STATUS, type RenameErrorCode } from "../tools/fleet/routes-rename.js";
 import { REFUSAL_STATUS } from "../tools/fleet/routes-steer.js";
 import { grantsPermission } from "../tools/fleet/pane.js";
@@ -199,5 +200,58 @@ describe("the gate's arms cannot be widened by accident", () => {
     expect(grantsPermission(conversation)).toBe(false);
     // And the classifier really does produce the safe arm from nothing.
     expect(classifyGate({ kind: "no-material" }, []).kind).not.toBe("conversation");
+  });
+});
+
+describe("nothing can be queued at an agent without saying who is speaking", () => {
+  /**
+   * **THE SAFETY PROPERTY OF THE WHOLE ACTION PATH, and it is a type or it is
+   * nothing.** `QueuedItem.speaker` is what stops an automated coordinator's
+   * instruction reaching an agent as an ordinary user turn indistinguishable
+   * from Greg's — `drain.ts`'s `sendable()` renders the attribution at delivery
+   * from this field, deliberately not at enqueue, because a sentence written
+   * twenty minutes before it is typed has decayed by the time anybody reads it.
+   *
+   * The field's own comment says *"Not optional, and there is no default here on
+   * purpose: who is speaking is the one thing a caller of this queue may not
+   * decline to say."* Until this guard, that was a claim about the compiler with
+   * nothing checking it — and the wiring it describes reached the drain during
+   * the 2026-09-08 wave while the guard the plan asked for in the same breath
+   * did not. Half a safety item is the half that stops it regressing.
+   *
+   * **The failure this prevents is silent.** An item built without a speaker
+   * does not throw and does not look wrong; it arrives at an agent as words with
+   * no attribution, which is exactly the state `renderSpoken` exists to make
+   * impossible. Nothing at runtime can tell that apart from Greg typing.
+   */
+  it("refuses an item with no speaker, and one with a speaker it does not know", () => {
+    const base = {
+      id: "q1",
+      sessionId: "$1",
+      claudeSessionId: "117e181a-155b-435a-b95b-e74220678d1a",
+      payload: { kind: "message", text: "keep going" },
+      enqueuedAt: 0,
+      leasedAt: null,
+      invalidated: null,
+    } as const;
+
+    // @ts-expect-error `speaker` is required; an item that declines to say who is
+    // asking must not be constructible, because nothing downstream can recover it.
+    const anonymous: QueuedItem = { ...base };
+    void anonymous;
+
+    // @ts-expect-error A speaker this build does not know must not round to a
+    // known one. `parseSpeaker` decides what an unrecognised claim means, at the
+    // HTTP boundary where the claim actually arrives — not here.
+    const invented: QueuedItem = { ...base, speaker: "some-new-agent" };
+    void invented;
+
+    /* Runtime, and the paired positive: the shape that SHOULD compile, actually
+       built — so `npm test` has something to run and a reader who expected a red
+       test sees the guard is real. `npm run typecheck` is what enforces the two
+       directives above; vitest never type-checks. */
+    const attributed: QueuedItem = { ...base, speaker: "greg" };
+    const coordinator: QueuedItem = { ...base, speaker: "overseer" };
+    expect([attributed.speaker, coordinator.speaker]).toEqual(["greg", "overseer"]);
   });
 });

@@ -39,6 +39,7 @@ import type {
   AttentionItem,
   AttentionKind,
   AttentionList,
+  FleetState as FleetStateWire,
   Pause,
   PauseUnknownCause,
 } from "../../wire.js";
@@ -266,38 +267,98 @@ export type FleetRow = {
   rawQuestion: unknown;
 };
 
-/** The whole payload, and enough about it to know whether to believe it. */
-export type FleetState = {
-  /** ISO, or null when nothing has ever been collected. */
-  collectedAt: string | null;
-  tookMs: number;
-  /** The last refresh failure. The rows beside it may still be good. */
-  error: string | null;
+/**
+ * The whole payload, and enough about it to know whether to believe it.
+ *
+ * **DERIVED FROM THE WIRE TYPE, NOT WRITTEN BESIDE IT** — the same repair
+ * `QueueItemView` in actions-client.ts got, for the same reason and against the
+ * same measurement. This was a hand-written twin of `FleetState` in
+ * `tools/fleet/state.ts` until 2026-09-08, and by then it had silently dropped
+ * two fields the server had been sending for a day: `grep -c answeringEnabled`
+ * and `grep -c tmuxServerPid` in this file both returned **zero**. Neither end
+ * could go red, because each was internally consistent.
+ *
+ * So every field the server sends is in this type unless it is NAMED in the
+ * `Omit<>` below, and `parseFleetState`'s object literal does not compile until
+ * each one is either parsed or named. Dropping a field is now a line somebody
+ * has to write and a reviewer can see.
+ *
+ * **This is a derivation and not an adoption, and the difference is the whole
+ * design.** Several fields are deliberately WEAKER here than on the wire,
+ * because **a server too old to send a field has made no claim** and a parse
+ * that invented `false` or `0` for it would be the exact defect this removes.
+ * The `Omit<>` list is in two halves, and the comment on each is the decision:
+ *
+ *  - **re-typed** — parsed into something this page can honestly draw;
+ *  - **declined** — read at the boundary and not carried, or not read at all,
+ *    with the reason beside it.
+ *
+ * `Row` is filled with this file's own `FleetRow` and `Health` with `unknown`;
+ * wire.ts § `FleetState` says why those two are holes rather than shared
+ * declarations, and why sharing `FleetRow` verbatim would be wrong rather than
+ * merely impossible.
+ *
+ * TWO FIELDS ARE KEPT UNPARSED ON PURPOSE — `rawStatus` and `rawQuestion` on
+ * the rows. See their comments on `FleetRow`.
+ */
+export type FleetState = Omit<
+  FleetStateWire<FleetRow, unknown>,
+  /* Re-typed below, each because this page must be able to say "the server did
+     not tell me" without inventing an answer on its behalf. */
+  | "answeringEnabled"
+  | "refreshMs"
+  | "attention"
+  /* Declined: READ AT THE BOUNDARY AND NOT CARRIED. `schema` decides whether to
+     believe the payload at all (`parseFleetState` refuses anything else), and
+     `servedAt` is consumed into `clockSkew` below — carrying either would be a
+     second copy of a decision already made. */
+  | "schema"
+  | "servedAt"
+  /* Declined: NOT READ, and this is the one entry that is a debt rather than a
+     decision. `attemptedAt` distinguishes "the box is quiet" from "we stopped
+     looking" — the fault it was added for is a collection that never settles,
+     which throws nothing, so `error` stays null and the masthead says calm. To
+     read it honestly a client needs the three arms of `readAttemptClock`
+     (state.ts): absent means EITHER never attempted OR a server too old to
+     report it, and only `collectedAt` separates them. That helper is a runtime
+     value, so it cannot live in wire.ts, and giving both sides one home for it
+     is a decision about a shared runtime module that v0.8b did not make. Named
+     here so the drop is reviewable rather than silent, which is the whole point
+     of this list. */
+  | "attemptedAt"
+> & {
   rows: FleetRow[];
-  /**
-   * Box health. Shape owned by tools/fleet/health.ts, which is being written by
-   * somebody else as this lands — so it is `unknown` here on purpose and
-   * HealthPanel renders whatever arrives without a schema. `null` means the
-   * server had nothing to give, which the panel says out loud rather than
-   * drawing an empty page.
-   */
-  health: unknown;
   /**
    * **How often the server actually collects**, in milliseconds, when it says.
    *
-   * Optional because the server does not send it today. It is read here rather
-   * than waited for because the alternative — a hardcoded staleness threshold —
-   * is what had the masthead crying STALE for most of every cycle: the page
-   * gave up after 30s against a collector that runs every 55–60s, deliberately,
-   * since one collection costs the box about ten seconds of work. A banner that
-   * is on most of the time is a banner nobody reads, which costs this tool the
-   * one signal it is built around.
-   *
    * `null` when absent, and `Header.freshness` then falls back to the cadence
-   * it has watched happen (useFleetState). Whichever it gets, the threshold is
-   * derived from it rather than written down beside it.
+   * it has watched happen (useFleetState). "The server did not say" and "the
+   * server says 60s" are different facts, and only the first should let the
+   * observed cadence win — a hardcoded threshold is what had the masthead
+   * crying STALE for most of every cycle.
    */
   refreshMs: number | null;
+  /**
+   * **Whether tapping an option would do anything**, or the fact that this
+   * server never said.
+   *
+   * Three states rather than two, and the third is why this is not `boolean`:
+   * a server built before the flag existed has made NO CLAIM, and defaulting to
+   * `true` invites the tap the hold exists to prevent while defaulting to
+   * `false` prints a warning nobody has any basis for. `SessionDetail`'s
+   * `HeldBack` draws the difference — the same discipline `parseGate` applies
+   * to `unknown`.
+   */
+  answeringEnabled: boolean | null;
+  /**
+   * **The attention inbox** — what the Overseer says needs Greg, or the reason
+   * there is no such list.
+   *
+   * Widened from the wire's `AttentionFeed` by one arm: a field that is PRESENT
+   * and unreadable is a fact about a payload rather than about the box, so the
+   * server cannot report it and this page must. See `AttentionView`.
+   */
+  attention: AttentionView;
   /**
    * **How many rows in the payload could not be read**, which is a fact about
    * the fleet and not a tidiness note.
@@ -308,17 +369,11 @@ export type FleetState = {
    * carrying a question scraped off a terminal, which is precisely the row the
    * page is opened to see. So the count is carried and the panel says *3 of 41
    * sessions could not be read* rather than showing 38 and looking complete.
+   *
+   * Not on the wire at all: the server has no unreadable rows, only this
+   * parser does.
    */
   unreadableRows: number;
-  /**
-   * **The attention inbox** — what the Overseer says needs Greg, or the reason
-   * there is no such list.
-   *
-   * Never null and never absent, because every one of the five things it can
-   * say is worth saying and two of them are about us rather than about the box.
-   * See `parseAttention`, and `AttentionFeed` in wire.ts.
-   */
-  attention: AttentionView;
   /**
    * **What was done to every server timestamp above, and whether it could be.**
    *
@@ -1223,6 +1278,26 @@ export function parseFleetState(raw: unknown, receivedAt: number): FleetStateRea
       collectedAt: shiftToBrowserClock(str(raw["collectedAt"]), clockSkew),
       tookMs: num(raw["tookMs"], 0),
       error: str(raw["error"]),
+      /* **WHICH TMUX SERVER THESE HANDLES BELONG TO.** Every `$…` and `%…` in
+         `rows` is meaningless without it: two snapshots with different values
+         here describe different worlds, however alike `$1643` looks in both.
+         Read here and drawn in the detail pane beside the handles themselves.
+
+         Absent and unreadable both land on `null`, deliberately merged: the
+         server sends `null` when it could not read the pid, and a server too
+         old to send the field at all leaves the same hole — and in both cases
+         the only honest sentence is *this page cannot tell you which tmux
+         server these are*. There is nothing a reader would do differently. */
+      tmuxServerPid: typeof raw["tmuxServerPid"] === "number" && Number.isFinite(raw["tmuxServerPid"]) ? raw["tmuxServerPid"] : null,
+      /* **TOLD, NOT INFERRED — and `null` is a third answer, not a default.**
+         The server had been sending this for a day and this parser did not read
+         it, so a person tapped an option and got a 503, which is precisely the
+         outcome the field exists to prevent (wire.ts § `answeringEnabled`).
+         `=== true` / `=== false` rather than truthiness: an absent field is a
+         server that has made no claim, and both `true` and `false` would be
+         claims made on its behalf — one invites the tap, the other prints a
+         warning nothing supports. */
+      answeringEnabled: raw["answeringEnabled"] === true ? true : raw["answeringEnabled"] === false ? false : null,
       rows,
       unreadableRows,
       health: raw["health"] ?? null,

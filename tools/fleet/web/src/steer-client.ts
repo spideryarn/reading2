@@ -131,8 +131,76 @@ export type DeliveryReading =
   | { kind: "unknown" }
   | { kind: "not-told" };
 
+/**
+ * **WHICH PANE THE KEYSTROKES ACTUALLY REACHED**, as the server verified it —
+ * or the arm that says it did not tell us.
+ *
+ * The server has sent this on every successful send since `routes-steer.ts` was
+ * written (`respond(res, 200, { ok: true, op, verified, sent })`) and this file
+ * threw it away: `grep -c verified steer-client.ts` returned **zero** on the
+ * evening of 2026-09-08, which is instance 12 in the table in
+ * docs/postmortems/260908b-the-parts-were-all-tested-and-none-of-the-joins-were.md.
+ *
+ * **It is the safety half of `sent`.** `sent` is the argv — what was typed.
+ * This is the address it was typed AT, resolved by the server against live tmux
+ * rather than copied back off the request: `verifyTarget` walks the pane's own
+ * process ancestry, so `claudePid` is the Claude that answers to the
+ * conversation id the row claimed. A value here that is not the row the person
+ * tapped is the one shape of failure a green tick would otherwise hide — a
+ * message delivered somewhere other than where the reader thought — and it is
+ * the reason this is drawn rather than merely parsed.
+ *
+ * A discriminated union rather than `Verified | null`, for the reason
+ * `DeliveryReading` beside it is one: **a renderer has to name the case it is
+ * drawing**, and *the server did not say where it went* must never render as a
+ * confident address. A partially-formed object is `not-told` too — half an
+ * address is not an address, and inventing the missing half is the mistake this
+ * whole file exists to refuse.
+ */
+export type VerifiedReading =
+  | {
+      kind: "verified";
+      /** tmux's pane handle, `%2108` — where the keys were typed. */
+      paneId: string;
+      /** tmux's session handle, `$1643` — which is a different thing. */
+      sessionId: string;
+      /** The pane's live process, which is what ancestry was walked from. */
+      panePid: number;
+      /** The pid of the Claude that answers to the conversation id we claimed. */
+      claudePid: number;
+    }
+  /** The server answered `ok` without saying where it went. Never rendered as an address. */
+  | { kind: "not-told" };
+
+/**
+ * The server's `verified`, or the arm that says there is none.
+ *
+ * Every field is required, and a missing one collapses the whole reading to
+ * `not-told` rather than being filled in: this value's only job is to be
+ * COMPARED with the row the person was looking at, and a comparison against a
+ * half-invented address would answer a weaker question than the one asked.
+ */
+export function parseVerified(v: unknown): VerifiedReading {
+  if (!isRecord(v)) return { kind: "not-told" };
+  const paneId = v["paneId"];
+  const sessionId = v["sessionId"];
+  const panePid = v["panePid"];
+  const claudePid = v["claudePid"];
+  if (typeof paneId !== "string" || paneId === "") return { kind: "not-told" };
+  if (typeof sessionId !== "string" || sessionId === "") return { kind: "not-told" };
+  if (typeof panePid !== "number" || !Number.isFinite(panePid)) return { kind: "not-told" };
+  if (typeof claudePid !== "number" || !Number.isFinite(claudePid)) return { kind: "not-told" };
+  return { kind: "verified", paneId, sessionId, panePid, claudePid };
+}
+
 export type SteerOutcome =
-  | { ok: true; op: "message" | "answer"; sent: string[][] }
+  | {
+      ok: true;
+      op: "message" | "answer";
+      sent: string[][];
+      /** WHERE IT LANDED. See `VerifiedReading`; `not-told` is the arm for silence. */
+      verified: VerifiedReading;
+    }
   | {
       ok: false;
       code: string;
@@ -248,7 +316,7 @@ async function post(
   }
 
   if (isRecord(parsed) && parsed["ok"] === true) {
-    return { ok: true, op, sent: parseSent(parsed["sent"]) };
+    return { ok: true, op, sent: parseSent(parsed["sent"]), verified: parseVerified(parsed["verified"]) };
   }
 
   // The server's own words, verbatim. The fallbacks below fire only when the
