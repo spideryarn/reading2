@@ -128,6 +128,45 @@ It also closed a security gap rather than opening one. The argument for leaving 
 was that a URL comes from Greg's own text box; these come from the *page*, hundreds per article,
 chosen by a publisher — so [fetching.md § DNS rebinding](fetching.md) had to be closed first.
 
+### And a fourth reason, found by a reader rather than reasoned out
+
+**A `<picture>` whose `<source>` is broken costs the reader the picture, and the working `<img>`
+underneath it is never reached.** A `<source>` wins on `type` before any byte moves, and that
+decision is final: there is no fallback the way there is for a `src` that 404s.
+
+The real case, 2026-09-07: an Asterisk Magazine essay whose three figures are each a `<picture>` with
+an AVIF `<source>` first. `asteriskmag.com` serves those `.avif` files as `content-type: text/plain`
+with `x-content-type-options: nosniff`. The bytes are a valid AVIF; the label is wrong, and Chrome's
+opaque-response blocking then refuses the response before the decoder sees it —
+`net::ERR_BLOCKED_BY_ORB`, measured. All three figures were blank on a build that still hot-linked.
+**Nothing of ours errored**: no exception, no Sentry event, no non-200 in our own log, and the report
+arrived as prose from a reader.
+
+Hosting the image cures it, and not by accident: `swapImages` deletes the `<source>` siblings of any
+image it rewrites, so there is nothing left for a publisher to mislabel. That guard was built against
+a synthetic fixture, because [260829b](../plans/260829b-hosting-the-articles-images.md) § What the
+corpus cannot tell us found no `<picture>` in the corpus at all. **The corpus has one now**, it is in
+`tests/rehost.test.ts`, and it arrived carrying exactly the failure the guard was invented for.
+
+**Holding a copy is not by itself enough**, which is the half this cost us a second look to see. The
+second draw is rebuilt from the original html — the design that makes *a failed fetch goes back to
+hot-linking* need no stash — and rebuilding it verbatim puts the `<source>` back too. So an image we
+hold and fail to *deliver* used to fall back to a `<picture>` that could not work. `ImagePlacement`'s
+third case, `unverified`, is that: the publisher's `src` stays — the one URL we actually fetched and
+sniffed — and every candidate we never checked is dropped, the `<source>` elements and the `<img>`'s
+own `srcset` and `sizes` alike.
+
+**The `srcset` has to go with it**, which is worth stating because it is the same trap wearing a
+different hat and this fix's own first draft fell into it. A `srcset` is as unchecked as a `<source>`
+— `imageSourceOf` reads `img[src]` and nothing else — and with `w` descriptors it does not merely
+outrank the `src`, it removes it from the candidate list, so a broken candidate has nothing beneath
+it. Measured in Chrome: with an unreachable `600w, 1920w` present the `<img>` is blank and
+`currentSrc` is the broken candidate; with it gone the `src` draws.
+
+One thing this still does *not* fix, in
+[260908a](../plans/260908a-the-monkeys-illustration-did-not-load.md) along with the width question: an
+image we hold **no** copy of is left with its `<picture>` whole, and is exposed to the same trick.
+
 ## The one way to get this silently wrong
 
 `blocks.json` stores `…&amp;s=3a2bee…`. `getAttribute("src")` returns `…&s=3a2bee…`. Build the

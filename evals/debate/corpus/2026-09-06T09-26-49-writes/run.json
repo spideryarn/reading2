@@ -1,0 +1,55 @@
+{
+  "runId": "2026-09-06T09-26-49",
+  "startedAt": "2026-09-06T09:26:51.729Z",
+  "slug": "writes",
+  "model": "anthropic/claude-sonnet-5",
+  "sourceHash": "1ee2ebde490b347e.9fa0a24e110d45f7.1118017b0bf914f6",
+  "completed": true,
+  "error": null,
+  "elapsedMs": 44132,
+  "webSearches": 6,
+  "kept": {
+    "direct": 1,
+    "claims": 6
+  },
+  "cost": {
+    "kind": "measured",
+    "nanos": 147306000,
+    "unpriced": 0,
+    "calls": 2,
+    "callIds": [
+      "gen-1788686811-pv6gekHEowFNNsJtBibx",
+      "gen-1788686823-dMZUqPK3VelVaGe3VgfV"
+    ],
+    "webSearches": 6,
+    "problems": []
+  },
+  "costLine": "$0.1473 over 2 call(s)",
+  "ledgerRunId": "725e2d97-965f-4bd6-9012-5b9bea88c536",
+  "journalFile": "output/debate-runs/2026-09-06T09-26-49-writes/journal.jsonl",
+  "journalWriteFailures": 0,
+  "reconciliation": {
+    "attempts": [
+      {
+        "attemptId": "92b88cbd-c6ef-49a5-b619-f9268db51348",
+        "pass": "direct",
+        "response": "body",
+        "outcome": "ok",
+        "failure": null,
+        "status": "captured"
+      },
+      {
+        "attemptId": "2aacace3-4106-4f96-b49e-3112c9015c8e",
+        "pass": "claims",
+        "response": "body",
+        "outcome": "ok",
+        "failure": null,
+        "status": "captured"
+      }
+    ],
+    "captured": 2,
+    "unmatchedStarts": 0,
+    "orphanEvents": 0,
+    "complete": true
+  }
+}

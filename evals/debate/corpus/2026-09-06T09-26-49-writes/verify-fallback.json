@@ -1,0 +1,99 @@
+{
+  "attempts": [
+    {
+      "attemptId": "92b88cbd-c6ef-49a5-b619-f9268db51348",
+      "pass": "direct",
+      "skipped": null,
+      "reportedRows": 2,
+      "quotations": 4
+    },
+    {
+      "attemptId": "2aacace3-4106-4f96-b49e-3112c9015c8e",
+      "pass": "claims",
+      "skipped": "not a direct pass — this tool answers a question about group one only",
+      "reportedRows": 0,
+      "quotations": 0
+    }
+  ],
+  "checks": [
+    {
+      "attemptId": "92b88cbd-c6ef-49a5-b619-f9268db51348",
+      "rowIndex": 0,
+      "field": "sourceQuote",
+      "host": "hamtyped.com",
+      "url": "https://www.hamtyped.com/p/ai-wont-replace-writing",
+      "chars": 181,
+      "digest": "cdbf93ab",
+      "klass": "inExtract",
+      "page": null
+    },
+    {
+      "attemptId": "92b88cbd-c6ef-49a5-b619-f9268db51348",
+      "rowIndex": 0,
+      "field": "articleReferenceQuote",
+      "host": "hamtyped.com",
+      "url": "https://www.hamtyped.com/p/ai-wont-replace-writing",
+      "chars": 49,
+      "digest": "6fe337e1",
+      "klass": "inExtract",
+      "page": null
+    },
+    {
+      "attemptId": "92b88cbd-c6ef-49a5-b619-f9268db51348",
+      "rowIndex": 1,
+      "field": "sourceQuote",
+      "host": "canro91.github.io",
+      "url": "https://canro91.github.io/2024/11/24/WriteNots/",
+      "chars": 78,
+      "digest": "4a52efad",
+      "klass": "inExtract",
+      "page": null
+    },
+    {
+      "attemptId": "92b88cbd-c6ef-49a5-b619-f9268db51348",
+      "rowIndex": 1,
+      "field": "articleReferenceQuote",
+      "host": "canro91.github.io",
+      "url": "https://canro91.github.io/2024/11/24/WriteNots/",
+      "chars": 43,
+      "digest": "d5f65dbd",
+      "klass": "inExtract",
+      "page": null
+    }
+  ],
+  "pages": [],
+  "summary": {
+    "quotations": 4,
+    "belowFloor": 0,
+    "noExtract": 0,
+    "inExtract": 4,
+    "observedFailures": 0,
+    "recovered": 0,
+    "notRecovered": 0,
+    "notAttempted": 0,
+    "byReadability": 0,
+    "byWholeBody": 0,
+    "byBoth": 0,
+    "readabilityOnly": 0,
+    "wholeBodyOnly": 0,
+    "spacedBodyOnly": 0,
+    "outcomes": {
+      "ok": 0,
+      "unsupported": 0,
+      "blocked": 0,
+      "timed-out": 0,
+      "too-big": 0,
+      "not-found": 0,
+      "failed": 0,
+      "budget-exhausted": 0
+    }
+  },
+  "budget": {
+    "concurrency": 3,
+    "maxFetches": 24,
+    "maxBytesTotal": 50331648,
+    "maxElapsedMs": 300000,
+    "perFetchMaxBytes": 4194304,
+    "perFetchTimeoutMs": 20000
+  }
+}

@@ -65,6 +65,11 @@
  * this file writes are for failures the server never saw — the fetch itself, or
  * an answer that is not this API — and each says plainly that it is local.
  */
+/* THE ONE SERVER MODULE THIS BUNDLE MAY IMPORT. `tools/fleet/wire.ts` is a leaf
+   with no imports at all, which is what makes it safe here: every other home for
+   these types reaches `node:child_process` transitively, and this project has no
+   node types. See wire.ts's header. */
+import type { QueuedItemView as QueuedItemViewWire, QueueView as QueueViewWire } from "../../wire.js";
 import { steerTargetBody, type SteerTargetBody } from "./steer-client";
 import type { FleetRow } from "./types";
 
@@ -250,7 +255,42 @@ export type QueuedView =
   | { kind: "message"; text: string }
   | { kind: "unrecognised"; why: string };
 
-export type QueueItemView = {
+/**
+ * **DERIVED FROM THE WIRE TYPE, NOT WRITTEN BESIDE IT.**
+ *
+ * `QueuedItemViewWire` is `tools/fleet/wire.ts`'s — the same declaration the
+ * route annotates its response with. Every field the server sends is therefore
+ * in this type unless it is NAMED in the `Omit<>` below, and `parseQueue`'s
+ * object literal does not compile until each one is either parsed or named. A
+ * field added on the server is a compile error here; dropping it is a line
+ * somebody has to write and a reviewer can see.
+ *
+ * Which is the whole repair: `stale`, `stuck`, `invalidated` and `deliverable`
+ * all reached this file on the wire and were dropped by a hand-written twin,
+ * four separate times in one night. docs/postmortems/260908b.
+ *
+ * The `Omit<>` list is in two halves, and the comment on each is the decision:
+ *
+ *  - **re-typed** — parsed to something weaker, because a server too old to send
+ *    the field has made no claim and this page must not make one for it;
+ *  - **deliberately unread** — the page has no use for it.
+ */
+export type QueueItemView = Omit<
+  QueuedItemViewWire,
+  /* Re-typed below, each to `| null`. */
+  | "payload"
+  | "enqueuedAt"
+  | "leasedAt"
+  | "stale"
+  | "stuck"
+  | "speaker"
+  /* Deliberately unread. The item is only ever addressed within the queue that
+     holds it, whose `sessionId` is on the QueueView; and which Claude
+     conversation it was queued against is the server's business — it refuses
+     the delivery itself. */
+  | "sessionId"
+  | "claudeSessionId"
+> & {
   /** What `cancel` names. */
   id: string;
   payload: QueuedView;
@@ -317,7 +357,17 @@ export type QueueItemView = {
  * every snapshot; when it does not, this substitutes the honest version of the
  * same fact rather than showing a queue with no note on it.
  */
-export type QueueView = {
+export type QueueView = Omit<
+  QueueViewWire,
+  /* Re-typed below. */
+  | "items"
+  | "deliverable"
+  /* Deliberately unread. `volatile` is always `true` and the sentence in
+     `warning` is what the page actually shows; `since` is the snapshot's own
+     timestamp and nothing renders it. */
+  | "volatile"
+  | "since"
+> & {
   sessionId: string;
   items: QueueItemView[];
   warning: string;

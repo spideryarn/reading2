@@ -51,6 +51,7 @@
  * See docs/plans/260826u-pdf-upload-and-storage.md § What was measured, not read.
  */
 import type { AssetExt } from "./assets.js";
+import type { DocumentOrigin } from "./document-origin.js";
 import type { DocumentKind } from "./fetch.js";
 import {
   type ReaderFacingFailure,
@@ -98,6 +99,32 @@ export type SourceOrigin =
       filename: string;
       uploadedAt: string;
     };
+
+/**
+ * **The discriminant above is the one spelling `DocumentOrigin` cannot own**,
+ * and this line holds it to the others.
+ *
+ * `kind: "url"` and `kind: "upload"` are what tell the two arms apart, and each
+ * arm carries different fields — writing `kind: DocumentOrigin` would collapse
+ * them into one shape and lose every narrowing this union exists for. So the
+ * literals stay, and the agreement is checked instead.
+ *
+ * **Both directions**, because a single assignment is satisfied by a union that
+ * has grown a member the other has not. A third origin added to either side
+ * fails to compile; verified red both ways before it was left green.
+ *
+ * **It is a value and not a type alias**, which is the difference between a
+ * check and a decoration: a type that resolves to `never` is not an error, and
+ * an alias nothing is assigned to would sit here for ever proving nothing. Two
+ * booleans against two conditional types is the smallest thing that actually
+ * goes red. It emits two trivial lines rather than nothing at all ⟨GPT Sol,
+ * F25⟩, which is the price.
+ */
+const _originsAgree: [
+  SourceOrigin["kind"] extends DocumentOrigin ? true : never,
+  DocumentOrigin extends SourceOrigin["kind"] ? true : never,
+] = [true, true];
+void _originsAgree;
 
 /**
  * A raw document, identified by what it contains rather than where it sits.

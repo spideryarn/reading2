@@ -116,14 +116,22 @@ exercise — the silent-success shape, and this stylesheet has shipped it twice.
 
 ## Discoverability, which is the cost being accepted
 
-An iPad reader who has never tapped a paragraph now sees an empty margin. That is accepted, and the
-reason it is cheap here is that **the tap that reveals the column is a tap they were making anyway**,
-and it already has visible feedback: `tr.row-active td.text` paints `--panel`, so the icons appear
-*inside* a wash that says the row is selected. That is more than a pointer device offers, where
-nothing announces that a row is hoverable at all.
+An iPad reader who has never tapped a paragraph now sees an empty margin. **This is a cost being
+accepted, not a cost being solved**, and the distinction is GPT Sol's — the first draft of this
+section claimed the reveal was cheap because *"the tap that reveals the column is a tap they were
+making anyway"*, which is unsupported: [touch.md](../project/touch.md):16 has a finger on the prose
+doing ordinary scrolling, not tapping. The `--panel` wash confirms a tap *after* it happens; it
+cannot teach a reader that untapped prose is hiding anything.
 
-The real price is that chat and the "?" become two taps instead of one, and three on a one-line
-paragraph (tap, "…", "?"). That is what was asked for. No first-visit hint is being built.
+**The reason to accept it anyway is that the administrator asked for this specific behaviour**, in
+these words, having read on the device in question. That is the whole warrant, and it is enough for
+a v1 — but it is the warrant, not an argument that the cost is small.
+
+The price is real and the reproduction sharpened it: chat, the "?" and the permalink have **no route
+anywhere in the app except that gutter icon** — no menu, no keyboard command, no text alternative —
+so this makes each of them two taps instead of one, and three on a one-line paragraph (tap, "…",
+"?"), with no fallback. No first-visit hint is being built; if the column turns out to be
+undiscoverable, that is the thing to revisit first.
 
 **One narrow loss, named rather than found later.** On a one-line paragraph the container query
 gives the gutter a single slot, which the "…" takes even when there is a note
@@ -447,3 +455,24 @@ but it also says the swap is not one token: on a hybrid, mouse hover and a persi
 need separate state, and `hoveredRow` is already carrying two meanings once a click can write it.
 That is a bigger change than this report, so the conclusion is **narrowed** instead: this fixes the
 device Greg reported from, and § What is still open says a Magic Keyboard iPad is untouched by it.
+
+## What is still open
+
+- **A hybrid iPad is untouched by this.** The whole fix lives inside `@media (hover: none)`, and an
+  iPad with a Magic Keyboard reports `hover: hover`, so neither today's blanket reveal nor tomorrow's
+  gated one applies to it — a finger on that machine reveals nothing at all. That hole is
+  **pre-existing**, and this report is evidence Greg's own device is not in it: he is complaining
+  that he sees too many icons, which only happens where the block applies. The semantically right
+  query is `(any-pointer: coarse)` — interaction rules should ask whether a coarse pointer exists,
+  not which one is primary — but the swap is not one token, because on a hybrid a mouse hover and a
+  persisted touch selection need to be separate state. See the next point.
+- **`hoveredRow` is carrying two meanings.** Once a click can write it, it is both *the row the
+  pointer is over* and *the row the reader chose*, which are the same thing on a mouse and different
+  things on a finger — one clears on `mouseleave`, the other should not. Nothing here breaks because
+  of it, and splitting it is what the `(any-pointer: coarse)` move above would need first. Named by
+  GPT Sol; deliberately not done for a report this size.
+- **`:active` on iOS has not been checked for these controls**, exactly as the sibling report left
+  it. A tap that lands and a tap that misses may look identical. Same remedy if it turns out to
+  matter: one `touchstart` no-op listener at the root, not one per control.
+- **The orphaned note on a one-line paragraph**, from § Discoverability above — invisible until the
+  row is tapped. Accepted; recorded so the next person measures rather than rediscovers.
