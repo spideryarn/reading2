@@ -201,3 +201,69 @@ export type QueueView = {
   warning: string;
   since: number;
 };
+
+/* ------------------------------------------------------------------ *
+ * The attention inbox. Produced by the Overseer, rendered by the page.
+ *
+ * The premise it corrects was measured on the live fleet 2026-09-08 and is
+ * written up in docs/project/orchestrator-direction.md § `idle` is the bug:
+ * `needs-you` means *Claude Code says a dialog is open*, and TEN OF FIFTEEN
+ * sessions genuinely waiting on Greg had ended their turn handing him a
+ * decision in sentences, with not one of them showing as needing him. A
+ * mechanical check found 1 of 23 by grepping for question marks, because the
+ * decisions end in full stops. So a list built from `needs-you` alone is a list
+ * of the cheapest thing on the box.
+ * ------------------------------------------------------------------ */
+
+/** Why we believe this needs Greg. The two arms are answered by DIFFERENT MECHANISMS. */
+export type AttentionEvidence =
+  | {
+      /** The harness says a dialog is open. Mechanical, observed, and it has options. */
+      kind: "dialog";
+      question: string;
+      /** In the order the harness drew them. Answering picks one of these. */
+      options: readonly string[];
+    }
+  | {
+      /** The turn ended handing Greg a decision in prose. INFERRED, and it may be wrong. */
+      kind: "prose";
+      /** The tail of the turn, so a person can check the inference rather than trust it. */
+      excerpt: string;
+      /** What made us think so, in words. Never a score. */
+      why: string;
+    };
+
+/** Consequence and reversibility. NOT confidence, and NOT urgency. */
+export type AttentionKind = "irreversible" | "product" | "technical" | "other";
+
+/** Whether answering this from a phone is a real option. */
+export type AttentionAnswerability =
+  | { kind: "phone" }
+  | { kind: "needs-a-screen"; why: string }
+  | { kind: "unknown"; why: string };
+
+export type AttentionItem = {
+  /** Stable across snapshots, so a card cannot move under a finger. */
+  id: string;
+  /** tmux's own handle — the address, and stable across renames. */
+  sessionId: string;
+  sessionName: string;
+  /** When we FIRST saw this question. Not when we last saw it. */
+  waitingSince: string;
+  kind: AttentionKind;
+  evidence: AttentionEvidence;
+  answerability: AttentionAnswerability;
+  /** Other sessions asking the same thing. Answer once, apply to all. */
+  duplicates: readonly { sessionId: string; sessionName: string; waitingSince: string }[];
+};
+
+export type AttentionList =
+  | {
+      kind: "list";
+      /** Already sorted: by `kind` first, then by `waitingSince`. The renderer must not re-sort. */
+      items: readonly AttentionItem[];
+      /** THE POSITIVE CONTROL. Zero items out of zero scanned is a broken probe. */
+      sessionsScanned: number;
+      scannedAt: string;
+    }
+  | { kind: "unknown"; why: string; scannedAt: string };
