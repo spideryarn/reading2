@@ -779,6 +779,23 @@ export type PauseUnknownCause =
   | "session-store-unreadable"
   | "rate-limits-not-collected"
   /**
+   * A rate-limit scan RAN and could not answer for this session.
+   *
+   * The eighth arm, and it is a different fact from `rate-limits-not-collected`:
+   * that one means nobody looked, this one means somebody looked and the
+   * evidence did not settle it. On this box in the week of 2026-09-08 that is
+   * the ordinary case — 27 rejections belong to a Max account Greg is no longer
+   * signed into, they carry no account id, and the only artefact that could
+   * attribute them is a cache whose window disagrees. So the collector reports
+   * `unknown` rather than naming a limit it cannot attribute, and this is the
+   * cause that carries that sentence to the page.
+   *
+   * Distinct from the other one because the remedies differ: "nobody looked" is
+   * fixed by publishing a reading, and "looked and could not tell" is fixed by
+   * signing in, or by waiting for the rejections to expire.
+   */
+  | "rate-limits-unreadable"
+  /**
    * A wake-up WAS found and its time could not be worked out — a recurring
    * expression, a step, a range.
    *

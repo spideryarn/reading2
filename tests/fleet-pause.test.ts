@@ -57,11 +57,13 @@ import {
   choosePause,
   nextCronFire,
   parseSessionStoreFiles,
+  rateLimitFrom,
   readPause,
   readShellState,
   scanCronRecords,
 } from "../tools/fleet/pause.js";
 import type { TranscriptRecord } from "../tools/fleet/transcript.js";
+import type { ConversationRateLimit } from "../tools/fleet/wire.js";
 
 const FIXTURES = path.resolve(import.meta.dirname, "fixtures/fleet-pause");
 
@@ -941,5 +943,79 @@ describe("readPause", () => {
       tailBytes: 1024 * 1024,
     });
     expect(pause).toEqual({ kind: "in-a-shell-call", sinceMs: 1_000 });
+  });
+});
+
+describe("the seam with the usage collector", () => {
+  /* `tools/overseer/usage.ts` owns rate-limit collection and answers with a
+     `ConversationRateLimit`. This module needs three facts out of it, and the
+     adapter is the only thing here that knows the other module's shape. */
+
+  function hit(over: Partial<Record<string, unknown>> = {}): ConversationRateLimit {
+    return {
+      kind: "hit",
+      hit: {
+        id: "abc123",
+        window: "five_hour",
+        resetsAtMs: Date.parse("2026-09-08T15:30:00.000Z"),
+        hitAtMs: null,
+        hitAt: null,
+        status: "rejected",
+        claudeSessionId: null,
+        transcriptPath: "/somewhere.jsonl",
+        message: null,
+        ...over,
+      } as ConversationRateLimit extends { kind: "hit"; hit: infer H } ? H : never,
+    };
+  }
+
+  it("converts the reset instant from milliseconds to an ISO string exactly once", () => {
+    /* `resetsAtMs` is a number there and `Pause.rate-limited` wants an ISO
+       string. Doing that conversion at three call sites instead of one is how
+       it goes wrong silently. */
+    expect(rateLimitFrom(hit())).toEqual({
+      kind: "limited",
+      window: "five_hour",
+      resetsAt: "2026-09-08T15:30:00.000Z",
+    });
+  });
+
+  it("keeps a rotating window name rather than normalising it", () => {
+    expect(rateLimitFrom(hit({ window: "iguana_necktie" }))).toMatchObject({ window: "iguana_necktie" });
+  });
+
+  it("does NOT flatten 'could not tell' into 'not rate limited'", () => {
+    /* The whole reason the adapter exists rather than a `??`. The collector
+       distinguishes "this session is not rate-limited" from "the evidence did
+       not settle it", and collapsing them one line after the boundary would
+       throw the distinction away. On this box that is the ORDINARY answer this
+       week: 27 rejections belong to an account nobody is signed into. */
+    expect(rateLimitFrom({ kind: "cannot-tell", why: "the scan could not attribute 27 rejections" })).toEqual({
+      kind: "cannot-tell",
+      why: "the scan could not attribute 27 rejections",
+    });
+    expect(rateLimitFrom({ kind: "none" })).toEqual({ kind: "not-limited" });
+  });
+
+  it("tells 'nobody looked' apart from 'looked and could not tell'", () => {
+    /* Two causes, because the remedies differ: one is fixed by publishing a
+       reading, the other by signing in or waiting for the rejections to expire.
+       Neither is `none`. */
+    const notCollected = choosePause({
+      transcript: { kind: "read", scan: { entries: [], lastRecordAt: null }, reachedStartOfFile: true },
+      shell: { kind: "not-in-a-shell-call" },
+      rateLimit: undefined,
+      nowMs: Date.now(),
+    });
+    expect(notCollected).toMatchObject({ kind: "cannot-tell", cause: "rate-limits-not-collected" });
+
+    const unreadable = choosePause({
+      transcript: { kind: "read", scan: { entries: [], lastRecordAt: null }, reachedStartOfFile: true },
+      shell: { kind: "not-in-a-shell-call" },
+      rateLimit: { kind: "cannot-tell", why: "27 rejections could not be attributed to this account" },
+      nowMs: Date.now(),
+    });
+    expect(unreadable).toMatchObject({ kind: "cannot-tell", cause: "rate-limits-unreadable" });
+    expect(unreadable.kind === "cannot-tell" && unreadable.why).toContain("27 rejections");
   });
 });
