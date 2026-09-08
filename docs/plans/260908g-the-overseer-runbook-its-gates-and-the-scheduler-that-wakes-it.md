@@ -1791,6 +1791,25 @@ All six pieces landed. What is worth knowing that the sections above do not alre
 - **`StoredScheduler` gained a `blocked` arm** — switched on, and not one loaded job can run. That is
   the state that used to print `ARMED`.
 
+**Two things I got wrong on the way, and one is still a live judgement call.**
+
+`leaseMs` left the fingerprint with the cadence, which **Sol did not ask for** — S8-1 names cadence,
+phase and first eligibility. The argument for moving it is that a deadline for disbelieving a run is
+a clock fact and belongs with the other clock facts; the cost is that shortening it releases a job
+whose session is still running, so a second one starts beside the first, and that is now a
+one-integer edit with no re-pin. The floor is `MINIMUM_LEASE_MS = hours(1)`. **If that reads badly,
+the alternative is putting `leaseMs` back on `JobBehaviour` and paying a re-pin every time somebody
+retunes it** — say so and it moves.
+
+And the floors were nearly decoration. `MINIMUM_EVERY_MS` was fifteen minutes for the first hour of
+this stage, which is what you write when you are producing bounds rather than costing them: two jobs
+at fifteen minutes is 192 Claude sessions a day against the twelve Greg asked for. Sol's instruction
+was *"protect abusive schedule values through validation"*, and a floor that permits sixteen times
+the intended rate protects nothing. It is `hours(1)` now — worst case 48, still bad, at least the
+same order as the intent. **It is not a budget.** Gate 4's shared reservation is where the real
+ceiling belongs, and until that exists this number is the only thing between a mistyped `hours(6)`
+and a day's subscription.
+
 **One thing for Greg to decide.** [overseer.md](../project/overseer.md) § gate 3 forbids *"acting on
 a job definition that changed after it was authorised"*. That is still exactly right about the
 behaviour and is now silent about the schedule, which a reader could take either way. It is a rule,

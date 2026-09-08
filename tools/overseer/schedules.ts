@@ -166,9 +166,40 @@ export const LAUNCH_SEPARATION_MS = minutes(30);
  * short a cadence spends, too long a lease wedges a job for a day, too short a
  * lease permits overlap.
  */
-export const MINIMUM_EVERY_MS = minutes(15);
+
+/**
+ * **AN HOUR, AND THE FLOOR IS DOING THE WORK GATE 4 IS NOT DOING YET.**
+ *
+ * It was fifteen minutes for about an hour of this stage, which is what you pick
+ * when you are writing bounds rather than thinking about what they cost. Two
+ * jobs at fifteen minutes is 192 Claude sessions a day; the schedules Greg
+ * actually asked for are twelve. Sol's S8-2 is explicit that a per-component
+ * "locally sensible number" is not a budget, and gate 4's shared reservation is
+ * unbuilt — so until it exists this number is the only thing between a mistyped
+ * `hours(6)` and a day's subscription. An hour makes the worst case 48, which is
+ * still bad and is at least the same order as the intended twelve.
+ *
+ * **It is not a budget and must not be mistaken for one.** Raise it, or lower it
+ * once gate 4 exists and the real ceiling lives there.
+ */
+export const MINIMUM_EVERY_MS = hours(1);
 export const MAXIMUM_EVERY_MS = hours(24 * 7);
-export const MINIMUM_LEASE_MS = minutes(5);
+/**
+ * **AN HOUR, and this floor guards overlap rather than spend.**
+ *
+ * `leaseMs` left the fingerprint with the cadence, which is a loosening Sol did
+ * not ask for and which is named as a cost on `ScheduleConfig.leaseMs`: a
+ * shortened lease makes the scheduler stop believing a running session is coming
+ * back, so it releases the job and a second session starts beside the first.
+ * With a five-minute floor — the first value here — that was a one-integer edit
+ * away, with no re-pin and no review beyond the commit.
+ *
+ * An hour is still shorter than the six these jobs actually take, so a wrong
+ * value here can still overlap; what it cannot do is turn a lease into a
+ * stopwatch. If that trade reads badly, the alternative is putting `leaseMs`
+ * back on `JobBehaviour`, which costs a re-pin every time somebody retunes it.
+ */
+export const MINIMUM_LEASE_MS = hours(1);
 export const MAXIMUM_LEASE_MS = hours(24);
 export const MAXIMUM_INITIAL_DELAY_MS = hours(24);
 
