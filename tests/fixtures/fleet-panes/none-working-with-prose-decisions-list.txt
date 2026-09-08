@@ -1,0 +1,41 @@
+  One process note against myself: I implemented this directly rather than delegating to an Opus subagent as engineering-manager.md prescribes.
+  Defensible given how subtle the correctness conditions were, but it was my call to make and I should flag it rather than let it pass as normal.
+
+✻ Baked for 3m 44s · done 1:02 AM
+
+❯ Explain plainly but briefly, are there issues we need to deal with, and/or decisions to make
+
+● One real issue
+
+  Worktree disk is filling and nothing removes them. 15G of 20G free, three arriving a day, none leaving. Not urgent today, roughly a fortnight away
+  from being urgent.
+
+  The cause is now known precisely: logs/ blocks removal on eleven of eighteen trees, and logs/ is written by tmux-job.ts, which CLAUDE.md tells
+  agents to use.
+
+  Three decisions, all yours
+
+  1. Should build/test logs block worktree removal? (~1 hour if no)
+
+  They're rebuildable, and worktree-check.ts already has a disposable category for exactly that. The reason I didn't just do it: it's a safety
+  classifier, and "rebuildable" is a claim about the future. That file has never lost anyone's work. My recommendation is yes, treat logs/ as
+  disposable — but it's a one-way loosening of a guard, so it should be your call, not mine.
+
+  2. version-control.md — the commit recipe doesn't work mid-merge. git commit -F msg -- <paths> is refused during a merge; the doc prescribes it as
+  if it always applies. Rule wording, so it needs your approval. I'd add two sentences.
+
+  3. silent-success.md — add "age the fixture, don't move the clock." Nine assertions in one test file were blind because they advanced an injectable
+  clock instead of backdating the artifact. Also rule wording, also two sentences. This one has been waiting since yesterday's postmortem, which left
+  a similar rule unwritten for the same reason.
+
+  Nothing else
+
+  The guard fixes are landed, tested and pushed. No known defects outstanding, no cleanup pending.
+
+✻ Cogitated for 13s · done 1:47 AM
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── arch-a10-style-ownership ─
+❯ do all three
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  [Opus 5 (1M context)] worktrees/sweep-self-stamp (worktree-sweep-self-stamp) ⑂ sweep-self-stamp · ██░░░░░░░░ 28%                        /rc failed
+  ⏵⏵ auto mode on (shift+tab to cycle) · gh auth login for PR status · ← for agents

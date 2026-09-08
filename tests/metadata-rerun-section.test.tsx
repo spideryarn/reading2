@@ -161,6 +161,7 @@ function stages(): StageState[] {
     outputs: [`data/${SLUG}/${step}.json`],
     done: ran.has(step),
     ranAt: ran.has(step) ? "2026-09-01T00:00:00.000Z" : null,
+    startedAt: ran.has(step) ? "2026-08-31T23:59:52.000Z" : null,
     bytes: null,
   }));
 }

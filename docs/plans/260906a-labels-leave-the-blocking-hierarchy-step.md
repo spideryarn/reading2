@@ -1,6 +1,6 @@
 # The labels leave the blocking step
 
-**Status: stages 1, 2a, 2b and 2c landed; 2c went through two rounds of review and was rebuilt twice, and two states are *documented rather than closed* ([below](#stage2c-review)). Stage 3 not started.** Written 2026-09-06, out of
+**Status: every stage landed. 2c went through two rounds of review and was rebuilt twice, and two states are *documented rather than closed* ([below](#stage2c-review)); stage 3 measured it without spending anything and recommends **not** buying the paid book rerun ([below](#stage3)).** Written 2026-09-06, out of
 [260904d](260904d-deepen-fat-sections.md) § *Question 5*, where a measured run found that the thing
 blowing the ingest deadline was not the feature that plan was building.
 
@@ -358,7 +358,9 @@ Sol's Q7 answer, with its stamp pre-stage deleted for the reason above.
 - **Stage 3 — measure it.** A deterministic test that the ingest job publishes while a deliberately
   delayed label executor is still running, and that partial output never replaces the tree. Step
   timings showing `hierarchy` no longer carries the label wall time. Then, if Greg approves the
-  spend, one paid book rerun.
+  spend, one paid book rerun — **and the answer is not to buy it**, for the reason in
+  [what stage 3 measured](#stage3), which is also where the timings turned the plan's own 79.5–92%
+  into a worst case rather than a typical one.
 
 Checkpoint rows survive the split unchanged — `batchFingerprint` contains no step or job identity —
 **provided the checkpoint namespace stays `hierarchy-labels`.** Renaming it would invalidate every
@@ -1027,6 +1029,125 @@ state with nothing said about it.
 `npm run labels` and no `labels` step. Both came back in stage 2a. Corrected, with the old reasoning
 kept as a marker rather than deleted, because *why* the step had been retired is why its return needed
 a plan. Its neighbour in [setup-dev.md](../project/setup-dev.md) had already been corrected.
+
+## What stage 3 measured <a id="stage3"></a>
+
+Built 2026-09-08. **Nothing was spent**: no pipeline run, no `npm run labels`, no model call. The
+tests replace exactly one function — `generateLabels` — and the timings come out of the local
+database, which already held everything the question needed.
+
+### The two orderings, in one file
+
+[`tests/labels-land-after-the-shelf.test.ts`](../../tests/labels-land-after-the-shelf.test.ts), four
+cases over the real Postgres session, the real `publishRevisionIn`, the real `writeArtefacts` and the
+real `STEPS.labels.run`. The **only** thing faked below the job runner is the paid model call, wired
+to a deferred promise the test resolves — so the window between the ingest publishing and the labels
+landing is held open for as long as the assertions take, rather than raced against a `setTimeout`.
+
+1. **An ingest publishes while nothing has bought the labels.** The job's step list is
+   `DEFAULT_INGEST_STEPS` minus the three that reach the network, *derived from that constant rather
+   than written out*, so putting `labels` back into it puts it into this job. The article reaches the
+   shelf — `current_revision_id` moves and `pgArticleReader.loadArticle` serves the prose — reading
+   `pending` over a tree with no label on any leaf, with a free successor queued and the label
+   executor never entered. Then the executor is released and the labels land, `ready`, on a second
+   revision, with the blocks unchanged.
+2. **A run that produces batches and then throws changes nothing.** It writes a real row into
+   `spideryarn.checkpoints` first — asserted *before* the tree is, because without it "the tree is
+   unchanged" would pass just as well over a run that did nothing
+   ([silent-success.md](../reusable/silent-success.md)) — and then fails. The shelf does not move, the
+   stored tree is byte-for-byte what it was, and the published revision goes `pending` → `failed`.
+3. **A run that comes back with half the article labelled is refused.** This is the reachable half of
+   *partial output never replaces the tree*, and it is a different question from case 2: a run that
+   throws returns nothing for `run()` to write, so the tree is safe by the shape of the code; a run
+   that **returns** short is handed to `mergeLabels`, which replaces rather than overlays. What stops
+   it is the one line stage 2 moved — `checkCoverage` in `STEPS.labels.run` — and deleting that line
+   publishes a half-labelled tree reading `ready`.
+
+**Red-first, with the mutation named beside every case.** Six one-line mutations of production code,
+each quoted in the file as it actually came out: `unrun = false` in `writeArtefacts`
+(`expected 'ready' to be 'pending'`); its receipt deletion disabled (`expected { …(10) } to be
+undefined` — the assertion that stops case 1's second half being vacuous, because a carried `labels`
+receipt makes the successor's step **skip**); `"labels"` back in `DEFAULT_INGEST_STEPS`
+(`expected 'error' to be 'done'`, plus the premise case by name); the successor enqueue deleted
+(`no labels successor was queued`); `markNavLabelsFailedIn` deleted (`expected 'pending' to be
+'failed'`); and `checkCoverage` deleted (`a half-labelled run was accepted`, then — with that
+assertion taken out so the rest could be reached — `a half-labelled run published a revision`).
+
+One assertion has no mutation behind it and says so: the read taken inside the held-open window.
+Nothing can make it red without inventing a second writer of the tree.
+
+**What the file stands in for, and it is written at the top of it.** `fetch` reaches the network and
+`hierarchy` is a paid structure call, so the base revision carries `extracted_html` and `fetch`/
+`extract` receipts the way
+[`tests/pg-session-real-step.test.ts`](../../tests/pg-session-real-step.test.ts) does, and
+`hierarchy` is a fake whose product is assembled from the **real** `buildTree`, `mergeLabels`,
+`hashBlocks` and `structureHash` — so what the session is handed is a `PendingLabelsFile` rather than
+something shaped like one. `blocks` and `labels` are the real steps.
+
+### The timings, and the plan's own figure is a worst case rather than a typical one
+
+Read out of `spideryarn.revision_step_runs` and `spideryarn.ai_calls` on the local database,
+2026-09-08. **Nothing was re-run to get them.**
+
+**The plan's headline numbers reproduce, exactly.** The 602 s call is
+`duration_ms = 601917` at `reported_input_tokens = 173583` — the figure in
+[§ the straggler](#the-straggler) to the token. Joining each pre-split `hierarchy` run to the
+`labels` calls inside its window reproduces two of that section's three rows within half a point:
+
+| run | `hierarchy` wall | label span | share | longest call |
+|---|---|---|---|---|
+| `m1-kuhn-spya-a2zrjb` — **a real ingest, not an eval** | **727.2 s** | 568.5 s | **78.2%** | 425.7 s at 196,896 tok |
+| `evaldeepen-e5aq8o9s-book` | 576.2 s | 456.8 s | **79.3%** (plan: 79.5%) | 372.8 s |
+| `evaldeepen-e5aq8o9s-book` | 518.1 s | 468.4 s | **90.4%** (plan: 90.7%) | 389.8 s |
+
+The third row of the plan's table (`spya-fm4y2w`, 682 s, ≥92%) has no `revision_step_runs` row —
+that eval invocation did not go through the step bookkeeping — so it cannot be checked from this end.
+Its 602 s call is in `ai_calls`, which is the half that mattered.
+
+**And the honest correction.** Over every pre-split `hierarchy` run longer than five seconds that
+made any label call at all, the label share is **median 22%, min 9%, max 90%** — n = 28 runs,
+deduplicated on `(article, started_at, finished_at)` because several `revision_step_runs` rows share
+one run's timings; over the raw 67 rows the median is 23%, so the dedupe does not move it. The
+79.5–92% band is real and is what the deadline was blown by, but it is the **fat-section case**, not
+the ordinary article — a typical ingest spends
+under a quarter of `hierarchy` on labels. The plan's § *The number this exists for* reads as a
+general claim and should be read as a worst-case one. It does not weaken the argument: the run that
+came within **13 seconds** of the 740 s deadline was a real reader's article, `m1-kuhn`, and 78% of
+it was labels.
+
+**What cannot be measured from here.** There are **two** post-split `hierarchy` runs on this
+database and **two** successful `labels` runs (17.4 s and 21.6 s), all four from one afternoon and
+all on ordinary short articles. That is far too few to say anything, and it would be dressing up a
+sample of two to call it evidence. So the claim *"`hierarchy` no longer carries the label wall time"*
+is settled **by construction rather than by timing**: `generateHierarchy` does not call
+`generateLabels`, and `labels` is not in `DEFAULT_INGEST_STEPS`. A timing that proved it would only be
+re-measuring a call the code can no longer make.
+
+**And the first half of that was not actually pinned**, which stage 3 found while writing the
+sentence above. Everything asserted a *neighbour* of it — `checkCoverage` had moved, the step was not
+scheduled, a structure-only tree carries no labels — and none of those is the claim. A
+`generateHierarchy` that started calling `generateLabels` again would have satisfied every test in
+the tree while putting the whole 600 s back inside the blocking step, and the only symptom would have
+been the clock. There are now two cases in
+[`tests/hierarchy-leaves-the-labels.test.ts`](../../tests/hierarchy-leaves-the-labels.test.ts) reading
+the function's own source, comments stripped — because the paragraph src/hierarchy.ts leaves where the
+call used to be *names* `generateLabels`, so a check over the raw source would go red on the
+documentation of the removal.
+
+### The paid book rerun: not worth asking for
+
+What it would buy is one number — the post-split `hierarchy` wall clock on a 2,569-block book — and
+we can already say what it will be: the pre-split `hierarchy` minus the label span, which for the two
+recorded Moby-Dick passes is **119 s and 50 s** against a 740 s deadline. It would cost roughly the
+same as the passes it is replaying — the three recorded passes cost **$2.54, $2.96 and $3.49** in
+structure and labels together — and it would not answer the question that is actually open, which is
+whether the **973-child sibling set** still takes 600 s and $1.30 in the successor job. That one is not in doubt either — the plan says so
+in [§ the straggler](#the-straggler): *"lazy labelling does not remove this call; it moves it."*
+
+So the recommendation is **don't spend it**. The rerun that *would* be worth buying is a different
+one: a book run after [260904d](260904d-deepen-fat-sections.md)'s cascade reaches `n0831` and the
+973-child set stops existing, because that is the change whose effect nobody can predict from the
+data we have. Asking for this one now would buy a confirmation and spend the budget that one needs.
 
 ## Groundwork for stage 2, established before any code <a id="stage2-groundwork"></a>
 

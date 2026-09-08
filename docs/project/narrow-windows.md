@@ -97,6 +97,17 @@ Three things worth carrying to whatever is built next:
   [`styles/dock-fit.css`](../../src/web/styles/dock-fit.css) § the bar's fit ladder, and
   [260902k](../plans/260902k-the-bottom-bar-measures-its-own-fit.md) for the shape of the argument.
   A breakpoint is right when the *window* is what changed; this bar keeps growing instead.
+- **`.controls` is usually not there at all**, since 2026-09-08. What is left in it is Hierarchy's
+  granularity pills and a visitor's read-only chip, so on every other reading view it was 44px of
+  nothing — held on screen in a band mode by the guard below, which is how a reader came to report
+  it. `Reader` draws it only when `barHasContent` ([`src/web/layout.ts`](../../src/web/layout.ts))
+  says there is something to put in it, and `:root:not(:has(:where(.reader) > .controls))` in
+  [`styles/shell.css`](../../src/web/styles/shell.css) then lets `--bar-bottom` fall to the status-bar
+  inset. Two things follow that will catch you out: **`.controls` is not a safe thing to
+  `querySelector`** — an author's prose may contain one and the sanitiser keeps it, so ask
+  `controlsBar()` in [`src/web/scroll.ts`](../../src/web/scroll.ts) — and every rule keyed on the
+  bar's *presence* now has a state where it is absent.
+  [260908a](../plans/260908a-the-top-bar-stops-being-drawn-when-it-has-nothing-in-it.md).
 - **`.controls` moves by `transform`; everything under it moves by `top`.** A bullet here used to
   say a transform on that bar computed to identity and could not be used. That was wrong, and it was
   wrong for the reason [browser-testing.md § a hidden tab](browser-testing.md) now describes: a CSS
