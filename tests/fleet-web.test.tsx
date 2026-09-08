@@ -4149,6 +4149,10 @@ describe("the action buttons, which are the server's vocabulary", () => {
         why: "pane %1646 is in session $1643 now, not $1",
         status: 409,
         from: "server",
+        /* A server that states `none` is the one case allowed to produce
+           "Nothing happened.", which is why this fixture still says it. The
+           other three arms are next door, in "what became of an ACTION". */
+        delivery: { kind: "none" },
       }),
     });
     openWith([CONTINUE_WIRE], { api: rec });
@@ -4731,6 +4735,8 @@ describe("the box, which says what it would do before it does it", () => {
         why: "ps exited 1 and said nothing",
         status: 500,
         from: "server",
+        // The dry run never sends anything, so the route has no delivery to state.
+        delivery: { kind: "not-told" },
       }),
     });
     await act(async () => {});
@@ -5250,6 +5256,158 @@ describe("what became of the keystrokes, which is three answers and not two", ()
     for (const odd of [undefined, null, "", "NONE", 0, {}, ["partial"]]) {
       expect(parseDelivery(odd)).toEqual({ kind: "not-told" });
     }
+  });
+});
+
+describe("what became of an ACTION, which is also not two answers", () => {
+  /* THE SAME DEFECT, ONE FILE ALONG, AND WITH MORE AT STAKE. The steer path
+     carries a `DeliveryReading` and `SessionDetail` renders all four arms of
+     it. `ActionOutcome`'s failure arm carried no delivery at all, and
+     `ActionButtons` printed "Nothing happened." over every failure — including
+     `from: "client"`, where the REPLY NEVER ARRIVED. That is the one case where
+     the page has no basis for the claim whatsoever, and the request it is
+     making the claim about may have removed a worktree or killed thirty
+     processes. A person who reads "Nothing happened." presses it again.
+
+     Everything here drives the REAL client over a fake `fetch`, never a
+     hand-built `ActionOutcome`: the line that was missing is the one that reads
+     `delivery` off the body, and a fixture of an outcome cannot fail when that
+     line is deleted. Same argument as `browserFetch` in
+     tests/fleet-actions-route.test.ts. */
+
+  const ROW = steerable({ id: "$1643", title: "the one being acted on" });
+
+  /** A `fetch` that never answers — the phone off Tailscale, mid-request. */
+  const nothingCameBack = (async () => {
+    throw new TypeError("Failed to fetch");
+  }) as unknown as typeof fetch;
+
+  /** A `fetch` that answers one refusal body, verbatim. */
+  function refusing(body: Record<string, unknown>, status = 409): typeof fetch {
+    return (async () => ({ status, json: async () => body }) as unknown as Response) as unknown as typeof fetch;
+  }
+
+  /** Answers the dry run, then vanishes on the press that would do it. */
+  function answersThenVanishes(first: Record<string, unknown>): typeof fetch {
+    let calls = 0;
+    return (async () => {
+      calls += 1;
+      if (calls === 1) return { status: 200, json: async () => first } as unknown as Response;
+      throw new TypeError("Failed to fetch");
+    }) as unknown as typeof fetch;
+  }
+
+  /** The session page, with the real client wired to `fetchImpl`. */
+  function openActing(fetchImpl: typeof fetch, actions: unknown[]): void {
+    const client = makeActionsApi(fetchImpl);
+    const rec = recordingActions(() => actionsWire({ actions }), {
+      run: (r, actionId) => client.run(r, actionId),
+      queueMessage: (r, text) => client.queueMessage(r, text),
+    });
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport, actionsApi: rec.api });
+    act(() => feed.push(state({ rows: [ROW] })));
+    openSession("the one being acted on");
+  }
+
+  /** The box panel, same wiring. */
+  function openActingBox(fetchImpl: typeof fetch, actions: unknown[]): void {
+    const client = makeActionsApi(fetchImpl);
+    const rec = recordingActions(() => actionsWire({ actions }), { box: (actionId, dryRun) => client.box(actionId, dryRun) });
+    window.location.hash = "#health";
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport, actionsApi: rec.api });
+    act(() => feed.push(state({ health: { verdict: { level: "strained", reasons: [] } } })));
+  }
+
+  it("does not say nothing happened when the reply never arrived", async () => {
+    /* THE HEADLINE BUG. `remove-worktree` deletes a directory. The request went
+       out; the answer did not come back. Whether the tree is still there is
+       exactly what this page cannot say, and it said the opposite. */
+    openActing(nothingCameBack, [REMOVE_WORKTREE_WIRE]);
+    await act(async () => {});
+    await clickSaying("Remove worktree");
+    await clickSaying("Yes — remove worktree");
+
+    const text = container.textContent ?? "";
+    expect(text).not.toContain("Nothing happened.");
+    expect(text).toContain("It is not known whether this happened.");
+    // The local sentence is still there, and still owned by whoever wrote it.
+    expect(text).toContain("this browser could not reach the dashboard");
+    expect(text).toContain("said by this browser");
+  });
+
+  it("says PART of it went out when the server says that is what happened", async () => {
+    openActing(
+      refusing(
+        { ok: false, code: "enter-not-sent", why: "the text was typed and the Enter could not be sent", delivery: "partial" },
+        502,
+      ),
+      [CONTINUE_WIRE],
+    );
+    await act(async () => {});
+    await clickSaying("Continue");
+
+    const text = container.textContent ?? "";
+    expect(text).not.toContain("Nothing happened.");
+    expect(text).toContain("PART of it went out.");
+    expect(text).toContain("Do NOT repeat this");
+    // Still verbatim, still the server's.
+    expect(text).toContain("the text was typed and the Enter could not be sent");
+  });
+
+  it("says the server did not say, when the body carries no delivery at all", async () => {
+    /* The ordinary production refusal: nothing was sent, but the route never
+       claimed that, and a page that filled it in would be inventing the one
+       fact it is here to carry. */
+    openActing(refusing({ ok: false, code: "confirm-required", why: "'remove-worktree' needs confirming" }), [CONTINUE_WIRE]);
+    await act(async () => {});
+    await clickSaying("Continue");
+
+    const text = container.textContent ?? "";
+    expect(text).not.toContain("Nothing happened.");
+    expect(text).toContain("The server did not say whether this happened.");
+  });
+
+  it("does not read a delivery word it has never heard of as nothing", async () => {
+    openActing(refusing({ ok: false, code: "odd", why: "something else went wrong", delivery: "half-ish" }), [CONTINUE_WIRE]);
+    await act(async () => {});
+    await clickSaying("Continue");
+
+    const text = container.textContent ?? "";
+    expect(text).not.toContain("Nothing happened.");
+    expect(text).toContain("The server did not say whether this happened.");
+  });
+
+  it("still says nothing happened when the server says exactly that", async () => {
+    /* The negative half. A guard that never lets the plain case through is one
+       that has simply stopped saying the true thing. */
+    openActing(refusing({ ok: false, code: "not-steerable", why: "that session is not at a prompt", delivery: "none" }), [CONTINUE_WIRE]);
+    await act(async () => {});
+    await clickSaying("Continue");
+
+    const text = container.textContent ?? "";
+    expect(text).toContain("Nothing happened.");
+    expect(text).not.toContain("PART of it went out.");
+    expect(text).not.toContain("It is not known whether this happened.");
+  });
+
+  it("does not say nothing happened on the box when the kill's reply never arrived", async () => {
+    /* The worst version of it. The dry run answered, the person read what it
+       would kill, pressed yes — and then nothing came back. Thirty processes
+       may be gone. "Nothing happened." is the sentence that sends them to press
+       it again. */
+    openActingBox(answersThenVanishes({ ok: true, op: "dry-run", dryRun: true, result: { candidates: [{ pid: 5001 }] } }), [
+      KILL_SUITES_WIRE,
+    ]);
+    await act(async () => {});
+    await clickSaying("Kill test suites");
+    await clickSaying("Yes — kill test suites");
+
+    const text = container.textContent ?? "";
+    expect(text).not.toContain("Nothing happened.");
+    expect(text).toContain("It is not known whether this happened.");
+    expect(text).toContain("said by this browser");
   });
 });
 

@@ -89,6 +89,7 @@ import {
   type QueueOp,
   type QueueView,
 } from "./actions-client";
+import type { DeliveryReading } from "./steer-client";
 import type { FleetRow } from "./types";
 import { Button, Card, Mono, cx } from "./ui";
 
@@ -185,6 +186,50 @@ function successCopy(outcome: Extract<ActionOutcome, { ok: true }>): { head: str
   }
 }
 
+/**
+ * **WHAT A FAILED ACTION MAY BE SAID TO HAVE DONE**, which is four sentences
+ * and used to be one.
+ *
+ * "Nothing happened." went above every failure, `from: "client"` included —
+ * where the answer never came back and the request may perfectly well have
+ * deleted a worktree or killed thirty processes. It is the most expensive
+ * sentence on this page, because a person who reads it presses the button
+ * again, and none of these actions can be taken back.
+ *
+ * A `Record` over the closed union, so a fifth arm of `DeliveryReading` fails
+ * the build here rather than quietly taking the last branch — the same shape,
+ * and the same reasoning, as `DELIVERY_HEADLINE` in SessionDetail.tsx.
+ *
+ * **The words differ from that one's on purpose and it is not a twin.** There
+ * the subject is keystrokes going into an input box, and the advice is about a
+ * retry appending to half-typed text. Here the subject is an action — a queue
+ * gesture, a worktree removal, a kill — and there is nothing to append to. The
+ * TYPE and the PARSE are shared, which is the part a second copy would rot.
+ *
+ * `unknown` and `not-told` are two situations and get two headings: the first
+ * is *the attempt failed in a way that cannot say*, the second is *the server
+ * refused and did not mention it*. Both mean look before repeating; neither
+ * means nothing happened. Only a server-stated `none` says that.
+ */
+const ACTION_DELIVERY_COPY: Record<DeliveryReading["kind"], { head: string; body: string | null }> = {
+  none: { head: "Nothing happened.", body: null },
+  partial: {
+    head: "PART of it went out.",
+    body:
+      "The server says some of it took effect and the rest did not. Do NOT repeat this before going and looking — a second attempt acts again on whatever the first one already did, and nothing here can undo either.",
+  },
+  unknown: {
+    head: "It is not known whether this happened.",
+    body:
+      "The attempt failed in a way that cannot say what the server did with it, so this may have taken effect. Go and look before pressing it again.",
+  },
+  "not-told": {
+    head: "The server did not say whether this happened.",
+    body:
+      "It refused without saying what it had already done. Treat that as unknown rather than as nothing: look before pressing it again.",
+  },
+};
+
 export function ActionOutcomeCard({ outcome, onRefresh }: { outcome: ActionOutcome; onRefresh: () => void }): ReactNode {
   if (outcome.ok) {
     const { head, body } = successCopy(outcome);
@@ -226,9 +271,11 @@ export function ActionOutcomeCard({ outcome, onRefresh }: { outcome: ActionOutco
       </div>
     );
   }
+  const said = ACTION_DELIVERY_COPY[outcome.delivery.kind];
   return (
     <div className="tw:mt-2 tw:rounded-lg tw:border tw:border-alarm/40 tw:bg-alarm-wash tw:p-3 tw:text-[13px]">
-      <p className="tw:font-medium tw:text-alarm-ink">Nothing happened.</p>
+      <p className="tw:font-medium tw:text-alarm-ink">{said.head}</p>
+      {said.body === null ? null : <p className="tw:mt-1 tw:font-medium tw:text-alarm-ink">{said.body}</p>}
       {/* Verbatim. Every word of this is the server's. */}
       <p className="tw:mt-1 tw:break-words tw:text-ink">{outcome.why}</p>
       <p className="tw:mt-1 tw:text-[12px] tw:text-ink-faint">
@@ -1441,9 +1488,21 @@ export function BoxActions({
             same defect § Stage v0.5f names for "Queued." over a cancel. The
             answer's own `dryRun` decides; a server that did not say gets the
             heading that does not know.
+
+            **AND SO IS "Nothing happened."**, which is the failure half of the
+            same rule and was exempt from it until 2026-09-08. This is the panel
+            with `kill` on it: a second tap whose reply never came back may have
+            ended thirty processes, and the page said the opposite. The four
+            headings are `ACTION_DELIVERY_COPY`'s, above.
           */}
           <p className={cx("tw:font-medium", done.ok ? "tw:text-work-ink" : "tw:text-alarm-ink")}>
-            {!done.ok ? "Nothing happened." : !done.dryRunStated ? "The server answered." : done.dryRun ? "Nothing was done." : "Done."}
+            {!done.ok
+              ? ACTION_DELIVERY_COPY[done.delivery.kind].head
+              : !done.dryRunStated
+                ? "The server answered."
+                : done.dryRun
+                  ? "Nothing was done."
+                  : "Done."}
           </p>
           {done.ok ? (
             <>
@@ -1471,6 +1530,9 @@ export function BoxActions({
             </>
           ) : (
             <>
+              {ACTION_DELIVERY_COPY[done.delivery.kind].body === null ? null : (
+                <p className="tw:mt-1 tw:font-medium tw:text-alarm-ink">{ACTION_DELIVERY_COPY[done.delivery.kind].body}</p>
+              )}
               <p className="tw:mt-1 tw:break-words tw:text-ink">{done.why}</p>
               <p className="tw:mt-1 tw:text-[12px] tw:text-ink-faint">
                 <Mono>{done.code}</Mono>

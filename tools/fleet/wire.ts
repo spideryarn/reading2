@@ -119,7 +119,20 @@ export type SpokenAction = {
 export type QueuedPayload = { kind: "action"; action: SpokenAction } | { kind: "message"; text: string };
 
 export type QueuedItem = {
-  /** Stable for the life of the item, and what `cancel` and `settle` name. */
+  /**
+   * Stable for the life of the item, and what `cancel` and `settle` name.
+   *
+   * **OPAQUE TO THE CLIENT, AND THAT IS A RULE RATHER THAN AN OBSERVATION.**
+   * The browser stores whatever string it was handed and gives it back
+   * unexamined; nothing outside `SteeringQueue` may parse it or build one.
+   * Since 2026-09-08 it carries the RUN of the server that minted it, because
+   * a per-process counter re-issues `q1` after every restart and a phone left
+   * open across one was able to cancel a stranger's instruction and be told it
+   * had worked. `SteeringQueue.idOrigin` reads the run back; the four routes
+   * that accept an id from a client refuse a foreign one as `other-instance`.
+   * A client that started splitting on the separator would make that shape
+   * impossible to change again.
+   */
   id: string;
   /** tmux's session handle (`$1643`) — which queue this is in. */
   sessionId: string;
