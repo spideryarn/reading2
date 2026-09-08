@@ -44,6 +44,7 @@
  * and does not interpret it a second time, so a change at the source changes
  * the history's shape rather than drifting from it."
  */
+import { isRepoValue } from "../../scripts/gjd-remote-repo.js";
 import type { SessionKind, SessionMeta, SessionState, SessionUnknownCause } from "../../scripts/gjd-remote-tmux.js";
 
 /**
@@ -74,8 +75,8 @@ export type ParseResult<T> = { ok: true; value: T } | { ok: false; reason: strin
  * A two-armed type makes reading the rows without deciding about the clock
  * impossible rather than merely discouraged.
  */
-export type CollectedClock = { collected: true; at: string; atMs: number };
-export type CollectionClock = { collected: false } | CollectedClock;
+export type CollectedClock = { readonly collected: true; readonly at: string; readonly atMs: number };
+export type CollectionClock = { readonly collected: false } | CollectedClock;
 
 /**
  * The status union with ONE COMBINATION THE PRODUCER CANNOT EMIT REMOVED.
@@ -117,12 +118,12 @@ export type ObservedRow = {
    * whole of one: it is stable within one tmux server and handed out again from
    * `$0` by the next.
    */
-  id: string;
-  name: string;
-  title: string | null;
+  readonly id: string;
+  readonly name: string;
+  readonly title: string | null;
   /** Lossy display fields. `meta` is the record; these two are for reading. */
-  repo: string | null;
-  worktree: string | null;
+  readonly repo: string | null;
+  readonly worktree: string | null;
   /**
    * The launcher's metadata, whole. `version === 1` gates `dir`, `kind` and
    * `repo` together, which is the reason the dashboard sent the union rather
@@ -130,10 +131,10 @@ export type ObservedRow = {
    * cannot be reconstructed after a reboot, and a null the compiler lets you
    * ignore is how it would come to be dropped.
    */
-  meta: SessionMeta;
-  startedAt: string;
-  paneId: string | null;
-  panePid: number | null;
+  readonly meta: SessionMeta;
+  readonly startedAt: string;
+  readonly paneId: string | null;
+  readonly panePid: number | null;
   /**
    * **A CLAIM about which conversation is in this pane, not a fact.** The wire
    * calls it `claudeSessionId`; it is renamed here because the wire name reads
@@ -170,36 +171,36 @@ export type ObservedRow = {
    * brand the stage does spend is `AdmissibleSnapshot` in admissible.ts, which
    * a function really does mint and really does gate.
    */
-  claimedConversationId: string | null;
+  readonly claimedConversationId: string | null;
   /** Volatile prose, kept verbatim and never diffed. */
-  question: JsonValue;
+  readonly question: JsonValue;
   /**
    * The status, narrowed past what `SessionState` can say — see
    * `ObservedStatus`. Assignable to `SessionState`, so everything downstream
    * that takes one still takes this.
    */
-  status: ObservedStatus;
+  readonly status: ObservedStatus;
 };
 
 /** One snapshot, as the dashboard reported it. */
 export type ObservedSnapshot = {
-  schema: 1;
-  rows: readonly ObservedRow[];
+  readonly schema: 1;
+  readonly rows: readonly ObservedRow[];
   /**
    * The tmux server generation these handles belong to, or null when it could
    * not be read. Two snapshots that disagree here describe different worlds —
    * see diff.ts, where that is a rule about not diffing rather than a change.
    */
-  tmuxServerPid: number | null;
+  readonly tmuxServerPid: number | null;
   /** The wire's `collectedAt`, as a type that cannot be read without deciding about null. */
-  clock: CollectionClock;
-  tookMs: number;
+  readonly clock: CollectionClock;
+  readonly tookMs: number;
   /** The last collection's failure. A stale payload keeps its old rows and is broadcast anyway. */
-  error: string | null;
+  readonly error: string | null;
   /** How often the producer intends to collect, so a freshness watchdog need not hard-code a deadline. */
-  refreshMs: number;
+  readonly refreshMs: number;
   /** Kept verbatim, interpreted nowhere. */
-  health: JsonValue;
+  readonly health: JsonValue;
 };
 
 /**
@@ -215,7 +216,7 @@ export type ObservedSnapshot = {
  * Sol's S2-07). The gate that really is a gate is `AdmissibleSnapshot` in
  * admissible.ts, which carries a brand only that function can attach.
  */
-export type FreshSnapshot = ObservedSnapshot & { clock: CollectedClock };
+export type FreshSnapshot = ObservedSnapshot & { readonly clock: CollectedClock };
 
 /** The one schema this reader was written against. */
 export const OBSERVATION_SCHEMA = 1;
@@ -404,31 +405,6 @@ function parseStatus(u: unknown, where: string): ParseResult<ObservedStatus> {
 }
 
 /**
- * A `GJD_REPO` value, by the producer's own grammar, repeated here.
- *
- * REPEATED RATHER THAN IMPORTED, and that is a cost taken deliberately:
- * `isRepoValue` in scripts/gjd-remote-repo.ts is the original and this is a
- * copy of its rule, which is exactly the kind of duplication that drifts. The
- * alternative is worse in this one module — every import in tools/overseer/ is
- * `import type`, so nothing here can execute a line of the producer's code and
- * the whole stage stays pure and instant. `tests/overseer-observation.test.ts`
- * pins the two together by checking this against real values.
- *
- * The grammar: `unknown`, or two segments of `[a-z0-9._-]{1,100}`, neither of
- * them `.` or `..` — bounded because the value is written into a durable
- * history, and `..`-free because a repo identity that can climb a path is one
- * somebody eventually joins onto a directory name.
- */
-const REPO_SEGMENT = /^[a-z0-9._-]{1,100}$/;
-
-function isRepoValue(v: string): boolean {
-  if (v === "unknown") return true;
-  const parts = v.split("/");
-  if (parts.length !== 2) return false;
-  return parts.every((seg) => REPO_SEGMENT.test(seg) && seg !== "." && seg !== "..");
-}
-
-/**
  * The longest `dir` the producer will mint, from `parseMeta` in
  * scripts/gjd-remote-tmux.ts. A path longer than this did not come from there.
  */
@@ -455,6 +431,18 @@ function parseMeta(u: unknown, where: string): ParseResult<SessionMeta> {
   // value the producer would have refused is one nothing can act on. GPT Sol's
   // S2-06.
   if (typeof repo !== "string") return { ok: false, reason: `${where}.meta.repo is ${typeName(repo)}, not a string` };
+  // THE PRODUCER'S OWN VALIDATOR, IMPORTED — the only line in this module that
+  // executes another module's code, and it earns the exception. A copy of the
+  // grammar was here for a few hours and was wrong for a reason no test could
+  // catch: when the producer changes what a repo value may be, a copy goes on
+  // agreeing with the old rule, typecheck stays green, and the Overseer either
+  // refuses every newly valid snapshot or records one the producer has begun
+  // refusing. `isRepoValue` validates `GJD_REPO` at the launcher, the log's
+  // `repo` field, and now this — one grammar for the recovery identity rather
+  // than three that agree today. GPT Sol's S2-06A, 2026-09-08.
+  //
+  // It costs nothing at import: scripts/gjd-remote-repo.ts runs nothing at
+  // module scope, and its one impurity (`git`) is injected per call.
   if (!isRepoValue(repo)) {
     return { ok: false, reason: `${where}.meta.repo is ${JSON.stringify(repo)}, which is neither an owner/name slug nor 'unknown'` };
   }

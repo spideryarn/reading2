@@ -14,11 +14,13 @@ import { describe, expect, test } from "vitest";
 import type { SessionState } from "../scripts/gjd-remote-tmux.js";
 import type { AdmissibleSnapshot } from "../tools/overseer/admissible.js";
 import {
+  baselineOf,
   diff,
   generationRelation,
   sessionKey,
   statusKey,
-  WAIT_DEADLINE_TOLERANCE_MS,
+  waitDeadlineToleranceMs,
+  type Baseline,
   type OverseerEvent,
 } from "../tools/overseer/diff.js";
 import type { JsonValue } from "../tools/overseer/observation.js";
@@ -41,14 +43,73 @@ function edited(name: FixtureName, edit: (payload: Record<string, JsonValue>) =>
  * everything.
  */
 function diffed(previous: AdmissibleSnapshot | null, next: AdmissibleSnapshot): OverseerEvent[] {
-  const outcome = diff(previous, next);
+  const outcome = diff(previous === null ? null : mustBaseline(previous), next);
   if (outcome.kind !== "diffed") throw new Error(`expected a diff, got ${outcome.kind}: ${outcome.reason}`);
   return outcome.events;
+}
+
+/**
+ * A snapshot promoted to a world, through the real gate.
+ *
+ * `admissible()` cannot hand out a baseline any more (S2-01, second attempt), so
+ * every test that compares two collections goes through `baselineOf` exactly as
+ * a restarted daemon does. It THROWS on the null rather than shrugging: passing
+ * a null `previous` into `diff()` compiles and quietly means "cold start", which
+ * would turn a refused world into a fleet's worth of `session-seen` in the
+ * middle of a test that was checking for silence.
+ */
+function mustBaseline(snapshot: AdmissibleSnapshot): Baseline {
+  const baseline = baselineOf(snapshot);
+  if (baseline === null) throw new Error(`refused as a baseline: the collection at ${snapshot.snapshot.clock.at}`);
+  return baseline;
 }
 
 function kinds(events: readonly OverseerEvent[]): string[] {
   return events.map((e) => e.kind);
 }
+
+/**
+ * THE TWO RULES THAT ARE TYPES RATHER THAN BEHAVIOUR, so this is the only test
+ * here that vitest cannot fail. It goes red under `npm run typecheck`, which is
+ * the wrapper that includes tests/ — `tsc` on the app alone never reads this
+ * file, and vitest strips these annotations without looking at them.
+ *
+ * Each `@ts-expect-error` below is an assertion that the line under it does NOT
+ * compile. If a later change makes any of them legal again, the directive
+ * becomes unused and the build fails saying so — which is the only way a
+ * compile-time guarantee can be regression-tested.
+ */
+test("TYPE-LEVEL: the three forgeries the P0 and S2-07 turned on", () => {
+  const admitted = freshFixture("status-change-before");
+
+  // DECLARED AND NEVER CALLED, on purpose. Every line inside is a claim about
+  // what the COMPILER refuses, and running them would only prove that a forged
+  // snapshot crashes — which is not the guarantee being made.
+  const forgeries = (): void => {
+    // 1. AN ADMISSIBLE SNAPSHOT IS NOT A BASELINE. This is the hole S2-01 was
+    //    reopened for: withholding `baseline` from a `held` result does not
+    //    take away the reference the caller already had, so `baseline = b`
+    //    compiled. Now they are different types, and the only two things that
+    //    mint the second both ask whether the snapshot can be placed in a world.
+    // @ts-expect-error - `previous` is a Baseline: something diff() produced, never something admissible() did
+    diff(admitted, admitted);
+
+    // 2. A SPREAD IS NOT AN ADMISSION. Every invariant `admissible()` checks —
+    //    error-nullness above all — used to survive `{...snapshot, error:
+    //    "boom"}` with the brand intact and no cast, so a failed collection
+    //    could still be turned into a fleet's worth of false disappearances.
+    // @ts-expect-error - a plain object cannot be an AdmissibleSnapshot, whatever fields it copies
+    diff(null, { ...admitted.snapshot, error: "boom" });
+
+    // 3. AND NEITHER IS A MUTATION, which is the same hole reached without a
+    //    spread: the accepted snapshot's own fields are readonly now.
+    // @ts-expect-error - the accepted snapshot is readonly, so its admissibility cannot be edited away
+    admitted.snapshot.error = "boom";
+  };
+
+  expect(typeof forgeries).toBe("function");
+  expect(admitted.snapshot.error).toBeNull();
+});
 
 describe("the real pairs", () => {
   test("a status change is one event, and it names both ends of it", () => {
@@ -62,7 +123,7 @@ describe("the real pairs", () => {
     expect(event.identity.tmuxId).toBe("$1991");
     expect(event.from).toBe("idle");
     expect(event.to).toBe("working");
-    expect(event.at).toBe(after.clock.at);
+    expect(event.at).toBe(after.snapshot.clock.at);
     expect(event.tmuxServerPid).toBe(132280);
     // The key is the PAIR, so the claimed conversation is in it — and the word
     // `claims` is in the key on purpose, because a human reading the log should
@@ -217,7 +278,7 @@ describe("CONSTRUCTED: a tmux session resumed into a different conversation", ()
     const [event] = events;
     if (event?.kind !== "session-replaced") return;
     expect(event.identity.claimedConversationId).toBe("00000000-1111-2222-3333-444444444444");
-    expect(event.previous.claimedConversationId).toBe(before.rows[0]?.claimedConversationId);
+    expect(event.previous.claimedConversationId).toBe(before.snapshot.rows[0]?.claimedConversationId);
     // Same handle, same name, same pane — everything a history keyed on the
     // handle would have used to decide these were one continuous agent.
     expect(event.identity.tmuxId).toBe(event.previous.tmuxId);
@@ -308,14 +369,14 @@ describe("CONSTRUCTED: a different tmux generation", () => {
     const after = edited("status-change-after", (p) => {
       p["tmuxServerPid"] = null;
     });
-    const outcome = diff(before, after);
+    const outcome = diff(mustBaseline(before), after);
     expect(outcome.kind).toBe("held");
     if (outcome.kind !== "held") return;
     expect(outcome.why).toBe("generation-unreadable");
     // The sentence is the whole point of holding rather than dropping: S3 has
     // to be able to write down that the history stopped, and why.
     expect(outcome.reason).toContain("no tmux generation");
-    expect(outcome.reason).toContain(after.clock.at);
+    expect(outcome.reason).toContain(after.snapshot.clock.at);
   });
 
   test("S2-01: an EMPTY fleet with an unreadable generation is still diffed, because there is nothing to equate", () => {
@@ -324,11 +385,48 @@ describe("CONSTRUCTED: a different tmux generation", () => {
       p["tmuxServerPid"] = null;
       p["rows"] = [];
     });
-    const outcome = diff(before, drained);
+    const outcome = diff(mustBaseline(before), drained);
     expect(outcome.kind).toBe("diffed");
     // Six sessions were there and are not. That is evidence, and refusing it
     // would be refusing the truth at the moment it is most interesting.
     expect(kinds(diffed(before, drained))).toEqual(Array(6).fill("tmux-session-gone"));
+  });
+
+  test("S2-01: baselineOf refuses exactly what diff() holds, so a held snapshot cannot be promoted", () => {
+    // THE HOLE THE SECOND MINT SITE COULD HAVE REOPENED. A caller holding the
+    // snapshot `diff()` just held could otherwise call `baselineOf(b)` and
+    // advance anyway — one function call instead of one assignment is not a
+    // boundary. It returns null because the predicate is about the VALUE (rows
+    // with no readable generation), not about where the value came from.
+    const unplaceable = edited("status-change-after", (p) => {
+      p["tmuxServerPid"] = null;
+    });
+    expect(baselineOf(unplaceable)).toBeNull();
+
+    // And the same snapshot is what `diff()` holds — one predicate, two
+    // callers, checked here so they cannot drift into two.
+    expect(diff(mustBaseline(freshFixture("status-change-before")), unplaceable).kind).toBe("held");
+
+    // The exemption travels with it: an empty fleet is placeable either way.
+    const drained = edited("status-change-after", (p) => {
+      p["tmuxServerPid"] = null;
+      p["rows"] = [];
+    });
+    expect(baselineOf(drained)).not.toBeNull();
+  });
+
+  test("S2-01: a baseline recovered after a restart closes what ended while the daemon was down", () => {
+    // WHY THE SECOND MINT SITE EXISTS. S4 persists the producer's own bytes and
+    // re-blesses them on restart, so the recovered snapshot never came out of a
+    // diff. Without `baselineOf` the daemon would have to resume with
+    // `diff(null, …)`, which announces every session on the box as newly seen —
+    // a history in which the fleet appears out of nothing at every restart.
+    const restored = mustBaseline(freshFixture("session-gone-before"));
+    const outcome = diff(restored, freshFixture("session-gone-after"));
+    expect(outcome.kind).toBe("diffed");
+    if (outcome.kind !== "diffed") return;
+    // One session ended and one began — not six arrivals.
+    expect(kinds(outcome.events)).toEqual(["tmux-session-gone", "session-seen"]);
   });
 
   test("S2-01: 100 → null → 200 reads as a reboot rather than as one continuous world", () => {
@@ -346,9 +444,11 @@ describe("CONSTRUCTED: a different tmux generation", () => {
       p["tmuxServerPid"] = 999111;
     });
 
-    // The daemon's loop, as S3 will write it: the baseline moves only on a
-    // `diffed`, and the compiler is what stops it moving on a `held`.
-    let baseline = a;
+    // The daemon's loop, as S3 writes it: the baseline moves only on a
+    // `diffed`, and the compiler is what stops it moving on a `held` — `b` is
+    // an `AdmissibleSnapshot` and this variable is a `Baseline`, so the
+    // assignment that used to compile is now the error this describes.
+    let baseline = mustBaseline(a);
     const events: OverseerEvent[] = [];
     const holds: string[] = [];
     for (const next of [b, c]) {
@@ -389,11 +489,11 @@ describe("CONSTRUCTED: a different tmux generation", () => {
  */
 describe("a wait, and the deadline that tells a restarted one from a countdown", () => {
   test("REAL: the implied deadline does not move, even across a missed collection", () => {
-    // THIS IS THE MEASUREMENT THE TOLERANCE IS SIZED FROM, and it is here
-    // rather than only in a comment because it is a claim about somebody else's
-    // code. If the producer ever starts sampling `secondsLeft` independently of
-    // the deadline it derives it from, this goes red and
-    // `WAIT_DEADLINE_TOLERANCE_MS` is wrong rather than merely stale.
+    // THIS IS THE MEASUREMENT THE BOUND IS SHAPED BY, and it is here rather
+    // than only in a comment because it is a claim about somebody else's code.
+    // If the producer ever starts sampling `secondsLeft` independently of the
+    // deadline it derives it from, this goes red and `waitDeadlineToleranceMs`
+    // is wrong rather than merely stale.
     //
     // These two collections are 129.9 s apart — a collection was missed between
     // them, twice the ordinary 65 s cadence — and that is why this pair was
@@ -403,13 +503,16 @@ describe("a wait, and the deadline that tells a restarted one from a countdown",
     // together.
     const first = freshFixture("waiting-first");
     const second = freshFixture("waiting-second");
-    expect(second.clock.atMs - first.clock.atMs).toBe(129_937);
+    expect(second.snapshot.clock.atMs - first.snapshot.clock.atMs).toBe(129_937);
 
     const deadlines = (s: typeof first): Map<string, number> =>
       new Map(
-        s.rows
+        s.snapshot.rows
           .filter((r) => r.status.kind === "waiting")
-          .map((r) => [r.id, s.clock.atMs + (r.status.kind === "waiting" ? r.status.secondsLeft : 0) * 1000]),
+          .map((r) => [
+            r.id,
+            s.snapshot.clock.atMs + (r.status.kind === "waiting" ? r.status.secondsLeft : 0) * 1000,
+          ]),
       );
     const before = deadlines(first);
     const after = deadlines(second);
@@ -463,7 +566,7 @@ describe("CONSTRUCTED: a wait that was replaced by a longer one", () => {
     if (event?.kind !== "session-wait-restarted") return;
     expect(event.identity.tmuxId).toBe("$2082");
     expect(Date.parse(event.deadline) - Date.parse(event.previousDeadline)).toBeGreaterThan(
-      WAIT_DEADLINE_TOLERANCE_MS,
+      waitDeadlineToleranceMs(freshFixture("waiting-second").snapshot.tookMs),
     );
     // The status rides along so the log can say how long the new wait is.
     expect(event.status).toEqual({ kind: "waiting", secondsLeft: 3600 });
@@ -479,14 +582,15 @@ describe("CONSTRUCTED: a wait that was replaced by a longer one", () => {
     // calls what it is.
     //
     // Found by mutation: replacing 10 s with 120 s left the whole suite green
-    // until this case existed.
-    expect(WAIT_DEADLINE_TOLERANCE_MS).toBeLessThan(30_000);
+    // until this case existed, and the bound is no longer a constant at all.
+    const after = freshFixture("waiting-second");
+    expect(waitDeadlineToleranceMs(after.snapshot.tookMs)).toBeLessThan(30_000);
     const events = waits(900, 785);
     expect(kinds(events)).toEqual(["session-wait-restarted"]);
     const [event] = events;
     if (event?.kind !== "session-wait-restarted") return;
     const moved = Date.parse(event.deadline) - Date.parse(event.previousDeadline);
-    expect(moved).toBeGreaterThan(WAIT_DEADLINE_TOLERANCE_MS);
+    expect(moved).toBeGreaterThan(waitDeadlineToleranceMs(after.snapshot.tookMs));
     expect(moved).toBeLessThan(15_000);
   });
 
@@ -511,16 +615,59 @@ describe("CONSTRUCTED: a wait that was replaced by a longer one", () => {
     expect(waits(3600, 60)).toEqual([]);
   });
 
+  test("S2-03: a drift just past the collection's own duration is still rounding, not a restart", () => {
+    // The second term of the bound, isolated. This pair's later collection took
+    // 3.820 s and the drift here is 3.937 s — outside the sampling window and
+    // inside whole-second rounding, which is real: `secondsLeft` is an integer,
+    // so each implied deadline is already up to a second off the true one.
+    // Without `WAIT_DEADLINE_ROUNDING_MS` this row would be reported as a wait
+    // that restarted, on the strength of a rounding error.
+    const after = freshFixture("waiting-second");
+    expect(after.snapshot.tookMs).toBe(3_820);
+    const driftMs = GAP_MS - (900 - 775) * 1000;
+    expect(driftMs).toBeGreaterThan(after.snapshot.tookMs);
+    expect(driftMs).toBeLessThan(waitDeadlineToleranceMs(after.snapshot.tookMs));
+    expect(waits(900, 775)).toEqual([]);
+  });
+
+  test("S2-03: a SLOW COLLECTION does not manufacture a restart, and this is why the bound is not a constant", () => {
+    // Sol's second sequence. The countdown is read off the pane early in a
+    // collection and `collectedAt` is stamped when that collection ends, so the
+    // implied deadline carries however long the collection took. A 4 s
+    // collection followed by a 20 s one moves it ~16 s later with no wait
+    // having changed at all — and a fixed 10 s tolerance, sized off a capture
+    // whose collections all took 3.8 s, calls that a restarted wait.
+    //
+    // `tookMs` is IN BOTH SNAPSHOTS, so the uncertainty does not have to be
+    // guessed: it is bounded by how long the later collection ran.
+    const before = edited("waiting-first", (p) => {
+      p["tookMs"] = 4_000;
+      const row = rowsOf(p)[0];
+      if (row) row["status"] = { kind: "waiting", secondsLeft: 900 };
+    });
+    const after = edited("waiting-second", (p) => {
+      p["tookMs"] = 20_000;
+      const row = rowsOf(p)[0];
+      // A countdown consistent with the 129.937 s between the two clocks: the
+      // wait did not move. Only the sampling did.
+      if (row) row["status"] = { kind: "waiting", secondsLeft: 900 - 130 + 16 };
+    });
+    expect(diffed(before, after)).toEqual([]);
+  });
+
   test("S2-03: the boundary is exactly where the tolerance says it is", () => {
     // Derived from the constant rather than hard-coded, so changing the
     // tolerance moves this test's boundary with it instead of leaving it
     // quietly checking a number that used to matter.
     const before = freshFixture("waiting-first");
     const after = freshFixture("waiting-second");
-    const gapMs = after.clock.atMs - before.clock.atMs;
+    const gapMs = after.snapshot.clock.atMs - before.snapshot.clock.atMs;
     expect(gapMs).toBe(GAP_MS);
-    // The largest countdown that still keeps the deadline inside the tolerance.
-    const stillWithin = 900 - Math.ceil((gapMs - WAIT_DEADLINE_TOLERANCE_MS) / 1000);
+    // The largest countdown that still keeps the deadline inside the bound —
+    // and the bound comes off the LATER collection's own `tookMs`, so this
+    // moves with the fixture rather than with a constant somebody chose.
+    const tolerance = waitDeadlineToleranceMs(after.snapshot.tookMs);
+    const stillWithin = 900 - Math.ceil((gapMs - tolerance) / 1000);
     expect(waits(900, stillWithin)).toEqual([]);
     expect(kinds(waits(900, stillWithin + 1))).toEqual(["session-wait-restarted"]);
   });

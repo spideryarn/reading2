@@ -11,6 +11,7 @@
 import { describe, expect, test } from "vitest";
 
 import { fleetState } from "../tools/fleet/state.js";
+import { isRepoValue } from "../scripts/gjd-remote-repo.js";
 import type { SessionMeta, SessionState } from "../scripts/gjd-remote-tmux.js";
 import { admissible } from "../tools/overseer/admissible.js";
 import {
@@ -36,7 +37,7 @@ describe("the real captured snapshots", () => {
   });
 
   test("meta survives whole, so a reboot has a directory to resume into", () => {
-    const snapshot = freshFixture("status-change-before");
+    const snapshot = freshFixture("status-change-before").snapshot;
     const dirs = snapshot.rows.map((r) => (r.meta.version === 1 ? r.meta.dir : null));
     // The point of the union: every arm that has a dir has a real one, and a
     // legacy arm has none at all rather than an empty string standing in.
@@ -239,7 +240,7 @@ describe("admissibility", () => {
     // between collections, so this is the ordinary case — the reason the middle
     // arm exists at all.
     expect(verdict.verdict).toBe("duplicate");
-    expect(verdict.reason).toContain(first.clock.at);
+    expect(verdict.reason).toContain(first.snapshot.clock.at);
   });
 
   test("a collection that advanced is accepted, and carries the snapshot with it", () => {
@@ -247,7 +248,7 @@ describe("admissibility", () => {
     const verdict = admissible(before, parseObservation(rawFixture("status-change-after")));
     expect(verdict.verdict).toBe("accept");
     if (verdict.verdict !== "accept") return;
-    expect(verdict.snapshot.clock.atMs).toBeGreaterThan(before.clock.atMs);
+    expect(verdict.snapshot.snapshot.clock.atMs).toBeGreaterThan(before.snapshot.clock.atMs);
   });
 
   test("a payload that did not parse is rejected here, not thrown at the caller", () => {
@@ -505,6 +506,42 @@ describe("CONSTRUCTED: recovery metadata the producer would not have minted", ()
     ).toBe(true);
   });
 
+  test("S2-06A: the parser delegates to the producer's validator rather than agreeing with a copy of it", () => {
+    // NOT AN EXAMPLE TEST — a drift detector, and the only kind that can catch
+    // this. A copy of `isRepoValue` lived here for a few hours and passed every
+    // example anyone thought to write, because it was correct on the day it was
+    // written. What it could not do is change when the producer's grammar
+    // changes: `isRepoValue` guards `GJD_REPO` at the launcher and the `repo`
+    // field of the durable log, so a copy that stopped matching would have the
+    // Overseer refusing snapshots the box was right to send — silently, with
+    // typecheck green. This asserts the parser's verdict IS the validator's,
+    // whatever the validator currently says.
+    const values = [
+      "spideryarn/reading2",
+      "unknown",
+      "owner/name",
+      "a.b-c_d/e.f-g_h",
+      "Not A Slug",
+      "OWNER/NAME",
+      "a/b/c",
+      "../escape",
+      "owner/..",
+      "owner/.",
+      "owner/name/",
+      "owner",
+      "",
+      "/",
+      `${"x".repeat(101)}/name`,
+      `${"x".repeat(100)}/name`,
+    ];
+    for (const value of values) {
+      const parsed = withMeta((meta) => {
+        meta["repo"] = value;
+      });
+      expect(parsed.ok, `the parser and isRepoValue disagree about ${JSON.stringify(value)}`).toBe(isRepoValue(value));
+    }
+  });
+
   test("a repo value that is not a slug is refused, and `unknown` is not one of those", () => {
     for (const bad of ["Not A Slug", "a/b/c", "../escape", "owner/..", "owner/name/", ""]) {
       expect(
@@ -543,7 +580,7 @@ describe("CONSTRUCTED: equal clocks with disagreeing bodies", () => {
   function sameClockAs(first: ReturnType<typeof freshFixture>, edit: (payload: Record<string, JsonValue>) => void) {
     const payload = editableFixture("duplicate-second");
     edit(payload);
-    expect(payload["collectedAt"]).toBe(first.clock.at);
+    expect(payload["collectedAt"]).toBe(first.snapshot.clock.at);
     return admissible(first, parseObservation(payload));
   }
 

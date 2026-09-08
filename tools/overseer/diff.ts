@@ -60,7 +60,91 @@
  */
 import type { SessionState } from "../../scripts/gjd-remote-tmux.js";
 import type { AdmissibleSnapshot } from "./admissible.js";
-import type { ObservedRow, ObservedStatus } from "./observation.js";
+import type { FreshSnapshot, ObservedRow, ObservedStatus } from "./observation.js";
+
+/**
+ * A snapshot that has become the world the next one is compared against.
+ *
+ * **A SEPARATE PERMISSION FROM ADMISSIBILITY, and the P0 came back because it
+ * was not.** `admissible()` answers "is this evidence?"; this answers "may this
+ * stand as what the fleet WAS?" — and the second is strictly narrower, because
+ * a snapshot whose tmux generation nobody could read is perfectly good evidence
+ * and a hopeless world. The first fix expressed that by leaving `baseline` off
+ * the `held` arm, which discourages a caller and stops nobody: they still hold
+ * the snapshot they passed in, and `baseline = b` compiled. GPT Sol, 2026-09-08.
+ *
+ * So a baseline is a thing only `diff()` can produce. `admissible()` mints
+ * something you may diff AGAINST; only a completed diff mints something you may
+ * KEEP. `#snapshot` makes that nominal — no literal, spread or other class is
+ * assignable — and the class is not exported, so no other module can build one.
+ * The first call of a daemon's life is therefore `diff(null, next)`, which is
+ * also exactly what a cold start means.
+ */
+class BaselineBox {
+  readonly #snapshot: FreshSnapshot;
+
+  constructor(snapshot: FreshSnapshot) {
+    this.#snapshot = snapshot;
+  }
+
+  /** The world, for a caller that wants to log which collection it is standing on. */
+  get snapshot(): FreshSnapshot {
+    return this.#snapshot;
+  }
+}
+
+export type Baseline = BaselineBox;
+
+/**
+ * Can this snapshot stand as the world the next one is compared against?
+ *
+ * ONE PREDICATE, TWO CALLERS, AND THAT IS THE WHOLE DESIGN. `diff()` asks it
+ * before comparing and `baselineOf()` asks it before promoting, so there is no
+ * way to obtain a baseline the differ would have refused — not by keeping the
+ * snapshot you passed in, and not by re-blessing bytes off the disk. Writing
+ * the test twice is how the two would come apart.
+ *
+ * **It is a question about the VALUE, not about where the value came from.**
+ * That is what makes it hold: a provenance rule ("only `diff()` may mint one")
+ * is one API call away from being wrong forever, and this one cannot be, because
+ * the property is checkable on any snapshot at any time.
+ *
+ * The property: a snapshot with sessions in it and no readable `tmuxServerPid`
+ * cannot be placed in a world. Its `$7` may be a fresh allocation wearing an
+ * old number, so comparing anything to it attributes one session's history to
+ * another. An EMPTY fleet with an unreadable generation is fine — there are no
+ * handles to equate — and refusing it would stall the history over a payload
+ * that cannot mislead anyone.
+ */
+function unplaceable(snapshot: FreshSnapshot): boolean {
+  return snapshot.tmuxServerPid === null && snapshot.rows.length > 0;
+}
+
+/**
+ * A baseline from a snapshot that did not come out of a `diff()` — the restart
+ * path, and the only other way to get one.
+ *
+ * **WHY THIS EXISTS.** S4 persists the last good snapshot as the producer's own
+ * wire bytes and, after a crash, re-parses and re-blesses them. That snapshot is
+ * genuinely admissible and has no diff behind it, so without this the daemon
+ * would have to restart with `diff(null, …)` — which announces every session on
+ * the box as newly seen, every time it restarts. A history that says the fleet
+ * appeared out of nothing each morning is the same class of fiction as the one
+ * the P0 was about, arrived at from the other end.
+ *
+ * **WHY IT IS NOT A HOLE.** It refuses exactly what `diff()` holds, by calling
+ * the same predicate: a snapshot whose world cannot be placed is not a baseline
+ * however it was obtained, so a caller holding one this module just held gets
+ * `null` here too.
+ *
+ * **READ THE NULL.** `diff(baselineOf(x), next)` compiles when this returns
+ * null and quietly means "cold start", which announces the whole fleet. Branch
+ * on it and say something; do not pass it straight through.
+ */
+export function baselineOf(snapshot: AdmissibleSnapshot): Baseline | null {
+  const fresh = snapshot.snapshot;
+  return unplaceable(fresh) ? null : new BaselineBox(fresh);
+}
 
 /** Which session, in the best terms available — one of which is not a fact. */
 export type SessionIdentity = {
@@ -266,9 +350,10 @@ export type OverseerEvent =
    * DEADLINES, NOT KEY MATERIAL. Putting `secondsLeft` in the key would bring
    * back the fifty-one events the measurement above is about. What separates
    * the two cases is the IMPLIED DEADLINE — when the observation was taken,
-   * plus what was left — which an ordinary countdown holds roughly still and a
-   * restarted wait shoves later. See `WAIT_DEADLINE_TOLERANCE_MS` for how much
-   * "roughly" is.
+   * plus what was left — which an ordinary countdown holds still and a
+   * restarted wait shoves later. See `waitDeadlineToleranceMs`, which asks the
+   * producer how uncertain this particular pair of readings is rather than
+   * assuming a number.
    *
    * A deadline that moves EARLIER is silent. That is a countdown, a wait
    * shortened by hand, or jitter; none of it is a new wait, and the wait's end
@@ -289,37 +374,57 @@ export type OverseerEvent =
     };
 
 /**
- * How far an implied deadline may drift later before it is a new wait.
+ * The part of the deadline bound that is not measured: whole-second rounding on
+ * both countdowns, plus a second of slack for a clock the box adjusted.
  *
- * **COLLECTION JITTER IS NOT THE TERM, and assuming it was is how this constant
- * was nearly set twenty times too large.** The obvious reasoning — collections
- * are ~65 s apart, so the tolerance must exceed that — is wrong, because the
- * two halves of the deadline move TOGETHER: the producer derives `secondsLeft`
- * from a real deadline rather than sampling it independently, so a later
- * collection carries a proportionally smaller countdown and the sum does not
- * move. Measured on the live box, 2026-09-08 05:43–05:49 UTC: five consecutive
- * collections, three `waiting` sessions, **implied deadline stable to 72 ms
- * across all three sessions over five and a half minutes** — which is the
- * rounding of a whole-second countdown and nothing else. The real pair in
- * `tests/fixtures/overseer-snapshots/waiting-{first,second}.json` is two of
- * those five collections, and `tests/overseer-diff.test.ts` re-measures it.
- *
- * What CAN move it is the gap between the two moments inside one collection:
- * the countdown is read off the pane early in the run and `collectedAt` is
- * stamped when the run ends, so a slow collection following a fast one shifts
- * the implied deadline by the difference in their durations. That capture ran
- * 3.81–3.90 s (95 ms of spread); the earlier one in the fixtures README ran
- * 12.3–14.4 s, and the README's observed range of 5.7–11.0 s puts the worst
- * case around 5 s. Ten seconds is about twice that.
- *
- * The cost is stated rather than hidden — **a wait extended by less than ten
- * seconds is invisible** — and it is the right side to err on: a false positive
- * is a fabricated event in the history, which is this module's worst outcome,
- * while the smallest restart worth recording is minutes long. A two-minute
- * tolerance, by contrast, would have hidden a wait restarted from 60 s to
- * 120 s, which is exactly the defect S2-03 is about.
+ * `secondsLeft` is an integer, so each implied deadline is already up to a
+ * second away from the real one, and the difference of two of them up to two.
  */
-export const WAIT_DEADLINE_TOLERANCE_MS = 10_000;
+export const WAIT_DEADLINE_ROUNDING_MS = 2_000;
+
+/**
+ * How far an implied deadline may drift later, for THIS pair of collections,
+ * before it is a new wait rather than the same one seen twice.
+ *
+ * **NOT A CONSTANT, AND IT WAS ONE FOR A DAY.** Two wrong answers came before
+ * this, and both are worth keeping because the second looks like the first's
+ * lesson learned:
+ *
+ * 1. **120 s, sized from the collection interval.** Wrong because jitter
+ *    CANCELS: the producer derives `secondsLeft` from a real deadline rather
+ *    than sampling it independently, so a later collection carries a
+ *    proportionally smaller countdown and the sum does not move. Measured on
+ *    the live box, 2026-09-08 05:43–05:49 UTC — six consecutive collections,
+ *    three `waiting` sessions, implied deadline stable to **72 ms**, and it did
+ *    not move when a collection was MISSED and the interval doubled. A 120 s
+ *    tolerance would have hidden a wait restarted from 60 s to 120 s, which is
+ *    the defect S2-03 is about.
+ * 2. **10 s, sized from the spread of collection durations in that capture.**
+ *    Right about the term that moves — the countdown is read off the pane early
+ *    in a run and `collectedAt` is stamped when the run ends, so the implied
+ *    deadline carries the run's length — but wrong to freeze it. Every
+ *    collection in that capture took 3.8–3.9 s. On a loaded box they take
+ *    5.7–11.0 s (the fixtures README), and there is no ceiling: a 4 s
+ *    collection followed by a 20 s one moves the deadline ~16 s later with no
+ *    wait having changed, and a fixed 10 s bound calls that a restart. GPT Sol.
+ *
+ * **The producer tells us the number.** `tookMs` is on every snapshot, so the
+ * sampling uncertainty is bounded rather than assumed: the countdown was read
+ * somewhere inside the later collection, so its implied deadline is at most
+ * that collection's own duration too late. Nothing about the earlier collection
+ * enters — its duration can only push its deadline LATER, which makes the
+ * difference smaller, and a difference that shrinks is not reported anyway.
+ *
+ * The cost, stated rather than hidden: **on a collection that took twenty
+ * seconds, a wait extended by less than twenty-two is invisible.** That is the
+ * right side to err on — a false positive is a fabricated event, which is this
+ * module's worst outcome, and the smallest restart worth recording is minutes
+ * long — and unlike a constant it tightens automatically on a healthy box,
+ * where the bound is about six seconds.
+ */
+export function waitDeadlineToleranceMs(nextTookMs: number): number {
+  return nextTookMs + WAIT_DEADLINE_ROUNDING_MS;
+}
 
 /**
  * How two snapshots' tmux generations relate.
@@ -352,10 +457,15 @@ export type HoldReason = "generation-unreadable";
  * What `diff()` did — and, crucially, whether the baseline may move.
  *
  * A DISCRIMINATED UNION RATHER THAN AN ARRAY, so that "we could not safely
- * compare these" is a thing the caller has to answer for. The next snapshot is
- * reachable as `baseline` only on the `diffed` arm, so a daemon cannot advance
- * past a snapshot this module refused to diff — the compiler stops it, rather
- * than a comment asking it not to. GPT Sol's S2-01.
+ * compare these" is a thing the caller has to answer for.
+ *
+ * **WITHHOLDING `baseline` FROM THE `held` ARM IS NOT WHAT STOPS THE CALLER**,
+ * and believing it was is how the P0 survived its first fix. The caller still
+ * holds the snapshot it passed in; `baseline = b` compiled and nothing said a
+ * word. What stops it is `Baseline` being a type this module alone can produce,
+ * and only from a snapshot that passes `unplaceable` — so the shape of this
+ * union is a convenience for reading the result, and the guarantee lives in the
+ * type of the thing it carries. GPT Sol's S2-01, twice.
  *
  * **A hold is not silence, and it must not become silence.** "Correct and
  * unavailable" and "nothing is happening" look identical in an event log, and
@@ -367,7 +477,7 @@ export type HoldReason = "generation-unreadable";
  * with no session in it would be the first thing to make that union incoherent.
  */
 export type DiffOutcome =
-  | { kind: "diffed"; events: OverseerEvent[]; baseline: AdmissibleSnapshot }
+  | { kind: "diffed"; events: OverseerEvent[]; baseline: Baseline }
   | { kind: "held"; why: HoldReason; reason: string };
 
 /**
@@ -397,8 +507,9 @@ export type DiffOutcome =
  * S2-08. Also in tests/fixtures/overseer-snapshots/README.md, under what the
  * fixtures do not cover.
  */
-export function diff(previous: AdmissibleSnapshot | null, next: AdmissibleSnapshot): DiffOutcome {
-  const at = next.clock.at;
+export function diff(previous: Baseline | null, next: AdmissibleSnapshot): DiffOutcome {
+  const nextSnapshot = next.snapshot;
+  const at = nextSnapshot.clock.at;
 
   // BEFORE ANYTHING IS COMPARED, AND BEFORE THE BASELINE COULD MOVE. A snapshot
   // with sessions in it and no readable generation cannot be placed in a world:
@@ -417,27 +528,32 @@ export function diff(previous: AdmissibleSnapshot | null, next: AdmissibleSnapsh
   // evidence, and refusing it would stall the history over a payload that
   // cannot mislead anyone.
   //
-  // ONLY `next` IS CHECKED, and `previous` needs no check for a reason worth
-  // writing down: a baseline can only come from a `diffed` result, and this
-  // guard is what a `diffed` result has passed — so a `previous` with rows and
-  // no generation is unreachable. Checking it anyway would be worse than
-  // useless: there is no escape from it, so a baseline restored from an older
-  // store could stall the history for good rather than for one collection.
-  if (next.tmuxServerPid === null && next.rows.length > 0) {
+  // ONLY `next` IS CHECKED, and `previous` needs no check because the TYPE has
+  // already made it. Every `Baseline` in existence went through `unplaceable`
+  // — here or in `baselineOf()` — so a `previous` with rows and no generation
+  // cannot be constructed. This used to be an argument about callers being
+  // disciplined, which is what GPT Sol reopened the P0 over.
+  if (unplaceable(nextSnapshot)) {
     return {
       kind: "held",
       why: "generation-unreadable",
       reason:
-        `the collection at ${at} lists ${next.rows.length} sessions and no tmux generation, ` +
+        `the collection at ${at} lists ${nextSnapshot.rows.length} sessions and no tmux generation, ` +
         `so its handles cannot be told apart from the ones already recorded`,
     };
   }
 
   if (previous === null) {
-    return { kind: "diffed", events: next.rows.map((row) => seen(row, at, next.tmuxServerPid)), baseline: next };
+    return {
+      kind: "diffed",
+      events: nextSnapshot.rows.map((row) => seen(row, at, nextSnapshot.tmuxServerPid)),
+      baseline: new BaselineBox(nextSnapshot),
+    };
   }
 
-  const relation = generationRelation(previous.tmuxServerPid, next.tmuxServerPid);
+  const previousSnapshot = previous.snapshot;
+
+  const relation = generationRelation(previousSnapshot.tmuxServerPid, nextSnapshot.tmuxServerPid);
   switch (relation) {
     case "changed":
       // A DIFFERENT WORLD, so nothing is compared across it. Every handle in
@@ -448,10 +564,10 @@ export function diff(previous: AdmissibleSnapshot | null, next: AdmissibleSnapsh
       return {
         kind: "diffed",
         events: [
-          ...previous.rows.map((row) => gone(row, at, previous.tmuxServerPid, "tmux-server-changed")),
-          ...next.rows.map((row) => seen(row, at, next.tmuxServerPid)),
+          ...previousSnapshot.rows.map((row) => gone(row, at, previousSnapshot.tmuxServerPid, "tmux-server-changed")),
+          ...nextSnapshot.rows.map((row) => seen(row, at, nextSnapshot.tmuxServerPid)),
         ],
-        baseline: next,
+        baseline: new BaselineBox(nextSnapshot),
       };
     case "same":
     case "unverifiable":
@@ -465,22 +581,22 @@ export function diff(previous: AdmissibleSnapshot | null, next: AdmissibleSnapsh
   // Keyed by HANDLE, not by identity, because that is the question being asked
   // here: is this tmux session still there, and if so is it still the same
   // conversation? Identity keys the register; the handle keys the comparison.
-  const before = new Map(previous.rows.map((row) => [row.id, row]));
-  const after = new Map(next.rows.map((row) => [row.id, row]));
+  const before = new Map(previousSnapshot.rows.map((row) => [row.id, row]));
+  const after = new Map(nextSnapshot.rows.map((row) => [row.id, row]));
 
   const events: OverseerEvent[] = [];
 
-  for (const row of previous.rows) {
+  for (const row of previousSnapshot.rows) {
     // Only the tmux session going removes a row. Claude exiting does NOT — the
     // row stays and becomes `no-claude` — which is why this event has the word
     // `tmux` in it and why a consumer must not read it as "the agent finished".
-    if (!after.has(row.id)) events.push(gone(row, at, previous.tmuxServerPid, "absent-from-snapshot"));
+    if (!after.has(row.id)) events.push(gone(row, at, previousSnapshot.tmuxServerPid, "absent-from-snapshot"));
   }
 
-  for (const row of next.rows) {
+  for (const row of nextSnapshot.rows) {
     const was = before.get(row.id);
     if (was === undefined) {
-      events.push(seen(row, at, next.tmuxServerPid));
+      events.push(seen(row, at, nextSnapshot.tmuxServerPid));
       continue;
     }
     // ONE-WAY EVIDENCE. A changed claim means the conversation changed; an
@@ -490,7 +606,7 @@ export function diff(previous: AdmissibleSnapshot | null, next: AdmissibleSnapsh
       events.push({
         kind: "session-replaced",
         at,
-        tmuxServerPid: next.tmuxServerPid,
+        tmuxServerPid: nextSnapshot.tmuxServerPid,
         key: sessionKey(identityOf(row)),
         identity: identityOf(row),
         previous: identityOf(was),
@@ -503,12 +619,12 @@ export function diff(previous: AdmissibleSnapshot | null, next: AdmissibleSnapsh
     // key as `waiting`, so without this a wait that ended and was replaced by a
     // longer one is one unbroken wait in the history. See
     // `session-wait-restarted`.
-    const restarted = waitRestart(was.status, previous.clock.atMs, row.status, next.clock.atMs);
+    const restarted = waitRestart(was.status, previousSnapshot.clock.atMs, row.status, nextSnapshot);
     if (restarted !== null) {
       events.push({
         kind: "session-wait-restarted",
         at,
-        tmuxServerPid: next.tmuxServerPid,
+        tmuxServerPid: nextSnapshot.tmuxServerPid,
         key: sessionKey(identityOf(row)),
         identity: identityOf(row),
         previousDeadline: restarted.previousDeadline,
@@ -525,7 +641,7 @@ export function diff(previous: AdmissibleSnapshot | null, next: AdmissibleSnapsh
     events.push({
       kind: "session-status",
       at,
-      tmuxServerPid: next.tmuxServerPid,
+      tmuxServerPid: nextSnapshot.tmuxServerPid,
       key: sessionKey(identityOf(row)),
       identity: identityOf(row),
       from,
@@ -534,7 +650,7 @@ export function diff(previous: AdmissibleSnapshot | null, next: AdmissibleSnapsh
     });
   }
 
-  return { kind: "diffed", events, baseline: next };
+  return { kind: "diffed", events, baseline: new BaselineBox(nextSnapshot) };
 }
 
 /**
@@ -548,12 +664,13 @@ function waitRestart(
   before: ObservedStatus,
   beforeAtMs: number,
   after: ObservedStatus,
-  afterAtMs: number,
+  afterSnapshot: FreshSnapshot,
 ): { previousDeadline: string; deadline: string } | null {
   if (before.kind !== "waiting" || after.kind !== "waiting") return null;
   const previousDeadlineMs = beforeAtMs + before.secondsLeft * 1000;
-  const deadlineMs = afterAtMs + after.secondsLeft * 1000;
-  if (deadlineMs - previousDeadlineMs <= WAIT_DEADLINE_TOLERANCE_MS) return null;
+  const deadlineMs = afterSnapshot.clock.atMs + after.secondsLeft * 1000;
+  // The bound comes off the later collection itself — see `waitDeadlineToleranceMs`.
+  if (deadlineMs - previousDeadlineMs <= waitDeadlineToleranceMs(afterSnapshot.tookMs)) return null;
   return {
     previousDeadline: new Date(previousDeadlineMs).toISOString(),
     deadline: new Date(deadlineMs).toISOString(),
