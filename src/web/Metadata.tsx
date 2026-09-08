@@ -16,9 +16,23 @@
  * (docs/plans/260825c-bottom-bar.md#why-the-bottom), and a page has no such problem
  * because it is not beside anything.
  *
- * **Nothing here is generated and nothing here is a model call.** This is the
- * page you open when something looks wrong, so every number on it is read off
- * the artefacts.
+ * **Opening it generates nothing and makes no model call.** This is the page
+ * you open when something looks wrong, so every number on it is read off the
+ * artefacts.
+ *
+ * That is narrower than *nothing here is generated*, which is what this line
+ * said until 2026-09-08 and which had stopped being true twice over: the page
+ * shows the hierarchy's `gist` and `summary` (§ In one sentence), and since
+ * 2026-09-07 it can start a run of its own (§ Generate it again, below, one
+ * button per step). Neither happens on arrival, and *on arrival* is the half a
+ * reader here is trusting.
+ *
+ * It is worth saying why the old sentence is worth this much space. It was
+ * copied out of this docblock into the Metadata button's hover card on
+ * 2026-09-07, where a reader would have read it — the card was corrected before
+ * it shipped, but only because a cross-family review went looking
+ * (docs/plans/260907b-rich-tooltips-on-the-dock-modes.md § Stage 2). A stale
+ * header is not a private matter between a file and its next author.
  *
  * ## The second pass, 2026-08-25: what came back from the original
  *

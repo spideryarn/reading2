@@ -607,8 +607,17 @@ in the list and still openable. Losing the anchor is the safe failure, exactly a
 **And since 2026-08-31 it is not invisible either.** Every commented block carries a `Bookmark` in
 the prose gutter ([`BlockGutter.tsx`](../../src/web/BlockGutter.tsx)), counted from `comments` by
 **`blockId` alone** — never from the resolved marks. That is the point of it: the block id is the
-half of the anchor that cannot drift, so a comment whose quote has been re-extracted away still has
-somewhere to show. Click it and the dialog opens on the block's first comment in reading order.
+*durable* half of the anchor, so a comment whose quote has been re-extracted away can still have
+somewhere to show, for as long as its block keeps that id.
+
+**Durable is not immutable, and the difference bit once.** Stage 3 carries an id over by matching a
+new block to an old one **by its text** ([block-ids.md § Surviving stage 2](block-ids.md#surviving-stage-2-which-is-the-case-that-actually-matters)),
+so a block whose words changed can be re-minted and the comment on it then points at an id no block
+carries. What keeps the comment itself is not the id at all: it is stored against the article rather
+than a revision. Worth stating because the tidier version — *pinned to the permanent id, so the
+comment survives* — has the facts right and the causation wrong, which reads as true and got as far
+as a reader-facing tooltip on 2026-09-07 before a review caught it
+([260907b § Stage 2](../plans/260907b-rich-tooltips-on-the-dock-modes.md)). Click it and the dialog opens on the block's first comment in reading order.
 
 Two things follow, and both are easy to get wrong:
 

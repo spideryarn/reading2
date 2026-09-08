@@ -64,7 +64,7 @@ import { MODE_LABEL } from "../src/title-text.js";
 import type { PublicArtefacts } from "../src/types.js";
 import { Dock } from "../src/web/Dock.js";
 import { markedModes } from "../src/web/visitor.js";
-import { EXPERIMENTAL_ON } from "./helpers/experimental-fixtures.js";
+import { EXPERIMENTAL_ON, EXPERIMENTAL_SIGNED_OUT } from "./helpers/experimental-fixtures.js";
 
 /* ---------------------------------------------------------------- harness -- */
 
@@ -536,10 +536,13 @@ describe("Comments, read by somebody who did not add the article", () => {
    * thing wanted and the last thing reached.
    *
    * **Not `readersOwnWork("Comments")`**, which is what this button said half
-   * of until today. That sentence ends *a shared link carries the piece, never
-   * anybody's notes about it*, and it stopped being true on 2026-09-04 when a
-   * shared link started carrying them (260904c § Stage 3). The drawer dropped
-   * the notice that day and the button kept it.
+   * of until 2026-09-07. That sentence ended *a shared link carries the piece,
+   * never anybody's notes about it*, and it stopped being true on 2026-09-04
+   * when a shared link started carrying them (260904c § Stage 3). The drawer
+   * dropped the notice that day and the button kept it. The function was
+   * deleted on 2026-09-08 with the `readers-own` variant that called it, so
+   * there is no longer a wrong sentence for this one to be chosen over — which
+   * is why the note stays: it is the only place the choice is recorded.
    *
    * So this asserts the *shape*, and one clause of the claim, and deliberately
    * not the sentence — pinning the wording is how the old one survived a
@@ -584,5 +587,152 @@ describe("Comments, read by somebody who did not add the article", () => {
     expect(paras[1], "the loose arm has lost where the press lands").toContain(
       "back in the article they are about",
     );
+  });
+});
+
+/* ------------------------- the last two buttons to carry an OS box --------- */
+
+/**
+ * **The wordmark and the command button**, which took cards on 2026-09-08 —
+ * the two the stage before this one deliberately left alone, because neither
+ * goes through `DockLink` and neither was one of the three Greg named.
+ *
+ * They are the ends of the row rather than a pair: `DockHome` is the first
+ * thing in the bar and `DockCommands` the button after the modes. What they
+ * share is only what put them last — a `title` attribute, and no card.
+ *
+ * `barControl` cannot find the wordmark: it is a `.logo.dock-home`, not a
+ * `.dock-btn`, because § the bar's fit ladder and the logo animations both key
+ * on that class (design-logo.md § Two mount points). So it gets its own finder
+ * rather than a widened one, which would have quietly started matching the
+ * Feedback trigger too.
+ */
+function homeControl(): HTMLElement {
+  const hit = host.querySelectorAll<HTMLElement>(".dock .dock-home");
+  expect(hit, "no single wordmark in the bar").toHaveLength(1);
+  return hit[0] as HTMLElement;
+}
+
+describe("the wordmark and the command button", () => {
+  it("each open a card of two paragraphs, headed with their own name", async () => {
+    reading();
+    for (const [el, name] of [
+      [homeControl(), "Spideryarn"],
+      [barControl("Commands"), "Commands"],
+    ] as const) {
+      const { head, paras } = await cardFor(el);
+      expect(head, `${name}'s card is headed with somebody else's name`).toBe(name);
+      expect(paras.length, `${name}'s card is not two paragraphs`).toBe(2);
+      for (const p of paras) expect(p, `${name} has an empty paragraph`).not.toBe("");
+    }
+  });
+
+  it("do not say the first paragraph twice, or the button's own word back", async () => {
+    reading();
+    for (const [el, name] of [
+      [homeControl(), "Spideryarn"],
+      [barControl("Commands"), "Commands"],
+    ] as const) {
+      const { paras } = await cardFor(el);
+      const [what, how] = paras as [string, string];
+      expect(restates(what, how), `${name}: the second paragraph is the first again`).toBe(false);
+      expect(restates(name, what), `${name}: the first paragraph is the label again`).toBe(false);
+    }
+  });
+
+  /**
+   * The `title` these two carried until 2026-09-08, asserted gone — the
+   * wordmark in both arms of the bar, the command button in the only one it
+   * appears in. Same reason as the three above: a `title` beside a card is a
+   * race, not a fallback.
+   */
+  it("carry no `title` attribute", () => {
+    reading();
+    expect(homeControl().hasAttribute("title"), "the OS box is back on the wordmark").toBe(false);
+    expect(barControl("Commands").hasAttribute("title"), "the OS box is back on Commands").toBe(
+      false,
+    );
+    loose();
+    expect(homeControl().hasAttribute("title"), "the OS box is back off the reading view").toBe(
+      false,
+    );
+  });
+
+  /**
+   * **The one clause in this file pinned to its wording**, and it is pinned
+   * because a decision made elsewhere depends on it existing here.
+   * `DockCommands` § The glyph is `Command` argues that the label should say
+   * what the button opens rather than how else to open it — which leaves this
+   * card as the only surface in the app that can teach the chord. On the phone
+   * this button was built for, the `title` it replaced never showed at all.
+   *
+   * **Both complete forms**, which the first draft did not do: it asserted the
+   * character `⌘` alone, which passes on a card saying *press ⌘* with the `K`
+   * gone and says nothing at all about the half a reader without a Mac needs.
+   * GPT Sol, 2026-09-08 — and a fair hit on a test whose whole point is that
+   * this is the only surface carrying the chord.
+   */
+  it("teaches both halves of the keyboard chord, which the label deliberately does not", async () => {
+    reading();
+    const { paras } = await cardFor(barControl("Commands"));
+    const card = paras.join(" ");
+    expect(card, "the card has lost the Mac chord").toContain("⌘K");
+    expect(card, "the card has lost the chord for everybody else").toContain("Ctrl-K");
+  });
+
+  /**
+   * **A stranger has no shelf**, which is the same shape as the Comments bug
+   * stage 2 found the day before: a sentence true for the owner, read out to a
+   * visitor, on a button the visitor can see. Signed out, `/` is the landing
+   * page (App.tsx § the signed-out routes).
+   *
+   * **The card stays two paragraphs and changes the first**, rather than
+   * gaining a `state` above it — Tooltip.tsx § `ControlTip` has the two
+   * reasons, and this is where a regression back to three would show. So the
+   * count is asserted as well as the words: a `state` reappearing here would
+   * put a denial over the thing denied and no assertion about content alone
+   * would notice.
+   *
+   * Clauses, never the sentence: pinning the wording is how the last one
+   * survived a rewrite of everything around it.
+   */
+  it("sends a signed-out reader to the front page, in the paragraph the owner reads", async () => {
+    reading({ experimental: EXPERIMENTAL_SIGNED_OUT });
+    const { paras } = await cardFor(homeControl());
+    expect(paras.length, "the signed-out wordmark card is not two paragraphs").toBe(2);
+    expect(paras[0], "it does not say where the press actually lands").toMatch(/front page/i);
+    expect(paras[0], "it still promises a library to a reader who has none").not.toMatch(
+      /your library/i,
+    );
+  });
+
+  /**
+   * **The frame before the store knows**, which is the one that would have
+   * shipped a false sentence to the owner rather than the visitor.
+   *
+   * `experimental-store.ts` opens on `{loaded: false, signedIn: false}` and only
+   * writes `loaded: true` when its auth callback lands, so a bare `signedIn`
+   * read here says *signed out* about a reader who is not — the frame
+   * tests/dock-corner-controls.test.tsx already documents from the other side.
+   * The bar asks `loaded && !signedIn` instead, and *unknown* falls to the
+   * owner's sentence.
+   *
+   * Built inline rather than added to the fixtures, for the reason their own
+   * header gives about `broken()`: a near-identical object in a shared list is
+   * what goes stale one field at a time. GPT Sol, 2026-09-08.
+   */
+  it("does not call a reader signed out before the store has found out", async () => {
+    reading({ experimental: { ...EXPERIMENTAL_SIGNED_OUT, loaded: false } });
+    const { paras } = await cardFor(homeControl());
+    expect(paras[0], "an unknown reader is told they have no library").toMatch(/your library/i);
+  });
+
+  /** And the owner is told none of it, because for them none of it is true. */
+  it("sends a signed-in reader to their library, and says nothing about signing in", async () => {
+    reading();
+    const { paras } = await cardFor(homeControl());
+    expect(paras.length, "the signed-in wordmark card is not two paragraphs").toBe(2);
+    expect(paras[0], "the owner is no longer sent to their library").toMatch(/your library/i);
+    expect(paras.join(" "), "the owner is told about signing in").not.toMatch(/signed out|sign in/i);
   });
 });
