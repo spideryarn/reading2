@@ -885,6 +885,204 @@ export function parsePane(capture: string): PaneQuestion {
   return parseCursorMenu(lines);
 }
 
+/* ------------------------------------ which permission mode it launched in -- */
+
+/**
+ * **WHICH PERMISSION MODE THIS SESSION IS IN**, read off its status bar.
+ *
+ * ## The measured defect this exists for
+ *
+ * A Claude Code session on this box comes up in one of two permission modes. In
+ * **auto mode** a classifier answers its permission prompts. In **default
+ * (manual) mode** it stops at the first command it cannot approve on its own —
+ * in practice `git fetch`, `git log`, `npm run worktree:setup` or an MCP read,
+ * i.e. within the first minute of almost any brief written here — and then
+ * waits for a human who is asleep.
+ *
+ * **34.9 agent-hours lost since 2026-09-06**, independently reproducing an
+ * earlier measurement of 41.6 hours since 09-01. **20% of launches were
+ * defective** (28 auto, 7 default), and two sessions launched 25 seconds apart
+ * from identical generated job scripts came up in opposite modes. The longest
+ * single stall was **7.38 hours**; the next five were 6.34h, 5.75h, 5.35h,
+ * 5.33h and 4.30h. The longest stall in any always-auto session over three days
+ * was 21 minutes. `scripts/gjd-remote.ts` was fixed on 2026-09-08 to pass
+ * `--permission-mode auto`, which covers `gjd-remote` launches and not
+ * interactive or `EnterWorktree` ones.
+ *
+ * **Nothing else on this box notices.** `gjd-remote log` lists a stalled
+ * default-mode session as `running`, byte-identical to a healthy one. That is
+ * why the cost is written down here: a check whose value is recorded is one
+ * nobody deletes as speculative.
+ *
+ * ## Why this is a substring test and not a model
+ *
+ * The status bar says it verbatim, and the dashboard is already capturing
+ * panes. This is deliberately NOT the hard problem — deciding whether an
+ * agent's prose ended with a question for Greg needs something that can read.
+ * This one is two adjacent lines of terminal chrome, which is exactly why it is
+ * worth doing first.
+ *
+ * ## Four arms, and each is a different thing to draw
+ *
+ * `cannot-tell` IS THE WHOLE POINT and must never collapse into either
+ * neighbour. Rendered as "it is fine" it hides the defect; rendered as "it is
+ * broken" it cries wolf on twenty sessions and teaches Greg to ignore the one
+ * signal this is for — which costs more than the defect does. `not-applicable`
+ * is a fourth arm rather than a flavour of `not-auto` for the same reason in
+ * the other direction: a shell has no permission mode, and reporting one as a
+ * defective launch is a false alarm about a session that is working perfectly.
+ *
+ * `not-auto` carries the mode's own name rather than a boolean, because the
+ * page has to say *what* it is in — "manual mode" is a sentence a person can
+ * act on and "not auto" is one they have to go and check.
+ */
+export type PaneAutoMode =
+  /** The status bar says `auto mode on`. This is the healthy launch. */
+  | { kind: "auto" }
+  /**
+   * The status bar names a mode we know is not auto. `mode` is the name it
+   * printed, so the page can say which.
+   */
+  | { kind: "not-auto"; mode: string }
+  /**
+   * We could not read it. **Not a claim in either direction** — the status bar
+   * is off this screenful, the pane is mid-redraw, or it names a mode this
+   * build has never met. `why` says which.
+   */
+  | { kind: "cannot-tell"; why: string }
+  /**
+   * There is no permission mode to read: a shell, a scheduled wait, a pane with
+   * no Claude in it. **Never produced by `readPaneMode`** — it is a fact about
+   * what is RUNNING in the session, which the pane text cannot settle and
+   * `status.ts` already has. See `modeApplicability` in collect.ts.
+   */
+  | { kind: "not-applicable"; why: string };
+
+/**
+ * The status bar's first line: `  [Opus 5 (1M context)] worktrees/foo · ██░░ 25%`.
+ *
+ * **THIS IS THE ANCHOR, AND THE ANCHOR IS THE WHOLE DESIGN.** The obvious rule
+ * — does the pane contain the substring `auto mode on` — is wrong on this box
+ * in the one direction that matters. Agents here read and write about the
+ * dashboard constantly, and a brief that quotes a status bar verbatim (this
+ * feature's own brief does) puts those exact bytes into a pane's scrollback. A
+ * session in manual mode displaying a document about auto mode would report
+ * itself healthy, which is precisely the session we are looking for.
+ *
+ * So the mode line only counts when the line DIRECTLY ABOVE it is this one.
+ * Prose that quotes one line does not also reproduce the model-and-directory
+ * line above it, and two adjacent lines of chrome is a coincidence nothing on
+ * this box has produced.
+ *
+ * **Measured before it was written**, against every real capture we have: the
+ * 24 pinned fixtures under tests/fixtures/fleet-panes/ and all 19 live panes on
+ * the box at 09:40 on 2026-09-08. Every mode line in all 43 was directly under
+ * a chrome line — 43 anchored, 0 loose — and no chrome line ever appeared
+ * without one under it.
+ *
+ * **Deliberately loose about the tail.** The context bar and the percentage are
+ * not required, because the line is truncated with `…` when the directory is
+ * long (`fb2c-feedback-button-on-homepage`, live, 2026-09-08) and absent
+ * entirely on a session too new to have used any context
+ * (`none-slash-command-autocomplete.txt`). The bracketed model name and the
+ * indent are what every one of them has.
+ */
+const STATUS_CHROME = /^ {0,4}\[[^\]\n]{1,120}\] /;
+
+/**
+ * The status bar's second line — `  ⏵⏵ auto mode on (shift+tab to cycle) · …`
+ * or `  ⏸ manual mode on · ← for agents`.
+ *
+ * The glyph is required and is not decoration: `⏵⏵` (U+23F5 twice) and `⏸`
+ * (U+23F8) are drawn by the harness and are not characters that turn up in
+ * prose. Note that neither survives into `cleanLines`'s world unharmed by
+ * accident — they sit just outside `DECORATION`, the same hair's breadth the
+ * ballot box in `AGENT_QUESTION_HEADER` survives by — which is why this reads
+ * `stripAnsi` output directly rather than going through `cleanLines`.
+ *
+ * The mode's name is captured LAZILY up to the first ` on`, so a suffix the
+ * harness adds later (`(shift+tab to cycle)`, a count of shells, the agents
+ * hint) is not part of the name.
+ */
+const STATUS_MODE = /^ {0,4}(?:⏵{1,2}|⏸)\s+(\S.*?)\s+on\b/;
+
+/**
+ * The mode names we have actually seen, and what each one means.
+ *
+ * **A NAME WE DO NOT KNOW IS `cannot-tell`, NOT `not-auto`**, and that is the
+ * one design decision here worth arguing about. The tempting rule is "anything
+ * that is not `auto mode` is the defect", which is right about today's two
+ * names and wrong the day Claude Code renames one of them: every session on the
+ * box lights up red at once, and a signal that has cried wolf on twenty rows is
+ * a signal Greg stops reading. Falling to `cannot-tell` costs a missed
+ * detection — which costs a glance at the terminal — and the `why` quotes the
+ * name it read, so teaching this table a new one is a single line.
+ *
+ * Both entries are from real captures, not from memory of what a status bar
+ * looks like. `auto mode` is on 14 live panes and three pinned fixtures;
+ * `manual mode` is on three pinned fixtures
+ * (`none-dialog-just-answered.txt`, `none-slash-command-autocomplete.txt`,
+ * `none-typed-numbered-message-in-input-box.txt`, all captures of one
+ * throwaway session launched without `--permission-mode auto`). Nothing here is
+ * guessed from Claude Code's documentation: `plan mode` and `accept edits` are
+ * plausible and are absent on purpose, because an arm reached only by a guess
+ * is an untested guard wearing the clothes of a fact.
+ */
+const MODE_NAMES: Record<string, "auto" | "not-auto"> = {
+  "auto mode": "auto",
+  "manual mode": "not-auto",
+};
+
+/**
+ * Which permission mode this pane's session is in, from its text and nothing
+ * else.
+ *
+ * Pure, like `parsePane`, so the fixtures are the whole test. Never returns
+ * `not-applicable`: whether a session HAS a permission mode is a question about
+ * what is running in it, and the answer to that lives in `status.ts`.
+ *
+ * **Takes the LOWEST anchored pair on the screen.** A real status bar is drawn
+ * near the bottom of the pane — below it there is at most a truncated hint or
+ * the expanded agents list (measured: five lines, `overseer-orchestrator-design-and`,
+ * live) — while a quoted one lives in the transcript above. Walking up from the
+ * bottom therefore prefers the live one over any copy of one. The residual case
+ * this does not cover is a pane whose real status bar has been replaced by a
+ * full-screen widget while a quoted status bar is still visible above it; that
+ * would be read as the session's own. It is written down rather than defended
+ * against because defending against it means refusing whenever two are visible,
+ * which would break the ordinary case to fix an imagined one.
+ */
+export function readPaneMode(capture: string): PaneAutoMode {
+  const lines = stripAnsi(capture).split("\n");
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (!STATUS_CHROME.test(lines[i] ?? "")) continue;
+    // **STOPS AT THE LOWEST CHROME LINE RATHER THAN LOOKING FURTHER UP.** A
+    // chrome line with no mode line under it is a shape we have never captured;
+    // walking past it would step from the live status bar into the transcript,
+    // which is where a quoted one lives. Refusing is the safe half of that
+    // choice and costs a glance at the terminal.
+    const named = STATUS_MODE.exec(lines[i + 1] ?? "");
+    if (!named) {
+      return {
+        kind: "cannot-tell",
+        why: "the status bar is on screen but has no mode line under it — the pane is probably mid-redraw",
+      };
+    }
+    const name = (named[1] ?? "").trim().toLowerCase();
+    const known = MODE_NAMES[name];
+    if (known === "auto") return { kind: "auto" };
+    if (known === "not-auto") return { kind: "not-auto", mode: name };
+    return {
+      kind: "cannot-tell",
+      why: `the status bar says ${JSON.stringify(name)}, which this build does not recognise as auto mode or as a mode that is not auto`,
+    };
+  }
+  return {
+    kind: "cannot-tell",
+    why: "the status bar is not on this screenful, so there is nothing saying which mode it is in",
+  };
+}
+
 /**
  * A pane id, and nothing else.
  *

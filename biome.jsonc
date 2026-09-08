@@ -46,6 +46,36 @@
       // the one property these files exist for; not linting captured data is
       // the fix.
       "!evals/results/**",
+      // `tools/**` — the fleet dashboard, the Overseer and their web client,
+      // about 15k lines — was in the allowlist hole this comment warns about
+      // until 2026-09-08: typechecked by scripts/typecheck.ts, linted by
+      // nobody, and saying so nowhere. Found while linting a new file and
+      // getting a clean result from a run that had checked no file at all.
+      //
+      // **Zero new findings when it was opened, and that is the interesting
+      // part rather than the boring one.** The whole directory was linted
+      // through a temporary config first: three files clean, and the seven in
+      // routes-actions.ts and server.ts are byte-for-byte the set that was
+      // already there at HEAD. A hole that turns out to be empty is the good
+      // case, and recording that somebody looked is what stops the next person
+      // assuming nobody had.
+      //
+      // WHAT OPENING IT ACTUALLY SHOWED, written down so nobody re-discovers it
+      // as news: 352 `useLiteralKeys` infos, 18 `noExcessiveCognitiveComplexity`
+      // (five of them in routes-actions.ts, which is the known debt at 1,700
+      // lines), 10 `noControlCharactersInRegex` — every one of those a
+      // deliberate ANSI-escape strip, which is what reading a terminal pane is
+      // — and a scatter of style infos. Nothing new, nothing alarming, and the
+      // repo's baseline is not clean anyway, so `lint` is advice here rather
+      // than a gate (CLAUDE.md).
+      "tools/**",
+      // Same file, same reason, same file name as `src/web/tailwind.css` above:
+      // Biome's CSS parser rejects Tailwind v4's `prefix(tw)` and
+      // `source(none)`, and reports them as PARSE errors rather than findings —
+      // which no inline `biome-ignore` can suppress, because the suppression is
+      // never reached. Six of them in this one file. Left in and it is the
+      // whole-repo `biome lint .` that carries them.
+      "!tools/fleet/web/src/tailwind.css",
       "styles/**",
       "vite.config.ts",
       "vitest.config.ts",

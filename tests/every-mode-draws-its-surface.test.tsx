@@ -387,7 +387,7 @@ const DEBATE: Debate = {
         title: "The Leiden replication",
         sourceQuote: "We could not reproduce the calibration.",
         relation: "disputes",
-        valence: "negative",
+        lean: "leans-against",
         applies: DEBATE_APPLIES,
         articleReferenceQuote: "The instrument was built",
         /* The witness is the same string as `articleReferenceQuote` — that is

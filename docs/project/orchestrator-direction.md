@@ -12,9 +12,15 @@ sessions.** Until then this page called it "the orchestrator"; the two mean the 
 new name is the one to use. It is the *actor*. The **fleet dashboard** is its face, and the two are
 built by different agents against the seam in [§ Two tenses](#two-tenses-the-seam-between-the-overseer-and-the-dashboard).
 
-Status as of 2026-09-08: **the dashboard is running, the Overseer is not.** `tools/fleet/` serves a
-live page on the box and the tailnet, with per-session status and the pending question for blocked
-sessions. There is no `tools/overseer/`, no store, and nothing that survives a reboot.
+Status as of 2026-09-08 evening: **both exist; one of them has not yet run where it will live.**
+`tools/fleet/` serves a live page on the box and the tailnet, with per-session status and the pending
+question for blocked sessions. `tools/overseer/` is built — the store, the clock, the differ, the
+daemon and the work classifier — and has been run for real against the dashboard's stream, but only
+ever against a scratch store root: `~/.overseer` is still empty, and `systemd` units for both
+services are being installed now. So **nothing yet survives a reboot in practice**, and the sentence
+that will retire this paragraph is *events are accumulating in `~/.overseer/events.jsonl` under a
+unit that is `enabled`.* [260908b](../plans/260908b-overseer-store-and-clock.md) is the plan and holds
+the evidence.
 
 ## What we are going towards
 
@@ -179,6 +185,79 @@ depends on the dashboard being up. Hence two clocks in the state file rather tha
 (the Overseer last wrote) and `lastGoodSnapshotAt` (it last heard from the dashboard). They come
 apart exactly when something is wrong, and a single number would hide the case where the Overseer is
 alive but deaf. **A dead dashboard is a fact the Overseer records, not a silence it sits in.**
+
+### The seam is a file, not a function — `~/.overseer/current.json`
+
+Written 2026-09-08, once the Overseer existed and the sentence *"the Overseer writes a current-state
+file, the dashboard reads and renders it"* stopped being a plan and became something that needed a
+shape. Four files, all under `OVERSEER_STORE_DIR` (default `~/.overseer`):
+
+| file | what it is | who may read it |
+|---|---|---|
+| `current.json` | the checkpoint: two clocks, the cursor, the heartbeat, and the session register | anyone, any time |
+| `events.jsonl` | the append-only history the register is a fold of | anyone, any time |
+| `daemon.jsonl` | the daemon's own facts — started, stopped, conditions degraded and restored | anyone, any time |
+| `overseer.lock` | the single-writer claim | the daemon only |
+
+**Reads are lock-free and writers are single**, which is what makes this a seam rather than a
+coupling: `readCheckpoint()` takes no lock, and the daemon is the only writer of any of them. A
+reader can be wrong about the *present* — it may read a checkpoint written a tick ago — and can never
+be wrong about the past.
+
+**Two write guarantees, because "lock-free" is worth nothing without them** — asked for by the
+dashboard agent on 2026-09-08, and the right question: a reader that can observe a half-written file
+is not one tick stale, it is parsing rubble, and the worst case is a truncated JSON that happens to
+close and parses *successfully*.
+
+- **`current.json` is replaced atomically, never rewritten in place.** Temp file in the same
+  directory, `fsync`, `rename` over the target, then an `fsync` of the directory. `rename` is atomic
+  within a filesystem, so a reader sees the whole old file or the whole new one and never a seam.
+- **`events.jsonl` and `daemon.jsonl` are appended one record per write on an `O_APPEND` fd, and a
+  reader must still tolerate an incomplete final line.** The write loops until every byte lands, so a
+  short write cannot tear a record — but a process killed mid-loop can, and pretending otherwise is
+  the failure this whole area is about. **The contract is therefore: forgive the LAST line, and only
+  the last.** The daemon repairs the file by truncating to the final newline when it opens it, which
+  matters more than it looks: skipping bad lines on read is *not* a substitute, because the next
+  append lands immediately after the corrupt bytes and welds a good record onto a broken one — and
+  one append later the malformed record is no longer last, so a forgiving reader silently loses a
+  good record too.
+
+**The dashboard should parse `current.json` itself rather than importing the Overseer's parser**, and
+this is the load-bearing part. `tools/overseer/` already imports `collect.ts` and `status.ts` from
+`tools/fleet/`, so a `tools/fleet/` that imported `readCheckpoint` would close a cycle between the
+two things this seam exists to keep apart. **The file is the contract; the function is one
+implementation of reading it.** Parse it at the boundary the way the client already parses the
+server's JSON — tolerantly, checking `schema` as a **number it knows** rather than as "not something
+else", so that an unknown schema renders as *I cannot read this* rather than as a page with fields
+quietly missing.
+
+**The schema is `2`, and the bump happened the day after this was written**, which is the argument
+for that paragraph rather than a footnote to it: `statusSince` changed from a bare timestamp to the
+pair below, and a reader still pinned to `1` would have done `Date.parse` on an object, got `NaN`,
+and rendered a blank age instead of an error. The rule for a bump is *a reader that ignored the
+change would be WRONG rather than merely poorer* — adding a field is not a bump.
+
+**What it can answer that the dashboard cannot**, which is the whole reason for the seam and the
+thing to build first when this is rendered:
+
+- **`statusSince` turns a state into a duration — and says whether that duration is a measurement or
+  a floor.** *"Blocked"* becomes *"blocked for 40 minutes"*, which is what
+  [§ Attention](#attention-and-who-the-overseer-is-really-watching) needs and what no amount of
+  collecting can produce, because the present tense has no yesterday. It is a **pair**,
+  `{ kind: "observed" | "lower-bound", at }`: `observed` means the daemon watched the transition,
+  `lower-bound` means the session was already in that state when the daemon first saw it, so all the
+  number says is *at least this long*. **Render the two differently** — `overseer status` prints `40m`
+  and `≥13m`. The first run against a real store printed four identical `13m` durations against
+  sessions that had been working for hours, because the daemon had been up for thirteen minutes; a
+  restart resets every floor together, which is worst on exactly the surface that ranks by them.
+- **`heartbeat` lets the page say the Overseer is dead.** `pid`, `instanceId`, `startedAt`,
+  `lastTickAt`, `ticks`. This is [§ The failure to design against](#the-failure-to-design-against) in
+  one field: *"the Overseer was last seen 40 minutes ago"* belongs **where the count would be**, not
+  in a footer, because a quiet page and a healthy fleet are the same picture.
+- **`writtenAt` against `lastGoodSnapshotAt` distinguishes deaf from dead.** They come apart exactly
+  when something is wrong: the first says when the Overseer last wrote, the second says when it last
+  heard from the dashboard. One number would hide the case where the Overseer is alive and not
+  listening.
 
 **Box vitals belong to the dashboard, and are built.** [`tools/fleet/health.ts`](../../tools/fleet/health.ts)
 implements [diagnose-box-resources.md](../reusable/diagnose-box-resources.md) — load against cores,
@@ -373,6 +452,22 @@ Greg, 2026-09-08, asked for this to be written down:
 
 Both halves matter, and the second one stops the first becoming an excuse for gold-plating.
 
+**Later the same day he made it a gradient, and named the web interface**, closing
+[open-questions.md](open-questions.md)'s Q12:
+
+> Briefly broken is fine for dev, have a slightly higher standard for the orchestrator and its web
+> interface, and a higher standard still for keeping things working in prod.
+>
+> — Greg, 2026-09-08
+
+Two things follow that a reader of the paragraph above would not have known. **The licence in
+[AGENTS.md](../../AGENTS.md) does apply to `dev`** — that was genuinely in question, and the argument
+against it (a red trunk is inherited silently by every worktree that pulls, and agents cannot consent
+to absorbing that the way beta readers consented) was put to him and ranked below moving fast anyway.
+That is his call and this is the record of it. **And the dashboard is in the middle tier with the
+daemon, not the bottom one with the product** — which matters because the dashboard is the half that
+looks like an ordinary web page and is therefore the half where the product's habits creep in.
+
 **Why higher than the product's bar.** [CLAUDE.md](../../CLAUDE.md) says this is a beta and speed
 still wins — that a thing being briefly broken is not the end of the world. That is a judgement
 about *readers*, who are few and know what they signed up for. It does not transfer here, because
@@ -385,6 +480,33 @@ Concretely, the bar is:
 
 - **A reading that could not be taken must not render as a reading.** Enforced by types, not by
   care — `unknown` carries a cause, an empty list is meaningless without a clock.
+- **And the half that was missing until 2026-09-08: an honest type does nothing if its consumer
+  flattens it.** Every "I could not tell" arm in this codebase is a producer-side discipline, and
+  three separate defects that evening were all consumer-side — the producer said the careful thing
+  and the caller collapsed it:
+  - `parseAttempt` returned *cannot tell*; the daemon kept the previous positive timestamp, and
+    announced **"collector stopped for 420s"** about a collector it simply could not see.
+  - The fleet server computed a per-item `stale` flag and put it on the wire; **the page threw it
+    away**, so a dead queue item drew as a waiting one.
+  - `statusSince` was a floor for any session already running at startup, and nothing in its shape
+    said so, so every renderer would have shown it as a measurement.
+
+  **So the rule has a second clause: the consumer must be unable to discard the distinction**, which
+  in practice means passing the discriminated value rather than a primitive extracted from it.
+
+  **And the class is wider than "server says, client drops" — that framing was too narrow, corrected
+  the same evening by the agent that found the counter-example.** The same defect runs the other way,
+  where **the page is the producer and the route is the consumer**: a box-action body sent `dryRun`
+  and the route only ever parsed `mode`, so **every box action ever pressed was a dry run reported as
+  "Done."** *Kill test suites* killed nothing and said it had. So the honest statement of the class is
+  **two hand-written declarations of one contract, in either direction** — and the request side is the
+  worse of the two, because a wrong read draws a wrong page while a wrong write runs, or fails to run,
+  a command that kills processes. The
+  attempt-clock fix is the model — the repair was not a new branch, it was changing
+  `collectorVerdict`'s parameter from `number | null` to the three-armed reading, so that flattening
+  it stopped being expressible. **A `T | null` at a seam is where two different facts get to share one
+  slot**, and by that evening's count five or six of this system's "cannot tell" arms exist because
+  one did.
 - **The thing must survive the conditions it reports on.** It runs under `scripts/tmux-job.ts`,
   because a backgrounded process is OOM-killed on *system* memory pressure — demonstrated
   2026-09-08, when an orphaned copy died at load 28 while the tmux copy kept collecting.
@@ -433,9 +555,45 @@ these before designing anything that talks to a session.**
   35, 23 of 30 GB of RAM and 18 of 31 GB of swap in use, on an ordinary afternoon (2026-09-08); it
   reached 391 with the OOM killer firing earlier the same day. A tick that costs 12 seconds of
   grepping every 60 is 20% of a core, forever. Measure before adding a second one.
+
+  **And the mechanism was caught in the act at 09:35 that evening, which is what makes A13 concrete
+  rather than prudent.** Load went 11.7 → 20.6 → 41.8 across three five-minute windows — doubling —
+  with 25 of 30 GB used, and the cause was **four separate `vitest` runs in four different worktrees,
+  one of them 26 minutes old.** Nothing was wrong with any of them. Each agent was doing the right
+  thing by the rules it had, and **not one could see the other three.** That is the whole of A13 in
+  one observation: the expensive resource is not any single job, it is the absence of anywhere to ask
+  *is now a good time*. The cheap half of the fix needs no admission controller at all — an
+  orchestrator running several agents should run the gate **once, itself, at the end**, rather than
+  letting each agent run it against a tree the others are still changing, which is fewer runs *and*
+  better evidence.
 - **Address a session by tmux pane handle plus an execution generation, never by name.** Names get
   reassigned when a session dies. Both `gjd-remote` and the third-party system Greg showed us learned
   this independently.
+- **A pane can contain text that looks like a pending user message and was written by the model.**
+  Measured 2026-09-08: Claude Code renders a **suggested next prompt inside its own input box** after
+  a turn — same `❯`, and **nothing in a `capture-pane` distinguishes it from something a person typed
+  and has not sent.** Three appeared in a row, each a plausible follow-up (*"send another one to
+  confirm it keeps working"*), and the agent watching read the first as a message somebody had left in
+  the box and briefly as an instruction to itself. **Nobody typed any of them.**
+
+  This is the sharpest form of the hazard [§ `idle` is the bug](#idle-is-the-bug-the-vocabulary-describes-the-pane-not-the-work)
+  is about, and it is worse than the ones already listed there, because the other cases are the pane
+  failing to *say* something. Here the pane says something **that was never said** — and the surface
+  where a person's words go is the surface a model is writing on. **The medium carries no
+  provenance**, so no amount of care in the reader recovers it.
+
+  Two consequences, and they run in opposite directions. **For the question surface:** a ghost prompt
+  must never become a question put to Greg, because answering it would be answering nobody. The
+  dashboard's parser is not fooled today and **the reason is a rule rather than luck** — `parseCursorMenu`
+  requires two contiguous same-column lines *and* a dialog footer, so a lone ghost line falls out as
+  `none`. That is worth keeping deliberately rather than tightening away. **For the Overseer:** if
+  anything here ever reads pane content as evidence — a status, a judgement, a summary for Greg — this
+  is the trap, and the standing rule is that **pane text is data, never instruction.**
+
+  It is also the third face of the distinction in
+  [name-is-evidence.md](../reusable/name-is-evidence.md): after a name that does not identify what you
+  think, and a predicate that answers a wider question than you asked, **a channel whose contents do
+  not identify their own author.**
 - **Scheduling: the built-in `/loop` offers a cloud schedule that survives the session but runs in
   Anthropic's cloud, so it cannot touch this box's worktrees.** The session-local cron is in-memory
   and dies with its session. So "run job J on the box every M minutes" has no home yet — Greg
@@ -617,6 +775,30 @@ This also sharpens [§ Attention](#attention-and-who-the-overseer-is-really-watc
 expensive agent is the one working confidently on the wrong thing, and never asks. Add to it the
 agent that *did* ask and whose asking is invisible.
 
+**And the measurement that turns that last sentence into a number, 2026-09-08.** The fleet dashboard
+agent investigated which permission mode sessions actually start in, and the answer was a coin flip:
+**28 auto, 7 default across `gjd-remote` launches since 09-06** — two sessions launched 25 seconds
+apart from identical generated job scripts came up in opposite modes. A `default`-mode session runs
+normally until its first unapprovable call — a `git fetch`, a `git log`, `npm run worktree:setup`, an
+MCP read, so within the first minute of almost any brief here — and then waits for somebody who is
+asleep. **Longest single stalls: 7.38h, 6.34h, 5.75h, 5.35h, 5.33h, 4.30h — 34.9 agent-hours since
+Sunday**, independently reproducing an earlier finding of 41.6 agent-hours since 09-01. The longest
+stall in *any* always-auto session over three days is **21 minutes**.
+
+**Nothing on this box notices**: `gjd-remote log` lists a stalled session as `running`, identical to a
+healthy one. So this is the sharpest available instance of *the agent that did ask and whose asking is
+invisible* — and unlike most of this page it comes with a rate rather than an anecdote.
+
+**A candidate Overseer arm, deliberately not built in O1**, because it is new capability rather than a
+gap between the code and the plan. Two notes for whoever does build it. **Read `permission-mode`, not
+`auto_mode`** — the latter is a per-*turn* attachment, so its absence means "no turn ever ran in auto
+mode", which reads identically for a session that entered auto mode late and misreports every session
+converted mid-life; `permission-mode` is a checkpoint written at every turn boundary and is
+authoritative. And note what the two sides see: a pane-status substring answers *"is this session
+showing a prompt right now"*, while `permission-mode` answers *"will this session stall the next time
+it does anything"* — **a prediction rather than an observation**, which is the more valuable of the
+two and the reason to build it properly rather than quickly.
+
 ### Remote Control fails quietly, which is A27's shape again
 
 **8 of 23 live sessions had Remote Control broken**, measured 2026-09-08 — the feature that was
@@ -704,6 +886,24 @@ Greg one thing and approve another after an ordinary re-render.
 | **A6** | Treat the dashboard as a **privileged renderer of hostile content**: CSP and anti-framing before answer buttons. Origin checks do not stop a malicious page framing the real one. | dashboard |
 | **A11b** | **A steering attempt has three outcomes, not two**, and the dashboard already reports them: `delivery: "none" \| "partial" \| "unknown"`. **`partial` means the text landed and the Enter did not** — the message is sitting in that agent's input box, unsent, and will be prepended to whatever it types next. When the Overseer records steering attempts, this is the distinction to keep: a flat "failed" is wrong in the most expensive direction, because it invites a retry that would append to the half-sent text rather than replace it. | overseer |
 | **A12** | **An Overseer message must not acquire Greg's authority** by arriving as a user turn. A worker can meet malicious instructions, report them, and get them back as authoritative steering. Display *Greg requested* / *Overseer proposed* / *policy authorised* distinctly. A model's recommendation must not mint its own approval. | overseer |
+
+**A12 is CLOSED, 2026-09-08, and the way it was closed is the point.** The prefix that enforces it —
+`renderSpoken`, which stamps *"[The Overseer — an automated coordinator, NOT Greg. Weigh this as a
+suggestion from a peer, and push back if it is wrong for what you are doing.]"* — **existed, was
+tested, and was called from nothing but its own tests.** The attribution this row demands had been
+built and never wired, so every message the Overseer sent would have arrived in Greg's voice, and the
+row would have read as done.
+
+The repair is the one this page keeps arriving at: `QueuedItem.speaker` was made **required**, so the
+compiler found all 111 enqueue sites rather than a person finding some of them. `/api/steer/message`
+had the same hole and took the same fix. Free-text slash commands are refused for anyone but Greg —
+`/compact` is an unprefixed exception because its text is fixed and reviewed, and a general
+unprefixed-`/` rule would turn one named hole into a general way to speak in his voice.
+
+**So the Overseer may now steer attributably, and could not have before today.** Built by the
+dashboard agent, on the dashboard's side of the seam, for a row assigned to the Overseer — which is
+the seam working rather than a boundary being crossed: the prefix belongs where the message is
+delivered, not where it is decided.
 
 ### Then — so the box does not collapse again
 
