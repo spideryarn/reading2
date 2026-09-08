@@ -60,8 +60,27 @@ export const GAP_SLACK = 2.5;
 /** …and never less than a minute of slack, so a fast `refreshMs` does not make every turn a gap. */
 export const GAP_FLOOR_MS = 60_000;
 
+/**
+ * …and never more than two minutes of it, however long the expected interval is.
+ *
+ * **A MULTIPLIER COMPOUNDS SOMEBODY ELSE'S BACKOFF INTO OUR BLINDNESS.** Health
+ * collection currently rides the fleet loop, which waits five times as long
+ * after a *fleet* failure — health itself may have succeeded. `nextDueMs` then
+ * says 313s, `2.5×` allowed **12.5 minutes**, and a genuine seven-minute silence
+ * inside that was drawn as continuous and described as "a sample was recorded
+ * throughout". GPT Sol's finding 5, and it is the sharpest argument for
+ * decoupling the two loops, which is the real fix and is a follow-up.
+ *
+ * Capping the slack is the honest interim: the allowance stays proportional
+ * where the interval is short and stops growing where it is long, so the worst
+ * blindness is the interval plus two minutes rather than the interval times
+ * two and a half.
+ */
+export const GAP_SLACK_CAP_MS = 120_000;
+
 export function gapAfterMs(sample: HealthSampleView): number {
-  return Math.max(sample.nextDueMs * GAP_SLACK, sample.nextDueMs + GAP_FLOOR_MS);
+  const slack = Math.min(Math.max(sample.nextDueMs * (GAP_SLACK - 1), GAP_FLOOR_MS), GAP_SLACK_CAP_MS);
+  return sample.nextDueMs + slack;
 }
 
 /* ------------------------------------------------------------------ *
@@ -235,7 +254,24 @@ export const SERIES: SeriesSpec[] = [
     label: "IO wait",
     unit: "%",
     max: 100,
-    bands: { strained: THRESHOLDS.ioWait.thrashing, critical: THRESHOLDS.ioWait.thrashing, worseIs: "higher" },
+    /**
+     * **AMBER AT 50%, AND NO RED AT ALL.**
+     *
+     * This is the one place the claim "the chart does not compute a verdict"
+     * was false. Setting both cutoffs to 50 painted everything above it red,
+     * while `computeVerdict` calls high IO wait *without* active swapping merely
+     * `strained` — so a disk-bound, non-swapping sample drew a **red chart under
+     * an amber badge**, on a page whose whole argument is that the two agree.
+     * GPT Sol's finding 9.
+     *
+     * Critical here needs `waPercent >= 50` AND `activelySwapping`, which is a
+     * combination this band mechanism cannot express — bands are one number on
+     * one axis. So the band stops at amber and the combination stays where it
+     * is already computed: the verdict strip above, drawn from the collector's
+     * own stored `verdict.level`. `Number.POSITIVE_INFINITY` says "this series
+     * has no red of its own" rather than hiding a number that looks chosen.
+     */
+    bands: { strained: THRESHOLDS.ioWait.thrashing, critical: Number.POSITIVE_INFINITY, worseIs: "higher" },
     read: (sample) =>
       readingFrom(sample, "swapActivity", (reading) => {
         const wa = num(reading, "waPercent");
@@ -291,6 +327,14 @@ export type SeriesPlot = {
   worst: Point | null;
   /** The most recent value, for the "now" half of that sentence. */
   latest: Point | null;
+  /**
+   * Whether `latest` actually reaches the right-hand edge.
+   *
+   * `latest` is the newest VALUE in the window; if the readings after it were
+   * unknown, or the writer is overdue, it can be hours old — and a sentence
+   * calling it "now" is a live number that is not live.
+   */
+  latestIsCurrent: boolean;
   /** The largest value present. Null when there are none. */
   peak: number | null;
   /**
@@ -397,12 +441,22 @@ export function plotHistory(view: Extract<HistoryView, { kind: "history" }>, now
     const to = hole.beforeAtMs ?? toMs;
     if (to > from) gaps.push({ fromMs: Math.max(from, fromMs), toMs: to, ongoing: false });
   }
-  /* THE GAP THAT IS HAPPENING NOW, which no sample can record because it is the
-     one that has not arrived. Without this the chart draws a line that stops
-     partway across and looks merely finished. */
-  const last = samples[samples.length - 1];
-  if (last !== undefined && toMs - last.atMs > gapAfterMs(last)) {
-    gaps.push({ fromMs: last.atMs, toMs, ongoing: true });
+  /**
+   * THE GAP THAT IS HAPPENING NOW, which no sample can record because it is the
+   * one that has not arrived. Without this the chart draws a line that stops
+   * partway across and looks merely finished.
+   *
+   * **`?? view.predecessor` is the case that was missing**, and it is the worst
+   * one on this page: if the newest sample in the store is just OUTSIDE the
+   * window and nothing has been written since, `samples` is empty, no gap was
+   * produced, and the panel took its empty-window branch — *"Nothing recorded in
+   * the last 24 hours … it is empty after a restart"* — about a dashboard that
+   * has been silent for over a day. The most alarming state the record can hold,
+   * rendered as the most reassuring sentence on the page. GPT Sol's finding 4.
+   */
+  const last = samples[samples.length - 1] ?? view.predecessor;
+  if (last !== null && last !== undefined && toMs - last.atMs > gapAfterMs(last)) {
+    gaps.push({ fromMs: Math.max(last.atMs, fromMs), toMs, ongoing: true });
   }
 
   const merged = mergeGaps(gaps);
@@ -422,7 +476,11 @@ export function plotHistory(view: Extract<HistoryView, { kind: "history" }>, now
     const level = levelOf(sample);
     return {
       fromMs: sample.atMs,
-      toMs: samples[i + 1]?.atMs ?? Math.min(sample.atMs + sample.nextDueMs, toMs),
+      /* Same rule as `plotSeries`: a verdict covers the interval its sample said
+         to expect, never the silence after it. A `critical` band stretched
+         across a four-hour break would say the box was critical for four hours
+         on the strength of one reading. */
+      toMs: Math.min(samples[i + 1]?.atMs ?? Number.POSITIVE_INFINITY, sample.atMs + gapAfterMs(sample), toMs),
       level,
       tone: LEVEL_TONE[level] ?? "unknown",
     };
@@ -539,6 +597,11 @@ function plotSeries(
   let peak: number | null = null;
   let worst: Point | null = null;
   let latest: Point | null = null;
+  /* How far this series' newest VALUE speaks for — which is not how far the
+     newest SAMPLE speaks for, and conflating them was the first version's bug:
+     a value followed by an unknown reading still reached the right-hand edge,
+     so a stale number was labelled "now". */
+  let latestCoveredUntil: number | null = null;
 
   const isWorse = (a: number, b: number): boolean => (spec.bands.worseIs === "lower" ? a < b : a > b);
   const flush = (): void => {
@@ -555,9 +618,20 @@ function plotSeries(
     const sample = samples[i];
     if (sample === undefined) continue;
     const reading = spec.read(sample);
-    /* A span wide enough to see: from this sample to the next, or one nominal
-       interval when it is the last. */
-    const until = samples[i + 1]?.atMs ?? Math.min(sample.atMs + sample.nextDueMs, toMs);
+    /**
+     * **HOW FAR ONE SAMPLE SPEAKS FOR — AND IT IS NOT "UNTIL THE NEXT ONE".**
+     *
+     * It was, and that was the worst rendering bug in this file. An unknown or
+     * `collector-failed` sample followed by four hours of silence painted those
+     * four hours violet, drawn OVER the hatch, so a break was given a cause the
+     * record cannot support — the exact thing the whole panel is built to
+     * refuse, arriving through my own renderer. GPT Sol's finding 3.
+     *
+     * A sample covers the interval it said to expect, and no further. Beyond
+     * that the record is silent, and silence belongs to the gap layer.
+     */
+    const coversUntil = Math.min(sample.atMs + gapAfterMs(sample), toMs);
+    const until = Math.min(samples[i + 1]?.atMs ?? coversUntil, coversUntil);
 
     /* OUTSIDE the value branch: a mark is a fact about the sample, not about
        whether this series got a number out of it. */
@@ -572,6 +646,12 @@ function plotSeries(
       peak = peak === null ? reading.value : Math.max(peak, reading.value);
       if (worst === null || isWorse(point.value, worst.value)) worst = point;
       latest = point;
+      /* `until`, not `coversUntil`: a value's currency also ends where the NEXT
+         sample begins. With `coversUntil` a value followed by an unknown reading
+         still counted as reaching the right-hand edge whenever the window ended
+         soon after, so a stale number was labelled "now" — the bug this field
+         exists to prevent, reintroduced one line lower down. */
+      latestCoveredUntil = until;
       /* WHERE THE LINE RAN OFF A FIXED AXIS. Clipped on the chart, marked on the
          top edge, and stated in full in the sentence beside the label — see
          `SeriesSpec.max` for what a fitted axis did instead. */
@@ -596,7 +676,10 @@ function plotSeries(
     if (isGapStart.has(sample.atMs)) flush();
   }
   flush();
-  return { spec, segments, unknowns, absences, peak, worst, latest, overCeiling, marks, markedMs };
+  /* Current only if this series' newest VALUE covers the right-hand edge — the
+     same "how far does one sample speak for" rule the spans use. */
+  const latestIsCurrent = latest !== null && latestCoveredUntil !== null && latestCoveredUntil >= toMs;
+  return { spec, segments, unknowns, absences, peak, worst, latest, latestIsCurrent, overCeiling, marks, markedMs };
 }
 
 /* ------------------------------------------------------------------ *
@@ -618,8 +701,23 @@ export function collapseVerdict(bands: VerdictBand[], fromMs: number, toMs: numb
   const worst: (VerdictBand | null)[] = Array.from({ length: columns }, () => null);
 
   for (const band of bands) {
-    const startColumn = Math.max(0, Math.floor(((band.fromMs - fromMs) / span) * columns));
-    const endColumn = Math.min(columns - 1, Math.floor(((band.toMs - fromMs) / span) * columns));
+    /**
+     * **HALF-OPEN COLUMNS, AND CLIPPED TO THE WINDOW FIRST.**
+     *
+     * Flooring both ends and including both columns had three errors, each
+     * shifting severity by up to four minutes on a 24h/360-column strip: a band
+     * ending exactly at the window start painted column 0, a zero-width band
+     * painted a whole column, and a band ending on a column boundary
+     * contaminated the next one. GPT Sol's finding 8.
+     *
+     * A band covers `[from, to)`. Clip it to the window, drop it if nothing is
+     * left, then take `floor(start)` to `ceil(end) - 1`.
+     */
+    const clippedFrom = Math.max(band.fromMs, fromMs);
+    const clippedTo = Math.min(band.toMs, toMs);
+    if (clippedTo <= clippedFrom) continue;
+    const startColumn = Math.max(0, Math.floor(((clippedFrom - fromMs) / span) * columns));
+    const endColumn = Math.min(columns - 1, Math.ceil(((clippedTo - fromMs) / span) * columns) - 1);
     for (let c = startColumn; c <= endColumn; c++) {
       const held = worst[c];
       if (held === null || held === undefined || (LEVEL_RANK[band.level] ?? 1) > (LEVEL_RANK[held.level] ?? 1)) {
@@ -668,8 +766,16 @@ export function describeDuration(ms: number): string {
  * 04:00 is about a third of a pixel wide — legible only as a sentence.
  */
 export function describeGaps(plot: HistoryPlot, formatTime: (ms: number) => string): string {
-  if (plot.sampleCount === 0) return "Nothing has been recorded in this window.";
-  if (plot.gaps.length === 0) return "No breaks — a sample was recorded throughout.";
+  /* **GAPS ARE CHECKED FIRST.** A window with no samples but a break running
+     through it is the dashboard having been silent for the whole window — the
+     most alarming thing the record can say — and describing it as "nothing has
+     been recorded" reads as a fresh start. Order matters here for the same
+     reason it does in the panel's empty-state branch. */
+  if (plot.gaps.length === 0) {
+    return plot.sampleCount === 0
+      ? "Nothing has been recorded in this window."
+      : "No breaks — a sample was recorded throughout.";
+  }
 
   const total = plot.gaps.reduce((sum, gap) => sum + (gap.toMs - gap.fromMs), 0);
   const longest = plot.gaps.reduce((worst, gap) => (gap.toMs - gap.fromMs > worst.toMs - worst.fromMs ? gap : worst));

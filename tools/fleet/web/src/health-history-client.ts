@@ -183,6 +183,28 @@ export function parseHistory(raw: unknown): HistoryView {
     return { kind: "no-answer", why: "the dashboard server answered something that is not this API" };
   }
 
+  /**
+   * **THE SCHEMA IS CHECKED, AND IT WAS NOT.** A payload stamped `schema: 2` was
+   * accepted and drawn as current history — GPT Sol verified it. That is the
+   * whole point of putting a version on the wire: a server that has changed what
+   * a field MEANS, rather than merely added one, must not be rendered by a build
+   * that predates the change. The failure would be silent and plausible, which
+   * is the only kind that matters here.
+   *
+   * `state.ts`'s rule is the one being followed: bump when a consumer that
+   * ignored the change would be WRONG rather than merely poorer. So an unknown
+   * schema refuses, and says which one it saw.
+   */
+  const schema = raw["schema"];
+  if (schema !== 1) {
+    return {
+      kind: "no-answer",
+      why:
+        `this page can read version 1 of the history API and the server sent ${JSON.stringify(schema)}. ` +
+        "Refusing to draw it rather than guessing what changed — reload, or rebuild the client.",
+    };
+  }
+
   const fromMs = num(raw["fromMs"]);
   const toMs = num(raw["toMs"]);
   if (fromMs === null || toMs === null || toMs <= fromMs) {
@@ -193,14 +215,48 @@ export function parseHistory(raw: unknown): HistoryView {
   }
 
   const rawSamples = raw["samples"];
+  /**
+   * **A MISSING `samples` KEY IS NOT AN EMPTY DAY.** Renaming or dropping the
+   * field produced a perfectly valid "the box recorded nothing for 24 hours" —
+   * GPT Sol verified it, and it is the same collapse `state.ts` refuses when it
+   * insists an empty `rows` is only a claim once `collectedAt` is non-null. An
+   * absent array is a payload this page cannot read, not a quiet box.
+   */
+  if (!Array.isArray(rawSamples)) {
+    return {
+      kind: "no-answer",
+      why: "the history came back with no samples array at all, which is a payload this page cannot read rather than a day with nothing in it",
+    };
+  }
+
   const samples: HealthSampleView[] = [];
   let unreadableSamples = 0;
-  if (Array.isArray(rawSamples)) {
-    for (const item of rawSamples) {
-      const sample = parseSample(item);
-      if (sample === null) unreadableSamples += 1;
-      else samples.push(sample);
+  /**
+   * **A SAMPLE THIS PAGE CANNOT READ BECOMES A POSITIONAL HOLE**, not just a
+   * number in a footnote.
+   *
+   * The store already does this for a line it cannot parse, and the client had
+   * the other half of the same bug: a malformed sample between two healthy ones
+   * was dropped, and the line was drawn straight across it. GPT Sol's finding 1,
+   * and it is the same reconnection a break must never get.
+   */
+  const rejected: { afterAtMs: number | null; beforeAtMs: number | null }[] = [];
+  let openRejection: { afterAtMs: number | null; beforeAtMs: number | null } | null = null;
+  for (const item of rawSamples) {
+    const sample = parseSample(item);
+    if (sample === null) {
+      unreadableSamples += 1;
+      if (openRejection === null) {
+        openRejection = { afterAtMs: samples[samples.length - 1]?.atMs ?? null, beforeAtMs: null };
+        rejected.push(openRejection);
+      }
+      continue;
     }
+    if (openRejection !== null) {
+      openRejection.beforeAtMs = sample.atMs;
+      openRejection = null;
+    }
+    samples.push(sample);
   }
 
   const holes: { afterAtMs: number | null; beforeAtMs: number | null }[] = [];
@@ -210,6 +266,10 @@ export function parseHistory(raw: unknown): HistoryView {
       holes.push({ afterAtMs: msFrom(item["afterAt"]), beforeAtMs: msFrom(item["beforeAt"]) });
     }
   }
+  /* The store's holes and this page's rejections are the same fact from two
+     sides of the wire, and the renderer treats them identically: a place where
+     the line must stop. */
+  holes.push(...rejected);
 
   return {
     kind: "history",

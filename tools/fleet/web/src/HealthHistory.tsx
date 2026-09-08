@@ -39,7 +39,7 @@
  * **Colour is never the only carrier.** Every band and every series states its
  * number in text underneath.
  */
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
 import { Explain, type Tip } from "./Tooltip";
 import { type HistoryApi, type HistoryView, type RetentionView } from "./health-history-client";
@@ -88,23 +88,37 @@ export function HealthHistory({
 }): ReactNode {
   const [view, setView] = useState<HistoryView | null>(null);
 
+  /**
+   * **A GENERATION TOKEN, BECAUSE AN OLDER ANSWER MUST NOT REPLACE A NEWER
+   * PICTURE.**
+   *
+   * `setInterval` fires whether or not the last request has come back, and on a
+   * loaded box a history request is a megabyte of JSON — so two can overlap and
+   * resolve out of order. The visible consequence is specific and bad: a newly
+   * arrived retention warning erased by a response that predates it, and not
+   * shown again for another minute. GPT Sol's finding 10.
+   *
+   * A counter rather than `AbortController`: the request is harmless and cheap
+   * to let finish, and what actually needs preventing is the *write*.
+   */
+  const generation = useRef(0);
+  const latest = useRef(0);
+
   const load = useCallback(() => {
-    let live = true;
+    const mine = ++generation.current;
     void api.window(WINDOW_HOURS).then((next) => {
-      if (live) setView(next);
+      /* Strictly newer, so a straggler is dropped rather than reinstated. */
+      if (mine > latest.current) {
+        latest.current = mine;
+        setView(next);
+      }
     });
-    return () => {
-      live = false;
-    };
   }, [api]);
 
   useEffect(() => {
-    const cancel = load();
+    load();
     const timer = setInterval(load, HISTORY_POLL_MS);
-    return () => {
-      cancel();
-      clearInterval(timer);
-    };
+    return () => clearInterval(timer);
   }, [load]);
 
   return (
@@ -144,9 +158,20 @@ function HistoryBody({ view, nowMs }: { view: HistoryView | null; nowMs: number 
 
   const plot = plotHistory(view, nowMs);
 
-  if (plot.sampleCount === 0) {
-    /* AN EMPTY WINDOW IS NOT AN EMPTY BOX. The dashboard restarts often, and a
-       freshly started one legitimately knows nothing yet. */
+  /**
+   * **THE EMPTY-STORE SENTENCE IS ONLY HONEST WHEN THE STORE REALLY IS EMPTY.**
+   *
+   * Three things can make `samples` empty and only one of them is "we have not
+   * started": a record that predates the window and has had nothing added since
+   * (a dashboard silent for over a day), a window whose every sample this page
+   * rejected (corruption), and a genuinely fresh store. The first two are the
+   * two most alarming states here, and taking this branch on them printed the
+   * most reassuring sentence on the page. GPT Sol's finding 4.
+   */
+  const reallyEmpty =
+    plot.sampleCount === 0 && plot.gaps.length === 0 && view.unreadableSamples === 0 && view.unreadableLines === 0;
+
+  if (reallyEmpty) {
     return (
       <div>
         <Note tone="idle" head="Nothing recorded in the last 24 hours.">
@@ -279,8 +304,13 @@ function SeriesChart({ series, plot }: { series: SeriesPlot; plot: HistoryPlot }
     const bottom = y(Math.min(from, to));
     return { y: top, height: Math.max(bottom - top, 0) };
   };
-  const strained = band(spec.bands.strained, spec.bands.critical);
-  const critical = worseIsHigher ? band(spec.bands.critical, ceiling) : band(0, spec.bands.critical);
+  /* A series may have no red of its own — IO wait's critical rule needs a second
+     fact (active swapping) that a band on one axis cannot express, so it stops
+     at amber and the combination stays in the verdict strip. An infinite cutoff
+     clamps to the ceiling, giving amber all the way up and a zero-height red. */
+  const criticalAt = Math.min(spec.bands.critical, ceiling);
+  const strained = band(spec.bands.strained, criticalAt);
+  const critical = worseIsHigher ? band(criticalAt, ceiling) : band(0, criticalAt);
 
   /* The two per-series marks are explained HERE rather than in the shared
      legend below, because they belong to one chart each and a legend with seven
@@ -325,8 +355,6 @@ function SeriesChart({ series, plot }: { series: SeriesPlot; plot: HistoryPlot }
           <rect x={0} y={strained.y} width={PLOT_W} height={strained.height} fill="var(--needs-wash)" />
           <rect x={0} y={critical.y} width={PLOT_W} height={critical.height} fill="var(--alarm-wash)" />
 
-          <Absences plot={plot} height={SERIES_H} />
-
           {series.absences.map((span) => (
             <rect
               key={`absent-${span.fromMs}`}
@@ -349,6 +377,14 @@ function SeriesChart({ series, plot }: { series: SeriesPlot; plot: HistoryPlot }
               fill="var(--unknown-wash)"
             />
           ))}
+
+          {/* **THE ABSENCE LAYER GOES ON TOP OF THE READING LAYER, NOT UNDER
+              IT.** It used to be drawn first, so a violet "could not tell" band
+              painted over the hatch and gave a stretch of silence a cause — four
+              hours of nothing, coloured by the one reading before it. The record
+              is silent about a break; nothing may be drawn over it that claims
+              otherwise. GPT Sol's finding 3. */}
+          <Absences plot={plot} height={SERIES_H} />
 
           {/* WHERE THE LINE RAN OFF THE TOP. A fixed axis means a real
               excursion has to be marked, or a line pressed against the ceiling
@@ -417,7 +453,14 @@ function summarise(series: SeriesPlot): string {
     return `no readings in this window${marked}`;
   }
   const direction = series.spec.bands.worseIs === "lower" ? "low" : "peak";
-  const now = series.latest === null ? "" : `now ${format(series.latest.value)}${series.spec.unit} · `;
+  /* **"NOW" ONLY WHEN THE RIGHT-HAND EDGE IS ACTUALLY COVERED BY IT.** `latest`
+     is the newest VALUE anywhere in the window, which is a different thing: if
+     the last few readings were unknown, or the writer is overdue, the newest
+     value can be hours old and labelling it "now" is a live number that is not
+     live. GPT Sol's finding 3. `latest` is dropped rather than relabelled with
+     its time, because the sentence already carries a timestamped extreme and two
+     of them would read as a range. */
+  const now = series.latestIsCurrent && series.latest !== null ? `now ${format(series.latest.value)}${series.spec.unit} · ` : "";
   return `${now}${direction} ${format(series.worst.value)}${series.spec.unit} at ${timeOfDay(series.worst.atMs)}${marked}`;
 }
 
@@ -572,7 +615,14 @@ function Retention({ retention }: { retention: RetentionView | null }): ReactNod
   /* Null is "this server did not say", not "fine". No claim either way, and
      nothing to draw — the alternative is a reassurance nothing produced. */
   if (retention === null) return null;
-  const trouble = retention.failure ?? (retention.poisoned ? "an earlier write may have left a partial record" : null);
+  /* `lockedOutBy` counts IMMEDIATELY, rather than waiting for the first append
+     to copy it into `failure`. A dashboard that has never been able to write is
+     in trouble from the moment it starts, and the minute before its first turn
+     is exactly when somebody might look. GPT Sol's finding 6. */
+  const trouble =
+    retention.failure ??
+    retention.lockedOutBy ??
+    (retention.poisoned ? "an earlier write may have left a partial record" : null);
   if (trouble === null) return null;
   return (
     <div className="tw:mt-2 tw:border-l-4 tw:border-l-alarm tw:bg-alarm-wash tw:py-1 tw:pl-3">
@@ -582,7 +632,13 @@ function Retention({ retention }: { retention: RetentionView | null }): ReactNod
         {retention.lastSuccessAt === null
           ? " — no sample has been written since this dashboard started."
           : ` — the last one that worked was ${timeOfDay(Date.parse(retention.lastSuccessAt))}.`}{" "}
-        <strong>Any break after that is this, not the box.</strong>
+        {/* **NOT "any break after that is this, not the box".** That was the
+            wording here, and it is unknowable: if writing failed and the box
+            then crashed, both happened — and the sentence would have talked a
+            reader out of the second one. That the record is unavailable is the
+            whole of what can be claimed. GPT Sol's finding 6, which is finding 1
+            made again by me after I had fixed it everywhere else. */}
+        <strong>There is no record after that time, so nothing here can tell you how the box has been since.</strong>
         {retention.poisoned ? " Restarting the dashboard repairs the file and resumes." : null}
       </p>
     </div>

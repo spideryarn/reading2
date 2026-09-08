@@ -18,6 +18,7 @@ import { describe, expect, it } from "vitest";
 import type { HealthSampleView, HistoryView } from "../tools/fleet/web/src/health-history-client";
 import {
   GAP_SLACK,
+  GAP_SLACK_CAP_MS,
   SERIES,
   collapseVerdict,
   describeDuration,
@@ -216,7 +217,31 @@ describe("what counts as a break", () => {
     const samples = [backedOff, reading(T0 + 320_000)];
     const plot = plotHistory(view(samples), T0 + 400_000);
     expect(plot.gaps).toHaveLength(0);
-    expect(gapAfterMs(backedOff)).toBeGreaterThan(313_000 * (GAP_SLACK - 0.01));
+    /* Still tolerant of the backoff itself… */
+    expect(gapAfterMs(backedOff)).toBeGreaterThan(313_000);
+  });
+
+  it("caps the slack, so a long backoff does not buy minutes of blindness", () => {
+    /* THIS ASSERTION USED TO PIN THE BUG. It required the allowance to be 2.5x
+       the expected interval, which for a 313s fleet backoff is 12.5 MINUTES —
+       so a genuine seven-minute silence inside it was drawn as continuous and
+       described as "a sample was recorded throughout". A multiplier compounds
+       somebody else's backoff into our blindness; the slack is capped now. */
+    const short = reading(T0, {}, 73_000);
+    const backedOff = reading(T0, {}, 313_000);
+    expect(gapAfterMs(short) - 73_000).toBeLessThanOrEqual(GAP_SLACK_CAP_MS);
+    expect(gapAfterMs(backedOff) - 313_000).toBe(GAP_SLACK_CAP_MS);
+    expect(gapAfterMs(backedOff)).toBeLessThan(313_000 * GAP_SLACK);
+
+    /* Concretely: a backed-off sample now covers 313s + 120s ≈ 7.2 min, where
+       the multiplier gave it 13. A ten-minute silence used to be drawn as
+       continuous and is now a break. */
+    const caught = plotHistory(view([backedOff, reading(T0 + 10 * 60_000)]), T0 + 11 * 60_000);
+    expect(caught.gaps).toHaveLength(1);
+    /* And the backoff itself, six minutes, still is not — the loop really was
+       waiting, and an alarm that is usually wrong is worse than no alarm. */
+    const tolerated = plotHistory(view([backedOff, reading(T0 + 6 * 60_000)]), T0 + 7 * 60_000);
+    expect(tolerated.gaps).toHaveLength(0);
   });
 
   it("marks a break that is still going at the right-hand edge", () => {
@@ -485,5 +510,113 @@ describe("the fixed axis", () => {
     const samples = [reading(T0, { memory: 0.4 }), reading(T0 + CADENCE, { memory: 0.03 })];
     const plot = plotHistory(view(samples), T0 + 2 * CADENCE);
     expect(seriesOf(plot, "memory").worst?.value).toBeCloseTo(3, 5);
+  });
+});
+
+/* ================================================================== *
+ * What the code review of the BUILT code found, 2026-09-08. Every one of
+ * these produced a confident, plausible, wrong picture.
+ * ================================================================== */
+
+describe("how far one sample speaks for", () => {
+  it("does not paint a break violet because the sample before it was unreadable", () => {
+    /* THE WORST RENDERING BUG IN THE FILE. Spans ran to the NEXT sample, so an
+       unknown or collector-failed reading followed by four hours of silence
+       coloured those four hours violet — over the hatch — and gave the silence a
+       cause the record cannot support. GPT Sol's finding 3. */
+    const samples = [failed(T0), reading(T0 + 4 * 3_600_000)];
+    const plot = plotHistory(view(samples), T0 + 4 * 3_600_000 + CADENCE);
+    const load = seriesOf(plot, "load");
+    expect(load.unknowns).toHaveLength(1);
+    /* It covers what it said to expect, and not one minute more. */
+    expect(load.unknowns[0]?.toMs).toBe(T0 + gapAfterMs(failed(T0)));
+    expect(plot.gaps).toHaveLength(1);
+  });
+
+  it("does not stretch a critical verdict across the silence after it", () => {
+    const samples = [reading(T0, { level: "critical" }), reading(T0 + 4 * 3_600_000)];
+    const plot = plotHistory(view(samples), T0 + 4 * 3_600_000 + CADENCE);
+    const critical = plot.verdict.find((band) => band.level === "critical");
+    expect(critical?.toMs).toBe(T0 + gapAfterMs(reading(T0)));
+  });
+
+  it("says `now` only when the newest value actually reaches the right-hand edge", () => {
+    /* `latest` is the newest VALUE anywhere; if the readings after it were
+       unknown, or the writer is overdue, it can be hours old, and a sentence
+       calling it "now" is a live number that is not live. */
+    const current = plotHistory(view([reading(T0, { load: 1.2 })]), T0 + CADENCE);
+    expect(seriesOf(current, "load").latestIsCurrent).toBe(true);
+
+    const stale = plotHistory(
+      view([reading(T0, { load: 1.2 }), reading(T0 + CADENCE, { blindLoad: "nproc failed" })]),
+      T0 + 2 * CADENCE,
+    );
+    expect(seriesOf(stale, "load").latest?.value).toBe(1.2);
+    expect(seriesOf(stale, "load").latestIsCurrent).toBe(false);
+
+    const overdue = plotHistory(view([reading(T0, { load: 1.2 })], { toMs: T0 + 3 * 3_600_000 }), T0 + 3 * 3_600_000);
+    expect(seriesOf(overdue, "load").latestIsCurrent).toBe(false);
+  });
+});
+
+describe("a window with no samples in it", () => {
+  it("is an ONGOING break when the record predates the window", () => {
+    /* The worst state the record can hold — a dashboard silent for over a day —
+       used to produce zero gaps, which the panel then printed as "empty after a
+       restart": the most reassuring sentence on the page. GPT Sol's finding 4. */
+    const plot = plotHistory(
+      view([], { predecessor: reading(T0 - 3_600_000), earliestAtMs: T0 - 3_600_000, toMs: T0 + 6 * 3_600_000 }),
+      T0 + 6 * 3_600_000,
+    );
+    expect(plot.gaps).toHaveLength(1);
+    expect(plot.gaps[0]?.ongoing).toBe(true);
+    expect(describeGaps(plot, () => "")).toMatch(/still going/);
+  });
+
+  it("is genuinely empty when there is no predecessor either", () => {
+    const plot = plotHistory(view([]), T0 + 3_600_000);
+    expect(plot.gaps).toHaveLength(0);
+    expect(plot.sampleCount).toBe(0);
+  });
+});
+
+describe("collapseVerdict interval arithmetic", () => {
+  const band = (fromMs: number, toMs: number, level = "critical") =>
+    ({ fromMs, toMs, level, tone: "alarm" }) as const;
+
+  it("ignores a band that ends exactly at the window start", () => {
+    /* It used to paint column 0 — flooring both ends and including both. */
+    expect(collapseVerdict([band(T0 - 1000, T0)], T0, T0 + 3600_000, 360)).toEqual([]);
+  });
+
+  it("ignores a zero-width band rather than giving it a whole column", () => {
+    expect(collapseVerdict([band(T0 + 1000, T0 + 1000)], T0, T0 + 3600_000, 360)).toEqual([]);
+  });
+
+  it("does not let a band ending on a column boundary contaminate the next column", () => {
+    /* One column of a 360-column 24h strip is four minutes, so this was four
+       minutes of severity in the wrong place. */
+    const span = 3_600_000;
+    const oneColumn = span / 360;
+    const out = collapseVerdict([band(T0, T0 + oneColumn)], T0, T0 + span, 360);
+    expect(out).toHaveLength(1);
+    expect(out[0]?.toMs).toBeLessThanOrEqual(T0 + oneColumn + 1);
+  });
+
+  it("clips a band that starts before the window", () => {
+    const out = collapseVerdict([band(T0 - 3_600_000, T0 + 60_000)], T0, T0 + 3_600_000, 360);
+    expect(out[0]?.fromMs).toBeGreaterThanOrEqual(T0);
+  });
+});
+
+describe("IO wait has no red of its own", () => {
+  it("stops at amber, because critical needs a second fact a band cannot express", () => {
+    /* Both cutoffs were 50, so 50%+ IO painted the chart red while the collector
+       calls high IO WITHOUT active swapping merely strained — a red chart under
+       an amber badge, on a page whose argument is that the two agree. GPT Sol's
+       finding 9. */
+    const io = SERIES.find((spec) => spec.key === "io");
+    expect(io?.bands.strained).toBe(50);
+    expect(io?.bands.critical).toBe(Number.POSITIVE_INFINITY);
   });
 });

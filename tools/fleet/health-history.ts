@@ -79,7 +79,7 @@ import { closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, s
 import { isAbsolute, join } from "node:path";
 
 import { truncateToLastLine, writeAll, type JsonlRepair } from "../overseer/jsonl.js";
-import { describeLockRefusal, releaseLock, takeLock, type HeldLock } from "../overseer/lock.js";
+import { describeLockRefusal, releaseLock, stillOurs, takeLock, type HeldLock } from "../overseer/lock.js";
 import type { HealthReport } from "./health.js";
 
 /* ------------------------------------------------------------------ *
@@ -195,6 +195,23 @@ export const MAX_WHY_CHARS = 2000;
 function boundWhy(why: string): string {
   return why.length <= MAX_WHY_CHARS ? why : `${why.slice(0, MAX_WHY_CHARS)}… (truncated for the history)`;
 }
+
+/**
+ * The largest a single line may be, in BYTES.
+ *
+ * **Bounding one `why` was not bounding the record**, and GPT Sol produced the
+ * proof: a type-valid `HealthReport` whose *readings'* own `why` strings were
+ * long — `parseAttribution` and friends each carry one, and `verdict.reasons` is
+ * an array of them — wrote a **40,000,420-byte** live file against a claimed
+ * 8,388,608-byte cap. The rotation invariant depends on a record having a size,
+ * so the bound has to be on the record, not on one field of it.
+ *
+ * 64 KiB is about seventy-five times the measured 869-byte sample, so nothing a
+ * healthy collector produces comes close; what it catches is the pathological
+ * case, and it catches it as a **reported retention failure rather than
+ * silently**, because a sample quietly dropped is a hole with no explanation.
+ */
+export const MAX_LINE_BYTES = 64 * 1024;
 
 /** The clock and the expectation, which the store does not invent for itself. */
 export type SampleStamp = { at: string; nextDueMs: number };
@@ -438,15 +455,34 @@ export function openHealthHistory(dir: string = DEFAULT_HISTORY_DIR, options: Op
     return { kind: "refused", why: `could not create ${dir}: ${err instanceof Error ? err.message : String(err)}` };
   }
 
+  /**
+   * **THE LOCK COMES FIRST, AND THIS ORDER USED TO BE THE OTHER WAY ROUND.**
+   *
+   * `truncateToLastLine` is a WRITE: it cuts the file back on disk. Running it
+   * before the lock meant a second process — one that would go on to be
+   * correctly refused, and correctly report itself read-only — had already
+   * truncated the live file belonging to the writer that owned it. GPT Sol
+   * measured it: opening a second store took the first writer's file from 105
+   * bytes to 100. If the owner happened to be mid-write, that is damage to an
+   * active record, done by a process that never believed it was writing at all.
+   *
+   * So: claim the right to write, and only then exercise it. **A reader repairs
+   * nothing.** A torn tail left by a dead process is the live writer's to fix at
+   * its own next start, and until then a reader simply sees one line it cannot
+   * parse — which this store already reports as a positional hole.
+   */
   const live = join(dir, LIVE_FILE);
-  let repaired: JsonlRepair;
-  try {
-    repaired = truncateToLastLine(live);
-  } catch (err) {
-    return { kind: "refused", why: `could not repair ${live}: ${err instanceof Error ? err.message : String(err)}` };
+  const { lock, lockedOutBy } = lockRefusalFor(dir);
+
+  let repaired: JsonlRepair = { torn: false };
+  if (lock !== null) {
+    try {
+      repaired = truncateToLastLine(live);
+    } catch (err) {
+      return { kind: "refused", why: `could not repair ${live}: ${err instanceof Error ? err.message : String(err)}` };
+    }
   }
 
-  const { lock, lockedOutBy } = lockRefusalFor(dir);
   return { kind: "open", dir, repaired, store: makeStore(dir, lock, lockedOutBy, options.writeLine ?? writeAll) };
 }
 
@@ -550,6 +586,28 @@ function makeStore(
          and they are two different facts. Found by making the file read-only on
          a running server and reading the payload. */
       if (poisoned) return;
+
+      /**
+       * **STILL OURS?** — asked of the filesystem, before every write.
+       *
+       * `takeLock` at startup is not a claim that survives the process. The
+       * stale-lock race `lock.ts` names — two starts that both prove the same
+       * corpse dead, both unlink, both create — leaves one of them holding a
+       * file that is no longer at the path, and without this check that loser
+       * appends beside the winner for ever, silently, producing a history with
+       * two sample densities and no way to tell. `stillOurs` compares dev+ino
+       * AND the record inside, so it catches both a competitor that replaced
+       * the file and one that overwrote it in place. It costs one `stat` per
+       * ~73 seconds. GPT Sol's finding 2.
+       */
+      if (held !== null && !stillOurs(held, join(dir, LOCK_FILE))) {
+        held = null;
+        lockedOutBy =
+          `the writer lock at ${join(dir, LOCK_FILE)} is no longer this process's — another writer took it. ` +
+          "This dashboard is reading the history but has stopped adding to it.";
+        failure = lockedOutBy;
+        return;
+      }
       if (lockedOutBy !== null) {
         failure = lockedOutBy;
         return;
@@ -560,6 +618,21 @@ function makeStore(
           ? { schema: 1, at: stamp.at, nextDueMs: stamp.nextDueMs, kind: "reading", report: turn.report }
           : { schema: 1, at: stamp.at, nextDueMs: stamp.nextDueMs, kind: "collector-failed", why: boundWhy(turn.why) };
       const line = sampleLine(sample);
+      /* **BYTES, NOT CHARACTERS.** `statSync().size` is bytes and `String.length`
+         is UTF-16 code units, so comparing them was a unit mismatch of exactly
+         the kind health.ts's `totalBytes` rename exists to stop — and here it
+         made the rotation cap advisory rather than real. GPT Sol's finding 7. */
+      const lineBytes = Buffer.byteLength(line, "utf8");
+
+      if (lineBytes > MAX_LINE_BYTES) {
+        /* NOT poisoned — nothing was written and the file is intact — and not
+           silent either: an oversized sample is a hole in the chart, and a hole
+           with no explanation is what this whole panel refuses. */
+        failure =
+          `a sample serialised to ${lineBytes} bytes, over the ${MAX_LINE_BYTES}-byte per-record limit, ` +
+          "so it was not written. The rotation cap can only bound the file if a record has a size.";
+        return;
+      }
 
       try {
         /* Rotate BEFORE the write that would overflow, so the cap is a ceiling
@@ -568,7 +641,7 @@ function makeStore(
            counter is wrong the moment anything else touches the file, and a
            stat costs ~10µs. */
         const size = existsSync(live) ? statSync(live).size : 0;
-        if (size > 0 && size + line.length > MAX_FILE_BYTES) renameSync(live, prev);
+        if (size > 0 && size + lineBytes > MAX_FILE_BYTES) renameSync(live, prev);
 
         /* `openSync(…, "a")` per append rather than one long-lived fd: at one
            write per ~73 seconds the open costs nothing, and it means a file that

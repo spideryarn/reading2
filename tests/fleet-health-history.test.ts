@@ -403,6 +403,56 @@ describe("the writer's own condition", () => {
     expect(failing.status().lastSuccessAt).toBeNull();
   });
 
+  it("a locked-out opener REPAIRS NOTHING, so it cannot damage the owner's file", () => {
+    /* **THE ONE THAT DESTROYED DATA.** `truncateToLastLine` is a write, and it
+       ran before the lock was claimed — so a second process, one that would go
+       on to be correctly refused and correctly report itself read-only, had
+       already cut the owner's live file back. GPT Sol measured 105 bytes to 100.
+       If the owner were mid-write, that is damage to an active record, done by a
+       process that never believed it was writing at all. */
+    const { dir, store } = withStore();
+    store.append({ kind: "reading", report: report() }, { at: "2026-09-08T12:00:00.000Z", nextDueMs: 73_000 });
+
+    /* A torn tail, of the kind a repair would cut off. */
+    const live = join(dir, "health.jsonl");
+    appendFileSync(live, '{"schema":1,"at":"2026-09-08T12:01');
+    const before = statSync(live).size;
+
+    const second = openHealthHistory(dir);
+    if (second.kind !== "open") throw new Error("the second store should open read-only, not refuse");
+    open.push(second.store);
+
+    expect(second.store.status().lockedOutBy).not.toBeNull();
+    expect(second.repaired.torn).toBe(false);
+    /* NOT ONE BYTE. The torn tail is the owner's to repair at its own next
+       start; until then a reader simply sees a line it cannot parse, which this
+       store already reports as a positional hole. */
+    expect(statSync(live).size).toBe(before);
+  });
+
+  it("stops writing when the lock stops being ours, rather than writing beside the winner", () => {
+    /* `takeLock` at startup is not a claim that survives the process: the
+       stale-lock race lock.ts names can leave two claimants, and without a
+       per-write check the loser appends beside the winner for ever, producing a
+       history with two sample densities and no way to tell. */
+    const { dir, store } = withStore();
+    store.append({ kind: "reading", report: report() }, { at: "2026-09-08T12:00:00.000Z", nextDueMs: 73_000 });
+
+    /* Somebody else takes the lock out from under us. */
+    rmSync(join(dir, "writer.lock"), { force: true });
+    writeFileSync(
+      join(dir, "writer.lock"),
+      `${JSON.stringify({ pid: process.pid, instanceId: "somebody-else", hostname: "box", startedAt: "2026-09-08T12:00:30.000Z" })}\n`,
+    );
+
+    store.append({ kind: "reading", report: report() }, { at: "2026-09-08T12:01:13.000Z", nextDueMs: 73_000 });
+    expect(store.status().lockedOutBy).toMatch(/no longer this process/);
+
+    const read = store.read({ sinceMs: 0 });
+    if (read.kind !== "read") throw new Error(read.why);
+    expect(read.samples).toHaveLength(1);
+  });
+
   it("keeps reading but stops writing when another process holds the lock", () => {
     /* **Degrade, never refuse.** A dashboard that would not start because a
        lock file was held would be unavailable exactly when somebody is trying
@@ -517,6 +567,40 @@ describe("what the earliest sample is allowed to claim", () => {
 });
 
 describe("bounding a record", () => {
+  it("refuses a sample whose SERIALISED size blows the per-record limit", () => {
+    /* Bounding one `why` was not bounding the record. A type-valid report whose
+       READINGS' own `why` strings were long — every parser carries one, and
+       `verdict.reasons` is an array of them — wrote a 40,000,420-byte file
+       against a claimed 8,388,608-byte cap. The rotation invariant depends on a
+       record having a size. GPT Sol's finding 7. */
+    const { store } = withStore();
+    const huge = report({
+      load: { kind: "unknown", why: "x".repeat(200_000) },
+      verdict: { level: "unknown", reasons: ["y".repeat(200_000)] },
+    });
+    store.append({ kind: "reading", report: huge }, { at: "2026-09-08T12:00:00.000Z", nextDueMs: 73_000 });
+
+    /* Not written, not poisoned — nothing was written and the file is intact —
+       and NOT silent: a dropped sample is a break in the chart, and a break with
+       no explanation is what this whole panel refuses. */
+    expect(store.status().poisoned).toBe(false);
+    expect(store.status().failure).toMatch(/per-record limit/);
+    const read = store.read({ sinceMs: 0 });
+    if (read.kind !== "read") throw new Error(read.why);
+    expect(read.samples).toEqual([]);
+  });
+
+  it("measures the record in BYTES, not in UTF-16 code units", () => {
+    /* `statSync().size` is bytes and `String.length` is code units, so the
+       rotation cap was comparing two different things — the same unit mismatch
+       health.ts's `totalBytes` rename exists to stop. */
+    const { store } = withStore();
+    /* Every character here is three bytes. */
+    const wide = report({ load: { kind: "unknown", why: "あ".repeat(30_000) } });
+    store.append({ kind: "reading", report: wide }, { at: "2026-09-08T12:00:00.000Z", nextDueMs: 73_000 });
+    expect(store.status().failure).toMatch(/per-record limit/);
+  });
+
   it("truncates an unbounded `why`, and says it did", () => {
     /* An unbounded string makes the file's growth rate unbounded, which is the
        assumption the rotation cap depends on. */
