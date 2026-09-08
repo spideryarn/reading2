@@ -56,6 +56,17 @@ function snapshotOf(rows: FleetRow[]): FleetSnapshot {
   return { rows, collectedAt: new Date().toISOString(), tookMs: 1 };
 }
 
+/**
+ * The session fixture's claude id, named rather than written out twice.
+ *
+ * It was a literal in both places until 2026-09-08, and a merge moved the
+ * helper's copy without moving the one in the round-trip test below — which
+ * then looked up an agents map under an id no session had, and read as
+ * `unknown` rather than `working`. See tests/fixture-ids.test.ts for why the
+ * `f1ee7000-…` block, and not `11111111-…`, which is a real `auth.users` row.
+ */
+const CLAUDE_ID = "f1ee7000-0000-4000-8000-000000000001";
+
 function session(over: Partial<Session> = {}): Session {
   return {
     id: "$1",
@@ -65,7 +76,7 @@ function session(over: Partial<Session> = {}): Session {
     windows: 1,
     title: "",
     provisional: false,
-    claudeId: "f1ee7000-0000-4000-8000-000000000001",
+    claudeId: CLAUDE_ID,
     proc: { kind: "claude" },
     meta: { version: 1, kind: "claude", repo: "spideryarn/reading2", dir: "/home/greg/code/spideryarn2" },
     ...over,
@@ -213,7 +224,7 @@ describe("the collector's wiring", () => {
       sessions: [session({ id: "$7", proc: { kind: "claude" } as const })],
       unreadable: [],
       failure: null,
-      agents: new Map([["11111111-1111-1111-1111-111111111111", "busy"]]),
+      agents: new Map([[CLAUDE_ID, "busy"]]),
       agentsWhy: null,
     };
     const snap = snapshotFrom(parsed, new Map([["$7", "%70"]]), 5);
