@@ -7,9 +7,18 @@
  * — objects, arrays, numbers, strings, nothing. That is not a placeholder for a
  * schema-aware panel; it is the honest version of a panel whose schema belongs
  * to somebody else, and it means a reading the collector adds tomorrow appears
- * here without anybody editing this file. Exactly ONE field is read by name and
- * lifted to the top — see `Verdict` below, and the argument there for why the
- * second one should be resisted.
+ * here without anybody editing this file.
+ *
+ * **That was true of the whole panel until 2026-09-08, and is now true of its
+ * fallback.** Greg asked for the numbers that matter to be legible at a glance
+ * and coloured red/amber/green, so `health-view.ts` reads five readings by name
+ * and draws them as tiles at the top, and the generic view is a disclosure
+ * underneath rather than the page itself. What keeps the original argument's
+ * teeth: every threshold is health.ts's own and says so, a field that is absent
+ * produces no tile rather than a zero, an unreadable one is violet carrying the
+ * collector's own words, and when nothing at all is recognised the generic view
+ * opens by itself. A collector that renames a reading loses a tile and keeps a
+ * truthful page.
  *
  * **Absence is stated, never drawn as emptiness.** `health: null` means the
  * server had nothing to give, and this says so with the reason it is most
@@ -18,7 +27,9 @@
  */
 import type { ReactNode } from "react";
 
-import { Card, Pill, cx, toneClasses } from "./ui";
+import { Explain, type Tip } from "./Tooltip";
+import { readHealthStats, type Stat } from "./health-view";
+import { Card, Pill, SectionHeading, cx, toneClasses } from "./ui";
 import type { Tone } from "./view";
 
 /**
@@ -131,8 +142,23 @@ function Value({ value, depth }: { value: unknown; depth: number }): ReactNode {
 const LEVEL_TONE: Record<string, Tone> = {
   ok: "work",
   strained: "needs",
-  critical: "needs",
+  /* Its own red rather than "needs you"'s orange, since 2026-09-08. The three
+     levels are a scale, and drawing the top two in one colour threw away the
+     step that matters most — and the tiles below colour red/amber/green against
+     the same cutoffs, so a critical badge over a red tile has to be that red. */
+  critical: "alarm",
   unknown: "unknown",
+};
+
+/**
+ * The card the verdict wears. One sentence about what it is, one about the
+ * fourth level — which is the thing a reader will not guess and the whole
+ * reason the collector computes a verdict at all.
+ */
+const VERDICT_TIP: Tip = {
+  head: "The verdict",
+  what: "One level over every reading below — ok, strained or critical — with the reasons that produced it.",
+  how: "There is a fourth, unknown, for when the core readings could not be taken. That is not the same as the box being fine, and keeping the two apart is what this whole panel is for.",
 };
 
 function Verdict({ health }: { health: unknown }): ReactNode {
@@ -154,7 +180,9 @@ function Verdict({ health }: { health: unknown }): ReactNode {
       )}
     >
       <div className="tw:flex tw:items-center tw:gap-2">
-        <Pill tone={tone}>{level}</Pill>
+        <Explain tip={VERDICT_TIP} placement="bottom">
+          <Pill tone={tone}>{level}</Pill>
+        </Explain>
         <span className="tw:text-[13px] tw:text-ink-faint">the box, as it reports itself</span>
       </div>
       {reasons.length > 0 ? (
@@ -189,15 +217,72 @@ export function HealthPanel({ health }: { health: unknown }): ReactNode {
     );
   }
 
+  const stats = readHealthStats(health);
+
   return (
     <div>
       <Verdict health={health} />
-      <Card className="tw:p-4">
-        <p className="tw:mb-3 tw:text-[11px] tw:tracking-widest tw:text-ink-faint tw:uppercase">
-          As the server sent it
-        </p>
-        <Value value={health} depth={0} />
-      </Card>
+
+      {stats.length > 0 ? (
+        <>
+          <SectionHeading>The numbers</SectionHeading>
+          {/* `auto-fit` with a `minmax` floor rather than a column count: the
+              tiles are all the same shape, so this is the one case on the page
+              where CSS can be trusted to do the arithmetic itself — unlike the
+              session bands, whose widths depend on their content (fit.ts). */}
+          <div className="tw:grid tw:gap-2 tw:[grid-template-columns:repeat(auto-fit,minmax(9.5rem,1fr))]">
+            {stats.map((stat) => (
+              <StatTile key={stat.key} stat={stat} />
+            ))}
+          </div>
+        </>
+      ) : null}
+
+      {/* **The raw dump is a disclosure now, not the page.** It read as a debug
+          view — load, memory, swap, disk and attribution as bare key-value
+          pairs under a shouted heading — and it was the first thing after the
+          verdict. It stays because it is the honest fallback for a shape this
+          panel does not recognise, which is why it opens by itself when there
+          were no tiles to draw: in that case it is not the appendix, it is
+          everything there is.
+
+          A `<details>` rather than a button and a piece of state: it is a
+          disclosure, the browser has one, and it needs no JavaScript to be
+          keyboard-reachable and announced correctly. */}
+      <details open={stats.length === 0} className="tw:mt-3">
+        <summary className="tw:cursor-pointer tw:rounded-md tw:px-1 tw:py-1 tw:text-[12px] tw:text-ink-faint tw:hover:text-ink-soft">
+          Everything the server sent
+        </summary>
+        <Card className="tw:mt-2 tw:p-4">
+          <Value value={health} depth={0} />
+        </Card>
+      </details>
     </div>
+  );
+}
+
+/**
+ * One number, large, in the colour it has earned.
+ *
+ * The label sits above the value rather than beside it so a tile is a fixed
+ * shape whatever the number is; the sub-line under it is what the number is out
+ * of, which is the half that makes "72%" mean something. The card carries the
+ * threshold, so a reader who wants to know why this one is amber can ask
+ * without leaving the page — and `Explain` puts the same words in the
+ * accessible name, so the colour is never the only carrier. **Colour alone is
+ * not information**: every tile says its number and its context in text.
+ */
+function StatTile({ stat }: { stat: Stat }): ReactNode {
+  const tone = toneClasses(stat.tone);
+  return (
+    <Explain tip={stat.tip} placement="bottom" className="tw:block tw:w-full">
+      <Card className={cx("tw:h-full tw:border-l-4 tw:p-3 tw:text-left", tone.edge, tone.wash)}>
+        <div className="tw:text-[11px] tw:font-semibold tw:tracking-wide tw:text-ink-faint tw:uppercase">
+          {stat.label}
+        </div>
+        <div className={cx("tw:mt-0.5 tw:text-[22px] tw:leading-tight tw:font-semibold", tone.ink)}>{stat.value}</div>
+        <div className="tw:mt-0.5 tw:text-[12px] tw:break-words tw:text-ink-soft">{stat.sub}</div>
+      </Card>
+    </Explain>
   );
 }

@@ -22,7 +22,7 @@
  * `tailwind-merge`, because nothing here takes a className from a caller that
  * could conflict with its own.
  */
-import type { ReactNode } from "react";
+import type { ButtonHTMLAttributes, ReactNode } from "react";
 
 import type { Tone } from "./view";
 
@@ -62,6 +62,12 @@ const TONE_CLASSES: Record<Tone, { pill: string; edge: string; wash: string; ink
     edge: "tw:border-l-rule-strong",
     wash: "tw:bg-panel",
     ink: "tw:text-ink-soft",
+  },
+  alarm: {
+    pill: "tw:bg-alarm tw:text-page",
+    edge: "tw:border-l-alarm",
+    wash: "tw:bg-alarm-wash",
+    ink: "tw:text-alarm-ink",
   },
 };
 
@@ -120,5 +126,64 @@ export function SectionHeading({ children }: { children: ReactNode }): ReactNode
     <h2 className="tw:px-1 tw:pt-5 tw:pb-2 tw:text-[11px] tw:font-semibold tw:tracking-widest tw:text-ink-faint tw:uppercase">
       {children}
     </h2>
+  );
+}
+
+/**
+ * **One height, one radius** — docs/project/controls.md, whose numbers section
+ * is the whole of what a page this size needs from a design system:
+ *
+ * > Not a scale — the page has no spacing scale and this does not invent one —
+ * > but the controls on a list page now agree, and agreeing is the whole of it.
+ *
+ * 28px (`h-7`) and `rounded-md` are the product's chip, which is what it landed
+ * on for anything sitting in a row beside other controls. The height is stated
+ * as a HEIGHT rather than as padding, which is what lets an icon-only control
+ * agree with a text one without anybody redoing the arithmetic.
+ *
+ * `cva`-shaped variants and a `data-slot` attribute, per the note at the top of
+ * this file: the pattern is shadcn's, the import is not.
+ *
+ * Two things about the variants are the product's hard-won ones. `loud` hovers
+ * by `brightness`, not by an alpha — `hover:bg-alarm/90` composites the colour
+ * over what is behind it, which on a dark page makes the button DARKER on
+ * hover. And no variant sets `outline: none`: the product's controls doc
+ * records months of a button with no visible focus at all, and never writing
+ * that line is the cheapest way not to repeat it.
+ */
+const BUTTON_VARIANTS = {
+  /** The ordinary one: a hairline box that firms up under the pointer. */
+  quiet:
+    "tw:border tw:border-rule tw:bg-transparent tw:text-ink-soft tw:hover:border-rule-strong tw:hover:text-ink",
+  /** The one the page wants you to press, and there is at most one on screen. */
+  loud: "tw:border tw:border-transparent tw:bg-alarm tw:font-semibold tw:text-page tw:hover:brightness-110",
+} as const;
+
+export type ButtonVariant = keyof typeof BUTTON_VARIANTS;
+
+export function Button({
+  variant = "quiet",
+  className,
+  children,
+  ...rest
+}: {
+  variant?: ButtonVariant;
+  className?: string;
+  children: ReactNode;
+} & Omit<ButtonHTMLAttributes<HTMLButtonElement>, "className" | "children">): ReactNode {
+  return (
+    <button
+      type="button"
+      data-slot="button"
+      className={cx(
+        "tw:inline-flex tw:h-7 tw:shrink-0 tw:items-center tw:gap-1.5 tw:rounded-md tw:px-2.5",
+        "tw:text-[12px] tw:whitespace-nowrap tw:transition-colors",
+        BUTTON_VARIANTS[variant],
+        className,
+      )}
+      {...rest}
+    >
+      {children}
+    </button>
   );
 }

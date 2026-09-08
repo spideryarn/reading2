@@ -61,6 +61,22 @@ export type FleetOption = { label: string; key: FleetOptionKey };
  */
 export type FleetQuestion = { prompt: string; options: FleetOption[] };
 
+/**
+ * What the session recorded about itself when it was created — `SessionMeta`
+ * on the node side, restated here for the reason at the top of this file.
+ *
+ * **`dir` is the only place the full working directory exists.** `row.worktree`
+ * is the last segment of it, and several worktrees have names that differ by a
+ * word, so on the page the path is what tells two of them apart.
+ *
+ * `legacy` is a session created before any of this was recorded, and it is a
+ * real arm rather than a missing value: there is nothing to show, and saying so
+ * beats drawing an empty field. Anything this build does not recognise parses
+ * to `legacy` for the same reason a strange status parses to `unknown` — except
+ * that here there is nothing to warn about, only nothing to say.
+ */
+export type SessionMeta = { version: "legacy" } | { version: 1; kind: string | null; repo: string | null; dir: string | null };
+
 /** One session. Flat, because it is rendered and it is JSON. */
 export type FleetRow = {
   /** tmux's SESSION handle, `$1643` — the address, and stable across renames. */
@@ -75,6 +91,8 @@ export type FleetRow = {
   status: FleetStatus;
   /** Present only when the session is blocked on a dialog. */
   question: FleetQuestion | null;
+  /** What the session recorded about itself. See `SessionMeta`. */
+  meta: SessionMeta;
 };
 
 /** The whole payload, and enough about it to know whether to believe it. */
@@ -93,6 +111,22 @@ export type FleetState = {
    * drawing an empty page.
    */
   health: unknown;
+  /**
+   * **How often the server actually collects**, in milliseconds, when it says.
+   *
+   * Optional because the server does not send it today. It is read here rather
+   * than waited for because the alternative — a hardcoded staleness threshold —
+   * is what had the masthead crying STALE for most of every cycle: the page
+   * gave up after 30s against a collector that runs every 55–60s, deliberately,
+   * since one collection costs the box about ten seconds of work. A banner that
+   * is on most of the time is a banner nobody reads, which costs this tool the
+   * one signal it is built around.
+   *
+   * `null` when absent, and `Header.freshness` then falls back to the cadence
+   * it has watched happen (useFleetState). Whichever it gets, the threshold is
+   * derived from it rather than written down beside it.
+   */
+  refreshMs: number | null;
 };
 
 /* ------------------------------------------------------------- parsing -- */
@@ -184,6 +218,19 @@ export function parseQuestion(v: unknown): FleetQuestion | null {
   return { prompt, options };
 }
 
+/**
+ * A session's own record of itself, off the wire.
+ *
+ * `version` is checked as the number 1 rather than as "not legacy", so a
+ * version 2 that renames `dir` parses to `legacy` and the page shows nothing
+ * instead of showing a field that has moved. Nothing here is load-bearing
+ * enough to be worth a warning: the worst case is a tooltip that does not open.
+ */
+export function parseMeta(v: unknown): SessionMeta {
+  if (!isRecord(v) || v["version"] !== 1) return { version: "legacy" };
+  return { version: 1, kind: str(v["kind"]), repo: str(v["repo"]), dir: str(v["dir"]) };
+}
+
 /** One row off the wire. Null when it carries no id, since an id is its address. */
 export function parseRow(v: unknown): FleetRow | null {
   if (!isRecord(v)) return null;
@@ -199,6 +246,7 @@ export function parseRow(v: unknown): FleetRow | null {
     startedAt: str(v["startedAt"]) ?? "",
     status: parseStatus(v["status"]),
     question: parseQuestion(v["question"]),
+    meta: parseMeta(v["meta"]),
   };
 }
 
@@ -227,5 +275,11 @@ export function parseFleetState(raw: unknown): FleetState | null {
     error: str(raw["error"]),
     rows,
     health: raw["health"] ?? null,
+    /* `null` rather than a default: "the server did not say" and "the server
+       says 60s" are different facts, and only the first should let the observed
+       cadence win. */
+    refreshMs: typeof raw["refreshMs"] === "number" && Number.isFinite(raw["refreshMs"]) && raw["refreshMs"] > 0
+      ? raw["refreshMs"]
+      : null,
   };
 }
