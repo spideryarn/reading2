@@ -247,7 +247,7 @@ throughout**, because every row genuinely did enter a bucket.
 `sessionsScanned` and the breakdown are a real positive control **on the walk**. They cannot be a
 control on the *judgement*, and the difference is invisible from inside: the accounting proves
 something was looked at and says nothing about whether looking succeeded. When
-[`w2-attention-inbox`](#stage-a--the-attention-list-the-deciding-half) reported that control as
+[`w2-attention-inbox`](#stage-a-the-attention-list-the-deciding-half) reported that control as
 closing the gap, the Overseer agreed with it in writing — *"stronger than the field I designed"* —
 which it was, about the walk. **Neither of us asked what it could not see.** So the lesson is not
 "they built it too shallow"; it is that a control is named for the thing it guards and reviewed for
