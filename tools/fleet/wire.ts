@@ -1590,7 +1590,27 @@ export type ExecutionUnknownCause =
    * because it exited between the process table and the `/proc` read. We saw
    * it; we cannot name it durably; that is not a verified execution.
    */
-  | "process-start-unreadable";
+  | "process-start-unreadable"
+  /**
+   * **THE PID WAS REUSED WHILE WE WERE LOOKING AT IT.**
+   *
+   * The harness kind and the conversation come from the process table; the
+   * start token comes from a `/proc` read taken afterwards. If the process
+   * exits and its pid is handed to another in between, those two describe
+   * DIFFERENT PROCESSES, and stapling them together produces a `verified`
+   * identity that never existed — the old conversation with the new process's
+   * token, which the write gate would then allow. This arm is what the two
+   * readings disagreeing produces instead. GPT Sol's P1-2, 2026-09-09.
+   */
+  | "process-changed-under-read"
+  /**
+   * `/proc/uptime` could not be read, so the process table's elapsed times and
+   * `/proc`'s start ticks cannot be put on one clock and the check above cannot
+   * be made. **Unverifiable rather than assumed good**: the arm exists to catch
+   * a reading assembled from two processes, and an unmade check is not a passed
+   * one.
+   */
+  | "uptime-unreadable";
 
 /**
  * **WHAT IS ACTUALLY EXECUTING IN THIS PANE, or the honest reason we cannot
@@ -1617,5 +1637,28 @@ export type ExecutionReading =
       harness: HarnessKind;
       conversation: ConversationReading;
     }
+  /**
+   * **ITS `conversation` CAN ONLY EVER BE `not-claimed` OR `unverifiable`**,
+   * and a consumer that branches on `conflicting` here is writing dead code.
+   *
+   * Said out loud because the type does not say it and a reader of this file
+   * inferred the opposite on 2026-09-09, which would have made the loudest
+   * state look reachable from two arms when it is reachable from one. The
+   * reason is structural rather than incidental: `claimed-only` means *the walk
+   * ran and could not name what it found*, and an unnamed process is one whose
+   * command line we did not read — so there is no observed conversation id to
+   * disagree with the claim. `readExecutionIdentity` passes a null observation
+   * on this path, unconditionally.
+   *
+   * **`conflicting` is reachable from `verified` and nowhere else.** If you are
+   * looking for *this pane changed hands*, that is the one arm to check.
+   *
+   * The near miss worth knowing about is the other direction: when a harness IS
+   * named and only its start ticks cannot be read, this returns
+   * `unknown`/`process-start-unreadable` and DISCARDS the conversation verdict
+   * it briefly had. That is deliberate — a failed `/proc` read almost always
+   * means the process has just exited, and reporting which conversation a dead
+   * process was running is a false alarm rather than a rescued fact.
+   */
   | { kind: "claimed-only"; conversation: ConversationReading; why: string }
   | { kind: "unknown"; cause: ExecutionUnknownCause; why: string };

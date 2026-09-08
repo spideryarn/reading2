@@ -273,7 +273,7 @@ export function describeEvent(event: OverseerEvent): string {
     // print: the pane is running a conversation nobody addressed.
     case "session-execution-changed":
       return (
-        `${when}  new run    ${event.identity.tmuxId} — ${event.previousToken} → ${event.token}` +
+        `${when}  ${event.previousToken === null ? "run seen " : "new run  "}  ${event.identity.tmuxId} — ${event.previousToken ?? "none recorded"} → ${event.token}` +
         (event.conversation.kind === "conflicting"
           ? `, now conversation ${event.conversation.observed} rather than the claimed ${event.conversation.claimed}`
           : `, conversation ${event.conversation.kind}`)

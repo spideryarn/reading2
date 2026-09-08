@@ -58,7 +58,15 @@ import { join } from "node:path";
 import type { AttentionList, StoredUsage, UsageReport } from "../fleet/wire.js";
 import { chooseUsage } from "./usage-carry.js";
 import { admissible, type AdmissibleSnapshot } from "./admissible.js";
-import { baselineOf, diff, sessionKey, type Baseline, type OverseerEvent, type SessionIdentity } from "./diff.js";
+import {
+  baselineOf,
+  diff,
+  sessionKey,
+  type Baseline,
+  type OverseerEvent,
+  type SessionIdentity,
+  type SessionKey,
+} from "./diff.js";
 import type { AuthorisedJob, SpawnJob } from "./jobs.js";
 import { conditionTracker, describeNote, openNoteLog, type DaemonNote } from "./notes.js";
 import type { ProposingRuleWork } from "./rule-protocol.js";
@@ -1029,7 +1037,16 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     // one look like a duplicate.
     accepted = verdict.snapshot;
 
-    const outcome = diff(baseline, verdict.snapshot);
+    // THE REGISTER IS THE THIRD INPUT, and it has to be read HERE rather than
+    // left to the differ: `diff()` knows nothing about the store, and what it
+    // needs is not the previous snapshot's reading but the last run this
+    // Overseer actually verified — which survives a collection that could not
+    // look, and survives this daemon being restarted. GPT Sol's P1-1.
+    const known = new Map<SessionKey, string>();
+    for (const [key, entry] of store.register) {
+      if (entry.verifiedExecution !== null) known.set(key, entry.verifiedExecution.token);
+    }
+    const outcome = diff(baseline, verdict.snapshot, known);
     if (outcome.kind === "held") {
       // NOT A SILENCE. The baseline stays where it is, so the comparison
       // happens the moment a readable generation arrives; without this note the

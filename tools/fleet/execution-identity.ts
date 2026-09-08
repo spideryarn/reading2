@@ -57,135 +57,22 @@
  * functions that touch the machine ({@link readBootIdentity},
  * {@link readProcessStart}) are separated from it and take an injectable
  * reader, and {@link parseProcStat} — the one piece of real parsing — is pure.
+ *
+ * ## What is NOT here, and why
+ *
+ * `executionTokenText`, `continuityOf` and `identityWriteGate` live in
+ * `execution-token.ts`. This file imports `node:fs` and two Overseer modules,
+ * so the browser can never import it — and those three are precisely what a
+ * browser component needs before it reuses a draft or enables a write. Policy
+ * that its main consumer cannot import gets copied rather than imported, so it
+ * is a leaf next door. This file is what the machine says; that one is what it
+ * means. GPT Sol's P2-3.
  */
 import { readFileSync } from "node:fs";
 
 import { classifyPaneHarness } from "../overseer/harness.js";
 import type { ProcessTableReading } from "../overseer/work.js";
-import type { ConversationReading, ExecutionReading, ExecutionToken } from "./wire.js";
-
-/* ------------------------------------------------------------------ *
- * The token, and what equality of one means.
- * ------------------------------------------------------------------ */
-
-/**
- * The token as one comparable, storable string.
- *
- * A string rather than a structural compare because it has to survive a JSONL
- * round trip and be a map key in the Overseer's register, and because a
- * hand-written three-field `===` in each consumer is the shape this repo has
- * lost mornings to. The separator is `:`; a boot id is a uuid and the other two
- * are decimal, so nothing in a field can be confused for one.
- */
-export function executionTokenText(token: ExecutionToken): string {
-  return `${token.boot}:${token.pid}:${token.startTicks}`;
-}
-
-/**
- * **THE CONTINUITY QUESTION, and the only honest way to ask it.**
- *
- * A caller that owns something identity-dependent — a draft, a transcript
- * attribution, a measured duration — stores the token it was created under and
- * asks this every time it is about to use it. It does NOT ask "did a change
- * event fire", because an event log has sampling gaps and a token comparison
- * does not: a run replaced while nobody was reading is still a different token
- * the next time anybody looks.
- *
- * Three answers and no fourth. `unverifiable` is not a soft `same`: it is the
- * arm that must quarantine, because *we cannot see it* and *it is still there*
- * are the same picture from here.
- */
-export type Continuity =
-  | { kind: "same"; token: string }
-  | { kind: "replaced"; previous: string; current: string; why: string }
-  | { kind: "unverifiable"; previous: string | null; why: string };
-
-export function continuityOf(previous: string | null, current: ExecutionReading): Continuity {
-  if (current.kind !== "verified") {
-    return {
-      kind: "unverifiable",
-      previous,
-      why:
-        current.kind === "claimed-only"
-          ? `nothing under this pane could be identified, so whether it is still the same run cannot be established: ${current.why}`
-          : `there is no execution reading for this pane (${current.cause}), so whether it is still the same run cannot be established: ${current.why}`,
-    };
-  }
-  const token = executionTokenText(current.token);
-  if (previous === null) {
-    return {
-      kind: "unverifiable",
-      previous: null,
-      why: `this is run ${token}, and there is no earlier run recorded to compare it against`,
-    };
-  }
-  if (previous === token) return { kind: "same", token };
-  return {
-    kind: "replaced",
-    previous,
-    current: token,
-    why: `the process in this pane is run ${token} now, not ${previous} — it was replaced, and the pane, its pid and its CLAUDE_SESSION_ID all stayed the same across that`,
-  };
-}
-
-/**
- * **MAY SOMETHING KEYED TO A CONVERSATION BE WRITTEN RIGHT NOW?**
- *
- * The gate is deliberately strict: the execution must be verified AND the
- * conversation must be verified. Anything less is refused with the sentence a
- * reader is shown beside the disabled control, so the refusal explains itself
- * rather than greying out silently.
- *
- * **A CACHED `allowed` IS NOT AUTHORITY.** This takes a reading, and a reading
- * is what was true at the instant it was taken. The rule for a caller is that
- * the reading must be *fresh at the moment of the write* — which is what
- * `steer.ts`'s `verifyTarget` already does for keystrokes, re-deriving against
- * the live box rather than trusting what the page was rendered from. Storing an
- * `allowed: true` and acting on it later is the mistake this comment exists to
- * name; the token it returns is for recording what a write was done under, not
- * for re-authorising a later one.
- */
-export type IdentityWriteGate = { allowed: true; token: string; conversationId: string } | { allowed: false; why: string };
-
-export function identityWriteGate(reading: ExecutionReading): IdentityWriteGate {
-  if (reading.kind === "unknown") {
-    return {
-      allowed: false,
-      why: `we cannot see what is running in this pane (${reading.cause}), so anything addressed to a conversation could reach a different one: ${reading.why}`,
-    };
-  }
-  if (reading.kind === "claimed-only") {
-    return {
-      allowed: false,
-      why: `nothing under this pane could be identified, so its conversation id is a launch claim rather than an observation: ${reading.why}`,
-    };
-  }
-  switch (reading.conversation.kind) {
-    case "verified":
-      return { allowed: true, token: executionTokenText(reading.token), conversationId: reading.conversation.id };
-    case "not-claimed":
-      return {
-        allowed: false,
-        why: `this pane holds ${reading.harness} and no conversation was ever claimed for it, so there is nothing here to address`,
-      };
-    case "conflicting":
-      return {
-        allowed: false,
-        why:
-          `this pane is running conversation ${reading.conversation.observed}, not ${reading.conversation.claimed} ` +
-          `which every address on this row still names — a different Claude has been started here since launch`,
-      };
-    case "unverifiable":
-      return {
-        allowed: false,
-        why: `nothing observable confirms that conversation ${reading.conversation.claimed} is the one in this pane: ${reading.conversation.why}`,
-      };
-    default: {
-      const never: never = reading.conversation;
-      throw new Error(`no write gate for conversation reading ${JSON.stringify(never)}`);
-    }
-  }
-}
+import type { ConversationReading, ExecutionReading } from "./wire.js";
 
 /* ------------------------------------------------------------------ *
  * The classifier.
@@ -199,6 +86,34 @@ export type BootIdentity =
 /** One process's start tick, or why it could not be read. */
 export type ProcessStartTicks = { read: true; ticks: number } | { read: false; why: string };
 
+/** Seconds since boot, or why they could not be read. One reading per collection. */
+export type UptimeReading = { read: true; seconds: number } | { read: false; why: string };
+
+/**
+ * **THE procfs CLOCK, WHICH IS NOT THE KERNEL'S.**
+ *
+ * `/proc/<pid>/stat`'s times are in USER_HZ, which the procfs ABI fixes at 100
+ * regardless of the kernel's own `CONFIG_HZ`. That is why this is a constant
+ * rather than a `getconf CLK_TCK` at startup: the number is a property of the
+ * interface we are reading, not of the machine we are reading it on.
+ */
+const USER_HZ = 100;
+
+/**
+ * **HOW FAR THE TWO CLOCKS MAY DISAGREE BEFORE WE STOP BELIEVING THE PAIR.**
+ *
+ * Four sources of honest slack, and none of them is close to the thing being
+ * caught: `ps etimes` is whole seconds (±1), the `/proc` read happens after the
+ * `ps` (up to the probe's own duration), `USER_HZ` rounding (±0.01 s), and the
+ * two reads are simply taken at different instants.
+ *
+ * Five seconds is generous against all of that and still decisive against the
+ * failure: a process that took over a pid inside the race window is seconds
+ * old while the table said minutes or hours, so a real mismatch is off by the
+ * whole of the previous process's life, not by a rounding.
+ */
+const START_AGREEMENT_TOLERANCE_S = 5;
+
 /** Everything {@link readExecutionIdentity} needs, all of it injectable. */
 export type ExecutionInput = {
   /** The pane's own pid, from the same row this reading will be attached to. */
@@ -209,6 +124,12 @@ export type ExecutionInput = {
   table: ProcessTableReading;
   /** One boot identity, shared across the whole fleet. */
   boot: BootIdentity;
+  /**
+   * Seconds since boot, read once per collection — the clock that lets the
+   * process table's elapsed times and `/proc`'s start ticks be compared. See
+   * the cross-check in {@link readExecutionIdentity}.
+   */
+  uptime: UptimeReading;
   /** Start ticks for one pid. Called at most once per row. */
   readStart: (pid: number) => ProcessStartTicks;
 };
@@ -227,7 +148,7 @@ export type ExecutionInput = {
  * ask*, and one of them is allowed to be reassuring in a way the other is not.
  */
 export function readExecutionIdentity(input: ExecutionInput): ExecutionReading {
-  const { panePid, claimedConversationId, table, boot, readStart } = input;
+  const { panePid, claimedConversationId, table, boot, uptime, readStart } = input;
 
   if (!boot.read) return { kind: "unknown", cause: boot.cause, why: boot.why };
   if (panePid === null) {
@@ -277,6 +198,14 @@ export function readExecutionIdentity(input: ExecutionInput): ExecutionReading {
     };
   }
 
+  // THE TWO READINGS MUST BE OF THE SAME PROCESS, AND UNTIL HERE NOTHING SAID
+  // SO. `harness` and its conversation come from the process table; `start`
+  // comes from a `/proc` read taken afterwards. A pid reused in between yields
+  // the old harness stapled to the new process's token — `verified`, coherent,
+  // and about no process that ever existed. GPT Sol's P1-2.
+  const agreement = startAgrees(harness.pid, table, uptime, start.ticks);
+  if (agreement !== null) return agreement;
+
   const observed = harness.kind === "claude-code" ? harness.claudeSessionId : null;
   const whyUnobserved =
     harness.kind === "claude-code"
@@ -288,6 +217,65 @@ export function readExecutionIdentity(input: ExecutionInput): ExecutionReading {
     token: { boot: boot.id, pid: harness.pid, startTicks: start.ticks },
     harness: harness.kind,
     conversation: conversationOf(claimedConversationId, observed, whyUnobserved),
+  };
+}
+
+/**
+ * **DO THE PROCESS TABLE AND `/proc` DESCRIBE THE SAME PROCESS?** — null when
+ * they agree, and the refusal to return when they do not.
+ *
+ * The check costs nothing anybody was not already paying. `ps` reported this
+ * process's ELAPSED TIME and `/proc` reported its START TICK; with one uptime
+ * reading those are two independent measurements of one instant, taken by two
+ * different mechanisms moments apart. **A second, independent join, built so
+ * that it CAN contradict the first** — which is the only kind of check worth
+ * having here, since a reading assembled from two processes is internally
+ * consistent and looks perfect.
+ *
+ * A replacement that took the pid inside the race window is seconds old while
+ * the table said minutes, so the disagreement is the whole of the previous
+ * process's life rather than a rounding. See `START_AGREEMENT_TOLERANCE_S` for
+ * the honest slack this has to allow.
+ *
+ * **AN UNMADE CHECK IS NOT A PASSED CHECK.** No uptime, or a table row whose
+ * elapsed time could not be converted, refuses rather than waving the pair
+ * through — the same rule as every other arm in this file.
+ */
+function startAgrees(
+  pid: number,
+  table: Extract<ProcessTableReading, { read: true }>,
+  uptime: UptimeReading,
+  ticks: number,
+): ExecutionReading | null {
+  if (!uptime.read) {
+    return {
+      kind: "unknown",
+      cause: "uptime-unreadable",
+      why: `pid ${pid}'s start time cannot be checked against the process table without a boot clock, so whether the two readings are of one process is unknown: ${uptime.why}`,
+    };
+  }
+  const row = table.rows.find((candidate) => candidate.pid === pid);
+  // Cannot happen — the harness came out of this table — but the row is looked
+  // up rather than threaded through, and an absent one must refuse rather than
+  // skip the check.
+  if (row === undefined || !row.started.known) {
+    return {
+      kind: "unknown",
+      cause: "process-changed-under-read",
+      why: `pid ${pid} has no usable elapsed time in the process table it was classified from, so its start tick cannot be checked against it`,
+    };
+  }
+  // Both sides as "seconds since boot at which this process started".
+  const fromProc = ticks / USER_HZ;
+  const fromTable = uptime.seconds - (table.atMs - row.started.atMs) / 1000;
+  const apart = Math.abs(fromProc - fromTable);
+  if (apart <= START_AGREEMENT_TOLERANCE_S) return null;
+  return {
+    kind: "unknown",
+    cause: "process-changed-under-read",
+    why:
+      `pid ${pid} was ${Math.round((table.atMs - row.started.atMs) / 1000)} s old in the process table and /proc says it started ` +
+      `${Math.round(uptime.seconds - fromProc)} s ago — ${Math.round(apart)} s apart, so the two readings are of different processes and the pid was reused between them`,
   };
 }
 
@@ -354,6 +342,32 @@ export function readBootIdentity(
     return { read: false, cause: "boot-identity-unreadable", why: `${BOOT_ID_PATH} is empty` };
   }
   return { read: true, id };
+}
+
+export const UPTIME_PATH = "/proc/uptime";
+
+/**
+ * Seconds since boot, for the cross-check in {@link startAgrees}.
+ *
+ * One read per collection, not per row: it is a property of the box. The file
+ * is two floats and only the first is wanted.
+ */
+export function readUptime(read: ReadTextFile = readText): UptimeReading {
+  let raw: string;
+  try {
+    raw = read(UPTIME_PATH);
+  } catch (cause) {
+    return { read: false, why: `${UPTIME_PATH} could not be read: ${cause instanceof Error ? cause.message : String(cause)}` };
+  }
+  const first = raw.trim().split(/\s+/)[0];
+  const seconds = first === undefined ? Number.NaN : Number(first);
+  // NEGATIVE OR NON-FINITE IS A REFUSAL, not a zero. A zero would put every
+  // process's derived start before the boot and fail every cross-check on the
+  // box, which reads as thirty replaced processes rather than as one bad read.
+  if (!Number.isFinite(seconds) || seconds < 0) {
+    return { read: false, why: `${UPTIME_PATH} does not start with a number of seconds: ${JSON.stringify(raw.slice(0, 60))}` };
+  }
+  return { read: true, seconds };
 }
 
 /**

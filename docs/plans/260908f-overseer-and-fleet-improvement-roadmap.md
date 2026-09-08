@@ -547,18 +547,77 @@ earlier — two independent joins agreeing.
    `claude-argv.ts` refuses the command line and the harness is `ambiguous-harness`. Every current
    launch reads cleanly, but the arm is not hypothetical and is covered by a test against the
    unedited fixture.
-3. **The differ has a sampling gap it cannot close cheaply.** `verified(A) → unknown → verified(B)`
-   emits no `session-execution-changed`, because `diff()` compares consecutive snapshots and neither
-   step is a pair of verified readings. Closing it would mean carrying accumulated state inside
-   `Baseline`, against `unplaceable`'s stated design. It is a gap in the **history** and not in the
-   **guarantee**: nothing identity-dependent asks whether an event fired — it compares its stored
-   token to the current reading, and a comparison has no sampling gap. Pinned by a test rather than
-   only described.
+3. ~~**The differ has a sampling gap it cannot close cheaply.**~~ **This was wrong, and GPT Sol
+   disproved it with a reproduction (P1-1, 2026-09-09).** I had argued that
+   `verified(A) → unknown → verified(B)` emitting no event cost history and not correctness, because
+   continuity is decided by comparing tokens rather than by asking whether an event fired. Two things
+   were wrong with that:
+
+   - **`statusSince` is an existing event-dependent consumer.** A missed event left the register
+     holding run A's token *and A's measured age*, so the attention projection ranked a fresh Claude
+     by its predecessor's hours — which is precisely what this stage's acceptance line forbids.
+   - **On the upgrade path nothing fired at all.** Sessions already in the register when the field
+     shipped are never `session-seen` again, so their `verifiedExecution` would have stayed null
+     indefinitely. Sol reproduced it against the checked-in fixtures: six of six entries null.
+
+   **Fixed by comparing against the register rather than against the previous snapshot.** `diff()`
+   now takes a third input, `KnownExecutions` — a `ReadonlyMap` of last-verified tokens, passed by
+   the daemon, so no import and no cycle. The register's token survives a collection that could not
+   look, which is what closes both cases. `previousToken` is now nullable: null is a **first
+   sighting** of an identity, which records the token and deliberately does NOT reset `statusSince`,
+   because learning what a session has been running all along is not evidence that it restarted —
+   otherwise the deploy itself would wipe every measured age on the box.
+
+4. **A `verified` reading could be assembled from two different processes** (Sol's P1-2). The harness
+   kind and conversation come from `ps`; the start token from a `/proc` read taken afterwards. A pid
+   reused in between yielded the old conversation stapled to the new process's token, stamped
+   `verified`, and the write gate allowed it. Closed with a free falsifier: `ps` already reported the
+   process's elapsed time, so with one `/proc/uptime` read the table and `/proc` are **two
+   independent measurements of one start instant**, and a replacement is off by the whole of the
+   previous process's life. Disagreement is `process-changed-under-read`; an unreadable uptime is
+   `uptime-unreadable`, because an unmade check is not a passed one.
 
 **Named follow-up, deliberately not built:** draft *recovery* — re-establishing the same verified
 identity restoring a quarantined draft. There is no draft persistence in `tools/fleet/web/src/` yet
 (that is the Session continuity stage), so there is nothing to recover; the invariant it will need,
 and the function that decides it, are here.
+
+**Decided but not yet applied — narrow `claimed-only`'s conversation.** `ExecutionReading`'s
+`claimed-only` arm is typed as carrying a full `ConversationReading`, but it can only ever produce
+`not-claimed` or `unverifiable`: that arm means *the walk ran and could not name what it found*, and
+an unnamed process is one whose command line was never read, so there is no observation to conflict
+with the claim. **`conflicting` is reachable from `verified` and nowhere else.**
+
+This is not theoretical. On 2026-09-09 the `dashboard-titles-descriptions-detail` session read this
+file specifically to check my claims, inferred from the type alone that `conflicting` was reachable
+from both arms, and was about to build a rendering branch that could never fire — *"a dead branch
+guarding the exact hazard the P1 is about would have been worse than no branch, because it would
+have looked like the hazard was handled."* The inference was made under the most favourable
+conditions the type is ever going to get, which is the strongest available evidence that the type
+is too wide.
+
+The invariant is documented on the arm for now. Making it **unrepresentable** — an
+`UnobservedConversation` alias off `Extract<ConversationReading, …>` — is the house rule and is the
+right end state, but it changes runtime behaviour in both parsers, so it is held rather than churned
+in late. GPT Sol reached the same area independently from the other side ("`claimed-only` with
+`conversation: not-claimed` is semantically odd, and no current consumer benefits from this
+distinction"), so there are now two signals and it should be applied by whoever next opens this file.
+
+**Sol's over-building note, recorded rather than argued away.** Its verdict was that "the core token,
+collection pass and conservative wire field are proportionate", and that the event/sticky-register
+layer and the exported policy helpers are ahead of their consumers — *"they add substantial state and
+contract surface, yet currently contain the two main correctness gaps"*. That is fair and it is worth
+saying plainly: both P1s were in the layer this stage added on top of the reading, not in the reading
+itself. The layer stays, because the Overseer's register is the thing that has to survive a restart
+and the dashboard-descriptions session is already building on the reading — but a later stage should
+weigh whether `claimed-only` plus nine unknown causes is more taxonomy than any consumer uses.
+
+**Rejected, with the argument recorded** so nobody re-derives it wrongly: when a harness IS named and
+only its start ticks cannot be read, the reading is `unknown`/`process-start-unreadable` and the
+conversation verdict it briefly held is discarded. Promoting that to `claimed-only` carrying the real
+verdict would rescue a real observation — and would be wrong, because a failed `/proc` read almost
+always means the process exited between the `ps` and the read, so naming the conversation a dead
+process was running is a false alarm rather than a rescued fact.
 
 - [x] Reproduce a new Claude child started under an unchanged shell/pane whose tmux
   `CLAUDE_SESSION_ID` still names the old conversation. Current `diff.ts` documents this blind spot;

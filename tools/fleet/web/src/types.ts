@@ -1079,6 +1079,28 @@ export function parseExecution(v: unknown): ExecutionReading {
   );
 }
 
+/**
+ * The reading, checked against the row it arrived on — the browser's copy of
+ * `coherentWith` in `tools/overseer/observation.ts`.
+ *
+ * Two independent readers of one wire type is this area's stated design, so the
+ * rule is stated twice on purpose; what is NOT duplicated is the policy about
+ * which harnesses are addressable, which both sides take from the same
+ * sentence in `tools/fleet/execution-token.ts`.
+ */
+function coherentWith(reading: ExecutionReading, claimed: string | null): ExecutionReading {
+  if (reading.kind !== "verified" || reading.conversation.kind !== "verified") return reading;
+  const observed = reading.conversation.id;
+  if (claimed !== null && observed === claimed && reading.harness === "claude-code") return reading;
+  const why =
+    claimed === null
+      ? `this row claims no conversation, so a report that it is running ${observed} agrees with nothing`
+      : observed !== claimed
+        ? `the server reports this pane running ${observed} while the row claims ${claimed}, and the two cannot both be verified`
+        : `the server reports a verified conversation on ${reading.harness}, which cannot hold one`;
+  return { ...reading, conversation: { kind: "unverifiable", claimed: claimed ?? observed, why } };
+}
+
 /** One conversation verdict, or null when the payload does not carry one. */
 function parseConversation(v: unknown): ConversationReading | null {
   if (!isRecord(v)) return null;
@@ -1113,6 +1135,8 @@ const EXECUTION_CAUSES: Record<ExecutionUnknownCause, true> = {
   "platform-unsupported": true,
   "boot-identity-unreadable": true,
   "process-start-unreadable": true,
+  "process-changed-under-read": true,
+  "uptime-unreadable": true,
 };
 
 function parseExecutionCause(v: unknown): ExecutionUnknownCause {
@@ -1186,7 +1210,13 @@ export function parseRow(v: unknown, skew: ClockSkew): FleetRow | null {
         ? v["panePid"]
         : null,
     claudeSessionId: str(v["claudeSessionId"]),
-    execution: parseExecution(v["execution"]),
+    /* CHECKED AGAINST ITS OWN ROW, not only against its own shape. A payload
+       asserting a verified conversation that the row does not claim, or one on
+       a harness that cannot hold a conversation, is downgraded to
+       `unverifiable` — the process reading survives, the claim about which
+       transcript it is writing does not. Same rule as `coherentWith` in
+       tools/overseer/observation.ts; GPT Sol's P2-4. */
+    execution: coherentWith(parseExecution(v["execution"]), str(v["claudeSessionId"])),
     /* NOT `parseStatus(...)` and NOT a clone. The reference the server sent,
        kept so it can be serialised back exactly as it arrived. */
     rawStatus: v["status"] ?? null,

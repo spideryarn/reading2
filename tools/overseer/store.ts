@@ -105,7 +105,7 @@ import {
 import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
 
-import { executionTokenText } from "../fleet/execution-identity.js";
+import { executionTokenText, isExecutionTokenText } from "../fleet/execution-token.js";
 import type { AttentionItem, AttentionList, ConversationReading, StoredUsage } from "../fleet/wire.js";
 import { parseAnswerability } from "./attention-memory.js";
 import { parseUsageReport } from "./usage.js";
@@ -1002,21 +1002,22 @@ type SessionEventCommon = { at: string; key: SessionKey; identity: SessionIdenti
  * Its own function rather than a case body, because it is four checks and the
  * `parseEvent` switch is already the longest thing in this file.
  *
- * **BOTH TOKENS REQUIRED AND DIFFERENT.** The arm exists only when two verified
- * readings disagreed, so an event with a missing side, or with two equal sides,
- * is one this module never wrote — and an event log whose entries do not mean
- * what the writer meant is worse than a shorter log. The token's shape is
- * `boot:pid:startTicks` and it is deliberately NOT taken apart here: it is
- * compared whole, and a reader that parsed it into three fields would be a
- * second definition of what a token is.
+ * **`token` IS REQUIRED AND WELL-FORMED; `previousToken` MAY BE NULL AND MAY
+ * NOT EQUAL IT.** Null is the first-sighting arm — a session the register had
+ * never verified — and an event whose two sides are equal is not a change and
+ * is one this module never wrote. Both tokens go through
+ * {@link isExecutionTokenText}, so "malformed present values are refused" is a
+ * property of the parser rather than of the writer's good manners; accepting
+ * any non-empty string was GPT Sol's P2-4b.
  */
 function parseExecutionChanged(u: Record<string, unknown>, common: SessionEventCommon): ParseResult<OverseerEvent> {
-  const previousToken = u["previousToken"];
+  const rawPrevious = u["previousToken"];
   const token = u["token"];
-  if (typeof previousToken !== "string" || previousToken === "") {
-    return { ok: false, reason: "previousToken is not an execution token" };
+  if (rawPrevious !== null && !isExecutionTokenText(rawPrevious)) {
+    return { ok: false, reason: "previousToken is neither null nor an execution token" };
   }
-  if (typeof token !== "string" || token === "") return { ok: false, reason: "token is not an execution token" };
+  const previousToken = rawPrevious as string | null;
+  if (!isExecutionTokenText(token)) return { ok: false, reason: "token is not an execution token" };
   if (previousToken === token) {
     return { ok: false, reason: "previousToken and token are equal, which is not a change" };
   }
@@ -1780,8 +1781,12 @@ function parseRegisterEntry(u: unknown): ParseResult<RegisterEntry> {
 function parseVerifiedExecution(u: unknown): ParseResult<RegisterEntry["verifiedExecution"]> {
   if (u === undefined || u === null) return { ok: true, value: null };
   if (!isRecord(u)) return { ok: false, reason: "verifiedExecution is not an object or null" };
+  // THE REAL SHAPE, not merely non-empty. Accepting any string made the claim
+  // "a present-but-malformed value fails whole" false for every value except
+  // `""` — GPT Sol's P2-4b — and this is the register, so a token that parses
+  // and means nothing would be compared against real ones for ever.
   const token = u["token"];
-  if (typeof token !== "string" || token === "") return { ok: false, reason: "verifiedExecution.token is not an execution token" };
+  if (!isExecutionTokenText(token)) return { ok: false, reason: "verifiedExecution.token is not an execution token" };
   const since = u["since"];
   if (!isIsoTimestamp(since)) return { ok: false, reason: "verifiedExecution.since is not an ISO timestamp" };
   return { ok: true, value: { token, since } };
@@ -2352,15 +2357,21 @@ export function foldEvents(
         break;
       }
       case "session-execution-changed": {
-        // THE RUN MOVED AND THE PANE DID NOT. Two things change here and the
-        // second is the one that is easy to leave out.
         const was = into.get(event.key);
         if (was !== undefined) {
+          // **A FIRST SIGHTING AND A REPLACEMENT ARE NOT THE SAME EVENT**, and
+          // this is the line that keeps them apart. A null `previousToken` means
+          // the register had never verified a run for this session — the upgrade
+          // path, where every existing entry learns its identity on the first
+          // collection after the deploy. Resetting the status clock there would
+          // wipe the measured age of every session on the box at once, which is
+          // the opposite of what this stage is for.
+          const learned = event.previousToken === null;
           into.set(event.key, {
             ...was,
             verifiedExecution: { token: event.token, since: event.at },
             lastSeenAlive: event.at,
-            // **THE NEW RUN DOES NOT INHERIT THE OLD ONE'S MEASURED AGE.**
+            // **A REPLACEMENT DOES NOT INHERIT THE OLD RUN'S MEASURED AGE.**
             // `statusSince` was a reading about a process that has gone; the
             // status key is unchanged (a working session replaced by a working
             // session is still `working`) so nothing else in this fold would
@@ -2369,7 +2380,7 @@ export function foldEvents(
             // a FLOOR rather than to `observed`: we know this run was in this
             // state when we looked and not when it entered it, which is exactly
             // what `lower-bound` means.
-            statusSince: { kind: "lower-bound", at: event.at },
+            statusSince: learned ? was.statusSince : { kind: "lower-bound", at: event.at },
           });
         }
         break;

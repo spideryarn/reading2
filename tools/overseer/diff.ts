@@ -59,7 +59,7 @@
  * its own argument for being one.
  */
 import type { SessionMeta, SessionState } from "../../scripts/gjd-remote-tmux.js";
-import { executionTokenText } from "../fleet/execution-identity.js";
+import { executionTokenText } from "../fleet/execution-token.js";
 import type { ConversationReading } from "../fleet/wire.js";
 import type { AdmissibleSnapshot } from "./admissible.js";
 import type { DefinitionHash, JobOutcome, OccurrenceId } from "./jobs.js";
@@ -542,28 +542,36 @@ export type SessionEvent =
    * `claude` started under an unchanged shell — the case whose whole
    * significance is that *nothing above it moved*.
    *
-   * **BOTH SIDES MUST BE `verified`, AND THAT IS NOT A CONVENIENCE.** The same
-   * rule as `previousPanePid` two arms up, arrived at from the same argument:
-   * `verified → unknown` is EVIDENCE LOST, not a process replaced. A collection
-   * whose `ps` failed would otherwise report every session on the box as having
-   * been replaced, and then report it again on the way back.
+   * ## IT IS COMPARED AGAINST THE REGISTER, NOT AGAINST THE PREVIOUS SNAPSHOT
    *
-   * ## THE SAMPLING GAP THIS ARM HAS, stated because absence is invisible
+   * The first version of this arm compared two consecutive snapshots, and GPT
+   * Sol showed that produced two real failures rather than the one cosmetic gap
+   * it was documented as having (2026-09-09):
    *
-   * `verified(A) → unknown → verified(B)` produces NO event: this module
-   * compares consecutive snapshots and neither of those two steps is a pair of
-   * verified readings. Closing it would mean carrying a last-verified token
-   * inside `Baseline`, and `unplaceable`'s comment is the argument against —
-   * a baseline is a question about a VALUE, and one carrying accumulated state
-   * would stop being checkable on any snapshot at any time.
+   *  - **On the upgrade path nothing ever fired.** Sessions already in the
+   *    register when this field shipped are never `session-seen` again, so
+   *    their `verifiedExecution` stayed null indefinitely — reproduced against
+   *    the checked-in fixtures, six of six entries null.
+   *  - **`verified(A) → unknown → verified(B)` left the register claiming A**,
+   *    *and kept A's `statusSince`* — so the attention projection ranked a
+   *    fresh Claude by its predecessor's age. That is the acceptance criterion
+   *    of this whole stage ("never silently inherits historical age"), so the
+   *    old claim that the gap cost history and not the guarantee was simply
+   *    wrong: `statusSince` is an existing event-dependent consumer.
    *
-   * **It is a gap in the HISTORY and not in the guarantee**, which is the
-   * reason it is affordable. Nothing identity-dependent asks whether an event
-   * fired; it stores the token it was created under and compares it to the
-   * current reading (`continuityOf` in tools/fleet/execution-identity.ts), and
-   * a comparison has no sampling gap — a run replaced while nobody was looking
-   * is still a different token the next time anybody looks. Pinned by a test in
-   * tests/overseer-diff.test.ts rather than described only here.
+   * Comparing against the register's last VERIFIED token fixes both, and it is
+   * where the state honestly lives — `Baseline` could not carry it without
+   * ceasing to be a question about a value (see `unplaceable`). A reading that
+   * is not verified moves nothing, so `verified → unknown` is still evidence
+   * lost rather than a replacement, which was the one thing the first version
+   * had right.
+   *
+   * `previousToken` is null for a session the register has never verified —
+   * the upgrade path, and a session whose first readings were all unknown.
+   * **That is a first sighting of an identity, not a replacement**, and the
+   * fold treats it differently: it records the token and leaves `statusSince`
+   * alone, because learning what a session has been running all along is not
+   * evidence that it restarted.
    */
   | {
       kind: "session-execution-changed";
@@ -571,8 +579,12 @@ export type SessionEvent =
       tmuxServerPid: number | null;
       key: SessionKey;
       identity: SessionIdentity;
-      /** The token as `continuityOf` compares it: `boot:pid:startTicks`. */
-      previousToken: string;
+      /**
+       * The token as `continuityOf` compares it: `boot:pid:startTicks`. Null
+       * when the register had never verified one — see above; that arm records
+       * without resetting the status clock.
+       */
+      previousToken: string | null;
       token: string;
       /**
        * What the new run says about its conversation. `conflicting` here is the
@@ -894,7 +906,25 @@ export type DiffOutcome =
  * S2-08. Also in tests/fixtures/overseer-snapshots/README.md, under what the
  * fixtures do not cover.
  */
-export function diff(previous: Baseline | null, next: AdmissibleSnapshot): DiffOutcome {
+/**
+ * **WHAT THE REGISTER HAS ACTUALLY VERIFIED**, keyed by session — the third
+ * input, and the one that is not a snapshot.
+ *
+ * A `ReadonlyMap` passed in rather than an import of `store.ts`: the differ
+ * still knows nothing about the store, and there is still no cycle. An absent
+ * key means *no run has ever been verified for this session*, which is what a
+ * session carried over from before this field existed looks like, and what a
+ * session whose readings have all been unknown looks like. Both are the same
+ * fact and both are handled by the same arm.
+ *
+ * **An EMPTY map is a legitimate value and is not a shortcut.** It says the
+ * register has verified nothing — true at a cold start, and true for a caller
+ * that keeps no register. It cannot cause a false replacement, because the
+ * `previousToken: null` arm is a first sighting rather than a change.
+ */
+export type KnownExecutions = ReadonlyMap<SessionKey, string>;
+
+export function diff(previous: Baseline | null, next: AdmissibleSnapshot, known: KnownExecutions): DiffOutcome {
   const nextSnapshot = next.snapshot;
   const at = nextSnapshot.clock.at;
 
@@ -1068,9 +1098,12 @@ export function diff(previous: Baseline | null, next: AdmissibleSnapshot): DiffO
     // collection: a `respawn-pane` replaces the pane AND the process in it, and
     // recording only one of those loses half of what happened.
     //
-    // BOTH SIDES VERIFIED, no exceptions — `verified → unknown` is a collection
-    // that could not look, and the arm's own comment has the argument.
-    const replaced = executionChange(was, row);
+    // AGAINST THE REGISTER, NOT AGAINST `was`. The previous snapshot is one
+    // sample and the register is what we have actually verified; comparing to
+    // the sample missed the upgrade path entirely and let a fresh Claude
+    // inherit its predecessor's measured age. GPT Sol's P1-1, and the arm's own
+    // comment has the reproduction.
+    const replaced = executionChange(known, sessionKey(identityOf(row)), row);
     if (replaced !== null) {
       events.push({
         kind: "session-execution-changed",
@@ -1122,27 +1155,27 @@ export function diff(previous: Baseline | null, next: AdmissibleSnapshot): DiffO
 }
 
 /**
- * The two tokens, when one verified run was replaced by another.
+ * What the register's knowledge of this session's run should become, or null
+ * when it should not move.
  *
- * Null in every other case, and the two null cases are different sentences that
- * happen to share an outcome: two verified readings with the SAME token are one
- * unbroken run, and a pair where either side is not verified is a collection
- * that could not look. **The second is the load-bearing one** — a box whose `ps`
- * failed for one tick would otherwise report every session on it as replaced,
- * and report it again on the way back. The same rule as `panePid`'s null on
- * `session-pane-replaced`, arrived at from the same argument.
+ * Two nulls, two different sentences: the current reading is not `verified`, so
+ * there is nothing to learn from it (**a `ps` that failed must not report every
+ * session on the box as replaced** — the same rule as `panePid`'s null on
+ * `session-pane-replaced`); or the register already holds this exact token, so
+ * nothing changed.
  *
- * Its own function rather than four lines inline, for the reason `waitRestart`
+ * Its own function rather than five lines inline, for the reason `waitRestart`
  * is one: the arm's rule is the thing a reader has to check, and a rule inside
  * a 200-line loop is read as part of the loop.
  */
 function executionChange(
-  before: ObservedRow,
+  known: KnownExecutions,
+  key: SessionKey,
   after: ObservedRow,
-): { previousToken: string; token: string; conversation: ConversationReading } | null {
-  if (before.execution.kind !== "verified" || after.execution.kind !== "verified") return null;
-  const previousToken = executionTokenText(before.execution.token);
+): { previousToken: string | null; token: string; conversation: ConversationReading } | null {
+  if (after.execution.kind !== "verified") return null;
   const token = executionTokenText(after.execution.token);
+  const previousToken = known.get(key) ?? null;
   if (previousToken === token) return null;
   return { previousToken, token, conversation: after.execution.conversation };
 }

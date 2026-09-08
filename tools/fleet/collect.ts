@@ -35,8 +35,10 @@ import {
   readBootIdentity,
   readExecutionIdentity,
   readProcessStart,
+  readUptime,
   type BootIdentity,
   type ProcessStartTicks,
+  type UptimeReading,
 } from "./execution-identity.js";
 import { readPause, readSessionStore, type StoreIndex } from "./pause.js";
 import { probeProcessTable } from "../overseer/work-probe.js";
@@ -814,6 +816,7 @@ export async function collect(): Promise<FleetSnapshot> {
 export type ExecutionIo = {
   probe: () => ProcessTableReading;
   boot: () => BootIdentity;
+  uptime: () => UptimeReading;
   readStart: (pid: number) => ProcessStartTicks;
 };
 
@@ -849,6 +852,7 @@ export type ExecutionIo = {
 export function readExecutions(rows: FleetRow[], io: Partial<ExecutionIo> = {}): void {
   const probe = io.probe ?? probeProcessTable;
   const bootOf = io.boot ?? (() => readBootIdentity());
+  const uptimeOf = io.uptime ?? (() => readUptime());
   const readStart = io.readStart ?? ((pid: number) => readProcessStart(pid));
 
   let table: ProcessTableReading;
@@ -858,6 +862,10 @@ export function readExecutions(rows: FleetRow[], io: Partial<ExecutionIo> = {}):
     table = { read: false, why: `the process table probe threw: ${cause instanceof Error ? cause.message : String(cause)}` };
   }
   const boot = bootOf();
+  // READ AFTER THE PROBE, not before. It is the clock the table's elapsed times
+  // are compared against, and taking it after `ps` means the derived start of a
+  // process cannot land in the future.
+  const uptime = uptimeOf();
 
   for (const row of rows) {
     try {
@@ -866,6 +874,7 @@ export function readExecutions(rows: FleetRow[], io: Partial<ExecutionIo> = {}):
         claimedConversationId: row.claudeSessionId,
         table,
         boot,
+        uptime,
         readStart,
       });
     } catch (cause) {

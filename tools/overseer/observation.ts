@@ -602,12 +602,47 @@ function parseRow(u: unknown, index: number): ParseResult<ObservedRow> {
       paneId: paneId.value,
       panePid: panePid.value,
       claimedConversationId: claimed.value,
-      execution: parseExecution(u["execution"]),
+      execution: coherentWith(parseExecution(u["execution"]), claimed.value),
       question: u["question"] as JsonValue,
       status: status.value,
     },
   };
 }
+
+/**
+ * **THE READING MUST AGREE WITH THE ROW IT ARRIVED ON.**
+ *
+ * `parseExecution` checks the reading's own shape; nothing until here checked
+ * it against its neighbours. A payload can assert a `verified` conversation
+ * whose id is not the one the row claims, or assert one on a harness that
+ * cannot hold a conversation at all — combinations this box's producer cannot
+ * construct and a parser will happily rebuild. GPT Sol's P2-4.
+ *
+ * **IT DOWNGRADES THE CONVERSATION RATHER THAN FAILING THE SNAPSHOT**, and
+ * rather than inventing a ninth `ExecutionUnknownCause`. The PROCESS reading is
+ * still good — the token is well-formed and says which run is there — and it is
+ * only the claim about which transcript that run is writing that nothing
+ * corroborates. `unverifiable` is exactly that sentence, and it is already the
+ * arm the write gate refuses.
+ */
+function coherentWith(reading: ExecutionReading, claimed: string | null): ExecutionReading {
+  if (reading.kind !== "verified" || reading.conversation.kind !== "verified") return reading;
+  const observed = reading.conversation.id;
+  if (claimed !== null && observed === claimed && ADDRESSABLE_HARNESSES.has(reading.harness)) return reading;
+  const why =
+    claimed === null
+      ? `this row claims no conversation, so a producer's report that it is running ${observed} agrees with nothing`
+      : observed !== claimed
+        ? `the producer reports this pane running ${observed} while the row claims ${claimed}, and the two cannot both be verified`
+        : `the producer reports a verified conversation on ${reading.harness}, which cannot hold one`;
+  return { ...reading, conversation: { kind: "unverifiable", claimed: claimed ?? observed, why } };
+}
+
+/**
+ * The harnesses that can hold an addressable conversation — see the twin in
+ * `tools/fleet/execution-token.ts`, which is the policy this defers to.
+ */
+const ADDRESSABLE_HARNESSES: ReadonlySet<HarnessKind> = new Set<HarnessKind>(["claude-code"]);
 
 /**
  * The named causes, as a `Record` over the closed union so that a new arm in
@@ -622,6 +657,8 @@ const EXECUTION_CAUSES: Record<ExecutionUnknownCause, true> = {
   "platform-unsupported": true,
   "boot-identity-unreadable": true,
   "process-start-unreadable": true,
+  "process-changed-under-read": true,
+  "uptime-unreadable": true,
 };
 
 /**
