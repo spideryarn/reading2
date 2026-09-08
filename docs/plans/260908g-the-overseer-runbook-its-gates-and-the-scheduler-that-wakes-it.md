@@ -1078,6 +1078,41 @@ designed for, the bad case is the normal case* — is an unearned extrapolation 
 eight, and that is the mistake this plan has spent all day catching rather than committing. It is a
 hypothesis with an obvious test, which is whether the overnight run reaches those counts at all.
 
+#### Nobody had measured the number the whole premise rests on
+
+The dashboard's owner offered a fact against their own stage: that four-to-eight agents was *"all of
+today"*, so eight is the high-water mark rather than a low sample, and the box may simply never reach
+the busy regime. **It is wrong, and checking it re-opened the question instead of closing it.**
+
+Reconstructed from `~/.overseer/events.jsonl` — 599 events, 0 unreadable, spanning 08:32 to 21:11 —
+by maintaining a live set across `session-seen`, `tmux-session-gone` and `session-replaced`:
+
+```
+PEAK live tmux sessions: 33, at 12:35:06
+  of which shells: 15, status-unknown: 0   =>  18 AGENTS at peak
+and it is not a spike: the reconstruction sat at 20+ sessions for much of the day
+```
+
+**The box ran eighteen agents this lunchtime.** The sampler's four-to-eight is not all of today, it
+is the quietest 73 minutes of it — measurement began at 20:56, hours after the peak. So the series is
+unrepresentative in the direction that weakens the finding, which is the third time today an
+instrument of mine has been biased against its own case.
+
+What it settles and what it does not: it kills *"the box may never get there"* — eighteen is within a
+factor of two of the 20–35 this design assumes, so **the premise is nearly met already**. It does
+*not* show reachability is bad at eighteen, because there is no sample there; the sampler did not
+exist at 12:35. The hypothesis stays unearned. What changed is that the regime is **reachable rather
+than imaginary**, so the overnight run can actually test it.
+
+Caveats, because this is a reconstruction and not a census: `session-seen` fires on change rather than
+every tick, so the live set inherits any gap in the log; the log covers today only; and the
+agent/shell split uses `status.kind !== "shell"`, which agreed with an independent hand count at
+20:25 (8 agents, 7 shells, 15 rows) — one cross-check, not a validation.
+
+**The thing worth taking away is not the number, it is that nobody had it.** Eighteen concurrent
+agents is the quantity this entire plan is written around, and this is the first time it has been
+measured. Several pages above were argued about a four-to-eight box while planning for a 20–35 one.
+
 Caveats that belong next to the number rather than under it: 73 minutes is not a night; the box went
 from very quiet to busy inside it, so this is **one transition rather than a representative day**;
 and the sampler reads the snapshot the dashboard publishes, so an interval when the dashboard was
