@@ -186,6 +186,26 @@ depends on the dashboard being up. Hence two clocks in the state file rather tha
 apart exactly when something is wrong, and a single number would hide the case where the Overseer is
 alive but deaf. **A dead dashboard is a fact the Overseer records, not a silence it sits in.**
 
+**Divergence, 2026-09-08: the vitals history is being built in the DASHBOARD, not here.** The bullet
+above assigns it to the Overseer and `daemon.ts` says outright *"No health history and no local
+collection"*; both are now describing an intention rather than the code. Agreed between the two
+agents rather than decided by one: the reading already exists in-process where it is collected, so
+writing it at the source removes a transport hop **and** removes the dependency on the Overseer being
+up — which matters most in exactly the hour Greg is opening the graph to ask about. It gets its own
+root, `~/.fleet-health/`, so there is never a question of two writers on one file. **Recorded here
+before the code lands, not after**, because until it is written down this page points the rest of the
+wave at the wrong owner. Whether the assignment above should change is Greg's call, not ours.
+
+**And the one-writer discipline moved to a leaf so it would not be written a third time.** The
+retention needs the same kernel-backed exclusion the store has — a second dashboard on a different
+`FLEET_PORT` sharing the same directory is a second writer, and two starts can race before either
+observes an async bind failure. So `takeLock` / `stillOurs` / `isProcessAlive` / `LockHolder` /
+`LockRefusal` came out of `store.ts` into
+[`tools/overseer/lock.ts`](../../tools/overseer/lock.ts), which imports nothing but node builtins and
+`jsonl.ts`. **The third copy would have been the simplified one, and that is the copy that is wrong
+in the way nobody notices** — the same argument `jsonl.ts`'s own header makes about the rule it
+holds.
+
 ### The seam is a file, not a function — `~/.overseer/current.json`
 
 Written 2026-09-08, once the Overseer existed and the sentence *"the Overseer writes a current-state
