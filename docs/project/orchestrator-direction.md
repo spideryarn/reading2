@@ -204,6 +204,24 @@ coupling: `readCheckpoint()` takes no lock, and the daemon is the only writer of
 reader can be wrong about the *present* — it may read a checkpoint written a tick ago — and can never
 be wrong about the past.
 
+**Two write guarantees, because "lock-free" is worth nothing without them** — asked for by the
+dashboard agent on 2026-09-08, and the right question: a reader that can observe a half-written file
+is not one tick stale, it is parsing rubble, and the worst case is a truncated JSON that happens to
+close and parses *successfully*.
+
+- **`current.json` is replaced atomically, never rewritten in place.** Temp file in the same
+  directory, `fsync`, `rename` over the target, then an `fsync` of the directory. `rename` is atomic
+  within a filesystem, so a reader sees the whole old file or the whole new one and never a seam.
+- **`events.jsonl` and `daemon.jsonl` are appended one record per write on an `O_APPEND` fd, and a
+  reader must still tolerate an incomplete final line.** The write loops until every byte lands, so a
+  short write cannot tear a record — but a process killed mid-loop can, and pretending otherwise is
+  the failure this whole area is about. **The contract is therefore: forgive the LAST line, and only
+  the last.** The daemon repairs the file by truncating to the final newline when it opens it, which
+  matters more than it looks: skipping bad lines on read is *not* a substitute, because the next
+  append lands immediately after the corrupt bytes and welds a good record onto a broken one — and
+  one append later the malformed record is no longer last, so a forgiving reader silently loses a
+  good record too.
+
 **The dashboard should parse `current.json` itself rather than importing the Overseer's parser**, and
 this is the load-bearing part. `tools/overseer/` already imports `collect.ts` and `status.ts` from
 `tools/fleet/`, so a `tools/fleet/` that imported `readCheckpoint` would close a cycle between the
