@@ -39,24 +39,39 @@ transitive closure under DOM-only libs, so one `import type` makes the typecheck
 endpoint of four is migrated; see Stage v0.8a for what is left and for the two corrections the plan
 doc needed.
 
-**What is left, in order.** v0.4g and v0.4h are both **landed** since the previous version of this
-list; what remains is smaller and mostly not this session's.
+**What is left, in order.** Rewritten on the evening of 2026-09-08, against the code rather than
+against the previous version of this list. **Four stages landed since it was last written** — v0.6f
+(the attention inbox joined end to end), v0.4j (the phone's clock), v0.8b (the fleet-state endpoint
+behind the shared type, and four dropped fields read) and v0.8c (the last two live missing joins) —
+each with a cross-family review and a fix round after it.
 
-1. **Two finished branches, unpushed.** `worktree-fleet-approval-binding` (nine commits: A9 ticked,
-   A10's prose half built — `sendMessage` now refuses a pane whose input box has anything in it,
-   proved end to end against a live session) and `worktree-attention-inbox`. Both waiting on their
-   own reviews. Nothing to build; somebody has to land them.
-2. **The rest of v0.8a** — three endpoints, ~30 twin declarations, and one (`FleetRow`) that cannot
-   migrate the same way at all. About a day, and the value is now measured rather than argued.
+*This list is the part of the doc most likely to be acted on without checking, which is exactly what
+happened earlier today: two items marked as urgent safety work had already been fixed during the
+wave and the paragraph still said they were live. Re-grep before briefing anybody off it.*
+
+1. **The rest of v0.8a — two endpoints, not three.** The actions catalogue, and
+   steer/new/messages/rename. Fleet state is done (v0.8b). `FleetRow` still cannot migrate the same
+   way at all and the reason is written into `wire.ts` beside the generic hole it leaves.
+2. **v0.9a — the broadcast cannot reach the sessions that caused the load.** Found by
+   `spideryarn2-b6`, written up below, and **deliberately waiting on evidence**: a 24-hour sampler is
+   running, and a series showing reachability recovering on its own kills the stage. It is two
+   changes rather than one, because a box-wide action is *forbidden* from queueing on a stated
+   ground that has to be answered rather than deleted.
 3. **The systemd cutover**, which is Greg's to run — `sudo systemctl enable` is refused for agents on
    this box. Script prepared 2026-09-08 12:00, unrun. **Step 3 is a decision, not a check**: it is
    the moment the dashboard becomes tailnet-reachable, and `w2-fleet-dictation` measured that
    `navigator.mediaDevices` is *absent* (not degraded) at the tailnet address, so HTTPS there is a
    feature prerequisite rather than a nicety.
-4. **v0.4j — the phone's clock**, written up 2026-09-08 and not started. Two alarms on this page can
-   be manufactured by a browser clock a few minutes fast.
-5. **v0.2c's other half** — delivery receipts and action ids. The browser now reads `delivery`; the
-   five states and the repeat-retrieves-the-receipt rule are not built.
+4. **v0.2c's other half** — delivery receipts and action ids. The browser now reads `delivery`; the
+   five states and the repeat-retrieves-the-receipt rule are not built. **The related overclaim is
+   fixed**: the page no longer says a keystroke *landed*, because `verifyTarget` runs before the send
+   and nothing looks at the pane afterwards.
+
+**Done since this list was last written, so nobody fixes them twice:** the attention inbox has a
+consumer; every server timestamp is converted into the browser's clock at the parse boundary;
+`answeringEnabled`, `tmuxServerPid`, `verified` and `resolution`/`startedDir` are read; `clear()` has
+a route and a button; `/api/agents` is an alias whose description was the thing that was wrong; and
+`renderSpoken`'s compile guard — the half of that safety item that never landed — exists.
 
 **Two product questions are Greg's and are not blocked on anything.** Whether the cutover should
 widen the bind at all, and what to do about a card that draws **five identical full-width
@@ -1773,23 +1788,33 @@ check. The write-up is
 this is the rearchitecting it asks for. Filed at the finish line is filed and never done, so it is a
 stage.
 
-**Seven of the sixteen are still live at 11:03 on 2026-09-08, and two of them are safety
-mechanisms.** Fix these two first, whatever happens to the rest of the stage:
+**Seven of the sixteen were live at 11:03 on 2026-09-08, and two of them were safety mechanisms.
+✅ BOTH OF THOSE TWO ARE NOW FIXED** — during the wave, by other sessions, and this paragraph told
+whoever read it next to go and fix them again. Re-measured on the evening of 2026-09-08 before
+briefing anybody, which is the only reason it was caught:
 
-- **The attribution prefix reaches nothing.** `renderSpoken()` — which prepends `[Greg, via the
-  fleet dashboard]` or the Overseer's *"NOT Greg, weigh this as a suggestion"* disclaimer — has six
-  test callers and **zero product callers**, because `SessionActionRequest` has no `speaker` field
-  and `drain.ts`'s `sendable()` returns `action.text` raw. Broadcasts carry the attribution;
-  single-session instructions, which is how the Overseer will actually talk to an agent, do not.
-- **The "what would this destroy" preview is empty.** `actions-client.ts`'s `box()` reads
-  `parsed["would"] ?? parsed["result"] ?? null`, and **none of the eleven `respond(res, 200, …)`
-  calls in `routes-actions.ts` sends either name** — the box arms send `steps`, `run`, `candidates`,
-  `killed`, `skipped`, `total`, `recipients`. So `ActionButtons.tsx:969` and `:1021` render
-  `<RawValue value={null}>`, which draws the literal grey word *"null"*, as the confirmation step
-  for `remove-worktree`, `kill-session` and `kill-test-suites`.
+- ✅ **The attribution prefix reaches the wire.** `SessionActionRequest` carries a `speaker`
+  (`routes-actions.ts:395`, parsed at `:439`), `Speaker` is in `wire.ts`, and `drain.ts:292` returns
+  `renderSpoken(action, item.speaker)` from `sendable()`. It had six test callers and zero product
+  callers; it now has one, on the path that matters — the single-session instruction, which is how
+  the Overseer talks to an agent.
+- ✅ **The "what would this destroy" preview says so when it cannot.** `routes-actions.ts:1148` sends
+  `result: { steps: built.plan.steps }` on a dry run, so the client's read finds a value. And the
+  empty case no longer draws the literal grey word *"null"* in the shape of an answer: it is a
+  sentence in the alarm colour naming what is missing, **and the Confirm button is not offered at
+  all**. A confirmation that cannot say what it would do no longer looks like one that can.
 
-The other five live ones: `SteerResponse.verified` (which pane a keystroke actually reached, dropped
-by `steer-client.ts`), `answeringEnabled`/`tmuxServerPid` (absent from the client's `FleetState`),
+**The lesson is about this document rather than about that code.** Both entries were true when
+written and false by the evening, and nothing in the repo would have said so — a plan is exactly the
+artefact `260908f` warns about: authored to be trusted later, in a place nobody re-derives. The next
+agent to open this would have briefed a subagent to fix two things that are not broken, and the
+subagent would have found working code and either invented a problem or reported confusion. **Re-grep
+a plan's factual claims before acting on them, especially the ones marked urgent** — urgency is what
+makes a stale claim get acted on without checking.
+
+The other five live ones: `SteerResponse.verified` (which pane the send was aimed at, as the server
+verified it in the moment BEFORE typing — not where the keystrokes ended up; dropped by
+`steer-client.ts`), `answeringEnabled`/`tmuxServerPid` (absent from the client's `FleetState`),
 `LaunchRecord.resolution`/`startedDir`, `SteeringQueue.clear()`, and `/api/agents`.
 
 **There are two classes here and they want different things, which is the whole design of this
@@ -1819,10 +1844,14 @@ stage.** Confusing them gets you a linter for a problem the compiler should have
       because **a server too old to send a field has made no claim**, and returning the wire type
       verbatim would force `parseQueue` to invent `false` or `0` for it. That is instance 16, the
       one this whole stage is about, reintroduced by the fix for it. The form that works is
-      `Omit<QueueViewWire, …the fields it re-types or declines…> & { … }`: a new wire field is not in
-      the `Omit`, so it lands in the client type and the object literal stops compiling, and the
-      escape hatch is **adding a name to a list** — a named, reviewable decision rather than a
-      silence. The twin is derived, not deleted, and that turned out to be the correct end state
+      `Omit<QueueViewWire, …the fields it re-types or declines…> & { … }`: a new **required** wire field
+      is not in the `Omit`, so it lands in the client type and the object literal stops compiling,
+      and the escape hatch is **adding a name to a list** — a named, reviewable decision rather than
+      a silence. *(An OPTIONAL wire field crosses untouched — GPT Sol's M2, 2026-09-08. Both object
+      literals may omit it, so neither end goes red. The mechanism is therefore paired with a
+      compile guard in `tests/fleet-compile-guards.test.ts` that refuses an optional top-level key on
+      the shared wire state; the guarantee is "required fields are carried by construction, optional
+      ones are refused at the door", and this line said the first half only.)* The twin is derived, not deleted, and that turned out to be the correct end state
       rather than an interim one.
 - [x] **Prove it against the original shape, not a tidied one.** Done twice, and the second time by
       hand. Adding one field to `QueueView` in `wire.ts` turns **both** ends red —
@@ -1844,11 +1873,22 @@ stage.** Confusing them gets you a linter for a problem the compiler should have
       leaf (`config.ts`, `origin.ts`) would compile and could put a runtime `const` in the browser
       bundle. A ~30-line test modelled on `tests/client-imports.test.ts` would buy the *error
       message*, not the enforcement.
-- [ ] **The remaining three endpoints.** The module landed with one: queues (`Speaker`,
-      `SpokenActionId`, `SpokenAction`, `QueuedPayload`, `QueuedItem`, `QueuedItemView`,
-      `QueueView`). Left: the actions catalogue, fleet state, and steer/new/messages/rename. About
-      30 twin declarations remain, across 6 client files and ~12 server ones. Split by endpoint, one
-      stage each, each typechecked and its own suite run.
+- [ ] **The remaining two endpoints.** The module landed with queues (`Speaker`, `SpokenActionId`,
+      `SpokenAction`, `QueuedPayload`, `QueuedItem`, `QueuedItemView`, `QueueView`); **`FleetState`
+      followed on 2026-09-08 as v0.8b**, and with it the four fields the client had been dropping.
+      Left: the actions catalogue, and steer/new/messages/rename. Split by endpoint, one stage each,
+      each typechecked and its own suite run.
+      **`FleetState` is generic — `FleetState<Row, Health>` — and whoever does the next one should
+      copy that rather than the queue's shape.** `rows` and `health` are holes because the types that
+      fill them (`collect.ts`'s `FleetRow`, `health.ts`'s `HealthReport`) reach `node:child_process`,
+      which wire.ts may not import; the server fills them with its own types and the client with its
+      projection. Everything outside those two fields is shared, and that is where all six dropped
+      fields were. Proved by mutation: one **required** field added to the wire type turns the server
+      project, the client project *and* the fixtures red, judged by `npm run typecheck`'s exit code.
+      An **optional** one turns none of those red — measured 2026-09-08, and the reason the compile
+      guard above exists. `FleetState<Row, Health>` also lost its `= unknown` defaults that day, so a
+      caller has to say what it is putting in each hole rather than inherit two it may not know are
+      there.
 - [ ] **`FleetRow` will NOT migrate the way the others do, and whoever starts it should know
       first.** `FleetRow.meta` resolves to `scripts/gjd-remote-tmux.ts`'s `SessionMeta` (`kind:
       SessionKind; repo: string; dir: string`) while the client's says all three nullable — and
@@ -1863,23 +1903,43 @@ stage.** Confusing them gets you a linter for a problem the compiler should have
       `w2-fleet-dictation` (the transcribe request/response). `~/.overseer/current.json` is the same
       kind of boundary with none of the protection, and it is the **worse direction**: a wrong read
       draws a wrong page, a wrong write runs — or fails to run — a destructive command.
-- [ ] **Fix the live lossy joins while you are in there** — `would`/`result` (#11, the safety
-      preview), `verified`, `answeringEnabled`, `tmuxServerPid`, `resolution`, `startedDir`. The
-      queue cluster (`stale`, `stuck`, `deliverable`, `invalidated`) was already repaired by hand on
-      the night of 2026-09-08, four separate times; **that treadmill is the argument for this
-      stage**, not a reason to think the area is now safe.
+- [x] **Fix the live lossy joins while you are in there** — `verified`, `answeringEnabled`,
+      `tmuxServerPid`, `resolution`, `startedDir`, **all five read and drawn in v0.8b**, each with a
+      test whose failure was watched by breaking the read. `would`/`result` (#11, the safety
+      preview) was already fixed before that stage started, by whoever wrote
+      `routes-actions.ts:1148` and `actions-client.ts:992` — this line went on naming it as live,
+      which is the third time this document has done that to a reader. The queue cluster (`stale`,
+      `stuck`, `deliverable`, `invalidated`) was repaired by hand on the night of 2026-09-08, four
+      separate times; **that treadmill is the argument for this stage**, not a reason to think the
+      area is now safe.
+      **`attemptedAt` was declined in v0.8b and read in v0.8b's fix pass**, and the reasoning for
+      declining it was wrong rather than merely cautious. It ran: reading it honestly needs
+      `readAttemptClock`'s three arms (absent means either *never attempted* or *a server too old to
+      report it*), that is a runtime value, wire.ts cannot hold a runtime value, so both sides cannot
+      share one. The middle step does not follow — **what the browser project cannot tolerate is a
+      NODE dependency; "no runtime values" is wire.ts's own rule about its own file.** So
+      `tools/fleet/attempt-clock.ts` is a leaf module with no imports, the server, the Overseer
+      daemon and the browser all import the one implementation, and `Header.freshness` says which
+      kind of stale a stale snapshot is: a run that began and hung, or a loop that stopped. GPT Sol's
+      M5.
 - [ ] **`would` is a different failure from the rest and needs a different check.** Both ends are
       internally consistent and disagree about a *name*, so an "unread field" sweep cannot see it —
       only a shared type can. Fix it by importing the type, not by renaming one end and moving on.
 - [ ] Beware the spread. `items: s.items.map((i) => ({ ...i, … }))` puts every field of `QueuedItem`
       on the wire with no line written at the boundary — which is how `invalidated` crossed, and why
       `git log -S invalidated -- tools/fleet/routes-actions.ts` finds nothing.
-- [ ] **Type the fixtures with the shared type too, and this is not optional.** `actionsWire()` in
+- [x] **Type the fixtures with the shared type too, and this is not optional.** `actionsWire()` in
       `tests/fleet-web.test.tsx` built `{actions: []}`, a flat array the route has never sent, and
       ~196 tests passed over it while **every action button on the real page was invisible** — under
       a doc comment correctly explaining that the fixture must be the wire shape. *A fixture is a
       claim about the producer that nothing checks against the producer.* A fixture annotated
       `: QueueView` (or built by the server's own serialiser) cannot make that claim falsely.
+      **Done for the state payload in v0.8b**, and the shape that worked is worth copying: the
+      fixture builder takes `{[K in keyof FleetStateWire]?: FleetStateWire[K] | undefined}` — partial
+      because most of these fixtures deliberately ARE payloads from an older server, and `| undefined`
+      because `exactOptionalPropertyTypes` otherwise refuses the explicit absence they are testing.
+      A fixture that is deliberately malformed goes through a second builder called `malformed()`,
+      so reaching for the escape hatch is visible in the diff rather than hidden in a cast.
 - [ ] **Prefer a named union to a boolean wherever the client reports on the server.** Two sessions
       independently reached this repair on the same evening: `catalogueOffered: boolean` became
       `CatalogueReading = absent | unreadable | read`, and the Overseer's `Checkpoint | null` became
@@ -1895,17 +1955,45 @@ stage.** Confusing them gets you a linter for a problem the compiler should have
       was a self-inflicted false positive because `steer-client.ts:51` writes `"api/steer/message"`
       with no leading slash — so match on substring, not prefix. Small surface, low noise, and it
       needs a short allowlist for the paths the Overseer and `curl` use honestly. **Gate it**, on
-      `scripts/check.ts`'s own rule: it is green the moment `/api/agents` is resolved.
-- [ ] **Resolve `/api/agents`**: either delete the alias or fix the five places in `live.ts` that
+      `scripts/check.ts`'s own rule — but note that `/api/agents` was resolved by keeping the alias
+      and fixing the prose (next entry), so **it is an allowlist entry rather than a zero**: the one
+      real finding on this tree is a deliberate exception now, and the check has to be able to say so
+      or it will be turned off the first time it fires.
+- [x] **Resolve `/api/agents`**: either delete the alias or fix the five places in `live.ts` that
       still call it "the poll". It is harmless — same handler — and it is the reason the check above
-      is not green on day one.
-- [ ] **`renderSpoken()` reaches the drain.** `speaker` onto `SessionActionRequest`, carried through
-      the queued item, applied in `drain.ts`'s `sendable()`. This is the safety property, so it gets
-      a `@ts-expect-error` guard in `tests/fleet-compile-guards.test.ts` — that file already exists
-      and is exactly the right home — asserting that a spoken action cannot be typed into the
-      transport without a `Speaker`.
-- [ ] **`clear()` gets a route or gets deleted.** Either is fine; leaving a tested method nothing can
-      reach is not.
+      is not green on day one. **Resolved the second way, 2026-09-08: the prose changed and the alias
+      stayed.** Deleting a working endpoint to tidy a name is the worse trade — it costs one clause,
+      and a note or a bookmark outside this repo may still hold it. All five occurrences in `live.ts`
+      now say `/api/state`, with a paragraph at the top of that file and a comment at the mount in
+      `server.ts` saying that `/api/agents` is the original name, retained as an alias, called by
+      nothing here. **Which means the route check above still needs its allowlist** — this entry did
+      not make it green, it made the reason for the exception written down.
+- [x] **`renderSpoken()` reaches the drain.** `speaker` onto `SessionActionRequest`
+      (`routes-actions.ts:395`, parsed at `:439`), carried on `QueuedItem`, applied in `drain.ts`'s
+      `sendable()` at `:292`. **The wiring landed during the wave and the guard did not**, which is
+      the half that matters: the property held and nothing stopped it being un-held. Measured on the
+      evening of 2026-09-08 — `tests/fleet-compile-guards.test.ts` had eight `@ts-expect-error`
+      guards and not one mention of `Speaker`. Now it has one, asserting that a `QueuedItem` with no
+      speaker and one with a speaker this build does not know both refuse to compile, with the pair
+      that should compile built beside them as the runtime positive.
+      **Verified by mutation, which on this kind of guard means typecheck rather than vitest**:
+      making `speaker` optional in `wire.ts` turns the directive unused and
+      `npm run typecheck` fails with `TS2578: Unused '@ts-expect-error' directive` — restored
+      byte-identical, zero deletions in the file's diff. The failure it prevents is silent: an item
+      built without a speaker does not throw and does not look wrong, it just reaches an agent as
+      words indistinguishable from Greg's.
+- [x] **`clear()` gets a route or gets deleted.** Either is fine; leaving a tested method nothing can
+      reach is not. **It got a route** (`POST /api/actions/clear`, `routes-actions.ts`) and a button
+      (*Clear the queue*, in `SessionQueue`), 2026-09-08. Two things came out of building it that the
+      box did not anticipate. **`keptInFlight` is the feature, not a return value**: `clear()`
+      deliberately keeps a leased item, so both the confirmation and the result name what will NOT
+      go, by its words — a page that said only "cleared" would be the ambiguous negative this
+      postmortem is about. And **the body carries the item ids the reader was looking at**, frozen at
+      the tap, so an item queued by the Overseer between the preview being drawn and the tap is
+      refused (`stale-view`, 409) rather than destroyed unread; `{sessionId}` alone, which is all
+      `clear()` needs, cannot express *the list I read*. Verified by mutation: removing the route's
+      call to `clear()` reddens `expected [] to deeply equal [ 'q2', 'q3' ]` in
+      `tests/fleet-actions-route.test.ts`, which drives the real client over the real handler.
 
 #### The rule, which is the part that generalises
 
@@ -2159,6 +2247,79 @@ failed, a stored list was unreadable — each carrying its own `why`. **We do no
 producer keeps it deliberately as one thing, *nobody can tell you*, and splitting it here would put
 the same reasoning in two places. The `why` is rendered on screen rather than behind a disclosure,
 because "no pass has run yet" means wait and "the pass failed" means go and look.
+
+### 🔵 Stage v0.9a: the broadcast cannot reach the sessions that caused the load
+
+**Found by `spideryarn2-b6` on 2026-09-08 while building the Overseer's resource rules**, handed over
+rather than patched, and every claim below was re-measured here before it was written down.
+
+`broadcastRoute` keeps only recipients whose `drainGate` is `{kind: "now"}`
+(`routes-actions.ts:1705-1707`). A shell — where the text would be *executed* — and a session that is
+*working* are both left out. For a person pressing **Ease off**, that is defensible and the comment
+above it says so.
+
+**For a rule that fires *because* the box is under pressure, it inverts.** The more load there is, the
+more sessions are working, and the fewer the broadcast reaches. Measured from
+`~/.overseer/last-snapshot.json` at 20:25: 15 rows — 7 shells, 5 working, 3 idle — so the broadcast
+would have reached **3 of 15**, and the 5 it excluded were the ones consuming the box.
+
+**The sharp end is `total === 0`** (`:1710`). When every agent is working — the exact condition the
+action exists for — the route refuses the whole call with *"none of the rows you sent is at a prompt
+right now, so there is nobody to tell"*. It does not degrade. It declines, and it declines hardest at
+maximum need.
+
+#### The cooldown does not protect the path that fires under load
+
+`lastBroadcastAt = at` is stamped at `:1769`, **after** the `total === 0` refusal returns at `:1712`
+and after the dry-run branch. So a refused call never spends the cooldown: an unattended caller is
+refused, the clock is never started, and it may re-fire immediately. There is no *send* loop, because
+nothing is delivered — there is an unthrottled *refusal* loop, on a box already under pressure.
+
+**That is a constraint on every automated caller today**, not a future one, and it is why
+`spideryarn2-b6`'s rule carries its own interval and treats a refusal as the end of an attempt rather
+than the start of a retry.
+
+#### Why the obvious fix is wrong, and what the real one costs
+
+`drainGate` returns `{kind: "later"}` for a working session, and `queue.ts` and `drain.ts` already
+exist to hold and deliver exactly that. But `broadcastText` carries *"arm a wake-up ~N minutes from
+now"* and `renderBroadcast` computes N **at send time on purpose** — a slow fan-out must not hand out
+stale minute counts. Queue a broadcast for a session that reaches a prompt forty minutes later and it
+arrives telling the agent to wake at a time that has passed. **Worse than not arriving.**
+
+So the fix is to render at delivery rather than at enqueue — and it is **two changes, not one**:
+
+1. **A box-wide action would have to become queueable per session**, which means ANSWERING the
+   refusal at `:505` rather than deleting it: *"a box-wide action cannot be queued against one
+   session"*, because there is no single session whose order it belongs to. The argument not yet
+   made is that a broadcast wants a **held delivery in each of many** rather than a position in one
+   session's order, and that those are separable. That looks obvious, which is the reason to be
+   careful with it.
+2. **Then render `index`/`total` at delivery**, which is idiomatic here rather than novel:
+   `drain.ts`'s `sendable()` already renders the attribution at delivery for the same reason, and
+   says so — *a sentence written twenty minutes before it is typed has decayed by the time anybody
+   reads it*.
+
+#### Not started, and deliberately waiting on evidence
+
+Crossing a deliberate refusal needs better evidence than *it would reach more sessions*.
+`spideryarn2-b6` is sampling `total`, `reachable`, `working`, the full status histogram and the load
+ratio every 30 seconds for 24 hours, recording an unreadable snapshot **as unreadable rather than as
+zero rows**. Two early readings — 3 of 15, then 2 of 14 with `working` steady at 5 — are a direction
+rather than a result; the second is the more interesting, because the denominator moved while the
+working count did not, which is a session ending rather than pressure easing.
+
+**A series showing reachability recovering on its own kills this stage**, which is the cheaper
+outcome and the one to hope for.
+
+- [ ] Answer or overturn the `:505` refusal, in writing, before any code.
+- [ ] Render `index`/`total` at delivery, following `sendable()`.
+- [ ] Say on the page what the route already answers: *"sent to 3 of 15 — 5 were working, 7 are
+      shells"*. The per-recipient outcomes are already in `result` and already drawn, but as a JSON
+      dump a reader scrolls past rather than a sentence they read. **Not a missing join** — checked —
+      a presentation gap.
+- [ ] A test that a refused call does not stamp the cooldown, so the behaviour above is a decision
+      rather than an accident. Whichever way it is decided, it should be decided.
 
 ### Later: the coordinator agent
 

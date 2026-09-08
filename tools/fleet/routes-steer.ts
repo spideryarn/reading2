@@ -143,7 +143,7 @@ export type SteerResponse =
  * A refusal's HTTP status.
  *
  * **Nothing in here is a 5xx, and nothing in here is a 200.** A `Record` keyed
- * by the union rather than a switch with a default, so that a thirteenth
+ * by the union rather than a switch with a default, so that a new
  * `RefusalCode` in steer.ts stops this file compiling instead of inheriting
  * somebody's guess. Two groups:
  *
@@ -167,6 +167,10 @@ export const REFUSAL_STATUS: Record<RefusalCode, number> = {
   "wrong-pane": 409,
   "pane-in-copy-mode": 409,
   "no-claude-in-pane": 409,
+  // The session IS there, and so is another Claude that may be the one reading
+  // that terminal — so the box is not what the client thought, which is what
+  // every 409 in this table means. Nothing is broken and nothing was delivered.
+  "competing-claude": 409,
   // Both 409 and NEITHER of them a 5xx, though one of the two is genuinely our
   // fault. `claude-unreadable` means `claude` was invoked in a shape our parser
   // does not know — a flag Anthropic added, most likely — and the useful fact
@@ -868,6 +872,26 @@ export type SteerRoutes = {
   handle(req: IncomingMessage, res: ServerResponse): boolean;
 };
 
+/**
+ * One log record stays one line, whatever another process put in its own argv.
+ *
+ * A refusal's `why` quotes what the reader found — the flag it did not know, a
+ * session id — and `tools/fleet/claude-argv.ts` gets those from a command line
+ * that anybody able to start a process on this box chose. A newline in one
+ * forges a whole record: measured, `--session-id $'x\nsteer message: SENT …'`
+ * put a fabricated SENT line into the log, which is the one place a person
+ * looks to find out what actually happened.
+ *
+ * Every C0 control and DEL, not just `\n`, because `\r` alone ends a line for
+ * plenty of readers and a lone ESC starts a sequence a terminal will act on.
+ * They become a space rather than being deleted, so the token boundaries a
+ * reader is scanning for survive.
+ */
+function oneLine(s: string): string {
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: the control characters ARE the subject.
+  return s.replace(/[\u0000-\u001f\u007f]+/g, " ");
+}
+
 function respond(res: ServerResponse, status: number, body: SteerResponse, extra: Record<string, string> = {}): void {
   const json = JSON.stringify(body);
   res.writeHead(status, { "content-type": "application/json", "cache-control": "no-store", ...extra });
@@ -1040,9 +1064,17 @@ export function makeSteerRoutes(overrides: Partial<SteerDeps> = {}): SteerRoutes
       // file's header promises the message is never logged. A refusal that
       // leaked it into the log would be the promise broken at the one moment
       // somebody is reading the log to find out what went wrong.
+      // `oneLine`, because a refusal's `why` NAMES WHAT IT FOUND — a flag, a
+      // session id — and those come out of another process's argv, which anyone
+      // who can start a process on this box chooses. This file already promised
+      // the message never reaches the log and was letting argv in through the
+      // back: `claude --session-id $'x\nsteer message: SENT …'` wrote a second,
+      // forged line into the log a person reads to find out what went wrong.
+      // The client still gets the sentence unflattened — it is rendered as text
+      // in an element, where a newline is a newline and not a record boundary.
       deps.log(
         `steer ${op}: refused pane=${target.paneId} code=${result.reason.code} ` +
-          `delivery=${result.delivery} landed=${describeSend(result.sent)} why=${result.reason.why}`,
+          `delivery=${result.delivery} landed=${describeSend(result.sent)} why=${oneLine(result.reason.why)}`,
       );
       respond(res, REFUSAL_STATUS[result.reason.code], {
         ok: false,

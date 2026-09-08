@@ -1,8 +1,9 @@
 /**
- * The action vocabulary, the queues, and the six requests that touch them —
+ * The action vocabulary, the queues, and the seven requests that touch them —
  * `POST /api/actions/session`, `GET /api/actions`, `POST /api/actions/box`,
- * `POST /api/actions/cancel`, and the two recovery gestures
- * `POST /api/actions/revive` and `POST /api/actions/abandon`.
+ * `POST /api/actions/cancel`, the two recovery gestures
+ * `POST /api/actions/revive` and `POST /api/actions/abandon`, and
+ * `POST /api/actions/clear`, which empties one session's queue.
  *
  * ## THE RULE THIS FILE KEEPS, WHICH IS steer-client.ts's RULE
  *
@@ -18,7 +19,9 @@
  *
  * The cancel body is the same discipline pointed at a different object: the
  * `sessionId` and the item `id` come off the queue snapshot that was on screen,
- * not from a lookup.
+ * not from a lookup. `clearBody` is the same rule applied to a whole list, and
+ * there the check at the far end is the safety property rather than a nicety —
+ * see it.
  *
  * ## THE CATALOGUE IS THE SERVER'S, AND THAT IS WHY THERE IS NO LIST HERE
  *
@@ -80,6 +83,8 @@ export const CANCEL_URL = "api/actions/cancel";
 /** The two recovery gestures. Both take the same body as cancel; see `cancelBody`. */
 export const REVIVE_URL = "api/actions/revive";
 export const ABANDON_URL = "api/actions/abandon";
+/** Emptying one session's queue in a single gesture. Its body is NOT cancel's; see `clearBody`. */
+export const CLEAR_URL = "api/actions/clear";
 
 /* ------------------------------------------------------------------ *
  * The vocabulary, as this page reads it.
@@ -456,6 +461,38 @@ function parsePayload(v: unknown): QueuedView | null {
   return null;
 }
 
+/**
+ * One item, as the server sends it — or null when this page cannot read it.
+ *
+ * Extracted from `parseQueue` rather than copied beside it, because the clear
+ * response carries items too (`removed`, `keptInFlight`) and a second hand-
+ * written reading of the same shape is precisely the twin declaration
+ * docs/postmortems/260908b is about. There is one reading of a queued item on
+ * this page.
+ *
+ * `stale` and `stuck` are absent from the items a clear hands back — they are
+ * the queue's judgment about delivery and a removed item has no delivery — and
+ * `flag()` turns that absence into `null`, which is "no claim made" rather than
+ * `false`. That is the same rule as everywhere else here and it is why the
+ * clear card never calls `itemState`.
+ */
+export function parseQueueItem(v: unknown): QueueItemView | null {
+  if (!isRecord(v)) return null;
+  const id = str(v["id"]);
+  const payload = parsePayload(v["payload"]);
+  if (id === null || payload === null) return null;
+  return {
+    id,
+    payload,
+    enqueuedAt: millis(v["enqueuedAt"]),
+    leasedAt: millis(v["leasedAt"]),
+    invalidated: str(v["invalidated"]),
+    stale: flag(v["stale"]),
+    stuck: flag(v["stuck"]),
+    speaker: v["speaker"] === "greg" || v["speaker"] === "overseer" ? v["speaker"] : null,
+  };
+}
+
 export function parseQueue(v: unknown): QueueView | null {
   if (!isRecord(v)) return null;
   const sessionId = str(v["sessionId"]);
@@ -468,26 +505,12 @@ export function parseQueue(v: unknown): QueueView | null {
   const itemsUnreadable = !Array.isArray(rawItems);
   const raw = Array.isArray(rawItems) ? rawItems : [];
   for (const item of raw) {
-    if (!isRecord(item)) {
+    const read = parseQueueItem(item);
+    if (read === null) {
       unreadableItems += 1;
       continue;
     }
-    const id = str(item["id"]);
-    const payload = parsePayload(item["payload"]);
-    if (id === null || payload === null) {
-      unreadableItems += 1;
-      continue;
-    }
-    items.push({
-      id,
-      payload,
-      enqueuedAt: millis(item["enqueuedAt"]),
-      leasedAt: millis(item["leasedAt"]),
-      invalidated: str(item["invalidated"]),
-      stale: flag(item["stale"]),
-      stuck: flag(item["stuck"]),
-      speaker: item["speaker"] === "greg" || item["speaker"] === "overseer" ? item["speaker"] : null,
-    });
+    items.push(read);
   }
   return {
     sessionId,
@@ -775,6 +798,26 @@ export function cancelBody(sessionId: string, itemId: string): CancelBody {
   return { sessionId, itemId };
 }
 
+/**
+ * Emptying a queue, and **the list is what makes it safe**.
+ *
+ * `itemIds` is what this page had on screen and offered to drop, copied off the
+ * snapshot in the same spirit as everything else in this file: a stale-but-
+ * honest claim, checked at the far end. The server compares it with the queue's
+ * own droppable set and refuses `stale-view` on any difference, so an item that
+ * arrived between the confirmation being drawn and the tap cannot be destroyed
+ * unread — which is the one thing a bulk delete must not do.
+ *
+ * The obvious body was `{sessionId}` alone, since `clear()` takes only that.
+ * It was rejected here and in routes-actions.ts for the same reason: it cannot
+ * say *the list I read*, and there is then nothing to check against.
+ */
+export type ClearBody = { sessionId: string; itemIds: string[] };
+
+export function clearBody(sessionId: string, itemIds: readonly string[]): ClearBody {
+  return { sessionId, itemIds: [...itemIds] };
+}
+
 /* ------------------------------------------------------------------ *
  * Outcomes.
  * ------------------------------------------------------------------ */
@@ -802,6 +845,21 @@ export type ActionOutcome =
    * delivery is the reassuring half of a contradiction.
    */
   | { ok: true; kind: "queue-changed"; op: QueueOp }
+  /**
+   * A queue emptied, **with the item that survived it**.
+   *
+   * Its own arm rather than a fourth `QueueOp`, and that is the whole design:
+   * an `op` is a word, and this answer has a fact in it that a word cannot
+   * carry. `clear()` keeps a leased item on purpose — the keystrokes may have
+   * gone — so "cleared" on its own is an ambiguous negative, and the page must
+   * be unable to draw it without saying which item stayed. Flattening three
+   * facts into one label is the mistake docs/postmortems/260908b ends on.
+   *
+   * `removed` may be short of what the server actually dropped when an item was
+   * unreadable; `unreadable` counts those, so the card can say the list is
+   * short rather than quietly presenting it as complete.
+   */
+  | { ok: true; kind: "queue-cleared"; removed: QueueItemView[]; keptInFlight: QueueItemView | null; unreadable: number }
   | { ok: true; kind: "accepted" }
   | { ok: false; code: string; why: string; status: number | null; from: "server" | "client" };
 
@@ -857,6 +915,11 @@ export type ActionsApi = {
   revive: (sessionId: string, itemId: string) => Promise<ActionOutcome>;
   /** Clear a lease nobody settled. It recalls nothing; see the confirmation copy. */
   abandon: (sessionId: string, itemId: string) => Promise<ActionOutcome>;
+  /**
+   * Empty one session's queue. `itemIds` is the list the person read — see
+   * `clearBody` — and an item already going out is kept, not dropped.
+   */
+  clear: (sessionId: string, itemIds: readonly string[]) => Promise<ActionOutcome>;
   box: (actionId: string, dryRun: boolean) => Promise<BoxOutcome>;
 };
 
@@ -923,6 +986,20 @@ function refusal(response: Response, parsed: unknown): { ok: false; code: string
 
 function readActionOutcome(response: Response, parsed: unknown): ActionOutcome {
   if (!isRecord(parsed) || parsed["ok"] !== true) return refusal(response, parsed);
+  /* BEFORE `queueOp`, and deliberately not one of its words: reading this as a
+     bare "cleared" would drop `keptInFlight`, which is the only thing on this
+     response that a person must not be left guessing about. */
+  if (parsed["op"] === "cleared") {
+    const raw = Array.isArray(parsed["removed"]) ? parsed["removed"] : [];
+    const removed: QueueItemView[] = [];
+    let unreadable = 0;
+    for (const item of raw) {
+      const read = parseQueueItem(item);
+      if (read === null) unreadable += 1;
+      else removed.push(read);
+    }
+    return { ok: true, kind: "queue-cleared", removed, keptInFlight: parseQueueItem(parsed["keptInFlight"]), unreadable };
+  }
   /* FIRST, because these responses also carry an `item` and would otherwise be
      read as an enqueue and drawn as "Queued." */
   const op = queueOp(parsed["op"]);
@@ -975,6 +1052,7 @@ export function makeActionsApi(fetchImpl: typeof fetch = fetch): ActionsApi {
     cancel: (sessionId, itemId) => send(CANCEL_URL, cancelBody(sessionId, itemId)),
     revive: (sessionId, itemId) => send(REVIVE_URL, cancelBody(sessionId, itemId)),
     abandon: (sessionId, itemId) => send(ABANDON_URL, cancelBody(sessionId, itemId)),
+    clear: (sessionId, itemIds) => send(CLEAR_URL, clearBody(sessionId, itemIds)),
 
     async box(actionId, dryRun): Promise<BoxOutcome> {
       const posted = await postJson(BOX_ACTION_URL, boxActionBody(actionId, dryRun), fetchImpl);
@@ -1008,5 +1086,6 @@ export const httpActionsApi: ActionsApi = {
   cancel: (sessionId, itemId) => makeActionsApi().cancel(sessionId, itemId),
   revive: (sessionId, itemId) => makeActionsApi().revive(sessionId, itemId),
   abandon: (sessionId, itemId) => makeActionsApi().abandon(sessionId, itemId),
+  clear: (sessionId, itemIds) => makeActionsApi().clear(sessionId, itemIds),
   box: (actionId, dryRun) => makeActionsApi().box(actionId, dryRun),
 };

@@ -63,6 +63,44 @@ export const STALE_AFTER_CADENCES = 2.5;
  */
 export const ASSUMED_CADENCE_MS = 60_000;
 
+/**
+ * **WHICH KIND OF STALE THIS IS: a loop that stopped, or one that hung.**
+ *
+ * The two look identical from a snapshot's age alone, and they are the two
+ * halves of the fault `attemptedAt` was added for. A collection that never
+ * settles throws nothing, so `error` stays null and everything else on this
+ * masthead says calm — measured at ~30 minutes stale with `error: null`, which
+ * reads as a slightly-quiet box rather than as a dashboard that stopped looking.
+ *
+ * `attemptedAt` is set BEFORE every attempt, so the comparison is the whole
+ * diagnostic: an attempt LATER than the last success is one that began and has
+ * not come back, and no attempt since the last success is a loop that is no
+ * longer running. `readAttemptClock` (tools/fleet/attempt-clock.ts) is what turns
+ * the raw field into the three cases, and the third of them — a server that does
+ * not report it — must not be read as *never attempted*, which would print
+ * "wedged" over every older server.
+ *
+ * Appended only to the STALE sentence. On a fresh snapshot there is nothing to
+ * diagnose, and a line explaining which kind of fine it is would be the caveat
+ * on every row that Fable's rule is about.
+ */
+export function attemptNote(state: FleetState, now: number): string {
+  const clock = state.attemptedAt;
+  if (clock.kind === "never-attempted") {
+    return "No collection has ever been started, so this is a collector that has not run rather than one that is late.";
+  }
+  /* NOT A FAULT AND NOT A WEDGE. Say what is missing rather than guess what it
+     would have said — the same discipline as the payload's own `not-asked`. */
+  if (clock.kind === "not-reported") return `Whether one is still being attempted cannot be told: ${clock.why}.`;
+
+  const attemptedAgo = Math.max(0, now - Date.parse(clock.at));
+  const collected = state.collectedAt === null ? null : Date.parse(state.collectedAt);
+  const laterThanSuccess = collected === null || Date.parse(clock.at) > collected;
+  return laterThanSuccess
+    ? `A collection was started ${formatDuration(attemptedAgo)} ago and has not finished — this is a run that hung, not a quiet box.`
+    : "No collection has been started since that one finished, so the loop itself has stopped rather than a single run hanging.";
+}
+
 export type Freshness = {
   stale: boolean;
   /** The short line that is always on screen. */
@@ -159,7 +197,10 @@ export function freshness(args: {
     return {
       stale: true,
       age,
-      why: `The server is answering, but the snapshot it is serving is ${formatDuration(dataAge)} old — over ${formatDuration(staleAfter)}, which is ${STALE_AFTER_CADENCES}× its usual ${formatDuration(cadence)}.`,
+      why:
+        `The server is answering, but the snapshot it is serving is ${formatDuration(dataAge)} old — over ` +
+        `${formatDuration(staleAfter)}, which is ${STALE_AFTER_CADENCES}× its usual ${formatDuration(cadence)}. ` +
+        attemptNote(state, now),
       tip,
     };
   }
@@ -208,7 +249,12 @@ export function Header({
      nothing about them — it exists because a corrected page and a broken clock
      otherwise look identical, and because nothing else will ever tell Greg his
      phone is five minutes fast. Quiet by construction: no colour, no card, and
-     nothing at all under a minute (view.ts § `CLOCK_SKEW_NOTICE_MS`). */
+     nothing at all under a minute (view.ts § `CLOCK_SKEW_NOTICE_MS`).
+
+     Three outcomes, not two: a measured skew worth mentioning, a measured one
+     too small to move a printed number (silence), and a skew that could not be
+     measured at all — which says so rather than passing as the second, because
+     an unmeasured correction and a zero one draw the same page. */
   const clock = state === null ? null : clockNote(state.clockSkew);
 
   return (

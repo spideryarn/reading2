@@ -54,7 +54,7 @@
  */
 import { isRepoValue } from "../../scripts/gjd-remote-repo.js";
 import type { SessionKind, SessionMeta, SessionState, SessionUnknownCause } from "../../scripts/gjd-remote-tmux.js";
-import { readAttemptClock } from "../fleet/state.js";
+import { readAttemptClock } from "../fleet/attempt-clock.js";
 
 /**
  * Anything `JSON.parse` can return, which is the honest type for a field we
@@ -595,7 +595,7 @@ function parseRow(u: unknown, index: number): ParseResult<ObservedRow> {
  * answer the question: `attemptedAt` absent means "never attempted" or "older
  * producer", and only `collectedAt` separates them.
  *
- * THE INFERENCE IS NOT MADE HERE. `readAttemptClock` in tools/fleet/state.ts
+ * THE INFERENCE IS NOT MADE HERE. `readAttemptClock` in tools/fleet/attempt-clock.ts
  * owns it and this delegates the whole decision to it, for the reason
  * `parseMeta` imports `isRepoValue` a few lines up: the rule is the producer's
  * — `attemptedAt` is written BEFORE each attempt, so a non-null `collectedAt`

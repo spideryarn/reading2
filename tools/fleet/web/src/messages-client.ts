@@ -121,6 +121,23 @@ export type MessageToolCall = { name: string; detail: string | null };
 /** One turn, as this page will draw it. `TranscriptTurn` off the wire. */
 export type MessageTurn = {
   speaker: MessageSpeaker;
+  /**
+   * **THE SERVER'S OWN STRING, NEVER SHIFTED**, because RecentMessages prints
+   * it as the absolute instant it is. Moving it would not say *the phone's wall
+   * clock*, it would assert a UTC time nothing happened at — types.ts §
+   * `shiftToBrowserClock` has the rule and `withClockSkew` below has the other
+   * end of it.
+   *
+   * **SO DO NOT SUBTRACT IT FROM A BROWSER CLOCK.** It is on the box's, and
+   * `now - Date.parse(at)` puts the whole device skew into the answer — the
+   * mistake `lastModified` made on this very route before v0.4j. Correct it
+   * first with `shiftMsToBrowserClock`. A pre-corrected `atMs` was carried here
+   * for one commit to make that impossible, and was deleted: nothing read it,
+   * and a field with a producer, a test and no consumer is Class A out of
+   * docs/postmortems/260908b — built, that time, while fixing an instance of
+   * Class A. The warning belongs on the field somebody would actually reach
+   * for, which is this one.
+   */
   at: string | null;
   /**
    * Plain, untrusted, possibly truncated, **never markup**. An assistant turn
@@ -211,6 +228,10 @@ function parseTurn(v: unknown): MessageTurn | null {
   return {
     speaker: speakerOf(v["speaker"]),
     at: str(v["at"]),
+    /* NOT computed here. The wire boundary has no clock to correct against —
+       `withClockSkew` is the only thing that holds one — and a `Date.parse` of
+       the raw string here would be the server's instant wearing a field that
+       promises the browser's. */
     text: typeof v["text"] === "string" ? v["text"] : "",
     truncated: v["truncated"] === true,
     fullChars: num(v["fullChars"]),
@@ -420,12 +441,16 @@ export function withClockSkew(api: MessagesApi, skew: () => ClockSkew): Messages
       return {
         ...view,
         lastModified: shiftToBrowserClock(view.lastModified, at),
-        /* The turns' own timestamps too. They are printed as wall-clock times
-           beside each message, so on a phone five minutes fast they would read
-           five minutes earlier than the phone's own clock says it is now — and
-           a message stamped in the future is the reading a person notices. */
-        turns: view.turns.map((turn) => ({ ...turn, at: shiftToBrowserClock(turn.at, at) })),
+        /* **THE TURNS KEEP THEIR OWN STRINGS.** This shifted them for one
+           round, on the belief that they were printed as wall-clock times.
+           They are not: `Turn` in RecentMessages.tsx prints `turn.at` verbatim,
+           so the shift turned `12:00:00Z` into `12:05:00Z` — not a phone's
+           clock, but an assertion about an absolute instant nothing happened
+           at, and wrong about the reader's timezone either way. GPT Sol's K4.
+           The correction is carried beside it as a number instead, for whatever
+           wants to measure an age from it. */
       };
     },
   };
 }
+

@@ -26,13 +26,14 @@ import { OverseerPanel } from "./OverseerPanel";
 import { SessionsPanel } from "./SessionsPanel";
 import { httpActionsApi, type ActionsApi } from "./actions-client";
 import { useDockFit } from "./fit";
+import { httpHistoryApi, type HistoryApi } from "./health-history-client";
 import { httpMessagesApi, withClockSkew, type MessagesApi } from "./messages-client";
 import { useHashState } from "./mode";
 import { httpNewSessionApi, type NewSessionApi } from "./new-session-client";
 import { httpRenameApi, type RenameApi } from "./rename-client";
 import { httpSteerApi, type SteerApi } from "./steer-client";
 import type { Transport } from "./transport";
-import { CLOCK_SKEW_UNMEASURED, type ClockSkew } from "./types";
+import { ANSWERING_NOT_REPORTED, CLOCK_SKEW_UNMEASURED, type ClockSkew } from "./types";
 import { cx } from "./ui";
 import { useActions } from "./useActions";
 import { useFleetState } from "./useFleetState";
@@ -46,6 +47,7 @@ export function App({
   rename = httpRenameApi,
   actionsApi = httpActionsApi,
   messagesApi = httpMessagesApi,
+  historyApi = httpHistoryApi,
   actionsPollMs,
 }: {
   transport?: Transport;
@@ -60,6 +62,13 @@ export function App({
    * there is no shared feed for the page to hold. RecentMessages.tsx says why.
    */
   messagesApi?: MessagesApi;
+  /**
+   * The day of box health. Injected here as well as defaulted in `HealthPanel`,
+   * so a test can drive the chart through the whole page rather than through
+   * the panel alone — which is what it takes to hold the join between the skew
+   * this page measures and the times that chart prints.
+   */
+  historyApi?: HistoryApi;
   /** Only a test passes this, to keep a poll off a fake clock. */
   actionsPollMs?: number;
 }): ReactNode {
@@ -140,6 +149,11 @@ export function App({
             <AttentionPanel
               attention={feed.state?.attention ?? { kind: "not-asked" }}
               now={now}
+              /* The panel's ages are anchored to the later of this and `now`,
+                 so a tab that iOS froze for a minute does not judge a
+                 just-arrived checkpoint against the clock it fell asleep with —
+                 AttentionPanel.tsx § `ageMs`. */
+              receivedAt={feed.receivedAt}
               onSelect={(id) => setParam("sel", id)}
             />
             {/* **`collected` is not `rows.length > 0`, and that is the point.**
@@ -152,6 +166,15 @@ export function App({
               now={now}
               collected={feed.state?.collectedAt != null}
               unreadableRows={feed.state?.unreadableRows ?? 0}
+              /* **NEITHER DEFAULT IS `false`/`0`.** Before the first payload
+                 arrives this page has been told nothing, and inventing `false`
+                 here would print "answering is switched off" over a server that
+                 has said no such thing — the mirror of the drop this stage
+                 repairs. `ANSWERING_NOT_REPORTED` says the true thing instead,
+                 and withholds the control while it says it. types.ts §
+                 `AnsweringReading`. */
+              answeringEnabled={feed.state?.answeringEnabled ?? ANSWERING_NOT_REPORTED}
+              tmuxServerPid={feed.state?.tmuxServerPid ?? null}
               order={order}
               onOrder={(next) => setParam("order", next === "status" ? null : next)}
               selectedId={selectedId}
@@ -167,7 +190,18 @@ export function App({
         ) : null}
         {mode === "health" ? (
           <div className="tw:mx-auto tw:max-w-3xl">
-            <HealthPanel health={feed.state?.health ?? null} actions={actions} />
+            <HealthPanel
+              health={feed.state?.health ?? null}
+              actions={actions}
+              historyApi={historyApi}
+              /* **THE CHART'S LABELS ARE WALL-CLOCK TIMES**, so they are the
+                 reader's to read off their own watch — and the masthead above
+                 says the times on this page are corrected. A chart labelled on
+                 the box's clock would disagree with both. Only the labels move:
+                 the geometry is server-to-server arithmetic and is right as it
+                 is (HealthHistory.tsx § `timeLabel`). */
+              skew={feed.state?.clockSkew ?? CLOCK_SKEW_UNMEASURED}
+            />
           </div>
         ) : null}
         {mode === "overseer" ? (

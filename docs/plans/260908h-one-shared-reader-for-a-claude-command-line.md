@@ -194,13 +194,16 @@ its core rule. This is what round 2 implemented, red-first, on 2026-09-08.
 
 ### The rule now
 
-- The option region ends at a bare `--` and **nowhere else**. Positionals do not end it.
+- The option region ends at a bare `--` and **nowhere else**. Positionals do not end it. (On the
+  flattened arm a `--` that follows a positional ends nothing either — it makes the whole reading
+  `unreadable`. That is ARGV-P1-01, in Stage B round 2 below, and it is the next bullet applied to
+  the separator as well.)
 - On the **`argv`** arm the scan keeps going past positionals: a dash-led token before any `--` is a
   flag. This is decidable because the prompt is one element.
-- On the **`ps-flattened`** arm, once an **unconsumed positional** has appeared, any later dash-led
-  token is `unreadable`, naming the token. "Unconsumed" is load-bearing: a bare word a flag ate as
-  its value is not a positional, or the ordinary launcher shape (`--permission-mode auto --print`)
-  would refuse.
+- On the **`ps-flattened`** arm, once an **unconsumed positional** has appeared, **every** later
+  dash-led token is `unreadable`, naming the token — the separator included, since `--` is a word
+  people write in prose. "Unconsumed" is load-bearing: a bare word a flag ate as its value is not a
+  positional, or the ordinary launcher shape (`--permission-mode auto --print`) would refuse.
 - Only the **first** unconsumed positional can be a subcommand word, so a prompt using the word
   "stop" three sentences in is still a prompt.
 
@@ -706,6 +709,134 @@ revision.
   prompt begins with those words, which a walked-through separator would hand over) is now asserted
   there with its pair.
 
+### Stage B round 2 — the wiring reviewed, and two of the three were real
+
+A cross-family review (GPT Sol) of Stage B's wiring returned two P0s and a P1. Two are fixed, one is
+weighed and written down instead. Everything below was measured on the box on 2026-09-08.
+
+**ARGV-P1-01 — a bare `--` inside a flattened prompt was the option separator, so the `--print`
+after it was never seen.** The original bug of this whole plan, arriving through the one token the
+round-2 boundary rule had exempted:
+
+```
+real argv: ["claude","--session-id",A,"Please explain -- carefully","--print"]
+  faithful  -> session, headless=TRUE      correct: claude really does parse that --print
+  flattened -> session, headless=FALSE     wrong, and `steerWithProse` grants on it
+```
+
+The exemption had a written argument — *stopping at a `--` after a positional is safe under both
+readings, because if the prompt really is one element then nothing after it was a flag anyway* — and
+its first half is false: a prompt being one element does not make it the LAST element. Same class as
+[260908f](../postmortems/260908f-a-correct-comment-contradicted-by-the-line-beneath-it.md), a claim
+of impossibility made against the space the author had in mind.
+
+**It fell out as one condition, not two.** The flattened-ambiguity rule now runs in the scan over
+every dash-led token, ahead of the separator, instead of inside `readFlagToken` — which could only
+ever see the tokens that reached it, and a `--` never did. The rule is now literally *on a `ps` line,
+once an unconsumed positional has appeared, every dash-led token is `unreadable`*.
+
+**What it costs, measured rather than asserted.** Census of `/proc` on this box: **6 live `claude`
+processes, 0 of them changed by the rule** — the one carrying a `--` has it at argv[7], after
+`--name`'s value and before the prompt, which is where both producers put it
+(`gjd-remote.ts:2565`, `run-claude.ts:326`). One PRE-EXISTING test did change, and it is worth
+naming: a flattened `--name my session -- go and do the thing` is now `unreadable`. **No producer
+can emit it** — a session name cannot contain a space (`gjd-remote.ts:2462` and
+`tools/fleet/routes-new.ts:376` both refuse anything but `^[a-z0-9][a-z0-9-]{0,40}$`), which also
+corrects a comment in `claude-argv.ts` that read the launcher's `shq(name)` as evidence that names
+hold spaces. The narrower rule that would have kept it — refuse only when a dash-led token FOLLOWS
+the ambiguous `--`, which is exactly when the two readings disagree — is named and rejected in the
+module header: a second condition and a lookahead, to buy back a shape nothing can produce.
+
+**STEER-P0-01 — a competing Claude under the same pane, and Stage B is what lost the information.**
+`verifyTarget` accepted the first candidate returning `yes` and stopped. Sol's sequence: outer Claude
+A starts a descendant Claude B whose prompt quotes A's uuid, so `pgrep` returns both; A reads `yes`,
+B reads `no` because B's session id is B's; the loop takes A whatever the ordering — and **B owns the
+visible terminal**, showing an ordinary empty input box that the screen check approves. A's message
+is typed at B. That is "the right text delivered to the wrong session", which the file's header names
+as the failure it exists to prevent.
+
+The cause is the one to act on: the `no` arm had collapsed *not a `claude` at all* (a wrapper shell,
+a `grep`) into *a different live conversation*, and nothing downstream could get the distinction
+back. So:
+
+- **a fifth arm, `other-claude`**, on `ClaudeForSession` in `steer.ts`. `no` now means *nothing a
+  keystroke in this pane could reach* — not a claude, a subcommand, or **a claude for another
+  conversation running headless**, which read its prompt at exec and never looks at a tty.
+  `other-claude` is a live interactive claude that is not ours: a different id, ids that differ, or
+  no id at all.
+- **the loop no longer breaks**, and records the first of each kind rather than depending on pid
+  order, into a named `PaneCandidates`.
+- **a new `RefusalCode`, `competing-claude`** (409 in `REFUSAL_STATUS`), returned by `contendedPane`
+  when our session is verified AND a competitor is present. An unreadable second candidate refuses
+  too, as `claude-unreadable`, because "we cannot read it" is not an answer that permits a keystroke.
+- **`no-claude-in-pane` is unchanged as a code** — a pane holding only somebody else's conversation
+  is still "no claude for yours in there" — and its sentence now names what IS under the pane.
+
+**What the refusal costs, measured.** Two censuses. A single `/proc` + `tmux list-panes` pass: 13
+panes, 6 with a `claude` descendant, **0 with more than one**. Then a sampler every 5 seconds for 10
+minutes: **120 samples, 6 claudes throughout, 0 nested claude-under-a-claude in any of them**. So a
+blanket refusal costs nothing today, and the headless exemption is what keeps it that way — it is
+`run-claude.ts`'s sub-runs that put a second claude under a delegating session's pane, and those are
+`--print`.
+
+**The residual gap, stated in the header rather than implied away.** Candidates come from
+`pgrep -f -- <uuid>`, so a competing claude whose argv never mentions this uuid — a plain `claude`
+somebody started in the pane by hand — is not in the list and is not refused. Widening to every
+descendant of the pane would see it, at an argv read per descendant, for a launch nothing in this
+repo performs.
+
+**STEER-P0-02 — the pid-reuse splice: DOCUMENTED, NOT FIXED, and the reasoning is in the file's
+KNOWN GAPS.** The ancestry snapshot and the per-candidate `/proc/<pid>/cmdline` read are two
+observations with nothing binding them to one process generation. Measured: `pid_max` is 4,194,304
+and this box forked 3,842 processes in 60 seconds (64/s) at an ordinary load, so the pid space wraps
+about every **18 hours**, against a window of well under a millisecond — and the recycled pid would
+ALSO have to be a `claude` carrying this exact uuid before the splice granted anything. Three reasons
+not to build the `/proc/<pid>/stat` start-time check, and the third decides it: it widens `SteerIo`'s
+contract for a race nobody has seen; **it would not be complete anyway**, because the ancestry walk
+reads every intermediate parent from the same snapshot and binding those needs a start time per row,
+not per candidate; and `steer.ts:51` already documents a structurally identical, LARGER race — a pane
+respawn between the last check and `send-keys`, needing no pid wrap at all — as unclosable and
+accepted. A partial fix that reads as a complete one is worse than a paragraph, because the next
+person stops looking. The paragraph names its domain: on a kernel with the old 32,768 `pid_max` the
+wrap is minutes rather than hours and the arithmetic moves three orders of magnitude.
+
+**TEST-P3-01 — a comment stating the old policy**, at `tests/fleet-claude-argv.test.ts`'s
+duplicate-id case: *"`steer.ts` wants to refuse any repeat"*, which stopped being true when Stage B
+took D2. Corrected, with what the occurrence list is actually still for (`A A B`). A sweep of the
+touched files found four more of the same shape, all corrected: `isClaudeForSession`'s "**THIS
+RETURNS FOUR ANSWERS**" (five now), `verifyTarget`'s "a box with forty agents on it reads one
+`cmdline`" (it reads every candidate under the pane now, deliberately), `REFUSAL_STATUS`'s "a
+thirteenth `RefusalCode`", and the `--name` comment above.
+
+**Red first, and both were live grants.** The steer test refuses through the real `sendMessage` with
+a paired positive control that sends, and its red was
+`expected a refusal, got a send of [["send-keys","-t","%10","-l","--","keep going"],["send-keys","-t","%10","Enter"]]`
+— the message really went out. The argv/harness reds were
+`expected 'claude-code' not to be 'claude-code'` on `classifyPaneHarness`, whose `claude-code` is
+what `HARNESS_CAPABILITIES` grants prose steering on.
+
+**Mutation: 9 mutants, 9 killed, 0 survivors, 0 void.** Baseline 347 tests across six suites, and
+347 again after every revert.
+
+| mutant | red |
+|---|---|
+| M1 flattened `--` exempted again (the ARGV-P1-01 bug exactly) | 3 |
+| M2 whole flattened-ambiguity rule deleted | 9 |
+| M3 rule armed on every dash-led token, positional or not | 33 |
+| M4 rule applied on the faithful arm too | 5 |
+| M5 `other-claude` collapsed back into `no` | 2 |
+| M6 `competing-claude` refusal dropped | 1 |
+| M7 first-match-wins restored (a competitor seen before ours is forgotten) | 1 |
+| M8 a headless claude for somebody else counted as a competitor | 2 |
+| M9 the unreadable-second-candidate refusal dropped | 1 |
+
+M6, M7 and M9 are each held by ONE assertion, which is the low-kill-count signal this plan's Stage A
+report says to write down: those three rules have no second witness. **The harness lied first, and
+its own check caught it** — the summary line arrives wrapped in ANSI escapes, so the parser read a
+green run as "no summary at all"; because it refuses a run whose test count does not match the
+baseline, that surfaced as a hard stop rather than as nine survivors. That is the failure mode a
+sibling agent shipped a table from the day before.
+
 ### The behaviour choices, settled
 
 | | rule that wins | why |
@@ -837,6 +968,44 @@ to test the pair, not the two boxes.
 > — which interact for the same reason: the arity table is only partly known, so an unreadable token
 > has to be able to stop the whole reading. Checklist features that look independent on a README
 > interact once the grammar is foreign.
+
+## Status — 2026-09-08, end of the run
+
+**Done enough to stop here.** All three stages are on `dev`, each has had a cross-family review and a
+round two, and what remains is optional.
+
+| stage | state | evidence |
+|---|---|---|
+| **A** — `tools/fleet/claude-argv.ts` | landed, 2 rounds | 20 mutants, 1 equivalent, 0 real survivors |
+| **B** — the three consumers | landed, 2 rounds | 9 mutants, 9 killed; 2 red tests were **live grants** |
+| **C** — the awk probe | landed, 2 rounds | 13 mutants, 13 killed |
+
+Live positive control at the end: **6 `claude` processes, both fidelities, all a clean `session`.**
+Full suite `EXIT=0`; typecheck exit 0.
+
+### What the job turned out to be about
+
+Not the duplication. **Nobody had checked what the CLI does.** `claude` permutes its options — it
+parses them after a positional, measured three ways — so the boundary rule both TypeScript readers
+rested on was not a rule about `claude` at all, and the `harness.ts` comment asserting it was a bug
+fix that reintroduced the bug it described. Three separate routes to the same false grant were closed
+in one day: a substring search (C), a bare-word boundary (A), and a `--` inside a flattened prompt
+(B round 2).
+
+### What is left, and what leaving it costs
+
+- **The subcommand table will rot, and nothing would notice.** An unknown *flag* is loud
+  (`unreadable`); an unknown *subcommand* is a bare word and reads as an ordinary `session` — it fails
+  **open**. Partly irreducible, because a new subcommand is indistinguishable from a prompt beginning
+  with that word (which is why `help` is excluded by hand, measured). A maintenance check diffing
+  `claude --help`'s `Commands:`/`Options:` against `SUBCOMMANDS`/`FLAGS` is designed and **not built**;
+  it needs a home outside the hermetic suite. Cost of leaving it: the day Anthropic adds a subcommand,
+  a pane running it is labelled steerable. Small, and it is the one gap that gets worse with time.
+- **The pid-reuse splice**, documented in `steer.ts`'s KNOWN GAPS with its domain named. Deliberately
+  not fixed; the reasoning is in the round-2 commit.
+- **The awk keeps two holes an arity table would close**, both in the granting direction, both now
+  asserted by tests so they stay visible: a prompt quoting this pane's uuid in a `claude` carrying no
+  id of its own, and a differing second id behind an unknown flag's value.
 
 ## The simpler option, named
 

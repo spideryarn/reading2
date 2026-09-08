@@ -30,7 +30,8 @@ import {
   type FleetSnapshot,
 } from "../tools/fleet/collect.js";
 import { parseBinds } from "../tools/fleet/config.js";
-import { fleetState, readAttemptClock } from "../tools/fleet/state.js";
+import { readAttemptClock } from "../tools/fleet/attempt-clock.js";
+import { fleetState } from "../tools/fleet/state.js";
 import type { AttentionFeed } from "../tools/fleet/wire.js";
 import type { FleetStatus } from "../tools/fleet/status.js";
 import { buildSessionScript, type Session } from "../scripts/gjd-remote-tmux.js";

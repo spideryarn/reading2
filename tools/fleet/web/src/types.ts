@@ -32,6 +32,7 @@
  * silently rounded a new state to "idle" would be the exact lie the status
  * module exists to prevent.
  */
+import { readAttemptClock, type AttemptClock } from "../../attempt-clock.js";
 import type {
   AttentionAnswerability,
   AttentionEvidence,
@@ -39,9 +40,12 @@ import type {
   AttentionItem,
   AttentionKind,
   AttentionList,
+  FleetState as FleetStateWire,
   Pause,
   PauseUnknownCause,
 } from "../../wire.js";
+
+export type { AttemptClock };
 
 export type {
   AttentionAnswerability,
@@ -266,38 +270,114 @@ export type FleetRow = {
   rawQuestion: unknown;
 };
 
-/** The whole payload, and enough about it to know whether to believe it. */
-export type FleetState = {
-  /** ISO, or null when nothing has ever been collected. */
-  collectedAt: string | null;
-  tookMs: number;
-  /** The last refresh failure. The rows beside it may still be good. */
-  error: string | null;
+/**
+ * The whole payload, and enough about it to know whether to believe it.
+ *
+ * **DERIVED FROM THE WIRE TYPE, NOT WRITTEN BESIDE IT** — the same repair
+ * `QueueItemView` in actions-client.ts got, for the same reason and against the
+ * same measurement. This was a hand-written twin of `FleetState` in
+ * `tools/fleet/state.ts` until 2026-09-08, and by then it had silently dropped
+ * two fields the server had been sending for a day: `grep -c answeringEnabled`
+ * and `grep -c tmuxServerPid` in this file both returned **zero**. Neither end
+ * could go red, because each was internally consistent.
+ *
+ * So every REQUIRED field the server sends is in this type unless it is NAMED
+ * in the `Omit<>` below, and `parseFleetState`'s object literal does not compile
+ * until each one is either parsed or named. Dropping a field is now a line
+ * somebody has to write and a reviewer can see.
+ *
+ * **"Required" is doing real work in that sentence** and it was missing from it
+ * for a day (GPT Sol's M2). An OPTIONAL key on the wire type slips through
+ * untouched: this `Omit<>` carries the `?` across with it, the parse's object
+ * literal is free to omit it, and the field ships to a browser that never reads
+ * it — the exact drop this derivation exists to prevent, through the one door it
+ * does not cover. Which is why the wire type may not have one:
+ * `tests/fleet-compile-guards.test.ts` refuses an optional top-level key on it,
+ * and `npm run typecheck` is the gate. Nothing here has to defend against it,
+ * but nobody should believe this paragraph promises more than it does.
+ *
+ * **This is a derivation and not an adoption, and the difference is the whole
+ * design.** Several fields are deliberately WEAKER here than on the wire,
+ * because **a server too old to send a field has made no claim** and a parse
+ * that invented `false` or `0` for it would be the exact defect this removes.
+ * The `Omit<>` list is in two halves, and the comment on each is the decision:
+ *
+ *  - **re-typed** — parsed into something this page can honestly draw;
+ *  - **declined** — read at the boundary and not carried, or not read at all,
+ *    with the reason beside it.
+ *
+ * `Row` is filled with this file's own `FleetRow` and `Health` with `unknown`;
+ * wire.ts § `FleetState` says why those two are holes rather than shared
+ * declarations, and why sharing `FleetRow` verbatim would be wrong rather than
+ * merely impossible.
+ *
+ * TWO FIELDS ARE KEPT UNPARSED ON PURPOSE — `rawStatus` and `rawQuestion` on
+ * the rows. See their comments on `FleetRow`.
+ */
+export type FleetState = Omit<
+  FleetStateWire<FleetRow, unknown>,
+  /* Re-typed below, each because this page must be able to say "the server did
+     not tell me" without inventing an answer on its behalf. */
+  | "answeringEnabled"
+  | "refreshMs"
+  | "attention"
+  /* Re-typed too, and it was DECLINED for a day on reasoning that did not hold.
+     The entry here used to say that `readAttemptClock` is a runtime value, so it
+     could not live in wire.ts, so both sides could not share one — and therefore
+     the client would not read `attemptedAt` at all. The middle step is the wrong
+     one: what the browser project cannot tolerate is a NODE dependency, and "no
+     runtime values" is wire.ts's own rule about its own file. A leaf module with
+     no imports has neither problem, so `attempt-clock.ts` exists and both sides
+     import it. GPT Sol's M5. */
+  | "attemptedAt"
+  /* Declined: READ AT THE BOUNDARY AND NOT CARRIED. `schema` decides whether to
+     believe the payload at all (`parseFleetState` refuses anything else), and
+     `servedAt` is consumed into `clockSkew` below — carrying either would be a
+     second copy of a decision already made. */
+  | "schema"
+  | "servedAt"
+> & {
   rows: FleetRow[];
-  /**
-   * Box health. Shape owned by tools/fleet/health.ts, which is being written by
-   * somebody else as this lands — so it is `unknown` here on purpose and
-   * HealthPanel renders whatever arrives without a schema. `null` means the
-   * server had nothing to give, which the panel says out loud rather than
-   * drawing an empty page.
-   */
-  health: unknown;
   /**
    * **How often the server actually collects**, in milliseconds, when it says.
    *
-   * Optional because the server does not send it today. It is read here rather
-   * than waited for because the alternative — a hardcoded staleness threshold —
-   * is what had the masthead crying STALE for most of every cycle: the page
-   * gave up after 30s against a collector that runs every 55–60s, deliberately,
-   * since one collection costs the box about ten seconds of work. A banner that
-   * is on most of the time is a banner nobody reads, which costs this tool the
-   * one signal it is built around.
-   *
    * `null` when absent, and `Header.freshness` then falls back to the cadence
-   * it has watched happen (useFleetState). Whichever it gets, the threshold is
-   * derived from it rather than written down beside it.
+   * it has watched happen (useFleetState). "The server did not say" and "the
+   * server says 60s" are different facts, and only the first should let the
+   * observed cadence win — a hardcoded threshold is what had the masthead
+   * crying STALE for most of every cycle.
    */
   refreshMs: number | null;
+  /**
+   * **Whether tapping an option would do anything** — see `AnsweringReading`,
+   * which is four arms rather than a boolean and fails CLOSED.
+   */
+  answeringEnabled: AnsweringReading;
+  /**
+   * **WHEN A COLLECTION WAS LAST STARTED**, as the three-arm reading rather than
+   * the raw string — `readAttemptClock` in tools/fleet/attempt-clock.ts, the one
+   * the server and the Overseer daemon also call.
+   *
+   * `collectedAt` says when data last ARRIVED and cannot tell a stopped
+   * collector from a quiet box; this is what separates them. The fault it exists
+   * for is a collection that never settles: it throws nothing, so `error` stays
+   * null and the masthead says calm while the snapshot goes half an hour stale.
+   * `Header.freshness` is the consumer — it says which of the two a STALE
+   * snapshot is.
+   *
+   * Shifted onto this browser's clock like every other server timestamp here.
+   * See `ClockSkew`.
+   */
+  attemptedAt: AttemptClock;
+  /**
+   * **The attention inbox** — what the Overseer says needs Greg, or the reason
+   * there is no such list.
+   *
+   * Widened from the wire's `AttentionFeed` by one arm: a field that is PRESENT
+   * and unreadable is a fact about a payload rather than about the box, so the
+   * server cannot report it and this page must. See `AttentionView`.
+   */
+  attention: AttentionView;
   /**
    * **How many rows in the payload could not be read**, which is a fact about
    * the fleet and not a tidiness note.
@@ -308,17 +388,11 @@ export type FleetState = {
    * carrying a question scraped off a terminal, which is precisely the row the
    * page is opened to see. So the count is carried and the panel says *3 of 41
    * sessions could not be read* rather than showing 38 and looking complete.
+   *
+   * Not on the wire at all: the server has no unreadable rows, only this
+   * parser does.
    */
   unreadableRows: number;
-  /**
-   * **The attention inbox** — what the Overseer says needs Greg, or the reason
-   * there is no such list.
-   *
-   * Never null and never absent, because every one of the five things it can
-   * say is worth saying and two of them are about us rather than about the box.
-   * See `parseAttention`, and `AttentionFeed` in wire.ts.
-   */
-  attention: AttentionView;
   /**
    * **What was done to every server timestamp above, and whether it could be.**
    *
@@ -332,6 +406,84 @@ export type FleetState = {
    */
   clockSkew: ClockSkew;
 };
+
+/* ------------------------------------------------- can we answer at all -- */
+
+/**
+ * **WHETHER `POST /api/steer/answer` WILL DO ANYTHING, AS FOUR ANSWERS.**
+ *
+ * A boolean-ish read of the raw field is what this was until 2026-09-08, and it
+ * FAILED OPEN twice over: an absent field became `null` and `null` still offered
+ * the buttons, and a malformed `"yes"` landed in the same `null` and therefore
+ * also became permission to offer a control.
+ *
+ * The argument for offering them on silence was mine and it was wrong. It ran:
+ * refusing on an older server's silence would invent a hold nobody declared.
+ * GPT Sol's correction is factual and beats it — **the kill switch predates the
+ * state field in history**, so a server old enough not to send this is a server
+ * that can have answering switched off with no way to say so. Silence is
+ * therefore not evidence that answering works; it is the absence of evidence
+ * either way, and this is the one control where acting on that costs a person a
+ * 503 and the hold its entire purpose.
+ *
+ * **So only a positive `enabled` offers the buttons.** The other three say that
+ * availability could not be established, which is a different sentence from
+ * *a hold was declared* — and `not-reported` and `unreadable` stay apart so the
+ * page can be accurate about which happened rather than lumping them into one
+ * shrug. Same discipline as `parseGate`'s `unknown` and `AttentionFeed`'s
+ * `not-asked`: "I could not tell" must never become the way through.
+ *
+ * **Failing closed costs nothing real here, and that is worth knowing before
+ * somebody re-opens it.** `not-reported` is close to unreachable in practice:
+ * this server serves the bundle that talks to it, so the two always ship
+ * together and a browser reading a payload from a server older than its own code
+ * is not a state the deployment produces. The arm exists because the type must
+ * be able to say it, not because it is expected.
+ */
+export type AnsweringReading =
+  /** The server said yes. The ONLY arm that offers a control. */
+  | { kind: "enabled" }
+  /** The server said no. A hold was declared, and the page says so in those words. */
+  | { kind: "disabled" }
+  /** No such field. A server that predates it — and it may still be switched off. */
+  | { kind: "not-reported" }
+  /** The field is there and is not a boolean. A payload we cannot read, not a claim. */
+  | { kind: "unreadable"; why: string };
+
+/**
+ * Read the flag without letting silence or nonsense become a yes.
+ *
+ * `=== true` / `=== false` rather than truthiness, for the reason the whole
+ * union exists. Absence is `undefined` because this is JSON — a key that is not
+ * there reads as `undefined` and nothing else does — so an explicit `null`, a
+ * `"yes"` and a `0` are all *present and unreadable* rather than *not reported*,
+ * which is the honest split: one is a server that never heard of the field, the
+ * other is a server whose answer this build cannot interpret.
+ */
+/**
+ * **NOBODY HAS SAID ANYTHING YET**, which is what the page holds before its
+ * first payload arrives.
+ *
+ * A named value for the same reason `CLOCK_SKEW_UNMEASURED` is one, and with the
+ * same rule attached: it is not a claim that answering is off, and it must never
+ * be the value a real payload rounds to. It is `not-reported` because that is
+ * literally what has happened — no server has reported anything — and it
+ * withholds the buttons, which before the first payload is free, since there are
+ * no rows to open.
+ */
+export const ANSWERING_NOT_REPORTED: AnsweringReading = { kind: "not-reported" };
+
+export function readAnswering(raw: unknown): AnsweringReading {
+  if (!isRecord(raw)) return { kind: "unreadable", why: "the payload is not an object" };
+  const value = raw["answeringEnabled"];
+  if (value === true) return { kind: "enabled" };
+  if (value === false) return { kind: "disabled" };
+  if (value === undefined) return { kind: "not-reported" };
+  return {
+    kind: "unreadable",
+    why: `the server sent ${JSON.stringify(value)} where this page reads true or false`,
+  };
+}
 
 /* --------------------------------------------------------- the clocks -- */
 
@@ -382,10 +534,16 @@ export const CLOCK_SKEW_UNMEASURED: ClockSkew = {
 /**
  * The skew a payload implies, given when this browser received it.
  *
- * `servedAt − receivedAt` is skew plus network latency, and latency here is
- * milliseconds on a tailnet against thresholds of minutes — which is why
- * `servedAt` exists rather than `collectedAt` or `attemptedAt` being reused.
- * Either of those is up to a full cadence older than the answer, and that
+ * `servedAt − receivedAt` is not the skew alone. With a one-way latency `L`
+ * (box → browser) it is `serverOffset − browserOffset − L`, so the measurement
+ * UNDERSTATES the skew by `L` and the conversion maps server-send onto
+ * browser-receipt — which means every age computed off a shifted timestamp is
+ * short by `L` rather than long. That is fine here and the sign is the reason:
+ * `L` is milliseconds on a tailnet against thresholds of minutes, and it errs
+ * towards calling things fresher, never towards a manufactured alarm.
+ *
+ * It is `servedAt` that is read, and not `collectedAt` or `attemptedAt`, because
+ * either of those is up to a full cadence older than the answer — and that
  * genuine snapshot age cannot be told apart from skew. state.ts § `servedAt`.
  */
 export function readClockSkew(raw: unknown, receivedAt: number): ClockSkew {
@@ -395,21 +553,46 @@ export function readClockSkew(raw: unknown, receivedAt: number): ClockSkew {
       why: "this server does not say what time it answered, so the difference between its clock and this device's cannot be measured",
     };
   }
-  const servedAt = Date.parse(raw["servedAt"]);
-  if (!Number.isFinite(servedAt)) {
+  /* **`iso`, NOT `Date.parse`.** `Date.parse` reads `"0"` as the year 2000,
+     accepts date-only strings, and is allowed to accept anything else an
+     implementation fancies — and each of those would arrive as a `known` skew
+     and shift every timestamp on the page by years, in the direction of "the
+     box's clock is broken". The producer writes `toISOString()` (state.ts §
+     `servedAt`), so that is what this reads, and the same predicate the inbox
+     already refuses its timestamps with. GPT Sol's K6, 2026-09-08. */
+  const servedAt = iso(raw["servedAt"]);
+  if (servedAt === null) {
     return { kind: "unknown", why: "the server sent a time of answering this page could not read" };
   }
-  return { kind: "known", ms: servedAt - receivedAt };
+  return { kind: "known", ms: Date.parse(servedAt) - receivedAt };
 }
 
 /**
  * One server timestamp, in this browser's terms. **The whole of the fix.**
  *
- * Shifts the STRING rather than returning a number, because most of these stay
- * strings all the way to the screen and some of them are read as wall-clock
- * times rather than as ages. Displaying a shifted `pause.resetsAt` is CORRECT
- * for a reader: a phone five minutes fast should show a 06:30 reset as 06:35,
- * because 06:35 is when it will happen by the clock they are looking at.
+ * **SHIFT A VALUE THAT REACHES THE SCREEN THROUGH A LOCAL WALL-CLOCK FORMATTER
+ * OR AS AN AGE. NEVER SHIFT ONE THAT IS PRINTED AS AN ABSOLUTE INSTANT** — that
+ * manufactures a UTC time nothing happened at, and it is still wrong about the
+ * reader's timezone anyway.
+ *
+ * **The rule shipped one round too broad, and this is the corrected version.**
+ * It used to argue only the first half — that a phone five minutes fast should
+ * show a 06:30 reset as 06:35 — which is true of `pause.resetsAt`, because
+ * `PauseLine` renders it through `clockTime()` and the reader is comparing it
+ * against the watch on their wrist. It is false of anything printed as the ISO
+ * string it is: a transcript turn's `at` went to the screen verbatim, so the
+ * shift turned `12:00:00Z` into `12:05:00Z` — not *the phone's wall clock*, but
+ * an assertion about a different absolute instant that nothing happened at.
+ * GPT Sol's K4, 2026-09-08; messages-client.ts § `withClockSkew` holds the
+ * other end, and carries a corrected NUMBER beside the untouched string rather
+ * than moving it.
+ *
+ * Shifts the STRING rather than returning a number, because the values this is
+ * still right for stay strings all the way to their formatter, and one of them
+ * has to stay in the shape `iso` accepts: `parseAttention`'s shifted `writtenAt`
+ * becomes a degraded list's `scannedAt`, which the type promises came out of
+ * `toISOString()`. `shiftMsToBrowserClock` below is the same conversion for the
+ * callers that never had a string.
  *
  * Anything unparseable is returned untouched, for the same reason `startedAt`
  * survives as `""` — this function's job is to move a time, not to decide
@@ -419,7 +602,24 @@ export function shiftToBrowserClock(value: string | null, skew: ClockSkew): stri
   if (value === null || skew.kind === "unknown" || skew.ms === 0) return value;
   const at = Date.parse(value);
   if (!Number.isFinite(at)) return value;
-  return new Date(at - skew.ms).toISOString();
+  return new Date(shiftMsToBrowserClock(at, skew)).toISOString();
+}
+
+/**
+ * The same conversion on a number, for the callers that never had a string.
+ *
+ * **The arithmetic lives here once.** Three places need it — the string form
+ * above, `browserMsOf` in messages-client.ts, and the chart's axis labels in
+ * HealthHistory.tsx, whose samples arrive as epoch milliseconds — and a second
+ * copy of `at - skew.ms` is a second chance to get the sign the wrong way
+ * round. It is the sign, specifically: `skew.ms` is the SERVER's clock minus
+ * this browser's, so a server ahead of us means subtracting to come back.
+ *
+ * An `unknown` skew shifts by zero, which is the whole discipline of the type:
+ * nobody measured it, so nothing is invented.
+ */
+export function shiftMsToBrowserClock(at: number, skew: ClockSkew): number {
+  return skew.kind === "unknown" ? at : at - skew.ms;
 }
 
 /* ------------------------------------------------------------- parsing -- */
@@ -434,6 +634,29 @@ function str(v: unknown): string | null {
 
 function num(v: unknown, fallback: number): number {
   return typeof v === "number" && Number.isFinite(v) ? v : fallback;
+}
+
+/**
+ * A timestamp spelled the one way this fleet spells one.
+ *
+ * The same check `isIsoTimestamp` makes in tools/overseer/store.ts, and
+ * deliberately as strict: every timestamp in the inbox was written by
+ * `toISOString()` and was refused by that function on the way into the
+ * checkpoint, so anything else arriving here did not come from the producer. A
+ * lenient version would accept a string `Date.parse` can read and the age
+ * arithmetic cannot reason about, which is how a duration on screen becomes
+ * confidently wrong rather than absent.
+ *
+ * **It sits up here, with the general helpers, because it now guards two things
+ * and not one.** It was written for the attention inbox and `readClockSkew`
+ * borrowed it (GPT Sol's K6): the two are the same requirement, that a
+ * timestamp came out of `toISOString()` and not out of whatever `Date.parse`
+ * happens to tolerate this month.
+ */
+function iso(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const at = new Date(v);
+  return Number.isNaN(at.getTime()) || at.toISOString() !== v ? null : v;
 }
 
 /**
@@ -777,23 +1000,6 @@ export function parseRow(v: unknown, skew: ClockSkew): FleetRow | null {
 }
 
 /* ------------------------------------------------- the attention inbox -- */
-
-/**
- * A timestamp spelled the one way this fleet spells one.
- *
- * The same check `isIsoTimestamp` makes in tools/overseer/store.ts, and
- * deliberately as strict: every timestamp in the inbox was written by
- * `toISOString()` and was refused by that function on the way into the
- * checkpoint, so anything else arriving here did not come from the producer. A
- * lenient version would accept a string `Date.parse` can read and the age
- * arithmetic cannot reason about, which is how a duration on screen becomes
- * confidently wrong rather than absent.
- */
-function iso(v: unknown): string | null {
-  if (typeof v !== "string") return null;
-  const at = new Date(v);
-  return Number.isNaN(at.getTime()) || at.toISOString() !== v ? null : v;
-}
 
 /** A count. Integer and non-negative: `sessionsScanned: 2.5` is not a number of sessions. */
 function count(v: unknown): number | null {
@@ -1169,6 +1375,40 @@ export function parseFleetState(raw: unknown, receivedAt: number): FleetStateRea
       collectedAt: shiftToBrowserClock(str(raw["collectedAt"]), clockSkew),
       tookMs: num(raw["tookMs"], 0),
       error: str(raw["error"]),
+      /* **WHICH TMUX SERVER THESE HANDLES BELONG TO.** Every `$…` and `%…` in
+         `rows` is meaningless without it: two snapshots with different values
+         here describe different worlds, however alike `$1643` looks in both.
+         Read here and drawn in the detail pane beside the handles themselves.
+
+         Absent and unreadable both land on `null`, deliberately merged: the
+         server sends `null` when it could not read the pid, and a server too
+         old to send the field at all leaves the same hole — and in both cases
+         the only honest sentence is *this page cannot tell you which tmux
+         server these are*. There is nothing a reader would do differently. */
+      tmuxServerPid: typeof raw["tmuxServerPid"] === "number" && Number.isFinite(raw["tmuxServerPid"]) ? raw["tmuxServerPid"] : null,
+      /* **TOLD, NOT INFERRED — and it FAILS CLOSED.** The server had been
+         sending this for a day and this parser did not read it, so a person
+         tapped an option and got a 503, which is precisely the outcome the field
+         exists to prevent (wire.ts § `answeringEnabled`). See
+         `AnsweringReading`: four arms, and only a positive `enabled` is
+         permission to draw a control. */
+      answeringEnabled: readAnswering(raw),
+      /* **BOTH CLOCKS SHIFTED BEFORE THE READING IS TAKEN**, not after. The
+         helper's whole job is to compare `attemptedAt` against `collectedAt`,
+         and the comparison downstream is against this browser's `now` — so they
+         have to enter it already in browser terms or the reading would be one
+         clock and its consumer another. `ClockSkew` says why the correction
+         belongs at the boundary.
+
+         `str()` collapses "the field is absent" and "the server sent null" onto
+         the same `null`, which is exactly what `readAttemptClock` says it wants:
+         the raw-JSON distinction between the two dies in the first thing that
+         normalises one to the other, and a guard that survives only until
+         somebody reasonable touches the pipe is not a guard. */
+      attemptedAt: readAttemptClock({
+        attemptedAt: shiftToBrowserClock(str(raw["attemptedAt"]), clockSkew),
+        collectedAt: shiftToBrowserClock(str(raw["collectedAt"]), clockSkew),
+      }),
       rows,
       unreadableRows,
       health: raw["health"] ?? null,

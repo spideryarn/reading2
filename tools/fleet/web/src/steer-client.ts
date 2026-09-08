@@ -131,8 +131,229 @@ export type DeliveryReading =
   | { kind: "unknown" }
   | { kind: "not-told" };
 
+/**
+ * **THE ADDRESS THE SERVER ESTABLISHED IN THE MOMENT BEFORE IT SENT** — or the
+ * arm that says it did not tell us.
+ *
+ * **It is a PRE-SEND identity check and it is not a delivery receipt**, and the
+ * difference is the whole reason this comment is long. `verifyTarget` runs
+ * *before* the screen capture and before the `send-keys` calls (steer.ts,
+ * `sendMessage` and `answerQuestion`), and its result is carried through to the
+ * response without being recomputed. So it says *this pane, this session, this
+ * pid and this conversation were all true a few milliseconds ago*; it does not
+ * say where the keystrokes ended up. steer.ts's own KNOWN GAPS records that
+ * window and says tmux offers no compare-and-send that would close it. Nothing
+ * on this page may turn that into a claim about what arrived.
+ *
+ * **It is still the safety half of `sent`.** `sent` is the argv — what was
+ * typed. This is the address it was aimed at, resolved by the server against
+ * live tmux rather than copied back off the request: `verifyTarget` walks the
+ * pane's own process ancestry, so `claudePid` is the Claude that answers to the
+ * conversation id the row claimed. A value here that is not the row the person
+ * tapped is the one shape of failure a green tick would otherwise hide, and it
+ * is the reason this is compared rather than merely printed — see
+ * `checkLanding`.
+ *
+ * The server has sent this on every successful send since `routes-steer.ts` was
+ * written (`respond(res, 200, { ok: true, op, verified, sent })`) and this file
+ * threw it away: `grep -c verified steer-client.ts` returned **zero** on the
+ * evening of 2026-09-08, which is instance 12 in the table in
+ * docs/postmortems/260908b-the-parts-were-all-tested-and-none-of-the-joins-were.md.
+ *
+ * A discriminated union rather than `Verified | null`, for the reason
+ * `DeliveryReading` beside it is one: **a renderer has to name the case it is
+ * drawing**, and *the server did not say what it resolved* must never render as
+ * a confident address. A partially-formed object is `not-told` too — half an
+ * address is not an address, and inventing the missing half is the mistake this
+ * whole file exists to refuse.
+ */
+export type VerifiedReading =
+  | {
+      kind: "verified";
+      /** tmux's pane handle, `%2108` — where the keys were typed. */
+      paneId: string;
+      /** tmux's session handle, `$1643` — which is a different thing. */
+      sessionId: string;
+      /** The pane's live process, which is what ancestry was walked from. */
+      panePid: number;
+      /** The pid of the Claude that answers to the conversation id we claimed. */
+      claudePid: number;
+    }
+  /** The server answered `ok` without saying what it resolved. Never rendered as an address. */
+  | { kind: "not-told" };
+
+/** The `verified` arm on its own, so a comparison result can carry it. */
+export type VerifiedAddress = Extract<VerifiedReading, { kind: "verified" }>;
+
+/**
+ * The server's `verified`, or the arm that says there is none.
+ *
+ * Every field is required, and a missing one collapses the whole reading to
+ * `not-told` rather than being filled in: this value's only job is to be
+ * COMPARED with the row the person was looking at, and a comparison against a
+ * half-invented address would answer a weaker question than the one asked.
+ */
+export function parseVerified(v: unknown): VerifiedReading {
+  if (!isRecord(v)) return { kind: "not-told" };
+  const paneId = v["paneId"];
+  const sessionId = v["sessionId"];
+  const panePid = v["panePid"];
+  const claudePid = v["claudePid"];
+  if (typeof paneId !== "string" || paneId === "") return { kind: "not-told" };
+  if (typeof sessionId !== "string" || sessionId === "") return { kind: "not-told" };
+  if (typeof panePid !== "number" || !Number.isFinite(panePid)) return { kind: "not-told" };
+  if (typeof claudePid !== "number" || !Number.isFinite(claudePid)) return { kind: "not-told" };
+  return { kind: "verified", paneId, sessionId, panePid, claudePid };
+}
+
+/* ------------------------------------------------------------------ *
+ * Comparing the receipt against the row that was actually tapped.
+ * ------------------------------------------------------------------ */
+
+/**
+ * **THE ROW'S IDENTITY AT THE MOMENT THE SEND WAS ASKED FOR**, kept so the
+ * answer can be compared against what the person was looking at.
+ *
+ * A snapshot rather than a live read, and it is a correctness fix rather than a
+ * tidy-up. The detail pane is keyed by session id alone, so it survives every
+ * refresh of the payload — and a `verified` compared against whatever `row` is
+ * on screen when the answer lands is a comparison against a DIFFERENT fact from
+ * the one the request carried. Both errors follow: a pane rehomed between the
+ * tap and the response reads as *it went somewhere else* when the send was
+ * perfectly aimed, and a row that has since drifted back into agreement hides a
+ * real mismatch. The request body is built from these same three values
+ * (`steerTargetBody`), so this is the thing the server was actually asked
+ * about.
+ */
+export type SentTarget = {
+  paneId: string | null;
+  sessionId: string;
+  /** Null when the row carried no pid, which means the pid was never claimed. */
+  panePid: number | null;
+};
+
+/** The identity half of the request, snapshotted. Pure, like `steerTargetBody`. */
+export function sentTarget(row: FleetRow): SentTarget {
+  return { paneId: row.paneId, sessionId: row.id, panePid: row.panePid };
+}
+
+/**
+ * One field of the address. Named rather than positional so the sentence on
+ * screen can say which of them the comparison actually used.
+ */
+export type LandingField = "pane" | "session" | "pane pid";
+
+/**
+ * **WHAT THE PRE-SEND CHECK ESTABLISHED, MEASURED AGAINST WHAT WAS ASKED FOR.**
+ *
+ * Three arms, and the third field on the two informative ones — `unchecked` —
+ * is the part that stops this being another overclaim. A comparison that
+ * quietly skipped a field it had no value for would report agreement it never
+ * tested, which is the same defect one level down from the one this whole
+ * function exists to repair.
+ *
+ * `pane pid` is compared **when the row carried one**, and it is the field the
+ * first version of this dropped. `gjd-remote resume` and `tmux respawn-pane`
+ * both keep the pane and session handles and replace the process underneath, so
+ * pane-and-session alone say *the address is the same box* rather than *the same
+ * program*. The server refuses that case itself (`verifyTarget`: "it was
+ * respawned"), which is why a disagreement here should be unreachable — and
+ * unreachable is exactly when a check earns its keep, because reaching it means
+ * a guard upstream did not hold.
+ */
+export type LandingCheck =
+  /** The server said nothing about what it resolved. Draw no address at all. */
+  | { kind: "not-told" }
+  | {
+      kind: "agrees";
+      verified: VerifiedAddress;
+      /** The fields that took part. Never empty: `session` is always available. */
+      compared: LandingField[];
+      /** The fields the request could not claim, so nothing was proved about them. */
+      unchecked: LandingField[];
+    }
+  | {
+      kind: "disagrees";
+      verified: VerifiedAddress;
+      target: SentTarget;
+      /** The fields that differ. Never empty on this arm. */
+      differing: LandingField[];
+      unchecked: LandingField[];
+    };
+
+/**
+ * **`claudePid` IS DELIBERATELY NOT A FOURTH COMPARISON, and the reason is a
+ * distinction worth keeping.**
+ *
+ * `session`, `pane` and `pane pid` are CLAIMS THE CLIENT MADE — it tapped a row
+ * that said `$1643`, `%2108`, pid N — and `verifyTarget` checks the box against
+ * them. That is what makes agreement mean something.
+ *
+ * `claudePid` is not a claim anybody made. The client never knew it;
+ * `verifyTarget` DISCOVERS it while walking the process table. Putting it on the
+ * wire so the client could send it back would have the client echo a value the
+ * server told it, and the server then check that value against itself — failure
+ * mode 5 in routes-steer.ts's own header, and the reason that file imports no
+ * value from collect.ts. It would read as a fourth check and be worth nothing.
+ *
+ * So it stays an OUTPUT: *this is the process we found and typed at*, useful in a
+ * log and to a person reconstructing what happened. Settled 2026-09-08 with
+ * `orchestrator-setup`, who own `steer.ts`; the question was mine and the
+ * distinction is theirs.
+ */
+export function checkLanding(verified: VerifiedReading, target: SentTarget): LandingCheck {
+  if (verified.kind === "not-told") return { kind: "not-told" };
+  const compared: LandingField[] = [];
+  const unchecked: LandingField[] = [];
+  const differing: LandingField[] = [];
+
+  /* `sessionId` is `row.id`, which every row has by construction — there is no
+     absent case to branch on. */
+  compared.push("session");
+  if (verified.sessionId !== target.sessionId) differing.push("session");
+
+  /* A null `paneId` cannot reach here from this page — a send from a row with
+     no pane handle is refused locally as `unaddressable` — but it is recorded
+     as unchecked rather than assumed to match, because the sentence must not
+     name a pane the request never claimed. */
+  if (target.paneId === null) unchecked.push("pane");
+  else {
+    compared.push("pane");
+    if (verified.paneId !== target.paneId) differing.push("pane");
+  }
+
+  /* `panePid` is genuinely optional on a row and the server treats a null as
+     "no respawn check", so absence here is a real state rather than a defect. */
+  if (target.panePid === null) unchecked.push("pane pid");
+  else {
+    compared.push("pane pid");
+    if (verified.panePid !== target.panePid) differing.push("pane pid");
+  }
+
+  return differing.length === 0
+    ? { kind: "agrees", verified, compared, unchecked }
+    : { kind: "disagrees", verified, target, differing, unchecked };
+}
+
+/** `a`, `a and b`, `a, b and c` — for naming which fields were compared. */
+export function listFields(fields: readonly LandingField[]): string {
+  if (fields.length === 0) return "nothing";
+  if (fields.length === 1) return fields[0] as string;
+  return `${fields.slice(0, -1).join(", ")} and ${fields[fields.length - 1] as string}`;
+}
+
 export type SteerOutcome =
-  | { ok: true; op: "message" | "answer"; sent: string[][] }
+  | {
+      ok: true;
+      op: "message" | "answer";
+      sent: string[][];
+      /**
+       * WHAT WAS TRUE OF THE TARGET IMMEDIATELY BEFORE THE KEYS WENT — not
+       * where they ended up. See `VerifiedReading`; `not-told` is the arm for
+       * silence, and `checkLanding` is what may be drawn from it.
+       */
+      verified: VerifiedReading;
+    }
   | {
       ok: false;
       code: string;
@@ -248,7 +469,7 @@ async function post(
   }
 
   if (isRecord(parsed) && parsed["ok"] === true) {
-    return { ok: true, op, sent: parseSent(parsed["sent"]) };
+    return { ok: true, op, sent: parseSent(parsed["sent"]), verified: parseVerified(parsed["verified"]) };
   }
 
   // The server's own words, verbatim. The fallbacks below fire only when the

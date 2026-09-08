@@ -208,7 +208,18 @@ export type ActionErrorCode =
   /** Nothing matched the rule, or nothing survived the intersection. */
   | "nothing-to-kill"
   /** The fleet was told to ease off very recently. */
-  | "cooldown";
+  | "cooldown"
+  /**
+   * The page asked to drop a set of items and the queue no longer holds exactly
+   * that set — something arrived, went out, or was taken by somebody else
+   * between the list being drawn and the tap.
+   *
+   * Only `clearRoute` raises it, and it is the whole of that route's safety
+   * argument: a bulk delete names WHICH items it means, so the one thing it can
+   * never do is drop something nobody read. 409 rather than 400 because the
+   * body was well formed — the world moved.
+   */
+  | "stale-view";
 
 /**
  * A refusal's HTTP status.
@@ -248,6 +259,7 @@ export const ACTION_ERROR_STATUS: Record<ActionErrorCode, number> = {
   "box-unreadable": 409,
   "nothing-to-kill": 409,
   cooldown: 429,
+  "stale-view": 409,
 };
 
 /**
@@ -321,6 +333,21 @@ export type ActionResponse =
   | { ok: true; op: "revived"; item: QueuedItem }
   /** A lease nobody settled, cleared by a person. It is NOT a claim that nothing was sent. */
   | { ok: true; op: "abandoned"; item: QueuedItem }
+  /**
+   * A whole session's queue emptied — **and the one item that survived it**.
+   *
+   * `keptInFlight` is not a detail, it is the safety property: `clear()` keeps
+   * an item that has already been leased, because the keystrokes may be on
+   * their way and no receipt exists for a keystroke. A response that said only
+   * "cleared" would be the ambiguous negative this module keeps writing
+   * postmortems about — a person reading it would believe the queue was empty
+   * while one instruction was still going out. So both halves are on the wire
+   * and the page draws both, by name.
+   *
+   * Whole items rather than ids: the page has just thrown its own copy away, so
+   * the only thing left to name them with is what came back.
+   */
+  | { ok: true; op: "cleared"; removed: QueuedItem[]; keptInFlight: QueuedItem | null }
   /*
    * THE FOUR ARMS THAT DESCRIBE AN EFFECT, and they agree on two field names.
    *
@@ -528,6 +555,43 @@ export function parseCancelBody(raw: unknown): Parsed<CancelRequest> {
   if (sessionId === null) return bad("sessionId is missing, and it says which queue");
   if (itemId === null) return bad("itemId is missing");
   return { ok: true, value: { sessionId, itemId } };
+}
+
+export type ClearRequest = { sessionId: string; itemIds: string[] };
+
+/**
+ * `POST /api/actions/clear`'s body.
+ *
+ * **`itemIds` IS THE POINT OF THIS BODY AND IT IS NOT OPTIONAL.** The obvious
+ * shape — `{sessionId}` alone, since `clear()` takes only that — was rejected:
+ * it cannot express *the list I am looking at*, so an item queued by the
+ * Overseer between the confirmation being drawn and the tap would be destroyed
+ * without ever having been on anybody's screen. The ids come verbatim off the
+ * snapshot the person read, exactly as `cancelBody`'s do, and `clearRoute`
+ * compares them with what the queue holds NOW; a difference is a refusal, not a
+ * best effort. It is the same discipline as the tmux claims in routes-steer.ts:
+ * a stale-but-honest claim, checked at the far end, never re-fetched to make
+ * itself true.
+ *
+ * An empty array is accepted here and refused by the route, so that "you sent
+ * no ids" and "there is nothing waiting" are two different sentences.
+ */
+export function parseClearBody(raw: unknown): Parsed<ClearRequest> {
+  const o = asRecord(raw);
+  if (!o) return bad("the body is not a JSON object");
+  const sessionId = asString(o.sessionId);
+  if (sessionId === null) return bad("sessionId is missing, and it says which queue");
+  const raws = o.itemIds;
+  if (!Array.isArray(raws)) {
+    return bad("itemIds is missing, and it says which items you were looking at — clearing a queue sight unseen is not offered");
+  }
+  const itemIds: string[] = [];
+  for (const v of raws) {
+    const id = asString(v);
+    if (id === null) return bad("an entry in itemIds is not a string");
+    itemIds.push(id);
+  }
+  return { ok: true, value: { sessionId, itemIds } };
 }
 
 /* ------------------------------------------------------------------ *
@@ -1364,6 +1428,78 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
     respond(res, 200, { ok: true, op: "abandoned", item: result.item });
   }
 
+  /* ---------------- POST /api/actions/clear ---------------- */
+
+  /**
+   * Empty one session's queue in a single gesture.
+   *
+   * **THE ROUTE EXISTS BECAUSE `clear()` HAD NO CALLER.** It was written,
+   * bounded and tested — two call sites, both in tests/fleet-queue.test.ts —
+   * and nothing in the product could reach it: `revive()`'s shape exactly, and
+   * instance 9 of docs/postmortems/260908b. A method reachable only from its own
+   * test looks healthy from every angle except the one that asks *who calls
+   * this?*
+   *
+   * **The set is checked, not just the session.** `itemIds` says which items the
+   * person was reading; this compares that with the queue's own droppable set
+   * and refuses `stale-view` on any difference. So a bulk delete can only ever
+   * destroy things that were on screen — see `parseClearBody` for the shape that
+   * was rejected, and why. The comparison is on the SET rather than the order,
+   * because the page draws them in the queue's order and nothing here depends on
+   * it.
+   *
+   * **`keptInFlight` is the answer, not a footnote.** `clear()` deliberately
+   * keeps a leased item, for `cancel()`'s reason: the keystrokes may already
+   * have left and there is no receipt for a keystroke. Reporting "cleared"
+   * without saying so would leave a person believing nothing more is going out
+   * while one instruction still is.
+   *
+   * Written like `cancelRoute` in every respect that is a rule — the same origin
+   * check inside `parsedBody`, the same `refuse`/`respond` helpers, the same
+   * habit of letting the queue's own sentence be the one a person reads.
+   */
+  async function clearRoute(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    const parsed = await parsedBody(req, res, MAX_BODY_BYTES);
+    if (parsed === null) return;
+    const body = parseClearBody(parsed);
+    if (!body.ok) {
+      refuse(res, "bad-request", body.why);
+      return;
+    }
+    const { sessionId, itemIds } = body.value;
+    const items = deps.queue.snapshot(sessionId).items;
+    // The queue's rule for "can still be taken back", asked of the queue rather
+    // than restated: `cancel()` refuses a leased item and `clear()` keeps one,
+    // and a third opinion here would drift from both.
+    const droppable = items.filter((i) => i.leasedAt === null).map((i) => i.id);
+    if (droppable.length === 0) {
+      deps.log(`action clear: refused code=no-such-item session=${sessionId}`);
+      refuse(res, "no-such-item", `nothing is waiting in ${sessionId}'s queue that could be taken out of it`);
+      return;
+    }
+    const asked = new Set(itemIds);
+    const gone = droppable.filter((id) => !asked.has(id));
+    const extra = itemIds.filter((id) => !droppable.includes(id));
+    if (gone.length > 0 || extra.length > 0) {
+      // Both directions named, because they mean opposite things to a person:
+      // something ARRIVED that they have not read, or something they meant to
+      // drop has already gone out. Either way the answer is to look again.
+      const why =
+        `the queue for ${sessionId} has changed since that list was drawn` +
+        (gone.length > 0 ? ` — ${gone.join(", ")} ${gone.length === 1 ? "is" : "are"} waiting and was not in it` : "") +
+        (extra.length > 0 ? ` — ${extra.join(", ")} ${extra.length === 1 ? "is" : "are"} no longer waiting` : "") +
+        ". Look at it again and clear what is actually there.";
+      deps.log(`action clear: refused code=stale-view session=${sessionId} gone=${gone.length} extra=${extra.length}`);
+      refuse(res, "stale-view", why);
+      return;
+    }
+    const result = deps.queue.clear(sessionId);
+    deps.log(
+      `action clear: REMOVED ${result.removed.length} session=${sessionId} kept=${result.keptInFlight?.id ?? "-"}`,
+    );
+    respond(res, 200, { ok: true, op: "cleared", removed: result.removed, keptInFlight: result.keptInFlight });
+  }
+
   /* ---------------- POST /api/actions/box ---------------- */
 
   /**
@@ -1805,6 +1941,19 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
           return true;
         }
         void guard(pathname === "/api/actions/revive" ? reviveRoute(req, res) : abandonRoute(req, res), res);
+        return true;
+      }
+      // POST only, though it removes things and cancel takes a DELETE for that
+      // reason. This body is not addressed by its URL — it carries the whole
+      // list of ids the person was looking at (`parseClearBody`) — and a DELETE
+      // whose meaning lives entirely in its body is the awkward shape, not the
+      // natural one.
+      if (pathname === "/api/actions/clear") {
+        if (method !== "POST") {
+          refuse(res, "method-not-allowed", "clearing a queue is POST only", undefined, { allow: "POST" });
+          return true;
+        }
+        void guard(clearRoute(req, res), res);
         return true;
       }
       // Ours by prefix and not a route. Claimed rather than returned false, so

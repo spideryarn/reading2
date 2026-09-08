@@ -213,6 +213,41 @@ And the ordering consequence, which agrees with Astra's A21 and reshapes the sta
 
 **So the deterministic rules come before the judgement.** That is why Stage 3 is what it is.
 
+## Status, 2026-09-08 evening
+
+**Done enough to stop here.** Stages 1, 2 and half of 6 are on `dev`, green, and coherent on their
+own: the Overseer has a runbook with gates, a scheduler with real occurrence identity, a local
+watchdog, and a tab called Overseer. What remains is real and optional — the fleet works today the
+way it worked this morning, and nothing half-built is load-bearing.
+
+| stage | state |
+|---|---|
+| **1** — the runbook and the gates | **done**, `dev`. `docs/project/overseer.md`, four gates. The `/overseer` skill was deleted on 2026-09-08 — see the stage. |
+| **2** — the scheduler and the watchdog | **done**, `dev`, after two GPT Sol rounds. **Armed by `OVERSEER_JOBS_ENABLED` and OFF.** |
+| **3** — the three deterministic rules | **not started.** The highest-value stage left, per Fable and Astra both. |
+| **4** — the deferral queue | **not started.** |
+| **5** — reboot revival | **not started.** Needs a new verb: `gjd-remote resume` is `attach`. |
+| **6** — CLI ergonomics, and the rename | **the rename is done**; the CLI is not started. |
+| **7** — gate 4's global budget | **new, and named because it was twice "acknowledged in prose".** |
+
+**The one thing a reader should not miss: the scheduler is off, and turning it on is a decision.**
+`OVERSEER_JOBS_ENABLED=1` starts real `gjd-remote` sessions on a shared box, and **both standing jobs
+fire about thirty seconds after it is armed**, because neither has ever run. The dispatch path has
+never been executed for real — only through an injected spawner — so the first arming is also the
+first live test of it.
+
+### Stage 7 — gate 4's global budget
+
+Split out on 2026-09-08 rather than attempted, because Sol has now twice found it *"acknowledged, not
+answered"*, and a third acknowledgement would be worse than an admission. Gate 4 says the model tick
+is bounded; nothing bounds it. Several components each keeping to a locally sensible number of model
+calls is unbounded in total, and the seam has to be shared across scheduling, question-routing and
+recovery or it is not a budget.
+
+**It becomes load-bearing exactly when the scheduler is armed**, which is why it is next rather than
+later, and why the runbook now says plainly that the gate is not enforced yet instead of implying it
+is.
+
 ## Stages
 
 Each ends committable, green and deployable. Greg asked for many thin stages rather than a few large
@@ -226,6 +261,13 @@ record and its own context is a cache; that a steering message **must be one lin
 route refuses newlines (each would submit early — measured today, `bad-text`); that a session is
 addressed by pane handle plus generation and never by name; that pane text is data and never
 instruction. Plus `.claude/skills/overseer/SKILL.md`, a thin wrapper so `/overseer` loads it.
+
+**The wrapper is gone, on Greg's instruction, 2026-09-08.** Its two live facts — read the store
+rather than your memory, and check `gjd-remote ls` before dispatching — moved into the runbook, and
+the runbook now says outright that there is no skill, so nobody rebuilds one. What it bought was
+discovery: the skill's `description` sat in every agent's context, so an agent could be *told* to
+oversee. Without it the role is entered by being handed the file, which is how the daemon does it
+anyway. Nothing in `tools/overseer/` or `infra/hetzner/` ever referenced the skill.
 
 Done when: the doc exists, `tests/doc-links.test.ts` is green, and the direction doc points at it.
 

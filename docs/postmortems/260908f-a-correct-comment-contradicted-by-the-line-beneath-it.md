@@ -81,6 +81,30 @@ one of them is true. So the discipline is not "stop writing them"; it is that **
 something is untestable has to be earned to a higher standard than the test it replaces**, because it
 is load-bearing precisely to the degree people believe it.
 
+### What all three have in common, stated once
+
+**A judgement about what cannot happen, made against the space you had in mind rather than the space
+the code runs in.**
+
+That is the sentence the whole day converges on, and it covers more than this file:
+
+- *"No command line can distinguish that mutant"* — true of uuids, false of a hand-set
+  `CLAUDE_SESSION_ID`, which the same file has an arm for.
+- *"A `--print` inside the prompt must not be read as headless"* — a claim about a CLI, written as a
+  property, and false: `claude` parses options after a positional, measured.
+- *"D5 is a coincidence, not a design"* — I wrote that a headless pane could not actually be typed at,
+  because a downstream screen check happened to cover it. Two red-first tests then **sent the
+  message** — `send-keys -l -- "keep going"`, then `Enter`. It was not covered at the layer the code
+  runs in.
+
+The third is the worst of them, and not because it is the biggest: it is the only one where the wrong
+answer **had already reached a keyboard**. The other two were waiting.
+
+The remedy is not "be more careful". It is that a claim of impossibility is a claim about a **domain**,
+so it has to name its domain — *no command line **whose id is a uuid*** — and then somebody has to ask
+whether the code is restricted to it. Written that way the mutant claim disproves itself in one
+reading, because `sessionState` has an arm for the ids it excludes.
+
 ## Why the obvious checks could not see it
 
 - **The type system could not.** `AttentionList.sessionsUnreadable` is `number`, and `0` is a

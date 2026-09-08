@@ -294,6 +294,15 @@ function handler(req: import("node:http").IncomingMessage, res: import("node:htt
   // statePayload() — because two shapes that are meant to be identical and are
   // built in two places will differ eventually, and the client would be the
   // thing that found out.
+  //
+  // **`/api/agents` IS THE ORIGINAL NAME, KEPT AS AN ALIAS, AND NOTHING IN THIS
+  // REPO CALLS IT.** The page polls `/api/state` (web/src/transport.ts) and so
+  // does the Overseer (tools/overseer/source.ts). It is retained rather than deleted
+  // because it costs one clause and something outside this repo — a note, a
+  // bookmark, a curl in somebody's shell history — may still name it; removing
+  // a working endpoint to tidy a name is the worse trade. What was actually
+  // wrong was the prose in live.ts, which named it five times as "the poll";
+  // see there, and instance 10 of docs/postmortems/260908b.
   if (url.startsWith("/api/state") || url.startsWith("/api/agents")) {
     res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
     res.end(statePayload());
