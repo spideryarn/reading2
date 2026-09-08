@@ -337,7 +337,7 @@ export function liveness(worktreePath: string, lockReason: string | undefined, p
   }
   const chain = ancestry(proc, pid);
   const standing = ownerStanding(proc, lockReason, chain);
-  const scan = cwdUsersUnder(proc, worktreePath, new Set(chain.map((a) => a.pid)));
+  const scan = cwdUsersUnder(proc, worktreePath, new Set(chain.map((a) => a.pid)), pid);
   return { standing, inUse: composeInUse(standing, scan), authorised: ownerIsAsking(standing) };
 }
 

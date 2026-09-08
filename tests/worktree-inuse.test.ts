@@ -33,6 +33,7 @@ import {
 
 interface FakeProc {
   ppid?: number;
+  pgrp?: number;
   start: number;
   /** A path, `{opaque}` for a process the kernel hides, or absent for gone. */
   cwd?: string | { opaque: string };
@@ -41,18 +42,18 @@ interface FakeProc {
 }
 
 /** `/proc/<pid>/stat`, spelled the way the kernel spells it. */
-function statLine(pid: number, comm: string, ppid: number, start: number): string {
-  /* Fields 3..21 are placeholders; only state, ppid and starttime are read. The
-     comm deliberately carries a space and a paren in some tests. */
-  const middle = Array.from({ length: 17 }, () => "0").join(" ");
-  return `${pid} (${comm}) S ${ppid} ${middle} ${start} 0 0`;
+function statLine(pid: number, comm: string, ppid: number, start: number, pgrp = pid): string {
+  /* After the closing paren: state, ppid, pgrp, then placeholders up to
+     starttime, which is the 20th of those fields. */
+  const middle = Array.from({ length: 16 }, () => "0").join(" ");
+  return `${pid} (${comm}) S ${ppid} ${pgrp} ${middle} ${start} 0 0`;
 }
 
 function fakeProc(table: Record<number, FakeProc>, self = 1000): ProcTable {
   return {
     stat(pid) {
       const p = table[pid];
-      return p === undefined ? null : statLine(pid, "bash", p.ppid ?? 1, p.start);
+      return p === undefined ? null : statLine(pid, "bash", p.ppid ?? 1, p.start, p.pgrp ?? pid);
     },
     cwd(pid) {
       const p = table[pid];
@@ -94,8 +95,8 @@ describe("parseStat", () => {
   it("counts from the last ')', so a comm with a space and a paren cannot shift the fields", () => {
     /* `tmux: server` is on the box right now. A whitespace split of the whole
        line puts starttime one field left of where it is, silently. */
-    const line = `132280 (tmux: server (x)) S 1 ${Array.from({ length: 17 }, () => "0").join(" ")} 99 0 0`;
-    expect(parseStat(line)).toEqual({ ppid: 1, start: 99 });
+    const line = `132280 (tmux: server (x)) S 1 7 ${Array.from({ length: 16 }, () => "0").join(" ")} 99 0 0`;
+    expect(parseStat(line)).toEqual({ ppid: 1, pgrp: 7, start: 99 });
   });
 
   it("agrees with the real /proc on this very process", () => {
@@ -182,6 +183,33 @@ describe("ownerStanding", () => {
 /* ----------------------------------------------------------------- signal B -- */
 
 describe("cwdUsersUnder", () => {
+  it("does not count a sibling in OUR OWN pipeline — measured as a false refusal", () => {
+    /* `npx tsx scripts/worktree-remove.ts | tail -20` refused on a real run, and
+       listed `tail -20` as a process working in the tree. `tail` is a sibling of
+       the node process, not an ancestor, so ancestry alone could not exclude it —
+       and a refusal carrying an obviously bogus reason is how refusals stop being
+       read. The process group is exactly "the job the shell started". */
+    const proc = fakeProc({
+      90: { ppid: 80, pgrp: 90, start: 9, cwd: TREE },
+      91: { ppid: 80, pgrp: 90, start: 9, cwd: TREE, command: "tail -20" },
+      80: { ppid: 1, pgrp: 80, start: 8, cwd: TREE },
+    });
+    const chain = ancestry(proc, 90).map((a: ProcId) => a.pid);
+    const scan = cwdUsersUnder(proc, TREE, new Set(chain), 90);
+    if (scan.kind === "checked") expect(scan.found).toEqual([]);
+  });
+
+  it("control: a peer in its OWN process group is still seen", () => {
+    const proc = fakeProc({
+      90: { ppid: 80, pgrp: 90, start: 9, cwd: TREE },
+      80: { ppid: 1, pgrp: 80, start: 8, cwd: TREE },
+      500: { ppid: 1, pgrp: 500, start: 5, cwd: TREE, command: "a peer's dev server" },
+    });
+    const chain = ancestry(proc, 90).map((a: ProcId) => a.pid);
+    const scan = cwdUsersUnder(proc, TREE, new Set(chain), 90);
+    if (scan.kind === "checked") expect(scan.found.map((f) => f.pid)).toEqual([500]);
+  });
+
   it("REFUSES: a peer's process is sitting in the tree", () => {
     const proc = fakeProc({ 700: { start: 1, cwd: `${TREE}/src`, command: "vitest" } });
     const scan = cwdUsersUnder(proc, TREE, new Set());

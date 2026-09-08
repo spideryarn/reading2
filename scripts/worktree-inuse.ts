@@ -161,14 +161,37 @@ export function parseLockOwner(reason: string | undefined): LockOwner | null {
  * After the last `) `, the fields start at 3 (state), so ppid is the 2nd and
  * starttime the 20th of them.
  */
-export function parseStat(line: string): { ppid: number; start: number } | null {
+export function parseStat(line: string): { ppid: number; pgrp: number; start: number } | null {
   const at = line.lastIndexOf(") ");
   if (at === -1) return null;
   const f = line.slice(at + 2).trim().split(/\s+/);
   const ppid = Number.parseInt(f[1] ?? "", 10);
+  const pgrp = Number.parseInt(f[2] ?? "", 10);
   const start = Number.parseInt(f[19] ?? "", 10);
-  if (!Number.isFinite(ppid) || !Number.isFinite(start)) return null;
-  return { ppid, start };
+  if (!Number.isFinite(ppid) || !Number.isFinite(pgrp) || !Number.isFinite(start)) return null;
+  return { ppid, pgrp, start };
+}
+
+/**
+ * The process group of one pid, or `null` if it could not be read.
+ *
+ * Used to exclude **this invocation's own job**, and ancestors are not enough for
+ * that. Measured on a real run: `npx tsx scripts/worktree-remove.ts | tail -20`
+ * refused, and among its reasons was `a process is running inside it — pid 1817223
+ * (tail -20)`. `tail` is a *sibling* of the node process in the pipeline, not an
+ * ancestor, so nothing excluded it. A refusal carrying an obviously bogus reason
+ * is how refusals stop being read, which is the failure this whole file exists
+ * downstream of.
+ *
+ * A process group is the right unit: it is exactly "the job the shell started",
+ * and a peer's shell — and every other agent's — has its own. The residual is a
+ * process *backgrounded from the same shell command* as the removal, which would
+ * be excluded; contrived enough to accept, and written down rather than not.
+ */
+function pgrpOf(proc: ProcTable, pid: number): number | null {
+  const line = proc.stat(pid);
+  if (line === null) return null;
+  return parseStat(line)?.pgrp ?? null;
 }
 
 /**
@@ -278,7 +301,14 @@ export type CwdScan =
  * what settles it here. What remains genuinely unknown — no `/proc` at all, or a
  * listing that failed — is still `cannot-tell`, and still costs you the floor.
  */
-export function cwdUsersUnder(proc: ProcTable, root: string, excluded: ReadonlySet<number>): CwdScan {
+export function cwdUsersUnder(
+  proc: ProcTable,
+  root: string,
+  excluded: ReadonlySet<number>,
+  askingPid?: number,
+): CwdScan {
+  /* This invocation's own job — see `pgrpOf`. `null` excludes nothing extra. */
+  const myPgrp = askingPid === undefined ? null : pgrpOf(proc, askingPid);
   let pids: number[];
   try {
     pids = proc.pids();
@@ -293,6 +323,7 @@ export function cwdUsersUnder(proc: ProcTable, root: string, excluded: ReadonlyS
 
   for (const pid of pids) {
     if (excluded.has(pid)) continue;
+    if (myPgrp !== null && pgrpOf(proc, pid) === myPgrp) continue;
     const uid = proc.uid(pid);
     /* A uid we cannot read is a process that has exited between the listing and
        here, or one we have no business inspecting. Neither is ours to block on. */
