@@ -927,6 +927,57 @@ dashboard agent, on the dashboard's side of the seam, for a row assigned to the 
 the seam working rather than a boundary being crossed: the prefix belongs where the message is
 delivered, not where it is decided.
 
+**A5 is CLOSED too, 2026-09-08, and the answer was none of the options.** Astra's row said *"Tailscale's
+default policy is permissive, so verify rather than assume"*, and nobody had verified. Greg's
+instruction: *"Get input from GPT Sol and/or Fable then use your judgment about whether/how to deal
+with this now."* Measured first, arbitrated second.
+
+**What the box actually says.** The tailnet has **exactly two devices** — this box
+(`100.92.255.119`) and Greg's iPhone, both his — and `tailscale serve status` and `funnel status` both
+report **"No serve config"**, so nothing is public. **The running dashboard binds `127.0.0.1` only**;
+it is not tailnet-reachable at all today, and Greg reaches it over an ssh forward. The repo's unit
+already says `Environment=FLEET_BIND=127.0.0.1`, and
+[a test enforces exactly that string](../../tests/systemd-units.test.ts). **The widening is not in the
+unit — it is in `/etc/fleet-dashboard.env`**, which exists on this box, contains
+`FLEET_BIND=127.0.0.1,100.92.255.119`, and is read at start because `EnvironmentFile=` comes after
+`Environment=`. So the surface widens at the instant `systemctl enable --now` runs, and not before.
+
+**Fable's verdict, and it reframes the row rather than answering it:**
+
+> A5 hardens a boundary against parties that don't exist yet while A7 (deferred, reasonably) leaves
+> the real one open. Fixing A5 now buys nothing that A7 hasn't already given away.
+>
+> — Fable, 2026-09-08
+
+All 27 agents share one Unix user and can already reach `127.0.0.1:8787`. **The untrusted parties that
+actually exist are on the loopback side of the bind, not the tailnet side**, so the two deferrals are
+consistent and fixing one without the other is not.
+
+**And the "cheap fix" Astra proposed is not cheap, for a reason worth keeping.** *Tailscale ACLs have
+no deny rule* — everything is allow. Restricting `:8787` to one device cannot be done by adding a
+grant beside the default `*:*`; it means deleting the wildcard and enumerating everything else that
+must still work, **including the ssh Greg reaches the box by**, in a console no agent can read or
+test, with lockout as the failure mode. That is a whole-policy rewrite, not a paste.
+
+**So the rule attaches to the widening, not to a backlog.** The dashboard binds loopback and has no
+write-path auth because the only parties who can reach it already own the box (A7). **Anyone widening
+the bind to the tailnet does it with `tailscale serve` proxying to the loopback bind, and an owner
+check on the `Tailscale-User-Login` header for every write** — not an ACL grant, because a device is
+not a person and Greg's phone being on the tailnet does not mean Greg is holding it. On a one-user
+tailnet that check is redundant today, which is exactly why it is a precondition on the widening
+commit rather than work to schedule now.
+
+**The likely failure mode of the deferral is not an attacker**, and naming it is the point: someone
+enables the unit as written; months later a device joins for convenience — the Mac, a collaborator's
+laptop, a tagged node for the scheduler — and nobody re-reads the policy, because *"it's on the
+tailnet"* has become the reason it is safe. The cost is keystrokes into any pane, which is root plus
+every key in `.env.local`, plus **`git push origin HEAD:main` from any pane — an unreviewed deploy to
+paying readers, with nothing mechanical to stop it**
+([version-control.md § What protects `main`](version-control.md#what-protects-main-and-what-does-not)).
+**Two devices today is what makes deferring safe; it is not something to build on.** Build on the
+bind, which the box controls and `ss -ltnp` can verify, rather than on tailnet membership, which only
+the admin console knows.
+
 ### Then — so the box does not collapse again
 
 | | what | owner |
