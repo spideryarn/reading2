@@ -21,7 +21,7 @@
  * observer is a function the test supplies, which is the seam that exists so
  * this file does not need a dashboard.
  */
-import { appendFileSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { appendFileSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -268,6 +268,34 @@ describe("rule 2 as arithmetic, with no I/O anywhere near it", () => {
       expect(labels).toEqual([...fields]);
     }
   });
+
+  test("AND EVERY KNOB'S VALUE REACHES THE BYTES, not just its name", () => {
+    // GPT Sol's finding 6 on 3b, and it is the label test's blind spot: an
+    // encoder written `newKnob: () => "newKnob:"` compiles, appears in
+    // `RULE_SPEC_HASHED_FIELDS`, and passes the check above — while every later
+    // change to that knob leaves the fingerprint exactly where it was, which is
+    // SP-1 reopened through the one door the mapped type does not cover.
+    //
+    // So: perturb each non-discriminant field of each shipped spec and require
+    // the canonical form to MOVE. Driven off the table rather than a hand-written
+    // list, so a new knob is covered the day it exists.
+    const perturb = (value: unknown): unknown => {
+      if (typeof value === "number") return value + 1;
+      if (typeof value === "string") return `${value}-moved`;
+      throw new Error(`this test does not know how to perturb ${typeof value}`);
+    };
+    for (const spec of [WEDGED_WORK_SPEC, LAUNCH_MODE_SPEC] as readonly RuleSpec[]) {
+      const before = canonicalRuleSpec(spec);
+      for (const field of RULE_SPEC_HASHED_FIELDS[spec.kind] as readonly string[]) {
+        // `kind` is the discriminant: perturbing it makes a spec of no rule at
+        // all, which the union refuses, so it is covered by the label check
+        // above and by the two specs hashing differently.
+        if (field === "kind") continue;
+        const moved = { ...spec, [field]: perturb((spec as unknown as Record<string, unknown>)[field]) } as RuleSpec;
+        expect(`${spec.kind}.${field} moved: ${canonicalRuleSpec(moved) !== before}`).toBe(`${spec.kind}.${field} moved: true`);
+      }
+    }
+  });
 });
 
 describe("the two-phase protocol, under the scheduler", () => {
@@ -389,12 +417,20 @@ describe("the two-phase protocol, under the scheduler", () => {
     expect(rawKinds(root)).toEqual(["job-occurrence-reserved", "job-occurrence-started"]);
   });
 
-  test("the intent is ALREADY ON THE DISK at the instant the actor is called", async () => {
+  test("the intent is ALREADY WRITTEN at the instant the actor is called", async () => {
     // The positive half of the ordering, and it is asserted from *inside* the
     // actor rather than from the finished log — because a log read afterwards
     // shows the same two lines in the same order whichever way round they were
     // written, so it cannot tell an append-then-act from an act-then-append.
     // This can: it reads the file at the one moment that distinguishes them.
+    //
+    // **WRITTEN, NOT DURABLE, and the test used to claim the second.** Reading
+    // back through another file descriptor proves the bytes are visible to this
+    // process, which is what ORDERING needs; it says nothing about surviving a
+    // power cut, because that is `store.ts`'s `fsyncSync` and no test here can
+    // see whether it ran. GPT Sol's finding 3 on 3b — and `rule-jobs.ts` §
+    // What the fingerprint does NOT cover says why that gap is accepted rather
+    // than closed.
     const root = tempRoot();
     const clock = fakeClock("2026-09-08T21:00:00.000Z");
     const store = mustOpen(root, clock.now);
@@ -571,6 +607,41 @@ describe("rule 1 under the scheduler, and back off the disk", () => {
     expect(settled.outcome.kind).toBe("proposed");
   });
 
+  test("AN EVENT THAT CONTRADICTS ITSELF IS REFUSED — a ruleId and a finding from two different rules", async () => {
+    // GPT Sol's finding 5 on 3b. Both discriminants were checked, and neither
+    // was checked against the other, so a line claiming `ruleId: "launch-mode"`
+    // with a wedged-work finding parsed perfectly and came back as a
+    // launch-mode run whose numbers are another rule's arithmetic. A record
+    // that reads plausibly and is false is the one thing a durable log must not
+    // produce, so the whole range is refused rather than the line repaired.
+    const root = tempRoot();
+    const clock = fakeClock("2026-09-08T22:00:00.000Z");
+    const store = mustOpen(root, clock.now);
+    const look = looking({
+      kind: "launch-modes",
+      collection: { collected: true, ageSeconds: 10 },
+      sessions: [{ id: "$1", name: "worktree-beta", mode: { kind: "not-auto", mode: "manual mode" } }],
+    });
+    schedulerTick({ definitions: [launchJob()], store, rules: look, now: clock.now });
+    await settle();
+    // Rewrite the finding to another rule's, ON THE DISK, which is the only
+    // place this can be got wrong — nothing in the process can produce it.
+    const path = join(root, EVENTS_FILE);
+    const lines = readFileSync(path, "utf8").trim().split("\n");
+    const rewritten = lines.map((line) => {
+      const event = JSON.parse(line) as Record<string, unknown>;
+      if (event["kind"] !== "rule-intended") return line;
+      return JSON.stringify({
+        ...event,
+        finding: { kind: "wedged-work", policy: "safe-to-kill", minAgeSeconds: 14400, matched: 1, candidates: 1, scanned: 750, processes: [] },
+      });
+    });
+    writeFileSync(path, `${rewritten.join("\n")}\n`);
+    const second = reopen(root, clock.now);
+    expect(second.opening.unreadableLines).toBe(1);
+    expect(second.occurrenceHistory.kind).not.toBe("intact");
+  });
+
   test("a fleet with nothing wrong appends ONE terminal event and no intent", async () => {
     const root = tempRoot();
     const clock = fakeClock("2026-09-08T22:00:00.000Z");
@@ -649,6 +720,16 @@ describe("the launch-mode specimen-maker refuses to leave a blinded fleet behind
     expect(verdict.ok === false && verdict.why).toContain("cannot say whether the session is readable");
   });
 
+  test("A LISTING WHOSE ONLY MATCH IS A LONGER NAME IS A REFUSAL — the prefix hazard, one layer out", () => {
+    // GPT Sol's finding 4 on 3b. `out.includes(SPECIMEN_SESSION)` was satisfied
+    // by a row for `overseer-launch-mode-specimen-old`, which is a different
+    // session — the same prefix hazard as a bare tmux `-t`, which this repo has
+    // already been bitten by once. The row's own first field is the name.
+    const verdict = listingVerdict(() => `NAME  REPO\n${SPECIMEN_SESSION}-old  unknown\n`);
+    expect(verdict.ok).toBe(false);
+    expect(verdict.ok === false && verdict.why).toContain("no row for");
+  });
+
   test("a listing that names the specimen is the one green there is", () => {
     expect(listingVerdict(() => `NAME  REPO\n${SPECIMEN_SESSION}  unknown\n`).ok).toBe(true);
   });
@@ -719,7 +800,15 @@ describe("the shipped rule job, and its pin", () => {
     const armed = describeRuleJobs({ armed: true, enableVar: RULES_ENABLED_VAR, jobs });
     expect(off).toContain(RULES_ENABLED_VAR);
     expect(armed).not.toContain(RULES_ENABLED_VAR);
-    for (const sentence of [off, armed]) expect(sentence).toContain("wedged-work");
+    // EVERY RULE IS NAMED, not just the first. A status line that silently
+    // stopped mentioning one rule would look exactly like a status line for a
+    // fleet with one rule, which is the shape of half the findings on this job.
+    for (const sentence of [off, armed]) {
+      for (const id of ["wedged-work", "launch-mode"]) expect(sentence).toContain(id);
+      // AND ITS DISPOSITION, because "which rules exist" and "what they may do"
+      // are different questions and the second is the one gate 3 is about.
+      expect(sentence.match(/\(propose\)/g)).toHaveLength(2);
+    }
   });
 });
 
@@ -843,15 +932,32 @@ describe("rule 1: launch-mode drift", () => {
     expect(finding.sessions.map((session) => session.id)).toEqual(["$2"]);
   });
 
-  test("CANNOT-TELL IS NOT A NEGATIVE — an unreadable row neither fires the rule nor counts as healthy", () => {
+  test("CANNOT-TELL IS NOT A NEGATIVE — an unreadable row neither fires the rule nor reads as healthy", () => {
     const decision = decideRule(LAUNCH, seen([auto("$1"), unreadable("$2")]));
-    // NOT a proposal: a mode we could not read is not evidence of drift.
+    // NOT A PROPOSAL: a mode we could not read is not evidence of drift.
+    // NOT `nothing` EITHER, and this is the half I got wrong first time (GPT
+    // Sol's finding 1 on 3b). Counting the four arms separately buys nothing if
+    // the DECISION has only two outcomes: `nothing` settles durably as
+    // `nothing-to-do`, whose discriminant says the rule looked and there is
+    // nothing wrong — so the counts survived in the prose while the field every
+    // consumer branches on collapsed `cannot-tell` into the healthy answer.
+    expect(decision.kind).toBe("cannot-tell");
+    if (decision.kind !== "cannot-tell") throw new Error("unreachable");
+    expect(decision.why).toContain("1 of 2 agent session(s) could not be read");
+    expect(decision.why).toContain("1 read auto");
+  });
+
+  test("...but only when the unreadable ones could actually have carried the threshold", () => {
+    // The arithmetic, not a mood: one unreadable session cannot hide two
+    // drifted ones, so with `minSessions: 2` this really is a nothing — and the
+    // count is still in the sentence.
+    const decision = decideRule({ ...LAUNCH, minSessions: 2 }, seen([auto("$1"), auto("$2"), unreadable("$3")]));
     expect(decision.kind).toBe("nothing");
     if (decision.kind !== "nothing") throw new Error("unreachable");
-    // AND NOT SILENT EITHER. The sentence has to carry the unreadable count, or
-    // "nothing to do" is a clean bill this rule never issued.
     expect(decision.why).toContain("1 could not be read");
-    expect(decision.why).toContain("1 read auto");
+    // And with one more unreadable it becomes a cannot-tell again, because two
+    // unread sessions could between them be the two this rule reports on.
+    expect(decideRule({ ...LAUNCH, minSessions: 2 }, seen([auto("$1"), unreadable("$2"), unreadable("$3")])).kind).toBe("cannot-tell");
   });
 
   test("CANNOT-TELL, WHEN SOMETHING IS ALSO WRONG — the proposal still carries it, separately", () => {
@@ -930,11 +1036,20 @@ describe("rule 1: launch-mode drift", () => {
 describe("rule 1's observer, against the dashboard's own /api/state shape", () => {
   const LAUNCH: RuleSpec = { kind: "launch-mode", minSessions: 1, maxCollectionAgeSeconds: 300, disposition: "propose" };
 
+  /**
+   * A payload shaped like the real one, `error` included.
+   *
+   * **`error: null` is not decoration here.** `refresh.ts` keeps a failed
+   * collection's error BESIDE the previous snapshot, so `/api/state` goes on
+   * serving the rows it last managed to see — and a fixture that omitted the
+   * field entirely was a fixture that could never have exercised the case.
+   */
   function stateBody(rows: readonly unknown[], extra: Record<string, unknown> = {}): string {
     return JSON.stringify({
       schema: 1,
       collectedAt: "2026-09-08T21:23:22.269Z",
       servedAt: "2026-09-08T21:23:52.269Z",
+      error: null,
       rows,
       ...extra,
     });
@@ -979,7 +1094,10 @@ describe("rule 1's observer, against the dashboard's own /api/state shape", () =
     const observation = await fleetStateObserver({ baseUrl: "http://127.0.0.1:8787", get: http.get })(LAUNCH);
     if (observation.kind !== "launch-modes") throw new Error("expected launch-modes");
     expect(observation.sessions[0]?.mode.kind).toBe("cannot-tell");
-    expect(decideRule(LAUNCH, observation).kind).toBe("nothing");
+    // AND THE DECISION IS `cannot-tell` TOO, not a proposal and not a clean
+    // bill: the only agent row on this fleet is one whose mode we could not
+    // read, so there is nothing to say in either direction.
+    expect(decideRule(LAUNCH, observation).kind).toBe("cannot-tell");
   });
 
   test("a dashboard too old to report the field is `cannot-tell` as well", async () => {
@@ -999,6 +1117,32 @@ describe("rule 1's observer, against the dashboard's own /api/state shape", () =
     const http = getter(stateBody([row("$1", { kind: "auto" })], { servedAt: "2026-09-08T21:00:00.000Z" }));
     const observation = await fleetStateObserver({ baseUrl: "http://127.0.0.1:8787", get: http.get })(LAUNCH);
     expect(observation.kind).toBe("cannot-see");
+  });
+
+  test("A PAYLOAD WHOSE OWN COLLECTION FAILED IS A CANNOT-SEE, however fresh its rows look", async () => {
+    // THE CASE THIS BOX PRODUCED ON 2026-09-08, 21:37Z to 21:47Z: the collector
+    // failed, `/api/state` went on serving the sessions it last saw, and every
+    // one of those rows was the past wearing a current `servedAt`. Reading them
+    // is how a rule proposes relaunching a session that no longer exists.
+    const http = getter(
+      stateBody([row("$1", { kind: "not-auto", mode: "manual mode" })], {
+        error: "could not read this box's tmux sessions: session 'x' has GJD_REPO='y', which is neither an owner/name slug nor 'unknown'",
+      }),
+    );
+    const observation = await fleetStateObserver({ baseUrl: "http://127.0.0.1:8787", get: http.get })(LAUNCH);
+    expect(observation.kind).toBe("cannot-see");
+    // The reader's own sentence, because the reader is what has the reason.
+    expect(observation.kind === "cannot-see" && observation.why).toContain("GJD_REPO");
+  });
+
+  test("a dashboard too old to say whether its collection worked is a cannot-see too", async () => {
+    // Present AND null. A producer that stopped sending the field is one we
+    // cannot ask, and reading its silence as success is the same drop the
+    // client's own wire type was rebuilt to prevent.
+    const http = getter(JSON.stringify({ schema: 1, collectedAt: "2026-09-08T21:23:22.269Z", servedAt: "2026-09-08T21:23:52.269Z", rows: [] }));
+    const observation = await fleetStateObserver({ baseUrl: "http://127.0.0.1:8787", get: http.get })(LAUNCH);
+    expect(observation.kind).toBe("cannot-see");
+    expect(observation.kind === "cannot-see" && observation.why).toContain("does not say whether its last collection succeeded");
   });
 
   test("a dashboard that answers badly is a cannot-see rather than an empty fleet", async () => {

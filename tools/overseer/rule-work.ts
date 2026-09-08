@@ -371,6 +371,26 @@ export function fleetStateObserver(options: ObserverOptions): (spec: LaunchModeS
       return cannotSee(`its answer was not JSON: ${cause instanceof Error ? cause.message : String(cause)}`);
     }
     if (!isRecord(body)) return cannotSee("its answer was not a fleet state this version understands");
+    // **A PAYLOAD THAT SAYS ITS OWN COLLECTION FAILED CARRIES THE PREVIOUS
+    // ROWS.** `refresh.ts` keeps the error BESIDE the last snapshot, so
+    // `/api/state` goes on serving the sessions it last managed to see with a
+    // non-null `error` — and 21:37Z to 21:47Z on 2026-09-08 is what that looks
+    // like on this box. Reading those rows is reading the past and calling it
+    // the present. `admissible.ts` refuses such a payload for the daemon's own
+    // pipeline; this is the same refusal for the rules, and it was missing
+    // (GPT Sol's finding 2 on 3b).
+    //
+    // Present AND null, not merely falsy: a producer that stopped sending the
+    // field is one we cannot ask, which is a `cannot-see` rather than a clean
+    // bill.
+    const error = body["error"];
+    if (error !== null) {
+      return cannotSee(
+        typeof error === "string"
+          ? `its last collection failed (${error}), so the rows it is still serving are the previous ones`
+          : "it does not say whether its last collection succeeded, so its rows cannot be believed",
+      );
+    }
     const collection = parseCollection(body);
     if (collection === null) return cannotSee("its collection clock is not a pair of timestamps this version can read");
     const rows = body["rows"];

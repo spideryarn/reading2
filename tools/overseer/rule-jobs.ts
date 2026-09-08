@@ -60,6 +60,35 @@
  * change constantly), and splitting the per-rule halves into per-rule files is
  * the next move if a third rule makes it bite. `npx tsx scripts/overseer-pins.ts`
  * prints the number to copy.
+ *
+ * ## WHAT THE FINGERPRINT DOES NOT COVER, and it is not nothing
+ *
+ * **A self-verifying pin cannot protect its own verifier**, so the boundary has
+ * to be stated rather than implied. GPT Sol's finding 3 on 3b: two claims made
+ * here and in `rule-protocol.ts` were stronger than the mechanism.
+ *
+ * What is inside: **what a rule decides, how it looks, and whether it may
+ * act** — the thresholds, the disposition, the observers, and the ordering that
+ * puts a decision on the disk before anything is done about it.
+ *
+ * What is outside, deliberately, as a reviewed execution base:
+ *
+ *  - **`store.ts`'s durability.** The protocol trusts `append` and does not
+ *    fsync itself. Deleting `fsyncSync` leaves every pin current, and the test
+ *    that reads the intent back through a second file descriptor proves
+ *    process-visible bytes rather than crash durability.
+ *  - **`scheduler.ts`'s lifecycle.** The authorisation gate, the lease, the
+ *    sweep that releases an expired one, and the reservation decide WHETHER a
+ *    rule runs and HOW OFTEN — an edit there can permit repeats without moving
+ *    a rule's fingerprint.
+ *  - **What `"safe-to-kill"` MEANS.** It is a hashed word whose meaning lives in
+ *    `tools/fleet/actions.ts`, which no pin covers, so changing what the policy
+ *    selects changes what rule 2 proposes without changing its hash. Already
+ *    named as a precondition on 3d in the plan, and it belongs on this list.
+ *
+ * Closing any of them means extracting a small stable module and pinning that,
+ * which is a change worth making the day something acts — not one to make while
+ * both rules can only propose.
  */
 import { definitionHash, type AuthorisedRuleJob, type DefinitionHash, type JobDocument, type RuleJobDefinition } from "./jobs.js";
 import type { RuleId, RuleSpec } from "./rules.js";
@@ -154,7 +183,21 @@ export type RuleJobId = RuleId;
 /**
  * THE AUTHORISED FINGERPRINTS.
  *
- * Re-pinned 2026-09-08 for 3b part 1: `6a62bed1e623` → `95485a7dbe6f`.
+ * Re-pinned 2026-09-08 for GPT Sol's code review of 3b: `a3dcfd98b110` →
+ * `bebaeb2561c0` for `wedged-work`, `a648c4bfbe4c` → `898a5c1ab3f1` for
+ * `launch-mode`. **Rule 1's decision changed and rule 2's did not.** Rule 1 now
+ * answers `cannot-tell` when enough sessions were unreadable to have hidden the
+ * threshold, rather than folding that into `nothing-to-do` (finding 1); its
+ * observer refuses a payload whose own collection failed, which `/api/state`
+ * serves with the PREVIOUS rows attached (finding 2); and both rules' pins moved
+ * again for the prose corrections above, which are a narrowing of what this
+ * fingerprint was claimed to cover (finding 3).
+ *
+ * Before that, 3b part 2 pinned `launch-mode` at `a648c4bfbe4c` and moved
+ * `wedged-work` `95485a7dbe6f` → `a3dcfd98b110` — no rule's behaviour changed;
+ * `rules.ts` and `rule-work.ts` grew a second rule, and both are shared.
+ *
+ * Before that, 3b part 1: `6a62bed1e623` → `95485a7dbe6f`.
  * **Nothing the rule decides changed, and nothing about the spec changed** —
  * one document in the list was swapped for another. `scheduler.ts` left
  * `RULE_SOURCES` and `rule-protocol.ts` took its place, which is the whole of
@@ -172,8 +215,8 @@ export type RuleJobId = RuleId;
  * says when it is stale.
  */
 export const AUTHORISED_RULE_HASHES: Readonly<Record<RuleJobId, string>> = {
-  "wedged-work": "a3dcfd98b110",
-  "launch-mode": "a648c4bfbe4c",
+  "wedged-work": "bebaeb2561c0",
+  "launch-mode": "898a5c1ab3f1",
 };
 
 /** The spec, as it is authorised. Every knob, and `disposition: "propose"` is the one gate 3 turns on. */

@@ -511,12 +511,30 @@ function decideLaunchMode(spec: LaunchModeSpec, observation: Extract<RuleObserva
   // have got wrong.
   const agents = auto + drifted.length + cannotTell;
   const unreadable = `${cannotTell} could not be read`;
+  const counted = `${auto} read auto, ${unreadable}, and ${notApplicable} row(s) have no permission mode to read`;
   if (drifted.length < spec.minSessions) {
+    // **THREE-VALUED, AND THE MIDDLE ARM IS THE WHOLE FINDING.** Counting the
+    // four arms separately is not enough if the DECISION then has only two
+    // outcomes: a run with one unreadable session and no known drift used to
+    // settle as `nothing-to-do`, whose discriminant says *the rule looked and
+    // there is nothing wrong* — so the counts survived in prose while the field
+    // every consumer branches on collapsed `cannot-tell` into the healthy
+    // answer. GPT Sol's finding 1 on 3b, and it is the exact failure this rule
+    // was written against, one level further in than I was looking.
+    //
+    // So: enough unreadable sessions that they COULD have carried the threshold
+    // means we cannot tell, not that there is nothing to tell.
+    if (drifted.length + cannotTell >= spec.minSessions) {
+      return {
+        kind: "cannot-tell",
+        why:
+          `${cannotTell} of ${agents} agent session(s) could not be read, which is enough to hide the ` +
+          `${spec.minSessions} this rule reports on — ${counted}`,
+      };
+    }
     return {
       kind: "nothing",
-      why:
-        `${drifted.length} of ${agents} agent session(s) are not in auto mode, under the ${spec.minSessions} this rule reports on; ` +
-        `${auto} read auto, ${unreadable}, and ${notApplicable} row(s) have no permission mode to read`,
+      why: `${drifted.length} of ${agents} agent session(s) are not in auto mode, under the ${spec.minSessions} this rule reports on; ${counted}`,
     };
   }
   const named = finding.sessions.map((session) => `${session.name} (${session.id}, ${session.mode})`).join(", ");
