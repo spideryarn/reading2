@@ -108,6 +108,21 @@ test.** Two things follow.
 This is worth more care than an ordinary type error, because the whole point of such a guard is that
 somebody *stops thinking* about the class it covers.
 
+**And the companion rule, learned the same night by the agent who asked for the paragraph above.** In
+one batch they added four refusal codes — the exhaustive `Record` fired exactly as designed and
+refused to compile — and, in the same batch, added a field to a returned object literal. That second
+one is **not a type error anywhere**: `typecheck` was clean, it was pushed, and a test that spelled
+out the whole object went red on `dev`.
+
+> a type-level guard catches a changed **shape** and cannot catch a changed **value** — and adding a
+> field is a value change to every assertion that spells out an object.
+
+So the two gates fail in opposite directions and neither covers the other: `npm test` cannot see a
+broken exhaustiveness guard, and `npm run typecheck` cannot see a widened literal that every
+`toEqual` in the tree disagrees with. The habit that follows is not "run both" — everyone already
+knows that — it is **run the file that CONSUMES what you changed, not only the file you were editing
+in**. Their words: *"I'd run the file I was editing and not the file that consumed it."*
+
 ### The `@/` alias, and where it may live
 
 shadcn generates its imports as `@/lib/utils`, so the alias had to exist before any component landed

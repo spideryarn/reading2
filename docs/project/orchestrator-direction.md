@@ -501,11 +501,22 @@ page calls them idle:
   review runs inside a Claude session's Bash tool, so a session waiting 15–45 minutes on a paid
   review reads as `idle` for the whole of it.
 
+- **Sessions with a dialog open that the status does not know about.** `needs-you` is derived from
+  `claude agents --json`; the pending question is scraped from the pane. **They are different
+  sources**, so a row can be honestly `working` while a numbered dialog is on screen. Found by GPT
+  Sol reviewing the steering path, where its consequence is worse than a mis-sorted list: a steering
+  message beginning "1" arriving while a dialog is up **is an approval**, and the route returned 200.
+
 The dashboard agent's phrasing is the finding, and it is worth keeping exactly:
 
 > our vocabulary describes the pane, and the thing Greg wants to know is about the work.
 >
 > — 2026-09-08
+
+**Three cases, three different reasons, and none of them is a bug in `sessionState`** — which is the
+point. It reports faithfully what its two sources say. The gap is between *what the box can observe
+about a pane* and *what a person needs to know about a piece of work*, and no amount of care inside
+the status function closes it.
 
 **The two halves need different machinery, and that is the useful part.** Subprocess ancestry is in
 the process table, so the Codex case is *mechanically* detectable and should be — a status arm, not a
@@ -602,6 +613,7 @@ Greg one thing and approve another after an ordinary re-render.
 | **A11** | Delivery needs an **uncertain** state. A nonce proves the transport *can* work; it says nothing about later requests. Action IDs, and five states — accepted, keys submitted, reception observed, refused, outcome unknown — with a repeat retrieving the receipt. **Never auto-retry keystrokes.** | dashboard |
 | **A5** | **Reachability, but narrower.** The reference system we copied checked callers against `owner-logins.txt` before POSTs — *its write boundary was never reachability alone*, and we took the half we liked. The cheap fix is a device-scoped tailnet grant, not a login page. Tailscale's default policy is permissive, so verify rather than assume. | both |
 | **A6** | Treat the dashboard as a **privileged renderer of hostile content**: CSP and anti-framing before answer buttons. Origin checks do not stop a malicious page framing the real one. | dashboard |
+| **A11b** | **A steering attempt has three outcomes, not two**, and the dashboard already reports them: `delivery: "none" \| "partial" \| "unknown"`. **`partial` means the text landed and the Enter did not** — the message is sitting in that agent's input box, unsent, and will be prepended to whatever it types next. When the Overseer records steering attempts, this is the distinction to keep: a flat "failed" is wrong in the most expensive direction, because it invites a retry that would append to the half-sent text rather than replace it. | overseer |
 | **A12** | **An Overseer message must not acquire Greg's authority** by arriving as a user turn. A worker can meet malicious instructions, report them, and get them back as authoritative steering. Display *Greg requested* / *Overseer proposed* / *policy authorised* distinctly. A model's recommendation must not mint its own approval. | overseer |
 
 ### Then — so the box does not collapse again
