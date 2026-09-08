@@ -2509,6 +2509,7 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      two concurrent runs would be two walks over one article's line. Everything
      it does is inside a transaction it rolls back; the article itself is
      suffixed per run and cleaned up in `afterAll`. */
+  "tests/labels-land-after-the-shelf.test.ts": "private-postgres",
   "tests/labels-receipt-invalidation.test.ts": "private-postgres",
   "tests/library-log-volume.test.ts": "private-postgres",
   "tests/list-reconciles-expired.test.ts": "private-postgres",

@@ -224,7 +224,7 @@
     --font-sans: 'Geist Variable', system-ui, -apple-system, 'Segoe UI', Arial, sans-serif;
     --font-reading: var(--font-sans);   /* the article itself, and the reader's own words */
     --font-ui: var(--font-sans);        /* chrome: controls, masthead facts, column headers */
-    --font-brand: 'Trebuchet MS', sans-serif;           /* the wordmark, and only the wordmark */
+    --font-brand: var(--font-sans);     /* the wordmark, and only the wordmark */
     --font-mono: 'Geist Mono Variable', ui-monospace, SFMono-Regular, Menlo, monospace;
     --font-id: 'Courier New', Courier, var(--font-mono);   /* block ids, and only block ids */
 
@@ -289,7 +289,20 @@
 }
 
 /* Wordmark. Structure copied from the original header so its logo animations could drop in later:
-   an <img class="logo-image"> next to a <span class="logo-text"> of per-letter <span class="logo-letter">. */
+   an <img class="logo-image"> next to a <span class="logo-text"> of per-letter <span class="logo-letter">.
+
+   **--font-brand was Trebuchet MS until 2026-09-08, and the weight below is why it is worth
+   knowing.** The wordmark is drawn twice — this class in the corner (HomeLogo.tsx) and
+   .dock-btn-label in the bottom bar (Dock.tsx), which inherits --font-ui and so was always Geist —
+   so the app's own name was set in two different faces depending on which page you were on. Two
+   agents found it independently while writing docs/project/design-logo.md; Greg's answer was one
+   word, "use Geist". It is still a separate token rather than --font-sans spelled at the call site,
+   for the same reason --font-reading is: the wordmark having its own face is a decision somebody
+   may want back, and this is the one line that gives it back.
+
+   600 is a real weight now rather than a synthesised one. Trebuchet ships 400 and 700, so the
+   browser was faux-bolding a smearing 600; Geist is variable across 100-900 (see --reading-weight
+   above) and draws it. */
 .logo-text {
     font-family: var(--font-brand);
     font-weight: 600;
