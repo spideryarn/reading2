@@ -2334,6 +2334,45 @@ favoured the fix rather than instead of them, which is the only reason it is wor
 **A series showing reachability recovering on its own kills this stage**, which is the cheaper
 outcome and the one to hope for.
 
+#### A cheaper option, found after the stage was written, and it should be tried first
+
+**`drainGate` excludes every `working` row, and some of them are at a prompt.**
+`queue.ts:155` takes only a `FleetStatus`, and `working` becomes
+`{kind: "later", why: "it is working, and keystrokes sent to a busy Claude do not queue themselves
+anywhere useful"}`. That reason is sound for a session mid-turn. It is **false for a session whose
+turn has ended with something running behind it** — Claude Code's `status: "shell"` is
+`baseStatus === "idle" && hasUnfinishedLocalBash`, so that session is at a prompt and typing at it
+works. `claude agents --json` normalises `shell` to `busy`, which is why the board calls it *Working*
+and why this was invisible.
+
+**The server already computes the distinction.** `pause.ts` reads the session store and produces
+`{kind: "background-work"}` for exactly those rows, joining on the `sessionId` inside each file
+rather than the pid in its name. Two such rows were live at 20:43 on 2026-09-08, and
+`spideryarn2-b6` — sampling with this module's own join after their pid-ancestry version disagreed
+with it — measured **`agents=7 reachable=4 working=3 working_but_at_prompt=1 oracle_unknown=0`** at
+20:53. One of three *working* rows was messageable.
+
+So a broadcast could reach some of the sessions it currently defers **without touching the enqueue
+refusal at all**: `working` + `background-work` is `now`, not `later`. That is a smaller change than
+making a box-wide action queueable, it needs no rendering-at-delivery, and it uses a fact this
+dashboard already has rather than one it would have to invent.
+
+**Two things to settle before building it**, neither of them hard but neither of them skippable:
+
+- **`drainGate` is the drain's rule too, not only the broadcast's.** Widening it would also send
+  queued items to those sessions sooner. That is probably right for the same reason, but it is a
+  second behaviour change and it should be argued rather than inherited.
+- **Where the pause comes from at the route.** `broadcastRoute` reads `declaredStatus` off the
+  request, and the pause must NOT arrive the same way — a client echoing a value the server told it,
+  checked by the server against itself, is failure mode 5 in `routes-steer.ts`'s header. The server
+  should read it from its own latest snapshot.
+
+**And this is the honest order:** try the cheap fix, measure whether the residue still matters, and
+only then argue the `:505` refusal. The stage below may turn out to be unnecessary, which is the
+outcome to hope for.
+
+- [ ] Try the cheap fix first: `working` + `background-work` becomes deliverable, with the pause read
+      server-side rather than accepted from the request.
 - [ ] Answer or overturn the `:505` refusal, in writing, before any code.
 - [ ] Render `index`/`total` at delivery, following `sendable()`.
 - [ ] Say on the page what the route already answers: *"sent to 3 of 15 — 5 were working, 7 are
