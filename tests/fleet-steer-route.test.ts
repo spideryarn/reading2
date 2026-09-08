@@ -755,10 +755,27 @@ describe("parsing untrusted bodies", () => {
     expect(parseStatus({ kind: "shell", busy: null })).toEqual({ kind: "shell", busy: null });
     expect(parseStatus({ kind: "unknown", why: "no agents list" })).toEqual({
       kind: "unknown",
+      // STAMPED HERE, not read from the body, and not one of the six real
+      // causes `sessionState` can produce. This status did not come from the
+      // box; a browser said what it had on screen. Writing `agents-unavailable`
+      // would assert that the box reported a fault when the box was never
+      // asked — the same lie as inventing a `collectedAt` for a collection that
+      // never happened. The client's own prose survives in `why`, which is what
+      // the refusal sentence renders.
+      cause: "client-declared",
       why: "no agents list",
     });
     expect(parseStatus({ kind: "shell" })).toBeNull();
     expect(parseStatus({ kind: "invented" })).toBeNull();
+  });
+
+  it("overwrites a cause the client sent rather than believing it", () => {
+    // The half the assertion above cannot show, because its input has no cause
+    // to overwrite. A client that names one of the box's real faults must not
+    // have that string laundered into a field whose whole purpose is to say
+    // what the BOX observed.
+    const s = parseStatus({ kind: "unknown", cause: "agents-unavailable", why: "no agents list" });
+    expect(s).toEqual({ kind: "unknown", cause: "client-declared", why: "no agents list" });
   });
 
   it("refuses a panePid that is not a pid instead of dropping it", () => {
