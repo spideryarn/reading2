@@ -186,6 +186,17 @@
   left: var(--safe-left);
   right: var(--safe-right);
   bottom: var(--dock-space);
+  /* **Where the strip is, in the one state that moves it.** The value is set
+     beside `--dock-bottom` in narrow-window.css § a small device, so the hint
+     travels with the bar it sits on rather than being told separately — the
+     three declarations there are one state, and keeping them together is the
+     whole point (that file has what went wrong when they were not).
+
+     The fallback is what every other width gets: this is the only element that
+     reads the property, and outside that media query nothing sets it. Declared
+     here rather than there so the element's own geometry is readable in one
+     place. */
+  transform: var(--install-hint-transform, translateY(0px));
   /* Under the drawer (95) and its dim (92), above the mode band (44) — it is
      chrome about the app rather than part of the article, and a modal drawer
      must cover it like everything else. */

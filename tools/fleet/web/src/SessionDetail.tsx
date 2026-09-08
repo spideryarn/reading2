@@ -97,6 +97,7 @@ import { useCallback, useRef, useState, type ReactNode } from "react";
 
 import { ActionOutcomeCard, SessionActions, SessionQueue } from "./ActionButtons";
 import { DictationControl, useFleetDictation } from "./DictationControl";
+import { PauseLine } from "./PauseLine";
 import { RecentMessages, useRecentMessages } from "./RecentMessages";
 import { Handles, LaunchMode, QuestionCard, StatusPill, Uptime } from "./SessionParts";
 import { Explain } from "./Tooltip";
@@ -568,6 +569,7 @@ export function SessionDetail({
           down inside Recent messages. */}
       <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-x-2 tw:gap-y-1">
         <StatusPill status={row.status} />
+        <PauseLine pause={row.pause} now={now} />
         <LastWrote view={reading.view} status={row.status} now={now} />
         <Uptime row={row} now={now} className="tw:ml-auto" />
       </div>
