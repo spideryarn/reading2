@@ -168,3 +168,12 @@ and [260908f-overseer-and-fleet-improvement-roadmap.md](260908f-overseer-and-fle
   offset so they don't bump into each other). Ideally these would be written in some config somewhere
   that would be easy to edit, with an idempotent script to update them."* — handed to the coordinator
   as the owner of `jobs.ts` and the unit; `systemctl enable`/restart of the unit stays Greg's.
+- 2026-09-09 00:20 UTC — **Greg queued** four dashboard product items (notify the Overseer on New
+  Session; a good title; a 1–2 sentence description in the list; Session Detail led by the latest
+  message with history behind a button) and asked to be asked upfront. **Greg decided:** descriptions
+  and idle summaries from a cheap cached model call (the attention-classify path); "notify" = one
+  line into the claim-holding session via the steer machinery; titles are dashboard display only,
+  for every session, no tmux rename. **Dashboard agent** ceded `SessionDetail.tsx` to the new session
+  on two conditions (four-arm outcome wording and ActionButtons text untouched; the notify send goes
+  through `sendMessage` with its `Delivery` result, never fire-and-forget or "sent"). Dispatched
+  `dashboard-titles-descriptions-detail`. Six sessions now working for or beside me.
