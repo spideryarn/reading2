@@ -572,6 +572,13 @@ Run on the box, 2026-09-07, before this plan was written.
 - **Remote Control is already on for most sessions.** 11 of 19 had a non-null `bridgeSessionId`
   with no flag passed; `claude --remote-control <name>` sets it explicitly (tested with a throwaway
   session, since killed).
+- **…but it does not stay working, and that is the strongest argument for this tool existing at
+  all.** Counted 2026-09-08 04:15: **8 of 23** live interactive sessions showed `/rc failed` in
+  their status bar. A third of the fleet, silently — the only evidence anywhere is one word at the
+  bottom of a terminal nobody is looking at. So "Remote Control already does this" is true of a
+  session at launch and unreliable of the same session an hour later, which is precisely when you
+  reach for a phone. Noticed by Fable while it was reading the panes for something else; counted
+  independently afterwards.
 - **The Hetzner cloud firewall allows SSH, mosh and ICMP only.** Read from `infra/hetzner/main.tf`.
   Not verified against live Hetzner state — the box has no `hcloud` CLI and no Hetzner token by
   design. **Greg should confirm with `hcloud firewall list` from the Mac.**
