@@ -149,7 +149,18 @@ function steerable(over: Partial<FleetState["rows"][number]> & { id: string }): 
 
 function state(over: Partial<FleetState> = {}): FleetState {
   return {
-    collectedAt: new Date("2026-09-08T12:00:00Z").toISOString(),
+    /* NOW, NOT A DATE. This was `new Date("2026-09-08T12:00:00Z")`, which was
+       "now" on the morning it was written and stopped being so at 12:02:30Z
+       the same day — the moment the snapshot passed the 2m 30s staleness
+       threshold. Three rendering tests then started asserting `not.toContain
+       ("STALE")` against a page that had begun, correctly, to say STALE. The
+       tests were right about the page and wrong about the clock.
+       A fixture that means "fresh" has to be computed from the clock the
+       component reads, because freshness is a relation between two times and
+       an absolute constant can only ever be one of them. The tests that want
+       an OLD snapshot pass both times explicitly — see `freshness` below — and
+       are unaffected. */
+    collectedAt: new Date().toISOString(),
     tookMs: 12_000,
     error: null,
     rows: [],
@@ -1501,7 +1512,12 @@ describe("master and detail", () => {
 
     const text = container.textContent ?? "";
     // The things the list cannot hold, each asserted positively.
-    expect(text).toContain("What it needs from you");
+    /* NOT "What it needs from you" — this row is idle, and that section is
+       drawn only when there is something to say. It used to appear on every
+       page carrying the sentence "Nothing. It is not asking you anything.",
+       which is a heading whose only content was the news that it had none.
+       The badge in the header already says idle. */
+    expect(text).not.toContain("Nothing. It is not asking you anything.");
     expect(text).toContain("Say something to it");
     expect(text).toContain("Where it is");
     expect(text).toContain("/home/greg/code/spideryarn2");
@@ -2248,7 +2264,7 @@ describe("answering, and the dialogs it is not offered for", () => {
     expect(box.disabled).toBe(false);
     typeInto(box, "answer it yourself, you have my go-ahead");
     await act(async () => {
-      buttonSaying("Send")?.click();
+      buttonSaying("Send now")?.click();
     });
     expect(recorder.calls[0]?.op).toBe("message");
   });
@@ -2442,7 +2458,7 @@ describe("the rule about sending the server its own claims back", () => {
     if (!box) throw new Error("no message box");
     typeInto(box, "carry on");
     await act(async () => {
-      buttonSaying("Send")?.click();
+      buttonSaying("Send now")?.click();
     });
 
     const text = container.textContent ?? "";
@@ -2478,7 +2494,7 @@ describe("the rule about sending the server its own claims back", () => {
     if (!box) throw new Error("no message box");
     typeInto(box, "pull the latest dev and carry on");
     await act(async () => {
-      buttonSaying("Send")?.click();
+      buttonSaying("Send now")?.click();
     });
 
     expect(recorder.calls).toHaveLength(1);
@@ -3225,6 +3241,27 @@ describe("the action buttons, which are the server's vocabulary", () => {
     expect(buttonLabels()).not.toContain("Kill test suites");
   });
 
+  it("still draws an action this build has never heard of, rather than grouping it away", async () => {
+    /* THE ESCAPE HATCH ON THE DECLUTTER, AND THE ONLY PART OF IT THAT COULD
+       LOSE A FEATURE. `groupSpoken` puts four known ids in the visible row and
+       sorts the rest into Work / Pause / Hand off — by id, from a list written
+       here rather than sent by the server. The server owns this catalogue and
+       can add to it, so a grouping that silently dropped what it did not
+       recognise would be a new instance of the exact class the postmortem of
+       2026-09-08 is about: a consumer quietly not rendering what a producer
+       sent. Anything unrecognised lands in "Other" and is still pressable. */
+    const invented = {
+      ...CONTINUE_WIRE,
+      id: "take-a-photo-of-the-moon",
+      label: "Take a photo of the moon",
+      text: "Please take a photo of the moon.",
+    };
+    openWith([CONTINUE_WIRE, invented]);
+    await act(async () => {});
+    expect(buttonLabels()).toContain("Take a photo of the moon");
+    expect(container.textContent).toContain("Other");
+  });
+
   it("has no hand-written list: a server offering nothing offers no buttons", async () => {
     openWith([]);
     await act(async () => {});
@@ -3267,10 +3304,24 @@ describe("the action buttons, which are the server's vocabulary", () => {
     openWith([CONTINUE_WIRE, REMOVE_WORKTREE_WIRE]);
     await act(async () => {});
     const text = container.textContent ?? "";
+    /* THE WORDS MOVED IN THE DECLUTTER PASS AND THE PROPERTY DID NOT. The two
+       groups used to be told apart by two permanent paragraphs above the
+       buttons; they are now told apart by their headings and by the buttons'
+       own labels, which is the same distinction carried in fewer words. What
+       must not happen is the distinction surviving only as a colour. */
+    expect(text).toContain("Ask it to…");
+    expect(text).toContain("Force");
     expect(text).toContain("Each of these types a sentence into its input box.");
-    expect(text).toContain("This tool runs a command — a directory deleted, a process signalled");
     // The colour is carried too, but it is never the only carrier.
     expect(buttonSaying("Remove worktree")?.className).toContain("alarm");
+
+    /* And the sentence that moved has to be somewhere. It is on the confirm
+       step now — the moment it changes what somebody is about to do, rather
+       than a standing warning about a button nobody has pressed. A test that
+       only checked it had left the strip would pass over its deletion. */
+    expect(text).not.toContain("This tool runs a command — a directory deleted, a process signalled");
+    await clickSaying("Remove worktree");
+    expect(container.textContent).toContain("This tool runs a command — a directory deleted, a process signalled");
   });
 
   // THIS TEST WENT RED ON PURPOSE ON 2026-09-08 AND THAT IS THE POINT OF IT.
@@ -3595,7 +3646,7 @@ describe("queueing a message, in one line with the buttons", () => {
     const box = container.querySelector<HTMLTextAreaElement>("#steer-text");
     if (!box) throw new Error("no message box");
     typeInto(box, "actually do the other thing");
-    await clickSaying("Queue it");
+    await clickSaying("Queue (~73s)");
 
     expect(rec.calls.filter((c) => c.op === "queueMessage")).toEqual([
       { op: "queueMessage", arg: "actually do the other thing", second: "$1643" },
@@ -3614,7 +3665,7 @@ describe("queueing a message, in one line with the buttons", () => {
     const box = container.querySelector<HTMLTextAreaElement>("#steer-text");
     if (!box) throw new Error("no message box");
     typeInto(box, "say this now");
-    await clickSaying("Send");
+    await clickSaying("Send now");
 
     // Send still types at the pane, and did NOT quietly become a queue.
     expect(steer.calls).toHaveLength(1);
@@ -3643,14 +3694,14 @@ describe("queueing a message, in one line with the buttons", () => {
     await act(async () => {});
     // The paired positive: Send is still there, so this is one button gone
     // rather than the whole section failing to render.
-    expect(buttonLabels()).toContain("Send");
-    expect(buttonLabels()).not.toContain("Queue it");
+    expect(buttonLabels()).toContain("Send now");
+    expect(buttonLabels()).not.toContain("Queue (~73s)");
   });
 
   it("offers Queue on a working session, which is the state the queue exists for", async () => {
     openAt({ kind: "working" });
     await act(async () => {});
-    expect(buttonLabels()).toContain("Queue it");
+    expect(buttonLabels()).toContain("Queue (~73s)");
   });
 
   it("offers Queue on an idle session that already has something waiting, because order is the point", async () => {
@@ -3659,7 +3710,7 @@ describe("queueing a message, in one line with the buttons", () => {
     /* Two buttons that both send NOW would let this message overtake the item
        already in the line — queue.ts: "a message must land after the one that
        says do X and before the one that says push". */
-    expect(buttonLabels()).toContain("Queue it");
+    expect(buttonLabels()).toContain("Queue (~73s)");
   });
 
   it("offers no Queue on an idle session whose only queued item can never be delivered", async () => {
@@ -3680,8 +3731,8 @@ describe("queueing a message, in one line with the buttons", () => {
       }),
     ]);
     await act(async () => {});
-    expect(buttonLabels()).toContain("Send");
-    expect(buttonLabels()).not.toContain("Queue it");
+    expect(buttonLabels()).toContain("Send now");
+    expect(buttonLabels()).not.toContain("Queue (~73s)");
   });
 
   it("offers no Queue on an idle session whose only queued item is too old to send", async () => {
@@ -3689,7 +3740,7 @@ describe("queueing a message, in one line with the buttons", () => {
       queueWire({ items: [itemWire({ id: "q1", payload: { kind: "action", actionId: "push" }, stale: true })] }),
     ]);
     await act(async () => {});
-    expect(buttonLabels()).not.toContain("Queue it");
+    expect(buttonLabels()).not.toContain("Queue (~73s)");
   });
 
   it("offers Queue against a server too old to say what is deliverable", async () => {
@@ -3703,7 +3754,7 @@ describe("queueing a message, in one line with the buttons", () => {
       }),
     ]);
     await act(async () => {});
-    expect(buttonLabels()).toContain("Queue it");
+    expect(buttonLabels()).toContain("Queue (~73s)");
   });
 
   it("says how long a queued message waits, in seconds rather than 'shortly'", async () => {
@@ -3711,12 +3762,14 @@ describe("queueing a message, in one line with the buttons", () => {
     await act(async () => {});
     /* Both places that offer the queue, because the vague version was in two
        and fixing one would leave the page disagreeing with itself. */
-    expect(container.textContent).toContain(
-      "to go when the session is next at a prompt — which is checked about every 73 seconds",
-    );
+    /* The number moved behind a tap on the Queue button in the declutter pass,
+       and the button's own label now carries it too. Both still say seconds. */
+    expect(buttonLabels()).toContain("Queue (~73s)");
+    expect(container.textContent).toContain("The line is checked about every 73 seconds");
     expect(container.textContent).toContain("goes out once it is back at a prompt — checked about every 73 seconds");
     // The words that promised a speed and named no number.
     expect(container.textContent).not.toContain("within a minute or so");
+    expect(container.textContent).not.toContain("shortly");
   });
 });
 

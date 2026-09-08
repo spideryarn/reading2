@@ -63,86 +63,21 @@
  * and are still never put back. `release` refuses to be called without the
  * transport's own word for it: see `nothingWasSent`.
  */
-import { actionById, renderMessage, type SpokenAction, type Speaker } from "./actions.js";
+import { actionById, renderMessage, type Speaker } from "./actions.js";
 import type { FleetStatus } from "./status.js";
 import { checkText, steerableStatus, type Refusal, type SteerFailure } from "./steer.js";
+/* A queued item is on the wire verbatim (`{...i, stale, stuck}` in
+   routes-actions.ts spreads every field of it), so its shape lives in wire.ts
+   where the browser can import it too. Re-exported so `from "./queue.js"` keeps
+   working for the twenty-odd call sites. */
+import type { QueuedItem, QueuedPayload } from "./wire.js";
+
+export type { QueuedItem, QueuedPayload } from "./wire.js";
 
 /* ------------------------------------------------------------------ *
- * What can be queued.
+ * What can be queued — `QueuedPayload` and `QueuedItem`, now in wire.ts and
+ * re-exported above, because the browser reads both off the wire.
  * ------------------------------------------------------------------ */
-
-/**
- * An action or a free-text message, in ONE queue.
- *
- * Greg asked for them combined — "one could press more than one, in
- * combination with messages" — and combining them is not a convenience: a
- * message that says "actually do X instead" must land after the button that
- * says "do X" and before the one that says "push", and two queues cannot
- * promise that.
- */
-/**
- * **`SpokenAction`, not `Action`, and that is a boundary rather than a
- * convenience.** An enacted action — `remove-worktree`, `kill-session` — cannot
- * be REPRESENTED as a queued item, so nothing downstream needs a defensive
- * branch for one and nobody can add a second way in. See `enqueueAction` for
- * why the retreat was made and what to delete first when it is reversed.
- */
-export type QueuedPayload = { kind: "action"; action: SpokenAction } | { kind: "message"; text: string };
-
-export type QueuedItem = {
-  /** Stable for the life of the item, and what `cancel` and `settle` name. */
-  id: string;
-  /** tmux's session handle (`$1643`) — which queue this is in. */
-  sessionId: string;
-  /**
-   * The CONVERSATION this was queued against, and the field that stops the
-   * commonest wrong delivery.
-   *
-   * A pane can be resumed into a different Claude conversation while an item
-   * waits (`gjd-remote resume` keeps the pane and the tmux session and starts a
-   * new conversation), and then everything else about the target still matches.
-   * steer.ts refuses that at send time because `SteerTarget` carries the uuid;
-   * this field is what lets the QUEUE refuse it first, and say why on the page,
-   * instead of the person seeing a send fail for an obscure reason.
-   */
-  claudeSessionId: string;
-  payload: QueuedPayload;
-  /**
-   * WHO ASKED FOR THIS, and it travels with the item because the words are
-   * rendered at DELIVERY rather than here.
-   *
-   * `renderBroadcast` already says why nothing is rendered at enqueue: a
-   * sentence written twenty minutes before it is typed has decayed by the time
-   * anybody reads it. The same argument makes the speaker a FIELD rather than a
-   * prefix baked into `payload.text` — and it is the field that stops an
-   * automated coordinator's instruction reaching an agent as an ordinary user
-   * turn indistinguishable from Greg's. See actions.ts § `Speaker` (A12).
-   *
-   * Not optional, and there is no default here on purpose: "who is speaking" is
-   * the one thing a caller of this queue may not decline to say. The place that
-   * decides what an absent claim means is `parseSpeaker`, at the HTTP boundary,
-   * where the claim actually arrives.
-   */
-  speaker: Speaker;
-  enqueuedAt: number;
-  /** When `next()` handed it out. Null while it is waiting. */
-  leasedAt: number | null;
-  /**
-   * Why this can never be delivered, or null. Set by `noteGeneration`.
-   *
-   * A tmux server restart takes every session with it and RE-ISSUES the same
-   * `$…` and `%…` handles to whatever comes next, so an item queued against the
-   * old server names a session that no longer exists — and names it with digits
-   * that now belong to somebody else. There is no per-item field that could
-   * catch that (`claudeSessionId` survives a resume, `panePid` is optional), so
-   * it is caught for the whole queue at once, when the generation changes.
-   *
-   * A SENTENCE RATHER THAN A BOOLEAN, and the item stays in the snapshot
-   * carrying it: the page shows why it will not happen. Deleting the items
-   * would be the quiet loss this file's header is about.
-   */
-  invalidated: string | null;
-};
 
 /* ------------------------------------------------------------------ *
  * Bounds.

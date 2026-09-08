@@ -109,12 +109,24 @@ const SHARED = new Set([
      See src/site-text.ts. */
   "site-text.js",
   // Every sentence a reader is shown when a model call fails. On the list
-  // because it qualifies rather than because it was convenient: it imports
-  // nothing at all. The client needs it so /design can render the real
-  // failure copy at the width it will actually wrap at — placeholder text is
-  // exactly what stops anyone noticing a message reads badly.
+  // because it qualifies rather than because it was convenient: everything it
+  // imports is on this list too. The client needs it so /design can render the
+  // real failure copy at the width it will actually wrap at — placeholder text
+  // is exactly what stops anyone noticing a message reads badly.
+  // ("it imports nothing at all" until 2026-09-08, which had stopped being
+  // true — `types.js`, `uploads.js`, `billing-plan.js` and `modes.js` are all
+  // allowlisted, which is why the guard below stayed green over it.)
   // See docs/project/copy.md.
   "messages.js",
+  /* Two words — whether a document came off an address or off a reader's disk.
+     A whole module for a union, and this list is half the reason: `messages.js`
+     needs it to choose between two refusal sentences, and the module that owns
+     the fact (`source.js`) reaches `fetch.js` and its untyped packages, so a
+     type-only import from there fails the client project with TS7016. This is
+     the leaf the header of that file, and the docstring below, both say to make.
+     It imports nothing, and must go on importing nothing.
+     See src/document-origin.ts. */
+  "document-origin.js",
   /* How big a dictation may be, and what containers we can transcribe. On the
      list for the reason the header gives rather than for convenience: it
      imports nothing at all, and the alternative is two copies of one number.
@@ -677,6 +689,36 @@ describe("the client's imports", () => {
       impure.push(...disqualifying(name, scan(file)));
     }
     expect(impure).toEqual([]);
+  });
+
+  /**
+   * **The one module that has to import *nothing*, not merely nothing
+   * disqualifying.**
+   *
+   * The rule above lets an allowlisted module import another allowlisted
+   * module, which is right for almost all of them and not enough for this one:
+   * `document-origin.ts` exists **because** `src/messages.ts` cannot reach
+   * `src/source.ts` without dragging `src/fetch.ts`'s untyped packages into the
+   * browser client's project and failing it with TS7016. A leaf that grows any
+   * dependency is a leaf that can grow that one back, by a route the guard
+   * above would pass because the intermediate name is allowlisted too.
+   *
+   * That file's header promises this in prose. ⟨GPT Sol, F28: *"an exact
+   * zero-import assertion would make the prose promise executable"*⟩ — which is
+   * this repo's own standard, since a promise in a comment is a promise nothing
+   * checks.
+   *
+   * **A list of one, and it should stay short.** If a second module ever needs
+   * this, it needs it for a reason worth writing next to its name here.
+   */
+  it("keeps the leaf modules importing nothing at all", () => {
+    const LEAVES = ["document-origin.js"];
+    for (const name of LEAVES) {
+      expect(SHARED.has(name), `${name} is not on the shared list`).toBe(true);
+      const file = path.join(ROOT, "src", name.replace(/\.js$/, ".ts"));
+      const specs = scan(file).map((i) => i.spec);
+      expect(specs, `src/${name} must import nothing`).toEqual([]);
+    }
   });
 
   /**
