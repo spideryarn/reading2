@@ -58,7 +58,7 @@ import { join } from "node:path";
 import { admissible, type AdmissibleSnapshot } from "./admissible.js";
 import { baselineOf, diff, sessionKey, type Baseline, type OverseerEvent, type SessionIdentity } from "./diff.js";
 import { conditionTracker, describeNote, openNoteLog, type DaemonNote } from "./notes.js";
-import { parseAttempt, parseObservation, type JsonValue, type ObservedRow } from "./observation.js";
+import { parseAttempt, parseObservation, type JsonValue, type ObservedAttemptClock, type ObservedRow } from "./observation.js";
 import { fleetSource, type SourceMessage, type SourceOptions, type Transport } from "./source.js";
 import {
   describeOpening,
@@ -178,6 +178,36 @@ export type CollectorVerdict =
   | { kind: "stopped"; sinceAttemptMs: number; why: string };
 
 /**
+ * The newest READING of the attempt clock, which is not the newest TIMESTAMP.
+ *
+ * MAKING A TYPE HONEST DOES NOTHING IF THE CONSUMER FLATTENS IT BACK. The whole
+ * point of `ObservedAttemptClock`'s third arm is that "this payload cannot say"
+ * is a different answer from "it has not attempted" — and the daemon used to
+ * keep only `lastAttemptAtMs: number | null`, moved on a positive reading and
+ * untouched by any other. So a producer that STOPPED reporting the field — a
+ * dashboard rolled back to a build from before it existed, or one that started
+ * emitting a malformed value — left the last good timestamp standing as current
+ * evidence, and five minutes later the watchdog measured its age and called a
+ * healthy collector stopped. A reading that could not be taken was being
+ * answered with an older reading that could: this codebase's recurring shape,
+ * one layer above where `parseAttempt` had just fixed it.
+ *
+ * So the daemon holds the reading, and this is the fold that keeps the newest
+ * one. `null` means no payload has said anything yet.
+ *
+ * THE ONLY THING THAT SURVIVES A NEWER READING IS AN OLDER POSITIVE ONE WITH A
+ * LATER INSTANT, which is the out-of-order guard the `Math.max` used to be: a
+ * reconnect can replay a payload the daemon has already seen, and the collector
+ * has not gone backwards in time because the transport did.
+ */
+export function latestAttempt(held: ObservedAttemptClock | null, next: ObservedAttemptClock): ObservedAttemptClock {
+  if (held === null) return next;
+  if (!held.reported || !held.attempted) return next;
+  if (next.reported && next.attempted && next.atMs < held.atMs) return held;
+  return next;
+}
+
+/**
  * Is the dashboard's collector still trying?
  *
  * **A third condition, not a split of the other two**, and the case it names was
@@ -207,8 +237,12 @@ export type CollectorVerdict =
  * two guessed ones.
  */
 export function collectorVerdict(input: {
-  /** The newest `attemptedAt` any payload has carried, or null if none has. */
-  lastAttemptAtMs: number | null;
+  /**
+   * The LATEST reading, not the latest positive one — see `latestAttempt`. A
+   * `number | null` here is what let a stale timestamp answer a question the
+   * current payload had already declined to answer.
+   */
+  attempt: ObservedAttemptClock | null;
   /** When the last payload of any kind arrived, by OUR clock. */
   lastPayloadAtMs: number | null;
   nowMs: number;
@@ -218,10 +252,28 @@ export function collectorVerdict(input: {
   if (input.lastPayloadAtMs === null || input.nowMs - input.lastPayloadAtMs > deadlineMs) {
     return { kind: "cannot-tell", why: "nothing has arrived from the dashboard recently, so its collector cannot be asked about" };
   }
-  if (input.lastAttemptAtMs === null) {
+  const attempt = input.attempt;
+  if (attempt === null) {
     return { kind: "cannot-tell", why: "no payload has carried an attemptedAt, so this producer cannot say" };
   }
-  const sinceAttemptMs = input.nowMs - input.lastAttemptAtMs;
+  if (!attempt.reported) {
+    // GOING BLIND IS NOT THE SAME AS GOING QUIET, and the temptation runs both
+    // ways. Reporting `stopped` here would be the original bug mirrored — an
+    // alarm about a collector we simply cannot see. Reporting `collecting`
+    // would be worse: a restoration that clears a real alarm the moment the
+    // producer's clock became unreadable. `cannot-tell` is neither, so an open
+    // condition stays open and a closed one stays closed until a reading
+    // arrives that can actually answer.
+    return { kind: "cannot-tell", why: `the latest payload cannot say whether its collector is trying: ${attempt.why}` };
+  }
+  if (!attempt.attempted) {
+    // The producer answered, and its answer is that it has never STARTED a
+    // collection. That is not a wedged collector — the freshness watchdog is
+    // what reports a dashboard that has never given us one, and a second alarm
+    // here would be two names for the same outage.
+    return { kind: "cannot-tell", why: "the dashboard reports that it has never started a collection" };
+  }
+  const sinceAttemptMs = input.nowMs - attempt.atMs;
   if (sinceAttemptMs <= deadlineMs) return { kind: "collecting", sinceAttemptMs };
   return {
     kind: "stopped",
@@ -353,7 +405,7 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
   // What the producer has told us about its own collector, from every payload
   // — accepted, duplicate or rejected alike. A wedged collector serves the same
   // cached body for ever, so DUPLICATES are where this is learned.
-  let lastAttemptAtMs: number | null = null;
+  let attemptReading: ObservedAttemptClock | null = null;
   let lastPayloadAtMs: number | null = null;
 
   const checkFreshness = (): void => {
@@ -366,7 +418,7 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
       write(conditions.degrade("freshness", at.toISOString(), verdict.why));
     }
 
-    const collector = collectorVerdict({ lastAttemptAtMs, lastPayloadAtMs, nowMs, refreshMs });
+    const collector = collectorVerdict({ attempt: attemptReading, lastPayloadAtMs, nowMs, refreshMs });
     switch (collector.kind) {
       case "stopped":
         write(conditions.degrade("collector", at.toISOString(), collector.why));
@@ -475,9 +527,11 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     // whose rows this version refuses would be reported as a stopped collector,
     // which is a fault it does not have.
     const attempt = parsed.ok ? parsed.value.attempt : parseAttempt(json);
-    if (attempt.reported && attempt.attempted) {
-      lastAttemptAtMs = Math.max(lastAttemptAtMs ?? attempt.atMs, attempt.atMs);
-    }
+    // EVERY READING, NOT ONLY THE ONES THAT CARRY A TIMESTAMP. A payload that
+    // cannot answer RETIRES the last one that could, because the alternative is
+    // measuring the age of a reading the producer has stopped taking — see
+    // `latestAttempt`.
+    attemptReading = latestAttempt(attemptReading, attempt);
 
     const verdict = admissible(accepted, parsed);
     switch (verdict.verdict) {
@@ -563,8 +617,8 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     //     matches it exactly. Nothing repeats and nothing is lost.
     //   died during 3 — `writeAtomically` renames, so a reader sees the old
     //     checkpoint or the new one, never half. That is the previous case.
-    //   died during 1 — the log's last line may be torn. `repairEventLog`
-    //     truncates to the last complete newline before the next append, so the
+    //   died during 1 — the log's last line may be torn. `truncateToLastLine`
+    //     (jsonl.ts) cuts back to the last complete newline before the next append, so the
     //     partial event is dropped and the baseline file, being older, causes it
     //     to be re-derived.
     //

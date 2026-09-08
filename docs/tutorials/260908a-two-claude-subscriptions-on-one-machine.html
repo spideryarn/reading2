@@ -1,0 +1,1023 @@
+<!--
+  Request (Greg, 2026-09-08, verbatim):
+
+  "How can I set things up so that when I run Claude Code from this repo, it uses one
+  account/subscription, and when I run it from others it runs from a different account/subscription?
+  Get web research from Sonnet, and then review from GPT Sol."
+
+  Follow-up in the same session:
+  "Write this up as docs/reusable/claude-subscriptions.md , and set this folder/repo up to use my
+  greg@rehearsable.ai subscription-account . Then run @docs/reusable/write-tutorial.md on all this
+  stuff, and how to set up separate Claude subscription-accounts for separate folders/repos, and
+  also ideally as a bonus: how to make it easy to switch between Claude subscription-accounts (with
+  extra Sonnet web research re best practices, and also Sonnet trawling through
+  /Users/greg/dev/gdconsult_work/mindstone/MindstoneRebel maybe in coding-agent-instructions for how
+  we're doing it in there), then commit/push."
+
+  Written 2026-09-08 by session reading2 (Claude Code 2.1.263, Opus 5 1M, macOS 25.6).
+
+  MEASURED, not recalled. The mechanism in §3 and §5 was read out of the shipped v2.1.263 binary
+  (bun-bundled ESM chunks, extracted by byte offset) and then exercised on this machine:
+    - `security find-generic-password -s "Claude Code-credentials"` — the credential is a Keychain
+      item, and ~/.claude/.credentials.json does not exist.
+    - A throwaway CLAUDE_CONFIG_DIR reported loggedIn:false while the default still reported
+      loggedIn:true — proving the credential is per-config-dir and that the existing login survives.
+    - A repo whose .claude/settings.json named a CLAUDE_CONFIG_DIR ran on the default account and
+      left the target directory empty — proving project settings cannot set it (§7).
+    - Both branches of the installed wrapper, including from inside a git worktree.
+
+  Reviewed by GPT Sol (cross-family, per AGENTS.md) before the doc and this tutorial were written.
+  It killed three things in the first draft: symlinking settings.json between config dirs (it
+  measured a lost-update race — see §7), sharing plugins/, and using a zsh function rather than a
+  PATH script (§4). It also caught that .claude.json moves with the config dir, which the first
+  draft had missed entirely.
+
+  Sources:
+    - The v2.1.263 binary at ~/.local/share/claude/versions/2.1.263, and this Mac.
+    - Two Sonnet web-research passes: one on the documented mechanism (code.claude.com
+      authentication / settings / env-vars / statusline / legal pages, plus anthropics/claude-code
+      issues #37570, #44687, #30538, #34888, #56370), one on switching ergonomics and the
+      third-party switcher landscape.
+    - One Sonnet trawl of /Users/greg/dev/gdconsult_work/mindstone/MindstoneRebel — the source of
+      §8, in particular the 2026-09-04 ~/.bashrc incident and the apiKeyHelper landmine.
+    - docs/reusable/claude-subscriptions.md, written alongside this and the place the rules live.
+
+  Scope: Claude Code's own authentication. Nothing here touches Spideryarn's pipeline or product.
+-->
+<meta charset="utf-8">
+<title>Two Claude Subscriptions, One Machine</title>
+<meta name="description" content="How Claude Code decides which subscription to bill, why the answer is a directory, and how to pin one repo to one account without silently billing the wrong one.">
+<style>
+  :root {
+    --ink: #1a1a1a; --ink-soft: #4a4a4a; --ink-faint: #6e6e6e;
+    --bg: #fbfaf8; --card: #ffffff; --rule: #e3e0da;
+    --local: #2563eb; --local-bg: #eaf1fe;
+    --disk: #6b7280; --disk-bg: #f1f2f4;
+    --cloud: #7c3aed; --cloud-bg: #f3ecfe;
+    --remote: #059669; --remote-bg: #e6f6f0;
+    --warn: #b45309; --warn-bg: #fdf3e3;
+    --danger: #b91c1c; --danger-bg: #fdecec;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ink: #ecebe8; --ink-soft: #bdbbb6; --ink-faint: #918e88;
+      --bg: #17181a; --card: #1f2023; --rule: #34363a;
+      --local: #7ba7f8; --local-bg: #1b2740;
+      --disk: #a1a5ad; --disk-bg: #26282c;
+      --cloud: #b799f7; --cloud-bg: #2a2140;
+      --remote: #58c9a3; --remote-bg: #14302a;
+      --warn: #e0a44f; --warn-bg: #33280f;
+      --danger: #ef8b8b; --danger-bg: #3a1d1d;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ink: #ecebe8; --ink-soft: #bdbbb6; --ink-faint: #918e88;
+    --bg: #17181a; --card: #1f2023; --rule: #34363a;
+    --local: #7ba7f8; --local-bg: #1b2740;
+    --disk: #a1a5ad; --disk-bg: #26282c;
+    --cloud: #b799f7; --cloud-bg: #2a2140;
+    --remote: #58c9a3; --remote-bg: #14302a;
+    --warn: #e0a44f; --warn-bg: #33280f;
+    --danger: #ef8b8b; --danger-bg: #3a1d1d;
+  }
+
+  body {
+    background: var(--bg); color: var(--ink);
+    font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    margin: 0; padding: 0 20px 120px;
+    -webkit-font-smoothing: antialiased;
+  }
+  main { max-width: 820px; margin: 0 auto; }
+  h1 { font-size: 2.1rem; line-height: 1.15; letter-spacing: -0.02em; margin: 2.2rem 0 0.5rem; }
+  h2 {
+    font-size: 1.45rem; letter-spacing: -0.015em; margin: 3.2rem 0 0.9rem;
+    padding-top: 1.4rem; border-top: 1px solid var(--rule);
+  }
+  h3 { font-size: 1.1rem; margin: 2rem 0 0.5rem; }
+  h4 { font-size: 0.97rem; margin: 1.4rem 0 0.4rem; color: var(--ink-soft); }
+  p { margin: 0.85rem 0; }
+  a { color: var(--local); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  code {
+    font-family: var(--mono); font-size: 0.87em;
+    background: var(--disk-bg); padding: 0.12em 0.36em; border-radius: 4px;
+    overflow-wrap: break-word;
+  }
+  pre {
+    background: var(--card); border: 1px solid var(--rule); border-left: 3px solid var(--disk);
+    border-radius: 6px; padding: 0.85rem 1rem; overflow-x: auto;
+    font-family: var(--mono); font-size: 0.83rem; line-height: 1.55;
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .lede { font-size: 1.06rem; color: var(--ink-soft); }
+  .meta { color: var(--ink-faint); font-size: 0.87rem; margin: 0.2rem 0 1.6rem; }
+
+  .tldr {
+    background: var(--card); border: 1px solid var(--rule); border-radius: 10px;
+    padding: 1.1rem 1.3rem; margin: 1.6rem 0;
+  }
+  .tldr h2 { border: 0; margin: 0 0 0.5rem; padding: 0; font-size: 0.8rem;
+    letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint); }
+
+  .model {
+    background: var(--card); border: 1px solid var(--rule); border-left: 4px solid var(--local);
+    border-radius: 8px; padding: 0.9rem 1.1rem; margin: 1rem 0;
+  }
+  .model strong { display: block; margin-bottom: 0.2rem; font-size: 1.02rem; }
+  .model p { margin: 0.35rem 0 0; color: var(--ink-soft); }
+
+  .note, .warn, .danger, .win {
+    border-radius: 8px; padding: 0.8rem 1.05rem; margin: 1.1rem 0; font-size: 0.95rem;
+    border: 1px solid var(--rule); border-left-width: 4px;
+  }
+  .note { background: var(--local-bg); border-left-color: var(--local); }
+  .warn { background: var(--warn-bg); border-left-color: var(--warn); }
+  .danger { background: var(--danger-bg); border-left-color: var(--danger); }
+  .win { background: var(--remote-bg); border-left-color: var(--remote); }
+  .note p:first-child, .warn p:first-child, .danger p:first-child, .win p:first-child { margin-top: 0; }
+  .note p:last-child, .warn p:last-child, .danger p:last-child, .win p:last-child { margin-bottom: 0; }
+  .label { font-weight: 600; }
+
+  .fig { margin: 1.6rem 0; }
+  .fig .scroll { overflow-x: auto; }
+  .fig svg { display: block; width: 100%; height: auto; min-width: 520px; }
+  figcaption { color: var(--ink-faint); font-size: 0.85rem; margin-top: 0.5rem; }
+
+  .key { display: flex; flex-wrap: wrap; gap: 0.5rem 1.1rem; margin: 0.8rem 0 0.4rem;
+    font-size: 0.82rem; color: var(--ink-soft); }
+  .key span { display: inline-flex; align-items: center; gap: 0.35rem; }
+  .sw { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+
+  .tbl { overflow-x: auto; margin: 1.2rem 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.9rem; min-width: 520px; }
+  th, td { text-align: left; padding: 0.5rem 0.7rem; border-bottom: 1px solid var(--rule);
+    vertical-align: top; }
+  th { font-size: 0.78rem; letter-spacing: 0.05em; text-transform: uppercase;
+    color: var(--ink-faint); font-weight: 600; }
+  td code { font-size: 0.85em; }
+  .yes { color: var(--remote); font-weight: 600; }
+  .no  { color: var(--danger); font-weight: 600; }
+  .part { color: var(--warn); font-weight: 600; }
+
+  details {
+    background: var(--card); border: 1px solid var(--rule); border-radius: 8px;
+    padding: 0.55rem 1rem; margin: 1rem 0;
+  }
+  details[open] { padding-bottom: 0.9rem; }
+  summary { cursor: pointer; font-weight: 600; font-size: 0.95rem; padding: 0.3rem 0; }
+  summary::marker { color: var(--ink-faint); }
+
+  .toc { background: var(--card); border: 1px solid var(--rule); border-radius: 10px;
+    padding: 1rem 1.3rem; }
+  .toc ol { margin: 0.4rem 0; padding-left: 1.3rem; }
+  .toc li { margin: 0.22rem 0; }
+  .paths { margin-top: 1rem; padding-top: 0.9rem; border-top: 1px solid var(--rule); font-size: 0.92rem; }
+  .paths p { margin: 0.4rem 0; }
+
+  .verdict { font-size: 0.9rem; color: var(--ink-faint); margin-top: 0.3rem; }
+  ul, ol { padding-left: 1.35rem; }
+  li { margin: 0.3rem 0; }
+  hr { border: 0; border-top: 1px solid var(--rule); margin: 2.5rem 0; }
+  .measured { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.07em;
+    color: var(--remote); font-weight: 700; }
+</style>
+
+<main>
+
+<h1>Two Claude Subscriptions, One Machine</h1>
+<p class="meta">Skim in 6 minutes · deep dive in 25 · written 2026-09-08 against Claude Code 2.1.263 on macOS</p>
+
+<p class="lede">You take on a client. Their work must not be billed to your own Claude subscription,
+and theirs must not be billed to yours. Claude Code offers you one login and a <code>/logout</code>
+command. This is how to do better than that, and — more importantly — how to know you actually did.</p>
+
+<div class="tldr">
+  <h2>TL;DR</h2>
+  <p>Claude Code keeps its identity in a <strong>directory</strong>, and the environment variable
+  <code>CLAUDE_CONFIG_DIR</code> chooses which one. Point it somewhere new and you get a second,
+  fully independent login; both stay signed in at once. On macOS the token itself lives in the
+  Keychain, under a service name derived from a hash of that directory path — which is exactly why
+  the two logins do not collide.</p>
+  <p>The whole job is therefore <em>setting one environment variable before <code>claude</code>
+  starts</em>. The trap is that the obvious ways to set it — a setting in the repo, a shell function
+  in your <code>.zshrc</code> — either do not work or work only when you are typing, leaving every
+  script, cron job and dispatched agent quietly billing the wrong account with nothing looking wrong.</p>
+</div>
+
+<h2 id="models">Mental models</h2>
+
+<div class="model">
+  <strong>An identity is a directory, not a login</strong>
+  <p>The intuition to unlearn: you are not "logged into Claude Code", you are logged into
+  <code>~/.claude</code>. Hand it a different directory and it is a different person, with different
+  history, different settings, a different subscription. Nothing was logged out.</p>
+</div>
+
+<div class="model">
+  <strong>The safe-deposit box, and the number on the key</strong>
+  <p>On macOS the token sits in the Keychain, not in the config directory. The config directory's
+  <em>path</em> is run through a hash to produce the box number. Same path, same box, same account.
+  Change one character of the path — a tilde, a trailing slash — and you are politely handed a
+  different, empty box, and told you are not signed in.</p>
+</div>
+
+<div class="model">
+  <strong>Alias at the door vs. sign on the corridor</strong>
+  <p>A shell function greets only the people who walk in the front door and say your name. A script
+  on <code>PATH</code> is a sign in the corridor that everyone passes — including the delivery
+  drivers: cron, launchd, an IDE, and the Node script that spawns thirty agents. Almost every way
+  this goes wrong is a rule that only the front door could see.</p>
+</div>
+
+<div class="model">
+  <strong>A fallback is worse than a crash</strong>
+  <p>If the routing cannot find a credential, the tempting behaviour is to use the default one. That
+  is the single worst outcome available: everything works, nothing is logged, and a month of a
+  client's tokens lands on your personal subscription. Refuse and exit non-zero instead.</p>
+</div>
+
+<div class="toc">
+  <strong>Contents</strong>
+  <ol>
+    <li><a href="#pass1">What happens when you type <code>claude</code></a></li>
+    <li><a href="#pieces">The four pieces</a></li>
+    <li><a href="#keychain">Why the credential actually separates</a></li>
+    <li><a href="#wrapper">Why the wrapper must be a script</a></li>
+    <li><a href="#walkthrough">One invocation, followed all the way through</a></li>
+    <li><a href="#switch">Switching by hand</a></li>
+    <li><a href="#hard">The parts that are genuinely hard</a></li>
+    <li><a href="#pool">A different problem: pooling, not separating</a></li>
+    <li><a href="#judgment">Trade-offs, risks, open questions</a></li>
+    <li><a href="#faq">FAQ</a></li>
+    <li><a href="#appendix">Appendix: what is where</a></li>
+  </ol>
+  <div class="paths">
+    <p><strong>Just want it working?</strong> <a href="#pieces">§2</a>, then <a href="#wrapper">§4</a>.</p>
+    <p><strong>Deciding whether it is worth it?</strong> <a href="#pass1">§1</a> and
+      <a href="#judgment">§9</a>.</p>
+    <p><strong>Something is billing the wrong account?</strong> <a href="#walkthrough">§5</a> to see
+      where it can go wrong, <a href="#hard">§7</a> for the known ones.</p>
+    <p><strong>Running many accounts as capacity, not identity?</strong> <a href="#pool">§8</a>.</p>
+  </div>
+</div>
+
+<h2 id="pass1">1. What happens when you type <code>claude</code></h2>
+
+<p>End to end, with no detail at all: something decides which config directory this invocation
+belongs to, that directory's path is hashed into a Keychain box number, and the token in that box is
+the subscription that gets billed.</p>
+
+<div class="fig">
+  <div class="scroll">
+  <svg viewBox="0 0 800 330" role="img" aria-label="Two directories route through the wrapper to two different Keychain items and two different accounts">
+    <defs>
+      <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+        <path d="M0 0 L10 5 L0 10 z" fill="currentColor"/>
+      </marker>
+    </defs>
+
+    <text x="97"  y="34" font-size="13" font-weight="700" fill="var(--ink-faint)" text-anchor="middle">WHERE YOU ARE</text>
+    <text x="297" y="34" font-size="13" font-weight="700" fill="var(--ink-faint)" text-anchor="middle">WRAPPER SETS</text>
+    <text x="522" y="34" font-size="13" font-weight="700" fill="var(--ink-faint)" text-anchor="middle">KEYCHAIN ITEM</text>
+    <text x="727" y="34" font-size="13" font-weight="700" fill="var(--ink-faint)" text-anchor="middle">BILLED</text>
+
+    <!-- lane A -->
+    <rect x="10" y="60" width="175" height="72" rx="8" fill="var(--local-bg)" stroke="var(--local)"/>
+    <text x="97" y="88"  font-size="13" fill="var(--ink)" text-anchor="middle">the pinned repo</text>
+    <text x="97" y="110" font-size="12.5" font-family="var(--mono)" fill="var(--ink-soft)" text-anchor="middle">~/dev/…/reading2</text>
+
+    <g color="var(--ink-faint)"><path d="M188 96 L212 96" stroke="currentColor" stroke-width="1.6" marker-end="url(#ar)"/></g>
+
+    <rect x="215" y="60" width="165" height="72" rx="8" fill="var(--disk-bg)" stroke="var(--disk)"/>
+    <text x="297" y="86"  font-size="12.5" font-family="var(--mono)" fill="var(--ink)" text-anchor="middle">CLAUDE_CONFIG_DIR</text>
+    <text x="297" y="108" font-size="12.5" font-family="var(--mono)" fill="var(--ink-soft)" text-anchor="middle">~/.claude-spideryarn</text>
+
+    <g color="var(--ink-faint)"><path d="M383 96 L407 96" stroke="currentColor" stroke-width="1.6" marker-end="url(#ar)"/></g>
+    <text x="395" y="53" font-size="12" fill="var(--ink-faint)" text-anchor="middle">sha256</text>
+
+    <rect x="410" y="60" width="225" height="72" rx="8" fill="var(--cloud-bg)" stroke="var(--cloud)"/>
+    <text x="522" y="86"  font-size="12.5" font-family="var(--mono)" fill="var(--ink)" text-anchor="middle">Claude Code-credentials</text>
+    <text x="522" y="108" font-size="12.5" font-family="var(--mono)" fill="var(--cloud)" text-anchor="middle">-54a3298a</text>
+
+    <g color="var(--ink-faint)"><path d="M638 96 L662 96" stroke="currentColor" stroke-width="1.6" marker-end="url(#ar)"/></g>
+
+    <rect x="665" y="60" width="125" height="72" rx="8" fill="var(--remote-bg)" stroke="var(--remote)"/>
+    <text x="727" y="92" font-size="14" font-weight="600" fill="var(--ink)" text-anchor="middle">account A</text>
+    <text x="727" y="113" font-size="12.5" fill="var(--ink-soft)" text-anchor="middle">this repo only</text>
+
+    <!-- lane B -->
+    <rect x="10" y="185" width="175" height="72" rx="8" fill="var(--local-bg)" stroke="var(--local)"/>
+    <text x="97" y="213" font-size="13" fill="var(--ink)" text-anchor="middle">everywhere else</text>
+    <text x="97" y="235" font-size="12.5" font-family="var(--mono)" fill="var(--ink-soft)" text-anchor="middle">~/dev/anything</text>
+
+    <g color="var(--ink-faint)"><path d="M188 221 L212 221" stroke="currentColor" stroke-width="1.6" marker-end="url(#ar)"/></g>
+
+    <rect x="215" y="185" width="165" height="72" rx="8" fill="var(--disk-bg)" stroke="var(--disk)"/>
+    <text x="297" y="213" font-size="12.5" font-family="var(--mono)" fill="var(--ink)" text-anchor="middle">(unset)</text>
+    <text x="297" y="235" font-size="12.5" font-family="var(--mono)" fill="var(--ink-soft)" text-anchor="middle">~/.claude</text>
+
+    <g color="var(--ink-faint)"><path d="M383 221 L407 221" stroke="currentColor" stroke-width="1.6" marker-end="url(#ar)"/></g>
+    <text x="395" y="178" font-size="12" fill="var(--ink-faint)" text-anchor="middle">no hash</text>
+
+    <rect x="410" y="185" width="225" height="72" rx="8" fill="var(--cloud-bg)" stroke="var(--cloud)"/>
+    <text x="522" y="221" font-size="12.5" font-family="var(--mono)" fill="var(--ink)" text-anchor="middle">Claude Code-credentials</text>
+
+    <g color="var(--ink-faint)"><path d="M638 221 L662 221" stroke="currentColor" stroke-width="1.6" marker-end="url(#ar)"/></g>
+
+    <rect x="665" y="185" width="125" height="72" rx="8" fill="var(--remote-bg)" stroke="var(--remote)"/>
+    <text x="727" y="217" font-size="14" font-weight="600" fill="var(--ink)" text-anchor="middle">account B</text>
+    <text x="727" y="238" font-size="12.5" fill="var(--ink-soft)" text-anchor="middle">the default</text>
+
+    <text x="400" y="300" font-size="13" fill="var(--ink-faint)" text-anchor="middle">Both accounts stay signed in. Nothing is logged out to switch between them.</text>
+  </svg>
+  </div>
+  <div class="key">
+    <span><i class="sw" style="background:var(--local)"></i>your shell</span>
+    <span><i class="sw" style="background:var(--disk)"></i>environment &amp; files</span>
+    <span><i class="sw" style="background:var(--cloud)"></i>macOS Keychain</span>
+    <span><i class="sw" style="background:var(--remote)"></i>Anthropic account</span>
+  </div>
+  <figcaption>The whole mechanism. Everything else in this document is a consequence of this
+  picture, or a way it goes wrong.</figcaption>
+</div>
+
+<p>If you stop reading here, the useful residue is: <strong>the account is chosen by an environment
+variable, before the process starts</strong>. That is why the fix lives in your shell rather than in
+any Claude Code setting, and why the failure modes are all about <em>who got to set the variable</em>.</p>
+
+<h2 id="pieces">2. The four pieces</h2>
+
+<p>A working setup has four parts, and only the fourth is subtle.</p>
+
+<div class="tbl">
+<table>
+  <tr><th>Piece</th><th>What it is</th><th>How much work</th></tr>
+  <tr>
+    <td><strong>A config directory</strong></td>
+    <td>An ordinary directory — <code>~/.claude-clientname</code>. Holds settings, history, plugins.</td>
+    <td><code>mkdir</code></td>
+  </tr>
+  <tr>
+    <td><strong>A login in it</strong></td>
+    <td>One interactive sign-in, done once, that files a token in its own Keychain box.</td>
+    <td>one command</td>
+  </tr>
+  <tr>
+    <td><strong>Some seed config</strong></td>
+    <td>A copy of <code>settings.json</code> and <code>plugins/</code>, because the new directory
+      starts empty.</td>
+    <td>two <code>cp</code>s</td>
+  </tr>
+  <tr>
+    <td><strong>Something that sets the variable</strong></td>
+    <td>The part that has to be right. See <a href="#wrapper">§4</a>.</td>
+    <td>a small script</td>
+  </tr>
+</table>
+</div>
+
+<p>The first three are three lines:</p>
+
+<pre><code>D=/Users/greg/.claude-clientname
+mkdir -p "$D"
+cp    /Users/greg/.claude/settings.json "$D/settings.json"
+cp -R /Users/greg/.claude/plugins       "$D/plugins"
+CLAUDE_CONFIG_DIR="$D" claude auth login --claudeai --email you@example.com</code></pre>
+
+<div class="warn">
+  <p><span class="label">Type <code>--claudeai</code> even though it is the default.</span> The
+  alternative, <code>--console</code>, signs you into Anthropic Console and bills metered API usage.
+  It is a different product wearing the same login flow, and the difference does not announce itself
+  afterwards.</p>
+</div>
+
+<h3>What the new directory does and does not inherit</h3>
+
+<p>The second account starts almost empty, and the surprise is usually in the right-hand column
+rather than the left.</p>
+
+<div class="fig">
+  <div class="scroll">
+  <svg viewBox="0 0 800 300" role="img" aria-label="Two panels listing what moves with the config directory and what stays with the repository">
+    <rect x="10" y="12" width="380" height="272" rx="10" fill="var(--disk-bg)" stroke="var(--disk)"/>
+    <text x="200" y="42" font-size="14" font-weight="700" fill="var(--ink)" text-anchor="middle">MOVES with the config dir</text>
+    <text x="200" y="62" font-size="12.5" fill="var(--ink-faint)" text-anchor="middle">the new account starts without these</text>
+
+    <text x="34" y="96"  font-size="13" font-family="var(--mono)" fill="var(--ink)">.claude.json</text>
+    <text x="34" y="114" font-size="12.5" fill="var(--ink-soft)">OAuth account, user-scoped MCP servers, trust</text>
+    <text x="34" y="142" font-size="13" font-family="var(--mono)" fill="var(--ink)">projects/</text>
+    <text x="34" y="160" font-size="12.5" fill="var(--ink-soft)">session history — the other account's is invisible</text>
+    <text x="34" y="188" font-size="13" font-family="var(--mono)" fill="var(--ink)">plugins/  teams/  tasks/</text>
+    <text x="34" y="206" font-size="12.5" fill="var(--ink-soft)">installed plugins, marketplaces, agent state</text>
+    <text x="34" y="234" font-size="13" font-weight="700" fill="var(--warn)">MCP OAuth tokens</text>
+    <text x="34" y="252" font-size="12.5" fill="var(--ink-soft)">every OAuth'd server needs re-authorising per account</text>
+
+    <rect x="410" y="12" width="380" height="272" rx="10" fill="var(--remote-bg)" stroke="var(--remote)"/>
+    <text x="600" y="42" font-size="14" font-weight="700" fill="var(--ink)" text-anchor="middle">STAYS with the repo</text>
+    <text x="600" y="62" font-size="12.5" fill="var(--ink-faint)" text-anchor="middle">free, needs no thought</text>
+
+    <text x="434" y="96"  font-size="13" font-family="var(--mono)" fill="var(--ink)">.claude/settings.json</text>
+    <text x="434" y="114" font-size="12.5" fill="var(--ink-soft)">found relative to the repo, not the config dir</text>
+    <text x="434" y="142" font-size="13" font-family="var(--mono)" fill="var(--ink)">.mcp.json</text>
+    <text x="434" y="160" font-size="12.5" fill="var(--ink-soft)">so committed MCP servers carry into every account</text>
+    <text x="434" y="188" font-size="13" font-family="var(--mono)" fill="var(--ink)">CLAUDE.md, skills, commands</text>
+    <text x="434" y="206" font-size="12.5" fill="var(--ink-soft)">anything committed to the project</text>
+    <text x="434" y="234" font-size="13" font-family="var(--mono)" fill="var(--ink)">~/.claude/statusline-script.sh</text>
+    <text x="434" y="252" font-size="12.5" fill="var(--ink-soft)">absolute paths resolve from $HOME, not the config dir</text>
+  </svg>
+  </div>
+  <figcaption>The dividing line is <em>where the file is found from</em>. Config-dir-relative things
+  move; repo-relative and <code>$HOME</code>-relative things do not.</figcaption>
+</div>
+
+<div class="note">
+  <p><span class="label">The session history is the one real loss.</span> It stays under the old
+  config directory and becomes invisible to <code>--resume</code>. Copying it across is safe when both
+  directories are the same account, and a judgment call when they are not — a resumed transcript is
+  submitted under whichever account resumes it.</p>
+</div>
+
+<h2 id="keychain">3. Why the credential actually separates</h2>
+
+<p>This section is the one place worth understanding rather than accepting, because every macOS
+failure mode falls out of it.</p>
+
+<p>The natural assumption is that a config directory holds a credentials file, so a second directory
+holds a second file. <strong>On macOS that is wrong.</strong> <code>~/.claude/.credentials.json</code>
+does not exist; the token is a Keychain generic-password item. This is why third-party switchers that
+copy credential files around struggle on macOS — they are fighting the Keychain rather than using it.</p>
+
+<p>What actually happens is that the Keychain <em>service name</em> is computed from the config
+directory path:</p>
+
+<pre><code>let t = e !== void 0 ? !e : !process.env.CLAUDE_CONFIG_DIR,
+    r = e !== void 0 ? e.normalize("NFC") : be(),
+    c = t ? "" : `-${sha256(r).hex.substring(0, 8)}`;
+return `Claude Code${OAUTH_FILE_SUFFIX}${n}${c}`;</code></pre>
+
+<p class="verdict">Read out of the v2.1.263 binary. Unset, the service is
+<code>Claude Code-credentials</code>. Set, it gains a <code>-&lt;first 8 hex of sha256(path)&gt;</code>
+suffix.</p>
+
+<p>So the two logins do not overwrite each other because they were never in the same place. You can
+derive any directory's box number yourself:</p>
+
+<pre><code>printf '%s' /Users/greg/.claude-spideryarn | shasum -a 256 | cut -c1-8
+# 54a3298a
+security find-generic-password -s "Claude Code-credentials-54a3298a"</code></pre>
+
+<div class="danger">
+  <p><span class="label">The path is never tilde-expanded, and the hash is over the raw string.</span>
+  The resolver is <code>process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), ".claude")</code> — no
+  expansion, no normalisation beyond Unicode NFC. A literal <code>~</code>, a relative path, or a
+  stray trailing slash each hash to a <em>different</em> box. The symptom is a session insisting you
+  are not signed in, plus a directory literally named <code>~</code> appearing under your working
+  directory. <strong>Absolute paths, no trailing slash.</strong></p>
+</div>
+
+<details>
+  <summary>How this was verified, rather than assumed</summary>
+  <p>Reading the code tells you what should happen. What was actually run on this machine:</p>
+  <ol>
+    <li><code>security find-generic-password -s "Claude Code-credentials"</code> returned an item,
+      and <code>ls ~/.claude/.credentials.json</code> returned no such file — establishing that the
+      credential is in the Keychain on this platform.</li>
+    <li>Pointing <code>CLAUDE_CONFIG_DIR</code> at a throwaway directory and running
+      <code>claude auth status --json</code> returned <code>loggedIn: false</code>, while the same
+      command with the variable unset still returned <code>loggedIn: true</code> for
+      <code>greg@rehearsable.ai</code>. That is the whole claim in one command pair: the credential
+      is per-directory, and creating a second one does not disturb the first.</li>
+    <li>The throwaway directory came back holding a fresh <code>.claude.json</code> and reporting a
+      <code>projectsDirectory</code> inside itself — which is how we know what else moves.</li>
+  </ol>
+  <p>The step that has <em>not</em> been done from a terminal is a two-real-account acceptance test,
+  because that needs a second subscription. The Keychain naming above is read from the binary and is
+  the part to re-check first if something ever behaves oddly.</p>
+</details>
+
+<h2 id="wrapper">4. Why the wrapper must be a script</h2>
+
+<p>Two of the three obvious ways to set the variable are wrong, and both fail quietly.</p>
+
+<h3>Not a setting in the repo</h3>
+
+<p>The tidiest-looking answer is an <code>env</code> block in the repo's own
+<code>.claude/settings.json</code>, so the rule travels with the project. It does not work: Claude
+Code ignores <code>CLAUDE_CONFIG_DIR</code> from project settings, and it is circular anyway — the
+config directory is what decides where settings are read from in the first place.</p>
+
+<p class="verdict"><span class="measured">Measured</span> — a repo whose settings named a config
+directory ran on the default account and left the named directory empty.</p>
+
+<h3>Not a shell function</h3>
+
+<p>The common community answer is a function or alias in <code>~/.zshrc</code>. It works when you
+type <code>claude</code>, and it does not exist for anything else: a script that spawns
+<code>claude</code>, cron, launchd, an IDE, an SSH command, a non-interactive shell.</p>
+
+<div class="danger">
+  <p><span class="label">This is not hypothetical, and it is expensive.</span> In this repository
+  <code>scripts/run-claude.ts</code> spawns <code>bin: 'claude'</code> through <code>PATH</code>
+  <em>and</em> deliberately strips <code>CLAUDE_CONFIG_DIR</code> from the child environment. With a
+  shell function, every dispatched agent would run on the default account while your terminal ran on
+  the right one, and nothing anywhere would look wrong.</p>
+  <p>A neighbouring repo lost hours to exactly this class on 2026-09-04 — see <a href="#pool">§8</a>.</p>
+</div>
+
+<h3>A script on <code>PATH</code></h3>
+
+<p>An executable early on <code>PATH</code> is re-entered by every caller, <em>after</em> whatever
+environment sanitising they do, so it can re-derive the answer from the working directory:</p>
+
+<pre><code>#!/bin/zsh
+set -eu
+REAL_CLAUDE=/Users/greg/.local/bin/claude
+CONF=/Users/greg/.claude-accounts        # "&lt;repo root&gt;:&lt;config dir&gt;", one per line
+
+if [[ -n "${CLAUDE_ACCOUNT_DIR:-}" ]]; then
+  export CLAUDE_CONFIG_DIR="$CLAUDE_ACCOUNT_DIR"        # explicit override always wins
+else
+  unset CLAUDE_CONFIG_DIR 2>/dev/null || true
+  here="$(pwd -P)/"                      # not $PWD: that is logical, and a symlinked
+  best_len=0                             # path into the repo would slip past the test
+  while IFS= read -r line; do            # longest match wins, so a worktree can be
+    [[ "$line" == \#* || -z "${line// }" ]] &amp;&amp; continue   # carved out of its repo
+    root="${line%%:*}"
+    if [[ "$here" == "$root/"* &amp;&amp; ${#root} -gt $best_len ]]; then
+      best_len=${#root}; export CLAUDE_CONFIG_DIR="${line#*:}"
+    fi
+  done &lt; "$CONF"
+fi
+unset CLAUDE_SECURESTORAGE_CONFIG_DIR 2>/dev/null || true
+exec "$REAL_CLAUDE" "$@"</code></pre>
+
+<p>Three details that each exist for a reason:</p>
+
+<ul>
+  <li><code>pwd -P</code>, not <code>$PWD</code>. <code>$PWD</code> is the <em>logical</em> path, so
+    entering the repo through a symlink would slip past the prefix test and silently use the default
+    account.</li>
+  <li><code>"$(pwd -P)/"</code> against <code>"$root/"*</code> — the trailing slashes on both sides
+    match the repo root and everything under it, git worktrees included, without also matching a
+    sibling directory called <code>reading2-old</code>.</li>
+  <li><code>REAL_CLAUDE</code> points at the launcher symlink, never a versioned path. The installer
+    moves the symlink forward; a pinned version would quietly stop updating.</li>
+</ul>
+
+<h3>And then refuse to fall back</h3>
+
+<p>If the routed directory has no login, the wrapper must not use the default one:</p>
+
+<pre><code>hash8="$(printf '%s' "$CLAUDE_CONFIG_DIR" | shasum -a 256 | cut -c1-8)"
+security find-generic-password -s "Claude Code-credentials-$hash8" >/dev/null 2>&1 || {
+  print -u2 "claude: $CLAUDE_CONFIG_DIR has no login — refusing to fall back to the default account."
+  exit 78
+}</code></pre>
+
+<p><code>find-generic-password</code> without <code>-w</code> reads only attributes, so it triggers
+no Keychain prompt and costs nothing per invocation. It proves a credential <em>exists</em>, not
+whose it is — for that question see <a href="#walkthrough">§5</a>.</p>
+
+<h2 id="walkthrough">5. One invocation, followed all the way through</h2>
+
+<p>Greg types <code>claude</code> in <code>~/dev/spideryarn/reading2</code>. Here is every step, and
+what would go wrong if it were missing.</p>
+
+<div class="fig">
+  <div class="scroll">
+  <svg viewBox="0 0 800 470" role="img" aria-label="Seven sequential steps from typing claude to being authenticated, each annotated with the failure it prevents">
+    <defs>
+      <marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+        <path d="M0 0 L10 5 L0 10 z" fill="currentColor"/>
+      </marker>
+    </defs>
+
+    <rect x="30" y="14" width="330" height="46" rx="7" fill="var(--local-bg)" stroke="var(--local)"/>
+    <text x="46" y="43" font-size="13" font-family="var(--mono)" fill="var(--ink)">you type: claude</text>
+    <text x="390" y="43" font-size="12.5" fill="var(--ink-faint)">in the pinned repo</text>
+
+    <g color="var(--ink-faint)"><path d="M195 62 L195 78" stroke="currentColor" stroke-width="1.6" marker-end="url(#ar2)"/></g>
+
+    <rect x="30" y="80" width="330" height="46" rx="7" fill="var(--disk-bg)" stroke="var(--disk)"/>
+    <text x="46" y="109" font-size="13" font-family="var(--mono)" fill="var(--ink)">PATH finds ~/bin/claude</text>
+    <text x="390" y="103" font-size="12.5" fill="var(--ink-faint)">a script, so cron and node reach it too —</text>
+    <text x="390" y="120" font-size="12.5" fill="var(--ink-faint)">a shell function would stop here</text>
+
+    <g color="var(--ink-faint)"><path d="M195 128 L195 144" stroke="currentColor" stroke-width="1.6" marker-end="url(#ar2)"/></g>
+
+    <rect x="30" y="146" width="330" height="46" rx="7" fill="var(--disk-bg)" stroke="var(--disk)"/>
+    <text x="46" y="175" font-size="13" font-family="var(--mono)" fill="var(--ink)">pwd -P → match routes file</text>
+    <text x="390" y="169" font-size="12.5" fill="var(--ink-faint)">physical path, so a symlinked route in</text>
+    <text x="390" y="186" font-size="12.5" fill="var(--ink-faint)">cannot dodge the rule</text>
+
+    <g color="var(--ink-faint)"><path d="M195 194 L195 210" stroke="currentColor" stroke-width="1.6" marker-end="url(#ar2)"/></g>
+
+    <rect x="30" y="212" width="330" height="46" rx="7" fill="var(--disk-bg)" stroke="var(--disk)"/>
+    <text x="46" y="241" font-size="13" font-family="var(--mono)" fill="var(--ink)">export CLAUDE_CONFIG_DIR</text>
+    <text x="390" y="241" font-size="12.5" fill="var(--ink-faint)">absolute, no trailing slash</text>
+
+    <g color="var(--ink-faint)"><path d="M195 260 L195 276" stroke="currentColor" stroke-width="1.6" marker-end="url(#ar2)"/></g>
+
+    <rect x="30" y="278" width="330" height="46" rx="7" fill="var(--warn-bg)" stroke="var(--warn)"/>
+    <text x="46" y="307" font-size="13" font-family="var(--mono)" fill="var(--ink)">is that box occupied?</text>
+    <text x="390" y="301" font-size="12.5" fill="var(--ink-faint)">no → exit 78 and say so.</text>
+    <text x="390" y="318" font-size="12.5" fill="var(--ink-faint)">Never fall back to the default</text>
+
+    <g color="var(--ink-faint)"><path d="M195 326 L195 342" stroke="currentColor" stroke-width="1.6" marker-end="url(#ar2)"/></g>
+
+    <rect x="30" y="344" width="330" height="46" rx="7" fill="var(--cloud-bg)" stroke="var(--cloud)"/>
+    <text x="46" y="373" font-size="13" font-family="var(--mono)" fill="var(--ink)">binary hashes the path</text>
+    <text x="390" y="373" font-size="12.5" fill="var(--ink-faint)">→ Claude Code-credentials-54a3298a</text>
+
+    <g color="var(--ink-faint)"><path d="M195 392 L195 408" stroke="currentColor" stroke-width="1.6" marker-end="url(#ar2)"/></g>
+
+    <rect x="30" y="410" width="330" height="46" rx="7" fill="var(--remote-bg)" stroke="var(--remote)"/>
+    <text x="46" y="439" font-size="13" font-weight="600" fill="var(--ink)">authenticated as account A</text>
+    <text x="390" y="439" font-size="12.5" fill="var(--ink-faint)">prove it: claude auth status --json</text>
+  </svg>
+  </div>
+  <figcaption>Every box is somewhere the wrong thing could happen silently. Only the fifth one is
+  designed to be loud.</figcaption>
+</div>
+
+<h3>Proving it, rather than believing it</h3>
+
+<p>There is one command, it starts no session, and it costs nothing:</p>
+
+<pre><code>$ claude auth status --json
+{ "loggedIn": true, "authMethod": "claude.ai", "email": "greg@rehearsable.ai",
+  "subscriptionType": "max", "orgId": "…",
+  "projectsDirectory": "/Users/greg/.claude-spideryarn/projects" }</code></pre>
+
+<p><code>authMethod</code> and <code>email</code> are the assertion worth making.
+<code>authMethod: "claude.ai"</code> is what rejects an API key, a Console profile, or a
+Bedrock/Vertex provider having quietly outranked your subscription — several things beat the login
+you think you are using:</p>
+
+<pre><code>ANTHROPIC_AUTH_TOKEN &gt; ANTHROPIC_API_KEY &gt; apiKeyHelper &gt; CLAUDE_CODE_OAUTH_TOKEN
+                     &gt; profile/federation &gt; subscription OAuth from /login</code></pre>
+
+<p>Before any unattended run that costs money, assert it in the <em>same environment</em> the real
+invocation will use:</p>
+
+<pre><code>claude auth status --json | jq -e '.loggedIn and .authMethod == "claude.ai"
+                                   and .email == "you@example.com"'</code></pre>
+
+<div class="warn">
+  <p><span class="label">A Keychain item existing is not this check.</span> It proves only that some
+  blob is filed under that name. <code>/status</code> inside a session is fine for a human, but it
+  reports after startup and possibly after a paid turn has already happened.</p>
+</div>
+
+<h2 id="switch">6. Switching by hand</h2>
+
+<p>Per-directory routing covers the steady state. You still want to sign in, look, and occasionally
+force an account regardless of where you are standing — so wrap those four things in one command
+rather than memorising environment-variable invocations:</p>
+
+<pre><code>claude-acct              # which account would this directory use?
+claude-acct list         # every config dir on the machine, and who is signed into each
+claude-acct login work   # create ~/.claude-work, seed it, sign a subscription in
+claude-acct use work     # a subshell pinned to that account, wherever you are</code></pre>
+
+<pre><code>$ claude-acct list
+~/.claude                          greg@rehearsable.ai (max, claude.ai)
+~/.claude-spideryarn               greg@rehearsable.ai (max, claude.ai)</code></pre>
+
+<p><code>use</code> exports <code>CLAUDE_ACCOUNT_DIR</code>, which the wrapper honours ahead of its
+routing table — so the override reaches subprocesses too, not only the interactive shell. That is the
+same reasoning as <a href="#wrapper">§4</a>, applied to the manual case.</p>
+
+<div class="warn">
+  <p><span class="label">You cannot put the account in the status line.</span> The
+  <code>statusLine</code> JSON on stdin carries <code>model</code>, <code>cwd</code>,
+  <code>cost</code>, <code>context_window</code>, <code>rate_limits</code>, <code>session_id</code>,
+  <code>version</code>, <code>agent</code>, <code>worktree</code> and more — and no account, email or
+  config-dir field. A status-line script can read <code>$CLAUDE_CONFIG_DIR</code> from its inherited
+  environment, or shell out to <code>claude auth status --json</code> at the cost of a subprocess per
+  refresh. Terminal-level indicators (an iTerm2 badge keyed off the config dir) are the cheaper
+  answer.</p>
+</div>
+
+<details>
+  <summary>Should you use one of the third-party switchers instead?</summary>
+  <p>They exist and some are popular: <a href="https://github.com/realiti4/claude-swap">claude-swap</a>
+  (~2.4k stars, pushed the day this was written) and
+  <a href="https://github.com/uwuclxdy/clauth">clauth</a> are the two with real traction, adding
+  usage dashboards, menu-bar apps and rate-limit-triggered automatic switching. Several others sit
+  between 40 and 120 stars.</p>
+  <p>They all wrap the same environment variable. The case for one is the dashboard and the
+  auto-switching; the case against is that a tool holding your credentials is a tool you should have
+  read, and the thing it wraps is twenty lines. If you want the usage dashboard, take the tool. If
+  you want two accounts to stay separate, the wrapper is less to trust.</p>
+  <p>One thing to check in any of them: switchers built on copying credential <em>files</em> cannot
+  isolate OAuth on macOS, because the token is in the Keychain (<a href="#keychain">§3</a>). Only ones
+  that rely on the config-dir hash actually work here.</p>
+</details>
+
+<h2 id="hard">7. The parts that are genuinely hard</h2>
+
+<p>Everything above works. These are the things that bite afterwards.</p>
+
+<div class="danger">
+  <p><span class="label">The VS Code extension does not respect <code>CLAUDE_CONFIG_DIR</code>.</span>
+  Not one bug but several open ones — it is ignored entirely
+  (<a href="https://github.com/anthropics/claude-code/issues/30538">#30538</a>), per-workspace auth is
+  ignored while the terminal CLI works
+  (<a href="https://github.com/anthropics/claude-code/issues/34888">#34888</a>), and shell-integration
+  lock files hardcode <code>~/.claude/</code>
+  (<a href="https://github.com/anthropics/claude-code/issues/56370">#56370</a>). JetBrains is
+  unconfirmed but shares the code path. <strong>Treat the terminal as the only place the routing is
+  real.</strong></p>
+</div>
+
+<details>
+  <summary>Do not symlink <code>settings.json</code> between config directories</summary>
+  <p>Maintaining settings twice is annoying, so the obvious move is to symlink the second directory's
+  <code>settings.json</code> at the first's. Claude Code resolves the link and replaces the target
+  atomically, so — contrary to the first worry — the symlink survives and does not degrade into a
+  regular file.</p>
+  <p>The actual problem is worse and quieter: each config directory takes <em>its own</em> lock while
+  both replace the <em>same</em> target, so the locks do not coordinate. Concurrent settings changes
+  from two accounts silently lose one. GPT Sol measured this at 30 trials out of 30 on v2.1.263 when
+  reviewing the draft of this document.</p>
+  <p>Copy the file. Accept that the copies drift. The same argument applies to <code>plugins/</code>,
+  which additionally holds mutable marketplace clones and caches.</p>
+</details>
+
+<details>
+  <summary>Every OAuth'd MCP server must be re-authorised per account</summary>
+  <p>MCP OAuth tokens live in the config directory, so a new account starts with none of them and
+  every server needs <code>/mcp</code> again. What softens this is the split from
+  <a href="#pieces">§2</a>: servers declared in the repo's committed <code>.mcp.json</code> are found
+  again automatically, and only their <em>authorisation</em> is missing. Servers declared
+  user-scoped in <code>~/.claude.json</code> are missing entirely and have to be re-added.</p>
+  <p>Worth seeding deliberately when you create the directory, alongside
+  <code>hasTrustDialogAccepted</code> for the repo, so the new account does not re-ask the trust
+  dialog for a project you already trusted.</p>
+</details>
+
+<details>
+  <summary>The macOS Keychain caches for about 30 seconds</summary>
+  <p>After a switch, a session can appear not to have picked up the change for up to half a minute.
+  Linux and Windows pick it up immediately. If a check disagrees with what you just did, wait and
+  re-run before debugging.</p>
+</details>
+
+<details>
+  <summary><code>ANTHROPIC_PROFILE</code> looks like the answer and is not</summary>
+  <p>The binary reads a profile store at <code>$ANTHROPIC_CONFIG_DIR</code> (else
+  <code>~/.config/anthropic</code>) holding <code>active_config</code>,
+  <code>configs/&lt;name&gt;.json</code> and <code>credentials/&lt;name&gt;.json</code>, where a
+  profile's <code>authentication.type</code> can be <code>user_oauth</code>. It looks exactly like
+  the first-party multi-account feature everyone wants.</p>
+  <p>It is the Anthropic Console / workload-identity-federation profile store, written by a separate
+  CLI. Selecting a profile switches you to Console API billing rather than to a second subscription,
+  and it outranks your <code>/login</code> credential while doing so.
+  <code>claude --help</code> exposes no <code>--profile</code> flag and no profile subcommand. This
+  is the trap that most rewards checking <code>authMethod</code> rather than assuming.</p>
+</details>
+
+<h2 id="pool">8. A different problem: pooling, not separating</h2>
+
+<p>Everything above answers <em>which account does this directory bill?</em> There is a second,
+genuinely different question — <em>which account does this process bill?</em> — and it has a
+different answer. Greg's MindstoneRebel repo has been running it in production for longer than this
+document has existed.</p>
+
+<pre><code>CLAUDE_CONFIG_DIR="$dir" claude setup-token   # long-lived token, requires a subscription
+export CLAUDE_CODE_OAUTH_TOKEN_2=…            # injected per shell / per tmux pane</code></pre>
+
+<p>There, several subscriptions are a <strong>pool of capacity</strong> rather than a set of
+identities. A daemon picks the least-loaded account and can hot-swap a <em>running</em> session onto
+another one mid-conversation. Auth binds to the shell or tmux pane, not to the directory and not to
+the worktree. Each account is deliberately signed in twice — an <code>auth login</code> so a usage
+dashboard can read its quota, and a <code>setup-token</code> that is the credential actually spent —
+and the token is minted <em>before</em> the sign-in, so a half-failed setup cannot file one account's
+credential under another's export.</p>
+
+<div class="tbl">
+<table>
+  <tr><th></th><th><code>CLAUDE_CONFIG_DIR</code></th><th><code>CLAUDE_CODE_OAUTH_TOKEN</code></th></tr>
+  <tr><td>answers</td><td>which account does this <em>directory</em> bill?</td><td>which account does this <em>process</em> bill?</td></tr>
+  <tr><td>set by</td><td>a <code>PATH</code> wrapper, from the working directory</td><td>the launcher, per shell or pane</td></tr>
+  <tr><td>isolates</td><td>history, settings, plugins, MCP auth</td><td>the credential only</td></tr>
+  <tr><td>good for</td><td>keeping a client's work off your own subscription</td><td>spreading load, unattended dispatch, a headless box</td></tr>
+</table>
+</div>
+
+<p>Two hazards carry across whichever you pick, and both are worth knowing even if you never build a
+pool.</p>
+
+<div class="danger">
+  <p><span class="label"><code>apiKeyHelper</code> outranks an injected token</span>, and a settings
+  file cannot be unset from a child environment. A lane can therefore report
+  <code>subscription</code> while actually billing a metered API key. This is the concrete reason to
+  assert <code>authMethod</code> rather than intent.</p>
+</div>
+
+<div class="danger">
+  <p><span class="label">Shell startup files are the wrong place for the export.</span> MindstoneRebel
+  lost hours on 2026-09-04 to exports sitting <em>below</em> the non-interactive-shell guard in
+  <code>~/.bashrc</code>: interactive terminals got the right account, every dispatched agent silently
+  got account 1, and nothing looked wrong. That is the same failure the <code>PATH</code> script in
+  <a href="#wrapper">§4</a> exists to prevent — arrived at independently, from a real incident, in a
+  different repo.</p>
+</div>
+
+<h2 id="judgment">9. Trade-offs, risks, open questions</h2>
+
+<h3>Trade-offs, where reasonable people differ</h3>
+
+<div class="tbl">
+<table>
+  <tr><th>Decision</th><th>The other choice</th><th>What it costs</th></tr>
+  <tr>
+    <td><strong>Pin the exception, leave the default alone</strong></td>
+    <td>Move everything into named config dirs, leave <code>~/.claude</code> unused</td>
+    <td>Pinning one repo is a two-line change and cannot break the other ninety. Naming everything is
+      tidier and more uniform, but every repo now depends on the wrapper being correct.</td>
+  </tr>
+  <tr>
+    <td><strong>A hand-written wrapper</strong></td>
+    <td>claude-swap or clauth</td>
+    <td>You give up a usage dashboard and rate-limit auto-switching. You gain twenty readable lines
+      instead of a dependency that holds credentials.</td>
+  </tr>
+  <tr>
+    <td><strong>Leave the old session history behind</strong></td>
+    <td>Copy <code>projects/&lt;repo&gt;</code> across</td>
+    <td>1.9&nbsp;GB here. Leaving it costs <code>--resume</code> on pre-switch sessions; copying it
+      duplicates a large tree that then diverges. Cheap to change your mind later.</td>
+  </tr>
+  <tr>
+    <td><strong>Refuse to run when not signed in</strong></td>
+    <td>Fall back to the default account</td>
+    <td>Refusing means a broken window between installing the wrapper and doing the login. Falling
+      back means that window is invisible and lasts until the invoice.</td>
+  </tr>
+</table>
+</div>
+
+<h3>Risks and fragilities</h3>
+
+<ul>
+  <li><strong>The whole thing is a string prefix match on a path.</strong> Move or rename the repo and
+    the routing silently stops applying — no error, just the default account. A rename is the most
+    likely way this breaks.</li>
+  <li><strong>The Keychain check proves existence, not identity.</strong> If you ever sign the wrong
+    account into a routed directory, every check in the wrapper still passes. Only
+    <code>claude auth status --json</code> catches it, and only if something runs it.</li>
+  <li><strong>The wrapper shadows <code>claude</code> for everything.</strong> That is the point, but
+    it means a bug in twenty lines of zsh takes out every Claude invocation on the machine, including
+    the ones you would use to debug it. <code>~/.local/bin/claude</code> remains the escape hatch.</li>
+  <li><strong>IDE integrations quietly opt out</strong> (<a href="#hard">§7</a>). Anyone who does most
+    of their work in the VS Code extension does not have the separation they think they have.</li>
+  <li><strong>Nothing tests any of this.</strong> There is no red-going-green check that the right
+    account is billed; there is a command you have to remember to run.</li>
+</ul>
+
+<h3>Open questions</h3>
+
+<ul>
+  <li><strong>Should the preflight be automatic?</strong> A <code>SessionStart</code> hook asserting
+    <code>authMethod</code> and <code>email</code> would turn "a command you remember" into "a check
+    that runs". The cost is a subprocess on every session start.</li>
+  <li><strong>Is the status line worth the subprocess?</strong> Today there is no account field, so
+    showing it means shelling out per refresh. An iTerm2 badge set once at launch is cheaper and
+    probably enough.</li>
+  <li><strong>What happens on the Linux box?</strong> The wrappers are macOS-specific and deliberately
+    outside the repo. The remote box runs the same checkout with its own authentication, and nothing
+    yet asserts that the two machines agree about which account a given repo should use.</li>
+  <li><strong>Will this survive first-party support?</strong> Anthropic has not shipped account
+    switching and has closed the main request as a duplicate — but eight overlapping issues is real
+    demand, and a native <code>claude auth switch</code> would make this wrapper legacy overnight.
+    Worth writing thin enough to throw away.</li>
+</ul>
+
+<h2 id="faq">10. FAQ</h2>
+
+<details>
+  <summary>Do I need two subscriptions, or can I split one?</summary>
+  <p>Two accounts means two subscriptions. A subscription is for your own individual use — you may not
+  route another person's usage through your seat, and the moment work is really someone else's, that
+  is what an API key is for. One person holding two of their own subscriptions and using each from a
+  different directory is not addressed explicitly anywhere in the docs, but it is your own use in
+  both cases.</p>
+</details>
+
+<details>
+  <summary>Can I just use an API key for the second one?</summary>
+  <p>You can, but it is not a second subscription — it is metered Console billing, a different product
+  with different economics. It also outranks your subscription login wherever it is set, which is a
+  common way to accidentally stop using the subscription you are paying for.</p>
+</details>
+
+<details>
+  <summary>Will my existing login be disturbed?</summary>
+  <p>No. Creating a second config directory files a new Keychain item under a different service name;
+  the original is untouched. This was checked before and after on this machine.</p>
+</details>
+
+<details>
+  <summary>Can I put just some tabs, or one worktree, on the other account?</summary>
+  <p>Yes — the account is chosen <strong>per process, at launch</strong>, so there are three levers of
+  decreasing coarseness: the routing table (a whole directory tree), <code>claude-acct use
+  &lt;name&gt;</code> (a shell or tab, and everything it dispatches), and
+  <code>CLAUDE_ACCOUNT_DIR=… claude</code> (one invocation).</p>
+  <p>A single worktree can be carved out of its repo, because the routing table is
+  <strong>longest-match</strong> rather than first-match — a longer path wins wherever its line sits
+  in the file. First-match would have meant a worktree route added below its repo's route silently did
+  nothing, which is this document's whole subject.</p>
+  <p><code>CLAUDE_ACCOUNT_DIR</code> is specifically the lever that reaches dispatched sessions:
+  <code>run-claude.ts</code> strips <code>CLAUDE_CONFIG_DIR</code> from the child environment but not
+  this one.</p>
+  <p>Two things you cannot do. <strong>Subagents of one session cannot differ</strong> — they run
+  inside the parent process and share its credential; a session is one account, whole. And
+  <strong>a running session cannot be moved</strong>: the variable is read at startup, so changing the
+  routing affects the next <code>claude</code>, never the ones already up. That is why arming the
+  wrapper does not disturb a live fleet — but it also means "I fixed the routing" and "this tab is now
+  on the right account" are different claims.</p>
+</details>
+
+<details>
+  <summary>What about git worktrees?</summary>
+  <p>Covered for free when they live inside the repo, because the routing is a path-prefix test —
+  <code>~/dev/…/reading2/.claude/worktrees/foo</code> starts with <code>~/dev/…/reading2/</code>.
+  Verified from inside a real worktree. Worktrees kept <em>outside</em> the repo need their own
+  <code>~/.claude-accounts</code> entry.</p>
+</details>
+
+<details>
+  <summary>How do I undo all this?</summary>
+  <p><code>rm ~/bin/claude</code>. That restores the previous behaviour immediately, because
+  <code>~/.local/bin/claude</code> was never touched. The config directory and its Keychain item can
+  stay until you want the space back.</p>
+</details>
+
+<details>
+  <summary>Why is my new account asking to trust a repo I already trust?</summary>
+  <p>Trust is recorded per project in <code>.claude.json</code>, which moves with the config
+  directory. Seed <code>hasTrustDialogAccepted</code> for the repo when you create the directory, or
+  answer the dialog once more.</p>
+</details>
+
+<h2 id="appendix">11. Appendix: what is where</h2>
+
+<h3>On this machine, as of 2026-09-08</h3>
+
+<div class="tbl">
+<table>
+  <tr><th>Path</th><th>What it is</th></tr>
+  <tr><td><code>~/.claude</code></td><td>the default account, <code>greg@rehearsable.ai</code> (Max) — every repo</td></tr>
+  <tr><td><code>~/.claude-spideryarn</code></td><td>seeded (settings, plugins, the user-scoped MCP server, the repo's trust flag) and <strong>not yet signed in</strong></td></tr>
+  <tr><td><code>…/claude-wrapper.zsh</code></td><td>the routing wrapper, <strong>staged rather than armed</strong> — deliberately not on <code>PATH</code></td></tr>
+  <tr><td><code>~/bin/claude-acct</code></td><td>look at and switch accounts</td></tr>
+  <tr><td><code>~/bin/claude-acct-arm</code></td><td>installs the wrapper as <code>~/bin/claude</code>, and refuses to until the login exists</td></tr>
+  <tr><td><code>~/.local/bin/claude</code></td><td>the real launcher symlink, untouched — the escape hatch</td></tr>
+</table>
+</div>
+
+<pre><code>claude-acct login spideryarn   # browser opens; sign in as the account this repo should bill
+claude-acct-arm                # installs ~/bin/claude, which precedes ~/.local/bin on PATH</code></pre>
+
+<div class="note">
+  <p><span class="label">Why it was left staged.</span> The wrapper refuses to fall back
+  (<a href="#wrapper">§4</a>), so arming it before the login makes <code>claude</code> exit 78 inside
+  the repo — and this machine was running a fleet of agents in worktrees that would have started
+  failing immediately. Because the account being pinned to is <em>already</em> the default, waiting
+  costs nothing and bills nothing wrongly. That trade — a loud refusal is right, but arming it at the
+  wrong moment is still disruptive — is the practical shape of the fourth mental model.</p>
+</div>
+
+<p>Both accounts are the same today. The point of pinning is that they need not stay that way:
+adding a client subscription later is <code>claude-acct login &lt;name&gt;</code> plus one line in
+<code>~/.claude-accounts</code>, and this repo cannot drift onto it by accident.</p>
+
+<h3>Glossary</h3>
+
+<div class="tbl">
+<table>
+  <tr><th>Term</th><th>In plain words</th></tr>
+  <tr><td><strong>config dir</strong></td><td>The directory holding one Claude Code identity's settings, history and plugins. Defaults to <code>~/.claude</code>.</td></tr>
+  <tr><td><strong>generic-password item</strong></td><td>A macOS Keychain entry with a <em>service</em> name and an <em>account</em> name. Claude Code files its token under service <code>Claude Code-credentials</code>.</td></tr>
+  <tr><td><strong><code>authMethod</code></strong></td><td>Which kind of credential won. <code>claude.ai</code> means the subscription; anything else means it did not.</td></tr>
+  <tr><td><strong>worktree</strong></td><td>A second working copy of the same git repository, checked out to a different branch. Here they live inside the repo under <code>.claude/worktrees/</code>.</td></tr>
+  <tr><td><strong><code>setup-token</code></strong></td><td>A long-lived credential minted from a subscription, for injecting into non-interactive runs. See <a href="#pool">§8</a>.</td></tr>
+</table>
+</div>
+
+<h3>Where the rules live</h3>
+
+<p>This tutorial explains the mechanism. The rules, kept short enough to follow, are in
+<code>docs/reusable/claude-subscriptions.md</code>. The related repo docs are
+<code>docs/reusable/claude-cli-as-subagent.md</code> — the dispatcher a shell function would have
+missed — and <code>docs/reusable/silent-success.md</code>, which is the class that the loud-failure
+rule in <a href="#wrapper">§4</a> belongs to.</p>
+
+<p>Official pages, current 2026-09-08:
+<a href="https://code.claude.com/docs/en/authentication">Authentication</a> ·
+<a href="https://code.claude.com/docs/en/settings">Settings</a> ·
+<a href="https://code.claude.com/docs/en/statusline">Status line</a>.</p>
+
+</main>

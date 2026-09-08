@@ -129,6 +129,30 @@ export type FleetGate = { kind: "permission" | "unknown"; why: string } | { kind
 export type FleetQuestion = { prompt: string; options: FleetOption[]; material: FleetMaterial; gate: FleetGate };
 
 /**
+ * **WHICH PERMISSION MODE THE SESSION LAUNCHED IN** — `PaneAutoMode` in
+ * tools/fleet/pane.ts, restated for the reason at the top of this file.
+ *
+ * A session that came up in default rather than auto mode stops at the first
+ * command it cannot approve — `git fetch`, `git log`, an MCP read, i.e. within
+ * the first minute of almost any brief written here — and waits for somebody
+ * who is asleep. **34.9 agent-hours since 2026-09-06, 20% of launches, longest
+ * single stall 7.38 hours.** Nothing else on this box notices: `gjd-remote log`
+ * lists it as `running`.
+ *
+ * **THE FOUR ARMS ARE FOUR DIFFERENT PIXELS AND COLLAPSING ANY TWO IS THE
+ * BUG.** `not-auto` is something to go and fix now. `not-applicable` is a
+ * shell, which has no permission mode and must never wear a warning.
+ * `cannot-tell` is neither — it must not read as "fine", which would hide the
+ * defect, and it must not read as "broken", which on twenty rows teaches the
+ * reader to ignore the badge and costs more than the defect does.
+ */
+export type FleetPermissionMode =
+  | { kind: "auto" }
+  | { kind: "not-auto"; mode: string }
+  | { kind: "cannot-tell"; why: string }
+  | { kind: "not-applicable"; why: string };
+
+/**
  * What the session recorded about itself when it was created — `SessionMeta`
  * on the node side, restated here for the reason at the top of this file.
  *
@@ -158,6 +182,8 @@ export type FleetRow = {
   status: FleetStatus;
   /** Present only when the session is blocked on a dialog. FOR RENDERING. */
   question: FleetQuestion | null;
+  /** Which permission mode it launched in. See `FleetPermissionMode`. */
+  permissionMode: FleetPermissionMode;
   /** What the session recorded about itself. See `SessionMeta`. */
   meta: SessionMeta;
   /**
@@ -414,6 +440,46 @@ export function parseGate(v: unknown): FleetGate {
 }
 
 /**
+ * Which permission mode the session launched in, off the wire, **failing
+ * towards `cannot-tell`**.
+ *
+ * The safe arm here is not the same as the safe arm anywhere else in this file,
+ * so it is worth naming which failure it is chosen against. `not-auto` is the
+ * loud arm: it says *go and fix this session now*. A server too old to send the
+ * field would, if that parsed as `not-auto`, light up **every row on the page
+ * at once** on the first deploy where the client is ahead of the server — and a
+ * badge that has cried wolf on forty sessions is worth nothing on the day it is
+ * right. That is the specific accident this direction prevents.
+ *
+ * It is not `auto` either, for the mirror reason: an absent field must not
+ * clear a session this build has heard nothing about. `cannot-tell` is the only
+ * answer that is true, and the page draws it as neither.
+ *
+ * `not-auto` WITHOUT A MODE NAME IS STILL `not-auto`. The defect is the fact,
+ * not the label, so a missing name gets a generic one rather than downgrading
+ * the arm — dropping to `cannot-tell` over a cosmetic field would be losing the
+ * finding to tidiness.
+ */
+export function parsePermissionMode(v: unknown): FleetPermissionMode {
+  if (!isRecord(v)) {
+    return { kind: "cannot-tell", why: "this server did not say which permission mode this session is in" };
+  }
+  const kind = str(v["kind"]);
+  if (kind === "auto") return { kind: "auto" };
+  if (kind === "not-auto") return { kind: "not-auto", mode: str(v["mode"]) ?? "a mode that is not auto" };
+  const why = str(v["why"]) ?? "no reason was given";
+  if (kind === "cannot-tell") return { kind: "cannot-tell", why };
+  if (kind === "not-applicable") return { kind: "not-applicable", why };
+  return {
+    kind: "cannot-tell",
+    why:
+      kind === null
+        ? "the server sent a permission mode with no kind"
+        : `this page does not know the permission mode ${JSON.stringify(kind)}`,
+  };
+}
+
+/**
  * A session's own record of itself, off the wire.
  *
  * `version` is checked as the number 1 rather than as "not legacy", so a
@@ -441,6 +507,7 @@ export function parseRow(v: unknown): FleetRow | null {
     startedAt: str(v["startedAt"]) ?? "",
     status: parseStatus(v["status"]),
     question: parseQuestion(v["question"]),
+    permissionMode: parsePermissionMode(v["permissionMode"]),
     meta: parseMeta(v["meta"]),
     panePid:
       typeof v["panePid"] === "number" && Number.isSafeInteger(v["panePid"]) && v["panePid"] > 0

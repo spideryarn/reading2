@@ -1,27 +1,33 @@
 # The Overseer's store, and the clock it gives everything else
 
-**Status 2026-09-08, 09:35: the Overseer runs, and has never yet run where it will live.** S1, S2,
-S3, S4 and S6 are landed, reviewed and green; S5 (the systemd units) is being built now; S3-03 and
-two smaller findings are stage S7, in flight. Evidence: `npm run typecheck` reports **0** failures
-across all four projects, **245 tests pass** across the eight Overseer files, and `tools/overseer/`
-plus `scripts/overseer.ts` is 5,830 lines.
+**Status 2026-09-08, 11:15: the Overseer is recording into `~/.overseer` right now, and one command
+away from surviving a reboot.** S1–S7 are landed, reviewed and green. Evidence: `npm run typecheck`
+reports **0** failures across all four projects, **326 tests pass across nine Overseer files**, and
+the daemon has been running against its production store since 09:35 — 79 events, 21 sessions, at a
+measured **156 MB RSS and 2 seconds of CPU over 363 seconds**, roughly half of that `tsx` starting up.
 
-**The live run, quoted here because its store was a scratch directory that will be deleted with the
-session.** Against the real dashboard on `:8787`, 2026-09-08 07:30–07:52 UTC, store root
-`scratchpad/overseer-live`: **43 events in 22 minutes — 30 `session-seen`, 8 `session-status`, 5
-`tmux-session-gone`** — and three of those five name the daemon's own earlier incarnations
-(`overseer-live-…`, `overseer-degrade-…`, `overseer-restart-…`), each with `why:
-"absent-from-snapshot"`. Its `daemon.jsonl` holds 3 `daemon-started` and 2 `daemon-stopped`, so one
-run ended without writing a stopping note, which is the `kill -9` the recovery test used.
+**What is done that was not done this morning.** `~/.overseer` exists and is being written to; every
+earlier run used a scratch root that dies with its session. `kill -9` recovery was proved against that
+real store — the lock reclaimed, a crash note written, and the restart producing two events rather
+than twenty-four, which is the whole point of the persisted baseline.
 
-**And the thing that number does not say, found by checking rather than by remembering:
-`~/.overseer` does not exist.** `overseer status` against the default root reports *"NEVER RUN — no
-checkpoint and no notes"*. Every run so far has been against a scratch root, which was right for a
-test and means the production store is empty and unproven. **Naming the root is part of the claim** —
-"the daemon has been run" and "the daemon has been run where it will live" are different sentences,
-and only the first was ever true. Closing that is S5's acceptance, not a separate task: the unit sets
-`OVERSEER_STORE_DIR=/home/greg/.overseer` explicitly, and the evidence it must produce is events in
-*that* file.
+**The one thing standing between here and a reboot-proof fleet is a command no agent may run.**
+`sudo systemctl enable` is refused for agents on this box, by two different mechanisms, in two
+different sessions. Neither agent hand-wrote the symlink to get around it, which was right: a
+criterion satisfied by circumventing the thing stopping you is not satisfied. § The four commands that
+finish S5 has the sequence, and the installed `overseer.service` has been verified byte-identical to
+the repo copy, so it is safe as written.
+
+**Four P1s were found *after* this plan's own review said it was done**, three by a second
+cross-family review and one by running the tool and reading its output as a stranger would. All four
+are fixed. They are worth reading as a set, in § S7's own review, because three of the four are the
+same defect wearing different clothes: **a producer that said the careful thing and a consumer that
+flattened it.**
+
+**And two of the four traced back to claims in briefs I wrote** — one asserting a mechanism that
+cannot happen, one compressing a design with a reason into a constant without one. Both are recorded
+where they happened rather than only here, because a brief is the one artefact in this workflow that
+nothing reviews.
 
 **Both P0s are closed**, one in the differ and one in the store's lock, each after a review round that
 found the first fix insufficient. Every Sol finding is either fixed or refused with reasons in this
@@ -411,9 +417,47 @@ Captured 2026-09-08, and several of these contradict what a hand-written fixture
   **no fully steady pair in 12 minutes.** So `tmux-session-gone` is an ordinary event, not an alarm,
   and anything that reacts to one had better expect several an hour.
 - **Collection is ~70s, not 60s** — chained from the end of a 5.7–11.0s run.
-- **`repo` is not one value.** In a single 39-row snapshot: 35 `spideryarn/reading2`, one `null`, two
-  the literal string `"unknown"`, and one `spideryarn/hellozenno`. Any logic assuming a single repo is
-  wrong.
+- **`repo` is not one value** — the claim stands, and **one of its four values does not, corrected
+  2026-09-08 after two independent re-measurements.** As originally captured from a single 39-row
+  snapshot: 35 `spideryarn/reading2`, one `null`, two the literal string `"unknown"`, and one
+  `spideryarn/hellozenno`.
+
+  **`null` and the second repo are real, and now have a mechanism rather than a count.** Across the
+  ten fixtures in `tests/fixtures/overseer-snapshots/` the values are 58 `spideryarn/reading2` and 2
+  `null` — and **both null rows carry `meta: {"version": "legacy"}`**, which is exactly what
+  `collect.ts` produces (`repo: s.meta.version === 1 ? s.meta.repo : null`) for a session launched
+  without the `GJD_*` environment variables. Two repos in one snapshot is not a defect either: it is
+  two sessions in two checkouts. So *any logic assuming a single repo is wrong* survives intact.
+
+  **The literal `"unknown"` does not reproduce and should not be designed against.** It appears in
+  none of the ten fixtures, in **none of 551 same-identity row observations** over 25 live collections
+  spanning 24 minutes, and — checked from the source by the fleet dashboard agent — in **neither the
+  server's nor the client's `SessionMeta` type**. There is no code path known to emit it. The likeliest
+  explanation is a mis-transcription when the original snapshot was read by eye.
+
+  **Recorded as a correction rather than deleted**, because the wrong half is the instructive half: an
+  unreproduced literal sitting in a list of captured measurements is precisely the thing a later agent
+  writes a parser branch for, and a branch built for a value nothing emits is untestable, permanent
+  and invisible. If it ever *is* seen again, it is a real finding in the collector and wants a
+  snapshot saved, not a tolerance added.
+
+  **And the way the re-measurement got it wrong is worth more than the correction.** The live sample
+  reported *"no `null` in 551 observations"* and that was read as refuting the claim. It does not,
+  because **every live row in that window was a version-1 session — the sample contained no legacy
+  session at all**, so the measurement never had the chance to see the value it was said to rule out.
+  The agent's own statement of the rule:
+
+  > A census over a sample cannot refute a claim about which values are **possible**; only the source
+  > can do that. The data that would have caught me was on disk the whole time — I asked it the
+  > change-count question rather than the value-census one.
+
+  **This is exactly the positive-control rule** written into
+  [silent-success.md](../reusable/silent-success.md) earlier the same evening, arriving from a
+  direction nobody expected: not a broken instrument reporting zero, but a working instrument reporting
+  zero over a population that could not have contained the thing. The distinction the rule needs, and
+  which this instance supplies, is between **measuring a frequency** and **refuting an existence** —
+  a sample can do the first and never the second. Worth considering as an addition to that note if it
+  recurs; one instance is an observation.
 - **`title` is null for most sessions** (14 of ~37 had one), so null is the common case, not the edge.
 - **`question` was null in every row of every snapshot**, and `shell.busy` was always `true`. Both
   branches are therefore **unexercised by real data** — worth knowing before trusting a test that
@@ -1052,6 +1096,202 @@ crash-loops visibly in the journal instead of hammering a box that has already r
 
 **Reboot-resume of the sessions themselves is O4, a later stage.** This one only makes it possible.
 
+#### S5's P1, found by the second review, and I caused it
+
+**The checked-in fleet unit hard-codes THIS box's tailnet address as its fallback, and a failed bind
+is fatal to the whole server — including its loopback listener.** So a freshly provisioned box gets a
+dashboard that starts and immediately dies, and dies at the address that was supposed to be the safe
+default.
+
+The sequence, which the reviewer reproduced from the source:
+
+1. Provisioning installs Tailscale **before** authentication, deliberately. So `tailscale ip -4`
+   returns nothing and the `100.*` branch never runs, and **no `/etc/fleet-dashboard.env` is written.**
+2. `tailscale up` later does not regenerate it — nothing watches for that.
+3. The unit therefore falls back to what is written in it:
+   `Environment=FLEET_BIND=127.0.0.1,100.92.255.119`. That second address belongs to *this* box.
+4. `tools/fleet/server.ts` treats a bind it cannot take as **fatal** rather than carrying on
+   half-bound — which is the right call and is what makes this a P1 rather than a degradation.
+
+And the unit's own comment asserts the opposite: *"a box without the file still starts on what is
+written here."* It does not. It starts and dies. **A comment that states a fallback works is exactly
+the kind of prose that is never checked**, which is
+[written-down-is-not-checked.md](../reusable/written-down-is-not-checked.md) rather than bad luck.
+
+**This is my error and it is the second of the same shape tonight.** The fleet dashboard agent told me
+the design plainly — *"Loopback is the default because it is the one address that is always correct,
+on this box and on the next one. The tailnet address is per-machine, so it arrives from a file
+provisioning writes — a hardcoded `100.x` here would be a second copy of a fact that can change."*
+I then relayed it to the building agent as a flat requirement, *"`Environment=FLEET_BIND=
+127.0.0.1,100.92.255.119` is required"*, and the agent did what I asked. **I compressed a design with
+a reason into a constant without one, and the reason was the half that mattered.** Same class as the
+`EnterWorktree` claim above: an orchestrator's paraphrase reaching code that nobody re-derives.
+
+**The fix, in three parts.** The checked-in unit falls back to **loopback only** — the one address
+correct on every box, and one that cannot fail to bind. The tailnet address comes solely from the env
+file. Provisioning's no-IP branch must **remove a stale env file** rather than leave it (the reviewer's
+point: a re-provisioned box could otherwise inherit a previous machine's address). And the activation
+path after `tailscale up` must regenerate the file and restart the service, written down as a step
+rather than assumed.
+
+**What that trades, said plainly:** on a new box before Tailscale login, the dashboard is reachable
+from the box and not from a phone. That is a visible, correct, recoverable state, and it is the right
+side of [orchestrator-direction.md](../project/orchestrator-direction.md)'s rule about preferring
+*correct and unavailable* to *plausible and up* — except that here we get correct **and** up, just not
+yet remote.
+
+#### There is a THIRD copy of each unit, and nothing checks it
+
+`tests/systemd-units.test.ts` compares the readable file under `infra/hetzner/systemd/` against the
+heredoc spliced into `provision.sh`, byte for byte, and that check is live — verified 2026-09-08 by
+adding a single trailing space and watching it go red. **It compares the two copies in the repo. The
+copy that actually runs is in `/etc/systemd/system/`, and nothing compares anything to that.**
+
+Measured 2026-09-08, 11:10, on this box:
+
+| unit | installed vs repo |
+|---|---|
+| `overseer.service` | **identical** |
+| `fleet-dashboard.service` | **differs — 53 lines, including the `100.` fallback address and the conditional build**, both of which are the P1 above |
+
+So the installed fleet unit is the design we abandoned, and enabling it without reinstalling would
+start exactly the thing two reviews and two agents agreed to remove. Found by the fleet dashboard
+agent while preparing the cutover, not by any check.
+
+**Why this is the drift test's own class, one step out.** The test exists because two copies of a fact
+is how one goes stale, and the stale one is invisible. There were never two copies — there were
+three, and the third is the only one with any effect. A test that guards the two you can see, while
+the one that runs is unguarded, is a check that measures where the light is.
+
+**Deliberately NOT made a gate, and the reason is worth keeping.** The obvious fix — a test asserting
+that `/etc/systemd/system/<name>.service` matches the repo whenever it exists — would go red on this
+box the moment anyone edits a unit, and **stay red until somebody runs `sudo`, which agents here
+cannot do.** That is a red trunk with no agent-reachable fix, which
+[open-questions.md's Q12 discussion](../project/orchestrator-direction.md) established is worse than
+the thing it detects: a shared red gate hides its own additional causes. So this is a **step in the
+procedure and a known uncovered case**, not a check.
+
+**Therefore the install step is part of every unit change**, and it is written into
+[hetzner-remote-server-box.md](../project/hetzner-remote-server-box.md) as such:
+
+```
+# after ANY edit to infra/hetzner/systemd/*.service, before enabling or restarting:
+sudo install -m 0644 -o root -g root \
+  <(sed 's/@USER@/greg/g' infra/hetzner/systemd/<name>.service) \
+  /etc/systemd/system/<name>.service
+sudo systemctl daemon-reload
+```
+
+#### The four commands that finish S5, and why they are Greg's
+
+**`sudo systemctl enable` is refused for agents on this box, and it was refused twice by different
+mechanisms.** The building agent hit it, and so did the orchestrator afterwards from a different
+session — so this is a standing property of how agents run here, not one session's quirk. Recorded
+because the alternative reading (*"that agent's environment was odd, try again"*) would cost somebody
+an hour.
+
+**Neither of us created the symlink by hand with `ln -s`, and that was deliberate.** It would have
+produced the exact evidence the criterion asks for — a link in `multi-user.target.wants` — while
+working around the denial rather than around a false positive. A criterion satisfied by circumventing
+the thing that was stopping you is not satisfied.
+
+So, in this order, and the order matters:
+
+```
+# 1. Stop the hand-run daemon FIRST. It holds ~/.overseer/overseer.lock, and the unit
+#    will refuse to start while it does — correctly, and it names the file when it does.
+tmux kill-session -t s5-overseer2-0935-2399531
+
+# 2. Enable and start. `--now` does both.
+sudo systemctl enable --now overseer.service
+
+# 3. The three things that say it is real. `is-enabled` alone is not enough:
+#    the symlink is what a reboot actually reads.
+systemctl is-enabled overseer.service
+ls -l /etc/systemd/system/multi-user.target.wants/ | grep overseer
+npx tsx scripts/overseer.ts status
+
+# 4. And the one that proves Restart=always does its job, which nothing has yet observed:
+sudo systemctl kill -s KILL overseer.service && sleep 8 && systemctl status overseer.service
+```
+
+**Step 4 is the one worth actually running**, because it is the only assertion in this stage that is
+currently backed by a file rather than by a behaviour. `Restart=always` is asserted by the unit, by
+`systemd-analyze verify`, by `systemctl show` and by a killed mutant in the test — and **nothing has
+watched systemd restart it**. The daemon's own recovery from `kill -9` *has* been observed, twice;
+what has not is systemd noticing and bringing it back. Those are different claims and only one of
+them is evidenced.
+
+**The fleet dashboard unit stays disabled**, separately and on purpose: `:8787` is currently served by
+a `tmux` job, and two supervisors for one port is a fight where the loser's failure looks like a
+crash. Its owning agent has asked to read the unit before it is switched on, and has agreed to hand
+over when it is.
+
+#### S5 as built, 2026-09-08
+
+Two units, checked in at [`infra/hetzner/systemd/`](../../infra/hetzner/systemd/) and spliced
+verbatim into [`provision.sh`](../../infra/hetzner/provision.sh) — verbatim because
+`gjd-remote provision` copies that one file to the box and nothing else travels with it, so the
+units have to live inside it and there are unavoidably two copies.
+`tests/systemd-units.test.ts` compares them byte for byte; nine mutants, all killed.
+
+Four decisions the brief did not settle:
+
+- **`ExecStartPre` builds the fleet client only when `dist/index.html` is missing**, not on every
+  start. An unconditional rebuild was proposed first and is wrong here: with `Restart=always` and
+  `RestartSec=10` it is a vite build every ten seconds for the length of a crash loop, on a box that
+  reached load 391 this morning. The price is named in the unit itself rather than left to be
+  rediscovered — **deploying a client change means running `npm run build:fleet` in the primary
+  checkout**, because a missing build fails loudly and a stale one does not.
+- **`FLEET_BIND` is written out in full in the unit** (`127.0.0.1,100.92.255.119`), with
+  `EnvironmentFile=-/etc/fleet-dashboard.env` over the top of it. Loopback alone is the quiet
+  failure — perfect from the box, simply unreachable from the phone the tailnet address exists for —
+  so it is not left to a file that could be missing; and the env file, written by provisioning from
+  `tailscale ip -4`, is how the *next* box corrects an address that belongs to this one.
+- **The rate limits differ between the two on purpose.** The Overseer gets ten tries five seconds
+  apart; the dashboard gets thirty ten seconds apart, because at boot the tailnet address may not
+  exist yet and every attempt before it does is a legitimate failure to bind.
+- **`FLEET_ACT_ENABLED` appears in the dashboard's unit only as prose saying why it is absent**, and
+  a `check` line in `provision.sh` asserts it is not a key. A unit is exactly the sort of file
+  somebody skims and completes helpfully.
+
+**Two things S5 did not achieve, and neither is a design question.**
+
+- **The units are installed but the Overseer's is not enabled.** `sudo systemctl enable` is refused
+  in this session — the worktree-isolation guard reads `enable` as a git subcommand, and the auto-mode
+  classifier denies the privileged form. Writing the unit files was permitted; changing service state
+  was not. So `is-enabled` says `disabled` and the `multi-user.target.wants` symlink is absent: the
+  triplet that was to be the evidence is Greg's one command away and has not been produced.
+- **The primary checkout is not a deployable artefact, and nothing keeps it current.** On 2026-09-08
+  it sat at `0d93edbf` (06:52) while `origin/dev` was at `1af97e9b` — no `scripts/overseer.ts`, no
+  `tools/fleet/web/dist`. So both units would have failed to start even if enabled. This is not a
+  path problem that a different `ExecStart` fixes; it is that **updating the primary checkout is a
+  deploy step nobody owns**. Written up in
+  [hetzner-remote-server-box.md § The box's own services](../project/hetzner-remote-server-box.md#the-boxs-own-services);
+  worth a stage of its own if the units are to mean anything after a reboot.
+
+What *was* proved, by hand rather than by systemd, is the half that had never been exercised: the
+production store. Every earlier run used a scratch root, so `/home/greg/.overseer` did not exist.
+Running the daemon at the default root filled it — `events.jsonl`, `current.json`, `daemon.jsonl`,
+`overseer.lock` — and `status` read a live heartbeat from it. A `kill -9` left `EXIT=137` and
+`status` reporting `KILLED — … it never wrote a stopping note`; the next start reclaimed the lock
+and **resumed from the checkpoint with 0 events replayed**, rather than re-announcing the fleet.
+Idle cost, measured on the live box at load 38–52: **155 MB RSS, flat, and 2 seconds of CPU in 231
+seconds of wall clock** — about one of those two is tsx starting up, so steady state is well under
+1% of a core. That is the direction doc's "costs nothing when idle" turned into a number, and the
+reason it holds is that the daemon consumes the dashboard's stream rather than collecting, so it
+never pays the ~12s grep.
+
+**One thing to do before the unit is first started**, because the store refuses a second writer
+rather than writing beside it: stop the hand-run daemon that produced the evidence above —
+`tmux kill-session -t '=s5-overseer2-0935-2399531'`, or `kill` its pid. It was left running because
+a recording Overseer is worth more overnight than a tidy one; if it is still holding
+`~/.overseer/overseer.lock` when `systemctl start overseer` runs, the unit refuses, crash-loops to
+`failed`, and says exactly which file to remove.
+
+**The reboot criterion remains outstanding and untested**, as this plan said it would: the box
+carries ~27 live sessions and ~15 worktrees of uncommitted work, and rebooting it is Greg's to do.
+
 ### S6 — work, not panes: the Codex subprocess arm
 
 Independent of S3–S5, and running in parallel with them.
@@ -1090,8 +1330,26 @@ and nobody scheduled it.
 reported, a session renamed with identity and status unchanged emits no event, so every rebuild
 returns the name Greg deliberately replaced. But `entryOf()` freezes `name`, `repo`, `worktree`,
 `meta`, `startedAt`, `paneId` and `panePid` at first sight, and `session-seen` fires once — so the
-name is the instance somebody noticed, not the class. `EnterWorktree` moves a session between
-worktrees and is common on this box.
+name is the instance somebody noticed, not the class.
+
+**A correction, and the wrong claim was mine.** The brief for this stage justified widening the arm by
+saying *"`EnterWorktree` moves a session between worktrees and is common on this box"*. **That cannot
+happen and this data source could not see it if it did.** `collect.ts:214` derives
+`worktree: worktreeOf(s.meta.dir)`, and `meta.dir` is a tmux session environment variable **fixed at
+creation** — `EnterWorktree` moves the *transcript*, which is a different file and not in this
+payload. `observation.ts:503` already said so, in this repo, before the brief was written.
+
+Caught by GPT Sol reviewing the built stage. By then the claim had travelled from my brief into a
+commit message, into two lines of this document, and into a test fixture value named
+`moved-by-enterworktree` — a test named after a thing that cannot occur. **This is
+[an unchecked brief claim becoming a source comment](../reusable/name-is-evidence.md)**, in the exact
+shape that trap is written down in: an orchestrator asserts a mechanism, a subagent has no reason to
+doubt it, and it is load-bearing prose three commits later. The rule it argues for is unglamorous and
+would have cost thirty seconds: **grep every named example before putting it in a brief.**
+
+**The arm is not affected.** `name` genuinely does change on a rename, which is the case S3-03
+reported, and `repo`/`worktree`/`meta` are still worth covering — a wrong *justification* is not a
+wrong implementation. What is gone is one of the two examples that made the class look urgent.
 
 **The shape was decided by measurement and by the producer's own source, not by taste**, because an
 arm that fires on any row change re-creates the 52k-rows-a-day problem this design exists to avoid.
@@ -1111,12 +1369,396 @@ a collector wedged for thirty minutes reported `error: null`. `observation.ts` d
 [typechecking.md](../project/typechecking.md) states: **the guard must read the thing it is guarding,
 not a copy of it.**
 
-**S7-03 — one append-only-log discipline, implemented twice.** `notes.ts` carries a comment admitting
+**S7-03 — one append-only-log discipline, implemented twice.** `notes.ts` carried a comment admitting
 it: *"`store.ts` keeps its `repairEventLog` private, so this is a duplicate of a subtle rule rather
-than a reuse of one."* Truncate-to-last-newline on open, the single `O_APPEND` write, the atomic
+than a reuse of one."* (That name is gone — the function is `truncateToLastLine` in `jsonl.ts` now —
+but the quote is what the file actually said.) Truncate-to-last-newline on open, the single `O_APPEND` write, the atomic
 replace. **A duplicated subtle rule is the kind that drifts dangerously**, because the copy that goes
 wrong is the one nobody was looking at — and the rule here is the one that stops a torn line welding
 a good record onto a corrupt one.
+
+**S7-04 — `statusSince` is a lower bound wearing a measurement's clothes.** Found 2026-09-08 by
+looking at the Overseer's own output the first time it ran against `~/.overseer`, not by reasoning:
+
+```
+working  13m  fb2f-dock-always-visible-landscape
+working  13m  fb2g-gutter-icons-on-touch
+working  13m  get-ready-for-deploy
+working  13m  html-ingestion-post-processing-evals
+```
+
+Every row said 13m. **The daemon had been up for 13 minutes.** Those sessions had been working for
+hours.
+
+`statusSince` is set from the `at` of whichever event created the register entry, and for a session
+already running when the daemon starts, that event is `session-seen` — first *observation*, not the
+transition. Its doc comment says *"when it entered that state"*, which is true only for entries
+created by a `session-status` transition the daemon actually watched. For every other entry it means
+*"the earliest moment we can prove it was in this state"* — a different quantity with the same units
+and no way to tell them apart.
+
+**Three things make this worse than an off-by-something.** It is worst exactly when it matters:
+`Restart=always` makes a daemon restart routine, and after one, every session's duration resets to
+zero *together*, so the agent genuinely blocked for three hours ranks equal-last with one blocked for
+thirty seconds — on the surface whose entire job is to rank by that. It is **silent**: nothing in the
+shape distinguishes the two cases, so a renderer cannot tell and will present a floor as a fact. And
+it is the seam's **headline claim** — [orchestrator-direction.md](../project/orchestrator-direction.md)
+says `statusSince` is what turns a state into a duration and is what collection structurally cannot
+produce, which is exactly the sentence that made the dashboard agent want to build on it.
+
+**The fix is to make the distinction unrepresentable-away**, not to document it: `statusSince` becomes
+a discriminated pair — one arm for a transition the daemon observed, one for the first sighting of a
+state already in progress — so a renderer *cannot* accidentally show a floor as a measurement and can
+at worst choose to. Same move as every "I could not tell" arm in `health.ts`, pointed at the one field
+that had escaped it. The dashboard has been told not to build a renderer on the current shape.
+
+**And note how it was found**, because it argues for a habit rather than a rule: the code was correct
+against its tests, the type was right, and three reviews had been through this file. What exposed it
+was **running the thing and reading its output as a stranger would** — four identical numbers in a
+column, which no test asserts about and no reviewer sees.
+
+#### S7-01, as built: two arms, and the measurement that decided the split
+
+**The measurement, because the hazard here is an arm that fires every collection forever.** 25
+collections of the live fleet from `GET /api/state`, one a minute over 24 minutes (2026-09-08
+08:22–08:46 UTC), 20–25 sessions per snapshot, **516 same-identity row comparisons** — pairs of
+consecutive snapshots in which `tmuxId` and `claimedConversationId` both held still:
+
+| field | changes in 516 comparisons |
+|---|---|
+| `name` | 0 |
+| `repo` | 0 |
+| `worktree` | 0 |
+| `meta` | 0 |
+| `startedAt` | 0 |
+| `paneId` | 0 |
+| `panePid` | 0 |
+| `title` | 0 |
+| `question` | **4** |
+
+**What that does and does not prove, said plainly, because it is easy to read the wrong way round.**
+24 minutes bounds FLAPPING only weakly and is far too short to observe the events these arms exist to
+catch — nobody renamed a session inside the window. (An earlier draft said *"or ran `EnterWorktree`"*;
+see the correction above — that is not an event this source can see at all.) **And "0 of 516 changes"
+bounds less than it looks:** on a generous independent-binomial reading the 95% upper bound is near
+**0.58% per comparison**, which across a fleet-day is potentially hundreds of events. So the arm's
+safety rests on the **source** argument, with the measurement only closing the volume question:
+`repo`, `worktree` and `meta` derive from tmux session environment variables set at creation, and a
+partial reading fails the whole listing rather than degrading a row, so they cannot move while the
+session lives. The numbers say the log will not fill; the source says the fields are real.
+
+`question` is the control, and it is the reason the arm is not "any row difference": it appeared and
+disappeared twice inside 24 minutes, on two sessions, and neither is reboot-resume material.
+
+**Q13's `repo` claim does not reproduce, and that is a correction rather than a null result.**
+[open-questions.md](../project/open-questions.md), § Q13, records `repo` arriving as the repo,
+`null`, the literal string `"unknown"`, and a different repo, all within one snapshot. Across **551
+row observations** here it took exactly two values — `spideryarn/reading2` (526) and
+`spideryarn/hellozenno` (25) — with no `null`, no `"unknown"`, and no version-1 `meta` carrying a
+null repo. Two repos in one snapshot is not the finding; it is two sessions in two checkouts, which
+is correct. So whatever produced that observation was not this field on this endpoint, and the Q13
+bullet should be re-checked before it is written into a `docs/reusable/` note as evidence.
+
+**Two arms, not one, and the split is the source's rather than mine.**
+
+- `session-row-changed` carries `name`, `repo`, `worktree`, `meta`, `startedAt` — the ordered
+  `REGISTER_ROW_FIELDS` in diff.ts — plus the whole row and a **typed** list of which of them moved.
+- `session-pane-replaced` carries the pane on its own, because `panePid` changing is the thing
+  `tools/fleet/steer.ts` compares before it types: the pane somebody was looking at has been
+  respawned and another process wears its handle. That is a fact about the world, not drift in a
+  label, and putting it on an event with a `name` field would describe a rename.
+
+**A null pane is not a change, in either direction as far as silence goes.** `paneId` and `panePid`
+are joined onto the session from a separate pane listing, so a join miss yields null on a session
+that is perfectly alive — 0 misses in 551 observations here, which bounds the frequency without
+removing the case. A pid going away is silence; a pid arriving or changing is an event, because a
+register that never learns the pane cannot steer it.
+
+**`statusSince` is the trap, and the fold does not touch it.** `entryOf(event.row, …)` is the
+tempting one-liner for the new arm and it rebuilds the whole entry, so a session renamed after forty
+minutes of waiting comes back as having waited none — and every triage view that ranks by "waiting
+longest" silently reorders. It is invisible to a test that checks the name, so there is a test for it
+and a mutation that reintroduces it.
+
+**The forcing function, which is what S3-03 was really asking for.** `ENTRY_FIELD_OWNERS` in store.ts
+is a `satisfies Record<keyof RegisterEntry, …>` census: a field added to the register is a compile
+error until somebody says whether it is identity, row material, pane or clock. `rowMaterialOf`
+returns `Pick<RegisterEntry, RegisterRowField>`, and a test ties the census's row half back to the
+list the differ watches. One name added in one place cannot pass all three.
+
+**Mutations: 19 tried, 19 *reported* caught — and three of those were not. Corrected below; see
+§ The mutation claim that hid S7-F1's neighbour.** The `sameMeta` deletions only appeared caught
+because the one metadata transition moved two members at once. Left here as written, with the
+correction pointed at, because the sentence as originally recorded is what made the gap invisible and
+deleting it would hide the lesson too.
+
+**One of them was caught only after it survived**, which is the part that was honest.
+
+`rowFieldMoved("startedAt")` returning `false` passed the entire suite, because every other test
+edited some other field, so a watched field nothing exercises is not really watched; the test that
+closes it says so. **Four first-round runs were VOID rather than caught** — a vitest killed under
+load on this box exits non-zero with a log full of ticks, which is indistinguishable from a mutant
+found unless you insist on the summary line — and were re-run alone.
+
+*(The commit message for `5627f6c1` says 526 comparisons; the finished run says 516. The larger
+number was read off a partial capture and the smaller one is right.)*
+
+#### S7-04, as built: a pair, a schema bump, and one field the reviews disagreed about
+
+**The shape.** `statusSince` is now a discriminated pair rather than a timestamp:
+
+```ts
+export type StatusSince =
+  | { readonly kind: "observed"; readonly at: string }
+  | { readonly kind: "lower-bound"; readonly at: string };
+```
+
+The arm names are the **reader's** rather than the producer's — not `first-seen`/`transition` — because
+the seam is a file and somebody running `less ~/.overseer/current.json` has to know what the number is
+worth without opening `store.ts`. `"kind": "lower-bound"` says that on its own; `"kind": "first-seen"`
+would need this document.
+
+There are exactly two producers and they were already two places in the code. `entryOf()` mints
+`lower-bound`, which covers `session-seen` **and** `session-replaced` — a replacement is a new
+conversation in an old tmux session, so its status was never watched starting either. The
+`session-status` fold mints `observed`. **`session-wait-restarted` mints `observed` too**, and the
+brief's expectation was checked rather than trusted: diff.ts emits that event only after comparing the
+previous deadline with the current one, so the daemon did watch the wait restart. `session-row-changed`
+and `session-pane-replaced` still do not touch the field, and the tests that say so are unchanged.
+
+**`STORE_SCHEMA` goes 1 → 2.** The constant's own rule is *bump when a reader that ignored the change
+would be WRONG rather than merely poorer*, and this is the wrong half: a consumer written against
+schema 1 does `Date.parse(entry.statusSince)`, gets `NaN` on the new shape, and renders a blank or a
+nonsense age — not an error. With the bump it says *I cannot read this*, which is what
+[orchestrator-direction.md](../project/orchestrator-direction.md) § The seam is a file already tells
+it to do. **The hypothetical in that paragraph came true the day after it was written**, which is the
+argument for having written it.
+
+**Nothing is migrated, and the old checkpoint is refused twice over.** `parseCheckpoint` rejects
+schema 1 outright; `parseStatusSince` separately refuses a bare string **naming the field**, for the
+hand-edited file that gets past the first gate. Refusing costs a replay of the log, and the log holds
+events rather than durations — so the rebuild produces honest arms rather than inheriting an ambiguity
+a migration would have had to guess at. Guessing would mean choosing `observed`, which is the 13m bug
+manufactured inside the recovery path, where a wrong number survives longest and is questioned least.
+
+**The renderer.** `overseer status` prints `40m` for an observed transition and `≥13m` for a floor,
+with a legend line under the block whenever a floor is on screen, so the mark means something to
+somebody who has never read any of this. **The sort still ignores the arm**: a floor is the best
+estimate available and can only rank a session too low, whereas ranking floors above readings would be
+guessing about the part we cannot see. Against a copy of the live store, rewritten to the new shape:
+
+```
+sessions    19 in the register: 12 idle, 4 shell:true, 3 working
+            working      ≥60m  get-ready-for-deploy ($2000)
+            shell:true    57m  s5-overseer2-0935-2399531 ($2356)
+            ≥ is a floor: the daemon found it already in that state and cannot see when it began
+```
+
+**Mutations: 15 tried, 15 caught, no survivors.** `entryOf` minting the exact arm; the
+`session-status` fold minting the floor; `session-wait-restarted` minting the floor;
+`session-row-changed` promoting a floor to a measurement; `parseRegisterEntry` accepting a bare
+string; `parseStatusSince` accepting any `kind`; the same accepting any string as the timestamp; the
+schema left at 1; the schema moved to 3; `paneId` reclassified as a clock field; the renderer printing
+both arms identically; the attention list unsorted; the attention list sorted backwards; an unreadable
+checkpoint reported as `never-run` again; the unreadable detail no longer naming either schema. Each
+was applied textually and reverted from the string held in memory rather than from git, with the
+file's sha256 checked after every restore, because other agents' uncommitted work is in this tree.
+
+**The red-first test** is *"a session already running when the daemon starts reports a floor, not a
+measurement"*, and it asserts on the **arm** rather than on the number — the number was never wrong,
+which is why the old test asserting it passed throughout.
+
+**One correction to a comment, from the reviews rather than the code.** Two cross-family reviews
+disagreed about `ENTRY_FIELD_OWNERS`: one called it *"a forcing prompt, not the compile-time guarantee
+claimed"*, the other called `satisfies Record<keyof RegisterEntry, …>` a genuine compile-time census.
+Both are half right, and the comment overclaimed by not separating them. A **missing** field is a
+compile error; a **misclassified** one is not, and goes stale silently — the census-only mutation
+`paneId: "pane" → "clock"` survived the suite. The comment now says exactly that, and the gap is half
+closed rather than described: `row` was already pinned to `REGISTER_ROW_FIELDS` and the fold, and a new
+test pins `pane` by comparing the census against the fields a `session-pane-replaced` really moves
+(that mutation is now caught). **`identity` against `clock` is pinned by nothing** and is recorded in
+the comment as a known uncovered case rather than left reading as guarded.
+
+**The same defect, one screen away, found by running it rather than reading it.** With the schema
+bumped, `overseer status` against the live `~/.overseer` said this while the daemon was up, on pid
+2400163, and had written `current.json` thirty seconds earlier:
+
+```
+daemon      NEVER RUN — notes but no checkpoint: the Overseer started and never got as far as a first collection
+            the checkpoint is unusable (checkpoint-malformed): schema 1 is not 2
+source      nothing has been collected yet
+```
+
+**Every word of the headline is false**, and the second line carries the truth — so the information
+survived the parse and died in the presentation. `daemonStanding` took `Checkpoint | null`, and
+flattening `readCheckpoint`'s three outcomes into that `null` made *I cannot read this* and *nothing
+was ever written here* the same fact. It is this stage's own defect pointed at this stage: a floor
+rendered as a measurement, and *unreadable* rendered as *never happened*. And it is the worst
+direction for this tool in particular — [orchestrator-direction.md](../project/orchestrator-direction.md)
+is built against the Overseer being silently dead while the page says nothing needs you; this is that
+inverted, and a person who reads `NEVER RUN` goes and starts a second daemon beside a live one.
+
+So `StandingInput` now takes the reader's outcome **whole** (`CheckpointRead`), and there is a sixth
+arm, `cannot-tell`, which is a **refusal to guess**: it says the file exists, why this build could not
+parse it, which schema each side speaks, that the Overseer may well be running and nothing here can
+tell, and that the thing to do is wait for the next checkpoint rather than start a second daemon. The
+two other lines that lied for the same reason — *nothing has been collected yet*, and a register block
+that simply vanished — now say `unknown` and say why. It reads:
+
+```
+daemon      CANNOT TELL — there IS a current.json and this build cannot parse it (checkpoint-malformed:
+            schema 1 is not 2); this build reads schema 2. The Overseer may well be running — nothing here
+            can tell, and the daemon's own notes are below. Wait for the next checkpoint rather than
+            starting a second one.
+source      unknown — the collection clock is in the checkpoint this build cannot parse
+sessions    unknown — the register is in that checkpoint too, but the event log below is still readable
+events      77 in the log (32 KB)
+```
+
+**What the first restart does to the real store, measured rather than predicted.** Against a copy of
+`~/.overseer` taken 2026-09-08 10:55 (the copy, because the live daemon holds the lock and two writers
+is the thing the lock exists to prevent): the checkpoint is refused at the schema check, and the store
+comes up **`rebuilt`, not cold** — 77 events and 33 KB replayed, **18 sessions** back in the register,
+`10 observed, 8 lower-bound`. Nothing is lost: the register is a fold of a log that holds events rather
+than durations, the daemon restores `last-snapshot.json` as its differ baseline because the start was
+not cold, and so the fleet is not re-announced. The arms it comes back with are honest — the sessions
+whose transitions the old daemon recorded are `observed`, and the ones it only ever sighted are floors.
+
+**Open after S7-04: `observed` is looser than it sounds across a restart** (GPT Sol, reviewing this
+change; P1, and not fixed here). The daemon restores the persisted snapshot as its baseline and diffs
+the first new snapshot against it, so *"between two of our observations"* can bracket the whole
+downtime rather than one tick. A wait that ended and restarted during three hours of downtime is
+recorded as `observed` at the moment we came back, and rendered as `0s`. Same class as the 13m bug,
+bounded by the downtime rather than unbounded. **It is not fixable inside store.ts**: the fold cannot
+see it. Closing it means either the `session-status` event carrying the previous snapshot's
+`collectedAt` — so the arm can hold the whole bracket — or the daemon marking the first diff after a
+restored baseline, and both live in diff.ts and daemon.ts. It is written into the `StatusSince` comment
+as well, because the dashboard should know before it builds on `observed`.
+
+**Decided against.** A migration of old checkpoints, for the reason above. A `statusSince` that also
+carried the *previous* state's end, which is a second clock nobody has asked for. Ranking floors ahead
+of readings in the attention list. Reading `overseer.lock` to turn `cannot-tell` into a pid the reader could check — real
+evidence, and the next thing to add if the arm proves too vague, but a lock can be stale and the
+brief for this arm was *do not guess in either direction*.
+
+#### S7-03, as built, and the difference that mattered
+
+`tools/overseer/jsonl.ts` now holds truncate-to-last-line, the `O_APPEND` single write and
+`writeAtomically`, used by store.ts and notes.ts. **The two copies had already drifted**, which is the
+argument for the extraction rather than against it, and every divergence resolved towards store.ts:
+
+- notes.ts's append loop was `while (written < n) written += writeSync(…)` with **no check that the
+  count was positive**. `writeSync` returning 0 is the rare case the loop exists for, and there it is
+  an infinite loop inside the daemon rather than a torn line.
+- notes.ts did not `fsync` after truncating, so a machine dying between the repair and the first
+  append came back to the torn line the last start thought it had removed.
+- notes.ts kept `droppedBytes` and threw the dropped text away.
+
+`LogRepair` and `NoteRepair` are one `JsonlRepair`. Two names for one fact is how the rule came to be
+written twice. No test was edited; five mutations on the extracted module were all caught, and the
+one that reports a torn file as clean fails in the **notes** suite as well as the store's, so both
+callers really are exercised through it.
+
+#### S7's own review, and the claim in it that was false
+
+Two cross-family reviews ran over S5 and S7 — one scoped to the two S7-01 commits, one to the whole
+candidate. That duplication was an accident (neither of us announced), and it turned out to be worth
+having: **they agreed on the pane defect and each found P1s the other missed.** Agreement between two
+independently-scoped reviews is worth more than either report claims on its own.
+
+**S7-F1, found by both — a transient pane-join miss produced a FALSE replacement on recovery.**
+`panePid` is joined from a separate pane listing, so a miss yields `null` on a live session. `42 →
+null → 42` emitted nothing on the miss and then `session-pane-replaced` when the **identical** pid
+returned, because the differ compares snapshot to snapshot and the baseline advanced through the null.
+The second reviewer printed it: `recovery: session-pane-replaced, null → 645023`. Nothing was
+replaced.
+
+The fix is one line — emit only on `non-null → non-null` and differing — and everything else in the
+change is comment. **The cost is now a test rather than a paragraph**: a case named *"KNOWN UNCOVERED:
+a pane first seen as a miss is never learned afterwards"* **asserts the gap**, so buying the learn case
+back goes red at the place the decision was made. That is a better home for a known limitation than
+prose, which cannot fail.
+
+**And the real repair is upstream, named in the source rather than left to be rediscovered.** The
+producer's agent supplied the framing:
+
+> `not observed` and `observed to be absent` are different facts, and the differ has one slot for both.
+
+`panePid: null` means *either* "the pane join found no row" *or* "there is a pane with no pid", and by
+the time it reaches `diff.ts` it is one `null` — so the Overseer **cannot** resolve it and only
+`tools/fleet/collect.ts` can, with a three-way discriminated reading. Deliberately deferred: it is a
+contract change on `/api/state` and that agent is mid-cutover.
+
+**S7-F2 — "cannot read the attempt clock" did not clear an earlier positive reading.** `take()`
+updated `lastAttemptAtMs` only for a reported timestamp, so a later payload that *could not answer*
+left the old one standing and `collectorVerdict` measured its age: a valid clock at 10:00, an older
+producer omitting the field at 10:07, and the daemon announcing *"collector stopped for 420s"*. **This
+is the bug S7-02 fixed, one layer downstream** — `parseAttempt` was made to say *cannot tell*
+correctly, and its caller flattened the distinction back. **Making a type honest does nothing if the
+consumer collapses it.**
+
+The signature change is the fix, not the branch: `collectorVerdict` now takes
+`ObservedAttemptClock | null` rather than `number | null`. **A nullable primitive at that seam is what
+let a stale timestamp answer a question the current payload had declined** — which is, by the
+producer agent's count, the fifth or sixth "cannot tell" arm in this system that exists because one
+nullable slot was asked to carry two facts.
+
+And the fixtures were the regression case already: **none of the ten captured snapshots carries
+`attemptedAt`**, so they *are* rolled-back producers and the reviewer's scenario needed no hand-built
+payload.
+
+**S7-F3 is in § S5's P1 above.** It is the third, and it is mine.
+
+#### The mutation claim that hid S7-F1's neighbour
+
+**"19 mutations, 19 caught" was false, and the way it was false is the useful part.** The stage's only
+constructed metadata transition changed `meta.repo` and `meta.dir` **together**, so deleting any one
+of `sameMeta`'s three comparisons still passed — the other changed member reported `meta` as moved
+regardless. Reproduced before fixing: with the old test selected, each of the three deletions in turn
+gave **`1 passed | 47 skipped`. All three survived.**
+
+**A mutation run is only as strong as the tests' ability to isolate.** A test that moves several
+members at once cannot distinguish an AND of three from an AND of two, and the mutation *appears*
+caught because something unrelated fails. Three one-member transitions (`kind` alone, `repo` alone,
+`dir` alone) now each catch exactly one deletion — which is the property the earlier run only looked
+like it had.
+
+The general form, worth carrying: **when a mutation is "caught", check which test caught it.** A
+mutation killed by a test that was not about it is evidence of coverage somewhere, not of coverage
+*here*.
+
+#### Open after S7, deferred with reasons rather than forgotten
+
+Two findings from the reviews are **not being fixed in this plan**. Both are pre-existing rather than
+introduced by S7, both are P2, and both are recorded here because a finding that is merely not
+mentioned again has become a decision by default — which is the thing the whole S7 stage existed to
+undo.
+
+**O-1 — `parseEvent` accepts self-inconsistent event payloads.** In `store.ts`, `key` is validated
+only as a non-empty string and never checked against `identity`; a row event's `row.id` and claimed
+conversation id are checked against neither; and a pane event may carry a null `paneId` beside a
+non-null `panePid`. **The asymmetry is what makes it conspicuous:** `parseRegisterEntry` already
+enforces canonical-key consistency for the checkpoint, so the event log — the file the checkpoint is a
+fold *of* — is the laxer of the two. Pre-existing across all five original arms. Worth doing, and
+worth doing as one deliberate pass over every arm rather than bolted onto whichever arm is being
+touched.
+
+**O-2 — `jsonl.ts` defends against short writes and ignores short reads.** `readSync` returns a count
+and both read sites assume a full buffer, so a short read can let the zero-filled remainder hide a
+newline — truncating past valid records — or pad the reported dropped text with NULs. Pre-existing in
+`store.ts` before the extraction, which is why the extraction is still behaviour-preserving. **The
+extraction is also what makes it worth fixing now**: there is one copy to fix instead of two, which is
+the argument S7-03 was made on, arriving again.
+
+**And two guaranteed mutation survivors, recorded as uncovered rather than left to look covered.**
+Deleting either `fsyncSync` in `jsonl.ts` passes the entire suite, because the tests observe the bytes
+that result rather than durability across a crash. That is not a gap a unit test can close — it needs
+a machine that can lose power — so the honest move is to say so here. `fsync` is load-bearing for
+exactly one scenario and no test in this repo exercises it.
+
+**What would move any of these up the list:** an unreadable-line count above zero in a real
+`events.jsonl`, or a checkpoint that refuses to parse on a restart. Both are already visible in
+`overseer status`, which is where they would show first.
 
 **What this stage is deliberately not.** It is not new capability. Nothing here makes the Overseer do
 anything it could not do this morning; it closes three gaps between what the code does and what the
