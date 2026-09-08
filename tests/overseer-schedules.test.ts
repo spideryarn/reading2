@@ -181,6 +181,13 @@ describe("S8-1: the config, and the validation that replaced the re-pin", () => 
     expect(validateSchedules({ a: { ...good, everyMs: -1 } }, ids).join()).toContain("below the");
     expect(validateSchedules({ a: { ...good, everyMs: hours(24 * 30) } }, ids).join()).toContain("above the");
     expect(validateSchedules({ a: { ...good, leaseMs: 1 } }, ids).join()).toContain("below the");
+    // THE FLOORS ARE THE ONLY BUDGET THERE IS UNTIL GATE 4 EXISTS, so they are
+    // asserted as numbers rather than left to whatever the constants happen to
+    // say. Fifteen minutes was the first value for `everyMs`, and two jobs at
+    // fifteen minutes is 192 sessions a day against the twelve Greg asked for.
+    expect(validateSchedules({ a: { ...good, everyMs: minutes(30) } }, ids).join()).toContain("below the");
+    expect(validateSchedules({ a: { ...good, leaseMs: minutes(30) } }, ids).join()).toContain("below the");
+    expect(validateSchedules({ a: { ...good, everyMs: hours(1), leaseMs: hours(1) } }, ids)).toEqual([]);
     expect(validateSchedules({ a: { ...good, initialDelayMs: -1 } }, ids).join()).toContain("below the");
     // ZERO IS FINE FOR THE DELAY AND NOWHERE ELSE. "Run as soon as we are armed"
     // is a thing to ask for; "run every 0ms" is not.
@@ -196,7 +203,7 @@ describe("S8-1: the config, and the validation that replaced the re-pin", () => 
   test("`hours` and `minutes` are what they say", () => {
     expect(hours(6)).toBe(21_600_000);
     expect(minutes(90)).toBe(5_400_000);
-    expect(MINIMUM_EVERY_MS).toBe(minutes(15));
+    expect(MINIMUM_EVERY_MS).toBe(hours(1));
   });
 });
 

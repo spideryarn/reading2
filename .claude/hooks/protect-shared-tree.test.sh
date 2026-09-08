@@ -50,7 +50,49 @@ EOF'
   check 2 "over-refusal, by design" 'grep -rn "git stash" docs/'
   check 2 "a path carrying both"   'chmod +x .claude/hooks/no-git-stash.sh'
 
+  echo "--- branch deletion: must be REFUSED (exit 2) ---"
+  check 2 "the incident, verbatim"  'git branch -d worktree-260908f-overseer-status-card'
+  check 2 "capital D"               'git branch -D worktree-x'
+  check 2 "long form"               'git branch --delete worktree-x'
+  check 2 "clustered flags"         'git branch -df worktree-x'
+  check 2 "flag after the name"     'git branch worktree-x -D'
+  check 2 "global -C in front"      'git -C /home/greg/code/spideryarn2 branch -D worktree-x'
+  check 2 "the whole hand sequence" 'git worktree remove .claude/worktrees/x && git branch -d worktree-x'
+  check 2 "buried mid-compound"     'npm test; git branch -D worktree-x; npm run typecheck'
+  check 2 "newline-separated"       'git worktree remove x
+git branch -D worktree-x'
+  # Measured as a bypass before the carry was added: the split put the word in
+  # one segment and the flag in the next.
+  check 2 "line-continuation"       'git branch \
+-D worktree-x'
+  check 2 "piped into xargs"        'git branch --list | xargs -n1 git branch -D'
+  check 2 "the = form"              'git branch --delete=worktree-x'
+  check 2 "over-refusal: a grep that quotes it" 'grep -rn "git branch -D" docs/'
+  # A long cluster is a valid deletion; an earlier three-letter bound missed it.
+  check 2 "long flag cluster"       'git branch -vvvvD worktree-x'
+
   echo "--- controls: must be $ctrl ---"
+  # The rule needs the word `git` SOMEWHERE in the payload, so a command that
+  # merely quotes the flags without it is allowed. That is the line between
+  # over-refusing usefully and refusing prose.
+  check "$ctrl" "quoted, no git anywhere" 'grep -rn "branch -D" docs/'
+  # The rule is per-COMMAND: the tool, the noun and the flag must land in one
+  # segment. Measured as a false refusal before that was required per segment.
+  check "$ctrl" "git in one, quote in the next" 'git status && grep -n "branch -D" notes.txt'
+  check "$ctrl" "reading the doc about it"      'git log --oneline -3 && cat docs/project/worktrees.md | grep "branch -D"'
+  # These are the daily commands. The first draft of this rule matched the whole
+  # payload and refused the second one, which is why the match is per-command.
+  check "$ctrl" "show-current"          'git branch --show-current'
+  check "$ctrl" "list"                  'git branch --list'
+  check "$ctrl" "plain"                 'git branch'
+  check "$ctrl" "branch then -D elsewhere" 'git branch --show-current && npm install -D some-package'
+  check "$ctrl" "branch then -d elsewhere" 'git branch --list | head -20 && ls -d docs/'
+  check "$ctrl" "sort by date"          'git branch --list --sort=-committerdate'
+  check "$ctrl" "verbose"               'git branch -av'
+  check "$ctrl" "the sanctioned path"   'npm run worktree:remove -- --branch worktree-x'
+  check "$ctrl" "delete without branch" 'rm -d some-empty-dir'
+  check "$ctrl" "a rename, not a delete" 'git branch -m old-name new-name'
+
   check "$ctrl" "status"                'git status --short'
   check "$ctrl" "the commit recipe"     'git add -- a.ts && git commit -F msg -- a.ts b.ts'
   check "$ctrl" "diff"                  'git diff HEAD -- src/toc.ts'
