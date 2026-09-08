@@ -55,3 +55,11 @@ and [260908f-overseer-and-fleet-improvement-roadmap.md](260908f-overseer-and-fle
 - 2026-09-08 21:32Z — **Overseer** — Channel rule from here on: SendMessage to Claude sessions where
   ListAgents shows them; the dashboard steer route for Codex sessions or when SendMessage cannot
   find the target. Told the dashboard agent the old rule; will correct it when it next replies.
+- 2026-09-08 21:45Z — **dashboard agent, with Greg's go-ahead** — It owns the roadmap's Delivery
+  uncertainty stage in full (its own plan calls it v0.2c) and the `wire.ts` arms for actions, steer,
+  new, messages and rename. The preview envelope and kill candidate-identity half of Box contracts
+  stays with the Overseer to dispatch later, with `FLEET_ACT_ENABLED` treated as staying off.
+- 2026-09-08 21:10 UTC — **Greg** ran `/rename Overseer`; `ListAgents` now prints this session as
+  `Overseer [c9ad18]`, so peers can address it by role. The tmux session had the same name already.
+  Baseline session went idle at 22:05 local mid-job (two background jobs still running); not a
+  debrief, no action. Load 6.4, five_hour 31% (resets 21:50 UTC), seven_day 45%.

@@ -301,6 +301,13 @@ Each of these has cost somebody real time on this box.
 - **`gjd-remote resume` is an alias for `attach`** and reattaches to a **live** tmux session. It is
   not what brings a conversation back after a reboot; that is `claude --resume <claudeSessionId>`,
   and the id is in your own register.
+- **Talk to a Claude session with `SendMessage`, and steer through tmux only as the fallback.**
+  `ListAgents` shows every live Claude session on the box by name; a message sent that way lands in
+  the agent's context addressed to you, and `notify_when_idle` tells you when it next stops without
+  polling. The steer route below is for Codex sessions and for a session `ListAgents` cannot find.
+  Greg, 2026-09-08: *"SendMessage for Claude agents where available, and fall back to tmux as a
+  backup plan."* Your own peer name is whatever `ListAgents` prints at the top; Greg sets it with
+  `/rename`, and it is not the tmux session name.
 - **To read what another session has been saying, ask the dashboard, not the transcript store.**
   `GET /api/messages?id=<tmux session id>` returns that session's recent turns with timestamps — the
   id's `$` must be percent-encoded as `%24`, or the reply is an empty error rather than turns — and
