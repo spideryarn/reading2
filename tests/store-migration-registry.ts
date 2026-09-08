@@ -2362,6 +2362,15 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      bucket: no model is called and the article comes out of the committed
      corpus. */
   "tests/chat-spoken-route.test.ts": "private-postgres",
+  /* Written 2026-09-08 for the chat slice of the `AUTH_ROUTES` migration
+     (docs/plans/260908a-chat-and-live-sessions-join-the-route-table.md). It
+     seeds two conversations under a slug of its own and asserts, after the
+     route deletes one, that the store kept **exactly** the other — an exact
+     list rather than a membership check, which a neighbouring run writing to
+     `chat_threads` under the same slug could falsify. Nothing goes near GoTrue
+     or the Storage bucket: no model is called and the article comes out of the
+     committed corpus. */
+  "tests/chat-thread-delete-route.test.ts": "private-postgres",
   "tests/checkpoints-durable-resume.test.ts": "private-postgres",
   "tests/claim-session-postgres.test.ts": "private-postgres",
   "tests/comment-referee-mark.test.ts": "private-postgres",

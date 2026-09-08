@@ -778,6 +778,33 @@ the opposite: *removing* a return and letting later statements in the same handl
 refusal boundary is right either way, and it will force deliberate handling of chat GET and of the
 existing `similar`/`projection` promise returns.
 
+### Every remaining slice is provably unreachable before `requireUser`, and it can be argued once
+
+Written here rather than in a slice's own plan, because it is not about any one slice and a later
+author should not have to open a chat plan to find it. Added by 260907e on 2026-09-08 at 260907b's
+suggestion.
+
+`src/public/routes.ts:183` claims the public namespace with
+`path === "/api/public" || path.startsWith("/api/public/")`. That is a **literal** prefix, so **any**
+namespace whose own prefix is a literal other than `/api/public` cannot satisfy either clause, and
+the public dispatch — the one thing that runs before `requireUser` — cannot reach it. Every domain
+left in the queue qualifies: `/api/chat`, `/api/live`, `/api/comments`, `/api/glossary`, and the
+rest.
+
+This is **exhaustive rather than inferential**, which is the distinction worth keeping. The
+disjointness argument the contract test makes between *guards* is a corpus check over a finite set of
+witnesses — good, but a check. This one is a statement about two literal string prefixes and needs no
+witnesses at all.
+
+**So no slice needs to re-derive it, and no slice should skip it silently instead.** Confirmed
+independently by GPT Sol reviewing the chat plan, 2026-09-08:
+
+> Public dispatch only claims `/api/public` and `/api/public/*`; chat/live proceed through the single
+> `requireUser` call.
+
+If a future namespace is ever added to the public dispatcher, or its claim stops being a literal
+prefix, this section is what stops being true — and it is the only thing that has to be rechecked.
+
 ## Where stage 3 stands, and what the next slice costs
 
 **21 of 81 guards migrated** (billing 4, jobs/uploads 9, referee 8 — stage 4b, 2026-09-07). 60 remain

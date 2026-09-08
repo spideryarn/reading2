@@ -381,3 +381,44 @@ On the file getting longer, asked directly and answered directly:
 > converges on one routing mechanism; file extraction is a separate decision.
 >
 > — GPT Sol, 2026-09-08
+
+## Stage 1, as built — and what the mutation actually showed
+
+`tests/chat-thread-delete-route.test.ts`, two cases, registered in the `private-postgres` lane of
+`TEST_LANES` (a new test file defaults to `unit`, whose `DATABASE_URL` is poisoned on purpose, so an
+unregistered Postgres suite fails on `ECONNREFUSED 127.0.0.1:1` and looks like a broken database).
+
+**Green unmutated: 2 passed of 2.**
+
+**Mutation 1 — the subject — 2 failed of 2**, and the second failure is worth more than the first:
+
+- *answers with the remaining conversations* — `threads was not an array — a promise was not awaited:
+  expected false to be true`. The predicted `{"threads":{}}`.
+- *really removed it, and not only in the reply* — `expected [ 'spya-j827m6', 'spya-dmkgcy' ] to
+  deeply equal [ 'spya-dmkgcy' ]`. **Both conversations were still in the store when the next request
+  looked.** So the file does not merely detect a Promise where an array belongs; it demonstrates the
+  defect the plan described — the reply had already gone out saying the thread was deleted while the
+  deletion had not happened. The prediction was for the first assertion only; the second is better
+  evidence and was not designed for.
+
+**The box died during this stage, and the discriminator mattered.** A triage agent killed every
+vitest process on the machine at load average 391 with swap full, and reported any run in flight
+void. This run was not in flight: it had written its `EXIT=1` line, the vitest summary and two named
+assertion failures whose text matches the predicted semantics exactly. A killed run writes no `EXIT=`
+line at all — which is the property `scripts/tmux-job.ts` exists to give, and it is the difference
+between a result and a silence. `src/routes.ts` was reverted immediately and verified byte-identical
+to `HEAD` before anything else was done.
+
+**Mutation 2 — the control — 2 passed of 2, as predicted before it was run.** The lock deleted, the
+`await` kept, and every assertion in the file still holds. So the plan's table is not a claim any
+more:
+
+| Mutation | Predicted | Observed |
+|---|---|---|
+| `await inTurnOrder(…)` → `inTurnOrder(…)` | red | **2 failed of 2** |
+| `inTurnOrder(k, f)` → `f()` | green | **2 passed of 2** |
+
+Both halves matter. A file that only demonstrated the red would leave the reader free to believe it
+also covers the lock — which is precisely the belief that produced the earlier test
+`tests/turn-order.test.ts` warns about, the one that passed with the lock removed. Demonstrating the
+green is what makes the disclaimer in this file's header a measurement rather than a modesty.
