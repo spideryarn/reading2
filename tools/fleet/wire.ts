@@ -1481,3 +1481,141 @@ export type BroadcastRecipientOutcome =
   | "blocked"
   /** The fan-out ran out of time before this row. Nothing was sent. */
   | "not-reached";
+
+/* ------------------------------------------------------------------ *
+ * Execution identity: which RUN is in this pane, not which pane it is.
+ * ------------------------------------------------------------------ */
+
+/**
+ * **A DURABLE NAME FOR ONE RUNNING PROCESS, and the whole reason this block
+ * exists.**
+ *
+ * A pane outlives the things that run in it. `tmuxServerPid`, `paneId` and
+ * `panePid` can all stay fixed while the `claude` inside the pane exits and
+ * another one starts — the pane's shell is the same shell, so nothing above
+ * moves — and `claudeSessionId` cannot see it either, because
+ * `CLAUDE_SESSION_ID` is pinned into the tmux environment once, before Claude
+ * runs, and is never rewritten (`ObservedRow.claimedConversationId` in
+ * tools/overseer/observation.ts has the measurement). So every identity this
+ * payload previously carried is stable across exactly the change that matters
+ * most: **the conversation you were talking to has been replaced by a different
+ * one wearing all of its addresses.**
+ *
+ * Three fields, and each one is load-bearing:
+ *
+ *  - `boot` is `/proc/sys/kernel/random/boot_id`, which the kernel mints per
+ *    boot. Without it a token minted before a reboot could collide with one
+ *    minted after, since pids and start ticks both restart.
+ *  - `pid` names the process only for as long as it lives — the warning
+ *    `ChildJob.pid` and `Harness.pid` already carry, and the reason the third
+ *    field is not optional.
+ *  - `startTicks` is field 22 of `/proc/<pid>/stat`, the process's start time in
+ *    clock ticks since boot. It is EXACT and it is what closes pid reuse: the
+ *    next process handed pid 4039575 cannot also have started at tick 72055933.
+ *
+ * **NOT `ProcessStart` FROM work.ts, and that is not a duplication.** That one
+ * is derived from `ps etimes`, counts whole seconds, and its own comment says
+ * two readings of one process can differ by a second and that it must *never be
+ * compared for equality*. It answers "how long has this been running" for a
+ * person. This answers "is this the same run", and equality is the only thing
+ * it is for.
+ */
+export type ExecutionToken = {
+  /** `/proc/sys/kernel/random/boot_id`. A different boot is a different world. */
+  boot: string;
+  /** The harness process's pid, at the instant of the reading. */
+  pid: number;
+  /** `/proc/<pid>/stat` field 22 — start time in clock ticks since boot. Exact. */
+  startTicks: number;
+};
+
+/**
+ * **WHICH CONVERSATION IS IN THERE — kept separate from whether the PROCESS is
+ * identified, because the two are genuinely different questions.**
+ *
+ * Knowing that a live `claude` is the pane's descendant, and holding a durable
+ * token for it, says nothing about which transcript it is writing. A bare
+ * `claude` with no `--session-id` is a perfectly ordinary, perfectly verified
+ * process whose conversation nothing on its command line names.
+ *
+ * `conflicting` is the arm the whole stage was built for: the tmux environment
+ * claims one uuid and the live process's argv carries another, which is a fresh
+ * Claude under an unchanged pane, caught.
+ */
+export type ConversationReading =
+  /** The row carries no `CLAUDE_SESSION_ID`: a shell, a `setup`, a legacy session. */
+  | { kind: "not-claimed" }
+  /** The live harness's own `--session-id` equals the tmux environment's claim. */
+  | { kind: "verified"; id: string }
+  /**
+   * The claim and the process disagree. **The claim is the stale one** — it was
+   * written before the first Claude started and is never updated — so `observed`
+   * is the conversation actually in the pane and `claimed` is what every address
+   * in this payload would have sent you to.
+   */
+  | { kind: "conflicting"; claimed: string; observed: string }
+  /** A claim with nothing to check it against, and the sentence saying what was missing. */
+  | { kind: "unverifiable"; claimed: string; why: string };
+
+/**
+ * Why there is no execution reading. Each arm is a different thing to draw, and
+ * none of them means "there is nothing running".
+ *
+ * The first two are the *nobody looked* pair and they are not interchangeable:
+ * `not-probed` is this producer choosing not to run the pass, `not-reported` is
+ * a producer too old to have one — which a consumer meets across a deploy and
+ * must not read as a session that lost its identity.
+ */
+export type ExecutionUnknownCause =
+  /** This collection did not run the pass. A `FleetRow` starts here. */
+  | "not-probed"
+  /** The payload had no `execution` field at all: a producer from before this stage. */
+  | "not-reported"
+  /** The row carried no pane pid, so there is no tree to walk. */
+  | "no-pane-pid"
+  /** The process table could not be read. `why` carries what the probe said. */
+  | "process-table-unreadable"
+  /** The table is not an ancestry, or the pane's own pid is not in it. */
+  | "pane-tree-unreadable"
+  /**
+   * There is no `/proc` to read. **Unsupported, never "use the pid on its own"**
+   * — a pid with nothing to disambiguate reuse is precisely the identity this
+   * type exists to refuse.
+   */
+  | "platform-unsupported"
+  /** `/proc/sys/kernel/random/boot_id` could not be read, so no token can be minted. */
+  | "boot-identity-unreadable"
+  /**
+   * A harness was found and its start ticks could not be read — almost always
+   * because it exited between the process table and the `/proc` read. We saw
+   * it; we cannot name it durably; that is not a verified execution.
+   */
+  | "process-start-unreadable";
+
+/**
+ * **WHAT IS ACTUALLY EXECUTING IN THIS PANE, or the honest reason we cannot
+ * say.**
+ *
+ * Three arms, and the middle one is the one that is easy to leave out:
+ *
+ *  - `verified` — a live harness process under this pane, with a durable token.
+ *    Two `verified` readings whose tokens are equal are the same run; two whose
+ *    tokens differ are not, and no amount of matching pane ids changes that.
+ *  - `claimed-only` — we looked, and the launch metadata is all there is: a pane,
+ *    a claim, and nothing under it we can name. **This is not a weaker
+ *    `verified`**; nothing identity-dependent may be done on it.
+ *  - `unknown` — we did not look, or could not. `cause` says which.
+ *
+ * A verified execution with an unverifiable conversation is normal and is not a
+ * defect: see `ConversationReading`.
+ */
+export type ExecutionReading =
+  | {
+      kind: "verified";
+      token: ExecutionToken;
+      /** Which harness the token names. The same union `Harness` uses. */
+      harness: HarnessKind;
+      conversation: ConversationReading;
+    }
+  | { kind: "claimed-only"; conversation: ConversationReading; why: string }
+  | { kind: "unknown"; cause: ExecutionUnknownCause; why: string };

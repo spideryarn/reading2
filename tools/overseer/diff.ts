@@ -59,6 +59,8 @@
  * its own argument for being one.
  */
 import type { SessionMeta, SessionState } from "../../scripts/gjd-remote-tmux.js";
+import { executionTokenText } from "../fleet/execution-identity.js";
+import type { ConversationReading } from "../fleet/wire.js";
 import type { AdmissibleSnapshot } from "./admissible.js";
 import type { DefinitionHash, JobOutcome, OccurrenceId } from "./jobs.js";
 import type { FreshSnapshot, ObservedRow, ObservedStatus } from "./observation.js";
@@ -527,6 +529,57 @@ export type SessionEvent =
       paneId: string | null;
       /** NEVER NULL: a pid that went away is a join miss and does not produce this event. */
       panePid: number;
+    }
+  /**
+   * **THE PANE DID NOT MOVE AND THE THING INSIDE IT DID** — the event every
+   * other arm of this union is blind to.
+   *
+   * `session-replaced` fires on a changed `claimedConversationId`, which the
+   * tmux environment almost never changes; `session-pane-replaced` fires on a
+   * changed pane pid, which a `respawn-pane` changes and a claude restarting
+   * inside its own shell does not. Between them they cover the pane being
+   * replaced and the launch claim being rewritten, and neither covers a fresh
+   * `claude` started under an unchanged shell — the case whose whole
+   * significance is that *nothing above it moved*.
+   *
+   * **BOTH SIDES MUST BE `verified`, AND THAT IS NOT A CONVENIENCE.** The same
+   * rule as `previousPanePid` two arms up, arrived at from the same argument:
+   * `verified → unknown` is EVIDENCE LOST, not a process replaced. A collection
+   * whose `ps` failed would otherwise report every session on the box as having
+   * been replaced, and then report it again on the way back.
+   *
+   * ## THE SAMPLING GAP THIS ARM HAS, stated because absence is invisible
+   *
+   * `verified(A) → unknown → verified(B)` produces NO event: this module
+   * compares consecutive snapshots and neither of those two steps is a pair of
+   * verified readings. Closing it would mean carrying a last-verified token
+   * inside `Baseline`, and `unplaceable`'s comment is the argument against —
+   * a baseline is a question about a VALUE, and one carrying accumulated state
+   * would stop being checkable on any snapshot at any time.
+   *
+   * **It is a gap in the HISTORY and not in the guarantee**, which is the
+   * reason it is affordable. Nothing identity-dependent asks whether an event
+   * fired; it stores the token it was created under and compares it to the
+   * current reading (`continuityOf` in tools/fleet/execution-identity.ts), and
+   * a comparison has no sampling gap — a run replaced while nobody was looking
+   * is still a different token the next time anybody looks. Pinned by a test in
+   * tests/overseer-diff.test.ts rather than described only here.
+   */
+  | {
+      kind: "session-execution-changed";
+      at: string;
+      tmuxServerPid: number | null;
+      key: SessionKey;
+      identity: SessionIdentity;
+      /** The token as `continuityOf` compares it: `boot:pid:startTicks`. */
+      previousToken: string;
+      token: string;
+      /**
+       * What the new run says about its conversation. `conflicting` here is the
+       * loudest thing this log can say: the pane is running a conversation
+       * nobody addressed, under an id everything still uses.
+       */
+      conversation: ConversationReading;
     };
 
 /**
@@ -1010,6 +1063,26 @@ export function diff(previous: Baseline | null, next: AdmissibleSnapshot): DiffO
         panePid: row.panePid,
       });
     }
+    // THE PANE STAYED AND THE RUN INSIDE IT DID NOT. Placed here, after the
+    // pane arm, because the two are independent and both can fire on one
+    // collection: a `respawn-pane` replaces the pane AND the process in it, and
+    // recording only one of those loses half of what happened.
+    //
+    // BOTH SIDES VERIFIED, no exceptions — `verified → unknown` is a collection
+    // that could not look, and the arm's own comment has the argument.
+    const replaced = executionChange(was, row);
+    if (replaced !== null) {
+      events.push({
+        kind: "session-execution-changed",
+        at,
+        tmuxServerPid: nextSnapshot.tmuxServerPid,
+        key: sessionKey(identityOf(row)),
+        identity: identityOf(row),
+        previousToken: replaced.previousToken,
+        token: replaced.token,
+        conversation: replaced.conversation,
+      });
+    }
     // THE ONE THING THE CANONICAL KEY DELIBERATELY CANNOT SEE. Both statuses
     // key as `waiting`, so without this a wait that ended and was replaced by a
     // longer one is one unbroken wait in the history. See
@@ -1046,6 +1119,32 @@ export function diff(previous: Baseline | null, next: AdmissibleSnapshot): DiffO
   }
 
   return { kind: "diffed", events, baseline: new BaselineBox(nextSnapshot) };
+}
+
+/**
+ * The two tokens, when one verified run was replaced by another.
+ *
+ * Null in every other case, and the two null cases are different sentences that
+ * happen to share an outcome: two verified readings with the SAME token are one
+ * unbroken run, and a pair where either side is not verified is a collection
+ * that could not look. **The second is the load-bearing one** — a box whose `ps`
+ * failed for one tick would otherwise report every session on it as replaced,
+ * and report it again on the way back. The same rule as `panePid`'s null on
+ * `session-pane-replaced`, arrived at from the same argument.
+ *
+ * Its own function rather than four lines inline, for the reason `waitRestart`
+ * is one: the arm's rule is the thing a reader has to check, and a rule inside
+ * a 200-line loop is read as part of the loop.
+ */
+function executionChange(
+  before: ObservedRow,
+  after: ObservedRow,
+): { previousToken: string; token: string; conversation: ConversationReading } | null {
+  if (before.execution.kind !== "verified" || after.execution.kind !== "verified") return null;
+  const previousToken = executionTokenText(before.execution.token);
+  const token = executionTokenText(after.execution.token);
+  if (previousToken === token) return null;
+  return { previousToken, token, conversation: after.execution.conversation };
 }
 
 /**

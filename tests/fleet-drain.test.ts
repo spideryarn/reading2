@@ -74,6 +74,9 @@ function row(over: Partial<FleetRow> = {}): FleetRow {
     /* The arm the collector produces before `readPauses` has run. Not `none`:
        a fixture is in no position to claim we looked everywhere. */
     pause: { kind: "cannot-tell", why: "the fixture did not say", cause: "rate-limits-not-collected" },
+    // Required on a row and not what this file is about: a fixture is not a box
+    // whose process table anybody probed.
+    execution: { kind: "unknown", cause: "not-probed", why: "the fixture did not probe the process table" },
     status: IDLE,
     paneId: PANE_A,
     panePid: PANE_PID,

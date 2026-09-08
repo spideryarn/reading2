@@ -30,8 +30,17 @@ import {
 } from "../../scripts/gjd-remote-tmux.js";
 import { capturePane, parsePane, readPaneMode, type PaneAutoMode, type PaneQuestion } from "./pane.js";
 import { statusesOf, type FleetStatus } from "./status.js";
-import type { Pause } from "./wire.js";
+import type { ExecutionReading, Pause } from "./wire.js";
+import {
+  readBootIdentity,
+  readExecutionIdentity,
+  readProcessStart,
+  type BootIdentity,
+  type ProcessStartTicks,
+} from "./execution-identity.js";
 import { readPause, readSessionStore, type StoreIndex } from "./pause.js";
+import { probeProcessTable } from "../overseer/work-probe.js";
+import type { ProcessTableReading } from "../overseer/work.js";
 
 /** One line of the page. Deliberately flat: it is rendered, and it is JSON. */
 export type FleetRow = {
@@ -156,6 +165,23 @@ export type FleetRow = {
    * only the reader is in a position to make it.
    */
   pause: Pause;
+  /**
+   * **WHICH RUN IS IN THIS PANE — the one identity none of the fields above can
+   * carry.**
+   *
+   * `paneId`, `panePid` and `claudeSessionId` are all unchanged when a pane's
+   * claude exits and another starts in the same shell, so a consumer holding
+   * any of them cannot tell yesterday's conversation from this morning's. This
+   * carries a durable token for the harness process itself, and a separate
+   * verdict on whether the conversation the launcher claimed is the one that
+   * process is actually running. `ExecutionReading` in `wire.ts` has the
+   * argument; `execution-identity.ts` derives it; `readExecutions` below fills
+   * it in.
+   *
+   * Starts at `unknown`/`not-probed` on the same rule as `pause` and
+   * `permissionMode`: a collection that never ran the pass says so.
+   */
+  execution: ExecutionReading;
 };
 
 /** A snapshot, and enough about it to know whether to believe it. */
@@ -374,6 +400,16 @@ export function toRows(
         why: "nothing has looked at whether this session is waiting for something yet",
         cause: "rate-limits-not-collected",
       } as Pause,
+      /* AND THE SAME RULE AGAIN, for the same reason: a row that nobody has
+         probed says *nobody looked*, with the cause that says which kind of
+         not-looking it was. `readExecutions` fills it in. `not-probed` and
+         `not-reported` are deliberately different arms — see
+         `ExecutionUnknownCause` — and this is the first of them. */
+      execution: {
+        kind: "unknown",
+        cause: "not-probed",
+        why: "this collection did not probe the process table, so nothing has looked at what is executing in this pane",
+      } as ExecutionReading,
       // A session the status pass did not cover is `unknown` with a reason, not a
       // default that reads as calm. There is no legitimate way to get here — the
       // two lists come from one parse — so if it ever shows up on the page, the
@@ -739,6 +775,11 @@ export async function collect(): Promise<FleetSnapshot> {
      captures is measured on the latter. */
   readPanes(rows);
 
+  /* AND ONE PASS FOR WHICH RUN IS IN EACH PANE. One `ps` for the whole fleet
+     and one small `/proc` read per pane, so this is the third pass rather than
+     a probe per row — see `readExecutions`. */
+  readExecutions(rows);
+
   /* AND ONE PASS FOR WHY A QUIET SESSION IS QUIET. Separate from `readPanes`
      because it reads files rather than terminals, and because it is allowed to
      fail without costing us the board — see `readPauses`. */
@@ -769,6 +810,79 @@ export async function collect(): Promise<FleetSnapshot> {
  * seconds on a loaded box, `w2-usage-limits` owns it, and the moment it
  * publishes a reading this is where it plugs in. It is emphatically not `none`.
  */
+/** What {@link readExecutions} touches, so a test can drive it without a box. */
+export type ExecutionIo = {
+  probe: () => ProcessTableReading;
+  boot: () => BootIdentity;
+  readStart: (pid: number) => ProcessStartTicks;
+};
+
+/**
+ * **FILL IN `execution` ON EVERY ROW, FROM ONE READING OF THE PROCESS TABLE.**
+ *
+ * **ONE `ps` FOR THE WHOLE FLEET, NOT ONE PER ROW**, and the same for the boot
+ * id. That is the collector contract the roadmap states — *"Bounded
+ * process/transcript probes have one owner/cadence"* — and it is also the only
+ * way the answers can be consistent with each other: thirty separate `ps` runs
+ * would describe thirty slightly different boxes, so two rows could disagree
+ * about a process they share. The per-row cost after that is one
+ * `/proc/<pid>/stat` read, which is a few hundred bytes.
+ *
+ * **IT REUSES THE PROBE THAT ALREADY EXISTS.** `probeProcessTable` was written
+ * for this box, carries its own positive control (a `ps` that does not contain
+ * this process is refused as not being a reading of this machine), and until
+ * this call site had no production caller at all. `classifyPaneHarness` is the
+ * same story. Nothing here re-walks a tree or re-reads a `claude` command line.
+ *
+ * **COST, MEASURED RATHER THAN ASSUMED.** `probeProcessTable` uses `spawnSync`,
+ * which blocks the event loop; work-probe.ts measures it at ~40 ms over ~1000
+ * processes here. That is against a collection that already takes 8–12 seconds,
+ * so it is noise — but it is a NEW synchronous spawn on the request process, and
+ * the Responsive collection stage should take it with the two `execFileSync`
+ * calls it is already going after rather than leave it as the one nobody
+ * remembered. Named here so it is found.
+ *
+ * **A FAILURE COSTS NOTHING BUT THE READING.** Every arm of `ExecutionReading`
+ * is a value, including all the failures, so a box whose `ps` will not run
+ * produces rows that say why rather than rows that are missing.
+ */
+export function readExecutions(rows: FleetRow[], io: Partial<ExecutionIo> = {}): void {
+  const probe = io.probe ?? probeProcessTable;
+  const bootOf = io.boot ?? (() => readBootIdentity());
+  const readStart = io.readStart ?? ((pid: number) => readProcessStart(pid));
+
+  let table: ProcessTableReading;
+  try {
+    table = probe();
+  } catch (cause) {
+    table = { read: false, why: `the process table probe threw: ${cause instanceof Error ? cause.message : String(cause)}` };
+  }
+  const boot = bootOf();
+
+  for (const row of rows) {
+    try {
+      row.execution = readExecutionIdentity({
+        panePid: row.panePid,
+        claimedConversationId: row.claudeSessionId,
+        table,
+        boot,
+        readStart,
+      });
+    } catch (cause) {
+      // `readExecutionIdentity` returns values for every failure it knows
+      // about, so a throw here is a bug rather than a condition — and the cause
+      // is the nearest arm rather than an accurate one. THE `why` IS THE
+      // ANSWER; the cause is what a switch has to have. Same shape as
+      // `readPauses` below, which maps a throw onto `transcript-unreadable`.
+      row.execution = {
+        kind: "unknown",
+        cause: "process-table-unreadable",
+        why: `deriving this session's execution identity threw: ${cause instanceof Error ? cause.message : String(cause)}`,
+      };
+    }
+  }
+}
+
 export async function readPauses(rows: FleetRow[]): Promise<void> {
   let index: StoreIndex | undefined;
   try {

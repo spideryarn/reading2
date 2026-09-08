@@ -150,6 +150,9 @@ function row(over: Partial<FleetState["rows"][number]> & { id: string }): FleetS
   return {
     paneId: null,
     name: over.id,
+    // Required on a row and not what this file is about — an old producer's
+    // shape, which is what `parseExecution` returns for a payload without one.
+    execution: { kind: "unknown", cause: "not-reported", why: "the fixture carried no execution reading" },
     title: null,
     repo: null,
     worktree: null,

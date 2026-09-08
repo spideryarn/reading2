@@ -513,28 +513,107 @@ them.**
 This is a foundation for verified continuity and writes, not a prerequisite for a read-only status
 card or an explicitly claimed observation. Develop it alongside those earlier deliveries.
 
-- [ ] Reproduce a new Claude child started under an unchanged shell/pane whose tmux
+**Status, 2026-09-09 (worktree `260908f-exec-identity`).** Built: the reading, its derivation, and
+its propagation through fleet state, the browser parser, the Overseer's observation boundary, the
+differ and the register. Checkbox 5 is done to the scope cut — the quarantine and its explanation
+exist as `continuityOf` and `identityWriteGate`, and draft recovery is a named follow-up below.
+
+The reading is `ExecutionReading` in `tools/fleet/wire.ts`: `verified` (a durable
+`ExecutionToken` of boot id + pid + `/proc/<pid>/stat` field 22, plus a separate
+`ConversationReading`), `claimed-only`, or `unknown` with one of eight causes. It is derived in the
+new `tools/fleet/execution-identity.ts`, which **reuses `probeProcessTable` and
+`classifyPaneHarness` rather than writing a second probe** — and in doing so gives
+`classifyPaneHarness` its first production caller, closing half of the Baseline census's
+"zero non-test callers" finding. (`classifyPaneWork` is still uncalled; that is the Work evidence
+stage, not this one.) One `ps` and one boot-id read per collection, then one small `/proc` read per
+pane: the pass is `readExecutions` in `collect.ts`, beside `readPanes` and `readPauses`.
+
+**The blind spot is latent, not firing — which is the argument for building the reading now.** A
+read-only census of all 11 tmux sessions at 22:46 UTC on 2026-09-08 found 7 claudes whose tmux
+`CLAUDE_SESSION_ID` matched the `--session-id` on the live process, 0 conflicting, 4 shells with no
+claim. Re-measured through the production code path at 00:40 on 2026-09-09: 11 of 11 `verified`, no
+`claimed-only` and no `unknown`, and the `Overseer`'s own token
+(`96e5c266-…:4039575:72055933`) identical to the one derived by hand off `/proc` an hour and a half
+earlier — two independent joins agreeing.
+
+**Three things the plan did not know.**
+
+1. **`ProcessStart` in `work.ts` cannot be the token.** It is derived from `ps etimes`, counts whole
+   seconds, and its own comment forbids comparing it for equality. The exact value is
+   `/proc/<pid>/stat` field 22, which is a bounded read (one per pane, not the ~1000 `work-probe.ts`
+   rejected) and is what actually closes pid reuse.
+2. **A live, working Claude can be `claimed-only`.** `quiet-claude-pane.txt` is a real capture of a
+   session launched before `new-claude` wrote `--`, whose prompt runs past the option region, so
+   `claude-argv.ts` refuses the command line and the harness is `ambiguous-harness`. Every current
+   launch reads cleanly, but the arm is not hypothetical and is covered by a test against the
+   unedited fixture.
+3. **The differ has a sampling gap it cannot close cheaply.** `verified(A) → unknown → verified(B)`
+   emits no `session-execution-changed`, because `diff()` compares consecutive snapshots and neither
+   step is a pair of verified readings. Closing it would mean carrying accumulated state inside
+   `Baseline`, against `unplaceable`'s stated design. It is a gap in the **history** and not in the
+   **guarantee**: nothing identity-dependent asks whether an event fired — it compares its stored
+   token to the current reading, and a comparison has no sampling gap. Pinned by a test rather than
+   only described.
+
+**Named follow-up, deliberately not built:** draft *recovery* — re-establishing the same verified
+identity restoring a quarantined draft. There is no draft persistence in `tools/fleet/web/src/` yet
+(that is the Session continuity stage), so there is nothing to recover; the invariant it will need,
+and the function that decides it, are here.
+
+- [x] Reproduce a new Claude child started under an unchanged shell/pane whose tmux
   `CLAUDE_SESSION_ID` still names the old conversation. Current `diff.ts` documents this blind spot;
   concatenating current row fields does not fix it. Also test PID reuse and tmux server restart.
-- [ ] Add a browser-safe discriminated identity reading: `verified` (current harness process plus
+- [x] Add a browser-safe discriminated identity reading: `verified` (current harness process plus
   process-start token and verified conversation id if observable), `claimed-only` (launch metadata
   with no current corroboration), or `unknown` (cause). Keep conversation verification separate from
   process verification: a known child process does not prove which transcript it is writing.
-- [ ] On Linux, derive process identity from boot identity + PID + process start ticks, using the
+- [x] On Linux, derive process identity from boot identity + PID + process start ticks, using the
   existing ancestry/probe machinery. Validate that the expected harness is still the pane's live
   descendant and compare its actual session-id argument/authoritative harness observation with the
   launch claim. Missing or ambiguous evidence stays claimed-only/unknown; do not guess by title.
   Treat unavailable platform evidence as unsupported, not as permission to use PID alone.
-- [ ] Propagate this reading through fleet state, its browser parser, and the daemon register/event
+- [x] Propagate this reading through fleet state, its browser parser, and the daemon register/event
   boundary. Plan schema compatibility explicitly. Reuse the same identity derivation in fresh
   action revalidation; never promote a cached verified identity into current write authority.
-- [ ] Key component/draft ownership to verified execution. A changed or unverifiable execution must
+
+  **Schema compatibility, decided rather than inherited.** No bump on either schema, by each file's
+  own stated rule (*bump when a consumer that ignored the change would be WRONG*): a reader that
+  ignores `execution` draws no continuity, which is poorer rather than wrong. Concretely — the
+  fleet payload gains a field and `OBSERVATION_SCHEMA` stays 1, because a producer without it parses
+  to `unknown`/`not-reported` and its rows stay inspectable; `STORE_SCHEMA` stays 2, and
+  `verifiedExecution` is **the one field in `parseRegisterEntry` whose ABSENCE is forgiven** (an old
+  `current.json` would otherwise be discarded on the first restart after the deploy, and the
+  register is the thing there is no second copy of) while a **malformed** one still fails the
+  checkpoint whole. Both are covered in `tests/overseer-store.test.ts`.
+
+  **Fresh revalidation:** `verifyTarget` in `steer.ts` already re-derives against the live box on
+  every write and never trusts a cached reading, which is the invariant this checkbox is about;
+  `identityWriteGate` takes a reading rather than returning authority, and says so in its own
+  comment. Giving `Verified` a durable token is a nice-to-have left for the write-path stage that
+  owns `steer.ts`.
+- [~] Key component/draft ownership to verified execution. A changed or unverifiable execution must
   quarantine the previous draft/results, show why continuity cannot be established, and disable
   identity-dependent writes. Transcript display needs a verified conversation claim; otherwise show
   it as unverified history, not the current conversation. Re-establishing the same verified identity
   can recover its draft. A process replacement does not inherit the previous duration as measured.
-- [ ] Test the actual row→wire→browser/register round trip, including old producers that omit the
+
+  **Done: the quarantine and the explanation.** `continuityOf(previousToken, reading)` returns
+  `same` / `replaced` / `unverifiable`, each carrying the sentence a reader is shown, and
+  `identityWriteGate(reading)` allows a write only when the execution AND the conversation are both
+  verified — every other arm refuses with prose naming what is wrong. *"A process replacement does
+  not inherit the previous duration as measured"* is enforced in the register fold: the
+  `session-execution-changed` arm resets `statusSince` to a `lower-bound`, so a fresh Claude cannot
+  be credited with its predecessor's hours.
+
+  **Not done, on the stage's scope cut:** draft recovery, and the transcript-display arm — both
+  belong to client components owned by another session, and there is no draft persistence in
+  `tools/fleet/web/src/` to quarantine yet.
+- [x] Test the actual row→wire→browser/register round trip, including old producers that omit the
   new reading. They stay inspectable with unknown continuity; do not cast them into verified state.
+
+  The old-producer half uses **real old bytes**: every file in
+  `tests/fixtures/overseer-snapshots/` was captured before this field existed, so all ten are
+  genuine producers that omit it, checked through both independent readers.
 
 **Acceptance:** a fresh Claude under the same shell is detected or explicitly unverifiable; it never
 silently inherits a draft, transcript attribution or historical age. This stage supplies the invariant

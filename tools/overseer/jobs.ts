@@ -838,6 +838,7 @@ export function foldOccurrences(
       case "session-wait-restarted":
       case "session-row-changed":
       case "session-pane-replaced":
+      case "session-execution-changed":
       // AND THE RULE ARMS. A rule event is addressed BY an occurrence id and
       // says nothing about that occurrence's lifecycle — the reservation, the
       // start and the finish around it are the job events above. Folding one

@@ -200,6 +200,7 @@ const EVENT_KINDS: Record<OverseerEvent["kind"], true> = {
   "session-wait-restarted": true,
   "session-row-changed": true,
   "session-pane-replaced": true,
+  "session-execution-changed": true,
   "job-occurrence-reserved": true,
   "job-occurrence-started": true,
   "job-occurrence-finished": true,
@@ -267,6 +268,16 @@ export function describeEvent(event: OverseerEvent): string {
       return `${when}  changed    ${event.row.name} (${event.identity.tmuxId}) — ${event.fields.join(", ")}`;
     case "session-pane-replaced":
       return `${when}  new pane   ${event.identity.tmuxId} — pid ${event.previousPanePid ?? "none"} → ${event.panePid}`;
+    // THE PANE DID NOT MOVE, so this line has to say what did. The conversation
+    // verdict is on it because `conflicting` is the loudest thing this log can
+    // print: the pane is running a conversation nobody addressed.
+    case "session-execution-changed":
+      return (
+        `${when}  new run    ${event.identity.tmuxId} — ${event.previousToken} → ${event.token}` +
+        (event.conversation.kind === "conflicting"
+          ? `, now conversation ${event.conversation.observed} rather than the claimed ${event.conversation.claimed}`
+          : `, conversation ${event.conversation.kind}`)
+      );
     // THE SCHEDULER'S ARMS. A run is addressed by its occurrence id, which
     // carries the job, the instant and the definition hash, so one line of this
     // log is enough to find every other line about the same run.

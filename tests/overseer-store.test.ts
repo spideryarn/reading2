@@ -87,6 +87,9 @@ function observedRow(over: Partial<ObservedRow> = {}): ObservedRow {
   return {
     id: "$1991",
     name: "overseer-o1-store",
+    // Required on a row and not what this file is about — an old producer's
+    // shape, which is the honest default for a fixture nobody probed.
+    execution: { kind: "unknown", cause: "not-reported", why: "the fixture carried no execution reading" },
     title: null,
     repo: "spideryarn/reading2",
     worktree: "overseer-o1-store",
@@ -902,6 +905,69 @@ describe("a half-written current.json", () => {
 
     expect(second.opening.start).toEqual({ kind: "rebuilt", why: "checkpoint-malformed" });
     expect(keysIn(second)).toEqual([sessionKey(identityOf(rowA))]);
+  });
+
+  /**
+   * **THE ONE FIELD WHOSE ABSENCE IS FORGIVEN, and the reason the pair of tests
+   * is here rather than one of them.**
+   *
+   * `verifiedExecution` arrived after this file's other fields, so the first
+   * `current.json` the daemon reads after that deploy will not have one. Failing
+   * whole there would throw the register away on every restart of the deploy
+   * that introduced it, and the register is the thing there is no second copy
+   * of. So an ABSENT field is `null` — *no run has been verified for this
+   * session*, which is true of it.
+   *
+   * A MALFORMED field is the opposite case and still fails whole: absent is an
+   * old writer, malformed is a broken one, and letting the two share an outcome
+   * is how a forgiving arm stops being about deploy ordering and starts hiding
+   * bugs.
+   */
+  test("a checkpoint written before verifiedExecution existed comes back with a null one", () => {
+    const root = tempRoot();
+    const row = observedRow();
+    const first = mustOpen(root);
+    first.append([seenEvent(row, "2026-09-08T10:00:00.000Z")]);
+    first.checkpoint({ lastGoodSnapshotAt: "2026-09-08T10:00:00.000Z", tick: true });
+    first.close();
+
+    const parsed = JSON.parse(readFileSync(join(root, CHECKPOINT_FILE), "utf8")) as {
+      register: Record<string, unknown>[];
+    };
+    const [entry] = parsed.register;
+    if (entry === undefined) throw new Error("expected one register entry");
+    delete entry["verifiedExecution"];
+    writeFileSync(join(root, CHECKPOINT_FILE), JSON.stringify(parsed));
+
+    const second = mustOpen(root);
+
+    // ACCEPTED, not rebuilt: the checkpoint is usable and the entry is honest.
+    expect(second.opening.start.kind).toBe("resumed");
+    expect([...second.register.values()][0]?.verifiedExecution).toBeNull();
+  });
+
+  test("a checkpoint whose verifiedExecution is present and malformed still fails whole", () => {
+    const root = tempRoot();
+    const row = observedRow();
+    const first = mustOpen(root);
+    first.append([seenEvent(row, "2026-09-08T10:00:00.000Z")]);
+    first.checkpoint({ lastGoodSnapshotAt: "2026-09-08T10:00:00.000Z", tick: true });
+    first.close();
+
+    const parsed = JSON.parse(readFileSync(join(root, CHECKPOINT_FILE), "utf8")) as {
+      register: Record<string, unknown>[];
+    };
+    const [entry] = parsed.register;
+    if (entry === undefined) throw new Error("expected one register entry");
+    entry["verifiedExecution"] = { token: "", since: "not a timestamp" };
+    writeFileSync(join(root, CHECKPOINT_FILE), JSON.stringify(parsed));
+
+    const second = mustOpen(root);
+
+    expect(second.opening.start).toEqual({ kind: "rebuilt", why: "checkpoint-malformed" });
+    // AND THE REGISTER IS STILL RIGHT, out of the log — which is what makes
+    // failing whole affordable.
+    expect(keysIn(second)).toEqual([sessionKey(identityOf(row))]);
   });
 
   test("a checkpoint from yesterday's daemon is refused by name rather than migrated", () => {

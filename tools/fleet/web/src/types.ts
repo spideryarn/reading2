@@ -41,7 +41,11 @@ import type {
   AttentionItem,
   AttentionKind,
   AttentionList,
+  ConversationReading,
+  ExecutionReading,
+  ExecutionUnknownCause,
   FleetState as FleetStateWire,
+  HarnessKind,
   OverseerHeartbeat,
   OverseerRegister,
   OverseerScheduler,
@@ -267,6 +271,23 @@ export type FleetRow = {
    * a null here means the row cannot be steered at all.
    */
   claudeSessionId: string | null;
+  /**
+   * **WHICH RUN IS IN THE PANE — and the only field on this row that can tell
+   * a fresh Claude from the one you were talking to.**
+   *
+   * Every identifier above survives a claude exiting and another starting in
+   * the same pane: `paneId` and `panePid` belong to the pane's shell, which
+   * never died, and `claudeSessionId` is the tmux environment's launch claim,
+   * written once and never rewritten. This is the reading that does not, and
+   * `ExecutionReading` in `wire.ts` says how it is derived.
+   *
+   * A page that keys anything to a session — a draft, a transcript heading, a
+   * measured age — compares this reading's token to the one it stored, and
+   * quarantines rather than continuing when they differ or when there is no
+   * reading. Never `verified` by default: a producer that predates this field
+   * parses to `unknown`/`not-reported`.
+   */
+  execution: ExecutionReading;
   /**
    * **THE SERVER'S OWN `status` OBJECT, UNTOUCHED**, to be handed back verbatim
    * on a steering request. `status` above is the parse, and it is for drawing.
@@ -970,6 +991,136 @@ export function parsePause(v: unknown, skew: ClockSkew): Pause {
 }
 
 /**
+ * **WHICH RUN IS IN THE PANE, off the wire — and an absent field is
+ * `not-reported`, never anything reassuring.**
+ *
+ * The same rule as `parsePause` above and for the same reason, but the stakes
+ * are higher by one step: a `pause` this page invents makes a badge wrong, and
+ * an `execution` this page invents makes a page go on writing into a
+ * conversation that has been replaced. So there is no arm here that a missing
+ * or malformed payload can reach except `unknown`, and every `unknown` carries
+ * the cause that says which kind of not-knowing it is.
+ *
+ * **`verified` IS CHECKED FIELD BY FIELD.** A token with a missing `startTicks`
+ * is not a token — it is the identity with the pid-reuse defence removed — so a
+ * half-shaped `verified` becomes `unknown`/`not-reported` rather than a
+ * `verified` with a hole in it.
+ */
+/**
+ * The harness names this build knows, as a `Record` over the closed union
+ * rather than an array: adding an arm to `HarnessKind` without adding it here
+ * stops the build, which is the same mechanism `HARNESS_CAPABILITIES` uses on
+ * the server. An unfamiliar name off the wire becomes `unknown`, which is the
+ * arm that refuses everything.
+ */
+const HARNESS_KINDS: Record<HarnessKind, true> = {
+  "claude-code": true,
+  "claude-headless": true,
+  "codex-batch": true,
+  "codex-interactive": true,
+  shell: true,
+  unknown: true,
+};
+
+export function parseExecution(v: unknown): ExecutionReading {
+  const unread = (why: string, cause: ExecutionUnknownCause = "not-reported"): ExecutionReading => ({
+    kind: "unknown",
+    cause,
+    why,
+  });
+  if (v === undefined || v === null) {
+    return unread("this server does not report what is executing in each pane, so continuity cannot be established");
+  }
+  if (!isRecord(v)) return unread("the server sent an execution reading that is not an object");
+
+  const kind = str(v["kind"]);
+  if (kind === "unknown") {
+    return { kind: "unknown", cause: parseExecutionCause(v["cause"]), why: str(v["why"]) ?? "no reason was given" };
+  }
+  if (kind === "claimed-only") {
+    const conversation = parseConversation(v["conversation"]);
+    if (conversation === null) return unread("the server sent a claimed-only execution with no readable conversation reading");
+    return { kind: "claimed-only", conversation, why: str(v["why"]) ?? "no reason was given" };
+  }
+  if (kind === "verified") {
+    const token = v["token"];
+    const harness = str(v["harness"]);
+    const conversation = parseConversation(v["conversation"]);
+    if (!isRecord(token) || harness === null || conversation === null) {
+      return unread("the server sent a verified execution without a token, a harness and a conversation reading");
+    }
+    const boot = str(token["boot"]);
+    const pid = token["pid"];
+    const startTicks = token["startTicks"];
+    if (
+      boot === null ||
+      boot === "" ||
+      typeof pid !== "number" ||
+      !Number.isSafeInteger(pid) ||
+      pid <= 0 ||
+      typeof startTicks !== "number" ||
+      !Number.isSafeInteger(startTicks) ||
+      startTicks < 0
+    ) {
+      return unread("the server sent a verified execution whose token is not a boot id, a pid and a start tick");
+    }
+    return {
+      kind: "verified",
+      token: { boot, pid, startTicks },
+      // A harness kind this build has not heard of is kept rather than
+      // rejected: it is a label beside the token, and the token is the part
+      // anything acts on. `HARNESS_KINDS` below is what gates capabilities.
+      harness: Object.hasOwn(HARNESS_KINDS, harness) ? (harness as HarnessKind) : "unknown",
+      conversation,
+    };
+  }
+  return unread(
+    kind === null ? "the server sent an execution reading with no kind" : `this page does not know the execution reading ${JSON.stringify(kind)}`,
+  );
+}
+
+/** One conversation verdict, or null when the payload does not carry one. */
+function parseConversation(v: unknown): ConversationReading | null {
+  if (!isRecord(v)) return null;
+  const kind = str(v["kind"]);
+  if (kind === "not-claimed") return { kind: "not-claimed" };
+  if (kind === "verified") {
+    const id = str(v["id"]);
+    return id === null || id === "" ? null : { kind: "verified", id };
+  }
+  if (kind === "conflicting") {
+    const claimed = str(v["claimed"]);
+    const observed = str(v["observed"]);
+    return claimed === null || observed === null ? null : { kind: "conflicting", claimed, observed };
+  }
+  if (kind === "unverifiable") {
+    const claimed = str(v["claimed"]);
+    return claimed === null ? null : { kind: "unverifiable", claimed, why: str(v["why"]) ?? "no reason was given" };
+  }
+  return null;
+}
+
+/**
+ * The named cause, or `not-reported` — which is the one that says the producer
+ * never offered a reading at all. Same fallback rule as `parsePauseCause`.
+ */
+const EXECUTION_CAUSES: Record<ExecutionUnknownCause, true> = {
+  "not-probed": true,
+  "not-reported": true,
+  "no-pane-pid": true,
+  "process-table-unreadable": true,
+  "pane-tree-unreadable": true,
+  "platform-unsupported": true,
+  "boot-identity-unreadable": true,
+  "process-start-unreadable": true,
+};
+
+function parseExecutionCause(v: unknown): ExecutionUnknownCause {
+  const name = str(v);
+  return name !== null && Object.hasOwn(EXECUTION_CAUSES, name) ? (name as ExecutionUnknownCause) : "not-reported";
+}
+
+/**
  * The named cause, or the one that says we were never told.
  *
  * A cause this build has not heard of falls back rather than throwing: the
@@ -1035,6 +1186,7 @@ export function parseRow(v: unknown, skew: ClockSkew): FleetRow | null {
         ? v["panePid"]
         : null,
     claudeSessionId: str(v["claudeSessionId"]),
+    execution: parseExecution(v["execution"]),
     /* NOT `parseStatus(...)` and NOT a clone. The reference the server sent,
        kept so it can be serialised back exactly as it arrived. */
     rawStatus: v["status"] ?? null,
