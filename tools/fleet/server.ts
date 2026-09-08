@@ -36,7 +36,9 @@ import { collect, type FleetSnapshot } from "./collect.js";
 import { parseBinds } from "./config.js";
 import { collectHealth, type HealthReport } from "./health.js";
 import { broadcast, startHeartbeat, subscribe, subscriberCount } from "./live.js";
+import { newSessionRoutes } from "./routes-new.js";
 import { handleSteerRequest } from "./routes-steer.js";
+import { fleetState } from "./state.js";
 
 /** Where the built React client lives. */
 const DIST = path.join(path.dirname(fileURLToPath(import.meta.url)), "web", "dist");
@@ -97,13 +99,16 @@ let lastError: string | null = null;
  */
 let health: HealthReport | null = null;
 
-/** The wire shape, in one place, so the poll and the stream cannot disagree. */
+/**
+ * The wire shape, in one place, so the poll and the stream cannot disagree.
+ *
+ * The shape itself lives in state.ts, where it can be tested without binding a
+ * port — and where the rule that matters is written down: `collectedAt: null`
+ * means NEVER COLLECTED, and an empty `rows` is only a claim about the box when
+ * `collectedAt` is non-null.
+ */
 function statePayload(): string {
-  return JSON.stringify({
-    ...(snapshot ?? { rows: [], collectedAt: null, tookMs: 0 }),
-    error: lastError,
-    health,
-  });
+  return JSON.stringify(fleetState(snapshot, lastError, health, REFRESH_MS));
 }
 
 async function refresh(): Promise<void> {
@@ -187,6 +192,19 @@ function handler(req: import("node:http").IncomingMessage, res: import("node:htt
   // must not acquire opinions about steering that the tested modules do not
   // have, or there will be two places to read and they will diverge.
   if (handleSteerRequest(req, res)) return;
+
+  // Starting a session, which is the other write. `startsWith` mounts it, but
+  // the route 404s any path that is not exactly this one, so the prefix cannot
+  // quietly widen into `/api/sessions/new/../…`.
+  //
+  // `void` because `handle` is async and never rejects — it catches its own
+  // failures and answers 500. An unhandled rejection here would be a request
+  // that hangs until the client gives up, which on a phone is indistinguishable
+  // from the box being down.
+  if (url.startsWith("/api/sessions/new")) {
+    void newSessionRoutes().handle(req, res);
+    return;
+  }
 
   // The React client. There is no second renderer behind it — see the startup
   // check below, which is what replaced one.
