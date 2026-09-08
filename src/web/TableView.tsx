@@ -304,6 +304,36 @@ function applyOpen(
  * docs/plans/260908e-gutter-icons-on-touch-only-when-a-block-is-selected.md.
  */
 
+/**
+ * **`(hover: hover)`, asked once and read live.**
+ *
+ * The exclusion list below is worth nothing while a second writer can set the
+ * same state, and on a touch device there is one: a tap fires the compatibility
+ * mouse events, `mouseenter` among them, so `hoveredRow` was being written by
+ * every tap on the row regardless of what the tap landed on. **This is measured
+ * rather than feared** — the reproduction in the plan doc watched a Chromium tap
+ * set and hold `row-active` on the commit *before* any click handler existed,
+ * and `onMouseEnter` was the only writer there was. So the comment that used to
+ * say "a finger fires no `mouseenter`" was exactly backwards. GPT Sol, 2026-09-08.
+ *
+ * Gating the hover writers on the same capability the stylesheet asks about
+ * leaves one path on each kind of device: hover on a pointer, this predicate on
+ * a finger. It also settles what iOS does with `mouseleave` — nothing, because
+ * nothing is listening.
+ *
+ * **Asked at event time rather than cached**, which is the same shape
+ * `scroll.ts` uses for `prefers-reduced-motion`. It follows a mouse being
+ * plugged into an iPad with no listener and no re-render, it is a microsecond
+ * against a pointer crossing a row, and a value fixed at module load could not
+ * be exercised by a test at all. `true` where the question cannot be asked — no
+ * `window`, or a `matchMedia` a privacy extension has removed — so anything that
+ * is not a browser behaves as it always did.
+ */
+export const canHover = (): boolean =>
+  typeof window === "undefined" || typeof window.matchMedia !== "function"
+    ? true
+    : window.matchMedia("(hover: hover)").matches;
+
 /** Everything inside `td.text` that a tap already means something else by. */
 const NOT_A_BLOCK_SELECTION = [
   /* Following it is the point of tapping it, and selecting the row it is
@@ -318,6 +348,14 @@ const NOT_A_BLOCK_SELECTION = [
      buttons also call `stopPropagation`, and that is exactly what this list
      exists not to depend on. */
   "button",
+  /* **And the picture itself, which is the other zoom surface.** The delegated
+     handler on `<tbody>` says "a picture is its own button" and opens the
+     lightbox for a bare `<img>` or `<svg>` inside a `.zoomable` wrapper — so
+     excluding only the ⤢ would select the row on the way past and open the
+     overlay over a freshly-painted wash. Written with the handler's own
+     selector, verbatim, so the two cannot drift apart; a picture inside a link
+     is caught by `a[href]` above, exactly as it is there. GPT Sol, 2026-09-08. */
+  `.prose .${ZOOM_WRAP_CLASS} :is(img, svg)`,
   "[role='button']",
   /* **The OPEN "…" panel, and only that.** A closed gutter is
      `pointer-events: none`, so a tap on its blank strip never lands here at
@@ -1284,7 +1322,12 @@ function TableViewInner({
           keydown listener here would run the jump twice. */}
       <tbody
         ref={bodyRef}
-        onMouseLeave={() => setHoveredRow(null)}
+        /* On a pointer only — see `canHover` above. A finger's selection is set
+           deliberately and must not be cleared by a compatibility mouse event
+           that no reader produced. */
+        onMouseLeave={() => {
+          if (canHover()) setHoveredRow(null);
+        }}
         /* Both handlers below are delegated, not per-block: the prose is
            injected HTML, so its <mark> and <a> elements are not React's and
            cannot carry React handlers. */
@@ -1449,7 +1492,13 @@ function TableViewInner({
           <tr
             key={block.id}
             data-block={block.id}
-            onMouseEnter={() => setHoveredRow(row)}
+            /* On a pointer only. A tap fires this too, and unguarded it would
+               set the row whatever the tap landed on — which is the whole
+               exclusion list below, bypassed. `canHover` above has the
+               measurement. */
+            onMouseEnter={() => {
+              if (canHover()) setHoveredRow(row);
+            }}
             className={hoveredRow === row ? "row-active" : undefined}
           >
             {drawnColumns.map((depth) => {

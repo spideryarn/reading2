@@ -576,7 +576,18 @@ tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
    BlockGutter.tsx's own sentence — *at rest the gutter shows state, on hover it
    shows affordances* — became false on a finger. Greg, reading on an iPad,
    asked for the icons back only on the block he selects
-   (SPIDERYARN-READING2-2G; docs/plans/260908e-…). `:where()` is what makes that
+   (SPIDERYARN-READING2-2G; docs/plans/260908e-…).
+
+   **What this rule decides is `opacity` and `pointer-events`, never `display`.**
+   How many controls a row draws at all is the container query's business, above
+   — a one-line paragraph has room for one 24px target and gets the "…" alone —
+   so "the affordances appear on the selected row" is true of the ones the row
+   had room for, and the rest are behind that dot exactly as they are under a
+   pointer. Two mechanisms, one column, and reading either as the whole story
+   gets the other one wrong. GPT Sol asked for that said rather than implied,
+   2026-09-08.
+
+   `:where()` is what makes the gate
    one rule instead of five: it contributes nothing, so this whole list stays at
    (0,1,0) — beating the bare hidden state above on source order alone, and
    losing *naturally* to `.block-chat.has`, `.blk-gutter[data-open] > *`,

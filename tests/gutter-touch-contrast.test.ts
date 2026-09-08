@@ -133,9 +133,15 @@ describe("the gutter's touch reveal is legible on every row it can appear on", (
     const bg = Array(3).fill(grey(greyL(source)));
     const ink = Array(3).fill(grey(greyL("muted-foreground")));
     const drawn = ratio(luminance(composite(ink, bg, touchOpacity())), luminance(bg));
+    /* **The unrounded number.** This asserted `Number(drawn.toFixed(3))` for one
+       commit, which is a check that answers a weaker question than it states: at
+       `0.705` the `--muted` ratio is 3.0049, and an opacity of `0.7039` gives
+       2.99982 — which rounds to 3.000 and passes a test whose message says "at
+       least 3:1". The rounding belongs in the message, never in the comparison.
+       GPT Sol, 2026-09-08. */
     expect(
-      Number(drawn.toFixed(3)),
-      `the gutter's affordances draw at ${drawn.toFixed(2)}:1 over --${name}, short of WCAG 1.4.11's 3:1`,
+      drawn,
+      `the gutter's affordances draw at ${drawn.toFixed(3)}:1 over --${name}, short of WCAG 1.4.11's 3:1`,
     ).toBeGreaterThanOrEqual(3);
   });
 

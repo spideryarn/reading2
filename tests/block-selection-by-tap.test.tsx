@@ -103,6 +103,7 @@ afterEach(() => {
   act(() => root.unmount());
   document.removeEventListener("click", cancelNavigation);
   host.remove();
+  vi.unstubAllGlobals();
 });
 
 type Loaded = Awaited<ReturnType<typeof readArticleFromDir>>;
@@ -197,6 +198,33 @@ async function tap(el: Element, detail = 1): Promise<void> {
   await act(async () => {
     el.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, detail }));
   });
+}
+
+/**
+ * The compatibility `mouseenter` a touch tap fires **before** its click.
+ *
+ * `mouseenter` does not bubble, and React attaches it to the root container and
+ * synthesises the enter/leave pair from `mouseover`, so this dispatches the
+ * bubbling event React actually listens for.
+ */
+async function compatibilityHover(el: Element): Promise<void> {
+  await act(async () => {
+    el.dispatchEvent(new MouseEvent("mouseover", { bubbles: true, cancelable: true }));
+  });
+}
+
+/** Answer `(hover: hover)` with `matches`, and every other query with `false`. */
+function pretendHover(matches: boolean): void {
+  vi.stubGlobal("matchMedia", (query: string) => ({
+    matches: query.includes("hover: hover") ? matches : false,
+    media: query,
+    onchange: null,
+    addEventListener() {},
+    removeEventListener() {},
+    addListener() {},
+    removeListener() {},
+    dispatchEvent: () => false,
+  }));
 }
 
 /** The first element inside a row's prose matching `selector`, or a loud failure. */
@@ -335,6 +363,53 @@ describe("a tap that already means something else does not select the block", ()
     if (!control) throw new Error("the gutter drew no control");
     await tap(control);
     expect(selectedRows(), "a gutter control selected its row").toEqual([]);
+  });
+
+  it("leaves the selection alone when the tap is the picture itself", async () => {
+    /* **The other zoom surface.** The delegated handler on `<tbody>` says "a
+       picture is its own button" and opens the lightbox for a bare `<img>` or
+       `<svg>` inside a `.zoomable` wrapper — no ⤢ involved. Excluding only the
+       button would select the row on the way past and open the overlay over a
+       freshly-painted wash. The predicate uses that handler's own selector
+       verbatim so the two cannot drift. GPT Sol, 2026-09-08. */
+    const loaded = await readArticleFromDir(DIR);
+    await draw(propsFor(articleFrom(loaded)));
+    const picture = host.querySelector("tbody td.text .prose .zoomable :is(img, svg)");
+    if (!picture) throw new Error("the fixture drew no zoomable picture — the case would be vacuous");
+
+    await tap(picture);
+    expect(selectedRows()).toEqual([]);
+  });
+
+  it("ignores the compatibility mouse events a tap fires, where there is no hover", async () => {
+    /* **The finding that made the whole exclusion list ornamental.** A touch tap
+       fires the compatibility mouse events, `mouseenter` among them, and the
+       row's own `onMouseEnter` sets `hoveredRow` without consulting any of this.
+       It is measured rather than feared: on the commit before this feature
+       existed, a real Chromium tap set and held `row-active`, and that handler
+       was the only writer there was.
+
+       So both hover writers now ask `(hover: hover)`, and this is the assertion
+       that they do. Without it the list below is decoration: tapping a link, a
+       mark or a picture would still select the row through the other door.
+       GPT Sol, 2026-09-08. */
+    const loaded = await readArticleFromDir(DIR);
+    await draw(propsFor(articleFrom(loaded)));
+    const [first, second] = plainBlocks(loaded);
+    if (!first || !second) throw new Error("the fixture has fewer than two plain-prose blocks");
+
+    pretendHover(false);
+    await compatibilityHover(inProse(second.id, PROSE_TEXT));
+    expect(selectedRows(), "a compatibility mouse event selected a row on a touch device").toEqual([]);
+
+    /* And the pointer half is untouched, which is the other thing that must
+       stay true: on a device that really hovers, moving over a row still
+       selects it and nothing about this change is visible. */
+    pretendHover(true);
+    await compatibilityHover(inProse(second.id, PROSE_TEXT));
+    expect(selectedRows(), "hovering a row on a pointer device stopped selecting it").toEqual([
+      second.id,
+    ]);
   });
 
   it("ignores a click no pointer produced", async () => {

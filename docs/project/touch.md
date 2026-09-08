@@ -409,6 +409,15 @@ things about it are worth carrying to the next rule of this shape:
   `:hover` on whatever was last tapped, which would be a second gate on the same controls — and not
   the same one: a tap the hover card swallows at document capture never reaches the selection
   handler, so the gutter would open at full strength on a row nothing selected.
+- **And so did the JavaScript half, which is the finding worth carrying furthest.** A tap fires the
+  compatibility mouse events, `mouseenter` among them, so the row's `onMouseEnter` was writing the
+  selected row on every tap regardless of what the tap landed on — the exclusion list above governed
+  the `click` path while a second, ungated path wrote the same state. **It was measured rather than
+  feared**: on the commit before any of this, a Chromium tap set `row-active` and held it, and
+  `onMouseEnter` was the only writer that existed. Both hover writers now ask
+  `matchMedia("(hover: hover)")`, so there is one writer per kind of device. The general lesson is
+  the one this file already teaches about *"a lift fires the hover events too"*: **a touch rule that
+  only guards the CSS has guarded half of it.**
 - **The opacity is a measurement against the row's own ground, not a constant.** It is 0.705, which
   is 3:1 over `--page`, over the `--panel` a selected row is painted, and over the `--muted` an
   opaque figure row is painted — and `.opaque` beats `.row-active`, so that last one is the case

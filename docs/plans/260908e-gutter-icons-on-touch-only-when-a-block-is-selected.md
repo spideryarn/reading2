@@ -1,6 +1,6 @@
 # The gutter waits to be asked on a finger too
 
-Status as of 2026-09-08: **built, and what shipped is the reviewed design rather than the one first written down.** Read § What the plan review changed and then § What was actually built; § What gets built is the pre-review draft, kept because the review is easier to follow against it, and superseded in three places.
+Status as of 2026-09-08: **built and reviewed twice.** Read § What the plan review changed, § What was actually built, and § What the code review changed, in that order; § What gets built is the pre-review draft, kept because the reviews are easier to follow against it, and superseded throughout. **The most useful finding in the whole job is F10**, and it is in the last of those: the exclusion list this design is built around was ornamental for one commit, because a touch tap fires `mouseenter` and a second, ungated writer was setting the same state — and this doc had measured that a tap does exactly that, three sections earlier, without either of us noticing.
 
 From [SPIDERYARN-READING2-2G](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-2G),
 2026-09-07 17:42 UTC, `build_commit=c0fb04a4`:
@@ -106,7 +106,16 @@ calls it *"this is the row you are on"*). Two candidates were refused:
   a tap on the prose does not set it, so it does not even match the gesture Greg named;
 - **a third notion of "the current row"**, beside hover and `at`.
 
-**And it is set explicitly, not inherited from an emulated `mouseenter`.** One
+**And it is set explicitly, not inherited from an emulated `mouseenter`.**
+
+> **Superseded twice, and the second time is the important one.** The `<tr>` became the prose cell
+> plus a named predicate (§ What the plan review changed, P0 #3), and then the emulated `mouseenter`
+> turned out **not** to have been ruled out at all: `onMouseEnter` was still on the row, unguarded,
+> writing the same state on every tap. The paragraph below is right about what it wants and wrong
+> about having got it — see § What the code review changed, F10, which is the finding this whole job
+> turns on.
+
+One
 `onClick={() => setHoveredRow(row)}` on the `<tr>`: `click` fires for a tap and not for a scroll
 drag, and it is deterministic on every engine — including the one this box cannot run.
 [touch.md](../project/touch.md) records that the compatibility-mouse path is exactly where this app
@@ -560,6 +569,80 @@ rule, which would also retire the `tr:hover .blk-permalink.failed` workaround �
 taken out of the (0,2,1) reveal list, which is a third change to a heavily-argued selector list. One
 line in a plan doc is the right size for it; a follow-up is not filed because this doc is the file.
 
+## What the code review changed
+
+GPT Sol reviewed the built code (`8d351e48`) as round two; prompt and answer in the session
+scratchpad as `fb2g-sol-code-prompt.md` / `fb2g-sol-code-answer-r2.md`, exit 0. Verdict: **refuse
+`8d351e48` as written** — *"The CSS gate, cascade, and contrast arithmetic are sound; the
+touch-selection policy is not."* It ran all three test files itself (5/5, 22/22, 7/7) and
+independently reproduced the contrast numbers to four decimal places, which is the half it cleared.
+
+The two P1s are both about the **selection** half, and the first is the one that matters.
+
+### F10 — the exclusion list was ornamental, and my own evidence said so
+
+`onMouseEnter={() => setHoveredRow(row)}` was left unconditional, on the argument — written into
+the source as a comment — that a finger fires no `mouseenter`. **That is exactly backwards, and this
+doc had already measured it.** § Reproduction records that on the commit *before* any click handler
+existed, a real Chromium tap set `row-active` and held it through a scroll. The only writer in that
+build was `onMouseEnter`. So a tap fires it, and every tap wrote the row **before** the click
+predicate got a chance to refuse — a tap on a link, a mark, a picture or a gutter control all
+selected the row through the other door.
+
+The whole point of the P0 that produced the predicate was that selection should be policy rather
+than propagation. It was still propagation; there were simply two paths and I had written a policy
+for one of them.
+
+> The seven component tests dispatch only a bare `MouseEvent("click")`, so they omit the event that
+> defeats them.
+
+**Both hover writers now ask `canHover()`** — `window.matchMedia("(hover: hover)").matches`, the same
+capability the stylesheet asks about — so there is one writer per kind of device: hover on a pointer,
+the predicate on a finger. Asked at event time rather than cached, which follows a mouse being
+plugged into an iPad and is the only version a test can exercise. It also closes the third of the
+four open questions below: `mouseleave` cannot clear a finger's selection, because on a finger
+nothing is listening.
+
+The test for it dispatches the compatibility `mouseover` React synthesises `mouseenter` from, with
+`(hover: hover)` stubbed both ways, and asserts both halves — no selection on a finger, unchanged
+selection on a pointer.
+
+### F11 — the picture is the other zoom surface
+
+The list excluded `button.zoom-btn` and not the picture. `TableView.tsx`'s delegated handler says
+*"a picture is its own button"* and opens the lightbox for a bare `<img>` or `<svg>` inside a
+`.zoomable` wrapper, with no ⤢ involved — so tapping a photograph selected the row on the way past
+and opened the overlay over a freshly-painted wash. Fixed with **that handler's own selector,
+verbatim**, so the two cannot drift; a picture inside a link is caught by `a[href]` in both places,
+which is how the handler treats it too.
+
+### F12, F13 — two tests that answered a weaker question than they stated
+
+- **The shape assertion capped the weight and said nothing about the contents.** Deleting only
+  `:where(tr.row-active) .block-chat,` leaves every remaining selector matching the pattern, the
+  reachability check satisfied and all three files green — while a plain chat button stays shut on
+  the selected row, which is the iPad bug that started this. The exact selector set is asserted now,
+  and each rule's body with it.
+- **The contrast assertion rounded a failing ratio up to passing.** It compared
+  `Number(drawn.toFixed(3))`, so `0.7039` gives 2.99982 over `--muted`, rounds to 3.000 and passes a
+  test whose message says *at least 3:1*. The rounding belongs in the message, never in the
+  comparison. Both mutations were run and both now go red.
+
+### F14 — a claim stronger than the layout makes
+
+I stated the contract as *an affordance is visible iff its row is active*. False, and not because of
+a defect: the container query decides how many controls a row draws at all, so a one-line paragraph
+shows the "…" alone whether or not it is selected. This rule sets `opacity` and `pointer-events` and
+never `display`. Two mechanisms, one column; the stylesheet now says so where the gate is written.
+
+### F15 — held, and recorded rather than built
+
+A trusted tap on `mark.cmt` / `mark.chat` acts on `mouseup`, which can reannotate and replace the
+marked DOM before the browser dispatches `click`. Sol grades it **reasoned, not established** — no
+wrong outcome demonstrated — and the honest position is that jsdom cannot answer it and a Playwright
+pass would have to. F10's fix removes the mechanism that made it most likely to bite, since the
+`mouseenter` path no longer writes anything on a finger. Named in § What is still open.
+
 ## What is still open
 
 - **A hybrid iPad is untouched by this.** The whole fix lives inside `@media (hover: none)`, and an
@@ -570,11 +653,20 @@ line in a plan doc is the right size for it; a follow-up is not filed because th
   query is `(any-pointer: coarse)` — interaction rules should ask whether a coarse pointer exists,
   not which one is primary — but the swap is not one token, because on a hybrid a mouse hover and a
   persisted touch selection need to be separate state. See the next point.
-- **`hoveredRow` is carrying two meanings.** Once a click can write it, it is both *the row the
-  pointer is over* and *the row the reader chose*, which are the same thing on a mouse and different
-  things on a finger — one clears on `mouseleave`, the other should not. Nothing here breaks because
-  of it, and splitting it is what the `(any-pointer: coarse)` move above would need first. Named by
-  GPT Sol; deliberately not done for a report this size.
+- **`hoveredRow` is carrying two meanings, but only one at a time.** It is both *the row the pointer
+  is over* and *the row the reader chose*, which are the same thing on a mouse and different things
+  on a finger — one clears on `mouseleave`, the other must not. The F10 fix makes that harmless
+  rather than fixing it: both hover writers now ask `(hover: hover)`, so on any given device exactly
+  one of the two meanings is ever written, and there is nothing to disagree. **A hybrid is where it
+  would bite**, which is the same machine as the point above and the same reason the
+  `(any-pointer: coarse)` move needs this split first. Named by GPT Sol; deliberately not done for a
+  report this size.
+- **A trusted tap on `mark.cmt` / `mark.chat` after reannotation is unverified.** Those act on
+  `mouseup`, which can replace the marked DOM before the browser dispatches `click`, so where that
+  click is *targeted* afterwards is a browser question jsdom cannot answer — the test dispatches a
+  `click` at a mark that is still there. GPT Sol graded it reasoned rather than established, and no
+  wrong outcome has been demonstrated; F10's fix removes the path that made it most likely to bite,
+  because on a finger the `mouseenter` writer is gone. A Playwright pass is what would settle it.
 - **`:active` on iOS has not been checked for these controls**, exactly as the sibling report left
   it. A tap that lands and a tap that misses may look identical. Same remedy if it turns out to
   matter: one `touchstart` no-op listener at the root, not one per control.

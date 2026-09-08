@@ -459,6 +459,24 @@ describe("the column shows as many controls as the row has room for", () => {
         `\`${sel}\` in the touch block is not \`:where(tr.row-active) .<class>\` — anything with more weight than that outranks \`.block-chat.has\` and dims a state mark to an affordance`,
       ).toMatch(/^:where\(tr\.row-active\) \.[\w-]+$/);
     }
+
+    /* **And the exact set, because a shape assertion caps the weight without
+       saying anything about the contents.** Deleting only
+       `:where(tr.row-active) .block-chat,` leaves every remaining selector
+       matching the pattern above, `.blk-help` still satisfying the reachability
+       check below, and both other files green — while a plain chat button stays
+       at `opacity: 0; pointer-events: none` on the selected row, which is the
+       shut door on an iPad that started all of this. GPT Sol, 2026-09-08. */
+    const AFFORDANCES = [".blk-permalink", ".block-chat", ".blk-help", ".blk-more"];
+    expect(selectorsIn(touch).sort()).toEqual(
+      AFFORDANCES.map((c) => `:where(tr.row-active) ${c}`).sort(),
+    );
+    for (const affordance of AFFORDANCES) {
+      const revealed = rulesWith(`:where(tr.row-active) ${affordance}`);
+      expect(revealed.length, `nothing reveals \`${affordance}\` on the selected row`).toBe(1);
+      expect(revealed[0]?.body).toContain("opacity: 0.705");
+      expect(revealed[0]?.body).toContain("pointer-events: auto");
+    }
   });
 
   it("shows the gutter on a finger only on the row the finger chose", () => {
