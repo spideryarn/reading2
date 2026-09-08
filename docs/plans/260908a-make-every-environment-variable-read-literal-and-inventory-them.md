@@ -1,7 +1,6 @@
 # Make every environment-variable read literal, and inventory them
 
-**Status as of 2026-09-08: Stages 1 and 2 are on `dev`; Stage 3 is built, reviewed twice and lands
-with this commit, and
+**Status as of 2026-09-08: all three stages are on `dev`, and
 [260827b](../postmortems/260827b-health-check-green-while-uploads-dead.md) item 1 is marked built
 with its limit stated.** Stage 1 took five GPT Sol verdicts — two refusals and three scoped checks —
 and the two changes that mattered both came from *giving up on making the checker clever*: pinning
@@ -21,7 +20,7 @@ contract — one declaration each variable's reader and this reporter both impor
 that, and is still not built.
 
 Commits: `d403821d` (Stage 1), `ec1b2543` (Stage 2), `7b4102e7` (a false justification corrected),
-`95b7f66a` (the status line), and Stage 3 below.
+`95b7f66a` (the status line), `c6f2c9a8` (Stage 3).
 
 The route was put to GPT Sol before anything was written and came back a
 **hybrid — route A for ordinary reads, plus narrow executable contracts for the five genuinely
