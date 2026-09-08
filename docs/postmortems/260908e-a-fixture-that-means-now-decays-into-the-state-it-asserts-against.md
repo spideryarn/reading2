@@ -97,3 +97,39 @@ The general rule for this repo is the one the fleet dashboard keeps arriving at 
 **a value's honesty is only worth having if the thing that reads it is held to it.** Here the
 producer (the component) was honest about staleness and the consumer (the assertion) had encoded a
 belief about the clock that nothing checked.
+
+## Four shapes of a green test that proves nothing, found in one day
+
+This is one of four, and they are worth listing together because the family is what makes them
+expensive rather than any one of them. **The common property is that the check and the thing it
+checks share an assumption** — which is
+[silent-success.md](../reusable/silent-success.md)'s subject, and the reason that note is worth
+re-reading rather than this section restating it.
+
+1. **Green when written, red later.** This postmortem. A fixture that encodes an instant decays into
+   the state it asserts against. *A time bomb with a later fuse is indistinguishable from correct
+   code.*
+2. **Green because the test never reaches the thing.** Fixing the browser dropping `delivery` from a
+   steer refusal, five tests passed — and passed again with the one line that reads the field
+   deleted, because every one of them built the outcome by hand and handed it to the renderer. Tested
+   parts, untested join, in the commit fixing a tested part with an untested join. `makeSteerApi` had
+   no test caller anywhere in the repo. The same day, `w2-fleet-dictation`'s flood test never reached
+   the burst ceiling it claimed to prove, because a per-key floor refused all twelve requests first.
+3. **Green in isolation, red in the suite, and the failure lands on the innocent file.**
+   `tests/fixture-ids.test.ts` catching `fleet-pause.test.ts` sharing two uuids with files that
+   insert them: whichever tears down first deletes the other's fixture. `w2-fleet-dictation`, who
+   found it: *"the signal points away from the cause, so whoever investigates starts in the wrong
+   file and finds nothing wrong there — because there is nothing wrong there."*
+4. **Green by construction, which is the worst of the four.** The first three are green by accident.
+   This one is a *fix* that works by becoming invisible to the check. The first repair attempted for
+   (3) used uuids with a memorable prefix containing `p` and `s`; the guard matches `[0-9a-f]{8}`, so
+   it would not have seen them at all. The suite would have gone green and the collision would have
+   remained. Caught before the edit landed, and only because the ids were re-read for hex.
+
+   `w2-fleet-dictation` hit the same shape from the other side: a response fake that silently absorbed
+   writes-after-close — **the exact thing it existed to detect**. *A fake that absorbs the thing under
+   test is worse than no fake.*
+
+**The check that separates all four from a real pass is the same one:** watch it fail. Every fix in
+this postmortem and the four above was mutation-checked — the original defect put back, the suite run,
+the file restored byte-identical. A check nobody has watched fail is not evidence.

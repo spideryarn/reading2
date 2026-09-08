@@ -31,6 +31,15 @@ import { escapeHtml } from "./html.js";
 import { canonicaliseCallouts, type CalloutStats } from "./callouts.js";
 import { type FurnitureRemovals, removePlatformFurniture } from "./furniture.js";
 import { canonicaliseNotes, type NoteStats } from "./notes.js";
+import {
+  type KeptStructure,
+  type ProtectOptions,
+  controlOptionsFor,
+  keptWithdrawn,
+  notForPrintText,
+  proseRetention,
+  protectAuthoredStructure,
+} from "./protect.js";
 /* The namespace and its scrub — src/reserved.ts is the only file allowed to
    name one of these attributes. See `stampSourceIds`. */
 import { RESERVED_ATTRS, scrubReserved } from "./reserved.js";
@@ -178,6 +187,15 @@ export interface ExtractResult {
    * is where that trade stops being premature.
    */
   removed: FurnitureRemovals;
+  /**
+   * **What stage 2 told Readability to keep, per rule** — the other half of the
+   * audit line, and the mirror of `removed` above (src/protect.ts).
+   *
+   * It rides here for exactly the reason `removed` does, and the same trade is
+   * still premature. A rule that stamped nothing is absent rather than zero,
+   * which `KeptStructure` explains.
+   */
+  kept: KeptStructure;
 }
 
 /**
@@ -373,6 +391,43 @@ export function readArticle(
   callouts: CalloutStats;
   /** What `removePlatformFurniture` deleted, per selector — see src/furniture.ts. */
   removed: FurnitureRemovals;
+  /**
+   * What `protectAuthoredStructure` stamped, per rule — see src/protect.ts.
+   *
+   * A `…-rolled-back` key in place of the stamped one means the rescue was
+   * withdrawn and `article` is the control extraction: `armThatKeptTheProse`.
+   */
+  kept: KeptStructure;
+} {
+  const shipped = armThatKeptTheProse(readingArm(html, url, {}), (opts) => readingArm(html, url, opts));
+  return {
+    article: shipped.article,
+    refusal: capabilityFloor(shipped.article),
+    notes: shipped.notes,
+    callouts: shipped.callouts,
+    removed: shipped.removed,
+    kept: shipped.kept,
+  };
+}
+
+/**
+ * **One run of stage 2 on the shipping path**, so that the treatment arm and the
+ * control arm are the same code with a different `ProtectOptions` rather than
+ * two similar paragraphs that can drift apart.
+ *
+ * `notes`, `callouts` and `removed` come back from both arms and are identical
+ * in both: all three run before `protectAuthoredStructure` in `prepareDocument`,
+ * on the same input, so whichever arm ships, its copies are the right ones.
+ */
+function readingArm(
+  html: string,
+  url: string | null,
+  protect: ProtectOptions,
+): ProtectedArm & {
+  article: ReturnType<Readability["parse"]>;
+  notes: NoteStats;
+  callouts: CalloutStats;
+  removed: FurnitureRemovals;
 } {
   /* **A `VirtualConsole` with nothing attached to it**, and this is not tidiness.
      JSDOM's default forwards its own errors straight to `console`, and one of
@@ -392,9 +447,80 @@ export function readArticle(
      of the same class, and the first one where the leak was a dependency's
      rather than ours. See docs/project/logging.md. */
   const dom = sourceDom(html, url);
-  const { notes, callouts, removed } = prepareDocument(dom.window.document);
+  const { notes, callouts, removed, kept } = prepareDocument(dom.window.document, protect);
+  /* Before the parse, and it has to be: Readability mutates the document it is
+     given, and `keepClasses: false` takes the `noprint` class off whatever
+     survives. See `notForPrintText` (src/protect.ts). */
+  const notForPrint = notForPrintText(dom.window.document);
   const article = new Readability(dom.window.document).parse();
-  return { article, refusal: capabilityFloor(article), notes, callouts, removed };
+  return {
+    article,
+    notes,
+    callouts,
+    removed,
+    kept,
+    notForPrint,
+    content: () => bodyOf(article?.content ?? ""),
+  };
+}
+
+/**
+ * **What the prose-retention fallback needs of an arm, and nothing else** — so
+ * the two entry points can hand it two different kinds of extraction and get
+ * the same decision.
+ *
+ * `content` is a function rather than an `Element` because on the shipping path
+ * it costs a JSDOM parse of Readability's output, and the fallback runs on three
+ * of the thirty-five corpus fixtures. Eager, it would be a parse on every page
+ * for a comparison almost no page makes.
+ */
+interface ProtectedArm {
+  readonly kept: KeptStructure;
+  /** Readability's output, as something `proseRetention` can query. */
+  readonly content: () => Element;
+  /** This arm's document before Readability saw it — see `notForPrintText`. */
+  readonly notForPrint: readonly string[];
+}
+
+/**
+ * **Every rescue is checked before it ships, and a bad one is taken back** —
+ * once, for both read paths.
+ *
+ * § *The fallback* in src/protect.ts is why there is one at all, and
+ * `proseRetention` there is the criterion. This is the arithmetic round it: ask
+ * `controlOptionsFor` which rules fired, run the same stage again with exactly
+ * those switched off, and ship whichever arm still has the author's prose in it.
+ *
+ * **It is one function on purpose.** `readArticle` had it and
+ * `readArticleWithProvenance` did not, which meant the eval harness's *shipped*
+ * arm would inspect the extraction we threw away on the first page that rolled
+ * back — measured by GPT Sol on 2026-09-08 at 1,323 characters and four prose
+ * markers against 3,805 and none. Two copies of a decision is two copies to keep
+ * in step; one generic function is the version that cannot diverge, and
+ * tests/extract-protect.test.ts § *the two read paths* pins the two outputs
+ * byte-for-byte on a page that rolls back.
+ *
+ * **The `kept` that ships is the treatment's, rewritten** (`keptWithdrawn`), not
+ * the control's: the control stamped nothing, so its own `kept` would say
+ * nothing happened on a page where a rescue was made and withdrawn.
+ */
+function armThatKeptTheProse<T extends ProtectedArm>(treatment: T, runControl: (opts: ProtectOptions) => T): T {
+  const opts = controlOptionsFor(treatment.kept);
+  if (opts === null) return treatment;
+  const control = runControl(opts);
+  const check = proseRetention(control.content(), treatment.content(), control.notForPrint);
+  if (check.retained) return treatment;
+  return { ...control, kept: keptWithdrawn(treatment.kept) };
+}
+
+/**
+ * The body of a fragment of HTML, so `proseRetention` has something to query.
+ *
+ * `null` for the URL on purpose: this parses Readability's *output*, which has
+ * no address of its own and resolves nothing.
+ */
+function bodyOf(fragment: string): Element {
+  return sourceDom(fragment, null).window.document.body;
 }
 
 /**
@@ -545,10 +671,15 @@ function sourceDom(
  * `readArticleWithProvenance` below is a third caller and would have been a
  * third chance to get it wrong.
  */
-function prepareDocument(doc: Document): {
+function prepareDocument(
+  doc: Document,
+  /** Passed straight to `protectAuthoredStructure` — see `readArticle`'s fallback. */
+  protect: ProtectOptions = {},
+): {
   notes: NoteStats;
   callouts: CalloutStats;
   removed: FurnitureRemovals;
+  kept: KeptStructure;
 } {
   unhideCollapsedSections(doc);
   /* **The PDF figure marker, scrubbed on the one path a stranger's markup
@@ -591,7 +722,14 @@ function prepareDocument(doc: Document): {
      neither reads what the other writes — so it is simply the later arrival.
      src/callouts.ts. */
   const callouts = canonicaliseCallouts(doc);
-  return { notes, callouts, removed };
+  /* **Last, and the order is the safe one rather than an arbitrary one.**
+     Nothing else in this pass reads a class token we invent — the note and
+     callout recognisers know their shapes by the publisher's own class names —
+     so running last means our token cannot influence either of them, and that
+     is true by construction rather than by measurement. Readability is the only
+     reader of what this writes, and it has not run yet. src/protect.ts. */
+  const kept = protectAuthoredStructure(doc, protect);
+  return { notes, callouts, removed, kept };
 }
 
 /**
@@ -740,6 +878,28 @@ export function readArticleWithProvenance(
    * than assumed — C4a, 2026-09-06.
    */
   removed: FurnitureRemovals;
+  /**
+   * What `protectAuthoredStructure` stamped, per rule (src/protect.ts).
+   *
+   * **Stamped before the source is stamped with ids**, the same ordering fact
+   * `removed` rests on — and here it is doubly harmless, because the pass adds
+   * a class token and moves nothing: the stamped source and Readability's
+   * output are the same nodes in the same order either way.
+   *
+   * **The prose-retention fallback runs here too**, through the same
+   * `armThatKeptTheProse` the shipping path uses. It used not to, on the
+   * argument that no corpus fixture rolls back — and GPT Sol measured the
+   * divergence on the fallback's own committed construction on 2026-09-08:
+   * `readArticle` returned four prose markers and
+   * `a-table-called-header-rolled-back`, this returned none and
+   * `a-table-called-header`, 1,323 serialised characters against 3,805. An
+   * instrument whose *shipped* arm inspects the extraction we discarded is
+   * measuring a pipeline that does not exist, which is the failure
+   * `readArticle`'s own header already records once. So the cost — a second
+   * provenance-stamped run of the two-document dance below, on the pages a rule
+   * stamped and no others — is paid.
+   */
+  kept: KeptStructure;
   /** The stamped source, as Readability was handed it and before it pruned anything. */
   source: Document;
   /**
@@ -760,8 +920,49 @@ export function readArticleWithProvenance(
   /** How many source elements carry a stamp — the denominator for coverage. */
   stampedElements: number;
 } {
+  const shipped = armThatKeptTheProse(provenanceArm(html, url, {}), (opts) => provenanceArm(html, url, opts));
+  return {
+    article: shipped.article,
+    refusal: capabilityFloor(shipped.article),
+    notes: shipped.notes,
+    callouts: shipped.callouts,
+    removed: shipped.removed,
+    kept: shipped.kept,
+    source: shipped.source,
+    sourceHtml: shipped.sourceHtml,
+    stampedElements: shipped.stampedElements,
+  };
+}
+
+/**
+ * **One provenance-stamped run of stage 2**, the instrument's counterpart to
+ * `readingArm` — and, like it, one body of code that both arms of the fallback
+ * go through.
+ *
+ * `source`, `sourceHtml` and `stampedElements` belong to *this* arm, so a page
+ * that rolls back hands the caller the control arm's stamped source. That is the
+ * point rather than a detail: every output id is looked up in `source`, and the
+ * source of an extraction we discarded would answer for a document nobody read.
+ */
+function provenanceArm(
+  html: string,
+  url: string,
+  protect: ProtectOptions,
+): ProtectedArm & {
+  article: ReturnType<Readability<Element>["parse"]>;
+  notes: NoteStats;
+  callouts: CalloutStats;
+  removed: FurnitureRemovals;
+  source: Document;
+  sourceHtml: string;
+  stampedElements: number;
+} {
   const prepared = sourceDom(html, url);
-  const { notes, callouts, removed } = prepareDocument(prepared.window.document);
+  const { notes, callouts, removed, kept } = prepareDocument(prepared.window.document, protect);
+  /* Before Readability, for the reason `readingArm` gives. `stampSourceIds`
+     below only adds an attribute, so either side of it would do; before it is
+     where the same line sits on the other path. */
+  const notForPrint = notForPrintText(prepared.window.document);
   const stampedElements = stampSourceIds(prepared.window.document);
   const sourceHtml = prepared.window.document.documentElement.outerHTML;
   const forReadability = sourceDom(prepared.serialize(), url);
@@ -770,13 +971,18 @@ export function readArticleWithProvenance(
   }).parse();
   return {
     article,
-    refusal: capabilityFloor(article),
     notes,
     callouts,
     removed,
+    kept,
     source: prepared.window.document,
     sourceHtml,
     stampedElements,
+    notForPrint,
+    /* Already a DOM node — the serializer above is the identity — so unlike
+       `readingArm` there is nothing to parse. `bodyOf("")` stands in for the
+       page Readability declined, which has no prose to lose either way. */
+    content: () => article?.content ?? bodyOf(""),
   };
 }
 
@@ -954,7 +1160,7 @@ export async function runExtract(opts: {
      Found by a GPT Sol review that reproduced it, 2026-08-26 — the fourth round
      of the same class, and the first one where the leak was a dependency's
      rather than ours. See docs/project/logging.md. */
-  const { article, refusal, notes, callouts, removed } = readArticle(opts.html, opts.url);
+  const { article, refusal, notes, callouts, removed, kept } = readArticle(opts.html, opts.url);
   if (!article) {
     throw new ReadabilityRefused();
   }
@@ -1004,6 +1210,7 @@ export async function runExtract(opts: {
     notes,
     callouts,
     removed,
+    kept,
   };
 }
 
