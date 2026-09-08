@@ -2323,6 +2323,12 @@ today* — sampling began at 20:56, eight hours after the peak. "The box may nev
 where this matters" is dead: 18 agents is within a factor of two of the 20-35 the Overseer design
 assumes, and that design target is most of the way to being met already.
 
+**The class this belongs to is written up rather than restated here:**
+[260908h — the plan and the instrument described different systems](../postmortems/260908h-the-plan-and-the-instrument-described-different-systems.md).
+Its signature is comfort: every number was defensible and every caveat was written down, which is
+why nine hours passed before anybody checked the premise. A wrong number gets challenged; a right
+number about the wrong system does not.
+
 **What it does not change.** There is still **no reachability sample at 18 agents** — the sampler
 did not exist at 12:35. So *"at 20-35 agents the bad case is the normal case"* remains exactly as
 unearned as before; what has moved is that the regime is real rather than hypothetical, so the

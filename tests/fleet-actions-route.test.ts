@@ -1441,6 +1441,60 @@ describe("rate limiting", () => {
   });
 });
 
+describe("what a refusal says about delivery, and what a page may conclude from it", () => {
+  /**
+   * A `FleetRow` as far as the request bodies are concerned.
+   *
+   * `steerTargetBody` reads five fields off a row and nothing else, so this is
+   * the whole of what `run()` needs. A cast rather than a full row, because a
+   * full one would be a fixture of the state payload — a different file's
+   * subject — and would go stale against it silently.
+   */
+  const ROW = {
+    id: "$99001",
+    paneId: "%99001",
+    claudeSessionId: CLAUDE_ID,
+    panePid: 424242,
+    rawStatus: { kind: "idle" },
+  } as unknown as Parameters<ReturnType<typeof makeActionsApi>["run"]>[0];
+
+  it("sends no delivery on a refusal that had already run two steps", async () => {
+    /* NOT AN OVERSIGHT, AND THE TEST IS HERE SO IT STAYS DELIBERATE. This
+       refusal arrives AFTER `git rev-parse` and `npm run worktree:check` have
+       actually run on the box, and it still has no opinion about delivery,
+       because `delivery` is a fact about keystrokes and no keystroke was
+       involved. The route must not invent one — a `delivery: "none"` here would
+       be the server signing its name to "nothing happened" over two commands
+       that did. Absence is the honest answer, and the client reads it as
+       `not-told`. */
+    const { io, ran } = fakeIo({
+      step: (_s, i) => (i === 1 ? { ...OK_STEP, code: 1, stdout: "blocked: data/ has 3 files" } : { ...OK_STEP, stdout: "worktree-fixture\n" }),
+    });
+    const { routes } = harness({ io });
+    const r = await call(
+      routes,
+      fakeReq({ body: sessionBody({ actionId: "remove-worktree", confirm: true, mode: "run", worktreeDir: WORKTREE, branch: "worktree-fixture" }) }),
+    );
+    expect(r.status).toBe(409);
+    expect(r.json.code).toBe("plan-failed");
+    expect(ran.map((x) => x.argv[0])).toEqual(["git", "npm"]);
+    expect(r.json).not.toHaveProperty("delivery");
+  });
+
+  it("is read as not-told rather than none by the client that receives it", async () => {
+    /* THE JOIN, over the real handler. Everything either side of it can be
+       right while the client still reads a missing field as `none` — which is
+       what it did, by having nowhere to put the answer at all. */
+    const { routes } = harness({});
+    const outcome = await makeActionsApi(browserFetch(routes)).run(ROW, "remove-worktree");
+    expect(outcome.ok).toBe(false);
+    expect(outcome.ok === false && outcome.code).toBe("confirm-required");
+    expect(outcome.ok === false && outcome.delivery).toEqual({ kind: "not-told" });
+    // The server's sentence, unparaphrased, and from the server.
+    expect(outcome.ok === false && outcome.from).toBe("server");
+  });
+});
+
 describe("reading the process table", () => {
   it("parses ps output, and keeps a comm with a space in it", () => {
     const args = parsePsArgs(["    1     0  12000    98765 /sbin/init splash", " 4242     1  91000    12345 node /x/node_modules/.bin/vitest run", "garbage"].join("\n"));
