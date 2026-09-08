@@ -733,6 +733,68 @@ and has never included the name, which is the same conclusion for the same reaso
 - **Done:** the full torn-write sequence — tear, restart, append, append, read — and a second daemon
   refusing to start. Not "a torn line is skipped".
 
+### S3's review, and the premise in it that was wrong
+
+[260908b-s3-review-sol.md](260908b-s3-review-sol.md). A P0 and four others; all five dispatched fixes
+landed, and **one finding was rejected on its premise rather than fixed** — which is the part worth
+keeping.
+
+**S3-01 (P0) — the lock was not exclusive.** Rename-plus-read-back only catches contenders that
+renamed before the read. Now `openSync(path, "wx")`: the kernel decides, in one syscall. The residual
+is **named rather than hidden** — clearing a provably-dead pid's lock cannot be made atomic without a
+primitive Node does not expose — and it is covered by a second line: **ownership is the lock file
+itself, checked two ways.** Inode-and-device identity between the held fd and the path catches a
+competitor's unlink-and-recreate *even when byte-identical*; the record's `instanceId` catches an
+in-place overwrite, which keeps the inode. Checked before the log is repaired, before the append
+handle opens, and before every write — so a start that lost the clearing race refuses rather than
+truncating a log the winner is appending to, which was the worse half of the finding.
+
+**S3-02 — replay is now all-or-nothing.** One unreadable line inside the range being replayed means
+no fold at all. A hole *before* the checkpoint's cursor does not block a resume: those bytes were
+folded when they were good, and refusing there would throw away a sound checkpoint over a line
+nothing reads again. The framing that unlocked it — not a hostile-user boundary, but a **persistence,
+version and corruption** boundary — is in the module comment, next to the sentence that makes the
+strictness affordable:
+
+> Every refusal in this file is affordable precisely because the thing on the other side of it is a
+> working daemon with no memory.
+
+**S3-06 — the cursor now saves work as a number rather than as a claim.** The checkpoint is read
+first, the log only from the cursor, positionally. `StoreOpening` gained `bytesScanned`, and the
+smoke run prints `Resumed … Read 0 bytes of the log.` A range too large to replay is a **cold start
+rather than an attempt** — the restart-loop cliff removed instead of documented.
+
+**And S3-04, which was rejected.** Sol's premise was that a resumed store must reconstruct a baseline
+from what it holds. It must not, and cannot honestly: the register keeps `lastStatusKey` rather than
+the status and has never held `title` or `question`, so anything minted from it carries **an invented
+`collectedAt` for a collection that never happened** — plausible wrongness manufactured by the
+recovery path, which is where it survives longest. The daemon instead persists **the producer's own
+wire bytes** and, on restart, re-parses and re-blesses them through `parseObservation` and
+`admissible()`.
+
+> The register answers *what is running*. The baseline answers *what did the producer last say*.
+> Different questions, and only the second is safe to re-derive, because we can keep the exact bytes.
+
+That now sits on `SessionRegister` in the code, because the temptation will recur. **The fields the
+register drops are dropped on purpose; that is what makes it safe, and it is a property to preserve
+rather than a gap to close.**
+
+**Two things about reviews follow from it**, and both agents reached them independently: a premise
+from a cross-family review **can be wrong in the same way code can**, and it is easier to miss because
+a finding arrives already framed as a defect with a fix implied. Sol found a real gap here — a
+restart genuinely could not produce `working → idle` — and named the wrong repair. Taking the gap and
+refusing the repair is the outcome to aim for.
+
+**Mutations: 29 tried, 28 caught, and the survivor reported as an equivalent mutant rather than
+banked as coverage.** Five of the original fifteen went **NO-OP** because their anchors had been
+rewritten, and were re-anchored and re-run rather than counted — *a mutation that matches nothing
+reports nothing*, which is this whole failure class in miniature.
+
+**The sharpest finding of the round is about tests, not stores.** The mutant that removed the
+absolute-path check really did create a directory in the repo root — **which then made the next run of
+that test pass for the wrong reason.** A control that poisons its own verification is worth killing on
+sight; that test now cleans up whatever happens.
+
 ### S4 — the source and the daemon
 
 - SSE with poll fallback, the freshness watchdog, degradation and restoration events. **No health

@@ -247,6 +247,26 @@ export type RegisterEntry = {
   readonly statusSince: string;
 };
 
+/**
+ * WHAT IS RUNNING — and deliberately not a snapshot.
+ *
+ * The tempting move, which a cross-family review proposed and which is wrong:
+ * rebuild a differ baseline out of this after a restart. It cannot be done
+ * honestly. We keep `lastStatusKey` rather than the status, and have never
+ * held `title` or `question`, so anything minted here would carry an invented
+ * `collectedAt` for a collection that never happened — plausible wrongness
+ * manufactured by the recovery path, which is the one place it survives
+ * longest.
+ *
+ * The register answers "what is running". A baseline answers "what did the
+ * producer last say". Only the second is safe to re-derive, and only because
+ * the daemon keeps the producer's own bytes and re-blesses them through
+ * `parseObservation` + `admissible()` — a snapshot that passed the real gate,
+ * not a reconstruction that resembles one.
+ *
+ * **The fields this drops are dropped on purpose.** That is what makes it safe,
+ * so it is a property to preserve rather than a gap to close.
+ */
 export type SessionRegister = ReadonlyMap<SessionKey, RegisterEntry>;
 
 /**
