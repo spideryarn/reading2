@@ -173,7 +173,22 @@ That is a cheap, general countermeasure and it outranks everything already in my
 
 It generalises past this incident: an instrument attached partway down a chain cannot see that the
 chain is severed above it. The measurement will be internally consistent, responsive to real
-conditions, and about nothing.
+conditions, and about nothing — **it moves when the box gets busy, which is exactly what makes it
+convincing.**
+
+**And the countermeasure has its own failure mode, which the dashboard's owner named** and which
+would otherwise have made it useless here:
+
+> The trace has to end at the **first refusal**, not at the first thing that *looks like* the
+> mechanism. Had I traced the broadcast and stopped at `drainGate` — the code I was arguing about,
+> and the first thing in that path that looks like the answer — I would have confirmed my own model
+> and learned nothing.
+
+So *"end to end"* is load-bearing and a reader will be tempted to shorten it to *"trace the call"*.
+The stopping rule is the whole difficulty, because the natural place to stop is the thing you already
+believe in — which is the original error wearing the countermeasure's clothes. Their verification was
+**one `curl` and under a minute**: the difference between the two of us and the session that found it
+was not rigour or effort, it was **direction of travel**.
 
 ### What survives
 
