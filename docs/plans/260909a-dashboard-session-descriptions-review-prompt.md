@@ -129,3 +129,11 @@ These are already my doubts, so confirming them is cheap. Spend most of the run 
   something". Am I under-building it?
 
 Do not change any file.
+
+---
+
+**Candidate closed.** The live pre-commit candidate above landed as commit `2d50d6a7` (Stage 0 only),
+merged and pushed to `dev` as `3d020761`. Sol noted that Stage 0's tracked edits appeared in the tree
+mid-review and correctly treated them as concurrent work rather than as the candidate — which is the
+hazard the "not durable" warning in
+[review-prompt-template.md](../reusable/review-prompt-template.md) describes, observed in the wild.

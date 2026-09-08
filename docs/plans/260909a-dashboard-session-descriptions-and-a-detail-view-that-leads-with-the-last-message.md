@@ -1,8 +1,15 @@
 # Dashboard: session descriptions, a notified Overseer, and a detail view that leads with the last message
 
-**Status as of 2026-09-09 01:20: planned, nothing built.** Evidence: no file named `describe*` under
-`tools/fleet/`, and `grep -rn "description" tools/fleet/web/src/types.ts` returns nothing on
-`FleetRow`. This doc is a record of a decision, not evidence that anything shipped.
+**Status as of 2026-09-09 02:45: Stage 0 committed and pushed to `dev` (`2d50d6a7`, merged and pushed
+as `3d020761`); Stages A–F unbuilt, and the plan for them is being rewritten against a cross-family
+review that refused it.** Evidence: no file named `describe*` under `tools/fleet/`, and
+`grep -rn "description" tools/fleet/web/src/types.ts` returns nothing on `FleetRow`. This doc is a
+record of a decision, not evidence that anything shipped.
+
+**The review is [260909a-dashboard-session-descriptions-review-sol.md](260909a-dashboard-session-descriptions-review-sol.md)**
+— twelve findings, seven of them established P1s, verdict *refuse as written*. The ledger is at the
+bottom of this doc. Do not build Stages A–F from the text above until the ledger says a finding is
+folded in.
 
 Umbrella plan: [260907e-agent-fleet-dashboard.md](260907e-agent-fleet-dashboard.md). Session name
 `dashboard-titles-descriptions-detail`, worktree `260909a-dashboard-descriptions`.
@@ -166,6 +173,33 @@ the first minutes of a session, when the list says `no title yet`.
 A record carries **both** keys plus the `tmuxServerPid` it was computed under, and a reader that finds
 a disagreement treats the record as stale rather than rendering it — `planClassifications`'
 key-in-record check (`attention-classify.ts:151`), applied to a two-part key.
+
+### The description needs a reader that does not exist yet
+
+**Found 2026-09-09 02:30, after the plan went to Sol and before Stage A started.** The plan above says
+the description comes from "the session's first turns", read with `readRecentMessages`. **It cannot
+be**: `readRecentMessages` (`transcript.ts:891`) and `readRawTail` (`:1055`) both seek **backwards**
+from the end of the file, and there is no forward reader anywhere in `tools/fleet/`. What they return
+is the newest 12 turns, which is the opposite end of the conversation.
+
+That matters beyond plumbing, because it is what makes the cache design work. A description taken from
+the newest turns describes what a session is doing *now*, so its fingerprint churns on every turn and
+"one call per session" becomes one call per turn — the exact cost `planClassifications` exists to
+prevent.
+
+**The answer is a small forward reader**, and it is smaller than it looks because
+`recordsToTurns(records, maxTextChars)` is already exported (`transcript.ts:717`) and does the hard
+part: coalescing an assistant turn that spans several JSONL lines by `message.id` (1497 of 2806 ids in
+the measured transcript spanned more than one line), and dropping `isSidechain` subagent records that
+would otherwise read as the main agent saying things it never said. So the new code is "read the first
+N KB, keep the complete records, hand them to `recordsToTurns`".
+
+**It is also cheaper than the reader it sits beside** — a forward read is one chunk from byte 0, with
+none of the backwards seeking `readRecentMessages` needs — which is worth saying because "another
+transcript read per session" sounds like the 10–12 s cost this dashboard exists to avoid, and is not.
+
+Two consequences for the stages below: Stage A gains the reader, and **`tools/fleet/transcript.ts`
+joins the file set** (it is in nobody's claim).
 
 ### The simpler options passed over
 
@@ -419,3 +453,83 @@ New order, the loud band staying on top:
   session is then permanently marked non-provisional. Not ours to fix, but a generated title sitting
   beside a truncated `aiTitle` will look like our bug.
 - **Two agents editing `tests/fleet-web.test.tsx`.** Append only, re-read immediately before editing.
+
+## Review ledger — GPT Sol, round one, 2026-09-09
+
+Verdict **refuse as written**: no P0, seven established P1s. The artefact is
+[260909a-dashboard-session-descriptions-review-sol.md](260909a-dashboard-session-descriptions-review-sol.md);
+findings are addressed by ID and each ID appears exactly once. Every finding below was checked
+against the code before being accepted.
+
+| ID | Finding | Disposition |
+|---|---|---|
+| F1 | A reused pane renders the previous conversation's description | **Accepted** — verified |
+| F2 | The reader cannot detect that its cached idle summary is stale | **Accepted, reduced** |
+| F3 | `readRecentMessages` cannot produce `openingFingerprint` | **Accepted** — found independently first |
+| F4 | Web-launched sessions are ineligible for generated titles | **Accepted** — verified, and worse than stated |
+| F5 | The private notification prefix violates the attribution gate | **Escalated** — conflicts with a coordination decision |
+| F6 | Nullable notification state lets the consumer lose the result | **Accepted** |
+| F7 | Bounding individual calls still blocks the dashboard (~60 s, not 30 s) | **Accepted** |
+| F8 | A stale claim can notify a former Overseer | **Accepted** |
+| F9 | "Must not say finished" has no implementation requirement | **Accepted** |
+| F10 | Stages A and B deliberately end with dead joins | **Accepted** |
+| F11 | The daemon rationale overstates what `wire.ts` refuses | **Accepted** — conclusion stands, reasoning did not |
+| F12 | The plan's status line is internally stale | **Fixed** |
+
+### The three that change the shape of the work
+
+**F1 is the one that would have shipped.** `transcript.ts:200-215` says it outright: `CLAUDE_SESSION_ID`
+is set once at session creation and *never updated*, so a pane re-used for a second conversation still
+names the first one, and the reader "will faithfully return that conversation's last turns… real
+messages, well formed, correctly attributed, about this repo. They are simply not the conversation on
+screen." Every key I proposed — both fingerprints, `tmuxServerPid`, the pane and session handles —
+matches in that sequence, so conversation A's confident description renders on conversation B's row.
+That is precisely the failure this whole codebase is organised against, and my key design did not
+touch it.
+
+**The fix is a dependency rather than a patch:** a description is renderable only when the row's
+Execution identity is `verified` and its verified conversation id is the id of the transcript that was
+read; `claimed-only` or `unknown` produces `cannot-tell` and never falls back to `CLAUDE_SESSION_ID`.
+That is `FleetRow.execution`, which `260908f-roadmap-exec-identity` is landing tonight — so Stage B
+was already queued behind it, and now *depends* on it rather than merely sharing a file.
+
+**F4, and it is partly self-inflicted.** `routes-new.ts:405-423` already documents this and cites an
+earlier Sol finding: a web launch passes an opaque `web-<clock>` name, which makes gjd-remote run
+`claude --name`, which writes a `customTitle` and sets `GJD_PROVISIONAL=0`. Privacy was chosen over
+the title deliberately — a prompt-derived name would leak the prompt onto every listing on the box.
+
+**Stage 0 then made the consequence worse**, which I did not see when I shipped it: those sessions used
+to read `title === null` and would have been eligible for a generated title; now they carry an opaque
+clock-shaped one and Stage C's `row.title === null` test skips them. So Stage 0's headline number is
+weaker than reported — for a launcher-named session the `customTitle` simply *is* the session name, and
+what it gained is a title identical to a name the list could already show. **Stage 0's durable win is
+narrower: it stops rows showing a *misleading* generated title** (`Overseer`, and
+`claude-agents-dashboard`'s garbled "Fraud agents dashboard").
+
+**The eligibility rule is therefore not `row.title === null`.** The cheap and general form, preferred
+over Sol's gjd-remote change because it needs no launch-path surgery and catches every launcher name
+rather than only the web one: **a title equal to the session's own name is a name, not a title.** It
+reclassifies `worktree-removal-script`, `web-260908-125129-3e7aab` and every `w2-*` session as
+undescribed, which is what they are. Sol's tmux-only-name option remains the right fix *at the source*
+and is worth doing later; it is not worth blocking the description work on.
+
+**F10 is a fair hit with the postmortem I quoted at it.** Stage A's done condition was "nothing else
+imports the new module", which is Class A from
+[260908b](../postmortems/260908b-the-parts-were-all-tested-and-none-of-the-joins-were.md) — the exact
+failure I cited in the References. Stages A–C merge into one delivery stage whose completion boundary
+is the real `statePayload` output rendering every description arm in a real browser; the unit-level
+describer and store become reviewed checkpoints inside it, not landed stages.
+
+### F5 — escalated, not decided
+
+Sol: *"`overseer.md` says attribution is enforced through required `Speaker`, 'and you should not work
+around it.' The plan explicitly works around it with a private constant. A coordination conflict with
+another branch is not a reason to create the second handwritten attribution mechanism the gate
+forbids."*
+
+The Overseer ruled the opposite four hours earlier, on the ground that widening `Speaker` turns the
+delivery-receipts agent's build red mid-flight. **Both are right about their own half**: Sol is right
+that a second attribution path is the thing gate 1 forbids, and the Overseer is right that this is a
+scheduling problem. They are not actually in conflict — the answer is to add the arm *after* the
+delivery-receipts work lands, which is a sequencing decision the Overseer owns. Put back to it rather
+than settled here; Stage D does not start until it answers.
