@@ -1,0 +1,7 @@
+│ This loop stops when you close this session. Set it up as a cloud schedule instead so it keeps running?
+❯ 1. Cloud schedule (recommended)
+     Runs in Anthropic's cloud even after you close this session
+  2. This session only
+  3. Type something.
+  4. Chat about this
+Enter to select · ↑/↓ to navigate · Esc to cancel

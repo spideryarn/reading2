@@ -1,0 +1,225 @@
+/*
+ * The fleet dashboard's stylesheet. `main.tsx` imports THIS file and nothing
+ * else, which is the same rule src/web/tailwind.css states for the product.
+ *
+ * ## What is copied from the product, and what is deliberately not
+ *
+ * COPIED: the `@layer` statement first (a layer statement is one of the few
+ * things allowed to precede `@import`, and it is what fixes the order); the
+ * `prefix(tw)` on both Tailwind imports, so utilities are written `tw:flex`;
+ * the bare `theme.css`/`utilities.css` imports with explicit `layer(…)`,
+ * because neither file self-wraps and without the keyword they land unlayered
+ * and lose to everything on specificity; `@source` narrowed to exactly one
+ * directory, because Tailwind's scanner is a plain TEXT scanner and will
+ * happily compile a class name out of a prose file; and `@theme inline`, whose
+ * keyword is load-bearing (it emits `var(--our-token)` at the use site instead
+ * of an indirection that resolves at `:root`).
+ *
+ * NOT COPIED, and both are decisions:
+ *
+ *  - **Preflight is imported here.** The product refuses it because `.prose`
+ *    renders the article author's own HTML and it cannot enumerate the tags.
+ *    This tool renders no author HTML — every element on the page is one we
+ *    wrote — so the ordinary reset is the boring option and a hand-written
+ *    substitute would be a second one to maintain.
+ *  - **Light and dark, both real.** The product is dark unconditionally
+ *    (Greg's call, docs/project/web-client.md § Dark mode) and redefines
+ *    Tailwind's `dark:` variant to always match. This page is read on a phone
+ *    in daylight and at a desk at night, so it follows the device: the tokens
+ *    below are defined light on `:root` and redefined under
+ *    `prefers-color-scheme: dark`. Nothing here writes `dark:` — the tokens
+ *    carry the whole difference, which is why there is exactly one place to
+ *    change a colour.
+ *
+ * The palette itself is the fleet page's own language, carried over from
+ * tools/fleet/page.ts so that this rewrite does not also re-teach the reader
+ * what the colours mean: orange for "needs you", green for "working", violet
+ * for "unknown", grey for everything quiet. The greys and the type are the
+ * house's (styles/tokens.css, docs/project/typography.md).
+ */
+@layer theme, base, app, utilities;
+
+/* Geist, self-hosted from the dependency the product already carries. Three
+   files would be four with the italics; this tool sets none, so the two upright
+   families are all it needs. Family names are Fontsource's — 'Geist Variable',
+   not 'Geist', which matches nothing and falls silently through to the system
+   stack. */
+@import "@fontsource-variable/geist/wght.css";
+@import "@fontsource-variable/geist-mono/wght.css";
+
+@import "tailwindcss/theme.css" layer(theme) prefix(tw);
+@import "tailwindcss/preflight.css" layer(base);
+@import "tailwindcss/utilities.css" layer(utilities) prefix(tw) source(none);
+
+/* Exactly this directory, and it holds no prose. `dist/` is a sibling of `src/`
+   rather than a child, so the build's own output is never scanned back in. */
+@source ".";
+
+/* ------------------------------------------------------------- tokens -- */
+
+:root {
+  /* The one line that makes form controls, scrollbars and the canvas follow the
+     device rather than guessing. */
+  color-scheme: light dark;
+
+  --font-ui: "Geist Variable", system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Surfaces, lightest first. On a light ground the greys run the ordinary way;
+     the dark block below reverses them, which is the one thing that trips
+     people writing a second theme. */
+  --page: oklch(0.985 0 0);
+  --panel: oklch(1 0 0);
+  --panel-raised: oklch(0.965 0 0);
+
+  --ink: oklch(0.22 0 0);
+  --ink-soft: oklch(0.45 0 0);
+  --ink-faint: oklch(0.58 0 0);
+
+  --rule: oklch(0.9 0 0);
+  --rule-strong: oklch(0.82 0 0);
+
+  /* The four meanings. `*-wash` is the colour MIXED INTO THE PAGE rather than
+     an alpha of it: an alpha composites over whatever is behind, so the same
+     class reads differently on `--panel` and on `--panel-raised`, and the
+     difference shows exactly where a card sits inside a section. */
+  --needs: oklch(0.55 0.17 42);
+  --needs-ink: oklch(0.45 0.15 42);
+  --needs-wash: color-mix(in oklab, oklch(0.55 0.17 42) 10%, var(--panel));
+
+  --work: oklch(0.53 0.13 152);
+  --work-ink: oklch(0.45 0.12 152);
+  --work-wash: color-mix(in oklab, oklch(0.53 0.13 152) 9%, var(--panel));
+
+  --unknown: oklch(0.52 0.19 300);
+  --unknown-ink: oklch(0.45 0.18 300);
+  --unknown-wash: color-mix(in oklab, oklch(0.52 0.19 300) 9%, var(--panel));
+
+  --quiet: oklch(0.62 0 0);
+  --quiet-wash: oklch(0.93 0 0);
+
+  /* Staleness. Deliberately the same hue as "needs you" — both mean *look at
+     this* — but a step darker, so a stale banner over a page of orange rows is
+     still legible as a different kind of thing. */
+  --alarm: oklch(0.5 0.19 28);
+  --alarm-wash: color-mix(in oklab, oklch(0.5 0.19 28) 12%, var(--panel));
+
+  --focus: oklch(0.55 0.17 42);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --page: oklch(0.145 0 0);
+    --panel: oklch(0.185 0 0);
+    --panel-raised: oklch(0.225 0 0);
+
+    --ink: oklch(0.96 0 0);
+    --ink-soft: oklch(0.74 0 0);
+    --ink-faint: oklch(0.6 0 0);
+
+    --rule: oklch(0.27 0 0);
+    --rule-strong: oklch(0.36 0 0);
+
+    /* Lifted, not merely re-used. A hue that reads as strong on white sits at
+       about half the contrast it needs on a near-black page, and text painted
+       in a *surface* token is the specific mistake docs/project/design-css-overview.md
+       says had the product's outline panel half unreadable for four days. */
+    --needs: oklch(0.72 0.16 48);
+    --needs-ink: oklch(0.8 0.14 55);
+    --needs-wash: color-mix(in oklab, oklch(0.72 0.16 48) 14%, var(--panel));
+
+    --work: oklch(0.72 0.15 152);
+    --work-ink: oklch(0.78 0.14 152);
+    --work-wash: color-mix(in oklab, oklch(0.72 0.15 152) 12%, var(--panel));
+
+    --unknown: oklch(0.7 0.16 300);
+    --unknown-ink: oklch(0.78 0.14 300);
+    --unknown-wash: color-mix(in oklab, oklch(0.7 0.16 300) 13%, var(--panel));
+
+    --quiet: oklch(0.6 0 0);
+    --quiet-wash: oklch(0.25 0 0);
+
+    --alarm: oklch(0.7 0.19 27);
+    --alarm-wash: color-mix(in oklab, oklch(0.7 0.19 27) 16%, var(--panel));
+
+    --focus: oklch(0.72 0.16 48);
+  }
+}
+
+/* The bridge: Tailwind's names pointed at the tokens above, so a component can
+   write `tw:bg-panel` instead of `tw:bg-[var(--panel)]`. `inline` means the
+   utility emits `var(--panel)` and reads it at the use site, so a utility and a
+   hand-written `var(--panel)` can never disagree. */
+@theme inline {
+  --color-page: var(--page);
+  --color-panel: var(--panel);
+  --color-panel-raised: var(--panel-raised);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-faint: var(--ink-faint);
+  --color-rule: var(--rule);
+  --color-rule-strong: var(--rule-strong);
+  --color-needs: var(--needs);
+  --color-needs-ink: var(--needs-ink);
+  --color-needs-wash: var(--needs-wash);
+  --color-work: var(--work);
+  --color-work-ink: var(--work-ink);
+  --color-work-wash: var(--work-wash);
+  --color-unknown: var(--unknown);
+  --color-unknown-ink: var(--unknown-ink);
+  --color-unknown-wash: var(--unknown-wash);
+  --color-quiet: var(--quiet);
+  --color-quiet-wash: var(--quiet-wash);
+  --color-alarm: var(--alarm);
+  --color-alarm-wash: var(--alarm-wash);
+
+  --font-sans: var(--font-ui);
+  --font-mono: var(--font-mono);
+}
+
+/* --------------------------------------------------------------- base -- */
+
+@layer app {
+  html {
+    /* The phone's status bar and home indicator. Every value of these is `0px`
+       on every machine we develop on, which is why it is written once here
+       rather than discovered on the device. */
+    background: var(--page);
+  }
+
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--ink);
+    font-family: var(--font-ui);
+    font-size: 15px;
+    line-height: 1.45;
+    -webkit-text-size-adjust: 100%;
+    /* Under the notch and the home indicator, without any content landing
+       there. `env()` resolves to 0px where there is nothing to avoid. */
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+      env(safe-area-inset-left);
+  }
+
+  /* One focus treatment, drawn rather than suppressed. The product's own
+     controls.md records months of a button with no visible focus at all; the
+     cheapest way not to repeat that is never to write `outline: none`. */
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+
+  /* The motion guard, written globally before there is much motion to guard —
+     which is the lesson from the previous app, where the guard covered two
+     class names while fifteen animations ran regardless. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
