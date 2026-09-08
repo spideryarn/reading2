@@ -1134,6 +1134,48 @@ side of [orchestrator-direction.md](../project/orchestrator-direction.md)'s rule
 *correct and unavailable* to *plausible and up* — except that here we get correct **and** up, just not
 yet remote.
 
+#### There is a THIRD copy of each unit, and nothing checks it
+
+`tests/systemd-units.test.ts` compares the readable file under `infra/hetzner/systemd/` against the
+heredoc spliced into `provision.sh`, byte for byte, and that check is live — verified 2026-09-08 by
+adding a single trailing space and watching it go red. **It compares the two copies in the repo. The
+copy that actually runs is in `/etc/systemd/system/`, and nothing compares anything to that.**
+
+Measured 2026-09-08, 11:10, on this box:
+
+| unit | installed vs repo |
+|---|---|
+| `overseer.service` | **identical** |
+| `fleet-dashboard.service` | **differs — 53 lines, including the `100.` fallback address and the conditional build**, both of which are the P1 above |
+
+So the installed fleet unit is the design we abandoned, and enabling it without reinstalling would
+start exactly the thing two reviews and two agents agreed to remove. Found by the fleet dashboard
+agent while preparing the cutover, not by any check.
+
+**Why this is the drift test's own class, one step out.** The test exists because two copies of a fact
+is how one goes stale, and the stale one is invisible. There were never two copies — there were
+three, and the third is the only one with any effect. A test that guards the two you can see, while
+the one that runs is unguarded, is a check that measures where the light is.
+
+**Deliberately NOT made a gate, and the reason is worth keeping.** The obvious fix — a test asserting
+that `/etc/systemd/system/<name>.service` matches the repo whenever it exists — would go red on this
+box the moment anyone edits a unit, and **stay red until somebody runs `sudo`, which agents here
+cannot do.** That is a red trunk with no agent-reachable fix, which
+[open-questions.md's Q12 discussion](../project/orchestrator-direction.md) established is worse than
+the thing it detects: a shared red gate hides its own additional causes. So this is a **step in the
+procedure and a known uncovered case**, not a check.
+
+**Therefore the install step is part of every unit change**, and it is written into
+[hetzner-remote-server-box.md](../project/hetzner-remote-server-box.md) as such:
+
+```
+# after ANY edit to infra/hetzner/systemd/*.service, before enabling or restarting:
+sudo install -m 0644 -o root -g root \
+  <(sed 's/@USER@/greg/g' infra/hetzner/systemd/<name>.service) \
+  /etc/systemd/system/<name>.service
+sudo systemctl daemon-reload
+```
+
 #### The four commands that finish S5, and why they are Greg's
 
 **`sudo systemctl enable` is refused for agents on this box, and it was refused twice by different
