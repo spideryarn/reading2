@@ -224,7 +224,7 @@ way it worked this morning, and nothing half-built is load-bearing.
 |---|---|
 | **1** — the runbook and the gates | **done**, `dev`. `docs/project/overseer.md`, four gates. The `/overseer` skill was deleted on 2026-09-08 — see the stage. |
 | **2** — the scheduler and the watchdog | **done**, `dev`, after two GPT Sol rounds. **Armed by `OVERSEER_JOBS_ENABLED` and OFF.** |
-| **3** — the three deterministic rules | **not started.** The highest-value stage left, per Fable and Astra both. |
+| **3** — the three deterministic rules | **designed and reviewed, 2026-09-08 evening**, split 3a–3d. Fable arbitrated how much each rule may act; Sol blocked the first draft with four P0s, all accepted. The acting rule is now last, behind two named preconditions. |
 | **4** — the deferral queue | **not started.** |
 | **5** — reboot revival | **not started.** Needs a new verb: `gjd-remote resume` is `attach`. |
 | **6** — CLI ergonomics, and the rename | **the rename is done**; the CLI is not started. |
@@ -327,6 +327,363 @@ No model calls. Each is a scheduled job from Stage 2 over primitives that alread
   nobody verifies is indistinguishable from an agent that died.
 
 Done when each has fired against a real condition on this box and the log says what it did.
+
+#### How the three rules behave: Fable's arbitration, 2026-09-08 evening
+
+I put the obvious fork to Fable — should v1 **act**, or **observe and surface**? The answer was
+neither, and it is better than both:
+
+> **Attempt through the real route, and let the existing switches decide whether it lands.** The
+> act/observe framing treats the three rules as one thing. They are not, and the codebase already
+> has the two-phase shape you need: every action has a dry-run/preview arm that runs real code
+> (`selectForKill`, `renderBroadcast`), and `actEnabled()` is read per request. So in v1 each rule
+> **always runs the whole path** — detect, plan, dry-run, then call the same gate functions the panel
+> uses — and writes a store event saying what happened: `sent to 31 of 36`, or
+> `refused: FLEET_ACT_ENABLED unset`, or `proposed: needs confirm`. Off and nothing-to-do never
+> render the same, which is the direction doc's own rule. That kills the "called from nothing but
+> its own tests" class without granting anything new.
+>
+> — Fable, 2026-09-08
+
+That is the design. **The rule is exercised end to end on the day it lands**, against the live
+specimen, and the only thing between a proposal and an action is a switch Greg already owns. It is
+the direct answer to the class this job hit twice in one day.
+
+Per rule, ordered by reversibility — because they are not equally reversible and the plan had been
+treating them as one thing:
+
+- **Rule 3 (box pressure and usage) — acts, behind `FLEET_ACT_ENABLED`.** The reversible one: a
+  spoken message that agents weight as a peer's suggestion. Two conditions Fable attached, both
+  cheap: fire only on a usage reading that is **not `unknown`** — a stale cache must never fire it,
+  and `resets_at` in the past is the validity check that says so — and **once per stagger window**,
+  which `BROADCAST_COOLDOWN_MS` (10 minutes) already half-provides.
+- **Rule 2 (wedged work) — proposes, never kills, in v1.** The specimen already matches
+  `cwd-deleted` in `SAFE_KILL_RULES`, so the *plan* exists and the rule computes and records it. But
+  running it unattended is a different grant from a person clicking confirm, and Greg said to leave
+  the specimen standing until the rule has fired against it. Nineteen hours of wedge costs 2.9 MB; a
+  wrong unattended kill is not symmetric.
+- **Rule 1 (launch-mode drift) — observes only, by construction.** There is no reversible act: you
+  cannot type `/permission-mode auto`, and you may not answer the dialog. The only fix is
+  kill-and-relaunch, the least reversible thing on the list. **And the ground has moved under this
+  rule**: the launcher fix landed at 12:20 today, and at 20:25 all eight agent rows read
+  `{kind:"auto"}` with the other seven `not-applicable` shells. The 34.9 hours are sunk, not
+  ongoing. Rule 1 is now a **regression alarm** on that fix, which is the right shape for it — and
+  it is the reason rule 1 moves from first to last in the build order.
+
+**Gate 4 does bite, and not where I assumed.** I had reasoned that deterministic rules make no model
+calls and are therefore outside gate 4. Sound for the rules, wrong for their effects: a broadcast is
+thirty-six user turns, and a re-broadcast loop is unbounded spend.
+
+**And the sentence that used to end this paragraph — *"the cooldown closes it"* — was wrong**,
+found by the fleet dashboard's owner on 2026-09-08 when I sent them the finding above and asked them
+to confirm rather than assume. `lastBroadcastAt` is stamped *after* the `total === 0` refusal has
+already returned, so **a call refused for "nobody to tell" never spends the cooldown**:
+
+> An unattended rule firing on a fully-loaded box is refused, the clock is not started, and it may
+> re-fire immediately — as fast as its own schedule permits. There is no *send* loop, because nothing
+> is delivered. There is an unthrottled *refusal* loop, and every attempt costs a route's worth of
+> work on a box already under pressure. So your rule must carry its own interval and must not retry
+> on a refusal, because the route will not throttle you on exactly the condition that triggers you.
+>
+> — the fleet dashboard's owner, 2026-09-08
+
+So rule 3 carries **its own interval**, and **a refusal ends the attempt rather than starting a
+retry**. That is a constraint on 3b today, not a future tidy-up, and it is a good example of why the
+finding went to its owner rather than into my own patch: I had the defect right and the consequence
+wrong, and the correction inverted which half was dangerous.
+
+They also asked for something I had not planned: **record the refusals too**, with
+`recipients.length` as the denominator, because *"a run that reached nobody is the most informative
+reading of all and it currently leaves no trace"*. And they confirmed the delivery-time fix is
+theirs and idiomatic rather than novel — `drain.ts`'s `sendable()` already renders attribution at
+delivery for exactly the argument I made about the stale minute count.
+
+Their pushback is fair and is kept here because it widens the defect: *"for a person clicking the
+button it is defensible"* was doing too much work, since the person who clicked at 20:25 also
+reached three rows of fifteen. **But they then corrected themselves, in the direction of less
+alarm, and that correction belongs here too** — the route answers `result: {total, recipients:
+outcomes}` and the page draws it, so every excluded recipient and its reason does reach a person. It
+reaches them as a JSON dump they read by eye rather than as a sentence, which is a presentation gap
+and not a dropped join. **The useful consequence for this stage is that rule 3 and the page read the
+same object** rather than two hand-written declarations of the same idea, so the denominator the
+rule records is the denominator the page shows.
+
+#### What the survey found, and the two things that change the design
+
+Surveyed before writing any code, because the expensive mistake here is a second way to do
+something. Two findings changed the shape.
+
+**1. The seam for an in-process job already exists, and needs no new type.** `SpawnJob` is
+`(definition, key) => JobSpawn`, and nothing in `scheduler.ts` or `jobs.ts` knows that today's only
+implementation shells out to `gjd-remote`. A rule job is an `AuthorisedJob` plus a dispatcher that
+switches on `definition.id`. **So Stage 3 adds no scheduler machinery at all** — which is what a good
+seam is supposed to buy, and it is worth saying out loud because the plan had budgeted for widening
+one.
+
+**2. `resource-broadcast` cannot reach the sessions that cause the load, and fails hardest exactly
+when it is needed most.** `broadcastRoute` keeps only recipients whose `drainGate` is `{kind:"now"}`.
+A `working` session gates `{kind:"later"}` and is dropped — deliberately, and the comment says so.
+Measured on the box at 20:25: fifteen rows, seven shells, five working, three idle, so a broadcast
+reaches **three of fifteen**, and the five it excludes are the load. Worse, `total === 0` refuses the
+whole call with *"none of the rows you sent is at a prompt right now, so there is nobody to tell"* —
+so at the limit, where every agent is working, the action does not degrade, it refuses.
+
+**The easy fix is wrong**, which is presumably why it was not taken: the queue and `drain.ts` could
+hold `later` rows until they reach a prompt, but the broadcast text says *"arm a wake-up ~N minutes
+from now"* and N is rendered at send time. A queued delivery would arrive carrying a number that had
+gone stale, which is worse than not arriving.
+
+**And the real fix is bigger than that**, which the dashboard's owner established by checking their
+own first answer rather than mine. Broadcasts are not merely un-queued, they are **forbidden** from
+queueing: `routes-actions.ts:505` refuses `enqueue` for a box-wide action outright, on the stated
+ground that *"there is no single session to be ordered against"*. So the fix is two changes, and only
+the second is the idiomatic one:
+
+1. A box-wide action would have to become queueable per session, **which means answering the
+   objection at `:505` rather than deleting it.** Their reading — that a broadcast wants a *held
+   delivery* in each of many sessions rather than a position in one session's order, and that the
+   two are separable — is probably right and is, in their words, *"exactly the kind [of argument]
+   that looks obvious and turns out to have a reason."*
+2. Then render `index`/`total` at delivery, which `drain.ts`'s `sendable()` already precedents.
+
+**This raises the value of the instrumentation rather than lowering it.** Crossing a refusal
+somebody wrote deliberately needs better evidence than *it would reach more sessions*. A series
+showing reachable steady at two or three of fifteen while `working` sits at five is the shape of
+argument that would justify it — **and a series showing it recovering on its own would kill the
+stage, which is a result worth having too.**
+
+So rule 3 does not work around it. It goes through the real route as Fable says, and **its store
+event records the denominator and the reason for it** — `sent to 3 of 15; 5 excluded because
+working` — which turns an invisible structural limit into a number that accumulates. That number is
+also the evidence that would justify the fix, and it is reported to the dashboard's owner rather than
+patched from here.
+
+#### Where the findings go, and the option not taken
+
+A new `RuleEvent` arm on `OverseerEvent`. The rejected option was `daemon.jsonl` via `notes.ts`,
+which is cheaper — one file instead of five. It loses on two counts: gate 1 requires that every
+decision the Overseer makes on Greg's behalf be **somewhere he can easily review**, and `daemon.jsonl`
+is not on the wire and not in the panel; and `notes.ts` is explicitly for facts about the Overseer's
+own condition — being deaf, losing a record — where a rule firing at the fleet is not that.
+
+**I first wrote that a new event kind costs five compiler-enforced updates. It is six, and the sixth
+is not compiler-enforced.** Checked before the number went into a brief, because an unchecked claim
+in a brief is how a wrong number becomes a comment in the source.
+
+1. `tools/overseer/diff.ts:616` — the union itself.
+2. `tools/overseer/store.ts:952` — `EVENT_KINDS`, a `Record<OverseerEvent["kind"], true>`, so a
+   missing key does not compile.
+3. `tools/overseer/store.ts:1837` — `foldEvents`.
+4. `tools/overseer/jobs.ts:594` — `foldOccurrences`'s explicitly-named ignore list.
+5. `scripts/overseer.ts:189` and `:243` — a **second** `EVENT_KINDS` and `describeEvent`.
+6. **`tools/overseer/store.ts:1097` — `parseEvent`, and this one is a runtime parser.**
+
+Six is the fact; the sixth is the finding. `EVENT_KINDS` being a total record means the *key* cannot
+be forgotten, but **the parse branch for the new arm can be**, and nothing refuses to compile if it
+is. The failure that produces is the shape this project keeps meeting: the event appends to
+`events.jsonl` perfectly, and comes back on the next read as
+*"kind … is not an event this version knows"*. A write that succeeds and a read that quietly refuses
+it — [silent-success.md](../reusable/silent-success.md) with the halves in the inconvenient order,
+because the damage is done in one process and discovered in another.
+
+So the acceptance test for the new arm is **round-trip, not append**: write one, read it back through
+`parseEvent`, and assert on what comes out. An append that returns `ok` proves nothing here.
+
+#### The plan review, and what it changed — GPT Sol, 2026-09-08
+
+Sol reviewed `848938a7` before anything was built and **blocked the stage as written**, with four
+P0s. It is right about all of them and none is overruled. The full review is in
+[260908g-stage3-plan-review-sol.md](260908g-stage3-plan-review-sol.md). The four that block:
+
+- **SP-1 — the rule implementation is outside the authorisation fingerprint.** `definitionHash`
+  covers `id`, `everyMs`, `leaseMs` and `what`. A dispatcher that selects executable code by
+  `definition.id` means **changing a threshold or an action leaves the pin valid**, so rule 3 could
+  go on acting after its behaviour changed. That is precisely the hole gate 3's *"never act on a job
+  definition that changed after it was authorised"* exists to close, and the code version of it is
+  worse than the document version it was written for. The fix needs no new machinery: thresholds and
+  the chosen action become **data in the hashed definition**, and the rule's source file goes into
+  `documents`, which is already a list of `{path, sha256}` for exactly this purpose.
+- **SP-2 — the seam cannot record the event, and logging after the action is not fail-closed.**
+  Verified: the store is opened privately inside `runOverseer` (`daemon.ts:424`) under an exclusive
+  lock, so a dispatcher cannot open a second one. And `SpawnJob` returns a `JobOutcome` that is an
+  exit code or a reason — there is nowhere for a rich finding to go. The deeper half is the
+  ordering: **gate 1 wants the decision recorded before the action, not after.** A broadcast followed
+  by a failed append is an action nobody can review. The fix is the pattern Stage 2 already
+  established for occurrences — append and fsync the intent, act only if that succeeded, then append
+  the outcome — so it is the same machinery generalised rather than new machinery. **But my claim
+  that Stage 3 adds no scheduler machinery is false, and Sol says so plainly.**
+- **SP-3 — a `RuleEvent` does not reach the surface gate 1 requires.** This is the one that
+  embarrasses the argument above it. I chose `events.jsonl` over `daemon.jsonl` on the ground that
+  gate 1 needs reviewability and events are in the panel. **They are not.** Verified:
+  `tools/fleet/attention.ts` parses *only* `schema`, `writtenAt` and `attention` out of
+  `current.json` and explicitly ignores the rest; `events.jsonl` is not on the wire at all, and the
+  Overseer panel says the decision log is later. The only reader of event history is the CLI. So the
+  distinction I drew between the two logs was **false in the direction that flattered my choice** —
+  and it is the fifth claim of mine today that was about a domain and checked against a subset of it.
+- **SP-4 — the acceptance test cannot be run without arming the paid jobs.** There is one global
+  `OVERSEER_JOBS_ENABLED`, and arming it supplies the two standing jobs as well as any rule
+  definitions. Both standing jobs have never run and are immediately due — my own status paragraph
+  says they fire about thirty seconds later. So *"watch each rule fire for real"* would start paid
+  model sessions under a gate 4 this plan admits is unbuilt. **A deterministic-only arming path is
+  needed**, and it is worth having anyway: being able to run one job is a thing you want at three in
+  the morning.
+
+Two of the P1s change what gets built, rather than how:
+
+- **SP-7 — rule 3 has not been granted the confirmation its route demands.** `resource-broadcast`
+  carries `needsConfirm: true`, and the route checks `confirm` *before* it checks
+  `FLEET_ACT_ENABLED`. So *"the only thing between a proposal and an action is a switch Greg owns"*
+  is wrong: the rule would also have to assert `confirm: true`, and **an unattended process
+  asserting a human-facing confirmation is the authority grant itself.** This converges exactly with
+  the one question Fable said to put to Greg, and sharpens it from a policy question into a
+  mechanical one.
+- **SP-8 — the broadcast text is false for the triggers proposed.** The fixed text asserts that load
+  and memory are both high and that processes are being OOM-killed. Rule 3 might fire because usage
+  is near a quota, or because of disk alone. **Telling fifteen agents a thing that is not true is a
+  worse failure than not telling them**, and it is not fixed by tuning a threshold. Separate
+  messages per predicate, and a trigger table that says which levels combine with OR and which with
+  AND.
+
+The remaining P1s are folded in where they belong: **SP-5** (a persisted `approaching` verdict can
+age into staleness, so recompute at execution and never branch on the stored level), **SP-6** (a
+durable `WakeExpectation` rather than a 10-minute in-memory cooldown against 5–60 minute pauses),
+**SP-9** (merged with the six-place count above; Sol adds that `parseEvent` casts to
+`SessionEvent["kind"]`, which is why the omission is not compiler-enforced), **SP-10** (a required
+new `ObservedRow` field would turn historical log lines into replay holes and could put the ledger
+into `history-lost`, **holding every job** — a consequence I had not seen, and it turns my decision
+not to thread `observation.ts` from a preference into a requirement), and **SP-11**, below.
+
+#### The reframe: what four P0s actually cost, which is less than it looks
+
+Taken literally the review turns a quick payback stage into a large one. It does not, and the reason
+is a coincidence between two findings.
+
+**SP-7 forces rule 3 to be dry-run-only in v1 regardless** — asserting `confirm: true` unattended is
+a grant only Greg can make. And **SP-3's review surface is only required before a rule acts.** Gate 1
+governs decisions taken on Greg's behalf; a rule that computes a plan, takes no action and records to
+a log the CLI can read has not yet decided anything on his behalf.
+
+So the two findings cancel: v1 does not act, therefore v1 does not need the web surface, therefore
+the largest P0 is **deferred behind a named condition rather than dropped**. It becomes a
+precondition on rule 3 ever acting, which is a stronger statement than a to-do, because the thing it
+gates cannot happen without Greg anyway.
+
+#### Build order, revised twice
+
+- **3a — the rule protocol, with rule 2 as its first consumer.** Sol's recommended order and it is
+  right: the authorisation that covers the implementation (SP-1), the two-phase
+  append-fsync-act-append runner with the store passed in (SP-2), the deterministic-only arming path
+  (SP-4), and the `RuleEvent` arm with a **round-trip** test (SP-9). Rule 2 rides on it, proposing
+  and never killing. Done when the rule has fired against pid 2282035 and the event round-trips out
+  of the store saying `proposed: kill, rule cwd-deleted, needs confirm`.
+- **3b — rule 1.** Small, observe-only, reading the raw payload rather than widening `ObservedRow`.
+- **3c — the review surface.** A bounded rule-event projection into `current.json`, the independent
+  fleet-side parser, the wire type, and the Overseer panel. **This is the gate on 3d, not a
+  nice-to-have.**
+- **3d — rule 3, acting.** Gated on 3c *and* on Greg's answer about unattended confirmation. Carries
+  SP-5's recomputed verdict, SP-6's durable `WakeExpectation`, and SP-8's trigger table and honest
+  per-predicate messages. It is the whole broadcast-and-wake lifecycle or it is nothing: Sol is right
+  that abandoning 3d half-built, with automatic broadcasting and no wake accounting, is worse than
+  not starting it.
+
+**What this ordering buys** is that the acting rule is last and behind two named preconditions rather
+than behind a flag — which is what the gates were asking for all along, and which the original
+ordering would have reached only by accident.
+
+#### SP-11, and a number I sent to somebody else
+
+Sol is right that *"3 of 15"* mixes eight agent sessions with seven shells, and that `working`
+describes a Claude pane's state rather than proving those sessions were consuming the machine. The
+honest statement is **"3 of 8 agent sessions were deliverable; 5 were held because working; 7 shells
+were never eligible"**, and attributing load to sessions needs `health.ts`'s attribution evidence
+rather than a status word.
+
+This one matters more than a P2 usually would, because **I had already sent the weaker number to the
+fleet dashboard's owner**, who is deciding on that evidence whether to cross a deliberate refusal in
+their own code. The sampler now records categorical counts, and they have been told which number
+changed and why.
+
+#### The Overseer sees less of the fleet than the fleet sends, and the rules should not fix that by widening the differ
+
+The three fields the rules most want are all outside `ObservedRow`: `permissionMode`, `pause`, and
+`health`. Each is on the wire and each is dropped by `parseRow()` before anything in
+`tools/overseer/` sees it.
+
+The obvious move is to thread them through `observation.ts`. **Do not.** Two reasons, and the second
+is the real one:
+
+1. That file belongs to a worktree that is still active, and this stage does not need to open it.
+2. `ObservedRow` and `diff.ts` exist to answer *what changed about a session's identity and status
+   over time*. `pause` and `permissionMode` flicker for reasons that are not events —
+   `pause` is recomputed from a transcript tail on every collection — so threading them through the
+   differ manufactures a stream of "changes" that mean nothing. **That is the same argument
+   `source.ts` already made about `health`** and settled the same way: *"a missing health block would
+   read as a health change."* Widening the differ would be re-deciding a question that has been
+   decided once, in the direction it was decided against.
+
+The resolution costs nothing, because the daemon already holds what the rules need.
+`SourceMessage` carries `{kind: "payload"; json: unknown}` — **the whole raw wire payload, before
+`parseRow` narrows it.** The rules parse the two or three fields they want out of that same value,
+with their own narrow parser and their own unknown arms. No second HTTP client, no edit to another
+worktree's file, and no diff noise.
+
+This is the seam the direction doc describes doing its job: the differ answers past-tense questions,
+and a rule asking *is anything wrong right now* is a present-tense question that was never its
+customer.
+
+#### The wake-check is nearly built, and I had it down as the least designed thing here
+
+I flagged "check later that they woke up" as the weakest part of this plan. It is the strongest,
+because `pause.ts` already computes it: `Pause.overdue` is set only when the wake-up time **was
+actually read**, is more than `OVERDUE_GRACE_MS` (5 minutes) in the past, **and nothing has run
+since**. That third clause is the whole difficulty — it is what tells a wake-up that never fired
+apart from one that fired and went quiet — and it is already written and already tested.
+
+So the wake-check has no detector to build.
+
+**I then wrote that nothing anywhere reads `overdue`, and that was wrong.** The field's author
+checked it end to end rather than from memory and found the reader: it crosses the wire in
+`types.ts`, deliberately untouched by the clock-skew shift because it is the server's judgement
+rather than a time the browser may reinterpret, and `PauseLine.tsx:175` draws it in the alarm colour
+— *"wake-up — overdue 22m"*, with the due time on the card. It landed with its consumer this
+afternoon.
+
+The mistake is worth keeping because of its shape. *"Nothing reads it"* is a claim about the whole
+repository, and I checked it against `tools/overseer/`, which is the directory I was standing in.
+The field is declared in `wire.ts` and its only reader is in the browser, so the search I ran could
+only ever have found the producer. **Same class as the census that counted its own `grep`, and as
+the impossibility claim that did not name its domain** — a claim about a domain checked against a
+subset of it, and the third instance today.
+
+**What survives is sharper than what I wrote, not weaker.** `overdue` has a *human* consumer and no
+automated one. So does the kill machinery — `selectForKill` is reached by a person pressing a button
+on a phone. That is the real pattern, and it is the case for the Overseer stated in one line: the
+mechanisms here are built, correct, and each waits on somebody noticing. The scheduler seam was the
+one genuine orphan.
+
+For 3b this means the wake-check is a one-line read plus the durable record of who was told and
+when — the smallest piece of the stage rather than the largest, and its hard half is already written,
+already tested, and already trusted enough to be drawn in the loud colour.
+
+#### The one question that is Greg's, and it blocks nothing
+
+May an unattended rule run an **enacted** action — a kill under a named safety rule — without a
+confirm? It is an authority grant, the same class as the parked question about whether the watchdog
+may restart the daemon, and Fable was strict that it is not minutiae. **The default answer is no,
+propose only**, which is what gets built either way, so this is asked in the debrief rather than as a
+mid-run stop.
+
+What is explicitly *not* Greg's, so it is settled here: thresholds, which surface the events land on,
+the cooldown, and building rule 3 behind `FLEET_ACT_ENABLED`. He owns *flipping* that switch;
+building behind it forces nothing on him.
+
+#### What would overturn rule 2's verdict, stated as a number
+
+Fable named the one thing that changes its mind, and it is a rate: if `cwd-deleted` orphans recur at
+more than one a day, a proposal inbox becomes the two-hundred-entry log this design says it cannot
+survive, and rule 2 must act rather than propose. Today n=1. **The events rule 2 writes are how that
+rate gets measured**, so the observation is not merely a record, it is the instrument that decides
+the next version.
 
 ### Stage 4 — the deferral queue
 
