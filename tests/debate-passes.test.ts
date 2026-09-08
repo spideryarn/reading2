@@ -141,7 +141,7 @@ const DIRECT_ROW = JSON.stringify([
     sourceQuote: "true in a cool kitchen and wrong in a warm one",
     articleReferenceQuote: "Notes on my sourdough starter, week 3",
     relation: "qualifies",
-    valence: "negative",
+    lean: "leans-against",
     applies: "It accepts the schedule only for cool kitchens.",
   },
 ]);
@@ -153,7 +153,7 @@ const CLAIM_ROW = JSON.stringify([
     claimQuote: "fall apart within a week",
     sourceQuote: "collapse in about a week",
     relation: "corroborates",
-    valence: "positive",
+    lean: "leans-for",
     applies: "It reports the same collapse.",
   },
 ]);
@@ -299,7 +299,7 @@ describe("the fence the answer is read out of", () => {
         claimQuote: "fall apart within a week",
         sourceQuote: "collapse in about a week",
         relation: "corroborates",
-        valence: "positive",
+        lean: "leans-for",
         /* The characters the old parser cut the document at. */
         applies: "It sets the claim in a ``` block and reports the same collapse.",
       },

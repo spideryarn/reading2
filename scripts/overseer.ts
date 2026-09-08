@@ -32,13 +32,16 @@ import { runOverseer, TICK_MS } from "../tools/overseer/daemon.js";
 import type { OverseerEvent } from "../tools/overseer/diff.js";
 import { describeNote, openConditions, readNotes, type DaemonNote } from "../tools/overseer/notes.js";
 import {
+  CHECKPOINT_FILE,
   EVENTS_FILE,
+  STORE_SCHEMA,
   describeRefusal,
   isProcessAlive,
   readCheckpoint,
   storeRoot,
-  type Checkpoint,
+  type CheckpointRead,
   type RegisterEntry,
+  type StatusSince,
 } from "../tools/overseer/store.js";
 
 /** Where the daemon looks for the dashboard unless told otherwise. */
@@ -76,12 +79,24 @@ export function requireAbsoluteRoot(root: string): string {
 }
 
 export type DaemonStanding = {
-  state: "never-run" | "running" | "stalled" | "stopped" | "killed";
+  state: "never-run" | "running" | "stalled" | "stopped" | "killed" | "cannot-tell";
   detail: string;
 };
 
 export type StandingInput = {
-  checkpoint: Checkpoint | null;
+  /**
+   * The reader's own outcome, WHOLE.
+   *
+   * **This used to be `Checkpoint | null`, and flattening it was a bug of
+   * exactly the kind this file exists to catch.** `absent` and `unusable` are
+   * different facts — *nothing was ever written here* versus *something was
+   * written and this build cannot read it* — and collapsing them into `null`
+   * made a running Overseer report as NEVER RUN for as long as its checkpoint
+   * was in a schema this build refuses. Seen live on 2026-09-08: the daemon had
+   * been up eighty minutes and had written `current.json` thirty seconds
+   * earlier. The information survived the parse and died in the presentation.
+   */
+  read: CheckpointRead;
   /** The last line of the daemon's own log. Its own last word beats anything inferred. */
   lastNote: DaemonNote | null;
   nowMs: number;
@@ -101,9 +116,25 @@ export type StandingInput = {
  * process wearing a dead daemon's number is exactly the kind of coincidence
  * this codebase keeps meeting — so it is only ever used to CONFIRM a
  * checkpoint that is already recent.
+ *
+ * **`cannot-tell` is the sixth, and it is a REFUSAL TO GUESS.** Every other arm
+ * is a claim about a daemon; that one says the evidence is behind a file this
+ * build cannot parse. Guessing "dead" sends somebody to start a second daemon
+ * beside a live one; guessing "running" is the failure the whole project is
+ * designed against. So it says neither, and says which schema each side speaks.
  */
 export function daemonStanding(input: StandingInput): DaemonStanding {
-  const { checkpoint, lastNote, nowMs } = input;
+  const { read, lastNote, nowMs } = input;
+  if (read.kind === "unusable") {
+    return {
+      state: "cannot-tell",
+      detail:
+        `there IS a ${CHECKPOINT_FILE} and this build cannot parse it (${read.why}: ${read.detail}); ` +
+        `this build reads schema ${STORE_SCHEMA}. The Overseer may well be running — nothing here can ` +
+        "tell, and the daemon's own notes are below. Wait for the next checkpoint rather than starting a second one.",
+    };
+  }
+  const checkpoint = read.kind === "checkpoint" ? read.checkpoint : null;
   if (checkpoint === null) {
     return {
       state: "never-run",
@@ -141,6 +172,8 @@ const EVENT_KINDS: Record<OverseerEvent["kind"], true> = {
   "tmux-session-gone": true,
   "session-replaced": true,
   "session-wait-restarted": true,
+  "session-row-changed": true,
+  "session-pane-replaced": true,
 };
 
 /**
@@ -195,6 +228,12 @@ export function describeEvent(event: OverseerEvent): string {
       return `${when}  replaced   ${event.row.name} (${event.identity.tmuxId}) — a different conversation is in the pane`;
     case "session-wait-restarted":
       return `${when}  wait again ${event.identity.tmuxId} — now until ${event.deadline}`;
+    case "session-row-changed":
+      // The fields, because "renamed" and "moved to another worktree" are the
+      // same event and a person scanning the log needs to know which one it was.
+      return `${when}  changed    ${event.row.name} (${event.identity.tmuxId}) — ${event.fields.join(", ")}`;
+    case "session-pane-replaced":
+      return `${when}  new pane   ${event.identity.tmuxId} — pid ${event.previousPanePid ?? "none"} → ${event.panePid}`;
     default: {
       const never: never = event;
       throw new Error(String(never));
@@ -215,13 +254,17 @@ export function statusLines(root: string, nowMs: number = Date.now()): string[] 
   const checkpoint = read.kind === "checkpoint" ? read.checkpoint : null;
   const notes = readNotes(root);
   const lastNote = notes.notes.at(-1) ?? null;
-  const standing = daemonStanding({ checkpoint, lastNote, nowMs, alive: isProcessAlive });
+  const standing = daemonStanding({ read, lastNote, nowMs, alive: isProcessAlive });
   const lines: string[] = [`Overseer store: ${root}`, ""];
 
-  lines.push(`daemon      ${standing.state.toUpperCase().replace("-", " ")} — ${standing.detail}`);
-  if (read.kind === "unusable") lines.push(`            the checkpoint is unusable (${read.why}): ${read.detail}`);
+  lines.push(`daemon      ${standing.state.toUpperCase().replaceAll("-", " ")} — ${standing.detail}`);
 
-  if (checkpoint === null) {
+  if (read.kind === "unusable") {
+    // NOT "nothing has been collected yet", which is the same lie as NEVER RUN
+    // wearing a different noun: the collection clock is inside the file we could
+    // not read, so the honest answer is that we do not know.
+    lines.push("source      unknown — the collection clock is in the checkpoint this build cannot parse");
+  } else if (checkpoint === null) {
     lines.push("source      nothing has been collected yet");
   } else if (checkpoint.lastGoodSnapshotAt === null) {
     // ALIVE BUT DEAF, and it is a different sentence from a quiet fleet.
@@ -240,6 +283,10 @@ export function statusLines(root: string, nowMs: number = Date.now()): string[] 
 
   if (checkpoint !== null) {
     lines.push("", registerSummary(checkpoint.register), ...attentionLines(checkpoint.register, nowMs));
+  } else if (read.kind === "unusable") {
+    // Said out loud rather than left as an absence: a missing block reads as an
+    // empty fleet to anybody who has not counted the blocks before.
+    lines.push("", "sessions    unknown — the register is in that checkpoint too, but the event log below is still readable");
   }
 
   const tail = readEventTail(root, 5);
@@ -268,16 +315,53 @@ function registerSummary(register: readonly RegisterEntry[]): string {
  * `statusSince` is the duration attention triage ranks by — the thing the
  * dashboard cannot know, because it has no yesterday. `idle` is left out
  * deliberately: an idle session that has been idle for six hours wants nothing.
+ *
+ * **`≥` is load-bearing.** Many of these durations are floors — the daemon found
+ * the session already in that state — and this column printing four identical
+ * `13m` rows against sessions that had been working for hours is the reason
+ * `statusSince` has two arms at all. The legend below the rows is there so the
+ * mark means something to somebody who has never read any of this.
+ *
+ * **The sort ignores the arm, on purpose.** A floor is still the best estimate
+ * available, and it can only rank a session too LOW — a three-hour block seen
+ * thirteen minutes ago sorts as thirteen minutes, which under-reports rather
+ * than inventing urgency. Ranking floors above readings would be guessing about
+ * the part we cannot see.
  */
 function attentionLines(register: readonly RegisterEntry[], nowMs: number): string[] {
   const waiting = register
     .filter((entry) => entry.lastStatusKey !== "idle")
-    .sort((a, b) => Date.parse(a.statusSince) - Date.parse(b.statusSince))
+    .sort((a, b) => Date.parse(a.statusSince.at) - Date.parse(b.statusSince.at))
     .slice(0, 6);
-  return waiting.map(
+  const lines = waiting.map(
     (entry) =>
-      `            ${entry.lastStatusKey.padEnd(10)} ${describeAge(nowMs - Date.parse(entry.statusSince)).padStart(6)}  ${entry.name} (${entry.tmuxId})`,
+      `            ${entry.lastStatusKey.padEnd(10)} ${describeStatusAge(entry.statusSince, nowMs).padStart(6)}  ${entry.name} (${entry.tmuxId})`,
   );
+  if (waiting.some((entry) => entry.statusSince.kind === "lower-bound")) {
+    lines.push("            ≥ is a floor: the daemon found it already in that state and cannot see when it began");
+  }
+  return lines;
+}
+
+/**
+ * How long it has been in this state, marked when that is a floor.
+ *
+ * A `switch` with a `never`, rather than a ternary, so a third arm on
+ * `StatusSince` has to be given a rendering here instead of quietly borrowing
+ * the one that reads best.
+ */
+function describeStatusAge(since: StatusSince, nowMs: number): string {
+  const age = describeAge(nowMs - Date.parse(since.at));
+  switch (since.kind) {
+    case "observed":
+      return age;
+    case "lower-bound":
+      return `≥${age}`;
+    default: {
+      const never: never = since;
+      throw new Error(`no rendering for ${JSON.stringify(never)}`);
+    }
+  }
 }
 
 function describeAge(ms: number): string {

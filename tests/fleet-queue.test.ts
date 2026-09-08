@@ -22,9 +22,18 @@
 import { describe, expect, it } from "vitest";
 
 import { ACTIONS } from "../tools/fleet/actions.js";
-import { drainGate, PERSISTENCE_WARNING, SteeringQueue, type QueuedItem, type QueueLimits } from "../tools/fleet/queue.js";
+import {
+  deliveryGate,
+  drainGate,
+  nothingWasSent,
+  PERSISTENCE_WARNING,
+  SteeringQueue,
+  type QueuedItem,
+  type QueueLimits,
+  type UnsentFailure,
+} from "../tools/fleet/queue.js";
 import type { FleetStatus } from "../tools/fleet/status.js";
-import { steerableStatus } from "../tools/fleet/steer.js";
+import { steerableStatus, type SteerFailure } from "../tools/fleet/steer.js";
 
 const SESSION = "$1643";
 const CONVO = "117e181a-155b-435a-b95b-e74220678d1a";
@@ -100,8 +109,39 @@ describe("drainGate", () => {
   });
 
   it("drains at a prompt, whether or not there is a question on screen", () => {
+    // `drainGate` answers "may this session be steered at all", which is what
+    // the ENQUEUE route needs: an item queued for a session showing a dialog is
+    // a perfectly good item, and it goes out once the dialog is dealt with.
     expect(drainGate(IDLE).kind).toBe("now");
     expect(drainGate(NEEDS_YOU).kind).toBe("now");
+  });
+});
+
+describe("deliveryGate", () => {
+  it("differs from drainGate on needs-you, and on nothing else", () => {
+    // **THE AGREEMENT TEST, AND THE ONE DISAGREEMENT IS THE POINT.** The two
+    // gates answer different questions — "may this be queued for" and "may this
+    // be sent to right now" — and confusing them destroyed a person's message
+    // in the design review of this stage. Comparing them across every arm makes
+    // a future edit to either a visible decision rather than silent drift.
+    for (const status of EVERY_STATUS) {
+      const drain = drainGate(status);
+      const deliver = deliveryGate(status);
+      if (status.kind === "needs-you") {
+        expect(drain.kind).toBe("now");
+        expect(deliver.kind).toBe("later");
+        continue;
+      }
+      expect(deliver, status.kind).toEqual(drain);
+    }
+  });
+
+  it("holds rather than refuses a session that is asking a question", () => {
+    // `later`, not `never`: the agent will stop asking, and the instruction
+    // should go then. A permanent refusal loses the item just as surely.
+    const gate = deliveryGate(NEEDS_YOU);
+    expect(gate.kind).toBe("later");
+    if (gate.kind === "later") expect(gate.why).toContain("dialog");
   });
 
   it("refuses a shell in steer.ts's own words, because the text would be executed", () => {
@@ -118,9 +158,9 @@ describe("drainGate", () => {
 describe("enqueueing", () => {
   it("keeps actions and messages in one list, in the order they were pressed", () => {
     const { q } = makeQueue();
-    expect(q.enqueueAction(TARGET, "pull").ok).toBe(true);
-    expect(q.enqueueMessage(TARGET, "actually, do the smaller version first").ok).toBe(true);
-    expect(q.enqueueAction(TARGET, "push").ok).toBe(true);
+    expect(q.enqueueAction(TARGET, "pull", "greg").ok).toBe(true);
+    expect(q.enqueueMessage(TARGET, "actually, do the smaller version first", "greg").ok).toBe(true);
+    expect(q.enqueueAction(TARGET, "push", "greg").ok).toBe(true);
 
     const items = q.snapshot(SESSION).items;
     expect(items.map((i) => (i.payload.kind === "action" ? i.payload.action.id : i.payload.text))).toEqual([
@@ -130,31 +170,55 @@ describe("enqueueing", () => {
     ]);
   });
 
-  it("makes an enacted action wait its turn behind the spoken ones", () => {
-    // The reason enacted actions queue at all. "Push, then remove the worktree"
-    // must not become "remove the worktree, then try to push" — the removal
-    // could have run immediately, and running it immediately would delete work
-    // the queued push had not yet saved.
+  it("refuses an enacted action outright, and says what to do instead", () => {
+    // **THIS TEST USED TO ASSERT THE OPPOSITE** — that "push, then remove the
+    // worktree" kept its order, which is the argument the module header makes
+    // for queuing enacted actions at all. That argument is still right and it
+    // has been retreated from (2026-09-08, stage v0.5f): the drain delivers
+    // sentences, and delivering an enacted item would mean running `execFile`s
+    // that delete a directory from inside the refresh loop. So the promise is
+    // not made, rather than made and not kept.
     const { q } = makeQueue();
-    q.enqueueAction(TARGET, "push");
-    q.enqueueAction(TARGET, "remove-worktree");
+    q.enqueueAction(TARGET, "push", "greg");
+    const out = q.enqueueAction(TARGET, "remove-worktree", "greg");
+
+    expect(out.ok).toBe(false);
+    if (!out.ok) {
+      expect(out.rule).toBe("enacted-not-deliverable");
+      // The sentence names the alternative, because a refusal that leaves
+      // somebody with no route to the thing they wanted is a dead end.
+      expect(out.why).toContain("dry-run");
+      expect(out.why).toContain("confirm");
+    }
+    expect(q.size(SESSION)).toBe(1);
 
     const first = q.next(SESSION, ctx(IDLE));
     expect(first.kind).toBe("ready");
-    if (first.kind === "ready") {
-      expect(first.item.payload.kind).toBe("action");
-      if (first.item.payload.kind === "action") expect(first.item.payload.action.id).toBe("push");
+    if (first.kind === "ready" && first.item.payload.kind === "action") {
+      expect(first.item.payload.action.id).toBe("push");
     }
+  });
+
+  it("refuses an enacted action whether or not it is a plausible one", () => {
+    // Unconditional, and not gated on `FLEET_ACT_ENABLED`: a conditional
+    // refusal would re-create the silent promise the day the flag goes on.
+    const { q } = makeQueue();
+    for (const id of ["remove-worktree", "kill-session"]) {
+      const out = q.enqueueAction(TARGET, id, "greg");
+      expect(out.ok, id).toBe(false);
+      if (!out.ok) expect(out.rule, id).toBe("enacted-not-deliverable");
+    }
+    expect(q.size(SESSION)).toBe(0);
   });
 
   it("refuses an action id that is not in the vocabulary", () => {
     const { q } = makeQueue();
-    const out = q.enqueueAction(TARGET, "rm-rf-slash");
+    const out = q.enqueueAction(TARGET, "rm-rf-slash", "greg");
     expect(out.ok).toBe(false);
     if (!out.ok) expect(out.rule).toBe("no-such-action");
     expect(q.size(SESSION)).toBe(0);
     // Paired positive: a real id does go in.
-    expect(q.enqueueAction(TARGET, "continue").ok).toBe(true);
+    expect(q.enqueueAction(TARGET, "continue", "greg").ok).toBe(true);
     expect(q.size(SESSION)).toBe(1);
   });
 
@@ -163,47 +227,67 @@ describe("enqueueing", () => {
     // copy would be staggered against the wrong denominator.
     const { q } = makeQueue();
     for (const id of ["resource-broadcast", "kill-test-suites", "kill-safe-processes"]) {
-      const out = q.enqueueAction(TARGET, id);
+      const out = q.enqueueAction(TARGET, id, "greg");
       expect(out.ok, id).toBe(false);
       if (!out.ok) expect(out.rule).toBe("wrong-scope");
     }
     expect(q.size(SESSION)).toBe(0);
-    expect(q.enqueueAction(TARGET, "remove-worktree").ok).toBe(true);
+    // Paired positive, and a session-scoped one: the rule above is about scope,
+    // not about the whole vocabulary. (`remove-worktree` used to stand here,
+    // and is now refused for a different reason — see the enacted test above.)
+    expect(q.enqueueAction(TARGET, "wrap-up", "greg").ok).toBe(true);
   });
 
   it("refuses a message steer.ts could never send, using steer.ts's own check", () => {
     const { q } = makeQueue();
-    const twoLines = q.enqueueMessage(TARGET, "first line\nsecond line");
+    const twoLines = q.enqueueMessage(TARGET, "first line\nsecond line", "greg");
     expect(twoLines.ok).toBe(false);
     if (!twoLines.ok) {
       expect(twoLines.rule).toBe("bad-text");
       // The reason is steer.ts's, not a second copy of it.
       expect(twoLines.why).toContain("submit it early");
     }
-    expect(q.enqueueMessage(TARGET, "  ").ok).toBe(false);
-    expect(q.enqueueMessage(TARGET, "one good line").ok).toBe(true);
+    expect(q.enqueueMessage(TARGET, "  ", "greg").ok).toBe(false);
+    expect(q.enqueueMessage(TARGET, "one good line", "greg").ok).toBe(true);
+  });
+
+  it("counts the line naming the speaker against the length limit, here and not at the send", () => {
+    // The words that go out are not the words that came in: the prefix is
+    // rendered at delivery. A message just under the limit therefore PASSES the
+    // raw check and FAILS the one the send makes — which would be an item
+    // accepted, drawn as waiting its turn, and refused twenty minutes later for
+    // a length nobody could see. The Overseer's line is the long one, so the
+    // two speakers do not have the same ceiling.
+    const { q } = makeQueue();
+    const long = "x".repeat(3990);
+    expect(q.enqueueMessage(TARGET, long, "greg").ok).toBe(false);
+    const refused = q.enqueueMessage(TARGET, long, "overseer");
+    expect(refused.ok).toBe(false);
+    if (!refused.ok) expect(refused.why).toContain("added when it goes out");
+    // And a message with room for the prefix still goes.
+    expect(q.enqueueMessage(TARGET, "x".repeat(3000), "overseer").ok).toBe(true);
   });
 
   it("refuses a target that is not a tmux handle and a conversation", () => {
     const { q } = makeQueue();
-    expect(q.enqueueAction({ sessionId: "1643", claudeSessionId: CONVO }, "continue").ok).toBe(false);
-    expect(q.enqueueAction({ sessionId: SESSION, claudeSessionId: "not-a-uuid" }, "continue").ok).toBe(false);
-    expect(q.enqueueAction(TARGET, "continue").ok).toBe(true);
+    expect(q.enqueueAction({ sessionId: "1643", claudeSessionId: CONVO }, "continue", "greg").ok).toBe(false);
+    expect(q.enqueueAction({ sessionId: SESSION, claudeSessionId: "not-a-uuid" }, "continue", "greg").ok).toBe(false);
+    expect(q.enqueueAction(TARGET, "continue", "greg").ok).toBe(true);
   });
 
   it("is bounded per session and across the fleet", () => {
     const { q } = makeQueue({ maxPerSession: 3, maxTotal: 5 });
     const ids = ["continue", "pull", "push", "run-checks"];
-    for (const id of ids.slice(0, 3)) expect(q.enqueueAction(TARGET, id).ok).toBe(true);
-    const over = q.enqueueAction(TARGET, "run-checks");
+    for (const id of ids.slice(0, 3)) expect(q.enqueueAction(TARGET, id, "greg").ok).toBe(true);
+    const over = q.enqueueAction(TARGET, "run-checks", "greg");
     expect(over.ok).toBe(false);
     if (!over.ok) expect(over.rule).toBe("session-queue-full");
     expect(q.size(SESSION)).toBe(3);
 
     const second = { sessionId: "$99", claudeSessionId: OTHER_CONVO };
-    expect(q.enqueueAction(second, "continue").ok).toBe(true);
-    expect(q.enqueueAction(second, "pull").ok).toBe(true);
-    const fleetFull = q.enqueueAction(second, "push");
+    expect(q.enqueueAction(second, "continue", "greg").ok).toBe(true);
+    expect(q.enqueueAction(second, "pull", "greg").ok).toBe(true);
+    const fleetFull = q.enqueueAction(second, "push", "greg");
     expect(fleetFull.ok).toBe(false);
     if (!fleetFull.ok) expect(fleetFull.rule).toBe("fleet-queue-full");
     expect(q.totalSize()).toBe(5);
@@ -211,8 +295,8 @@ describe("enqueueing", () => {
 
   it("treats an instant repeat as a double tap, and a later one as an intention", () => {
     const { q, advance } = makeQueue({ doubleTapMs: 5000 });
-    expect(q.enqueueAction(TARGET, "run-checks").ok).toBe(true);
-    const tap = q.enqueueAction(TARGET, "run-checks");
+    expect(q.enqueueAction(TARGET, "run-checks", "greg").ok).toBe(true);
+    const tap = q.enqueueAction(TARGET, "run-checks", "greg");
     expect(tap.ok).toBe(false);
     if (!tap.ok) expect(tap.rule).toBe("double-tap");
     expect(q.size(SESSION)).toBe(1);
@@ -220,7 +304,7 @@ describe("enqueueing", () => {
     advance(6000);
     // Deliberately queuing the same thing twice — "run the checks, then run
     // them again after the merge" — must still work.
-    expect(q.enqueueAction(TARGET, "run-checks").ok).toBe(true);
+    expect(q.enqueueAction(TARGET, "run-checks", "greg").ok).toBe(true);
     expect(q.size(SESSION)).toBe(2);
   });
 });
@@ -235,9 +319,9 @@ describe("draining", () => {
     // working session must not race, must not interrupt, and must not lose
     // anything.
     const { q } = makeQueue();
-    q.enqueueAction(TARGET, "pull");
-    q.enqueueAction(TARGET, "run-checks");
-    q.enqueueMessage(TARGET, "and then push");
+    q.enqueueAction(TARGET, "pull", "greg");
+    q.enqueueAction(TARGET, "run-checks", "greg");
+    q.enqueueMessage(TARGET, "and then push", "greg");
 
     for (let i = 0; i < 3; i++) {
       const out = q.next(SESSION, ctx(WORKING));
@@ -254,8 +338,8 @@ describe("draining", () => {
 
   it("drains one at a time, in order, once the session reaches a prompt", () => {
     const { q } = makeQueue();
-    q.enqueueAction(TARGET, "pull");
-    q.enqueueAction(TARGET, "run-checks");
+    q.enqueueAction(TARGET, "pull", "greg");
+    q.enqueueAction(TARGET, "run-checks", "greg");
 
     const first = q.next(SESSION, ctx(IDLE));
     expect(first.kind).toBe("ready");
@@ -283,7 +367,7 @@ describe("draining", () => {
 
   it("refuses a session that cannot be typed into, in steer.ts's words", () => {
     const { q } = makeQueue();
-    q.enqueueAction(TARGET, "continue");
+    q.enqueueAction(TARGET, "continue", "greg");
     const out = q.next(SESSION, ctx(SHELL));
     expect(out.kind).toBe("blocked");
     if (out.kind === "blocked") {
@@ -301,7 +385,7 @@ describe("draining", () => {
     // this check "pull the latest" lands in a conversation that has never heard
     // of the task.
     const { q } = makeQueue();
-    q.enqueueAction(TARGET, "pull");
+    q.enqueueAction(TARGET, "pull", "greg");
     const out = q.next(SESSION, ctx(IDLE, OTHER_CONVO));
     expect(out.kind).toBe("orphaned");
     if (out.kind === "orphaned") {
@@ -319,7 +403,7 @@ describe("draining", () => {
 
   it("stops delivering an instruction that has waited too long, without deleting it", () => {
     const { q, advance } = makeQueue({ maxAgeMs: 30 * 60_000 });
-    q.enqueueAction(TARGET, "run-checks");
+    q.enqueueAction(TARGET, "run-checks", "greg");
     advance(29 * 60_000);
     expect(q.next(SESSION, ctx(WORKING)).kind).toBe("held");
 
@@ -348,7 +432,7 @@ describe("draining", () => {
 describe("settling", () => {
   it("removes a delivered item and moves on", () => {
     const { q } = makeQueue();
-    q.enqueueAction(TARGET, "continue");
+    q.enqueueAction(TARGET, "continue", "greg");
     const out = q.next(SESSION, ctx(IDLE));
     expect(out.kind).toBe("ready");
     if (out.kind !== "ready") return;
@@ -363,8 +447,8 @@ describe("settling", () => {
     // returns are about the box being different from the page — trying again a
     // moment later is how a message ends up in the wrong session.
     const { q } = makeQueue();
-    q.enqueueAction(TARGET, "continue");
-    q.enqueueAction(TARGET, "pull");
+    q.enqueueAction(TARGET, "continue", "greg");
+    q.enqueueAction(TARGET, "pull", "greg");
     const first = q.next(SESSION, ctx(IDLE));
     if (first.kind !== "ready") throw new Error("expected a lease");
     expect(q.settle(SESSION, first.item.id, "refused").ok).toBe(true);
@@ -381,7 +465,7 @@ describe("settling", () => {
 
   it("calls an unsettled lease stuck, and waits for a person rather than retrying", () => {
     const { q, advance } = makeQueue({ leaseMs: 60_000 });
-    q.enqueueAction(TARGET, "continue");
+    q.enqueueAction(TARGET, "continue", "greg");
     const out = q.next(SESSION, ctx(IDLE));
     if (out.kind !== "ready") throw new Error("expected a lease");
 
@@ -403,7 +487,7 @@ describe("settling", () => {
 
   it("refuses to settle something that was never handed out", () => {
     const { q } = makeQueue();
-    const added = q.enqueueAction(TARGET, "continue");
+    const added = q.enqueueAction(TARGET, "continue", "greg");
     expect(added.ok).toBe(true);
     if (!added.ok) return;
     const out = q.settle(SESSION, added.item.id, "delivered");
@@ -414,14 +498,205 @@ describe("settling", () => {
 });
 
 /* ---------------------------------------------------------------- *
+ * Putting one back — the one hole in "nothing is ever retried".
+ * ---------------------------------------------------------------- */
+
+const NOTHING_SENT: SteerFailure = {
+  ok: false,
+  reason: { code: "pane-is-asking", why: "the pane is asking a question" },
+  delivery: "none",
+  sent: [],
+};
+
+describe("releasing", () => {
+  it("puts an item back at the head when the transport says it sent nothing", () => {
+    // NOT A RETRY: there was no attempt. The refusal fired before the two
+    // `send-keys` calls, and `sent` is empty, so nothing reached the pane —
+    // which is exactly the knowledge the never-retry rule says a retry cannot
+    // have. Without this, the commonest refusal on this box destroys the item.
+    const { q } = makeQueue();
+    q.enqueueAction(TARGET, "continue", "greg");
+    q.enqueueAction(TARGET, "pull", "greg");
+    const first = q.next(SESSION, ctx(IDLE));
+    if (first.kind !== "ready") throw new Error("expected a lease");
+
+    const unsent = nothingWasSent(NOTHING_SENT);
+    expect(unsent).not.toBeNull();
+    if (!unsent) return;
+    const back = q.release(SESSION, first.item.id, unsent);
+    expect(back.ok).toBe(true);
+
+    expect(q.size(SESSION)).toBe(2);
+    expect(headId(q.snapshot(SESSION).items)).toBe(first.item.id);
+    expect(q.snapshot(SESSION).items[0]?.leasedAt).toBe(null);
+    // And the SAME item is next, not the one behind it: the order the person
+    // pressed the buttons in is what the queue is for.
+    const again = q.next(SESSION, ctx(IDLE));
+    expect(again.kind === "ready" && again.item.id).toBe(first.item.id);
+  });
+
+  it("will not take evidence that something may have been sent", () => {
+    for (const failure of [
+      { ...NOTHING_SENT, delivery: "partial" as const },
+      { ...NOTHING_SENT, delivery: "unknown" as const },
+      // The dishonest one: the summary says nothing was sent and the record of
+      // completed calls says otherwise. Believed in the safe direction.
+      { ...NOTHING_SENT, sent: [["send-keys", "-t", "%99001", "-l", "--", "…"]] },
+    ]) {
+      expect(nothingWasSent(failure)).toBeNull();
+    }
+  });
+
+  it("cannot be given evidence a caller wrote for themselves", () => {
+    // GPT Sol's D5, 2026-09-08. `UnsentFailure`'s doc comment claims the type
+    // "can only be obtained from `nothingWasSent`"; as a plain structural
+    // intersection that was false — any object literal with the two right
+    // fields satisfied it, so the audited constructor could be walked past.
+    //
+    // **THE ASSERTION IS THE `@ts-expect-error`, and `npm run typecheck` is
+    // what checks it — vitest never type-checks.** Delete the brand from
+    // `UnsentFailure` and this line stops being an error, which makes the
+    // `@ts-expect-error` itself the error. The runtime half below is not the
+    // point: `release` re-checks the two fields, so it would accept a forgery
+    // that got this far, which is exactly why the compile-time guard has to
+    // hold.
+    // @ts-expect-error a hand-written refusal is not the transport's word for it
+    const forged: UnsentFailure = { ok: false, reason: { code: "not-at-input", why: "made up" }, delivery: "none", sent: [] };
+    expect(forged.delivery).toBe("none");
+  });
+
+  it("refuses to put back something that was never handed out", () => {
+    const { q } = makeQueue();
+    const added = q.enqueueAction(TARGET, "continue", "greg");
+    if (!added.ok) throw new Error("expected an item");
+    const unsent = nothingWasSent(NOTHING_SENT);
+    if (!unsent) throw new Error("expected evidence");
+    const out = q.release(SESSION, added.item.id, unsent);
+    expect(out.ok).toBe(false);
+    if (!out.ok) expect(out.why).toContain("never handed out");
+  });
+
+  it("does not re-arm the clock, so a released item still goes stale", () => {
+    // Deliberate: `release` is about WHERE the item is, not about how old it
+    // is. An instruction that cannot be delivered for half an hour is one
+    // somebody should look at again before it lands in a conversation that has
+    // moved on, and that is `revive`'s job and a person's decision.
+    const { q, advance } = makeQueue();
+    q.enqueueAction(TARGET, "continue", "greg");
+    const first = q.next(SESSION, ctx(IDLE));
+    if (first.kind !== "ready") throw new Error("expected a lease");
+    const unsent = nothingWasSent(NOTHING_SENT);
+    if (!unsent) throw new Error("expected evidence");
+    q.release(SESSION, first.item.id, unsent);
+
+    advance(31 * 60_000);
+    expect(q.next(SESSION, ctx(IDLE)).kind).toBe("stale");
+  });
+});
+
+/* ---------------------------------------------------------------- *
+ * Which tmux server these handles belong to.
+ * ---------------------------------------------------------------- */
+
+describe("noteGeneration", () => {
+  it("learns the generation once and says nothing changed", () => {
+    const { q } = makeQueue();
+    q.enqueueAction(TARGET, "continue", "greg");
+    expect(q.knownGeneration()).toBe(null);
+    expect(q.noteGeneration(132_280)).toBe(0);
+    expect(q.knownGeneration()).toBe(132_280);
+    expect(q.noteGeneration(132_280)).toBe(0);
+    expect(q.next(SESSION, ctx(IDLE)).kind).toBe("ready");
+  });
+
+  it("invalidates every waiting item when the tmux server has been replaced", () => {
+    // One reboot takes the tmux server, the dashboard and all ~36 sessions in a
+    // single stroke, and the handles are then re-issued: `$1643` afterwards is
+    // somebody else's session, so an item queued for the old one names a
+    // stranger.
+    const { q } = makeQueue();
+    q.enqueueAction(TARGET, "continue", "greg");
+    q.enqueueAction(TARGET, "pull", "greg");
+    q.noteGeneration(132_280);
+
+    expect(q.noteGeneration(400_100)).toBe(2);
+
+    // Visible rather than dropped, and reported as orphaned rather than sent.
+    expect(q.size(SESSION)).toBe(2);
+    const items = q.snapshot(SESSION).items;
+    expect(items.every((i) => i.invalidated !== null)).toBe(true);
+    expect(items[0]?.invalidated).toContain("132280");
+    const out = q.next(SESSION, ctx(IDLE));
+    expect(out.kind).toBe("orphaned");
+    if (out.kind === "orphaned") expect(out.why).toContain("re-issued");
+  });
+
+  it("offers a fresh item queued after the restart rather than stopping at the dead one", () => {
+    // GPT Sol's D3, 2026-09-08. `invalidated` is PERMANENT — the handles were
+    // re-issued and no later observation can un-re-issue them — and nothing
+    // settles an item reported `orphaned`. So a `next()` that stops at the head
+    // blocks a perfectly deliverable item queued after the restart for thirty
+    // minutes, while the page marks only the dead one and gives no hint that it
+    // has to be cancelled first. An item that can never be delivered must not
+    // be a gate on one that can.
+    const { q } = makeQueue();
+    q.enqueueAction(TARGET, "continue", "greg");
+    q.noteGeneration(132_280);
+    expect(q.noteGeneration(400_100)).toBe(1);
+    q.enqueueAction(TARGET, "pull", "greg");
+    const items = q.snapshot(SESSION).items;
+    expect(items[0]?.invalidated).not.toBe(null);
+    expect(items[1]?.invalidated).toBe(null);
+
+    const out = q.next(SESSION, ctx(IDLE));
+
+    expect(out.kind).toBe("ready");
+    if (out.kind === "ready") expect(out.item.id).toBe(items[1]?.id);
+    // And the dead one is STILL THERE with its sentence on it: the page draws
+    // it so a person can read why, and cancelling it is their decision rather
+    // than a precondition for anything.
+    expect(q.size(SESSION)).toBe(2);
+    expect(q.snapshot(SESSION).items[0]?.invalidated).not.toBe(null);
+  });
+
+  it("still says orphaned when every waiting item is dead, rather than empty", () => {
+    // The other end of the same change. Skipping past the invalidated items
+    // must not turn "everything here is undeliverable" into "there is nothing
+    // here" — the drain would then report nothing and the page would draw two
+    // items nobody was talking about.
+    const { q } = makeQueue();
+    q.enqueueAction(TARGET, "continue", "greg");
+    q.enqueueAction(TARGET, "pull", "greg");
+    q.noteGeneration(132_280);
+    q.noteGeneration(400_100);
+
+    const out = q.next(SESSION, ctx(IDLE));
+
+    expect(out.kind).toBe("orphaned");
+    if (out.kind === "orphaned") expect(out.head.id).toBe(headId(q.snapshot(SESSION).items));
+  });
+
+  it("leaves a leased item alone, because it is already out of reach", () => {
+    const { q } = makeQueue();
+    q.enqueueAction(TARGET, "continue", "greg");
+    q.noteGeneration(132_280);
+    const out = q.next(SESSION, ctx(IDLE));
+    if (out.kind !== "ready") throw new Error("expected a lease");
+    expect(q.noteGeneration(400_100)).toBe(0);
+    expect(q.snapshot(SESSION).items[0]?.invalidated).toBe(null);
+    expect(q.next(SESSION, ctx(IDLE)).kind).toBe("in-flight");
+  });
+});
+
+/* ---------------------------------------------------------------- *
  * Seeing it, and taking it back.
  * ---------------------------------------------------------------- */
 
 describe("visibility and cancellation", () => {
   it("cancels a waiting item", () => {
     const { q } = makeQueue();
-    const a = q.enqueueAction(TARGET, "continue");
-    const b = q.enqueueAction(TARGET, "pull");
+    const a = q.enqueueAction(TARGET, "continue", "greg");
+    const b = q.enqueueAction(TARGET, "pull", "greg");
     if (!a.ok || !b.ok) throw new Error("setup");
     expect(q.cancel(SESSION, a.item.id).ok).toBe(true);
     expect(q.snapshot(SESSION).items.map((i) => i.id)).toEqual([b.item.id]);
@@ -432,7 +707,7 @@ describe("visibility and cancellation", () => {
     // be on their way to the pane, and removing the row tells somebody it did
     // not happen.
     const { q } = makeQueue();
-    q.enqueueAction(TARGET, "continue");
+    q.enqueueAction(TARGET, "continue", "greg");
     const out = q.next(SESSION, ctx(IDLE));
     if (out.kind !== "ready") throw new Error("expected a lease");
     const cancelled = q.cancel(SESSION, out.item.id);
@@ -443,9 +718,9 @@ describe("visibility and cancellation", () => {
 
   it("clears the waiting items and keeps the one in flight", () => {
     const { q } = makeQueue();
-    q.enqueueAction(TARGET, "continue");
-    q.enqueueAction(TARGET, "pull");
-    q.enqueueAction(TARGET, "push");
+    q.enqueueAction(TARGET, "continue", "greg");
+    q.enqueueAction(TARGET, "pull", "greg");
+    q.enqueueAction(TARGET, "push", "greg");
     const out = q.next(SESSION, ctx(IDLE));
     if (out.kind !== "ready") throw new Error("expected a lease");
 
@@ -459,7 +734,7 @@ describe("visibility and cancellation", () => {
     // A queue that quietly lost its items on a restart would be the same
     // failure as everything else in this area: an absence reported as success.
     const { q } = makeQueue();
-    q.enqueueAction(TARGET, "continue");
+    q.enqueueAction(TARGET, "continue", "greg");
     const snap = q.snapshot(SESSION);
     expect(snap.volatile).toBe(true);
     expect(snap.warning).toBe(PERSISTENCE_WARNING);
@@ -469,8 +744,8 @@ describe("visibility and cancellation", () => {
 
   it("lists only the sessions that have something waiting", () => {
     const { q } = makeQueue();
-    q.enqueueAction(TARGET, "continue");
-    q.enqueueAction({ sessionId: "$99", claudeSessionId: OTHER_CONVO }, "pull");
+    q.enqueueAction(TARGET, "continue", "greg");
+    q.enqueueAction({ sessionId: "$99", claudeSessionId: OTHER_CONVO }, "pull", "greg");
     expect(q.snapshots().map((s) => s.sessionId).sort()).toEqual(["$1643", "$99"]);
     q.clear("$99");
     expect(q.snapshots().map((s) => s.sessionId)).toEqual(["$1643"]);
@@ -478,7 +753,7 @@ describe("visibility and cancellation", () => {
 
   it("keeps one session's queue out of another's", () => {
     const { q } = makeQueue();
-    q.enqueueAction(TARGET, "continue");
+    q.enqueueAction(TARGET, "continue", "greg");
     expect(q.size("$99")).toBe(0);
     expect(q.next("$99", ctx(IDLE, OTHER_CONVO)).kind).toBe("empty");
     expect(q.size(SESSION)).toBe(1);
@@ -489,12 +764,16 @@ describe("visibility and cancellation", () => {
  * The vocabulary and the queue agree.
  * ---------------------------------------------------------------- */
 
-describe("every session action can actually be queued", () => {
-  it("accepts each one, and rejects each box-wide one", () => {
+describe("every spoken session action can actually be queued", () => {
+  it("accepts each one, and rejects everything the drain would not deliver", () => {
+    // Driven off the catalogue rather than off a list here, so an action added
+    // to actions.ts is covered the day it is added. The rule is BOTH halves:
+    // session-scoped (a box-wide one has no single session to be ordered
+    // against) and spoken (nothing delivers a queued enacted action).
     for (const action of ACTIONS) {
       const { q } = makeQueue();
-      const out = q.enqueueAction(TARGET, action.id);
-      expect(out.ok, action.id).toBe(action.scope === "session");
+      const out = q.enqueueAction(TARGET, action.id, "greg");
+      expect(out.ok, action.id).toBe(action.scope === "session" && action.effect === "spoken");
     }
   });
 });

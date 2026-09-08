@@ -25,6 +25,7 @@ import type {
   FleetConsequence,
   FleetMaterial,
   FleetOption,
+  FleetPermissionMode,
   FleetQuestion,
   FleetRow,
   FleetStatus,
@@ -120,6 +121,90 @@ export function StatusPill({ status }: { status: FleetStatus }): ReactNode {
     <Explain tip={STATUS_TIPS[status.kind]} placement="bottom">
       <Pill tone={label.tone}>{label.text}</Pill>
     </Explain>
+  );
+}
+
+/**
+ * The card the launch-mode warning carries. One object, not one per row: the
+ * sentences are the same on every row and only the mode's name differs.
+ *
+ * **The recovery is checked, not assumed.** "Yes, and switch to auto mode" is
+ * option 3 on a Bash-command permission dialog in three real captures
+ * (`dialog-bash-permission.txt`, `-ansi`, `-git-log`); a file-write dialog
+ * offers "switch to accept edits" instead, which is a different and weaker
+ * thing. So this says *the next time it asks to run a command*, because that is
+ * the dialog the option is actually on.
+ */
+const NOT_AUTO_TIP: Tip = {
+  head: "Not in auto mode",
+  what: "This session will stop at the first command its settings cannot approve — a git fetch, an MCP read, a setup script — and wait for a person. Nothing else on the box notices: gjd-remote log lists it as running, exactly like a healthy one.",
+  how: "To fix it for good, answer its next request to run a command with 'Yes, and switch to auto mode' — that unblocks it and converts the session permanently. Measured cost of not doing so: 34.9 agent-hours since 2026-09-06, across 20% of launches, the longest single stall 7.38 hours.",
+};
+
+/** And the card for the arm that is a shrug, so the shrug is at least explained. */
+const MODE_UNKNOWN_TIP: Tip = {
+  head: "Which mode it is in",
+  what: "Read off the two lines of status bar at the foot of the pane, and those are not on this screenful.",
+  how: "Usually because a dialog is up — Claude Code's modal covers the status bar, so a blocked session is the one whose mode cannot be read. This is neither good news nor bad; it is the absence of news.",
+};
+
+/**
+ * **A SESSION THAT DID NOT LAUNCH IN AUTO MODE**, which is not an error so much
+ * as a session that will stall the moment it does anything.
+ *
+ * ## Where this is drawn, and why not somewhere louder
+ *
+ * Under the status row, on the list card and on the detail — beside the other
+ * per-session facts, not as a fourth band across the page. A band would put it
+ * above sessions that are actually blocked right now, and this is a session
+ * that is *fine until it isn't*: important, and not more important than
+ * somebody actually waiting.
+ *
+ * ## The four arms draw three different amounts of nothing
+ *
+ *  - **`auto` DRAWS NOTHING AT ALL.** It is the norm — 14 of the 14 live panes
+ *    whose status bar was readable on 2026-09-08 — and a green tick on every
+ *    row is a tick nobody reads, which would make the one row without it harder
+ *    to spot rather than easier. Silence is the signal.
+ *  - **`not-applicable` draws nothing either.** A shell has no permission mode;
+ *    a badge on one would be a false alarm about a session working perfectly.
+ *  - **`cannot-tell` draws a quiet line, and only on the detail.** It must not
+ *    read as "fine", and it must not read as "broken" — a grey line on the one
+ *    screen you opened deliberately is the shape that is neither. It is kept
+ *    off the list cards because a blocked session's mode is *always* unreadable
+ *    (the modal covers the status bar), so on the list it would be a shrug
+ *    printed next to every row that most needs the space.
+ *  - **`not-auto` draws the strip below**, in both places, because it is the
+ *    whole reason the check exists.
+ */
+export function LaunchMode({ mode, detail }: { mode: FleetPermissionMode; detail: boolean }): ReactNode {
+  if (mode.kind === "auto" || mode.kind === "not-applicable") return null;
+  if (mode.kind === "cannot-tell") {
+    return !detail ? null : (
+      <Explain tip={MODE_UNKNOWN_TIP} placement="bottom" className="tw:mt-1 tw:block tw:text-[12px] tw:text-ink-faint">
+        permission mode unread
+      </Explain>
+    );
+  }
+  return (
+    <div className="launch-mode tw:mt-2 tw:rounded-md tw:border tw:border-alarm/50 tw:bg-alarm-wash tw:p-2">
+      <Explain tip={NOT_AUTO_TIP} placement="bottom" className="tw:block">
+        <span className="tw:text-[13px] tw:font-semibold tw:text-alarm-ink">
+          {mode.mode} — not auto
+        </span>
+      </Explain>
+      <p className="tw:mt-1 tw:text-[13px] tw:break-words tw:text-ink">
+        It will stop at the first command it cannot approve and wait for a person, and nothing else on
+        the box will say so.
+      </p>
+      {detail ? (
+        <p className="tw:mt-1 tw:text-[12px] tw:text-ink-soft">
+          Next time it asks to run a command, choose <em>Yes, and switch to auto mode</em> — that both
+          unblocks it and converts it for the rest of the session. Sessions launched like this have cost
+          34.9 agent-hours since 2026-09-06.
+        </p>
+      ) : null}
+    </div>
   );
 }
 

@@ -36,6 +36,14 @@
  * wire's `claudeSessionId`, renamed here because it is a claim rather than an
  * identity — see `ObservedRow`), and `status`.
  *
+ * Strictly BUT WITHOUT A VETO: `attemptedAt`, the only field here that can be
+ * malformed without failing the snapshot. It arrived as an addition rather than
+ * a schema bump, so every dashboard built before 2026-09-08 omits it, and a
+ * parser that refused those would take the Overseer off the air over a field
+ * nothing in the history is built from. It is still PARSED rather than shrugged
+ * at — see `parseAttempt`, where a junk value has to end up as "this producer
+ * cannot say" and not as a positive claim that it never tried.
+ *
  * Verbatim, as opaque JSON: `health` and `question`. Neither is diffed and
  * neither is an identity; both belong to another module that is still moving,
  * and re-validating them here would mean this file fails a snapshot because the
@@ -46,6 +54,7 @@
  */
 import { isRepoValue } from "../../scripts/gjd-remote-repo.js";
 import type { SessionKind, SessionMeta, SessionState, SessionUnknownCause } from "../../scripts/gjd-remote-tmux.js";
+import { readAttemptClock } from "../fleet/state.js";
 
 /**
  * Anything `JSON.parse` can return, which is the honest type for a field we
@@ -77,6 +86,37 @@ export type ParseResult<T> = { ok: true; value: T } | { ok: false; reason: strin
  */
 export type CollectedClock = { readonly collected: true; readonly at: string; readonly atMs: number };
 export type CollectionClock = { readonly collected: false } | CollectedClock;
+
+/**
+ * When the producer last STARTED a collection — three answers, not two.
+ *
+ * `collectedAt` says when data last ARRIVED and `error` says why the last
+ * attempt failed; NEITHER SAYS WHETHER THE COLLECTOR IS STILL TRYING. Measured
+ * on 2026-09-08: `/api/state` served a `collectedAt` thirty minutes stale with
+ * `error: null`, because the collector's child took SIGTERM in uninterruptible
+ * IO and the chained refresh loop never reached its next iteration. Nothing
+ * threw. The thing that would have reported the failure was the thing that had
+ * stopped. `attemptedAt` is written BEFORE each attempt precisely so that pair
+ * can be read — see `attemptedAt` in tools/fleet/state.ts.
+ *
+ * THE THIRD ARM IS THE WHOLE DIFFICULTY. A producer that does not report the
+ * field looks, to anything reading a two-armed type, exactly like one that has
+ * never attempted a collection — which is exactly what a wedged collector looks
+ * like. So "this producer cannot say" is a reading of its own, and a consumer
+ * that has it can stay silent instead of raising the alarm that is always
+ * wrong. Malformed lands here too, with its own sentence: a value the producer
+ * could not have printed is a producer we cannot read, never a producer
+ * volunteering that it has never tried.
+ *
+ * NESTED DISCRIMINANTS, `reported` then `attempted`, so the two questions are
+ * answered in the order they have to be asked. `{ reported: false }` carries a
+ * `why` for the same reason `ParseResult` does: whoever decides to say nothing
+ * about the collector has to be able to write down why.
+ */
+export type ObservedAttemptClock =
+  | { readonly reported: false; readonly why: string }
+  | { readonly reported: true; readonly attempted: false }
+  | { readonly reported: true; readonly attempted: true; readonly at: string; readonly atMs: number };
 
 /**
  * The status union with ONE COMBINATION THE PRODUCER CANNOT EMIT REMOVED.
@@ -194,6 +234,13 @@ export type ObservedSnapshot = {
   readonly tmuxServerPid: number | null;
   /** The wire's `collectedAt`, as a type that cannot be read without deciding about null. */
   readonly clock: CollectionClock;
+  /**
+   * The wire's `attemptedAt` — when the producer last STARTED collecting, which
+   * is a different fact from `clock` and the only one that can tell a wedged
+   * collector from a quiet box. See `ObservedAttemptClock`, and note that this
+   * is the one field whose malformation does not fail the snapshot.
+   */
+  readonly attempt: ObservedAttemptClock;
   readonly tookMs: number;
   /** The last collection's failure. A stale payload keeps its old rows and is broadcast anyway. */
   readonly error: string | null;
@@ -542,6 +589,89 @@ function parseRow(u: unknown, index: number): ParseResult<ObservedRow> {
 }
 
 /**
+ * The attempt clock, read off a whole payload — see `ObservedAttemptClock`.
+ *
+ * TAKES THE PAYLOAD RATHER THAN THE FIELD, because the field alone cannot
+ * answer the question: `attemptedAt` absent means "never attempted" or "older
+ * producer", and only `collectedAt` separates them.
+ *
+ * THE INFERENCE IS NOT MADE HERE. `readAttemptClock` in tools/fleet/state.ts
+ * owns it and this delegates the whole decision to it, for the reason
+ * `parseMeta` imports `isRepoValue` a few lines up: the rule is the producer's
+ * — `attemptedAt` is written BEFORE each attempt, so a non-null `collectedAt`
+ * with no attempt clock is provably a producer that does not REPORT trying
+ * rather than one that never tried — and a copy of it here would go on agreeing
+ * with today's producer for ever, with typecheck green either way. One grammar,
+ * not two that match this afternoon.
+ *
+ * WHAT THIS FILE ADDS IS THE SHAPE CHECK, and it is the half the helper cannot
+ * do. Its parameter is `string | null | undefined`, so a payload carrying
+ * `attemptedAt: 17` — or `""`, or a date string `toISOString()` could not have
+ * printed — arrives there as "nothing here" and comes back as a POSITIVE claim
+ * that the collector has never started, on a payload full of live rows. That is
+ * a fact manufactured out of junk, and the watchdog would act on it. So
+ * anything present-but-unreadable is refused here first, as "cannot say".
+ *
+ * EXPORTED BECAUSE THE DAEMON READS THIS OFF PAYLOADS THE GATE REFUSED. A
+ * collector that keeps attempting while its snapshots are rejected is a source
+ * that is FAILING, which is a different condition from one that has STOPPED,
+ * and the difference is only visible on payloads with no parsed snapshot to
+ * read the field from. `parseObservation` fills its own field with this same
+ * function, so the two can never disagree about one payload.
+ *
+ * NEVER FAILS THE SNAPSHOT: every arm returns a reading, and the unreadable
+ * ones return a sentence rather than a `ParseResult`. See the module comment.
+ */
+export function parseAttempt(u: unknown): ObservedAttemptClock {
+  if (!isRecord(u)) return { reported: false, why: `the payload is ${typeName(u)}, so it carries no attempt clock` };
+
+  const raw = u["attemptedAt"];
+  let stamp: { iso: string; ms: number } | null = null;
+  if (raw !== undefined && raw !== null) {
+    const parsed = isoTimestamp(raw, "attemptedAt");
+    if (!parsed.ok) return { reported: false, why: parsed.reason };
+    stamp = parsed.value;
+  }
+
+  // Only the SHAPE of `collectedAt` matters to the inference — whether the
+  // producer has ever collected — and a malformed one fails the whole snapshot
+  // in `parseObservation` anyway, where the history really does depend on it.
+  const collectedAt = u["collectedAt"];
+  const clock = readAttemptClock({
+    attemptedAt: stamp?.iso ?? null,
+    collectedAt: typeof collectedAt === "string" ? collectedAt : null,
+  });
+  switch (clock.kind) {
+    case "attempted":
+      // THE COUPLING, CHECKED RATHER THAN ASSERTED. The only string handed to
+      // the helper is one this function validated, so `stamp` is non-null and
+      // `clock.at` is that same string; a `!` here would be a claim about
+      // another module's future. If it ever normalised or substituted the
+      // value, the milliseconds below would belong to a different instant than
+      // the string beside them — so the honest answer is that we cannot say.
+      // UNREACHABLE TODAY, and knowingly so: a mutation that deletes it passes
+      // the whole suite, because no payload can reach it while the helper
+      // returns what it was given. It is here instead of a `!`, not instead of
+      // a test.
+      if (stamp === null || stamp.iso !== clock.at) {
+        return { reported: false, why: `attemptedAt is ${JSON.stringify(clock.at)}, which is not the timestamp this reader validated` };
+      }
+      return { reported: true, attempted: true, at: stamp.iso, atMs: stamp.ms };
+    case "never-attempted":
+      // Both-absent is merged into this arm at the source, on purpose: a
+      // producer that has never attempted and an old one that has never
+      // collected have told us the same nothing, and there is one action.
+      return { reported: true, attempted: false };
+    case "not-reported":
+      return { reported: false, why: clock.why };
+    default: {
+      const never: never = clock;
+      return { reported: false, why: `the attempt clock is ${JSON.stringify(never)}, which this version has no arm for` };
+    }
+  }
+}
+
+/**
  * A `/api/state` body, or a sentence saying why it is not one.
  *
  * Takes `unknown` on purpose: the caller has done `JSON.parse` and holds
@@ -622,6 +752,11 @@ export function parseObservation(u: unknown): ParseResult<ObservedSnapshot> {
       rows,
       tmuxServerPid: tmuxServerPid.value,
       clock,
+      // DELIBERATELY NOT ABLE TO FAIL THIS PARSE. Every other field above can
+      // refuse the snapshot; this one always returns a reading, because a
+      // dashboard built before the field existed is an old producer rather than
+      // a broken one and the Overseer has to go on watching it.
+      attempt: parseAttempt(u),
       tookMs: tookMs.value,
       error: error.value,
       refreshMs: refreshMs.value,

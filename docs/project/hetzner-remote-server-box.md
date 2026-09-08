@@ -945,11 +945,136 @@ reaches Greg's phone. The dashboard binds the tailnet interface rather than a pu
 reachability *is* the access control, and nothing extra has to be built to keep it away from
 strangers.
 
+### After `tailscale up`, give the fleet dashboard the address
+
+**Logging in does not tell the dashboard.** Its bind list comes from
+`/etc/fleet-dashboard.env`, which only `provision.sh` writes, and provisioning has already run and
+found no address by the time you get here. So `tailscale up` is two commands, not one:
+
+```
+tailscale ip -4 | head -n 1                 # confirm a tailnet address exists BEFORE the next line
+printf 'FLEET_BIND=127.0.0.1,%s\n' "$(tailscale ip -4 | head -n 1)" | sudo tee /etc/fleet-dashboard.env
+sudo systemctl restart fleet-dashboard      # only if the unit is enabled — see the warning below
+```
+
+**That order, and it matters.** `EnvironmentFile=` is read when the service *starts*, so a restart
+before the file exists binds loopback and looks fine until somebody picks up a phone. Written first,
+the *first* start after login already has the address.
+
+**The restart is conditional on the unit being enabled**, which as of 2026-09-08 it is not: the page
+is up under a tmux job, and starting the unit alongside it makes two supervisors race for `:8787`.
+If the unit is not running, there is nothing to restart — the file is simply waiting for its first
+start, which is what you want.
+
+Doing this by hand, rather than by an `ExecStartPre` that generates the file, is deliberate: an
+`ExecStartPre` writes the file *after* systemd has already read `EnvironmentFile`, so it would take
+effect one start late — a mechanism that looks correct and is off by one every time. It would also
+have to write to `/etc` as `User=greg`. Re-running `gjd-remote provision` regenerates the file too,
+and is the other way to get here.
+
+**Before you have run it, the dashboard is reachable from the box and not from your phone, and that
+is the deliberate trade.** The unit falls back to `127.0.0.1` alone, which is correct on every box
+and cannot fail to bind. It used to fall back to this box's tailnet address as well, which on a
+freshly provisioned machine is an address that machine does not have — and
+[`tools/fleet/server.ts`](../../tools/fleet/server.ts) treats a bind it cannot take as fatal, on
+purpose, so the whole dashboard died rather than half-binding. A page you can only reach from the
+box is visible, correct and one command from fixed; a service that will not start is none of those.
+Found by a cross-family review on 2026-09-08, two hours after the unit landed.
+
 It was installed by hand on the live box first, on 2026-09-08 — a human ssh session, not
 `provision.sh` — which is exactly the gap
 [A change to the box is a change to a file](#a-change-to-the-box-is-a-change-to-a-file) exists to
 close: a box rebuilt from the script alone, before this landed, would have booted with no
 Tailscale and no way to reach it from a phone, and nothing here would have said why.
+
+## The box's own services
+
+Two long-running tools run under **systemd**, not tmux: the **Overseer**, which records what the
+agent fleet did, and the **fleet dashboard** it reads — both
+[orchestrator-direction.md](orchestrator-direction.md).
+
+They are **system units with `User=greg`**, and that is the whole point of them. Both used to be
+`scripts/tmux-job.ts` jobs whose entrypoint was inside a *worktree*, so `git worktree remove` took
+them down, and a reboot took the tmux server and everything in it. A systemd **user** unit would
+not have fixed the reboot either: it does not start at boot unless lingering is enabled for the
+account, and nothing here enables it. The evidence that a unit really will come back is the
+symlink, not the word `enabled`:
+
+```
+systemctl is-enabled overseer                                   # enabled
+ls -l /etc/systemd/system/multi-user.target.wants/overseer.service
+```
+
+**Editing a unit in the repo does NOT change the box, and nothing tells you.** There are three
+copies of each unit — the readable one under `infra/hetzner/systemd/`, the heredoc inside
+`provision.sh`, and the one in `/etc/systemd/system/` that actually runs.
+`tests/systemd-units.test.ts` compares the first two byte for byte; **nothing compares either to the
+third.** Measured 2026-09-08: `overseer.service` matched, and `fleet-dashboard.service` on the box was
+**53 lines different** from the repo — still carrying a hardcoded tailnet address that no other box
+could bind, two revisions after that was fixed.
+
+So the install step is part of every unit change, not an occasional chore:
+
+```
+# after ANY edit to infra/hetzner/systemd/*.service — before enabling, restarting, or believing it
+sudo install -m 0644 -o root -g root \
+  <(sed 's/@USER@/greg/g' infra/hetzner/systemd/overseer.service) \
+  /etc/systemd/system/overseer.service
+sudo systemctl daemon-reload
+```
+
+**This is not a check for a good reason.** A test asserting the installed file matches the repo would
+go red the moment anyone edits a unit and stay red until somebody ran `sudo` — which agents on this
+box cannot do. A red trunk with no agent-reachable fix is worse than the drift it detects, because a
+shared red gate hides its own additional causes. So it is a step you take and a thing you verify by
+hand, and `diff` is the whole of the verification:
+
+```
+diff <(sed 's/@USER@/greg/g' infra/hetzner/systemd/overseer.service) /etc/systemd/system/overseer.service
+```
+
+At 3am:
+
+```
+systemctl status overseer                # or fleet-dashboard
+journalctl -u overseer -n 50 --no-pager  # -f to follow
+sudo systemctl restart overseer
+sudo systemctl stop overseer             # stays stopped; Restart=always respects a deliberate stop
+```
+
+`Restart=always`, not `on-failure`, because on this box the things that send a clean `SIGTERM` are
+not the service's owner — a stray `pkill`, a tidy-up script, an agent killing what it thinks is its
+own process — and `on-failure` reads every one of those mistakes as a decision. A `StartLimitBurst`
+in `[Unit]` stops a genuinely broken build restarting for ever: it crash-loops visibly in the
+journal for about a minute and then sits in `failed`.
+
+**They run out of the primary checkout, `/home/greg/code/spideryarn2`, never a worktree** — a
+worktree is deleted by normal tidying, and an `ExecStart` inside one is a service that disappears
+when somebody cleans up. Two consequences follow, and both are real rather than theoretical:
+
+- They run **whatever is in the primary checkout when they start**, including a red `dev`. That is
+  deliberate: a dashboard that refuses to boot until somebody fixes `dev` is unavailable exactly
+  when it is needed.
+- Nothing keeps the primary checkout current, and it is often hours behind `origin/dev`. **Updating
+  it is a deploy**: `git merge origin/dev` there, then `npm run build:fleet` if the dashboard's
+  client changed — `tools/fleet/web/dist/` is gitignored, so no pull can supply it, and a stale one
+  is served with no error anywhere.
+
+The unit files are checked in at [`infra/hetzner/systemd/`](../../infra/hetzner/systemd/) and
+installed by [`provision.sh`](../../infra/hetzner/provision.sh), which splices them in verbatim —
+`gjd-remote provision` copies that one file to the box and nothing else travels with it, so the
+units have to live inside it. `tests/systemd-units.test.ts` compares the two copies byte for byte,
+because two copies of a unit file is how one of them goes stale.
+
+**The fleet dashboard's unit is installed and deliberately not enabled** as of 2026-09-08: the page
+is up under a tmux job and its owner asked to read the unit before it is switched on, since two
+supervisors racing for `:8787` produce a loser whose failure looks like a crash. Its bind list is
+`FLEET_BIND`, which the unit sets to `127.0.0.1` alone and `/etc/fleet-dashboard.env` extends with
+this box's tailnet address — provisioning writes that file from `tailscale ip -4`, removes it when
+there is no address, and [after a login you write it yourself](#after-tailscale-up-give-the-fleet-dashboard-the-address).
+The unit names no tailnet address itself, because that is a per-machine fact and a checked-in copy
+of it is one the next box cannot bind. It deliberately does not name `FLEET_ACT_ENABLED` in any
+form.
 
 ## Traps
 

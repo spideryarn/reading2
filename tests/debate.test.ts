@@ -167,7 +167,7 @@ describe("an article nobody has written about", () => {
    * The model has been handed nine real pages and has done exactly what Stage 0
    * showed a model does: written them up as though they were responses. Every
    * row here is *well formed* — a URL the search genuinely returned, a quotation
-   * genuinely in that page's extract, a relation, a valence, a sentence about
+   * genuinely in that page's extract, a relation, a lean, a sentence about
    * how it applies. Rule 1 passes on all of them.
    *
    * What none of them can do is show the page naming this article, because none
@@ -182,7 +182,7 @@ describe("an article nobody has written about", () => {
          produces when the page contains nothing of the kind. */
       articleReferenceQuote: "Greg's recent notes on his starter",
       relation: "qualifies",
-      valence: "neutral",
+      lean: "neither",
       applies: "It bears on how often a young starter needs feeding.",
     }));
 
@@ -217,7 +217,7 @@ describe("an article nobody has written about", () => {
         claimQuote: "fall apart within a week unless it is fed twice a day",
         sourceQuote: "A starter kept on the counter will collapse in about a week",
         relation: "corroborates",
-        valence: "positive",
+        lean: "leans-for",
         applies: "It reports the same collapse over the same period.",
       },
       {
@@ -226,7 +226,7 @@ describe("an article nobody has written about", () => {
         claimQuote: "Rye flour ferments faster than white",
         sourceQuote: "Rye ferments faster than white flour",
         relation: "extends",
-        valence: "positive",
+        lean: "leans-for",
         applies: "It adds that a rye starter also falls earlier.",
         limits: "It says nothing about how much sooner the peak comes.",
       },
@@ -270,7 +270,7 @@ describe("an article nobody has written about", () => {
         claimQuote: "unless it is fed twice a day",
         sourceQuote: "Twice is the number that works",
         relation: "corroborates",
-        valence: "positive",
+        lean: "leans-for",
         applies: "Same schedule.",
       },
     ];
@@ -297,7 +297,7 @@ describe("a row's identity is a URL the search returned", () => {
     claimQuote: "unless it is fed twice a day",
     sourceQuote: "Twice is the number that works",
     relation: "corroborates",
-    valence: "positive",
+    lean: "leans-for",
     applies: "Same schedule.",
   });
 
@@ -352,7 +352,7 @@ describe("the article cannot cite itself", () => {
     claimQuote: "unless it is fed twice a day",
     sourceQuote: "fall apart within a week",
     relation: "corroborates",
-    valence: "positive",
+    lean: "leans-for",
     applies: "It says exactly this.",
   });
 
@@ -409,7 +409,7 @@ describe("no row survives as an unchecked paraphrase", () => {
           claimQuote: "unless it is fed twice a day",
           sourceQuote: "this article is wrong about everything",
           relation: "disputes",
-          valence: "negative",
+          lean: "leans-against",
           applies: "It rejects the piece outright.",
         },
       ],
@@ -438,7 +438,7 @@ describe("no row survives as an unchecked paraphrase", () => {
           claimQuote: "Rye flour ferments faster than white",
           sourceQuote: "every  ten\ndegrees ROUGHLY doubles the rate",
           relation: "extends",
-          valence: "neutral",
+          lean: "neither",
           applies: "It gives the temperature rule behind the difference.",
         },
       ],
@@ -481,7 +481,7 @@ describe("no row survives as an unchecked paraphrase", () => {
           claimQuote: "starters collapse if underfed",
           sourceQuote: "Twice is the number that works",
           relation: "corroborates",
-          valence: "positive",
+          lean: "leans-for",
           applies: "Same schedule.",
         },
       ],
@@ -501,7 +501,7 @@ describe("no row survives as an unchecked paraphrase", () => {
           claimQuote: "unless it is fed twice a day",
           sourceQuote: "Twice is the number that works",
           relation: "corroborates",
-          valence: "positive",
+          lean: "leans-for",
           applies: "Same schedule.",
         },
       ],
@@ -537,7 +537,7 @@ describe("no row survives as an unchecked paraphrase", () => {
           sourceQuote: "true in a cool kitchen and wrong in a warm one",
           articleReferenceQuote: "notes on my sourdough starter, week 3",
           relation: "qualifies",
-          valence: "negative",
+          lean: "leans-against",
           applies: "It accepts the schedule only for cool kitchens.",
         },
       ],
@@ -560,7 +560,7 @@ describe("what a cap and a bad row are counted as", () => {
     claimQuote: "unless it is fed twice a day",
     sourceQuote: "Twice is the number that works",
     relation: "corroborates",
-    valence: "positive",
+    lean: "leans-for",
     applies: "Same schedule.",
   });
 
@@ -612,7 +612,7 @@ describe("what a cap and a bad row are counted as", () => {
       sourceQuote: "true in a cool kitchen and wrong in a warm one",
       articleReferenceQuote: "notes on my sourdough starter, week 3",
       relation: "qualifies",
-      valence: "negative",
+      lean: "leans-against",
       applies: "It accepts the schedule only for cool kitchens.",
     }));
     const group = readDirectGroup(many, { admissible: evidenceMap([review]), article: ARTICLE, blockText }, 2);
@@ -705,7 +705,7 @@ describe("a direct row must show the page naming this article", () => {
           sourceQuote: "Day-three starters want warmer water than most recipes suggest",
           articleReferenceQuote: "the difference in activity is obvious within hours",
           relation: "disputes",
-          valence: "negative",
+          lean: "leans-against",
           applies: "It disproves the article's central claim.",
         },
       ],
@@ -734,7 +734,7 @@ describe("a direct row must show the page naming this article", () => {
           sourceQuote: "argues for a colder kitchen",
           articleReferenceQuote: "Notes on my rye starter, week 9",
           relation: "corroborates",
-          valence: "positive",
+          lean: "leans-for",
           applies: "It agrees about the kitchen.",
         },
       ],
@@ -758,7 +758,7 @@ describe("a direct row must show the page naming this article", () => {
       sourceQuote: "makes the same case, and it is worth a look",
       articleReferenceQuote: witness,
       relation: "corroborates",
-      valence: "positive",
+      lean: "leans-for",
       applies: "It makes the same case.",
     });
 
@@ -814,7 +814,7 @@ describe("a direct row must show the page naming this article", () => {
           articleReferenceQuote:
             "The post at https://gregs-private-baking-notes.example/starter-week-3#spya-aaaaaa",
           relation: "disputes",
-          valence: "negative",
+          lean: "leans-against",
           applies: "It rejects the feeding schedule.",
         },
       ],
@@ -841,7 +841,7 @@ describe("a direct row must show the page naming this article", () => {
           articleReferenceQuote:
             "See https://gregs-private-baking-notes.example/starter%2Dweek%2D3 for the claim",
           relation: "qualifies",
-          valence: "neutral",
+          lean: "neither",
           applies: "It answers the claim.",
         },
       ],
@@ -912,7 +912,7 @@ describe("a quote too short to be evidence", () => {
     claimQuote: "unless it is fed twice a day",
     sourceQuote: "Twice is the number that works",
     relation: "corroborates",
-    valence: "positive",
+    lean: "leans-for",
     applies: "Same schedule.",
     ...over,
   });
@@ -974,7 +974,7 @@ describe("a quote too short to be evidence", () => {
           sourceQuote: "true in a cool kitchen and wrong in a warm one",
           articleReferenceQuote: "a",
           relation: "qualifies",
-          valence: "negative",
+          lean: "leans-against",
           applies: "It accepts the schedule only for cool kitchens.",
         },
       ],
@@ -1014,7 +1014,7 @@ describe("a row with no address", () => {
     claimQuote: "unless it is fed twice a day",
     sourceQuote: "Twice is the number that works",
     relation: "corroborates",
-    valence: "positive",
+    lean: "leans-for",
     applies: "Same schedule.",
   });
 
@@ -1069,7 +1069,7 @@ describe("what counts as a debate document", () => {
 
 /* ------------------------------------------------- the closed vocabularies -- */
 
-describe("relation and valence", () => {
+describe("relation and lean", () => {
   const row = {
     url: "https://myeclecticbites.com/sourdough-starter-notes",
     blockId: "spya-aaaaaa",
@@ -1080,26 +1080,26 @@ describe("relation and valence", () => {
 
   /**
    * A value outside the vocabulary becomes the vocabulary's own "we cannot
-   * tell", rather than dropping the row. `unclear` and `unknown` are correct
+   * tell", rather than dropping the row. `unclear` and `cannot-tell` are correct
    * answers and are drawn as calmly as the rest — a model that cannot tell
    * whether a page agrees should say so and be believed.
    */
-  it("falls back to unclear and unknown rather than dropping the row", () => {
+  it("falls back to unclear and cannot-tell rather than dropping the row", () => {
     const group = readClaimGroup(
-      [{ ...row, relation: "demolishes", valence: "62% negative" }],
+      [{ ...row, relation: "demolishes", lean: "62% negative" }],
       claimInput,
       2,
     );
     expect(group.counts.keptRows).toBe(1);
     expect(group.rows[0]?.relation).toBe("unclear");
-    expect(group.rows[0]?.valence).toBe("unknown");
+    expect(group.rows[0]?.lean).toBe("cannot-tell");
     expect(anyLost(group.counts.lost)).toBe(false);
   });
 
-  it("keeps a valence that is in the set", () => {
-    const group = readClaimGroup([{ ...row, relation: "disputes", valence: "negative" }], claimInput, 2);
+  it("keeps a lean that is in the set", () => {
+    const group = readClaimGroup([{ ...row, relation: "disputes", lean: "leans-against" }], claimInput, 2);
     expect(group.rows[0]?.relation).toBe("disputes");
-    expect(group.rows[0]?.valence).toBe("negative");
+    expect(group.rows[0]?.lean).toBe("leans-against");
   });
 });
 

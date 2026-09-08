@@ -55,6 +55,11 @@ function messageBody(over: Record<string, unknown> = {}): Record<string, unknown
     panePid: 424242,
     status: { kind: "needs-you" },
     text: "please merge origin/dev before you carry on",
+    // WHAT THE PAGE SENDS, and the field is here rather than left out because
+    // this fixture is a claim about the client. `steerMessageBody` puts
+    // `speaker: "greg"` in every body; a fixture without it would be exercising
+    // the default path and calling it the page's.
+    speaker: "greg",
     ...over,
   };
 }
@@ -222,8 +227,49 @@ describe("carrying the client's claims through", () => {
       claudeSessionId: CLAUDE_ID,
       panePid: 424242,
     });
-    expect(call?.op === "message" && call.text).toBe("please merge origin/dev before you carry on");
+    // ATTRIBUTED. The text the delivery module is handed is not the text the
+    // body carried: it has the line saying who is speaking in front of it,
+    // because every message reaches an agent as an ordinary user turn and
+    // nothing else in it says whether a person or an automated coordinator
+    // wrote it (tools/fleet/actions.ts § `Speaker`). This route hands text
+    // straight to a pane, so this is the assertion that keeps it honest.
+    expect(call?.op === "message" && call.text).toBe("[Greg, via the fleet dashboard] please merge origin/dev before you carry on");
     expect(call?.declaredStatus).toEqual({ kind: "needs-you" });
+  });
+
+  it("labels a caller that did not say who it was as the Overseer, not as Greg", async () => {
+    // THE DEFAULT IS THE WEAKER CLAIM, and it is the whole of `parseSpeaker`'s
+    // argument: a coordinator that forgets to say who it is must not inherit
+    // Greg's authority by omission, which is the one failure the attribution
+    // rule exists to prevent. The other default is unrecoverable — nothing
+    // downstream can tell an unattributed message from Greg's.
+    const { routes, calls } = harness();
+    const body = messageBody();
+    delete body["speaker"];
+    const r = await post(routes, fakeReq({ body: JSON.stringify(body) }));
+
+    expect(r.status).toBe(200);
+    expect(calls[0]?.op === "message" && calls[0].text.startsWith("[The Overseer — an automated coordinator, NOT Greg.")).toBe(true);
+  });
+
+  it("refuses a slash command from anybody but Greg, and types nothing", async () => {
+    // A slash command cannot carry the prefix — it must be first on the line or
+    // Claude Code will not run it — so for any speaker but Greg there is no way
+    // to send one AND say who is sending it. `/loop 5m <prose>` is why that
+    // matters: the argument to a slash command is instructions, so an
+    // unprefixed one is a general way to speak in Greg's voice rather than the
+    // narrow, reviewed hole `/compact` opens.
+    const { routes, calls } = harness();
+    const r = await post(routes, fakeReq({ body: JSON.stringify(messageBody({ speaker: "overseer", text: "/compact" })) }));
+
+    expect(r.status).toBe(400);
+    expect(String(r.json.why)).toContain("only Greg may send one");
+    expect(calls).toEqual([]);
+
+    // And Greg's own slash command still goes, unprefixed, as it must.
+    const mine = await post(routes, fakeReq({ body: JSON.stringify(messageBody({ speaker: "greg", text: "/compact" })) }));
+    expect(mine.status).toBe(200);
+    expect(calls[0]?.op === "message" && calls[0].text).toBe("/compact");
   });
 
   it("passes a panePid the live box could not possibly agree with, unchanged", async () => {
