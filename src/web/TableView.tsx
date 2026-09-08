@@ -329,7 +329,7 @@ function applyOpen(
  * `window`, or a `matchMedia` a privacy extension has removed — so anything that
  * is not a browser behaves as it always did.
  */
-export const canHover = (): boolean =>
+const canHover = (): boolean =>
   typeof window === "undefined" || typeof window.matchMedia !== "function"
     ? true
     : window.matchMedia("(hover: hover)").matches;
@@ -382,7 +382,7 @@ const NOT_A_BLOCK_SELECTION = [
  * Enter would move the selected row, paint the wash and shift `activeChain`,
  * on input that never touched the row. GPT Sol, 2026-09-07.
  */
-export function isBlockSelectionTap(event: {
+function isBlockSelectionTap(event: {
   target: EventTarget | null;
   detail: number;
 }): boolean {
