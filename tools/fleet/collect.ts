@@ -27,7 +27,7 @@ import {
   type Session,
   type SessionMeta,
 } from "../../scripts/gjd-remote-tmux.js";
-import { capturePane, parsePane, type PaneQuestion } from "./pane.js";
+import { capturePane, parsePane, readPaneMode, type PaneAutoMode, type PaneQuestion } from "./pane.js";
 import { statusesOf, type FleetStatus } from "./status.js";
 
 /** One line of the page. Deliberately flat: it is rendered, and it is JSON. */
@@ -106,6 +106,30 @@ export type FleetRow = {
    * waiting on, and every extra capture is load on a box that fell over today.
    */
   question: PaneQuestion | null;
+  /**
+   * **WHICH PERMISSION MODE THIS SESSION LAUNCHED IN** — the other fact that
+   * comes off the pane, and the one nothing on this box noticed until now.
+   *
+   * A session that came up in default rather than auto mode stops at its first
+   * unapproved command and waits for somebody asleep: **34.9 agent-hours lost
+   * since 2026-09-06, 20% of launches, longest single stall 7.38 hours.**
+   * `gjd-remote log` calls such a session `running`, identical to a healthy
+   * one. The measurement and the detection rule are in `PaneAutoMode` and
+   * `readPaneMode` in pane.ts.
+   *
+   * **A UNION, NEVER A BOOLEAN, AND NEVER OPTIONAL.** `question` above may be
+   * null because "not asking anything" is a real answer; there is no
+   * corresponding null here, because every one of the three ways this can be
+   * unanswerable — no Claude in the session, no status bar on screen, a mode
+   * name we do not know — is a different thing to draw. A `boolean | null`
+   * would render the fleet's most expensive defect and a shell as the same
+   * pixel.
+   *
+   * Populated in two places, deliberately: `toRows` settles the arms that
+   * follow from the status alone, and `readPanes` reads the rest off the pane.
+   * See `modeApplicability`.
+   */
+  permissionMode: PaneAutoMode;
 };
 
 /** A snapshot, and enough about it to know whether to believe it. */
@@ -194,6 +218,84 @@ export function worktreeOf(dir: string): string | null {
 }
 
 /**
+ * Whether a session's permission mode is a question worth asking of its pane,
+ * or one the status has already answered.
+ *
+ * **THE STATUS DECIDES, NOT THE PANE TEXT**, and that is the whole reason this
+ * function exists rather than `readPaneMode` guessing. A shell and a Claude
+ * whose status bar has scrolled off produce the same bytes — no status bar —
+ * and they are opposite claims: one HAS no permission mode, the other has one
+ * we could not see. Rendering the first as the second would put a shrug on
+ * every shell on the box; rendering the second as the first would quietly
+ * declare a real Claude exempt from the check. `status.ts` already knows which
+ * is which, so it is asked rather than re-derived.
+ *
+ * **`unknown` IS `cannot-tell`, NOT `not-applicable`.** The box could not say
+ * what is running, and one failed `claude agents --json` turns EVERY Claude row
+ * unknown at once (status.ts says so at length) — so the alternative would
+ * declare the whole fleet exempt in a single bad second, silently.
+ *
+ * **The three interactive arms all get read, `working` and `idle` included, and
+ * that is the point of the whole stage.** Only `needs-you` rows were captured
+ * before, and a blocked session is exactly the one whose mode CANNOT be read:
+ * Claude Code's modal takes the whole screenful, and not one of the eleven
+ * dialogs captured on 2026-09-08 has a status bar under it. The value is in
+ * saying so within a minute of the session starting — while it is still
+ * working — rather than five hours after it stopped.
+ *
+ * **The extra captures are affordable, measured rather than assumed.** All 19
+ * panes on the box at 09:40 on 2026-09-08 took **176ms in total, median 9ms**,
+ * against a collection that costs 5–13 seconds. That is under 2% of a
+ * collection for the whole box, and `needs-you` rows pay nothing extra because
+ * their capture is reused.
+ *
+ * The `never` is load-bearing: an eighth `SessionState` arm stops compiling
+ * here, so somebody decides whether it has a permission mode instead of
+ * inheriting an answer.
+ */
+export type ModeApplicability =
+  /** Ask the pane. */
+  | { kind: "read-the-pane" }
+  /** The status already answers it; this is the answer. */
+  | { kind: "settled"; mode: PaneAutoMode };
+
+export function modeApplicability(status: FleetStatus): ModeApplicability {
+  switch (status.kind) {
+    case "needs-you":
+    case "working":
+    case "idle":
+      return { kind: "read-the-pane" };
+    case "shell":
+      return {
+        kind: "settled",
+        mode: { kind: "not-applicable", why: "this is a shell, not an agent — there is no permission mode to be in" },
+      };
+    case "waiting":
+      return {
+        kind: "settled",
+        mode: { kind: "not-applicable", why: "this session is in a timed wait of its own, not at a Claude prompt" },
+      };
+    case "no-claude":
+      return {
+        kind: "settled",
+        mode: { kind: "not-applicable", why: "there is no Claude running in this session" },
+      };
+    case "unknown":
+      return {
+        kind: "settled",
+        mode: {
+          kind: "cannot-tell",
+          why: `the box could not say what this session is running (${status.cause}), so its pane was not read`,
+        },
+      };
+    default: {
+      const never: never = status;
+      return never;
+    }
+  }
+}
+
+/**
  * Sessions to display rows.
  *
  * A session with an empty title keeps null rather than a placeholder, so that
@@ -207,30 +309,100 @@ export function toRows(
   status: ReadonlyMap<string, FleetStatus>,
   panes: ReadonlyMap<string, PaneInfo> = new Map(),
 ): FleetRow[] {
-  return sessions.map((s) => ({
-    id: s.id,
-    name: s.name,
-    title: s.title.trim() === "" ? null : s.title.trim(),
-    repo: s.meta.version === 1 ? s.meta.repo : null,
-    worktree: s.meta.version === 1 ? worktreeOf(s.meta.dir) : null,
-    meta: s.meta,
-    startedAt: s.created.toISOString(),
-    paneId: panes.get(s.id)?.paneId ?? null,
-    panePid: panes.get(s.id)?.panePid ?? null,
-    claudeSessionId: s.claudeId,
-    // Filled in below, only for the blocked rows. Null here rather than
-    // undefined so the field is always present in the JSON.
-    question: null as PaneQuestion | null,
-    // A session the status pass did not cover is `unknown` with a reason, not a
-    // default that reads as calm. There is no legitimate way to get here — the
-    // two lists come from one parse — so if it ever shows up on the page, the
-    // page is telling you about a real bug rather than about the box.
-    status: status.get(s.id) ?? {
+  return sessions.map((s) => {
+    // Resolved once and used twice, so the status a row is stamped with is the
+    // same one its mode was decided from. Two lookups of the same map is how
+    // those quietly stop being the same status.
+    const rowStatus: FleetStatus = status.get(s.id) ?? {
       kind: "unknown",
       cause: "no-status-derived",
       why: "no status was derived for this session",
-    },
-  }));
+    };
+    const applies = modeApplicability(rowStatus);
+    return {
+      id: s.id,
+      name: s.name,
+      title: s.title.trim() === "" ? null : s.title.trim(),
+      repo: s.meta.version === 1 ? s.meta.repo : null,
+      worktree: s.meta.version === 1 ? worktreeOf(s.meta.dir) : null,
+      meta: s.meta,
+      startedAt: s.created.toISOString(),
+      paneId: panes.get(s.id)?.paneId ?? null,
+      panePid: panes.get(s.id)?.panePid ?? null,
+      claudeSessionId: s.claudeId,
+      // Filled in below, only for the blocked rows. Null here rather than
+      // undefined so the field is always present in the JSON.
+      question: null as PaneQuestion | null,
+      /* THE ARMS THE STATUS SETTLES ARE SETTLED HERE, and the rest starts at
+         `cannot-tell` — never at `auto`. `readPanes` fills those in from the
+         pane, and a caller that never runs it (`snapshotFrom` on its own, the
+         JSON round-trip test) then produces rows that say "we did not look"
+         rather than rows that say every session is fine. */
+      permissionMode:
+        applies.kind === "settled"
+          ? applies.mode
+          : ({ kind: "cannot-tell", why: "this session's pane has not been read yet" } as PaneAutoMode),
+      // A session the status pass did not cover is `unknown` with a reason, not a
+      // default that reads as calm. There is no legitimate way to get here — the
+      // two lists come from one parse — so if it ever shows up on the page, the
+      // page is telling you about a real bug rather than about the box.
+      status: rowStatus,
+    };
+  });
+}
+
+/**
+ * **READ EVERY PANE THAT HAS SOMETHING TO SAY**, and put both facts on its row.
+ *
+ * Extracted from `collect` rather than left inline, for two reasons and the
+ * second is the one that matters. It is the seam a test can drive without tmux,
+ * the same shape steer.ts uses. And until it existed **the capture loop had no
+ * test at all** — a loop that populated nothing would have left the whole suite
+ * green, which is the shape of bug docs/reusable/silent-success.md is about.
+ *
+ * **ONE CAPTURE PER PANE, ANSWERING BOTH QUESTIONS.** A blocked row's pane was
+ * already being read for its dialog. Taking a second `capture-pane` of it here
+ * would not merely cost another 9ms — it would read a screen that may have
+ * redrawn in between, so the question on the card and the mode beside it would
+ * be facts about two different frames.
+ *
+ * **A FAILURE LEAVES BOTH UNREAD RATHER THAN INVENTING EITHER.** The row still
+ * shows its status, which is true and useful; the page says it could not read
+ * the pane rather than pretending there was nothing on it.
+ */
+export function readPanes(rows: FleetRow[], capture: (paneId: string) => string = capturePane): void {
+  for (const row of rows) {
+    if (modeApplicability(row.status).kind !== "read-the-pane") continue;
+    if (row.paneId === null) {
+      row.permissionMode = {
+        kind: "cannot-tell",
+        why: "tmux gave this session no pane, so there is no screen to read it off",
+      };
+      continue;
+    }
+    let text: string | null = null;
+    try {
+      text = capture(row.paneId);
+    } catch {
+      text = null;
+    }
+    if (text === null) {
+      row.permissionMode = { kind: "cannot-tell", why: "this session's pane could not be captured" };
+      continue;
+    }
+    row.permissionMode = readPaneMode(text);
+    // ONLY THE BLOCKED ROWS GET A QUESTION. Parsing every pane would be free
+    // now that the capture is taken anyway, and it would still be wrong: a
+    // `question` on a row nobody is waiting on is a card the page draws about a
+    // session that is not asking, and `parsePane`'s whole bias is calibrated
+    // against being generous on panes that are merely working.
+    if (row.status.kind !== "needs-you") continue;
+    try {
+      row.question = parsePane(text);
+    } catch {
+      row.question = null;
+    }
+  }
 }
 
 /**
@@ -525,21 +697,15 @@ export async function collect(): Promise<FleetSnapshot> {
   const snapshot = snapshotFrom(parsed, listing, 0);
   const rows = snapshot.rows;
 
-  // ASK ONLY THE BLOCKED ONES what they are asking. A capture is cheap, but a
-  // capture per session per refresh is ~35 of them on a box that fell over
-  // today, and the answer is meaningless for a pane nobody is waiting on.
-  //
-  // A capture or parse that fails leaves `question` null: the row still shows
-  // as needs-you, which is true and useful, and the page says it could not read
-  // the question rather than pretending there is not one.
-  for (const row of rows) {
-    if (row.status.kind !== "needs-you" || row.paneId === null) continue;
-    try {
-      row.question = parsePane(capturePane(row.paneId));
-    } catch {
-      row.question = null;
-    }
-  }
+  /* ONE PASS OVER THE PANES, for the two facts that only the terminal has: what
+     a blocked session is asking, and which permission mode any interactive
+     Claude launched in. It used to read only the blocked rows, and that was
+     right while the question was the only thing wanted from a pane — but the
+     mode of a blocked session is the one thing its screen CANNOT tell us (the
+     modal covers the status bar), so a check that ran only there would never
+     have fired. See `readPanes` and `modeApplicability`; the cost of the extra
+     captures is measured on the latter. */
+  readPanes(rows);
 
   return { ...snapshot, collectedAt: new Date().toISOString(), tookMs: Date.now() - startedAt };
 }

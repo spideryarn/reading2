@@ -1,15 +1,24 @@
 # Agent fleet dashboard
 
-**Status as of 2026-09-08 09:30: one thing left — the queue that nothing drains.**
+**Status as of 2026-09-08 10:15: the queue drains, and Greg has asked for three more things.**
 
-1. **Nothing drains the action queue** —
-   [Stage v0.5f](#-stage-v05f-nothing-drains-the-queue-the-one-thing-that-is-worse-than-not-built).
-   The routes, the client and the queue are all built and tested; no production code path ever calls
-   `queue.next()`. A queued action waits thirty minutes and is dropped. A button that says *queued*
-   and means *never* is worse than no button. In progress.
-2. ~~The live server predates the code~~ — **restarted 2026-09-08 09:18, on Greg's instruction**, and
-   the discrimination it was carrying was confirmed against two real sessions the moment it came up.
-   See the section below.
+1. ~~Nothing drains the action queue~~ — **v0.5f landed**. A queued message now goes out on the next
+   refresh pass, at most one per session. The first design was killed by GPT Sol before a line was
+   written; the second is below, along with what it changed and why.
+2. ~~Sessions launch in the wrong permission mode~~ — **fixed**, on the box and in `provision.sh`,
+   Greg's call answered as *both*. **v0.4e** then made the defect visible: the page now says when a
+   session is not in auto mode.
+3. ~~The live server predates the code~~ — **restarted 2026-09-08 09:18**, and the pane gate
+   classified two real dialogs in opposite directions the moment it came up.
+4. **Greg's four, 2026-09-08 10:10–10:20** — v0.5g (Queue on an idle session), v0.4f (recent
+   messages, which is a HALF-LANDED stage rather than a new one — the server route exists and no page
+   calls it), v0.4g (the detail view is cluttered; take screenshots and get Fable's product input),
+   and **v0.4h**, which is the substantial one: *"working"* is hiding at least three different states,
+   including a session asleep for three hours with an intention to come back.
+
+**What is verified right now:** all 20 fleet suites, 812 tests, plus `npm run typecheck` clean across
+all four projects, at the commit below. `tools/**` is now inside `biome.jsonc`'s allowlist, which it
+had never been.
 
 Everything else below is real but optional.
 
@@ -717,10 +726,75 @@ not to do.
       `row.meta.dir` plus `row.claudeSessionId`, and say plainly when it cannot be found rather
       than showing an empty conversation.
 
-### 🔴 Stage v0.5f: NOTHING DRAINS THE QUEUE — the one thing that is worse than not built
+### ✅ Stage v0.5f: nothing drained the queue (landed 2026-09-08)
 
-**The queue accepts items and no code path ever delivers them.** `SteeringQueue` is built, tested and
-routed; `POST /api/actions/session` defaults to `mode: "enqueue"`; the client renders the queue and
+**`tools/fleet/drain.ts`, `tools/fleet/refresh.ts`, and the narrowing in `queue.ts`.** A queued
+message is now delivered by the next refresh pass — one item per session per pass, after the snapshot
+has been published, inside its own try/catch.
+
+**The design below was reviewed by GPT Sol before anything was built, and it came back "do not build
+this as written."** Two P0s, both confirmed against the source, and they are worth keeping because
+each is a general shape rather than a bug:
+
+**P0-1 — `steerableStatus` answers a wider question than the one being asked.** The design says *ask
+`drainGate(row.status)`, and when it says `now`, deliver*. `drainGate` is built on `steerableStatus`,
+which answers *"may this session be steered at all"*; `needs-you` passes it. But `sendMessage`
+refuses a pane that is showing a dialog (`steer.ts:1117`, `pane-is-asking`). So the drain would have
+leased the item, been refused, settled it as spent, and **destroyed the person's instruction** — once
+a minute until the queue emptied, while the agent sat on one dialog. The fix is `deliveryGate`, a
+second function differing from `drainGate` in exactly one arm, obtained by *asking* `drainGate`
+rather than copying its list, so the two cannot drift.
+
+*The general shape, and it is the third instance in one night:* a signal whose name promises more
+than its definition delivers. See `docs/reusable/name-is-evidence.md`.
+
+**P0-2 — a synchronous delivery inside the loop that draws the page.** `sendMessage` is up to six
+`execFileSync` calls at ten seconds each, and `Promise.race` cannot bound one: the timer cannot fire
+while the event loop is blocked. Unbounded, a fleet where everybody has something queued is ~36
+minutes of dead dashboard. The fix is three bounds — publish the snapshot *before* delivering,
+`MAX_SENDS_PER_PASS`, and `DRAIN_BUDGET_MS`, the last two checked *between* rows, because a send
+already under way cannot be abandoned.
+
+**And one retreat, recorded rather than dropped.** `QueuedPayload` now holds a `SpokenAction`, so an
+*enacted* action — `remove-worktree`, `kill-session` — cannot be represented as a queued item at all.
+The header's original argument (queue them, for ordering: "push, then remove the worktree" must not
+become the reverse) is right and was overruled: delivering one means running a plan of `execFile`s
+that deletes a directory, from the one loop whose failure takes the dashboard down with it, and that
+surface is the least-reviewed in the tool. The narrowing is structural rather than a check, so the
+drain has no branch for the case and could not compile one.
+
+**Three things it does that the design did not ask for**, each because the review found the hole:
+
+- **`release()`** — the one hole in *never auto-retry a keystroke*, and it is not a retry. When the
+  transport says `delivery: "none"` with an empty `sent` list, nothing left this process; the item
+  goes back to the **head** of its queue. Without it the commonest refusal on this box —
+  `pane-is-asking`, because the pane opened a dialog in the thirteen seconds since the collection —
+  destroys the message rather than delaying it. The type can only be built by `nothingWasSent`.
+- **`noteGeneration()`** — a tmux restart re-issues every `$…` and `%…` handle to different sessions,
+  so the whole queue is invalidated at once, with a *sentence* rather than a deletion, and the page
+  draws it.
+- **`refresh.ts`** — the missing line was in `server.ts`, which no test can import, because importing
+  it binds 8787. So the *order* moved to a file a test can drive, and `server.ts` keeps only the
+  dependencies. This is Sol's D8, and it is the reason the original hole was invisible to a suite in
+  which every individual part was tested.
+
+**Untrue prose is a defect, and this stage produced one.** The confirm strip said *"if this session is
+working, this waits its turn in the queue"* about an action that is now refused outright. The test
+that pinned that sentence went red, which is what it was for; it now pins the new rule and asserts
+the old one is nowhere on the page. **Prose is a second copy of a rule and the compiler does not
+check it.**
+
+**Still open, deliberately.** `broadcastRoute` picks its recipients with `drainGate` and has the same
+P0 shape — nothing is destroyed, because a broadcast has no queue, but it should ask `deliveryGate`.
+Receipts, an abandon-stuck route, and the per-pane mutex (*"the day any of this becomes async, the
+mutex arrives in the same commit"*) are named in the source and not built.
+
+<details>
+<summary>The original stage text, kept because the review is only legible against it</summary>
+
+**The queue accepts items and no code path ever delivers them.**
+
+`SteeringQueue` is built, tested and routed; `POST /api/actions/session` defaults to `mode: "enqueue"`; the client renders the queue and
 lets you cancel. But `queue.next()` is called from `tests/fleet-actions-route.test.ts` and **from
 nowhere else in the product**. A queued action sits until it goes stale at thirty minutes and is then
 silently dropped.
@@ -821,6 +895,160 @@ messages"* — so this is the difference between v0.5 being built and v0.5 worki
       through the route and draining through the export.
 - [ ] Then mutate: make the drain settle without sending, and make it deliver to the wrong session,
       and check the suite goes red for both.
+
+</details>
+
+### ✅ Stage v0.4e: the page says when a session launched in the wrong mode (landed 2026-09-08)
+
+The fix in `provision.sh` stops it happening again; this is what makes it *visible* when it happens
+anyway — a different box, an older session, a launcher nobody has updated.
+
+`readPaneMode` in `pane.ts` reads the mode off the status bar and returns one of four arms:
+`auto` / `not-auto` (carrying the name) / `cannot-tell` (with a reason) / `not-applicable`.
+
+**The design call worth keeping is the anchoring.** A mode line counts only when the line *directly
+above* it is the status bar's chrome line. Measured before it was written: across 24 pinned fixtures
+and 19 live panes, **43 mode lines, 43 anchored, 0 loose** — and a test splices a real auto-mode line
+into a real manual-mode pane's transcript, where the naive substring rule fires and the anchored one
+correctly says `not-auto`.
+
+**And the second: an unfamiliar mode name is `cannot-tell`, not `not-auto`.** "Anything that isn't
+auto is the defect" turns every row red the day Claude Code renames a mode — a false alarm across the
+whole fleet at once.
+
+Live on 20 rows the day it landed: 14 `auto`, 6 `not-applicable`, **0 `not-auto`, 0 `cannot-tell`**.
+The six were blank shell panes, which the detector alone called `cannot-tell` and `modeApplicability`
+correctly turned into "there is no mode to have". The cost is 19 captures in 176ms, median 9ms.
+
+**It is silent when healthy.** A green tick on every row makes the one without it harder to spot.
+
+**One thing the brief got wrong, and it inverted the premise:** the dashboard did *not* already
+capture every pane — only `needs-you` rows. The mode is the one thing a blocked session's pane cannot
+tell you (the modal covers the status bar), so a check reusing only the existing captures would have
+fired approximately never.
+
+### 🔵 Stage v0.4f: recent messages, which is half-landed and reads as done
+
+**Greg, 2026-09-08:** *"Show the recent message(s) for each session when I click on it in `Sessions`
+mode, no matter what status."*
+
+**The server route exists and works. No page has ever called it.** `GET /api/messages?id=` is wired
+in `server.ts` and backed by `tools/fleet/transcript.ts` (42KB, tested); `SessionDetail.tsx:522` still
+draws *"Recent messages are not wired up yet."* and points at this stage. So v0.4c is marked ✅ above
+and the thing a person can see is absent — which is the same class as the queue that nothing drained,
+caught this time by Greg looking at the page rather than by a check.
+
+- [ ] Call `/api/messages?id=` from the detail pane and render the reply's arms — it is a
+      discriminated union with `unreadable` and `not-found` cases, and those are the ones that must
+      not collapse into an empty conversation.
+- [ ] **No matter what status**, which is Greg's actual words and the easy thing to get wrong: a
+      `shell` or `no-claude` row has no transcript, and the honest answer there is a sentence, not a
+      blank panel.
+- [ ] It is agent-authored text from a process that may have handled hostile input. React escapes it;
+      nothing may add markup. Same rule as the pane capture.
+- [ ] Fix `OrchestratorPanel.tsx:65`, which calls v0.4c `"next"`, and the ✅ on v0.4c above.
+
+### 🔵 Stage v0.5g: Queue on an idle session is a worse Send
+
+**Greg, 2026-09-08:** *"I tried using "Queue" to send a message to an idle session, and nothing
+happened, because it's waiting for something - if the session is idle, either hide the Queue button
+and/or auto-send."*
+
+**Half of this is v0.5f and is now fixed** — *nothing happened* was the queue having no drain, and a
+queued message now goes out on the next pass. But the rest of the report stands, and it is a product
+point rather than a bug: on an idle session the two buttons do the same thing, one of them a minute
+later, and the page offers no reason to prefer the slow one.
+
+- [ ] When the row is `idle`, **Send is the only button**. Not "hide Queue if the queue is empty" —
+      the condition is the status, because that is the condition the person is reasoning about.
+- [ ] When something is already queued for that session, Queue stays, and it stays for the reason
+      the queue exists: order. Two buttons that both send *now* would interleave with what is
+      waiting.
+- [ ] Say the delay out loud wherever Queue is offered. It is *"within a minute or so"* and the real
+      cadence is ~73 seconds, not 60 — the collection itself takes about 13.
+- [ ] The failing test first, and it is a rendering test: an `idle` row shows no Queue button.
+
+### 🔵 Stage v0.4g: the session detail view is cluttered
+
+**Greg, 2026-09-08:** *"Use Playwright or similar to take screenshots and make the Session detail view
+less confusing and cluttered and more user-friendly (with product input from Fable)."*
+
+This is the first stage in the plan whose deliverable is a judgment rather than a mechanism, and the
+brief names both halves of how to get one: **screenshots of the real page**, because tests going
+green is not evidence a reader can see it, and **Fable**, because the question is what a person needs
+first and that is not a technical fork.
+
+- [ ] Playwright against system Chrome on the box — `docs/project/browser-control.md` decides which
+      automation, not preference. Phone width as well as desktop: the page is read on a phone.
+- [ ] Every band of the detail view has a reason it is there, written in `SessionDetail.tsx`'s
+      header. **A cut needs a reason back**, not just less ink — several of those bands exist because
+      a collapsed distinction cost something.
+- [ ] Ask Fable for the ordering, not for a redesign: *what does a person need to see first on a
+      phone at 3am*. The answer is a product call, so anything user-visible beyond ordering and
+      density goes to Greg.
+
+### 🔵 Stage v0.4h: "working" is hiding at least three different things
+
+**Greg, 2026-09-08:** *"can you try and distinguish between statuses like `Working`, `Hit usage
+limits`, and `Paused/waiting` (e.g. because it's been asked to run Unix sleep or idle waiting for a
+CronCreate or similar, i.e. it's kind of idle, but with an intention to reactivate, and ideally make
+a note of when it should reactivate (and whether it's overdue)). This might require regexes and/or
+matching on the recent messages and other metadata about the session? Get input from Fable, and you
+can run spikes with dummy sessions you've created, then get a review from GPT Sol."*
+
+**Start from what already exists, because half of one arm is built and it does not cover the case
+Greg means.** `SessionState` has a `waiting` arm carrying `secondsLeft`, and
+`sessionState()` in `scripts/gjd-remote-tmux.ts:971` produces it from `s.proc.kind === "wait"` — the
+process probe seeing a `sleep` as the session's **foreground** process. That is the launcher's own
+scheduled session: a job script that sleeps three hours and *then* starts Claude. It is checked
+before the agents lookup, so it works, and it is the easy case.
+
+**The case Greg is describing is the opposite one and reads as `working`.** An agent that has been
+*told* to sleep runs `sleep` as a child of a live `claude`; the foreground process is Claude, Claude
+Code reports `busy`, and the row says **Working** for three hours. Same for a session parked on a
+`CronCreate`, and same — differently — for one that has hit a usage limit, which is not in the agents
+map's vocabulary at all and so lands on `working` or `idle` depending on timing.
+
+So the fleet's most common long-lived states are three facts wearing one word, and the dashboard's
+whole claim is that you can tell at a glance which sessions need you.
+
+**What makes this hard, and it is the thing to establish before designing anything.** The evidence is
+in three different places and they disagree about what they can prove:
+
+- **`proc`** — what is actually running. Strong evidence, and it can see a `sleep` **child**, not just
+  a foreground one. It cannot say why.
+- **The pane capture** — already taken once a minute for every row since v0.4e. Shows what Claude
+  Code is *saying*: a usage-limit message, a countdown, a tool call in flight. Strong for the
+  usage-limit case and the only source for it. Untrusted text.
+- **The transcript tail** — v0.4f. Says what was *asked for*: "sleep for 3h", a `CronCreate`. This is
+  the only source that can supply an **intended reactivation time**, which is the half of Greg's ask
+  that nothing else can answer.
+
+**The rule this stage must not break.** `FleetStatus` has seven arms and **three exhaustive switches
+depend on it** — `triageRank`, `steerableStatus` and `drainGate`, now `deliveryGate` too. v0.4d
+already decided the general form of this question: *"how `idle` splits is an added fact, not an
+eighth status"*. Read that decision before proposing an eighth arm here. A paused-with-intent session
+is genuinely `working` by every measure `FleetStatus` is built from, and the new facts probably belong
+**beside** `question` and `permissionMode` on the row. If the research says otherwise, that is a
+finding worth arguing, not a licence.
+
+**And the rule the whole tool runs on.** Every one of these signals has a negative case that is
+ambiguous, which is the mistake this project made three times in one night. *"No sleep found"* and
+*"could not look"* are different facts. **A `cannot-tell` arm, with a reason, or it is not built.**
+
+- [ ] **Research first, and from evidence.** Two or three subagents at different angles — one reading
+      `proc` on real sessions, one reading pane captures, one reading transcripts. Agents reasoning
+      from the same source reach the same wrong answer confidently.
+- [ ] **Spikes with dummy sessions**, which Greg has explicitly authorised: make your own session,
+      put it in each state, and see what each source says. Do not reason about it. **Your own
+      sessions only** — the rest of the box is other people's work, and it is `capture-pane` only.
+- [ ] **Fable on the product shape**: how many states a person can hold in their head at a glance,
+      and what "overdue" should do to the sort order. That is a product call, not a technical fork.
+- [ ] **The reactivation time, and whether it is overdue** — Greg asked for it specifically. Note
+      that "overdue" is a claim, so it needs the same treatment: an intended time we could not read
+      is not an intended time of zero.
+- [ ] Red test first, mutations after, and a GPT Sol review at the end of the stage, which is
+      obligatory here rather than optional — this touches the type three switches are built on.
 
 ### Stage v0.5: the steering vocabulary
 
