@@ -226,6 +226,62 @@ has to be the reading's own clock.
   `<line>` and puts labels in HTML beside the SVG. Copy that. A dependency for one chart in a tool
   that must keep working when everything else is broken is a poor trade.
 
+## Measurements
+
+Taken by this session on 2026-09-09 against the live `~/.overseer/current.json` (read-only;
+`scratchpad/ult-size-usage-history.mjs`). These size the store and settle the rotation cap, which
+until now was inherited from health without checking.
+
+| | bytes |
+|---|---|
+| whole checkpoint | 101,430 |
+| `usage` blob, raw | 61,122 |
+| — of which `rateLimits` | **58,781 (96%)** |
+| — `cache` | 970 |
+| — `verdict` | 983 |
+| — `account` | 259 |
+| — `coverage` | 301 |
+
+**140 hits collapse to 9 incident clusters.** Grouped by `${window} ${resetsAtMs}` the way
+`groupUsageIncidents` does: one `seven_day` cluster (27 hits, 16 conversations) and eight `five_hour`
+clusters (6–19 hits each). A projected incident list is **~4.2 KB against 58.4 KB of raw hits — a
+14× reduction**, and it is bounded by the number of *windows that have ever been hit*, not by the
+transcript backlog. This is D2's evidence, and it is stronger than the estimate D2 was written on.
+
+**A history line therefore costs ~6.8 KB** (account + cache + ~4.2 KB incidents + verdict + coverage
++ envelope), and at one line per distinct reading — at most 288/day on the 300 s timer — the store
+grows at **~2 MB/day**.
+
+So **the rotation cap is 8 MiB, kept from health but for a different reason**: at health's ~1 MB/day
+it bought 8 days; here it buys ~4. Four days is still ample for a 24-hour display window with room
+to widen to the route's 168-hour maximum, and a single cap across both stores is one fewer number to
+explain. Stage 1 asserts the ~6.8 KB line size in a test, so the day a line gets fat the suite says
+so rather than the cap silently shrinking to a day and a half.
+
+**A third argument for storing the projection, which D2 did not have:** a raw hit carries
+`transcriptPath` and `message`. Storing raw would copy transcript paths and API error prose into a
+long-lived file that nothing else prunes. The projection carries neither.
+
+### Two things the live data contradicted in the plan as first written
+
+- **There is a third window name.** The live cache carries `nimbus_quill` alongside `five_hour` and
+  `seven_day`, in the `unknown` arm, with `why: "no resets_at, so the utilization (0) cannot be
+  checked for validity — reporting it would be reporting a numbe…"`. So "per known window
+  (`five_hour`, `seven_day`)" is a statement about `KNOWN_USAGE_WINDOWS`, not about what the file
+  contains. **The chart must not silently drop an unrecognised window** — a window we cannot read is
+  exactly the thing a usage tab exists to surface, and dropping it would be D6's flat-line-at-zero
+  failure wearing a different hat. Stage 4 gets a test for an unknown window name, and the design is:
+  render it as a named row in the unknown state, never as a series and never omitted.
+  (Note the 0 in that `why` — an unvalidated `utilizationPercent: 0` is exactly the number that must
+  never reach a chart.)
+- **The live checkpoint predates tonight's cache reshape.** It still carries the single
+  `cache: {kind: "value", accountUuid, windows}` arm; the three-arm
+  `attributed` / `unattributed` / `unknown` shape lands with `260908f-roadmap-usage`. So any fixture
+  captured from the box today is a **schema-2, old-cache** specimen. Stage 1 must not pin the new
+  shape against an old capture — capture fresh fixtures after that branch lands, and keep the old
+  one deliberately as the "line written before the reshape" case, which is precisely what D3's
+  provenance field is for.
+
 ## References
 
 Roughly most-useful first.
@@ -312,6 +368,9 @@ one can read the other.
   - [ ] rotation at the byte cap moves live → prev and keeps reading across both
   - [ ] an over-long single line is truncated, not dropped, and says it was truncated
   - [ ] a corrupt/partial trailing line is counted in `unreadableLines`, not thrown
+  - [ ] **a line built from a realistic reading is ~6.8 KB and under 10 KB** — so the day a line
+        gets fat, the suite says so instead of the 8 MiB cap silently shrinking from 4 days to one
+  - [ ] a line written under the **old** single-arm `cache` shape still reads back (D3 provenance)
   - [ ] the lock: a second writer no-ops and reports `lockedOutBy`, **and reads still work** (D9)
   - [ ] a stale lock held by a dead pid is stolen
   - [ ] `FLEET_USAGE_DIR` redirects the whole store
@@ -374,6 +433,9 @@ The first stage Greg can see. Ends with a genuinely useful tab even if Stage 4 n
   - [ ] "before history began" is its own labelled region, distinct from a hole
   - [ ] rejections are **not** grouped by account, and the series carries no `accountUuid`
   - [ ] utilisation **is** grouped by account
+  - [ ] **an unrecognised window name (`nimbus_quill` is live on this box today) is rendered as a
+        named row in the unknown state — never dropped, and never plotted from its unvalidated
+        `utilizationPercent: 0`**
 - [ ] `tools/fleet/web/src/usage-history-client.ts` (parse + poll the wire payload) and
       `usage-history-series.ts` (the pure absence-classification layer) — mirroring
       `health-history-client.ts` / `history-series.ts`
