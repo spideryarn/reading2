@@ -90,7 +90,7 @@
  * which is a change worth making the day something acts — not one to make while
  * both rules can only propose.
  */
-import { definitionHash, type AuthorisedRuleJob, type DefinitionHash, type JobDocument, type RuleJobDefinition } from "./jobs.js";
+import { behaviourHash, type AuthorisedRuleJob, type BehaviourHash, type JobDocument, type RuleJobDefinition } from "./jobs.js";
 import type { RuleId, RuleSpec } from "./rules.js";
 import { digestDocument } from "./standing-jobs.js";
 
@@ -215,8 +215,21 @@ export type RuleJobId = RuleId;
  * says when it is stale.
  */
 export const AUTHORISED_RULE_HASHES: Readonly<Record<RuleJobId, string>> = {
-  "wedged-work": "bebaeb2561c0",
-  "launch-mode": "898a5c1ab3f1",
+  // BOTH RE-PINNED 2026-09-09, for two reasons and neither is a change to a
+  // rule. First, cadence and lease left the fingerprint (GPT Sol's S8-1), so the
+  // bytes hashed changed while every spec, threshold and disposition stayed as
+  // it was. Second, `rules.ts` is one of `RULE_SOURCES`, so renaming
+  // `definitionHash` to `behaviourHash` in TWO OF ITS COMMENTS moved its digest
+  // and therefore both pins.
+  //
+  // **That second one is the tripwire working, and it is worth reading twice.**
+  // A comment edit disarming two rules is exactly the alarm-fatigue risk
+  // `standing-jobs.ts` names — the difference is that these documents are
+  // implementation files rather than prose, and a rule's implementation is the
+  // thing a person is authorising. Re-pinned after reading the diff: two words
+  // in two comments, both of them the new name of a function this file calls.
+  "wedged-work": "17abcb1814de",
+  "launch-mode": "f130e228aa85",
 };
 
 /** The spec, as it is authorised. Every knob, and `disposition: "propose"` is the one gate 3 turns on. */
@@ -288,24 +301,25 @@ export function ruleJobs(repoRoot: string): RuleJobs {
   // question there is.
   const defined: readonly RuleJobDefinition[] = [
     {
-      id: "wedged-work",
-      everyMs: WEDGED_WORK_EVERY_MS,
-      leaseMs: RULE_LEASE_MS,
-      what: WEDGED_WORK_WHAT,
-      documents,
-      work: { kind: "rule", rule: WEDGED_WORK_SPEC },
+      behaviour: { id: "wedged-work", what: WEDGED_WORK_WHAT, documents, work: { kind: "rule", rule: WEDGED_WORK_SPEC } },
+      // THE RULES' SCHEDULES ARE NOT IN `schedules.ts`, deliberately. That file
+      // is Greg's — the two standing jobs, the ones that cost money, the ones he
+      // asked to be able to retune at 3am. A rule ticks in-process and costs
+      // nothing, and its cadence is a property of the rule rather than a
+      // preference; putting it in the same file would invite editing it for the
+      // same reasons, which are not the same reasons at all.
+      schedule: { everyMs: WEDGED_WORK_EVERY_MS, leaseMs: RULE_LEASE_MS, initialDelayMs: 0 },
     },
     {
-      id: "launch-mode",
-      everyMs: LAUNCH_MODE_EVERY_MS,
-      leaseMs: RULE_LEASE_MS,
-      what: LAUNCH_MODE_WHAT,
-      documents,
-      work: { kind: "rule", rule: LAUNCH_MODE_SPEC },
+      behaviour: { id: "launch-mode", what: LAUNCH_MODE_WHAT, documents, work: { kind: "rule", rule: LAUNCH_MODE_SPEC } },
+      schedule: { everyMs: LAUNCH_MODE_EVERY_MS, leaseMs: RULE_LEASE_MS, initialDelayMs: 0 },
     },
   ];
   return {
-    jobs: defined.map((definition) => ({ definition, authorisedHash: AUTHORISED_RULE_HASHES[definition.id as RuleJobId] as DefinitionHash })),
+    jobs: defined.map((definition) => ({
+      definition,
+      authorisedHash: AUTHORISED_RULE_HASHES[definition.behaviour.id as RuleJobId] as BehaviourHash,
+    })),
     problems,
   };
 }
@@ -320,9 +334,9 @@ export function ruleJobs(repoRoot: string): RuleJobs {
 export function describeRuleJobs(input: { armed: boolean; enableVar: string; jobs: RuleJobs }): string {
   const { jobs, problems } = input.jobs;
   const named = jobs.map((job) => {
-    const found = definitionHash(job.definition);
-    const disposition = job.definition.work.rule.disposition;
-    const label = `${job.definition.id} (${disposition})`;
+    const found = behaviourHash(job.definition.behaviour);
+    const disposition = job.definition.behaviour.work.rule.disposition;
+    const label = `${job.definition.behaviour.id} (${disposition})`;
     return found === job.authorisedHash ? label : `${label} (NOT AUTHORISED: pinned ${job.authorisedHash}, now ${found})`;
   });
   const tail = [named.length === 0 ? "no rule definitions built" : named.join(", "), ...problems].join("; ");
