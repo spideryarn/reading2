@@ -4465,6 +4465,50 @@ describe("why a session is paused, off the wire and on the page", () => {
     expect(text).toContain("the transcript tail ran out of window");
   });
 
+  it("does not say 'waiting? unknown' on a row that is visibly busy", () => {
+    /* MEASURED ON THE LIVE BOX, 2026-09-08: 29 of 32 rows came back
+       `cannot-tell`, most of them working sessions whose transcript tail ran out
+       of window. A phrase on 29 of 32 cards is not a caveat, it is wallpaper —
+       and the rate-limit collector reports `unknown` until 2026-09-12 while some
+       unattributable rejections expire, so this is the common case this week
+       rather than a rare one.
+
+       The rule is the question itself: `Pause` answers "why is this session not
+       doing anything", and on a row that IS doing something the question does
+       not arise. But the POSITIVE states must still draw on a busy row — a
+       session blocked in a shell call while the board says Working is the whole
+       reason this stage exists. */
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport });
+    const dunno = {
+      kind: "cannot-tell",
+      why: "the transcript tail ran out of window",
+      cause: "tail-window-exhausted",
+    } as const;
+    act(() =>
+      feed.push(
+        state({
+          rows: [
+            row({ id: "$busy", title: "busy and unexamined", status: { kind: "working" }, pause: dunno }),
+            row({ id: "$sh", title: "a shell", status: { kind: "shell", busy: true }, pause: dunno }),
+            row({ id: "$quiet", title: "quiet and unexamined", status: { kind: "idle" }, pause: dunno }),
+            row({
+              id: "$blocked",
+              title: "working, and actually stuck",
+              status: { kind: "working" },
+              pause: { kind: "in-a-shell-call", sinceMs: 21 * 60_000 },
+            }),
+          ],
+        }),
+      ),
+    );
+    const text = container.textContent ?? "";
+    // Once, for the quiet row — not three times.
+    expect(text.split("waiting? unknown").length - 1).toBe(1);
+    // And the positive state is drawn on a WORKING row, which is the point.
+    expect(text).toContain("in a shell call 21m");
+  });
+
   it("puts an overdue session in the loud colour and says how long it has been waiting", () => {
     /* Fable, 2026-09-08: a rate-limited session never resumes by itself, so
        overdue is deterministic rather than a guess — and it is the single most

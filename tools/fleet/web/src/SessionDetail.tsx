@@ -628,7 +628,7 @@ export function SessionDetail({
           down inside Recent messages. */}
       <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-x-2 tw:gap-y-1">
         <StatusPill status={row.status} />
-        <PauseLine pause={row.pause} now={now} />
+        <PauseLine pause={row.pause} status={row.status} now={now} />
         <LastWrote view={reading.view} status={row.status} now={now} />
         <Uptime row={row} now={now} className="tw:ml-auto" />
       </div>
