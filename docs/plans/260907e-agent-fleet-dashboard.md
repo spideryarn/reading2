@@ -2371,8 +2371,40 @@ dashboard already has rather than one it would have to invent.
 only then argue the `:505` refusal. The stage below may turn out to be unnecessary, which is the
 outcome to hope for.
 
-- [ ] Try the cheap fix first: `working` + `background-work` becomes deliverable, with the pause read
-      server-side rather than accepted from the request.
+**CORRECTION, 20:56 the same evening: the item above named the wrong field, and it was contradicted
+by measurement within the hour.** `spideryarn2-b6` added a second join so the two could disagree, and
+they did:
+
+    20:56  agents=7 reachable=5 working=2 working_but_at_prompt=1
+           server_bg_work=0 joins_disagree=1 oracle_unknown=0
+
+The row that was at a prompt reported `pause: {kind: "cannot-tell"}`, and its reason string was
+**identical to the genuinely-busy row's** — so `pause` did not discriminate between the two at all.
+
+**The cause is one line in `pause.ts`, and it is Class B in a module written the same day.**
+`readShellState` does `if (entry.status !== "shell") return { kind: "not-background-work" }`, so a
+store entry whose status is `idle` — the *direct* evidence of at-a-prompt — is read and then
+collapsed into a negative. `background-work` is only the `shell` subset (idle **and** unfinished
+bash). The row they counted was plain `idle`, which is the larger set and the one reachability
+actually wants. **The producer said the careful thing and the consumer threw it away**, which is the
+lossy-join half of `260908b` occurring inside the fix for it.
+
+So the cheap fix is still available and it is a *different* field: keep the store's own status rather
+than reducing it to a boolean about background work. That also answers the open question left over
+from v0.4h about `choosePause`'s precedence, which put `background-work` above `cannot-tell` back
+when that arm meant *blocked*.
+
+**One reading, two rows, and the coverage is an open question rather than a settled one.** Their
+`joins_disagree` column now makes the misses visible instead of inferable from a total, and the
+overnight series says how often the store's `idle` and the board's `working` actually coincide. If
+they rarely do, this is cheap and nearly useless and the expensive stage below survives; if they
+usually do, this is sufficient and the stage below can be deleted.
+
+- [ ] Try the cheap fix first, **on the store's status rather than on `background-work`**: stop
+      collapsing a non-`shell` status into `not-background-work`, and let a row the store calls
+      `idle` be deliverable. Read server-side from our own snapshot, never off the request.
+- [ ] Revisit `choosePause`'s precedence at the same time; it was ordered when `background-work` was
+      believed to mean *blocked*.
 - [ ] Answer or overturn the `:505` refusal, in writing, before any code.
 - [ ] Render `index`/`total` at delivery, following `sendable()`.
 - [ ] Say on the page what the route already answers: *"sent to 3 of 15 — 5 were working, 7 are
