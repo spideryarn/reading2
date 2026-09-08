@@ -224,6 +224,59 @@ describe("what counts as a break", () => {
     expect(plot.gaps[0]?.ongoing).toBe(true);
   });
 
+  it("does not count one silence twice when a corrupt line sits inside a real break", () => {
+    /* TWO MECHANISMS CAN DESCRIBE THE SAME SILENCE. A four-hour spacing between
+       two samples is a break; a corrupt line between those same two samples is
+       also a break, bracketed by the same pair. Pushed separately they are two
+       entries over one stretch of time, and the sentence then reports "2 breaks
+       totalling 8.0 h" about four hours — a number Greg would act on, arrived at
+       by adding a thing to itself. */
+    const samples = [reading(T0), reading(T0 + 4 * 3_600_000)];
+    const plot = plotHistory(
+      view(samples, { holes: [{ afterAtMs: T0, beforeAtMs: T0 + 4 * 3_600_000 }] }),
+      T0 + 4 * 3_600_000 + CADENCE,
+    );
+    expect(plot.gaps).toHaveLength(1);
+    expect(describeGaps(plot, () => "04:00")).toMatch(/1 break totalling 4\.0 h/);
+  });
+
+  it("does not count the break at the right-hand edge twice when a corrupt line trails it", () => {
+    const samples = [reading(T0), reading(T0 + CADENCE)];
+    const plot = plotHistory(
+      view(samples, { holes: [{ afterAtMs: T0 + CADENCE, beforeAtMs: null }] }),
+      T0 + 3 * 3_600_000,
+    );
+    expect(plot.gaps).toHaveLength(1);
+    expect(plot.gaps[0]?.ongoing).toBe(true);
+  });
+
+  it("keeps two breaks apart when a single sample sits between them", () => {
+    /* They share an endpoint and must not merge: a reading arrived at that
+       instant and the record says so. One long silence over a moment the box
+       was heard from is the same lie as an interpolated line, in the sentence
+       instead of the picture. */
+    const only = reading(T0 + 4 * 3_600_000);
+    const plot = plotHistory(
+      view([only], { predecessor: reading(T0 - 3_600_000), earliestAtMs: T0 - 3_600_000, toMs: T0 + 8 * 3_600_000 }),
+      T0 + 8 * 3_600_000,
+    );
+    expect(plot.gaps).toHaveLength(2);
+    expect(plot.gaps[0]?.toMs).toBe(only.atMs);
+    expect(plot.gaps[1]?.fromMs).toBe(only.atMs);
+    expect(plot.gaps[1]?.ongoing).toBe(true);
+  });
+
+  it("keeps two genuinely separate breaks separate", () => {
+    const samples = [
+      reading(T0),
+      reading(T0 + 3 * 3_600_000),
+      reading(T0 + 3 * 3_600_000 + CADENCE),
+      reading(T0 + 8 * 3_600_000),
+    ];
+    const plot = plotHistory(view(samples), T0 + 8 * 3_600_000 + CADENCE);
+    expect(plot.gaps).toHaveLength(2);
+  });
+
   it("uses the sample BEFORE the window to classify the left edge", () => {
     /* Without the predecessor there is nothing to compare the first in-window
        sample against, and four hours of silence at the left looks like where

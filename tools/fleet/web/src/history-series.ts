@@ -364,7 +364,6 @@ export function plotHistory(view: Extract<HistoryView, { kind: "history" }>, now
     const to = hole.beforeAtMs ?? toMs;
     if (to > from) gaps.push({ fromMs: Math.max(from, fromMs), toMs: to, ongoing: false });
   }
-  gaps.sort((a, b) => a.fromMs - b.fromMs);
   /* THE GAP THAT IS HAPPENING NOW, which no sample can record because it is the
      one that has not arrived. Without this the chart draws a line that stops
      partway across and looks merely finished. */
@@ -373,8 +372,12 @@ export function plotHistory(view: Extract<HistoryView, { kind: "history" }>, now
     gaps.push({ fromMs: last.atMs, toMs, ongoing: true });
   }
 
+  const merged = mergeGaps(gaps);
+
   /* Which samples a segment must be cut AFTER: the one before each gap, and the
-     one before each corrupt run. */
+     one before each corrupt run. Built from the UNMERGED list, because merging
+     is about how the silence is counted and drawn, not about where the line has
+     to stop — a cut point swallowed by a wider gap is still a cut point. */
   const isGapStart = new Set(gaps.filter((g) => !g.ongoing).map((g) => g.fromMs));
   for (const hole of view.holes) {
     if (hole.afterAtMs !== null) isGapStart.add(hole.afterAtMs);
@@ -408,7 +411,7 @@ export function plotHistory(view: Extract<HistoryView, { kind: "history" }>, now
     toMs,
     series,
     verdict,
-    gaps,
+    gaps: merged,
     beforeHistory,
     /* **`rotated` decides the WORDS**, and it is the difference between a claim
        we can make and one we cannot. Without a rotation, the oldest sample is
@@ -418,6 +421,43 @@ export function plotHistory(view: Extract<HistoryView, { kind: "history" }>, now
     retainedOnly: view.rotated,
     sampleCount: samples.length,
   };
+}
+
+/**
+ * Overlapping breaks into one, sorted.
+ *
+ * **THREE MECHANISMS CAN DESCRIBE THE SAME SILENCE**, and until this existed
+ * they each pushed their own entry: a wide spacing between two samples, a
+ * corrupt line bracketed by those same two samples, and the run to the
+ * right-hand edge. A stretch with a torn record inside a four-hour outage was
+ * pushed twice, and the sentence under the chart then read **"2 breaks totalling
+ * 8.0 h"** about four hours — a number Greg would act on, arrived at by adding a
+ * thing to itself.
+ *
+ * `ongoing` survives a merge, because "and it is still going" is the half of
+ * that sentence that changes what you do next.
+ *
+ * Found by walking my own gap arithmetic while a reviewer was looking at it, and
+ * caught by a test that went red first.
+ */
+export function mergeGaps(gaps: Gap[]): Gap[] {
+  const sorted = [...gaps].sort((a, b) => a.fromMs - b.fromMs || a.toMs - b.toMs);
+  const out: Gap[] = [];
+  for (const gap of sorted) {
+    const tail = out[out.length - 1];
+    /* **STRICTLY OVERLAPPING, NOT MERELY TOUCHING.** Two breaks that share an
+       endpoint are separated by a sample AT that instant — a reading arrived,
+       and the record says so. Merging them would erase it and report one long
+       silence over a moment the box was heard from. `<=` here cost a test and
+       is the more tempting spelling. */
+    if (tail !== undefined && gap.fromMs < tail.toMs) {
+      tail.toMs = Math.max(tail.toMs, gap.toMs);
+      tail.ongoing = tail.ongoing || gap.ongoing;
+    } else {
+      out.push({ ...gap });
+    }
+  }
+  return out;
 }
 
 /**
