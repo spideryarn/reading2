@@ -3162,6 +3162,16 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
          reallocate. `insistsOnTheArticle` and `SlugAllocation` have the three
          cases. */
       requiresArticle: insistsOnTheArticle(allocation),
+      /* **The two rows this insert leans on**, when it leans on one. Both are
+         the same shape of fact as `requiresArticle` and are closed the same way
+         — a lookup out here, re-asked under a lock in there — and both are what
+         is left of the resurrection race once the article is not the thing
+         being asked about. GPT Sol's F40 and F41,
+         docs/plans/260906h-delete-an-article-permanently.md;
+         `EnqueueTicket` (src/store/jobs.ts) has each one's argument. */
+      ...(request.retryOf !== undefined && { retryOf: request.retryOf }),
+      ...(allocation.kind === "adopted" &&
+        allocation.from === "queue" && { adoptedFromJob: allocation.holder }),
     });
 
     /**
@@ -3236,8 +3246,10 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
         : /* Unreachable, as the paragraph above says — only a request carrying a
              URL can be told `sourceTaken`. From the *queue* if it ever were: the
              name comes from another live job of this reader's, which may not
-             have opened a draft, so nothing here may insist on an article. */
-          { kind: "adopted", from: "queue", slug: outcome.job.slug };
+             have opened a draft, so nothing here may insist on an article — but
+             it must still name the holder, so that the store can insist on
+             *that* instead (F41). It is the job the store just handed back. */
+          { kind: "adopted", from: "queue", slug: outcome.job.slug, holder: outcome.job.id };
       continue;
     }
 
@@ -3542,10 +3554,22 @@ export function sameWork(
  *   address. **Not** durable, and there may be no article row at all yet, so
  *   insisting would refuse the legitimate double-paste `freeSlug` exists to
  *   handle.
+ *
+ * ## Why the queue branch carries the holder's id
+ *
+ * Because *"a queue holder was seen"* is a fact about the moment of the lookup
+ * and nothing else, and the insert happens later. GPT Sol's F41 on the same
+ * plan: the holder publishes and finishes, the owner destroys the article, and
+ * the delayed request then inserts on a slug whose article has gone — because
+ * `requiresArticle` is deliberately false for this branch. The store closes
+ * that by re-asking *is **that** job still active* under the article lock, and
+ * it can only ask about a job it has been told the name of. Recovering the
+ * holder later is the same guess `from` itself exists to stop being made.
  */
 export type SlugAllocation =
   | { kind: "minted"; slug: string }
-  | { kind: "adopted"; from: "shelf" | "queue"; slug: string };
+  | { kind: "adopted"; from: "shelf"; slug: string }
+  | { kind: "adopted"; from: "queue"; slug: string; holder: string };
 
 /**
  * **Must the store find an `articles` row before it inserts this job?**
@@ -3626,9 +3650,13 @@ export async function freeSlug(
   alreadyHolding: (urlKey: string) => Promise<SlugHolder | undefined> = slugAlreadyHolding,
 ): Promise<SlugAllocation> {
   const held = await alreadyHolding(urlKey(url));
-  return held === undefined
-    ? { kind: "minted", slug: slugWithShortId(slug) }
-    : { kind: "adopted", from: held.from, slug: held.slug };
+  if (held === undefined) return { kind: "minted", slug: slugWithShortId(slug) };
+  /* The two adoptions are spelled out rather than spread, because they are not
+     the same allocation: a queue adoption carries the holder it adopted from,
+     and the type will not let it be built without one. See `SlugAllocation`. */
+  return held.from === "shelf"
+    ? { kind: "adopted", from: "shelf", slug: held.slug }
+    : { kind: "adopted", from: "queue", slug: held.slug, holder: held.jobId };
 }
 
 /**
@@ -3640,11 +3668,16 @@ export async function freeSlug(
  * pair here rather than re-deriving it is the same argument the allocation type
  * itself makes: the fact is known at the lookup and nowhere afterwards.
  */
-export interface SlugHolder {
-  slug: string;
-  /** `"shelf"` for an article this reader owns; `"queue"` for a live job of theirs. */
-  from: "shelf" | "queue";
-}
+export type SlugHolder =
+  /** An article this reader owns, published and durable. */
+  | { slug: string; from: "shelf" }
+  /**
+   * A live job of theirs, **and its id** — which the caller needs and cannot
+   * get back afterwards. `SlugAllocation` § *Why the queue branch carries the
+   * holder's id* is the whole argument; the union is what stops the pair coming
+   * apart.
+   */
+  | { slug: string; from: "queue"; jobId: string };
 
 /**
  * **The slug a retry should use**, which is `freeSlug`'s three branches with
@@ -3770,7 +3803,7 @@ async function slugAlreadyHolding(key: string): Promise<SlugHolder | undefined> 
   const shelved = await slugForUrlKey(key);
   if (shelved !== undefined) return { slug: shelved, from: "shelf" };
   const inFlight = await inFlightSlugForUrlKey(key);
-  return inFlight === undefined ? undefined : { slug: inFlight, from: "queue" };
+  return inFlight === undefined ? undefined : { ...inFlight, from: "queue" };
 }
 
 /**
@@ -3785,11 +3818,19 @@ async function slugAlreadyHolding(key: string): Promise<SlugHolder | undefined> 
  * (`ACTIVE`, src/store/pg-jobs.ts, and every one of the queue's partial unique
  * indexes is over exactly those two); a cancelled or failed job is not holding
  * anything.
+ *
+ * **The id comes back with the slug** since 2026-09-08, because the caller has
+ * to be able to name the holder again later — `SlugAllocation` § *Why the queue
+ * branch carries the holder's id*. Answering a bare slug meant the adoption
+ * recorded only that *something* had been seen, which is a fact that has
+ * already expired by the time anything acts on it.
  */
-async function inFlightSlugForUrlKey(key: string): Promise<string | undefined> {
+async function inFlightSlugForUrlKey(
+  key: string,
+): Promise<{ slug: string; jobId: string } | undefined> {
   for (const job of await store.list(currentOwnerId())) {
     if (job.status !== "queued" && job.status !== "running") continue;
-    if (job.url && urlKey(job.url) === key) return job.slug;
+    if (job.url && urlKey(job.url) === key) return { slug: job.slug, jobId: job.id };
   }
   return undefined;
 }

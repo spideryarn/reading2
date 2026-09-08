@@ -616,3 +616,321 @@ describe("a fresh paste for a URL the shelf is losing", () => {
     expect(await articleRows(), "and no article had to exist for it").toHaveLength(0);
   });
 });
+
+/* ----------------------------- the two races the terminal-job delete left -- */
+
+/**
+ * **What is left of the resurrection once the unhurried route is closed** — GPT
+ * Sol's F40 and F41, the second round of review on the same plan.
+ *
+ * Taking the terminal jobs with the article closed the *sequential* way back in:
+ * Retry on a month-old failure. It did nothing about the two requests that have
+ * **already read** the thing the delete is about to take, and are between that
+ * read and their insert. Both of those requests insert with
+ * `requiresArticle: false`, correctly — a retry of an attempt that never opened
+ * a draft, and a second paste adopting a name from a job still minting, are both
+ * requests to *have* an article — so the article lock finds nothing, refuses
+ * nothing, and the worker's `lockOrCreateArticle` builds what the reader
+ * destroyed.
+ *
+ * ## How each of these is a race with a stopwatch rather than a hope
+ *
+ * A third connection holds the `articles` row. That is where `tryEnqueue` stops
+ * — after its allocation, which has already read whatever it is about to be
+ * wrong about, and before its insert — so the window is entered every time
+ * rather than when the scheduler feels like it. `expect(settled).toBe(false)` is
+ * the proof it was entered: without it, a test whose enqueue had already
+ * finished would go green on a fix it never exercised.
+ *
+ * The holder then commits **the delete's own two statements from inside its own
+ * transaction** — the article's terminal jobs, then the article — so the state
+ * the enqueue resumes into is exactly the state `destroy` commits. It is spelled
+ * as SQL rather than by calling `destroy`, because `destroy` wants the same row
+ * lock the barrier is holding, and a barrier you have to release to let the
+ * delete through is not a barrier. That `destroy` really does commit those two
+ * statements is what the cases at the top of this file assert.
+ *
+ * A timing slip fails the two refusals rather than passing them: an enqueue that
+ * ran before the holder's delete inserts successfully, and each of those cases
+ * asserts a rejection.
+ *
+ * **The last two cases are the controls**, and they are here rather than
+ * elsewhere because a guard is only worth having if it can be shown to let the
+ * ordinary thing through: a holder that is really still there, and a holder that
+ * finished the way it was meant to. Each was watched red against a plausible
+ * mis-statement of the guard — see the plan.
+ */
+describe("what a delete can take out from under a request already in flight", () => {
+  const URL = "https://example.test/a-first-ingest-that-failed";
+
+  /**
+   * **F40 — the in-flight Retry.**
+   *
+   * `retryJob` reads the failed attempt on the pool and then calls `enqueue`;
+   * nothing locked that row or required it still to be there. So: read the
+   * attempt, delete the article — which takes the attempt with it — and the
+   * retry inserts anyway, because an upload retry always mints and a URL retry
+   * mints as soon as the shelf no longer holds the address. Which is the case
+   * here: the article has no published revision, so `slugForRetry` finds nothing
+   * on the shelf and mints the attempt's own name.
+   *
+   * Driven through `enqueue` with `retryOf` rather than through `retryJob`,
+   * which is the same call with `pump: false` — the read `retryJob` does first
+   * is the very fact this test is arranging to be stale.
+   *
+   * **Its positive control is the last case in the block above**, *still lets a
+   * retry mint for an attempt that never got as far as an article*: the attempt
+   * is there, no article ever existed, and the insert must succeed. Without it a
+   * guard that refused every retry would look exactly like this one.
+   */
+  it("refuses a retry whose attempt the delete took, and queues nothing", async () => {
+    if (!pool) return;
+    const articleId = await givenArticle();
+    const failed = await givenJob({ status: "error", url: URL });
+
+    const holder = await pool.connect();
+    try {
+      await holder.query("begin");
+      await holder.query("select 1 from spideryarn.articles where id = $1 for update", [articleId]);
+
+      const retrying = asOwner(() =>
+        enqueue({ slug: SLUG, retryOf: failed, url: URL, steps: ["fetch"], pump: false }),
+      );
+      /* Both handlers, so this derived promise cannot become an unhandled
+         rejection of its own; `retrying` itself is still awaited below. */
+      let settled = false;
+      void retrying.then(
+        () => {
+          settled = true;
+        },
+        () => {
+          settled = true;
+        },
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      expect(settled, "the retry must still be waiting on the article row").toBe(false);
+
+      await holder.query("delete from spideryarn.jobs where id = $1", [failed]);
+      await holder.query("delete from spideryarn.articles where id = $1", [articleId]);
+      await holder.query("commit");
+
+      await expect(retrying).rejects.toMatchObject({ status: 404 });
+    } finally {
+      await holder.query("rollback").catch(() => {});
+      holder.release();
+    }
+
+    /* The forbidden outcome: a queued job on a destroyed slug is a job whose
+       worker calls `lockOrCreateArticle`. */
+    expect(await jobRows()).toHaveLength(0);
+    expect(await articleRows()).toHaveLength(0);
+  }, 20_000);
+
+  /**
+   * **F41 — the paste that adopted a name from the queue.**
+   *
+   * Two pastes of one address seconds apart. The second finds the first still
+   * minting and adopts its slug, and that adoption deliberately does not insist
+   * on an article, because there may not be one yet. But *"a queue holder was
+   * seen"* is a fact about the lookup and nothing later: the holder can publish,
+   * finish, and have its article destroyed before the second paste inserts — and
+   * then the insert lands on a slug with nothing under it.
+   *
+   * The holder job is `queued` with the address on it, which is what
+   * `inFlightSlugForUrlKey` scans for, and its article has no published revision
+   * — so the shelf lookup misses and the adoption really does come from the
+   * queue rather than from the shelf. Then, inside the window, it publishes and
+   * finishes and the delete takes both.
+   *
+   * **The positive control is *lets the delete refuse when the job got there
+   * first*** above: an adoption whose article is still there inserts, and this
+   * guard is only ever asked when the article is absent.
+   */
+  it("refuses a paste whose queue holder finished and was deleted, and queues nothing", async () => {
+    if (!pool) return;
+    const articleId = await givenArticle();
+    const holderJob = await givenJob({ status: "queued", url: URL });
+
+    const holder = await pool.connect();
+    try {
+      await holder.query("begin");
+      await holder.query("select 1 from spideryarn.articles where id = $1 for update", [articleId]);
+
+      const pasting = asOwner(() =>
+        enqueue({ slug: "a-second-paste", url: URL, steps: ["fetch"], pump: false }),
+      );
+      let settled = false;
+      void pasting.then(
+        () => {
+          settled = true;
+        },
+        () => {
+          settled = true;
+        },
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      expect(settled, "the paste must still be waiting on the article row").toBe(false);
+
+      /* The holder publishes and finishes — the transition that makes it no
+         longer a holder — and the owner then destroys the article, which takes
+         the now-terminal job with it. */
+      await holder.query(
+        "update spideryarn.jobs set status = 'done', finished_at = now() where id = $1",
+        [holderJob],
+      );
+      await holder.query("delete from spideryarn.jobs where id = $1", [holderJob]);
+      await holder.query("delete from spideryarn.articles where id = $1", [articleId]);
+      await holder.query("commit");
+
+      await expect(pasting).rejects.toMatchObject({ status: 409 });
+    } finally {
+      await holder.query("rollback").catch(() => {});
+      holder.release();
+    }
+
+    expect(await jobRows()).toHaveLength(0);
+    expect(await articleRows()).toHaveLength(0);
+  }, 20_000);
+
+  /**
+   * **The positive control for the case above, and it is the ordinary one.**
+   *
+   * Two pastes of one address, no article anywhere, and the first is still
+   * minting: the second adopts its name and queues behind it. That is what
+   * `freeSlug`'s queue branch is *for*, and it is the exact shape the guard is
+   * asked about — article absent, holder named — so a guard that refused
+   * whenever it was consulted would be indistinguishable from a working one
+   * without this.
+   */
+  it("still lets a second paste queue behind a holder that is really still there", async () => {
+    const holderJob = await givenJob({ status: "queued", url: URL });
+
+    const job = await asOwner(() =>
+      enqueue({ slug: "a-second-paste", url: URL, steps: ["fetch"], pump: false }),
+    );
+
+    expect(job.slug, "it adopts the holder's name rather than minting a second").toBe(SLUG);
+    expect(await articleRows(), "and no article had to exist for either of them").toHaveLength(0);
+    expect((await jobRows()).map((row) => row.id).sort()).toEqual([holderJob, job.id].sort());
+  });
+
+  /**
+   * **The second positive control, and the reason the guard is asked only when
+   * the article is absent.**
+   *
+   * Same window as the refusal above and the same holder finishing inside it —
+   * but this time it finishes the way it was supposed to, publishing the article
+   * on its way out. So the paste that was waiting is now joining an article that
+   * is *there*, which is an ordinary shelf adoption in all but provenance, and
+   * refusing it would take a legitimate second paste away for no reason.
+   *
+   * The guard reads nothing but whether the article row is there; the published
+   * revision is here because that is what actually puts one there, not because
+   * anything looks at it.
+   */
+  it("still lets the paste in when the holder finished by publishing rather than dying", async () => {
+    if (!pool) return;
+    const articleId = await givenArticle();
+    const holderJob = await givenJob({ status: "queued", url: URL });
+
+    const holder = await pool.connect();
+    let job: Job;
+    try {
+      await holder.query("begin");
+      await holder.query("select 1 from spideryarn.articles where id = $1 for update", [articleId]);
+
+      const pasting = asOwner(() =>
+        enqueue({ slug: "a-second-paste", url: URL, steps: ["fetch"], pump: false }),
+      );
+      let settled = false;
+      void pasting.then(
+        () => {
+          settled = true;
+        },
+        () => {
+          settled = true;
+        },
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      expect(settled, "the paste must still be waiting on the article row").toBe(false);
+
+      const { rows } = await holder.query<{ id: string }>(
+        "insert into spideryarn.article_revisions (article_id, status, final_url) " +
+          "values ($1, 'published', $2) returning id",
+        [articleId, URL],
+      );
+      await holder.query("update spideryarn.articles set current_revision_id = $1 where id = $2", [
+        rows[0]?.id,
+        articleId,
+      ]);
+      await holder.query(
+        "update spideryarn.jobs set status = 'done', finished_at = now() where id = $1",
+        [holderJob],
+      );
+      await holder.query("commit");
+
+      job = await pasting;
+    } finally {
+      await holder.query("rollback").catch(() => {});
+      holder.release();
+    }
+
+    expect(job.slug, "it still lands on the article the holder made").toBe(SLUG);
+    expect(await articleRows()).toHaveLength(1);
+    expect((await jobRows()).map((row) => row.id).sort()).toEqual([holderJob, job.id].sort());
+  }, 20_000);
+});
+
+/* ------------------------- a finished job that never gave its slot back -- */
+
+/**
+ * **The state the code cannot reach and the database permits** — GPT Sol's F42.
+ *
+ * `deleteTerminalJobs` is safe because every transition into a terminal status
+ * settles the job's reservation in the same transaction. That is an argument
+ * about this codebase, and the schema does not carry it: `jobs_status` allows
+ * `error`, `ingest_events_settled_once` allows both settlement timestamps to
+ * stay null, and one `update spideryarn.jobs set status = 'error'` by hand puts
+ * the two together. Delete the job then, and the slot is counted against the
+ * reader for ever with nothing left to say which job spent it.
+ *
+ * The fixture writes that state directly rather than running the `UPDATE`,
+ * because the row it produces is the same row and the point is what `destroy`
+ * does when it finds one.
+ *
+ * **Refusing rather than settling** is the whole of the fix: choosing to charge
+ * or to refund on the strength of a status that is corrupt by hypothesis is a
+ * bill nobody asked for in either direction.
+ *
+ * Its positive control is *leaves the settled reservation, and the usage,
+ * exactly where they were* above — the same shape with the slot settled, and it
+ * deletes.
+ */
+describe("a finished job still holding an unsettled slot", () => {
+  it("refuses the delete and moves nothing", async () => {
+    await givenArticle();
+    const reservationId = await givenReservation();
+    const jobId = await givenJob({ status: "error", ingestEventId: reservationId });
+
+    const before = await usageFor(OWNER, FREE);
+    expect(before.inFlight, "a reservation nobody settled is still in flight").toBe(1);
+
+    await expect(asOwner(() => pgShelfStore.destroy(SLUG))).rejects.toMatchObject({ status: 500 });
+
+    expect(await articleRows()).toHaveLength(1);
+    expect(await jobRows()).toEqual([{ id: jobId, status: "error" }]);
+
+    const [reservation] = await getDb()
+      .select({ succeededAt: ingestEvents.succeededAt, releasedAt: ingestEvents.releasedAt })
+      .from(ingestEvents)
+      .where(eq(ingestEvents.id, reservationId));
+    expect(reservation, "not settled behind the reader's back either").toEqual({
+      succeededAt: null,
+      releasedAt: null,
+    });
+    expect(await usageFor(OWNER, FREE)).toEqual(before);
+  });
+});

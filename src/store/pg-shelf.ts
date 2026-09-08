@@ -22,7 +22,7 @@
 import { and, asc, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
-import { articles, articleRevisions, jobs, revisionBlocks } from "../db/schema.js";
+import { articles, articleRevisions, ingestEvents, jobs, revisionBlocks } from "../db/schema.js";
 import { MAX_TITLE_CHARS } from "../shelf.js";
 import { MAX_PURPOSE_CHARS, normaliseProfileText } from "../profile.js";
 import { log } from "../log.js";
@@ -172,9 +172,8 @@ function importRunning(): Error {
 /**
  * **Why the finished jobs go with the article, when the running ones stop it.**
  *
- * Not a function — the delete is three lines inside `destroy` — but the argument
- * needs a home, because the two halves look contradictory: a live job makes the
- * delete refuse, and a terminal one is deleted outright.
+ * The argument needs a home, because the two halves look contradictory: a live
+ * job makes the delete refuse, and a terminal one is deleted outright.
  *
  * ## What a leftover terminal row can do
  *
@@ -212,6 +211,14 @@ function importRunning(): Error {
  * this reasoning since before any of it was written down; this is the same
  * operation, chosen by article rather than by hand.
  *
+ * **And the argument above is checked rather than trusted**, by
+ * `strandedReservationsQuery` below. It is an argument about the *application*,
+ * and the database does not carry it: `jobs_status` permits `error` while
+ * `ingest_events_settled_once` permits both settlement timestamps to stay null
+ * (src/db/schema.ts), so a hand-run `UPDATE`, an admin repair or a migration can
+ * make the state this paragraph says is unreachable — and this delete would then
+ * erase the only link from the slot to the job that spent it. GPT Sol's F42.
+ *
  * ## Owner-scoped, like everything else here
  *
  * `articles.slug` is globally unique, so another owner cannot have this article
@@ -227,6 +234,93 @@ function deleteTerminalJobs(
   return tx
     .delete(jobs)
     .where(and(eq(jobs.ownerId, ownerId), eq(jobs.slug, slug), inArray(jobs.status, TERMINAL)));
+}
+
+/**
+ * **A finished job of this article's still holding a slot nobody gave back.**
+ *
+ * The check `deleteTerminalJobs` above is not allowed to skip, and the reason it
+ * is a query rather than a comment: the sentence *"a terminal job's reservation
+ * is always settled"* is true of every path through this codebase and is **not**
+ * a constraint. `jobs_status` allows `error`, `ingest_events_settled_once` allows
+ * `num_nonnulls(succeeded_at, released_at) <= 1` — which includes zero — and one
+ * `update spideryarn.jobs set status = 'error'` by hand puts the two together.
+ * GPT Sol's F42, docs/plans/260906h-delete-an-article-permanently.md.
+ *
+ * If that row is deleted, the slot is counted against the reader for ever and
+ * `jobs.ingest_event_id` was the only thing that said which job had spent it. So
+ * the delete refuses instead, loudly — see `strandedReservation`.
+ *
+ * **It refuses rather than settling.** Settling would mean choosing between
+ * charging the reader and refunding them on the strength of a job status that is
+ * corrupt by hypothesis, which is a bill nobody asked for either way. Sol's
+ * finding says the same in one line: *"Do not infer whether to charge or
+ * release."*
+ *
+ * **`for update`, and it locks nothing at all in the ordinary case** — the join
+ * is inner and the predicate is *unsettled*, so a healthy article matches no
+ * rows and there is nothing to lock. When it does match, the lock makes the
+ * check and `deleteTerminalJobs` one decision about the same rows, and the
+ * transaction throws immediately afterwards and releases them.
+ *
+ * Not `for update of jobs`, which is what this asked for first and is what a
+ * reviewer will reach for: drizzle qualifies the table with its schema there,
+ * and `for update of "spideryarn"."jobs"` is a `42601` syntax error — Postgres
+ * wants the alias alone. Locking the ledger row as well costs nothing here for
+ * the reason above.
+ *
+ * **Pre-existing rather than introduced**, and worth saying so: `trimFinished`
+ * and `forget` have deleted terminal rows on the same assumption since long
+ * before this feature, and still do. This is one delete path made stricter than
+ * the status quo, not a hole this one opened.
+ */
+function strandedReservationsQuery(
+  db: Pick<ReturnType<typeof getDb>, "select">,
+  slug: string,
+  ownerId: OwnerId,
+) {
+  return db
+    .select({ jobId: jobs.id, reservationId: ingestEvents.id })
+    .from(jobs)
+    .innerJoin(ingestEvents, eq(jobs.ingestEventId, ingestEvents.id))
+    .where(
+      and(
+        eq(jobs.ownerId, ownerId),
+        eq(jobs.slug, slug),
+        inArray(jobs.status, TERMINAL),
+        isNull(ingestEvents.succeededAt),
+        isNull(ingestEvents.releasedAt),
+      ),
+    )
+    .for("update");
+}
+
+/**
+ * **The refusal for a state that should not exist**, and it says so.
+ *
+ * A 500 rather than a 409: a conflict is something the reader can resolve by
+ * waiting or pressing Stop, and this is neither their doing nor within their
+ * power. The `status` is also what lets the sentence out past `guardDbStore`
+ * (src/store/db-errors.ts) — without one, the reader would get *"Something went
+ * wrong"* and nobody would ever learn what.
+ *
+ * Ids, no prose: a job id and a reservation id are both ours (src/log.ts). They
+ * go to the log rather than into the sentence, because they are what a person
+ * repairing this needs and are noise to the reader who cannot.
+ */
+function strandedReservation(rows: { jobId: string; reservationId: string }[]): Error {
+  log("store").error(
+    { jobIds: rows.map((r) => r.jobId), reservationIds: rows.map((r) => r.reservationId) },
+    "refusing to delete an article: a finished job still holds an unsettled ingest reservation",
+  );
+  return Object.assign(
+    new Error(
+      "This article cannot be deleted: one of its finished imports is still holding a quota " +
+        "slot that was never settled, and deleting it would spend that slot for ever. Nothing " +
+        "has been deleted, and this has been reported.",
+    ),
+    { status: 500 },
+  );
 }
 
 const rawPgShelfStore: ShelfStore = {
@@ -344,9 +438,11 @@ const rawPgShelfStore: ShelfStore = {
    * `article_id`: `ai_calls` and `ingest_events` because the ledger outlives
    * everything, `article_visibility_changes` because takedown evidence about a
    * document we no longer serve is exactly what a late complaint needs, and
-   * `realtime_sessions`. Terminal `jobs` rows and the `uploads` row survive
-   * with a stale `slug` and no foreign key at all — neither has a unique index
-   * on it, so they dangle harmlessly.
+   * `realtime_sessions`. The `uploads` row survives too, with a stale `slug`
+   * and no foreign key at all — the column has no unique index, so it dangles
+   * harmlessly. **The terminal `jobs` rows do not survive**: they carry the
+   * attempt's own slug and URL, which is a live Retry button pointing at a
+   * destroyed article, so `deleteTerminalJobs` takes them in this transaction.
    *
    * **The `uploads` row is left alone on purpose.** Deleting it destroys the
    * only durable mapping from this article back to its staging object
@@ -398,6 +494,15 @@ const rawPgShelfStore: ShelfStore = {
 
       const live = await liveJobsForQuery(tx, slug, ownerId);
       if (live.length > 0) throw importRunning();
+
+      /* **And now the finished ones, which are safe to delete for a reason and
+         not by assumption.** The reason is that a terminal job's slot is always
+         settled; the database does not enforce it, so this asks. Nothing can
+         become terminal underneath it either: the refusal above has just locked
+         every active row for this slug and found none, and an insert can only
+         ever arrive `queued`. See `strandedReservationsQuery`. */
+      const stranded = await strandedReservationsQuery(tx, slug, ownerId);
+      if (stranded.length > 0) throw strandedReservation(stranded);
 
       /* **And the finished ones go with it**, in this transaction, and only
          after the refusal above has established there are no others. See

@@ -159,6 +159,54 @@ export interface EnqueueTicket {
    * that can only fail to block, never wrongly block.
    */
   requiresArticle?: boolean;
+  /**
+   * **The terminal attempt this request repeats** — `EnqueueRequest.retryOf`
+   * (src/jobs.ts), carried through so the store can require it to still be
+   * there when it inserts.
+   *
+   * `requiresArticle` is false for most retries and correctly so: a job stopped
+   * while still `queued` never made an article, and its retry must be allowed
+   * to make one. That leaves a retry with *nothing* it has to find, and
+   * `retryJob` reads the failed attempt on the pool minutes of nothing in
+   * particular before the insert. So: read the attempt, delete the article
+   * (which takes its terminal jobs with it), insert anyway, and the worker's
+   * `lockOrCreateArticle` rebuilds what the reader destroyed. GPT Sol's F40,
+   * docs/plans/260906h-delete-an-article-permanently.md.
+   *
+   * The store locks this row and refuses if it has gone, which makes the pair
+   * *"the article and the attempt that named it"* one decision taken under one
+   * lock. **Existence is the whole test** — not the status: `retryJob` has
+   * already refused an attempt that is not terminal, and terminal is absorbing,
+   * so a second opinion here could only ever disagree with the first.
+   *
+   * A `queued`-and-cancelled attempt still satisfies it, which is why this is
+   * the fix rather than `requiresArticle: true` for every retry: that attempt's
+   * row exists even though its article never did.
+   *
+   * **`trimFinished` can also take it**, in principle: the retention sweep runs
+   * on every job ending, and an attempt that fell out of the kept window during
+   * this request would be refused where it used to be queued. That answer is
+   * true rather than unfortunate — the record has gone, and the card offering
+   * Retry would 404 on its next poll for the same reason.
+   */
+  retryOf?: string;
+  /**
+   * **The live job whose name this request adopted** —
+   * `SlugAllocation.from === "queue"` (src/jobs.ts), and the id it carries.
+   *
+   * The sibling of `requiresArticle`, for the allocation that deliberately does
+   * *not* insist on an article. Adopting from the queue says only that a holder
+   * was seen at the moment of the lookup; by the time the insert runs it may
+   * have published and finished and had its article destroyed, and this request
+   * would then queue a job on a slug with nothing under it — which the worker
+   * would helpfully create. GPT Sol's F41, same plan.
+   *
+   * So the store re-asks, under the article lock and **only when the article is
+   * absent**: is that exact job still `queued` or `running`? A holder that
+   * finished normally leaves an article behind, and adopting it then is an
+   * ordinary shelf adoption rather than a resurrection.
+   */
+  adoptedFromJob?: string;
 }
 
 /**

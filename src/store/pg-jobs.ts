@@ -284,6 +284,140 @@ function noSuchArticle(): Error {
 }
 
 /**
+ * **The attempt this retry repeats, locked** — and required, which is the point.
+ *
+ * The same statement and the same argument as `lockArticleFor` above, one row to
+ * the left: `retryJob` (src/jobs.ts) reads the failed attempt on the pool, and
+ * nothing held that fact still. `pgShelfStore.destroy` deletes the article's
+ * terminal jobs in the transaction that deletes the article, so the attempt and
+ * the article go together — and a retry that had already read the attempt would
+ * otherwise insert on the far side of that, with `requiresArticle` false because
+ * the allocation minted. The worker then remakes the article. GPT Sol's F40.
+ *
+ * **Owner-scoped**, like `get`: somebody else's job is one that is not there.
+ *
+ * **After the article lock, never before.** `destroy` takes `articles` and then
+ * `jobs`, and a transaction that took them the other way round would be the
+ * cycle. The article lock is a no-op when the article is absent, so the only
+ * order this can ever hold locks in is the one `destroy` uses.
+ */
+async function lockRetriedAttempt(tx: Tx, job: Job, retryOf: string) {
+  return await tx
+    .select({ id: jobs.id })
+    .from(jobs)
+    .where(and(eq(jobs.id, retryOf), eq(jobs.ownerId, job.ownerId)))
+    .for("update")
+    .limit(1);
+}
+
+/**
+ * **The live job this request adopted a name from, locked** — and required to
+ * still be live.
+ *
+ * GPT Sol's F41. `freeSlug` (src/jobs.ts) hands back a queue holder's slug, and
+ * that allocation deliberately does not insist on an article, because the holder
+ * may not have opened its draft yet. The gap between the lookup and the insert is
+ * long enough for the holder to publish, finish, and have its article destroyed —
+ * and then this insert lands on a slug with nothing under it.
+ *
+ * **Only asked when the article is absent**, which is the difference between a
+ * guard and a refusal of ordinary work: a holder that finished properly leaves
+ * the article behind, and adopting a name whose article exists is a shelf
+ * adoption in all but provenance.
+ *
+ * **The lock has to cover the insert**, and does, because it is taken in the
+ * insert's own transaction. An unlocked existence check is the same race one
+ * statement later — the finding says so in as many words.
+ *
+ * Narrower than it looks, and deliberately not sold as more: this closes the
+ * window *before* the insert, not the one after it. A holder that goes terminal
+ * once our non-reserving row is committed still leaves an address nothing
+ * reserves — the class written up at `handBackToARetry` (src/jobs.ts), whose
+ * durable fix is a table that claims an address.
+ */
+async function lockAdoptedHolder(tx: Tx, job: Job, holderId: string) {
+  return await tx
+    .select({ id: jobs.id })
+    .from(jobs)
+    .where(
+      and(eq(jobs.id, holderId), eq(jobs.ownerId, job.ownerId), inArray(jobs.status, ACTIVE)),
+    )
+    .for("update")
+    .limit(1);
+}
+
+/**
+ * **The attempt this retry repeats has gone**, which means the article it
+ * belonged to went with it.
+ *
+ * A 404 rather than a 409, and the same 404 the reader would have got a moment
+ * earlier: `retryJob` starts with `store.get(id, owner)` and src/routes.ts turns
+ * its `null` into exactly this. The race only moves *when* the answer is
+ * discovered, so it must not change what the answer is.
+ *
+ * No job id in the message. It would be ours to give and harmless, but the
+ * sentence is what a reader sees and the id would be noise in it.
+ */
+function noSuchAttempt(): Error {
+  return Object.assign(
+    new Error("That attempt is no longer on file, so there is nothing to try again."),
+    { status: 404 },
+  );
+}
+
+/**
+ * **The in-flight job this request was joining has gone, and so has its article.**
+ *
+ * A 409 rather than a 404, because nothing the reader named is missing: they
+ * pasted an address, and the answer is that the thing it was about to join
+ * stopped existing underneath it. Asking again is the repair and it will work,
+ * which is what the sentence says.
+ *
+ * Words we chose and nothing else — no slug, no address, no title (src/log.ts).
+ */
+function adoptedJobGone(): Error {
+  return Object.assign(
+    new Error("The article this was joining has gone. Add it again to make a new one."),
+    { status: 409 },
+  );
+}
+
+/**
+ * **The rows this insert leaned on, re-asked under the lock** — the pair of
+ * guards `requiresArticle` is the third of.
+ *
+ * All three answer one question: slug allocation (src/jobs.ts) decided this
+ * request could go ahead because of something it saw, and *when* it saw it is a
+ * moment that has passed. The article is one such thing; the other two are job
+ * rows, and both of them are what a delete takes with the article
+ * (`deleteTerminalJobs`, src/store/pg-shelf.ts). GPT Sol's F40 and F41,
+ * docs/plans/260906h-delete-an-article-permanently.md.
+ *
+ * **After the article lock, never before it.** `pgShelfStore.destroy` takes
+ * `articles` and then `jobs`; a transaction taking them the other way round
+ * would be the cycle. Called with whether that lock found anything rather than
+ * with the row, because that is all either guard wants to know.
+ */
+async function requireWhatTheAllocationLeanedOn(
+  db: Tx,
+  job: Job,
+  ticket: EnqueueTicket,
+  articleExists: boolean,
+): Promise<void> {
+  if (ticket.retryOf !== undefined) {
+    const [attempt] = await lockRetriedAttempt(db, job, ticket.retryOf);
+    if (!attempt) throw noSuchAttempt();
+  }
+  /* Only when the article is absent: a holder that finished properly left one
+     behind, and adopting a name whose article exists is a shelf adoption in all
+     but provenance. See `lockAdoptedHolder`. */
+  if (!articleExists && ticket.adoptedFromJob !== undefined) {
+    const [holder] = await lockAdoptedHolder(db, job, ticket.adoptedFromJob);
+    if (!holder) throw adoptedJobGone();
+  }
+}
+
+/**
  * One insert-or-look. `null` means the holder finished in between; ask again.
  *
  * **A transaction since 2026-09-06**, where it used to be two statements on the
@@ -306,6 +440,8 @@ async function enqueueIn(
      is a fact from before the lock, which is precisely the fact the race
      invalidates. */
   if (!article && ticket.requiresArticle === true) throw noSuchArticle();
+
+  await requireWhatTheAllocationLeanedOn(db, job, ticket, article !== undefined);
 
   const inserted = await db
     .insert(jobs)

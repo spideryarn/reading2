@@ -630,6 +630,89 @@ and it is the box.
   it is a dead link until Stage E retires the row.
 - `feedback.slug` survives, as the table above says.
 
+#### Sol's Stage C code review, round two — refused, and all four findings taken
+
+[The answer](260906h-delete-an-article-permanently-stage-c-review-2-sol.md). Round one (`a239fd83`)
+removed the **sequential** resurrection surface: `destroy` deletes the article's terminal jobs in the
+transaction that deletes the article, so Retry on a month-old failure has nothing left to retry. Sol
+refused again on the two **concurrent** surfaces that leaves, and on the one state the schema permits
+that the safety argument called impossible. All four stand and all four are closed.
+
+| ID | Finding | Severity | Disposition |
+|----|---------|----------|-------------|
+| F40 | An in-flight Retry survives the delete: `retryJob` reads the attempt on the pool, the delete takes attempt and article, and the retry inserts anyway because a mint insists on nothing | P1 | **Fixed**, Sol's shape — `retryOf` travels on the `EnqueueTicket`, and `enqueueIn` locks and requires that same-owner attempt after the article lock |
+| F41 | `adopted from:"queue"` is the same shape: the provenance records only that *a* holder was seen, and it is stale by insert time | P1 | **Fixed**, Sol's shape — `SlugAllocation`'s queue branch carries the holder's job id, and the insert requires that exact job still to be active, under the article lock and only when the article is absent |
+| F42 | Postgres permits a terminal job with an unsettled reservation, and `deleteTerminalJobs` erases the only job-to-slot provenance | P0 | **Fixed**, and it was cheap: one indexed query and a loud refusal, no schema change |
+| F43 | Two comments in `pg-shelf.ts` still say terminal jobs survive | P3 | **Fixed** — both statements removed |
+
+**F40 and F41 are one fix wearing two hats**, and naming it that way is what kept it small. Slug
+allocation lets a request proceed because of *something it saw*: an article on the shelf
+(`requiresArticle`, closed in round one), the attempt this repeats, or a live job minting this
+address. Every one of those is a fact about the moment of the lookup, and the insert happens later.
+So all three are re-asked inside the insert's own transaction, under the same article lock `destroy`
+takes — `requireWhatTheAllocationLeanedOn` in [`src/store/pg-jobs.ts`](../../src/store/pg-jobs.ts).
+The holder's id now travels on `SlugAllocation` for the same reason `from` does: the fact is known
+at the lookup and every attempt to recover it later is a guess.
+
+Three decisions inside that, two of them departures from the answer:
+
+- **Existence, not status, for the retried attempt.** Sol says *"lock and require that same-owner
+  terminal source job"*. `retryJob` has already refused an attempt that is not terminal, and terminal
+  is absorbing, so a status check here could only ever disagree with the one that already ran.
+- **The queue-holder check is conditional on the article being absent**, which Sol's text says and is
+  worth restating, because it is what stops the guard being a regression: a holder that finished by
+  *publishing* leaves an article behind, and joining it then is an ordinary adoption.
+- **A 409 for the queue case, not the retry's 404.** Nothing the reader named is missing — they
+  pasted an address, and the thing it was joining stopped existing underneath them. Asking again
+  works, and the sentence says so. The retry keeps 404 because that is the answer `retryJob` would
+  have given a moment earlier: a race moves *when* an answer is discovered, not what it is.
+
+**Both races are made deterministic rather than hoped for.** A third connection holds the `articles`
+row, which is where `tryEnqueue` stops — after the allocation that has already read the thing it is
+about to be wrong about, and before the insert. `expect(settled).toBe(false)` before the barrier
+releases is the proof the window was entered; without it, an enqueue that had already finished would
+go green on a fix it never exercised. The holder then commits the delete's own two statements from
+inside its own transaction, so the state the enqueue resumes into is the state `destroy` commits — it
+is spelled as SQL because `destroy` wants the very row lock the barrier is holding. Two positive
+controls sit beside the two refusals: a holder that is really still there, and one that finished by
+publishing. `tests/article-delete-pg.test.ts` § *what a delete can take out from under a request
+already in flight*.
+
+**F42 was taken even though it is not this feature's bug.** The exposure is pre-existing and shared
+with `trimFinished` and `forget`, which have deleted terminal rows on the same assumption for weeks,
+so Stage C introduced nothing. But the guard is one indexed query, needs no schema change, and makes
+`destroy` strictly safer than the status quo, so there was nothing to trade. It **refuses rather than
+settling**: the state is corrupt by hypothesis, so choosing to charge or to refund on the strength of
+it is a bill nobody asked for in either direction, and silently repairing corruption is how it stops
+being visible. The query locks nothing at all on a healthy article — the join is inner and the
+predicate is *unsettled*, so nothing matches. `for update of jobs`, which is what a reviewer reaches
+for, is a `42601`: drizzle qualifies the table with its schema and Postgres wants the alias alone.
+
+##### The evidence, and why none of it counts yet
+
+Each finding was watched red with its guard disabled — F40 and F41 both by *resolving*, with a
+`queued` job standing on the destroyed slug, which is the resurrection itself rather than a proxy for
+it — then green, then each fix mutated back and the suite watched to notice.
+
+**All of that ran on 2026-09-08 between 01:12 and 02:11, on a box at load 80–240**, which a triage
+agent then declared critically overloaded: swap full, the OOM killer already fired with postgres
+invoking it, eighteen suites running across about twenty sessions, and every `vitest` process killed.
+Two full-suite attempts died with `EXIT=143` without reaching a verdict. So **none of these numbers
+are settled**, and they are written down here as claims to be re-checked rather than as results.
+
+Two distinctions survive the caveat and are worth keeping:
+
+- **The reds that are findings were semantic, not timeouts.** A promise that *resolves* with a queued
+  job on a destroyed slug is not something contention manufactures. A killed run and a real failure
+  look alike; a resolved-instead-of-rejected does not look like either.
+- **`tests/pdf-integrity.test.ts` § "rejects partial cached record…" was red twice, including alone**,
+  in a file whose import alone took 90 s. It touches no jobs, no shelf and no database, so it is
+  almost certainly not ours — but it is **not a finding until it is re-run on a quiet box**, and it is
+  written here so that it is not quietly forgotten either.
+
+The order to re-run in, when the box is quiet: `tests/article-delete-pg.test.ts` first — 16 cases,
+and all the new work lives in it.
+
 ### Stage D — the control on the metadata page
 
 - [ ] `DeletePermanently` under `ArchiveArticle`, in its own `Section` labelled **Delete this
