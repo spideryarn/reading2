@@ -67,8 +67,20 @@ import { LOGIN_HREF } from "./router.js";
 import { anAccountWouldHelp, visitorSentence, type VisitorGap } from "./visitor.js";
 
 /**
- * The label, in the sticky controls bar — so it is on screen at every scroll
- * position rather than only on arrival.
+ * The label, in the sticky controls bar, rather than something you see only on
+ * arrival and scroll past.
+ *
+ * **It used to say "on screen at every scroll position", and that stopped being
+ * true on 2026-09-07** for the reader this chip is *for*. The bar leaves while
+ * you read at every width now
+ * (docs/plans/260907b-the-top-bar-leaves-while-you-read-at-every-width.md), and
+ * a visitor is the one reader who still has a bar in a band mode —
+ * `barHasContent` returns `true` for a non-owner precisely so this chip is
+ * drawn. Until 2026-09-08 `shell.css`'s guard then pinned that bar in every
+ * band mode, which is how the older claim survived; narrowing the guard to a
+ * covering band (docs/plans/260908e-…) let it hide, so the chip now comes and
+ * goes with the bar it sits in. Scrolling up brings both back, which is the
+ * whole design of that switch.
  *
  * `.mode` is the bar's class for a word that states rather than acts — it was
  * what "reading"/"outline" and the mode name were drawn with, so this read as

@@ -139,22 +139,36 @@ export type WorkRecogniser = {
   label: string;
   /** Matched against the BASENAME of the executable, after peeling one launcher. */
   executable: RegExp;
-  /** Matched against everything after the executable, joined with single spaces. */
-  args: RegExp;
+  /**
+   * Matched against everything after the executable, joined with single spaces.
+   *
+   * A PREDICATE IS ALLOWED, not only a regex, because one recogniser genuinely
+   * needs more than a pattern: a `codex` command line has to have its leading
+   * options skipped before its subcommand can be read, and `parseCodexInvocation`
+   * is where that is decided — once, for this table and for `harness.ts` both.
+   */
+  args: RegExp | ((args: string) => boolean);
   /** Why a person would call this work - and, where it matters, what it is not. */
   note: string;
 };
 
 /**
- * Why no reading could be taken.
+ * Why no reading could be taken from a pane's process tree.
  *
  * **Each of these is a different sentence, and none of them is "nothing is
  * running".** That distinction is the entire robustness bar for this area
  * (direction doc § "A higher bar for robustness here than elsewhere"): a
  * monitoring tool that reports an absence it never measured has told you
  * nothing, in a way that looks like good news.
+ *
+ * NAMED FOR THE READ, NOT FOR THE QUESTION, because two questions are asked of
+ * the same walk: what is this tree DOING (`WorkReading`) and which harness is
+ * HOLDING it (`Harness`, in `harness.ts`). The four ways a walk can fail to
+ * start are identical for both, and declaring them twice is the class of bug
+ * this repo spent a morning on — a contract written out by hand on each side of
+ * a seam, where a divergence is invisible until it is a wrong answer.
  */
-export type WorkUnknownCause =
+export type TreeReadFailure =
   /** The snapshot carried no pane pid, so there is no tree to walk. */
   | "no-pane-pid"
   /** The probe failed. `why` carries what it said. */
@@ -181,6 +195,13 @@ export type WorkUnknownCause =
    * quietly and say the pane was quiet, and a cross-family review caught it.
    */
   | "malformed-process-table";
+
+/**
+ * Why no WORK reading could be taken. Exactly the tree-read failures and
+ * nothing else: once the walk starts, work always has an answer, because
+ * "looked and found none" is an answer rather than a failure.
+ */
+export type WorkUnknownCause = TreeReadFailure;
 
 /** One recognised piece of work found beneath a pane. */
 export type ChildJob = {
@@ -274,7 +295,7 @@ export type WorkReading =
  */
 export const COMMAND_KEPT = 400;
 
-function truncate(command: string): string {
+export function truncate(command: string): string {
   return command.length <= COMMAND_KEPT ? command : `${command.slice(0, COMMAND_KEPT)}...`;
 }
 
@@ -303,6 +324,25 @@ const LAUNCHERS: ReadonlySet<string> = new Set(["node", "nodejs"]);
  * itself - the launcher rule above would not save us, and this does. A
  * recogniser names a tool installed on the box; a `codex` in a scratch directory
  * that exists for the length of one test is not that tool.
+ *
+ * **THE SPECIMEN IS STILL RUNNING, WHICH IS WHY THIS IS NOT HYPOTHETICAL.**
+ * `bash /tmp/fake-codex-qAz9Um/codex -o /tmp/run-codex-gc.txt` was reparented to
+ * init by a test run on 2026-09-01 and was still there on 2026-09-08, **six days
+ * and twenty hours later**, at 1.7 MB and costing nothing. It is the only
+ * long-lived `ppid 1` process on this box carrying the word `codex`. Both guards
+ * decline it - a shell is never peeled, and nothing under `/tmp` is an installed
+ * tool - so it has never once been reported as a paid review, which is the whole
+ * point. Anyone loosening either rule can watch it become one.
+ *
+ * **THIS CHECKS THE SPELLING OF argv[0], NOT WHERE THE BINARY ACTUALLY IS**, and
+ * the difference is not pedantry: a process launched as `./codex exec` with a
+ * cwd of `/tmp/fake-codex-X` has argv[0] `./codex` and passes this. Closing that
+ * needs `/proc/<pid>/exe` and `/proc/<pid>/cwd`, which are syscalls per
+ * candidate against processes that may exit underneath the read - a different
+ * design for the probe, not a stricter string test. The guard is worth having
+ * for the shape the harness in this repo actually produces, and is not worth
+ * being described as more than it is. A cross-family review caught the
+ * overclaim in the original wording.
  */
 function isThrowawayPath(path: string): boolean {
   return path.startsWith("/tmp/") || path.startsWith("/var/tmp/");
@@ -318,8 +358,13 @@ function basename(path: string): string {
  *
  * Null when the row is nothing we will ever recognise - an empty command, or a
  * tool run out of a throwaway directory.
+ *
+ * EXPORTED so `harness.ts` can ask the same question of the same string. Both
+ * halves of the fake-codex decision - shells are never peeled, nothing under
+ * `/tmp` is an installed tool - are load-bearing for harness recognition too,
+ * and a second copy of them would be a second copy that could drift.
  */
-function resolveExecutable(command: string): { name: string; args: string } | null {
+export function resolveExecutable(command: string): { name: string; args: string } | null {
   const tokens = command.trim().split(/\s+/).filter((t) => t !== "");
   const head = tokens[0];
   if (head === undefined) return null;
@@ -336,6 +381,124 @@ function resolveExecutable(command: string): { name: string; args: string } | nu
 }
 
 /**
+ * The Codex subcommands that run WITHOUT a person at the keyboard.
+ *
+ * Read off `codex --help` on this box on 2026-09-08 rather than assumed:
+ *
+ *     exec    Run Codex non-interactively [aliases: e]
+ *     review  Run a code review non-interactively
+ *
+ * So `exec` alone was too narrow: `codex e` is the same job under its documented
+ * alias, and `codex review` is a second non-interactive mode entirely. Both
+ * would have read as an empty pane, which is the exact failure this module was
+ * built for. Only `exec` has ever been captured here (`run-codex.ts` hard-codes
+ * it), so the other two are on the CLI's own word — which is evidence, but a
+ * different kind of evidence, and worth knowing apart.
+ *
+ * SHARED WITH `harness.ts`, which needs the same line to tell a Codex batch job
+ * (no stdin, ever) from an interactive Codex (a TUI nobody here has tried to
+ * type at). One declaration, because the two would drift.
+ */
+export const CODEX_BATCH_SUBCOMMAND = /^(exec|e|review)$/;
+
+/**
+ * Codex subcommands that run WITHOUT a person at the keyboard, and the ones
+ * that run WITH one — both read off `codex --help` on this box, 2026-09-08.
+ *
+ * `exec` carries `[aliases: e]` and `review` says "Run a code review
+ * non-interactively", so `exec` alone was too narrow. `resume` and `fork` both
+ * say they resume or fork an *interactive* session.
+ *
+ * `CODEX_OTHER_SUBCOMMAND` is everything else `--help` lists: servers, auth,
+ * maintenance. **None of those is an agent harness**, and the first draft of
+ * this called every one of them an interactive Codex, which a cross-family
+ * review caught. A `codex login` sitting in a pane is a person running a
+ * utility, not a session anybody could steer.
+ *
+ * THIS LIST IS PINNED TO A CODEX VERSION AND WILL DRIFT. That is survivable
+ * only because of which way it fails: a subcommand added by a future Codex is
+ * in none of these sets, and an unrecognised word is reported as *unreadable*
+ * rather than guessed at. Drift costs a grey row, never a false label.
+ */
+const CODEX_INTERACTIVE_SUBCOMMAND = /^(resume|fork)$/;
+const CODEX_OTHER_SUBCOMMAND =
+  /^(agents|login|logout|mcp|mcp-server|plugin|app-server|remote-control|completion|update|doctor|sandbox|debug|apply|a|queue|archive|delete|unarchive|migrate-rollouts|cloud|exec-server|features|help)$/;
+
+/** Every subcommand `codex --help` names, whichever kind it is. */
+function isKnownCodexSubcommand(token: string): boolean {
+  return (
+    CODEX_BATCH_SUBCOMMAND.test(token) ||
+    CODEX_INTERACTIVE_SUBCOMMAND.test(token) ||
+    CODEX_OTHER_SUBCOMMAND.test(token)
+  );
+}
+
+/**
+ * What a `codex` command line is doing.
+ *
+ * ## Why this is not one regex
+ *
+ * `codex --help`: `codex [OPTIONS] [PROMPT]` **or** `codex [OPTIONS] <COMMAND>
+ * [ARGS]`. Global options come BEFORE the subcommand, so an anchored test
+ * against the first word calls `codex --model x review the diff` interactive
+ * when it is a non-interactive review. A cross-family review found that, and
+ * found a test in this repo pinning the wrong answer.
+ *
+ * So: skip the leading run of options, then look at the first bare word.
+ * Deciding whether an option CONSUMES the word after it is the hard part —
+ * `--model x` does, `--json` does not — and argv is flattened by the time we
+ * see it. The rule is **a word is never eaten as an option's value if it is a
+ * subcommand `--help` names**, which resolves both `codex --model x exec` and
+ * `codex --json exec` correctly without knowing which flags take values.
+ *
+ * ## WHAT THIS CANNOT DO, because the information is already gone
+ *
+ * **`ps args` has lost the quoting**, as this module's header says. So
+ * `codex 'review this diff'` — an interactive Codex with a one-argument prompt
+ * — arrives as `codex review this diff` and is INDISTINGUISHABLE from
+ * `codex review the diff`, a batch review. It is reported as batch. The fix is
+ * not available here: it needs `/proc/<pid>/cmdline`, which is NUL-separated
+ * and keeps the boundaries, and that is a syscall per candidate against a
+ * process that may exit underneath it — a different design for the probe, not
+ * a better regex. Recorded rather than papered over; in v1 both answers refuse
+ * steering, so the cost today is a wrong label rather than a wrong action.
+ */
+export type CodexInvocation =
+  /** `exec` / `e` / `review`: a paid run with nobody at the keyboard. */
+  | { mode: "batch" }
+  /** A TUI: a bare `codex`, flags only, or `resume` / `fork`. */
+  | { mode: "interactive" }
+  /** A server, a login, a maintenance command. Not a harness at all. */
+  | { mode: "other"; subcommand: string }
+  /** A bare word that is no subcommand we know. Could be a prompt; could be a
+   * subcommand from a newer Codex. Never guessed at. */
+  | { mode: "unreadable"; firstWord: string };
+
+export function parseCodexInvocation(args: string): CodexInvocation {
+  const tokens = args.split(/\s+/).filter((t) => t !== "");
+  let i = 0;
+  while (i < tokens.length) {
+    const token = tokens[i];
+    if (token === undefined || !token.startsWith("-")) break;
+    i += 1;
+    // Consume this option's value, unless the next word is a subcommand — in
+    // which case it is the command, not a value, whatever this flag expects.
+    const next = tokens[i];
+    if (next !== undefined && !next.startsWith("-") && !isKnownCodexSubcommand(next)) i += 1;
+  }
+
+  const word = tokens[i];
+  // No subcommand at all: `codex`, or `codex --model x`. The captured
+  // interactive pane on this box is exactly this — argv is the single word
+  // `codex`.
+  if (word === undefined) return { mode: "interactive" };
+  if (CODEX_BATCH_SUBCOMMAND.test(word)) return { mode: "batch" };
+  if (CODEX_INTERACTIVE_SUBCOMMAND.test(word)) return { mode: "interactive" };
+  if (CODEX_OTHER_SUBCOMMAND.test(word)) return { mode: "other", subcommand: word };
+  return { mode: "unreadable", firstWord: word };
+}
+
+/**
  * The recognisers, as data.
  *
  * Every one of these was seen running on this box on 2026-09-08 and its command
@@ -345,12 +508,14 @@ function resolveExecutable(command: string): { name: string; args: string } | nu
 export const RECOGNISERS: Record<WorkRecogniserId, WorkRecogniser> = {
   "codex-exec": {
     id: "codex-exec",
-    label: "GPT review or task (codex exec)",
+    label: "GPT review or task (non-interactive codex)",
     executable: /^codex$/,
-    // The subcommand is required. It is what separates a real run from a
-    // command line that merely mentions codex, and it is why the fake harness's
+    // A non-interactive SUBCOMMAND is required, and it is looked for after the
+    // global options rather than at the head of the line — see
+    // `parseCodexInvocation`. It is what separates a real run from a command
+    // line that merely mentions codex, and it is why the fake harness's
     // `codex -o /tmp/run-codex-gc.txt` could not match even if it were reached.
-    args: /^exec(\s|$)/,
+    args: (args) => parseCodexInvocation(args).mode === "batch",
     note: "The finding this module exists for: 15-45 minutes of paid review, during which the pane looks empty.",
   },
   "claude-headless": {
@@ -392,7 +557,10 @@ export function recogniseCommand(command: string): WorkRecogniser | null {
   const resolved = resolveExecutable(command);
   if (resolved === null) return null;
   for (const recogniser of Object.values(RECOGNISERS)) {
-    if (recogniser.executable.test(resolved.name) && recogniser.args.test(resolved.args)) return recogniser;
+    if (!recogniser.executable.test(resolved.name)) continue;
+    const argsMatch =
+      typeof recogniser.args === "function" ? recogniser.args(resolved.args) : recogniser.args.test(resolved.args);
+    if (argsMatch) return recogniser;
   }
   return null;
 }
@@ -447,6 +615,46 @@ export function parseProcessTable(text: string, nowMs: number): ParseProcessTabl
 }
 
 /**
+ * A process table turned into the two maps every walk needs, or the duplicate
+ * pid that says it is not one table.
+ *
+ * THE INVARIANT IS RE-CHECKED HERE RATHER THAN TRUSTED FROM `parseProcessTable`.
+ * A `ProcessTableReading` is an ordinary value: a store replay, or a merge of
+ * two readings, can hand a walk a table the parser would have refused, and
+ * silently keeping the second row would drop a whole subtree with nothing to
+ * show for it.
+ *
+ * SHARED BY BOTH WALKS — `classifyPaneWork` here and `classifyPaneHarness` in
+ * `harness.ts` — because they were written with the same fifteen lines in each,
+ * and two hand-written copies of one invariant is the shape this repo lost a
+ * morning to. If they drifted, one walk would accept a table the other refused
+ * and the two answers about one pane would disagree for a reason nobody could
+ * see.
+ *
+ * NO SELF-PARENT GUARD, deliberately. A `ppid === pid` row does put itself in
+ * its own children list, but a walk can only reach it if it were the pane, and
+ * every caller seeds `visited` with the pane before it starts. A guard was
+ * written here first and mutation testing showed no test could fail for its
+ * absence, because nothing can: it was unreachable.
+ */
+export type ProcessIndex =
+  | { ok: true; byPid: ReadonlyMap<number, ProcessRow>; children: ReadonlyMap<number, ProcessRow[]> }
+  | { ok: false; duplicatePid: number };
+
+export function indexProcessTable(rows: readonly ProcessRow[]): ProcessIndex {
+  const byPid = new Map<number, ProcessRow>();
+  const children = new Map<number, ProcessRow[]>();
+  for (const row of rows) {
+    if (byPid.has(row.pid)) return { ok: false, duplicatePid: row.pid };
+    byPid.set(row.pid, row);
+    const siblings = children.get(row.ppid);
+    if (siblings === undefined) children.set(row.ppid, [row]);
+    else siblings.push(row);
+  }
+  return { ok: true, byPid, children };
+}
+
+/**
  * What the tree under `panePid` is doing, according to one reading of the
  * process table.
  *
@@ -478,33 +686,16 @@ export function classifyPaneWork(panePid: number | null, reading: ProcessTableRe
   // the same reading in 33 times - and the rebuild is ~1 ms of map-building
   // against 1000 rows, against a tick budget the direction doc measures in
   // seconds. Left simple on purpose; if it ever shows up in a profile, the fix
-  // is an `indexProcessTable(reading)` the caller hoists, not a cache in here.
-  const byPid = new Map<number, ProcessRow>();
-  const children = new Map<number, ProcessRow[]>();
-  for (const row of reading.rows) {
-    // THE INVARIANT IS RE-CHECKED HERE, not merely assumed from the parser. A
-    // `ProcessTableReading` is an ordinary value: a store replay or a merge of
-    // two readings can hand this function a table `parseProcessTable` would have
-    // refused, and silently keeping the second row would drop a whole subtree.
-    if (byPid.has(row.pid)) {
-      return {
-        kind: "cannot-tell",
-        cause: "malformed-process-table",
-        why: `pid ${row.pid} appears twice, so these rows are not one process table`,
-      };
-    }
-    byPid.set(row.pid, row);
-    // NO SELF-PARENT GUARD HERE, deliberately. A `ppid === pid` row does put
-    // itself in its own children list, but the only way the walk could reach it
-    // is if it were the pane, and the pane is already in `visited` before the
-    // walk starts. A guard was written here first and mutation testing showed no
-    // test could ever fail for its absence, because nothing can: it was
-    // unreachable. Dead defensive code that cannot be covered is worse than
-    // none, so the `visited` set below is the whole of the answer.
-    const siblings = children.get(row.ppid);
-    if (siblings === undefined) children.set(row.ppid, [row]);
-    else siblings.push(row);
+  // is hoisting `indexProcessTable` into the caller, not a cache in here.
+  const index = indexProcessTable(reading.rows);
+  if (!index.ok) {
+    return {
+      kind: "cannot-tell",
+      cause: "malformed-process-table",
+      why: `pid ${index.duplicatePid} appears twice, so these rows are not one process table`,
+    };
   }
+  const { byPid, children } = index;
 
   const pane = byPid.get(panePid);
   if (pane === undefined) {

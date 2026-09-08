@@ -1,0 +1,111 @@
+
+ RUN  v4.1.11 /home/greg/code/spideryarn2
+
+stderr | tests/fleet-web.test.tsx > staleness > keeps the last good rows when a refresh fails, and says STALE with the reason
+An update to App inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to App inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to App inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | tests/fleet-web.test.tsx > staleness > recovers: a success after failures clears the banner and the count
+An update to App inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to App inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to App inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+ ❯ |unit| tests/fleet-web.test.tsx (215 tests | 2 failed) 11164ms
+     × keeps the last good rows when a refresh fails, and says STALE with the reason 135ms
+     × recovers: a success after failures clears the banner and the count 83ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |unit| tests/fleet-web.test.tsx > staleness > keeps the last good rows when a refresh fails, and says STALE with the reason
+AssertionError: expected 'Fleet1 session1 workingSTALE — collec…' not to contain 'STALE'
+
+Expected: "STALE"
+Received: "Fleet1 session1 workingSTALE — collected 9m ago — How old this is: The box is collected about every 1m (assumed, until this page has seen two collections), and one collection costs it around ten seconds of work — so a number a minute old is normal, not a fault. This line goes red past 2m 30s, or the moment a refresh fails — whichever comes first. Right now: last heard from 0s ago.The server is answering, but the snapshot it is serving is 9m old — over 2m 30s, which is 2.5× its usual 1m.Try nowNew sessionStarts a Claude on the box through gjd-remote new-claude, so it shows up here and gjd-remote kill can stop it.1 sessionOrderStatusLongest runningNewestNameRepo and worktreeWorking · 1working — Working: The agent is mid-turn: thinking, running a tool, or writing. It means the pane changed recently, not that progress is being made. A session stuck in a loop looks exactly like one doing good work.up 2h 9m — Up: How long this tmux session has existed, from the time tmux itself recorded when it was created. It is the SESSION's age, not the agent's: a long-running window that has been handed a new job reads as old, and a session started an hour ago that has done nothing reads the same as one that has been working throughout.still hereno repo recorded$a·$aSessionsBox healthOrchestratorRefresh"
+
+ ❯ tests/fleet-web.test.tsx:452:39
+    450|     act(() => feed.push(state({ rows: [row({ id: "$a", title: "still h…
+    451|     expect(container.textContent).toContain("still here");
+    452|     expect(container.textContent).not.toContain("STALE");
+       |                                       ^
+    453|
+    454|     act(() => feed.fail("connect ECONNREFUSED 127.0.0.1:8787"));
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |unit| tests/fleet-web.test.tsx > staleness > recovers: a success after failures clears the banner and the count
+AssertionError: expected 'Fleet1 session1 workingSTALE — collec…' not to contain 'STALE'
+
+Expected: "STALE"
+Received: "Fleet1 session1 workingSTALE — collected 9m ago — How old this is: The box is collected about every 1m (assumed, until this page has seen two collections), and one collection costs it around ten seconds of work — so a number a minute old is normal, not a fault. This line goes red past 2m 30s, or the moment a refresh fails — whichever comes first. Right now: last heard from 0s ago.The server is answering, but the snapshot it is serving is 9m old — over 2m 30s, which is 2.5× its usual 1m.Try nowNew sessionStarts a Claude on the box through gjd-remote new-claude, so it shows up here and gjd-remote kill can stop it.1 sessionOrderStatusLongest runningNewestNameRepo and worktreeWorking · 1working — Working: The agent is mid-turn: thinking, running a tool, or writing. It means the pane changed recently, not that progress is being made. A session stuck in a loop looks exactly like one doing good work.up 2h 9m — Up: How long this tmux session has existed, from the time tmux itself recorded when it was created. It is the SESSION's age, not the agent's: a long-running window that has been handed a new job reads as old, and a session started an hour ago that has done nothing reads the same as one that has been working throughout.backno repo recorded$a·$aSessionsBox healthOrchestratorRefresh"
+
+ ❯ tests/fleet-web.test.tsx:487:39
+    485|     expect(container.textContent).toContain("STALE");
+    486|     act(() => feed.push(state({ rows: [row({ id: "$a", title: "back", …
+    487|     expect(container.textContent).not.toContain("STALE");
+       |                                       ^
+    488|     expect(container.textContent).toContain("back");
+    489|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed | 3 passed (4)
+      Tests  2 failed | 362 passed (364)
+   Start at  13:09:36
+   Duration  20.66s (transform 2.51s, setup 739ms, import 2.67s, tests 11.84s, environment 4.17s)
+

@@ -44,7 +44,11 @@
      the glossary, the search results, the chat. Run it to the bottom of the
      screen and its last row sits behind the home indicator, where the system
      takes the touch. GPT Sol, 2026-08-28. */
-  bottom: calc(max(var(--dock-bottom), var(--safe-bottom)) + var(--hint-h));
+  /* `--hint-now`, not `--hint-h`: the hint's *current* height, which is `0`
+     once it has slid away with the bar. Reading the resting number here left a
+     56px strip of nothing under the band on an uninstalled iPhone — tokens.css
+     § `--hint-now` has the whole account. */
+  bottom: calc(max(var(--dock-bottom), var(--safe-bottom)) + var(--hint-now));
   z-index: 44; /* under the spine (45), over the controls bar (40) */
   display: flex;
   flex-direction: column;

@@ -102,7 +102,7 @@
  *    result is dropped unless it is still the newest thing anybody asked for.
  */
 import { type MutableRefObject, useCallback, useEffect, useRef, useState } from "react";
-import { type TranscriptionResult, sendForTranscription } from "./dictation-upload.js";
+import type { Transcriber, TranscriptionResult } from "./transcriber.js";
 import { type MicClaim, claimMicrophone, releaseMicrophone } from "./mic-lock.js";
 import { verdictFor } from "./dictation-errors.js";
 import {
@@ -322,7 +322,7 @@ export interface UseDictation {
  * `stopRequested` says whether we asked for this, and `finished` says whether
  * this session has already had its ending.
  */
-interface Session {
+interface Session<C> {
   /**
    * The recogniser, or **null on a browser that has none** — Firefox.
    *
@@ -379,7 +379,7 @@ interface Session {
    * transcribed against a different article's glossary. GPT Sol's code review,
    * item 1.
    */
-  where: DictationContext;
+  where: C;
   /**
    * This session's claim on the page's one microphone, and the resolver that
    * tells the next claimant the device is free. See [mic-lock.ts](./mic-lock.ts).
@@ -411,7 +411,7 @@ interface Session {
  * needs to persist on navigation should commit on its own way out.
  * GPT Sol's code review, item 7.
  */
-export interface DictationOptions {
+export interface DictationOptions<C> {
   /**
    * Each **confirmed** live phrase, to append where the caret is. Never called
    * with a guess, and never called at all on a browser without the track
@@ -438,16 +438,34 @@ export interface DictationOptions {
   onEnd?(): void;
   /**
    * Where the reader is dictating, which is how the server decides what
-   * vocabulary to prime the model with. `{ kind: "article", slug }` is the one
-   * that scores best, because the article's glossary is the vocabulary.
+   * vocabulary to prime the model with. **This hook never looks inside it**: it
+   * snapshots it when a press starts and hands it back to {@link transcribe}.
+   *
+   * In the product it is `DictationContext` in
+   * [dictation-upload.ts](./dictation-upload.ts) — `{ kind: "article", slug }`
+   * is the one that scores best, because the article's glossary is the
+   * vocabulary. In the fleet dashboard it names a session.
    */
-  context: DictationContext;
+  context: C;
+  /**
+   * **Where the words come from, which this hook is deliberately not allowed to
+   * decide.**
+   *
+   * It used to call `sendForTranscription` directly, and that single import was
+   * the whole of the product coupling in this file's closure — 25 files and
+   * 17,829 lines, reaching Supabase, Sentry and the billing plan, for a hook
+   * that needs six. Passing it in is what lets the fleet dashboard
+   * (`tools/fleet/`) reuse the microphone rather than copy it.
+   * [transcriber.ts](./transcriber.ts) has the measurement and the rule.
+   *
+   * Held in a ref, so an inline arrow at a call site does not rebuild the
+   * session machinery on every render — the same treatment `context` gets, and
+   * for the same reason.
+   */
+  transcribe: Transcriber<C>;
 }
 
-/** Mirrors `Where` in [src/transcribe.ts](../transcribe.ts). */
-export type DictationContext = { kind: "profile" } | { kind: "article"; slug: string };
-
-export function useDictation(options: DictationOptions): UseDictation {
+export function useDictation<C>(options: DictationOptions<C>): UseDictation {
   const { onText, onTranscript, onEnd, context } = options;
   /* **"Can open a microphone", not "has Web Speech".** The live half is
      optional now; the recording is not. See the header. */
@@ -472,7 +490,7 @@ export function useDictation(options: DictationOptions): UseDictation {
    * glossary. A ref, because nothing renders from it — `canRetry` is the piece
    * the interface shows.
    */
-  const retryable = useRef<{ recorded: MicRecording; where: DictationContext } | null>(null);
+  const retryable = useRef<{ recorded: MicRecording; where: C } | null>(null);
   const [canRetry, setCanRetry] = useState(false);
   /** Which retry is allowed to publish its answer. See `retry`. */
   const retryGeneration = useRef(0);
@@ -497,7 +515,7 @@ export function useDictation(options: DictationOptions): UseDictation {
   const meter: MeterKind = measured.measuring ? "measured" : phase === "idle" ? "none" : "detected";
   detectedLevel.current = hearing ? 1 : 0;
 
-  const session = useRef<Session | null>(null);
+  const session = useRef<Session<C> | null>(null);
   /**
    * The last session ever started, and **never cleared**.
    *
@@ -508,7 +526,7 @@ export function useDictation(options: DictationOptions): UseDictation {
    * null again, publishing audio from two dictations ago under a strip that is
    * about neither. GPT Sol's code review, 2026-08-27, item 1.
    */
-  const newest = useRef<Session | null>(null);
+  const newest = useRef<Session<C> | null>(null);
   const emit = useRef(onText);
   emit.current = onText;
   const ended = useRef(onEnd);
@@ -520,6 +538,12 @@ export function useDictation(options: DictationOptions): UseDictation {
      take the whole session machinery with it. */
   const whereRef = useRef(context);
   whereRef.current = context;
+  /* The same treatment, for the same reason: a caller that writes an inline
+     arrow — which the fleet dashboard's boxes do, since they close over a
+     session id — would otherwise rebuild `start`, `stop` and `retry` on every
+     render. Read at the moment of upload, like every other callback here. */
+  const transcribe = useRef(options.transcribe);
+  transcribe.current = options.transcribe;
 
   /**
    * Deliver a session's ending, exactly once.
@@ -563,7 +587,7 @@ export function useDictation(options: DictationOptions): UseDictation {
    * @param quiet the session was **abandoned** — an unmount, or the reader
    * changing microphone mid-dictation. No transcript, no save, no audio kept.
    */
-  const finish = useCallback((s: Session, quiet = false) => {
+  const finish = useCallback((s: Session<C>, quiet = false) => {
     if (s.finished) return;
     s.finished = true;
 
@@ -747,7 +771,7 @@ export function useDictation(options: DictationOptions): UseDictation {
       }
 
       s.upload = new AbortController();
-      const result = await sendForTranscription(
+      const result = await transcribe.current(
         recorded.blob,
         recorded.mimeType,
         s.where,
@@ -822,7 +846,7 @@ export function useDictation(options: DictationOptions): UseDictation {
        says so in as many words. */
     const Ctor = ctor();
     const r = Ctor ? new Ctor() : null;
-    const s: Session = {
+    const s: Session<C> = {
       r,
       stopRequested: false,
       finished: false,
@@ -1247,7 +1271,7 @@ export function useDictation(options: DictationOptions): UseDictation {
     const cancel = new AbortController();
     retryUpload.current = cancel;
     void (async () => {
-      const result = await sendForTranscription(
+      const result = await transcribe.current(
         held.recorded.blob,
         held.recorded.mimeType,
         held.where,
@@ -1373,7 +1397,7 @@ export function useDictation(options: DictationOptions): UseDictation {
  * Needs both the track and `audioAt`, and is called from whichever arrives
  * second. Does nothing twice.
  */
-function armTape(s: Session, capped: () => void): void {
+function armTape(s: Session<unknown>, capped: () => void): void {
   if (s.tape || s.finished || !s.track || s.audioAt === null) return;
   s.tape = recordTrack(s.track, capped);
 }
