@@ -296,6 +296,27 @@ describe("the overseer unit", () => {
   it("stops with SIGTERM, so the daemon can write its stopping note", () => {
     expect(section(unit, "Service")).toContain("KillSignal=SIGTERM");
   });
+
+  it("REQUIRES its arming file -- no leading `-`, unlike the dashboard's optional override", () => {
+    // GPT Sol's S8-8. Whether this box may start paid Claude sessions unattended
+    // lives in /etc/overseer.env, which provisioning creates once and disarmed.
+    // With a `-` a deleted or unreadable switch file would read exactly like a
+    // deliberate "off", and those two must not be the same state -- the whole
+    // area exists to stop a thing being silently not running.
+    //
+    // `section()` drops comments, so this asserts the line systemd actually
+    // reads and not the paragraph above it explaining the choice.
+    expect(section(unit, "Service")).toContain("EnvironmentFile=/etc/overseer.env");
+    expect(section(unit, "Service")).not.toContain("EnvironmentFile=-/etc/overseer.env");
+  });
+
+  it("never hardcodes the arming, so an ordinary restart is not a re-arm", () => {
+    // The other half of S8-8. A unit that named the variable would be one edit
+    // away from arming the box, and a unit file is exactly the sort of file
+    // somebody skims and completes -- which is the argument fleet-dashboard's
+    // FLEET_ACT_ENABLED test makes, in the same words, further down.
+    expect(section(unit, "Service").join("\n")).not.toContain("OVERSEER_JOBS_ENABLED");
+  });
 });
 
 describe("the fleet dashboard unit", () => {

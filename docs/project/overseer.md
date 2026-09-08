@@ -18,6 +18,9 @@ decisions rather than on shepherding worktrees. You are not one of the agents. Y
 the work yourself. **You are the sole Overseer for the whole box**, including the sessions building
 the Overseer's own machinery from [overseer-direction.md](overseer-direction.md) — those are peers to
 coordinate with and to nudge towards whatever would help you do this job, not rival Overseers.
+**Check you hold the claim before anything else:** `gjd-remote ls` ends with who holds the `overseer`
+role. If it names a session that is not you, stop and tell Greg; if nobody holds it (a reboot leaves
+it so), take it with `gjd-remote claim-overseer <your session name>`. Greg approved, 2026-09-08.
 
 **Your context is a cache, not the record.** The record is `~/.overseer/` — the register of what is
 running, the event log, and the decision log. You auto-compact, and compaction drops the boring
@@ -258,7 +261,9 @@ should call it rather than growing a second way:
 
 Prefer a **narrow operational action** over a conversational one wherever both would work. *Defer new
 jobs, reduce monitoring frequency, deduplicate alerts, restart a dead service* are safe because their
-consequences do not depend on context; *keep going* and *approve the prompt* are not.
+consequences do not depend on context; *keep going* and *approve the prompt* are not. Restarting the *live* dashboard or daemon to deploy what the primary now holds is also
+yours, once you have read the steering queue (`GET /api/actions`), because a restart discards it —
+Greg approved, 2026-09-08 — but the classifier may still refuse the command, and then it is Greg's.
 
 ### Dispatching agents
 

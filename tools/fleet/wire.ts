@@ -213,6 +213,18 @@ export type QueueView = {
   volatile: true;
   warning: string;
   since: number;
+  /**
+   * The hold stopping this session from being drained, or null.
+   *
+   * **A QUEUE IS ON THE WIRE WHEN IT HAS ITEMS *OR* THIS**, which is the
+   * whole reason the field is here rather than on a feed of its own: the
+   * commonest hold has NO items behind it — one message was queued, the send
+   * came back `partial`, the item settled `uncertain` and left — so a page
+   * that drew a queue only when `items.length > 0` would draw nothing at all
+   * over a session nothing may be sent to. See `QuarantineHoldView`, and
+   * `SteeringQueue.snapshots`, which is the filter that had to change.
+   */
+  quarantine: QuarantineHoldView | null;
 };
 
 /* ------------------------------------------------------------------ *
@@ -1238,6 +1250,13 @@ export type OverseerHeartbeat =
  */
 export type OverseerScheduler =
   | { kind: "armed"; why: string; at: string }
+  /**
+   * **SWITCHED ON, AND NOT ONE LOADED JOB CAN RUN.** GPT Sol's S8-7: this state
+   * used to render as `armed`, because the word came from an environment
+   * variable rather than from the definitions. It is neither `off` nor working,
+   * so it gets its own word here as it does in the store.
+   */
+  | { kind: "blocked"; why: string; at: string }
   | { kind: "off"; why: string; at: string }
   | { kind: "not-said"; why: string; at: string }
   | { kind: "unreadable"; why: string };
@@ -1415,38 +1434,52 @@ export type KillObservation =
   /** `kill` exited non-zero: no such process, or not ours to signal. Nothing happened to it. */
   | "signal-refused"
   /**
-   * The `kill` could not be run, was killed for taking too long, or died on a
-   * signal itself. **The most expensive arm to get wrong in either direction**:
-   * the signal may have gone out before it died, and it may not have.
+   * The attempt did not settle. The `kill` could not be spawned, or was killed
+   * for taking too long, or died on a signal itself — and in two of those three
+   * **it ran**. **The most expensive arm to get wrong in either direction**:
+   * the signal may have gone out before the command died, and it may not.
+   *
+   * There is deliberately no `not-attempted` beside this. `planKillProcesses`
+   * builds one step per pid and a `best-effort` step cannot stop a plan, so no
+   * pid on this route goes unreached; `killReport` asserts that rather than
+   * carrying an arm nothing can produce. An arm no code can reach is
+   * decoration, and the plan cut `reception observed` for the same reason.
    */
-  | "not-established"
-  /** The plan stopped before reaching this pid, so nothing was sent to it at all. */
-  | "not-attempted";
+  | "not-established";
 
 /** One pid, and what became of the attempt to signal it. */
 export type KillAttempt = {
   pid: number;
   observation: KillObservation;
-  /** The step's own verdict, verbatim, or why there was no step. */
+  /** The step's own verdict, verbatim. */
   why: string;
 };
 
 /**
  * A kill, reported as **intent and evidence separately**.
  *
- * `attempted` is the list the route meant to signal and is a fact about the
+ * `targeted` is the list the route set out to signal and is a fact about the
  * request; `observed` is what came back and is a fact about the box. They are
  * two fields rather than one because the route used to answer with the first
  * under a name that reads as the second, and a page cannot recover a
  * distinction the wire has already collapsed.
+ *
+ * **`targeted` WAS CALLED `attempted` FOR ONE DAY AND THAT WAS THE SAME
+ * MISTAKE ONE NOTCH SMALLER.** This stage exists to stop a kill reporting
+ * intent as outcome, and then named its own intent field after the attempt.
+ * The list is who we aimed at; whether each was attempted is `observed`, one
+ * entry at a time.
+ *
+ * There is no `planCompleted`. Every pid here has a step — `killReport`
+ * asserts it — so a flag saying the plan reached the end of the list could
+ * only ever be true, and a field that cannot be false is a claim rather than a
+ * reading.
  */
 export type KillReport = {
   /** Every pid the plan set out to signal, in order. INTENT, not effect. */
-  attempted: readonly number[];
-  /** One entry per attempted pid, in the same order. EVIDENCE. */
+  targeted: readonly number[];
+  /** One entry per targeted pid, in the same order. EVIDENCE. */
   observed: readonly KillAttempt[];
-  /** Every step ran. False means the tail of `attempted` was never signalled. */
-  planCompleted: boolean;
 };
 
 /**
@@ -1481,3 +1514,137 @@ export type BroadcastRecipientOutcome =
   | "blocked"
   /** The fan-out ran out of time before this row. Nothing was sent. */
   | "not-reached";
+
+/* ------------------------------------------------------------------ *
+ * A SESSION HELD BACK AFTER A SEND NOBODY CAN ACCOUNT FOR.
+ *
+ * Stage 4 of docs/plans/260908j. The dashboard types into other people's
+ * input boxes, and `Delivery` already distinguishes the three things a
+ * send can end as. Two of them — `partial` and `unknown` — mean **text
+ * may be sitting in that agent's input box with no Enter behind it**,
+ * and until somebody looks at the terminal nothing in this process can
+ * find out. The next queued item draining into that same box would
+ * concatenate itself onto half a sentence.
+ *
+ * So the ambiguity becomes a per-session HOLD. **Nothing below observes
+ * a consequence**, for the reason the block above says: no agent
+ * acknowledges a keystroke. `operator-confirmed` is a person's claim
+ * about what they saw with their own eyes, recorded as a claim; it is
+ * never a reading this software made.
+ *
+ * **AND NOTHING HERE IS EVER A RETRY.** A hold stops the NEXT item; it
+ * never re-sends the one that went wrong. Releasing a hold sends nothing
+ * either — both gestures below are records, not actions.
+ * ------------------------------------------------------------------ */
+
+/**
+ * What was read about the send that opened or extended a hold.
+ *
+ * Four arms, and each one names a producer, because an arm nothing can
+ * write is decoration — the rule the plan cut `reception observed` and
+ * `not-attempted` under.
+ *
+ *  - `partial` — `fire()` in steer.ts reached some of the sequence and not
+ *    the end of it (`Delivery` of `"partial"`).
+ *  - `unknown` — `fire()` could not say (`Delivery` of `"unknown"`).
+ *  - `threw` — the delivery module threw. It carries no `Delivery` at all,
+ *    and the `try` surrounds the whole call, so it cannot say whether
+ *    anything went out first. Produced by the direct steer route and by
+ *    the broadcast; **the drain does not produce it**, and the comment on
+ *    `deliverOne` says why — there the lease is left open instead, which
+ *    stops that session's queue harder than a hold would.
+ *  - `none-contradicted` — the transport said `delivery: "none"` and listed
+ *    tmux calls that completed anyway. `nothingWasSent` refuses to certify
+ *    that, and the honest reading of a self-contradicting report is the one
+ *    that assumes something went out.
+ */
+export type UncertainSendReading = "partial" | "unknown" | "threw" | "none-contradicted";
+
+/** Which of the three send paths left the input box in doubt. */
+export type UncertainSendOrigin =
+  /** The refresh loop's drain pass, delivering a queued item. */
+  | "queued-delivery"
+  /** Somebody typed into one session from the page — `POST /api/steer/…`. */
+  | "direct-steer"
+  /** One recipient of a fan-out — `POST /api/actions/box`. */
+  | "broadcast";
+
+/**
+ * The two gestures that end a hold, **neither of which sends anything.**
+ *
+ *  - `operator-confirmed` — *I looked at the terminal and saw it.* A
+ *    person's claim, stored as a person's claim. The dashboard did not
+ *    observe it and the copy must never say it did.
+ *  - `abandoned-unknown` — *Abandon the uncertainty.* It releases the hold
+ *    and **claims nothing in either direction**: not that the text
+ *    arrived, and — the half that is easy to get wrong — not that it did
+ *    not.
+ */
+export type HoldReleaseGesture = "operator-confirmed" | "abandoned-unknown";
+
+/**
+ * Where a hold has got to.
+ *
+ * A union rather than a `state` string beside three optional fields, so
+ * that reading the release gesture forces you to have established that it
+ * WAS released. `superseded` carries both generations because the whole
+ * argument for it is the comparison: a tmux server restart takes every
+ * pane with it, so the input box the hold was about no longer exists.
+ */
+export type HoldOutcome =
+  /** Still holding. Nothing drains into this session. */
+  | { kind: "holding" }
+  | {
+      kind: "released";
+      gesture: HoldReleaseGesture;
+      at: number;
+      /** What that gesture asserted, in words, for the page and the log. */
+      what: string;
+    }
+  | {
+      kind: "superseded";
+      at: number;
+      /** The tmux server the hold was opened against. */
+      was: number;
+      /** The one running now. */
+      now: number;
+      what: string;
+    };
+
+/**
+ * One session's hold, as `GET /api/actions` sends it.
+ *
+ * **`why` IS A SENTENCE, following `QueuedItem.invalidated`** rather than
+ * a code the page has to translate: a hold is a thing a person has to
+ * decide about, and the deciding is done from the sentence.
+ *
+ * `version` is what makes the release idempotent AND safe. It goes up
+ * every time another uncertain send lands on a session that is already
+ * held, so a phone that has been in a pocket since version 1 cannot
+ * release a hold that has since absorbed a second incident.
+ */
+export type QuarantineHoldView = {
+  /** `<instance>-h<n>`. Opaque to the client, exactly like a queued item's id. */
+  id: string;
+  /** Bumped by each further uncertain send. Starts at 1. */
+  version: number;
+  sessionId: string;
+  /** The pane the send was aimed at, or null when the producer had none to give. */
+  paneId: string | null;
+  claudeSessionId: string | null;
+  /** Which run of this server opened it. */
+  serverInstanceId: string;
+  /** The tmux server it was opened against, or null if this server had not been told yet. */
+  tmuxGeneration: number | null;
+  openedAt: number;
+  /** When the most recent uncertain send landed. Equals `openedAt` while `incidents` is 1. */
+  lastSendAt: number;
+  /** How many uncertain sends this hold has absorbed. Never below 1. */
+  incidents: number;
+  /** The reading of the most recent one. */
+  reading: UncertainSendReading;
+  /** Which path the most recent one came down. */
+  origin: UncertainSendOrigin;
+  why: string;
+  outcome: HoldOutcome;
+};

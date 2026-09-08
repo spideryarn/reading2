@@ -32,14 +32,16 @@ import {
   runPlan,
   type ActionDeps,
   type ActionIo,
+  type PlanRun,
   type StepRun,
 } from "../tools/fleet/routes-actions.js";
 import { createRateLimiter } from "../tools/fleet/routes-steer.js";
 /* THE REAL CARD, rendered to a string rather than into a DOM, so the route,
    the client parse and the component a person actually reads can meet in one
    test without this node-lane file acquiring jsdom. */
-import { ActionOutcomeCard, effectHeadline } from "../tools/fleet/web/src/ActionButtons";
+import { ActionOutcomeCard, BoxEffectSummary, effectHeadline } from "../tools/fleet/web/src/ActionButtons";
 import { makeActionsApi, type ActionsApi } from "../tools/fleet/web/src/actions-client";
+import { QuarantineBook } from "../tools/fleet/quarantine.js";
 import { SteeringQueue } from "../tools/fleet/queue.js";
 import type { FleetStatus } from "../tools/fleet/status.js";
 import type { SteerResult, SteerTarget } from "../tools/fleet/steer.js";
@@ -175,7 +177,17 @@ function harness(
   const sent: Sent[] = [];
   const logs: string[] = [];
   let clock = 1_000_000;
-  const queue = over.queue ?? new SteeringQueue({ now: () => clock, serverInstanceId: over.instanceId ?? INSTANCE });
+  const instanceId = over.instanceId ?? INSTANCE;
+  const queue =
+    over.queue ??
+    new SteeringQueue({
+      now: () => clock,
+      serverInstanceId: instanceId,
+      // A REAL BOOK, sharing this harness's clock and run id. The hold
+      // machinery is tests/fleet-quarantine.test.ts's subject; what this needs
+      // is that `next()` here asks the same question production's does.
+      quarantine: new QuarantineBook({ now: () => clock, serverInstanceId: instanceId }),
+    });
   const { result, instanceId: _instanceId, ...rest } = over;
   const routes = makeActionRoutes({
     queue,
@@ -1336,7 +1348,7 @@ describe("POST /api/actions/box — killing", () => {
     expect(r.status).toBe(200);
     // The intersection is what got a step; what the step ESTABLISHED is the
     // block below this describe.
-    expect((resultOf(r).kill as { attempted: number[] }).attempted).toEqual([5001]);
+    expect((resultOf(r).kill as { targeted: number[] }).targeted).toEqual([5001]);
     expect(ran.map((x) => x.argv)).toEqual([["kill", "-TERM", "5001"]]);
     const skipped = resultOf(r).skipped as { pid: number; why: string }[];
     expect(skipped.map((s) => s.pid).sort()).toEqual([5002, 5005]);
@@ -1611,7 +1623,7 @@ describe("POST /api/actions/box — the staggered broadcast", () => {
     let clock = 1_000_000;
     const sent: string[] = [];
     const routes = makeActionRoutes({
-      queue: new SteeringQueue({ now: () => clock, serverInstanceId: "1a2b3c4d" }),
+      queue: new SteeringQueue({ now: () => clock, serverInstanceId: "1a2b3c4d", quarantine: new QuarantineBook({ now: () => clock, serverInstanceId: "1a2b3c4d" }) }),
       sendMessage: (target) => {
         sent.push(target.paneId);
         clock += 60_000;
@@ -1817,9 +1829,11 @@ describe("a kill reports what it established, not what it intended", () => {
     const r = await call(routes, fakeReq({ url: "/api/actions/box", body: killBody([5001, 5002, 5003]) }));
     expect(r.status).toBe(200);
 
-    const kill = resultOf(r).kill as { attempted: number[]; observed: { pid: number; observation: string }[]; planCompleted: boolean };
-    // ATTEMPTED is the intent, and it is allowed to name all three.
-    expect(kill.attempted).toEqual([5001, 5002, 5003]);
+    const kill = resultOf(r).kill as { targeted: number[]; observed: { pid: number; observation: string }[] };
+    /* TARGETED is the intent, and it is allowed to name all three. It was
+       called `attempted` for a day, which named the intent after the attempt in
+       the stage built to stop exactly that. */
+    expect(kill.targeted).toEqual([5001, 5002, 5003]);
     // OBSERVED is what came back, and it is not allowed to agree with it.
     expect(kill.observed.map((o) => `${o.pid}:${o.observation}`)).toEqual([
       "5001:signal-accepted",
@@ -1852,15 +1866,20 @@ describe("a kill reports what it established, not what it intended", () => {
     expect(kill.observed[1]?.why).toContain("ENOENT");
   });
 
-  it("names a pid the plan never got to as not attempted, and says the plan stopped", () => {
-    /* DRIVEN THROUGH `killReport` RATHER THAN THE ROUTE, and the reason is
-       worth writing down: every step of a kill plan is `best-effort`, so
-       `judgeStep` can only return `passed` or `failed-ignored` and `runPlan`
-       cannot currently return `completed: false` for a kill. The route has no
-       path to this state today. It is still the state the type allows and the
-       one that must never render as a completed kill, so it is tested against
-       the real reducer with the `PlanRun` a stricter plan would produce. */
-    const report = killReport([5001, 5002, 5003], {
+  it("refuses a run short of steps rather than inventing an outcome for the pids it cannot see", () => {
+    /* **WHAT THIS REPLACES WAS DECORATION.** `not-attempted` and
+       `planCompleted` shipped for a day and no code could produce either: every
+       step of a kill plan is `best-effort`, so `judgeStep` never returns
+       `failed` and `runPlan` never stops one early. The only way to see them
+       was to build a `PlanRun` by hand — which the test that asserted them did,
+       so the arm existed to satisfy its own test. A vocabulary word nothing can
+       write costs a reader the assumption that the other words mean something.
+
+       So the shortfall is an invariant now. Throwing loses this run's evidence
+       and that is the direction to be wrong in: `guard()` turns it into a 500
+       naming the mismatch, where the alternative is a 200 naming fewer pids
+       than were signalled — the exact defect this stage removed. */
+    const short: PlanRun = {
       action: "kill-test-suites",
       planned: 3,
       completed: false,
@@ -1878,13 +1897,10 @@ describe("a kill reports what it established, not what it intended", () => {
           tail: "",
         },
       ],
-    });
-    expect(report.planCompleted).toBe(false);
-    expect(report.observed.map((o) => `${o.pid}:${o.observation}`)).toEqual([
-      "5001:signal-refused",
-      "5002:not-attempted",
-      "5003:not-attempted",
-    ]);
+    };
+    expect(() => killReport([5001, 5002, 5003], short)).toThrow(/1 step\(s\) for 3 targeted pid\(s\)/);
+    // And the same run against the list it actually covers reports normally.
+    expect(killReport([5001], short).observed.map((o) => `${o.pid}:${o.observation}`)).toEqual(["5001:signal-refused"]);
   });
 
   it("never says a process is dead, because nothing here looked", async () => {
@@ -1899,6 +1915,64 @@ describe("a kill reports what it established, not what it intended", () => {
     expect(words).not.toContain("killed");
     expect(words).not.toContain("dead");
     expect(words).toContain("signal-accepted");
+  });
+
+  it("renders each arm through the real card, and no sentence a person reads is past tense about a process", async () => {
+    /* **THE GUARD ON THE THING THIS STAGE EXISTS TO PREVENT**, and it was the
+       piece missing from it. The assertions above forbid `killed` in the JSON
+       and in the heading; the browser test rendered only the arm the route
+       cannot reach. So the sentence a person ACTUALLY READS after a kill —
+       `BOX_STATE_COPY`'s line for `signal-accepted` — could have been changed
+       to *process killed* with the whole suite still green. A review found
+       exactly that by mutating it.
+
+       Real route bytes, the real client parse, the real component. Three pids
+       and three fates in one press, and nothing re-read the process table
+       between them, so the ceiling on all three is the same. */
+    const { io } = fakeIo({
+      procs: suites,
+      step: (step) =>
+        step.argv[2] === "5002"
+          ? { ...OK_STEP, code: 1, stderr: "kill: (5002) - No such process" }
+          : step.argv[2] === "5003"
+            ? { ...OK_STEP, code: null, timedOut: true }
+            : OK_STEP,
+    });
+    const { routes } = harness({ io });
+    const recorded = await call(routes, fakeReq({ url: "/api/actions/box", body: killBody([5001, 5002, 5003]) }));
+    const outcome = await makeActionsApi(replay(recorded)).box("kill-test-suites", false);
+    const effect = outcome.ok ? outcome.effect : null;
+    if (effect === null) throw new Error("expected the answer to carry an effect reading");
+    /* `strip` turns every tag into a space, so the runs are collapsed before
+       anything is matched against them. */
+    const text = strip(renderToStaticMarkup(createElement(BoxEffectSummary, { effect }))).replace(/\s+/g, " ");
+
+    // The join first: three pids, three different words, one each.
+    expect(text).toContain("1 signal-accepted");
+    expect(text).toContain("1 signal-refused");
+    expect(text).toContain("1 not-established");
+
+    /* THE CEILING, ARM BY ARM, in the words on the page.
+
+       `signal-accepted` is the strongest thing this route can establish and it
+       stops at the signal: a process may ignore SIGTERM and nothing here looks
+       again. */
+    expect(text).toContain("signal accepted — not proof the process is gone");
+    // A settled negative, and the only one: `kill` said the pid was not there.
+    expect(text).toContain("no such process, or not ours to signal");
+    /* And the arm that settles NOTHING must not read like either of them. It
+       covers a timeout and a `kill` killed by a signal — in both of which the
+       command RAN, so "could not be run" was false of the case driven here and
+       could be contradicted by the verdict printed underneath it. */
+    expect(text).toContain("the signal attempt did not settle — it may have gone out and it may not");
+    expect(text).not.toContain("could not be run");
+
+    /* No past tense about the process, anywhere on the list a person reads.
+       Named words rather than a shape, because this is the assertion a
+       mutation has to get past. */
+    for (const claim of [/killed/i, /\bdead\b/i, /\bdied\b/i, /terminat/i, /no longer running/i, /shut down/i]) {
+      expect(text).not.toMatch(claim);
+    }
   });
 });
 
@@ -1958,9 +2032,14 @@ describe("a broadcast keeps one delivery reading per recipient", () => {
   });
 
   it("reads a throw from the delivery module as unknown, never as a refusal", async () => {
-    /* A throw happens PARTWAY THROUGH a sequence of tmux calls and there is no
-       `Delivery` to read: the exception carries none. `refused` was the
-       reassuring reading of the one case with the least evidence behind it. */
+    /* A throw carries no `Delivery`, so there is nothing to read: `refused` was
+       the reassuring reading of the one case with the least evidence behind it.
+
+       **AND THE SENTENCE MUST NOT SAY WHEN THE THROW HAPPENED.** The `try` is
+       around the WHOLE `sendMessage` call, so a throw before the first keystroke
+       lands in the same branch as one out of the middle of a tmux sequence —
+       and the fake below throws immediately, which is exactly the case the copy
+       used to describe as *partway through the send*. */
     const { routes } = harness({
       result: (t) => {
         if (t.paneId === "%3") throw new Error("execFileSync: EAGAIN");
@@ -1971,6 +2050,10 @@ describe("a broadcast keeps one delivery reading per recipient", () => {
     const row = (resultOf(r).recipients as { paneId: string; outcome: string; why: string }[]).find((x) => x.paneId === "%3");
     expect(row?.outcome).toBe("outcome-unknown");
     expect(row?.why).toContain("EAGAIN");
+    expect(row?.why).toContain("the delivery module threw while handling this recipient");
+    // The uncertainty survives the rewrite; the invented timing does not.
+    expect(row?.why).toContain("Nothing here can tell whether any of it reached the pane.");
+    expect(row?.why).not.toContain("partway");
   });
 
   it("says `would-send` in a preview, so a plan cannot be read as a delivery", async () => {
@@ -2068,26 +2151,15 @@ describe("a refusal that carried a plan run reaches the card", () => {
     const text = strip(renderToStaticMarkup(createElement(ActionOutcomeCard, { outcome, onRefresh: () => {} })));
     expect(text).toContain("It stopped part-way: 2 of 2 steps ran.");
     expect(text).toContain("the server used a word this page does not know");
-  });
-
-  it("does not read a kill that said nothing about its plan as a completed plan", async () => {
-    /* The same silence, one field over: `parseBoxEffect` reads
-       `planCompleted === true` for the reason above, and the reassuring
-       default is the one that must not be reachable by omission. */
-    const outcome = await makeActionsApi(
-      replay({
-        status: 200,
-        body: JSON.stringify({
-          ok: true,
-          op: "ran",
-          action: "kill-test-suites",
-          dryRun: false,
-          result: { kill: { attempted: [5001], observed: [{ pid: 5001, observation: "signal-accepted" }] } },
-        }),
-      }),
-    ).box("kill-test-suites", false);
-    const effect = outcome.ok ? outcome.effect : null;
-    expect(effect?.kind === "kill" && effect.planCompleted).toBe(false);
+    /* **A STEP IS NOT NECESSARILY A COMMAND THAT EXITED.** `PlanRun` records a
+       spawn failure, a timeout and a subprocess killed by a signal, and none of
+       those exited. The card said all three did, one line under a list that
+       could be naming them. */
+    /* Split around the apostrophe: `renderToStaticMarkup` escapes it to
+       `&#x27;` and `strip` only removes tags. */
+    expect(text).toContain("Each row below is a plan step the server reached, with the gate");
+    expect(text).toContain("s own verdict.");
+    expect(text).not.toContain("a command that exited");
   });
 });
 
@@ -2171,9 +2243,12 @@ describe("the heading over a box answer is a ratio, not a verdict", () => {
     expect(effectHeadline(a.ok ? a.effect : null)).not.toContain("killed");
   });
 
-  it("says a plan that did not complete left pids unsignalled, and never heads it as done", async () => {
-    /* The `completed: false` state the route cannot reach — see `killReport`'s
-       own comment — driven through the real parse and the real heading. */
+  it("takes the denominator from the pids the server targeted, and falls back to the evidence rather than to zero", async () => {
+    /* THE ONLY SHAPE THAT REACHES THE FALLBACK is a body from a server that
+       predates `targeted`, so it is hand-written on purpose and says so. The
+       fallback is the observed list because that is the most this page can
+       prove; falling back to zero would head a real kill *0 of 0*, which reads
+       as nothing having been aimed at. */
     const outcome = await makeActionsApi(
       replay({
         status: 200,
@@ -2182,18 +2257,14 @@ describe("the heading over a box answer is a ratio, not a verdict", () => {
           op: "ran",
           action: "kill-test-suites",
           dryRun: false,
-          result: {
-            run: { action: "kill-test-suites", steps: [], planned: 3, completed: false, stoppedAt: 0 },
-            kill: killReport([5001, 5002, 5003], { action: "kill-test-suites", steps: [], planned: 3, completed: false, stoppedAt: 0 }),
-          },
+          result: { kill: { observed: [{ pid: 5001, observation: "signal-accepted" }] } },
         }),
       }),
     ).box("kill-test-suites", false);
 
     const effect = outcome.ok ? outcome.effect : null;
-    expect(effect?.kind === "kill" && effect.planCompleted).toBe(false);
-    expect(effectHeadline(effect)).toBe("Signal accepted for 0 of 3 pids.");
-    expect(effect?.states).toEqual([{ state: "not-attempted", count: 3 }]);
+    expect(effect?.kind === "kill" && effect.targeted).toBe(1);
+    expect(effectHeadline(effect)).toBe("Signal accepted for 1 of 1 pids.");
   });
 
   it("heads a preview as a promise, not as a receipt", async () => {

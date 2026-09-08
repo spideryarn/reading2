@@ -95,6 +95,110 @@ is already in the data, and it would have made this postmortem impossible to nee
    records *pressure* rather than *population*. Adding a second general-purpose recorder is a large
    answer to a problem that one number solves.
 
+## The second instance, in this file's own instrument, four hours later
+
+Written the same night, because it is the strongest evidence the class is real and the weakest
+possible excuse.
+
+The sampler above reads `~/.overseer/last-snapshot.json`, which the **Overseer daemon** writes. At
+22:36:52Z the daemon was stopped for a planned restart, the relaunch was blocked, and the file simply
+stopped changing. The sampler went on reading it every thirty seconds and **emitting readings**.
+
+Ten rows, 23:36:10 to 23:40:40, every one identical:
+
+```
+agents=5 agent_reachable=1 agent_working=4 … ratio1=0.1875
+```
+
+**One instant, reported ten times as a time series** — and it would have run all night. Nothing about
+those rows looks wrong. They parse, they are well formed, the counts are consistent, and
+`reachable=1 of 5` is precisely the tail case the series was being used to argue about. **The
+fabricated data supported my own position.** The summariser I had already written takes min, max and
+mean, and would have absorbed them without a murmur.
+
+The cause is one missing line: the sampler checked whether the file **parsed** and never whether it
+was **fresh**. A stale file parses perfectly. That is the same sentence as
+[silent-success.md](../reusable/silent-success.md)'s whole argument, and the same sentence as the
+`resets_at` rule in `overseer-direction.md`, and the same sentence as `Pause.overdue`'s *"nothing has
+run since"* clause — all of which I had read, quoted and written about **that evening**, in this file
+and in the plan.
+
+Fixed: freshness is checked before parsing, and a stale snapshot is now its own row —
+`STALE | snapshot last written 302s ago — the daemon is not writing` — never a count.
+
+**What this instance adds to the class.** The first instance was a *sampling window* that did not
+match the plan's regime. This one is a *sample* that did not correspond to any moment at all. Both
+have the same shape — an instrument confidently describing a system it was not looking at — and the
+second happened to somebody who had just finished writing the first one down. **Knowing the class
+does not confer immunity to it**, which is an argument for the mechanical countermeasures below over
+the habitual one, and a correction to my own ranking: item 1 is the cheapest, and it is also the one
+that demonstrably failed twice in one night.
+
+## The third instance, and it makes the first two look mild
+
+Found by a third session, `overseer-tab-messaging`, and confirmed by me against the source and by the
+dashboard's owner against the live server.
+
+**The broadcast reaches nobody, and never has.** `boxActionBody`
+(`tools/fleet/web/src/actions-client.ts:791`) is the only body builder for box actions and returns
+`{actionId, mode, confirm, speaker}` — **no `recipients`**. `broadcastRoute` refuses on
+`recipients.length === 0` before it selects anyone:
+
+```
+POST /api/actions/box {"actionId":"resource-broadcast","mode":"dry-run",…}
+-> {"ok":false,"code":"bad-request","why":"a broadcast needs recipients: send the rows the page is showing…"}
+```
+
+So every press of the button is refused **two steps upstream of `drainGate`** — the filter whose
+selectivity two sessions spent an evening measuring, arguing about, correcting each other on, and
+building a 24-hour instrument for. Nine hours on one side and about five on the other, on **the
+selectivity of dead code**.
+
+This is the same class in its purest form. The plan described a *filter*; the instrument measured
+*reachability*; the actual behaviour was a *refusal* neither party had looked at. Every number was
+real, every caveat was written down, three separate corrections went the honest way, and none of it
+bore on the question. **The rigour was entirely downstream of the mistake.**
+
+### What actually found it, and why neither of us could have
+
+Not a better measurement, and not more care. The finder **read the request builder against the route
+it posts to** — and that is the one comparison neither of us made, because we both started at the
+mechanism we were interested in and reasoned *outwards*. Nobody started at the caller and went *in*.
+
+That is a cheap, general countermeasure and it outranks everything already in my list below:
+
+> **Before measuring anything about a mechanism, trace one real call end to end — from the caller's
+> request body to the server's first refusal.** It takes minutes, it needs no instrument, and it
+> would have ended all three instances on the first evening.
+
+It generalises past this incident: an instrument attached partway down a chain cannot see that the
+chain is severed above it. The measurement will be internally consistent, responsive to real
+conditions, and about nothing — **it moves when the box gets busy, which is exactly what makes it
+convincing.**
+
+**And the countermeasure has its own failure mode, which the dashboard's owner named** and which
+would otherwise have made it useless here:
+
+> The trace has to end at the **first refusal**, not at the first thing that *looks like* the
+> mechanism. Had I traced the broadcast and stopped at `drainGate` — the code I was arguing about,
+> and the first thing in that path that looks like the answer — I would have confirmed my own model
+> and learned nothing.
+
+So *"end to end"* is load-bearing and a reader will be tempted to shorten it to *"trace the call"*.
+The stopping rule is the whole difficulty, because the natural place to stop is the thing you already
+believe in — which is the original error wearing the countermeasure's clothes. Their verification was
+**one `curl` and under a minute**: the difference between the two of us and the session that found it
+was not rigour or effort, it was **direction of travel**.
+
+### What survives
+
+The reachability series is still a real quantity: it governs the **drain**, which does run, and it
+carries the only measurement anyone has of **peak agent concurrency** (18, 2026-09-08), which is the
+premise this whole plan rests on. So the sampler stays running. What it no longer bears on is the
+broadcast stage — and the honest statement there is not *"it reaches too few sessions when the box is
+busy"* but *"it reaches none, at any load, for a reason unrelated to the rule we were arguing
+about."*
+
 ## The part that has no countermeasure, and should be said anyway
 
 **There is still no independent source for the peak.** The dashboard's owner reproduced the

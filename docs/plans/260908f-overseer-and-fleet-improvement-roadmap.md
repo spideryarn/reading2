@@ -1,6 +1,6 @@
 # Make the Overseer and fleet dashboard useful, dependable, and cheaper to run
 
-Status as of 2026-09-08 evening: **implementation started, run by the Overseer** — Overseer status
+Status as of 2026-09-08 late evening: **implementation in progress, run by the Overseer** — landed on `dev`: Baseline (2aed1a48, census table below), Overseer status (5cf9a7ee), Failure containment (857ca301); Delivery uncertainty is with the `claude-agents-dashboard` session (its Stages 1–3: 0b2fee1e, 082d91aa, 854fac4b); dispatched 2026-09-08 22:50 UTC: Execution identity (session `260908f-roadmap-exec-identity`) and Usage visibility (`260908f-roadmap-usage`, which also carries Greg's London/Athens clock). Attention inbox and Attention completeness are **already met** per the census (attention-pass.ts, model-driven detector, AttentionPanel) and will not be dispatched; Work evidence waits for Execution identity because both use the same probe machinery. The log is [260908i](260908i-overseer-decision-log-for-the-two-astra-plans.md). Status as of 2026-09-08 evening: **implementation started, run by the Overseer** — Overseer status
 **landed** (5cf9a7ee, session closed); **Baseline landed** (session `260908f-roadmap-baseline`);
 Failure containment is with `260908f-roadmap-failure-containment`; the log is
 [260908i](260908i-overseer-decision-log-for-the-two-astra-plans.md). Earlier status: researched

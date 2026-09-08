@@ -19,14 +19,15 @@
  * ## THE PIN, and why the authorisation is not the definition
  *
  * Every job carries an `authorisedHash` literal. It is compared against
- * `definitionHash(definition)` on **every tick**, and a mismatch refuses the
- * dispatch (`authorisationOf` in jobs.ts). That comparison is the runbook's
- * *"never act on a job definition that changed after it was authorised"*, and
- * the reason it can mean anything is that the two sides come from different
- * places: the definition is built here from the repo as it stands right now,
- * and the pin is a constant that changes only in a commit somebody reviewed.
+ * `behaviourHash(definition.behaviour)` on **every tick**, and a mismatch
+ * refuses the dispatch (`authorisationOf` in jobs.ts). That comparison is the
+ * runbook's *"never act on a job definition that changed after it was
+ * authorised"*, and the reason it can mean anything is that the two sides come
+ * from different places: the behaviour is built here from the repo as it stands
+ * right now, and the pin is a constant that changes only in a commit somebody
+ * reviewed.
  *
- * **The digest of the DOCUMENT is inside the definition**, which is the half
+ * **The digest of the DOCUMENT is inside the behaviour**, which is the half
  * that makes this more than ceremony. These jobs' instructions are one sentence
  * each — *go and follow this document* — so a fingerprint over the sentence
  * covers the pointer and not the thing pointed at, and the runbook says so in as
@@ -41,34 +42,30 @@
  *
  * A pin deliberately does NOT live in `~/.overseer`: that store is written by
  * the daemon, and an authorisation the authorised party can write is not one.
+ *
+ * ## AND THE PIN SAYS NOTHING ABOUT THE SCHEDULE
+ *
+ * Cadence, lease and first-run delay live in `schedules.ts` and are outside the
+ * fingerprint entirely (GPT Sol's S8-1). Editing one of those numbers by hand
+ * changes when these jobs run and re-pins nothing — which is what Greg asked for
+ * and what the plan's original design could not have given him. What guards an
+ * abusive number instead is `validateSchedules`, checked here before any job is
+ * built: a config that fails it produces no jobs at all.
  */
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { definitionHash, type AuthorisedJob, type DefinitionHash, type JobDefinition, type JobDocument } from "./jobs.js";
+import { behaviourHash, type AuthorisedJob, type BehaviourHash, type JobBehaviour, type JobDefinition, type JobDocument } from "./jobs.js";
+import {
+  LAUNCH_SEPARATION_MS,
+  STANDING_JOB_SCHEDULES,
+  validateLaunchSeparation,
+  validateSchedules,
+  type StandingJobId,
+} from "./schedules.js";
 
-/** Three hours, per docs/reusable/get-ready-to-deploy.md § Running it on a timer ("every three hours or so"). */
-export const GET_READY_TO_DEPLOY_EVERY_MS = 3 * 3600_000;
-
-/**
- * Twelve hours: docs/project/overseer.md says the feedback sweep runs "a couple
- * of times a day".
- */
-export const FEEDBACK_SWEEP_EVERY_MS = 12 * 3600_000;
-
-/**
- * How long a run may be unsettled before it is `stuck` and the job is released.
- *
- * Generous on purpose, and it is a deadline rather than a timeout: nothing kills
- * the child when it passes. What it decides is when the *scheduler* stops
- * believing the run is coming back, and the cost of being wrong in the tight
- * direction is two sessions doing the same sweep at once.
- *
- * Both of these dispatch a Claude session that runs an engineering-manager loop
- * with subagents beneath it, and those have taken several hours on this box.
- */
-export const STANDING_JOB_LEASE_MS = 6 * 3600_000;
+export type { StandingJobId };
 
 /**
  * The prompt for the deploy sweep, **copied from the doc that owns it** —
@@ -134,20 +131,18 @@ export const FEEDBACK_SWEEP_DOCS = ["docs/project/feedback-reports.md"] as const
  * Pinned 2026-09-08 against the documents as they stood on `dev` that day.
  */
 export const AUTHORISED_HASHES: Readonly<Record<StandingJobId, string>> = {
-  // Both re-pinned 2026-09-08 when `JobDefinition` gained `work`, which is in
-  // the fingerprint. Nothing either job does changed — they are still `session`
-  // jobs running the same prompt against the same document — but the definition
-  // now says so out loud, and saying so moved the hash. Read the diff: it is one
-  // literal in `standingJobs`.
-  "get-ready-to-deploy": "bfc37addeea1",
-  // Re-pinned once before, on the same day, when `engineering-manager.md` came
-  // out of this job's document list (see the comment there). Read the change,
-  // which was the list and not the doc, and the job is still the one that
-  // should run unattended.
-  "feedback-sweep": "8aa20daa8b85",
+  // BOTH RE-PINNED 2026-09-09, when cadence and lease left the fingerprint
+  // (GPT Sol's S8-1). Nothing either job does changed — same prompt, same
+  // document, same `work: session` — and that is checkable rather than asserted:
+  // the diff removes two encoder entries from `BEHAVIOUR_ENCODERS` and touches
+  // no `what`, no document list and no work kind.
+  //
+  // **This is the last re-pin a schedule change will ever cause.** From here,
+  // editing `schedules.ts` moves nothing here; only an edit to a prompt, a
+  // document or a work kind does.
+  "get-ready-to-deploy": "771e433b6d2a",
+  "feedback-sweep": "eb76b675c2ce",
 };
-
-export type StandingJobId = "get-ready-to-deploy" | "feedback-sweep";
 
 /**
  * What building the standing jobs produced.
@@ -196,7 +191,21 @@ export function standingJobs(repoRoot: string): StandingJobs {
   const problems: string[] = [];
   const jobs: AuthorisedJob[] = [];
 
-  const build = (id: StandingJobId, everyMs: number, what: string, paths: readonly string[]): void => {
+  // **THE CONFIG IS CHECKED BEFORE ANY JOB IS BUILT, AND A BAD ONE BUILDS
+  // NOTHING.** This is what replaced the re-pin as the guard on an abusive
+  // schedule value (GPT Sol's S8-1: *"protect abusive schedule values through
+  // validation"*). Returning early rather than skipping the offending job, so a
+  // typo cannot leave one job armed on a number nobody meant and the other
+  // silently gone.
+  const configProblems = [
+    ...validateSchedules(STANDING_JOB_SCHEDULES, STANDING_JOB_IDS),
+    ...validateLaunchSeparation(LAUNCH_SEPARATION_MS, STANDING_JOB_SCHEDULES),
+  ];
+  if (configProblems.length > 0) {
+    return { jobs: [], problems: configProblems.map((problem) => `no standing job is being scheduled: ${problem}`) };
+  }
+
+  const build = (id: StandingJobId, what: string, paths: readonly string[]): void => {
     const documents: JobDocument[] = [];
     for (const path of paths) {
       const read = digestDocument(repoRoot, path);
@@ -210,14 +219,30 @@ export function standingJobs(repoRoot: string): StandingJobs {
     // sentence handed to a Claude session on this box. It is in the
     // fingerprint, so the pins below moved on 2026-09-08 when the field was
     // added; that is the mechanism working rather than a cost.
-    const definition: JobDefinition = { id, everyMs, leaseMs: STANDING_JOB_LEASE_MS, what, documents, work: { kind: "session" } };
-    jobs.push({ definition, authorisedHash: AUTHORISED_HASHES[id] as DefinitionHash });
+    const behaviour: JobBehaviour = { id, what, documents, work: { kind: "session" } };
+    // THE SCHEDULE COMES FROM THE CONFIG AND GOES NOWHERE NEAR THE HASH. That
+    // one line is the whole of what Greg asked for: edit a number in
+    // `schedules.ts`, and this job goes on dispatching under the pin it already
+    // has.
+    const definition: JobDefinition = { behaviour, schedule: STANDING_JOB_SCHEDULES[id] };
+    jobs.push({ definition, authorisedHash: AUTHORISED_HASHES[id] as BehaviourHash });
   };
 
-  build("get-ready-to-deploy", GET_READY_TO_DEPLOY_EVERY_MS, GET_READY_TO_DEPLOY_PROMPT, GET_READY_TO_DEPLOY_DOCS);
-  build("feedback-sweep", FEEDBACK_SWEEP_EVERY_MS, FEEDBACK_SWEEP_PROMPT, FEEDBACK_SWEEP_DOCS);
+  build("get-ready-to-deploy", GET_READY_TO_DEPLOY_PROMPT, GET_READY_TO_DEPLOY_DOCS);
+  build("feedback-sweep", FEEDBACK_SWEEP_PROMPT, FEEDBACK_SWEEP_DOCS);
   return { jobs, problems };
 }
+
+/**
+ * The ids this file knows how to build, as data.
+ *
+ * Written out rather than taken from `Object.keys(STANDING_JOB_SCHEDULES)`, and
+ * that is the point: the validator's job is to say *the config names something
+ * this build cannot construct*, and a list derived from the config could never
+ * say it. The compiler holds the other direction — a key in the config with no
+ * `build` call here is a missing `AUTHORISED_HASHES` entry.
+ */
+const STANDING_JOB_IDS: readonly StandingJobId[] = ["get-ready-to-deploy", "feedback-sweep"];
 
 /**
  * The sentence `overseer status` prints, and the one the daemon writes into its
@@ -238,8 +263,9 @@ export function standingJobs(repoRoot: string): StandingJobs {
 export function describeStandingJobs(input: { armed: boolean; enableVar: string; jobs: StandingJobs }): string {
   const { jobs, problems } = input.jobs;
   const named = jobs.map((job) => {
-    const found = definitionHash(job.definition);
-    return found === job.authorisedHash ? job.definition.id : `${job.definition.id} (NOT AUTHORISED: pinned ${job.authorisedHash}, now ${found})`;
+    const found = behaviourHash(job.definition.behaviour);
+    const id = job.definition.behaviour.id;
+    return found === job.authorisedHash ? id : `${id} (NOT AUTHORISED: pinned ${job.authorisedHash}, now ${found})`;
   });
   const tail = [named.length === 0 ? "no job definitions built" : named.join(", "), ...problems].join("; ");
   if (!input.armed) {
