@@ -23,7 +23,13 @@ function session(over: Partial<Session> = {}): Session {
     windows: 1,
     title: "",
     provisional: false,
-    claudeId: "11111111-1111-1111-1111-111111111111",
+    /* Its own uuid, and it has to be: this was `1111…1111`, which is `OWNER` in
+       `db-schema.test.ts` — a uuid that file **inserts a real `auth.users` row
+       under**. `fixture-ids.test.ts` caught the collision the day this file
+       landed. `NOT_A_ROW` is not the escape hatch here, because that list is for
+       ids *nothing* inserts, and one of these two files does. A session id is
+       not a row at all, so any distinct uuid does. */
+    claudeId: "11111111-1111-4000-8000-0000000f1ee7",
     proc: { kind: "claude" },
     meta: { version: 1, kind: "claude", repo: "spideryarn/reading2", dir: "/home/greg/code/spideryarn2" },
     ...over,
