@@ -147,3 +147,10 @@ and [260908f-overseer-and-fleet-improvement-roadmap.md](260908f-overseer-and-fle
   plus a missing guard on the summary sentence; `KillReport.attempted` becomes `targeted` and the
   `not-attempted` arm goes. Nothing of mine consumes it. **Advice to Greg:** relaunch the daemon now
   (unaffected); restart the dashboard when the fix is on dev, or now at the cost of a second restart.
+- 2026-09-08 23:10 UTC — **Dashboard agent** withdrew the hold after checking reachability: with
+  `FLEET_ACT_ENABLED` off, `acting-disabled` refuses run-mode before anything executes, so two of the
+  three P0 sentences have no live path and the third can at most appear on a preview card. Restart
+  timing is **Greg's call**, not a defect blocking him; a second restart when the fix lands is worth
+  it but not worth waiting on. For the record: the dashboard restart became Greg's because the
+  classifier **blocked** the command, not because the earlier reasoning about authority was found
+  optional — both stand.
