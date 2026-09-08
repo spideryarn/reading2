@@ -103,8 +103,13 @@ describe("toRows", () => {
   });
 
   it("gives a session the status pass missed an unknown with a reason", () => {
+    // `cause` says OUR BUG rather than "the box could not tell us", which is
+    // what every other unknown means. Nothing else in the union names this one,
+    // so anything reading these identifiers can separate a defect of ours from
+    // a box that is having a bad day — see `SessionUnknownCause`.
     expect(toRows([session()], NO_STATUS)[0]?.status).toEqual({
       kind: "unknown",
+      cause: "no-status-derived",
       why: "no status was derived for this session",
     });
   });

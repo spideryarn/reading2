@@ -385,6 +385,38 @@ Nothing else. A shared-API change with every consumer and test green is a stage.
 - **Done:** `npm test` and `npm run typecheck` green, `gjd-remote ls` still renders, and a mutation
   proves a test notices.
 
+**✅ LANDED 2026-09-08.** Seven causes, not the six planned — `not-a-session-id`,
+`agents-unavailable`, `unrecognised-agent-status`, `running-but-unlisted`,
+`process-probe-unavailable`, `no-status-derived`, and `client-declared`. Five construction sites in
+`sessionState` confirmed by hand; the plan's original "three" was wrong.
+
+Three things learned in the doing, all worth more than the change itself:
+
+- **A cause must not carry anything that varies for reasons the consumer does not care about.**
+  `unrecognised-agent-status` deliberately does *not* include the status name it found: a box
+  reporting two unfamiliar statuses in turn has one problem, and folding the name in would
+  reintroduce exactly the flapping the field exists to stop. The dashboard agent generalised it into
+  the rule worth keeping — **prose, counters, countdowns and timestamps belong beside a diff key,
+  never in it.** It is `waiting.secondsLeft` again, one level up.
+- **The seventh cause came from a disagreement worth losing.** `routes-steer.ts` parses a status a
+  *client* declared, and stamping one of the six box-faults on it would launder a browser's assertion
+  into a field whose whole purpose is to say what the box observed — *"the same class of error as
+  inventing a `collectedAt` for a collection that never happened"*. Hence `client-declared`, named for
+  the fault in the same sense as the others, because **the fault is the absence of an observation.**
+  Rejecting the body instead was the other option and is worse: it replaces an informative
+  `declared-not-steerable` refusal with "your JSON was wrong", and the refusal sentence is the
+  product.
+- **The exhaustiveness guard fired for real, and only under `typecheck`.** The test annotates its
+  fixture as an exhaustive `Record` over the causes, so adding `client-declared` broke compilation
+  until it was accounted for. **`npm test` cannot catch it** — vitest does not typecheck — so a
+  type-level guard here is only ever as good as the `typecheck` gate.
+
+`statusOf`'s second `sessionState(…, LISTED_NOTHING)` call and the constant are gone, with the
+reasoning kept in the comment and a line saying the trick is no longer how the distinction is drawn.
+Evidence: 220 tests across the four affected files; three mutations, all caught, one at compile time.
+The one remaining `typecheck` error is `routes-steer.ts`, handed to its owner deliberately rather
+than swept into a pathspec commit over their uncommitted work.
+
 ### S2 — the observation contract and the pure logic
 
 Types and pure functions. No I/O.

@@ -349,7 +349,7 @@ boundary was never reachability alone. We copied the half we liked.
 ### Stage v0.4b: Sessions becomes master–detail
 
 Greg, 2026-09-08 — quoted in full in
-[orchestrator-direction.md](../project/orchestrator-direction.md#what-greg-asked-for-on-2026-09-08).
+[orchestrator-direction.md](../project/orchestrator-direction.md#what-greg-asked-for-on-2026-09-08-in-his-own-words).
 
 - [ ] Left column: every session, with orderings — how long it has been running, **status
       (default)**, and whatever else earns its place.

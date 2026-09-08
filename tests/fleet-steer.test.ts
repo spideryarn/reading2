@@ -273,7 +273,7 @@ describe("the status the caller derived is checked before anything is sent", () 
       { kind: "shell", busy: null },
       { kind: "no-claude" },
       { kind: "waiting", secondsLeft: 300 },
-      { kind: "unknown", why: "the box could not say what Claude is doing" },
+      { kind: "unknown", cause: "agents-unavailable", why: "the box could not say what Claude is doing" },
     ];
     for (const status of notSteerable) {
       const { io, sent } = fakeBox();
