@@ -134,6 +134,56 @@ does not confer immunity to it**, which is an argument for the mechanical counte
 the habitual one, and a correction to my own ranking: item 1 is the cheapest, and it is also the one
 that demonstrably failed twice in one night.
 
+## The third instance, and it makes the first two look mild
+
+Found by a third session, `overseer-tab-messaging`, and confirmed by me against the source and by the
+dashboard's owner against the live server.
+
+**The broadcast reaches nobody, and never has.** `boxActionBody`
+(`tools/fleet/web/src/actions-client.ts:791`) is the only body builder for box actions and returns
+`{actionId, mode, confirm, speaker}` — **no `recipients`**. `broadcastRoute` refuses on
+`recipients.length === 0` before it selects anyone:
+
+```
+POST /api/actions/box {"actionId":"resource-broadcast","mode":"dry-run",…}
+-> {"ok":false,"code":"bad-request","why":"a broadcast needs recipients: send the rows the page is showing…"}
+```
+
+So every press of the button is refused **two steps upstream of `drainGate`** — the filter whose
+selectivity two sessions spent an evening measuring, arguing about, correcting each other on, and
+building a 24-hour instrument for. Nine hours on one side and about five on the other, on **the
+selectivity of dead code**.
+
+This is the same class in its purest form. The plan described a *filter*; the instrument measured
+*reachability*; the actual behaviour was a *refusal* neither party had looked at. Every number was
+real, every caveat was written down, three separate corrections went the honest way, and none of it
+bore on the question. **The rigour was entirely downstream of the mistake.**
+
+### What actually found it, and why neither of us could have
+
+Not a better measurement, and not more care. The finder **read the request builder against the route
+it posts to** — and that is the one comparison neither of us made, because we both started at the
+mechanism we were interested in and reasoned *outwards*. Nobody started at the caller and went *in*.
+
+That is a cheap, general countermeasure and it outranks everything already in my list below:
+
+> **Before measuring anything about a mechanism, trace one real call end to end — from the caller's
+> request body to the server's first refusal.** It takes minutes, it needs no instrument, and it
+> would have ended all three instances on the first evening.
+
+It generalises past this incident: an instrument attached partway down a chain cannot see that the
+chain is severed above it. The measurement will be internally consistent, responsive to real
+conditions, and about nothing.
+
+### What survives
+
+The reachability series is still a real quantity: it governs the **drain**, which does run, and it
+carries the only measurement anyone has of **peak agent concurrency** (18, 2026-09-08), which is the
+premise this whole plan rests on. So the sampler stays running. What it no longer bears on is the
+broadcast stage — and the honest statement there is not *"it reaches too few sessions when the box is
+busy"* but *"it reaches none, at any load, for a reason unrelated to the rule we were arguing
+about."*
+
 ## The part that has no countermeasure, and should be said anyway
 
 **There is still no independent source for the peak.** The dashboard's owner reproduced the
