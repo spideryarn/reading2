@@ -868,8 +868,14 @@ describe("buildSessionScript", () => {
 
   /**
    * Matched on THIS session's uuid, so a neighbouring session's Claude cannot
-   * answer for this one, and by string equality so an id somebody hand-set
+   * answer for this one, and as a fixed string so an id somebody hand-set
    * cannot be a regex.
+   *
+   * **`==` was not enough for that, and this docstring used to say it was.**
+   * awk compares two values NUMERICALLY when both look like numbers, and `-v`
+   * and `split()` produce exactly those, so `01` and `1` were the same session
+   * id. The concatenated `""` is what makes it the string comparison the
+   * sentence above always claimed — GPT Sol, round 2, 2026-09-08.
    *
    * It used to be `index(A[q], "--session-id " id)` — a substring search over
    * the flattened `ps` line, with no `argv[0]` check, no stop at a bare `--`,
@@ -881,8 +887,8 @@ describe("buildSessionScript", () => {
   it("looks for this session's own Claude, by uuid and as a fixed string", () => {
     expect(script).toContain("claudeForSession(A[q], id)");
     // String equality, not a match, so an id somebody hand-set into the tmux
-    // environment cannot be a pattern.
-    expect(script).toContain("return (seen == want)");
+    // environment cannot be a pattern — and not a number, so `01` is not `1`.
+    expect(script).toContain('return ((seen "") == (want ""))');
   });
 
   /** A snapshot it could not take, or a session tmux named no pane for, must
