@@ -333,6 +333,22 @@ an identity as the same argument. Most instances of this class are somebody else
   compile-time instance of the class**, and the one that shows it is not a habit of careless
   programmers but a property of labels — TypeScript's brand is a name attached to a shape, and a
   spread produces a new shape wearing the old name.
+- **And `readonly`, which is the same thing without anybody having invented it.** `readonly` is a
+  claim about a *reference*, not a property of the *object*: `Object.assign(x, …)` reaches the
+  object, and the conversion is shallow anyway, so `x.row.status.secondsLeft = 3600` goes through a
+  `readonly` two levels up. Found by GPT Sol on the Overseer's guard, one round after the brand.
+  **Together the two are the strongest form of this class**, because the brand is a label we chose
+  and `readonly` is one the language ships: it is not a property of sloppy systems, it is a property
+  of labelling. Both are labels that survive the operations which invalidate what they label.
+
+  **The exit is a change of question, not of code**, and that is Fable's, ruling on whether to add a
+  deep freeze: `readonly` was never runtime immutability, so asking a reviewer *"is this sound?"*
+  gets the next level down every time — freeze it and the next round finds `structuredClone`-then-
+  forge. That is convergence to a known limit, not a chain of misses. So state the guarantee at its
+  true strength and ask *"is this statement accurate?"* instead, write the uncovered case down as
+  uncovered, and put the one runtime check at the **use site** rather than at the mint — because
+  JavaScript cannot hold a value still in between, and the use site is the only place where it
+  matters that it did not move.
 
 **The rule it would carry.** When you match on a name, ask three things: *who wrote it, when, and
 what would make it stale.* Prefer a key you can **verify** over one you can only **read** — and when
