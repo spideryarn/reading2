@@ -111,7 +111,15 @@ import { homedir, hostname } from "node:os";
 import { isAbsolute, join } from "node:path";
 
 import type { SessionKind, SessionMeta } from "../../scripts/gjd-remote-tmux.js";
-import { statusKey, type OverseerEvent, type SessionIdentity, type SessionKey, type StatusKey } from "./diff.js";
+import {
+  REGISTER_ROW_FIELDS,
+  statusKey,
+  type OverseerEvent,
+  type RegisterRowField,
+  type SessionIdentity,
+  type SessionKey,
+  type StatusKey,
+} from "./diff.js";
 import type { ObservedRow, ParseResult } from "./observation.js";
 
 /**
@@ -594,7 +602,12 @@ const EVENT_KINDS: Record<OverseerEvent["kind"], true> = {
   "tmux-session-gone": true,
   "session-replaced": true,
   "session-wait-restarted": true,
+  "session-row-changed": true,
+  "session-pane-replaced": true,
 };
+
+/** The watched row fields, as a set, so a `fields` list read off the disk can be checked against it. */
+const ROW_FIELDS = new Set<string>(REGISTER_ROW_FIELDS);
 
 const GONE_REASONS = new Set(["absent-from-snapshot", "tmux-server-changed"]);
 
@@ -680,6 +693,50 @@ function parseEvent(u: unknown): ParseResult<OverseerEvent> {
       return {
         ok: true,
         value: { kind: "tmux-session-gone", ...common, name, why: why as "absent-from-snapshot" },
+      };
+    }
+    case "session-row-changed": {
+      const row = parseRow(u["row"]);
+      if (!row.ok) return { ok: false, reason: row.reason };
+      const fields = u["fields"];
+      // NON-EMPTY, because an empty one is a change that did not happen — the
+      // differ never writes it, so a file that has one has been edited or
+      // written by something that is not this module.
+      if (!Array.isArray(fields) || fields.length === 0) {
+        return { ok: false, reason: "fields is not a non-empty array" };
+      }
+      for (const field of fields) {
+        if (typeof field !== "string" || !ROW_FIELDS.has(field)) {
+          return { ok: false, reason: `fields contains ${JSON.stringify(field)}, which is not a watched row field` };
+        }
+      }
+      return {
+        ok: true,
+        value: {
+          kind: "session-row-changed",
+          ...common,
+          fields: fields as RegisterRowField[],
+          row: row.value,
+        },
+      };
+    }
+    case "session-pane-replaced": {
+      const previousPaneId = u["previousPaneId"];
+      const previousPanePid = u["previousPanePid"];
+      const paneId = u["paneId"];
+      const panePid = u["panePid"];
+      if (!isNullableString(previousPaneId)) return { ok: false, reason: "previousPaneId is not a string or null" };
+      if (previousPanePid !== null && !isPidLike(previousPanePid)) {
+        return { ok: false, reason: "previousPanePid is not a pid or null" };
+      }
+      if (!isNullableString(paneId)) return { ok: false, reason: "paneId is not a string or null" };
+      // NOT NULLABLE, and this is the arm's whole rule on disk as well as in
+      // memory: a pid that went away is a pane listing that could not be joined,
+      // and the differ never turns one into this event.
+      if (!isPidLike(panePid)) return { ok: false, reason: "panePid is not a pid" };
+      return {
+        ok: true,
+        value: { kind: "session-pane-replaced", ...common, previousPaneId, previousPanePid, paneId, panePid },
       };
     }
     case "session-wait-restarted": {
@@ -1185,6 +1242,34 @@ export function foldEvents(
         if (was !== undefined) into.set(event.key, { ...was, lastSeenAlive: event.at, statusSince: event.at });
         break;
       }
+      case "session-row-changed": {
+        // THE ROW MATERIAL AND NOTHING ELSE. `entryOf(event.row, …)` is the
+        // tempting one-liner and it is wrong: it rebuilds the whole entry, so a
+        // session renamed after forty minutes of waiting comes back as having
+        // waited none — `statusSince` belongs to the STATUS, and a rename is not
+        // a status. Same reason `lastStatusKey` is not recomputed from
+        // `event.row.status`: the row carries a status because the event carries
+        // a whole row, not because this arm has an opinion about it.
+        //
+        // A row change for a session the register has never seen is DROPPED, the
+        // same rule and for the same reason as `session-status`.
+        const was = into.get(event.key);
+        if (was !== undefined) into.set(event.key, { ...was, ...rowMaterialOf(event.row), lastSeenAlive: event.at });
+        break;
+      }
+      case "session-pane-replaced": {
+        // The pane, and the same rule about the clock as above.
+        const was = into.get(event.key);
+        if (was !== undefined) {
+          into.set(event.key, {
+            ...was,
+            paneId: event.paneId,
+            panePid: event.panePid,
+            lastSeenAlive: event.at,
+          });
+        }
+        break;
+      }
       default: {
         const never: never = event;
         throw new Error(`no fold for event ${JSON.stringify(never)}`);
@@ -1199,14 +1284,7 @@ function entryOf(row: ObservedRow, at: string, tmuxServerPid: number | null, key
     key: keyFor(row.id, row.claimedConversationId) as SessionKey,
     tmuxId: row.id,
     claimedConversationId: row.claimedConversationId,
-    name: row.name,
-    // COPIED, not referenced. The row belongs to the caller, and an entry that
-    // shares its `meta` object lets a later edit to that row rewrite a
-    // checkpoint describing events already on disk. GPT Sol's S3-05.
-    meta: structuredClone(row.meta),
-    repo: row.repo,
-    worktree: row.worktree,
-    startedAt: row.startedAt,
+    ...rowMaterialOf(row),
     paneId: row.paneId,
     panePid: row.panePid,
     tmuxServerPid,
@@ -1215,6 +1293,71 @@ function entryOf(row: ObservedRow, at: string, tmuxServerPid: number | null, key
     statusSince: at,
   };
 }
+
+/**
+ * The fields `session-row-changed` is allowed to move, taken off a row.
+ *
+ * **ONE FUNCTION FOR BOTH FOLDS**, because the alternative is two copies of the
+ * same seven assignments that drift: `entryOf` builds an entry from scratch and
+ * the row-changed arm patches one, and a field added to one and not the other is
+ * a register that is correct at first sight and stale afterwards — which is the
+ * defect this whole change is about.
+ *
+ * `Pick<RegisterEntry, RegisterRowField>` is the type that ties the two modules
+ * together: a name in `REGISTER_ROW_FIELDS` that is not a register field, or a
+ * register field the differ watches and this does not copy, is a compile error
+ * here.
+ */
+function rowMaterialOf(row: ObservedRow): Pick<RegisterEntry, RegisterRowField> {
+  return {
+    name: row.name,
+    repo: row.repo,
+    worktree: row.worktree,
+    // COPIED, not referenced. The row belongs to the caller, and an entry that
+    // shares its `meta` object lets a later edit to that row rewrite a
+    // checkpoint describing events already on disk. GPT Sol's S3-05.
+    meta: structuredClone(row.meta),
+    startedAt: row.startedAt,
+  };
+}
+
+/**
+ * WHO IS ALLOWED TO MOVE EACH FIELD OF A REGISTER ENTRY.
+ *
+ * A census rather than a mechanism, and it earns its place by being TOTAL: the
+ * `satisfies` below makes a field added to `RegisterEntry` a compile error until
+ * somebody says which of the four it is. That is the forcing function S3-03
+ * asked for — `name` was only ever the instance somebody noticed, and the class
+ * is a register field that nothing keeps current.
+ *
+ *  - `identity` — the pair the register is keyed on, plus the tmux generation
+ *    those handles belong to. It cannot change without the entry being a
+ *    different entry, which is `session-replaced`.
+ *  - `row` — `session-row-changed`, via `rowMaterialOf` above. Exactly
+ *    `REGISTER_ROW_FIELDS`; `tests/overseer-store.test.ts` walks that list and
+ *    checks each one really reaches the register.
+ *  - `pane` — `session-pane-replaced`. Separate because a null there is a join
+ *    miss rather than a change; see the arm in diff.ts.
+ *  - `clock` — the store's own bookkeeping, written by every arm and by none of
+ *    the row material. `statusSince` in particular belongs to the STATUS: a
+ *    rename that reset it would turn forty minutes of waiting into none.
+ */
+export const ENTRY_FIELD_OWNERS = {
+  key: "identity",
+  tmuxId: "identity",
+  claimedConversationId: "identity",
+  tmuxServerPid: "identity",
+  name: "row",
+  repo: "row",
+  worktree: "row",
+  meta: "row",
+  startedAt: "row",
+  paneId: "pane",
+  panePid: "pane",
+  lastSeenAlive: "clock",
+  lastStatusKey: "clock",
+  statusSince: "clock",
+} as const satisfies Record<keyof RegisterEntry, "identity" | "row" | "pane" | "clock">;
 
 export function describeOpening(opening: StoreOpening): string {
   const repair = opening.repair.torn

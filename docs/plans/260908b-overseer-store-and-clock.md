@@ -1052,6 +1052,71 @@ crash-loops visibly in the journal instead of hammering a box that has already r
 
 **Reboot-resume of the sessions themselves is O4, a later stage.** This one only makes it possible.
 
+#### S5 as built, 2026-09-08
+
+Two units, checked in at [`infra/hetzner/systemd/`](../../infra/hetzner/systemd/) and spliced
+verbatim into [`provision.sh`](../../infra/hetzner/provision.sh) — verbatim because
+`gjd-remote provision` copies that one file to the box and nothing else travels with it, so the
+units have to live inside it and there are unavoidably two copies.
+`tests/systemd-units.test.ts` compares them byte for byte; nine mutants, all killed.
+
+Four decisions the brief did not settle:
+
+- **`ExecStartPre` builds the fleet client only when `dist/index.html` is missing**, not on every
+  start. An unconditional rebuild was proposed first and is wrong here: with `Restart=always` and
+  `RestartSec=10` it is a vite build every ten seconds for the length of a crash loop, on a box that
+  reached load 391 this morning. The price is named in the unit itself rather than left to be
+  rediscovered — **deploying a client change means running `npm run build:fleet` in the primary
+  checkout**, because a missing build fails loudly and a stale one does not.
+- **`FLEET_BIND` is written out in full in the unit** (`127.0.0.1,100.92.255.119`), with
+  `EnvironmentFile=-/etc/fleet-dashboard.env` over the top of it. Loopback alone is the quiet
+  failure — perfect from the box, simply unreachable from the phone the tailnet address exists for —
+  so it is not left to a file that could be missing; and the env file, written by provisioning from
+  `tailscale ip -4`, is how the *next* box corrects an address that belongs to this one.
+- **The rate limits differ between the two on purpose.** The Overseer gets ten tries five seconds
+  apart; the dashboard gets thirty ten seconds apart, because at boot the tailnet address may not
+  exist yet and every attempt before it does is a legitimate failure to bind.
+- **`FLEET_ACT_ENABLED` appears in the dashboard's unit only as prose saying why it is absent**, and
+  a `check` line in `provision.sh` asserts it is not a key. A unit is exactly the sort of file
+  somebody skims and completes helpfully.
+
+**Two things S5 did not achieve, and neither is a design question.**
+
+- **The units are installed but the Overseer's is not enabled.** `sudo systemctl enable` is refused
+  in this session — the worktree-isolation guard reads `enable` as a git subcommand, and the auto-mode
+  classifier denies the privileged form. Writing the unit files was permitted; changing service state
+  was not. So `is-enabled` says `disabled` and the `multi-user.target.wants` symlink is absent: the
+  triplet that was to be the evidence is Greg's one command away and has not been produced.
+- **The primary checkout is not a deployable artefact, and nothing keeps it current.** On 2026-09-08
+  it sat at `0d93edbf` (06:52) while `origin/dev` was at `1af97e9b` — no `scripts/overseer.ts`, no
+  `tools/fleet/web/dist`. So both units would have failed to start even if enabled. This is not a
+  path problem that a different `ExecStart` fixes; it is that **updating the primary checkout is a
+  deploy step nobody owns**. Written up in
+  [hetzner-remote-server-box.md § The box's own services](../project/hetzner-remote-server-box.md#the-boxs-own-services);
+  worth a stage of its own if the units are to mean anything after a reboot.
+
+What *was* proved, by hand rather than by systemd, is the half that had never been exercised: the
+production store. Every earlier run used a scratch root, so `/home/greg/.overseer` did not exist.
+Running the daemon at the default root filled it — `events.jsonl`, `current.json`, `daemon.jsonl`,
+`overseer.lock` — and `status` read a live heartbeat from it. A `kill -9` left `EXIT=137` and
+`status` reporting `KILLED — … it never wrote a stopping note`; the next start reclaimed the lock
+and **resumed from the checkpoint with 0 events replayed**, rather than re-announcing the fleet.
+Idle cost, measured on the live box at load 38–52: **155 MB RSS, flat, and 2 seconds of CPU in 231
+seconds of wall clock** — about one of those two is tsx starting up, so steady state is well under
+1% of a core. That is the direction doc's "costs nothing when idle" turned into a number, and the
+reason it holds is that the daemon consumes the dashboard's stream rather than collecting, so it
+never pays the ~12s grep.
+
+**One thing to do before the unit is first started**, because the store refuses a second writer
+rather than writing beside it: stop the hand-run daemon that produced the evidence above —
+`tmux kill-session -t '=s5-overseer2-0935-2399531'`, or `kill` its pid. It was left running because
+a recording Overseer is worth more overnight than a tidy one; if it is still holding
+`~/.overseer/overseer.lock` when `systemctl start overseer` runs, the unit refuses, crash-loops to
+`failed`, and says exactly which file to remove.
+
+**The reboot criterion remains outstanding and untested**, as this plan said it would: the box
+carries ~27 live sessions and ~15 worktrees of uncommitted work, and rebooting it is Greg's to do.
+
 ### S6 — work, not panes: the Codex subprocess arm
 
 Independent of S3–S5, and running in parallel with them.
