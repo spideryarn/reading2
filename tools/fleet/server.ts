@@ -27,7 +27,7 @@
  * must not depend on anything under src/ (orchestrator-direction.md § Principles).
  * Worth revisiting if it grows.
  */
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { createServer } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -36,7 +36,9 @@ import { collect, type FleetSnapshot } from "./collect.js";
 import { parseBinds } from "./config.js";
 import { collectHealth, type HealthReport } from "./health.js";
 import { broadcast, startHeartbeat, subscribe, subscriberCount } from "./live.js";
-import { page } from "./page.js";
+
+/** Where the built React client lives. */
+const DIST = path.join(path.dirname(fileURLToPath(import.meta.url)), "web", "dist");
 
 const PORT = Number(process.env.FLEET_PORT ?? 8787);
 
@@ -55,6 +57,24 @@ if (!parsedBinds.ok) {
   process.exit(2);
 }
 const BINDS = parsedBinds.binds;
+
+/**
+ * REFUSE TO START WITHOUT A BUILT CLIENT.
+ *
+ * There used to be a hand-written HTML page here that rendered the same
+ * snapshot with no build step, and it served as the fallback when `web/dist/`
+ * was missing. Greg removed it on 2026-09-08 — one renderer, not two.
+ *
+ * That leaves a gap worth closing rather than inheriting: without the fallback,
+ * forgetting `npm run build:fleet` means the server starts, logs two cheerful
+ * "fleet on http://…" lines, collects happily, and answers 404 to the only
+ * person who ever visits it. Failing here instead turns a mystery you meet on
+ * your phone into one line in the terminal you started it from.
+ */
+if (!existsSync(path.join(DIST, "index.html"))) {
+  console.error(`✗ no built client at ${DIST} — run \`npm run build:fleet\` first`);
+  process.exit(2);
+}
 
 /**
  * 60s, not 30s. One collection costs ~12s of grepping, so at 30s this process
@@ -107,6 +127,15 @@ async function refresh(): Promise<void> {
     // legible; a blank one is a lie that looks like an empty box.
     lastError = err instanceof Error ? err.message : String(err);
     console.error(`collection failed: ${lastError}`);
+    // AND BROADCAST THE FAILURE. This used to return without one, so a stream
+    // subscriber saw nothing at all when a collection failed — silence, which
+    // is exactly what a healthy quiet box looks like. A poller could see
+    // `error` in the payload and a subscriber could not, which is the two
+    // shapes disagreeing after the trouble was taken to build them from one
+    // function. The Overseer (tools/overseer/, another session) consumes this
+    // stream to record fleet history, so a failure it cannot see is a gap in
+    // that history with no explanation in it.
+    broadcast(statePayload());
   }
 }
 
@@ -147,25 +176,14 @@ function handler(req: import("node:http").IncomingMessage, res: import("node:htt
     res.end(statePayload());
     return;
   }
-  // The React client, when it has been built.
+  // The React client. There is no second renderer behind it — see the startup
+  // check below, which is what replaced one.
   if (serveStatic(url, res)) return;
-
-  // THE HAND-WRITTEN PAGE IS THE FALLBACK, and it stays for that reason.
-  // `web/dist/` only exists after `npm run build:fleet`, and a dashboard that
-  // answers 404 because somebody forgot a build step is a dashboard that is
-  // down at the moment you reach for it. This renders from the same snapshot,
-  // needs no build, and says less — which is the right way to be degraded.
-  if (url === "/" || url.startsWith("/?")) {
-    res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
-    res.end(page(snapshot, lastError));
-    return;
-  }
 
   res.writeHead(404, { "content-type": "text/plain" });
   res.end("not found\n");
 }
 
-const DIST = path.join(path.dirname(fileURLToPath(import.meta.url)), "web", "dist");
 
 const TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8",

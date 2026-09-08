@@ -1,12 +1,16 @@
 /**
- * v0.1 of the fleet dashboard — the two things it does that are its own.
+ * The collector, and the configuration that decides whether the server starts.
  *
  * The inventory itself is `scripts/gjd-remote-tmux.ts` and is tested in
  * tests/gjd-remote-tmux.test.ts; there is no point re-testing the parse here.
- * What is ours is the mapping to display rows and the escaping, and the
- * escaping is the one with teeth: every field on that page is written by an
- * agent, so a session title is untrusted text arriving in the one browser
- * session that can see the whole fleet.
+ *
+ * **The rendering tests used to live here and have gone**, with `page.ts`
+ * itself — Greg removed the hand-written page on 2026-09-08, so there is one
+ * renderer rather than two. What they covered is covered by
+ * tests/fleet-web.test.tsx against the React client, which was checked before
+ * they were deleted rather than assumed: blocked-above-working, the question
+ * and its options, an unknown status showing its reason, the stale banner
+ * keeping the last good rows, and agent-authored markup rendering as text.
  */
 import { describe, expect, it } from "vitest";
 
@@ -16,45 +20,14 @@ import {
   snapshotFrom,
   toRows,
   worktreeOf,
-  type FleetRow,
   type FleetSnapshot,
 } from "../tools/fleet/collect.js";
 import { parseBinds } from "../tools/fleet/config.js";
-import { ageLine, esc, page } from "../tools/fleet/page.js";
 import type { FleetStatus } from "../tools/fleet/status.js";
 import { buildSessionScript, type Session } from "../scripts/gjd-remote-tmux.js";
 
 /** No status derived for anyone — the map `toRows` falls back from. */
 const NO_STATUS = new Map<string, FleetStatus>();
-
-/**
- * A display row, for the tests that render rather than collect.
- *
- * `FleetRow` is imported and named rather than derived from `page`'s parameter
- * with a conditional type, which is what this was at first. That version made
- * every new field optional without saying so, so adding `paneId` and `question`
- * to the real type left these fixtures silently missing them — and the tests
- * went on passing against a shape the collector no longer produces. GPT Sol
- * suspected the trick before it bit; it bit an hour later.
- */
-function row(over: Partial<FleetRow> = {}): FleetRow {
-  return {
-    id: "$1",
-    name: "n",
-    title: "t",
-    repo: null,
-    worktree: null,
-    startedAt: "2026-09-08T00:00:00.000Z",
-    status: { kind: "idle" },
-    paneId: "%1",
-    question: null,
-    ...over,
-  };
-}
-
-function snapshotOf(rows: FleetRow[]): FleetSnapshot {
-  return { rows, collectedAt: new Date().toISOString(), tookMs: 1 };
-}
 
 function session(over: Partial<Session> = {}): Session {
   return {
@@ -83,8 +56,7 @@ describe("worktreeOf", () => {
 
   it("is null, not undefined, for a path ending at `worktrees` with nothing under it", () => {
     // `parts[at + 1]` is undefined here, and undefined would render as the
-    // string "undefined" in the page. noUncheckedIndexedAccess is what makes
-    // this visible at all.
+    // string "undefined". noUncheckedIndexedAccess is what makes this visible.
     expect(worktreeOf("/home/greg/code/spideryarn2/.claude/worktrees")).toBeNull();
   });
 });
@@ -101,9 +73,9 @@ describe("toRows", () => {
   });
 
   it("admits it cannot know the repo of a legacy session", () => {
-    const row = toRows([session({ meta: { version: "legacy" } })], NO_STATUS)[0];
-    expect(row?.repo).toBeNull();
-    expect(row?.worktree).toBeNull();
+    const r = toRows([session({ meta: { version: "legacy" } })], NO_STATUS)[0];
+    expect(r?.repo).toBeNull();
+    expect(r?.worktree).toBeNull();
   });
 
   it("carries tmux's handle through as the id, not the name", () => {
@@ -111,6 +83,13 @@ describe("toRows", () => {
     // survives the rename `gjd-remote ls` performs. Everything later that acts
     // on a session must use this.
     expect(toRows([session({ id: "$1643", name: "renamed-since" })], NO_STATUS)[0]?.id).toBe("$1643");
+  });
+
+  it("gives a session the status pass missed an unknown with a reason", () => {
+    expect(toRows([session()], NO_STATUS)[0]?.status).toEqual({
+      kind: "unknown",
+      why: "no status was derived for this session",
+    });
   });
 });
 
@@ -134,47 +113,16 @@ describe("panesBySession", () => {
   });
 });
 
-describe("questionBlock, via page", () => {
-  it("tells 'could not read it' apart from 'nothing there'", () => {
-    // Two different facts about a blocked session, and the whole reason the
-    // question field is nullable rather than defaulting to an empty question.
-    const unread = page(snapshotOf([row({ status: { kind: "needs-you" }, question: null })]), null);
-    const none = page(snapshotOf([row({ status: { kind: "needs-you" }, question: { kind: "none" } })]), null);
-    expect(unread).toContain("could not read");
-    expect(none).toContain("no dialog on screen");
-    expect(unread).not.toContain("no dialog on screen");
-  });
-
-  it("renders the prompt and its options, escaped", () => {
-    const html = page(
-      snapshotOf([
-        row({
-          status: { kind: "needs-you" },
-          question: { kind: "question", prompt: `Trust <b>this</b> folder?`, options: [{ label: "No, exit", key: { via: "selected" } }, { label: "Yes", key: { via: "arrows", key: "Down", presses: 1 } }] },
-        }),
-      ]),
-      null,
-    );
-    expect(html).toContain("Trust &lt;b&gt;this&lt;/b&gt; folder?");
-    expect(html).toContain("No, exit");
-    expect(html).not.toContain("<b>this</b>");
-  });
-
-  it("says nothing about a question for a session that is merely working", () => {
-    expect(page(snapshotOf([row({ status: { kind: "working" } })]), null)).not.toContain("could not read");
-  });
-});
-
 describe("parseBinds", () => {
   it("defaults to loopback", () => {
     expect(parseBinds(undefined)).toEqual({ ok: true, binds: ["127.0.0.1"] });
   });
 
   it("refuses an empty list rather than listening nowhere", () => {
-    // The P0. An empty FLEET_BIND gave zero servers, and because the only timer
-    // left was unref'd the process collected once, printed lines that all read
-    // as success, and exited 0. `FLEET_BIND="$(tailscale ip -4)"` on a box that
-    // is not logged in is how it actually happens.
+    // The P0 GPT Sol found. An empty FLEET_BIND gave zero servers, and because
+    // the only timer left was unref'd the process collected once, printed lines
+    // that all read as success, and exited 0. `FLEET_BIND="$(tailscale ip -4)"`
+    // on a box that is not logged in is how it actually happens.
     for (const raw of ["", "   ", ",", " , "]) {
       const r = parseBinds(raw);
       expect(r.ok).toBe(false);
@@ -209,11 +157,18 @@ describe("the collector's wiring", () => {
   it("survives a JSON round trip with every row's status intact", () => {
     // The Map-stringifies-to-{} trap, pinned. If status is ever carried
     // alongside the rows again, this goes red rather than the page going quiet.
+    //
+    // The agents map is keyed off THIS session's own claudeId rather than a
+    // repeated literal: the literal was here first, and a merge that changed
+    // the fixture's uuid turned the join into a miss, so the row came out
+    // `unknown` and the test failed for a reason that had nothing to do with
+    // JSON. A fixture that states a value twice will state it twice differently.
+    const s = session({ id: "$7", proc: { kind: "claude" } as const });
     const parsed = {
-      sessions: [session({ id: "$7", proc: { kind: "claude" } as const })],
+      sessions: [s],
       unreadable: [],
       failure: null,
-      agents: new Map([["11111111-1111-1111-1111-111111111111", "busy"]]),
+      agents: new Map([[s.claudeId ?? "", "busy"]]),
       agentsWhy: null,
     };
     const snap = snapshotFrom(parsed, new Map([["$7", "%70"]]), 5);
@@ -230,142 +185,6 @@ describe("the collector's wiring", () => {
       agents: null,
       agentsWhy: "claude: command not found",
     };
-    const snap = snapshotFrom(parsed, new Map(), 5);
-    expect(snap.rows[0]?.status.kind).toBe("unknown");
-  });
-});
-
-describe("the header tally", () => {
-  it("does not count an unknown row as idle as well", () => {
-    // Sol's F2: `other` includes unknown, so two unknown rows rendered as
-    // "2 idle · 2 unknown" — overcounted and double-counted at once.
-    const html = page(
-      snapshotOf([
-        row({ id: "$1", status: { kind: "unknown", why: "x" } }),
-        row({ id: "$2", status: { kind: "unknown", why: "x" } }),
-      ]),
-      null,
-    );
-    expect(html).toContain("2 unknown");
-    expect(html).not.toContain("2 idle");
-    expect(html).not.toContain("2 other");
-  });
-
-  it("calls a busy shell 'other' rather than 'idle'", () => {
-    const html = page(snapshotOf([row({ status: { kind: "shell", busy: true } })]), null);
-    expect(html).toContain("1 other");
-    expect(html).not.toContain("1 idle");
-  });
-});
-
-describe("esc", () => {
-  it("defuses a session title that contains markup", () => {
-    expect(esc(`<img src=x onerror="alert(1)">`)).toBe(
-      "&lt;img src=x onerror=&quot;alert(1)&quot;&gt;",
-    );
-  });
-
-  it("escapes the ampersand first, so an entity cannot be reassembled", () => {
-    // &lt; must not come back out as < — which is what happens if & is escaped
-    // after the angle brackets rather than before them.
-    expect(esc("&lt;script&gt;")).toBe("&amp;lt;script&amp;gt;");
-  });
-
-  it("escapes single quotes, for attribute contexts", () => {
-    expect(esc("it's")).toBe("it&#39;s");
-  });
-});
-
-describe("ageLine", () => {
-  const snap = { rows: [], collectedAt: "2026-09-08T00:00:00.000Z", tookMs: 10 };
-
-  it("says how old the snapshot is", () => {
-    expect(ageLine(snap, null, Date.parse("2026-09-08T00:00:42Z"))).toBe("42s ago");
-    expect(ageLine(snap, null, Date.parse("2026-09-08T00:05:00Z"))).toBe("5m ago");
-  });
-
-  it("says STALE, and why, when the last refresh failed", () => {
-    // The failure mode this exists for: the box stops answering, the page goes
-    // on showing a plausible list, and nobody learns it stopped being true.
-    const line = ageLine(snap, "tmux ls failed", Date.parse("2026-09-08T00:01:00Z"));
-    expect(line).toContain("STALE");
-    expect(line).toContain("tmux ls failed");
-  });
-
-  it("distinguishes 'never collected' from 'collected an empty box'", () => {
-    expect(ageLine(null, null)).toBe("collecting…");
-  });
-});
-
-describe("page", () => {
-  it("never emits a hostile title as live markup", () => {
-    // The end-to-end version of the esc test: it is the page's job to call it,
-    // and a page that forgets is how a title becomes script in the one browser
-    // session that can see the whole fleet.
-    const nasty = `</div><script>fetch('//evil')</script>`;
-    const html = page(snapshotOf([row({ title: nasty })]), null);
-    expect(html).not.toContain("<script>fetch");
-    expect(html).toContain("&lt;script&gt;");
-  });
-
-  it("escapes the session name and the repo too, not only the title", () => {
-    // EVERY negative assertion here is paired with a positive one, and that is
-    // GPT Sol's F4: `not.toContain` passes just as happily when the field was
-    // never rendered at all. He mutated the repo out of the page entirely and
-    // both original assertions still passed.
-    const html = page(snapshotOf([row({ name: `<b>n</b>`, repo: `<i>r</i>` })]), null);
-    expect(html).toContain("&lt;b&gt;n&lt;/b&gt;");
-    expect(html).toContain("&lt;i&gt;r&lt;/i&gt;");
-    expect(html).not.toContain("<b>n</b>");
-    expect(html).not.toContain("<i>r</i>");
-  });
-
-  it("escapes the reason on an unknown status", () => {
-    // The reason is the box's own words, and the box quotes a command that
-    // failed — so it is the one status field most likely to contain punctuation
-    // that matters. It reaches the page through a different path to the title.
-    const html = page(snapshotOf([row({ status: { kind: "unknown", why: `<b>claude</b>: not found` } })]), null);
-    expect(html).toContain("&lt;b&gt;claude&lt;/b&gt;: not found");
-    expect(html).not.toContain("<b>claude</b>");
-  });
-
-  it("says so plainly when there is nothing to show", () => {
-    expect(page(snapshotOf([]), null)).toContain("Nothing to show");
-  });
-
-  it("puts a blocked session above a working one, and counts it in the header", () => {
-    // The reason the page exists. A needs-you row starting older than a working
-    // one must still come first, or the sort is doing nothing.
-    const html = page(
-      snapshotOf([
-        row({ id: "$w", name: "working-one", startedAt: "2026-09-08T02:00:00.000Z", status: { kind: "working" } }),
-        row({ id: "$b", name: "blocked-one", startedAt: "2026-09-08T01:00:00.000Z", status: { kind: "needs-you" } }),
-      ]),
-      null,
-    );
-    // BOTH NEEDLES MUST BE PRESENT BEFORE COMPARING. `indexOf` returns -1 for a
-    // missing string, and -1 < anything, so dropping the blocked row entirely
-    // used to satisfy this — while the separately-computed tally still said
-    // "1 need you". Sol's F4 again, and the same trap in a different disguise.
-    const blocked = html.indexOf("blocked-one");
-    const working = html.indexOf("working-one");
-    expect(blocked).toBeGreaterThanOrEqual(0);
-    expect(working).toBeGreaterThanOrEqual(0);
-    expect(blocked).toBeLessThan(working);
-    expect(html).toContain("1 need you");
-  });
-
-  it("shows the unknown count rather than reporting a calm fleet it could not ask about", () => {
-    // An agents-call failure turns every Claude row unknown at once. A header
-    // reading "0 need you" over rows nobody could ask about is the lie the
-    // status module exists to prevent.
-    const html = page(
-      snapshotOf([
-        row({ id: "$1", status: { kind: "unknown", why: "the box could not say" } }),
-        row({ id: "$2", status: { kind: "unknown", why: "the box could not say" } }),
-      ]),
-      null,
-    );
-    expect(html).toContain("2 unknown");
+    expect(snapshotFrom(parsed, new Map(), 5).rows[0]?.status.kind).toBe("unknown");
   });
 });
