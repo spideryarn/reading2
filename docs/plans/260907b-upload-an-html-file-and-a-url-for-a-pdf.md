@@ -213,6 +213,20 @@ Each of these is a deferral, not an oversight.
 - **No change to `GET /api/source/:slug`** — see above.
 - **No general MIME framework.** `DocumentKind` stays the two things stage 1 already knows.
 
+## The second bug the unit tests could not see, that evening
+
+**Status of this section: in progress, 2026-09-08.** Greg uploaded one of our own tutorial pages
+hours after this shipped and was refused with `[up-pdf]` — a valid HTML file, turned away by the
+check written here. Same shape as the bug below and the UTF-16 finding above: three instances in one
+day of *this markup scan cannot see markup it should*. The root cause, the class, and what the fix
+should be are in
+[260907c-a-heuristic-promoted-to-a-gate.md](../postmortems/260907c-a-heuristic-promoted-to-a-gate.md).
+
+The first attempt at the fix — widening `DOCUMENT_MARKUP` — went to GPT Sol and came back
+**ship-with-changes**, blocking: widening a *substring search* admits Atom, RSS, SVG and a JSON blob
+containing `<script>`, all four verified to flip from `null` to `html`. Awaiting Greg's call on the
+larger correction (match the document's leading tokens rather than search anywhere in the window).
+
 ## The bug the unit tests could not see, and what it cost
 
 Worth reading before the next change to this path, because it is the whole of

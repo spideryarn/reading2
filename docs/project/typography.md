@@ -16,7 +16,7 @@ self-hosted from `@fontsource-variable/geist`, imported at the top of
 | `--font-ui` | chrome: controls, masthead facts. The table's column headers wore it until 2026-09-05, when that row lost its height — it is still in the DOM for the fisheye panels' geometry and for a screen reader, and sets no type at all |
 | `--font-mono` | Geist Mono — counts, and anything that wants to line up |
 | `--font-id` | Courier — block ids, and only block ids (Greg's ask) |
-| `--font-brand` | Trebuchet MS — the wordmark, and only the wordmark |
+| `--font-brand` | Geist — the wordmark, and only the wordmark. Trebuchet MS until 2026-09-08 |
 
 `--font-reading` and `--font-ui` both resolve to `--font-sans` today. They stay separate names
 anyway: the article and the chrome being one face is a *decision*, and undoing it should be one

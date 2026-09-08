@@ -1,0 +1,88 @@
+/**
+ * The return-count rail, measured rather than read.
+ *
+ * For each of the twelve chat guards: cut the body out of
+ * `if (<matcher> && req.method === "<M>") { … }`, strip comments and strings,
+ * then count `return` tokens *at the guard's own function scope* — a return
+ * inside a nested function expression or arrow belongs to that function and is
+ * not the guard's.
+ *
+ * The rail: refuse automatic comparison unless the guard has exactly one
+ * return, it is argumentless, and it is the last statement.
+ */
+import { readFileSync } from "node:fs";
+
+const GUARDS = [
+  ["chat", "GET"], ["chat", "POST"], ["chatCancel", "POST"], ["chatLiveTool", "POST"],
+  ["chatLive", "POST"], ["liveSessionConnected", "POST"], ["liveSessionUsage", "POST"],
+  ["liveSessionClose", "POST"], ["chatSpoken", "POST"], ["chatStop", "POST"],
+  ["oneThread", "PATCH"], ["oneThread", "DELETE"],
+];
+
+const src = readFileSync(process.argv[2], "utf8");
+
+function blockAt(s, from) {
+  const open = s.indexOf("{", from);
+  let depth = 0;
+  for (let i = open; i < s.length; i++) {
+    if (s[i] === "{") depth++;
+    else if (s[i] === "}") { depth--; if (depth === 0) return s.slice(open + 1, i); }
+  }
+  throw new Error("unbalanced braces");
+}
+
+/** Blank out block comments, line comments, and string/template contents. */
+function blank(b) {
+  return b
+    .replace(/\/\*[\s\S]*?\*\//g, (m) => " ".repeat(m.length))
+    .replace(/\/\/[^\n]*/g, (m) => " ".repeat(m.length))
+    .replace(/"(?:[^"\\\n]|\\.)*"/g, (m) => `"${" ".repeat(Math.max(0, m.length - 2))}"`)
+    .replace(/'(?:[^'\\\n]|\\.)*'/g, (m) => `'${" ".repeat(Math.max(0, m.length - 2))}'`)
+    .replace(/`(?:[^`\\]|\\.)*`/g, (m) => `\`${" ".repeat(Math.max(0, m.length - 2))}\``);
+}
+
+/**
+ * Depths at which a nested *function* body starts, so returns inside them can be
+ * excluded. A `{` is a function body if the text before it ends in `=>` or the
+ * nearest preceding `function`/method head opened it — here the only shapes in
+ * this file are arrows and `async () =>`, so `=>` is the test.
+ */
+function ownScopeReturns(body) {
+  const b = blank(body);
+  const out = [];
+  let depth = 0;
+  const fnDepths = [];
+  for (let i = 0; i < b.length; i++) {
+    const c = b[i];
+    if (c === "{") {
+      const before = b.slice(Math.max(0, i - 40), i).trimEnd();
+      depth++;
+      if (before.endsWith("=>")) fnDepths.push(depth);
+    } else if (c === "}") {
+      if (fnDepths.at(-1) === depth) fnDepths.pop();
+      depth--;
+    } else if (b.startsWith("return", i) && !/[\w$]/.test(b[i - 1] ?? "") && !/[\w$]/.test(b[i + 6] ?? "")) {
+      if (fnDepths.length === 0) {
+        const rest = body.slice(i + 6);
+        const semi = rest.indexOf(";");
+        out.push({ at: i, arg: rest.slice(0, semi).trim(), tailDistance: body.length - (i + 6 + semi + 1) });
+      }
+      i += 5;
+    }
+  }
+  return out;
+}
+
+for (const [matcher, method] of GUARDS) {
+  const at = src.indexOf(`if (${matcher} && req.method === "${method}") {`);
+  if (at < 0) { console.log(`${matcher} ${method}: NOT FOUND`); continue; }
+  const body = blockAt(src, at);
+  const rets = ownScopeReturns(body);
+  const trailing = body.slice(rets.at(-1) ? rets.at(-1).at : 0).trim();
+  const ok = rets.length === 1 && rets[0].arg === "" && rets[0].tailDistance < 20;
+  console.log(
+    `${(matcher + " " + method).padEnd(28)} returns=${rets.length} ` +
+    `args=[${rets.map((r) => (r.arg === "" ? "-" : r.arg.slice(0, 28))).join(" | ")}] ` +
+    `tail=${rets.at(-1)?.tailDistance ?? "-"}  ${ok ? "comparable" : "*** RAIL FIRES ***"}`,
+  );
+}
