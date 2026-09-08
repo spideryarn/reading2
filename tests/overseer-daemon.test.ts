@@ -29,11 +29,12 @@ import {
   STALE_MULTIPLE,
   collectorVerdict,
   freshness,
+  latestAttempt,
   runOverseer,
   staleAfterMs,
 } from "../tools/overseer/daemon.js";
 import { NOTES_FILE, openConditions, readNotes, type DaemonNote } from "../tools/overseer/notes.js";
-import { parseAttempt, parseObservation, type JsonValue } from "../tools/overseer/observation.js";
+import { parseAttempt, parseObservation, type JsonValue, type ObservedAttemptClock } from "../tools/overseer/observation.js";
 import { EVENTS_FILE, readCheckpoint } from "../tools/overseer/store.js";
 import type { SourceMessage } from "../tools/overseer/source.js";
 import { editableFixture, rawFixture, rowsOf, type FixtureName } from "./overseer-fixtures.js";
@@ -167,6 +168,21 @@ describe("the staleness threshold is the measured number, not a guessed one", ()
   });
 });
 
+/**
+ * The three readings, by name. Built here rather than parsed because these unit
+ * tests are about what `collectorVerdict` does WITH a reading; that the parser
+ * produces the right one from a payload is `parseAttempt`'s own test, and the
+ * end-to-end tests below go through the real thing.
+ */
+const attemptedAt = (atMs: number): ObservedAttemptClock => ({
+  reported: true,
+  attempted: true,
+  at: new Date(atMs).toISOString(),
+  atMs,
+});
+const cannotSay = (why: string): ObservedAttemptClock => ({ reported: false, why });
+const neverAttempted: ObservedAttemptClock = { reported: true, attempted: false };
+
 describe("the collector, which is a third thing from the source and the payload", () => {
   // Measured 2026-09-08: `/api/state` served a `collectedAt` ~30 minutes stale
   // with `error: null`. The cause was `collect()`'s child taking SIGTERM in
@@ -176,7 +192,7 @@ describe("the collector, which is a third thing from the source and the payload"
   // FAILURE WAS THE THING THAT HAD STOPPED. `attemptedAt` — set BEFORE each
   // attempt — is what tells that apart from a source that is failing loudly.
   test("an attempt that never advances is a stopped collector, not a stale payload", () => {
-    const verdict = collectorVerdict({ lastAttemptAtMs: 0, lastPayloadAtMs: 400_000, nowMs: 400_000, refreshMs: 60_000 });
+    const verdict = collectorVerdict({ attempt: attemptedAt(0), lastPayloadAtMs: 400_000, nowMs: 400_000, refreshMs: 60_000 });
     expect(verdict.kind).toBe("stopped");
     if (verdict.kind !== "stopped") throw new Error("expected a stopped collector");
     expect(verdict.why).toContain("has not started a collection");
@@ -185,7 +201,7 @@ describe("the collector, which is a third thing from the source and the payload"
   test("an attempt inside the deadline is a collector that is still trying", () => {
     // The source failing LOUDLY looks like this: it keeps attempting, and
     // `error` says how. That is a different condition and a different action.
-    expect(collectorVerdict({ lastAttemptAtMs: 340_000, lastPayloadAtMs: 400_000, nowMs: 400_000, refreshMs: 60_000 }).kind).toBe("collecting");
+    expect(collectorVerdict({ attempt: attemptedAt(340_000), lastPayloadAtMs: 400_000, nowMs: 400_000, refreshMs: 60_000 }).kind).toBe("collecting");
   });
 
   test("a producer that does not report attempts is never called wedged", () => {
@@ -193,15 +209,60 @@ describe("the collector, which is a third thing from the source and the payload"
     // simply does not send it. Reading its absence as "never attempted" would
     // make every old dashboard look permanently stopped — the alarm that is
     // always wrong, which is the failure this whole watchdog is designed around.
-    const verdict = collectorVerdict({ lastAttemptAtMs: null, lastPayloadAtMs: 400_000, nowMs: 400_000, refreshMs: 60_000 });
+    const verdict = collectorVerdict({ attempt: null, lastPayloadAtMs: 400_000, nowMs: 400_000, refreshMs: 60_000 });
     expect(verdict.kind).toBe("cannot-tell");
+  });
+
+  test("a producer that STOPS reporting attempts retires the reading it used to give", () => {
+    // THE P1. `parseAttempt` says "cannot tell" correctly and the daemon used
+    // to keep only the newest POSITIVE timestamp, so the reading it could no
+    // longer take was answered with the last one it could — and at 420s that
+    // stale answer reads as a stopped collector. A dashboard rolled back to a
+    // build without the field is the ordinary way in.
+    const blind = collectorVerdict({
+      attempt: cannotSay("this payload has rows and a collection time but no attempt clock"),
+      lastPayloadAtMs: 420_000,
+      nowMs: 420_000,
+      refreshMs: 60_000,
+    });
+    expect(blind.kind).toBe("cannot-tell");
+    if (blind.kind !== "cannot-tell") throw new Error("expected no opinion");
+    expect(blind.why).toContain("no attempt clock");
+    // AND NOT THE MISTAKE IN THE OTHER DIRECTION. `collecting` would be a
+    // restoration, which would clear a real collector alarm the moment the
+    // producer's clock became unreadable.
+    expect(blind.kind).not.toBe("collecting");
+  });
+
+  test("a producer that says it has never started one is not a wedged collector either", () => {
+    // Both fields absent lands here too, so this is also the dashboard that has
+    // only just come up. `freshness` is what reports a dashboard that never
+    // gives us a collection; a second alarm here would be two names for it.
+    const verdict = collectorVerdict({ attempt: neverAttempted, lastPayloadAtMs: 420_000, nowMs: 420_000, refreshMs: 60_000 });
+    expect(verdict.kind).toBe("cannot-tell");
+  });
+
+  test("a reading that cannot answer replaces one that could, and never the other way round", () => {
+    // The fold that makes the above reachable. THE EXPECTATIONS ARE WRITTEN
+    // OUT, not computed from `latestAttempt` itself: an assertion derived from
+    // the function under test holds for whatever it returns.
+    const good = attemptedAt(100_000);
+    const blind = cannotSay("attemptedAt is 17, which is not a timestamp");
+    expect(latestAttempt(good, blind)).toEqual(blind);
+    expect(latestAttempt(blind, good)).toEqual(good);
+    expect(latestAttempt(null, blind)).toEqual(blind);
+    // An older POSITIVE reading is the one thing that does not displace a newer
+    // one: a reconnect replaying a payload we have already seen is not the
+    // collector going backwards in time.
+    expect(latestAttempt(good, attemptedAt(90_000))).toEqual(good);
+    expect(latestAttempt(good, attemptedAt(110_000))).toEqual(attemptedAt(110_000));
   });
 
   test("nothing arriving at all is the transport's business, not the collector's", () => {
     // If we are not hearing from the dashboard, we cannot say anything about
     // its collector — and `sse-stream`, `poll` and `freshness` already say what
     // is wrong. A fourth alarm here would be three names for one outage.
-    const verdict = collectorVerdict({ lastAttemptAtMs: 0, lastPayloadAtMs: 0, nowMs: 900_000, refreshMs: 60_000 });
+    const verdict = collectorVerdict({ attempt: attemptedAt(0), lastPayloadAtMs: 0, nowMs: 900_000, refreshMs: 60_000 });
     expect(verdict.kind).toBe("cannot-tell");
     if (verdict.kind !== "cannot-tell") throw new Error("expected no opinion");
     expect(verdict.why).toContain("nothing has arrived");
@@ -287,6 +348,54 @@ describe("the collector, which is a third thing from the source and the payload"
     );
     const collector = notes.filter((n) => "condition" in n && n.condition === "collector");
     expect(collector.map((n) => n.kind)).toEqual(["condition-degraded", "condition-restored"]);
+  });
+
+  test("end to end: a producer that STOPS reporting attempts is not called a stopped collector", async () => {
+    // THE FINDING. A reading that could not be taken must not be answered with
+    // an older reading that could. Roll the dashboard back to a build from
+    // before `attemptedAt` existed — the fixtures are exactly that, none of
+    // them carries the field — and every later payload says "cannot tell".
+    // Holding only the newest POSITIVE timestamp, the daemon went on measuring
+    // the age of a reading seven minutes old and called the collector stopped,
+    // on a dashboard that is collecting perfectly well and saying so in
+    // `collectedAt`.
+    const root = tempRoot();
+    const clock = fakeClock("2026-09-08T02:47:25.000Z");
+    const { notes } = await run(
+      root,
+      async function* () {
+        // 10:00 in the review's table: a clock we could read.
+        yield payload(fixtureWith("session-new-before", { attemptedAt: new Date(clock.ms() - 5_000).toISOString() }));
+        // A tick here, so the collector condition is RESTORED on the strength
+        // of that reading. Without it the expectation below would be an empty
+        // list, which is also what a test that never reached the case prints.
+        await new Promise((r) => setTimeout(r, 40));
+        // 10:07: seven minutes on — past the five-minute deadline — and the
+        // producer no longer reports the field. No sleep before the yield, so
+        // the watchdog is asked about this payload rather than about the pause.
+        clock.advance(7 * 60_000);
+        yield payload(fixtureWith("session-new-after", { collectedAt: new Date(clock.ms() - 3_000).toISOString() }));
+        await new Promise((r) => setTimeout(r, 40));
+      },
+      { clock },
+    );
+    // THE SECOND PAYLOAD REALLY WAS ACCEPTED AND REALLY DID SAY "CANNOT TELL".
+    // An empty list of collector notes is also what a test that never reached
+    // the case prints, and both halves of the case have to be pinned: a
+    // checkpoint at the rolled-back producer's own `collectedAt` proves the
+    // payload went all the way through the fold, and `parseAttempt` proves the
+    // reading it carried could not answer. Neither number is computed from the
+    // daemon under test.
+    const read = readCheckpoint(root);
+    if (read.kind !== "checkpoint") throw new Error("expected a checkpoint");
+    expect(read.checkpoint.lastGoodSnapshotAt).toBe(new Date(clock.ms() - 3_000).toISOString());
+    expect(parseAttempt(fixture("session-new-after")).reported).toBe(false);
+
+    const of = (condition: string) => notes.filter((n) => "condition" in n && n.condition === condition).map((n) => n.kind);
+    // NOT DEGRADED. Seven minutes of "cannot tell" is not seven minutes of a
+    // stopped collector, and the ticker asked several times.
+    expect(of("collector")).toEqual([]);
+    expect(read.checkpoint.heartbeat.ticks).toBeGreaterThan(0);
   });
 });
 
