@@ -411,9 +411,29 @@ Captured 2026-09-08, and several of these contradict what a hand-written fixture
   **no fully steady pair in 12 minutes.** So `tmux-session-gone` is an ordinary event, not an alarm,
   and anything that reacts to one had better expect several an hour.
 - **Collection is ~70s, not 60s** — chained from the end of a 5.7–11.0s run.
-- **`repo` is not one value.** In a single 39-row snapshot: 35 `spideryarn/reading2`, one `null`, two
-  the literal string `"unknown"`, and one `spideryarn/hellozenno`. Any logic assuming a single repo is
-  wrong.
+- **`repo` is not one value** — the claim stands, and **one of its four values does not, corrected
+  2026-09-08 after two independent re-measurements.** As originally captured from a single 39-row
+  snapshot: 35 `spideryarn/reading2`, one `null`, two the literal string `"unknown"`, and one
+  `spideryarn/hellozenno`.
+
+  **`null` and the second repo are real, and now have a mechanism rather than a count.** Across the
+  ten fixtures in `tests/fixtures/overseer-snapshots/` the values are 58 `spideryarn/reading2` and 2
+  `null` — and **both null rows carry `meta: {"version": "legacy"}`**, which is exactly what
+  `collect.ts` produces (`repo: s.meta.version === 1 ? s.meta.repo : null`) for a session launched
+  without the `GJD_*` environment variables. Two repos in one snapshot is not a defect either: it is
+  two sessions in two checkouts. So *any logic assuming a single repo is wrong* survives intact.
+
+  **The literal `"unknown"` does not reproduce and should not be designed against.** It appears in
+  none of the ten fixtures, in **none of 551 same-identity row observations** over 25 live collections
+  spanning 24 minutes, and — checked from the source by the fleet dashboard agent — in **neither the
+  server's nor the client's `SessionMeta` type**. There is no code path known to emit it. The likeliest
+  explanation is a mis-transcription when the original snapshot was read by eye.
+
+  **Recorded as a correction rather than deleted**, because the wrong half is the instructive half: an
+  unreproduced literal sitting in a list of captured measurements is precisely the thing a later agent
+  writes a parser branch for, and a branch built for a value nothing emits is untestable, permanent
+  and invisible. If it ever *is* seen again, it is a real finding in the collector and wants a
+  snapshot saved, not a tolerance added.
 - **`title` is null for most sessions** (14 of ~37 had one), so null is the common case, not the edge.
 - **`question` was null in every row of every snapshot**, and `shell.busy` was always `true`. Both
   branches are therefore **unexercised by real data** — worth knowing before trusting a test that
