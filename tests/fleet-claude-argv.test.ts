@@ -196,6 +196,40 @@ describe("the option region ends at a bare `--` and nowhere else", () => {
     expect(reading.kind).toBe("unreadable");
   });
 
+  it("refuses a flattened bare `--` that follows a prompt word, because it may BE a prompt word", () => {
+    // GPT Sol's ARGV-P1-01, round 2 of Stage B, and it is the same bug as the two above wearing
+    // the one token the module used to treat as unambiguous. `--` is a word people write in prose
+    // — an em dash typed by somebody whose keyboard does not have one — and on this arm nothing
+    // says whether it is the separator or that word.
+    //
+    // The consequence is the exact grant this whole plan started from: the reading stops at the
+    // `--`, never sees the `--print` after it, and hands back a steerable interactive session for a
+    // process that stopped reading its terminal at startup. The faithful half of the pair is the
+    // proof that the flattened answer is WRONG rather than merely cautious: the kernel says the
+    // prompt is one element, so the `--print` really is a flag and the run really is headless.
+    const argv = ["claude", "--session-id", ID_A, "Please explain -- carefully", "--print"];
+    expect(read(argv)).toEqual({ kind: "session", headless: true, sessionIds: [ID_A] });
+
+    const reading = readFlat(argv.join(" "));
+    // Named as the answer it must not give, not just as the one it must: this is what the grant
+    // looked like, and it is what `steer.ts` and `harness.ts` would have acted on.
+    expect(reading).not.toEqual({ kind: "session", headless: false, sessionIds: [ID_A] });
+    expect(reading.kind).toBe("unreadable");
+    expect(reading.kind === "unreadable" && reading.why).toContain("--");
+  });
+
+  it("still reads a bare `--` BEFORE any positional, which is where every launcher puts it", () => {
+    // What keeps the refusal above affordable, and it was measured rather than assumed:
+    // `gjd-remote.ts`'s `new-claude` (~2565) and `run-claude.ts`'s `buildClaudeArgs` (~326) both
+    // emit the separator after the last flag and before the prompt, so `sawPositional` is false
+    // when the scan reaches it. Census on this box, 2026-09-08: 6 live `claude` processes, one of
+    // them carrying a `--`, and NONE of them changes its reading under the new rule.
+    const argv = ["claude", "--session-id", ID_A, "--name", "a-name", "--", "please explain -- carefully"];
+    const expected = { kind: "session", headless: false, sessionIds: [ID_A] };
+    expect(read(argv)).toEqual(expected);
+    expect(readFlat(argv.join(" "))).toEqual(expected);
+  });
+
   it("still reads the launcher's own shape, which is why the refusal is affordable", () => {
     // `claude --session-id A --permission-mode auto -- <prompt>` is what `new-claude` emits, and
     // the `--` means no prompt is ever scanned. This must stay readable on BOTH arms.
@@ -367,8 +401,14 @@ describe("every --session-id before the boundary is reported, and the caller dec
   });
 
   it("reports the same id twice as two occurrences, not one", () => {
-    // D2. This module does not collapse them: `harness.ts` wants to accept identical ids and
-    // `steer.ts` wants to refuse any repeat, and both are true statements about this parse.
+    // D2, AND THE COMMENT HERE USED TO STATE THE OLD POLICY: it said `steer.ts` "wants to refuse
+    // any repeat", which stopped being true when Stage B landed — `isClaudeForSession` takes a SET
+    // over every occurrence, so `A A` is one conversation and is accepted, exactly as `harness.ts`
+    // accepts it. Both callers now apply the same rule and neither wants the raw count.
+    //
+    // What the occurrence LIST is still for is `A A B`: a set of one is the accept, and a caller
+    // handed a collapsed value could not tell that case from `A`. That is the whole reason this
+    // module reports occurrences and decides nothing.
     expect(read(["claude", "--session-id", ID_A, "--session-id", ID_A])).toEqual({
       kind: "session",
       headless: false,
@@ -518,12 +558,22 @@ describe("`--name` takes exactly one token, and a flattened multi-word name spil
     });
   });
 
-  it("reads a multi-word name that the launcher's `--` bounds", () => {
-    expect(readFlat(`claude --session-id ${ID_A} --name my session -- go and do the thing`)).toEqual({
-      kind: "session",
-      headless: false,
-      sessionIds: [ID_A],
-    });
+  it("refuses a multi-word name even when a `--` follows it — ARGV-P1-01 reaches this one too", () => {
+    // THIS TEST ASSERTED THE OPPOSITE UNTIL ROUND 2 OF STAGE B, and the change is deliberate: the
+    // `--` after a positional is now ambiguous like any other dash-led token, so this line is
+    // `unreadable` rather than a session.
+    //
+    // The rule refuses slightly more than it strictly has to. On THIS line the two readings agree
+    // (nothing dash-led follows the `--`, so everything after it is prose either way), and a
+    // narrower rule — refuse only when a dash-led token appears after the ambiguous `--` — would
+    // have kept it readable. Rejected: it is a second condition and a lookahead, to buy back a
+    // shape neither producer can make. **A session name cannot contain a space**:
+    // `gjd-remote.ts:2462` and `tools/fleet/routes-new.ts:376` both die unless the name matches
+    // `^[a-z0-9][a-z0-9-]{0,40}$`, so `--name` is one token from every launcher we have, and the
+    // positional this depends on never exists.
+    const reading = readFlat(`claude --session-id ${ID_A} --name my session -- go and do the thing`);
+    expect(reading.kind).toBe("unreadable");
+    expect(reading.kind === "unreadable" && reading.why).toContain("--");
   });
 
   it("refuses rather than reporting an interactive session when --print follows a flattened name", () => {

@@ -118,6 +118,15 @@ minute.**
 to a locally sensible number of model calls is unbounded in total; the limit is a shared reservation
 across all three, with an explicit *exhausted* state that says so out loud rather than degrading.
 
+> **NOT BUILT, as of 2026-09-08 — this gate is the one you have to keep yourself.** There is no
+> shared reservation, no cost or wall-time budget and no exhausted state; nothing counts your model
+> calls but you. GPT Sol found this twice, and the second time called it *"acknowledged, not
+> answered"*, so it is written here as unbuilt rather than acknowledged a third time — a runbook that
+> describes a guard that does not exist is worse than one that admits the gap, because you would
+> spend against a limit you believed was enforced. It becomes load-bearing the moment the scheduler
+> is armed, and it is Stage 7 of
+> [260908g](../plans/260908g-the-overseer-runbook-its-gates-and-the-scheduler-that-wakes-it.md).
+
 ### On editing docs whose wording is a rule
 
 Greg allowed this narrowly and it is not a fifth gate, it is a pointer to

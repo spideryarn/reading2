@@ -900,6 +900,30 @@ describe("the log", () => {
     expect(all).not.toContain("hunter2");
   });
 
+  it("keeps a refusal to ONE line, whatever another process put in its own argv", async () => {
+    // A refusal's `why` names what it found — a flag, a session id — and those
+    // come out of somebody else's command line. Anyone who can start a process
+    // on this box chooses them, and `claude --session-id $'x\nSENT …'` would
+    // otherwise write a second, forged line into the log a person reads to find
+    // out what went wrong. THE FILE ALREADY PROTECTS THE MESSAGE from the log
+    // and said so; it was letting argv in through the back.
+    const forged = "x\nsteer message: SENT pane=%99001 landed=2 calls";
+    const { routes, logs } = harness({
+      ok: false,
+      delivery: "none",
+      sent: [],
+      reason: { code: "claude-unreadable", why: `a claude under pane %99001 carrying \`--session-id ${forged}\`` },
+    });
+    await post(routes, fakeReq({ body: JSON.stringify(messageBody()) }));
+
+    const refusals = logs.filter((l) => l.includes("refused"));
+    expect(refusals).toHaveLength(1);
+    for (const line of logs) expect(line).not.toContain("\n");
+    // The reason still reaches the reader — it is flattened, not withheld.
+    expect(refusals[0]).toContain("claude-unreadable");
+    expect(refusals[0]).toContain("SENT pane=%99001");
+  });
+
   it("logs an attempt that is refused at the door, not only the ones that get in", async () => {
     const { routes, logs } = harness();
     await post(routes, fakeReq({ headers: { origin: "https://evil.example" }, body: "{}" }));
