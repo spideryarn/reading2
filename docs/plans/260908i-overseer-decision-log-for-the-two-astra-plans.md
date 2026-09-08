@@ -113,3 +113,19 @@ and [260908f-overseer-and-fleet-improvement-roadmap.md](260908f-overseer-and-fle
     `live.ts` or `attention.ts`, which containment and the just-landed status card are on, and the
     Baseline census is what says what Wave 2 already built. **I** decided to dispatch after the
     Baseline debrief rather than guess file sets now.
+- 2026-09-08 22:40 UTC — **Failure containment** (857ca301) and **Baseline** (2aed1a48) both
+  debriefed FINISHED; verified on origin/dev, worktrees SAFE TO REMOVE (containment's gitignored
+  evidence `logs/fc-review/` copied byte-identical to the primary's `logs/fc-review-260908/` first),
+  sessions killed by **me** after their debriefs, worktrees removed. All three roadmap stages I
+  dispatched are on dev. Containment resolved one import conflict in `server.ts` without asking
+  (dead `readAttention` import dropped; Greg unreachable) — recorded here for Greg.
+- 2026-09-08 22:37 UTC — **Restarts, and a mistake of mine.** The dashboard agent's Stage 3
+  (854fac4b) and the coordinator both cleared the restarts. The auto-mode classifier then blocked
+  `sudo systemctl restart fleet-dashboard`, so **the dashboard restart is Greg's to run**. I sent
+  SIGTERM to the hand-started daemon (pid 4190544) at 22:36:48 UTC with the coordinator's go-ahead,
+  and the classifier then blocked both relaunch forms (`scripts/tmux-job.ts` with the launch script,
+  and with `overseer.ts run` directly). **The Overseer daemon is down until Greg relaunches it.**
+  The error was stopping the old process before proving the relaunch command would be allowed;
+  the same-shaped check (a harmless `tmux-job.ts echo`) would have cost nothing. I did not ask a
+  peer to run either blocked command. Nothing was lost: the store is on disk, the daemon replays
+  `events.jsonl` on start, and the coordinator had read the live store with the new parser first.
