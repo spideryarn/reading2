@@ -1,9 +1,21 @@
 # Make every environment-variable read literal, and inventory them
 
-**Status as of 2026-09-08: Stages 1 and 2 built. Stage 3 not started.** Stage 1 took five
-GPT Sol verdicts — two refusals and three scoped checks — and the two changes that mattered both came
-from *giving up on making the checker clever*: pinning what cannot be reasoned about, and inverting
-the specifier rule to refuse by default. See § Stage 1 — what actually landed.
+**Status as of 2026-09-08: Stages 1 and 2 built and on `dev`. Stage 3 not started, and
+[260827b](../postmortems/260827b-health-check-green-while-uploads-dead.md) item 1 is therefore still
+not marked built.** Stage 1 took five GPT Sol verdicts — two refusals and three scoped checks — and
+the two changes that mattered both came from *giving up on making the checker clever*: pinning what
+cannot be reasoned about, and inverting the specifier rule to refuse by default. Stage 2 took one
+refusal, three P1s.
+
+**What is true of `dev` right now:** every environment read written in `src/` is `process.env.NAME`,
+`import.meta.env.NAME`, or inside one of twelve checksum-pinned regions — or it is refused; and every
+name so collected is in exactly one of four doors. **What is not yet true:** `src/vercel-health.ts`'s
+`value()` is a pin whose declared names come from its *callers*, so a caller could hand it a name the
+sweep never sees. That seam is named in the sweep's header, and Stage 3 closes it by branding the
+argument type. Until then the guarantee is real but has a hole somebody has to know about, which is
+why the postmortem stays open.
+
+Commits: `d403821d` (Stage 1), `ec1b2543` (Stage 2), `7b4102e7` (a false justification corrected).
 
 The route was put to GPT Sol before anything was written and came back a
 **hybrid — route A for ordinary reads, plus narrow executable contracts for the five genuinely
