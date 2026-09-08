@@ -1,8 +1,8 @@
 # Prose needs an empty input box, not merely a box
 
-**Status as of 2026-09-08: measured, not built.** The defect below was reproduced against three live
-panes on this box by read-only `capture-pane` and against a pinned fixture that has been in the
-corpus since before the bug was known. No code has changed. Evidence is in
+**Status as of 2026-09-08: built, reviewed and merged to dev.** The defect below was reproduced end to end against a
+throwaway session of my own, and against two pinned fixtures that had been in the corpus since
+before the bug was known — one of which the suite explicitly asserted as a screen we should send to. Evidence is in
 [§ The measurement](#the-measurement); the fixture is
 `tests/fixtures/fleet-panes/none-typed-numbered-message-in-input-box.txt`.
 
@@ -33,9 +33,10 @@ Astra's sentence for it:
 >
 > — GPT 6 Astra, 2026-09-08
 
-Of those three, **the draft is the one that is happening now**, the modal is largely covered by
-`parsePane`, and the foreground program is **not solvable on this box at all** — see
-[§ What we are not building](#what-we-are-not-building), which has the measurement.
+Of those three, **the draft is the one that is happening now**; the modal is largely covered by
+`parsePane`; and the foreground program is the one this doc got wrong twice and settled at
+[§ What we are not building](#what-we-are-not-building) — not closable by anything the kernel or
+tmux will tell us, but narrowed by a signal Claude Code writes about itself.
 
 ## The measurement
 
@@ -219,7 +220,11 @@ it is asserted rather than assumed.
 
 ## What we are not building
 
-**The foreground-program half of A10, because it cannot be built here.** `steer.ts`'s header says
+**A FOREGROUND GUARD BUILT ON THE KERNEL OR ON tmux — and this section originally said "no
+foreground guard at all", which Sol was right to call an overbroad conclusion from a sound
+measurement.** What follows disproves `tpgid`; the paragraph after it is what got built instead.
+
+`steer.ts`'s header says
 `#{pane_current_command}` is `bash` for every Claude session and so cannot tell a Claude pane from a
 shell pane. That is true, and the reason is worse than the note implies. Measured on 2026-09-08
 across `%1999`, `%2085` and `%2166`, reading `/proc/<pid>/stat`:
@@ -236,11 +241,26 @@ shelled out to. A check built on one would read strong and mean nothing, which i
 this project keeps writing postmortems about. The gap stays named in `steer.ts`'s KNOWN GAPS, with
 the measurement attached so the next person does not re-derive it.
 
-**A `clipped` signal out of `materialAbove` for a top border on line 0 of the capture.** Named as
-the right fix in `steer.ts`'s header, and still probably right — but no fixture in the corpus of 23
-triggers it, and one constructed by deleting the lines above a fixture's top border produces a
-*correct* body, not a wrong one. A guard whose trigger cannot be demonstrated is an untested guard,
-and this repo has just spent a day on four of those. Left named, not built.
+**What DID get built, because the conclusion above does not follow from the measurement.** Claude
+Code keeps its own note — `~/.claude/sessions/<pid>.json` — whose `status` field reads `shell` while
+a session has shelled out. It fires: pid 1471795 under pane `%2085` was in that state while this was
+written. `shelledOut` in `steer.ts` is the last check `sendMessage` makes, and it is **fail-open**,
+which is the reverse of everything else in that file and is the whole design. A `shell` status
+refuses; a missing file, unparseable JSON, an unrecognised status or a read that throws all proceed.
+It is another application's undocumented private state, so a guard that refused on its absence would
+stop every message on this box the day the format changed — and one that only ever ADDS a refusal
+cannot do that. It narrows the gap and does not close it: a child Claude Code has not recorded, or a
+status written a moment ago, is still invisible. Nothing here may be read as "we know who is reading
+the tty".
+
+**~~A `clipped` signal out of `materialAbove`~~ — this one was wrong, and it is kept here rather
+than quietly deleted because the reasoning is a trap worth recognising.** The argument was: no
+fixture triggers it, and one constructed by deleting the lines above a fixture's top border produces
+a *correct* body, so the guard's trigger cannot be demonstrated, so it would be an untested guard.
+Every step of that is true except the one that matters — **I had constructed the harmless case and
+concluded the dangerous one did not exist.** Sol built the dangerous one in a sentence, and it is
+now `dialog-clipped-at-a-solid-separator.txt`, which silently loses `Edit file` and `notes.md` from
+an otherwise perfect-looking dialog. Built. See [§ What the review changed](#what-the-review-changed).
 
 **`PaneGate`, `classifyGate`, `sameQuestion`, `sameMaterial` and the answering path.** Landed,
 tested against 23 captures, and out of scope. The two things Stage v0.2e deliberately left open —
@@ -249,7 +269,7 @@ nothing here argues with either.
 
 ## Stages
 
-### Stage A: A9 is built; the doc says it is not, and the refusal does not say what to do instead
+### ✅ Stage A: A9 is built; the doc says it is not, and the refusal does not say what to do instead
 
 The smallest thing, and it lands first so something is true by the end of the hour.
 
@@ -265,76 +285,76 @@ the buttons away and says *"Answer it in the terminal."* — which is correct an
 does not say how to get to that terminal. Astra asked for `gjd-remote resume <name>`, and the
 command exists (`scripts/gjd-remote.ts`, and the tool prints that exact line itself at two places).
 
-- [ ] `Material`'s `unreadable` arm in `tools/fleet/web/src/SessionParts.tsx` renders the actual
+- [x] `Material`'s `unreadable` arm in `tools/fleet/web/src/SessionParts.tsx` renders the actual
       command, `gjd-remote resume <session name>`, as **selectable** monospace text — the person
       reading it is on a phone and is about to paste it into a terminal somewhere else, so a
       sentence they have to retype is barely better than no sentence. The session's **name**, never
       its id: that is what the command takes. Needs the name threaded through `QuestionCard`; that
       is a one-line prop at the call site in `SessionDetail.tsx`, which belongs to the other
       session — **ask before adding it**.
-- [ ] Tick the three built boxes in 260907e § Stage v0.2b, mark the stage ✅ with the three commits
+- [x] Tick the three built boxes in 260907e § Stage v0.2b, mark the stage ✅ with the three commits
       named, and move "BLOCKS v0.4" — v0.4 shipped.
-- [ ] Prove it in a browser: a pane whose material is `unreadable` shows no option buttons and does
+- [x] Prove it in a browser: a pane whose material is `unreadable` shows no option buttons and does
       show the resume command. Screenshot.
 
-### Stage B: `paneSurface` — one reading of the screen, with an arm for a drafted box
+### ✅ Stage B: `paneSurface` — one reading of the screen, with an arm for an occupied box
 
 The safety property. Everything after this is presentation.
 
-- [ ] **Red first.** A test in `tests/fleet-steer.test.ts` that drives `sendMessage` with an `io`
+- [x] **Red first.** A test in `tests/fleet-steer.test.ts` that drives `sendMessage` with an `io`
       whose `capture` returns `none-typed-numbered-message-in-input-box.txt` and asserts a refusal.
       **Watch it fail**, and record what it printed when it failed — it must fail with `ok: true`
       and two `send-keys` calls in `sent`, because a test that goes red for the wrong reason (a
       malformed fake, a fixture that does not load) proves nothing.
-- [ ] `PaneSurface` in `pane.ts`, four arms, no optionals:
+- [x] `PaneSurface` in `pane.ts`, four arms, no optionals:
       `{ kind: "dialog"; question: PaneDialog }` · `{ kind: "empty-input"; promptLine: number }` ·
       `{ kind: "drafted-input"; promptLine: number; draftLines: number }` ·
       `{ kind: "unrecognised"; why: string }`. `PaneDialog` is the existing
       `Extract<PaneQuestion, { kind: "question" }>`, exported from `pane.ts` so `steer.ts`'s
       `SeenQuestion` becomes an alias of it rather than a second spelling.
-- [ ] `paneSurface(capture): PaneSurface` in `pane.ts`, absorbing `inputSurface` verbatim — same
+- [x] `paneSurface(capture): PaneSurface` in `pane.ts`, absorbing `inputSurface` verbatim — same
       three conditions, same `isBoxBorder`, same `BORDER_TITLE_INDENT`, same "last prompt line"
       rule — and calling `parsePane` **once**, whose result becomes the `dialog` arm.
-- [ ] Emptiness: the prompt line is empty when everything after the `❯` trims to nothing, and every
+- [x] Emptiness: the prompt line is empty when everything after the `❯` trims to nothing, and every
       line between it and the closing border does too. U+00A0 is whitespace to `String.trim`, which
       is what an empty box actually contains; there is a test that keeps that true, because a
       `trim` that stopped folding NBSP would turn every empty box into a drafted one and the
       feature would vanish silently.
-- [ ] `inputSurface` is deleted from `steer.ts`, not left beside its replacement. **This touches
+- [x] `inputSurface` is deleted from `steer.ts`, not left beside its replacement. **This touches
       `steer.ts`, which is shared — tell `claude-agents-dashboard` first.**
-- [ ] `sendMessage` switches on `paneSurface` with a `never` in the default: `empty-input` proceeds,
+- [x] `sendMessage` switches on `paneSurface` with a `never` in the default: `empty-input` proceeds,
       `dialog` → `pane-is-asking` (unchanged), `drafted-input` → the new code, `unrecognised` →
       `not-at-input` (unchanged, carrying `why`).
-- [ ] New `RefusalCode`: `input-not-empty`. Adding it makes `REFUSAL_STATUS` in `routes-steer.ts`
+- [x] New `RefusalCode`: `input-not-empty`. Adding it makes `REFUSAL_STATUS` in `routes-steer.ts`
       fail to compile until it is given a status — **409, not 400**: the request was fine and the
       box is not what the client thought, and the same client may legitimately retry once that agent
       has sent its own draft.
-- [ ] `answerQuestion` takes its dialog from the same `paneSurface` call, so the two entry points
+- [x] `answerQuestion` takes its dialog from the same `paneSurface` call, so the two entry points
       cannot come to different conclusions about one capture.
-- [ ] The whole fixture corpus re-classified, printed as a table in the test output: every
+- [x] The whole fixture corpus re-classified, printed as a table in the test output: every
       `dialog-*` fixture must be `dialog`, `none-typed-numbered-message-in-input-box` must be
       `drafted-input`, the two bare/blank panes `unrecognised`, and the rest `empty-input`. A count
       per arm, asserted, so a change that silently moves one fixture between arms goes red.
-- [ ] Assert the drain's behaviour rather than assume it: a test that the refusal carries
+- [x] Assert the drain's behaviour rather than assume it: a test that the refusal carries
       `delivery: "none"` and `sent: []`, which is what `nothingWasSent()` requires before
       `queue.release` will put the item back.
-- [ ] `npm test` and `npm run typecheck`.
+- [x] `npm test` and `npm run typecheck`.
 
-### Stage C: the person who pressed Send learns what happened
+### ✅ Stage C: the person who pressed Send learns what happened
 
 A refusal a phone cannot act on is a refusal that teaches Greg to stop reading them.
 
-- [ ] `input-not-empty` gets a client-side sentence in the steer client that says the specific
+- [x] `input-not-empty` gets a client-side sentence in the steer client that says the specific
       thing: there is already text in that session's input box, a message sent now would be added to
       the end of it and submitted as one, and the fix is to wait or to open the session. Not the
       generic refusal rendering.
-- [ ] **Make it refuse in a real browser.** Start a throwaway `claude` in a tmux session of my own,
+- [x] **Make it refuse in a real browser.** Start a throwaway `claude` in a tmux session of my own,
       type a few words into its input box without pressing Enter, and press Send from the dashboard.
       Watch the refusal arrive, screenshot it, and confirm by `capture-pane` that the draft is
       **unchanged** — the screenshot proves the message; the capture proves the safeguard. Then
       clear the draft and send again, and watch it succeed, because a guard that has never let
       anything through is a guard that is simply off.
-- [ ] Never against another agent's session. `capture-pane` only on those, `send-keys` never.
+- [x] Never against another agent's session. `capture-pane` only on those, `send-keys` never.
 
 ### Stage D (deferred, and named rather than done)
 
@@ -343,6 +363,73 @@ The page could show the draft state *before* Send is pressed — the same princi
 `surface` on the wire and computed by the collector, which lands in `wire.ts` and `collect.ts` while
 `wire.ts` is being written by somebody else today. Deferred deliberately: Stage B is the safety and
 Stage C is the explanation, and both stand without this.
+
+## What the review changed
+
+**GPT Sol reviewed the plan before a line was built** —
+[the answer](260908f-prose-needs-an-empty-input-box-not-merely-a-box-review-sol.md), and its verdict
+was *"do not build Stage B exactly as written"*. Four of its seven findings changed the code and two
+changed what this doc claims. It is worth reading in full; this is what came of it.
+
+**The blocker, and it was one.** `cleanLines` replaces every character in `DECORATION` with a space,
+so a box holding `■` or `────` cleans to a line that trims to nothing — Sol reproduced the step, and
+`❯■`, `❯────` and a genuine `❯ ` all clean to exactly `❯`. An emptiness rule written against `text`
+would have called those empty and appended to them. **Occupancy is read off `raw` instead**, which
+is the same capture with only the ANSI removed, and `Line` has carried both fields since it was
+written. The test asserts the trap as well as the fix, so nobody has to take the comment's word for
+it. Sol's second half of the same point — a decoration-only draft line can masquerade as the box's
+closing border — has its own test; the prompt line is occupied in that case anyway, so it is a belt
+rather than the braces.
+
+**The arm is `occupied-input`, not `drafted-input`.** Sol: *"Calling it `drafted-input` claims
+provenance the parser does not possess."* Correct, and it is the same discipline as `PaneGate`'s
+`unknown`. A capture cannot tell a person's half-typed reply from a suggestion the harness offered
+or the hint a never-used session draws. What is true of all three is that the box is not empty.
+
+**The corpus is 24, not 23, and TWO fixtures have occupied boxes.**
+`none-working-with-prose-decisions-list.txt` ends `❯ do all three`, which this doc had not noticed
+and the suite had listed under *"sends to every real screen that does have one"* alongside the other
+one. So the acceptance criterion as written could not have passed. There is now a table of all 24
+with a count per arm, and a fixture that arrives without being classified deliberately fails.
+
+**The `clipped` guard is built after all, and the reason I had for deferring it was wrong.** I said
+its trigger could not be demonstrated; the construction I had tried was the harmless one — delete
+the lines above a real outer border and the body that comes back is correct, because it is. Sol
+supplied the dangerous one: take `dialog-edit-diff.txt`, make its first *inner* separator solid as
+the hypothesised future renderer would, and begin the capture there. What that drops is precisely
+`Edit file` and `notes.md` — **the operation and the destination path** — leaving a readable diff
+that looks like a whole dialog. `materialAbove` now refuses a body whose top border is line 0. The
+cost is a dialog that genuinely begins at row 0, and a test asserts we pay it.
+
+**"Cannot be built at all" was too strong about the foreground.** The process-group measurement
+disproves `tpgid`; it does not disprove every guard. Claude Code writes
+`~/.claude/sessions/<pid>.json`, whose `status` reads `shell` while a session has shelled out —
+checked, and pid 1471795 under `%2085` was in that state while this was being written. It is now a
+last check in `sendMessage`, and it is **fail-open by design**: `shell` refuses, while a missing
+file, unparseable JSON, an unknown status or a read that throws all proceed. That is the opposite of
+this module's usual bias on purpose — it is another application's undocumented private state, and a
+guard that refused on its absence would stop every message on the box the day the format changed. It
+can only ever ADD a refusal, and there is a test whose job is to stop somebody "hardening" it later.
+**It is a supplement, not a closure**, and the stage does not claim to have shut the foreground gap.
+
+**The drain test was testing the wrong thing.** Asserting `delivery: "none"` and `sent: []` on the
+`SteerResult` proves ELIGIBILITY for `nothingWasSent`, not that `drain.ts` called `release`, kept
+the item, cleared its lease or left it at the head — a mutation that settled every refusal would
+have left it green. It is asserted at the drain now. Said precisely: **the item is retried on a
+later pass; the keystrokes are not**, which is the distinction `queue.release` and its
+`UnsentFailure` brand exist to hold.
+
+**And one claim in this doc was overstated.** The union gives exhaustive routing enforced by the
+compiler, on evidence `sendMessage` mints itself from a capture it takes — it is **not** a
+capability token. Sol found no bypass in the production call graph (route, drain and broadcast all
+go through `sendMessage`, and `fire` is private), but a caller could pass a `SteerIo` whose
+`capture` lies while its `sendKeys` is real. Making that impossible means making the transport
+private and tying it to internally minted evidence, which is a bigger change than this stage and is
+not pretended to have happened.
+
+**Left alone, deliberately.** Sol's finding 4 — the browser drops `delivery`, so a `send-partial`
+renders as *"Nothing was sent."* — is real and is A11b's consumer flattening an honest union. It
+belongs to the delivery-receipt owner and has been handed over rather than quietly fixed here.
 
 ## Risks
 
