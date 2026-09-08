@@ -129,3 +129,42 @@ and [260908f-overseer-and-fleet-improvement-roadmap.md](260908f-overseer-and-fle
   the same-shaped check (a harmless `tmux-job.ts echo`) would have cost nothing. I did not ask a
   peer to run either blocked command. Nothing was lost: the store is on disk, the daemon replays
   `events.jsonl` on start, and the coordinator had read the live store with the new parser first.
+- 2026-09-08 22:50 UTC — **Dispatched** Execution identity (`260908f-roadmap-exec-identity`, store.ts
+  handed over by the coordinator until its 3c) and Usage visibility (`260908f-roadmap-usage`, carrying
+  Greg's London/Athens clock and the missing `attention.json` seam-table row the Baseline agent
+  found). **I** decided, on the census: Attention inbox/completeness are already met and are not
+  dispatched; Work evidence waits behind Execution identity (shared probe machinery); the Box
+  contracts preview half waits until the dashboard agent's Stage 4 is off the action routes. Also
+  running for Greg: `worktree-removal-script` (his 23:30 request). Load 4.9, five_hour 8%.
+  - **Carried for Greg from the coordinator (260908g):** (a) blocking its 3d — may an unattended
+    rule assert `confirm: true`? Its default if unanswered is NO, propose only, which is what is
+    built. (b) non-blocking — whether to arm `OVERSEER_JOBS_ENABLED`; the Baseline agent adds that
+    exporting it in a shell arms nothing because `overseer.service` neither sets it nor reads an
+    env file, so durable arming is a unit change plus provisioning, i.e. Greg's.
+- 2026-09-08 23:00 UTC — **Dashboard agent** asked to hold the dashboard restart: Sol returned three
+  P0s on its Stage 3, all sentences claiming more than the code knows (a timed-out kill described as
+  "could not be run", "exited" said of a spawn failure, a "partway through" the code cannot know),
+  plus a missing guard on the summary sentence; `KillReport.attempted` becomes `targeted` and the
+  `not-attempted` arm goes. Nothing of mine consumes it. **Advice to Greg:** relaunch the daemon now
+  (unaffected); restart the dashboard when the fix is on dev, or now at the cost of a second restart.
+- 2026-09-08 23:10 UTC — **Dashboard agent** withdrew the hold after checking reachability: with
+  `FLEET_ACT_ENABLED` off, `acting-disabled` refuses run-mode before anything executes, so two of the
+  three P0 sentences have no live path and the third can at most appear on a preview card. Restart
+  timing is **Greg's call**, not a defect blocking him; a second restart when the fix lands is worth
+  it but not worth waiting on. For the record: the dashboard restart became Greg's because the
+  classifier **blocked** the command, not because the earlier reasoning about authority was found
+  optional — both stand.
+- 2026-09-08 22:50 UTC — **Greg** restarted `fleet-dashboard` (serving `index-CT7ppcO0.js`, the newest
+  build, one pid on both binds, HTTP 200) and opened the daemon tmux job; the launch line had split
+  in the paste so the pane held a bare `sh`. **I** typed the launch into that pane; daemon up as
+  pid 1178932, instance 3145d8c1, resumed from the checkpoint, reading the source over SSE.
+  `overseer status` now prints `overseer  Overseer: Overseer`; `/api/state` rows carry `role`.
+  Outage: 22:36:48 to 22:47:34 UTC. Both restarts verified, both services on dev code.
+- 2026-09-08 23:00 UTC — **Greg decided** the three open questions: (1) the two runbook sentences,
+  *"Ok, though keep the changes pretty minimal"* — landed as one three-line claim check and one
+  restart sentence, trimmed from the agents' proposals; (2) an unattended rule asserting
+  `confirm: true`: *"Probably no for now"* — propose-only stands, coordinator told; (3) arming the
+  scheduler: *"Yes, I'm thinking get-ready-to-deploy every 6h, and feedback-sweep every 3h (perhaps
+  offset so they don't bump into each other). Ideally these would be written in some config somewhere
+  that would be easy to edit, with an idempotent script to update them."* — handed to the coordinator
+  as the owner of `jobs.ts` and the unit; `systemctl enable`/restart of the unit stays Greg's.
