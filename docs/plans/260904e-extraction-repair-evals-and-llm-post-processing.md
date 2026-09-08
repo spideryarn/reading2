@@ -2964,6 +2964,139 @@ the notice still goes. The deletion just moves up one level.
   the `Block` representation for classified furniture and every consumer learning it. See § C4's
   *What landed*.
 
+#### C3, rewritten 2026-09-08 — **tell Readability it is content, in Readability's own vocabulary**
+
+The diagnosis above removed the reinsertion problem, so what is left is a **pre-Readability stamp**
+and the check that the recovered structure is intact. This section is the stage as it will be built,
+written after the diagnosis and measured before it was written.
+
+##### The mechanism, and why it is not a hack
+
+Both losses are Readability declining to believe an element is content, and Readability has **two of
+its own escape hatches** for exactly that:
+
+| the branch that deletes | what rescues it | which loss |
+|---|---|---|
+| `unlikelyCandidates` in the node-prep walk (line 1119) | `okMaybeItsACandidate` matching the same string | the four tables |
+| `_cleanConditionally`'s *"Low weight and a little linky"* (`weight < 25 && linkDensity > 0.2`) | `_getClassWeight` ≥ 25, i.e. a `positive` class token | the PLOS correction |
+
+`okMaybeItsACandidate` is `/and|article|body|column|content|main|shadow/i` and `positive` is
+`/article|body|content|entry|…/i`, and **both contain `content`**. So a single class token added
+before Readability runs — `spya-keep-content` — satisfies both, and the stage is one recogniser
+writing one token rather than two mechanisms.
+
+**It is not a trick played on the library.** Adding a class token that says *content* is the sentence
+Readability reads the class attribute in order to hear; we are answering the question it asks. The
+token never reaches the reader: Readability's `keepClasses` defaults to `false`, so it is stripped
+from the output along with every other class.
+
+**It adds no forgery surface**, which is the obvious objection. A hostile page can already write
+`class="content"` on its own junk and get the identical effect — that is Readability's behaviour, not
+something this introduces — so a page pre-placing our token buys it nothing it did not already have.
+Recorded rather than guarded, and the reserved-namespace scrub (`src/reserved.ts`) is deliberately
+**not** extended to it for that reason.
+
+##### Rule A — the data table Readability deletes before asking whether it is a data table
+
+**Stamp a `<table>` when both hold:**
+
+1. its own `class + " " + id` matches `unlikelyCandidates` and does **not** match
+   `okMaybeItsACandidate` — that is, Readability is about to delete it at line 1127; **and**
+2. it is a data table **by Readability's own `_markDataTables` rules**, mirrored in order:
+   `role="presentation"` → no · `datatable="0"` → no · `summary` → yes · non-empty `<caption>` → yes ·
+   a `col`/`colgroup`/`tfoot`/`thead`/`th` descendant → yes · a nested `<table>` → no · one row or one
+   column → no · ≥ 10 rows or > 4 columns → yes · else `rows × columns > 10`.
+
+**The whole stage is an ordering fix, and the second condition says so.** `_markDataTables` lives in
+`_prepArticle` and is called at line 1512 — 385 lines after these tables are gone — so the rule that
+should have protected a 223-row table is never reached. We do not invent a judgement; we run
+Readability's judgement at the point Readability's other branch needed it.
+
+**Measured across all 35 fixtures, 2026-09-08** (`data/scratch/C3-spike-corpus.mts`, throwaway;
+the durable version is the eval below):
+
+| fixture | tables stamped | tables out | `<tr>` out | text characters |
+|---|---|---|---|---|
+| `wiki_gdp_table` | 2 | 1 → **3** | 1 → **238** | 11,557 → 19,288 |
+| `ar5iv` | 2 | 7 → **9** | 42 → **60** | 38,853 → 39,614 |
+| `wiki_ar_ai` | 1 | 1 → **2** | 1 → **11** | 105,819 → 106,541 |
+| `wiki_transformer` | 1 | 0 → 0 | 0 → 0 | unchanged |
+| every other fixture | **0** | — | — | unchanged |
+
+Three things in that table are worth more than the totals:
+
+- **`wiki_ar_ai` was not in the diagnosis.** The Arabic Wikipedia fixture gains a table and ten rows,
+  and nobody had counted it. Found by running the rule over the whole corpus rather than over the
+  three fixtures the stage was scoped around.
+- **`wiki_transformer` stamps one table and changes nothing.** The stamp fires, the table still does
+  not reach the output, so it dies somewhere else as well. This is the honest shape of a partial fix
+  and the stage must print it rather than average it away — *a recogniser that fired and bought
+  nothing is not a recogniser that did not fire.*
+- **The navboxes stay out.** Wiki reaches 3 tables, not 8. They fail condition 1 — their own class
+  carries no unlikely token — and they die on their wrapper's `role="navigation"`, which no stamp on
+  a table can reach. Measured, not argued.
+
+**Corpus residual: 6 tables stamped across 35 fixtures.** The stage recovers 5 of the ~77 tables the
+corpus loses and **does not make "tables survive" true generally**, which § *What the spike also
+found* requires it to say out loud.
+
+##### Rule B — the correction notice
+
+`div.amendment-citation` goes on *"Low weight and a little linky"* (`weight=0`, `linkDensity=0.291`,
+bar `0.2`) — the density coming from the citation printing its own DOI as link text — and then the
+emptied parent `div.amendment amendment-correction` goes on *"No useful content"*, taking
+`<h2>Correction</h2>` with it.
+
+The diagnosis recorded that a class-weight nudge *"does not fix it"*, and that is now known to be
+**half right and the useful half wrong**: the spike stamped only the inner citation, the parent then
+failed the same check at 0.276, and the notice still went. **Stamping both** puts the parent at weight
+25, where the bar is `linkDensity > 0.5`, and 0.276 clears it. Measured: `plos_biology` goes 28,112 →
+28,460 characters and both `"Correction"` and `"10 Apr 2018"` come back.
+
+**What it recognises is the publisher's own label**, exact class tokens rather than substrings:
+`amendment`, `amendment-citation`, `correction`, `erratum`, `retraction`, on a `<div>`. PLOS is the
+only fixture with any of them (2 elements; every other fixture 0). The vocabulary is wider than the
+one fixture on purpose — a correction notice is on this plan's never-fold list whoever published it —
+and the asymmetry is what makes the width safe: a wrong match **keeps** a block that would otherwise
+have gone, and Greg has already priced that:
+
+> a bit of junk in the structure that's getting ignored seems a low price to pay
+
+**This is the open scope call for the review.** The narrow alternative is `amendment` alone, PLOS
+only, with the other four tokens added when a fixture needs them.
+
+##### What survives of C2 — a table oracle, and it is small now
+
+Sol's precondition five stands: the ruler is text and order, and **cannot see a datum moved into the
+wrong row**, so a claim about a table-bearing page needs an oracle. Nothing is re-attached any more,
+so the oracle no longer has to verify a rescued subtree against a sanitised one — it has to verify
+that the table Readability now keeps is the table the source had.
+
+`evals/extraction/table-oracle.mts`: match source tables to output tables by caption text and
+first-row signature, then compare **row count, cells per row, and normalised cell text at its
+row/column coordinates**, and report unmatched tables on both sides. Used by the C3 tests to make the
+positive claim, and by the corpus report to state the residual. That is the whole of it, and it is
+what is left of a stage that was scoped as *"the largest piece and the largest risk"*.
+
+##### How it is proved — the ladder, the counterfactual, and the adversary
+
+Per § *How every recogniser is proved*, each rule carries:
+
+- **an exposure ladder** — source candidates → tables stamped → survivors after Readability →
+  blocks affected → the assertion that changes;
+- **a counterfactual** — the pass disabled through a mutation seam, so the positive fixture is red
+  without it and green with it, and the two cards are asserted to differ at all;
+- **an adversarial negative written by a different agent** (C0's adversary rule): a table that trips
+  `unlikelyCandidates`, passes `_markDataTables`, and is furniture a reader should not get — a
+  comment thread, a related-articles strip, a footer link grid — and, for rule B, junk wearing a
+  correction token.
+
+Done when: both rules ship in `src/protect.ts`, wired into `prepareDocument` and proved by the real
+pipeline rather than by calling the pass directly; the four fixtures above assert the recovered
+tables through the oracle; the corpus residual is printed including `wiki_transformer`'s null
+result; and `docs/project/content-extraction.md` records the mechanism, the numbers and what the
+stage does **not** fix.
+
 #### The one place the reviewers disagreed — decided, not left open
 
 **Superseded 2026-09-06. This section recorded the disagreement as settled in Sol's favour and left
