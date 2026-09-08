@@ -33,7 +33,6 @@
  * Styled with the `site-*` classes at the foot of styles.css — SiteBits.tsx's
  * header says which mechanism owns what.
  */
-import { CONTACT_EMAIL } from "../site-text.js";
 import { Link } from "./Link.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { WebsitePlans } from "./PlanCards.js";
@@ -301,24 +300,32 @@ export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
           </p>
         </div>
 
-        <p className="tw:mt-14 tw:text-sm">
-          <Link href="/" className="tw:text-highlight tw:no-underline tw:hover:underline">
-            ← Back to the front page
-          </Link>
-          {" · "}
-          <a
-            href={`mailto:${CONTACT_EMAIL}`}
-            className="tw:text-highlight tw:no-underline tw:hover:underline"
-          >
-            Ask us something
-          </a>
-        </p>
+        {/* **This page used to end twice**, and the second ending is gone since
+            2026-09-08. An orange *← Back to the front page · Ask us something*
+            row sat exactly here, immediately above a footer that already offers
+            Home and Contact — so a reader got the same two destinations twice in
+            fifty pixels, the second time in a louder colour.
 
-        {/* No `here`: this page's route says `features`, so the row drops its
+            Its right-hand half was also a `mailto:hello@spideryarn.com`, which
+            is the thing Greg took out of the footer on 2026-09-06: *"Remove the
+            hello@spideryarn.com from the footer — just keep the Contact page,
+            which already points to that — that's sufficient."* That decision was
+            made about the footer and this row survived it one page over, which
+            is what an inventory pinned in a test catches and a rule in a comment
+            does not.
+
+            No `here`: this page's route says `features`, so the row drops its
             own link without being told. Only the two pages `App.tsx` uses as
             fallbacks have to declare themselves — SiteFooter.tsx § `here`. */}
-        <SiteFooter variant="marketing">
-          Spideryarn Reading — beta. Every screenshot is of a real article read in Spideryarn.
+        <SiteFooter>
+          {/* [tissue]. It began *"Spideryarn Reading — beta. Every screenshot…"*, which
+              was right when the footer was one grey line and this was the only
+              thing in it naming the product. Since 2026-09-08 the row carries a
+              wordmark above this sentence and a `© … · beta` colophon below it,
+              so the old prefix said the name twice and "beta" twice inside forty
+              pixels. The claim about the pictures — the part that is actually
+              this page speaking about itself — is untouched. */}
+          Every screenshot here is of a real article read in Spideryarn.
         </SiteFooter>
       </main>
     </div>

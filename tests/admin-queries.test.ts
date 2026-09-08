@@ -154,3 +154,52 @@ describe("the three child counts", () => {
     });
   }
 });
+
+/**
+ * **The half-price split on the admin page reads the same predicate the wall
+ * does**, and this file is the only place that can say so.
+ *
+ * `q.ingests` counts, over two windows, how many of an owner's charged rows are
+ * cheap — because a currently-public article costs half a slot, and `12 / 3` on
+ * that page would otherwise read as the quota wall having failed. It is a second
+ * spelling of `usageSql`'s question, in a different query builder, in a
+ * different file. The two coming to disagree about what "public" means is a
+ * silent wrong number on one surface and a right one on the other, so they now
+ * share one exported fragment — `isPublicPrice` in src/store/pg-billing.ts — and
+ * this is what notices if somebody unpicks that.
+ *
+ * The fallback is the load-bearing half: `ingest_events.article_id` is
+ * `on delete set null`, so once an article is deleted the only thing that still
+ * knows what it cost is the price frozen onto the ledger row at deletion.
+ * Dropping it here — and only here — would leave the wall and the admin page
+ * quoting two different usages for one account, with nothing else red.
+ */
+describe("the ingest ledger's half-price split", () => {
+  it("falls back to the price frozen at deletion, in both windows", () => {
+    const sql = sqlOf(q.ingests);
+    /* Twice, once per window — the same duplication `usageSql` has, which is
+       why this asserts a count rather than a presence. */
+    const matches = sql.match(
+      /coalesce\("articles"\."visibility", "ingest_events"\."article_visibility_at_delete", 'private'\) = 'public'/g,
+    );
+    expect(matches ?? [], "expected the fallback once for lifetime and once in-period").toHaveLength(
+      2,
+    );
+  });
+
+  it("never asks bare `visibility = 'public'`, which is the drift", () => {
+    /* The spelling this replaced. A bare comparison reads `null` for a deleted
+       article's rows, which is neither branch, so those rows drop out of the
+       shared count and are reported at full price — an account's usage moving
+       because it threw something away. */
+    expect(sqlOf(q.ingests)).not.toMatch(/(?<!coalesce\()"articles"\."visibility" = 'public'/);
+  });
+
+  it("reaches the article over a left join, so an unresolvable row survives", () => {
+    /* Inner would drop every pre-`article_id` row out of the count altogether,
+       which is the ledger forgetting an ingest. */
+    expect(sqlOf(q.ingests)).toContain(
+      'left join "articles" on "articles"."id" = "ingest_events"."article_id"',
+    );
+  });
+});

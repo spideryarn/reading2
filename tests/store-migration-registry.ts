@@ -2317,6 +2317,14 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      bounded loop gave up. No GoTrue and no bucket: the owner is the dev one the
      clone already seeds, and the article comes out of the committed corpus. */
   "tests/article-cache-call-site.test.ts": "private-postgres",
+  /* Stage C of the permanent-delete plan, 2026-09-06. It seeds its own owner,
+     its own article, its own jobs and its own ledger rows, and one of its cases
+     deliberately races a delete against an enqueue on a **third** connection it
+     takes out of `pgReady`'s pool. Two concurrent runs of that against one
+     database would contend on the same fixed slug and the same `billing_accounts`
+     row, so the private lane is not a preference here — it is what makes the
+     race the test is measuring the only race in it. No GoTrue and no bucket. */
+  "tests/article-delete-pg.test.ts": "private-postgres",
   "tests/article-rows-snapshot.test.ts": "private-postgres",
   "tests/billing-admission.test.ts": "private-postgres",
   "tests/billing-checkout.test.ts": "private-postgres",
@@ -2951,6 +2959,14 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
   },
   "tests/billing-quota-race.test.ts": {
     "0b111a99-0000-4000-8000-00000000c0da": { kind: "seeded" },
+  },
+  /* Stage C of the permanent-delete plan, 2026-09-06. `seedAuthUser` in
+     `beforeEach`, deleted again in `afterAll`, and it needs the row three times
+     over: the articles, the ingest events, and — the one that found this —
+     `billing_accounts`, which `pgShelfStore.destroy` creates through
+     `lockBillingAccount` before it deletes anything. */
+  "tests/article-delete-pg.test.ts": {
+    "de1e1e00-0000-4000-8000-0000000000a1": { kind: "seeded" },
   },
   "tests/db-referee-criteria.test.ts": {
     "7ac042a4-7c19-44a6-ab6d-448acc5909b8": { kind: "seeded" },

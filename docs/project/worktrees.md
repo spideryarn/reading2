@@ -537,8 +537,8 @@ select status, count(*) from spideryarn.jobs group by status
   →  error 48 · done 4 · running 3 · cancelled 1 · queued 1
 ```
 
-`running: 3`, and the job concurrency cap is three (`CONCURRENCY_ENV`,
-[`src/jobs.ts`](../../src/jobs.ts)). None of the three belonged to the worktree running the test. The
+`running: 3`, and the job concurrency cap is three (`SPIDERYARN_JOB_CONCURRENCY`, read by
+`jobConcurrency()` in [`src/jobs.ts`](../../src/jobs.ts)). None of the three belonged to the worktree running the test. The
 cap is **deliberately global** — counted across every row, which is what makes the lease design
 correct in production — so the store answered `busy` correctly about a machine that other worktrees
 had filled.

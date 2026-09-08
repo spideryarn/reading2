@@ -12,6 +12,8 @@
  *   GET    /api/library/search   `?q=…&limit=…` → passages from every article at once
  *   PATCH  /api/library/:slug    { archived?: boolean, title?: string | null, purpose?: string | null }
  *                                 → { entry, purpose } — see `patchShelf` for why purpose is beside it
+ *   DELETE /api/library/:slug    destroy it, for good → { destroyed: slug }. 409 while an
+ *                                 import is running; no body, and nothing to undo
  *   POST   /api/library/:slug/open   one more open, for the shelf's tooltip
  *   GET    /api/models           which model writes what
  *                                 → { tasks: [{ task, model, id, provider, source, effort? }] }
@@ -8081,6 +8083,27 @@ export async function serveAuthenticatedApi(
        record", and a client that forgot one field would silently clear it. */
     if (shelfEntry && req.method === "PATCH") {
       send(res, 200, await patchShelf(slugPart(shelfEntry, 1), await readBody(req)));
+      return;
+    }
+    /**
+     * **Destroy the article, for good.** The other ending, beside the `archived`
+     * flag the PATCH above sets.
+     *
+     * **No body.** There is nothing to say: the slug is the whole request, and a
+     * body would only invite a confirmation token that the server would have to
+     * either check (a second authorisation, disagreeing with the first) or
+     * ignore (a field that reads as a safeguard and is not one). The two-step
+     * confirm is the client's, and it is a property of the button rather than of
+     * the protocol.
+     *
+     * **And no ownership check here.** Authorisation is the `where` clause
+     * inside the one statement `destroy` runs, so this route asks nobody whose
+     * article it is — a second check would be a second opinion that can disagree
+     * with the first, and the one that matters is the one in the `DELETE`.
+     * docs/project/auth.md § *whose data is it*.
+     */
+    if (shelfEntry && req.method === "DELETE") {
+      send(res, 200, await shelfStore.destroy(slugPart(shelfEntry, 1)));
       return;
     }
     if (modelsRoute && req.method === "GET") {
