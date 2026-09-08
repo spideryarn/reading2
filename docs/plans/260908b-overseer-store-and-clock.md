@@ -1221,9 +1221,10 @@ a collector wedged for thirty minutes reported `error: null`. `observation.ts` d
 [typechecking.md](../project/typechecking.md) states: **the guard must read the thing it is guarding,
 not a copy of it.**
 
-**S7-03 — one append-only-log discipline, implemented twice.** `notes.ts` carries a comment admitting
-it: *"`store.ts` keeps its private repair function to itself, so this is a duplicate of a subtle rule rather
-than a reuse of one."* Truncate-to-last-newline on open, the single `O_APPEND` write, the atomic
+**S7-03 — one append-only-log discipline, implemented twice.** `notes.ts` carried a comment admitting
+it: *"`store.ts` keeps its `repairEventLog` private, so this is a duplicate of a subtle rule rather
+than a reuse of one."* (That name is gone — the function is `truncateToLastLine` in `jsonl.ts` now —
+but the quote is what the file actually said.) Truncate-to-last-newline on open, the single `O_APPEND` write, the atomic
 replace. **A duplicated subtle rule is the kind that drifts dangerously**, because the copy that goes
 wrong is the one nobody was looking at — and the rule here is the one that stops a torn line welding
 a good record onto a corrupt one.
@@ -1299,7 +1300,7 @@ session lives. The numbers say the log will not fill; the source says the fields
 disappeared twice inside 24 minutes, on two sessions, and neither is reboot-resume material.
 
 **Q13's `repo` claim does not reproduce, and that is a correction rather than a null result.**
-[open-questions.md § Q13](../project/open-questions.md#q13) records `repo` arriving as the repo,
+[open-questions.md](../project/open-questions.md), § Q13, records `repo` arriving as the repo,
 `null`, the literal string `"unknown"`, and a different repo, all within one snapshot. Across **551
 row observations** here it took exactly two values — `spideryarn/reading2` (526) and
 `spideryarn/hellozenno` (25) — with no `null`, no `"unknown"`, and no version-1 `meta` carrying a
