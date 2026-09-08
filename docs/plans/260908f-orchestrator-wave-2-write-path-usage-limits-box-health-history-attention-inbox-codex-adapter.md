@@ -114,11 +114,29 @@ put the write path in as *"a stage, but it doesn't have to be the top-priority."
 that. So on the Overseer's side the order is **attention first**, and the write path stays where he
 put it.
 
-## Where this stands, 2026-09-08T14:36Z
+## Where this stands, 2026-09-08T15:02Z
 
 **Done enough to stop here.** All six workstreams have landed on `dev`, and what remains is either
 Greg's to decide, Greg's to test, or explicitly deferred. Nothing is half-built and nothing is
 blocked on another session.
+
+### But none of the Overseer half is RUNNING, and that is the top of the list
+
+**The live daemon is pid 2400207, started 2026-09-08T08:35Z, and it has been up 6h27m** — which means
+it is executing the code as it stood *before every commit in this wave*. Measured at 15:02Z:
+`~/.overseer/current.json` says **`schema: 1`** against a tree at `STORE_SCHEMA = 2`, and carries
+**neither an `attention` nor a `usage` field**. 1,127 ticks of a build that predates the inbox, the
+usage report and the store fields both were added to.
+
+So the honest reading of every "DONE" below is **done on `dev`**. What Greg sees on the dashboard is
+still the morning's Overseer. The restart is not a separate chore — it is bundled into the systemd
+cutover that is already waiting on him, and it is his because it is also the moment the dashboard's
+bind widens ([§ A5](#a5-is-not-a-live-exposure-it-is-a-decision-that-happens-at-systemctl-enable)).
+
+**What a restart actually does, so nobody has to guess:** schema-2 code reads a schema-1 checkpoint,
+refuses it, and rebuilds the register by replaying `events.jsonl` — 160 KB, which is nothing. That is
+the designed path and it has a name: `{ kind: "rebuilt", why: "checkpoint-malformed" }`. Nothing is
+lost, because the checkpoint has always been an optimisation over the log rather than the only copy.
 
 | | landed | what remains |
 |---|---|---|
