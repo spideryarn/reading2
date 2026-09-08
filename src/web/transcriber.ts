@@ -21,7 +21,8 @@
  * import the product's authenticated fetch to record a sentence, and copying a
  * state machine that took a day of debugging to make believable would have been
  * worse. Cutting this one edge made every other file importable.
- * docs/plans/260908f-orchestrator-wave-2-….md.
+ * docs/plans/260908f-orchestrator-wave-2-write-path-usage-limits-box-health-history-attention-inbox-codex-adapter.md
+ * § Stage E.
  *
  * **The rule the fleet holds itself to, and the reason this file has no
  * imports:** only leaf, browser-only, product-agnostic modules may be imported

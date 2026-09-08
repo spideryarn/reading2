@@ -3,7 +3,8 @@
  *
  * One OpenRouter call, our own vocabulary, and no part of the product's server.
  * The browser half is `src/web/useDictation.ts`, reused rather than copied —
- * docs/plans/260908f-orchestrator-wave-2-….md § What the fleet now depends on.
+ * docs/plans/260908f-orchestrator-wave-2-write-path-usage-limits-box-health-history-attention-inbox-codex-adapter.md
+ * § Stage E — what the fleet now depends on.
  *
  * ## Why this is not `src/transcribe.ts`
  *

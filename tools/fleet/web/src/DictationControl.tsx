@@ -153,6 +153,22 @@ function Level({ level, detected }: { level: MutableRefObject<number>; detected:
 }
 
 /**
+ * **Whether the page is served somewhere a browser will open a microphone.**
+ *
+ * `window.isSecureContext` rather than sniffing the protocol, because the rule
+ * is not "https": `localhost` and `127.0.0.1` are trustworthy by exception, and
+ * the ssh forward Greg uses from his laptop lands on exactly those. The browser
+ * already knows the answer, so asking it is both shorter and right about cases
+ * a hand-written check would get wrong.
+ *
+ * Guarded for `undefined` because this file is unit-testable outside a browser,
+ * and a missing `window` there must not read as "insecure".
+ */
+function isInsecureContext(): boolean {
+  return typeof window !== "undefined" && window.isSecureContext === false;
+}
+
+/**
  * What the reader is told, in the order the states actually happen.
  *
  * There is a **measured 1.1-second gap** between pressing the button and the
@@ -178,11 +194,31 @@ export function DictationControl({
   toggle(): void;
   className?: string;
 }): ReactNode {
-  /* **Render nothing where a microphone cannot be opened.** `supported` means
-     "can open a microphone", not "has Web Speech" — so Firefox gets a button and
-     a transcript, and only the live words are missing. A button that cannot work
-     is worse than no button. */
-  if (!dictation.supported) return null;
+  /* **A button that cannot work is worse than no button — and a button that
+     silently is not there is worse than both.**
+
+     `supported` means "can open a microphone", not "has Web Speech", so Firefox
+     gets a button and a transcript and only the live words are missing. But it
+     is also false in the case that actually happens here, and it is not about
+     the browser at all: **`navigator.mediaDevices` is `undefined` outside a
+     secure context**, and this server is plain HTTP on a tailnet address.
+     `127.0.0.1` and `localhost` are trustworthy by exception, so dictation works
+     over an ssh forward and does not work on a phone reaching
+     `http://100.92.255.119:8787` — which is exactly how Greg reads this page.
+
+     Rendering `null` there would have been the fifth silently-dead feature this
+     tool has had in a day: no button, no error, nothing to search for. So the
+     reason is said out loud, and the two reasons are told apart, because only
+     one of them has a fix and the fix is not in this repo. */
+  if (!dictation.supported) {
+    return (
+      <p className={cx("tw:text-[12px] tw:text-ink-faint", className)}>
+        {isInsecureContext()
+          ? "No dictation here: browsers only open a microphone on a secure page, and this one is plain HTTP over the tailnet. It works over an ssh forward to localhost, and would work on the phone behind `tailscale serve`."
+          : "This browser will not open a microphone, so there is no dictation here. Type instead."}
+      </p>
+    );
+  }
 
   const status = statusLine(dictation);
 
