@@ -84,7 +84,12 @@ function observedRow(over: Partial<ObservedRow> = {}): ObservedRow {
     startedAt: "2026-09-08T09:00:00.000Z",
     paneId: "%12",
     panePid: 4242,
-    claimedConversationId: "11111111-1111-4111-8111-111111111111",
+    // Deliberately not `1111…` or any other round number: `tests/fixture-ids.test.ts`
+    // treats a uuid appearing in two test files as a collision, and the obvious
+    // placeholders are already claimed by files that really do insert rows. Nothing
+    // here touches the database — these are conversation ids inside JSON fixtures —
+    // but a distinct id is cheaper than an exemption somebody has to re-judge later.
+    claimedConversationId: "0e5ee0a1-0001-4000-8000-0000000000a1",
     question: null,
     status: { kind: "working" },
     ...over,
@@ -913,7 +918,7 @@ describe("the fold, which is what makes the checkpoint disposable", () => {
 
   test("a replacement retires the old identity rather than leaving two", () => {
     const was = observedRow();
-    const now = observedRow({ claimedConversationId: "22222222-2222-4222-8222-222222222222" });
+    const now = observedRow({ claimedConversationId: "0e5ee0a2-0002-4000-8000-0000000000a2" });
     const register = foldEvents(
       [seenEvent(was, "2026-09-08T10:00:00.000Z"), replacedEvent(was, now, "2026-09-08T10:01:00.000Z")],
       new Map(),

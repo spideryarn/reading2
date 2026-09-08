@@ -1,0 +1,799 @@
+/**
+ * The Overseer daemon: the source, the clock and the store, wired together.
+ *
+ * Everything hard was decided in the four modules underneath this one and none
+ * of it is repeated here. This file's whole job is the fold:
+ *
+ *     payload → parseObservation → admissible → diff → append → checkpoint
+ *
+ * and then the part that is genuinely its own — **saying so when that fold
+ * stops happening.** A daemon whose source has gone writes exactly what a
+ * daemon watching a quiet box writes: nothing. Telling those two apart is most
+ * of why the Overseer exists, so the conditions in notes.ts are not decoration
+ * around the fold, they are the other half of it.
+ *
+ * ## The freshness watchdog, and why the number is large
+ *
+ * **An alarm that is usually wrong is worse than no alarm**, because it is the
+ * same picture as a quiet page over a dead box — GPT Astra's A17, which is
+ * about the dashboard's own client calling data stale at 30s while collection
+ * waits 60s after a ~12s run. Measured here over six consecutive collections on
+ * 2026-09-08: the interval is **65.0s**, and **one interval in six was 130s** —
+ * a collection simply missed, no error, no gap in the data. So a missed
+ * collection is ORDINARY and any threshold under about 150s fires on a healthy
+ * fleet. See `STALE_FLOOR_MS`.
+ *
+ * ## Invariants
+ *
+ * **AFTER THE FIRST ACCEPTED SNAPSHOT, THE REGISTER IS THE SNAPSHOT** —
+ * whatever this daemon started from: a checkpoint, a rebuilt log, or nothing.
+ * The ordinary path gets it from `diff()`; the path with no baseline gets it
+ * from `goneWhileAway`, which exists for exactly this and mints nothing but
+ * closures. Without it, a session that ended while the daemon was down stays in
+ * the register for ever — in no baseline, so absent from every future
+ * comparison, and indistinguishable from a live one.
+ *
+ * **A baseline is only usable beside the register it matches.** Three durable
+ * writes in one order — events, then the baseline file, then the checkpoint —
+ * so the log is always at or ahead of the baseline file and the baseline file
+ * always at or ahead of the checkpoint. Every crash between two of them costs a
+ * repeat and never a loss; the ordering, and what is true after each step, is
+ * spelled out at the write itself in `take()`. A cold store has no register, so
+ * its baseline file is ignored rather than trusted.
+ *
+ * **Two marks, not one.** `accepted` is the newest snapshot the gate blessed
+ * and is what the next payload's clock is compared against; `baseline` is the
+ * newest world the differ agreed to stand on. A `held` result moves the first
+ * and not the second.
+ *
+ * ## What it does not do
+ *
+ * No health history and no local collection: there is one collector on this box
+ * and it is the dashboard's. No steering, no killing, no scheduling. It reads,
+ * it folds, it writes.
+ */
+import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+
+import { readAttemptClock } from "../fleet/state.js";
+import { admissible, type AdmissibleSnapshot } from "./admissible.js";
+import { baselineOf, diff, sessionKey, type Baseline, type OverseerEvent, type SessionIdentity } from "./diff.js";
+import { conditionTracker, describeNote, openNoteLog, type DaemonNote } from "./notes.js";
+import { parseObservation, type JsonValue, type ObservedRow } from "./observation.js";
+import { fleetSource, type SourceMessage, type SourceOptions, type Transport } from "./source.js";
+import {
+  describeOpening,
+  openStore,
+  storeRoot,
+  type LockHolder,
+  type OverseerStore,
+  type SessionRegister,
+  type StoreRefusal,
+} from "./store.js";
+
+/**
+ * The last accepted snapshot, kept so a restart does not re-announce the fleet.
+ *
+ * **This is a cache of somebody else's bytes, not a second source of truth.**
+ * The store's checkpoint restores the REGISTER — what is running — but `diff()`
+ * needs the previous SNAPSHOT, and a register cannot be turned back into one: it
+ * keeps `lastStatusKey` rather than the status, and it has never held `title` or
+ * `question`. Rebuilding a snapshot from it would mean inventing the missing
+ * fields, which is the same class of mistake as inventing a `collectedAt`.
+ *
+ * So the payload is stored exactly as the producer sent it and re-blessed
+ * through `admissible()` on the way back in — no cast, the same gate as a live
+ * payload. If the file is missing or unreadable the daemon starts with no
+ * baseline and the next snapshot re-announces every session: noisier, never
+ * wrong, and the register still ends up right. That is the store's disposability
+ * rule, which has to include half a store as well as none of one.
+ */
+export const BASELINE_FILE = "last-snapshot.json";
+
+/**
+ * **Five minutes, and the floor is the number that matters.**
+ *
+ * At the measured 65.0s cadence, five minutes tolerates three consecutive
+ * missed collections. One in six is missed on an ordinary afternoon, so a
+ * threshold of two intervals would fire several times an hour on a fleet with
+ * nothing wrong with it, and Greg would learn — correctly — that the alarm
+ * means nothing.
+ *
+ * The cost is stated rather than hidden: **a dead dashboard is reported up to
+ * five minutes late.** That is the right side to be wrong on. Being late is
+ * recoverable in one ssh command; being ignored is not.
+ */
+export const STALE_FLOOR_MS = 300_000;
+
+/**
+ * The deadline is this many of the producer's own collection intervals.
+ *
+ * `refreshMs` is a HINT, not the contract — the dashboard advertises 60s and
+ * really collects every 65s, because it chains from the *end* of each run. So
+ * the multiple has to cover the drift as well as the misses.
+ */
+export const STALE_MULTIPLE = 5;
+
+/**
+ * The largest cadence the hint is allowed to claim: ten minutes.
+ *
+ * `parseObservation` checks `refreshMs` is a positive integer and nothing more,
+ * which is right for a parser — but a producer advertising an hour would buy a
+ * five-hour deadline, and a watchdog that never fires reports the same thing as
+ * one with nothing to report. Above the ceiling the hint is ignored rather than
+ * believed. (The other end needs no clamp: `STALE_FLOOR_MS` already swallows
+ * any cadence below a minute.)
+ */
+export const CADENCE_CEILING_MS = 600_000;
+
+/** The measured cadence, used before any snapshot has told us the producer's own. */
+export const MEASURED_CADENCE_MS = 65_000;
+
+export function staleAfterMs(refreshMs: number): number {
+  return Math.max(STALE_FLOOR_MS, STALE_MULTIPLE * Math.min(refreshMs, CADENCE_CEILING_MS));
+}
+
+export type FreshnessInput = {
+  /** The PRODUCER's `collectedAt` from the last accepted snapshot, not when a response arrived. */
+  lastGoodAtMs: number | null;
+  /** When this daemon started, which is what the deadline runs from before the first collection. */
+  startedAtMs: number;
+  nowMs: number;
+  refreshMs: number;
+};
+
+export type Freshness =
+  | { fresh: true; ageMs: number; deadlineMs: number }
+  | { fresh: false; ageMs: number; deadlineMs: number; why: string };
+
+/**
+ * Is the Overseer still being told new things?
+ *
+ * **The age is measured from the producer's clock, not from the last HTTP
+ * response**, and that is the whole point of the watchdog: an SSE connection
+ * can stay perfectly healthy, delivering the same cached snapshot every few
+ * seconds, while the collector behind it has wedged. Nothing else in this
+ * system can see that. Both clocks are the same box's, so the subtraction is
+ * exact rather than an estimate.
+ */
+export function freshness(input: FreshnessInput): Freshness {
+  const deadlineMs = staleAfterMs(input.refreshMs);
+  const since = input.lastGoodAtMs ?? input.startedAtMs;
+  const ageMs = input.nowMs - since;
+  if (ageMs <= deadlineMs) return { fresh: true, ageMs, deadlineMs };
+  const seconds = Math.round(ageMs / 1000);
+  return {
+    fresh: false,
+    ageMs,
+    deadlineMs,
+    why:
+      input.lastGoodAtMs === null
+        ? `the dashboard has never given this Overseer a collection, ${seconds}s after it started (the deadline is ${Math.round(deadlineMs / 1000)}s)`
+        : `no new collection for ${seconds}s (the deadline is ${Math.round(deadlineMs / 1000)}s)`,
+  };
+}
+
+/**
+ * When the producer last STARTED a collection, as this daemon needs it.
+ *
+ * **The inference is not made here.** `readAttemptClock` in
+ * `tools/fleet/state.ts` owns it, and the reason it owns it is worth keeping:
+ * `attemptedAt` is written BEFORE each attempt, so on any producer that reports
+ * it a non-null `collectedAt` implies a non-null attempt clock — a collection
+ * cannot have succeeded without having been started. So a payload with data and
+ * no attempt clock is provably a producer that does not REPORT trying, rather
+ * than one that never tried. That is a consequence of the field's write
+ * ordering, not a convention two agents agreed on, which is why it lives in one
+ * shared function instead of being re-derived here. **Do not re-derive it.**
+ *
+ * The field was added on 2026-09-08 without a schema bump — correctly, by the
+ * producer's own rule — so an older server simply does not send it, and
+ * `not-reported` is a live case rather than a hypothetical: `:8787` was emitting
+ * exactly that shape while this was written.
+ *
+ * Read off the raw payload because `parseObservation` does not carry the field
+ * yet. That is the one place in this daemon that touches the raw JSON, and the
+ * real fix is for `observation.ts` to parse it — reported as a finding rather
+ * than made here, since that file is landed and under review.
+ */
+export type Attempt =
+  | { known: false; why: string }
+  | { known: true; attemptedAt: null }
+  | { known: true; attemptedAt: string; atMs: number };
+
+export function readAttempt(json: unknown): Attempt {
+  if (typeof json !== "object" || json === null || Array.isArray(json)) {
+    return { known: false, why: "the payload is not an object" };
+  }
+  const record = json as Record<string, unknown>;
+  const clock = readAttemptClock({
+    attemptedAt: stringOrNull(record["attemptedAt"]),
+    collectedAt: stringOrNull(record["collectedAt"]),
+  });
+  switch (clock.kind) {
+    case "attempted": {
+      const atMs = Date.parse(clock.at);
+      // A non-empty string that is not a date is the producer being wrong about
+      // its own field, which is a "cannot tell" rather than a moment.
+      if (!Number.isFinite(atMs)) return { known: false, why: `attemptedAt is ${JSON.stringify(clock.at)}, which is not a timestamp` };
+      return { known: true, attemptedAt: clock.at, atMs };
+    }
+    case "never-attempted":
+      // Also the both-absent case, merged on purpose upstream: no data has
+      // arrived either way, and the action is the same.
+      return { known: true, attemptedAt: null };
+    case "not-reported":
+      return { known: false, why: clock.why };
+    default: {
+      const never: never = clock;
+      throw new Error(String(never));
+    }
+  }
+}
+
+function stringOrNull(u: unknown): string | null {
+  return typeof u === "string" ? u : null;
+}
+
+export type CollectorVerdict =
+  | { kind: "cannot-tell"; why: string }
+  | { kind: "collecting"; sinceAttemptMs: number }
+  | { kind: "stopped"; sinceAttemptMs: number; why: string };
+
+/**
+ * Is the dashboard's collector still trying?
+ *
+ * **A third condition, not a split of the other two**, and the case it names was
+ * invisible until 2026-09-08. Measured that day: `/api/state` served a
+ * `collectedAt` thirty minutes stale with `error: null`, because `collect()`'s
+ * child took SIGTERM while in uninterruptible IO on a swapping box and
+ * `execFile` waited for a process that was never coming back. The refresh loop
+ * chains from the END of each run, so it never reached its next iteration.
+ * Nothing threw. **The thing that would have reported the failure was the thing
+ * that had stopped** — which is this area's recurring shape.
+ *
+ * So the two clocks separate three states that one clock could not:
+ *
+ *  - attempts advancing, collections stale → the source is FAILING, and will
+ *    either recover or say why. `snapshots` and `freshness` cover it.
+ *  - both stale → the collector has STOPPED. Nothing will recover it and
+ *    nothing else will report it. This condition, and only this one.
+ *  - no attempt reported → say nothing at all.
+ *
+ * **Silence about the collector when nothing is arriving is deliberate.** If the
+ * transport is down we are looking at a frozen copy of the last payload, and
+ * calling its collector wedged on that evidence would be three names for one
+ * outage — `sse-stream`, `poll` and `freshness` already say it.
+ *
+ * The deadline is the same `staleAfterMs` the freshness watchdog uses, because
+ * attempts and collections run on the same cadence: one measured number, not
+ * two guessed ones.
+ */
+export function collectorVerdict(input: {
+  /** The newest `attemptedAt` any payload has carried, or null if none has. */
+  lastAttemptAtMs: number | null;
+  /** When the last payload of any kind arrived, by OUR clock. */
+  lastPayloadAtMs: number | null;
+  nowMs: number;
+  refreshMs: number;
+}): CollectorVerdict {
+  const deadlineMs = staleAfterMs(input.refreshMs);
+  if (input.lastPayloadAtMs === null || input.nowMs - input.lastPayloadAtMs > deadlineMs) {
+    return { kind: "cannot-tell", why: "nothing has arrived from the dashboard recently, so its collector cannot be asked about" };
+  }
+  if (input.lastAttemptAtMs === null) {
+    return { kind: "cannot-tell", why: "no payload has carried an attemptedAt, so this producer cannot say" };
+  }
+  const sinceAttemptMs = input.nowMs - input.lastAttemptAtMs;
+  if (sinceAttemptMs <= deadlineMs) return { kind: "collecting", sinceAttemptMs };
+  return {
+    kind: "stopped",
+    sinceAttemptMs,
+    why:
+      `the dashboard is answering and has not started a collection for ${Math.round(sinceAttemptMs / 1000)}s ` +
+      `(the deadline is ${Math.round(deadlineMs / 1000)}s), so its collector has stopped rather than failed`,
+  };
+}
+
+export type DaemonOptions = {
+  /** Defaults to `~/.overseer`, or `OVERSEER_STORE_DIR`. Tests always pass one. */
+  root?: string;
+  /** The dashboard's origin. */
+  baseUrl: string;
+  signal: AbortSignal;
+  now?: () => Date;
+  /** Where the daemon's own commentary goes. `console.log` by default — this is a CLI, not a request path. */
+  log?: (line: string) => void;
+  /** How often to checkpoint and re-ask the watchdog. */
+  tickMs?: number;
+  pollIntervalMs?: number;
+  streamRetryAfterMs?: number;
+  /** Injected by tests so the fold can be driven without sockets. */
+  source?: (options: SourceOptions) => AsyncIterable<SourceMessage>;
+};
+
+export type DaemonOutcome =
+  | { kind: "refused"; refusal: StoreRefusal }
+  | { kind: "stopped"; why: string }
+  /** Another daemon took the lock while this one held it. Stop, loudly — do not keep writing. */
+  | { kind: "lock-lost"; holder: LockHolder | null };
+
+/** 30s: cheap (one small atomic write) and often enough that a reader can tell a dead daemon from a quiet one. */
+export const TICK_MS = 30_000;
+
+export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome> {
+  const now = options.now ?? (() => new Date());
+  const log = options.log ?? ((line: string) => console.log(line));
+  const root = options.root ?? storeRoot();
+  const tickMs = options.tickMs ?? TICK_MS;
+
+  const opened = openStore({ root, now });
+  if (!opened.ok) return { kind: "refused", refusal: opened.refusal };
+  const store = opened.store;
+
+  const notes = openNoteLog(root);
+  const conditions = conditionTracker(store.instanceId);
+  const write = (note: DaemonNote | null): void => {
+    if (note === null) return;
+    notes.append(note);
+    log(`${note.at} ${describeNote(note)}`);
+  };
+
+  // TWO MARKS, NOT ONE, and the pair is the whole of the crash-recovery
+  // design. `accepted` is the last snapshot `admissible()` blessed, and it is
+  // what the next payload's clock is compared against. `baseline` is the last
+  // world `diff()` agreed to stand on. They come apart on a `held` result: the
+  // snapshot was perfectly admissible, so the clock must move on, and it could
+  // not be placed in a world, so the baseline must not.
+  //
+  // A BASELINE IS ONLY USABLE BESIDE THE REGISTER IT MATCHES, and a cold store
+  // has no register at all. The store starts cold when the log is gone, or when
+  // it refuses to replay one — and diffing against a stored baseline then
+  // records only the DELTAS, so the register would end up holding whichever two
+  // sessions happened to change and none of the others, indefinitely. That is
+  // the mirror image of the bug `goneWhileAway` fixes, and it arrives through
+  // the same door: half a store. Cold means start over, and say so.
+  const restored = store.opening.start.kind === "cold" ? coldRestore(root) : restoreBaseline(root);
+
+  // WHY THE STORED BASELINE GOES BACK THROUGH `baselineOf()` AND ITS EVENTS ARE
+  // NOT REPLAYED.
+  //
+  // `Baseline` is mintable only inside diff.ts, on purpose: omitting `baseline`
+  // from a `held` result is what stops a caller advancing past a snapshot the
+  // differ refused. `baselineOf` is the one door back in, and it asks what the
+  // snapshot IS rather than where it came from — so a snapshot `diff()` would
+  // hold is refused here too, with the sentence saying why.
+  //
+  // **The events that snapshot would have produced are deliberately not
+  // re-derived**, and the reason is not that they are noise: the checkpoint is
+  // written AFTER the baseline file and the events before both, so the register
+  // restored at open already contains the fold of this very snapshot.
+  // Re-recording it would reset every `statusSince` — destroying the durations
+  // attention triage ranks by — in order to say what the register already says.
+  //
+  // When it refuses, the daemon keeps NO baseline and waits for a collection it
+  // can place, rather than closing anything out on the strength of one it
+  // cannot. The refusal's `reason` goes into the start note, because "started
+  // without a baseline because the stored one could not be placed in a world"
+  // and "started without one because there was no file" are different facts.
+  const seeded = restored.accepted === null ? null : baselineOf(restored.accepted);
+  let accepted: AdmissibleSnapshot | null = restored.accepted;
+  let baseline: Baseline | null = seeded !== null && seeded.ok ? seeded.baseline : null;
+  let lastGoodSnapshotAt: string | null = restored.accepted?.snapshot.clock.at ?? null;
+  let refreshMs = restored.accepted?.snapshot.refreshMs ?? MEASURED_CADENCE_MS;
+  const baselineNote =
+    seeded !== null && !seeded.ok ? `${restored.why}, but it cannot be a baseline: ${seeded.reason}` : restored.why;
+  const startedAtMs = now().getTime();
+
+  write({
+    kind: "daemon-started",
+    at: now().toISOString(),
+    instanceId: store.instanceId,
+    pid: process.pid,
+    source: options.baseUrl,
+    opening: describeOpening(store.opening),
+    baseline: baselineNote,
+  });
+
+  // READ AND WRITTEN THROUGH FUNCTIONS, which is not ceremony: it is only ever
+  // assigned inside a closure, and TypeScript's flow analysis cannot see that —
+  // it would narrow every later read to `null` and then to `never`. Going
+  // through `halted()` makes the declared type the one the compiler uses.
+  let stopped: DaemonOutcome | null = null;
+  const halted = (): DaemonOutcome | null => stopped;
+
+  /**
+   * A write that failed because somebody else holds the lock is not something
+   * to retry: it means two daemons, and the loser stops rather than interleaves
+   * its events with the winner's.
+   */
+  const guard = (result: { ok: true } | { ok: false; reason: "lock-lost"; holder: LockHolder | null }): boolean => {
+    if (result.ok) return true;
+    stopped = { kind: "lock-lost", holder: result.holder };
+    return false;
+  };
+
+  // What the producer has told us about its own collector, from every payload
+  // — accepted, duplicate or rejected alike. A wedged collector serves the same
+  // cached body for ever, so DUPLICATES are where this is learned.
+  let lastAttemptAtMs: number | null = null;
+  let lastPayloadAtMs: number | null = null;
+
+  const checkFreshness = (): void => {
+    const at = now();
+    const nowMs = at.getTime();
+    const verdict = freshness({ lastGoodAtMs: lastGoodSnapshotAt === null ? null : Date.parse(lastGoodSnapshotAt), startedAtMs, nowMs, refreshMs });
+    if (verdict.fresh) {
+      write(conditions.restore("freshness", at.toISOString(), `a collection arrived ${Math.round(verdict.ageMs / 1000)}s ago`));
+    } else {
+      write(conditions.degrade("freshness", at.toISOString(), verdict.why));
+    }
+
+    const collector = collectorVerdict({ lastAttemptAtMs, lastPayloadAtMs, nowMs, refreshMs });
+    switch (collector.kind) {
+      case "stopped":
+        write(conditions.degrade("collector", at.toISOString(), collector.why));
+        break;
+      case "collecting":
+        write(conditions.restore("collector", at.toISOString(), `the dashboard started a collection ${Math.round(collector.sinceAttemptMs / 1000)}s ago`));
+        break;
+      case "cannot-tell":
+        // NEITHER DEGRADE NOR RESTORE. "I could not tell" is not evidence that
+        // things are fine, and turning it into a restoration would clear a real
+        // alarm the moment the transport went down.
+        break;
+      default: {
+        const never: never = collector;
+        throw new Error(String(never));
+      }
+    }
+  };
+
+  // The heartbeat, and the only thing that runs when the source has gone
+  // silent: `writtenAt` moving while `lastGoodSnapshotAt` stands still is
+  // exactly how a reader tells "the Overseer is deaf" from "the Overseer is
+  // dead". Unref'd so it can never be the reason a process will not exit.
+  const ticker = setInterval(() => {
+    if (halted() !== null) return;
+    checkFreshness();
+    guard(store.checkpoint({ lastGoodSnapshotAt, tick: true }));
+  }, tickMs);
+  ticker.unref?.();
+
+  const makeSource = options.source ?? fleetSource;
+
+  try {
+    // Spread rather than assigned, because `exactOptionalPropertyTypes` makes
+    // "absent" and "present and undefined" different things — and here they
+    // should be: an absent option means the module's own default.
+    for await (const message of makeSource({
+      baseUrl: options.baseUrl,
+      signal: options.signal,
+      ...(options.pollIntervalMs === undefined ? {} : { pollIntervalMs: options.pollIntervalMs }),
+      ...(options.streamRetryAfterMs === undefined ? {} : { streamRetryAfterMs: options.streamRetryAfterMs }),
+    })) {
+      if (halted() !== null) break;
+      const at = now().toISOString();
+
+      switch (message.kind) {
+        case "stream-opened":
+          write(conditions.restore("sse-stream", at, message.why));
+          break;
+        case "stream-closed":
+          write(conditions.degrade("sse-stream", at, message.why));
+          break;
+        case "poll-failed":
+          write(conditions.degrade("poll", at, message.why));
+          break;
+        case "unreadable":
+          // Bytes arrived and were not a payload. Same condition as a payload
+          // the gate refuses: the Overseer is receiving and not learning.
+          write(conditions.degrade("snapshots", at, `the ${message.via} delivered something that was not JSON: ${message.why}`));
+          break;
+        case "payload":
+          write(conditions.restore("poll", at, transportRestored(message.via)));
+          // Its `false` means the lock is gone and `halted()` is set, which the
+          // guard after this switch acts on — a `break` here would only leave
+          // the switch, which is the kind of thing that reads as a loop exit
+          // and is not one.
+          take(message.json, message.via, at);
+          break;
+        default: {
+          const never: never = message;
+          throw new Error(`no handler for source message ${JSON.stringify(never)}`);
+        }
+      }
+      if (halted() !== null) break;
+    }
+  } catch (cause) {
+    // A THROW IS A DEATH THE DAEMON CAN STILL WRITE DOWN. Without this it dies
+    // with no `daemon-stopped` note and a lock file with a live-looking pid in
+    // it, which a reader cannot tell from a `kill -9` — and the two want
+    // different things done about them. Best effort by construction: if the
+    // store is what broke, the note will fail too, and `stopHere` swallows that
+    // rather than replacing the real error with a second one.
+    stopHere(`the daemon threw: ${cause instanceof Error ? cause.message : String(cause)}`);
+    throw cause;
+  } finally {
+    clearInterval(ticker);
+  }
+
+  /**
+   * One payload, all the way through. Returns false when the daemon must stop.
+   *
+   * Declared after the loop that uses it only because it closes over the
+   * mutable baseline; hoisting is what makes that legal, and keeping it inside
+   * `runOverseer` is what keeps the state out of module scope where a second
+   * daemon in one process would share it.
+   */
+  function take(json: unknown, via: Transport, at: string): boolean {
+    // BEFORE THE GATE, and from every payload including the ones it refuses: a
+    // failing collector keeps attempting while its snapshots are rejected, and
+    // that pair is precisely what tells a failing source from a stopped one.
+    lastPayloadAtMs = now().getTime();
+    const attempt = readAttempt(json);
+    if (attempt.known && attempt.attemptedAt !== null) {
+      lastAttemptAtMs = Math.max(lastAttemptAtMs ?? attempt.atMs, attempt.atMs);
+    }
+
+    const verdict = admissible(accepted, parseObservation(json));
+    switch (verdict.verdict) {
+      case "reject":
+        write(conditions.degrade("snapshots", at, verdict.reason));
+        return true;
+      case "duplicate":
+        // THE ORDINARY CASE, and deliberately not a restoration of anything: a
+        // repeat proves the transport is alive and says nothing about whether
+        // the collector behind it is. That is the watchdog's question.
+        return true;
+      case "accept":
+        break;
+      default: {
+        const never: never = verdict;
+        throw new Error(String(never));
+      }
+    }
+
+    const observed = verdict.snapshot.snapshot;
+    write(conditions.restore("snapshots", at, `a collection from ${observed.clock.at} was accepted`));
+    refreshMs = observed.refreshMs;
+    // THE CLOCK MOVES ON EVEN IF THE WORLD DOES NOT. This is the accepted mark,
+    // not the baseline; a snapshot that is held below is still the newest
+    // collection this Overseer has seen, and forgetting that would let the next
+    // one look like a duplicate.
+    accepted = verdict.snapshot;
+
+    const outcome = diff(baseline, verdict.snapshot);
+    if (outcome.kind === "held") {
+      // NOT A SILENCE. The baseline stays where it is, so the comparison
+      // happens the moment a readable generation arrives; without this note the
+      // only trace would be a history that quietly skipped a few minutes.
+      write(conditions.degrade("baseline", at, outcome.reason));
+      return true;
+    }
+    write(conditions.restore("baseline", at, `the collection at ${observed.clock.at} could be compared again`));
+
+    // WITH NO BASELINE, THE DIFF CANNOT CLOSE ANYTHING OUT. `diff(null, next)`
+    // is every row as `session-seen` and nothing else, so a session that ended
+    // while the daemon was down would sit in the restored register FOR EVER: it
+    // is in no baseline, so no later comparison can ever notice it is absent,
+    // and the entry looks exactly like a live one. That is the plausible-and-
+    // false register this whole stage exists to avoid. So the first accepted
+    // snapshot after a start with no baseline reconciles the register against
+    // it, and the invariant is worth stating plainly: AFTER THE FIRST ACCEPTED
+    // SNAPSHOT, THE REGISTER IS THE SNAPSHOT — whatever the daemon started from.
+    const events =
+      baseline === null ? [...goneWhileAway(store.register, verdict.snapshot, at), ...outcome.events] : outcome.events;
+
+    if (events.length > 0) {
+      const appended = store.append(events);
+      if (!guard(appended)) return false;
+      log(`${at} ${events.length} events from the collection at ${observed.clock.at} (via ${via})`);
+    }
+
+    baseline = outcome.baseline;
+    lastGoodSnapshotAt = observed.clock.at;
+    // ══ THE WRITE ORDER, AND WHAT IS TRUE IF THE PROCESS DIES BETWEEN EACH PAIR
+    //
+    // Three durable writes, in this order and no other:
+    //
+    //   1. `store.append(events)`   — the events, fsync'd, O_APPEND
+    //   2. `saveBaseline(json)`     — the payload those events were derived FROM
+    //   3. `store.checkpoint(...)`  — the register, and the cursor into (1)
+    //
+    // The invariant the order buys: **the event log is always at or ahead of
+    // the baseline file, and the baseline file is always at or ahead of the
+    // checkpoint.** Never the other way round. Everything below follows from
+    // that, and every case ends in a REPEAT rather than a LOSS.
+    //
+    //   died after 1, before 2 — the log has this collection's events; the
+    //     baseline file names the PREVIOUS one. On restart the register is
+    //     rebuilt from the checkpoint plus the log tail, so it already contains
+    //     these events; the older baseline then re-diffs this collection and
+    //     produces the same events a second time. Cost: a duplicate transition
+    //     in the history. Not a lost session, and not a wrong register — the
+    //     fold is idempotent for `session-seen` and `tmux-session-gone`, which
+    //     set and delete by key.
+    //   died after 2, before 3 — the checkpoint is one collection behind the
+    //     log. `openStore` replays the log tail past the checkpoint's cursor
+    //     onto the restored register, so the register catches up; the baseline
+    //     matches it exactly. Nothing repeats and nothing is lost.
+    //   died during 3 — `writeAtomically` renames, so a reader sees the old
+    //     checkpoint or the new one, never half. That is the previous case.
+    //   died during 1 — the log's last line may be torn. `repairEventLog`
+    //     truncates to the last complete newline before the next append, so the
+    //     partial event is dropped and the baseline file, being older, causes it
+    //     to be re-derived.
+    //
+    // **The order that would be wrong is 2 before 1**: the baseline would then
+    // name a collection whose events were never written, and the register —
+    // which is only ever the fold of the log — would be permanently missing
+    // them, with no later comparison able to notice, because the baseline says
+    // that world is already accounted for.
+    saveBaseline(root, json);
+    if (!guard(store.checkpoint({ lastGoodSnapshotAt, tick: true }))) return false;
+    checkFreshness();
+    return true;
+  }
+
+  const final = halted();
+  const why =
+    final !== null && final.kind === "lock-lost"
+      ? "another Overseer took the lock"
+      : options.signal.aborted
+        ? "the daemon was asked to stop"
+        : "the source ended";
+  stopHere(why);
+  return final ?? { kind: "stopped", why };
+
+  /**
+   * The last thing this instance does, whichever way it goes.
+   *
+   * Both `close`s are idempotent, so the crash path and the ordinary path can
+   * both call this. The note is attempted first and its failure is swallowed:
+   * releasing the lock matters more than recording why, because a lock nobody
+   * holds is what stops the next start.
+   */
+  function stopHere(reason: string): void {
+    try {
+      write({ kind: "daemon-stopped", at: now().toISOString(), instanceId: store.instanceId, why: reason });
+    } catch {
+      /* The store or the note log is what broke; the caller is about to say so. */
+    }
+    notes.close();
+    store.close();
+  }
+}
+
+/**
+ * The sessions the restored register holds and this snapshot does not.
+ *
+ * **THE ONE PLACE THE DAEMON MINTS AN EVENT OUTSIDE `diff()`, and it mints
+ * CLOSURES ONLY — never a `session-status`, never a `session-replaced`.** That
+ * restriction is the point rather than an omission, and the next person will
+ * want to relax it: comparing a register entry's `lastStatusKey` against a
+ * row's status looks like the same job. It is not. A status transition needs
+ * two collections to be a fact about the box, and a register entry is a FOLD,
+ * with no clock of its own and no `title` or `question` in it — so a transition
+ * derived from it would be a plausible sentence about a change nobody observed,
+ * which is the exact failure this stage exists to prevent. Absence is different:
+ * it is a fact about THIS snapshot alone, and a snapshot that lists the fleet
+ * is evidence that a handle it does not list is gone.
+ *
+ * **It takes an `AdmissibleSnapshot` rather than rows, so the type refuses the
+ * dangerous call.** This function closes sessions out by absence, so a payload
+ * the gate rejected — the startup placeholder with `rows: []`, or a failed
+ * refresh carrying an old body — would close out the entire fleet in one write.
+ * Three things stop that, and only the first is a promise:
+ *
+ *  1. the sole call site sits on `admissible()`'s `accept` arm, after `reject`
+ *     and `duplicate` have both returned;
+ *  2. the argument type is mintable ONLY by `admissible()`, so no other value
+ *     can be passed here without a cast; and
+ *  3. the call is downstream of `diff()` returning `diffed`, so a snapshot that
+ *     could not be placed in a world — sessions listed, no tmux generation —
+ *     has already taken the `held` early return and never reaches this.
+ *
+ * (2) is what makes it safe rather than careful: the empty-fleet placeholder
+ * cannot be blessed, because `admissible()` rejects a null `collectedAt` before
+ * anything else.
+ *
+ * `at` is when the snapshot arrived rather than when they really went, because
+ * that is the only thing anybody can know: the daemon was not watching. The
+ * `why` is `absent-from-snapshot`, the same cause `diff()` gives the ordinary
+ * case, because it is the same evidence.
+ */
+function goneWhileAway(register: SessionRegister, snapshot: AdmissibleSnapshot, at: string): OverseerEvent[] {
+  if (register.size === 0) return [];
+  const rows: readonly ObservedRow[] = snapshot.snapshot.rows;
+  const present = new Set(
+    rows.map((row) => sessionKey({ tmuxId: row.id, claimedConversationId: row.claimedConversationId })),
+  );
+  const gone: OverseerEvent[] = [];
+  for (const entry of register.values()) {
+    const identity: SessionIdentity = { tmuxId: entry.tmuxId, claimedConversationId: entry.claimedConversationId };
+    const key = sessionKey(identity);
+    if (present.has(key)) continue;
+    gone.push({
+      kind: "tmux-session-gone",
+      at,
+      // The generation the entry belonged to, not this snapshot's: the session
+      // is being closed out of the world it was recorded in.
+      tmuxServerPid: entry.tmuxServerPid,
+      key,
+      identity,
+      name: entry.name,
+      why: "absent-from-snapshot",
+    });
+  }
+  return gone;
+}
+
+function transportRestored(via: Transport): string {
+  return via === "poll" ? "a poll succeeded" : "the stream is delivering, so the fallback is not in use";
+}
+
+/**
+ * Store the payload that is now the baseline, atomically.
+ *
+ * Written whole to a sibling and renamed, so a reader — or the next start —
+ * sees one version or the other and never half of one. (`store.ts` does the
+ * same for `current.json` with a private `writeAtomically`; it is not exported,
+ * so this is the same four lines rather than a reuse. Reported as a finding.)
+ */
+function saveBaseline(root: string, payload: unknown): void {
+  const path = join(root, BASELINE_FILE);
+  const temporary = `${path}.tmp`;
+  mkdirSync(root, { recursive: true, mode: 0o700 });
+  writeFileSync(temporary, `${JSON.stringify({ schema: 1, payload })}\n`, { mode: 0o600 });
+  renameSync(temporary, path);
+}
+
+/**
+ * The baseline from a previous life, or a sentence saying why there is none.
+ *
+ * **Through `admissible()`, not through a cast.** The stored bytes go back
+ * through the same parser and the same gate a live payload does — so a stored
+ * snapshot that has stopped parsing, or that carries a producer error, is
+ * refused here exactly as it would be on the wire. `previous` is null because
+ * there is nothing to be monotonic against yet; every other rule still runs.
+ */
+/**
+ * The answer when the store came up cold: there is a file and we are not using
+ * it, which is a different sentence from there being no file.
+ */
+function coldRestore(root: string): { accepted: AdmissibleSnapshot | null; why: string } {
+  return {
+    accepted: null,
+    why: existsSync(join(root, BASELINE_FILE))
+      ? `${BASELINE_FILE} is present but not used: the store came up cold, so there is no register for it to agree with`
+      : "none stored, so the next collection announces every session",
+  };
+}
+
+function restoreBaseline(root: string): { accepted: AdmissibleSnapshot | null; why: string } {
+  const path = join(root, BASELINE_FILE);
+  if (!existsSync(path)) return { accepted: null, why: "none stored, so the next collection announces every session" };
+  let stored: unknown;
+  try {
+    stored = JSON.parse(readFileSync(path, "utf8")) as unknown;
+  } catch (cause) {
+    return { accepted: null, why: `none usable: ${BASELINE_FILE} did not parse (${String(cause)})` };
+  }
+  if (typeof stored !== "object" || stored === null || !("payload" in stored)) {
+    return { accepted: null, why: `none usable: ${BASELINE_FILE} has no payload in it` };
+  }
+  const verdict = admissible(null, parseObservation((stored as { payload: JsonValue }).payload));
+  if (verdict.verdict !== "accept") {
+    return { accepted: null, why: `none usable: the stored collection is not admissible (${verdict.reason})` };
+  }
+  return { accepted: verdict.snapshot, why: `restored from the collection at ${verdict.snapshot.snapshot.clock.at}` };
+}
+
+/** Only for a store the caller has proved is not in use — `scripts/overseer.ts` never calls this. */
+export function forgetBaseline(root: string): void {
+  const path = join(root, BASELINE_FILE);
+  if (existsSync(path)) unlinkSync(path);
+}
+
+export type { OverseerStore };
