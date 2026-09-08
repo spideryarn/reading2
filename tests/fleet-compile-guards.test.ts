@@ -1,0 +1,203 @@
+/**
+ * The guards that only the COMPILER can enforce, made to fail if they stop.
+ *
+ * Several types under `tools/fleet/` carry a comment saying the compiler
+ * prevents something — a one-tap enacted action, a new refusal code with no HTTP
+ * status, a gate arm nobody handled. Until this file, every one of those was a
+ * *claim about* the compiler with nothing checking it, and the usual way of
+ * proving a guard works does not work on this kind of guard:
+ *
+ * **`vitest` never type-checks.** A type-level guard cannot go red under
+ * `npm test` — and the corollary is the part that bites, raised by the
+ * `orchestrator-setup` session on 2026-09-08: **if the guard cannot go red under
+ * `npm test`, then MUTATING it cannot go red under `npm test` either.** So the
+ * mutation ritual this project runs on everything else is blind here, and a
+ * `Record<Code, number>` quietly widened to `Partial<Record<…>>` would leave
+ * every test green while the thing its comment promises stops being true.
+ *
+ * THE MECHANISM IS `@ts-expect-error`, and it is the whole point of the file.
+ * The directive is an assertion that the next line does NOT compile, and
+ * TypeScript reports an **unused** `@ts-expect-error` as an error of its own. So
+ * if somebody removes a guard, the line below starts compiling, the directive
+ * becomes unused, and `npm run typecheck` fails. That turns "this should not
+ * compile" from a comment into something a gate enforces.
+ *
+ * **It is `npm run typecheck` that runs this, not `npm test`** — the wrapper
+ * covers `tests/tsconfig.json`, which plain `tsc -p tsconfig.json` does not.
+ * Both are gates, so the guard is real either way, but a reader who expects a
+ * red test will not see one. Hence the runtime assertion at the bottom of each
+ * block: something has to be here for `npm test` to run at all, and it is the
+ * paired positive — the shape that SHOULD compile, actually built.
+ */
+import { describe, expect, it } from "vitest";
+
+import { ACTIONS, type EnactedAction } from "../tools/fleet/actions.js";
+import { classifyGate, type PaneGate } from "../tools/fleet/pane.js";
+import { RENAME_STATUS, type RenameErrorCode } from "../tools/fleet/routes-rename.js";
+import { REFUSAL_STATUS } from "../tools/fleet/routes-steer.js";
+import { grantsPermission } from "../tools/fleet/pane.js";
+import { answerQuestion, type RefusalCode, type SteerIo, type SteerResult } from "../tools/fleet/steer.js";
+
+describe("an enacted action is never one-tap", () => {
+  /**
+   * `needsConfirm` is the literal `true`, not `boolean`, so that adding a
+   * one-tap enacted action is a compile error and therefore a DECISION. Each of
+   * the four either deletes work, kills somebody's agent, or throws away a
+   * running test suite.
+   */
+  it("refuses to type an enacted action that could be pressed once", () => {
+    const legal: EnactedAction = {
+      effect: "enacted",
+      id: "kill-session",
+      scope: "session",
+      label: "Exit",
+      summary: "Kill the session",
+      needsConfirm: true,
+      gate: "the name must still mean this session",
+    };
+    expect(legal.needsConfirm).toBe(true);
+
+    // @ts-expect-error `needsConfirm: false` on an enacted action must not compile.
+    const illegal: EnactedAction = { ...legal, needsConfirm: false };
+    void illegal;
+
+    // The runtime half, so `npm test` says something too: no enacted action in
+    // the real catalogue can be pressed once.
+    const enacted = ACTIONS.filter((a) => a.effect === "enacted");
+    expect(enacted.length).toBeGreaterThan(0);
+    for (const a of enacted) expect(a.needsConfirm, a.id).toBe(true);
+  });
+});
+
+describe("every refusal code has a status, and a new one cannot inherit a guess", () => {
+  /**
+   * `Record<Code, number>` rather than a partial or a lookup with a fallback.
+   * A fallback is how a new refusal comes to be answered with somebody else's
+   * status — a 409 that should have been a 403, or worse a 200.
+   */
+  it("refuses a status table with a code missing", () => {
+    /* READ OFF THE REAL EXPORTS, not off a fresh annotation written here.
+       The first draft of this test declared its own `Record<RefusalCode, number>`
+       and put a `@ts-expect-error` on an incomplete literal — which passes
+       forever, because the annotation being tested was the one in the test. It
+       could not detect `routes-rename.ts` widening to `Partial<Record<…>>`, and
+       I checked: that mutation left it green. An assertion that constructs its
+       own premise cannot detect the premise changing, which is tonight's other
+       lesson arriving in the file written to apply the first one.
+
+       So these are ASSIGNMENTS of the real values to the total type. If either
+       export is widened, weakened to a partial, or given a fallback lookup,
+       these stop compiling — and `npm run typecheck` is the gate that says so. */
+    const totalRefusals: Record<RefusalCode, number> = REFUSAL_STATUS;
+    const totalRenames: Record<RenameErrorCode, number> = RENAME_STATUS;
+    expect(Object.keys(totalRefusals).length).toBeGreaterThan(10);
+    expect(Object.keys(totalRenames).length).toBeGreaterThan(5);
+
+    // @ts-expect-error and a code that does not exist is wrong in the other
+    // direction — this one IS about the literal, so writing it here is right.
+    const invented: Record<RenameErrorCode, number> = { ...RENAME_STATUS, "not-a-real-code": 400 };
+    void invented;
+
+    // Runtime: nothing in either table is a 2xx, whatever the compiler thinks.
+    // A refusal answered 200 is the failure both tables exist to prevent.
+    for (const [code, status] of Object.entries({ ...REFUSAL_STATUS, ...RENAME_STATUS })) {
+      expect(status, code).toBeGreaterThanOrEqual(400);
+    }
+  });
+});
+
+describe("nothing may come between the check and the send", () => {
+  /**
+   * **`answerQuestion` IS SYNCHRONOUS, AND THAT IS A SAFETY PROPERTY.**
+   *
+   * Checked after Fable's ruling on the Overseer's snapshot guard, which
+   * reframed a question I had been asking wrongly. Mine is not "can a caller
+   * forge or mutate a `SeenQuestion`" — it is whether the guard's result may
+   * outlive the capture it was computed from. Freezing would not touch that: a
+   * frozen object compared at T1 and used at T2 is still a guard about T1.
+   *
+   * Two halves, and only one of them was already safe.
+   *
+   * The keystroke is taken from `now` — the fresh parse — and never from
+   * `seen`, the client's copy. That is bind-at-the-point-of-use and it was
+   * already right. It is also defensive rather than load-bearing, and saying so
+   * is the honest version: once `sameQuestion` has passed, the two agree on
+   * every field the keystroke is derived from, so using `seen` would not
+   * currently be exploitable. It would merely be the shape that becomes
+   * exploitable the first time `sameQuestion` stops comparing a field.
+   *
+   * The load-bearing half is the SYNCHRONY. `steer.ts`'s KNOWN GAPS already
+   * records that a window remains between the last check and the send, because
+   * tmux has no compare-and-send. What it does not say is that the window is
+   * currently *microseconds* only because nothing suspends in it. Make this
+   * function `async` and add one `await` between `sameQuestion` and `fire`, and
+   * that window becomes arbitrarily long — the pane can be answered from the
+   * terminal in the meantime and the digit lands in whatever replaced it. **No
+   * test would go red**, because every test here drives a synchronous fake.
+   *
+   * So the return type is the guard. `SteerResult` and not `Promise<…>` is what
+   * makes "nothing suspends between the check and the send" true, and this is
+   * what makes changing it a compile error rather than a silent widening.
+   */
+  it("refuses to type answerQuestion as returning a promise", () => {
+    // The real signature, asserted by assignment rather than by a literal
+    // written here — the export's own type, not a copy of it.
+    const sync: (...args: Parameters<typeof answerQuestion>) => SteerResult = answerQuestion;
+    expect(typeof sync).toBe("function");
+
+    // @ts-expect-error if this ever compiles, `answerQuestion` has become async
+    // and the check-to-send window is no longer bounded by the event loop.
+    const asAsync: (...args: Parameters<typeof answerQuestion>) => Promise<SteerResult> = answerQuestion;
+    void asAsync;
+
+    // The runtime half, so `npm test` says something: it really does return a
+    // result rather than a thenable. A function returning `Promise<SteerResult>`
+    // would satisfy the assignment above under a structural-only reading.
+    const io: SteerIo = {
+      listPanes: () => "",
+      processParents: () => "",
+      claudeCandidates: () => "",
+      cmdline: () => null,
+      capture: () => "",
+      sendKeys: () => undefined,
+    };
+    const out = answerQuestion(
+      { paneId: "%1", sessionId: "$1", claudeSessionId: "f1ee7000-0000-4000-8000-000000000001", panePid: 1 },
+      { kind: "question", prompt: "?", material: { kind: "no-material" }, options: [], gate: { kind: "conversation" } },
+      0,
+      { kind: "needs-you" },
+      io,
+    );
+    expect(out).not.toBeInstanceOf(Promise);
+    expect(out.ok).toBe(false);
+  });
+});
+
+describe("the gate's arms cannot be widened by accident", () => {
+  /**
+   * `grantsPermission` is a type predicate narrowing to everything that is NOT
+   * `conversation`, so `now.gate.why` is readable inside the branch. That is
+   * what makes a new arm — a future `configuration`, say — a compile error at
+   * every call site rather than a silent fall-through to "allowed".
+   */
+  it("refuses a gate arm this build has never heard of", () => {
+    // @ts-expect-error `configuration` is not a PaneGate arm; adding one must break here first.
+    const future: PaneGate = { kind: "configuration", why: "changes a harness setting" };
+    void future;
+
+    // @ts-expect-error `conversation` carries no `why` — a reason there would be a reason to allow.
+    const explained: PaneGate = { kind: "conversation", why: "seems fine" };
+    void explained;
+
+    // Runtime, and the paired positive for the predicate: it must be false for
+    // exactly one arm. A `grantsPermission` that returned false for `unknown`
+    // would compile perfectly and open the hole this whole design closes.
+    const permission: PaneGate = { kind: "permission", why: "x" };
+    const cannotTell: PaneGate = { kind: "unknown", why: "x" };
+    const conversation: PaneGate = { kind: "conversation" };
+    expect([permission, cannotTell].map(grantsPermission)).toEqual([true, true]);
+    expect(grantsPermission(conversation)).toBe(false);
+    // And the classifier really does produce the safe arm from nothing.
+    expect(classifyGate({ kind: "no-material" }, []).kind).not.toBe("conversation");
+  });
+});

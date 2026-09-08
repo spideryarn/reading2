@@ -1,0 +1,28 @@
+
+
+● Nothing writes data/ any more — it's a frozen corpus, so the repair has to be a hand-edit of a gitignored file. Backing it up first.
+
+  Ran 1 shell command
+
+● The sweep is otherwise complete — nothing to commit, nothing to merge, nothing to push. The one open item is a judgement call on shared local state,
+  so I'd rather you picked.
+
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ ☐ Repair
+
+│ `data/source/labels.json` is stamped against the pre-collapse tree (declared 847fa445, tree now 084bda97), which reddens store-parity and
+│ store-roundtrip in this checkout. Nothing writes `data/` any more, so the repair is a hand-edit. All 41 blocks still exist and all 40 labels still
+│ map to live blocks, so the labels themselves are still correct — only the tree fingerprint moved. How should I repair it?
+
+❯ 1. Re-stamp structureHash       ┌───────────────────────────────────────────────────────────────┐
+    (Recommended)                 │ data/source/labels.json                                       │
+  2. Write a PendingLabelsFile    │ - "structureHash": "847fa44562a719b9",                        │
+  3. Leave it red, write it up    ├─── ✂ ─── 3 lines hidden ──────────────────────────────────────┤
+                                  └───────────────────────────────────────────────────────────────┘
+
+                                  Notes: press n to add notes
+
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Chat about this
+
+Enter to select · ↑/↓ to navigate · n to add notes · Esc to cancel

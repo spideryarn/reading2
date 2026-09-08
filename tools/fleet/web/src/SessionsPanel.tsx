@@ -1,0 +1,499 @@
+/**
+ * The list — what is running on the box — and, since 2026-09-08, the pane that
+ * opens when you pick one.
+ *
+ * ## The one thing this screen is for
+ *
+ * A `needs-you` row, especially one carrying a question, is what Greg opens
+ * this on a phone to see. So it is sorted first, drawn in its own band under
+ * its own heading, given the loud edge, and its question is rendered in full
+ * rather than summarised. Everything else on this page is arrangement; that is
+ * the feature.
+ *
+ * ## Three bands, not seven ranks — and four other orders
+ *
+ * `triageSort` in view.ts puts them in order and `triageBand` says which band a
+ * row is in; this file only groups what it is handed. The bands are Greg's, out
+ * of docs/project/orchestrator-direction.md, and the reasoning for the two
+ * surprising memberships — a busy shell is not promoted, and `unknown` is not
+ * promoted either — is in tools/fleet/status.ts, which is where it belongs.
+ *
+ * An `unknown` row therefore sits in the quiet band while carrying a reason
+ * that may be the most interesting thing on the page. That is why the reason is
+ * always drawn, in the violet the whole tool reserves for it: the ORDER cannot
+ * make it visible, so the COLOUR has to.
+ *
+ * **The bands exist only in the default order**, and that is deliberate rather
+ * than an omission. Grouping by status while sorting by uptime would put the
+ * longest-running session third, under a heading that is the thing the reader
+ * just asked not to sort by — the grouping would silently win. So `status` gets
+ * headings and the other four get one flat list, with the same coloured edge on
+ * every card either way (`ORDERINGS` in view.ts).
+ *
+ * ## Master and detail, and why the detail is a push
+ *
+ * At a width that affords both, picking a session splits the page: the list
+ * narrows to one column on the left and the detail takes the rest. Below that —
+ * a phone, which is where this is mostly read — **the detail REPLACES the
+ * list** and a button brings it back. A two-pane layout squeezed into 390px is
+ * two columns of nothing; docs/project/narrow-windows.md's rule is that a
+ * column which will not fit is given up whole rather than compressed, and
+ * `choosePanes` in fit.ts is that rule for this pane. **Measured, never a
+ * breakpoint** — the width it changes at is `COLUMN_MIN_PX + DETAIL_MIN_PX +
+ * PANE_GAP_PX` and is written down nowhere else.
+ *
+ * With nothing selected the list is exactly what it was before any of this:
+ * the three bands dealt into as many columns as the window affords. That is not
+ * a third layout, it is the second one with the detail absent.
+ */
+import type { ReactNode } from "react";
+
+import { NewSessionPanel } from "./NewSessionPanel";
+import { MissingSession, SessionDetail } from "./SessionDetail";
+import { Handles, QuestionCard, StatusPill, Uptime } from "./SessionParts";
+import { Explain } from "./Tooltip";
+import { COLUMN_MIN_PX, chooseColumns, choosePanes, spreadIntoColumns, useContainerWidth } from "./fit";
+import type { NewSessionApi } from "./new-session-client";
+import type { RenameApi } from "./rename-client";
+import type { SteerApi } from "./steer-client";
+import type { ActionsUi } from "./useActions";
+import { Card, SectionHeading, cx, toneClasses } from "./ui";
+import type { FleetRow } from "./types";
+import {
+  ORDERINGS,
+  ORDERING_LABELS,
+  type Ordering,
+  sortRows,
+  statusLabel,
+  triageBand,
+  whereLine,
+} from "./view";
+
+
+/**
+ * One session, as a row you can open.
+ *
+ * The title is the heading because it is what identifies a session to a person;
+ * the tmux handle is beneath it in mono because it is what identifies it to a
+ * program. `no title yet` is a real state — Claude has not named the
+ * conversation — and says so rather than falling back to the session name,
+ * which would make an unnamed session look named.
+ *
+ * **The whole card is the target, and there is still only one button in it.**
+ * The heading holds a real `<button>`; a `::after` on that button is stretched
+ * across the card (tailwind.css § the session list), so a thumb can land
+ * anywhere. The alternative — a `<button>` wrapping the card — would nest the
+ * status pill's explanation inside another button, which is invalid and reads
+ * as one control to a screen reader. The explanations sit above the overlay
+ * (`z-index`), so tapping the pill still opens its card rather than the
+ * session; that is the one place on the card where a tap does something else,
+ * and it is the place a reader taps when they want to know what the word means.
+ */
+function SessionCard({
+  row,
+  now,
+  selected,
+  onSelect,
+  compact,
+}: {
+  row: FleetRow;
+  now: number;
+  selected: boolean;
+  onSelect: (id: string) => void;
+  /** The narrow left-hand column beside an open detail. See `QuestionCard`. */
+  compact: boolean;
+}): ReactNode {
+  const label = statusLabel(row.status);
+  const tone = toneClasses(label.tone);
+  const where = whereLine(row);
+  /* Only a version-1 meta has a directory; a `legacy` session recorded none,
+     and there is nothing to show rather than something to apologise for. */
+  const dir = row.meta.version === 1 ? row.meta.dir : null;
+  return (
+    <Card
+      className={cx(
+        "session-card tw:mb-2 tw:border-l-4 tw:p-3",
+        tone.edge,
+        label.tone === "needs" && "tw:bg-needs-wash",
+        selected && "on",
+      )}
+    >
+      <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-x-2 tw:gap-y-1">
+        <StatusPill status={row.status} />
+        <Uptime row={row} now={now} className="tw:ml-auto" />
+      </div>
+
+      <h3 className="tw:mt-1.5 tw:leading-snug tw:font-medium tw:break-words">
+        <button
+          type="button"
+          className={cx("session-open", row.title === null && "tw:text-ink-faint tw:italic")}
+          aria-current={selected ? "true" : undefined}
+          onClick={() => onSelect(row.id)}
+        >
+          {row.title ?? "no title yet"}
+        </button>
+      </h3>
+
+      {label.detail !== null ? (
+        <p className={cx("tw:mt-1 tw:text-[13px] tw:break-words", tone.ink)}>{label.detail}</p>
+      ) : null}
+
+      {/* **The path is the disambiguation, and it exists nowhere else.**
+          `row.worktree` is only the last segment of the directory, and this box
+          runs several worktrees whose names differ by a word — so where two
+          rows look identical, the full `dir` out of `row.meta` is the thing
+          that tells them apart. Shown as a card rather than as a line, because
+          it is long, it is only wanted when two rows collide, and `Explain`
+          keeps it in the accessible name either way. */}
+      {where === null ? (
+        <p className="tw:mt-1 tw:text-[13px] tw:text-ink-faint">no repo recorded</p>
+      ) : dir === null ? (
+        <p className="tw:mt-1 tw:text-[13px] tw:break-words tw:text-ink-soft">{where}</p>
+      ) : (
+        <Explain
+          tip={{
+            head: "Where it is running",
+            what: dir,
+            how: "The name above is only the last segment of that path. Two worktrees can differ by a word, so this is what tells them apart.",
+          }}
+          placement="bottom"
+          className="tw:mt-1 tw:block tw:text-[13px] tw:break-words tw:text-ink-soft"
+        >
+          {where}
+        </Explain>
+      )}
+
+      <Handles row={row} />
+
+      {/* Still the whole dialog, not a preview. Seeing what a blocked session
+          is asking WITHOUT tapping anything is the reason this page is opened
+          on a phone; the detail's copy of it is the one with buttons on. */}
+      {row.question !== null ? <QuestionCard question={row.question} compact={compact} /> : null}
+    </Card>
+  );
+}
+
+/** A band of rows under its own heading. Only ever built for a non-empty one. */
+function Band({
+  title,
+  rows,
+  now,
+  selectedId,
+  onSelect,
+  compact,
+}: {
+  title: string;
+  rows: FleetRow[];
+  now: number;
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+  compact: boolean;
+}): ReactNode {
+  return (
+    <section>
+      <SectionHeading>
+        {title} · {rows.length}
+      </SectionHeading>
+      {rows.map((row) => (
+        <SessionCard
+          key={row.id}
+          row={row}
+          now={now}
+          selected={row.id === selectedId}
+          onSelect={onSelect}
+          compact={compact}
+        />
+      ))}
+    </section>
+  );
+}
+
+/**
+ * The row above the list: how many there are, and how they are sorted.
+ *
+ * A native `<select>` rather than a row of chips. It is one control at every
+ * width, it is what a phone already knows how to draw, and five orderings as
+ * chips would be a row that wraps to two lines on the device this page is
+ * mostly read on. `flex-wrap` regardless, per the rule that a row of things
+ * whose widths you do not control must be allowed to wrap
+ * (docs/project/narrow-windows.md).
+ */
+function ListControls({
+  count,
+  order,
+  onOrder,
+}: {
+  count: number;
+  order: Ordering;
+  onOrder: (order: Ordering) => void;
+}): ReactNode {
+  return (
+    <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-x-3 tw:gap-y-2">
+      <h2 className="tw:text-[11px] tw:font-semibold tw:tracking-widest tw:text-ink-faint tw:uppercase">
+        {count} {count === 1 ? "session" : "sessions"}
+      </h2>
+      <label className="tw:ml-auto tw:flex tw:items-center tw:gap-1.5 tw:text-[12px] tw:text-ink-faint">
+        Order
+        <select
+          value={order}
+          onChange={(e) => onOrder(e.target.value as Ordering)}
+          /* `h-7` and `rounded-md`, the one height and the one radius this page
+             uses for anything sitting in a row beside other controls —
+             docs/project/controls.md. */
+          className="tw:h-7 tw:rounded-md tw:border tw:border-rule tw:bg-panel tw:px-1.5 tw:text-[12px] tw:text-ink"
+        >
+          {ORDERINGS.map((value) => (
+            <option key={value} value={value}>
+              {ORDERING_LABELS[value]}
+            </option>
+          ))}
+        </select>
+      </label>
+    </div>
+  );
+}
+
+export function SessionsPanel({
+  rows,
+  now,
+  collected,
+  unreadableRows,
+  order,
+  onOrder,
+  selectedId,
+  onSelect,
+  steer,
+  rename,
+  actions,
+  newSession,
+  onRefresh,
+}: {
+  rows: readonly FleetRow[];
+  now: number;
+  /**
+   * **Whether a collection has ever finished.** An empty `rows` is only a claim
+   * about the box when this is true — see the empty states below, which is the
+   * whole reason the flag exists rather than being inferred here.
+   */
+  collected: boolean;
+  /**
+   * How many rows in the last payload could not be read at all.
+   *
+   * Drawn rather than swallowed: a dropped row shortens authoritative state,
+   * and the row most likely to be malformed is a blocked one carrying a
+   * question scraped off a terminal — which is the row this page is opened to
+   * see. types.ts § `unreadableRows`.
+   */
+  unreadableRows: number;
+  order: Ordering;
+  onOrder: (order: Ordering) => void;
+  /** The session the URL names, whether or not the box still lists it. */
+  selectedId: string | null;
+  onSelect: (id: string | null) => void;
+  steer: SteerApi;
+  rename: RenameApi;
+  /** The action vocabulary and the queues. Only the detail pane uses them. */
+  actions: ActionsUi;
+  newSession: NewSessionApi;
+  onRefresh: () => void;
+}): ReactNode {
+  const { ref, width } = useContainerWidth();
+
+  /**
+   * **Sessions the payload had and this page could not read.**
+   *
+   * Above everything, in the alarm colour, because the alternative is a list
+   * that is quietly short — and a page whose whole job is to say when it cannot
+   * see the fleet must not lose three rows in silence. GPT Sol's F15,
+   * 2026-09-08.
+   */
+  const unreadable =
+    unreadableRows > 0 ? (
+      <Card className="tw:mb-3 tw:border-l-4 tw:border-l-alarm tw:bg-alarm-wash tw:p-3">
+        <p className="tw:text-[13px] tw:font-medium tw:text-alarm-ink">
+          {unreadableRows} of {rows.length + unreadableRows} sessions could not be read.
+        </p>
+        <p className="tw:mt-1 tw:text-[13px] tw:text-ink-soft">
+          The box listed them and this page could not make sense of them, so they are missing from
+          everything below. The list is short by that many — it is not a shorter fleet.
+        </p>
+      </Card>
+    ) : null;
+  const panes = choosePanes(width);
+  const columns = chooseColumns(width);
+
+  const sorted = sortRows(rows, order);
+  const selected = selectedId === null ? null : (sorted.find((r) => r.id === selectedId) ?? null);
+
+  const detail =
+    selectedId === null ? null : selected === null ? (
+      <MissingSession id={selectedId} onBack={() => onSelect(null)} />
+    ) : (
+      <SessionDetail
+        /* Keyed by the session, so switching rows resets the message box and
+           the last outcome rather than carrying one row's typing onto another
+           row's terminal. */
+        key={selected.id}
+        row={selected}
+        now={now}
+        steer={steer}
+        rename={rename}
+        actions={actions}
+        onRefresh={onRefresh}
+        onBack={panes === 1 ? () => onSelect(null) : null}
+      />
+    );
+
+  /**
+   * The bands, and whether they are being used.
+   *
+   * Only the default order gets headings — see the header. In the other four
+   * the list is flat, and it is ONE column however wide the window: dealing
+   * cards into columns is column-major reading, which is fine for three bands
+   * whose order does not matter and wrong for a list whose order is the thing
+   * the reader just asked for.
+   */
+  const banded = order === "status";
+  const bands = [
+    { title: "Needs you", rows: sorted.filter((r) => triageBand(r.status) === 0) },
+    { title: "Working", rows: sorted.filter((r) => triageBand(r.status) === 1) },
+    { title: "Everything else", rows: sorted.filter((r) => triageBand(r.status) === 2) },
+  ].filter((band) => band.rows.length > 0);
+
+  /* The list is the narrow left-hand column exactly when a detail is open
+     beside it, and that is when its cards go compact — the dialog is already
+     drawn at full size two inches to the right. */
+  const compact = selectedId !== null;
+
+  const card = (row: FleetRow): ReactNode => (
+    <SessionCard
+      key={row.id}
+      row={row}
+      now={now}
+      selected={row.id === selectedId}
+      onSelect={onSelect}
+      compact={compact}
+    />
+  );
+
+  const band = (one: { title: string; rows: FleetRow[] }): ReactNode => (
+    <Band
+      key={one.title}
+      title={one.title}
+      rows={one.rows}
+      now={now}
+      selectedId={selectedId}
+      onSelect={onSelect}
+      compact={compact}
+    />
+  );
+
+  /** The whole list in one column — what the left pane and a phone both get. */
+  const oneColumnList: ReactNode = banded ? (
+    <>{bands.map(band)}</>
+  ) : (
+    <div className="tw:pt-2">{sorted.map(card)}</div>
+  );
+
+  /**
+   * **Three empty pages, not one**, and telling them apart is the single most
+   * load-bearing thing on this panel.
+   *
+   * The server answers `rows: []` with `collectedAt: null` for the ten seconds
+   * after a restart, while a collection runs. Drawing "No sessions." over that
+   * says *the box is idle* — on a phone, with nothing to suggest otherwise —
+   * at a moment when three dozen agents may be running on it. It is the same
+   * shape of lie as an `unknown` status rendered as `idle`, and it is the one
+   * this whole tool is built to refuse.
+   *
+   * So: nothing collected yet is its own page; a collection that found nothing
+   * is a different one; and a failure is neither, because the masthead's banner
+   * owns that and the last good rows stay on screen underneath it.
+   *
+   * The New session panel is drawn above all three, because "there is nothing
+   * running" is exactly when somebody wants to start something — and it is
+   * OUTSIDE the measured container on purpose, so that the container still
+   * appears only when there is a list to measure. That is what the callback-ref
+   * regression in fit.ts is guarded by.
+   */
+  const empty =
+    sorted.length === 0 ? (
+      collected ? (
+        <Card className="tw:p-6 tw:text-center tw:text-ink-soft">
+          <p className="tw:font-medium tw:text-ink">No sessions.</p>
+          <p className="tw:mt-1 tw:text-[13px]">
+            Either the box really is idle, or the collector could not read tmux — the age and any error above say
+            which.
+          </p>
+        </Card>
+      ) : (
+        <Card className="tw:border-l-4 tw:border-l-unknown tw:p-6 tw:text-center tw:text-ink-soft">
+          <p className="tw:font-medium tw:text-ink">Collecting…</p>
+          <p className="tw:mt-1 tw:text-[13px]">
+            Nothing has been read off the box yet — the first collection takes about ten seconds. This is not an
+            empty fleet; it is a fleet nobody has looked at.
+          </p>
+        </Card>
+      )
+    ) : null;
+
+  if (empty !== null) {
+    return (
+      <div className="tw:mx-auto tw:max-w-3xl">
+        {unreadable}
+        <NewSessionPanel api={newSession} />
+        {empty}
+      </div>
+    );
+  }
+
+  /* Never more columns than there are bands to put in them: an empty first
+     column beside two full ones reads as a rendering fault, not as good news. */
+  const groups = banded ? spreadIntoColumns(bands, Math.min(columns, bands.length)) : [];
+  const spread = detail === null && groups.length > 1;
+  /* The header spans whatever the body spans. Centring it over a full-width
+     two-pane grid puts the ordering control in the middle of nothing. */
+  const wideHeader = spread || (detail !== null && panes === 2);
+
+  return (
+    /* The measured element is this one, and it is always full width — the
+       narrowing happens INSIDE it. Capping the measured box at `max-w-3xl`
+       would make the answer to "how much room is there?" depend on the answer,
+       which is how a layout ends up oscillating between two states. */
+    <div ref={ref}>
+      <div className={cx("tw:mb-1", wideHeader ? null : "tw:mx-auto tw:max-w-3xl")}>
+        {unreadable}
+        <NewSessionPanel api={newSession} />
+        <ListControls count={sorted.length} order={order} onOrder={onOrder} />
+      </div>
+
+      {detail !== null && panes === 1 ? (
+        /* ONE PANE, SOMETHING SELECTED: the detail is a push. The list is not
+           on screen at all, and the detail carries the button back to it. */
+        <div className="tw:mx-auto tw:max-w-3xl tw:pt-2">{detail}</div>
+      ) : detail !== null ? (
+        /* TWO PANES. The list column is exactly `COLUMN_MIN_PX` wide, which is
+           the same number `chooseColumns` gives a column up at — one constant,
+           read twice, rather than a second one written down here. */
+        <div
+          className="tw:grid tw:items-start tw:gap-x-5 tw:pt-2"
+          style={{ gridTemplateColumns: `minmax(0, ${COLUMN_MIN_PX}px) minmax(0, 1fr)` }}
+        >
+          <div>{oneColumnList}</div>
+          <div className="tw:max-w-3xl">{detail}</div>
+        </div>
+      ) : spread ? (
+        <div
+          className="tw:grid tw:items-start tw:gap-x-5"
+          style={{ gridTemplateColumns: `repeat(${groups.length}, minmax(0, 1fr))` }}
+        >
+          {groups.map((group, index) => (
+            <div key={group[0]?.title ?? index}>{group.map(band)}</div>
+          ))}
+        </div>
+      ) : (
+        <div className="tw:mx-auto tw:max-w-3xl">{oneColumnList}</div>
+      )}
+    </div>
+  );
+}

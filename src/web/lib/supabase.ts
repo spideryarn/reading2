@@ -30,8 +30,24 @@
  */
 import { createClient } from "@supabase/supabase-js";
 
+/**
+ * **The two reads are literal, and `required` indexes an ordinary object.**
+ *
+ * `import.meta.env[name]` read the same values and was just as correct, but a
+ * computed key is invisible to any inventory of what this repo's configuration
+ * actually is — the door `SPIDERYARN_ENV_PINNED` sat behind, unseen by every
+ * inventory from the day it was written until something enumerated every read
+ * (docs/plans/260908a-make-every-environment-variable-read-literal-and-inventory-them.md).
+ * Built inside the call rather than at module scope so each call reads the
+ * environment exactly when it did before; three calls a session, and
+ * `tests/google-availability.test.ts` stubs these before importing this module.
+ */
 function required(name: "VITE_SUPABASE_URL" | "VITE_SUPABASE_PUBLISHABLE_KEY"): string {
-  const value = import.meta.env[name];
+  const configured: Record<"VITE_SUPABASE_URL" | "VITE_SUPABASE_PUBLISHABLE_KEY", unknown> = {
+    VITE_SUPABASE_URL: import.meta.env.VITE_SUPABASE_URL,
+    VITE_SUPABASE_PUBLISHABLE_KEY: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+  };
+  const value = configured[name];
   if (typeof value === "string" && value !== "") return value;
   throw new Error(
     `${name} is not set. It is compiled into the bundle at build time, so set it ` +

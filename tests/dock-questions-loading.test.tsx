@@ -73,6 +73,16 @@ function paint(comments: Comment[], loaded: boolean, loadFailed = false): void {
           comments,
           loaded,
           loadFailed,
+          /* **`error` moves with `loadFailed`, because in the real hook they are
+             never apart.** `useComments`'s load path sets both together
+             (useComments.ts § the load), so `loadFailed: true, error: null` is a
+             state the app cannot produce — and posing it here would have let
+             this file go on passing while the Dock announced a *failed write*
+             over a failed load, which is what it briefly did. GPT Sol, reviewing
+             the built code, 2026-09-08. `error` alone is the other case, and it
+             is a refused write; it has its own file,
+             tests/a-failed-comment-write-is-said-on-the-dock.test.ts(x). */
+          error: loadFailed ? "Couldn't reach the server." : null,
           panel: "questions" as const,
           onPanel: () => {},
           onOpenComment: () => {},

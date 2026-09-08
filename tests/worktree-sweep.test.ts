@@ -251,6 +251,7 @@ describe("classifyOne, on facts alone", () => {
     verified: [],
     disposable: 0,
     trunk: { kind: "landed" },
+    listeners: { kind: "checked", found: [] },
   };
 
   const base = (over: Partial<SweepFacts>): SweepFacts => ({
@@ -328,7 +329,7 @@ describe("gatherAll", () => {
 
     const facts = gatherAll(primary, entries, { kind: "sha", sha: "HEAD" }, (root) => {
       if (root.includes("thrower")) throw new Error("EACCES walking data/");
-      return { linked: true, branch: "x", inProgress: [], dirty: [], hidden: [], unexplained: [], notes: [], verified: [], disposable: 0, trunk: { kind: "landed" } };
+      return { linked: true, branch: "x", inProgress: [], dirty: [], hidden: [], unexplained: [], notes: [], verified: [], disposable: 0, trunk: { kind: "landed" }, listeners: { kind: "checked", found: [] } };
     });
 
     const thrower = facts.find((f) => f.branch === "worktree-thrower");

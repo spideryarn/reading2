@@ -110,7 +110,20 @@ export function loadEnvLocal(): void {
     return; // no file is fine — the variable may be set some other way
   }
 
-  const shadowed = applyEnvFile(text, process.env, INHERITED);
+  /* **The pin is read here, literally, and not discovered inside an injected
+     environment two hops down.** It is a name this repo authored, and until
+     2026-09-08 the only place it appeared was `env[PINNED]` inside
+     `pinnedNames` — so no inventory of what this deployment needs could see it,
+     and none did: it was found by something trying to enumerate every read.
+     docs/plans/260908a-make-every-environment-variable-read-literal-and-inventory-them.md.
+     The names that come *out of the file's own text* stay dynamic below, which
+     is what `applyEnvFile` is for. */
+  const shadowed = applyEnvFile(
+    text,
+    process.env,
+    INHERITED,
+    pinnedNames(process.env.SPIDERYARN_ENV_PINNED),
+  );
 
   /* **`console.warn`, and deliberately not src/log.ts.** This runs while the
      environment the logger configures itself from is still being assembled —
@@ -191,7 +204,10 @@ export function resolveTargetUrl(choice: { shellWins: boolean }): string | undef
      that also calls it pays nothing, and one that forgot cannot get a different
      answer from this function than its neighbour did. */
   loadEnvLocal();
-  return chooseTargetUrl(choice.shellWins, INHERITED, process.env);
+  /* Read after `loadEnvLocal`, deliberately: the file may have put the value
+     there, and the whole question this answers is which of the two wins. The
+     snapshot half is `INHERITED`, taken before any of our code ran. */
+  return chooseTargetUrl(choice.shellWins, INHERITED.DATABASE_URL, process.env.DATABASE_URL);
 }
 
 /**
@@ -294,21 +310,31 @@ function envProdCandidates(): string[] {
 }
 
 /**
- * The choice itself, over injected environments — split out for the same reason
+ * The choice itself, over two injected values — split out for the same reason
  * `applyEnvFile` is, and it is the same reason: `resolveTargetUrl` reads the
  * real snapshot and the real `process.env`, so a test that went through it
  * would be testing the machine. `tests/env.test.ts` drives this.
+ *
+ * **Two URLs rather than two environments**, since 2026-09-08. The rule is
+ * about one variable, and taking whole records meant `DATABASE_URL` — the name
+ * that decides which database a command writes to — was reachable only by
+ * following an argument into this function. Its caller now names it at the
+ * literal read, where anything enumerating this repo's configuration can see
+ * it.
+ *
+ * @param inheritedUrl what the shell exported, from the module-load snapshot
+ * @param currentUrl   what `process.env` says now, after `.env.local`
  */
 export function chooseTargetUrl(
   shellWins: boolean,
-  inherited: Readonly<Record<string, string | undefined>>,
-  env: Readonly<Record<string, string | undefined>>,
+  inheritedUrl: string | undefined,
+  currentUrl: string | undefined,
 ): string | undefined {
   /* `??`, so a shell that exported nothing falls through to whatever
      `.env.local` provided rather than resolving to `undefined` and making the
      caller print "DATABASE_URL is not set" beside a perfectly good one. */
-  if (shellWins) return inherited.DATABASE_URL ?? env.DATABASE_URL;
-  return env.DATABASE_URL;
+  if (shellWins) return inheritedUrl ?? currentUrl;
+  return currentUrl;
 }
 
 /**
@@ -322,6 +348,11 @@ export function chooseTargetUrl(
  * @param text     the contents of a `.env.local`
  * @param env      the environment to write into (`process.env` in real use)
  * @param inherited that environment as it was before this process ran
+ * @param pinned   the names this file may not write — `pinnedNames` of
+ *          `SPIDERYARN_ENV_PINNED`, read by the caller. **A required argument**,
+ *          because a caller that forgot it would silently lose the one
+ *          protection that survives `spawn`, and this file already learnt that
+ *          lesson once with `resolveTargetUrl`'s `shellWins`.
  * @returns the names — never the values — where the file disagreed with an
  *          inherited value and won, for the caller to report
  */
@@ -329,9 +360,9 @@ export function applyEnvFile(
   text: string,
   env: Record<string, string | undefined>,
   inherited: Readonly<Record<string, string | undefined>>,
+  pinned: ReadonlySet<string>,
 ): string[] {
   const shadowed: string[] = [];
-  const pinned = pinnedNames(env);
 
   for (const [name, value] of Object.entries(parseEnvFile(text))) {
     /* Pinned by the process that started this one — and unlike the snapshot
@@ -364,13 +395,18 @@ export function applyEnvFile(
  * `tests/stage2c-raw-bytes.test.ts`, which manufactures a disagreement on
  * `SUPABASE_URL` — can narrow the list rather than having to delete it.
  *
- * Read from the passed environment, not `process.env`, so `applyEnvFile` stays
- * the pure seam `tests/env.test.ts` drives.
+ * **The variable is read in `loadEnvLocal`, and this function parses what it
+ * got.** It used to take the whole environment and find the name itself, which
+ * is how a real variable came to be in no inventory anywhere: a source-authored
+ * name discovered through an injected record is invisible to anything reading
+ * this tree. The const stays for the tests and setup files that *set* the
+ * variable — see the list in
+ * docs/plans/260908a-make-every-environment-variable-read-literal-and-inventory-them.md.
  */
 export const PINNED = "SPIDERYARN_ENV_PINNED";
 
-export function pinnedNames(env: Readonly<Record<string, string | undefined>>): Set<string> {
-  const raw = env[PINNED];
+/** @param raw the comma-separated value of `SPIDERYARN_ENV_PINNED`, or nothing */
+export function pinnedNames(raw: string | undefined): Set<string> {
   if (!raw) return new Set();
   return new Set(
     raw

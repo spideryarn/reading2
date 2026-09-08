@@ -421,12 +421,30 @@ const EXPECTED: readonly Expected[] = [
    * **What the client's Sentry events are labelled with**, falling back to
    * `import.meta.env.MODE` (src/web/monitoring.ts:79).
    *
-   * **It looks platform-set and is not**, which is the only reason it is worth
-   * a line. Vercel writes `VERCEL_ENV`; Vite exposes only names beginning
-   * `VITE_`, and nothing here bridges the two — so a person has to set this on
-   * the project or every client error from every deployment arrives labelled
-   * with the build mode instead. Nothing else in the repo mentions it: this
-   * entry is the only place it is written down.
+   * **This entry's original reason was false, and the correction is the
+   * interesting part.** It said the variable *looks* platform-set and is not —
+   * that Vercel writes `VERCEL_ENV`, Vite exposes only `VITE_`-prefixed names,
+   * and nothing bridges the two, so a person must set it. GPT Sol refused that
+   * in review on 2026-09-08 and it was right: vercel.json declares
+   * `"framework": "vite"`, and Vercel's **framework environment variables**
+   * add `VITE_`-prefixed copies of its system variables to a detected
+   * framework's build — the documentation lists `VITE_VERCEL_ENV` by name
+   * (vercel.com/docs/environment-variables/framework-environment-variables,
+   * checked 2026-09-08). Nobody has to set it.
+   *
+   * **What is still open, and why the row stays for now.** Those are *build*
+   * variables, and this handler reads `process.env` in the serverless function
+   * at *runtime*. Whether a framework-injected `VITE_` name is present there
+   * too is a question about the platform that no amount of reading this repo
+   * can settle — it wants one look at a real deployment's `/api/health`. If it
+   * is absent at runtime, this line reports `false` about a variable that was
+   * compiled in correctly, which is a *worse* failure than the one the entry
+   * was added for. Moving it to the platform-written allowlist group in
+   * tests/env-names-are-inventoried.test.ts is the likely answer.
+   *
+   * Left as a report-only row rather than guessed at, because a wrong reason is
+   * what the next person checks against instead of the code — which is exactly
+   * how this comment came to be wrong in the first place.
    */
   { name: "VITE_VERCEL_ENV", breaks: null },
   /**
@@ -444,13 +462,43 @@ const EXPECTED: readonly Expected[] = [
    */
   { name: "DATABASE_POOL_MAX", breaks: null },
   /**
-   * How many ingest jobs run at once (`CONCURRENCY_ENV`, src/jobs.ts:401),
+   * How many ingest jobs run at once (`jobConcurrency()`, src/jobs.ts),
    * defaulting to 3. A value that is not a positive whole number is ignored
    * rather than obeyed — `0` would stop every ingest in the account and read
    * exactly like the queue being wedged — so what an operator needs from this
    * line is whether anything is set at all.
    */
   { name: "SPIDERYARN_JOB_CONCURRENCY", breaks: null },
+  /**
+   * **The extra origins that are *us***, comma-separated, for the sanitiser
+   * rule that stops an article's own HTML addressing our API — `ownOrigins()`
+   * in src/sanitize-policy.ts, and docs/project/security.md § *An article may
+   * not address our own API*.
+   *
+   * Arrived 2026-09-08 from the same sweep as the six above, which found it in
+   * no inventory door at all. `.env.example` ships it blank and says to leave
+   * it blank: on Vercel the deployment host comes from
+   * `VERCEL_PROJECT_PRODUCTION_URL` and `VERCEL_URL`, which the platform sets
+   * for us, and in dev the localhost fallback covers it. So it is reported and
+   * blank on almost every correct deployment.
+   *
+   * **It is here rather than on the sweep's allowlist because of who knows the
+   * answer.** The argument for leaving it out was that health cannot tell
+   * whether this deployment needs it — which is true, and is a statement about
+   * *requiredness*, which `breaks: null` does not make. What the line does is
+   * report presence to the one party who knows whether a domain is attached
+   * that neither platform variable names, and who is the only person who can
+   * set it. That matters here more than for most `breaks: null` rows, because
+   * this variable configures a **defence**: for two days in August 2026 it was
+   * the only source of that host, nobody had set it, and the server half of the
+   * rule quietly did nothing while the render-time pass covered for it. GPT
+   * Sol, reviewing the sweep that found it, 2026-09-08.
+   *
+   * **`breaks: null`, and that is a rule rather than a preference** — see the
+   * block above. A sweep found this name; a sweep is not entitled to decide
+   * that a deployment must warn without it.
+   */
+  { name: "SPIDERYARN_ORIGINS", breaks: null },
 ];
 
 /**

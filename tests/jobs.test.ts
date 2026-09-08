@@ -116,6 +116,7 @@ import {
   sameWork,
   unrunnableStepPlan,
 } from "../src/jobs.js";
+import type { SlugHolder } from "../src/jobs.js";
 import {
   DEFAULT_INGEST_STEPS,
   FORCE_ONLY_WHEN_NAMED,
@@ -1362,9 +1363,32 @@ describe("running a job", () => {
    queue, which is the one line these tests do not cover.
    -------------------------------------------------------------------------- */
 describe("freeSlug", () => {
-  /** A stand-in for "which article already has this URL", as an in-memory shelf. */
-  const shelf = (entries: Record<string, string>) => async (key: string) =>
-    Object.entries(entries).find(([, url]) => urlKey(url) === key)?.[0];
+  /**
+   * A stand-in for "which article already has this URL", as an in-memory shelf.
+   *
+   * **It answers where the holder came from as well as what it is called**, and
+   * that pair is the whole of `SlugAllocation.from`: an article on the shelf is
+   * durable and the store may insist on it, a live job's claim is not. The
+   * lookup used to answer a bare slug, which erased the difference — GPT Sol's
+   * F21, docs/plans/260906h-delete-an-article-permanently.md.
+   */
+  const holding =
+    (from: "shelf" | "queue") =>
+    (entries: Record<string, string>) =>
+    async (key: string): Promise<SlugHolder | undefined> => {
+      const slug = Object.entries(entries).find(([, url]) => urlKey(url) === key)?.[0];
+      if (slug === undefined) return undefined;
+      /* **A queue holder answers with its id as well**, because a live job is a
+         fact that expires and the caller has to be able to name it again under
+         a lock — GPT Sol's F41, and `SlugAllocation` § *Why the queue branch
+         carries the holder's id*. A shelf article has no such row and needs
+         none. */
+      return from === "shelf" ? { slug, from } : { slug, from, jobId: QUEUE_HOLDER };
+    };
+  const shelf = holding("shelf");
+  const queue = holding("queue");
+  /** The live job the `queue` lookup above pretends to have found. */
+  const QUEUE_HOLDER = "spya-hold01";
 
   it("mints a slug with a short id when nothing has this article yet", async () => {
     const got = await freeSlug("why-trees", "https://example.com/why-trees", shelf({}));
@@ -1400,9 +1424,34 @@ describe("freeSlug", () => {
     ]) {
       expect(await freeSlug("why-trees", spelling, have), spelling).toEqual({
         kind: "adopted",
+        from: "shelf",
         slug: "why-trees-spya-k3m9qt",
       });
     }
+  });
+
+  /**
+   * **The other kind of adoption, and it is not interchangeable with the one
+   * above.** Two pastes of one URL a second apart: the second adopts the first
+   * job's name, and there is no `articles` row yet — the worker creates it when
+   * it opens its draft. So this allocation must *not* let the store insist the
+   * article is there, where a shelf adoption must. That is exactly what
+   * `requiresArticle` reads, and reading it off `request.url` instead was F21.
+   *
+   * **And it carries the holder's id**, which is F41 from the second round of
+   * the same review: without it the allocation records that *a* queue holder was
+   * seen, and by the time the store inserts, that holder can have published,
+   * finished, and had its article destroyed. The store re-asks under the article
+   * lock, and it can only ask about a job it has been told the name of.
+   */
+  it("says an adoption from a live job is not an adoption from the shelf", async () => {
+    const beingMade = queue({ "why-trees-spya-k3m9qt": "https://www.example.com/why-trees" });
+    expect(await freeSlug("why-trees", "https://example.com/why-trees", beingMade)).toEqual({
+      kind: "adopted",
+      from: "queue",
+      slug: "why-trees-spya-k3m9qt",
+      holder: QUEUE_HOLDER,
+    });
   });
 
   /* The one spelling on Greg's list that deliberately does NOT merge. A
@@ -1495,13 +1544,17 @@ describe("slugForRetry", () => {
         { slug: "why-trees-spya-k3m9qt", url: "https://example.com/why-trees" },
         shelf({ "why-trees-spya-zzzzzz": "https://www.example.com/why-trees/" }),
       ),
-    ).toEqual({ kind: "adopted", slug: "why-trees-spya-zzzzzz" });
+    ).toEqual({ kind: "adopted", from: "shelf", slug: "why-trees-spya-zzzzzz" });
   });
 
   /** A late-stage re-run, which was already landing right and still does. */
   it("adopts for a request that names an article rather than claiming a name", async () => {
     expect(await slugForRetry({ slug: "why-trees-spya-k3m9qt" }, shelf({}))).toEqual({
       kind: "adopted",
+      /* From the shelf, and `enqueue`'s preflight has already proved it — this
+         is *"run something on the article I already have"*, which is the one
+         shape that may insist the article is there. */
+      from: "shelf",
       slug: "why-trees-spya-k3m9qt",
     });
   });

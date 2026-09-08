@@ -45,6 +45,36 @@ import type { Shot as ShotRecord } from "./shots.js";
 export const SHELL = "tw:mx-auto tw:w-full tw:max-w-6xl tw:px-6";
 
 /**
+ * **The two words, with the second one orange.** Nothing more — no pill, no
+ * link, no logo mark.
+ *
+ * It exists as a component because it is now drawn in two places that do not
+ * otherwise share code: the bar at the top of this file, and the foot of
+ * SiteFooter.tsx, which is a *general* component that also draws on the shelf
+ * and `/profile`. Two hand-written copies of a wordmark is how one of them ends
+ * up a different weight for a month before anyone notices, and this file's own
+ * header is an argument about exactly that kind of drift.
+ *
+ * **Not a link, and the caller adds one if it wants one.** The nav wraps it in
+ * a link to `/`; the footer deliberately does not, because the footer's whole
+ * rule is that it never offers the page under the reader's feet, and a wordmark
+ * pointing at `/` on `/` would break it. **Not `HomeLogo` either** — that is the
+ * animated corner mark with thirteen hover animations
+ * (docs/project/design-logo.md), and the foot of a privacy policy is not where
+ * those belong.
+ *
+ * The size is the caller's, since the two want different ones, so `className`
+ * carries a `tw:text-*` and nothing else needs to be a prop.
+ */
+export function Wordmark({ className }: { className?: string }) {
+  return (
+    <span className={`tw:font-prose tw:font-medium tw:text-foreground ${className ?? ""}`}>
+      Spideryarn <span className="tw:text-highlight">Reading</span>
+    </span>
+  );
+}
+
+/**
  * The bar at the top of all three pages: wordmark left, three links right.
  *
  * **Four pages, since 2026-09-04**, and the fourth is not a marketing page:
@@ -108,9 +138,7 @@ export function SiteNav({
           className="tw:flex tw:shrink-0 tw:items-center tw:gap-2.5 tw:whitespace-nowrap tw:no-underline"
           aria-label="Spideryarn Reading, home"
         >
-          <span className="tw:font-prose tw:text-base tw:font-medium tw:text-foreground">
-            Spideryarn <span className="tw:text-highlight">Reading</span>
-          </span>
+          <Wordmark className="tw:text-base" />
           <span className="tw:hidden tw:rounded-full tw:border tw:border-highlight/50 tw:px-2 tw:py-px tw:text-[0.6rem] tw:font-semibold tw:uppercase tw:tracking-widest tw:text-highlight tw:sm:inline">
             Beta
           </span>
@@ -414,8 +442,10 @@ export function Feature({ name, children }: { name: string; children: ReactNode 
 }
 
 /* **`SiteFooter` was here until 2026-09-03**, and it is now the general one in
-   SiteFooter.tsx, which these three pages call with `variant="marketing"` to keep
-   the spacing this design chose. Two components with one name and the same job
+   SiteFooter.tsx. These three pages called it with `variant="marketing"` to keep
+   the taller spacing this design chose, until 2026-09-08 gave the footer enough
+   mass to close a page on one measure and the prop went — SiteFooter.tsx
+   § `SPACING`. Two components with one name and the same job
    arrived on the same day in two worktrees and met at a merge; Greg's call was
    one component. The provenance sentence — every picture is a real article read
    in Spideryarn — did not move: it is each page's own child text, because it is

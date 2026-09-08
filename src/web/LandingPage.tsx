@@ -357,16 +357,22 @@ export function LandingPage() {
         {/* **One footer for the whole site**, since the merge of 2026-09-03:
             this page's own `SiteFooter` in SiteBits.tsx and the general one
             arrived the same day in two worktrees, and Greg's call was to keep
-            the general one. `variant` carries this page's taller spacing over
-            unchanged; the sentence is this page's and stays here.
+            the general one. The sentence is this page's and stays here.
 
             **`here` because this page is drawn at addresses that are not its
             own.** Signed out, `App.tsx` answers `/profile`, `/design`,
             `/admin`, `/add/...` and an unshared `/read/<slug>` with this page,
             so without it the row offered those readers a Home link to the page
             they were already on. SiteFooter.tsx § `here`. */}
-        <SiteFooter here="library" variant="marketing">
-          Spideryarn Reading — beta. Every screenshot is of a real article read in Spideryarn.
+        <SiteFooter here="library">
+          {/* [tissue]. It began *"Spideryarn Reading — beta. Every screenshot…"*, which
+              was right when the footer was one grey line and this was the only
+              thing in it naming the product. Since 2026-09-08 the row carries a
+              wordmark above this sentence and a `© … · beta` colophon below it,
+              so the old prefix said the name twice and "beta" twice inside forty
+              pixels. The claim about the pictures — the part that is actually
+              this page speaking about itself — is untouched. */}
+          Every screenshot here is of a real article read in Spideryarn.
         </SiteFooter>
       </main>
     </div>

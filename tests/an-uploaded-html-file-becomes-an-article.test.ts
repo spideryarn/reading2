@@ -234,17 +234,63 @@ describe("acquiring an uploaded web page", () => {
   });
 
   /**
-   * **Neither kind is still refused**, and terminally — the check the whole
-   * upload path exists to make. A `.html` name and a plausible size, so nothing
-   * else could be doing the refusing.
+   * **Something provably not a document is still refused**, and terminally —
+   * the check the whole upload path exists to make. A `.html` name and a
+   * plausible size, so nothing else could be doing the refusing.
+   *
+   * **The fixture changed on 2026-09-08 and the change is the point.** It used
+   * to be `"not a document at all, xxxx…"` — plain prose — and that is now
+   * *accepted*, because the upload predicate stopped asking "is this a
+   * document" and started asking "is this provably something else"
+   * (docs/plans/260908a-match-the-documents-leading-tokens-instead-of-searching-for-markup.md).
+   * Prose named `.html` is not provably anything else, so it goes to stage 2,
+   * which is the one place that can say whether there is an article in it.
+   *
+   * So the fixture is now bytes no text file contains — the WHATWG
+   * binary-data-byte test's own evidence — and the sibling below pins the half
+   * that reversed. Between them the rejection *record* stays covered, which is
+   * what this test is really for: a refusal that never reaches `uploads.reason`
+   * loses the only account of why a reader's file was turned away.
    */
-  it("refuses a file that is neither, and records why", async () => {
-    const bytes = new TextEncoder().encode(`not a document at all, ${"x".repeat(400)}`);
+  it("refuses a file that is provably not text, and records why", async () => {
+    const bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, ...new Uint8Array(400).fill(0x03)]);
     const { id, ctx } = await readyToVerify(bytes, "notes.html");
 
     await expect(STEPS.fetch.run(ctx, artefacts, nullCheckpointStore())).rejects.toThrow();
     const record = await readUpload(id);
     expect(record?.status).toBe("rejected");
     expect(record?.reason).toBe("not-a-pdf");
+  });
+
+  /**
+   * **The reversal, end to end.** The unit test in tests/fetch.test.ts pins that
+   * `uploadedDocumentKind` now answers `"html"` for prose; this pins that the
+   * step built on it actually lets such a file through stage 1 rather than
+   * refusing it somewhere else on the way. Two objects, one name, is how the
+   * last bug on this path hid — see this file's own § the manifest the store
+   * keeps.
+   *
+   * **It asserts the kind rather than merely that something resolved** ⟨Sol
+   * F15⟩. `resolves.toBeDefined()` and `status === "verified"` are both
+   * satisfied by a mutation that files this prose as a **PDF** and books it in
+   * to the transcriber — a green test over the most expensive way to get this
+   * wrong. The manifest is the artefact that carries the answer, so the
+   * assertion reads it.
+   */
+  it("lets prose named .html through stage 1, for stage 2 to judge", async () => {
+    const bytes = new TextEncoder().encode(`not a document at all, ${"x".repeat(400)}`);
+    const { id, ctx } = await readyToVerify(bytes, "notes.html");
+
+    const product = await STEPS.fetch.run(ctx, artefacts, nullCheckpointStore());
+    const manifest = product.parts?.raw;
+    if (!manifest) throw new Error("the step returned no manifest");
+    /* By the stored hash, like its neighbours: for HTML the canonical object is
+       the *decoded* string, so `shaOf(bytes)` is the wrong key here and this
+       test would leave a blob behind on every run. */
+    rubbish.push(() => blobs.remove(canonicalKey(manifest.storedSha256 ?? shaOf(bytes), "html")));
+
+    expect(manifest.kind).toBe("html");
+    expect(manifest.file).toBe("raw.html");
+    expect((await readUpload(id))?.status).toBe("verified");
   });
 });

@@ -310,7 +310,7 @@ export function Library({
   const capped = capRows(sorted, SHELF_ROW_CAP[view], expanded);
 
   return (
-    <main className="tw:mx-auto tw:max-w-4xl tw:px-6 tw:py-10 tw:font-sans">
+    <main className="tw:mx-auto tw:max-w-4xl tw:px-6 tw:pt-10 tw:font-sans">
       <header className="tw:mb-8">
         {/* The masthead links are deliberately the quietest thing on the page —
             same faint-until-hovered treatment as the back-link in Masthead.tsx,
@@ -718,7 +718,7 @@ function SearchBox({ value, onChange }: { value: string; onChange: (v: string) =
              tabbed into — and this input suppresses the browser's own ring
              with `outline-none`, so nothing else was drawing one. Same
              treatment on the URL box in AddArticle.tsx. */
-          className="tw:w-full tw:rounded-lg tw:border tw:border-border tw:bg-card tw:py-2 tw:pl-9 tw:pr-9 tw:text-sm tw:text-foreground tw:transition-colors tw:outline-none tw:placeholder:text-muted-foreground tw:focus:border-highlight tw:focus:ring-2 tw:focus:ring-highlight/25"
+          className="tw:w-full tw:rounded-lg tw:border tw:border-border tw:bg-card tw:py-2 tw:pl-9 tw:pr-9 tw:text-sm tw:text-foreground tw:any-pointer-coarse:text-base tw:transition-colors tw:outline-none tw:placeholder:text-muted-foreground tw:focus:border-highlight tw:focus:ring-2 tw:focus:ring-highlight/25"
         />
         {value && (
           <button

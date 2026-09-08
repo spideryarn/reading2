@@ -88,6 +88,7 @@ import { JobProgress } from "./JobProgress.js";
 import { UseProfile, WrittenForYou } from "./WrittenForYou.js";
 import { useHasProfile } from "./useProfile.js";
 import { useExperimental } from "./useExperimental.js";
+import { howLong } from "./relative-time.js";
 
 /** Clear of the fixed bottom bar, stated against `--dock-h`. See Metadata.tsx. */
 const DOCK_CLEARANCE = "tw:pb-[calc(var(--dock-space)_+_2rem)]";
@@ -877,23 +878,15 @@ export function threadMarkdown(thread: PublicTweets, article: Article): string {
   return [head, ...posts].join("\n\n");
 }
 
-/**
- * `6.1s`, or `1m 12s` once it gets long enough for seconds to stop being
- * readable.
- *
- * `elapsedMs` has been in the artefact since the first run and nothing has ever
- * shown it. It is worth showing for the reason the borrow list gives for timing
- * every model call from the outside: the original asked the SDK for its own
- * timings, got empty values back, and rendered them as `0ms` — a duration that
- * reads as "instant" rather than as "we don't know". A number nobody looks at
- * is a number nobody notices going wrong.
- */
-export function howLong(ms: number): string {
-  if (!Number.isFinite(ms) || ms < 0) return "an unknown time";
-  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
-  const s = Math.round(ms / 1000);
-  return `${Math.floor(s / 60)}m ${s % 60}s`;
-}
+/* `howLong` lived here from 2026-08-26 until 2026-09-08 and is now
+   relative-time.ts's, because the metadata page's step rows wanted the same
+   string and a second copy had been written before anybody noticed this one.
+   Why it exists at all is unchanged and is worth keeping in mind on this page:
+   `elapsedMs` has been in the artefact since the first run and nothing showed
+   it, and the original asked the SDK for its own timings, got empty values
+   back, and rendered them as `0ms` — a duration that reads as "instant" rather
+   than as "we don't know". That is where `an unknown time` comes from.
+   A number nobody looks at is a number nobody notices going wrong. */
 
 /** `25 Aug 2026`, or nothing readable if the artefact's timestamp is not one. */
 function whenWritten(iso: string): string {

@@ -121,7 +121,10 @@ On a box shared by coding agents, in rough order of how often it has been the an
 
 - **Concurrent test suites.** Each `vitest` run forks a worker per core, so two agents running the
   full suite on a 16-core box is 32+ processes. These belong to live work — leave them, and ask the
-  agents to serialise if it matters.
+  agents to serialise if it matters. **Do the arithmetic before reaching for the worker cap**:
+  measured here, peak memory was 3.84 GB fixed per run plus 0.198 GB per worker, so 87% of it was
+  spent before the first worker forked. Capping workers bounds processes, not gigabytes; what bounds
+  gigabytes is the number of concurrent runs.
 - **Dev servers from deleted worktrees.** The worktree is removed, the server keeps running and
   keeps its heap. Cross-check `git worktree list` against the servers you can see; a server whose
   worktree is absent from both git and disk is safe.
@@ -136,4 +139,7 @@ Not portable, so keep them at the edges of this doc:
   next one: [hetzner-remote-server-box.md](../project/hetzner-remote-server-box.md).
 - The swap size for new boxes is `swap_gb` in `infra/hetzner/variables.tf`; the block that applies it
   is in `infra/hetzner/provision.sh`, and it deliberately does not resize existing swap.
+- A crowded box refuses to start a suite rather than swapping: the reserve in
+  `~/.config/spideryarn/vitest-memory-reserve-gb`, written by `infra/hetzner/provision.sh` and read
+  by `vitest-admission.ts` — [testing.md](../project/testing.md).
 - Killing a shared dev server breaks other agents: [worktrees.md](../project/worktrees.md).

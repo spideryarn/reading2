@@ -11,11 +11,12 @@
  */
 import { describe, expect, it } from "vitest";
 
+import { sessionState } from "../scripts/gjd-remote-tmux.js";
 import type { Session } from "../scripts/gjd-remote-tmux.js";
 import { statusOf, statusesOf, triageCounts, triageRank, triageSort } from "../tools/fleet/status.js";
 import type { FleetStatus, StatusedSession } from "../tools/fleet/status.js";
 
-const CLAUDE_ID = "11111111-1111-1111-1111-111111111111";
+const CLAUDE_ID = "f1ee7000-0000-4000-8000-000000000001";
 
 function session(over: Partial<Session> = {}): Session {
   return {
@@ -66,8 +67,8 @@ describe("statusOf: the collapses this module exists to prevent", () => {
     // the difference between a screen of guesses and a screen that says so.
     const sessions = [
       session({ id: "$1", claudeId: CLAUDE_ID, proc: { kind: "claude" } }),
-      session({ id: "$2", claudeId: "22222222-2222-2222-2222-222222222222", proc: { kind: "none" } }),
-      session({ id: "$3", claudeId: "33333333-3333-3333-3333-333333333333", proc: { kind: "unknown" } }),
+      session({ id: "$2", claudeId: "f1ee7000-0000-4000-8000-000000000002", proc: { kind: "none" } }),
+      session({ id: "$3", claudeId: "f1ee7000-0000-4000-8000-000000000003", proc: { kind: "unknown" } }),
     ];
     const rows = statusesOf({ sessions, agents: null, agentsWhy: "claude: command not found" });
 
@@ -134,12 +135,59 @@ describe("statusOf: the collapses this module exists to prevent", () => {
   });
 });
 
+/**
+ * The enrichment is the one thing `statusOf` adds to `sessionState`, and it is
+ * chosen by `cause` — not by matching sentences, which is what this file used
+ * to do by asking `sessionState` a second time with an empty map. The reasoning
+ * behind that trick still holds and is written above `statusOf`: a reason that
+ * survives the box having answered is not the box's silence talking. The
+ * identifier says the same thing in one field.
+ */
+describe("statusOf: which unknown gets the box's excuse, and what survives it", () => {
+  const unknownOf = (status: FleetStatus) => {
+    if (status.kind !== "unknown") throw new Error(`expected unknown, got ${status.kind}`);
+    return status;
+  };
+
+  it("appends the box's own words only to the unknown the box caused", () => {
+    const blamed = unknownOf(statusOf(session(), null, "claude: command not found"));
+    expect(blamed.cause).toBe("agents-unavailable");
+    expect(blamed.why).toContain("claude: command not found");
+
+    // Same collection, same broken box, a row that is not broken in that way.
+    const notBlamed = unknownOf(statusOf(session({ claudeId: "not-a-uuid" }), null, "claude: command not found"));
+    expect(notBlamed.cause).toBe("not-a-session-id");
+    expect(notBlamed.why).not.toContain("command not found");
+  });
+
+  /**
+   * The enriched sentence carries the box's error text, which is exactly the
+   * kind of string that differs between two calls about one unchanging fault.
+   * The identifier must not follow it, or the enrichment reintroduces the
+   * flapping the field was added to stop.
+   */
+  it("keeps the identifier while the sentence takes on text that varies", () => {
+    const first = unknownOf(statusOf(session(), null, "claude: command not found"));
+    const second = unknownOf(statusOf(session(), null, "could not reach the box: timed out"));
+    expect(first.why).not.toBe(second.why);
+    expect(first.cause).toBe(second.cause);
+  });
+
+  it("passes an unknown through untouched when the box answered", () => {
+    // `agents` is an empty map: the box ANSWERED and listed nothing, so there
+    // is no excuse of its to append and nothing here to enrich.
+    const state = unknownOf(statusOf(session({ proc: { kind: "claude" } }), new Map(), null));
+    expect(state.cause).toBe("running-but-unlisted");
+    expect(state).toEqual(sessionState(session({ proc: { kind: "claude" } }), new Map()));
+  });
+});
+
 describe("triageRank", () => {
   it("puts needs-you above working, and working above the rest", () => {
     expect(triageRank({ kind: "needs-you" })).toBe(0);
     expect(triageRank({ kind: "working" })).toBe(1);
     expect(triageRank({ kind: "idle" })).toBe(2);
-    expect(triageRank({ kind: "unknown", why: "x" })).toBe(2);
+    expect(triageRank({ kind: "unknown", cause: "agents-unavailable", why: "x" })).toBe(2);
     expect(triageRank({ kind: "shell", busy: true })).toBe(2);
     expect(triageRank({ kind: "waiting", secondsLeft: 10 })).toBe(2);
     expect(triageRank({ kind: "no-claude" })).toBe(2);
@@ -210,7 +258,7 @@ describe("triageCounts", () => {
     const rows = [
       { status: { kind: "needs-you" } as const },
       { status: { kind: "working" } as const },
-      { status: { kind: "unknown", why: "x" } as const },
+      { status: { kind: "unknown", cause: "agents-unavailable", why: "x" } as const },
       { status: { kind: "shell", busy: false } as const },
     ];
     expect(triageCounts(rows)).toEqual({ needsYou: 1, working: 1, other: 2, unknown: 1 });
