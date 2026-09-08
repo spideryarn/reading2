@@ -114,16 +114,16 @@ put the write path in as *"a stage, but it doesn't have to be the top-priority."
 that. So on the Overseer's side the order is **attention first**, and the write path stays where he
 put it.
 
-## Where this stands, 2026-09-08T13:42Z
+## Where this stands, 2026-09-08T14:25Z
 
-**Important work left**, and it is now the last mile of four stages rather than all of six. What is
+**Important work left**, and it is now the last mile of three stages rather than all of six. What is
 finished is the part that had to be finished first: **every seam is agreed and every contract is a
 type**, so no session is waiting on another to decide anything.
 
 | | landed | what remains |
 |---|---|---|
 | **A** attention | the five types (`4d5cc454`); classifier built, evaluated and Sol-reviewed | **the push** — `Checkpoint.attention` is not on dev yet |
-| **B** usage | the dashboard's `Pause` contract (`f1c34e96`) and `pause.ts` | **the push**, then `Checkpoint.usage` on my side, behind A |
+| **B** usage | **DONE** (`95c2f49a`) — `usage.ts`, `UsageReport`, 19 Sol findings taken | `Checkpoint.usage` on my side, behind A |
 | **C** harness | **DONE** (`5c2e31cb`), worktree torn down | nothing; the `steer.ts` argv parser is unowned |
 | **D** health | seam agreed (`refreshOnce`, not `server.ts`); `lock.ts` extracted for it | retention and the drawing |
 | **E** dictation | the server half — `transcribe.ts`, `routes-transcribe.ts`, `vocabulary.ts` | the client half, and Greg's own mic test |
