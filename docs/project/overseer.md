@@ -212,6 +212,25 @@ box has actually lost. Prefer them over judgement:
   that they woke up.** Greg asked for that second half explicitly, and it is the half that gets
   skipped. A pause nobody verifies is indistinguishable from an agent that died.
 
+**The second of these now runs, and it proposes rather than acts.** `OVERSEER_RULES_ENABLED=1` arms
+the deterministic rules **and nothing else** — a daemon started that way is handed no session
+dispatcher at all, so no job in it can start a Claude session however due one is. That is why it is a
+separate switch from `OVERSEER_JOBS_ENABLED`, which arms the paid standing jobs as well and is
+Greg's to flip.
+
+What a rule may do is **data in its authorised definition, not a habit**: rule 2 carries
+`disposition: "propose"`, which is inside the hash, so changing it to `act` changes the fingerprint
+and the job is refused until somebody re-pins it deliberately. **And a re-pin would not be enough**:
+a daemon armed this way holds no actor at all — the same absence as the missing session dispatcher —
+so an `act` rule would meet a refusal naming what this process does not have. The proposal is written to the store
+*before* anything is attempted, and a proposal that could not be recorded means the action is not
+taken — a run that decided something and did nothing about it must be visible, not a quiet success.
+
+**Rules 1 and 3 are not built.** Rule 3 additionally cannot act until someone answers whether an
+unattended process may assert the `confirm: true` that `resource-broadcast` requires — the route
+checks it *before* it checks `FLEET_ACT_ENABLED`, so that assertion, not the flag, is the real
+authority grant. Do not assume the flag is the whole of it.
+
 ### Steering, and the actions you have
 
 The vocabulary is already built, in [`tools/fleet/actions.ts`](../../tools/fleet/actions.ts), and you

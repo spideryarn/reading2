@@ -134,11 +134,17 @@ export const FEEDBACK_SWEEP_DOCS = ["docs/project/feedback-reports.md"] as const
  * Pinned 2026-09-08 against the documents as they stood on `dev` that day.
  */
 export const AUTHORISED_HASHES: Readonly<Record<StandingJobId, string>> = {
-  "get-ready-to-deploy": "07eaeebbfc76",
-  // Re-pinned 2026-09-08 when `engineering-manager.md` came out of this job's
-  // document list (see the comment there). Read the change, which was the list
-  // and not the doc, and the job is still the one that should run unattended.
-  "feedback-sweep": "858c70da4976",
+  // Both re-pinned 2026-09-08 when `JobDefinition` gained `work`, which is in
+  // the fingerprint. Nothing either job does changed — they are still `session`
+  // jobs running the same prompt against the same document — but the definition
+  // now says so out loud, and saying so moved the hash. Read the diff: it is one
+  // literal in `standingJobs`.
+  "get-ready-to-deploy": "bfc37addeea1",
+  // Re-pinned once before, on the same day, when `engineering-manager.md` came
+  // out of this job's document list (see the comment there). Read the change,
+  // which was the list and not the doc, and the job is still the one that
+  // should run unattended.
+  "feedback-sweep": "8aa20daa8b85",
 };
 
 export type StandingJobId = "get-ready-to-deploy" | "feedback-sweep";
@@ -157,8 +163,15 @@ export type StandingJobs = {
   readonly problems: readonly string[];
 };
 
-/** Hex sha256 of a file's bytes, or the reason it could not be read. */
-function digest(repoRoot: string, path: string): { ok: true; document: JobDocument } | { ok: false; why: string } {
+/**
+ * Hex sha256 of a file's bytes, or the reason it could not be read.
+ *
+ * Exported because `rule-jobs.ts` digests its rule's implementation the same
+ * way this digests a job's document, and two copies of "read the file, hash it,
+ * say why it could not be read" is two places for the failure sentence to
+ * drift.
+ */
+export function digestDocument(repoRoot: string, path: string): { ok: true; document: JobDocument } | { ok: false; why: string } {
   try {
     const bytes = readFileSync(join(repoRoot, path));
     return { ok: true, document: { path, sha256: createHash("sha256").update(bytes).digest("hex") } };
@@ -186,14 +199,18 @@ export function standingJobs(repoRoot: string): StandingJobs {
   const build = (id: StandingJobId, everyMs: number, what: string, paths: readonly string[]): void => {
     const documents: JobDocument[] = [];
     for (const path of paths) {
-      const read = digest(repoRoot, path);
+      const read = digestDocument(repoRoot, path);
       if (!read.ok) {
         problems.push(`job ${id} is not being scheduled: ${read.why}`);
         return;
       }
       documents.push(read.document);
     }
-    const definition: JobDefinition = { id, everyMs, leaseMs: STANDING_JOB_LEASE_MS, what, documents };
+    // `work: {kind: "session"}` because that is what a standing job IS — a
+    // sentence handed to a Claude session on this box. It is in the
+    // fingerprint, so the pins below moved on 2026-09-08 when the field was
+    // added; that is the mechanism working rather than a cost.
+    const definition: JobDefinition = { id, everyMs, leaseMs: STANDING_JOB_LEASE_MS, what, documents, work: { kind: "session" } };
     jobs.push({ definition, authorisedHash: AUTHORISED_HASHES[id] as DefinitionHash });
   };
 
