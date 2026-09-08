@@ -14,7 +14,16 @@ stage first; a census broke the tie (41 data tables in the corpus, 34 kept, **7 
 reader's evidence) and Astra's ranking was adopted. **C4b is dropped, stage D deferred with all six
 visibility commitments intact, and C3 is next — diagnosed 2026-09-08 and much smaller than it was
 scoped as: the tables are deleted *before* candidate scoring, so there is no reinsertion problem and
-C2's rationale mostly goes with it.** Nothing of C3 is built yet. Scope narrowed after review.** The model repair pass Greg asked for is
+C2's rationale mostly goes with it.** **C3 is built and not yet landed**, at `f61df365` on the worktree branch: `src/protect.ts`, the
+table oracle that is what remains of C2, the PLOS gold corrected, and four data tables plus a
+correction notice recovered. Three Sol reviews so far — the plan, the code, and a narrow re-check of
+the P0 fixes — and **each one found a reader-reachable defect the one before had not**: a shared
+class token that truncated an article, a broad table rule that recovered a Wikipedia navigation
+sidebar and reported it as evidence, an ancestor guard that declined to rescue tables Readability
+then deleted, and now a prose-retention floor tuned to one fixture that lets a page of short
+paragraphs vanish, plus rule B deleting prose on a path the fallback never reaches. Those last three
+are in hand. **The pattern is the finding**: every defect here has been the *guard*, not the
+feature. Scope narrowed after review.** The model repair pass Greg asked for is
 **not** in this plan — GPT Sol's review found its operation layer not yet designable, and it moves to
 its own plan with the preconditions named in
 [What this plan deliberately does not build](#what-this-plan-deliberately-does-not-build-the-model-repair-pass).
@@ -2899,7 +2908,12 @@ substring inside class attributes:**
 | fixture | tables | `<tr>` |
 |---|---|---|
 | `ar5iv` | 7 → **9** | 42 → **60** |
-| `wiki_gdp_table` | 1 → **3** | 1 → **239** |
+| `wiki_gdp_table` | 1 → **3** | 1 → ~~239~~ **238** |
+
+**239 was wrong and is struck above; the number is 238** — 223 rows from the GDP table, 14
+from the regional one whose fifteenth source row is deleted by our own furniture pass, 1 from the
+map-legend grid. Reconciled per table by GPT Sol, 2026-09-08, which is how a document total stops
+hiding a discrepancy — and re-attributed below, because Sol blamed Readability for a row of ours.
 
 **And the navboxes stay out** — wiki goes to 3 tables, not 8. They die on a different branch
 (`UNLIKELY_ROLES`, for `role="navigation"` on their wrapper) and **link density plays no part in it**,
@@ -2964,6 +2978,631 @@ the notice still goes. The deletion just moves up one level.
   2026-09-06, which is now the wrong half. C4a shipped the delete class; what waits for stage D is
   the `Block` representation for classified furniture and every consumer learning it. See § C4's
   *What landed*.
+
+#### C3, rewritten 2026-09-08 — **tell Readability it is content, in Readability's own vocabulary**
+
+The diagnosis above removed the reinsertion problem, so what is left is a **pre-Readability stamp**
+and the check that the recovered structure is intact.
+
+**This section was rewritten twice on the same day**, and the second time is the useful one. The
+first draft proposed a broad rule and one shared class token; GPT Sol reviewed it before anything was
+built and returned **three P0s, all reproduced rather than reasoned to**, one of which showed the
+rule recovering navigation furniture and calling it evidence. The verdict was *"do not build C3 as
+written — build less, not none"*, and it is followed. What the first draft said, and why it was
+wrong, is kept below rather than deleted, because two of the three mistakes are ones this plan has
+made before under other names.
+
+##### The mechanism, and the boundary the review put on it
+
+Both losses are Readability declining to believe an element is content, and Readability has **two of
+its own escape hatches** for exactly that:
+
+| the branch that deletes | what rescues it | which loss |
+|---|---|---|
+| `unlikelyCandidates` in the node-prep walk (line 1119) | `okMaybeItsACandidate` matching the same string | the four tables |
+| `_cleanConditionally`'s *"Low weight and a little linky"* (`weight < 25 && linkDensity > 0.2`) | `_getClassWeight` ≥ 25, i.e. a `positive` class token | the PLOS correction |
+
+`okMaybeItsACandidate` is `/and|article|body|column|content|main|shadow/i` and `positive` is
+`/article|body|content|entry|…/i`. **Both contain `content`, and the first draft used that to do
+both jobs with one token. That was a P0.** A `positive` token does not only defeat a deletion — it
+adds 25 to the element's class weight, and tables are scored as candidate ancestors because their
+`<td>`s are in `elementsToScore` (Readability.js:1230, 2142). Sol constructed a qualifying table with
+prose either side and measured it:
+
+| token on the table | result |
+|---|---|
+| `spya-keep-column` | 1,568 chars — the table is a table, both prose regions survive |
+| `spya-keep-content` | 1,368 chars — **both prose regions gone**, the table promoted to top candidate and rewritten as a `<div>` |
+
+**No fixture in the corpus has that score topology**, which is why the corpus run looked clean. This
+is the exact shape of failure C0 was built to catch and the corpus could not: *a green result reached
+because the case is absent.*
+
+**So: one token per job.** Rule A uses `spya-keep-column` — in `okMaybeItsACandidate`, deliberately
+**not** in `positive`, so it defeats the deletion and changes no score. Rule B uses a `positive`
+token, because weight is the whole of its mechanism. Each is pinned by an end-to-end case that
+asserts its intended effect **and** its candidate-scoring boundary.
+
+**It is not a trick played on the library.** Adding a class token that says *content* is the sentence
+Readability reads the class attribute in order to hear; we answer the question it asks. The token
+never reaches the reader — `keepClasses` defaults to `false`, so it is stripped from the output with
+every other class. The lockfile pins Readability 0.6.0, so a bump that moved either regex would turn
+the end-to-end cases red rather than degrade quietly. ⟨Sol, agreeing, 2026-09-08.⟩
+
+**It adds no forgery surface.** A hostile page can already write `class="content"` on its own junk
+for the identical effect — that is Readability's behaviour, not something this introduces — so a page
+pre-placing our token buys nothing it did not have. Recorded rather than guarded, and the
+reserved-namespace scrub (`src/reserved.ts`) is deliberately **not** extended to it.
+
+##### Rule A — and the false positive that shrank it
+
+**What the first draft proposed:** stamp any `<table>` that (1) trips `unlikelyCandidates` on its own
+`class + " " + id` without matching `okMaybeItsACandidate`, and (2) is a data table by a mirror of
+Readability's `_markDataTables`. The argument was that this is an *ordering* bug — `_markDataTables`
+is called at line 1512, 385 lines after the table is gone — so the fix runs Readability's own
+judgement at the point the other branch needed it.
+
+**Both halves were wrong, and the second half is why.**
+
+`wiki_ar_ai` gained a table under that rule and the first draft reported it as a recovery nobody had
+counted. It is `<table class="sidebar sidebar-collapse nomobile nowraplinks hlist">` — 61 links,
+*"Part of a series on Artificial intelligence"*, and a taxonomy of topic links. **It is navigation.**
+It matched because `sidebar` is itself in `unlikelyCandidates`, and it passed the data-table mirror
+because a navigation sidebar has header cells. And `wiki_transformer` — reported in the first draft
+as an honest partial failure, a stamp that fired and bought nothing — is **the same sidebar shape**,
+saved only by the `role="navigation"` its Arabic twin happens to lack. Two of the first draft's three
+"interesting" results were one bug wearing two hats.
+
+**The lesson is one this plan has already written down once**, in C4's second round: *restricting an
+element by where it sits proves nothing about what it is for.* A data-table heuristic is not entitled
+to overrule the publisher's explicit `sidebar` declaration — `_markDataTables` exists to decide
+whether a table wants accessibility treatment, not to adjudicate furniture, and asking it to do the
+second is asking a question it was never written to answer.
+
+**The rule as built, per Sol's P0-02 and P1-01:**
+
+> Stamp a `<table>` when **`header` is the *sole* reason it matches `unlikelyCandidates`** — neutralise
+> the substring `header` in `class + " " + id` and no other unlikely term remains — **and** it carries
+> a non-empty `<caption>` or a `<th>`.
+
+No mirror, and no numerical tail. All four target tables have a caption or header cells, so the
+`rows >= 10 || columns > 4 || rows × columns > 10` arithmetic is never needed — and Sol showed the
+mirror was not one anyway: Readability adds `rowspan` found on each `<tr>`, counts descendant `<td>`
+only, and parses `colspan` with `parseInt`, three divergences that agree on all 192 corpus tables and
+disagree on two constructed ones. Calling the library's private `_markDataTables` was considered and
+rejected: it swaps a copied heuristic for an underscored runtime API **and still classifies the
+Arabic sidebar as data**, so it buys fidelity to the wrong oracle.
+
+**Measured across all 35 fixtures** (`data/scratch/C3-spike-corpus.mts`, throwaway; the durable
+version is the corpus test):
+
+| fixture | tables stamped | tables out | `<tr>` out |
+|---|---|---|---|
+| `wiki_gdp_table` | 2 | 1 → **3** | 1 → **238** |
+| `ar5iv` | 2 | 7 → **9** | 42 → **60** |
+| `wiki_ar_ai`, `wiki_transformer` | **0** — the sidebars, declined | unchanged | unchanged |
+| every other fixture | **0** | unchanged | unchanged |
+
+**Four tables recovered, not five**, and the corpus loses roughly 77. The stage does **not** make
+"tables survive" true generally and must not be quoted as though it did.
+
+**The 238 is right and the diagnosis's 239 was wrong**, reconciled by Sol per table: the GDP table
+contributes **223** rows, the regional table **14**, the map-legend swatch grid **1**. The stage
+records the per-table counts, not only the document total — a total is the number that hid the
+discrepancy for a day.
+
+**Sol attributed the missing fifteenth row to Readability, and that is wrong.** The row is
+`<tr class="mw-empty-elt">` — the only one in the fixture — and **our own C4a furniture pass deletes
+it** before Readability sees the page (`src/furniture.ts` § `ENTRIES`). Found by the agent building
+the oracle, which needed the snapshot point to be exact and so could not accept a nearly-right causal
+story. The count is unchanged and the cause is ours, which matters because the oracle's declared
+normalisation is written against the post-`prepareDocument` DOM: at that snapshot the source table
+has fourteen rows too, and a normalisation excusing a row nothing drops would be excusing nothing.
+
+**The navboxes stay out**, as measured: wiki reaches 3 tables, not 8. They carry no unlikely token of
+their own and die on their wrapper's `role="navigation"`, which no stamp on a table can reach.
+
+##### Rule B — the correction notice, and only the topology that was measured
+
+`div.amendment-citation` goes on *"Low weight and a little linky"* (`weight=0`, `linkDensity=0.291`,
+bar `0.2`) — the density coming from the citation printing its own DOI as link text — and the emptied
+parent `div.amendment amendment-correction` then goes on *"No useful content"*, taking
+`<h2>Correction</h2>` with it.
+
+The diagnosis said a class-weight nudge *"does not fix it"*. That is **half right**: the spike had
+stamped only the inner citation, the parent then failed the same check at 0.276, and the notice still
+went. **Stamping both** puts the parent at weight 25, where the bar is `linkDensity > 0.5`, and 0.276
+clears it. Confirmed three ways by Sol: parent alone recovers nothing, child alone recovers nothing,
+**both** take `plos_biology` from 28,004 to 28,352 characters (the figures were 28,112 → 28,460 from
+an older spike, the same delta of 348 against a drifted baseline) with `"Correction"`, `"10 Apr 2018"` and
+the DOI all back.
+
+**What it recognises is the measured topology and nothing else**: an outer
+`div.amendment.amendment-correction` together with its `div.amendment-citation` child. **No
+registry.** The first draft proposed adding `correction`, `erratum` and `retraction` — three tokens
+attested nowhere in the corpus — and defended the width by asymmetry: a wrong match only *keeps* a
+block, which Greg has already priced at *"a bit of junk in the structure that's getting ignored"*.
+
+**That argument is false, and Sol falsified it rather than disputing it.** A constructed
+`div.correction` given positive weight became the preferred candidate and dropped neighbouring
+genuine paragraphs. **Candidate selection is global**, so a wrong positive stamp can delete an
+author's prose somewhere else on the page. Greg's licence was about junk *surviving*; it was never a
+licence for a rescue that costs a paragraph. Another publisher's correction notice gets added when
+somebody has a fixture for its actual topology, positive and adversarial.
+
+##### What survives of C2 — a table oracle, and what the review made it check
+
+Sol's precondition five stands: the ruler is text and order and **cannot see a datum moved into the
+wrong row**, so a claim about a table-bearing page needs an oracle. Nothing is re-attached any more,
+so it no longer verifies a rescued subtree — it verifies that the table Readability now keeps is the
+table the source had.
+
+The first draft specified matching by caption text and first-row signature, and comparing row count,
+cells per row and normalised cell text at coordinates. **Both halves were too weak**, and both
+corrections come with a case that defeats the original:
+
+- **Match by provenance id, not by caption.** `stampSourceIds`/`sourceRefOf` (src/extract.ts) already
+  carry exact source identity, and caption matching is fuzzy where it is not simply absent — the
+  ar5iv tables have **no `<caption>`**, their labels are sibling `<figcaption>`s.
+- **Compare a semantic cell projection, not coordinate text**: tag name (`th` vs `td`), normalised
+  visible text, `rowSpan` and `colSpan`. Coordinate text alone passes while `<th>`s become `<td>`s,
+  spans vanish, or links disappear with their text intact — and this is concrete, not theoretical:
+  the recovered ar5iv Table 2 carries one `rowspan` and four `colspan`s, and stripping them would
+  pass the first draft's oracle unchanged. Mutation cases that delete a span and that convert a `th`
+  to a `td` must make the oracle fail.
+- **Name the source snapshot point and the allowed normalisation.** Two legitimate differences exist
+  in the GDP fixture alone: the regional table is 15 source rows against 14 output rows because the
+  last source row is empty, and one cell's source `textContent` includes inline stylesheet text that
+  `_prepArticle` removes. So: compare against the post-`prepareDocument` DOM, strip non-visible nodes
+  before reading text, and allow a wholly empty row to disappear — each written down as a permitted
+  difference rather than absorbed by a loose comparison.
+
+##### What landed, 2026-09-08 — and the three places the plan above was wrong
+
+[`src/protect.ts`](../../src/protect.ts), run **last** in `prepareDocument`, with
+`kept: KeptStructure` threaded to `ExtractResult` beside `removed` and an audit line in
+`src/pipeline.ts` that prints rule names and integers and is silent on the 32 fixtures that stamp
+nothing. `tests/extract-protect.test.ts` drives everything through `runExtract` and
+`splitIntoBlocks`.
+
+**The measurement beat the plan three times, and the plan is corrected rather than defended:**
+
+1. **The PLOS character counts were 28,112 → 28,460 and are 28,004 → 28,352.** The *delta* is 348
+   either way, so the rule's effect was right and the baseline had drifted under it — which is what a
+   number quoted from a stale run looks like when it is nearly right.
+2. **"Five fixtures are stamped" was wrong arithmetic on a right conclusion.** Three fixtures stamp;
+   the other two of the five are the bot walls, which stamp nothing and refuse. Thirty
+   zero-stamp fixtures either way.
+3. **The ar5iv landing sequence was overstated.** The plan claimed `figcaption` / `table` / `h2: 5
+   Training` as a contiguous run. The first two are adjacent and always were, inside the `<figure>`;
+   the `<h2>` is not adjacent and is not even a sibling — three paragraphs of § 4's own prose sit
+   between them, where the author put them, and the heading opens the next `<section>`. The test
+   asserts the true document order, `FIGURE, P, P, P, H2`.
+
+**The evidence that is worth more than any of ours: a floor written by somebody else went green.**
+`plos-biology.manifest.json` sets `structure.h2.atLeast: 12` and its note names the three article
+sections that are gone, the 2018 correction notice first. The shipped extraction returned **11**.
+With rule B it returns **12**, and the one gained is `"Correction"`. That assertion was written on
+2026-09-05 for a different purpose by somebody with no stake in this stage, which is exactly what
+makes it evidence rather than agreement.
+
+**One collateral repair, root-caused rather than patched.** Recovering the notice broke two cases in
+`tests/extraction-scorer.test.ts`. `region-padding-only`'s precondition needs 2,000 characters of
+off-region paddable prose; `plos-biology` had **2,030**, a thirty-character margin, and was the only
+fixture in the fast block that could run the arm. The recovered citation paragraph is **203** of
+those characters, so moving it into the output left 1,827 and the arm stopped being exercised at all.
+`mdn-cache-control` joins `SMALL_FIXTURES` with 6,971 paddable characters — three and a half times
+the bar, and not sitting on a boundary anything can nudge. `plos-biology` stays for the seven arms it
+still exercises.
+
+**And an open question the stage did not settle, recorded rather than quietly absorbed.**
+`plos-biology`'s `articleRegion` is `div#artText`, which does **not** contain the amendment div — so
+recovering the notice takes `regionPrecision` from 0.9807 to **0.9727**. The extraction is more
+correct and the instrument scores it lower. That is the ruler contradicting itself: the same
+manifest's note calls the notice one of three *missing article sections*, so its prose and its region
+disagree, and the region is the shortcut while the prose is the reasoning. Widening it moves numbers
+this plan has published (the region's 23,330 characters and the 22,100 floor), so it is not being
+changed in passing. It was the first question in the stage-end review, and it is answered below: **the gold was wrong.**
+
+##### The fallback — a rescue that loses the author's prose is not a rescue
+
+GPT Sol's review of the built stage refused the adversary's absolution. Its argument, adopted: an
+identical table without `header` triggering the same Readability failure explains the mechanism but
+does not absolve the pass, because **rule A is the action that turns a real header-named page from
+*prose, missing table* into *flattened table, missing prose*** — the same failure class for which the
+positive token was rejected at twelve rows.
+
+So `readArticle` runs stage 2 a **second time with rule A off** whenever rule A stamped a table, and
+ships the control arm if the treatment lost prose. The control keeps rule B running — a
+`ProtectOptions` parameter rather than the test-only module seam — so a rolled-back page still gets
+its correction notice. `kept` then says `a-table-called-header-rolled-back` **in place of**
+`a-table-called-header`, and the existing audit line carries it with no change, because it iterates
+whatever keys are there.
+
+**The obvious criterion is a length comparison and it is wrong**, which is the part worth keeping:
+in the case that caused all this the bad arm was the *longer* one — 3,726 characters of flattened
+rows against 801 characters and four paragraphs. Length scores the disaster as an improvement. What
+is compared instead is **containment**: every paragraph-level run in the control must appear
+somewhere in the treatment's text. `proseRetention` returns three numbers and no text, so a caller
+logging its result cannot log the article — [logging.md](../project/logging.md)'s rule made true by
+the signature rather than by remembering.
+
+**And the obvious floor is wrong too, which is the finding.** Written with Readability's own
+25-character scoring threshold, the criterion **fires on a real corpus fixture**: `wiki_gdp_table`'s
+treatment loses one control run — *"From Wikipedia, the free encyclopedia"*, 37 characters, written
+as `<div id="siteSub" class="noprint">` and rewritten by Readability as a `<p>`, dropped because
+`_cleanConditionally`'s arithmetic moves with the article's total score and the article had just got
+237 rows longer. At 25 the fallback would have withdrawn that page's four recovered data tables **over
+one line of site chrome the publisher had already marked as not for print.**
+
+The floor is **100** characters for that reason, and the reason is in the constant's own comment. At
+100: `wiki_gdp_table` compares 24 runs and loses none, `ar5iv` compares 111 and loses none, the
+24-and-40-row synthetic loses all four. **What it gives up is named in the same place**: a page whose
+prose is all short has little above the floor, so a catastrophe there is invisible to this check. The
+trade runs this way because a check that fires on chrome costs a reader four tables on a page that
+was fine.
+
+**Cost, measured**: `wiki_gdp_table` 4.6s against 1.7s for a single arm, `ar5iv` 3.3s against 1.4s,
+`plos_biology` unchanged because rule B does not trigger it. Two fixtures in thirty-five pay it, in a
+batch stage nobody is waiting on. **The fallback fires on no corpus fixture**, and the three stamped
+fixtures come out byte-identical to before it existed.
+
+**One divergence, named rather than left to be discovered.** `readArticleWithProvenance` does not run
+the fallback, so on a page that rolled back the eval instrument would report the extraction we did
+*not* ship. It fires on nothing today, and it is exactly the class of defect this stage exists to
+kill — an instrument measuring something other than what a reader gets. Recorded in that function's
+own `kept` doc and put to the reviewer as the narrow check of this fix.
+
+##### The rest of the second review, fixed and measured
+
+- **The ancestor guard was worse than reported.** `_hasAncestorTag` inspects four ancestor levels and
+  line 1121 passes no depth, so **one `<div>` between a layout cell and a data table is already
+  enough**: measured before the fix, the table was declined *and deleted* — `kept: {}`, zero tables.
+  The guard now walks four levels; the shallow and beyond-depth cases are both pinned. Swept all 35
+  fixtures for a table where the two guards disagree: **none**, so no corpus number moves.
+- **The exposure ladder's first rung disagreed with the shipped rule.** `sourceCandidates` still used
+  the substitution the adversary had disproved, and said *sole* where the real rule said *not sole*
+  on `headerelated`. It now tests each live unlikely alternative except `header` against the original
+  string — still derived from the library rather than from our copy, so the two cannot drift into
+  agreeing wrongly — with `headerelated`, `headerss`, `headeremark` and `headereplies` all requiring
+  zero, beside a header-sole positive control.
+- **Rule B narrowed to `:scope > div.amendment-citation`.** PLOS writes it as a direct child,
+  measured. The test that had required a citation buried in an unrelated `<aside>` to *qualify* — a
+  deferral wearing a contract — now requires it to be **declined**, with a direct-child control
+  beside it, and the comment names what would widen it again: a real publisher fixture with a wrapped
+  citation, with treatment and control both measured.
+- **Regex parity compares flags as well as source.** Said plainly in the report: this assertion
+  **cannot be red today**, because both are `i`. It is a tripwire for a future bump, not a fix for a
+  live defect, and calling it a fix would be the overstatement this section keeps catching.
+- **A false claim removed**: an element cannot qualify for both rules, because rule A selects
+  `<table>` and rule B selects `<div>`.
+- **A fixture lead recorded and not built for**: a detached `table#header` holding `<th>` cells beside
+  a separate data table would be stamped as an incomplete header shell. Sol found the construction
+  and reproduced no reader failure from it.
+
+**Red before green, checked by reverting.** All four source fixes were reverted at once and the file
+run: **5 failed, 30 passed**, and the five were exactly the new and changed cases — the `headerelated`
+rung, the four-level mirror, the row sweep (`expected +0 to be 4`, so the prose really was gone), the
+nested-notice count, and the buried-citation flip. The measurement probes were written before the
+source changes, so the pre-fix numbers here are measurements rather than reconstructions.
+
+##### The narrow re-check — the fallback's own guard had the bug in it, twice
+
+Under [engineering-manager.md](../reusable/engineering-manager.md), discovery closes after two rounds
+but *"an established P0 whose final fix was not in the round-two snapshot still gets a narrowly
+scoped check of that fix."* P0-01's fix was written after round two, so it got one. **The verdict was
+not ready to land**, and both findings were reproduced rather than argued.
+
+**The floor was tuned to a fixture, and that is the honest description of it.** `PROSE_RUN_FLOOR = 100`
+was chosen because 25 fired on `wiki_gdp_table`'s *"From Wikipedia, the free encyclopedia"*. Sol built
+a header-named 24-row table beside **eight distinct authored paragraphs of 99 characters each**: the
+control returns all eight, the treatment returns none of them and 1,781 characters of table, and
+`proseRetention` reports `{ runs: 0, lost: 0, retained: true }` — **so nothing rolls back and the
+reader loses the page.** Short news paragraphs, Q&A answers, list prose, poetry and concise technical
+documentation all live below 100. The floor was a statement about nothing; the exclusion has to be a
+statement about what the markup says, and the publisher already made it — `#siteSub` carries
+`class="noprint"`. Back to 25, with the chrome excluded semantically.
+
+**And rule B deletes prose on a path the fallback cannot reach.** The second arm runs only when rule
+A stamped, so `rescued === 0` returns immediately. Sol reproduced it on the exact accepted topology —
+`div.amendment.amendment-correction` with a direct `div.amendment-citation`, **no qualifying table
+anywhere**, four authored paragraphs beside it: the stamped notice won candidacy and every paragraph
+went, 675 characters against 1,031 with protection off, and `kept` said the notice was recovered.
+**This is the plan-stage positive-token failure, still reader-reachable after the selector was
+narrowed** — the same defect, at its third address.
+
+**The declared divergence was not dead after all.** `readArticleWithProvenance` skips the fallback,
+and this was recorded as harmless because no corpus page rolls back. Sol ran it against the
+fallback's **own committed construction**: `readArticle` returned four prose markers and
+`a-table-called-header-rolled-back`, the provenance arm returned zero markers and
+`a-table-called-header`, 1,323 characters against 3,805. So the eval harness's *"shipped"* arm
+already inspects an extraction we discard. It closes in this stage.
+
+**What Sol confirmed as sound**, and it matters that the list is not empty: the four-level ancestor
+mirror, including the off-by-one (depths 0–3 are parent levels 1–4, and it returns false before
+level 5); the exposure oracle's independence, deriving its alternatives from the live library while
+the shipped rule uses the pinned copy; `:scope > div.amendment-citation` against the measured PLOS
+topology; and the gold widening — with a correction to the argument for it. **The two-arm measurement
+alone does not disprove gerrymandering**, because a region drawn around treatment-only output would
+score the same favourable direction. What makes it sufficient is the *combination*: the two arms, the
+pre-existing annotation that counted *Correction* among the article's twelve `<h2>` before this stage
+existed, the single-root selector, and the region-size tripwire that went red. Recorded because the
+weaker version of that argument is the one this stage nearly shipped.
+
+###### What closing them took, and the one place Sol was wrong
+
+**No corpus fixture moves.** The three that stamp are byte-identical to before any of this, verified
+independently of the agent that made the fixes — and the census is now a *stricter* one: dropping the
+floor from 100 to 25 took `wiki_gdp_table` from 24 prose runs under scrutiny to **58**, and it still
+loses none.
+
+- **The floor is 25 and the chrome is excluded by markup.** `notForPrintText` reads the flattened text
+  of `.noprint` elements off the **pre-Readability** document — Readability strips the class that says
+  so — and a run contained in one of those is not the author's. **`.noprint` only**: `no-print`,
+  `hidden-print` and `d-print-none` were considered and left out for the same reason `erratum` was
+  left out of rule B. An unmeasured token here is a rollback that should fire and does not.
+- **Both rules are under the control now.** `controlOptionsFor(kept)` switches off exactly the rules
+  that fired, so a page where only rule A stamped still gets its correction notice in the control arm.
+  Where both fired and prose was lost, **both are withdrawn** — the coarse answer, taken deliberately:
+  separating A's fault from B's costs a third and fourth Readability run for a shape no fixture has,
+  and it costs a rescue rather than a paragraph.
+- **The provenance divergence closed by construction rather than by a test.** `readArticle` and
+  `readArticleWithProvenance` are now one shared generic over two arms, so there is no second copy of
+  the decision to drift; the byte-equivalence test is there as well, on both a rule-A and a rule-B
+  rollback page.
+
+**And Sol's rule-B reproduction did not reproduce.** Its construction used `<section>` wrappers; the
+loss needs `<article>`. **There are two reasons and the first account gave only one**: `<div>` is
+worth +5 in `_initializeNode` where `<article>` has no case at all, *and* `section` is itself in
+`DEFAULT_TAGS_TO_SCORE` (Readability.js:128), so a `<section>` wrapper is scored and feeds its parent.
+Both verified directly; the second was Fable's, checking a sentence this plan had stated as though it
+were complete. The defect is real and was found by
+sweeping for the shape that does it — 520 characters and no prose against 1,508 with protection off —
+but **the reviewer's own repro was wrong**, which is the fourth time in this stage that checking a
+report beat believing it.
+
+Cost of the second arm, measured on a loaded box so read the ratios: `wiki_gdp_table` 6.0s against
+1.9s, `ar5iv` 2.8s against 1.5s, `plos_biology` 1.5s against 0.7s. Three fixtures in thirty-five, in
+a batch stage nobody is waiting on.
+
+###### The pattern across three reviews — as first written, and as Fable corrected it
+
+**The first version of this section said every defect had been in a guard rather than in the feature,
+and that the recogniser had been right since the first measurement. That is false**, and Fable said
+why: the `headerelated` substitution was *in the recogniser*. `headerIsTheSoleUnlikelyTerm` is the
+predicate that decides what rule A recognises, *"neutralise `header` and re-test"* was its definition
+of **sole**, and it was wrong in a way that cost a whole page. Kept here rather than quietly
+rewritten, because a comforting story about one's own code is worth recording as a thing one reached
+for.
+
+**"The defect rate is falling" does not survive either.** Round one: 3 P0. Round two: 4 P0. Round
+three: 2 P0 and a P1 — on a review deliberately narrowed to a single fix. **Fewer findings from a
+narrower scope is what narrowing does, not convergence.**
+
+What genuinely converges is **where the findings sit**: the recogniser recovering navigation
+furniture → a guard missing a case → a guard's *threshold* being wrong. That is a weaker claim than
+the one first written here and it is the true one.
+
+**And the two rules are not the same kind of thing, which the first version blurred.** Rule A removes
+an *accidental penalty*: its effect is the page Readability would have produced had the publisher not
+written `header`, and its failure mode — a 24-row table beside thin prose — is Readability's ordinary
+behaviour on `wikitable sortable`, which ships on every Wikipedia table page today. It enlarges an
+exposed set; it does not create a hazard class. **Rule B is an affirmative `+25`**, and the plan had
+already rejected a registry because a positive token displaced prose — then Sol showed the *accepted*
+two-token topology doing the same. So **rule B is safe only under the fallback**, and what keeps it
+acceptable is exposure rather than design: two PLOS class names, on a platform whose body is tens of
+thousands of characters and never lets a notice win.
+
+###### The residual class, and the rule that stops this stage reopening
+
+Textual containment has an unbounded false-negative surface by construction, and Sol accepted its
+general shape in round three — *"acceptable only if the invariant is explicitly 'words retained
+somewhere'"*, which `proseRetention` now says outright. The known instances:
+
+- prose runs under the 25-character floor — poetry, dialogue — beside a rescued table;
+- article prose that happens to sit inside a `.noprint` container, which the exclusion then makes
+  invisible (the guard uses bare `.noprint`, wider than the `#siteSub.noprint` Sol proposed);
+- prose the control keeps in a container outside `PROSE_RUN_TAGS`;
+- a paragraph duplicated in a footnote or a table, whose main occurrence can go while the identical
+  string elsewhere keeps the check happy.
+
+**The stopping rule, written down so the next reviewer does not restart the loop: a further
+constructed instance of this class is not a P0 and does not reopen the stage. A real page that loses
+prose does.** ⟨Fable, arbitrating under
+[engineering-manager.md](../reusable/engineering-manager.md)'s *settle it through Fable or Greg*
+clause, 2026-09-08.⟩
+
+**Why the fallback stays**, against the honest case for dropping it and shipping the recogniser bare:
+nothing would ever show it was needed. The loss it guards against is **silent to the reader** — a page
+of table rows instead of an article — and there is no control arm in production, so the
+`…-rolled-back` key in the audit line is the only production instrument for this class at all. And
+its errors are asymmetric: a false rollback costs a rescue, which is the status quo; a missed loss
+costs prose, which is the bare feature. **Every fallback bug is therefore bounded by "the bare
+feature", so dropping it cannot be safer than keeping it.**
+
+##### The gold was wrong, and the test that says so is the one that could have gone the other way
+
+`plos-biology.manifest.json`'s `articleRegion.within` was `["div#artText"]`, and the amendment div
+sits outside it — so recovering the correction notice counted as text from outside the article and
+took `regionPrecision` from 0.9807 to **0.9727**. The extraction got more correct and the instrument
+scored it lower.
+
+The manifest's own prose had said otherwise since 2026-09-05: all twelve source `<h2>` are article,
+*Correction* listed first, three article sections gone with the notice named among them, and
+`structure.h2.atLeast: 12` set on that basis. **Its prose and its region disagreed**, and the region
+was a DOM shortcut — `div#artText` is what PLOS puts the *body* in, not the article.
+
+`within` gains `.article-content > div.amendment.amendment-correction`, which matches exactly one
+element in the prepared source and in the raw bytes, whose class list is PLOS's own. Reproduced
+independently of Sol, every figure agreeing: region 23,330 → **23,521** characters, credited 22,659 →
+**22,850**, `articleRecall` 0.97124 → 0.97147, `regionPrecision` 0.97270 → **0.98090**, and
+`minArticleChars` 22,100 → **22,300** by the manifest's own recorded policy of *the region less 5%,
+rounded down to 100*.
+
+**Widening a region so your own extraction scores better is gerrymandering**, and this one has the
+suspicious shape in full: the correction root holds 191 characters in 5 stamped elements and the
+extraction returns all 191, so recall inside the root is 1.000 and the widening **costs nothing**. A
+costless widening is exactly what a rigged one looks like. So the defence is not the argument, it is
+this measurement — both regions against both arms, the second arm being the extraction as it shipped
+until 2026-09-08:
+
+| | protect OFF | protect ON |
+|---|---:|---:|
+| corrected region, `articleRecall` | **0.96335** | 0.97147 |
+| corrected region, `regionPrecision` | 0.98074 | **0.98090** |
+| current region, `regionPrecision` | 0.98074 | 0.97270 |
+
+**The corrected region punishes the extraction that drops the notice.** The old region was the only
+one under which recovering it made the score worse. A gerrymandered region rewards its author's arm
+and is indifferent to the other; this one ranks the two arms in the order the manifest's prose
+already said they should be ranked, and it was chosen from the source rather than from the output.
+
+**The tripwire fired, which is the other half of the evidence.** `tests/extraction-scorer.test.ts`
+pins `REGION_CHARS["plos-biology"]`, with a comment saying a widened region must go red rather than
+pass quietly. It went red. The pin moved to 23,521 with the reason written beside it.
+
+**And a clause that has quietly stopped doing anything**: `except: ["ul.reflinks"]` matches **zero**
+elements in the prepared source and 26 in the raw bytes, because C4a's furniture pass now removes
+them before the region is resolved. It is harmless and it is left alone, but its `why` describes work
+it no longer does — recorded here rather than tidied, because the next person to read that `why` will
+otherwise believe it.
+
+##### The adversarial pass, by a different agent — three defects, and one of them lost the article
+
+C0's adversary rule, applied: the agent that attacked `src/protect.ts` did not write it and was
+briefed to break it rather than confirm it. It found three defects, all **red before the fix and
+green after**, each verified by mutating the source back and reading the failure message — and the
+other seven adversarial cases stayed green under the same mutation, which is what makes each one
+about its own defect rather than about the pass being off.
+
+**1. The neutralisation could be defeated by an overlapping term, and the cost was the whole page.**
+The first fix replaced `header` with a space and re-tested, arguing that a space cannot be part of
+any unlikely term so nothing could be *glued* into existence. True, and the wrong question. **The
+danger was destruction, not creation.** `header` ends in `r`, and `related`, `remark`, `replies` and
+`rss` all begin with one, so `headerelated`, `headerss`, `headeremark` and `headereplies` each
+contain a *second, genuine* unlikely term sharing that letter — and removing `header` removed it
+too: `"headerelated".replace(/header/gi, " ")` is `" elated"`, which matches nothing.
+
+Measured through `runExtract` on a page carrying `<table class="headerelated">`: the pass stamped it,
+Readability kept it, it won candidacy, and the output was **3,726 characters of flattened rows with
+all four paragraphs of prose deleted**, against 801 characters and four paragraphs with the pass off.
+Not junk kept — **the article lost.**
+
+The substitution is gone. `UNLIKELY_EXCEPT_HEADER` is `unlikelyCandidates` with its one `header`
+alternative removed, derived from the pinned copy and asked of the **original** string, so the join
+hazard is impossible rather than argued about. Verified independently: the literal `|header|` occurs
+exactly once in the source, `headerelated` and `headerss` now decline, and both real tables and the
+Arabic sidebar are unchanged.
+
+**2. `kept` overstated what rule B stamped.** `querySelector` reaches through a nested
+`div.amendment.amendment-correction`, so an outer notice and an inner one can resolve to the *same*
+citation element, and `notice += 2` per outer counted that element once per notice that found it. A
+document with two inner notices under one outer reported **6 for 5 elements actually stamped** — in
+the one field whose own docstring says the unit is elements stamped. Now a `Set` of what was actually
+stamped, so the unit is true by construction rather than by arithmetic that happens to agree.
+
+**3. Rule A counted rescues that rescued nothing.** Line 1119 carries `!_hasAncestorTag(node, "table")`
+and `!…(node, "code")`, so a table nested inside either is never reached by the deletion rule A exists
+to defeat. The pass stamped one anyway and reported it. The stamp was harmless — `KEEP_COLUMN` moves
+no score — but **the number was not**, and a count that reports work nobody did is the exact shape of
+the failure this stage is about. Readability's two ancestor guards are now mirrored.
+
+##### The claim the adversary corrected, and it is the honest one
+
+The header comment's two-token table read `spya-keep-column` ⇒ *the table is a table, both prose
+regions survive*, against `spya-keep-content` losing them. **That was a reading of one page with
+twelve body rows.** At twenty-four rows the weightless token produces the identical catastrophic
+card — table flattened to a `<div>`, every paragraph gone. **A weightless token does not make a
+rescue safe**: a rescued table is a table that gets *scored*, and thin prose beside it loses.
+
+The mitigating half was checked rather than assumed. The same page with `class="wikitable sortable"`
+— a string Readability never disliked, nothing stamped — loses the same four paragraphs at the same
+row count, to the character. **So this is Readability's arithmetic and not ours**, and rule A is
+faithful in the only sense available to it: it hands the page the extraction it would have had if the
+publisher had not written `header`, bad outcomes included. Both readings are in the comment now, and
+a swept test pins 12, 24 and 40 rows with its own control.
+
+##### What the adversary could not do, said plainly
+
+- **`headerelated` has no known real-world instance.** The defect and its consequence are measured;
+  the likelihood is not. A sharp edge with no known page on it.
+- **The seam has a hole nothing pins.** `withProtectionDisabled` restores in a `finally` after
+  `await fn()`, so a callback returning a **non-promise thenable that never settles** leaves the pass
+  disabled permanently — reproduced in a scratch script, deliberately not written as a test, because
+  reproducing it inside the suite would disable the pass for every test after it and there is no
+  exported way to force the flag back. Nothing in the repo passes a thenable, and the comment claims
+  only that a *throwing* case is safe, which it is.
+- **Rule B's citation lookup is wider than its measured topology** — `querySelector` finds a citation
+  anywhere beneath the notice, where PLOS writes it as a direct child. Left wide and pinned: no
+  construction made the width cost anything, and `:scope >` would decline any publisher who wraps the
+  citation once more. If a page is ever found where it costs prose, that pinned test is the one that
+  flips.
+- **No rule-B shape was found that costs a paragraph**, in three serious attempts. That is a failure
+  to break it, not evidence it cannot be broken.
+- **One sentence is narrower than it reads.** *"The token never reaches the reader"* holds, but
+  `readArticleWithProvenance` snapshots the prepared DOM into `sourceHtml`, so the tokens do reach
+  the eval harness's provenance artefact. No eval instrument reads class names, so nothing measures
+  differently — grepped, not assumed.
+
+###### What the oracle turned out to need — built 2026-09-08, and it corrected its own brief
+
+[`evals/extraction/table-oracle.mts`](../../evals/extraction/table-oracle.mts) and
+`tests/table-oracle.test.ts` (20 tests). Matching is by provenance id through `sourceRefOf`, and an
+output table is accepted **only when the id resolves to a `<table>` in the source** — a `descendant`
+resolution that lands on a `<tbody>` is reported *untraceable* rather than quietly matched, which is
+the abstention-shaped green C0 exists to refuse.
+
+**The four-field projection this section specified cannot detect one of the mutations it demands.**
+Delete a link and leave its text, and tag, normalised text, `rowSpan` and `colSpan` are all
+unchanged. So the projection carries a **fifth** field, the resolved hrefs in the cell, and the test
+asserts that mutation produces `cell-links-differ` and **no** `cell-text-differs` — the second half
+being what proves the fifth field is doing the work rather than riding along.
+
+**Cell text never leaves the module.** A text difference reports character counts and an eight-hex
+digest, which is enough to show two cells swapped — each new digest is the other's old one, and the
+test asserts exactly that — and not enough to reconstruct an author's prose.
+
+**The normalisations are data, not judgement**, exported as `NORMALISATIONS` with a test asserting
+the list is exactly three, so a fourth is a deliberate act rather than a loosened comparison:
+`empty-row-may-vanish`, `non-visible-nodes-stripped`, `whitespace-collapsed` (no case folding).
+Hidden-but-present nodes are deliberately **not** normalised — there are zero inside the corpus's 192
+source tables, and widening an oracle for a case nobody has is how an instrument stops being able to
+fail.
+
+**Corpus reading, 2026-09-08**, with C3's recovery in: `wiki-gdp-table` 3 of 3 traced tables agree,
+`ar5iv` 9 of 9 agree. Across 19 table-bearing fixtures, 118 traced, 65 agree, 53 differ, 74 source
+tables absent from the output, 0 untraceable. **The 53 are almost all `hn-dropbox` comment tables and
+one `blogger-bldgblog` sidebar cell Readability empties** — real losses, reported rather than
+absorbed, and the number to watch is that it did not come out as zero.
+
+##### How it is proved — the ladder, the counterfactual, and the adversary
+
+Per § *How every recogniser is proved*, each rule carries an **exposure ladder** (source candidates →
+elements stamped → survivors after Readability → blocks affected → the assertion that changes), a
+**counterfactual** through a mutation seam so the positive fixture is red without the pass and green
+with it, and an **adversarial negative written by a different agent** (C0's adversary rule).
+
+Three things the review adds to that, each closing a hole it found:
+
+1. **A candidate-scoring boundary case for every token.** Rule A's must assert that the table stays a
+   `<table>` and that prose on both sides survives — the case that caught P0-01, and the corpus
+   cannot supply it.
+2. **Both Wikipedia sidebars are standing negatives**: `wiki_ar_ai` and `wiki_transformer` assert
+   **zero stamps and byte-identical output**. They are the fixtures that caught the broad rule.
+3. **The corpus residual test runs both arms.** The first draft's spike did not — for a zero-stamp
+   fixture it assigned the treatment result from the control and compared three counts, which is a
+   check that cannot fail, in a stage whose subject is checks that cannot fail. Sol replayed the real
+   `prepareDocument` sequence with the pass inserted and compared whole article objects: **all 30
+   zero-stamp fixtures byte-identical** — 30, not the 31 the first draft claimed, because five
+   fixtures are stamped, not four. The durable test executes both arms, compares `extractedHtml`
+   bytes, and asserts the typed refusal separately for `medium_about` and `pmc_article` rather than
+   letting an exception become a `-1`.
+
+Done when: both rules ship in `src/protect.ts`, wired into `prepareDocument` and proved through the
+real pipeline rather than by calling the pass directly; the recovered tables are asserted through the
+oracle with per-table row counts; the corpus residual is byte-compared on both arms; and
+`docs/project/content-extraction.md` records the mechanism, the four tables, and what the stage does
+**not** fix.
 
 #### The one place the reviewers disagreed — decided, not left open
 
