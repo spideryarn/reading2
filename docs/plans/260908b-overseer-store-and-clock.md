@@ -1438,7 +1438,14 @@ error until somebody says whether it is identity, row material, pane or clock. `
 returns `Pick<RegisterEntry, RegisterRowField>`, and a test ties the census's row half back to the
 list the differ watches. One name added in one place cannot pass all three.
 
-**Mutations: 19 tried, 19 caught — and one of them only after it survived.**
+**Mutations: 19 tried, 19 *reported* caught — and three of those were not. Corrected below; see
+§ The mutation claim that hid S7-F1's neighbour.** The `sameMeta` deletions only appeared caught
+because the one metadata transition moved two members at once. Left here as written, with the
+correction pointed at, because the sentence as originally recorded is what made the gap invisible and
+deleting it would hide the lesson too.
+
+**One of them was caught only after it survived**, which is the part that was honest.
+
 `rowFieldMoved("startedAt")` returning `false` passed the entire suite, because every other test
 edited some other field, so a watched field nothing exercises is not really watched; the test that
 closes it says so. **Four first-round runs were VOID rather than caught** — a vitest killed under
@@ -1465,6 +1472,74 @@ argument for the extraction rather than against it, and every divergence resolve
 written twice. No test was edited; five mutations on the extracted module were all caught, and the
 one that reports a torn file as clean fails in the **notes** suite as well as the store's, so both
 callers really are exercised through it.
+
+#### S7's own review, and the claim in it that was false
+
+Two cross-family reviews ran over S5 and S7 — one scoped to the two S7-01 commits, one to the whole
+candidate. That duplication was an accident (neither of us announced), and it turned out to be worth
+having: **they agreed on the pane defect and each found P1s the other missed.** Agreement between two
+independently-scoped reviews is worth more than either report claims on its own.
+
+**S7-F1, found by both — a transient pane-join miss produced a FALSE replacement on recovery.**
+`panePid` is joined from a separate pane listing, so a miss yields `null` on a live session. `42 →
+null → 42` emitted nothing on the miss and then `session-pane-replaced` when the **identical** pid
+returned, because the differ compares snapshot to snapshot and the baseline advanced through the null.
+The second reviewer printed it: `recovery: session-pane-replaced, null → 645023`. Nothing was
+replaced.
+
+The fix is one line — emit only on `non-null → non-null` and differing — and everything else in the
+change is comment. **The cost is now a test rather than a paragraph**: a case named *"KNOWN UNCOVERED:
+a pane first seen as a miss is never learned afterwards"* **asserts the gap**, so buying the learn case
+back goes red at the place the decision was made. That is a better home for a known limitation than
+prose, which cannot fail.
+
+**And the real repair is upstream, named in the source rather than left to be rediscovered.** The
+producer's agent supplied the framing:
+
+> `not observed` and `observed to be absent` are different facts, and the differ has one slot for both.
+
+`panePid: null` means *either* "the pane join found no row" *or* "there is a pane with no pid", and by
+the time it reaches `diff.ts` it is one `null` — so the Overseer **cannot** resolve it and only
+`tools/fleet/collect.ts` can, with a three-way discriminated reading. Deliberately deferred: it is a
+contract change on `/api/state` and that agent is mid-cutover.
+
+**S7-F2 — "cannot read the attempt clock" did not clear an earlier positive reading.** `take()`
+updated `lastAttemptAtMs` only for a reported timestamp, so a later payload that *could not answer*
+left the old one standing and `collectorVerdict` measured its age: a valid clock at 10:00, an older
+producer omitting the field at 10:07, and the daemon announcing *"collector stopped for 420s"*. **This
+is the bug S7-02 fixed, one layer downstream** — `parseAttempt` was made to say *cannot tell*
+correctly, and its caller flattened the distinction back. **Making a type honest does nothing if the
+consumer collapses it.**
+
+The signature change is the fix, not the branch: `collectorVerdict` now takes
+`ObservedAttemptClock | null` rather than `number | null`. **A nullable primitive at that seam is what
+let a stale timestamp answer a question the current payload had declined** — which is, by the
+producer agent's count, the fifth or sixth "cannot tell" arm in this system that exists because one
+nullable slot was asked to carry two facts.
+
+And the fixtures were the regression case already: **none of the ten captured snapshots carries
+`attemptedAt`**, so they *are* rolled-back producers and the reviewer's scenario needed no hand-built
+payload.
+
+**S7-F3 is in § S5's P1 above.** It is the third, and it is mine.
+
+#### The mutation claim that hid S7-F1's neighbour
+
+**"19 mutations, 19 caught" was false, and the way it was false is the useful part.** The stage's only
+constructed metadata transition changed `meta.repo` and `meta.dir` **together**, so deleting any one
+of `sameMeta`'s three comparisons still passed — the other changed member reported `meta` as moved
+regardless. Reproduced before fixing: with the old test selected, each of the three deletions in turn
+gave **`1 passed | 47 skipped`. All three survived.**
+
+**A mutation run is only as strong as the tests' ability to isolate.** A test that moves several
+members at once cannot distinguish an AND of three from an AND of two, and the mutation *appears*
+caught because something unrelated fails. Three one-member transitions (`kind` alone, `repo` alone,
+`dir` alone) now each catch exactly one deletion — which is the property the earlier run only looked
+like it had.
+
+The general form, worth carrying: **when a mutation is "caught", check which test caught it.** A
+mutation killed by a test that was not about it is evidence of coverage somewhere, not of coverage
+*here*.
 
 #### Open after S7, deferred with reasons rather than forgotten
 
