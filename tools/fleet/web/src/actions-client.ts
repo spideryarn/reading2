@@ -1,7 +1,8 @@
 /**
- * The action vocabulary, the queues, and the four requests that touch them —
+ * The action vocabulary, the queues, and the six requests that touch them —
  * `POST /api/actions/session`, `GET /api/actions`, `POST /api/actions/box`,
- * `POST /api/actions/cancel`.
+ * `POST /api/actions/cancel`, and the two recovery gestures
+ * `POST /api/actions/revive` and `POST /api/actions/abandon`.
  *
  * ## THE RULE THIS FILE KEEPS, WHICH IS steer-client.ts's RULE
  *
@@ -51,9 +52,11 @@
  * are the client's *assumption* and this module is the one place to change when
  * they are reconciled. Everything is read defensively: a field that is not
  * there produces an honest gap on the page rather than an exception, and
- * `catalogueOffered` / `queuesOffered` exist so that "the server sent no
- * actions" and "the server sent an empty list of actions" can be told apart —
- * which is the distinction the whole tool is built around.
+ * `catalogue` / `queuesOffered` exist so that "the server sent no actions" and
+ * "the server sent an empty list of actions" can be told apart — which is the
+ * distinction the whole tool is built around. `catalogue` has a third arm,
+ * because the two-answer version of it answered a shape it did not recognise
+ * with the wrong one of the two; see `CatalogueReading`.
  *
  * ## Every failure is the SERVER'S sentence
  *
@@ -69,6 +72,9 @@ export const ACTIONS_URL = "api/actions";
 export const SESSION_ACTION_URL = "api/actions/session";
 export const BOX_ACTION_URL = "api/actions/box";
 export const CANCEL_URL = "api/actions/cancel";
+/** The two recovery gestures. Both take the same body as cancel; see `cancelBody`. */
+export const REVIVE_URL = "api/actions/revive";
+export const ABANDON_URL = "api/actions/abandon";
 
 /* ------------------------------------------------------------------ *
  * The vocabulary, as this page reads it.
@@ -265,6 +271,29 @@ export type QueueItemView = {
    * opposite mistake.
    */
   invalidated: string | null;
+  /**
+   * The queue's word that this has waited past `maxAgeMs`, or null.
+   *
+   * **THE SECOND FIELD THIS PAGE LET GO PAST IT** (GPT Sol's D2, 2026-09-08).
+   * The catalogue route has sent it since the day it was written, and nothing
+   * read it, so an item `next()` refuses to deliver was drawn as an ordinary
+   * waiting one under copy promising it goes out when the session is next at a
+   * prompt. `?? null` for the same reason as `invalidated`: a server too old to
+   * send the field is not making a claim, and defaulting to `false` would make
+   * one on its behalf.
+   */
+  stale: boolean | null;
+  /**
+   * The queue's word that this was handed out for delivery and never settled,
+   * or null.
+   *
+   * Not the same question as `leasedAt !== null`: a lease a second old is a
+   * send in progress, and one past `leaseMs` is a delivery nobody will ever
+   * confirm, which blocks the whole of that session's queue until a person
+   * abandons it. The line between them is `leaseMs`, which is the queue's, so
+   * this is asked rather than computed here.
+   */
+  stuck: boolean | null;
 };
 
 /**
@@ -278,15 +307,52 @@ export type QueueView = {
   sessionId: string;
   items: QueueItemView[];
   warning: string;
+  /**
+   * How many of `items` could still reach a pane, as the QUEUE counts it, or
+   * null when the server did not say. Read `hasDeliverable` rather than this.
+   */
+  deliverable: number | null;
   /** How many items in this queue the page could not read at all. */
   unreadableItems: number;
 };
 
+/**
+ * Is anything in this queue genuinely ahead of a message queued now?
+ *
+ * The page offers Queue on an idle session only when something is already in
+ * the line, because ordering is then the only thing the queue is for. **An item
+ * that will never be delivered is ahead of nothing**: an `invalidated` one
+ * (permanent) and a `stale` one (nothing sends it unasked) are both in `items`
+ * and neither is a reason to prefer the slower button, so `items.length` is the
+ * wrong question. The count is the queue's own rule — `isDeliverable` — because
+ * a second opinion in a component would drift from it.
+ *
+ * A server too old to send the count falls back to "is there anything at all",
+ * which is what this page asked before the field existed: over-offering a
+ * button is a smaller failure than hiding one on the strength of a field
+ * nobody sent.
+ */
+export function hasDeliverable(queue: QueueView | null): boolean {
+  if (queue === null) return false;
+  if (queue.deliverable !== null) return queue.deliverable > 0;
+  return queue.items.length > 0;
+}
+
 export const ASSUMED_VOLATILE_WARNING =
   "The server did not say whether these survive a restart, so assume they do not: nothing here is known to be written to disk.";
 
-function millis(v: unknown): number | null {
+/** A finite number the server actually sent, or null. NaN and Infinity are not numbers here. */
+function finite(v: unknown): number | null {
   return typeof v === "number" && Number.isFinite(v) ? v : null;
+}
+
+function millis(v: unknown): number | null {
+  return finite(v);
+}
+
+/** A boolean the server actually sent, or null. An absent flag is not a `false`. */
+function flag(v: unknown): boolean | null {
+  return typeof v === "boolean" ? v : null;
 }
 
 function parsePayload(v: unknown): QueuedView | null {
@@ -333,12 +399,15 @@ export function parseQueue(v: unknown): QueueView | null {
       enqueuedAt: millis(item["enqueuedAt"]),
       leasedAt: millis(item["leasedAt"]),
       invalidated: str(item["invalidated"]),
+      stale: flag(item["stale"]),
+      stuck: flag(item["stuck"]),
     });
   }
   return {
     sessionId,
     items,
     warning: str(v["warning"]) ?? ASSUMED_VOLATILE_WARNING,
+    deliverable: finite(v["deliverable"]),
     unreadableItems,
   };
 }
@@ -359,24 +428,90 @@ export function parseQueue(v: unknown): QueueView | null {
  */
 export type ActionsFeed = {
   actions: ClientAction[];
-  catalogueOffered: boolean;
+  catalogue: CatalogueReading;
   unreadableActions: number;
   queues: QueueView[];
   queuesOffered: boolean;
 };
 
-export function parseActionsFeed(raw: unknown): ActionsFeed | null {
-  if (!isRecord(raw)) return null;
-  const rawActions = raw["actions"];
+/**
+ * What this page found where the catalogue should be. **THREE ANSWERS, NOT TWO.**
+ *
+ * `catalogueOffered: boolean` used to live here, and the missing third answer is
+ * how every action button on the dashboard came to be invisible for the life of
+ * the feature (2026-09-08). The route sends `actions: {session, box}`; this
+ * parser asked `Array.isArray(actions)`, which is false for an object, and the
+ * `false` flowed into `catalogueOffered` — so the page drew *"this server sent
+ * no list of actions at all… it is probably older than this page"* over a server
+ * that had just sent the whole vocabulary. A shape mismatch became a confident
+ * claim about the server, in the direction that makes it nobody's fault.
+ *
+ * The distinction the flag existed for is still right and is kept: *an empty
+ * catalogue and a server that sent no catalogue are opposite claims.* What it
+ * could not say is the third thing — **there was something there and this page
+ * could not read it** — which is the arm a shape change lands in, and it names
+ * the page rather than the server.
+ */
+export type CatalogueReading =
+  /** `actions` was there and this page read it. Whatever it found is in `actions`. */
+  | { kind: "read" }
+  /** No `actions` field at all. */
+  | { kind: "absent" }
+  /** Something was there, and it is not a catalogue this build understands. */
+  | { kind: "unreadable"; why: string };
+
+/**
+ * The catalogue, in the shape the route actually sends it.
+ *
+ * **`{session: Action[], box: Action[]}`, and nothing else is accepted.** Being
+ * tolerant of a flat array here is what would let the next fixture disagree with
+ * the server and still pass; the route has never sent one, so an array is
+ * `unreadable` like anything else. Each arm is read independently — a server
+ * that sent `session` and not `box` has still sent a catalogue — and the entries
+ * are flattened into one list, because `scope` is on every entry and
+ * `sessionActions`/`boxActions` filter by it.
+ */
+function parseCatalogue(raw: unknown): { reading: CatalogueReading; actions: ClientAction[]; unreadable: number } {
+  if (raw === undefined || raw === null) return { reading: { kind: "absent" }, actions: [], unreadable: 0 };
+  if (!isRecord(raw)) {
+    return {
+      reading: {
+        kind: "unreadable",
+        why: `it sent ${Array.isArray(raw) ? "a plain list" : JSON.stringify(typeof raw)} where the catalogue should be, and this page expects one list of session actions and one of box actions`,
+      },
+      actions: [],
+      unreadable: 0,
+    };
+  }
+  const arms = [raw["session"], raw["box"]];
+  if (!arms.some((arm) => Array.isArray(arm))) {
+    return {
+      reading: {
+        kind: "unreadable",
+        why: "the catalogue it sent has neither a list of session actions nor a list of box actions in it",
+      },
+      actions: [],
+      unreadable: 0,
+    };
+  }
   const actions: ClientAction[] = [];
-  let unreadableActions = 0;
-  if (Array.isArray(rawActions)) {
-    for (const item of rawActions) {
+  let unreadable = 0;
+  for (const arm of arms) {
+    if (!Array.isArray(arm)) continue;
+    for (const item of arm) {
       const one = parseAction(item);
-      if (one === null) unreadableActions += 1;
+      if (one === null) unreadable += 1;
       else actions.push(one);
     }
   }
+  return { reading: { kind: "read" }, actions, unreadable };
+}
+
+export function parseActionsFeed(raw: unknown): ActionsFeed | null {
+  if (!isRecord(raw)) return null;
+  const catalogue = parseCatalogue(raw["actions"]);
+  const actions = catalogue.actions;
+  const unreadableActions = catalogue.unreadable;
   const rawQueues = raw["queues"];
   const queues: QueueView[] = [];
   if (Array.isArray(rawQueues)) {
@@ -387,7 +522,7 @@ export function parseActionsFeed(raw: unknown): ActionsFeed | null {
   }
   return {
     actions,
-    catalogueOffered: Array.isArray(rawActions),
+    catalogue: catalogue.reading,
     unreadableActions,
     queues,
     queuesOffered: Array.isArray(rawQueues),
@@ -473,8 +608,24 @@ export function cancelBody(sessionId: string, itemId: string): CancelBody {
 export type ActionOutcome =
   | { ok: true; kind: "queued"; position: number | null; why: string | null }
   | { ok: true; kind: "delivered"; sent: string[][] }
+  /**
+   * One of the three gestures that change an item already in the queue.
+   *
+   * Its own arm because the three say different things and none of them says
+   * "Queued." — which is what the page used to put on screen after a cancel,
+   * because the response carries an `item` and that was read as an enqueue.
+   * Untrue prose is a defect (§ Stage v0.5f), and "Queued." over an abandoned
+   * delivery is the reassuring half of a contradiction.
+   */
+  | { ok: true; kind: "queue-changed"; op: QueueOp }
   | { ok: true; kind: "accepted" }
   | { ok: false; code: string; why: string; status: number | null; from: "server" | "client" };
+
+export type QueueOp = "cancelled" | "revived" | "abandoned";
+
+function queueOp(v: unknown): QueueOp | null {
+  return v === "cancelled" || v === "revived" || v === "abandoned" ? v : null;
+}
 
 /**
  * What became of a box action.
@@ -497,6 +648,10 @@ export type ActionsApi = {
   run: (row: FleetRow, actionId: string) => Promise<ActionOutcome>;
   queueMessage: (row: FleetRow, text: string) => Promise<ActionOutcome>;
   cancel: (sessionId: string, itemId: string) => Promise<ActionOutcome>;
+  /** Re-arm a stale item's clock, so the next drain pass may deliver it. */
+  revive: (sessionId: string, itemId: string) => Promise<ActionOutcome>;
+  /** Clear a lease nobody settled. It recalls nothing; see the confirmation copy. */
+  abandon: (sessionId: string, itemId: string) => Promise<ActionOutcome>;
   box: (actionId: string, dryRun: boolean) => Promise<BoxOutcome>;
 };
 
@@ -563,6 +718,10 @@ function refusal(response: Response, parsed: unknown): { ok: false; code: string
 
 function readActionOutcome(response: Response, parsed: unknown): ActionOutcome {
   if (!isRecord(parsed) || parsed["ok"] !== true) return refusal(response, parsed);
+  /* FIRST, because these responses also carry an `item` and would otherwise be
+     read as an enqueue and drawn as "Queued." */
+  const op = queueOp(parsed["op"]);
+  if (op !== null) return { ok: true, kind: "queue-changed", op };
   /* `queued === false` is a positive claim that it went out now; anything else
      is read off the fields that are actually there, and if none of them are,
      the third arm says so rather than picking one. */
@@ -609,6 +768,8 @@ export function makeActionsApi(fetchImpl: typeof fetch = fetch): ActionsApi {
     run: (row, actionId) => send(SESSION_ACTION_URL, sessionActionBody(row, actionId)),
     queueMessage: (row, text) => send(SESSION_ACTION_URL, sessionMessageBody(row, text)),
     cancel: (sessionId, itemId) => send(CANCEL_URL, cancelBody(sessionId, itemId)),
+    revive: (sessionId, itemId) => send(REVIVE_URL, cancelBody(sessionId, itemId)),
+    abandon: (sessionId, itemId) => send(ABANDON_URL, cancelBody(sessionId, itemId)),
 
     async box(actionId, dryRun): Promise<BoxOutcome> {
       const posted = await postJson(BOX_ACTION_URL, boxActionBody(actionId, dryRun), fetchImpl);
@@ -640,5 +801,7 @@ export const httpActionsApi: ActionsApi = {
   run: (row, actionId) => makeActionsApi().run(row, actionId),
   queueMessage: (row, text) => makeActionsApi().queueMessage(row, text),
   cancel: (sessionId, itemId) => makeActionsApi().cancel(sessionId, itemId),
+  revive: (sessionId, itemId) => makeActionsApi().revive(sessionId, itemId),
+  abandon: (sessionId, itemId) => makeActionsApi().abandon(sessionId, itemId),
   box: (actionId, dryRun) => makeActionsApi().box(actionId, dryRun),
 };

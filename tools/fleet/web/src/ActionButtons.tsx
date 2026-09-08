@@ -84,6 +84,7 @@ import {
   type BoxOutcome,
   type ClientAction,
   type QueueItemView,
+  type QueueOp,
   type QueueView,
 } from "./actions-client";
 import type { FleetRow } from "./types";
@@ -110,6 +111,27 @@ function GroupHeading({ children }: { children: ReactNode }): ReactNode {
  * and did not say whether it typed or queued, so this says exactly that and
  * points at the queue rather than picking the cheerful reading.
  */
+/**
+ * What each of the three queue gestures did, said without claiming anything else.
+ *
+ * `Record`s keyed by the union rather than a chain of ternaries, so a fourth op
+ * added to `QueueOp` stops this file compiling instead of silently inheriting
+ * one of these sentences. The abandon copy is the load-bearing one: it must not
+ * read as "the message was not sent", because nothing knows that.
+ */
+const QUEUE_OP_HEAD: Record<QueueOp, string> = {
+  cancelled: "Taken out of the queue.",
+  revived: "Re-armed.",
+  abandoned: "The lease is cleared.",
+};
+
+const QUEUE_OP_BODY: Record<QueueOp, string> = {
+  cancelled: "It was never handed out for delivery, so nothing reached the session.",
+  revived: "Its clock has been started again. It goes when the session is next at a prompt, which is checked about every 73 seconds.",
+  abandoned:
+    "That recalled nothing: if the delivery got as far as the pane, the message is in that agent's input box. What it did do is free the rest of this session's queue.",
+};
+
 export function ActionOutcomeCard({ outcome, onRefresh }: { outcome: ActionOutcome; onRefresh: () => void }): ReactNode {
   if (outcome.ok) {
     const head =
@@ -119,13 +141,17 @@ export function ActionOutcomeCard({ outcome, onRefresh }: { outcome: ActionOutco
           : `Queued — number ${outcome.position} in the line.`
         : outcome.kind === "delivered"
           ? "Sent now."
-          : "The server took it.";
+          : outcome.kind === "queue-changed"
+            ? QUEUE_OP_HEAD[outcome.op]
+            : "The server took it.";
     const body =
       outcome.kind === "queued"
         ? "It has not been sent. It goes when the session is next at a prompt, and until then it can be cancelled below."
         : outcome.kind === "delivered"
           ? "The session's own reply lands in its terminal, not here."
-          : "It did not say whether that means typed at the pane or added to the queue. The queue below is what to believe.";
+          : outcome.kind === "queue-changed"
+            ? QUEUE_OP_BODY[outcome.op]
+            : "It did not say whether that means typed at the pane or added to the queue. The queue below is what to believe.";
     return (
       <div className="tw:mt-2 tw:rounded-lg tw:border tw:border-work/40 tw:bg-work-wash tw:p-3 tw:text-[13px]">
         <p className="tw:font-medium tw:text-work-ink">{head}</p>
@@ -386,10 +412,20 @@ export function SessionActions({
               <Button onClick={onChanged}>Try again</Button>
             </p>
           </>
-        ) : feed !== null && !feed.catalogueOffered ? (
+        ) : feed !== null && feed.catalogue.kind === "absent" ? (
           <p>
             This server sent no list of actions at all, which is not the same as having none — it is probably older
             than this page.
+          </p>
+        ) : feed !== null && feed.catalogue.kind === "unreadable" ? (
+          /* THE THIRD SENTENCE, and it blames this page rather than the server.
+             The two-answer version of this said the server was old when the
+             truth was that its catalogue had a shape this build cannot read —
+             which is exactly the wrong way round for the person deciding what
+             to do next. See `CatalogueReading`. */
+          <p>
+            This page could not read the list of actions this server sent, so it cannot say what you can do here:{" "}
+            {feed.catalogue.why}
           </p>
         ) : (
           <p>This server offers no actions for a session.</p>
@@ -468,32 +504,83 @@ function itemLine(item: QueueItemView): { what: string; detail: string | null } 
 }
 
 /**
- * One waiting item.
+ * WHAT THIS ITEM'S STATE IS, IN ONE ORDERED ANSWER.
+ *
+ * Four of the five states are things the queue has decided and sent — the page
+ * reads them and never recomputes one — and the order is the whole point: they
+ * can be true at once, and a reader believes the reassuring one. `noteGeneration`
+ * deliberately leaves a leased item alone, so *dead* and *going out* co-occur;
+ * a `stale` item that the server has also marked would be offered a re-arm that
+ * cannot help. So the strongest, most permanent claim wins.
+ *
+ * `stale` and `stuck` arrive as `boolean | null`; **only `=== true` counts**,
+ * because a server too old to send the field made no claim and this page must
+ * not make one for it.
+ */
+type ItemState = "dead" | "stuck" | "stale" | "going" | "waiting";
+
+function itemState(item: QueueItemView): ItemState {
+  if (item.invalidated !== null) return "dead";
+  if (item.stuck === true) return "stuck";
+  if (item.stale === true) return "stale";
+  if (item.leasedAt !== null) return "going";
+  return "waiting";
+}
+
+/**
+ * One waiting item, and the two ways out of a queue that has jammed.
  *
  * **A leased item says it is going now and offers Cancel anyway.** Whether a
  * lease can still be cancelled is the server's rule, not this page's, and the
  * client must not reimplement it — but the person deserves to know that the
  * keystrokes may already have left, because "cancelled" and "cancelled in time"
  * are different things and there is no receipt for a keystroke.
+ *
+ * **STUCK AND STALE ARE HERE BECAUSE THE PRODUCT COULD REACH THEM AND OFFERED
+ * NOTHING** (GPT Sol's D2 and D4, 2026-09-08). A stale item was drawn as one
+ * waiting its turn under copy promising delivery; a lease the delivery module
+ * threw out of was drawn as "Being delivered now" for ever, blocking everything
+ * behind it, while `cancel()` refused it and `clear()` kept it. Each now says
+ * what it is and carries the one gesture that moves it.
+ *
+ * **Abandoning asks twice, and the second question is the honest warning.** It
+ * clears the dashboard's lease and does nothing whatever to the pane: the
+ * keystrokes may have gone out, and drain.ts leaves the lease open precisely
+ * because nothing here can tell.
  */
 function QueueItem({
   item,
   index,
   busy,
   onCancel,
+  onRevive,
+  onAbandon,
 }: {
   item: QueueItemView;
   index: number;
   busy: boolean;
   onCancel: () => void;
+  onRevive: () => void;
+  onAbandon: () => void;
 }): ReactNode {
+  const [confirmingAbandon, setConfirmingAbandon] = useState(false);
   const line = itemLine(item);
-  const going = item.leasedAt !== null;
+  const state = itemState(item);
   return (
-    <li className={cx("tw:mt-1.5 tw:rounded-lg tw:border tw:border-rule tw:p-2.5", going && "tw:bg-work-wash")}>
+    <li className={cx("tw:mt-1.5 tw:rounded-lg tw:border tw:border-rule tw:p-2.5", state === "going" && "tw:bg-work-wash")}>
       <div className="tw:flex tw:flex-wrap tw:items-baseline tw:gap-x-2">
         <span className="tw:font-mono tw:text-[12px] tw:text-ink-faint">{index + 1}.</span>
         <span className="tw:min-w-0 tw:flex-1 tw:text-[13px] tw:font-medium tw:break-words">{line.what}</span>
+        {state === "stale" ? (
+          <Button disabled={busy} onClick={onRevive}>
+            Send it anyway
+          </Button>
+        ) : null}
+        {state === "stuck" && !confirmingAbandon ? (
+          <Button disabled={busy} onClick={() => setConfirmingAbandon(true)}>
+            Abandon it
+          </Button>
+        ) : null}
         <Button disabled={busy} onClick={onCancel}>
           Cancel
         </Button>
@@ -502,20 +589,51 @@ function QueueItem({
         <p className="tw:mt-1 tw:text-[12px] tw:break-words tw:text-ink-soft">{line.detail}</p>
       )}
       {/*
-        FIRST, AND IT SUPPRESSES THE REST. An invalidated item is not waiting
-        its turn and is not going now; it is a thing that will never happen,
-        still drawn so the person can see why rather than watching it sit there.
-        The alarm colour because the honest reading is that their instruction is
-        lost — the queue keeps it only so they can read the reason and re-press.
+        ONE SENTENCE, CHOSEN BY `itemState`. The alarm colour on the two that
+        mean an instruction is not going anywhere — the honest reading is that
+        it is lost, and the queue keeps it only so the reason can be read.
       */}
-      {item.invalidated !== null ? (
+      {state === "dead" ? (
         <p className="tw:mt-1 tw:text-[12px] tw:break-words tw:text-alarm-ink">
           This will not be delivered. {item.invalidated}
         </p>
-      ) : going ? (
+      ) : state === "stuck" ? (
+        <p className="tw:mt-1 tw:text-[12px] tw:break-words tw:text-alarm-ink">
+          Handed out for delivery and never confirmed. Nothing else in this queue can go out until it is cleared.
+        </p>
+      ) : state === "stale" ? (
+        <p className="tw:mt-1 tw:text-[12px] tw:break-words tw:text-alarm-ink">
+          This has waited too long to be sent unasked, so nothing is going to deliver it. Send it anyway starts its
+          clock again — it then goes when the session is next at a prompt, which is checked about every 73 seconds.
+        </p>
+      ) : state === "going" ? (
         <p className="tw:mt-1 tw:text-[12px] tw:text-work-ink">
           Being delivered now. Cancelling may not recall it — there is no receipt for a keystroke.
         </p>
+      ) : null}
+      {state === "stuck" && confirmingAbandon ? (
+        <div className="tw:mt-2 tw:rounded-lg tw:border tw:border-alarm/40 tw:bg-alarm-wash tw:p-2.5">
+          <p className="tw:text-[12px] tw:break-words tw:text-ink">
+            Abandoning this does not recall a keystroke. Nothing here can tell whether the delivery died before the
+            keys went out or after, so the message may already be in that agent&apos;s input box. All this does is
+            clear the dashboard&apos;s record of it, so the rest of the queue can move.
+          </p>
+          <div className="tw:mt-2 tw:flex tw:flex-wrap tw:gap-1.5">
+            <Button
+              variant="danger"
+              disabled={busy}
+              onClick={() => {
+                setConfirmingAbandon(false);
+                onAbandon();
+              }}
+            >
+              Yes, abandon it
+            </Button>
+            <Button disabled={busy} onClick={() => setConfirmingAbandon(false)}>
+              Keep waiting
+            </Button>
+          </div>
+        </div>
       ) : null}
     </li>
   );
@@ -549,16 +667,27 @@ export function SessionQueue({
   const [outcome, setOutcome] = useState<ActionOutcome | null>(null);
   const queue = queueFor(feed, sessionId);
 
-  const cancel = useCallback(
-    async (itemId: string): Promise<void> => {
+  /**
+   * The three gestures that change something already in the queue.
+   *
+   * One function taking the call, rather than three near-copies: the busy flag,
+   * the outcome card and the re-read after are the same in every case, and the
+   * only thing that differs is which of the server's routes is asked. `cancel`
+   * keeps its own name at the call sites for readability.
+   */
+  const act = useCallback(
+    async (call: (sessionId: string, itemId: string) => Promise<ActionOutcome>, itemId: string): Promise<void> => {
       setBusy(true);
-      const result = await api.cancel(sessionId, itemId);
+      const result = await call(sessionId, itemId);
       setOutcome(result);
       setBusy(false);
       onChanged();
     },
-    [api, onChanged, sessionId],
+    [onChanged, sessionId],
   );
+  const cancel = useCallback((itemId: string) => act(api.cancel, itemId), [act, api]);
+  const revive = useCallback((itemId: string) => act(api.revive, itemId), [act, api]);
+  const abandon = useCallback((itemId: string) => act(api.abandon, itemId), [act, api]);
 
   if (queue === null || queue.items.length === 0) {
     return (
@@ -569,7 +698,11 @@ export function SessionQueue({
             ? `The queue could not be read: ${error}`
             : feed !== null && !feed.queuesOffered
               ? "This server sent no queues at all, which is not the same as having none — it is probably older than this page."
-              : "Nothing is waiting. A message or a spoken action pressed while it is working queues up here, and goes out within a minute or so of it finishing."}
+              : /* The cadence in seconds rather than "a minute or so": the pass
+                   that drains this runs after each collection, which is ~73
+                   seconds apart and not 60 (tools/fleet/drain.ts). Vague here
+                   is what makes somebody press Queue and then watch. */
+                "Nothing is waiting. A message or a spoken action pressed while it is working queues up here, and goes out once it is back at a prompt — checked about every 73 seconds."}
       </p>
     );
   }
@@ -578,7 +711,15 @@ export function SessionQueue({
     <div>
       <ol>
         {queue.items.map((item, index) => (
-          <QueueItem key={item.id} item={item} index={index} busy={busy} onCancel={() => void cancel(item.id)} />
+          <QueueItem
+            key={item.id}
+            item={item}
+            index={index}
+            busy={busy}
+            onCancel={() => void cancel(item.id)}
+            onRevive={() => void revive(item.id)}
+            onAbandon={() => void abandon(item.id)}
+          />
         ))}
       </ol>
       {queue.unreadableItems > 0 ? (

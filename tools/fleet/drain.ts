@@ -102,9 +102,67 @@ import type { RefusalCode, SteerTarget, sendMessage as realSendMessage } from ".
 export const MAX_SENDS_PER_PASS = 3;
 export const DRAIN_BUDGET_MS = 5_000;
 
+/**
+ * WHERE THE PASS STARTS, AND WHY IT IS NOT ALWAYS THE TOP OF THE SNAPSHOT.
+ *
+ * `MAX_SENDS_PER_PASS` is what stops the page hanging, and a slot is spent by
+ * an ATTEMPT rather than by a delivery — a refused send costs the same six
+ * `execFileSync` timeouts as a delivered one. Walk the rows in the same order
+ * every pass and those two facts combine into starvation: three sessions whose
+ * sends are refused-unsent go back to the head of their own queues, are
+ * candidates again next pass, and spend all three slots again, so a fourth row
+ * is **never attempted at all** until its item goes stale at thirty minutes.
+ * That is this stage's own bug arriving one level up — a page that says
+ * *queued* about something nothing will ever try. GPT Sol's D1, 2026-09-08.
+ *
+ * So the pass remembers the last row it spent a slot on and the next one starts
+ * AFTER it, wrapping. Every queued row then gets a turn within a bounded number
+ * of passes, and the send bound is untouched.
+ *
+ * **THE STATE IS INJECTED, NOT A MODULE-LEVEL `let`.** `drainOnce` is otherwise
+ * a pure function of `(snapshot, deps)`, and a module-level cursor would be
+ * shared by every test in a file — the shape that made the original hole
+ * invisible to the suite, and the same reason `SteeringQueue` is a class rather
+ * than a module of `Map`s. One of these is built beside the queue in
+ * `makeActionRoutes`, so it lives exactly as long as the queue it rotates over
+ * and there is exactly one per server.
+ */
+export type DrainCursor = {
+  /** The session the previous pass stopped after, or null before the first one. */
+  after(): string | null;
+  /** Called for every row that spends a send slot, whatever the outcome. */
+  advanceTo(sessionId: string): void;
+};
+
+export function createDrainCursor(): DrainCursor {
+  let last: string | null = null;
+  return {
+    after: () => last,
+    advanceTo: (sessionId) => {
+      last = sessionId;
+    },
+  };
+}
+
+/**
+ * The rows, beginning after the cursor.
+ *
+ * A cursor naming a session that is no longer in the snapshot falls back to the
+ * top rather than to nothing: a session can end between passes, and "the row I
+ * stopped after has gone" is not a reason to deliver nothing at all.
+ */
+function rotated(rows: readonly FleetRow[], after: string | null): FleetRow[] {
+  if (after === null) return [...rows];
+  const at = rows.findIndex((r) => r.id === after);
+  if (at < 0) return [...rows];
+  return [...rows.slice(at + 1), ...rows.slice(0, at + 1)];
+}
+
 export type DrainDeps = {
   /** The one queue per server. It MUST be the one the routes filled. */
   queue: SteeringQueue;
+  /** Where this pass starts. State, owned by whoever owns the queue — see above. */
+  cursor: DrainCursor;
   /**
    * The delivery module, injected so this file's tests prove what it passes
    * down without a single keystroke going out.
@@ -356,7 +414,10 @@ export function drainOnce(snapshot: FleetSnapshot, deps: DrainDeps): DrainResult
     deps.log(`drain: tmux server is ${generation} now — ${invalidated} queued item(s) can no longer be delivered and are marked on the page`);
   }
 
-  for (const row of rows) {
+  // NOT `rows` — see `DrainCursor`. The first pass of a server's life reads
+  // exactly like the snapshot; every later one begins after the row the
+  // previous pass last spent a send slot on.
+  for (const row of rotated(rows, deps.cursor.after())) {
     try {
       // `size()` rather than `next()` for the empty case: a fleet of thirty-six
       // rows is mostly rows with nothing queued, and `next()` is also what
@@ -430,6 +491,10 @@ export function drainOnce(snapshot: FleetSnapshot, deps: DrainDeps): DrainResult
           // ten-second timeouts as a delivered one, and it is the SPENDING that
           // the bound is about, not the success.
           sends += 1;
+          // MOVED FOR THE SAME REASON THE SLOT IS SPENT, and before the send
+          // rather than after it: a send that throws has still cost the pass its
+          // time, so the next pass must not start on this row again.
+          deps.cursor.advanceTo(row.id);
           outcomes.push(deliverOne(row, { paneId, claudeSessionId }, next.item, deps));
           break;
         default: {

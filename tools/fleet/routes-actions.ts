@@ -77,7 +77,7 @@ import {
   type Step,
 } from "./actions.js";
 import type { FleetSnapshot } from "./collect.js";
-import { drainOnce, type DrainResult } from "./drain.js";
+import { createDrainCursor, drainOnce, type DrainResult } from "./drain.js";
 import {
   deliveryGate,
   drainGate,
@@ -250,11 +250,26 @@ export const ACTION_ERROR_STATUS: Record<ActionErrorCode, number> = {
 };
 
 /** What a queued item looks like on the wire, with the queue's own staleness rule applied. */
-export type QueuedItemView = QueuedItem & { stale: boolean };
+/**
+ * One item as the page reads it, with the two judgments only the queue can make.
+ *
+ * `stale` and `stuck` are both the QUEUE's rules asked rather than recomputed
+ * (`isStale`, `isStuck`), because both are comparisons against limits the page
+ * has never been told, and a page that guessed either would draw a recovery
+ * button a moment before or after the server would honour it.
+ */
+export type QueuedItemView = QueuedItem & { stale: boolean; stuck: boolean };
 
 export type QueueView = {
   sessionId: string;
   items: QueuedItemView[];
+  /**
+   * How many of `items` could still reach a pane — `SteeringQueue.isDeliverable`
+   * counted, which is neither `items.length` nor `items.length` minus the
+   * obvious ones. The page uses it to decide whether anything is genuinely
+   * ahead of a new message; see the comment on the field's producer.
+   */
+  deliverable: number;
   volatile: true;
   warning: string;
   since: number;
@@ -314,6 +329,10 @@ export type ActionResponse =
   | { ok: true; op: "catalogue"; schema: 1; actions: { session: readonly Action[]; box: readonly Action[] }; queues: QueueView[]; acting: { enabled: boolean; why: string }; now: number }
   | { ok: true; op: "enqueued"; item: QueuedItem; position: number; gate: DrainGate }
   | { ok: true; op: "cancelled"; item: QueuedItem }
+  /** A stale item's clock reset, so the next pass may deliver it. */
+  | { ok: true; op: "revived"; item: QueuedItem }
+  /** A lease nobody settled, cleared by a person. It is NOT a claim that nothing was sent. */
+  | { ok: true; op: "abandoned"; item: QueuedItem }
   | { ok: true; op: "dry-run"; action: ActionId; steps: readonly Step[]; candidates?: KillCandidate[]; scanned?: number; unreadable?: number }
   | { ok: true; op: "ran"; action: ActionId; run: PlanRun; killed?: number[]; skipped?: { pid: number; why: string }[] }
   | { ok: true; op: "broadcast-preview"; action: ActionId; total: number; recipients: BroadcastOutcome[]; sample: string | null }
@@ -989,16 +1008,31 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
   const deps: ActionDeps = { ...realActionDeps(), ...overrides };
   /** When the fleet was last told to ease off. Server-lifetime, like the queue. */
   let lastBroadcastAt: number | null = null;
+  /**
+   * WHERE THE NEXT DRAIN PASS STARTS. Server-lifetime state, built here rather
+   * than inside `drainOnce` for the reason on `DrainCursor`: the drain is a
+   * pure function of its inputs, and the one thing it has to remember between
+   * passes belongs beside the queue it rotates over. There is one of these per
+   * `ActionRoutes`, so it cannot be shared between two tests any more than the
+   * queue can.
+   */
+  const drainCursor = createDrainCursor();
 
   /* ---------------- GET /api/actions ---------------- */
 
   function catalogue(res: ServerResponse): void {
     const queues: QueueView[] = deps.queue.snapshots().map((s) => ({
       sessionId: s.sessionId,
-      // `stale` is the QUEUE's rule, asked rather than recomputed. A page that
-      // decided staleness for itself would be a second opinion about when an
-      // instruction is too old to deliver, and the two would drift.
-      items: s.items.map((i) => ({ ...i, stale: deps.queue.isStale(i) })),
+      // `stale` and `stuck` are the QUEUE's rules, asked rather than
+      // recomputed. A page that decided staleness for itself would be a second
+      // opinion about when an instruction is too old to deliver, and the two
+      // would drift.
+      items: s.items.map((i) => ({ ...i, stale: deps.queue.isStale(i), stuck: deps.queue.isStuck(i) })),
+      // AND SO IS THIS. The page asks "is anything already ahead of the message
+      // I am about to queue" before it offers Queue on an idle session, and
+      // `items.length` is the wrong answer to that question: an invalidated or
+      // stale item is in the list and is ahead of nothing.
+      deliverable: deps.queue.deliverableCount(s.sessionId),
       volatile: true,
       warning: s.warning,
       since: s.since,
@@ -1230,6 +1264,106 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
     }
     deps.log(`action cancel: REMOVED id=${itemId} session=${sessionId}`);
     respond(res, 200, { ok: true, op: "cancelled", item: result.item });
+  }
+
+  /* ---------------- POST /api/actions/revive ---------------- */
+
+  /**
+   * Re-arm an item that has waited past `maxAgeMs`.
+   *
+   * **THE ROUTE EXISTS BECAUSE THE QUEUE'S ANSWER OTHERWISE HAS NO LISTENER.**
+   * `next()` refuses a stale item and says *"re-arm it if it is still what you
+   * want"*; `revive()` was written for exactly that and nothing reached it, so
+   * the page drew an item under copy promising delivery that no pass would ever
+   * make — this stage's own bug in a state nobody had looked at (GPT Sol's D2).
+   *
+   * Deliberately a person's gesture rather than something `next()` does: the
+   * point of staleness is that somebody looks at an old instruction again
+   * before it lands in a conversation that has moved on.
+   *
+   * Written like `cancelRoute` in every respect that is a rule — the same body,
+   * the same origin check inside `parsedBody`, the same two failure codes
+   * classified off the snapshot so the SENTENCE stays the queue's.
+   */
+  async function reviveRoute(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    const parsed = await parsedBody(req, res, MAX_BODY_BYTES);
+    if (parsed === null) return;
+    // The same two fields, so the same parser. A second one would be a second
+    // place for `sessionId` to stop being checked.
+    const body = parseCancelBody(parsed);
+    if (!body.ok) {
+      refuse(res, "bad-request", body.why);
+      return;
+    }
+    const { sessionId, itemId } = body.value;
+    const result = deps.queue.revive(sessionId, itemId);
+    if (!result.ok) {
+      const present = deps.queue.snapshot(sessionId).items.some((i) => i.id === itemId);
+      const code: ActionErrorCode = present ? "in-flight" : "no-such-item";
+      deps.log(`action revive: refused code=${code} session=${sessionId} item=${itemId}`);
+      refuse(res, code, result.why);
+      return;
+    }
+    deps.log(`action revive: RE-ARMED id=${itemId} session=${sessionId}`);
+    respond(res, 200, { ok: true, op: "revived", item: result.item });
+  }
+
+  /* ---------------- POST /api/actions/abandon ---------------- */
+
+  /**
+   * Clear a lease nobody settled, so the rest of that session's queue can move.
+   *
+   * **IT IS NOT A CLAIM THAT NOTHING WAS SENT, AND THE COPY MUST NOT MAKE ONE.**
+   * `drain.ts` leaves the lease open when `sendMessage` throws precisely because
+   * nothing can tell a request that died before the keystrokes from one that
+   * died after; the message may be in that agent's input box already. This route
+   * is the missing half of that design — *"a person decides"* had no way for a
+   * person to decide, so one thrown send wedged that session's queue for ever
+   * (GPT Sol's D4). `settle(…, "abandoned")` is the queue's own word for it.
+   *
+   * **THE IN-FLIGHT/STUCK LINE IS `queue.isStuck`, NOT A COMPARISON HERE.** The
+   * queue owns `leaseMs`; a second copy of the rule in this file would let the
+   * page offer the button a moment before `next()` would agree, and abandoning a
+   * send that is still going out is the one thing the open lease prevents.
+   */
+  async function abandonRoute(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    const parsed = await parsedBody(req, res, MAX_BODY_BYTES);
+    if (parsed === null) return;
+    const body = parseCancelBody(parsed);
+    if (!body.ok) {
+      refuse(res, "bad-request", body.why);
+      return;
+    }
+    const { sessionId, itemId } = body.value;
+    const item = deps.queue.snapshot(sessionId).items.find((i) => i.id === itemId);
+    if (!item) {
+      deps.log(`action abandon: refused code=no-such-item session=${sessionId} item=${itemId}`);
+      refuse(res, "no-such-item", `no queued item ${itemId} for ${sessionId}`);
+      return;
+    }
+    if (item.leasedAt === null) {
+      // Nothing was ever handed out, so there is no lease to clear and no
+      // ambiguity to resolve. The gesture that fits is named, because a refusal
+      // that does not say what to press instead is a dead end.
+      deps.log(`action abandon: refused code=bad-request session=${sessionId} item=${itemId}`);
+      refuse(res, "bad-request", `${itemId} has not been handed out to anything, so there is no delivery to abandon — cancel it instead`);
+      return;
+    }
+    if (!deps.queue.isStuck(item)) {
+      deps.log(`action abandon: refused code=in-flight session=${sessionId} item=${itemId}`);
+      refuse(res, "in-flight", `${itemId} was handed out a moment ago and may still be going out; abandoning it now could clear a lease while the keystrokes are on their way`);
+      return;
+    }
+    const result = deps.queue.settle(sessionId, itemId, "abandoned");
+    if (!result.ok) {
+      // Only reachable if the queue changed under us, which it cannot today —
+      // this handler never yields between the read and the write.
+      deps.log(`action abandon: refused code=no-such-item session=${sessionId} item=${itemId}`);
+      refuse(res, "no-such-item", result.why);
+      return;
+    }
+    deps.log(`action abandon: ABANDONED id=${itemId} session=${sessionId}`);
+    respond(res, 200, { ok: true, op: "abandoned", item: result.item });
   }
 
   /* ---------------- POST /api/actions/box ---------------- */
@@ -1586,7 +1720,7 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
 
   return {
     drain(snapshot) {
-      return drainOnce(snapshot, { queue: deps.queue, sendMessage: deps.sendMessage, log: deps.log, now: deps.now });
+      return drainOnce(snapshot, { queue: deps.queue, cursor: drainCursor, sendMessage: deps.sendMessage, log: deps.log, now: deps.now });
     },
     handle(req, res) {
       const pathname = (req.url ?? "/").split("?")[0] ?? "/";
@@ -1626,6 +1760,17 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
           return true;
         }
         void guard(cancelRoute(req, res), res);
+        return true;
+      }
+      // The two recovery gestures. POST only, unlike cancel: neither is the
+      // thing a client naturally reaches for a DELETE with, and both CHANGE an
+      // item rather than removing one.
+      if (pathname === "/api/actions/revive" || pathname === "/api/actions/abandon") {
+        if (method !== "POST") {
+          refuse(res, "method-not-allowed", "this is POST only", undefined, { allow: "POST" });
+          return true;
+        }
+        void guard(pathname === "/api/actions/revive" ? reviveRoute(req, res) : abandonRoute(req, res), res);
         return true;
       }
       // Ours by prefix and not a route. Claimed rather than returned false, so

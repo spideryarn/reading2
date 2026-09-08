@@ -233,14 +233,42 @@ describe("GET /api/actions", () => {
     const { routes, queue } = harness();
     queue.enqueueAction({ sessionId: "$99001", claudeSessionId: CLAUDE_ID }, "pull");
     const r = await call(routes, fakeReq({ url: "/api/actions", method: "GET", headers: { "content-type": "" } }));
-    const queues = r.json.queues as { sessionId: string; items: { id: string; stale: boolean; payload: { kind: string; action?: { id: string } } }[]; volatile: boolean; warning: string }[];
+    const queues = r.json.queues as { sessionId: string; items: { id: string; stale: boolean; stuck: boolean; payload: { kind: string; action?: { id: string } } }[]; volatile: boolean; warning: string; deliverable: number }[];
     expect(queues).toHaveLength(1);
     expect(queues[0]?.sessionId).toBe("$99001");
     expect(queues[0]?.items.map((i) => i.payload.action?.id)).toEqual(["pull"]);
     expect(queues[0]?.items[0]?.stale).toBe(false);
+    expect(queues[0]?.items[0]?.stuck).toBe(false);
+    expect(queues[0]?.deliverable).toBe(1);
     expect(queues[0]?.volatile).toBe(true);
     // The warning is the queue's own sentence, not one written here.
     expect(queues[0]?.warning).toContain("Restarting it discards every one of them");
+  });
+
+  it("counts what could still be delivered, not what is in the list", async () => {
+    // The page decides whether to offer Queue on an idle session by asking
+    // whether anything is already ahead of the new message. An item the tmux
+    // generation has killed, or one past `maxAgeMs`, is not ahead of anything —
+    // it will never be delivered — so counting it would offer the button on the
+    // strength of an ordering guarantee that does not exist. **The rule is the
+    // queue's**, the same argument as `stale` above: a page that decided it
+    // would be a second opinion, and the two would drift.
+    const { routes, queue, tick } = harness();
+    queue.enqueueAction({ sessionId: "$99001", claudeSessionId: CLAUDE_ID }, "pull");
+    queue.noteGeneration(132_280);
+    queue.noteGeneration(400_100);
+    queue.enqueueAction({ sessionId: "$99001", claudeSessionId: CLAUDE_ID }, "push");
+    tick(31 * 60_000);
+    queue.enqueueAction({ sessionId: "$99001", claudeSessionId: CLAUDE_ID }, "continue");
+
+    const r = await call(routes, fakeReq({ url: "/api/actions", method: "GET", headers: { "content-type": "" } }));
+    const queues = r.json.queues as { items: { stale: boolean; invalidated: string | null }[]; deliverable: number }[];
+
+    // Three items: one dead, one stale, one fresh. Only the last can go.
+    expect(queues[0]?.items).toHaveLength(3);
+    expect(queues[0]?.items[0]?.invalidated).not.toBe(null);
+    expect(queues[0]?.items[1]?.stale).toBe(true);
+    expect(queues[0]?.deliverable).toBe(1);
   });
 
   it("tells the page whether acting is switched on, rather than leaving it to guess", async () => {
@@ -449,6 +477,137 @@ describe("cancelling a queued item", () => {
     expect(inFlight.json.code).toBe("in-flight");
     // And it is still there, because pretending otherwise is the dishonest option.
     expect(queue.snapshot("$99001").items.map((i) => i.id)).toEqual([id]);
+  });
+});
+
+/* ================================================================== *
+ * The two recovery routes. Both exist because a queue state the product
+ * could reach had no gesture that got out of it — GPT Sol's D2 and D4.
+ * ================================================================== */
+
+const IDLE_CTX = { status: { kind: "idle" as const }, claudeSessionId: CLAUDE_ID };
+
+describe("re-arming an item that has waited too long", () => {
+  it("re-arms it, so the next pass can deliver it", async () => {
+    // `SteeringQueue.revive()` was built and no route reached it, so an item
+    // past `maxAgeMs` was a thing the page drew, promised, and could not send —
+    // this stage's own bug in a state nobody had looked at.
+    const { routes, queue, tick } = harness();
+    queue.enqueueAction({ sessionId: "$99001", claudeSessionId: CLAUDE_ID }, "pull");
+    const id = queue.snapshot("$99001").items[0]?.id ?? "";
+    tick(31 * 60_000);
+    expect(queue.next("$99001", IDLE_CTX).kind).toBe("stale");
+
+    const r = await call(routes, fakeReq({ url: "/api/actions/revive", body: { sessionId: "$99001", itemId: id } }));
+
+    expect(r.status).toBe(200);
+    expect(r.json.op).toBe("revived");
+    expect(queue.next("$99001", IDLE_CTX).kind).toBe("ready");
+  });
+
+  it("tells 'there is nothing there' apart from 'it is going out right now'", async () => {
+    const { routes, queue } = harness();
+    queue.enqueueAction({ sessionId: "$99001", claudeSessionId: CLAUDE_ID }, "pull");
+    const id = queue.snapshot("$99001").items[0]?.id ?? "";
+
+    const missing = await call(routes, fakeReq({ url: "/api/actions/revive", body: { sessionId: "$99001", itemId: "q999" } }));
+    expect(missing.status).toBe(404);
+    expect(missing.json.code).toBe("no-such-item");
+
+    expect(queue.next("$99001", IDLE_CTX).kind).toBe("ready");
+    const leased = await call(routes, fakeReq({ url: "/api/actions/revive", body: { sessionId: "$99001", itemId: id } }));
+    expect(leased.status).toBe(409);
+    expect(leased.json.code).toBe("in-flight");
+  });
+
+  it("is a write, so a GET at it may not act", async () => {
+    const { routes, queue } = harness();
+    queue.enqueueAction({ sessionId: "$99001", claudeSessionId: CLAUDE_ID }, "pull");
+    const r = await call(routes, fakeReq({ url: "/api/actions/revive", method: "GET", headers: { "content-type": "" } }));
+    expect(r.status).toBe(405);
+  });
+
+  it("refuses a cross-origin re-arm, the same as every other write", async () => {
+    const { routes, queue } = harness();
+    queue.enqueueAction({ sessionId: "$99001", claudeSessionId: CLAUDE_ID }, "pull");
+    const id = queue.snapshot("$99001").items[0]?.id ?? "";
+    const r = await call(
+      routes,
+      fakeReq({ url: "/api/actions/revive", headers: { origin: "http://evil.example" }, body: { sessionId: "$99001", itemId: id } }),
+    );
+    expect(r.status).toBe(403);
+    expect(r.json.code).toBe("forbidden-origin");
+  });
+});
+
+describe("abandoning a lease nobody settled", () => {
+  /** Lease it and let the lease go stuck, which is what a thrown send leaves behind. */
+  function wedge(h: ReturnType<typeof harness>): string {
+    h.queue.enqueueAction({ sessionId: "$99001", claudeSessionId: CLAUDE_ID }, "pull");
+    h.queue.enqueueAction({ sessionId: "$99001", claudeSessionId: CLAUDE_ID }, "push");
+    const leased = h.queue.next("$99001", IDLE_CTX);
+    if (leased.kind !== "ready") throw new Error("expected a lease");
+    return leased.item.id;
+  }
+
+  it("clears a stuck lease, and the rest of the queue can drain again", async () => {
+    // `drain.ts` deliberately leaves the lease open when `sendMessage` throws —
+    // nothing can tell "died before the keystrokes" from "died after", so a
+    // person decides. **There was no way for a person to decide.** `cancel()`
+    // refuses a leased item, `clear()` keeps it, and `settle(…, "abandoned")`
+    // had no route, so one thrown send wedged that session's queue for ever.
+    const h = harness();
+    const id = wedge(h);
+    h.tick(61_000);
+    expect(h.queue.next("$99001", IDLE_CTX).kind).toBe("stuck");
+
+    const r = await call(h.routes, fakeReq({ url: "/api/actions/abandon", body: { sessionId: "$99001", itemId: id } }));
+
+    expect(r.status).toBe(200);
+    expect(r.json.op).toBe("abandoned");
+    // The wedged item is gone and the one behind it is deliverable again.
+    expect(h.queue.snapshot("$99001").items.map((i) => i.id)).not.toContain(id);
+    expect(h.queue.next("$99001", IDLE_CTX).kind).toBe("ready");
+  });
+
+  it("will not abandon a lease that is still in flight, using the queue's own rule", async () => {
+    // The distinction is `leaseMs`, and it is the queue's — `next()` has both
+    // arms. Abandoning a send that is still going out would clear a lease while
+    // the keystrokes are on their way, which is the one thing the open lease
+    // exists to stop.
+    const h = harness();
+    const id = wedge(h);
+
+    const r = await call(h.routes, fakeReq({ url: "/api/actions/abandon", body: { sessionId: "$99001", itemId: id } }));
+
+    expect(r.status).toBe(409);
+    expect(r.json.code).toBe("in-flight");
+    expect(h.queue.snapshot("$99001").items.map((i) => i.id)).toContain(id);
+  });
+
+  it("refuses an item that was never handed out, and names the gesture that fits", async () => {
+    const h = harness();
+    h.queue.enqueueAction({ sessionId: "$99001", claudeSessionId: CLAUDE_ID }, "pull");
+    const id = h.queue.snapshot("$99001").items[0]?.id ?? "";
+
+    const r = await call(h.routes, fakeReq({ url: "/api/actions/abandon", body: { sessionId: "$99001", itemId: id } }));
+
+    expect(r.status).toBe(400);
+    expect(String(r.json.why)).toContain("cancel");
+    expect(h.queue.snapshot("$99001").items.map((i) => i.id)).toContain(id);
+  });
+
+  it("says there is nothing there when there is nothing there", async () => {
+    const h = harness();
+    const r = await call(h.routes, fakeReq({ url: "/api/actions/abandon", body: { sessionId: "$99001", itemId: "q999" } }));
+    expect(r.status).toBe(404);
+    expect(r.json.code).toBe("no-such-item");
+  });
+
+  it("is a write, so a GET at it may not act", async () => {
+    const h = harness();
+    const r = await call(h.routes, fakeReq({ url: "/api/actions/abandon", method: "GET", headers: { "content-type": "" } }));
+    expect(r.status).toBe(405);
   });
 });
 

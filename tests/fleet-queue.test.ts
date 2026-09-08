@@ -30,6 +30,7 @@ import {
   SteeringQueue,
   type QueuedItem,
   type QueueLimits,
+  type UnsentFailure,
 } from "../tools/fleet/queue.js";
 import type { FleetStatus } from "../tools/fleet/status.js";
 import { steerableStatus, type SteerFailure } from "../tools/fleet/steer.js";
@@ -529,6 +530,24 @@ describe("releasing", () => {
     }
   });
 
+  it("cannot be given evidence a caller wrote for themselves", () => {
+    // GPT Sol's D5, 2026-09-08. `UnsentFailure`'s doc comment claims the type
+    // "can only be obtained from `nothingWasSent`"; as a plain structural
+    // intersection that was false — any object literal with the two right
+    // fields satisfied it, so the audited constructor could be walked past.
+    //
+    // **THE ASSERTION IS THE `@ts-expect-error`, and `npm run typecheck` is
+    // what checks it — vitest never type-checks.** Delete the brand from
+    // `UnsentFailure` and this line stops being an error, which makes the
+    // `@ts-expect-error` itself the error. The runtime half below is not the
+    // point: `release` re-checks the two fields, so it would accept a forgery
+    // that got this far, which is exactly why the compile-time guard has to
+    // hold.
+    // @ts-expect-error a hand-written refusal is not the transport's word for it
+    const forged: UnsentFailure = { ok: false, reason: { code: "not-at-input", why: "made up" }, delivery: "none", sent: [] };
+    expect(forged.delivery).toBe("none");
+  });
+
   it("refuses to put back something that was never handed out", () => {
     const { q } = makeQueue();
     const added = q.enqueueAction(TARGET, "continue");
@@ -593,6 +612,51 @@ describe("noteGeneration", () => {
     const out = q.next(SESSION, ctx(IDLE));
     expect(out.kind).toBe("orphaned");
     if (out.kind === "orphaned") expect(out.why).toContain("re-issued");
+  });
+
+  it("offers a fresh item queued after the restart rather than stopping at the dead one", () => {
+    // GPT Sol's D3, 2026-09-08. `invalidated` is PERMANENT — the handles were
+    // re-issued and no later observation can un-re-issue them — and nothing
+    // settles an item reported `orphaned`. So a `next()` that stops at the head
+    // blocks a perfectly deliverable item queued after the restart for thirty
+    // minutes, while the page marks only the dead one and gives no hint that it
+    // has to be cancelled first. An item that can never be delivered must not
+    // be a gate on one that can.
+    const { q } = makeQueue();
+    q.enqueueAction(TARGET, "continue");
+    q.noteGeneration(132_280);
+    expect(q.noteGeneration(400_100)).toBe(1);
+    q.enqueueAction(TARGET, "pull");
+    const items = q.snapshot(SESSION).items;
+    expect(items[0]?.invalidated).not.toBe(null);
+    expect(items[1]?.invalidated).toBe(null);
+
+    const out = q.next(SESSION, ctx(IDLE));
+
+    expect(out.kind).toBe("ready");
+    if (out.kind === "ready") expect(out.item.id).toBe(items[1]?.id);
+    // And the dead one is STILL THERE with its sentence on it: the page draws
+    // it so a person can read why, and cancelling it is their decision rather
+    // than a precondition for anything.
+    expect(q.size(SESSION)).toBe(2);
+    expect(q.snapshot(SESSION).items[0]?.invalidated).not.toBe(null);
+  });
+
+  it("still says orphaned when every waiting item is dead, rather than empty", () => {
+    // The other end of the same change. Skipping past the invalidated items
+    // must not turn "everything here is undeliverable" into "there is nothing
+    // here" — the drain would then report nothing and the page would draw two
+    // items nobody was talking about.
+    const { q } = makeQueue();
+    q.enqueueAction(TARGET, "continue");
+    q.enqueueAction(TARGET, "pull");
+    q.noteGeneration(132_280);
+    q.noteGeneration(400_100);
+
+    const out = q.next(SESSION, ctx(IDLE));
+
+    expect(out.kind).toBe("orphaned");
+    if (out.kind === "orphaned") expect(out.head.id).toBe(headId(q.snapshot(SESSION).items));
   });
 
   it("leaves a leased item alone, because it is already out of reach", () => {

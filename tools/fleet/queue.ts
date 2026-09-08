@@ -349,14 +349,32 @@ export type SettleResult = { ok: true; item: QueuedItem; outcome: SettleOutcome 
 /**
  * A refusal that PROVABLY sent nothing, and the only thing `release` accepts.
  *
- * The intersection is not decoration: `SteerFailure` is not a discriminated
- * union on `delivery`, so narrowing `f.delivery === "none"` at a call site
- * narrows the property and NOT the object, and a caller cannot manufacture one
- * of these by writing an `if`. The only way to obtain the type is
+ * **THE BRAND IS WHAT MAKES THE SENTENCE BELOW TRUE.** This used to be the
+ * plain intersection `SteerFailure & { delivery: "none" }`, with a comment
+ * saying the type could only be obtained from `nothingWasSent` — and that was
+ * false, because an ordinary structural intersection is satisfied by any object
+ * literal with the right two fields, so a caller could write one and skip the
+ * audit entirely (GPT Sol's D5, 2026-09-08). A comment claiming a guarantee the
+ * type does not give is worse than no comment.
+ *
+ * `UNSENT` is a `declare const` of a unique symbol: there is no runtime value
+ * for it anywhere, and it is not exported, so no code outside this module can
+ * name the property — the only way to obtain the type is the assertion inside
  * `nothingWasSent`, which is one audited place rather than a rule everybody has
  * to remember.
+ *
+ * **WHAT IT STILL DOES NOT DO.** The evidence is not tied to the ITEM or to the
+ * attempt it came from, so a caller holding a genuine "none sent" from attempt A
+ * could hand it to `release` for attempt B, which had partly sent — a duplicate
+ * delivery, the thing this file's header forbids. The present call site
+ * (`deliverOne`) pairs them correctly and is the only one. Closing that would
+ * mean an attempt token minted per `next()` and threaded through the transport,
+ * which is a bigger change than a review fix, and it is written down here rather
+ * than fixed so the next person can decide with the cost in front of them.
  */
-export type UnsentFailure = SteerFailure & { delivery: "none" };
+declare const UNSENT: unique symbol;
+
+export type UnsentFailure = SteerFailure & { delivery: "none"; readonly [UNSENT]: true };
 
 /**
  * The transport's own word that no keystroke left this process, or null.
@@ -397,6 +415,16 @@ export type QueueSnapshot = {
 
 const SESSION_HANDLE = /^\$\d+$/;
 const CLAUDE_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * An item the tmux generation has killed, narrowed so its sentence is a
+ * `string` rather than a `string | null` nobody can read without a `??`.
+ */
+type InvalidatedItem = QueuedItem & { invalidated: string };
+
+function isInvalidated(item: QueuedItem): item is InvalidatedItem {
+  return item.invalidated !== null;
+}
 
 /** The same thing pressed twice? Compared by identity, not by rendered text. */
 export function samePayload(a: QueuedPayload, b: QueuedPayload): boolean {
@@ -471,6 +499,45 @@ export class SteeringQueue {
   /** Is this item past `maxAgeMs`? Exposed so a page can grey it out. */
   isStale(item: QueuedItem): boolean {
     return item.leasedAt === null && this.now() - item.enqueuedAt > this.limits.maxAgeMs;
+  }
+
+  /**
+   * Is this lease one nobody settled — out longer than `leaseMs`?
+   *
+   * **THE ONE RULE, ASKED RATHER THAN COPIED.** `next()` uses this for its
+   * `stuck` arm and the abandon route uses it to decide whether a person may
+   * clear a lease, so the page cannot come to think an item is recoverable a
+   * moment before the queue would still call it in flight. Clearing a lease
+   * that is genuinely still going out is the one thing the open lease exists to
+   * prevent (drain.ts's `deliverOne`), which is why this is not a second
+   * comparison written next to a route.
+   */
+  isStuck(item: QueuedItem): boolean {
+    return item.leasedAt !== null && this.now() - item.leasedAt > this.limits.leaseMs;
+  }
+
+  /**
+   * Could this item still reach a pane?
+   *
+   * Two things make an item permanently undeliverable without removing it from
+   * the list: `invalidated` (the tmux generation changed, and `next()` now skips
+   * past those) and `isStale` (past `maxAgeMs`, and only a person's `revive()`
+   * re-arms it). Both are drawn, because the sentence on them is the point.
+   *
+   * **IT IS A RULE RATHER THAN A COUNT ON THE PAGE**, for the reason `isStale`
+   * is: the page asks whether anything is already ahead of a new message before
+   * it offers Queue on an idle session, and a component that answered that from
+   * `items.length` would be offering an ordering guarantee over items nothing
+   * will ever deliver. A leased item counts — in flight or stuck, it is ahead of
+   * whatever is queued behind it.
+   */
+  isDeliverable(item: QueuedItem): boolean {
+    return item.invalidated === null && !this.isStale(item);
+  }
+
+  /** How many of one session's items could still go out. `isDeliverable`, counted. */
+  deliverableCount(sessionId: string): number {
+    return (this.bySession.get(sessionId) ?? []).filter((i) => this.isDeliverable(i)).length;
   }
 
   /* ---------------- writing ---------------- */
@@ -655,7 +722,9 @@ export class SteeringQueue {
     const leased = items.find((i) => i.leasedAt !== null);
     if (leased && leased.leasedAt !== null) {
       const held = at - leased.leasedAt;
-      if (held > this.limits.leaseMs) {
+      // `isStuck` rather than the comparison, so this arm and the abandon route
+      // cannot disagree about when a person may clear a lease.
+      if (this.isStuck(leased)) {
         return {
           kind: "stuck",
           item: leased,
@@ -665,15 +734,30 @@ export class SteeringQueue {
       return { kind: "in-flight", item: leased, why: `${leased.id} is being delivered` };
     }
 
-    const head = items[0];
-    if (!head) return { kind: "empty" };
-
-    // The tmux server this was queued against is gone, so the handle at the top
-    // of this queue names whatever came after it. Reported as `orphaned` — the
-    // same arm as a resumed conversation, because it is the same fact: the
-    // address still resolves and no longer means what it meant.
-    if (head.invalidated !== null) {
-      return { kind: "orphaned", head, why: head.invalidated };
+    // **INVALIDATED ITEMS ARE SKIPPED, NOT STOPPED AT.** The tmux server this
+    // was queued against is gone, so the handle names whatever came after it —
+    // and that is PERMANENT: no later observation re-issues the old handles
+    // back, and nothing settles an item reported `orphaned`. Stopping at one
+    // therefore blocks every item queued AFTER the restart, which are exactly
+    // the deliverable ones, for the thirty minutes until they are stale too —
+    // one dead item taking a whole session's queue down with it, with the page
+    // marking only the dead one (GPT Sol's D3, 2026-09-08). They stay in the
+    // list, because the sentence on them is the point and a person decides
+    // whether to cancel; they are simply not candidates.
+    //
+    // The `claudeSessionId` arm below is deliberately NOT treated this way. It
+    // is a fact about the pane rather than about the item — resume the
+    // conversation back and every item in this queue is deliverable again — so
+    // skipping past the head there would start delivering items into a
+    // conversation the person queued nothing for.
+    const head = items.find((i) => i.invalidated === null);
+    if (!head) {
+      const dead = items.find(isInvalidated);
+      if (!dead) return { kind: "empty" };
+      // Everything here is undeliverable. Reported as `orphaned` rather than
+      // `empty`, because "there is nothing to send" and "nothing here can ever
+      // be sent" are opposite claims and the page draws them differently.
+      return { kind: "orphaned", head: dead, why: dead.invalidated };
     }
 
     if (head.claudeSessionId !== ctx.claudeSessionId) {
@@ -764,10 +848,15 @@ export class SteeringQueue {
       return { ok: false, why: `${itemId} cannot be put back: the transport did not say that nothing was sent` };
     }
     item.leasedAt = null;
-    // It is already at the head — `next()` only ever leases `items[0]` — but
-    // that is an invariant of another function, and this one is cheap.
+    // Back in front of every other DELIVERABLE item and behind the dead ones,
+    // which is where `next()` found it: since that function skips invalidated
+    // items, an unconditional `unshift` would hoist this one above them and
+    // reorder the page for no reason. It is almost always already in exactly
+    // this position — nothing inserts ahead of the head — but that is an
+    // invariant of another function, and this is cheap.
     items.splice(at, 1);
-    items.unshift(item);
+    const firstDeliverable = items.findIndex((i) => i.invalidated === null);
+    items.splice(firstDeliverable < 0 ? items.length : firstDeliverable, 0, item);
     return { ok: true, item };
   }
 

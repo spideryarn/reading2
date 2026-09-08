@@ -25,7 +25,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { actionById } from "../tools/fleet/actions.js";
 import type { FleetRow, FleetSnapshot } from "../tools/fleet/collect.js";
-import { DRAIN_BUDGET_MS, drainOnce, MAX_SENDS_PER_PASS, summariseDrain, type DrainDeps, type DrainOutcome } from "../tools/fleet/drain.js";
+import { createDrainCursor, DRAIN_BUDGET_MS, drainOnce, MAX_SENDS_PER_PASS, summariseDrain, type DrainDeps, type DrainOutcome } from "../tools/fleet/drain.js";
 import { SteeringQueue, type UnsentFailure } from "../tools/fleet/queue.js";
 import { drainSharedQueues, handleActionRequest, makeActionRoutes, type ActionDeps } from "../tools/fleet/routes-actions.js";
 import { createRateLimiter } from "../tools/fleet/routes-steer.js";
@@ -125,6 +125,9 @@ function harness(over: { result?: SteerResult | ((t: SteerTarget, text: string) 
   const logs: string[] = [];
   const deps: DrainDeps = {
     queue,
+    // ONE PER HARNESS, which is one per test: a cursor shared between tests
+    // would make a pass's starting row depend on which tests ran before it.
+    cursor: createDrainCursor(),
     sendMessage: (target, text, declaredStatus) => {
       sent.push({ target, text, declaredStatus });
       return typeof over.result === "function" ? over.result(target, text) : (over.result ?? SENT_OK);
@@ -632,6 +635,7 @@ describe("drainOnce is bounded", () => {
     const sent: string[] = [];
     const deps: DrainDeps = {
       queue,
+      cursor: createDrainCursor(),
       sendMessage: (_t, text) => {
         sent.push(text);
         clock += DRAIN_BUDGET_MS + 1;
@@ -650,6 +654,73 @@ describe("drainOnce is bounded", () => {
     // the promise being pinned here.
     expect(sent).toHaveLength(1);
     expect(result.outcomes.filter((o) => o.kind === "held" && o.reason === "out-of-time")).toHaveLength(2);
+  });
+});
+
+/* ================================================================== *
+ * Fairness. The bound above is what stops the page hanging; this is what
+ * stops that bound from being spent on the same rows for ever.
+ * ================================================================== */
+
+describe("drainOnce takes turns between passes", () => {
+  /** Four idle sessions, each with its own fictional handles and one message. */
+  const IDS = ["$99200", "$99201", "$99202", "$99203"] as const;
+  const LAST = IDS[3];
+
+  function fourRows(): FleetRow[] {
+    return IDS.map((id, i) => row({ id, paneId: `%9920${i}`, claudeSessionId: CONVO_A }));
+  }
+
+  it("reaches a row the previous pass never got to, even when the earlier rows keep refusing", () => {
+    // GPT Sol's D1, 2026-09-08, and it is the stage's own bug one level up: a
+    // page that says *queued* about something nothing will ever attempt.
+    //
+    // The first three sessions refuse having sent NOTHING — `pane-is-asking` is
+    // the commonest refusal on this box — so each goes back to the head of its
+    // own queue and is a candidate again next pass, having spent one of the
+    // three send slots. Walk the snapshot in the same order every time and rows
+    // one to three eat every slot for ever: row four is never ATTEMPTED, and
+    // thirty minutes later its item is stale and gone.
+    const all = fourRows();
+    const { deps, queue, sent } = harness({ result: (t) => (t.sessionId === LAST ? SENT_OK : REFUSED) });
+    for (const r of all) queue.enqueueMessage({ sessionId: r.id, claudeSessionId: CONVO_A }, `for ${r.id}`);
+
+    drainOnce(snap(all), deps);
+    expect(sent.map((s) => s.target.sessionId)).toEqual([IDS[0], IDS[1], IDS[2]]);
+
+    drainOnce(snap(all), deps);
+
+    // THE ASSERTION. The second pass has to start where the first one stopped.
+    expect(sent.map((s) => s.target.sessionId)).toContain(LAST);
+    expect(queue.size(LAST)).toBe(0);
+  });
+
+  it("gives every queued row a turn within a bounded number of passes", () => {
+    // The property rather than the instance: nobody starves. Four rows, three
+    // slots a pass, every send refused-unsent so nothing ever leaves the queue
+    // and the same four rows are candidates every time.
+    const all = fourRows();
+    const { deps, queue, sent } = harness({ result: REFUSED });
+    for (const r of all) queue.enqueueMessage({ sessionId: r.id, claudeSessionId: CONVO_A }, `for ${r.id}`);
+
+    for (let pass = 0; pass < 2; pass += 1) drainOnce(snap(all), deps);
+
+    expect(new Set(sent.map((s) => s.target.sessionId))).toEqual(new Set(IDS));
+  });
+
+  it("starts at the beginning again when the row it stopped after has gone", () => {
+    // The cursor names a session, and a session can end between passes. The
+    // honest fallback is the top of the snapshot rather than nothing at all.
+    const all = fourRows();
+    const { deps, queue, sent } = harness({ result: REFUSED });
+    for (const r of all) queue.enqueueMessage({ sessionId: r.id, claudeSessionId: CONVO_A }, `for ${r.id}`);
+
+    drainOnce(snap(all), deps);
+    const before = sent.length;
+    // Every row the first pass spent a slot on is gone from the box.
+    drainOnce(snap(all.slice(3)), deps);
+
+    expect(sent.slice(before).map((s) => s.target.sessionId)).toEqual([LAST]);
   });
 });
 
