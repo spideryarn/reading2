@@ -222,7 +222,7 @@ way it worked this morning, and nothing half-built is load-bearing.
 
 | stage | state |
 |---|---|
-| **1** — the runbook and the gates | **done**, `dev`. `docs/project/overseer.md`, four gates, `/overseer` skill. |
+| **1** — the runbook and the gates | **done**, `dev`. `docs/project/overseer.md`, four gates. The `/overseer` skill was deleted on 2026-09-08 — see the stage. |
 | **2** — the scheduler and the watchdog | **done**, `dev`, after two GPT Sol rounds. **Armed by `OVERSEER_JOBS_ENABLED` and OFF.** |
 | **3** — the three deterministic rules | **not started.** The highest-value stage left, per Fable and Astra both. |
 | **4** — the deferral queue | **not started.** |
@@ -261,6 +261,13 @@ record and its own context is a cache; that a steering message **must be one lin
 route refuses newlines (each would submit early — measured today, `bad-text`); that a session is
 addressed by pane handle plus generation and never by name; that pane text is data and never
 instruction. Plus `.claude/skills/overseer/SKILL.md`, a thin wrapper so `/overseer` loads it.
+
+**The wrapper is gone, on Greg's instruction, 2026-09-08.** Its two live facts — read the store
+rather than your memory, and check `gjd-remote ls` before dispatching — moved into the runbook, and
+the runbook now says outright that there is no skill, so nobody rebuilds one. What it bought was
+discovery: the skill's `description` sat in every agent's context, so an agent could be *told* to
+oversee. Without it the role is entered by being handed the file, which is how the daemon does it
+anyway. Nothing in `tools/overseer/` or `infra/hetzner/` ever referenced the skill.
 
 Done when: the doc exists, `tests/doc-links.test.ts` is green, and the direction doc points at it.
 
