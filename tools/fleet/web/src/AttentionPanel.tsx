@@ -35,6 +35,12 @@
  * sessions we TRIED to judge and could not; a session correctly skipped never
  * lands there, which is what keeps the caveat off almost every pass.
  *
+ * **On an EMPTY list the same field replaces the sentence instead of qualifying
+ * it**, because there is no list of cards for the floor to be a floor of — the
+ * whole output is one reassuring sentence, and a caveat under a sentence is
+ * read as the sentence. That branch was written before this agreement and did
+ * not look at the field at all; GPT Sol's C1, 2026-09-08.
+ *
  * ## The rule every line here is measured against
  *
  * Fable's, 2026-09-08: *a caveat stays on screen only if it would change what
@@ -111,11 +117,47 @@ const KINDS: Record<AttentionKind, { label: string; what: string; loud: boolean 
   other: { label: "other", what: "None of the three above fitted.", loud: false },
 };
 
-/** How old something is, or null when its timestamp is not one this page can read. */
+/**
+ * How much of a future timestamp is the reader's clock rather than a fault.
+ *
+ * **The two clocks here are genuinely different**, and that is a known open
+ * stage rather than a hypothetical: v0.4j in
+ * docs/plans/260907e-agent-fleet-dashboard.md — *the page reads the box's clock
+ * with the phone's* — every age on this page is `browserNow − aServerTimestamp`,
+ * and nothing corrects for the difference yet. So a server timestamp a few
+ * seconds ahead of `now` is ordinary and must not raise anything: an alarm a
+ * phone's clock can manufacture is A17, healthy operation spending its time
+ * alarming, which is how a caveat stops being read.
+ *
+ * Two minutes is generous against thresholds of five and six, and small against
+ * the skews v0.4j measured mattering (a phone three minutes fast). When v0.4j
+ * lands and timestamps are converted at the parse boundary, this tolerance is
+ * what should shrink rather than what should be deleted — the conversion is
+ * best-effort and the floor below it still has to do something.
+ */
+const CLOCK_SKEW_MS = 2 * 60_000;
+
+/**
+ * How old something is, or null when its timestamp is not one this page can use.
+ *
+ * **A timestamp further in the future than the skew allowance is UNREADABLE,
+ * not fresh.** It used to be `Math.max(0, now − parsed)`, so a `scannedAt` in
+ * the future read as "0s ago" — and went on reading as 0s ago for as long as it
+ * stayed in the future, which is exactly as long as the fault lasts. That
+ * suppresses the staleness branch below, and an empty list with a suppressed
+ * staleness branch is the permanently calm fleet this whole panel exists to
+ * prevent. `null` is the honest answer and the loud one: every caller treats an
+ * age it cannot compute as stale, because an age nobody can compute is not
+ * evidence of freshness. GPT Sol's C2, 2026-09-08 — the client half. The server
+ * half is the coherence check in tools/fleet/attention.ts, which CAN be strict
+ * because both of its timestamps come off one clock.
+ */
 function ageMs(at: string, now: number): number | null {
   const parsed = Date.parse(at);
   if (!Number.isFinite(parsed)) return null;
-  return Math.max(0, now - parsed);
+  const age = now - parsed;
+  if (age < -CLOCK_SKEW_MS) return null;
+  return Math.max(0, age);
 }
 
 /**
@@ -192,14 +234,22 @@ export function AttentionPanel({
     return (
       <Note
         head="The inbox could not be read"
-        what="A checkpoint is there and could not be read."
+        /* **NOT "a checkpoint is there and could not be read"**, which was a
+           claim this arm cannot support. Only `ENOENT` establishes that nothing
+           has been published; a permissions failure, a bad store path, an EIO —
+           and a store directory that could not be resolved at all — land HERE,
+           and in every one of those we never found out whether a checkpoint
+           exists. So the sentence covers both *it is there and would not parse*
+           and *we could not establish whether it is there*. GPT Sol's C3,
+           2026-09-08; tools/fleet/attention.ts holds the other end. */
+        what="A checkpoint could not be read here — either one is there and would not parse, or whether one is there could not be established."
         /* The `why` one tap away rather than on screen: it is a file path and a
            parser's sentence, and it changes what you would BELIEVE about the
            quiet rather than what you would do in the next ten seconds. The
            caveat itself — that the quiet is not evidence — is the visible half. */
         how={attention.why}
       >
-        the published inbox could not be read
+        the inbox could not be read here
       </Note>
     );
   }
@@ -322,6 +372,37 @@ function Published({
       return (
         <Note head="Nothing to conclude" what={stale.what} how={stale.how} loud>
           {stale.line} — nothing here says whether anything needs you
+        </Note>
+      );
+    }
+    /* **AND SO DOES AN INCOMPLETE PASS, for exactly the same reason.**
+       Agreement (c) — the count reads as a floor when something could not be
+       judged — was implemented for the items-present branch only, and this
+       branch never looked at `sessionsUnreadable` at all: `{items: [],
+       sessionsScanned: 32, sessionsUnreadable: 1}` drew *"nothing is waiting on
+       you · 32 sessions"*, asserting a calm fleet over a pass that failed to
+       judge one of them. That is the one claim the floor caveat exists to
+       withhold, made in the one branch nobody wrote it for. GPT Sol's C1,
+       2026-09-08.
+
+       It REPLACES the reassurance rather than qualifying it, like the stale
+       branch above and for the same finding: "nothing is waiting on you" with a
+       caveat underneath is read as "nothing is waiting on you". Not `loud` —
+       this is a true and useful reading (*we judged thirty-one and none of them
+       needs you*), unlike a stale clock, which is a reading of nothing.
+
+       Both parsers refuse a list whose unreadable count exceeds its scanned
+       count, so the subtraction cannot print a negative. */
+    if (list.sessionsUnreadable > 0) {
+      const judged = list.sessionsScanned - list.sessionsUnreadable;
+      return (
+        <Note
+          head="Nothing among the ones we could judge"
+          what={`None of the ${judged} sessions this pass could judge is waiting on you — ${age}.`}
+          how={`The pass looked at ${list.sessionsScanned} sessions and could not judge ${list.sessionsUnreadable} of them — a pane that would not parse, a gateway that refused, a tail the budget did not reach. So this is not "nothing needs you": any of those ${list.sessionsUnreadable} may be waiting on you, and the sessions below are where you would look.`}
+        >
+          nothing among the {judged} we could judge is waiting on you · {list.sessionsUnreadable} of{" "}
+          {list.sessionsScanned} could not be judged · {age}
         </Note>
       );
     }

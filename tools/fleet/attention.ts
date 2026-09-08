@@ -64,7 +64,7 @@
  * two minutes on the collection's 55–60s clock and make its age a property of a
  * loop it has nothing to do with.
  */
-import { readFileSync, statSync } from "node:fs";
+import { closeSync, fstatSync, openSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
 
@@ -104,6 +104,14 @@ const KNOWN_SCHEMA = 2;
  * the event loop that is serving the page. 4 MB is roughly four hundred times
  * the real size and still nothing, so the ceiling only ever fires on something
  * that has already gone wrong.
+ *
+ * **The ceiling is measured on the descriptor we then read from**, not on the
+ * path. `statSync(path)` followed by `readFileSync(path)` opens the file twice,
+ * and the writer replaces the path by atomic rename — so a checkpoint that
+ * grew past the ceiling could land between the two calls and be read whole,
+ * with the check having passed on the file it replaced. One `openSync`, an
+ * `fstatSync` of that descriptor, and a read from the same descriptor close it:
+ * the bytes measured are the bytes loaded. GPT Sol's C7, 2026-09-08.
  */
 const MAX_CHECKPOINT_BYTES = 4 * 1024 * 1024;
 
@@ -120,30 +128,53 @@ export function readAttention(root?: string): AttentionFeed {
     const dir = root ?? storeRoot();
     const path = join(dir, CHECKPOINT_FILE);
 
-    let size: number;
+    /* **ONLY `ENOENT` ESTABLISHES ABSENCE.** Every open failure used to land in
+       `checkpoint-absent`, which turned `EACCES`, `EIO` and `ENAMETOOLONG` into
+       the sentence *no checkpoint has been published here* — a positive claim
+       about the box manufactured out of a permissions error, and the page then
+       says it without a caveat because absence is a fact it trusts. `ENOENT`
+       means the file is not there; everything else means **we failed to look**,
+       which is the arm that carries a reason. `ENOTDIR` is in the second group
+       on purpose: a parent that is not a directory is a misconfigured path, not
+       an empty store. GPT Sol's C3, 2026-09-08. */
+    let fd: number;
     try {
-      const stats = statSync(path);
-      if (!stats.isFile()) {
-        return { kind: "checkpoint-unreadable", why: `${path} is not a file` };
-      }
-      size = stats.size;
-    } catch {
-      /* ENOENT is the ordinary case and is not a fault: no checkpoint has been
-         published at this path. Any other stat failure lands here too, and
-         calling that "absent" would be a claim — but the distinction is not
-         recoverable from a thrown errno without guessing, and the arm below is
-         the honest one for both: nothing was read here. Anything that gets PAST
-         stat and then fails is `checkpoint-unreadable` with the reason. */
-      return { kind: "checkpoint-absent" };
-    }
-    if (size > MAX_CHECKPOINT_BYTES) {
+      fd = openSync(path, "r");
+    } catch (cause) {
+      const code = errnoCode(cause);
+      if (code === "ENOENT") return { kind: "checkpoint-absent" };
       return {
         kind: "checkpoint-unreadable",
-        why: `${path} is ${size} bytes, over the ${MAX_CHECKPOINT_BYTES}-byte ceiling this reader will load`,
+        why: `${path} could not be opened: ${code ?? String(cause)}`,
       };
     }
 
-    const text = readFileSync(path, "utf8");
+    let text: string;
+    try {
+      /* `fstat` of the descriptor we hold, and the read from that same
+         descriptor — see MAX_CHECKPOINT_BYTES. A directory opens successfully
+         on Linux, so this is also where "the path is not a file" is caught. */
+      const stats = fstatSync(fd);
+      if (!stats.isFile()) return { kind: "checkpoint-unreadable", why: `${path} is not a file` };
+      if (stats.size > MAX_CHECKPOINT_BYTES) {
+        return {
+          kind: "checkpoint-unreadable",
+          why: `${path} is ${stats.size} bytes, over the ${MAX_CHECKPOINT_BYTES}-byte ceiling this reader will load`,
+        };
+      }
+      text = readFileSync(fd, "utf8");
+    } finally {
+      /* Swallowed, and only here: by this point the bytes are either read or
+         the failure above is already on its way out, so a descriptor that will
+         not close is a leak to fix rather than a reason to tell the reader the
+         inbox is unreadable. An unswallowed throw in a `finally` would also
+         REPLACE the return value above it. */
+      try {
+        closeSync(fd);
+      } catch {
+        /* nothing to do about it here */
+      }
+    }
     if (text.trim() === "") return { kind: "checkpoint-unreadable", why: `${path} is empty` };
 
     let json: unknown;
@@ -183,6 +214,20 @@ function storeRoot(env: NodeJS.ProcessEnv = process.env): string {
   return trimmed;
 }
 
+/**
+ * The `errno` string off a thrown filesystem error, or `null`.
+ *
+ * A narrowing rather than a cast: anything can be thrown, and `cause.code` on a
+ * non-object is a TypeError inside the one function that is not allowed to
+ * throw. Absent means the failure did not come from `node:fs` and cannot be
+ * classified, which is the unreadable arm either way.
+ */
+function errnoCode(cause: unknown): string | null {
+  if (typeof cause !== "object" || cause === null) return null;
+  const code = (cause as { code?: unknown }).code;
+  return typeof code === "string" ? code : null;
+}
+
 /* ------------------------------------------------------------------ *
  * The projection: three fields out of a file that has eight.
  * ------------------------------------------------------------------ */
@@ -200,6 +245,22 @@ function iso(u: unknown): string | null {
 
 function count(u: unknown): number | null {
   return typeof u === "number" && Number.isInteger(u) && u >= 0 ? u : null;
+}
+
+/**
+ * A string with something in it. **`""` is not a value, it is a hole.**
+ *
+ * Every string in this projection is something a person reads off a card — an
+ * id it is addressed by, a session's name, the question, the excerpt — and a
+ * blank one renders as an empty space under a heading that says we observed
+ * something. `{kind: "dialog", question: "", options: []}` passed a
+ * `typeof === "string"` check and arrived at the renderer wearing the observed,
+ * enumerable arm with nothing in it, which is precisely what wire.ts says must
+ * not cross. Whitespace counts as blank: it is indistinguishable on screen.
+ * GPT Sol's C4, 2026-09-08. The same helper, same name, is in web/src/types.ts.
+ */
+function nonBlank(u: unknown): string | null {
+  return typeof u === "string" && u.trim() !== "" ? u : null;
 }
 
 function readProjection(json: unknown): AttentionFeed {
@@ -254,10 +315,32 @@ function parseList(u: unknown, writtenAt: string): AttentionList {
   if (!isRecord(u)) return bad("it is not an object");
   const scannedAt = iso(u["scannedAt"]);
   if (scannedAt === null) return bad("scannedAt is not a timestamp this reader can read");
+  /* **A SCAN CANNOT HAVE HAPPENED AFTER THE FILE THAT REPORTS IT WAS WRITTEN.**
+     Both timestamps come off ONE clock — the Overseer stamps `scannedAt` when
+     the pass runs and `writtenAt` when it checkpoints, in the same process — so
+     this pair is not subject to any skew and there is nothing to tolerate: a
+     `scannedAt` in the future of its own checkpoint is a corrupt or hand-edited
+     file. It matters because the page's staleness check is `now − scannedAt`,
+     and a future timestamp reads as "0s ago" for as long as it stays in the
+     future, which suppresses the staleness branch and leaves an empty list
+     looking permanently calm. Equal is ordinary: the store's `attentionNotYetRun`
+     stamps a not-yet-run list with the checkpoint's own instant.
+     GPT Sol's C2, 2026-09-08 — the server half. The client cannot make this
+     check against ITS clock, and ageMs in AttentionPanel.tsx says why. */
+  if (Date.parse(scannedAt) > Date.parse(writtenAt)) {
+    return bad(`it was scanned at ${scannedAt}, after the ${writtenAt} checkpoint that carries it`);
+  }
 
   if (u["kind"] === "unknown") {
-    const why = u["why"];
-    return typeof why === "string" ? { kind: "unknown", why, scannedAt } : bad("an unknown list with no reason");
+    /* **`nonBlank`, NOT `typeof === "string"`, and this arm is the one that
+       cannot afford it.** The `why` is not a field beside the content — it IS
+       the content: the panel renders "no ranked list: {why}" and has nothing
+       else to draw. A blank one produced a sentence that stops at its colon,
+       which reads as the page being broken rather than as the coordinator not
+       having judged. GPT Sol's C4, extended by the implementer's own report to
+       the two fields the brief's list had missed. */
+    const why = nonBlank(u["why"]);
+    return why === null ? bad("an unknown list with no reason") : { kind: "unknown", why, scannedAt };
   }
   if (u["kind"] !== "list") {
     return bad(`kind ${JSON.stringify(u["kind"])} is neither "list" nor "unknown"`);
@@ -274,6 +357,17 @@ function parseList(u: unknown, writtenAt: string): AttentionList {
         "so its completeness cannot be established",
       scannedAt,
     };
+  }
+  /* **MORE FAILURES THAN ATTEMPTS IS CORRUPTION, NOT A READING.**
+     `sessionsUnreadable` counts sessions the pass TRIED to judge and could not,
+     so it is a subset of `sessionsScanned` by construction and a producer that
+     reports otherwise is not reporting. It has to be refused rather than
+     clamped, because the page subtracts one from the other to say how many were
+     judged, and a negative there would be printed. GPT Sol's C1, 2026-09-08. */
+  if (sessionsUnreadable > sessionsScanned) {
+    return bad(
+      `it says ${sessionsUnreadable} of ${sessionsScanned} sessions could not be judged, which is more than it scanned`,
+    );
   }
 
   const rawItems = u["items"];
@@ -296,10 +390,10 @@ const ATTENTION_KINDS: readonly AttentionKind[] = ["irreversible", "product", "t
 /** Every field, every arm. `null` on the first mismatch — the list then degrades whole. */
 function parseItem(u: unknown): AttentionItem | null {
   if (!isRecord(u)) return null;
-  const id = u["id"];
-  const sessionId = u["sessionId"];
-  const sessionName = u["sessionName"];
-  if (typeof id !== "string" || typeof sessionId !== "string" || typeof sessionName !== "string") return null;
+  const id = nonBlank(u["id"]);
+  const sessionId = nonBlank(u["sessionId"]);
+  const sessionName = nonBlank(u["sessionName"]);
+  if (id === null || sessionId === null || sessionName === null) return null;
   const waitingSince = iso(u["waitingSince"]);
   if (waitingSince === null) return null;
   const kind = ATTENTION_KINDS.find((k) => k === u["kind"]);
@@ -313,10 +407,10 @@ function parseItem(u: unknown): AttentionItem | null {
   const duplicates: { sessionId: string; sessionName: string; waitingSince: string }[] = [];
   for (const d of rawDuplicates) {
     if (!isRecord(d)) return null;
-    const dupId = d["sessionId"];
-    const dupName = d["sessionName"];
+    const dupId = nonBlank(d["sessionId"]);
+    const dupName = nonBlank(d["sessionName"]);
     const dupSince = iso(d["waitingSince"]);
-    if (typeof dupId !== "string" || typeof dupName !== "string" || dupSince === null) return null;
+    if (dupId === null || dupName === null || dupSince === null) return null;
     duplicates.push({ sessionId: dupId, sessionName: dupName, waitingSince: dupSince });
   }
   return { id, sessionId, sessionName, waitingSince, kind, evidence, answerability, duplicates };
@@ -335,16 +429,20 @@ function parseItem(u: unknown): AttentionItem | null {
 function parseEvidence(u: unknown): AttentionEvidence | null {
   if (!isRecord(u)) return null;
   if (u["kind"] === "dialog") {
-    const question = u["question"];
+    /* **NON-BLANK, not merely a string.** An option labelled `""` is a button
+       with no words on it and a question of `""` is a heading with nothing
+       under it — both arrive as something the harness is said to have SEEN and
+       enumerated. See `nonBlank` above. */
+    const question = nonBlank(u["question"]);
     const options = u["options"];
-    if (typeof question !== "string" || !Array.isArray(options)) return null;
-    if (!options.every((o) => typeof o === "string")) return null;
+    if (question === null || !Array.isArray(options)) return null;
+    if (!options.every((o) => nonBlank(o) !== null)) return null;
     return { kind: "dialog", question, options: options as string[] };
   }
   if (u["kind"] === "prose") {
-    const excerpt = u["excerpt"];
-    const why = u["why"];
-    if (typeof excerpt !== "string" || typeof why !== "string") return null;
+    const excerpt = nonBlank(u["excerpt"]);
+    const why = nonBlank(u["why"]);
+    if (excerpt === null || why === null) return null;
     return { kind: "prose", excerpt, why };
   }
   return null;
@@ -354,8 +452,11 @@ function parseEvidence(u: unknown): AttentionEvidence | null {
 function parseAnswerability(u: unknown): AttentionAnswerability | null {
   if (!isRecord(u)) return null;
   if (u["kind"] === "phone") return { kind: "phone" };
-  const why = u["why"];
-  if (typeof why !== "string") return null;
+  /* Both arms that carry a `why` carry NOTHING ELSE, so a blank one puts an
+     empty explanation on a card and leaves a reader worse off than the arm
+     being absent. `nonBlank`, for the reason the list's own `why` uses it. */
+  const why = nonBlank(u["why"]);
+  if (why === null) return null;
   if (u["kind"] === "needs-a-screen") return { kind: "needs-a-screen", why };
   if (u["kind"] === "unknown") return { kind: "unknown", why };
   return null;

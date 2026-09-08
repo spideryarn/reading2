@@ -683,6 +683,22 @@ function count(v: unknown): number | null {
   return typeof v === "number" && Number.isInteger(v) && v >= 0 ? v : null;
 }
 
+/**
+ * A string with something in it. **`""` is not a value, it is a hole.**
+ *
+ * `str` above is right for the session rows, where a blank field is a field the
+ * card simply does not draw. It is wrong for the inbox, where every string is
+ * the thing a person reads off a card and acts on:
+ * `{kind: "dialog", question: "", options: []}` passes a `typeof` check and
+ * arrives under the mechanical, observed heading with nothing in it — the exact
+ * crossing `AttentionEvidence` in wire.ts says must not happen. Whitespace is
+ * blank too, because on screen it is. GPT Sol's C4, 2026-09-08; the server's
+ * copy is `nonBlank` in tools/fleet/attention.ts.
+ */
+function nonBlank(v: unknown): string | null {
+  return typeof v === "string" && v.trim() !== "" ? v : null;
+}
+
 const ATTENTION_KINDS: readonly AttentionKind[] = ["irreversible", "product", "technical", "other"];
 
 /**
@@ -791,7 +807,11 @@ function parseAttentionList(raw: unknown, writtenAt: string): AttentionList {
   const scannedAt = iso(raw["scannedAt"]);
   if (scannedAt === null) return bad("scannedAt is not a timestamp this page can read");
   if (raw["kind"] === "unknown") {
-    const why = str(raw["why"]);
+    /* `nonBlank` rather than `str`: the `why` is the whole of what this arm
+       draws — "no ranked list: {why}" — so a blank one renders a sentence that
+       stops at its colon. The server refuses it too; this is the boundary
+       parse, and it does not get to assume the server is this build. */
+    const why = nonBlank(raw["why"]);
     return why === null ? bad("an unknown list with no reason") : { kind: "unknown", why, scannedAt };
   }
   if (raw["kind"] !== "list") {
@@ -816,6 +836,19 @@ function parseAttentionList(raw: unknown, writtenAt: string): AttentionList {
       scannedAt,
     };
   }
+  /* **MORE FAILURES THAN ATTEMPTS IS CORRUPTION, NOT A READING.**
+     `sessionsUnreadable` counts sessions the pass TRIED to judge and could not,
+     so it is a subset of `sessionsScanned` and a producer reporting otherwise is
+     not reporting. Refused rather than clamped: AttentionPanel subtracts one
+     from the other to say how many WERE judged, and a negative there would be
+     printed on the page. The same check is in tools/fleet/attention.ts, and
+     both are needed — this page may be reading a server older than itself.
+     GPT Sol's C1, 2026-09-08. */
+  if (sessionsUnreadable > sessionsScanned) {
+    return bad(
+      `it says ${sessionsUnreadable} of ${sessionsScanned} sessions could not be judged, which is more than it scanned`,
+    );
+  }
   const rawItems = raw["items"];
   if (!Array.isArray(rawItems)) return bad("items is not an array");
   const items: AttentionItem[] = [];
@@ -834,9 +867,9 @@ function parseAttentionList(raw: unknown, writtenAt: string): AttentionList {
 /** Every field, every arm. `null` on the first mismatch — the list then degrades whole. */
 function parseAttentionItem(raw: unknown): AttentionItem | null {
   if (!isRecord(raw)) return null;
-  const id = str(raw["id"]);
-  const sessionId = str(raw["sessionId"]);
-  const sessionName = str(raw["sessionName"]);
+  const id = nonBlank(raw["id"]);
+  const sessionId = nonBlank(raw["sessionId"]);
+  const sessionName = nonBlank(raw["sessionName"]);
   if (id === null || sessionId === null || sessionName === null) return null;
   const waitingSince = iso(raw["waitingSince"]);
   if (waitingSince === null) return null;
@@ -851,8 +884,8 @@ function parseAttentionItem(raw: unknown): AttentionItem | null {
   const duplicates: { sessionId: string; sessionName: string; waitingSince: string }[] = [];
   for (const d of rawDuplicates) {
     if (!isRecord(d)) return null;
-    const dupId = str(d["sessionId"]);
-    const dupName = str(d["sessionName"]);
+    const dupId = nonBlank(d["sessionId"]);
+    const dupName = nonBlank(d["sessionName"]);
     const dupSince = iso(d["waitingSince"]);
     if (dupId === null || dupName === null || dupSince === null) return null;
     duplicates.push({ sessionId: dupId, sessionName: dupName, waitingSince: dupSince });
@@ -874,15 +907,19 @@ function parseAttentionItem(raw: unknown): AttentionItem | null {
 function parseAttentionEvidence(raw: unknown): AttentionEvidence | null {
   if (!isRecord(raw)) return null;
   if (raw["kind"] === "dialog") {
-    const question = str(raw["question"]);
+    /* **NON-BLANK, not merely a string.** An option labelled `""` is a button
+       with no words on it and a question of `""` is a heading with nothing
+       under it, both drawn as something the harness SAW and enumerated. See
+       `nonBlank`. */
+    const question = nonBlank(raw["question"]);
     const options = raw["options"];
     if (question === null || !Array.isArray(options)) return null;
-    if (!options.every((o) => typeof o === "string")) return null;
+    if (!options.every((o) => nonBlank(o) !== null)) return null;
     return { kind: "dialog", question, options: options as string[] };
   }
   if (raw["kind"] === "prose") {
-    const excerpt = str(raw["excerpt"]);
-    const why = str(raw["why"]);
+    const excerpt = nonBlank(raw["excerpt"]);
+    const why = nonBlank(raw["why"]);
     if (excerpt === null || why === null) return null;
     return { kind: "prose", excerpt, why };
   }
@@ -902,7 +939,10 @@ function parseAttentionEvidence(raw: unknown): AttentionEvidence | null {
 function parseAnswerability(raw: unknown): AttentionAnswerability | null {
   if (!isRecord(raw)) return null;
   if (raw["kind"] === "phone") return { kind: "phone" };
-  const why = str(raw["why"]);
+  /* Both arms that carry a `why` carry nothing else, so a blank one draws an
+     empty explanation on a card — worse for a reader than the arm being absent.
+     `nonBlank` rather than `str`, matching the server. */
+  const why = nonBlank(raw["why"]);
   if (why === null) return null;
   if (raw["kind"] === "needs-a-screen") return { kind: "needs-a-screen", why };
   if (raw["kind"] === "unknown") return { kind: "unknown", why };

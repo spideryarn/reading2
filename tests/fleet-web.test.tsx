@@ -4969,6 +4969,51 @@ describe("the attention inbox, off the wire", () => {
     expect(feed.list.scannedAt).toBe(scannedAt);
   });
 
+  it("refuses a list that could not judge more sessions than it scanned", () => {
+    /* Corruption rather than a reading: `sessionsUnreadable` counts sessions the
+       pass TRIED to judge, so it is a subset of `sessionsScanned`. Refused
+       rather than clamped because the panel subtracts one from the other to say
+       how many WERE judged, and a negative there would be printed. The server's
+       reader makes the same refusal, and both are needed — this page may be
+       older or newer than the server it is reading. GPT Sol's C1. */
+    const feed = parseAttention(
+      published(attentionList({ items: [], sessionsScanned: 3, sessionsUnreadable: 4 })),
+    );
+    expect(feed).toMatchObject({ kind: "published", list: { kind: "unknown" } });
+    if (feed.kind !== "published" || feed.list.kind !== "unknown") return;
+    expect(feed.list.why).toContain("more than it scanned");
+  });
+
+  it("refuses a BLANK string wherever a card would draw one, not just a missing one", () => {
+    /* `""` passed a `typeof` check, so `{kind: "dialog", question: "",
+       options: []}` reached the renderer under the mechanical, observed heading
+       with nothing in it — the exact value wire.ts names as the one that must
+       not cross. Whitespace counts: on screen it is the same thing. The other
+       parsers cover missing fields; these are the present-and-empty ones.
+       GPT Sol's C4. */
+    for (const item of [
+      { id: "" },
+      { id: "x", sessionId: "   " },
+      { id: "x", sessionName: "" },
+      { id: "x", evidence: { kind: "dialog", question: "", options: [] } },
+      { id: "x", evidence: { kind: "dialog", question: "Drop it?", options: ["Yes", " "] } },
+      { id: "x", evidence: { kind: "prose", excerpt: "", why: "it stopped" } },
+      { id: "x", evidence: { kind: "prose", excerpt: "…and stopped", why: "" } },
+      { id: "x", duplicates: [{ sessionId: "", sessionName: "n", waitingSince: agoIso(60_000) }] },
+      { id: "x", duplicates: [{ sessionId: "$9", sessionName: "", waitingSince: agoIso(60_000) }] },
+    ] as Partial<AttentionItem>[]) {
+      const list = attentionList({ items: [attentionItem({ id: "x" })] });
+      const wire = JSON.parse(JSON.stringify(published(list))) as { list: { items: Record<string, unknown>[] } };
+      const first = wire.list.items[0];
+      if (first === undefined) throw new Error("the fixture lost its item");
+      Object.assign(first, item);
+      expect(parseAttention(wire), JSON.stringify(item)).toMatchObject({
+        kind: "published",
+        list: { kind: "unknown" },
+      });
+    }
+  });
+
   it("degrades the WHOLE list when one item will not parse", () => {
     /* Not "drop it and count", which is what `rows` gets. An inbox of 4 out of 5
        says *these are the ones that need you* and is then wrong about the fifth
@@ -5093,6 +5138,36 @@ describe("the attention inbox, on the page", () => {
     expect(text).not.toContain("nothing is waiting on you");
   });
 
+  it("treats a badly future timestamp as unreadable rather than as freshly scanned", () => {
+    /* **A FUTURE `scannedAt` USED TO READ AS "0s ago" FOREVER.** `ageMs` clamped
+       with `Math.max(0, …)`, so a clock that ran ahead suppressed the staleness
+       branch for exactly as long as the fault lasted, and an empty list looked
+       permanently calm — the failure this panel exists to prevent, arriving
+       through the one number it trusts. GPT Sol's C2.
+
+       Ten minutes ahead is past any plausible phone skew, so the page cannot use
+       the timestamp and must say so rather than treat it as fresh. */
+    const text = showing(
+      published(attentionList({ items: [], sessionsScanned: 32, scannedAt: agoIso(-10 * 60_000) })),
+    );
+    expect(text).not.toContain("nothing is waiting on you");
+    expect(text).toContain("at a time this page could not read");
+  });
+
+  it("lets a SMALL future timestamp pass, because the phone's clock is not the box's", () => {
+    /* The other half of C2, and the reason the tolerance is not zero: v0.4j —
+       *the page reads the box's clock with the phone's*, in
+       docs/plans/260907e-agent-fleet-dashboard.md — is open, so a browser a few
+       seconds ahead of the box is ordinary. An alarm a clock can manufacture is
+       an alarm that stops being read, which is the same A17 failure as a caveat
+       on 29 of 32 rows. */
+    const text = showing(
+      published(attentionList({ items: [], sessionsScanned: 32, scannedAt: agoIso(-30_000) })),
+    );
+    expect(text).toContain("nothing is waiting on you");
+    expect(text).not.toContain("at a time this page could not read");
+  });
+
   it("tells a stopped daemon apart from a stopped pass, because they are different faults", () => {
     /* The two clocks fail independently: `coordinatorWrittenAt` moves every ~30s
        whether or not the pass ran, `scannedAt` only when the paid pass runs. A
@@ -5103,6 +5178,28 @@ describe("the attention inbox, on the page", () => {
     expect(text).toContain("the Overseer stopped checkpointing");
     expect(text).not.toContain("the attention pass last ran");
     expect(text).not.toContain("nothing is waiting on you");
+  });
+
+  it("will not call an INCOMPLETE empty pass a calm fleet", () => {
+    /* **THE WORST OF the C7 review's findings, GPT Sol 2026-09-08.** Agreement
+       (c) was implemented for the items-present branch only, and this branch
+       never looked at `sessionsUnreadable` at all — so a pass that judged 31
+       sessions, failed on 1, and found nothing drew "nothing is waiting on you ·
+       32 sessions", which is the one claim the floor caveat exists to withhold.
+
+       The state is NOT rejected — *we judged 31, none of them needs you, and 1
+       we could not read* is true and useful — it is rendered honestly, and it
+       REPLACES the reassurance rather than qualifying it, because a sentence
+       with a caveat under it is read as the sentence. */
+    const text = showing(
+      published(attentionList({ items: [], sessionsScanned: 32, sessionsUnreadable: 1 })),
+    );
+    expect(text).not.toContain("nothing is waiting on you");
+    expect(text).toContain("nothing among the 31 we could judge is waiting on you");
+    expect(text).toContain("1 of 32 could not be judged");
+    /* The scan's age survives into this arm too: an incomplete pass that is also
+       twenty minutes old is two facts, not one. */
+    expect(text).toContain("scanned 1m 30s ago");
   });
 
   it("calls zero sessions scanned a broken probe rather than a quiet fleet", () => {
@@ -5267,7 +5364,7 @@ describe("the attention inbox, on the page", () => {
   });
 });
 
-describe("the join: a checkpoint on disk reaches the page", () => {
+describe("the composer production uses turns a checkpoint on disk into a question on screen", () => {
   /**
    * **THE DETECTOR FOR THE CLASS OF BUG THIS STAGE FIXED**, and it is one test
    * on purpose.
@@ -5294,8 +5391,33 @@ describe("the join: a checkpoint on disk reaches the page", () => {
    * mutations — the server-side read, the payload field, the client parse, the
    * panel render — each turned THIS assertion red, and each file was restored
    * byte-identical afterwards.
+   *
+   * ## THE ONE EDGE IT DOES NOT COVER, and what does cover it
+   *
+   * **This test supplies `readAttention` itself**, so `server.ts`'s own binding
+   * of it into `PayloadDeps` is outside the boundary — the test would stay green
+   * if that line were deleted. It used to be named as though it were not, which
+   * is why the name is now the composer rather than "the join". Renaming it was
+   * the fix rather than chasing the edge, and deliberately (GPT Sol's C5,
+   * answered 2026-09-08):
+   *
+   * `server.ts` binds ports at import time, which is the whole reason `state.ts`
+   * exists. Extracting its deps construction only MOVES the seam — there is
+   * always a last edge at the composition root that no test reaches without
+   * starting a server. What closes the missing-join risk there is not a test but
+   * the **type**: `readAttention` is a required field of `PayloadDeps`, so
+   * omitting it is a typecheck failure rather than a page that quietly draws
+   * nothing. A deliberate stub would still compile — but *somebody wired the
+   * wrong thing on purpose* is a different and far smaller class than *nobody
+   * remembered to wire it at all*, which is the class this stage was about.
+   *
+   * **And `textContent` survives CSS**, so what is asserted below is that the
+   * text is in the DOM and not that a person can see it — a rule that hid the
+   * panel would leave this green. That is structural on purpose; whether it is
+   * legible on a 390px phone is the browser pass, which is where the evidence
+   * disclosure's own pointer bug was found and where no unit test could have.
    */
-  it("walks a real checkpoint to a question on screen", () => {
+  it("turns a real checkpoint into a question on screen, through `statePayload`", () => {
     const root = mkdtempSync(join(tmpdir(), "fleet-web-attention-join-"));
     try {
       writeFileSync(

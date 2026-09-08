@@ -33,6 +33,7 @@
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -245,6 +246,101 @@ describe("readAttention", () => {
     expect(feed.list.scannedAt).toBe(LIST.scannedAt);
   });
 
+  it("refuses a list that could not judge more sessions than it scanned", () => {
+    /* A count of failures larger than the count of attempts is corruption
+       rather than a reading. It has to be refused rather than clamped, because
+       the page subtracts one from the other to say how many WERE judged and a
+       negative there would be drawn on screen. GPT Sol's C1. */
+    const root = tempRoot();
+    writeCheckpoint(root, {
+      attention: { ...LIST, items: [], sessionsScanned: 3, sessionsUnreadable: 4 },
+    });
+    const feed = readAttention(root);
+    expect(feed).toMatchObject({ kind: "published", list: { kind: "unknown" } });
+    if (feed.kind !== "published" || feed.list.kind !== "unknown") return;
+    expect(feed.list.why).toContain("more than it scanned");
+  });
+
+  it("refuses a list scanned after the checkpoint that carries it, because that clock is one clock", () => {
+    /* **A FUTURE `scannedAt` IS A PERMANENTLY FRESH ONE.** The page's staleness
+       check is `now − scannedAt`, and a timestamp in the future stays "0s ago"
+       for as long as it stays in the future — so an empty list looks calm for
+       exactly as long as the fault lasts, which is the failure the whole panel
+       is about. This pair is checkable HERE and not on the page: the Overseer
+       stamps both from one process, so there is no skew to tolerate.
+       GPT Sol's C2, the server half. */
+    const root = tempRoot();
+    const after = new Date(Date.parse(WRITTEN_AT) + 60_000).toISOString();
+    writeCheckpoint(root, { attention: { ...LIST, scannedAt: after } });
+    const feed = readAttention(root);
+    expect(feed).toMatchObject({ kind: "published", list: { kind: "unknown" } });
+    if (feed.kind !== "published" || feed.list.kind !== "unknown") return;
+    expect(feed.list.why).toContain("after");
+
+    /* Equal is ORDINARY, not incoherent: the store stamps a not-yet-run list
+       with the checkpoint's own instant, and refusing that would turn every
+       fresh Overseer into an unreadable one. */
+    const same = tempRoot();
+    writeCheckpoint(same, { attention: { ...LIST, scannedAt: WRITTEN_AT } });
+    expect(readAttention(same)).toMatchObject({ kind: "published", list: { kind: "list" } });
+  });
+
+  it("refuses a BLANK string wherever a card would draw one, not just a missing one", () => {
+    /* `typeof x === "string"` accepted `""`, so `{kind: "dialog", question: "",
+       options: []}` crossed the evidence boundary and arrived under the
+       mechanical, observed heading with nothing in it — wire.ts names that
+       exact value as the one that must not cross. Whitespace counts, because on
+       screen it is the same thing. GPT Sol's C4. */
+    for (const attention of [
+      { ...LIST, items: [{ ...ITEM, id: "" }] },
+      { ...LIST, items: [{ ...ITEM, sessionId: "  " }] },
+      { ...LIST, items: [{ ...ITEM, sessionName: "" }] },
+      { ...LIST, items: [{ ...ITEM, evidence: { kind: "dialog", question: "", options: [] } }] },
+      { ...LIST, items: [{ ...ITEM, evidence: { kind: "dialog", question: "Drop it?", options: ["Yes", ""] } }] },
+      { ...LIST, items: [{ ...ITEM, evidence: { kind: "prose", excerpt: "", why: "it stopped" } }] },
+      { ...LIST, items: [{ ...ITEM, evidence: { kind: "prose", excerpt: "…and stopped", why: " " } }] },
+      {
+        ...LIST,
+        items: [{ ...ITEM, duplicates: [{ sessionId: "", sessionName: "x", waitingSince: ITEM.waitingSince }] }],
+      },
+      {
+        ...LIST,
+        items: [{ ...ITEM, duplicates: [{ sessionId: "$9", sessionName: "", waitingSince: ITEM.waitingSince }] }],
+      },
+      /* **THE TWO THE FIRST PASS MISSED, AND THEY ARE THE ONES WITH THE LEAST TO
+         FALL BACK ON.** The brief enumerated nine fields and these were not
+         among them; the implementer's own report said so rather than letting it
+         pass, which is the only reason they are here. An `answerability.why` is
+         the ENTIRE content of the two arms that carry one. */
+      { ...LIST, items: [{ ...ITEM, answerability: { kind: "needs-a-screen", why: "" } }] },
+      { ...LIST, items: [{ ...ITEM, answerability: { kind: "unknown", why: "   " } }] },
+    ]) {
+      const root = tempRoot();
+      writeCheckpoint(root, { attention });
+      expect(readAttention(root), JSON.stringify(attention)).toMatchObject({
+        kind: "published",
+        list: { kind: "unknown" },
+      });
+    }
+  });
+
+  it("refuses an `unknown` list whose reason is blank, because the reason IS the output", () => {
+    /* This arm draws "no ranked list: {why}" and has nothing else — so a blank
+       `why` renders a sentence that stops at its colon, which reads as the page
+       being broken rather than as the coordinator not having judged yet. It is
+       the arm with the least to fall back on and it was the one still accepting
+       `""` after C4's first pass. */
+    for (const why of ["", "  "]) {
+      const root = tempRoot();
+      writeCheckpoint(root, { attention: { kind: "unknown", why, scannedAt: LIST.scannedAt } });
+      const feed = readAttention(root);
+      expect(feed, JSON.stringify(why)).toMatchObject({ kind: "published", list: { kind: "unknown" } });
+      const list = (feed as { list: { kind: "unknown"; why: string } }).list;
+      expect(list.why).not.toBe(why);
+      expect(list.why.trim()).not.toBe("");
+    }
+  });
+
   it("degrades the WHOLE list when one item will not parse", () => {
     /* Not "drop it and count", which is what the session rows get. An inbox of
        one out of two says *this is the one that needs you* and is then wrong
@@ -288,6 +384,24 @@ describe("readAttention", () => {
     expect(feed.why).toContain("absolute");
   });
 
+  it("says unreadable, not absent, when it never found out whether a checkpoint is there", () => {
+    /* **ONLY `ENOENT` ESTABLISHES ABSENCE.** Every open failure used to become
+       `checkpoint-absent`, so a permissions error rendered as *no checkpoint has
+       been published here* — a positive claim about the box manufactured out of
+       a failure to look, and the page draws that one without a caveat. GPT Sol's
+       C3.
+
+       `ENOTDIR` is the errno used here because it is deterministic and does not
+       depend on who is running the suite: a `chmod 000` proves nothing under a
+       uid that ignores it, and `EACCES` is the case this test stands in for. */
+    const root = tempRoot();
+    writeFileSync(join(root, "not-a-directory"), "hello", "utf8");
+    const feed = readAttention(join(root, "not-a-directory"));
+    expect(feed.kind).toBe("checkpoint-unreadable");
+    if (feed.kind !== "checkpoint-unreadable") return;
+    expect(feed.why).toContain("ENOTDIR");
+  });
+
   it("cannot throw on a path that is a directory rather than a file", () => {
     const root = tempRoot();
     mkdirSync(join(root, "current.json"));
@@ -307,8 +421,42 @@ describe("readAttention", () => {
   });
 });
 
+/**
+ * **THE TWO OVERSEER MODULES `tools/fleet/` IS ALLOWED TO IMPORT, written down
+ * so that adding a third is a decision somebody makes in a diff.**
+ *
+ * Both are leaf utilities that import nothing back, so they close no cycle and
+ * duplicate no judgement, and `health-history.ts` says at length why it uses
+ * them rather than copying them: *"The lock is `tools/overseer/lock.ts`'s,
+ * imported, not a copy."*
+ *
+ * Everything else in `tools/overseer/` reaches the store — directly, or through
+ * one hop of `usage.ts`, `observation.ts`, `memory.ts` — and the store is the
+ * thing this seam exists to keep out: it pulls usage, memory, diff, lock and log
+ * in behind it, and it holds the Overseer's own opinion about what a bad
+ * checkpoint means.
+ */
+const OVERSEER_MODULES_FLEET_MAY_IMPORT = ["jsonl.js", "lock.js"];
+
+/** Every `.ts`/`.tsx` file under a directory, recursively. Build output excluded. */
+function sourceFiles(dir: string): string[] {
+  const found: string[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      /* Bundled output re-states every import in a form no rule can read, and
+         `node_modules` is nobody's decision. */
+      if (entry.name === "node_modules" || entry.name === "dist") continue;
+      found.push(...sourceFiles(path));
+    } else if (entry.name.endsWith(".ts") || entry.name.endsWith(".tsx")) {
+      found.push(path);
+    }
+  }
+  return found;
+}
+
 describe("the seam between the two tools", () => {
-  it("has the dashboard importing the Overseer's STORE from nowhere", () => {
+  it("imports exactly two Overseer modules, and they are the two that were argued for", () => {
     /* **THE CYCLE THIS READER EXISTS TO AVOID, checked rather than remembered.**
      * docs/project/overseer-direction.md: *"`tools/overseer/` already imports
      * `collect.ts` and `status.ts` from `tools/fleet/`, so a `tools/fleet/` that
@@ -320,26 +468,39 @@ describe("the seam between the two tools", () => {
      * entirely reasonable — which is why the rule needs something that fails
      * rather than a paragraph somebody has to have read.
      *
-     * **Scoped to `store.ts`, and the scope was corrected by a measurement.**
-     * The first version of this test banned every `../overseer/` import and went
-     * red on `health-history.ts`, which imports `jsonl.ts` and `lock.ts` on
-     * purpose and says so at length: *"The lock is `tools/overseer/lock.ts`'s,
-     * imported, not a copy."* Those are leaf utilities that import nothing back,
-     * so they close no cycle and duplicate no judgement. The store is the one
-     * that does both — it pulls usage, memory, diff, lock and log in behind it,
-     * and it holds the Overseer's own opinion about what a bad checkpoint means.
+     * **AN ALLOWLIST RATHER THAN A BAN ON `store.js`, and the difference is the
+     * whole value.** The previous version scanned the immediate `tools/fleet/*.ts`
+     * for a double-quoted `from "../overseer/store.js"`, so single quotes, a
+     * dynamic `import()`, anything under `web/src/`, and — the one that matters —
+     * ANY INTERMEDIATE MODULE all walked past it. A new `import { … } from
+     * "../overseer/usage.js"` reaches the store transitively and would have been
+     * waved through by a denylist naming only the destination. Asserting the SET
+     * fails on it, and fails on the next one too, without anybody having to
+     * enumerate what reaches the store. GPT Sol's C6, 2026-09-08.
      *
-     * A text scan rather than a graph walk: the edge is one directory deep and
-     * tests/fleet-imports.test.ts already owns the transitive walking.
+     * Equality rather than containment on purpose: removing one of the two is
+     * also a change worth seeing, and the list above carries the reason each is
+     * permitted, so a diff that extends it is a diff that answers for it.
+     *
+     * A text scan rather than a graph walk — tests/fleet-imports.test.ts owns
+     * the transitive walking — and the specifier is matched by its tail
+     * (`(../)+overseer/x`) because `web/src/` sits two directories deeper and
+     * would spell the same import differently.
      */
-    const dir = new URL("../tools/fleet/", import.meta.url);
-    const offenders: string[] = [];
-    for (const name of readdirSync(dir)) {
-      if (!name.endsWith(".ts")) continue;
-      const source = readFileSync(new URL(name, dir), "utf8");
-      if (/from\s+"\.\.\/overseer\/store\.js"/.test(source)) offenders.push(name);
+    const dir = fileURLToPath(new URL("../tools/fleet/", import.meta.url));
+    const imported = new Set<string>();
+    const specifier = /["'](?:\.\.\/)+overseer\/([^"']+)["']/g;
+    for (const path of sourceFiles(dir)) {
+      for (const match of readFileSync(path, "utf8").matchAll(specifier)) {
+        const module = match[1];
+        if (module !== undefined) imported.add(module);
+      }
     }
-    expect(offenders).toEqual([]);
+    /* The scan is only evidence while it is still finding the files: a rename of
+       the directory, or a walker that silently returned nothing, would leave an
+       empty set that passes nothing and looks like a clean bill of health. */
+    expect(sourceFiles(dir).length).toBeGreaterThan(20);
+    expect([...imported].sort()).toEqual([...OVERSEER_MODULES_FLEET_MAY_IMPORT].sort());
   });
 });
 
