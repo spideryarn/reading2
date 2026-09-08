@@ -543,12 +543,12 @@ export function parsePause(v: unknown): Pause {
     return { kind: "scheduled-wakeup", at, overdue: v["overdue"] === true, source: "cron" };
   }
 
-  if (kind === "in-a-shell-call") {
+  if (kind === "background-work") {
     const sinceMs = v["sinceMs"];
     if (typeof sinceMs !== "number" || !Number.isFinite(sinceMs) || sinceMs < 0) {
       return unreadable("the server said this session is in a shell call but did not say for how long");
     }
-    return { kind: "in-a-shell-call", sinceMs };
+    return { kind: "background-work", sinceMs };
   }
 
   if (kind === "cannot-tell") {

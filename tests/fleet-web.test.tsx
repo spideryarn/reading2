@@ -4544,7 +4544,7 @@ describe("why a session is paused, off the wire and on the page", () => {
               id: "$blocked",
               title: "working, and actually stuck",
               status: { kind: "working" },
-              pause: { kind: "in-a-shell-call", sinceMs: 21 * 60_000 },
+              pause: { kind: "background-work", sinceMs: 21 * 60_000 },
             }),
           ],
         }),
@@ -4554,7 +4554,7 @@ describe("why a session is paused, off the wire and on the page", () => {
     // Once, for the quiet row — not three times.
     expect(text.split("waiting? unknown").length - 1).toBe(1);
     // And the positive state is drawn on a WORKING row, which is the point.
-    expect(text).toContain("in a shell call 21m");
+    expect(text).toContain("background work, 21m");
   });
 
   it("puts an overdue session in the loud colour and says how long it has been waiting", () => {
