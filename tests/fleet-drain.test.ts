@@ -69,6 +69,7 @@ function row(over: Partial<FleetRow> = {}): FleetRow {
     repo: null,
     worktree: null,
     meta: { version: "legacy" },
+    role: { kind: "none" },
     startedAt: "2026-09-08T00:00:00.000Z",
     /* The arm the collector produces before `readPauses` has run. Not `none`:
        a fixture is in no position to claim we looked everywhere. */
@@ -135,7 +136,7 @@ const GREG = "[Greg, via the fleet dashboard] ";
 /** The delivery module as a recorder, and optionally as a thing that fails. */
 function harness(over: { result?: SteerResult | ((t: SteerTarget, text: string) => SteerResult); queue?: SteeringQueue } = {}) {
   let clock = 1_000_000;
-  const queue = over.queue ?? new SteeringQueue({ now: () => clock });
+  const queue = over.queue ?? new SteeringQueue({ now: () => clock, serverInstanceId: "1a2b3c4d" });
   const sent: Sent[] = [];
   const logs: string[] = [];
   const deps: DrainDeps = {
@@ -223,7 +224,7 @@ describe("the route and the drain share one queue", () => {
     const sent: Sent[] = [];
     let clock = 1_000_000;
     const routes = makeActionRoutes({
-      queue: new SteeringQueue({ now: () => clock }),
+      queue: new SteeringQueue({ now: () => clock, serverInstanceId: "1a2b3c4d" }),
       sendMessage: (target, text, declaredStatus) => {
         sent.push({ target, text, declaredStatus });
         return SENT_OK;
@@ -271,7 +272,7 @@ describe("the route and the drain share one queue", () => {
     const sent: Sent[] = [];
     let clock = 1_000_000;
     const routes = makeActionRoutes({
-      queue: new SteeringQueue({ now: () => clock }),
+      queue: new SteeringQueue({ now: () => clock, serverInstanceId: "1a2b3c4d" }),
       sendMessage: (target, text, declaredStatus) => {
         sent.push({ target, text, declaredStatus });
         return SENT_OK;
@@ -762,7 +763,7 @@ describe("drainOnce is bounded", () => {
     // The clock is injected, so a slow transport is a fake that advances it —
     // no waiting, and the bound is measured rather than assumed.
     let clock = 1_000_000;
-    const queue = new SteeringQueue({ now: () => clock });
+    const queue = new SteeringQueue({ now: () => clock, serverInstanceId: "1a2b3c4d" });
     const sent: string[] = [];
     const deps: DrainDeps = {
       queue,
@@ -921,7 +922,7 @@ describe("an enacted action cannot be queued", () => {
   it("is refused by the route with a code the page can act on", async () => {
     let clock = 1_000_000;
     const routes = makeActionRoutes({
-      queue: new SteeringQueue({ now: () => clock }),
+      queue: new SteeringQueue({ now: () => clock, serverInstanceId: "1a2b3c4d" }),
       sendMessage: () => SENT_OK,
       now: () => clock,
       limiter: createRateLimiter({ minIntervalMs: 0, burstMax: 1_000, burstWindowMs: 1 }),

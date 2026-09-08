@@ -32,7 +32,7 @@ import {
 import { parseBinds } from "../tools/fleet/config.js";
 import { readAttemptClock } from "../tools/fleet/attempt-clock.js";
 import { fleetState } from "../tools/fleet/state.js";
-import type { AttentionFeed } from "../tools/fleet/wire.js";
+import type { AttentionFeed, OverseerStatusFeed } from "../tools/fleet/wire.js";
 import type { FleetStatus } from "../tools/fleet/status.js";
 import { buildSessionScript, type Session } from "../scripts/gjd-remote-tmux.js";
 
@@ -57,6 +57,7 @@ function session(over: Partial<Session> = {}): Session {
     claudeId: "f1ee7000-0000-4000-8000-000000000001",
     proc: { kind: "claude" },
     meta: { version: 1, kind: "claude", repo: "spideryarn/reading2", dir: "/home/greg/code/spideryarn2" },
+    role: { kind: "none" },
     ...over,
   };
 }
@@ -397,6 +398,9 @@ describe("collectWithDeadline — a collection that never comes back", () => {
  */
 const NOT_ASKED: AttentionFeed = { kind: "not-asked" };
 
+/** The same, for the Overseer's own status: none of these tests read a checkpoint either. */
+const NO_OVERSEER: OverseerStatusFeed = { kind: "not-asked" };
+
 describe("fleetState — the one wire shape", () => {
   const snap: FleetSnapshot = {
     rows: [],
@@ -425,12 +429,12 @@ describe("fleetState — the one wire shape", () => {
     const now = "2026-09-08T03:31:00.000Z";
 
     // The shape that was indistinguishable from healthy: old data, no error.
-    const stalled = fleetState({ ...snap, collectedAt: stale }, null, null, 60_000, true, null, NOT_ASKED);
+    const stalled = fleetState({ ...snap, collectedAt: stale }, null, null, 60_000, true, null, NOT_ASKED, NO_OVERSEER);
     expect(stalled.attemptedAt).toBeNull();
 
     // The same data, with the loop still going round. Same rows, same clock,
     // same null error — and now a reader can tell which of the two it is.
-    const trying = fleetState({ ...snap, collectedAt: stale }, null, null, 60_000, true, now, NOT_ASKED);
+    const trying = fleetState({ ...snap, collectedAt: stale }, null, null, 60_000, true, now, NOT_ASKED, NO_OVERSEER);
     expect(trying.collectedAt).toBe(stale);
     expect(trying.error).toBeNull();
     expect(trying.attemptedAt).toBe(now);
@@ -481,7 +485,7 @@ describe("fleetState — the one wire shape", () => {
     // `fleetState` writes these in — and a test that only ever saw hand-written
     // objects would keep passing if that ordering assumption stopped holding.
     const live = JSON.parse(
-      JSON.stringify(fleetState(snap, null, null, 60_000, true, "2026-09-08T03:31:00.000Z", NOT_ASKED)),
+      JSON.stringify(fleetState(snap, null, null, 60_000, true, "2026-09-08T03:31:00.000Z", NOT_ASKED, NO_OVERSEER)),
     ) as Record<string, unknown>;
     expect(readAttemptClock(live).kind).toBe("attempted");
 
@@ -496,7 +500,7 @@ describe("fleetState — the one wire shape", () => {
     // collection has finished. `rows: []` on its own reads as "nothing is
     // running" — and the Overseer, which folds these into a history, would
     // record thirty-six sessions vanishing at once. The null is the message.
-    const s = fleetState(null, null, null, 60_000, false, null, NOT_ASKED);
+    const s = fleetState(null, null, null, 60_000, false, null, NOT_ASKED, NO_OVERSEER);
     expect(s.collectedAt).toBeNull();
     expect(s.rows).toEqual([]);
     expect(s.error).toBeNull();
@@ -509,13 +513,13 @@ describe("fleetState — the one wire shape", () => {
     // Asserted as `toBeNull`, not as `not.toBeString`: a negative assertion is
     // satisfied by undefined, by 0, and by the field disappearing altogether,
     // so it would go on passing through exactly the change it is meant to catch.
-    expect(fleetState(null, null, null, 60_000, false, null, NOT_ASKED).collectedAt).toBeNull();
+    expect(fleetState(null, null, null, 60_000, false, null, NOT_ASKED, NO_OVERSEER).collectedAt).toBeNull();
   });
 
   it("keeps the previous rows and clock when a refresh failed", () => {
     // Stale-and-labelled beats blank. The page shows the age; a blank page is
     // the one reading nobody investigates.
-    const s = fleetState(snap, "tmux: connection refused", null, 60_000, false, null, NOT_ASKED);
+    const s = fleetState(snap, "tmux: connection refused", null, 60_000, false, null, NOT_ASKED, NO_OVERSEER);
     expect(s.collectedAt).toBe(snap.collectedAt);
     expect(s.error).toBe("tmux: connection refused");
   });
@@ -524,15 +528,15 @@ describe("fleetState — the one wire shape", () => {
     // The page flipped to STALE at 30s while the server collected every 60s, so
     // it cried wolf for most of every cycle. A threshold derived from the
     // server's own interval cannot drift away from it.
-    expect(fleetState(snap, null, null, 60_000, false, null, NOT_ASKED).refreshMs).toBe(60_000);
+    expect(fleetState(snap, null, null, 60_000, false, null, NOT_ASKED, NO_OVERSEER).refreshMs).toBe(60_000);
   });
 
   it("tells the page whether answering is switched on, rather than leaving it to guess", () => {
     // The page cannot honestly warn about a server flag it has never been told
     // about: without this it either hedges, or somebody finds out by tapping —
     // and the whole point of the hold is that nobody should tap.
-    expect(fleetState(snap, null, null, 60_000, false, null, NOT_ASKED).answeringEnabled).toBe(false);
-    expect(fleetState(snap, null, null, 60_000, true, null, NOT_ASKED).answeringEnabled).toBe(true);
+    expect(fleetState(snap, null, null, 60_000, false, null, NOT_ASKED, NO_OVERSEER).answeringEnabled).toBe(false);
+    expect(fleetState(snap, null, null, 60_000, true, null, NOT_ASKED, NO_OVERSEER).answeringEnabled).toBe(true);
   });
 });
 

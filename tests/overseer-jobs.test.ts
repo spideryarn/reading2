@@ -30,6 +30,7 @@ import { afterEach, describe, expect, test } from "vitest";
 
 import type { JobEvent, OverseerEvent } from "../tools/overseer/diff.js";
 import {
+  JOB_DEFINITION_HASHED_FIELDS,
   UNKNOWN_RETENTION,
   adoptOccurrence,
   authorisationOf,
@@ -46,15 +47,8 @@ import {
   type Occurrence,
   type OccurrenceId,
 } from "../tools/overseer/jobs.js";
-import {
-  describeReport,
-  schedulerTick,
-  type JobSpawn,
-  type LostRecord,
-  type OccurrenceLog,
-  type SchedulerReport,
-  type SpawnJob,
-} from "../tools/overseer/scheduler.js";
+import type { JobSpawn, SpawnJob } from "../tools/overseer/jobs.js";
+import { describeReport, schedulerTick, type LostRecord, type OccurrenceLog, type SchedulerReport } from "../tools/overseer/scheduler.js";
 import {
   EVENTS_FILE,
   LOCK_FILE,
@@ -119,6 +113,7 @@ const JOB: JobDefinition = {
   leaseMs: 120_000,
   what: "npm run get-ready-to-deploy",
   documents: [],
+  work: { kind: "session" },
 };
 
 /**
@@ -177,6 +172,19 @@ describe("a definition's fingerprint", () => {
     expect(definitionHash({ ...JOB, id: "other" })).not.toBe(definitionHash(JOB));
   });
 
+  test("THE FIELD LIST IS THE TYPE'S OWN, so a field added later cannot sit outside the fingerprint", () => {
+    // GPT Sol's SC-4. The assertions above name today's fields by hand, and the
+    // destructure they were written against is not exhaustive in TypeScript — so
+    // a seventh field on `JobDefinition` would compile perfectly and never reach
+    // the hash that authorises the job.
+    //
+    // `JOB_DEFINITION_HASHED_FIELDS` is derived from the encoder table rather
+    // than typed out here, so reverting to a destructure deletes the table and
+    // takes this test with it; and a new field is a compile error in the table
+    // before it is ever a red line here.
+    expect([...JOB_DEFINITION_HASHED_FIELDS].sort()).toEqual(Object.keys(JOB).sort());
+  });
+
   test("cannot be fooled by a field that contains the canonical form's own separators", () => {
     // THE TEST THIS REPLACED WAS NAMED FOR A PROPERTY IT DID NOT TEST. It used
     // `{id:"ab", what:"c"}` against `{id:"a", what:"bc"}`, which the field
@@ -188,8 +196,8 @@ describe("a definition's fingerprint", () => {
     // rest of the canonical form inside it hashes the same as the honest one.
     // Two different authorised instructions with one fingerprint is exactly the
     // edit the hash exists to detect.
-    const a = definitionHash({ id: "x\neveryMs:5\nleaseMs:6\nwhat:y", everyMs: 1, leaseMs: 2, what: "z", documents: [] });
-    const b = definitionHash({ id: "x", everyMs: 5, leaseMs: 6, what: "y\neveryMs:1\nleaseMs:2\nwhat:z", documents: [] });
+    const a = definitionHash({ id: "x\neveryMs:5\nleaseMs:6\nwhat:y", everyMs: 1, leaseMs: 2, what: "z", documents: [], work: { kind: "session" } });
+    const b = definitionHash({ id: "x", everyMs: 5, leaseMs: 6, what: "y\neveryMs:1\nleaseMs:2\nwhat:z", documents: [], work: { kind: "session" } });
     expect(a).not.toBe(b);
   });
 

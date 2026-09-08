@@ -115,6 +115,7 @@ import {
   type JobEvent,
   type OverseerEvent,
   type RegisterRowField,
+  type RuleEvent,
   type SessionEvent,
   type SessionIdentity,
   type SessionKey,
@@ -131,6 +132,8 @@ import {
   type OccurrenceId,
   type OccurrenceIndex,
 } from "./jobs.js";
+import type { KillPolicy } from "../fleet/actions.js";
+import type { DriftedSession, LaunchModeFinding, RuleFinding, RuleId, RuleOutcome, WedgedProcess, WedgedWorkFinding } from "./rules.js";
 import { truncateToLastLine, writeAll, writeAtomically, type JsonlRepair } from "./jsonl.js";
 import {
   isProcessAlive,
@@ -962,6 +965,8 @@ const EVENT_KINDS: Record<OverseerEvent["kind"], true> = {
   "job-occurrence-finished": true,
   "job-occurrence-refused": true,
   "job-occurrence-unknown": true,
+  "rule-intended": true,
+  "rule-settled": true,
 };
 
 /** The watched row fields, as a set, so a `fields` list read off the disk can be checked against it. */
@@ -979,6 +984,31 @@ const JOB_KINDS: Record<JobEvent["kind"], true> = {
 
 function isJobKind(kind: string): kind is JobEvent["kind"] {
   return Object.hasOwn(JOB_KINDS, kind);
+}
+
+/**
+ * THE THIRD FAMILY, AND THE DISCRIMINATOR THE COMPILER CANNOT DEMAND.
+ *
+ * GPT Sol's SP-9, and it is the sharp half of that finding. `EVENT_KINDS` being
+ * a total `Record` means the *key* for a new arm cannot be forgotten. The
+ * *parse branch* can: `parseEvent` below treats every kind that is not a job
+ * kind as a session event, and casts to `SessionEvent["kind"]` to do it — so a
+ * rule event with no family test here would append perfectly and come back on
+ * the next read demanding `key`, `identity` and `tmuxServerPid`, and **nothing
+ * would fail to compile.**
+ *
+ * A write that succeeds and a read that quietly refuses it, in that order,
+ * discovered in a different process: docs/reusable/silent-success.md with the
+ * halves the inconvenient way round. Hence a second total `Record` rather than
+ * a second thing to remember.
+ */
+const RULE_KINDS: Record<RuleEvent["kind"], true> = {
+  "rule-intended": true,
+  "rule-settled": true,
+};
+
+function isRuleKind(kind: string): kind is RuleEvent["kind"] {
+  return Object.hasOwn(RULE_KINDS, kind);
 }
 
 /** A field that is a non-empty string. Ids and hashes are opaque here; what makes an id well-formed is `occurrenceId()`, checked below. */
@@ -1084,6 +1114,262 @@ function parseJobEvent(kind: JobEvent["kind"], u: Record<string, unknown>, at: s
   }
 }
 
+/** One wedged process off the disk. Every field the finding's arithmetic used, so a replay can redo it rather than take it. */
+function parseWedgedProcess(u: unknown): ParseResult<WedgedProcess> {
+  if (!isRecord(u)) return { ok: false, reason: "a process is not an object" };
+  const pid = u["pid"];
+  if (!isPidLike(pid)) return { ok: false, reason: "process.pid is not a pid" };
+  const rule = u["rule"];
+  if (!isName(rule)) return { ok: false, reason: "process.rule is not a kill rule" };
+  for (const field of ["why", "comm", "args"] as const) {
+    if (typeof u[field] !== "string") return { ok: false, reason: `process.${field} is not a string` };
+  }
+  for (const field of ["rssKiB", "etimeSeconds"] as const) {
+    const value = u[field];
+    // NON-NEGATIVE, because the age is what the threshold was applied to: a
+    // negative one read back would make a finding whose own arithmetic cannot
+    // be redone, which is the only thing this record is for.
+    if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+      return { ok: false, reason: `process.${field} is not a count` };
+    }
+  }
+  return {
+    ok: true,
+    value: {
+      pid,
+      rule,
+      why: u["why"] as string,
+      comm: u["comm"] as string,
+      args: u["args"] as string,
+      rssKiB: u["rssKiB"] as number,
+      etimeSeconds: u["etimeSeconds"] as number,
+    },
+  };
+}
+
+/**
+ * What a rule found, off the disk — **one parser per rule, chosen by the
+ * finding's own `kind`.**
+ *
+ * Exhaustive on `RuleId`, so a new rule cannot be added without saying how its
+ * finding is read back. SP-9's shape: an event kind with no parse branch
+ * appends perfectly and comes back on the next read as "not an event this
+ * version knows", and the finding inside it is the same hazard one level down.
+ */
+function parseFinding(u: unknown): ParseResult<RuleFinding> {
+  if (!isRecord(u)) return { ok: false, reason: "finding is not an object" };
+  const kind = u["kind"];
+  if (!isRuleId(kind)) return { ok: false, reason: `finding.kind ${JSON.stringify(kind)} is not a rule this version knows` };
+  switch (kind) {
+    case "wedged-work":
+      return parseWedgedWorkFinding(kind, u);
+    case "launch-mode":
+      return parseLaunchModeFinding(kind, u);
+    default: {
+      const never: never = kind;
+      return { ok: false, reason: `no finding parser for ${String(never)}` };
+    }
+  }
+}
+
+/** Every count `decideRule` used, so a replay can redo its arithmetic rather than take its conclusion. */
+function parseCounts(u: Record<string, unknown>, fields: readonly string[]): ParseResult<Record<string, number>> {
+  const counts: Record<string, number> = {};
+  for (const field of fields) {
+    const value = u[field];
+    if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+      return { ok: false, reason: `finding.${field} is not a count` };
+    }
+    counts[field] = value;
+  }
+  return { ok: true, value: counts };
+}
+
+/** One drifted session off the disk — the address a person would use to go and relaunch it. */
+function parseDriftedSession(u: unknown): ParseResult<DriftedSession> {
+  if (!isRecord(u)) return { ok: false, reason: "a session is not an object" };
+  for (const field of ["id", "name", "mode"] as const) {
+    const value = u[field];
+    if (typeof value !== "string" || (field !== "name" && value === "")) {
+      return { ok: false, reason: `session.${field} is not a name` };
+    }
+  }
+  return { ok: true, value: { id: u["id"] as string, name: u["name"] as string, mode: u["mode"] as string } };
+}
+
+/**
+ * Rule 1's finding, off the disk.
+ *
+ * **The four arms are read as four counts.** A parser that summed them, or
+ * defaulted a missing one to zero, would turn "two sessions we could not read"
+ * into "two sessions that were fine" on the way back out — which is the same
+ * collapse the rule refuses to make on the way in, and the reason this is a
+ * round trip rather than an append.
+ */
+function parseLaunchModeFinding(kind: "launch-mode", u: Record<string, unknown>): ParseResult<LaunchModeFinding> {
+  const counts = parseCounts(u, ["minSessions", "maxCollectionAgeSeconds", "collectionAgeSeconds", "auto", "notAuto", "cannotTell", "notApplicable", "rows"]);
+  if (!counts.ok) return { ok: false, reason: counts.reason };
+  const raw = u["sessions"];
+  if (!Array.isArray(raw)) return { ok: false, reason: "finding.sessions is not an array" };
+  const sessions: DriftedSession[] = [];
+  for (const item of raw) {
+    const session = parseDriftedSession(item);
+    if (!session.ok) return { ok: false, reason: `finding.${session.reason}` };
+    sessions.push(session.value);
+  }
+  return {
+    ok: true,
+    value: {
+      kind,
+      minSessions: counts.value["minSessions"] as number,
+      maxCollectionAgeSeconds: counts.value["maxCollectionAgeSeconds"] as number,
+      collectionAgeSeconds: counts.value["collectionAgeSeconds"] as number,
+      auto: counts.value["auto"] as number,
+      notAuto: counts.value["notAuto"] as number,
+      cannotTell: counts.value["cannotTell"] as number,
+      notApplicable: counts.value["notApplicable"] as number,
+      rows: counts.value["rows"] as number,
+      sessions,
+    },
+  };
+}
+
+/** Rule 2's finding, off the disk. */
+function parseWedgedWorkFinding(kind: "wedged-work", u: Record<string, unknown>): ParseResult<WedgedWorkFinding> {
+  const policy = u["policy"];
+  // Keyed by `KillPolicy`, so a third policy is a compile error here rather than
+  // a value this parser silently refuses off the disk. The two-literal `!==`
+  // pair it replaces was the same not-exhaustive shape as `RULE_IDS`.
+  if (!isKillPolicy(policy)) {
+    return { ok: false, reason: `finding.policy ${JSON.stringify(policy)} is not a kill policy` };
+  }
+  const counts = parseCounts(u, ["minAgeSeconds", "matched", "candidates", "scanned"]);
+  if (!counts.ok) return { ok: false, reason: counts.reason };
+  const raw = u["processes"];
+  if (!Array.isArray(raw)) return { ok: false, reason: "finding.processes is not an array" };
+  const processes: WedgedProcess[] = [];
+  for (const item of raw) {
+    const process = parseWedgedProcess(item);
+    if (!process.ok) return { ok: false, reason: `finding.${process.reason}` };
+    processes.push(process.value);
+  }
+  return {
+    ok: true,
+    value: {
+      kind,
+      policy,
+      minAgeSeconds: counts.value["minAgeSeconds"] as number,
+      matched: counts.value["matched"] as number,
+      candidates: counts.value["candidates"] as number,
+      scanned: counts.value["scanned"] as number,
+      processes,
+    },
+  };
+}
+
+/**
+ * The rule ids this version knows.
+ *
+ * **A `Record<RuleId, true>` rather than an array**, so adding a rule without
+ * teaching the parser about it does not compile. It was
+ * `["wedged-work"] satisfies RuleId[]`, which checks that the members ARE rule
+ * ids and says nothing about whether they are ALL of them — the same
+ * not-exhaustive hole as the destructure SC-4 was about, in a different
+ * costume. Found while adding the second rule, which is the only moment it
+ * could have been found.
+ */
+const RULE_IDS: Record<RuleId, true> = { "wedged-work": true, "launch-mode": true };
+
+/** The kill policies this version can read back. Keyed by the type, for the reason `RULE_IDS` gives. */
+const KILL_POLICIES: Record<KillPolicy, true> = { "safe-to-kill": true, "test-suites": true };
+
+function isKillPolicy(u: unknown): u is KillPolicy {
+  return typeof u === "string" && Object.hasOwn(KILL_POLICIES, u);
+}
+
+function isRuleId(u: unknown): u is RuleId {
+  return typeof u === "string" && Object.hasOwn(RULE_IDS, u);
+}
+
+/**
+ * How a rule's run ended, off the disk.
+ *
+ * **Every arm is named**, and a kind this version does not know is refused
+ * rather than flattened into `failed`: "the rule was refused" and "the rule
+ * broke" are the two a reader must not confuse, and a parser with a permissive
+ * fallback is where that confusion would be introduced.
+ */
+/**
+ * WHICH SENTENCE EACH ENDING CARRIES — a table keyed by the arm, so a sixth
+ * outcome does not compile until somebody says how it is read back.
+ *
+ * It was a `switch` on a raw string, which the compiler does not tie to
+ * `RuleOutcome["kind"]` at all: a new arm would have appended fine and come back
+ * as *"not one this version knows"*, taking the whole event with it. Same
+ * not-exhaustive shape as the `satisfies` array below it used to be, and GPT
+ * Sol found both in one pass.
+ */
+const RULE_OUTCOME_FIELDS: Record<RuleOutcome["kind"], "why" | "what"> = {
+  "nothing-to-do": "why",
+  refused: "why",
+  failed: "why",
+  proposed: "what",
+  sent: "what",
+};
+
+function isRuleOutcomeKind(u: unknown): u is RuleOutcome["kind"] {
+  return typeof u === "string" && Object.hasOwn(RULE_OUTCOME_FIELDS, u);
+}
+
+function parseRuleOutcome(u: unknown): ParseResult<RuleOutcome> {
+  if (!isRecord(u)) return { ok: false, reason: "outcome is not an object" };
+  const kind = u["kind"];
+  if (!isRuleOutcomeKind(kind)) return { ok: false, reason: `outcome kind ${JSON.stringify(kind)} is not one this version knows` };
+  const field = RULE_OUTCOME_FIELDS[kind];
+  const sentence = u[field];
+  if (typeof sentence !== "string") return { ok: false, reason: `outcome.${field} is not a string` };
+  // The cast is the mapped table's own guarantee written out: `kind` and
+  // `field` came from one entry, so the pair is exactly one arm of the union,
+  // which TypeScript cannot see through a computed key.
+  return { ok: true, value: { kind, [field]: sentence } as RuleOutcome };
+}
+
+/** One rule event off the disk. The occurrence id is opaque here: the run it belongs to is addressed by it, and `parseJobEvent` is what checks the id against its own key. */
+function parseRuleEvent(kind: RuleEvent["kind"], u: Record<string, unknown>, at: string): ParseResult<RuleEvent> {
+  const id = u["occurrenceId"];
+  if (!isName(id)) return { ok: false, reason: "occurrenceId is not an id" };
+  const occurrenceId = id as OccurrenceId;
+  const ruleId = u["ruleId"];
+  if (!isRuleId(ruleId)) return { ok: false, reason: `ruleId ${JSON.stringify(ruleId)} is not a rule this version knows` };
+  switch (kind) {
+    case "rule-intended": {
+      const what = u["what"];
+      if (typeof what !== "string") return { ok: false, reason: "what is not a string" };
+      const finding = parseFinding(u["finding"]);
+      if (!finding.ok) return { ok: false, reason: finding.reason };
+      // **THE TWO DISCRIMINANTS HAVE TO AGREE**, and checking each on its own
+      // did not make them (GPT Sol's finding 5 on 3b). An event claiming
+      // `ruleId: "launch-mode"` with a `wedged-work` finding parsed perfectly
+      // and came back as a launch-mode run whose numbers are another rule's
+      // arithmetic — a record that reads plausibly and is false, which is the
+      // one thing a durable log must not produce.
+      if (finding.value.kind !== ruleId) {
+        return { ok: false, reason: `ruleId ${JSON.stringify(ruleId)} carries a ${JSON.stringify(finding.value.kind)} finding, so the event contradicts itself` };
+      }
+      return { ok: true, value: { kind, at, occurrenceId, ruleId, what, finding: finding.value } };
+    }
+    case "rule-settled": {
+      const outcome = parseRuleOutcome(u["outcome"]);
+      if (!outcome.ok) return { ok: false, reason: outcome.reason };
+      return { ok: true, value: { kind, at, occurrenceId, ruleId, outcome: outcome.value } };
+    }
+    default: {
+      const never: never = kind;
+      return { ok: false, reason: `no parser for ${String(never)}` };
+    }
+  }
+}
+
 /**
  * One event off the disk, validated per kind.
  *
@@ -1109,6 +1395,11 @@ function parseEvent(u: unknown): ParseResult<OverseerEvent> {
   // is the alternative, and it would put a fabricated tmux handle into a log
   // whose whole value is that a person can grep it and believe what it says.
   if (isJobKind(kind)) return parseJobEvent(kind, u, at);
+  // AND THE RULE FAMILY, FOR THE SAME REASON AND WITH ONE MORE. A rule event
+  // carries no session key either — but unlike the job branch above, nothing
+  // would have failed to compile if this line were missing, because the switch
+  // below casts. See `RULE_KINDS`.
+  if (isRuleKind(kind)) return parseRuleEvent(kind, u, at);
 
   const key = u["key"];
   if (typeof key !== "string" || key === "") return { ok: false, reason: "key is not a session key" };
@@ -1925,6 +2216,12 @@ export function foldEvents(
       case "job-occurrence-finished":
       case "job-occurrence-refused":
       case "job-occurrence-unknown":
+      // AND THE RULES'. A rule's finding is about the fleet and not about one
+      // session, so it moves no register entry — the arms are named here so
+      // that stays a decision somebody took rather than something a `default:`
+      // absorbed.
+      case "rule-intended":
+      case "rule-settled":
         break;
       default: {
         const never: never = event;

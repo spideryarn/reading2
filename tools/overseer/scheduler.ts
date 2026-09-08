@@ -8,6 +8,31 @@
  *
  *     append `reserved` and fsync it   ──▶  spawn  ──▶  append `started`
  *
+ * ## And the same ordering one layer in, for a rule
+ *
+ * A deterministic rule runs IN this process rather than as a child, and the
+ * decision it takes is the thing gate 1 wants written down. So it gets the same
+ * dance again inside the occurrence:
+ *
+ *     detect  ──▶  append `rule-intended` and fsync it  ──▶  act  ──▶  append `rule-settled`
+ *
+ * **That sequence is NOT in this file — it is `rule-protocol.ts`**, which every
+ * rule job pins by digest, and this file calls into it. `SpawnJob` could not
+ * carry it (GPT Sol's SP-2): it is handed no store and its `JobOutcome` has
+ * nowhere for a finding to go. What a caller supplies is a **capability** —
+ * looking (`ProposingRuleWork`), or looking and acting (`ActingRuleWork`) — and
+ * nothing else.
+ *
+ * **THIS FILE IS DELIBERATELY NOT PINNED, AND THAT IS A FIX RATHER THAN AN
+ * OVERSIGHT.** Stage 3a put the whole of it in `RULE_SOURCES`, because it was
+ * then the code interpreting the hashed `disposition` (SC-2). Right in
+ * principle and far too broad in practice: it also carries session dispatch,
+ * the sweep and `describeReport`'s wording, so every rule's authorisation was
+ * hostage to a file that changes for reasons having nothing to do with rules —
+ * it re-pinned twice in one session. 3b moved the protocol out instead. Same
+ * guarantee, far fewer false trips; `rule-protocol.ts`'s header has the
+ * argument and `tests/overseer-rules.test.ts` asserts both directions.
+ *
  * ## Three gates, and only one of them is about the clock
  *
  * A tick asks, in this order:
@@ -31,9 +56,11 @@
  * "spawn and try again later", not "log a warning and carry on": a store that
  * cannot record what we are about to do is a store that cannot tell anybody it
  * happened, and an unrecorded run is the one failure the whole design is arranged
- * against. `record()` below turns every way an append can fail — a refusal, a
- * throw from the filesystem — into one closed door, and `tests/overseer-jobs.test.ts`
- * makes the append fail and asserts nothing was spawned.
+ * against. `record()` — imported from `rule-protocol.ts`, where it is pinned,
+ * because fail-closed is the whole of the append-before-act guarantee — turns
+ * every way an append can fail into one closed door, and
+ * `tests/overseer-jobs.test.ts` makes the append fail and asserts nothing was
+ * spawned.
  *
  * ## The window this CANNOT close, said out loud
  *
@@ -71,7 +98,7 @@
  * ones become an `unrecorded` report and the completion, which lands after the
  * tick has returned, goes to `onLostRecord`.
  */
-import type { JobEvent, OverseerEvent } from "./diff.js";
+import type { OverseerEvent } from "./diff.js";
 import {
   authorisationOf,
   definitionHash,
@@ -82,33 +109,16 @@ import {
   standingOf,
   type AuthorisedJob,
   type JobDefinition,
-  type JobOutcome,
+  type JobSpawn,
   type Occurrence,
   type OccurrenceHistory,
   type OccurrenceId,
   type OccurrenceIndex,
   type OccurrenceKey,
+  type SpawnJob,
 } from "./jobs.js";
+import { record, startRule, type ActingRuleWork, type ProposingRuleWork } from "./rule-protocol.js";
 import type { AppendResult } from "./store.js";
-
-/**
- * What the runner says when it is asked to start a job.
- *
- * **It returns a result and does not throw**, and the two arms are different
- * facts: `refused` means *this did not start and I know it* (a precondition
- * failed, the binary is missing), which is a settled outcome. A throw is not in
- * the contract, and when one happens anyway the scheduler records `unknown`
- * rather than `refused` — because a function that broke its own contract is not
- * evidence about whether a process exists.
- *
- * `done` settles when the work does. A promise that never settles is not an
- * error here; it is the case the lease exists for.
- */
-export type JobSpawn =
-  | { readonly kind: "spawned"; readonly pid: number; readonly done: Promise<JobOutcome> }
-  | { readonly kind: "refused"; readonly why: string };
-
-export type SpawnJob = (definition: JobDefinition, key: OccurrenceKey) => JobSpawn;
 
 /**
  * What the scheduler needs from the store, and no more.
@@ -181,7 +191,42 @@ export type TickInput = {
   /** Each with the fingerprint it was authorised under — see `AuthorisedJob`, and C2 for what a bare definition let through. */
   readonly definitions: readonly AuthorisedJob[];
   readonly store: OccurrenceLog;
-  readonly spawn: SpawnJob;
+  /**
+   * **OPTIONAL, AND THAT IS THE DETERMINISTIC-ONLY ARMING PATH.**
+   *
+   * GPT Sol's SP-4: there was one global switch, arming it supplied both
+   * standing jobs, and both were immediately due — so there was no way to watch
+   * a deterministic rule fire without starting paid model sessions under a gate
+   * 4 that is admittedly unbuilt.
+   *
+   * The fix is a **capability, not a filter**. A daemon armed for rules only is
+   * given no spawner at all, so no code in that process can create a session
+   * however due a job is or however it got into the list. A job whose work is a
+   * session meets a `refused` — a fact, loud in the log — rather than a
+   * dispatch. `scripts/overseer.ts`'s `schedulerWiring` is the only place that
+   * decides which it is.
+   *
+   * `| undefined` as well as optional, unlike the rest of this codebase's
+   * absent-versus-undefined discipline, and deliberately: here the two mean the
+   * same thing — **this process holds no such capability** — so making a caller
+   * spread conditionally would buy a distinction that does not exist.
+   */
+  readonly spawn?: SpawnJob | undefined;
+  /** LOOKING, for a rule that may only propose. Absent means such a job is refused for the same reason and in the same way as a session job with no spawner. */
+  readonly rules?: ProposingRuleWork | undefined;
+  /**
+   * **THE ACTOR, AND IT IS A SEPARATE CAPABILITY FROM `rules` ON PURPOSE.**
+   *
+   * A daemon that may only propose is handed `rules` and not this, so a spec
+   * carrying `disposition: "act"` meets a refusal naming the missing actor —
+   * the same shape as a session job in a process with no `spawn`. GPT Sol's
+   * SC-2: the separation has to be *what this process holds*, not a `switch`
+   * inside a runner that holds both.
+   *
+   * Nothing outside the tests supplies it. `daemon.ts` has no option for it,
+   * which is 3d's job along with the durable rule-run index that acting needs.
+   */
+  readonly acting?: ActingRuleWork | undefined;
   /** Injected, always. Nothing in this area reads the wall clock for itself. */
   readonly now: () => Date;
   /**
@@ -190,6 +235,29 @@ export type TickInput = {
    * settles later. Everything synchronous reaches the report instead.
    */
   readonly onLostRecord?: (lost: LostRecord) => void;
+  /**
+   * **Where an IN-PROCESS rule run is handed over, so a shutdown can wait for
+   * it.** Called only for rule work, and only once its whole chain — settlement
+   * and completion append — is in one promise.
+   *
+   * A session job is deliberately not reported here: it is a separate process
+   * with a durable reservation behind it, and waiting for one at shutdown would
+   * hold the daemon open for an afternoon's Claude session. See `dispatch`.
+   */
+  readonly onRuleRun?: (run: RuleRun) => void;
+};
+
+/**
+ * A rule run this process is in the middle of.
+ *
+ * `settled` resolves when the rule has settled AND its completion has been
+ * appended (or reported lost). It does not reject: every failure inside it is
+ * already a record or an `onLostRecord`.
+ */
+export type RuleRun = {
+  readonly jobId: string;
+  readonly occurrenceId: OccurrenceId;
+  readonly settled: Promise<void>;
 };
 
 /** One pass of the scheduler: sweep what nobody can account for, then dispatch what is due. */
@@ -332,10 +400,10 @@ function dispatch(input: TickInput, definition: JobDefinition, at: string, nowMs
     return [{ kind: "not-dispatched", jobId: definition.id, why: `the reservation could not be recorded, so nothing was started: ${reserved.why}` }];
   }
 
-  // (2) THE SPAWN.
+  // (2) THE SPAWN — or, for a rule, the two-phase protocol below.
   let outcome: JobSpawn;
   try {
-    outcome = input.spawn(definition, key);
+    outcome = start(input, definition, key, id);
   } catch (cause) {
     // A THROW IS NOT A REFUSAL, and this is the distinction the whole file is
     // about. `refused` claims the job did not start; a runner that broke its
@@ -389,7 +457,7 @@ function dispatch(input: TickInput, definition: JobDefinition, at: string, nowMs
   const lost = (fact: LostRecord["fact"], why: string): void => {
     input.onLostRecord?.({ jobId: definition.id, occurrenceId: id, fact, why });
   };
-  void outcome.done.then(
+  const settled = outcome.done.then(
     (result) => {
       const wrote = record(input.store, [{ kind: "job-occurrence-finished", at: input.now().toISOString(), occurrenceId: id, outcome: result }]);
       if (!wrote.ok) {
@@ -415,7 +483,71 @@ function dispatch(input: TickInput, definition: JobDefinition, at: string, nowMs
       if (!wrote.ok) lost("finished", `the run broke (${why}) and that could not be recorded either: ${wrote.why}`);
     },
   );
+  // A RULE RUNS IN THIS PROCESS, AND THAT IS THE WHOLE DIFFERENCE. A session is
+  // a child with a durable reservation behind it, so a shutdown mid-run leaves a
+  // record; a rule's `observe` is in flight inside the daemon, so a shutdown
+  // mid-run closes the store underneath its own settlement and loses BOTH
+  // endings — leaving a `started` occurrence that the next boot reads as
+  // unaccountable. GPT Sol's SC-1, the half that bites today.
+  //
+  // So the promise is handed out rather than dropped. The scheduler cannot wait
+  // for it — `schedulerTick` is synchronous, and it must stay so, because the
+  // lease rather than a held promise is what guards overlap — so waiting is the
+  // daemon's, at the one moment it matters.
+  if (definition.work.kind === "rule") input.onRuleRun?.({ jobId: definition.id, occurrenceId: id, settled });
+  else void settled;
   return reports;
+}
+
+/**
+ * What actually starts, once the reservation is on the disk.
+ *
+ * **A switch on the definition's own hashed `work`**, never on its id. Choosing
+ * executable code by `definition.id` is exactly what GPT Sol's SP-1 blocked: the
+ * id is in the fingerprint, but so is nothing about what the id then selected,
+ * so a rule's threshold or its action could move while the pin stayed valid.
+ * Here the arm and its whole configuration are the thing that was authorised.
+ *
+ * **A missing capability is a REFUSAL, and refusals are facts.** A daemon armed
+ * for deterministic rules only holds no spawner, so a session job meets a
+ * sentence in the log rather than a dispatch — and there is no code in that
+ * process that could have started it. See `TickInput.spawn`.
+ */
+function start(input: TickInput, definition: JobDefinition, key: OccurrenceKey, id: OccurrenceId): JobSpawn {
+  const work = definition.work;
+  switch (work.kind) {
+    case "session": {
+      const spawn = input.spawn;
+      if (spawn === undefined) {
+        return {
+          kind: "refused",
+          why:
+            "this daemon was started with no session dispatcher, so it cannot start a Claude session for any job — " +
+            "it is armed for deterministic rules only",
+        };
+      }
+      return spawn(definition, key);
+    }
+    case "rule":
+      // HANDED STRAIGHT OVER TO THE PINNED PROTOCOL, which is what reads the
+      // hashed `disposition` and chooses a runner and a capability. Nothing
+      // about WHAT a rule may do is decided here.
+      //
+      // **That is narrower than "no edit to this file can change how a rule
+      // behaves", which is what this comment used to claim and is false** (GPT
+      // Sol's finding 3 on 3b). This file still owns the authorisation gate,
+      // the lease, `sweep`'s release of an expired one, and the reservation —
+      // so an edit here can change WHETHER a rule runs and HOW OFTEN, including
+      // letting two runs overlap, without moving any rule's fingerprint. What
+      // the pin covers is the rule's own policy and the append-before-act
+      // protocol; the scheduler and the store are a reviewed execution base
+      // outside it. `rule-jobs.ts` § What the fingerprint does NOT cover.
+      return startRule({ store: input.store, now: input.now }, work.rule, id, { rules: input.rules, acting: input.acting });
+    default: {
+      const never: never = work;
+      throw new Error(`no way to start job work ${JSON.stringify(never)}`);
+    }
+  }
 }
 
 /**
@@ -434,17 +566,6 @@ function lostReports(
 ): readonly SchedulerReport[] {
   if (wrote.ok) return [];
   return [{ kind: "unrecorded", jobId, occurrenceId: id, fact, why: wrote.why }];
-}
-
-/** Every way an append can fail, as one closed door. A refusal and a thrown filesystem error mean the same thing to a caller that must not proceed. */
-function record(store: OccurrenceLog, events: readonly JobEvent[]): { ok: true } | { ok: false; why: string } {
-  try {
-    const result = store.append(events);
-    if (result.ok) return { ok: true };
-    return { ok: false, why: `the store refused the append (${result.reason})` };
-  } catch (cause) {
-    return { ok: false, why: `the append threw: ${cause instanceof Error ? cause.message : String(cause)}` };
-  }
 }
 
 /** One report as a line for the daemon's log. The stuck ones are shouted, because they are the ones that used to be silent. */

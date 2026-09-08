@@ -52,20 +52,37 @@ wave and the paragraph still said they were live. Re-grep before briefing anybod
 1. **The rest of v0.8a — two endpoints, not three.** The actions catalogue, and
    steer/new/messages/rename. Fleet state is done (v0.8b). `FleetRow` still cannot migrate the same
    way at all and the reason is written into `wire.ts` beside the generic hole it leaves.
-2. **v0.9a — the broadcast cannot reach the sessions that caused the load.** Found by
+2. **v0.9a — HELD, pending one number.** Cancelled at 22:20 on an unconditional mean, reopened at
+   22:35 when the conditional picture arrived: reachability falls monotonically from 4 to 8 agents
+   and every sample at or below 25% reachable is at 7 or 8. Held rather than built, with a written
+   decision rule and a range nobody should extrapolate past. The `readShellState` lossy join it
+   uncovered is real, is unfixed, is confirmed by an independent identity holding in 150 of 151
+   samples, and is worth doing whichever way the hold resolves. Original text: found by
    `spideryarn2-b6`, written up below, and **deliberately waiting on evidence**: a 24-hour sampler is
    running, and a series showing reachability recovering on its own kills the stage. It is two
    changes rather than one, because a box-wide action is *forbidden* from queueing on a stated
    ground that has to be answered rather than deleted.
-3. **The systemd cutover**, which is Greg's to run — `sudo systemctl enable` is refused for agents on
-   this box. Script prepared 2026-09-08 12:00, unrun. **Step 3 is a decision, not a check**: it is
-   the moment the dashboard becomes tailnet-reachable, and `w2-fleet-dictation` measured that
-   `navigator.mediaDevices` is *absent* (not degraded) at the tailnet address, so HTTPS there is a
-   feature prerequisite rather than a nicety.
-4. **v0.2c's other half** — delivery receipts and action ids. The browser now reads `delivery`; the
-   five states and the repeat-retrieves-the-receipt rule are not built. **The related overclaim is
-   fixed**: the page no longer says a keystroke *landed*, because `verifyTarget` runs before the send
-   and nothing looks at the pane afterwards.
+3. **The systemd cutover — DONE, Greg ran it 2026-09-08 ~21:30.** The unit is active, serves
+   `127.0.0.1:8787` and `100.92.255.119:8787`, and the dashboard has been read from a phone. Two
+   things a reader still needs. **There is no authentication** — reachability is the whole boundary,
+   which was the right call for getting it working and is a decision rather than an oversight. And
+   `navigator.mediaDevices` is *absent* (not degraded) at a plain-HTTP tailnet address, measured by
+   `w2-fleet-dictation`, so dictation there needs HTTPS as a prerequisite rather than a nicety.
+
+   **Landing on `dev` is not deploying.** The unit's `WorkingDirectory` is the primary checkout and
+   its `ExecStartPre=/usr/bin/npm run build:fleet` builds from there, so a restart serves whatever
+   the *primary* has — not what is on `dev`. Merge the primary up first, or a restart will look like
+   it did nothing. Verify afterwards by comparing the served `index-*.js` against the newest asset in
+   `tools/fleet/web/dist/assets/`; a stale bundle answers 200 all night.
+4. **v0.2c — now its own plan, [260908j](260908j-delivery-receipts-and-honest-outcomes-for-the-fleet-dashboard.md), and half built.** Six stages, reordered after a
+   cross-family review refused two of them; it is the same work as the roadmap's *Delivery
+   uncertainty* stage, agreed with the Overseer so only one session builds it. **Landed 2026-09-08:**
+   the failure cards stop claiming an action had no effect when they cannot know (both paths,
+   including the kill card), and queue item ids now carry the run that minted them — which was a live
+   defect, not a tidy-up: a dead run's `q1` cancelled a live run's *different* `q1` and answered
+   `200 ok`. **Still open:** process/broadcast outcomes, quarantine after an uncertain delivery,
+   request ids and receipts, and the catalogue's `wire.ts` move. **`reception observed` was cut** —
+   nothing in this system observes reception, so the arm would have shipped permanently empty.
 
 **Done since this list was last written, so nobody fixes them twice:** the attention inbox has a
 consumer; every server timestamp is converted into the browser's clock at the parse boundary;
@@ -2248,7 +2265,120 @@ producer keeps it deliberately as one thing, *nobody can tell you*, and splittin
 the same reasoning in two places. The `why` is rendered on screen rather than behind a disclosure,
 because "no pass has run yet" means wait and "the pass failed" means go and look.
 
-### 🔵 Stage v0.9a: the broadcast cannot reach the sessions that caused the load
+### ⏸ Stage v0.9a (HELD 2026-09-08 22:35, cancelled at 22:20 and reopened fifteen minutes later): the broadcast cannot reach the sessions that caused the load
+
+**This stage is not being built, and the reason is the measurement it asked for.** It was written
+holding its own conclusion open — *"a series showing reachability recovering on its own kills the
+stage"* — and the series says exactly that. Recorded here in full rather than deleted, because the
+structural claim below is still true and somebody will rediscover it.
+
+`spideryarn2-b6`'s first real series, **147 samples between 20:56 and 22:09 on 2026-09-08**:
+
+    samples where NO agent was reachable:  0 of 147
+    reachable fraction of agents:  min 0.12  max 0.86  mean 0.59
+    agents 4-8, working 1-7, load ratio1 0.04-0.55
+    oracle_unknown: 0 throughout
+
+The `total === 0` refusal — *"it does not degrade, it refuses, and hardest at maximum need"* — **is
+structurally real and was not observed once**, including through a stretch at ratio 0.55 with seven
+of eight agents working. Typically most agents are reachable. The worst single sample was 1 of 8 at
+22:07, so the bad case does occur; it is a tail, not the condition this stage described.
+
+And the cheap fix, measured rather than argued: of the 33 samples with a positive oracle reading,
+**17 the server already agreed with and 16 it missed** — so it catches roughly half.
+
+**The decision at 22:20 was to cancel**, on the ground that half of a tail case which occurred in
+zero of 147 samples does not justify changing the drain rule, still less crossing the `:505`
+refusal — a reasoned boundary rather than an oversight.
+
+**That decision was reversed fifteen minutes later, by the same session, reporting against its own
+earlier framing for the third time today.** The unconditional numbers were dominated by an idle box.
+The conditional picture:
+
+    21:26  agents=4  reachable=3  working=1  ratio1=0.11   (0.75 reachable)
+    21:46  agents=6  reachable=2  working=4  ratio1=0.12
+    22:06  agents=8  reachable=2  working=6  ratio1=0.55
+    22:11  agents=8  reachable=1  working=7  ratio1=0.56   (0.12 reachable)
+
+    all 18 samples at or below 25% reachable are at agents=7 or 8
+
+**Reachability falls monotonically as the agent count rises from 4 to 8**, and the low period
+21:48-22:11 is the fleet filling up — two implementation agents dispatched by `spideryarn2-b6` plus
+the Overseer dispatching on `260908f`. So the bad case is **load-dependent rather than random**: it
+shows up when the box is busy, which is when a resource broadcast is for. *"0 of 147 with nothing
+reachable"* is still true and so is the 0.59 mean; both are answers to a weaker question than the
+one that matters.
+
+**So this is held, not cancelled, and not built.**
+
+**A correction, because the first version of this paragraph contained a wrong fact of mine.** I
+wrote that 4-to-8 agents "is also the whole range this box reached today", generalising from the one
+20:25 snapshot I had measured by hand. That is false, and it was false in the direction that
+supported my own cancellation. Reconstructed from `~/.overseer/events.jsonl` — 601 events, 0
+unreadable, 08:32 to 21:11 — by maintaining a live set across `session-seen`, `session-status`,
+`tmux-session-gone` and `session-replaced`:
+
+    PEAK live tmux sessions: 33, at 12:35:06.885Z
+      of which shells: 15   =>  18 AGENTS at peak
+
+    and it is not a spike: 30+ sessions held for over a hundred event-steps
+
+**Done twice, independently.** `spideryarn2-b6` reconstructed it first; this session rebuilt it with
+a different state machine and got the same peak, the same timestamp and the same split. That
+confirms the *reconstruction*, not the data — both readings come from the one log, so a gap in the
+log is invisible to both. `session-seen` fires on change rather than every tick, so the live set
+inherits any such gap, and the agent/shell split keys on `status.kind != "shell"`, which agreed with
+a hand count at 20:25 but has been cross-checked once rather than validated.
+
+**What this changes.** The sampler's 4-to-8 range is not today, it is *the quietest 73 minutes of
+today* — sampling began at 20:56, eight hours after the peak. "The box may never reach the regime
+where this matters" is dead: 18 agents is within a factor of two of the 20-35 the Overseer design
+assumes, and that design target is most of the way to being met already.
+
+**The class this belongs to is written up rather than restated here:**
+[260908h — the plan and the instrument described different systems](../postmortems/260908h-the-plan-and-the-instrument-described-different-systems.md).
+Its signature is comfort: every number was defensible and every caveat was written down, which is
+why nine hours passed before anybody checked the premise. A wrong number gets challenged; a right
+number about the wrong system does not.
+
+**What it does not change.** There is still **no reachability sample at 18 agents** — the sampler
+did not exist at 12:35. So *"at 20-35 agents the bad case is the normal case"* remains exactly as
+unearned as before; what has moved is that the regime is real rather than hypothetical, so the
+overnight series has a genuine chance of testing it. Nobody should write that sentence down as a
+finding until a sample exists.
+
+**The decision rule, agreed rather than asserted, so this does not get re-argued from prose:**
+reinstate the stage if the overnight series shows a reachable fraction below 0.25 at agent counts
+that turn out to be normal — and **18 is now the number to hold that against**, not 8; cancel it if
+the low samples stay confined to transient dispatch bursts like this one. If the series never climbs
+above 8 again, that is itself a result: it would mean the busy regime is a weekday-daytime
+phenomenon and the tail is genuinely a tail outside working hours. **Neither outcome is "build it because it was written down"**, which is the failure
+mode this section exists to resist.
+
+**One thing that is NOT a reason either way, and would be wrong to record as such.** No fix of mine
+landed in the sampled window — `readShellState` is unchanged at `pause.ts:573`, and the last commit
+touching `pause.ts` (`96627eb9`) repaired a comment — so the 16 misses are real misses rather than
+pre-fix artefacts. The claim that `joins_disagree` fell to zero in recent samples was itself
+withdrawn: the disagreements never stopped, there are **14 separate bursts across the 73 minutes**
+and the last is at 22:11:09, the most recent sample. It came from reading the last three lines of
+the file and reporting a tail as a trend — the same shape as a truncated
+grep read as an exhaustive list, and caught by checking rather than accepting.
+
+**What is worth doing regardless of how the hold resolves:** the Class B defect in `readShellState`
+is real, is still there, and is independent of this stage. A store entry the store calls `idle` —
+direct evidence of at-a-prompt — is collapsed into `not-background-work` at `pause.ts:573`.
+
+**That diagnosis is now confirmed numerically and independently.** Across the series the identity
+
+    joins_disagree == working_but_at_prompt - server_bg_work
+
+holds in **150 of 151 samples**, which says a disagreement is exactly *an at-prompt row in plain
+`idle`* — reached from the data without assuming the cause. Fix it as a lossy join on its own
+merits, not as a step towards the broadcast stage.
+
+<details>
+<summary>The original stage, kept whole because its structural argument is sound</summary>
+
 
 **Found by `spideryarn2-b6` on 2026-09-08 while building the Overseer's resource rules**, handed over
 rather than patched, and every claim below was re-measured here before it was written down.
@@ -2413,6 +2543,8 @@ usually do, this is sufficient and the stage below can be deleted.
       a presentation gap.
 - [ ] A test that a refused call does not stamp the cooldown, so the behaviour above is a decision
       rather than an accident. Whichever way it is decided, it should be decided.
+
+</details>
 
 ### Later: the coordinator agent
 

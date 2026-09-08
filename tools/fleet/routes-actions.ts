@@ -78,6 +78,7 @@ import {
 } from "./actions.js";
 import type { FleetSnapshot } from "./collect.js";
 import { createDrainCursor, drainOnce, type DrainResult } from "./drain.js";
+import { newServerInstanceId } from "./instance.js";
 import {
   deliveryGate,
   drainGate,
@@ -101,7 +102,7 @@ import {
   type RouteErrorCode,
 } from "./routes-steer.js";
 import type { FleetStatus } from "./status.js";
-import { sendMessage as realSendMessage, type RefusalCode, type SteerResult, type SteerTarget } from "./steer.js";
+import { sendMessage as realSendMessage, type Delivery, type RefusalCode, type SteerResult, type SteerTarget } from "./steer.js";
 
 /* ------------------------------------------------------------------ *
  * Limits. Exported so a test can drive them rather than sleeping.
@@ -219,7 +220,29 @@ export type ActionErrorCode =
    * never do is drop something nobody read. 409 rather than 400 because the
    * body was well formed — the world moved.
    */
-  | "stale-view";
+  | "stale-view"
+  /**
+   * The id was minted by a DIFFERENT run of this server, so whatever it names
+   * here is not what the person is looking at.
+   *
+   * **DISTINCT FROM `no-such-item`, WHICH IS THE MISLEADING ONE.** "There is no
+   * such item" invites the reader to conclude their instruction was never
+   * queued. The truth is that it was queued, the server restarted, the queue
+   * went with it, and the id they are holding now points at somebody else's
+   * work — see `SteeringQueue.idOrigin` and the note on `push` for what that
+   * cost before it was refused.
+   *
+   * **AND DISTINCT FROM `stale-view`, WHICH ANSWERS A DIFFERENT QUESTION.**
+   * That one guards CONCURRENT DRIFT within one run — something arrived, or
+   * went out, between the list being drawn and the tap. It cannot catch this:
+   * an old `[q1]` posted at a restarted queue that also holds exactly one item
+   * called `q1` passes its comparison exactly. Both guards are live and neither
+   * subsumes the other.
+   *
+   * 409 rather than 404 for `stale-view`'s reason: the body was well formed,
+   * the world moved.
+   */
+  | "other-instance";
 
 /**
  * A refusal's HTTP status.
@@ -260,6 +283,7 @@ export const ACTION_ERROR_STATUS: Record<ActionErrorCode, number> = {
   "nothing-to-kill": 409,
   cooldown: 429,
   "stale-view": 409,
+  "other-instance": 409,
 };
 
 /**
@@ -271,36 +295,38 @@ export const ACTION_ERROR_STATUS: Record<ActionErrorCode, number> = {
  * compile error in `parseQueue` until somebody reads it or names it in that
  * file's `Omit<>`. docs/postmortems/260908b.
  */
-import type { QueueView } from "./wire.js";
+import type {
+  BroadcastRecipientOutcome,
+  KillAttempt,
+  KillObservation,
+  KillReport,
+  PlanRunView,
+  PlanStepStatus,
+  PlanStepView,
+  QueueView,
+} from "./wire.js";
 
 export type { QueuedItemView, QueueView } from "./wire.js";
+export type { KillAttempt, KillObservation, KillReport } from "./wire.js";
 
-/** One step, after it ran. */
-export type StepStatus = "passed" | "failed" | "failed-ignored";
-
-export type StepOutcome = {
-  argv: readonly string[];
-  cwd: string;
-  /** The step's own reason for existing, from the plan. */
-  why: string;
-  status: StepStatus;
-  /** Why it got that status — the gate, in words. */
-  verdict: string;
-  code: number | null;
-  timedOut: boolean;
-  spawnError: string | null;
-  /** The tail of what it said, bounded, for a person. */
-  tail: string;
-};
-
-export type PlanRun = {
-  action: ActionId;
-  steps: StepOutcome[];
-  /** True when every step ran and none failed a gate it was not allowed to fail. */
-  completed: boolean;
-  /** The index of the step that stopped the plan, or null. */
-  stoppedAt: number | null;
-};
+/**
+ * A step and a run, after they ran — **declared in `./wire.js` and aliased
+ * here**, for `QueueView`'s reason above rather than for tidiness.
+ *
+ * The browser has to read these now: a `plan-failed` refusal carries the whole
+ * run, and `actions-client.ts` used to drop it on the floor and render *this
+ * page cannot tell whether the action took effect* over a body that said
+ * exactly what had taken effect. A second declaration over there would rot the
+ * way `QueueView`'s twin did.
+ *
+ * `PlanRunView` is parameterised so this side keeps the closed `ActionId` union
+ * — a run of an action nobody offers should not typecheck here — while the
+ * client reads a plain string, which is what a parse of somebody else's JSON
+ * honestly yields.
+ */
+export type StepStatus = PlanStepStatus;
+export type StepOutcome = PlanStepView;
+export type PlanRun = PlanRunView<ActionId>;
 
 /** One candidate for a kill, with the named rule that licensed it. */
 export type KillCandidate = {
@@ -314,16 +340,82 @@ export type KillCandidate = {
   etimeSeconds: number;
 };
 
-/** What became of one recipient of a broadcast. */
+/**
+ * What became of one recipient of a broadcast.
+ *
+ * **`outcome` IS THE WHOLE DELIVERY READING, NOT A SUMMARY OF ONE.** It used
+ * to carry `sent | refused | …`, and `refused` was the answer for three
+ * different fates: a `Delivery` of `none`, a `Delivery` of `partial`, and a
+ * throw out of the delivery module. `sendMessage` had already distinguished
+ * them and this row threw the distinction away — the same Class B collapse
+ * Stage 1 fixed on the *failure* half of an action, one arm over.
+ *
+ * The vocabulary lives in `wire.js` so the browser reads the same words. There
+ * is deliberately no second `delivery` field beside this one: two fields that
+ * can disagree is how the next one of these gets written.
+ */
 export type BroadcastOutcome = {
   paneId: string;
   sessionId: string;
   /** The pause this recipient was asked for, or null when nothing was sent. */
   minutes: number | null;
-  outcome: "sent" | "refused" | "held" | "blocked" | "not-reached";
+  outcome: BroadcastRecipientOutcome;
   code: RefusalCode | null;
   why: string | null;
 };
+
+/**
+ * `Delivery` → the recipient word, and the mapping is total and lossless.
+ *
+ * A `Record` over steer.ts's closed union rather than a chain of `if`s, so a
+ * fifth `Delivery` arm stops this file compiling instead of quietly taking the
+ * last branch — the same trick as `ACTION_ERROR_STATUS` above.
+ */
+const DELIVERY_OUTCOME: Record<Delivery, BroadcastRecipientOutcome> = {
+  none: "refused-before-effect",
+  partial: "partial",
+  unknown: "outcome-unknown",
+};
+
+/**
+ * One `kill -TERM` step's outcome, as evidence about the pid.
+ *
+ * **THE THREE FAILURES ARE NOT ONE FAILURE.** `kill` exiting non-zero means the
+ * process was not there, or is not ours — nothing happened to it, and that is a
+ * settled fact. A `kill` that could not be spawned, timed out, or died on a
+ * signal settles nothing: the signal may have gone first. Reading the second as
+ * the first is how a page tells somebody a process survived when it did not.
+ */
+function killObservation(step: StepOutcome | undefined): KillObservation {
+  if (step === undefined) return "not-attempted";
+  if (step.spawnError !== null || step.timedOut || step.code === null) return "not-established";
+  return step.code === 0 ? "signal-accepted" : "signal-refused";
+}
+
+/**
+ * A finished kill plan, as **intent and evidence side by side**.
+ *
+ * Exported and pure because the state that matters most here is the one the
+ * route cannot currently reach: every step of a kill plan is `best-effort`, so
+ * `judgeStep` never returns `failed` and `runPlan` never returns
+ * `completed: false` for a kill. A stricter plan would, `PlanRun` allows it,
+ * and a run that stopped leaves the tail of `pids` **unsignalled** — which must
+ * never render as a completed kill. A test drives this directly for exactly
+ * that reason.
+ *
+ * The steps are one per pid, in order, by construction in `planKillProcesses`.
+ */
+export function killReport(pids: readonly number[], run: PlanRun): KillReport {
+  const observed: KillAttempt[] = pids.map((pid, i) => {
+    const step = run.steps[i];
+    return {
+      pid,
+      observation: killObservation(step),
+      why: step?.verdict ?? "the plan stopped before this one, so no signal was sent to it",
+    };
+  });
+  return { attempted: [...pids], observed, planCompleted: run.completed };
+}
 
 export type ActionResponse =
   | { ok: true; op: "catalogue"; schema: 1; actions: { session: readonly Action[]; box: readonly Action[] }; queues: QueueView[]; acting: { enabled: boolean; why: string }; now: number }
@@ -358,7 +450,15 @@ export type ActionResponse =
    * `kill-test-suites` rendered the word "null" for it.
    */
   | { ok: true; op: "dry-run"; action: ActionId; dryRun: true; result: { steps: readonly Step[]; candidates?: KillCandidate[]; scanned?: number; unreadable?: number } }
-  | { ok: true; op: "ran"; action: ActionId; dryRun: false; result: { run: PlanRun; killed?: number[]; skipped?: { pid: number; why: string }[] } }
+  /*
+   * `kill` RATHER THAN `killed`, and the rename is the fix rather than a
+   * tidy-up. `killed: number[]` was the list of pids the route INTENDED to
+   * signal, in the past tense, sitting in the same body as the step outcomes
+   * that could contradict it — so a `kill` that found nothing there answered
+   * `killed: [5001, 5002]` and the page had no way to know better. `KillReport`
+   * keeps the intent and the evidence as two fields; see wire.js.
+   */
+  | { ok: true; op: "ran"; action: ActionId; dryRun: false; result: { run: PlanRun; kill?: KillReport; skipped?: { pid: number; why: string }[] } }
   | { ok: true; op: "broadcast-preview"; action: ActionId; dryRun: true; result: { total: number; recipients: BroadcastOutcome[]; sample: string | null } }
   | { ok: true; op: "broadcast"; action: ActionId; dryRun: false; result: { total: number; recipients: BroadcastOutcome[] } }
   | {
@@ -708,10 +808,10 @@ export async function runPlan(plan: Plan, io: ActionIo, timeoutMs: number = STEP
       tail: tailOf(r.stderr) || tailOf(r.stdout),
     });
     if (j.status === "failed") {
-      return { action: plan.action.id, steps, completed: false, stoppedAt: i };
+      return { action: plan.action.id, steps, planned: plan.steps.length, completed: false, stoppedAt: i };
     }
   }
-  return { action: plan.action.id, steps, completed: true, stoppedAt: null };
+  return { action: plan.action.id, steps, planned: plan.steps.length, completed: true, stoppedAt: null };
 }
 
 /* ------------------------------------------------------------------ *
@@ -981,7 +1081,10 @@ export type ActionDeps = {
 
 export function realActionDeps(): ActionDeps {
   return {
-    queue: new SteeringQueue({ now: () => Date.now() }),
+    // ONE INSTANCE ID PER PROCESS, minted at the composition root and passed
+    // down. Later stages reuse it for request ids and preview identity, which
+    // is why it is `instance.ts`'s to mint rather than the queue's.
+    queue: new SteeringQueue({ now: () => Date.now(), serverInstanceId: newServerInstanceId() }),
     sendMessage: realSendMessage,
     io: realActionIo(),
     now: () => Date.now(),
@@ -1014,6 +1117,34 @@ function respond(res: ServerResponse, status: number, body: ActionResponse, extr
 
 function refuse(res: ServerResponse, code: ActionErrorCode, why: string, run?: PlanRun, extra: Record<string, string> = {}): void {
   respond(res, ACTION_ERROR_STATUS[code], run === undefined ? { ok: false, code, why } : { ok: false, code, why, run }, extra);
+}
+
+/**
+ * Is any of these ids from a run of the server that is no longer this one?
+ *
+ * **ONE HELPER RATHER THAN FOUR COPIES**, because there are four routes that
+ * take an item id from a client and match it by string equality — cancel,
+ * revive, abandon and clear — and a guard that exists on three of them is a
+ * guard whoever adds the fifth route will not know about. The judgment itself
+ * is `SteeringQueue.idOrigin`'s: the queue owns the shape of an id.
+ *
+ * Takes a LIST because `clear` posts one, and answers on the first foreign id
+ * it finds: one such id already means the whole list was drawn by a page that
+ * has been watching a dead server, so there is nothing useful to say about the
+ * rest of it.
+ *
+ * Returns the sentence, or null. The caller refuses — it does not, because each
+ * of the four writes its own log line and this must not become the place that
+ * decides what a route logs.
+ */
+function fromAnotherRun(queue: SteeringQueue, itemIds: readonly string[]): string | null {
+  const foreign = itemIds.find((id) => queue.idOrigin(id) === "other-instance");
+  if (foreign === undefined) return null;
+  return (
+    `${foreign} was queued by a different run of this dashboard; this one is ${queue.serverInstanceId}. ` +
+    "The queue does not survive a restart, so that item is gone — and an id from before it can now name something else entirely. " +
+    "Reload the page and look at what is actually queued."
+  );
 }
 
 function header(headers: IncomingHttpHeaders, name: string): string | null {
@@ -1311,6 +1442,12 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
       return;
     }
     const { sessionId, itemId } = body.value;
+    const foreign = fromAnotherRun(deps.queue, [itemId]);
+    if (foreign !== null) {
+      deps.log(`action cancel: refused code=other-instance session=${sessionId} item=${itemId}`);
+      refuse(res, "other-instance", foreign);
+      return;
+    }
     const result = deps.queue.cancel(sessionId, itemId);
     if (!result.ok) {
       // The queue returns one sentence for both failures, and the page needs to
@@ -1358,6 +1495,12 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
       return;
     }
     const { sessionId, itemId } = body.value;
+    const foreign = fromAnotherRun(deps.queue, [itemId]);
+    if (foreign !== null) {
+      deps.log(`action revive: refused code=other-instance session=${sessionId} item=${itemId}`);
+      refuse(res, "other-instance", foreign);
+      return;
+    }
     const result = deps.queue.revive(sessionId, itemId);
     if (!result.ok) {
       const present = deps.queue.snapshot(sessionId).items.some((i) => i.id === itemId);
@@ -1397,6 +1540,12 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
       return;
     }
     const { sessionId, itemId } = body.value;
+    const foreign = fromAnotherRun(deps.queue, [itemId]);
+    if (foreign !== null) {
+      deps.log(`action abandon: refused code=other-instance session=${sessionId} item=${itemId}`);
+      refuse(res, "other-instance", foreign);
+      return;
+    }
     const item = deps.queue.snapshot(sessionId).items.find((i) => i.id === itemId);
     if (!item) {
       deps.log(`action abandon: refused code=no-such-item session=${sessionId} item=${itemId}`);
@@ -1467,6 +1616,18 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
       return;
     }
     const { sessionId, itemIds } = body.value;
+    // **BEFORE `droppable` AND BEFORE THE `stale-view` COMPARISON**, and the
+    // order is the point rather than an accident. Both of those would answer
+    // this case with a code that describes something else — "nothing is waiting"
+    // when the queue is empty after a restart, and "the list has changed" when
+    // it is not — and neither can catch the case where the ids happen to line
+    // up, which is the one that destroys somebody's instruction.
+    const foreign = fromAnotherRun(deps.queue, itemIds);
+    if (foreign !== null) {
+      deps.log(`action clear: refused code=other-instance session=${sessionId} items=${itemIds.length}`);
+      refuse(res, "other-instance", foreign);
+      return;
+    }
     const items = deps.queue.snapshot(sessionId).items;
     // The queue's rule for "can still be taken back", asked of the queue rather
     // than restated: `cancel()` refuses a leased item and `clear()` keeps one,
@@ -1669,8 +1830,17 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
 
     deps.log(`action box: KILLING action=${action.id} pids=${pids.join(",")}`);
     const run = await runPlan(built.plan, deps.io);
-    deps.log(`action box: ${run.completed ? "DONE" : "STOPPED"} action=${action.id} steps=${run.steps.length}`);
-    respond(res, 200, { ok: true, op: "ran", action: action.id, dryRun: false, result: { run, killed: pids, skipped } });
+    /* WHAT CAME BACK, PID BY PID, and the log says the same thing the body
+       does. A line reading `killed=3` beside a body naming two refusals is the
+       version of this defect that survives in the journal after the page has
+       been closed. */
+    const report = killReport(pids, run);
+    const accepted = report.observed.filter((o) => o.observation === "signal-accepted").length;
+    deps.log(
+      `action box: ${run.completed ? "DONE" : "STOPPED"} action=${action.id} steps=${run.steps.length} ` +
+        `signal-accepted=${accepted}/${report.attempted.length}`,
+    );
+    respond(res, 200, { ok: true, op: "ran", action: action.id, dryRun: false, result: { run, kill: report, skipped } });
   }
 
   /**
@@ -1723,7 +1893,12 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
             // The SAME function the send will call, with the same arguments, so
             // the preview cannot promise a spread the delivery does not keep.
             minutes: staggerMinutes(index, total, action.stagger),
-            outcome: "sent",
+            /* `would-send` RATHER THAN `sent`. A preview and a delivery used
+               the same word, so a row of a dry run was indistinguishable from
+               a row of a real fan-out by anything but the envelope around it —
+               and the envelope is exactly what got misread the day this panel
+               reported every dry run as "Done." */
+            outcome: "would-send",
             code: null,
             why: "it is at a prompt and would be told to pause for this long",
           });
@@ -1769,7 +1944,9 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
     lastBroadcastAt = at;
 
     let index = 0;
-    let sent = 0;
+    /* `submitted`, NOT `sent`. It counts the rows whose tmux calls all
+       completed, which is the strongest thing this route can count. */
+    let submitted = 0;
     for (const rec of r.recipients) {
       const gate = gates.get(rec.target.paneId);
       if (gate?.kind !== "now") {
@@ -1799,25 +1976,42 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
       try {
         result = deps.sendMessage(rec.target, text, rec.declaredStatus);
       } catch (e) {
+        /* **A THROW IS THE CASE WITH THE LEAST EVIDENCE BEHIND IT**, and it
+           answered `refused` — the reading that says nothing reached them.
+           `fire()` throws from the middle of a sequence of tmux calls and the
+           exception carries no `Delivery`, so the honest arm is the one that
+           claims nothing either way. */
         outcomes.push({
           paneId: rec.target.paneId,
           sessionId: rec.target.sessionId,
           minutes,
-          outcome: "refused",
+          outcome: "outcome-unknown",
           code: null,
-          why: `the delivery module threw: ${(e as Error).message}`,
+          why:
+            `the delivery module threw partway through the send: ${(e as Error).message}. ` +
+            "Nothing here can tell whether any of it reached the pane.",
         });
         continue;
       }
       if (result.ok) {
-        sent += 1;
-        outcomes.push({ paneId: rec.target.paneId, sessionId: rec.target.sessionId, minutes, outcome: "sent", code: null, why: null });
-      } else {
+        submitted += 1;
         outcomes.push({
           paneId: rec.target.paneId,
           sessionId: rec.target.sessionId,
           minutes,
-          outcome: "refused",
+          outcome: "keys-submitted",
+          code: null,
+          why: null,
+        });
+      } else {
+        /* THE READING `sendMessage` ALREADY MADE, kept rather than flattened.
+           `partial` is not `refused`: the text is in that agent's input box
+           and the next Enter anybody presses submits it. */
+        outcomes.push({
+          paneId: rec.target.paneId,
+          sessionId: rec.target.sessionId,
+          minutes,
+          outcome: DELIVERY_OUTCOME[result.delivery],
           code: result.reason.code,
           why: result.reason.why,
         });
@@ -1829,8 +2023,13 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
     }
     // Counts and minutes, never a word of what was said.
     const unreached = outcomes.filter((x) => x.outcome === "not-reached").length;
+    /* THE AMBIGUOUS ROWS GET THEIR OWN NUMBER IN THE JOURNAL. `told=30/36`
+       over six sessions holding half a message is the line somebody reads a
+       week later, and it must not be the only line. */
+    const unsure = outcomes.filter((x) => x.outcome === "partial" || x.outcome === "outcome-unknown").length;
     deps.log(
-      `action box: BROADCAST action=${action.id} speaker=${r.speaker} told=${sent}/${total} of ${r.recipients.length} rows` +
+      `action box: BROADCAST action=${action.id} speaker=${r.speaker} keys-submitted=${submitted}/${total} of ${r.recipients.length} rows` +
+        (unsure > 0 ? ` (${unsure} may or may not have landed)` : "") +
         (unreached > 0 ? ` (ran out of time before ${unreached})` : ""),
     );
     respond(res, 200, { ok: true, op: "broadcast", action: action.id, dryRun: false, result: { total, recipients: outcomes } });

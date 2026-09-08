@@ -119,7 +119,20 @@ export type SpokenAction = {
 export type QueuedPayload = { kind: "action"; action: SpokenAction } | { kind: "message"; text: string };
 
 export type QueuedItem = {
-  /** Stable for the life of the item, and what `cancel` and `settle` name. */
+  /**
+   * Stable for the life of the item, and what `cancel` and `settle` name.
+   *
+   * **OPAQUE TO THE CLIENT, AND THAT IS A RULE RATHER THAN AN OBSERVATION.**
+   * The browser stores whatever string it was handed and gives it back
+   * unexamined; nothing outside `SteeringQueue` may parse it or build one.
+   * Since 2026-09-08 it carries the RUN of the server that minted it, because
+   * a per-process counter re-issues `q1` after every restart and a phone left
+   * open across one was able to cancel a stranger's instruction and be told it
+   * had worked. `SteeringQueue.idOrigin` reads the run back; the four routes
+   * that accept an id from a client refuse a foreign one as `other-instance`.
+   * A client that started splitting on the separator would make that shape
+   * impossible to change again.
+   */
   id: string;
   /** tmux's session handle (`$1643`) — which queue this is in. */
   sessionId: string;
@@ -1086,6 +1099,26 @@ export type FleetState<Row, Health> = {
    */
   attention: AttentionFeed;
   /**
+   * **IS SUPERVISION STILL WORKING?** — the Overseer's two clocks, its
+   * heartbeat, its scheduler line and its register, or the reason there is no
+   * reading.
+   *
+   * A field on this payload rather than a `/api/overseer` of its own, and the
+   * argument is `attention`'s one field up: **one payload, one clock, one
+   * staleness.** A second endpoint would be a second `servedAt` to skew-correct
+   * against, a second cache to go stale on its own schedule, and a second thing
+   * that can be down while the page looks fine. It is also one file read —
+   * `readCheckpointFeeds` in overseer-status.ts projects this and `attention`
+   * out of the same bytes, so the inbox and the clock beside it can never come
+   * from two different versions of the file.
+   *
+   * The size is why that was a real question rather than a formality: the
+   * register can hold thirty-six sessions. `OverseerRegister` carries a bounded
+   * ranked projection with the total beside it, so this field is a few hundred
+   * bytes on a payload that already carries the rows themselves.
+   */
+  overseer: OverseerStatusFeed;
+  /**
    * **THE SERVER'S OWN CLOCK, AT THE MOMENT IT ANSWERED** — the one field here
    * that is about us rather than about the box.
    *
@@ -1098,3 +1131,353 @@ export type FleetState<Row, Health> = {
    */
   servedAt: string;
 };
+/* ------------------------------------------------------------------ *
+ * IS SUPERVISION STILL WORKING? — the Overseer's own status.
+ * ------------------------------------------------------------------ */
+
+/**
+ * **TWO CLOCKS, AND THEY COME APART EXACTLY WHEN SOMETHING IS WRONG.**
+ *
+ * The direction doc's § Two tenses insists on both, and the reason is the
+ * coupling the seam created: the Overseer has no collector of its own, so it
+ * lives off the dashboard's SSE stream. `writtenAt` says the Overseer is still
+ * writing; `lastGoodSnapshotAt` says it is still HEARING. A daemon ticking
+ * against a dead stream advances the first and freezes the second, and a
+ * watchdog reading only the heartbeat would bless it:
+ *
+ * > **A dead dashboard is a fact the Overseer records, not a silence it sits
+ * > in.**
+ *
+ * So this type never collapses them into one age, and the panel that draws it
+ * warns on a stale source even while the heartbeat advances.
+ *
+ * ## Every part fails on its own
+ *
+ * `heartbeat`, `scheduler` and `register` each carry their own `unreadable`
+ * arm rather than failing the whole projection. That is a request from the
+ * scheduler stage (260908g) and it is right in general: its Stage 3c may widen
+ * `StoredScheduler`'s discriminant, and a `kind` this build has never seen must
+ * read as *I cannot read this part of the file* and not as *the Overseer is
+ * unreadable*. The same rule the session rows already follow, one level down —
+ * `parseStatus`'s default arm in web/src/types.ts.
+ *
+ * The one thing that is NOT per-part is the schema: a checkpoint whose version
+ * this build does not know is refused whole, because the fields' meanings are
+ * what the version is about. `OverseerStatusFeed`'s `unsupported-schema` arm.
+ */
+export type OverseerStatus = {
+  /** The version the file declared. Carried so the page can name it, having accepted it. */
+  schema: number;
+  /** When the Overseer last wrote the checkpoint. The heartbeat's clock, effectively. */
+  writtenAt: string;
+  /**
+   * The producer's own `collectedAt` from the last observation the Overseer
+   * ACCEPTED — its source clock, and `null` when it has never accepted one.
+   *
+   * `null` is not "just started" and must not be drawn as fresh: a daemon that
+   * has been up for an hour without a single accepted snapshot is the deaf case
+   * in its purest form.
+   */
+  lastGoodSnapshotAt: string | null;
+  /**
+   * **THE DEADLINE THE DAEMON ITSELF IS USING** for *the collector has gone
+   * quiet*, in milliseconds — or `null` from a daemon that did not say.
+   *
+   * Carried rather than restated because the two ends already drifted once
+   * exactly here: `scripts/overseer-watchdog.ts` and the daemon called the same
+   * `staleAfterMs` and passed it different inputs, so one said 300,000 and the
+   * other 325,000 under the documented normal values. Sharing a FUNCTION
+   * prevents formula drift and not input drift; sharing the ANSWER prevents
+   * both. GPT Sol's C6 on the store, one consumer further out.
+   *
+   * A page that has no number falls back to its own constant and says which it
+   * used. `null` is *the daemon did not say*, never zero and never a default.
+   */
+  sourceStaleAfterMs: number | null;
+  heartbeat: OverseerHeartbeat;
+  scheduler: OverseerScheduler;
+  register: OverseerRegister;
+};
+
+/**
+ * Which daemon wrote this, and how far it has got.
+ *
+ * `lastTickAt` is `null` on a daemon that has written a checkpoint and not yet
+ * completed a tick — the truth about a fresh start, and not the same as a
+ * daemon that has stopped ticking, which keeps its last one and lets it age.
+ */
+export type OverseerHeartbeat =
+  | {
+      kind: "reading";
+      pid: number;
+      instanceId: string;
+      startedAt: string;
+      lastTickAt: string | null;
+      ticks: number;
+    }
+  /** The field is there and this build cannot read it. Not *there is no daemon*. */
+  | { kind: "unreadable"; why: string };
+
+/**
+ * Whether the scheduler is switched on, in the daemon's own words.
+ *
+ * Four arms for the store's three, and the fourth is the point:
+ *
+ *  - `armed` / `off` — the daemon said so, at `at`, for the reason `why`.
+ *  - `not-said` — the store's own `unknown`: no daemon in that build ever said.
+ *    A checkpoint written before the field existed lands here.
+ *  - `unreadable` — **a `kind` this build does not know**, or a field that is
+ *    not shaped like one at all. 260908g's Stage 3c may widen the discriminant,
+ *    and the widened value must not be able to render as `off`. It is one line
+ *    on the card and nothing else on it is affected.
+ *
+ * `not-said` is renamed from the store's `unknown` deliberately: on this side
+ * of the wire `unknown` would sit next to `unreadable` and the two would read
+ * as the same thing, when one is *nobody decided* and the other is *we cannot
+ * tell what was decided*.
+ */
+export type OverseerScheduler =
+  | { kind: "armed"; why: string; at: string }
+  | { kind: "off"; why: string; at: string }
+  | { kind: "not-said"; why: string; at: string }
+  | { kind: "unreadable"; why: string };
+
+/**
+ * **THE OVERSEER'S OWN RECORD OF WHAT HAS BEEN RUNNING, AND IT IS NOT A JOIN.**
+ *
+ * The register is the Overseer's past tense: it knows when a session entered
+ * the state it is in, which the dashboard cannot know because it has no
+ * yesterday. This carries a BOUNDED, RANKED PROJECTION of it — the longest
+ * waiting first — and nothing on the page matches these entries to the fleet
+ * rows beside them.
+ *
+ * **That refusal is the design.** A register entry and a fleet row can agree
+ * about a pane and still be about different children: the generation tuple
+ * (`tmuxServerPid`, `paneId`, `panePid`) can stay fixed while the process
+ * inside it is replaced, so *"blocked for at least 20 minutes"* said against a
+ * row needs continuity evidence this build does not have. The plan's Execution
+ * identity stage is what earns that join; until then these are history, drawn
+ * as history, under their own heading. **Whatever is wrong here, the fleet rows
+ * are unaffected** — they come from a different field of the same payload and
+ * nothing about them is derived from this one.
+ *
+ * `total` is the whole register and `sessions` is the cap, so a card that shows
+ * eight of thirty-six says so rather than looking like the whole fleet.
+ */
+export type OverseerRegister =
+  | { kind: "read"; total: number; sessions: OverseerSessionHistory[] }
+  | { kind: "unreadable"; why: string };
+
+/** One session as the Overseer remembers it. Ranked by `since`, oldest first. */
+export type OverseerSessionHistory = {
+  /** The name the launcher gave it. Recognisable, and not addressable. */
+  name: string;
+  /** tmux's handle, meaningless without the server pid — which is why this is not a join key. */
+  tmuxId: string;
+  /**
+   * The status the Overseer last recorded, as its own key — `working`,
+   * `needs-you`, `waiting`, and whatever else the collector grows. A string
+   * rather than a union: this is the Overseer's vocabulary, and a page that
+   * refused a key it had not heard of would drop the row that had changed.
+   */
+  status: string;
+  /**
+   * **WHEN IT ENTERED THAT STATE, AND WHETHER THAT IS A READING OR A FLOOR.**
+   *
+   * `lower-bound` means the daemon found it already in that state and cannot
+   * see when it began — which was four identical `13m` rows against sessions
+   * that had been working for hours. It renders `≥13m`, and the mark is
+   * load-bearing rather than decorative.
+   */
+  since: { kind: "observed" | "lower-bound"; at: string };
+};
+
+/**
+ * **IS SUPERVISION STILL WORKING?** — the whole reading, or the reason there
+ * isn't one.
+ *
+ * The brief's four outcomes, in this file's existing vocabulary so the two
+ * feeds read alike: *missing* is `checkpoint-absent`, *unreadable* is
+ * `checkpoint-unreadable`, *unsupported-schema* is its own arm, *available* is
+ * `published`. `not-asked` is the fifth and it is the parse default, for
+ * exactly the reason `AttentionFeed` has one: the field was added without a
+ * schema bump, so a server that predates it sends nothing, and silence from a
+ * server that never heard of the file is not an observation of the box.
+ *
+ * **`unsupported-schema` is a separate arm rather than a `why` on the
+ * unreadable one** because it is the one failure with an action attached: the
+ * page can say which version it read and which it knows, and somebody can
+ * deploy the other half. It is also the live case — the checkpoint on the box
+ * read schema **1** on 2026-09-08 against a checked-in `STORE_SCHEMA` of 2 —
+ * so this arm renders in production before either of the other two does.
+ */
+export type OverseerStatusFeed =
+  | { kind: "published"; status: OverseerStatus }
+  /** No checkpoint at the path we looked at. Says nothing about whether a daemon is alive. */
+  | { kind: "checkpoint-absent" }
+  /** One is there and could not be opened, read or parsed. */
+  | { kind: "checkpoint-unreadable"; why: string }
+  /** One is there, is JSON, and declares a version this build does not know. */
+  | { kind: "unsupported-schema"; saw: string; known: number }
+  /** This server did not look. Never a claim about the box. */
+  | { kind: "not-asked" };
+
+/* ------------------------------------------------------------------ *
+ * WHAT AN ACTION DID, AS OPPOSED TO WHAT IT WAS ASKED TO DO.
+ *
+ * Stage 3 of docs/plans/260908j. Three shapes, and every one of them
+ * exists because a route knew several different things and wrote down
+ * one word — the Class B lossy join of docs/postmortems/260908b.
+ *
+ * **THE CEILING ON ALL OF IT: NOTHING HERE OBSERVES A CONSEQUENCE.**
+ * The dashboard runs a command and reads its exit status, or hands a
+ * sequence of `tmux send-keys` calls to steer.ts and reads how far it
+ * got. Neither is evidence about the world afterwards — no process
+ * table is re-read after a kill, and no agent acknowledges a keystroke.
+ * So the vocabularies below are deliberately about the ATTEMPT, and the
+ * plan cut a `reception observed` arm rather than ship one nothing can
+ * fill. Do not add a field here that no code can honestly write.
+ * ------------------------------------------------------------------ */
+
+/**
+ * How one step of a plan ended, judged against the gate the plan named.
+ *
+ * `failed-ignored` is the arm that stops a `best-effort` step being smoothed
+ * into a pass: thirty kills of which eleven found nothing there is a fact worth
+ * reading, and it is the difference between a signal that was accepted and one
+ * that was not.
+ */
+export type PlanStepStatus = "passed" | "failed" | "failed-ignored";
+
+/** One step of a plan, after it ran. */
+export type PlanStepView = {
+  argv: readonly string[];
+  cwd: string;
+  /** The step's own reason for existing, from the plan. */
+  why: string;
+  status: PlanStepStatus;
+  /** Why it got that status — the gate, in words. */
+  verdict: string;
+  code: number | null;
+  timedOut: boolean;
+  spawnError: string | null;
+  /** The tail of what it said, bounded, for a person. */
+  tail: string;
+};
+
+/**
+ * A plan, after it ran — **and this is the one whole-action effect contract
+ * the server has.**
+ *
+ * `steps` is the steps that RAN, so a run that stopped is shorter than the plan
+ * that produced it, and `stoppedAt` names where. That asymmetry is the useful
+ * part: a reader can say *one of three steps ran* rather than *something went
+ * wrong*, which is what the card said for the life of the feature because
+ * `refusal()` in the browser dropped this whole object.
+ *
+ * Parameterised on the action id so the server can keep its closed `ActionId`
+ * union while the browser reads a plain string. One declaration, two uses —
+ * this file exists because the alternative was two declarations related by
+ * nothing but hope.
+ */
+export type PlanRunView<Id extends string = string> = {
+  action: Id;
+  steps: PlanStepView[];
+  /**
+   * **HOW MANY STEPS THE PLAN HAD**, which `steps.length` does not say.
+   *
+   * Added in Stage 3 because the denominator was simply absent from the wire: a
+   * three-step plan that stopped at the second sent two step outcomes and a
+   * `stoppedAt`, so the only honest sentence a reader could build was *two
+   * steps ran* — which reads as **all of them**. `1 of 3` and `2 of 2` are the
+   * same list of facts without this number.
+   */
+  planned: number;
+  /** True when every step ran and none failed a gate it was not allowed to fail. */
+  completed: boolean;
+  /** The index of the step that stopped the plan, or null. */
+  stoppedAt: number | null;
+};
+
+/**
+ * **WHAT ONE `kill -TERM <pid>` ESTABLISHED, WHICH IS LESS THAN IT SOUNDS.**
+ *
+ * The strongest arm is `signal-accepted`, and it is deliberately not called
+ * `killed`: it means the `kill` command exited 0, so the signal was delivered
+ * to a process that existed and that this uid may signal. A process is free to
+ * ignore SIGTERM, and nothing re-reads the process table afterwards, so
+ * *accepted* is the whole of the claim. `killed` was the word this route used,
+ * about the pids it INTENDED to signal.
+ */
+export type KillObservation =
+  /** `kill` exited 0. The signal went. Not proof the process is gone. */
+  | "signal-accepted"
+  /** `kill` exited non-zero: no such process, or not ours to signal. Nothing happened to it. */
+  | "signal-refused"
+  /**
+   * The `kill` could not be run, was killed for taking too long, or died on a
+   * signal itself. **The most expensive arm to get wrong in either direction**:
+   * the signal may have gone out before it died, and it may not have.
+   */
+  | "not-established"
+  /** The plan stopped before reaching this pid, so nothing was sent to it at all. */
+  | "not-attempted";
+
+/** One pid, and what became of the attempt to signal it. */
+export type KillAttempt = {
+  pid: number;
+  observation: KillObservation;
+  /** The step's own verdict, verbatim, or why there was no step. */
+  why: string;
+};
+
+/**
+ * A kill, reported as **intent and evidence separately**.
+ *
+ * `attempted` is the list the route meant to signal and is a fact about the
+ * request; `observed` is what came back and is a fact about the box. They are
+ * two fields rather than one because the route used to answer with the first
+ * under a name that reads as the second, and a page cannot recover a
+ * distinction the wire has already collapsed.
+ */
+export type KillReport = {
+  /** Every pid the plan set out to signal, in order. INTENT, not effect. */
+  attempted: readonly number[];
+  /** One entry per attempted pid, in the same order. EVIDENCE. */
+  observed: readonly KillAttempt[];
+  /** Every step ran. False means the tail of `attempted` was never signalled. */
+  planCompleted: boolean;
+};
+
+/**
+ * **WHAT BECAME OF ONE RECIPIENT OF A BROADCAST**, in the vocabulary
+ * docs/plans/260908j settled on: a transient phase, then four terminal states,
+ * plus the three ways a row is never spoken to at all.
+ *
+ * The four that matter are the four the route used to answer `refused` for. A
+ * `partial` send left the literal text in that agent's input box with no Enter
+ * behind it, so the next Enter anybody presses submits it; `refused` reads as
+ * *nothing reached them*, which is the opposite fact. `outcome-unknown` is the
+ * arm for a `Delivery` of `unknown` **and** for a throw out of the delivery
+ * module, which carries no reading at all.
+ *
+ * `keys-submitted` is the ceiling and it is named for what it proves: the tmux
+ * calls completed. It is not `read`, and it is not `obeyed`.
+ */
+export type BroadcastRecipientOutcome =
+  /** A DRY RUN only. What the send would do — never mixed with what one did. */
+  | "would-send"
+  /** Every tmux call completed. The keystrokes were submitted; nothing observed a reader. */
+  | "keys-submitted"
+  /** Some of the sequence arrived and it did not finish. Half a message may be sitting there. */
+  | "partial"
+  /** A throw, or a `Delivery` of `unknown`. It may have landed and it may not. */
+  | "outcome-unknown"
+  /** The delivery module refused with nothing sent: no keystroke left this box. */
+  | "refused-before-effect"
+  /** The queue's gate said "later" — the session is working. Nothing was sent. */
+  | "held"
+  /** The queue's gate said "never" — a shell, a dead Claude. Nothing was sent. */
+  | "blocked"
+  /** The fan-out ran out of time before this row. Nothing was sent. */
+  | "not-reached";

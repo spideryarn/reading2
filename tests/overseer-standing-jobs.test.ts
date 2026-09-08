@@ -164,7 +164,10 @@ describe("the wiring the shipped CLI actually does", () => {
 
     const on = schedulerWiring({ [JOBS_ENABLED_VAR]: "1" });
     expect(on.armed).toBe(true);
-    expect(on.jobs?.definitions.map((job) => job.definition.id)).toEqual(["get-ready-to-deploy", "feedback-sweep"]);
+    // The deterministic rule rides along under the full arming, which is the
+    // superset; `tests/overseer-rules.test.ts` covers the rules-only one, where
+    // the daemon is handed no spawner at all.
+    expect(on.jobs?.definitions.map((job) => job.definition.id)).toEqual(["get-ready-to-deploy", "feedback-sweep", "wedged-work", "launch-mode"]);
     expect(typeof on.jobs?.spawn).toBe("function");
     expect(on.detail).not.toContain(JOBS_ENABLED_VAR);
     expect(on.problems).toEqual([]);
@@ -173,7 +176,7 @@ describe("the wiring the shipped CLI actually does", () => {
   test("the definitions are built either way, so a disarmed daemon can still say what it would run", () => {
     // Off must not mean blind. A disarmed scheduler that could not name its jobs
     // would be indistinguishable from one that has none.
-    expect(schedulerWiring({}).definitions.map((job) => job.definition.id)).toEqual(["get-ready-to-deploy", "feedback-sweep"]);
+    expect(schedulerWiring({}).definitions.map((job) => job.definition.id)).toEqual(["get-ready-to-deploy", "feedback-sweep", "wedged-work", "launch-mode"]);
   });
 });
 
@@ -181,7 +184,7 @@ describe("what actually starts a session", () => {
   const KEY: OccurrenceKey = {
     jobId: "get-ready-to-deploy",
     scheduledAt: "2026-09-08T17:32:00.000Z",
-    definitionHash: definitionHash({ id: "x", everyMs: 1, leaseMs: 1, what: "x", documents: [] }),
+    definitionHash: definitionHash({ id: "x", everyMs: 1, leaseMs: 1, what: "x", documents: [], work: { kind: "session" } }),
   };
 
   function fakeSpawner(): { spawn: ChildSpawner; calls: { command: string; args: readonly string[]; cwd: unknown }[]; stdin: string[]; exit(code: number | null): void } {
@@ -232,7 +235,7 @@ describe("what actually starts a session", () => {
     // that never started.
     const fake = fakeSpawner();
     const spawn = gjdRemoteDispatch({ repoRoot: REPO, spawnProcess: fake.spawn, log: () => undefined });
-    spawn({ id: "j", everyMs: 1, leaseMs: 1, what: "do the thing", documents: [] }, KEY);
+    spawn({ id: "j", everyMs: 1, leaseMs: 1, what: "do the thing", documents: [], work: { kind: "session" } }, KEY);
     expect(fake.stdin).toEqual(["do the thing\n"]);
   });
 
@@ -241,7 +244,7 @@ describe("what actually starts a session", () => {
     // started, and a throw means the runner broke its contract and produced an
     // `unknown` that is never retried. A missing binary is knowable.
     const spawn = gjdRemoteDispatch({ repoRoot: tempRoot(), spawnProcess: fakeSpawner().spawn, log: () => undefined });
-    const outcome = spawn({ id: "j", everyMs: 1, leaseMs: 1, what: "x", documents: [] }, KEY);
+    const outcome = spawn({ id: "j", everyMs: 1, leaseMs: 1, what: "x", documents: [], work: { kind: "session" } }, KEY);
     expect(outcome.kind).toBe("refused");
     if (outcome.kind !== "refused") return;
     expect(outcome.why).toContain(TSX_RELATIVE_PATH);
@@ -250,7 +253,7 @@ describe("what actually starts a session", () => {
   test("a signal is a failure with a sentence, never an invented exit code", async () => {
     const fake = fakeSpawner();
     const spawn = gjdRemoteDispatch({ repoRoot: REPO, spawnProcess: fake.spawn, log: () => undefined });
-    const outcome = spawn({ id: "j", everyMs: 1, leaseMs: 1, what: "x", documents: [] }, KEY);
+    const outcome = spawn({ id: "j", everyMs: 1, leaseMs: 1, what: "x", documents: [], work: { kind: "session" } }, KEY);
     if (outcome.kind !== "spawned") throw new Error("expected a spawn");
     fake.exit(null);
     await expect(outcome.done).resolves.toEqual({ kind: "failed", why: expect.stringContaining("killed") });

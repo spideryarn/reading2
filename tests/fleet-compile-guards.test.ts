@@ -306,9 +306,16 @@ describe("the shared wire state cannot acquire an optional field", () => {
        make `fleetState`'s own return type optional in the same place, and an
        optional key is not assignable to a `Required<>`, so this is a second and
        independent way for the mutation to go red. */
-    const payload: Required<WireState> = fleetState(null, null, null, 60_000, true, null, {
-      kind: "not-asked",
-    });
+    const payload: Required<WireState> = fleetState(
+      null,
+      null,
+      null,
+      60_000,
+      true,
+      null,
+      { kind: "not-asked" },
+      { kind: "not-asked" },
+    );
 
     /* Runtime, and the paired positive: the observable shape of the whole design
        is that a field with nothing to say is PRESENT and null, never absent.

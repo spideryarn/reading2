@@ -56,6 +56,7 @@ import {
   makeActionsApi,
   parseAction,
   parseActionsFeed,
+  parseBoxEffect,
   parseQueue,
   sessionActions,
   boxActions,
@@ -107,7 +108,7 @@ import {
    payload composer before it renders anything. `statePayload` is the function
    `server.ts` calls — it lives in state.ts precisely so a test can drive it,
    because server.ts binds ports at import time and can never be imported. */
-import { readAttention } from "../tools/fleet/attention";
+import { readCheckpointFeeds } from "../tools/fleet/overseer-status";
 import { statePayload } from "../tools/fleet/state";
 /* **THE PRODUCER'S OWN TYPE, ON THE FIXTURES THAT CLAIM TO BE ITS OUTPUT.**
    `actionsWire()` in this file once built `{actions: []}` — a flat array the
@@ -172,6 +173,7 @@ function row(over: Partial<FleetState["rows"][number]> & { id: string }): FleetS
       cause: "rate-limits-not-collected",
     },
     meta: { version: "legacy" },
+    role: { kind: "none" },
     panePid: null,
     claudeSessionId: null,
     rawStatus: over.status ?? { kind: "idle" },
@@ -228,6 +230,14 @@ function state(over: Partial<FleetState> = {}): FleetState {
        `no-coordinator` would make every fixture quietly assert that
        `~/.overseer/` was looked at and is empty. */
     attention: { kind: "not-asked" },
+    /* And the same for the Overseer's own status: `not-asked` is what
+       `parseOverseer` produces for a payload with no `overseer` field, so a
+       fixture that does not care gets the page an older server would really
+       draw. It is not silent — the card says this server did not report
+       supervision — but it is one quiet line on the Overseer tab, which no
+       assertion in this file reads. Anything else would have each fixture
+       quietly asserting that this server looked at `~/.overseer/`. */
+    overseer: { kind: "not-asked" },
     /* Same argument again. `readClockSkew` produces this for a payload with no
        `servedAt`, so a fixture that does not care about clocks gets the state
        the page would really build off an older server — and nothing is shifted.
@@ -1498,7 +1508,7 @@ describe("the box's clock, read with the phone's", () => {
         refreshMs: 60_000,
         answeringEnabled: true,
         attemptedAt: null,
-        readAttention: () => ({ kind: "not-asked" }),
+        readCheckpoint: () => ({ attention: { kind: "not-asked" }, overseer: { kind: "not-asked" } }),
       }),
     );
     const servedAt = (payload as { servedAt?: unknown }).servedAt;
@@ -1924,7 +1934,11 @@ function recordingActions(
     },
     box: async (actionId, dryRun) => {
       calls.push({ op: "box", arg: actionId, second: dryRun });
-      return { ok: true, dryRun, dryRunStated: true, result: [], why: null };
+      /* `effect: null` is *this answer described no per-row effect*, which is
+         what an empty `result` means. It is REQUIRED rather than optional for
+         `delivery`'s reason: a fixture that could omit it would let the
+         renderer pick a default, and picking a default is the defect. */
+      return { ok: true, dryRun, dryRunStated: true, result: [], why: null, effect: null };
     },
     ...over,
   };
@@ -5041,12 +5055,21 @@ describe("the action buttons, which are the server's vocabulary", () => {
         why: "pane %1646 is in session $1643 now, not $1",
         status: 409,
         from: "server",
+        /* `none` is the server saying no KEYSTROKES left this box. It is NOT
+           a claim about the action as a whole, and since the fix round of
+           260908j the card no longer reads it as one. The other three arms are
+           next door, in "what became of an ACTION". */
+        delivery: { kind: "none" },
+        // No plan ran, so there is no run to describe. See `parsePlanRun`.
+        run: null,
       }),
     });
     openWith([CONTINUE_WIRE], { api: rec });
     await act(async () => {});
     await clickSaying("Continue");
-    expect(container.textContent).toContain("Nothing happened.");
+    expect(container.textContent).toContain("No keystrokes went out.");
+    // The whole-action claim is not available to this arm and never was.
+    expect(container.textContent).not.toContain("Nothing happened.");
     expect(container.textContent).toContain("pane %1646 is in session $1643 now, not $1");
     expect(container.textContent).toContain("said by the dashboard server");
   });
@@ -5612,7 +5635,78 @@ describe("the box, which says what it would do before it does it", () => {
       { op: "box", arg: "kill-test-suites", second: true },
       { op: "box", arg: "kill-test-suites", second: false },
     ]);
+    // The stub's answer describes no per-row effect, so "Done." is all there
+    // is to say. The two tests below are the answers that do describe one.
     expect(container.textContent).toContain("Done.");
+  });
+
+  it("will not say Done over a kill whose plan stopped before it signalled anything", async () => {
+    /* **A KILL THAT SIGNALLED NOTHING READ EXACTLY LIKE ONE THAT SIGNALLED
+       EVERYTHING.** The heading came off `dryRun` alone, and the pids were in
+       `RawValue` underneath, where a list of three objects looks the same
+       whatever the `observation` on each says. `parseBoxEffect` is the real
+       one, so the counts are read from the answer rather than asserted about
+       a shape nothing produces. */
+    const result = {
+      run: { action: "kill-test-suites", steps: [], planned: 3, completed: false, stoppedAt: 0 },
+      kill: {
+        attempted: [5001, 5002, 5003],
+        planCompleted: false,
+        observed: [
+          { pid: 5001, observation: "not-attempted", why: "the plan stopped before this one" },
+          { pid: 5002, observation: "not-attempted", why: "the plan stopped before this one" },
+          { pid: 5003, observation: "not-attempted", why: "the plan stopped before this one" },
+        ],
+      },
+    };
+    openBox([KILL_SUITES_WIRE], {
+      box: async (_id, dryRun) => ({
+        ok: true,
+        dryRun,
+        dryRunStated: true,
+        result,
+        why: null,
+        effect: parseBoxEffect(result),
+      }),
+    });
+    await act(async () => {});
+    await clickSaying("Kill test suites");
+    await clickSaying("Yes — kill test suites");
+
+    expect(container.textContent).toContain("Signal accepted for 0 of 3 pids.");
+    expect(container.textContent).toContain("never signalled: the plan stopped first");
+    expect(container.textContent).toContain("the pids after it were never signalled at all");
+    expect(container.textContent).not.toContain("Done.");
+  });
+
+  it("shows a half-landed broadcast as half-landed rather than as a refusal", async () => {
+    const result = {
+      total: 3,
+      recipients: [
+        { paneId: "%1", sessionId: "$1", minutes: 5, outcome: "keys-submitted", code: null, why: null },
+        { paneId: "%2", sessionId: "$2", minutes: null, outcome: "held", code: null, why: "it is working" },
+        { paneId: "%3", sessionId: "$3", minutes: 33, outcome: "partial", code: "send-failed", why: "the Enter did not go" },
+      ],
+    };
+    openBox([BROADCAST_WIRE], {
+      box: async (_id, dryRun) => ({
+        ok: true,
+        dryRun,
+        dryRunStated: true,
+        result,
+        why: null,
+        effect: parseBoxEffect(result),
+      }),
+    });
+    await act(async () => {});
+    await clickSaying("Broadcast: ease off, staggered");
+    await clickSaying("Yes — broadcast: ease off, staggered");
+
+    expect(container.textContent).toContain("Keys submitted to 1 of 3 rows.");
+    // The row that is holding half a message, said in words rather than left
+    // as a state name in a JSON dump.
+    expect(container.textContent).toContain("PART of the message went, and the rest is unaccounted for");
+    expect(container.textContent).not.toContain("Done.");
   });
 
   it("offers no Confirm at all when the dry run could not answer", async () => {
@@ -5623,6 +5717,10 @@ describe("the box, which says what it would do before it does it", () => {
         why: "ps exited 1 and said nothing",
         status: 500,
         from: "server",
+        // The dry run never sends anything, so the route has no delivery to state.
+        delivery: { kind: "not-told" },
+        // And `ps` failed before any plan was built, so there is no run either.
+        run: null,
       }),
     });
     await act(async () => {});
@@ -5640,7 +5738,7 @@ describe("the box, which says what it would do before it does it", () => {
     /* The worst thing this panel could get wrong: believing our own request
        instead of the reply, and reporting a kill as a question. */
     openBox([KILL_SUITES_WIRE], {
-      box: async () => ({ ok: true, dryRun: false, dryRunStated: true, result: ["killed 4"], why: null }),
+      box: async () => ({ ok: true, dryRun: false, dryRunStated: true, result: ["killed 4"], why: null, effect: null }),
     });
     await act(async () => {});
     await clickSaying("Kill test suites");
@@ -5656,7 +5754,7 @@ describe("the box, which says what it would do before it does it", () => {
        failure this panel exists to prevent is somebody pressing *kill* on the
        strength of an answer that said nothing. */
     const rec = openBox([KILL_SUITES_WIRE], {
-      box: async () => ({ ok: true, dryRun: true, dryRunStated: true, result: null, why: null }),
+      box: async () => ({ ok: true, dryRun: true, dryRunStated: true, result: null, why: null, effect: null }),
     });
     await act(async () => {});
     await clickSaying("Kill test suites");
@@ -5673,7 +5771,7 @@ describe("the box, which says what it would do before it does it", () => {
        run and reported as "Done." — the reassuring half of a contradiction, and
        the page could tell, because the answer says which it was. */
     openBox([KILL_SUITES_WIRE], {
-      box: async () => ({ ok: true, dryRun: true, dryRunStated: true, result: ["would kill 5001"], why: null }),
+      box: async () => ({ ok: true, dryRun: true, dryRunStated: true, result: ["would kill 5001"], why: null, effect: null }),
     });
     await act(async () => {});
     await clickSaying("Kill test suites");
@@ -5686,7 +5784,7 @@ describe("the box, which says what it would do before it does it", () => {
 
   it("will not claim a dry run when the server never said it was one", async () => {
     openBox([KILL_SUITES_WIRE], {
-      box: async () => ({ ok: true, dryRun: true, dryRunStated: false, result: [], why: null }),
+      box: async () => ({ ok: true, dryRun: true, dryRunStated: false, result: [], why: null, effect: null }),
     });
     await act(async () => {});
     await clickSaying("Kill test suites");
@@ -5768,9 +5866,55 @@ describe("the Overseer tab, which no longer says it is empty", () => {
     await act(async () => {});
 
     expect(buttonLabels()).toContain("Broadcast: ease off, staggered");
-    expect(container.textContent).toContain("There is nothing yet to send a message to.");
+    // The wording changed on 2026-09-08 with the Overseer status card: the old
+    // sentence's premise was that no Overseer process existed, and one does. The
+    // refusal is unchanged and is the point — a daemon that publishes a
+    // checkpoint is still not an agent that can receive a message.
+    expect(container.textContent).toContain("There is still nothing here to send a message to.");
     // A refusal with a way forward, not a shrug.
     expect(container.textContent).toContain("the broadcast above is the real thing");
+  });
+
+  it("draws the Overseer's own two clocks on the tab, straight off the payload", async () => {
+    /* THE EDGE `App` MAKES AND NOTHING ELSE COVERS: the panel gets `overseer`
+       from the state it was handed. tests/fleet-overseer-panel.test.tsx drives
+       the card and the payload; this is the one hop between them, and deleting
+       the prop in App.tsx turns it red. */
+    window.location.hash = "#overseer";
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport });
+    const wroteAt = new Date(Date.now() - 30_000).toISOString();
+    act(() =>
+      feed.push(
+        state({
+          rows: [],
+          overseer: {
+            kind: "published",
+            status: {
+              schema: 2,
+              writtenAt: wroteAt,
+              lastGoodSnapshotAt: new Date(Date.now() - 45_000).toISOString(),
+              sourceStaleAfterMs: 300_000,
+              heartbeat: {
+                kind: "reading",
+                pid: 2_375_511,
+                instanceId: "599c3840-4c9c-445f-9308-e34923704fa8",
+                startedAt: new Date(Date.now() - 3_600_000).toISOString(),
+                lastTickAt: wroteAt,
+                ticks: 28,
+              },
+              scheduler: { kind: "armed", why: "started with the scheduler on", at: wroteAt },
+              register: { kind: "read", total: 0, sessions: [] },
+            },
+          },
+        }),
+      ),
+    );
+    await act(async () => {});
+
+    expect(container.textContent).toContain("Supervision is running.");
+    expect(container.textContent).toContain("Overseer last wrote");
+    expect(container.textContent).toContain("its fleet source last updated");
   });
 });
 
@@ -6096,6 +6240,298 @@ describe("what became of the keystrokes, which is three answers and not two", ()
     for (const odd of [undefined, null, "", "NONE", 0, {}, ["partial"]]) {
       expect(parseDelivery(odd)).toEqual({ kind: "not-told" });
     }
+  });
+});
+
+describe("what became of an ACTION, which is also not two answers", () => {
+  /* THE SAME DEFECT, ONE FILE ALONG, AND WITH MORE AT STAKE. The steer path
+     carries a `DeliveryReading` and `SessionDetail` renders all four arms of
+     it. `ActionOutcome`'s failure arm carried no delivery at all, and
+     `ActionButtons` printed "Nothing happened." over every failure — including
+     `from: "client"`, where the REPLY NEVER ARRIVED. That is the one case where
+     the page has no basis for the claim whatsoever, and the request it is
+     making the claim about may have removed a worktree or killed thirty
+     processes. A person who reads "Nothing happened." presses it again.
+
+     Everything here drives the REAL client over a fake `fetch`, never a
+     hand-built `ActionOutcome`: the line that was missing is the one that reads
+     `delivery` off the body, and a fixture of an outcome cannot fail when that
+     line is deleted. Same argument as `browserFetch` in
+     tests/fleet-actions-route.test.ts. */
+
+  const ROW = steerable({ id: "$1643", title: "the one being acted on" });
+
+  /** A `fetch` that never answers — the phone off Tailscale, mid-request. */
+  const nothingCameBack = (async () => {
+    throw new TypeError("Failed to fetch");
+  }) as unknown as typeof fetch;
+
+  /** A `fetch` that answers one refusal body, verbatim. */
+  function refusing(body: Record<string, unknown>, status = 409): typeof fetch {
+    return (async () => ({ status, json: async () => body }) as unknown as Response) as unknown as typeof fetch;
+  }
+
+  /** Answers the dry run, then vanishes on the press that would do it. */
+  function answersThenVanishes(first: Record<string, unknown>): typeof fetch {
+    let calls = 0;
+    return (async () => {
+      calls += 1;
+      if (calls === 1) return { status: 200, json: async () => first } as unknown as Response;
+      throw new TypeError("Failed to fetch");
+    }) as unknown as typeof fetch;
+  }
+
+  /**
+   * A `fetch` that answers, and whose body will not parse.
+   *
+   * **The mutation this exists to catch.** `postJson`'s invalid-JSON branch can
+   * be changed from `unknown` back to `none` and the suite stayed green,
+   * because nothing drove the real client through a response whose `json()`
+   * REJECTS — only through a `fetch` that throws. A status arrived, so the
+   * request certainly reached the server; what did not arrive is any account of
+   * what it did with it.
+   */
+  function unreadableBody(status = 500): typeof fetch {
+    return (async () =>
+      ({
+        status,
+        json: async () => {
+          throw new SyntaxError("Unexpected token < in JSON at position 0");
+        },
+      }) as unknown as Response) as unknown as typeof fetch;
+  }
+
+  /** Answers the dry run, then answers the real press with a body that will not parse. */
+  function answersThenGarbles(first: Record<string, unknown>): typeof fetch {
+    let calls = 0;
+    return (async () => {
+      calls += 1;
+      if (calls === 1) return { status: 200, json: async () => first } as unknown as Response;
+      return {
+        status: 500,
+        json: async () => {
+          throw new SyntaxError("Unexpected token < in JSON at position 0");
+        },
+      } as unknown as Response;
+    }) as unknown as typeof fetch;
+  }
+
+  /**
+   * The sentence a server-stated `none` may say, and the ONLY thing it may say.
+   *
+   * `Delivery` is about keystrokes. Nothing on this path licenses a claim about
+   * a queue, a worktree or a process, so this string must never appear over any
+   * other reading — that is what the `not.toContain` uses of it are for.
+   */
+  const KEYSTROKE_SENTENCE = "No keystrokes went out.";
+  /** One heading for both readings that cannot tell, because the action is the same. */
+  const CANNOT_TELL_HEAD = "This page cannot tell whether the action took effect.";
+
+  /** The session page, with the real client wired to `fetchImpl`. */
+  function openActing(fetchImpl: typeof fetch, actions: unknown[]): void {
+    const client = makeActionsApi(fetchImpl);
+    const rec = recordingActions(() => actionsWire({ actions }), {
+      run: (r, actionId) => client.run(r, actionId),
+      queueMessage: (r, text) => client.queueMessage(r, text),
+    });
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport, actionsApi: rec.api });
+    act(() => feed.push(state({ rows: [ROW] })));
+    openSession("the one being acted on");
+  }
+
+  /** The box panel, same wiring. */
+  function openActingBox(fetchImpl: typeof fetch, actions: unknown[]): void {
+    const client = makeActionsApi(fetchImpl);
+    const rec = recordingActions(() => actionsWire({ actions }), { box: (actionId, dryRun) => client.box(actionId, dryRun) });
+    window.location.hash = "#health";
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport, actionsApi: rec.api });
+    act(() => feed.push(state({ health: { verdict: { level: "strained", reasons: [] } } })));
+  }
+
+  it("does not say nothing happened when the reply never arrived", async () => {
+    /* THE HEADLINE BUG. `remove-worktree` deletes a directory. The request went
+       out; the answer did not come back. Whether the tree is still there is
+       exactly what this page cannot say, and it said the opposite. */
+    openActing(nothingCameBack, [REMOVE_WORKTREE_WIRE]);
+    await act(async () => {});
+    await clickSaying("Remove worktree");
+    await clickSaying("Yes — remove worktree");
+
+    const text = container.textContent ?? "";
+    expect(text).not.toContain("Nothing happened.");
+    expect(text).not.toContain(KEYSTROKE_SENTENCE);
+    expect(text).toContain(CANNOT_TELL_HEAD);
+    /* THE LOAD-BEARING CLAUSES, pinned rather than the whole paragraph. Each of
+       these is a sentence that would be FALSE if it went the other way: the
+       first because the action may have run, the second because a repeat of a
+       kill or a worktree removal is a fresh act and not an addition to the
+       first one. Copy edits around them stay cheap. */
+    expect(text).toContain("may have taken effect and it may not");
+    expect(text).toContain("a second press is a NEW action");
+    // The local sentence is still there, and still owned by whoever wrote it.
+    expect(text).toContain("this browser could not reach the dashboard");
+    expect(text).toContain("said by this browser");
+  });
+
+  it("does not claim the rest did NOT happen when the server says partial", async () => {
+    /* `fire()` in steer.ts reaches `partial` down two roads, and only one of
+       them knows the remainder failed: its own words are "Part of the sequence
+       arrived and the rest cannot be accounted for" when `mayHaveLanded(e)`,
+       and "and the rest did not" when it does not. The card sits directly above
+       that verbatim sentence and used to contradict half of it. */
+    openActing(
+      refusing(
+        { ok: false, code: "enter-not-sent", why: "the text was typed and the Enter could not be sent", delivery: "partial" },
+        502,
+      ),
+      [CONTINUE_WIRE],
+    );
+    await act(async () => {});
+    await clickSaying("Continue");
+
+    const text = container.textContent ?? "";
+    expect(text).not.toContain("Nothing happened.");
+    expect(text).not.toContain(KEYSTROKE_SENTENCE);
+    expect(text).toContain("PART of it took effect.");
+    // The clause that was false, and must not come back in any form.
+    expect(text).not.toContain("the rest did not");
+    // The three clauses that carry the whole meaning.
+    expect(text).toContain("Some of it definitely happened");
+    expect(text).toContain("may or may not have happened");
+    expect(text).toContain("a second press is a NEW action");
+    // Still verbatim, still the server's.
+    expect(text).toContain("the text was typed and the Enter could not be sent");
+  });
+
+  it("says the server did not say, when the body carries no delivery at all", async () => {
+    /* The ordinary production refusal: nothing was sent, but the route never
+       claimed that, and a page that filled it in would be inventing the one
+       fact it is here to carry. */
+    openActing(refusing({ ok: false, code: "confirm-required", why: "'remove-worktree' needs confirming" }), [CONTINUE_WIRE]);
+    await act(async () => {});
+    await clickSaying("Continue");
+
+    const text = container.textContent ?? "";
+    expect(text).not.toContain("Nothing happened.");
+    expect(text).not.toContain(KEYSTROKE_SENTENCE);
+    expect(text).toContain(CANNOT_TELL_HEAD);
+    expect(text).toContain("the words below are all there is to go on");
+  });
+
+  it("does not read a delivery word it has never heard of as nothing", async () => {
+    openActing(refusing({ ok: false, code: "odd", why: "something else went wrong", delivery: "half-ish" }), [CONTINUE_WIRE]);
+    await act(async () => {});
+    await clickSaying("Continue");
+
+    const text = container.textContent ?? "";
+    expect(text).not.toContain("Nothing happened.");
+    expect(text).not.toContain(KEYSTROKE_SENTENCE);
+    expect(text).toContain(CANNOT_TELL_HEAD);
+    /* AND IT DOES NOT SAY THE SERVER WAS SILENT, because the server was not:
+       it said "half-ish" and this build could not read it. `parseDelivery`
+       folds an absent field and an unrecognised one onto the same arm, so any
+       heading that claimed silence would be false on half its traffic. That is
+       the whole reason the two headings collapsed into this one. */
+    expect(text).not.toContain("did not say whether this took effect");
+    expect(text).not.toContain("did not say whether this happened");
+    expect(text).toContain("the words below are all there is to go on");
+  });
+
+  it("reads a server-stated `none` as being about keystrokes and nothing wider", async () => {
+    /* The negative half, narrowed. `none` is still allowed to say its own true
+       thing — a guard that never lets the plain case through has simply stopped
+       saying it — but the true thing is about KEYSTROKES. It does not license
+       "Nothing happened.", which is a claim about a queue, a worktree or a
+       process that no `Delivery` value can support. */
+    openActing(refusing({ ok: false, code: "not-steerable", why: "that session is not at a prompt", delivery: "none" }), [CONTINUE_WIRE]);
+    await act(async () => {});
+    await clickSaying("Continue");
+
+    const text = container.textContent ?? "";
+    expect(text).toContain(KEYSTROKE_SENTENCE);
+    // The clause that keeps the heading narrow.
+    expect(text).toContain("only about keystrokes");
+    expect(text).not.toContain("Nothing happened.");
+    expect(text).not.toContain("PART of it took effect.");
+    expect(text).not.toContain(CANNOT_TELL_HEAD);
+  });
+
+  it("does not say nothing happened on the box when the kill's reply never arrived", async () => {
+    /* The worst version of it. The dry run answered, the person read what it
+       would kill, pressed yes — and then nothing came back. Thirty processes
+       may be gone. "Nothing happened." is the sentence that sends them to press
+       it again. */
+    openActingBox(answersThenVanishes({ ok: true, op: "dry-run", dryRun: true, result: { candidates: [{ pid: 5001 }] } }), [
+      KILL_SUITES_WIRE,
+    ]);
+    await act(async () => {});
+    await clickSaying("Kill test suites");
+    await clickSaying("Yes — kill test suites");
+
+    const text = container.textContent ?? "";
+    expect(text).not.toContain("Nothing happened.");
+    expect(text).not.toContain(KEYSTROKE_SENTENCE);
+    expect(text).toContain(CANNOT_TELL_HEAD);
+    expect(text).toContain("a second press is a NEW action");
+    expect(text).toContain("said by this browser");
+  });
+
+  it("reads an answer whose body will not parse as unknown, in the client itself", async () => {
+    /* DRIVEN THROUGH THE REAL CLIENT, and asserting the field rather than the
+       words, because this is the branch a renderer test cannot pin: change
+       `postJson`'s invalid-JSON arm to `none` and every rendering test above
+       still passes, since none of them ever reaches it. */
+    const outcome = await makeActionsApi(unreadableBody()).run(ROW, "continue");
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) throw new Error("unreachable");
+    expect(outcome.delivery.kind).toBe("unknown");
+    expect(outcome.code).toBe("not-json");
+    expect(outcome.from).toBe("client");
+  });
+
+  it("does not say nothing happened when the answer came back and would not parse", async () => {
+    /* The same branch, on screen. A 500 with an HTML error page in it is the
+       ordinary shape of this: the request unquestionably reached the server. */
+    openActing(unreadableBody(), [REMOVE_WORKTREE_WIRE]);
+    await act(async () => {});
+    await clickSaying("Remove worktree");
+    await clickSaying("Yes — remove worktree");
+
+    const text = container.textContent ?? "";
+    expect(text).not.toContain("Nothing happened.");
+    expect(text).not.toContain(KEYSTROKE_SENTENCE);
+    expect(text).toContain(CANNOT_TELL_HEAD);
+    expect(text).toContain("the body was not JSON");
+  });
+
+  it("does not say nothing happened on the box when the kill's answer would not parse", async () => {
+    /* The second consumer of the same arm, so the box path is constrained too
+       rather than inheriting the session page's guarantee. */
+    openActingBox(answersThenGarbles({ ok: true, op: "dry-run", dryRun: true, result: { candidates: [{ pid: 5001 }] } }), [
+      KILL_SUITES_WIRE,
+    ]);
+    await act(async () => {});
+    await clickSaying("Kill test suites");
+    await clickSaying("Yes — kill test suites");
+
+    const text = container.textContent ?? "";
+    expect(text).not.toContain("Nothing happened.");
+    expect(text).not.toContain(KEYSTROKE_SENTENCE);
+    expect(text).toContain(CANNOT_TELL_HEAD);
+    expect(text).toContain("may have taken effect and it may not");
+    /* The footer is what tells the two collapsed readings apart, so it has to
+       carry the status. An answer arrived here — it just could not be read. */
+    expect(text).toContain("HTTP 500");
+  });
+
+  it("reads a box answer whose body will not parse as unknown, in the client itself", async () => {
+    const outcome = await makeActionsApi(unreadableBody()).box("kill-suites", false);
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) throw new Error("unreachable");
+    expect(outcome.delivery.kind).toBe("unknown");
+    expect(outcome.code).toBe("not-json");
   });
 });
 
@@ -7079,7 +7515,7 @@ describe("the composer production uses turns a checkpoint on disk into a questio
    *
    * **It drives `statePayload`, which is the whole reason that function was
    * moved out of server.ts.** An earlier version of this test called
-   * `readAttention` and `fleetState` itself, and that is green-by-construction:
+   * `readCheckpointFeeds` and `fleetState` itself, and that is green-by-construction:
    * it had rebuilt the missing edge inside the test, so it would have stayed
    * green after production stopped making it. GPT Sol's sharpest finding on this
    * stage. `server.ts` binds ports at import time and can never be imported, so
@@ -7095,7 +7531,7 @@ describe("the composer production uses turns a checkpoint on disk into a questio
    *
    * ## THE ONE EDGE IT DOES NOT COVER, and what does cover it
    *
-   * **This test supplies `readAttention` itself**, so `server.ts`'s own binding
+   * **This test supplies `readCheckpointFeeds` itself**, so `server.ts`'s own binding
    * of it into `PayloadDeps` is outside the boundary — the test would stay green
    * if that line were deleted. It used to be named as though it were not, which
    * is why the name is now the composer rather than "the join". Renaming it was
@@ -7106,7 +7542,7 @@ describe("the composer production uses turns a checkpoint on disk into a questio
    * exists. Extracting its deps construction only MOVES the seam — there is
    * always a last edge at the composition root that no test reaches without
    * starting a server. What closes the missing-join risk there is not a test but
-   * the **type**: `readAttention` is a required field of `PayloadDeps`, so
+   * the **type**: `readCheckpoint` is a required field of `PayloadDeps`, so
    * omitting it is a typecheck failure rather than a page that quietly draws
    * nothing. A deliberate stub would still compile — but *somebody wired the
    * wrong thing on purpose* is a different and far smaller class than *nobody
@@ -7168,7 +7604,7 @@ describe("the composer production uses turns a checkpoint on disk into a questio
           refreshMs: 60_000,
           answeringEnabled: true,
           attemptedAt: null,
-          readAttention: () => readAttention(root),
+          readCheckpoint: () => readCheckpointFeeds(root),
         }),
       ) as unknown;
 

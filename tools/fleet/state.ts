@@ -22,7 +22,8 @@
  */
 import type { FleetSnapshot } from "./collect.js";
 import type { HealthReport } from "./health.js";
-import type { AttentionFeed, FleetState as FleetStateWire } from "./wire.js";
+import type { CheckpointFeeds } from "./overseer-status.js";
+import type { AttentionFeed, FleetState as FleetStateWire, OverseerStatusFeed } from "./wire.js";
 
 /**
  * What `/api/state` returns and `/api/live` pushes — the same bytes, by
@@ -69,11 +70,22 @@ export function fleetState(
    * words, which is true of it: it did not look.
    */
   attention: AttentionFeed,
+  /**
+   * **IS SUPERVISION STILL WORKING?** — required, for the same reason
+   * `attention` above is.
+   *
+   * A default of `{ kind: "not-asked" }` here would let a caller drop the one
+   * reading that says whether anything is watching the fleet — and drop it as a
+   * quiet line about an old server rather than as anything anybody would chase.
+   * A caller with nothing to say passes the arm in as many words.
+   */
+  overseer: OverseerStatusFeed,
 ): FleetState {
   return {
     schema: 1,
     attemptedAt,
     attention,
+    overseer,
     /* The clock read that makes every age on the page comparable. Unlike
        `collectedAt` above, inventing this one here is not a lie with a clock on
        it — it is the only honest reading of it, because composing the payload
@@ -100,7 +112,7 @@ export function fleetState(
 /**
  * Everything `statePayload` needs, as data and one function.
  *
- * `readAttention` is a FUNCTION rather than a value on purpose: composing the
+ * `readCheckpoint` is a FUNCTION rather than a value on purpose: composing the
  * payload is what triggers the read, so the inbox is as old as the request and
  * not as old as the last collection. attention.ts § Read per request.
  */
@@ -111,8 +123,20 @@ export type PayloadDeps = {
   refreshMs: number;
   answeringEnabled: boolean;
   attemptedAt: string | null;
-  /** The coordinator's inbox, read now. Must not throw — attention.ts's guarantee. */
-  readAttention: () => AttentionFeed;
+  /**
+   * **THE COORDINATOR'S CHECKPOINT — THE INBOX AND ITS OWN STATUS, OUT OF ONE
+   * READ.** Must not throw; `readCheckpointFeeds` in overseer-status.ts is the
+   * production implementation and that is its guarantee.
+   *
+   * It replaced a `readAttention: () => AttentionFeed` on 2026-09-08, and the
+   * pair is deliberate rather than tidy. Two functions here would be two reads
+   * of a file that is replaced by atomic rename, and the page's central claim —
+   * *the Overseer last wrote 12 minutes ago; its source last updated 15* — puts
+   * the inbox's clock and the checkpoint's clock in one sentence. Out of two
+   * reads that sentence can be assembled from two different versions of the
+   * file, and nothing on screen would say so.
+   */
+  readCheckpoint: () => CheckpointFeeds;
 };
 
 /**
@@ -137,6 +161,9 @@ export type PayloadDeps = {
  * goes back to drawing nothing.
  */
 export function statePayload(deps: PayloadDeps): string {
+  /* ONE READ, BOTH FEEDS. Calling `deps.readCheckpoint()` twice would reopen
+     the door this type was changed to close. */
+  const checkpoint = deps.readCheckpoint();
   return JSON.stringify(
     fleetState(
       deps.snapshot,
@@ -145,7 +172,8 @@ export function statePayload(deps: PayloadDeps): string {
       deps.refreshMs,
       deps.answeringEnabled,
       deps.attemptedAt,
-      deps.readAttention(),
+      checkpoint.attention,
+      checkpoint.overseer,
     ),
   );
 }

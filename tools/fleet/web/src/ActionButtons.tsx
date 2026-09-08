@@ -83,12 +83,16 @@ import {
   type ActionOutcome,
   type ActionsApi,
   type ActionsFeed,
+  type BoxEffectReading,
   type BoxOutcome,
   type ClientAction,
+  type PlanRunReading,
   type QueueItemView,
   type QueueOp,
   type QueueView,
+  type StepReading,
 } from "./actions-client";
+import type { DeliveryReading } from "./steer-client";
 import type { FleetRow } from "./types";
 import { Button, Card, Mono, cx } from "./ui";
 
@@ -185,6 +189,256 @@ function successCopy(outcome: Extract<ActionOutcome, { ok: true }>): { head: str
   }
 }
 
+/**
+ * **TWO FACTS, ONE SENTENCE**, and the collapse is deliberate.
+ *
+ * `unknown` and `not-told` stay separate arms in `DeliveryReading` and in
+ * `parseDelivery`, because they really are different things and a diagnosis
+ * wants to know which. They used to get two headings here, and that was wrong
+ * twice over.
+ *
+ *  - The `not-told` heading said *the server did not say*, which is FALSE half
+ *    the time it appears: `parseDelivery` folds an absent `delivery` and a word
+ *    this build does not recognise onto the same arm, so the server may well
+ *    have said `"half-ish"` and been misunderstood here.
+ *  - A person holding a phone does the same thing either way — go and look
+ *    before pressing it again. Two headings that mean one action are a cost on
+ *    a small screen, and they invite a reader to believe there is a difference
+ *    to act on.
+ *
+ * **The distinction survives in the type, in the parse and in the tests**, and
+ * it is what a later stage needs. The footer under this card — `why`, the
+ * `code · HTTP nnn` line, and who said the words — separates the client-side
+ * readings (`unreachable`, `not-json`, no reply at all) from a server refusal.
+ * It does NOT separate an unparsable delivery word from an absent one, which is
+ * exactly why the heading above it must claim neither.
+ *
+ * **AND IT IS NOT THE HEADING WHEN THE SERVER DESCRIBED A RUN.** Since Stage 3
+ * of docs/plans/260908j, a `plan-failed` refusal carries the plan it ran, and
+ * `PlanRunCard` below says which step stopped it. This copy is for the case it
+ * was always for: a refusal with nothing in it but a code. See `planHeadline`.
+ */
+const CANNOT_TELL: { head: string; body: string } = {
+  head: "This page cannot tell whether the action took effect.",
+  body:
+    "It may have taken effect and it may not; the words below are all there is to go on. Look before repeating it — a second press is a NEW action, not a repair of the first, and neither can be undone from here.",
+};
+
+/**
+ * **WHAT A STOPPED PLAN ACTUALLY ESTABLISHED**, which is more than *we cannot
+ * tell* and less than *nothing happened*.
+ *
+ * `steps` is the steps that RAN, so its length against the plan's is the whole
+ * sentence: one of three ran, and the two after it did not. That is a fact
+ * about the box, in the server's own arithmetic, and it was on the wire for the
+ * life of this panel while the card above printed *this page cannot tell*.
+ *
+ * **It does not say what those steps DID to the box.** A step that ran is a
+ * command that exited; `worktree:check` passing changed nothing, and
+ * `worktree:sweep` passing removed a directory. The gate verdicts underneath
+ * are what a person reads for that, verbatim, and this heading deliberately
+ * stops at *ran*.
+ */
+function planHeadline(run: PlanRunReading): { head: string; body: string } {
+  const ran = run.steps.length;
+  /* `planned` is the plan's own count and `ran` is a floor under it, so a
+     server that predates the field cannot make this read as *more* steps than
+     it can prove. */
+  const total = Math.max(ran, run.planned);
+  return {
+    head: run.completed ? "It ran every step, and was still refused." : `It stopped part-way: ${ran} of ${total} steps ran.`,
+    body:
+      "Each step below is a command that exited, with the gate's own verdict. A step that ran is not the same as a change to the box — read the verdicts before repeating this, because a second press runs the earlier steps again.",
+  };
+}
+
+/** How a step ended, in a word a person can scan a list by. */
+const STEP_MARK: Record<StepReading["status"], string> = {
+  passed: "passed",
+  failed: "STOPPED THE PLAN",
+  "failed-ignored": "failed, and was allowed to",
+  /* A word this build does not know. Named rather than dropped or guessed: the
+     step whose status we cannot read is the one worth looking at. */
+  unrecognised: "the server used a word this page does not know",
+};
+
+/** The steps the server said it ran, in order, with the gate's verdict on each. */
+function PlanRunCard({ run }: { run: PlanRunReading }): ReactNode {
+  return (
+    <ol className="tw:mt-1 tw:space-y-1 tw:border-l tw:border-rule tw:pl-3 tw:text-[12px]">
+      {run.steps.map((step, i) => (
+        <li key={i} className="tw:break-words">
+          <Mono>{step.argv.join(" ")}</Mono>
+          <span className={cx("tw:px-1", step.status === "failed" ? "tw:font-medium tw:text-alarm-ink" : "tw:text-ink-faint")}>
+            — {STEP_MARK[step.status]}
+          </span>
+          <span className="tw:text-ink">{step.verdict}</span>
+          {step.tail === "" ? null : <div className="tw:text-ink-faint">{step.tail}</div>}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+/**
+ * **WHAT A FAILED ACTION MAY BE SAID TO HAVE DONE**, which is three sentences
+ * and used to be one.
+ *
+ * "Nothing happened." went above every failure, `from: "client"` included —
+ * where the answer never came back and the request may perfectly well have
+ * deleted a worktree or killed thirty processes. It is the most expensive
+ * sentence on this page, because a person who reads it presses the button
+ * again, and none of these actions can be taken back. **It is gone**: no
+ * reading available here supports it, `none` included. See `none` below.
+ *
+ * A `Record` over the closed union, so a fifth arm of `DeliveryReading` fails
+ * the build here rather than quietly taking the last branch — the same shape,
+ * and the same reasoning, as `DELIVERY_HEADLINE` in SessionDetail.tsx.
+ *
+ * **The words differ from that one's on purpose and it is not a twin.** There
+ * the subject is keystrokes going into an input box, and the advice is about a
+ * retry appending to half-typed text. Here the subject is an action — a queue
+ * gesture, a worktree removal, a kill — and there is nothing to append to, so
+ * the advice is that a repeat is a fresh act rather than an addition. The TYPE
+ * and the PARSE are shared, which is the part a second copy would rot.
+ */
+const ACTION_DELIVERY_COPY: Record<DeliveryReading["kind"], { head: string; body: string | null }> = {
+  /**
+   * **THIS ARM SPEAKS FOR KEYSTROKES AND MAY NEVER SPEAK FOR THE ACTION.**
+   *
+   * `Delivery` is minted by `fire()` in steer.ts and means one thing: what
+   * became of a sequence of `tmux send-keys` calls. `none` says none of them
+   * left this box. It says nothing whatever about a queue, a worktree or a
+   * process — an action can be refused after its effect has already run, and a
+   * route can state `none` about the keystroke half of a request that did
+   * plenty besides.
+   *
+   * **It is also unreachable on this path today.** No `ok: false` body in
+   * routes-actions.ts carries a `delivery` at all, so every action failure
+   * lands on `not-told`; the fixtures below it in the tests are the only thing
+   * that reaches these words. An unreachable arm making the strongest claim on
+   * the page is the worst combination available, and that is what it was.
+   *
+   * **Do not widen this back out.** Whole-action effect is a different fact,
+   * and it now has its own contract rather than borrowing this one: Stage 3 of
+   * docs/plans/260908j put `run` on a `plan-failed` refusal and `effect` on a
+   * box answer, and `planHeadline` above is what speaks for them. This heading
+   * still describes keystrokes only, and there is still no keystroke on any
+   * `ok: false` body this file's routes send — so the arm remains unreachable
+   * and its claim remains the narrow one.
+   */
+  none: {
+    head: "No keystrokes went out.",
+    body:
+      "That is the whole of what the server said, and it is only about keystrokes: it does not say whether the rest of the action took effect. Read its own words below before repeating it.",
+  },
+  /**
+   * **"AND THE REST DID NOT" WAS FALSE**, and it contradicted the sentence
+   * printed directly beneath it.
+   *
+   * `fire()` reaches `partial` down two roads and only one of them knows the
+   * remainder failed. Its own `why` says "Part of the sequence arrived and the
+   * rest cannot be accounted for" when `mayHaveLanded(e)`, and "and the rest
+   * did not" only when it does not. So the card may assert the first clause —
+   * some of it definitely happened — and must not assert the second.
+   *
+   * The old retry sentence was keystroke reasoning too ("acts again on whatever
+   * the first one already did"), which is true of typing into a box and false
+   * of a kill or a worktree removal: those do not accumulate, they simply
+   * happen again.
+   */
+  partial: {
+    head: "PART of it took effect.",
+    body:
+      "Some of it definitely happened and the sequence did not finish. The rest may or may not have happened as well; nothing here can tell you which. Look before repeating it — a second press is a NEW action, not a repair of the first, and neither can be undone from here.",
+  },
+  unknown: CANNOT_TELL,
+  "not-told": CANNOT_TELL,
+};
+
+/**
+ * **ONE SENTENCE PER STATE, RATHER THAN A COUNT OF THINGS THAT WENT OUT.**
+ *
+ * The words are the server's (`BroadcastRecipientOutcome` and
+ * `KillObservation` in wire.ts) and the sentences are the ones a person acts
+ * on. `keys submitted` is the ceiling on the delivery half — nothing here
+ * observed a reader — and `signal accepted` is the ceiling on the kill half:
+ * nothing re-read the process table, so no word below says a process died.
+ *
+ * A plain `Record` over strings rather than the closed unions, because
+ * `StateCount.state` is a string on purpose: a word this build has not heard of
+ * is counted and rendered verbatim rather than dropped, and dropping it would
+ * hide exactly the rows that had changed.
+ */
+const BOX_STATE_COPY: Record<string, string> = {
+  "would-send": "would be told",
+  "keys-submitted": "keys submitted — nothing here saw them read",
+  partial: "PART of the message went, and the rest is unaccounted for",
+  "outcome-unknown": "may or may not have landed",
+  "refused-before-effect": "refused, with nothing sent",
+  held: "not at a prompt, so nothing was sent",
+  blocked: "cannot be typed into, so nothing was sent",
+  "not-reached": "ran out of time before this one",
+  "signal-accepted": "signal accepted — not proof the process is gone",
+  "signal-refused": "no such process, or not ours to signal",
+  "not-established": "the kill could not be run, so nothing is established",
+  "not-attempted": "never signalled: the plan stopped first",
+  unstated: "the server gave no state for this one",
+};
+
+/**
+ * The per-recipient / per-pid counts, and the heading that replaces "Done."
+ *
+ * **"Done." OVER A BROADCAST THAT HALF-LANDED IS THE DEFECT.** The old card
+ * decided its heading from `dryRun` alone, so a fan-out where six of
+ * thirty-six sessions were left holding half a message read exactly like one
+ * where all thirty-six went out — the counts were in `RawValue` underneath,
+ * where a list of thirty-six objects looks the same either way. Same for a
+ * kill: `killed: [5001, 5002]` under the word "Done.".
+ *
+ * So the heading is a ratio and never a verdict, and `Done.` survives only for
+ * an answer that carried no effect report at all.
+ */
+function BoxEffectSummary({ effect }: { effect: BoxEffectReading }): ReactNode {
+  return (
+    <>
+      <ul className="tw:mt-1 tw:space-y-0.5 tw:text-[12px]">
+        {effect.states.map((s) => (
+          <li key={s.state} className="tw:break-words tw:text-ink">
+            <span className="tw:font-medium">{s.count}</span> <Mono>{s.state}</Mono>
+            <span className="tw:text-ink-soft"> — {BOX_STATE_COPY[s.state] ?? "this page does not know that word"}</span>
+          </li>
+        ))}
+      </ul>
+      {effect.kind === "kill" && !effect.planCompleted ? (
+        <p className="tw:mt-1 tw:font-medium tw:text-alarm-ink">
+          The plan stopped before the end, so the pids after it were never signalled at all.
+        </p>
+      ) : null}
+    </>
+  );
+}
+
+/**
+ * The ratio a box answer may be headed with, or null when it carried no effect
+ * report.
+ *
+ * Exported so a test can drive it with the bytes a real handler produced. The
+ * card itself is only reachable after two clicks in a DOM, and the assertion
+ * that matters — *these two answers must not get the same heading* — is about
+ * this function.
+ */
+export function effectHeadline(effect: BoxEffectReading | null): string | null {
+  if (effect === null) return null;
+  const of = (state: string): number => effect.states.find((s) => s.state === state)?.count ?? 0;
+  if (effect.kind === "broadcast") {
+    const would = of("would-send");
+    if (would > 0) return `It would go to ${would} of ${effect.recipients} rows.`;
+    return `Keys submitted to ${of("keys-submitted")} of ${effect.recipients} rows.`;
+  }
+  return `Signal accepted for ${of("signal-accepted")} of ${effect.attempted} pids.`;
+}
+
 export function ActionOutcomeCard({ outcome, onRefresh }: { outcome: ActionOutcome; onRefresh: () => void }): ReactNode {
   if (outcome.ok) {
     const { head, body } = successCopy(outcome);
@@ -226,11 +480,18 @@ export function ActionOutcomeCard({ outcome, onRefresh }: { outcome: ActionOutco
       </div>
     );
   }
+  /* THE SERVER'S OWN ACCOUNT WINS OVER THIS PAGE'S UNCERTAINTY. When the body
+     described a run, saying *this page cannot tell* is false — it can, because
+     it was told. `ACTION_DELIVERY_COPY` speaks for the refusals that carry
+     nothing but a code. */
+  const said = outcome.run === null ? ACTION_DELIVERY_COPY[outcome.delivery.kind] : planHeadline(outcome.run);
   return (
     <div className="tw:mt-2 tw:rounded-lg tw:border tw:border-alarm/40 tw:bg-alarm-wash tw:p-3 tw:text-[13px]">
-      <p className="tw:font-medium tw:text-alarm-ink">Nothing happened.</p>
+      <p className="tw:font-medium tw:text-alarm-ink">{said.head}</p>
+      {said.body === null ? null : <p className="tw:mt-1 tw:font-medium tw:text-alarm-ink">{said.body}</p>}
       {/* Verbatim. Every word of this is the server's. */}
       <p className="tw:mt-1 tw:break-words tw:text-ink">{outcome.why}</p>
+      {outcome.run === null ? null : <PlanRunCard run={outcome.run} />}
       <p className="tw:mt-1 tw:text-[12px] tw:text-ink-faint">
         <Mono>{outcome.code}</Mono>
         {outcome.status === null ? null : (
@@ -1377,9 +1638,15 @@ export function BoxActions({
                     <Mono>gjd-remote</Mono> can still do it.
                   </p>
                 ) : (
-                  <div className="tw:mt-1">
-                    <RawValue value={preview.result} depth={0} />
-                  </div>
+                  <>
+                    {/* The same counts as the answer card, so the two read
+                        alike and the promise can be compared with the receipt
+                        row for row. */}
+                    {preview.effect === null ? null : <BoxEffectSummary effect={preview.effect} />}
+                    <div className="tw:mt-1">
+                      <RawValue value={preview.result} depth={0} />
+                    </div>
+                  </>
                 )}
               </>
             ) : (
@@ -1441,9 +1708,31 @@ export function BoxActions({
             same defect § Stage v0.5f names for "Queued." over a cancel. The
             answer's own `dryRun` decides; a server that did not say gets the
             heading that does not know.
+
+            **AND SO IS "Nothing happened."**, which is the failure half of the
+            same rule and was exempt from it until 2026-09-08. This is the panel
+            with `kill` on it: a second tap whose reply never came back may have
+            ended thirty processes, and the page said the opposite. The sentence
+            is now gone from every arm — `ACTION_DELIVERY_COPY`, above, and its
+            comments say why no reading here can support it.
+          */}
+          {/*
+            **AND "Done." IS A CLAIM ABOUT EVERY RECIPIENT AND EVERY PID**,
+            which is the third of these. `effectHeadline` turns the answer's own
+            per-row states into a ratio, so a fan-out that reached three of five
+            cannot be headed with the same word as one that reached five. Plain
+            "Done." survives only for an answer that carried no effect report.
           */}
           <p className={cx("tw:font-medium", done.ok ? "tw:text-work-ink" : "tw:text-alarm-ink")}>
-            {!done.ok ? "Nothing happened." : !done.dryRunStated ? "The server answered." : done.dryRun ? "Nothing was done." : "Done."}
+            {!done.ok
+              ? done.run === null
+                ? ACTION_DELIVERY_COPY[done.delivery.kind].head
+                : planHeadline(done.run).head
+              : !done.dryRunStated
+                ? "The server answered."
+                : done.dryRun
+                  ? "Nothing was done."
+                  : (effectHeadline(done.effect) ?? "Done.")}
           </p>
           {done.ok ? (
             <>
@@ -1457,6 +1746,10 @@ export function BoxActions({
                 </p>
               ) : null}
               {done.why === null ? null : <p className="tw:mt-1 tw:break-words tw:text-ink">{done.why}</p>}
+              {/* THE COUNTS ABOVE THE DUMP, not instead of it: `RawValue` still
+                  draws every field the server sent, including the ones this
+                  page has no schema for. */}
+              {done.effect === null ? null : <BoxEffectSummary effect={done.effect} />}
               {done.result === null || done.result === undefined ? (
                 <p className="tw:mt-1 tw:text-ink-soft">It said nothing about what it touched.</p>
               ) : (
@@ -1471,9 +1764,27 @@ export function BoxActions({
             </>
           ) : (
             <>
+              {(done.run === null ? ACTION_DELIVERY_COPY[done.delivery.kind].body : planHeadline(done.run).body) === null ? null : (
+                <p className="tw:mt-1 tw:font-medium tw:text-alarm-ink">
+                  {done.run === null ? ACTION_DELIVERY_COPY[done.delivery.kind].body : planHeadline(done.run).body}
+                </p>
+              )}
               <p className="tw:mt-1 tw:break-words tw:text-ink">{done.why}</p>
+              {done.run === null ? null : <PlanRunCard run={done.run} />}
+              {/* THE STATUS BELONGS HERE TOO. The session card has always shown
+                  it and this one did not, and the difference matters now that
+                  `unknown` and `not-told` share one heading: this line is where
+                  a person finds out which situation they are in. "HTTP 500,
+                  said by this browser" is an answer that came back unreadable;
+                  no status at all is a request whose answer never came. */}
               <p className="tw:mt-1 tw:text-[12px] tw:text-ink-faint">
                 <Mono>{done.code}</Mono>
+                {done.status === null ? null : (
+                  <>
+                    <span className="tw:px-1">·</span>
+                    <Mono>{`HTTP ${done.status}`}</Mono>
+                  </>
+                )}
                 <span className="tw:px-1">·</span>
                 {done.from === "server" ? "said by the dashboard server" : "said by this browser"}
               </p>

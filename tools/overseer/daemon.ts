@@ -59,9 +59,10 @@ import type { AttentionList, StoredUsage, UsageReport } from "../fleet/wire.js";
 import { chooseUsage } from "./usage-carry.js";
 import { admissible, type AdmissibleSnapshot } from "./admissible.js";
 import { baselineOf, diff, sessionKey, type Baseline, type OverseerEvent, type SessionIdentity } from "./diff.js";
-import type { AuthorisedJob } from "./jobs.js";
+import type { AuthorisedJob, SpawnJob } from "./jobs.js";
 import { conditionTracker, describeNote, openNoteLog, type DaemonNote } from "./notes.js";
-import { describeReport, schedulerTick, type LostRecord, type SpawnJob } from "./scheduler.js";
+import type { ProposingRuleWork } from "./rule-protocol.js";
+import { describeReport, schedulerTick, type LostRecord, type RuleRun } from "./scheduler.js";
 import { parseAttempt, parseObservation, type JsonValue, type ObservedAttemptClock, type ObservedRow } from "./observation.js";
 import { fleetSource, type SourceMessage, type SourceOptions, type Transport } from "./source.js";
 import {
@@ -345,7 +346,38 @@ export type DaemonOptions = {
    * overdue one is reported rather than skipped. The attention and usage guards
    * are deliberately left exactly as they were: they belong to another stage.
    */
-  jobs?: { intervalMs?: number; definitions: readonly AuthorisedJob[]; spawn: SpawnJob };
+  jobs?: {
+    intervalMs?: number;
+    definitions: readonly AuthorisedJob[];
+    /**
+     * **ABSENT IS THE DETERMINISTIC-ONLY ARMING.** A daemon given no spawner
+     * holds no capability to start a Claude session, so a session job meets a
+     * refusal rather than a dispatch — GPT Sol's SP-4, and `scheduler.ts`
+     * § `TickInput.spawn` says why that is a capability rather than a filter.
+     */
+    spawn?: SpawnJob;
+    /**
+     * **LOOKING, and only looking, for a deterministic rule.** Absent means a
+     * rule job is refused, the same way and for the same reason a session job
+     * is refused with no spawner.
+     *
+     * There is deliberately no option here for an ACTOR. `scheduler.ts` takes
+     * one (`TickInput.acting`) and this file does not pass one, so no daemon
+     * this codebase can build holds the capability to act on a proposal — GPT
+     * Sol's SC-2. Stage 3d adds the option, together with the durable rule-run
+     * index that acting needs.
+     */
+    rules?: ProposingRuleWork;
+    /**
+     * How long a shutdown waits for rule runs still in flight, before giving up
+     * on them **loudly**. Defaults to `RULE_SETTLE_GRACE_MS`.
+     *
+     * A bound rather than an unconditional await: a hung observer must not turn
+     * into a daemon that cannot be restarted, which is a worse failure than the
+     * lost settlement this wait exists to prevent.
+     */
+    settleGraceMs?: number;
+  };
   /**
    * WHAT TO SAY ABOUT THE SCHEDULER on the status page — the job ids, and any
    * whose definition no longer matches its pin.
@@ -405,6 +437,22 @@ export const USAGE_INTERVAL_MS = 300_000;
  * Overseer from a quiet one. Astra's A17, the same argument the usage scan makes.
  */
 export const JOBS_INTERVAL_MS = 30_000;
+
+/**
+ * **Fifteen seconds.** How long a shutdown waits for rule runs still in flight.
+ *
+ * Sized off the thing being waited for: a rule is one HTTP call to the dashboard
+ * with a ten-second timeout of its own (`rule-work.ts` § OBSERVE_TIMEOUT_MS) and
+ * some arithmetic, so anything past that is not going to answer. It is
+ * deliberately far short of the two-minute rule lease — the lease is how long a
+ * run may be UNSETTLED before another may start, and this is how long a stop may
+ * be DELAYED, which are different questions with different costs.
+ *
+ * There is a bound at all because `Restart=always` means the box gets its
+ * Overseer back only when the old one lets go. A hung observer must cost a
+ * written-down abandoned run, never a daemon that will not die.
+ */
+export const RULE_SETTLE_GRACE_MS = 15_000;
 
 export type DaemonOutcome =
   | { kind: "refused"; refusal: StoreRefusal }
@@ -690,13 +738,18 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
   /*
    * The scheduler, on its own timer.
    *
-   * NO IN-MEMORY GUARD AROUND IT, and that absence is the design rather than an
-   * omission. `schedulerTick` is synchronous: it appends, spawns, appends, and
-   * returns — it does not await the work, so there is no promise to hold and
-   * nothing to leave non-null. Overlap is prevented by the LEASE the tick reads
-   * out of the store, which a restart survives and which releases on its own
-   * deadline. That pair of properties is exactly what `attentionRunning` lacks,
-   * and adding a guard here "for symmetry" would put the bug back.
+   * NO IN-MEMORY OVERLAP GUARD AROUND IT, and that absence is the design rather
+   * than an omission. `schedulerTick` is synchronous: it appends, spawns,
+   * appends, and returns without awaiting the work. Overlap is prevented by the
+   * LEASE the tick reads out of the store, which a restart survives and which
+   * releases on its own deadline. That pair of properties is exactly what
+   * `attentionRunning` lacks, and adding a guard here "for symmetry" would put
+   * the bug back.
+   *
+   * `ruleRuns` below is NOT that guard and must not become it: nothing consults
+   * it before dispatching, it empties itself as runs settle, and its only reader
+   * is the shutdown path. A promise held to decide whether to start something is
+   * the trap; a promise held to know what to wait for is not.
    *
    * Every report is written down, including the boring ones, at two volumes: a
    * line in the log for all of them, and a durable `daemon.jsonl` note for the
@@ -725,6 +778,34 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
       why: lost.why,
     });
   };
+  /**
+   * THE RULE RUNS THIS PROCESS IS IN THE MIDDLE OF.
+   *
+   * A rule is not a child: it runs inside the daemon, so a shutdown that only
+   * cleared the timer released the store's lock with `observe` still in flight,
+   * and both `rule-settled` and `job-occurrence-finished` were then appended to a
+   * closed store and lost — leaving a `started` occurrence with no ending, which
+   * the next boot correctly reads as a run nobody can account for. GPT Sol's
+   * SC-1, the live half. Nothing acts yet, so nothing is dangerous; what it
+   * manufactures is exactly the noise the occurrence ledger exists to make
+   * meaningful.
+   *
+   * A `Set` rather than a counter, because giving up has to name the runs it
+   * gave up on. Each entry removes itself when it settles, so this is empty on
+   * an ordinary shutdown.
+   */
+  const ruleRuns = new Set<RuleRun>();
+  const trackRuleRun = (run: RuleRun): void => {
+    ruleRuns.add(run);
+    // `settled` does not reject — every failure inside it is already a record or
+    // an `onLostRecord` — but the handler is defensive rather than trusting,
+    // because a promise removed from this set on success only would leave a
+    // shutdown waiting on a run that is over.
+    void run.settled.then(
+      () => ruleRuns.delete(run),
+      () => ruleRuns.delete(run),
+    );
+  };
   const jobsTicker =
     jobOptions === undefined
       ? null
@@ -734,10 +815,12 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
             definitions: jobOptions.definitions,
             store,
             spawn: jobOptions.spawn,
+            rules: jobOptions.rules,
             now,
             // The completion append lands after the tick has returned, so its
             // failure cannot reach the reports above. This is where it goes.
             onLostRecord: recordLost,
+            onRuleRun: trackRuleRun,
           })) {
             log(describeReport(report));
             if (report.kind === "stuck" || report.kind === "unaccounted") {
@@ -762,19 +845,60 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
   jobsTicker?.unref?.();
 
   /**
-   * Wait for a pass in flight, if there is one.
+   * Wait for everything this PROCESS is in the middle of — the two passes, and
+   * the rule runs.
    *
-   * A function rather than an inline check because the assignment happens inside
-   * an interval callback, which the compiler cannot see from a `catch`; and
+   * A function rather than an inline check because the assignments happen inside
+   * interval callbacks, which the compiler cannot see from a `catch`; and
    * `catch(() => {})` because a pass that threw has already published its own
    * `unknown` and must not replace the error we are on our way out with.
+   *
+   * It was called `settlePasses` and covered only the two passes, which is how
+   * SC-1's live half got in: a rule run is in-process too, and a name that said
+   * "passes" made it easy to believe there was nothing else to wait for.
    */
-  async function settlePasses(): Promise<void> {
+  async function settleInFlight(): Promise<void> {
     // BOTH passes, and the usage one matters more rather than less: it holds a
     // file handle open across ~2.9 GB of reads, so it is the likelier of the two
     // to still be running when a signal arrives.
     for (const inFlight of [attentionRunning, usageRunning]) {
       if (inFlight !== null) await inFlight.catch(() => {});
+    }
+    await settleRuleRuns();
+  }
+
+  /**
+   * Wait for the rule runs in flight — BOUNDED, and the bound is loud.
+   *
+   * Unbounded would trade a lost settlement for a daemon that cannot be
+   * restarted, which is the worse of the two: `Restart=always` means the box
+   * gets its Overseer back only when this returns. So the wait has a deadline,
+   * and **the deadline is an outcome rather than a give-up**: every run still
+   * unsettled gets the same durable `job-record-lost` note a failed completion
+   * append gets, because from the ledger's point of view it is the same fact —
+   * the run's ending was not written down, and something has to say why.
+   */
+  async function settleRuleRuns(): Promise<void> {
+    if (ruleRuns.size === 0) return;
+    const graceMs = jobOptions?.settleGraceMs ?? RULE_SETTLE_GRACE_MS;
+    const waiting = [...ruleRuns];
+    const raced = await Promise.race([
+      Promise.allSettled(waiting.map((run) => run.settled)).then(() => "settled" as const),
+      new Promise<"gave-up">((resolve) => {
+        const timer = setTimeout(() => resolve("gave-up"), graceMs);
+        timer.unref?.();
+      }),
+    ]);
+    if (raced === "settled") return;
+    // WHATEVER IS STILL IN THE SET, read now rather than from `waiting`: some of
+    // them will have settled while we waited, and naming those would be a lie in
+    // the direction that costs the most — a note about a run that is fine.
+    for (const run of ruleRuns) {
+      const why =
+        `this rule run was still running when the daemon stopped and did not settle within ${graceMs}ms, ` +
+        "so its ending was not written down and the next instance will read the occurrence as unaccounted for";
+      log(`job ${run.jobId}: ABANDONED — ${run.occurrenceId} ${why}`);
+      recordLost({ jobId: run.jobId, occurrenceId: run.occurrenceId, fact: "finished", why });
     }
   }
 
@@ -835,18 +959,20 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     // store's lock with a paid call still in flight and a runner about to write
     // `attention.json`. The exceptional path is exactly when a second daemon is
     // most likely to be started, so it is the wrong one to leave open.
-    await settlePasses();
+    await settleInFlight();
     stopHere(`the daemon threw: ${cause instanceof Error ? cause.message : String(cause)}`);
     throw cause;
   } finally {
     clearInterval(ticker);
     if (attentionTicker !== null) clearInterval(attentionTicker);
     if (usageTicker !== null) clearInterval(usageTicker);
-    // NOT AWAITED, unlike the two passes, because there is nothing to await: a
-    // dispatched job is a separate process with a durable reservation behind it,
-    // so a shutdown mid-run leaves a record rather than a second writer. What it
-    // does leave is an occurrence that may not get its `finished` — which is the
-    // lease's case, and the next daemon reports it.
+    // CLEARING THE TIMER STOPS THE NEXT DISPATCH AND NOTHING ELSE, and what that
+    // leaves behind is two different things wearing one word. A dispatched
+    // SESSION is a separate process with a durable reservation behind it, so a
+    // shutdown mid-run leaves a record rather than a second writer; it may not
+    // get its `finished`, which is the lease's case and the next daemon reports
+    // it. A dispatched RULE runs in here, and this comment used to cover it too
+    // — GPT Sol's SC-1. Those are awaited, bounded, in `settleRuleRuns`.
     if (jobsTicker !== null) clearInterval(jobsTicker);
   }
 
@@ -984,7 +1110,7 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
   // straight afterwards — the `Restart=always` case, which is the normal one —
   // could be writing that file at the same moment. The write is atomic now,
   // which stops it tearing; this stops the second writer existing at all.
-  await settlePasses();
+  await settleInFlight();
 
   const final = halted();
   const why =
