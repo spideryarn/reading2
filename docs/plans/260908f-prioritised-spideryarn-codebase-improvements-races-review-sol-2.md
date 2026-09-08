@@ -21,3 +21,11 @@
    typed refusal if a hook guard is added; the postmortem lines 65–66 records why.
 
 No repository files were changed.
+
+
+## Author's landing record
+
+The plan, evidence and review artifacts were committed together in
+`2d12f5fda18b284e27238ec280b294503d3db0d4`. This identifies the resulting candidate,
+including author corrections after review; it does not imply this reviewer independently
+checked every final byte. The plan's review ledger records the findings and their disposition.

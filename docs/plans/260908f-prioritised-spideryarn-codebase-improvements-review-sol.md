@@ -92,3 +92,10 @@ Checked: client opening reads, mode boundaries and activation, glossary/chat han
 Skipped as directed: orchestrator/fleet, production data and services, paid inference, browser/runtime verification, full-suite execution, and claims of measured product benefit.
 
 Validation run against the reviewed bytes: `npx vitest run --project unit tests/doc-links.test.ts` — 1 file, 14 tests passed.
+
+## Author's landing record
+
+The plan, evidence and review artifacts were committed together in
+`2d12f5fda18b284e27238ec280b294503d3db0d4`. This identifies the resulting candidate,
+including author corrections after review; it does not imply this reviewer independently
+checked every final byte. The plan's review ledger records the findings and their disposition.
