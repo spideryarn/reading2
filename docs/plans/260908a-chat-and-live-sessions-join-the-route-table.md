@@ -124,8 +124,9 @@ requires frames and stored rows, so a dropped `await` there is already red. Chec
 
 ## Stage 2 — the move
 
-The recipe is 260907e § *Stage 2 — the move*, with the script at
-`scratchpad/e4f7-capture-referee.mjs` re-pointed at these twelve guards, plus one addition.
+The recipe is 260907e § *Stage 2 — the move*, with the capture/normalise script — now kept beside
+that doc as [260907e-capture-referee.mjs.txt](260907e-capture-referee.mjs.txt) rather than in a
+scratchpad — re-pointed at these twelve guards, plus one addition.
 
 **The addition: the return-count rail.** Sol corrected both sessions' model of the `return;` hazard
 on 2026-09-07 — a *retained* early return is harmless, because `dispatchAuthRoute` returns `true`
@@ -202,7 +203,7 @@ prefix that 260907e § *the genuinely cheap one* says is available when a namesp
 is available here.
 
 **Q3, first half — the rail fires on `chat` GET and on nothing else in this block.** Measured with
-`scratchpad/e4f7-count-returns.mjs`, which cuts each guard's body out of the chain, blanks comments
+[260908a-count-returns.mjs.txt](260908a-count-returns.mjs.txt), kept beside this doc, which cuts each guard's body out of the chain, blanks comments
 and string bodies, and counts `return` tokens at the guard's own function scope (returns inside
 nested arrows excluded by tracking the depths at which a `=>` opened a block):
 
@@ -263,6 +264,45 @@ result is only ever searched for a prefix, so `\w` becoming `w` is harmless.
   which is `/api/comments`.
 
 This is [silent-success.md](../reusable/silent-success.md) in its purest form: a check that agreed
-with the code because it shared an assumption with it, green for two whole slices. It is also the
-reason the two sessions talking to each other has been worth more than either of them working
-faster.
+with the code because it shared an assumption with it, green for two whole slices.
+
+**The reproducible part is the loop, not either session.** Neither of tonight's two real findings was
+anybody's hunch. 260907b asked Sol the sharper *"once, not per domain"* question because 260907e had
+challenged a settled-sounding claim of theirs; 260907b went to read the `moved` list because 260907e
+had asked which prefixes chat spans, and noticed the escaping on the way. Written down as *one agent
+had good instincts*, that teaches nothing. Written down as *ask a peer to check the claim you are
+about to hand a reviewer*, it generalises — which is the form the next sweep can actually use.
+
+## The queue after this slice, and the fact about it nobody had stated
+
+`comments` (6 guards) is next, and 260907b — the session that took `searches`, stopping after its
+leftover-filter fix lands — made the observation that turns a per-slice discovery into a fact about
+the queue:
+
+> two slices in a row that need [a red-first oracle] is worth knowing when you plan the queue rather
+> than discovering per slice
+>
+> — 260907b, 2026-09-08
+
+Sol found **four** domains that would not redden on a dropped `await`. One was inside this slice.
+**Three are still ahead of us**, and they are not evenly spread through the queue — they are
+clustered in the next three slices:
+
+| Slice | The gap | Today's only coverage |
+|---|---|---|
+| `chat` (this one) | `DELETE /api/chat/:slug/:threadId` holds `inTurnOrder` | none server-side |
+| `comments` | `POST /api/comments/:slug/:id/answer` — SSE plus the `answering` registry | a pre-stream 409 at `tests/routes.test.ts:1400` |
+| `sketch/…/similar/projection` | paid single-flight in `INFLIGHT`, linked by `return withSpendAttribution(…)` rather than `await`, so the mutation is `return` → `void` | — |
+| `article` and friends | `GET /api/link-summary` — SSE plus a database single-flight claim | — |
+
+So the right expectation for the next three slices is **one Stage 1 oracle each**, not "the referee
+slice paid for the instrument once". The thing that was paid once is the *method*; the oracles are
+per-gap, and the gaps were there before the migration started. That is worth restating because it is
+the one place where "once, not per domain" is easy to over-read.
+
+**The script the rail runs on is kept beside this doc as
+[260908a-count-returns.mjs.txt](260908a-count-returns.mjs.txt)** rather than in a scratchpad, because
+a scratch path is unreadable tomorrow and gone on the next machine — the same reason
+[review-prompt-template.md](../reusable/review-prompt-template.md) refuses one as evidence. Copy it
+out, change the `GUARDS` list, run it against `src/routes.ts`. What it deliberately excludes is
+returns inside nested arrow functions, which belong to those functions and not to the guard.

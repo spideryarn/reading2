@@ -347,7 +347,11 @@ artefact rather than a claim. I do the same:
 
 - the eight handler bodies are extracted and **normalised** — the permitted substitutions applied,
   whitespace collapsed — **before** the move and again after, and diffed. The diff is empty or the
-  move is not pure. Both captures and the diff go in the commit message.
+  move is not pure. Both captures and the diff go in the commit message. **The script that does it is
+  [260907e-capture-referee.mjs.txt](260907e-capture-referee.mjs.txt)**, kept beside this doc rather
+  than in a session scratchpad, which is unreadable tomorrow and gone on the next machine. It was in
+  a scratchpad for the whole of this slice, so the evidence in this section was, until 2026-09-08,
+  not reproducible by anybody but the session that produced it.
 - `EXPECTED_AUTH_ROUTES` in the contract test is shown unchanged **except** for the eight appended
   rows, so the test is not edited into agreeing with the arrangement it is supposed to bless — the
   specific failure Sol names.
