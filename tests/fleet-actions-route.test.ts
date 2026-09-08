@@ -17,11 +17,14 @@
  */
 import { PassThrough } from "node:stream";
 
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { actionById, renderBroadcast, staggerMinutes, type BroadcastAction, type ProcRecord, type Step } from "../tools/fleet/actions.js";
 import {
   judgeStep,
+  killReport,
   makeActionRoutes,
   mergeProcs,
   parsePsArgs,
@@ -32,7 +35,11 @@ import {
   type StepRun,
 } from "../tools/fleet/routes-actions.js";
 import { createRateLimiter } from "../tools/fleet/routes-steer.js";
-import { makeActionsApi } from "../tools/fleet/web/src/actions-client";
+/* THE REAL CARD, rendered to a string rather than into a DOM, so the route,
+   the client parse and the component a person actually reads can meet in one
+   test without this node-lane file acquiring jsdom. */
+import { ActionOutcomeCard, effectHeadline } from "../tools/fleet/web/src/ActionButtons";
+import { makeActionsApi, type ActionsApi } from "../tools/fleet/web/src/actions-client";
 import { SteeringQueue } from "../tools/fleet/queue.js";
 import type { FleetStatus } from "../tools/fleet/status.js";
 import type { SteerResult, SteerTarget } from "../tools/fleet/steer.js";
@@ -1327,7 +1334,9 @@ describe("POST /api/actions/box — killing", () => {
       fakeReq({ url: "/api/actions/box", body: { actionId: "kill-test-suites", mode: "run", confirm: true, pids: [5001, 5002] } }),
     );
     expect(r.status).toBe(200);
-    expect(resultOf(r).killed).toEqual([5001]);
+    // The intersection is what got a step; what the step ESTABLISHED is the
+    // block below this describe.
+    expect((resultOf(r).kill as { attempted: number[] }).attempted).toEqual([5001]);
     expect(ran.map((x) => x.argv)).toEqual([["kill", "-TERM", "5001"]]);
     const skipped = resultOf(r).skipped as { pid: number; why: string }[];
     expect(skipped.map((s) => s.pid).sort()).toEqual([5002, 5005]);
@@ -1411,6 +1420,49 @@ describe("POST /api/actions/box — the staggered broadcast", () => {
     return { actionId: "resource-broadcast", mode: "run", confirm: true, speaker: "greg", recipients: five, ...over };
   }
 
+  /**
+   * **THE NEGATIVE CONTROL FOR THE `body()` ABOVE, AND IT IS NOT A HYPOTHETICAL
+   * REQUEST.**
+   *
+   * Every test in this block hands the route a body with `recipients` in it,
+   * hand-written here. `boxActionBody` — the only thing that builds this request
+   * in the browser — returns `{actionId, mode, confirm, speaker}` and nothing
+   * else (`web/src/actions-client.ts`), so the body the page actually sends is
+   * the one below and no test in this file had ever put it through the route.
+   * Both halves were right about their own object and had never met: the same
+   * shape as the `kill-test-suites` pair above, where the request the panel
+   * sends is refused by a rule every hand-written fixture satisfies.
+   *
+   * So this asserts the refusal rather than papering over it, for the same
+   * reason the kill one does: an honest 400 in the server's own words is the
+   * true state of this path today, and the repair — the panel carrying the rows
+   * it previewed into the confirmed request — belongs to the roadmap's Box
+   * contracts stage (finding E-actions), not here. Written at the Baseline
+   * stage, 2026-09-08, through `browserFetch` so it is the real serializer
+   * meeting the real route.
+   */
+  it("refuses the body the page really sends, because the browser carries no recipients", async () => {
+    const { routes, sent } = harness();
+    /* **`true`, BECAUSE THE FIRST PRESS IS THE DRY RUN.** `ActionButtons` calls
+       `api.box(action.id, true)` for the preview and only offers Confirm once
+       that came back — so on this path the confirmed request is unreachable, and
+       a test written against `false` would be checking a request no reader can
+       make. The route happens to check recipients before mode, so both spell
+       the same refusal; this one is the press that actually happens. Sol's
+       third P2, 2026-09-08. */
+    const preview = await makeActionsApi(browserFetch(routes)).box("resource-broadcast", true);
+    expect(preview.ok).toBe(false);
+    expect(preview.ok === false && preview.code).toBe("bad-request");
+    expect(preview.ok === false ? preview.why : "").toContain("a broadcast needs recipients");
+
+    // And the confirmed one, which the panel cannot reach because of the above.
+    const confirmed = await makeActionsApi(browserFetch(routes)).box("resource-broadcast", false);
+    expect(confirmed.ok).toBe(false);
+
+    // The point of a negative control: nothing was said to anybody, either time.
+    expect(sent).toEqual([]);
+  });
+
   it("staggers across the recipients it can actually speak to", async () => {
     const { routes, sent } = harness();
     const r = await call(routes, fakeReq({ url: "/api/actions/box", body: body() }));
@@ -1435,7 +1487,13 @@ describe("POST /api/actions/box — the staggered broadcast", () => {
     const { routes } = harness();
     const r = await call(routes, fakeReq({ url: "/api/actions/box", body: body() }));
     const rows = resultOf(r).recipients as { paneId: string; outcome: string; minutes: number | null; why: string | null }[];
-    expect(rows.map((x) => `${x.paneId}:${x.outcome}`)).toEqual(["%1:sent", "%2:held", "%3:sent", "%4:blocked", "%5:sent"]);
+    expect(rows.map((x) => `${x.paneId}:${x.outcome}`)).toEqual([
+      "%1:keys-submitted",
+      "%2:held",
+      "%3:keys-submitted",
+      "%4:blocked",
+      "%5:keys-submitted",
+    ]);
     expect(rows.find((x) => x.paneId === "%2")?.why).toContain("working");
     expect(rows.find((x) => x.paneId === "%4")?.minutes).toBe(null);
   });
@@ -1451,8 +1509,11 @@ describe("POST /api/actions/box — the staggered broadcast", () => {
     const r = await call(routes, fakeReq({ url: "/api/actions/box", body: body() }));
     expect(sent.map((s) => s.target.paneId)).toEqual(["%1", "%3", "%5"]);
     const rows = resultOf(r).recipients as { paneId: string; outcome: string; code: string | null }[];
-    expect(rows.find((x) => x.paneId === "%3")).toMatchObject({ outcome: "refused", code: "not-at-input" });
-    expect(rows.filter((x) => x.outcome === "sent").map((x) => x.paneId)).toEqual(["%1", "%5"]);
+    // `delivery: "none"` on the refusal, so this one is settled: no keystroke
+    // left the box for %3. The three fates that are NOT settled are the block
+    // at the end of this file.
+    expect(rows.find((x) => x.paneId === "%3")).toMatchObject({ outcome: "refused-before-effect", code: "not-at-input" });
+    expect(rows.filter((x) => x.outcome === "keys-submitted").map((x) => x.paneId)).toEqual(["%1", "%5"]);
   });
 
   it("previews without speaking, with the same minutes the send would use", async () => {
@@ -1695,5 +1756,449 @@ describe("reading the process table", () => {
     const rows = parsePsArgs(" 4242     1  91000    12345 node dev.js");
     const merged = mergeProcs(rows, new Map([[4242, "node"]]), () => "/home/greg/gone (deleted)");
     expect(merged.procs[0]?.cwd).toBe("/home/greg/gone (deleted)");
+  });
+});
+
+/* ================================================================== *
+ * Stage 3 of docs/plans/260908j: outcomes that do not claim more than
+ * the box actually established.
+ *
+ * **ALL THREE DEFECTS HAVE ONE SHAPE.** The producer knew several
+ * different things and the consumer wrote down one word — the Class B
+ * lossy join docs/postmortems/260908b is about. So every assertion
+ * below is of the form *these two situations must not read the same*,
+ * and each is driven through the real handler, because a fixture of a
+ * response is a claim about a producer that nothing checks against the
+ * producer.
+ * ================================================================== */
+
+/** Rendered markup, as a person reads it. */
+function strip(html: string): string {
+  return html.replace(/<[^>]+>/g, " ");
+}
+
+/**
+ * The server's OWN BYTES, replayed into the real client.
+ *
+ * `makeActionsApi` posts bodies the page posts, and the page never asks for a
+ * `mode: "run"` session action and never sends `recipients` — so `plan-failed`
+ * and a real broadcast cannot be reached by pointing the client at the route.
+ * Recording the real response and answering the client's request with it is the
+ * nearest honest thing: the producer is the handler and the parser is the
+ * shipped one, and only the transport between them is a stub. A hand-written
+ * body would be the twin-fixture failure this file's header is about.
+ */
+function replay(recorded: { status: number | null; body: string }): typeof fetch {
+  return (async () => new Response(recorded.body, { status: recorded.status ?? 500 })) as unknown as typeof fetch;
+}
+
+describe("a kill reports what it established, not what it intended", () => {
+  const suites = [
+    proc({ pid: 5001, comm: "node-MainThread", args: VITEST_ARGS }),
+    proc({ pid: 5002, comm: "node-MainThread", args: VITEST_ARGS }),
+    proc({ pid: 5003, comm: "node-MainThread", args: VITEST_ARGS }),
+  ];
+
+  function killBody(pids: number[]): Record<string, unknown> {
+    return { actionId: "kill-test-suites", mode: "run", confirm: true, pids };
+  }
+
+  it("separates the pids it meant to signal from the ones the signal reached", async () => {
+    /* `kill -TERM <pid>` is a `best-effort` step, so a pid that has already
+       gone — or one this uid may not signal — comes back non-zero and the plan
+       CARRIES ON. The route used to answer `killed: [5001, 5002, 5003]` for
+       exactly that run: the intended list, under a past-tense name, with the
+       step outcomes that contradicted it sitting in the same response. */
+    const { io } = fakeIo({
+      procs: suites,
+      step: (step) => (step.argv[2] === "5002" ? { ...OK_STEP, code: 1, stderr: "kill: (5002) - No such process" } : OK_STEP),
+    });
+    const { routes } = harness({ io });
+    const r = await call(routes, fakeReq({ url: "/api/actions/box", body: killBody([5001, 5002, 5003]) }));
+    expect(r.status).toBe(200);
+
+    const kill = resultOf(r).kill as { attempted: number[]; observed: { pid: number; observation: string }[]; planCompleted: boolean };
+    // ATTEMPTED is the intent, and it is allowed to name all three.
+    expect(kill.attempted).toEqual([5001, 5002, 5003]);
+    // OBSERVED is what came back, and it is not allowed to agree with it.
+    expect(kill.observed.map((o) => `${o.pid}:${o.observation}`)).toEqual([
+      "5001:signal-accepted",
+      "5002:signal-refused",
+      "5003:signal-accepted",
+    ]);
+    // And the collapsed field is gone rather than left beside its replacement,
+    // where a reader would find the reassuring one first.
+    expect(resultOf(r)).not.toHaveProperty("killed");
+  });
+
+  it("does not call a signal it could not send an unsuccessful kill", async () => {
+    /* Three different failures, and only one of them means "that process was
+       not there". A `kill` that could not be spawned, or that was killed for
+       taking too long, establishes NOTHING — the signal may have gone. */
+    const { io } = fakeIo({
+      procs: suites,
+      step: (step) =>
+        step.argv[2] === "5002"
+          ? { ...OK_STEP, code: null, spawnError: "spawn kill ENOENT" }
+          : step.argv[2] === "5003"
+            ? { ...OK_STEP, code: null, timedOut: true }
+            : OK_STEP,
+    });
+    const { routes } = harness({ io });
+    const r = await call(routes, fakeReq({ url: "/api/actions/box", body: killBody([5001, 5002, 5003]) }));
+    const kill = resultOf(r).kill as { observed: { pid: number; observation: string; why: string }[] };
+    expect(kill.observed.map((o) => o.observation)).toEqual(["signal-accepted", "not-established", "not-established"]);
+    // The step's own verdict, not a sentence written here.
+    expect(kill.observed[1]?.why).toContain("ENOENT");
+  });
+
+  it("names a pid the plan never got to as not attempted, and says the plan stopped", () => {
+    /* DRIVEN THROUGH `killReport` RATHER THAN THE ROUTE, and the reason is
+       worth writing down: every step of a kill plan is `best-effort`, so
+       `judgeStep` can only return `passed` or `failed-ignored` and `runPlan`
+       cannot currently return `completed: false` for a kill. The route has no
+       path to this state today. It is still the state the type allows and the
+       one that must never render as a completed kill, so it is tested against
+       the real reducer with the `PlanRun` a stricter plan would produce. */
+    const report = killReport([5001, 5002, 5003], {
+      action: "kill-test-suites",
+      planned: 3,
+      completed: false,
+      stoppedAt: 0,
+      steps: [
+        {
+          argv: ["kill", "-TERM", "5001"],
+          cwd: PRIMARY,
+          why: "",
+          status: "failed",
+          verdict: "it exited 1",
+          code: 1,
+          timedOut: false,
+          spawnError: null,
+          tail: "",
+        },
+      ],
+    });
+    expect(report.planCompleted).toBe(false);
+    expect(report.observed.map((o) => `${o.pid}:${o.observation}`)).toEqual([
+      "5001:signal-refused",
+      "5002:not-attempted",
+      "5003:not-attempted",
+    ]);
+  });
+
+  it("never says a process is dead, because nothing here looked", async () => {
+    /* An honest ceiling. `kill -TERM` exiting 0 proves the signal was
+       ACCEPTED; the process may ignore it, and nothing re-reads the process
+       table afterwards. So no word in this half of the response may be past
+       tense about the process itself. */
+    const { io } = fakeIo({ procs: suites });
+    const { routes } = harness({ io });
+    const r = await call(routes, fakeReq({ url: "/api/actions/box", body: killBody([5001]) }));
+    const words = JSON.stringify(resultOf(r).kill);
+    expect(words).not.toContain("killed");
+    expect(words).not.toContain("dead");
+    expect(words).toContain("signal-accepted");
+  });
+});
+
+describe("a broadcast keeps one delivery reading per recipient", () => {
+  const five = [
+    recipient({ paneId: "%1", sessionId: "$1" }),
+    recipient({ paneId: "%2", sessionId: "$2", status: { kind: "working" } }),
+    recipient({ paneId: "%3", sessionId: "$3" }),
+    recipient({ paneId: "%4", sessionId: "$4", status: { kind: "shell", busy: false } }),
+    recipient({ paneId: "%5", sessionId: "$5" }),
+  ];
+
+  function body(over: Record<string, unknown> = {}): Record<string, unknown> {
+    return { actionId: "resource-broadcast", mode: "run", confirm: true, speaker: "greg", recipients: five, ...over };
+  }
+
+  const failing = (delivery: "none" | "partial" | "unknown"): SteerResult => ({
+    ok: false,
+    reason: { code: "send-failed", why: `the tmux call stopped: ${delivery}` },
+    delivery,
+    sent: delivery === "none" ? [] : [["send-keys", "-t", "%3", "-l", "--", "…"]],
+  });
+
+  it("does not report a partial send as a refusal", async () => {
+    /* THE ONE THAT COSTS. `partial` means the literal text reached the pane
+       and the Enter did not, so that agent is sitting on half a message which
+       the next Enter anybody presses will submit. `refused` reads as "nothing
+       reached them", and it was the same word this route used for a send that
+       went nowhere at all. */
+    const { routes } = harness({ result: (t) => (t.paneId === "%3" ? failing("partial") : SENT_OK) });
+    const r = await call(routes, fakeReq({ url: "/api/actions/box", body: body() }));
+    const rows = resultOf(r).recipients as { paneId: string; outcome: string; code: string | null }[];
+    expect(rows.find((x) => x.paneId === "%3")?.outcome).toBe("partial");
+    expect(rows.find((x) => x.paneId === "%3")?.code).toBe("send-failed");
+    // And the three fates stay three words.
+    expect(rows.map((x) => `${x.paneId}:${x.outcome}`)).toEqual([
+      "%1:keys-submitted",
+      "%2:held",
+      "%3:partial",
+      "%4:blocked",
+      "%5:keys-submitted",
+    ]);
+  });
+
+  it("keeps `none` and `unknown` apart, and neither of them is `partial`", async () => {
+    const none = harness({ result: (t) => (t.paneId === "%3" ? failing("none") : SENT_OK) });
+    const a = await call(none.routes, fakeReq({ url: "/api/actions/box", body: body() }));
+    expect((resultOf(a).recipients as { paneId: string; outcome: string }[]).find((x) => x.paneId === "%3")?.outcome).toBe(
+      "refused-before-effect",
+    );
+
+    const unsure = harness({ result: (t) => (t.paneId === "%3" ? failing("unknown") : SENT_OK) });
+    const b = await call(unsure.routes, fakeReq({ url: "/api/actions/box", body: body() }));
+    expect((resultOf(b).recipients as { paneId: string; outcome: string }[]).find((x) => x.paneId === "%3")?.outcome).toBe(
+      "outcome-unknown",
+    );
+  });
+
+  it("reads a throw from the delivery module as unknown, never as a refusal", async () => {
+    /* A throw happens PARTWAY THROUGH a sequence of tmux calls and there is no
+       `Delivery` to read: the exception carries none. `refused` was the
+       reassuring reading of the one case with the least evidence behind it. */
+    const { routes } = harness({
+      result: (t) => {
+        if (t.paneId === "%3") throw new Error("execFileSync: EAGAIN");
+        return SENT_OK;
+      },
+    });
+    const r = await call(routes, fakeReq({ url: "/api/actions/box", body: body() }));
+    const row = (resultOf(r).recipients as { paneId: string; outcome: string; why: string }[]).find((x) => x.paneId === "%3");
+    expect(row?.outcome).toBe("outcome-unknown");
+    expect(row?.why).toContain("EAGAIN");
+  });
+
+  it("says `would-send` in a preview, so a plan cannot be read as a delivery", async () => {
+    const { routes, sent } = harness();
+    const r = await call(routes, fakeReq({ url: "/api/actions/box", body: body({ mode: "dry-run" }) }));
+    const rows = resultOf(r).recipients as { outcome: string }[];
+    expect(rows.filter((x) => x.outcome === "would-send")).toHaveLength(3);
+    expect(rows.map((x) => x.outcome)).not.toContain("keys-submitted");
+    expect(sent).toEqual([]);
+  });
+});
+
+describe("a refusal that carried a plan run reaches the card", () => {
+  const removeBody = (over: Record<string, unknown> = {}) =>
+    sessionBody({ actionId: "remove-worktree", confirm: true, worktreeDir: WORKTREE, branch: "worktree-fixture", ...over });
+
+  const ROW = {
+    id: "$99001",
+    paneId: "%99001",
+    claudeSessionId: CLAUDE_ID,
+    panePid: 424242,
+    status: { kind: "idle" as const },
+  } as unknown as Parameters<ActionsApi["run"]>[0];
+
+  const stoppingIo = () =>
+    fakeIo({
+      step: (_s, i) =>
+        i === 1 ? { ...OK_STEP, code: 1, stdout: "blocked: data/ has 3 files" } : { ...OK_STEP, stdout: "worktree-fixture\n" },
+    });
+
+  it("keeps the steps the server described instead of reading them as silence", async () => {
+    const { routes } = harness({ io: stoppingIo().io });
+    const recorded = await call(routes, fakeReq({ body: removeBody({ mode: "run" }) }));
+    expect(recorded.json.code).toBe("plan-failed");
+
+    const outcome = await makeActionsApi(replay(recorded)).run(ROW, "remove-worktree");
+    expect(outcome.ok).toBe(false);
+    const run = outcome.ok === false ? outcome.run : null;
+    expect(run).not.toBe(null);
+    expect(run?.completed).toBe(false);
+    expect(run?.stoppedAt).toBe(1);
+    /* THE DENOMINATOR, and it was not on the wire until this stage: the run
+       carries the steps that RAN, so two outcomes and a `stoppedAt` are the
+       same list of facts whether the plan had two steps or three. `2 of 2`
+       reads as complete. */
+    expect(run?.planned).toBe(3);
+    expect(run?.steps).toHaveLength(2);
+    expect(run?.steps.map((s) => s.status)).toEqual(["passed", "failed"]);
+    expect(run?.steps[1]?.verdict).toContain("exited 1");
+  });
+
+  it("renders what the server said instead of saying it cannot tell", async () => {
+    /* THE WHOLE POINT OF THE STAGE, in one assertion: the card printed *this
+       page cannot tell whether the action took effect* over a body that said,
+       step by step, exactly what had taken effect. */
+    const { routes } = harness({ io: stoppingIo().io });
+    const recorded = await call(routes, fakeReq({ body: removeBody({ mode: "run" }) }));
+    const outcome = await makeActionsApi(replay(recorded)).run(ROW, "remove-worktree");
+
+    const html = renderToStaticMarkup(createElement(ActionOutcomeCard, { outcome, onRefresh: () => {} }));
+    const text = strip(html);
+    expect(text).not.toContain("This page cannot tell whether the action took effect");
+    // Two of three ran, which is the sentence `steps.length` alone cannot say:
+    // without `planned` this reads "2 of 2", and that reads as complete.
+    expect(text).toContain("2 of 3 steps ran");
+    // And the heading cannot be read on its own: the step that stopped it is
+    // named, with the gate's verdict, and the third is absent because it never
+    // ran.
+    expect(text).toContain("worktree:check");
+    expect(text).toContain("STOPPED THE PLAN");
+    expect(text).not.toContain("worktree:sweep");
+  });
+
+  it("does not read a server's SILENCE about a run as a completed run", async () => {
+    /* **THE HOLE A MUTATION FOUND.** `completed: v["completed"] === true` is
+       the whole safety of this parse — a body that never mentions the field
+       must not be read as done — and nothing drove it, because every response
+       this build produces carries the field. The arm exists for a server that
+       predates it, and this is the only shape that reaches it, so the body is
+       written by hand ON PURPOSE and says so.
+
+       `planned` has the same property one line down: absent, it falls back to
+       the number of steps that ran, which is the most this page can prove. */
+    const outcome = await makeActionsApi(
+      replay({ status: 409, body: JSON.stringify({ ok: false, code: "plan-failed", why: "a step said no", run: { action: "x", steps: [{}, {}] } }) }),
+    ).run(ROW, "remove-worktree");
+    const run = outcome.ok === false ? outcome.run : null;
+    expect(run?.completed).toBe(false);
+    expect(run?.planned).toBe(2);
+    expect(run?.stoppedAt).toBe(null);
+    // And a step whose status is a word this build has never heard of is named
+    // rather than dropped or read as one of the three we know.
+    expect(run?.steps.map((s) => s.status)).toEqual(["unrecognised", "unrecognised"]);
+
+    const text = strip(renderToStaticMarkup(createElement(ActionOutcomeCard, { outcome, onRefresh: () => {} })));
+    expect(text).toContain("It stopped part-way: 2 of 2 steps ran.");
+    expect(text).toContain("the server used a word this page does not know");
+  });
+
+  it("does not read a kill that said nothing about its plan as a completed plan", async () => {
+    /* The same silence, one field over: `parseBoxEffect` reads
+       `planCompleted === true` for the reason above, and the reassuring
+       default is the one that must not be reachable by omission. */
+    const outcome = await makeActionsApi(
+      replay({
+        status: 200,
+        body: JSON.stringify({
+          ok: true,
+          op: "ran",
+          action: "kill-test-suites",
+          dryRun: false,
+          result: { kill: { attempted: [5001], observed: [{ pid: 5001, observation: "signal-accepted" }] } },
+        }),
+      }),
+    ).box("kill-test-suites", false);
+    const effect = outcome.ok ? outcome.effect : null;
+    expect(effect?.kind === "kill" && effect.planCompleted).toBe(false);
+  });
+});
+
+describe("the heading over a box answer is a ratio, not a verdict", () => {
+  /* `effectHeadline` is driven with the bytes a real handler produced, through
+     the real client parse. The card that calls it is two clicks deep in a DOM;
+     the assertion that matters — *these two answers must not get the same
+     heading* — is about this function, and putting it here is what lets the
+     route be the producer. */
+
+  const five = [
+    recipient({ paneId: "%1", sessionId: "$1" }),
+    recipient({ paneId: "%2", sessionId: "$2", status: { kind: "working" } }),
+    recipient({ paneId: "%3", sessionId: "$3" }),
+    recipient({ paneId: "%4", sessionId: "$4", status: { kind: "shell", busy: false } }),
+    recipient({ paneId: "%5", sessionId: "$5" }),
+  ];
+
+  const broadcastBody = { actionId: "resource-broadcast", mode: "run", confirm: true, speaker: "greg", recipients: five };
+
+  async function headingFor(recorded: { status: number | null; body: string }): Promise<string | null> {
+    const outcome = await makeActionsApi(replay(recorded)).box("resource-broadcast", false);
+    return effectHeadline(outcome.ok ? outcome.effect : null);
+  }
+
+  it("cannot head a broadcast that half-landed the way it heads one that all landed", async () => {
+    const all = harness();
+    const half = harness({
+      result: (t) =>
+        t.paneId === "%3"
+          ? { ok: false, reason: { code: "send-failed", why: "the Enter did not go" }, delivery: "partial", sent: [["send-keys"]] }
+          : SENT_OK,
+    });
+    const a = await headingFor(await call(all.routes, fakeReq({ url: "/api/actions/box", body: broadcastBody })));
+    const b = await headingFor(await call(half.routes, fakeReq({ url: "/api/actions/box", body: broadcastBody })));
+
+    expect(a).toBe("Keys submitted to 3 of 5 rows.");
+    expect(b).toBe("Keys submitted to 2 of 5 rows.");
+    // The old card headed both "Done."
+    expect(a).not.toEqual(b);
+  });
+
+  it("counts the partial recipient under its own word, where a person will see it", async () => {
+    const { routes } = harness({
+      result: (t) =>
+        t.paneId === "%3"
+          ? { ok: false, reason: { code: "send-failed", why: "the Enter did not go" }, delivery: "partial", sent: [["send-keys"]] }
+          : SENT_OK,
+    });
+    const recorded = await call(routes, fakeReq({ url: "/api/actions/box", body: broadcastBody }));
+    const outcome = await makeActionsApi(replay(recorded)).box("resource-broadcast", false);
+    const effect = outcome.ok ? outcome.effect : null;
+    expect(effect?.kind).toBe("broadcast");
+    expect(effect?.states.find((s) => s.state === "partial")?.count).toBe(1);
+    expect(effect?.states.find((s) => s.state === "keys-submitted")?.count).toBe(2);
+    // Not folded in with the two rows nobody could speak to.
+    expect(effect?.states.find((s) => s.state === "refused-before-effect")).toBeUndefined();
+  });
+
+  it("cannot head a kill that signalled nothing the way it heads one that signalled everything", async () => {
+    const body = { actionId: "kill-test-suites", mode: "run", confirm: true, pids: [5001, 5002] };
+    const procs = [
+      proc({ pid: 5001, comm: "node-MainThread", args: VITEST_ARGS }),
+      proc({ pid: 5002, comm: "node-MainThread", args: VITEST_ARGS }),
+    ];
+    const good = harness({ io: fakeIo({ procs }).io });
+    const gone = harness({ io: fakeIo({ procs, step: () => ({ ...OK_STEP, code: 1, stderr: "No such process" }) }).io });
+
+    const a = await makeActionsApi(replay(await call(good.routes, fakeReq({ url: "/api/actions/box", body })))).box(
+      "kill-test-suites",
+      false,
+    );
+    const b = await makeActionsApi(replay(await call(gone.routes, fakeReq({ url: "/api/actions/box", body })))).box(
+      "kill-test-suites",
+      false,
+    );
+
+    expect(effectHeadline(a.ok ? a.effect : null)).toBe("Signal accepted for 2 of 2 pids.");
+    expect(effectHeadline(b.ok ? b.effect : null)).toBe("Signal accepted for 0 of 2 pids.");
+    // And neither of them is the past tense about a process.
+    expect(effectHeadline(a.ok ? a.effect : null)).not.toContain("killed");
+  });
+
+  it("says a plan that did not complete left pids unsignalled, and never heads it as done", async () => {
+    /* The `completed: false` state the route cannot reach — see `killReport`'s
+       own comment — driven through the real parse and the real heading. */
+    const outcome = await makeActionsApi(
+      replay({
+        status: 200,
+        body: JSON.stringify({
+          ok: true,
+          op: "ran",
+          action: "kill-test-suites",
+          dryRun: false,
+          result: {
+            run: { action: "kill-test-suites", steps: [], planned: 3, completed: false, stoppedAt: 0 },
+            kill: killReport([5001, 5002, 5003], { action: "kill-test-suites", steps: [], planned: 3, completed: false, stoppedAt: 0 }),
+          },
+        }),
+      }),
+    ).box("kill-test-suites", false);
+
+    const effect = outcome.ok ? outcome.effect : null;
+    expect(effect?.kind === "kill" && effect.planCompleted).toBe(false);
+    expect(effectHeadline(effect)).toBe("Signal accepted for 0 of 3 pids.");
+    expect(effect?.states).toEqual([{ state: "not-attempted", count: 3 }]);
+  });
+
+  it("heads a preview as a promise, not as a receipt", async () => {
+    const { routes } = harness();
+    const recorded = await call(routes, fakeReq({ url: "/api/actions/box", body: { ...broadcastBody, mode: "dry-run" } }));
+    expect(await headingFor(recorded)).toBe("It would go to 3 of 5 rows.");
   });
 });

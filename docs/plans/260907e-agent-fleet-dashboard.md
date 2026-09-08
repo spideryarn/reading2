@@ -62,15 +62,27 @@ wave and the paragraph still said they were live. Re-grep before briefing anybod
    running, and a series showing reachability recovering on its own kills the stage. It is two
    changes rather than one, because a box-wide action is *forbidden* from queueing on a stated
    ground that has to be answered rather than deleted.
-3. **The systemd cutover**, which is Greg's to run — `sudo systemctl enable` is refused for agents on
-   this box. Script prepared 2026-09-08 12:00, unrun. **Step 3 is a decision, not a check**: it is
-   the moment the dashboard becomes tailnet-reachable, and `w2-fleet-dictation` measured that
-   `navigator.mediaDevices` is *absent* (not degraded) at the tailnet address, so HTTPS there is a
-   feature prerequisite rather than a nicety.
-4. **v0.2c's other half** — delivery receipts and action ids. The browser now reads `delivery`; the
-   five states and the repeat-retrieves-the-receipt rule are not built. **The related overclaim is
-   fixed**: the page no longer says a keystroke *landed*, because `verifyTarget` runs before the send
-   and nothing looks at the pane afterwards.
+3. **The systemd cutover — DONE, Greg ran it 2026-09-08 ~21:30.** The unit is active, serves
+   `127.0.0.1:8787` and `100.92.255.119:8787`, and the dashboard has been read from a phone. Two
+   things a reader still needs. **There is no authentication** — reachability is the whole boundary,
+   which was the right call for getting it working and is a decision rather than an oversight. And
+   `navigator.mediaDevices` is *absent* (not degraded) at a plain-HTTP tailnet address, measured by
+   `w2-fleet-dictation`, so dictation there needs HTTPS as a prerequisite rather than a nicety.
+
+   **Landing on `dev` is not deploying.** The unit's `WorkingDirectory` is the primary checkout and
+   its `ExecStartPre=/usr/bin/npm run build:fleet` builds from there, so a restart serves whatever
+   the *primary* has — not what is on `dev`. Merge the primary up first, or a restart will look like
+   it did nothing. Verify afterwards by comparing the served `index-*.js` against the newest asset in
+   `tools/fleet/web/dist/assets/`; a stale bundle answers 200 all night.
+4. **v0.2c — now its own plan, [260908j](260908j-delivery-receipts-and-honest-outcomes-for-the-fleet-dashboard.md), and half built.** Six stages, reordered after a
+   cross-family review refused two of them; it is the same work as the roadmap's *Delivery
+   uncertainty* stage, agreed with the Overseer so only one session builds it. **Landed 2026-09-08:**
+   the failure cards stop claiming an action had no effect when they cannot know (both paths,
+   including the kill card), and queue item ids now carry the run that minted them — which was a live
+   defect, not a tidy-up: a dead run's `q1` cancelled a live run's *different* `q1` and answered
+   `200 ok`. **Still open:** process/broadcast outcomes, quarantine after an uncertain delivery,
+   request ids and receipts, and the catalogue's `wire.ts` move. **`reception observed` was cut** —
+   nothing in this system observes reception, so the arm would have shipped permanently empty.
 
 **Done since this list was last written, so nobody fixes them twice:** the attention inbox has a
 consumer; every server timestamp is converted into the browser's clock at the parse boundary;

@@ -72,7 +72,13 @@
    with no imports at all, which is what makes it safe here: every other home for
    these types reaches `node:child_process` transitively, and this project has no
    node types. See wire.ts's header. */
-import type { QueuedItemView as QueuedItemViewWire, QueueView as QueueViewWire } from "../../wire.js";
+import type {
+  PlanRunView,
+  PlanStepStatus,
+  PlanStepView,
+  QueuedItemView as QueuedItemViewWire,
+  QueueView as QueueViewWire,
+} from "../../wire.js";
 /* `DeliveryReading` and `parseDelivery` come from steer-client.ts for the same
    reason `steerTargetBody` does: there is one vocabulary for what became of a
    send, and a second copy of it here would be the twin this whole plan is
@@ -836,6 +842,148 @@ export function clearBody(sessionId: string, itemIds: readonly string[]): ClearB
  * for. So there are three arms, and the third says what it is: taken, and the
  * queue below is what to believe.
  */
+/* ------------------------------------------------------------------ *
+ * What the server said it DID, read rather than dropped.
+ * ------------------------------------------------------------------ */
+
+/**
+ * One step of a plan the server ran, as this page reads it.
+ *
+ * **`status` gains an `unrecognised` arm and the rest is the shared type.**
+ * The `Omit<…> & {…}` idiom, for the reason `ClientAction` uses it: a word this
+ * build has never heard of must land somewhere visible rather than being
+ * dropped or being silently read as one of the three we know — and the step
+ * whose status we cannot read is, by construction, the interesting one.
+ */
+export type StepReading = Omit<PlanStepView, "status"> & { status: PlanStepStatus | "unrecognised" };
+
+/** A plan run off the wire. `action` is a plain string: it is somebody else's vocabulary. */
+export type PlanRunReading = Omit<PlanRunView, "steps"> & { steps: StepReading[] };
+
+function stepStatus(v: unknown): PlanStepStatus | "unrecognised" {
+  return v === "passed" || v === "failed" || v === "failed-ignored" ? v : "unrecognised";
+}
+
+function num(v: unknown): number | null {
+  return typeof v === "number" && Number.isFinite(v) ? v : null;
+}
+
+/**
+ * The `run` on a refusal, or null when the body carried none.
+ *
+ * **THIS IS THE WHOLE OF DEFECT C.** `routes-actions.ts` puts a complete
+ * `PlanRun` on a `plan-failed` refusal — which step ran, which one said no, and
+ * in whose words — and `refusal()` read `code` and `why` and threw the rest
+ * away. The card then printed *this page cannot tell whether the action took
+ * effect* over a body that said, step by step, exactly what had taken effect.
+ *
+ * Null rather than an empty run when it is absent, because *the server did not
+ * describe a run* and *the server described a run of no steps* are different
+ * facts and only the first is common.
+ */
+export function parsePlanRun(v: unknown): PlanRunReading | null {
+  if (!isRecord(v)) return null;
+  const raw = v["steps"];
+  if (!Array.isArray(raw)) return null;
+  const steps: StepReading[] = [];
+  for (const s of raw) {
+    if (!isRecord(s)) continue;
+    steps.push({
+      argv: Array.isArray(s["argv"]) ? s["argv"].filter((a): a is string => typeof a === "string") : [],
+      cwd: str(s["cwd"]) ?? "",
+      why: str(s["why"]) ?? "",
+      status: stepStatus(s["status"]),
+      verdict: str(s["verdict"]) ?? "",
+      code: num(s["code"]),
+      timedOut: s["timedOut"] === true,
+      spawnError: str(s["spawnError"]),
+      tail: str(s["tail"]) ?? "",
+    });
+  }
+  return {
+    action: str(v["action"]) ?? "",
+    steps,
+    /* A server that predates the field says nothing, and `steps.length` is the
+       only floor available — never a guess at a larger plan. It makes the card
+       say *2 of 2*, which is what this page could honestly read before the
+       field existed. */
+    planned: num(v["planned"]) ?? steps.length,
+    /* `=== true`, so a body that omitted the field is NOT read as completed.
+       The safe default for a claim of completeness is the one that claims
+       less. */
+    completed: v["completed"] === true,
+    stoppedAt: num(v["stoppedAt"]),
+  };
+}
+
+/**
+ * One state and how many rows are in it.
+ *
+ * **`state` IS A STRING RATHER THAN A UNION**, and that is the deliberate half.
+ * The server's vocabulary is in `wire.ts` and this page knows it, but a page
+ * that refused a word it had not heard of would DROP the rows that had changed
+ * — which is the one group a reader most needs to see. So an unknown word is
+ * counted and rendered verbatim; `BOX_STATE_COPY` in ActionButtons.tsx supplies
+ * a sentence for the ones we know and falls back to the word for the rest.
+ */
+export type StateCount = { state: string; count: number };
+
+/**
+ * **PER-RECIPIENT AND PER-PID STATE, COUNTED — not a single total.**
+ *
+ * A broadcast answers `total: 3` and thirty-six rows; a kill answers a list of
+ * pids. Both used to reach the page as an undifferentiated blob under
+ * `RawValue`, where a fan-out that half-landed and one that was declined draw
+ * the same shape and the heading above them said "Done." either way.
+ *
+ * Null on `BoxOutcome` when the answer carried nothing this page recognises —
+ * never an empty count list, which would read as *nothing was in any state*.
+ */
+export type BoxEffectReading =
+  | { kind: "broadcast"; recipients: number; states: StateCount[] }
+  | { kind: "kill"; attempted: number; planCompleted: boolean; states: StateCount[] };
+
+/** Counts by state word, in first-seen order, so the rendering is stable. */
+function countStates(rows: readonly unknown[], field: string): StateCount[] {
+  const counts: StateCount[] = [];
+  for (const row of rows) {
+    const state = (isRecord(row) ? str(row[field]) : null) ?? "unstated";
+    const found = counts.find((c) => c.state === state);
+    if (found) found.count += 1;
+    else counts.push({ state, count: 1 });
+  }
+  return counts;
+}
+
+/**
+ * The `result` of a 200, read for the two shapes that describe an effect.
+ *
+ * Deliberately narrow: it recognises the two arms `routes-actions.ts` sends and
+ * returns null for everything else, including a dry run's preview. `RawValue`
+ * still draws the whole answer underneath — this is a reading ON TOP of it, not
+ * a replacement for it, so a field this function has never heard of is still on
+ * the page.
+ */
+export function parseBoxEffect(result: unknown): BoxEffectReading | null {
+  if (!isRecord(result)) return null;
+  const recipients = result["recipients"];
+  if (Array.isArray(recipients)) {
+    return { kind: "broadcast", recipients: recipients.length, states: countStates(recipients, "outcome") };
+  }
+  const kill = result["kill"];
+  if (isRecord(kill) && Array.isArray(kill["observed"])) {
+    const attempted = Array.isArray(kill["attempted"]) ? kill["attempted"].length : kill["observed"].length;
+    return {
+      kind: "kill",
+      attempted,
+      // `=== true` for `parsePlanRun`'s reason: silence must not read as done.
+      planCompleted: kill["planCompleted"] === true,
+      states: countStates(kill["observed"], "observation"),
+    };
+  }
+  return null;
+}
+
 export type ActionOutcome =
   | { ok: true; kind: "queued"; position: number | null; why: string | null }
   | { ok: true; kind: "delivered"; sent: string[][] }
@@ -889,8 +1037,23 @@ export type ActionOutcome =
    * A whole-action outcome is a different fact and there is no field for it
    * yet — do not borrow this one for it, and see `ACTION_DELIVERY_COPY` in
    * ActionButtons.tsx, which is where the temptation actually lands.
+   *
+   * **`run` IS THAT WHOLE-ACTION CONTRACT, FOR ONE REFUSAL.** `plan-failed`
+   * carries the plan the server ran — see `parsePlanRun`. It is REQUIRED and
+   * nullable rather than optional, for `delivery`'s reason: a producer that may
+   * omit a field leaves the renderer picking a default, which is this defect
+   * wearing a question mark. `null` means the body said nothing about a run,
+   * which is true of every other refusal on these routes.
    */
-  | { ok: false; code: string; why: string; status: number | null; from: "server" | "client"; delivery: DeliveryReading };
+  | {
+      ok: false;
+      code: string;
+      why: string;
+      status: number | null;
+      from: "server" | "client";
+      delivery: DeliveryReading;
+      run: PlanRunReading | null;
+    };
 
 export type QueueOp = "cancelled" | "revived" | "abandoned";
 
@@ -929,9 +1092,28 @@ export type BoxOutcome =
        */
       result: unknown;
       why: string | null;
+      /**
+       * **THE SAME ANSWER, READ RATHER THAN DUMPED.** `result` above is drawn
+       * by `RawValue`, which knows no schema and so cannot tell a fan-out that
+       * half-landed from one that was declined — both are a list of objects.
+       * This is the per-recipient and per-pid state, counted, so the card can
+       * say which; `null` when the answer carried neither shape.
+       *
+       * It does not replace `result`, it sits above it. Nothing the server
+       * sends stops being on the page.
+       */
+      effect: BoxEffectReading | null;
     }
   /** Same arm, same reasoning, and here the request kills processes. See `ActionOutcome`. */
-  | { ok: false; code: string; why: string; status: number | null; from: "server" | "client"; delivery: DeliveryReading };
+  | {
+      ok: false;
+      code: string;
+      why: string;
+      status: number | null;
+      from: "server" | "client";
+      delivery: DeliveryReading;
+      run: PlanRunReading | null;
+    };
 
 export type FeedOutcome = { ok: true; feed: ActionsFeed } | { ok: false; why: string };
 
@@ -980,7 +1162,7 @@ function parseSent(v: unknown): string[][] {
  */
 type Posted =
   | { response: Response; parsed: unknown }
-  | { failure: { code: string; why: string; status: number | null; delivery: DeliveryReading } };
+  | { failure: { code: string; why: string; status: number | null; delivery: DeliveryReading; run: PlanRunReading | null } };
 
 async function postJson(url: string, body: unknown, fetchImpl: typeof fetch): Promise<Posted> {
   let response: Response;
@@ -1002,6 +1184,8 @@ async function postJson(url: string, body: unknown, fetchImpl: typeof fetch): Pr
         why: `this browser could not reach the dashboard: ${describe(cause)}`,
         status: null,
         delivery: { kind: "unknown" },
+        // No answer arrived, so there is no run to read — never "a run of no steps".
+        run: null,
       },
     };
   }
@@ -1017,6 +1201,7 @@ async function postJson(url: string, body: unknown, fetchImpl: typeof fetch): Pr
         // A status arrived and the words did not. Whatever it did, it did not
         // tell us — and an unreadable body is not a body that said `none`.
         delivery: { kind: "unknown" },
+        run: null,
       },
     };
   }
@@ -1027,7 +1212,15 @@ async function postJson(url: string, body: unknown, fetchImpl: typeof fetch): Pr
 function refusal(
   response: Response,
   parsed: unknown,
-): { ok: false; code: string; why: string; status: number; from: "server" | "client"; delivery: DeliveryReading } {
+): {
+  ok: false;
+  code: string;
+  why: string;
+  status: number;
+  from: "server" | "client";
+  delivery: DeliveryReading;
+  run: PlanRunReading | null;
+} {
   const why = isRecord(parsed) && typeof parsed["why"] === "string" ? parsed["why"] : null;
   const code = isRecord(parsed) && typeof parsed["code"] === "string" ? parsed["code"] : null;
   return {
@@ -1042,6 +1235,10 @@ function refusal(
        nothing had been sent when they were written, and the route inventing a
        `none` would be worse than its silence. */
     delivery: parseDelivery(isRecord(parsed) ? parsed["delivery"] : undefined),
+    /* AND THE RUN, WHICH THIS FUNCTION USED TO DROP. `plan-failed` is the only
+       refusal that carries one today, and it is the one whose card was least
+       able to say what had happened — see `parsePlanRun`. */
+    run: parsePlanRun(isRecord(parsed) ? parsed["run"] : undefined),
   };
 }
 
@@ -1130,6 +1327,7 @@ export function makeActionsApi(fetchImpl: typeof fetch = fetch): ActionsApi {
         dryRunStated: stated,
         result: parsed["result"] ?? null,
         why: typeof parsed["why"] === "string" ? parsed["why"] : null,
+        effect: parseBoxEffect(parsed["result"]),
       };
     },
   };
