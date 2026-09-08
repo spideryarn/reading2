@@ -54,7 +54,21 @@
  *    `codex` invocations;
  *  - `pid` is unique only for as long as the process lives. A `ChildJob.pid`
  *    kept and looked up later may name a stranger. `started` is carried
- *    alongside it precisely so a later stage can notice that.
+ *    alongside it so a later stage has something to check that against —
+ *    **but it must be compared with a tolerance of at least a second, never for
+ *    equality.** `etimes` counts whole seconds, so the same process read at
+ *    `S+10.2s` and at `S+11.8s` yields derived starts 600 ms apart; an exact
+ *    comparison makes an unchanged process look replaced, which is the same
+ *    manufactured event `observation.ts` refuses elsewhere. Distinguishing two
+ *    processes that started within a second of each other needs a stable kernel
+ *    start identifier, which this does not have.
+ *
+ * **And nothing here can detect pid REUSE.** If the pane exits between the
+ * dashboard's collection and this read and its pid is handed out again, this
+ * walks a stranger's tree and answers confidently about it. The fix is not
+ * available at this seam: it needs a pane identity stronger than a bare number,
+ * or a re-check against tmux at the moment of the read. Recorded rather than
+ * papered over.
  */
 
 /**
@@ -147,7 +161,20 @@ export type WorkUnknownCause =
    * way there is no tree, and "nothing running" here would be a claim about a
    * process that does not exist.
    */
-  | "pane-not-in-table";
+  | "pane-not-in-table"
+  /**
+   * The table is not an ancestry: a pid appears twice, or the walk came back
+   * round to a process it had already visited.
+   *
+   * `parseProcessTable` refuses a duplicate pid, so a reading straight off the
+   * probe can never carry one - but a `ProcessTableReading` is an ordinary
+   * value that a store replay or a merge of two readings can also produce, and
+   * this arm is what stops that becoming a confident answer. **A cycle rendered
+   * as `no-child-work` is an ambiguous reading rendered as an absence**, which
+   * is the one thing this module exists not to do; the walk used to terminate
+   * quietly and say the pane was quiet, and a cross-family review caught it.
+   */
+  | "malformed-process-table";
 
 /** One recognised piece of work found beneath a pane. */
 export type ChildJob = {
@@ -180,7 +207,20 @@ export type ChildJob = {
  */
 export type WorkReading =
   | { kind: "cannot-tell"; cause: WorkUnknownCause; why: string }
-  | { kind: "no-child-work"; inspected: number; paneCommand: string }
+  | {
+      kind: "no-child-work";
+      inspected: number;
+      paneCommand: string;
+      /**
+       * When the table this was decided from was read.
+       *
+       * Carried on both walking arms so a `WorkReading` stored on its own can
+       * still say how old it is. Without it, "no child work" read forty minutes
+       * ago and "no child work" read a second ago are the same sentence, and the
+       * first is not an answer.
+       */
+      atMs: number;
+    }
   | {
       kind: "child-work";
       /** Non-empty by construction: `child-work` with no jobs cannot be written. */
@@ -193,6 +233,8 @@ export type WorkReading =
        */
       inspected: number;
       paneCommand: string;
+      /** When the table this was decided from was read. See the arm above. */
+      atMs: number;
     };
 
 /**
@@ -303,9 +345,13 @@ export const RECOGNISERS: Record<WorkRecogniserId, WorkRecogniser> = {
     id: "vitest",
     label: "Test suite (vitest run)",
     executable: /^vitest$/,
-    // `run` only. `vitest --watch` is a dev-loop watcher nobody is waiting on,
-    // and calling that work would light up every session that left one open.
-    args: /^run(\s|$)/,
+    // `run` or `--run`, which vitest treats as the same thing; every instance
+    // measured on this box used the subcommand, and `--run` is here on a
+    // reviewer's word rather than on a capture. `vitest --watch` is a dev-loop
+    // watcher nobody is waiting on, and calling that work would light up every
+    // session that left one open. KNOWN GAP: `vitest --coverage --run` is missed,
+    // because the flag has to lead for the same reason claude's `--print` does.
+    args: /^(run|--run)(\s|$)/,
     note: "The full suite takes ~24 minutes here, long enough for a backgrounded one to read as an empty pane.",
   },
 };
@@ -410,6 +456,17 @@ export function classifyPaneWork(panePid: number | null, reading: ProcessTableRe
   const byPid = new Map<number, ProcessRow>();
   const children = new Map<number, ProcessRow[]>();
   for (const row of reading.rows) {
+    // THE INVARIANT IS RE-CHECKED HERE, not merely assumed from the parser. A
+    // `ProcessTableReading` is an ordinary value: a store replay or a merge of
+    // two readings can hand this function a table `parseProcessTable` would have
+    // refused, and silently keeping the second row would drop a whole subtree.
+    if (byPid.has(row.pid)) {
+      return {
+        kind: "cannot-tell",
+        cause: "malformed-process-table",
+        why: `pid ${row.pid} appears twice, so these rows are not one process table`,
+      };
+    }
     byPid.set(row.pid, row);
     // NO SELF-PARENT GUARD HERE, deliberately. A `ppid === pid` row does put
     // itself in its own children list, but the only way the walk could reach it
@@ -435,12 +492,20 @@ export function classifyPaneWork(panePid: number | null, reading: ProcessTableRe
   const jobs: ChildJob[] = [];
   const visited = new Set<number>([panePid]);
   let inspected = 0;
+  // Set when the walk meets a process it has already visited. That cannot happen
+  // in a real ancestry, so it is not a shape to route around: it means these
+  // rows are not one tree, and the answer has to be that we could not tell
+  // rather than a tidy `no-child-work`.
+  let revisited: number | null = null;
 
   const walk = (pid: number, depth: number): void => {
     const kids = children.get(pid);
     if (kids === undefined) return;
     for (const kid of [...kids].sort((a, b) => a.pid - b.pid)) {
-      if (visited.has(kid.pid)) continue;
+      if (visited.has(kid.pid)) {
+        revisited = kid.pid;
+        continue;
+      }
       visited.add(kid.pid);
       inspected += 1;
       const recogniser = recogniseCommand(kid.command);
@@ -461,8 +526,17 @@ export function classifyPaneWork(panePid: number | null, reading: ProcessTableRe
   };
   walk(panePid, 1);
 
+  if (revisited !== null) {
+    return {
+      kind: "cannot-tell",
+      cause: "malformed-process-table",
+      why: `walking from pid ${panePid} came back to pid ${String(revisited)}, so these rows are not an ancestry`,
+    };
+  }
+
   const paneCommand = truncate(pane.command);
+  const atMs = reading.atMs;
   const [first, ...rest] = jobs;
-  if (first === undefined) return { kind: "no-child-work", inspected, paneCommand };
-  return { kind: "child-work", jobs: [first, ...rest], inspected, paneCommand };
+  if (first === undefined) return { kind: "no-child-work", inspected, paneCommand, atMs };
+  return { kind: "child-work", jobs: [first, ...rest], inspected, paneCommand, atMs };
 }

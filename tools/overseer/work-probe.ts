@@ -57,7 +57,7 @@ const TIMEOUT_MS = 10_000;
  */
 export function probeProcessTable(opts: { bin?: string } = {}): ProcessTableReading {
   const bin = opts.bin ?? "ps";
-  const atMs = Date.now();
+  const startedMs = Date.now();
   const run = spawnSync(bin, [...PS_ARGV], {
     encoding: "utf8",
     timeout: TIMEOUT_MS,
@@ -69,8 +69,19 @@ export function probeProcessTable(opts: { bin?: string } = {}): ProcessTableRead
     maxBuffer: 32 * 1024 * 1024,
   });
 
+  // TIMED AFTER ps RETURNS, not before it. `etimes` is relative to when ps read
+  // /proc, so a reading stamped before the spawn makes every derived start time
+  // early by the whole probe duration - ~40 ms here, but up to the 10-second
+  // timeout on a box that is swapping, which is exactly when the numbers matter.
+  // Neither end is the true instant; the interval between them is, and stamping
+  // the later end at least means no row can be older than the reading claims.
+  const atMs = Date.now();
+  const tookMs = atMs - startedMs;
+
   if (run.error !== undefined) return { read: false, why: `${bin} could not be run: ${run.error.message}` };
-  if (run.signal !== null) return { read: false, why: `${bin} was killed by ${run.signal} (timeout is ${TIMEOUT_MS} ms)` };
+  if (run.signal !== null) {
+    return { read: false, why: `${bin} was killed by ${run.signal} after ${tookMs} ms (timeout is ${TIMEOUT_MS} ms)` };
+  }
   if (run.status !== 0) {
     const stderr = (run.stderr ?? "").trim().slice(0, 200);
     return { read: false, why: `${bin} exited ${String(run.status)}${stderr === "" ? "" : `: ${stderr}`}` };
