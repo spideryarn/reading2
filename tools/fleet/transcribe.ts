@@ -266,7 +266,12 @@ export async function transcribeForFleet(args: {
       }),
       signal: abort,
     });
-  } catch (err) {
+    /* **No binding, because nothing may be read off it.** `catch {}` rather than
+       `catch (err)` says that out loud: on this wire a thrown message can carry
+       a prefix of the request body, and the request body is somebody talking.
+       An unused binding would be a warning; an unused binding somebody later
+       "fixed" by logging it would be a voice in a log file. */
+  } catch {
     /* The caller's abort is somebody navigating away and needs no sentence; our
        own deadline is a person watching a spinner and does. */
     if (args.signal?.aborted === true) {
