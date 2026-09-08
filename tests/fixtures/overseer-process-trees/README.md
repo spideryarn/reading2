@@ -27,6 +27,20 @@ three and the classifier would have been built to find it there.
 | `browser-pane.txt` | `430640` | A Claude session with a whole headless Chrome under it — 20 processes, none of them a job anyone is waiting on. |
 | `shell-pane-running-tests.txt` | `1234211` | **CONTROL.** A **`shell`-kind** pane running the suite under `scripts/tmux-job.ts`. Real, and 21 minutes into a run when captured. |
 | `orphan-fake-codex.txt` | — | The two rows of the `/tmp/fake-codex-*/codex` test harness, **reparented to init** (`ppid 1`) since 2026-09-01. Not a subtree; it exists to be pasted onto another file. |
+| `codex-batch-pane.txt` | `94316` | **CONTROL.** A pane that *is* a paid `codex exec` — `tmux-job.ts` running `run-codex.ts` directly, rather than an agent dispatching one. Captured ~12:15 UTC, 258 s into a real `gpt-5.6-sol --effort high` review. |
+| `codex-interactive-pane.txt` | `4108994` | **CONTROL.** A `bash -l` pane with a **bare interactive `codex`** TUI in it, 718 s old. The only capture of an interactive Codex this repo has. |
+
+### The last two were captured seventeen minutes after a measurement said they did not exist
+
+At ~11:58 UTC on 2026-09-08 this box had **22 panes, 15 `claude-code`, 7 `shell`, and no Codex pane of
+any kind** — the harness stage's first measurement, and it was recorded as the finding that a Codex
+process here is always a *child of a Claude session* or an orphan, never a fleet row. At ~12:15 UTC
+there were 26 panes, one `codex-batch` and two `codex-interactive`, all three genuine.
+
+Nothing was wrong with the first reading. **The fleet is a moving tree, and "there are none" is a
+reading rather than a property** — the same lesson `work.ts` records about a single `WorkReading`,
+one level up. Both numbers are in the plan doc, both with their timestamps, and neither is presented
+as the state of the box.
 
 ## Three of these are POSITIVE CONTROLS, and that is their job
 
@@ -53,6 +67,18 @@ the number looking the same and meaning nothing. There is a third control that n
 
 ## What the capture proves
 
+- **A `codex exec` pane's codex is at depth 5, not 8.** `codex-batch-pane` is
+  `sh -c ( npx tsx run-codex.ts … )` → `npm exec` → `sh -c 'tsx'` → `node …/.bin/tsx` →
+  `node --require …preflight.cjs` → `codex exec`. Three levels shorter than the dispatched case
+  below, because there is no `timeout` wrapper and no Bash-tool `bash -c` above it. Same tool, same
+  wrapper script, two different depths on one box on one morning — which is the depth lesson stated
+  twice rather than once.
+- **An interactive `codex` is at depth 1 and has NO subcommand at all**: `bash -l` → `codex`. That is
+  the whole of the command line. So an interactive Codex cannot be told from a batch one by anything
+  except the subcommand, which is why `CODEX_BATCH_SUBCOMMAND` is anchored and shared.
+- **Codex spawns a helper of its own**, `…/releases/0.153.4-…/bin/codex-code-mode-host`, under both
+  the batch and the interactive one. Anything walking below a matched harness would find it and have
+  to decide what it was; nothing does, because a match is never descended into.
 - **A dispatched `codex exec` is at depth 8.** pane → `claude` → the Bash tool's `/bin/bash -c
   source …snapshot…` → `timeout` → `npm exec` → `sh -c 'tsx'` → `node …/.bin/tsx` → `node
   --require …/preflight.cjs` → `codex exec`. `claude --print` sits at exactly the same depth

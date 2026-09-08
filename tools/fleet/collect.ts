@@ -29,6 +29,8 @@ import {
 } from "../../scripts/gjd-remote-tmux.js";
 import { capturePane, parsePane, readPaneMode, type PaneAutoMode, type PaneQuestion } from "./pane.js";
 import { statusesOf, type FleetStatus } from "./status.js";
+import type { Pause } from "./wire.js";
+import { readPause, readSessionStore, type StoreIndex } from "./pause.js";
 
 /** One line of the page. Deliberately flat: it is rendered, and it is JSON. */
 export type FleetRow = {
@@ -130,6 +132,17 @@ export type FleetRow = {
    * See `modeApplicability`.
    */
   permissionMode: PaneAutoMode;
+  /**
+   * Why this session is not doing anything — an added fact beside the status,
+   * never a replacement for it. `pause.ts` reads it; `readPauses` below fills
+   * it in; `Pause` in `wire.ts` carries the reasoning.
+   *
+   * Starts at `cannot-tell` for the same reason `permissionMode` does: a caller
+   * that never runs the pass produces rows saying *we did not look*, not rows
+   * saying every session is waiting for nothing. `none` is a positive claim and
+   * only the reader is in a position to make it.
+   */
+  pause: Pause;
 };
 
 /** A snapshot, and enough about it to know whether to believe it. */
@@ -342,6 +355,11 @@ export function toRows(
         applies.kind === "settled"
           ? applies.mode
           : ({ kind: "cannot-tell", why: "this session's pane has not been read yet" } as PaneAutoMode),
+      pause: {
+        kind: "cannot-tell",
+        why: "nothing has looked at whether this session is waiting for something yet",
+        cause: "rate-limits-not-collected",
+      } as Pause,
       // A session the status pass did not cover is `unknown` with a reason, not a
       // default that reads as calm. There is no legitimate way to get here — the
       // two lists come from one parse — so if it ever shows up on the page, the
@@ -707,5 +725,60 @@ export async function collect(): Promise<FleetSnapshot> {
      captures is measured on the latter. */
   readPanes(rows);
 
+  /* AND ONE PASS FOR WHY A QUIET SESSION IS QUIET. Separate from `readPanes`
+     because it reads files rather than terminals, and because it is allowed to
+     fail without costing us the board — see `readPauses`. */
+  await readPauses(rows);
+
   return { ...snapshot, collectedAt: new Date().toISOString(), tookMs: Date.now() - startedAt };
+}
+
+/**
+ * Fill in `pause` on every row, from `pause.ts`.
+ *
+ * **THE STORE IS READ ONCE FOR THE WHOLE FLEET, NOT ONCE PER ROW.**
+ * `~/.claude/sessions` is keyed by the `claude` process's pid while a row
+ * carries the *pane's* pid, so the join is on the conversation uuid and the
+ * whole directory has to be indexed anyway — 18 small files, 41ms cold. Doing
+ * that per row would be twenty times the syscalls for one answer.
+ *
+ * **A FAILURE HERE MUST NOT COST THE BOARD.** This is the last thing a
+ * collection does and it is the least important: a row with no `pause` is a row
+ * that says *we did not look*, which is honest and readable. A row that never
+ * arrives is a session missing from the page. So each row is wrapped
+ * individually — one unreadable transcript must not take out the other
+ * seventeen — and the whole pass is wrapped again for the store read.
+ *
+ * **NO RATE-LIMIT READING IS PASSED YET**, so every row will carry
+ * `cannot-tell` with `rate-limits-not-collected` unless it is positively parked
+ * or in a shell call. That is the honest state of the world: the scan costs
+ * seconds on a loaded box, `w2-usage-limits` owns it, and the moment it
+ * publishes a reading this is where it plugs in. It is emphatically not `none`.
+ */
+export async function readPauses(rows: FleetRow[]): Promise<void> {
+  let index: StoreIndex | undefined;
+  try {
+    const store = await readSessionStore();
+    if (store.kind === "read") index = store.index;
+  } catch {
+    /* Left undefined, so `readPause` reads the store itself per row and reports
+       its own failure in the `why`. Slower and still correct, which is the
+       right way round for a pass that must not throw. */
+  }
+
+  for (const row of rows) {
+    try {
+      row.pause = await readPause({
+        claudeSessionId: row.claudeSessionId,
+        dir: row.meta.version === 1 ? row.meta.dir : null,
+        ...(index === undefined ? {} : { storeIndex: index }),
+      });
+    } catch (cause) {
+      row.pause = {
+        kind: "cannot-tell",
+        why: `reading this session's pause threw: ${cause instanceof Error ? cause.message : String(cause)}`,
+        cause: "transcript-unreadable",
+      };
+    }
+  }
 }
