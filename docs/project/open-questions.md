@@ -287,6 +287,26 @@ believe is their own breakage — which is worse than the same minutes spent kno
 thing the original sentence's reasoning does not cover. So the licence really is narrower on `dev`
 than on `main`, for a reason that has nothing to do with readers.
 
+**A second-order cost, found by tripping over it on 2026-09-08, and it is the one that argues hardest
+for fixing a red trunk immediately: a shared red gate hides its own additional causes.**
+`tests/fixture-ids.test.ts` went red with three uuid collisions — two introduced by the Overseer
+stage, one by the fleet dashboard stage, landed hours apart. Neither agent had seen it, because both
+had been running only the files they touched; a full suite run by a third agent is the only reason
+either found out.
+
+And the fleet agent's account of what it would have done is the finding:
+
+> Mine would have stayed red behind yours indefinitely. I would have seen a red gate, seen two ids
+> that were not mine, and concluded it was not my problem.
+
+So the cost is not only that a red trunk is inherited silently. It is that **once a gate is red for
+somebody else's reason, everyone else's new breakage arrives invisibly**, and the longer it stays red
+the more of them accumulate behind the first — each one individually reasonable to disown. That is
+worse than a linear cost, and it is unavailable to anyone reasoning about a single breakage.
+
+The companion habit, which is cheaper than any rule about `dev`: **running your own files is not
+running the gate.** Both agents had green evidence all night and both were wrong about the trunk.
+
 Raised jointly with `spideryarn2-4c`, which had read it the same way.
 
 ---
