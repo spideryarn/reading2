@@ -1,6 +1,9 @@
 # The Overseer's store, and the clock it gives everything else
 
-**Status: planned, nothing built.** Evidence: there is no `tools/overseer/`.
+**Status 2026-09-08, 05:00: S1 landed and reviewed clean; S2 landed with a P0 outstanding; S3–S5 not
+started.** Evidence: `tools/overseer/` holds three modules and 1,014 lines, `npm run typecheck` is
+green on four projects, and 168 tests pass — **and Sol's review of S2 found a P0 and five P1s that
+the suite passes straight through.** The next session starts at § S2's review, not at S3.
 
 The standing direction is [orchestrator-direction.md](../project/orchestrator-direction.md) — read it
 first; it holds the constraints, Greg's horizon, and the seam with the fleet dashboard, and it
@@ -529,6 +532,54 @@ read that half as verified either. The asymmetry is documented on the event unde
 **"KNOWN BLIND SPOT: a replacement the tmux environment did not notice produces nothing"** that
 asserts the empty result, so the limitation is pinned where someone will read it rather than left in
 prose.
+
+### S2's review: a P0, five P1s, and the suite passed through all of them
+
+[260908b-s2-code-review-sol.md](260908b-s2-code-review-sol.md). **Not fixed — S2 is landed but not
+finished**, and this section is what the next session picks up.
+
+**S2-01 (P0) — an unreadable generation silently bridges two tmux worlds.** Exactly the suspicion the
+review prompt named, which is the useful outcome of naming it. Generation `100` → `null` → `200` is
+two `unverifiable` steps, both diffed normally, so a reboot in the middle produces either silence or
+a status transition attributed *across unrelated sessions* that happen to share a reused handle.
+**A non-empty snapshot with a null generation must not advance the baseline**; an empty one may,
+because there are no handles to equate. The existing test pins the unsafe default, so the fix must
+change a test that currently passes.
+
+The five P1s, each the same shape — a value the producer would never emit, accepted here and turned
+into a fabricated event:
+
+- **S2-02** `tmuxServerPid: 132280.5` parses because it is finite, and a fractional pid reads as a
+  generation *change*. Same weak domain check on `panePid`, `secondsLeft`, `tookMs` and `refreshMs` —
+  and a zero or negative `refreshMs` would later poison the freshness watchdog S4 depends on.
+- **S2-03** a wait that is *restarted* is invisible: `secondsLeft: 60` then `3600` is one key, so the
+  history shows one uninterrupted wait. Suppressing a countdown is right; suppressing a material
+  increase is not, and the fix is comparison logic (an implied deadline with tolerance) rather than
+  key material.
+- **S2-04** `reportedStatus` is accepted on causes the producer says can never carry it, so two
+  malformed rows manufacture a status transition. Wants a local discriminated union making the
+  combination unrepresentable *after* parsing.
+- **S2-05** equal clocks are trusted as identical collections without checking the bodies agree. Two
+  payloads claiming one timestamp with different generations is contract failure, not a duplicate,
+  and it currently disappears silently.
+- **S2-06** the register fields kept *for reboot recovery* are validated more weakly here than at the
+  producer: a relative `meta.dir` parses, and a later resumer would resume a real conversation in
+  whatever directory the daemon happened to occupy.
+
+**And the verdict that matters more than any single finding:**
+
+> A parser that accepts impossible numeric domains, an admissibility gate that trusts inconsistent
+> equal-clock payloads, and a differ that loses wait resets **all pass the suite**.
+
+168 tests, six mutations caught, and three real defect classes walked through untouched. The mutations
+proved the code does what it was written to do; they could not show what it was never written to
+handle. **That is the lesson of this stage** and it belongs beside the fixtures README's own
+admission: mutation testing proves a test notices *your* change, not that the design is right.
+
+Two judgments to keep: `SessionKey` and `StatusKey` earn their brands; **`ClaimedConversationId` does
+not** — it validates nothing and risks implying verification it does not perform. Sol would spend that
+brand instead on an opaque admissible-snapshot type (S2-07), so that `diff()` cannot be handed a
+snapshot `admissible()` never blessed — which is currently only a comment.
 
 ### S3 — the store: single writer, checkpoint, crash recovery
 
