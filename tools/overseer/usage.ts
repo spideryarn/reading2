@@ -6,7 +6,7 @@
  * the current account is, or which conversations have already been stopped by a
  * 429. This module is that reading. What is and is not observable was
  * researched and hand-verified on 2026-09-08 —
- * docs/project/orchestrator-direction.md § "What is actually observable about
+ * docs/project/overseer-direction.md § "What is actually observable about
  * usage limits" and § "Can we call an API instead? Mostly no, and not with an
  * admin key". Do not re-derive it here; that doc holds the measurements and the
  * reason there is no supported API to call instead.
@@ -222,7 +222,7 @@ export function parseUsageCache(claudeJson: unknown, nowMs: number): UsageCacheR
     // window, which is a percentage and a reset time. **If anyone later wants a
     // cost figure beside the utilisation, read `src/ai-spend.ts` first** — not
     // to import it (the fleet and Overseer tools must not depend on anything
-    // under `src/`; see orchestrator-direction.md § Principles) but for the case
+    // under `src/`; see overseer-direction.md § Principles) but for the case
     // list, which is already paid for. Its trap is the same shape as the stale
     // `resets_at` this file exists to guard: on a BYOK key the gateway reports
     // `cost: 0` for a call that cost real money, the true figure is in

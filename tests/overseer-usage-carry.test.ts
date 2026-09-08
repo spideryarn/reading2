@@ -49,7 +49,20 @@ function account(uuid: string | null, over: Partial<Extract<UsageAccount, { kind
 function report(over: Partial<UsageReport> = {}): UsageReport {
   return {
     account: account("acct-A"),
-    cache: { kind: "absent", why: "no cache in this fixture" } as UsageReport["cache"],
+    /*
+     * `unknown`, NOT an invented `absent` arm. The first version of this fixture
+     * wrote `{kind:"absent"} as UsageReport["cache"]` and the `as` silenced a
+     * compiler error saying the arm does not exist — so every test below, and
+     * every mutation run against them, exercised a report shape the parser would
+     * refuse and the collector can never produce. Checking a discriminant and
+     * casting the tail is the defect this module's own review kept finding; in a
+     * FIXTURE it is worse, because it decides what the tests are about.
+     *
+     * `chooseUsage` provably never reads `cache` — grep the module — so the logic
+     * was unaffected. That was confirmed rather than assumed, which is the only
+     * reason the six green mutations still count.
+     */
+    cache: { kind: "unknown", why: "no cache reading in this fixture" },
     rateLimits: { kind: "none", coverage: completeCoverage() },
     verdict: { level: "ok", reasons: ["no limit hit"], activeLimit: null },
     collectedAt: "2026-09-08T11:59:00.000Z",
