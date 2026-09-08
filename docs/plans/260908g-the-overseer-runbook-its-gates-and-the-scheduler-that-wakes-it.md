@@ -1595,6 +1595,98 @@ removed it.
   and it hands an unattended timer the ability to restart services. That is Greg's call, not a
   detail to slip into a stage about scheduling.
 
+### Stage 8 — the schedules become config, and arming becomes durable
+
+**Greg answered the two open questions on 2026-09-08 night**, and the second is this stage.
+
+On the blocking one — may an unattended rule assert `confirm: true`? — *"Probably no for now"*. So
+propose-only stands, 3d does not flip a disposition to `act`, and the five preconditions on 3d are
+joined by a sixth that is simply *he said no*.
+
+On arming, verbatim:
+
+> Yes, I'm thinking get-ready-to-deploy every 6h, and feedback-sweep every 3h (perhaps offset so they
+> don't bump into each other). Ideally these would be written in some config somewhere that would be
+> easy to edit, with an idempotent script to update them.
+>
+> — Greg, 2026-09-08
+
+#### Four things this needs, and the second is the one nobody would guess
+
+1. **The two schedules move out of code into one small config file.** Today they are
+   `GET_READY_TO_DEPLOY_EVERY_MS = 3h` and `FEEDBACK_SWEEP_EVERY_MS = 12h` in
+   `standing-jobs.ts`. Greg wants 6h and 3h, so **both change**, and both are constants in a
+   TypeScript module — which is not what *"config somewhere that would be easy to edit"* means.
+
+2. **The idempotent script is not a convenience. It is required by the authorisation design, and
+   this is the finding.** `everyMs` is a hashed field of `JobDefinition`, so **editing a schedule
+   changes the job's fingerprint and the job is refused until it is re-pinned.** That is gate 3
+   working exactly as intended — a changed definition must not run unattended on its old
+   authorisation — but it means a hand-edited config file arms nothing and fails *closed and
+   silently* to anyone who does not know why.
+
+   So the script Greg asked for is the mechanism that makes his config file work at all: read the
+   file, recompute the hashes, write the pins, print what changed and what did not. **It is what
+   turns "edit a number" from a thing that quietly disables a job into a thing that works.** Worth
+   saying in the doc, because a reader who edits the schedule and skips the script will get a daemon
+   that refuses both jobs and says why only in a log line.
+
+3. **The offset.** 6h and 3h coincide every six hours whatever the phase, so avoiding the collision
+   needs an explicit offset rather than luck. The scheduler measures `everyMs` **from the end of the
+   last run**, so once separated they stay separated, modulo the drift that choice already accepts
+   and documents. The simplest version is one `offsetMs` per job in the same config file, and its
+   imprecision should be named rather than hidden: this staggers *starts*, and a job that overruns
+   its offset will still overlap the other.
+
+4. **Arming has to survive a reboot, and today it cannot.** The Baseline census found it and I
+   verified it: `infra/hetzner/systemd/overseer.service` sets `HOME`, `OVERSEER_STORE_DIR` and
+   `OVERSEER_FLEET_URL`, and **neither sets `OVERSEER_JOBS_ENABLED` nor reads an `EnvironmentFile`**.
+   So exporting the variable in a shell arms nothing under the unit, and the daemon running tonight
+   is a tmux job rather than the unit anyway.
+
+   The unit is checked in **twice** — the file, and a heredoc in `provision.sh` — with
+   `tests/systemd-units.test.ts` comparing the bytes, so the change is three edits or it is a test
+   failure.
+
+   **The choice to name rather than inherit:** `Environment="OVERSEER_JOBS_ENABLED=1"` in the unit
+   makes arming a tracked change in the repo, which matches *a change to the box is a change to a
+   file*. `EnvironmentFile=-/etc/overseer.env` would let Greg arm and disarm without a deploy, at the
+   cost of the box's real arming state living in an untracked file — which is precisely the kind of
+   fact that goes stale invisibly. **Default to the unit**, and say so.
+
+#### The first run after arming, and why the obvious trick is forbidden
+
+Neither standing job has ever run, so both are immediately due and **both would fire about thirty
+seconds after arming** — two Claude sessions at once, as the first act of a mechanism nobody has
+watched work. Greg's default, via the Overseer, is to defer to the schedule.
+
+**The obvious implementation is to write a synthetic `finished` occurrence at arming time so the
+jobs look recently run. That must not be done.** The occurrence ledger's entire value is that a
+person can read it and believe it; a fabricated run in it is worse than an early dispatch, and it is
+the same failure as an instrument reporting a frozen snapshot as a live reading — which this job did
+to itself twice tonight. The deferral belongs in an honestly named field that says what it is.
+
+#### Gate 4 is unbuilt, and here is why that is tolerable *for this*
+
+The runbook says gate 4 becomes load-bearing the moment the scheduler is armed, and it is still
+unbuilt. That stands as a general statement and is not being waved away.
+
+But **these two jobs are bounded by their own schedules**: 6h and 3h is at most twelve model sessions
+a day, fixed, whatever the fleet does. The schedule *is* the budget. Gate 4's real subject is
+something that dispatches on a **condition** rather than a clock — thirty-six sessions producing
+thirty-six reviews a minute — and neither of these can do that. So arming these two is safe without
+Stage 7, and Stage 7 becomes load-bearing at the first condition-triggered dispatch, which is 3d and
+which Greg has just said no to.
+
+#### Done when
+
+The config file exists and Greg can edit a number in it; the script makes the running definitions
+match it, is safe to re-run, and prints what changed and what did not; the two jobs are 6h and 3h
+and offset; the unit and `provision.sh` carry the arming and agree byte-for-byte with each other and
+with `tests/systemd-units.test.ts`; and the stage ends with **the exact command list for Greg**, with
+nothing armed until he runs it — `systemctl daemon-reload`, `enable`, `restart`, and stopping the
+tmux daemon are his, not ours.
+
 ## Deliberately not in this job
 
 - **The decision-log web mode.** Greg asked for it; it is the dashboard's tense, and `tools/fleet/`
