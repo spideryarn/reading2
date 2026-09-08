@@ -233,11 +233,15 @@ const CANNOT_TELL: { head: string; body: string } = {
  * about the box, in the server's own arithmetic, and it was on the wire for the
  * life of this panel while the card above printed *this page cannot tell*.
  *
- * **It does not say what those steps DID to the box.** A step that ran is a
- * command that exited; `worktree:check` passing changed nothing, and
- * `worktree:sweep` passing removed a directory. The gate verdicts underneath
- * are what a person reads for that, verbatim, and this heading deliberately
- * stops at *ran*.
+ * **It does not say what those steps DID to the box.** `worktree:check`
+ * passing changed nothing, and `worktree:sweep` passing removed a directory.
+ * The gate verdicts underneath are what a person reads for that, verbatim, and
+ * this heading deliberately stops at *ran*.
+ *
+ * **Nor may the body call a step a command that exited**, which is what it said
+ * until a review looked at `PlanStepView`: a spawn failure, a timeout and a
+ * subprocess killed by a signal are all steps, and none of them exited. The
+ * only thing true of every row is that the server reached it.
  */
 function planHeadline(run: PlanRunReading): { head: string; body: string } {
   const ran = run.steps.length;
@@ -248,7 +252,7 @@ function planHeadline(run: PlanRunReading): { head: string; body: string } {
   return {
     head: run.completed ? "It ran every step, and was still refused." : `It stopped part-way: ${ran} of ${total} steps ran.`,
     body:
-      "Each step below is a command that exited, with the gate's own verdict. A step that ran is not the same as a change to the box — read the verdicts before repeating this, because a second press runs the earlier steps again.",
+      "Each row below is a plan step the server reached, with the gate's own verdict. Reaching a step is not the same as a change to the box — read the verdicts before repeating this, because a second press runs the earlier steps again.",
   };
 }
 
@@ -381,8 +385,12 @@ const BOX_STATE_COPY: Record<string, string> = {
   "not-reached": "ran out of time before this one",
   "signal-accepted": "signal accepted — not proof the process is gone",
   "signal-refused": "no such process, or not ours to signal",
-  "not-established": "the kill could not be run, so nothing is established",
-  "not-attempted": "never signalled: the plan stopped first",
+  /* NOT "the kill could not be run", which this arm was called for a day. It
+     also covers a `kill` that timed out and one killed by a signal, and in both
+     of those the command RAN — so the summary contradicted the verdict printed
+     underneath it in exactly the two cases with the least evidence behind
+     them. */
+  "not-established": "the signal attempt did not settle — it may have gone out and it may not",
   unstated: "the server gave no state for this one",
 };
 
@@ -398,24 +406,25 @@ const BOX_STATE_COPY: Record<string, string> = {
  *
  * So the heading is a ratio and never a verdict, and `Done.` survives only for
  * an answer that carried no effect report at all.
+ *
+ * **EXPORTED SO A TEST CAN DRIVE IT WITH A REAL ROUTE'S BYTES**, for
+ * `effectHeadline`'s reason one function down: the card that calls it is two
+ * clicks deep in a DOM, and the assertion that matters here — *no sentence on
+ * this list may be past tense about a process* — is about this component
+ * rather than about the panel around it. A review found the accepted-state
+ * sentence could be changed to "process killed" with the whole suite still
+ * green, because nothing rendered the accepted state through the real one.
  */
-function BoxEffectSummary({ effect }: { effect: BoxEffectReading }): ReactNode {
+export function BoxEffectSummary({ effect }: { effect: BoxEffectReading }): ReactNode {
   return (
-    <>
-      <ul className="tw:mt-1 tw:space-y-0.5 tw:text-[12px]">
-        {effect.states.map((s) => (
-          <li key={s.state} className="tw:break-words tw:text-ink">
-            <span className="tw:font-medium">{s.count}</span> <Mono>{s.state}</Mono>
-            <span className="tw:text-ink-soft"> — {BOX_STATE_COPY[s.state] ?? "this page does not know that word"}</span>
-          </li>
-        ))}
-      </ul>
-      {effect.kind === "kill" && !effect.planCompleted ? (
-        <p className="tw:mt-1 tw:font-medium tw:text-alarm-ink">
-          The plan stopped before the end, so the pids after it were never signalled at all.
-        </p>
-      ) : null}
-    </>
+    <ul className="tw:mt-1 tw:space-y-0.5 tw:text-[12px]">
+      {effect.states.map((s) => (
+        <li key={s.state} className="tw:break-words tw:text-ink">
+          <span className="tw:font-medium">{s.count}</span> <Mono>{s.state}</Mono>
+          <span className="tw:text-ink-soft"> — {BOX_STATE_COPY[s.state] ?? "this page does not know that word"}</span>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -436,7 +445,7 @@ export function effectHeadline(effect: BoxEffectReading | null): string | null {
     if (would > 0) return `It would go to ${would} of ${effect.recipients} rows.`;
     return `Keys submitted to ${of("keys-submitted")} of ${effect.recipients} rows.`;
   }
-  return `Signal accepted for ${of("signal-accepted")} of ${effect.attempted} pids.`;
+  return `Signal accepted for ${of("signal-accepted")} of ${effect.targeted} pids.`;
 }
 
 export function ActionOutcomeCard({ outcome, onRefresh }: { outcome: ActionOutcome; onRefresh: () => void }): ReactNode {
