@@ -402,6 +402,14 @@ another stage's code is the thing
   so in its own comment — *"a session that is working [is] left out here"* — and it is honest about
   it in the response, so this is a gap in the action rather than a lie about it. It is still the
   wrong half of the fleet.
+
+  **And the refinement that matters for whoever fixes it: the capability is not missing, the
+  broadcast declined to use it.** `steerableStatus` returns `null` for `working` — a working session
+  *may* be typed at, and the ordinary `/api/steer/message` route does exactly that; measured tonight,
+  a message to a session the page called `working` returned `ok:true` and sent. `drainGate` layers a
+  separate *not now* policy on top for the queue, which is a defensible thing for a queue to do. The
+  defect is only that the broadcast turns that "not now" into a **skipped outcome rather than a
+  durable intent**, so "later" means "never". Fixing it is enqueue-and-confirm, not new plumbing.
 - **S9 — a kill plan can report `completed: true` with every kill having failed.** `runPlan` treats
   `best-effort` steps as non-stopping; they are recorded per-step as `failed-ignored`, which is
   honest, but the plan-level `completed` does not reflect them. Whether the route's summary then
