@@ -283,3 +283,56 @@
   padding-bottom: calc(var(--block-pad) / 2);
 }
 
+
+/* ------------------------------------------- the wordmark animation gallery --
+   `/design` § Wordmark animations, which draws all dozen at once so they can be
+   compared — DesignPage.tsx § LogoAnimations has the argument for the section
+   existing at all.
+
+   Nothing here styles the wordmark itself. `.logo`, `.logo-text` and
+   `.logo-letter` are already defined (styles/dock.css § the wordmark,
+   styles/tokens.css), and the whole value of this gallery is that it renders
+   the real ones — a cell that redefined them would go on looking right after
+   the shipping wordmark broke, which is the exact failure this page exists to
+   catch. These three rules supply nothing but the grid.
+
+   The cells are `overflow: hidden` so that nothing escapes a card into its
+   neighbour. **That is not the dock's clip and this page cannot stand in for
+   it** — a claim made here for an hour and worth correcting rather than
+   deleting, because it is the mistake the next person will make. The reading
+   view's bar clips at 40px (52px under a coarse pointer) around a 20px mark;
+   a cell here is a whole card with a caption under it, so a letter may fall
+   eight pixels and meet nothing at all. **Dock clearance is verified in the
+   dock**, not here. Nor can this page show a Geist-specific fault: it draws the
+   corner copy's face. GPT Astra, 2026-09-07. */
+.design-logo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: 0.9rem;
+  margin-top: 0.9rem;
+}
+.design-logo-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  /* Matches `--bar-h`, the height the dock gives the wordmark, for the same
+     reason the clipping does: this is the room it actually has. */
+  padding: 0.7rem;
+  overflow: hidden;
+  border: 1px solid var(--rule);
+  border-radius: calc(var(--radius) - 4px);
+  background: var(--panel);
+}
+.design-logo-cell .design-note { margin: 0; }
+/* **Or the wordmark is stretched to the cell's width and one animation lies.**
+   A column flex container stretches its items across, so `.logo` — content about
+   140px — became a 280px box, and `spya-dawn`'s mask sweep, which is sized as a
+   percentage of that box, spent half its travel crossing empty space. It was
+   correct in the app and looked feeble here (browser check, 2026-09-07). A
+   gallery that misrepresents one of the things it exists to show is worse than
+   no gallery.
+
+   `align-self` on the wordmark rather than `align-items` on the cell, so the
+   caption and the class name below it still fill the width and wrap normally. */
+.design-logo-cell .logo { align-self: flex-start; }
+.design-logo-row { display: flex; gap: 2rem; align-items: center; flex-wrap: wrap; }

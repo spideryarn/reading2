@@ -233,6 +233,55 @@
  *     domain that is not a contiguous suffix — would have to be taught here,
  *     deliberately.
  *
+ * ### Stage 4b, 2026-09-07 — the eight referee guards become table rows
+ *
+ * Green unmutated at **325**. `EXPECTED_AUTH_ROUTES` was not touched — the block
+ * is still byte-identical to stage 1c's (md5 `c36bdcb…`) — and neither was the
+ * lifetime oracle, which is the point of that file and the condition stage 4a
+ * set for this one.
+ *
+ * **The oracle named below is `tests/referee-stream-lifetime.test.ts` now.**
+ * This slice was built twice, in parallel, by two worktrees that each took it
+ * off the same plan on `dev` — 260907b here and 260907e there — and 260907e
+ * landed first. Its lifetime test covers the same property across all three
+ * streaming referee routes rather than criteria alone, so it is the one that
+ * survived; `tests/streaming-route-request-lifetime.test.ts` was removed in the
+ * merge. The transcripts below were recorded against the removed file and are
+ * left as they were run, because a log that is quietly rewritten to name a
+ * different file is a log that cannot be checked.
+ *
+ * **The order expectation was written and watched red first**, which is what
+ * stage 3b could not claim. With the eight referee pair-keys prepended to §
+ * `keeps the table in the chain's order` and *no* source change yet: **1
+ * failed**, and the diff was exactly the eight rows missing from the head of the
+ * received array and nothing else — *expected [ 'GET literal /api/jobs', …(12) ]
+ * to deeply equal [ …(21) ]*. Only then were the guards moved.
+ *
+ * 17. **A table row deleted** — the `DELETE /api/referee/criteria/:slug/:id`
+ *     entry removed. **4 failed:** *contract rows with no guard in
+ *     src/routes.ts*, the canary (*expected 80 to be 81*), § `answers the moved
+ *     domains from the table` and § `keeps the table in the chain's order`. The
+ *     matcher set stayed green, correctly — `ONE_CRITERION_PATTERN`'s other row
+ *     still names it.
+ * 18. **A table row's method changed** — `GET /api/referee/scan/:slug` made
+ *     `PUT`. **4 failed:** the pair set (*guards in src/routes.ts that no
+ *     contract row allows*), both table cases, and the negative matrix refusing
+ *     to send `PUT /api/referee/scan/w1` because the source now answers it.
+ * 19. **Two moved rows reordered** — `GET /api/referee/claims/:slug` lifted
+ *     above `DELETE /api/referee/criteria/:slug/:id`. **1 failed**, and only
+ *     one: § `keeps the table in the chain's order`, the expectation written red
+ *     first above. Same honest reach as mutation 15.
+ * 20. **A moved handler stopped awaiting its own work** — the criteria POST
+ *     row's `await withSpendAttribution(…)` made `void withSpendAttribution(…)`,
+ *     which is the mutation Sol said `assertHandlersAwaited` cannot see because
+ *     the dispatcher's syntax does not change. It could not: **this file stayed
+ *     green at 325**, and `tests/streaming-route-request-lifetime.test.ts` went
+ *     **2 failed** — *the request is still in flight: expected 'resolved' to be
+ *     'pending'* and *the rejection reached serveApi's catch: expected +0 to be
+ *     500*, the same two that file recorded against the arm before the move.
+ *     That pair, now travelling through `dispatchAuthRoute`, is what discharges
+ *     the dispatcher half of P2-LIFETIME-BEHAVIOUR.
+ *
  * The disjointness check has a **control rather than a mutation**: a real
  * overlap cannot be introduced into `src/routes.ts` without also failing the
  * pair-set comparison, so `would notice if two guards did overlap` feeds two
@@ -1838,7 +1887,7 @@ describe("the authenticated API's route contract", () => {
 
     it("answers the moved domains from the table, not from the chain", () => {
       /* Otherwise everything above could be green because the parser is still
-         reading thirteen `if`s and the move never happened — the two forms are
+         reading twenty-one `if`s and the move never happened — the two forms are
          normalised to the same pair, which is the whole idea and also the way
          this could pass while proving nothing.
 
@@ -1848,6 +1897,11 @@ describe("the authenticated API's route contract", () => {
       expect(sorted(parsed.guards.filter((g) => g.fromTable).map((g) => pairKey(g.method, g.match))))
         .toEqual(
           sorted([
+            // search, 260907b stage 5
+            "GET regex /^\\/api\\/search\\/([\\w.%-]+)$/",
+            "POST regex /^\\/api\\/search\\/([\\w.%-]+)$/",
+            "PATCH regex /^\\/api\\/search\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
+            "DELETE regex /^\\/api\\/search\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
             // referee, 260907e
             "GET regex /^\\/api\\/referee\\/criteria\\/([\\w.%-]+)$/",
             "POST regex /^\\/api\\/referee\\/criteria\\/([\\w.%-]+)$/",
@@ -1874,7 +1928,7 @@ describe("the authenticated API's route contract", () => {
             "GET literal /api/billing/usage",
           ]),
         );
-      const moved = ["/api/billing", "/api/jobs", "/api/uploads", "/api/referee"];
+      const moved = ["/api/billing", "/api/jobs", "/api/uploads", "/api/referee", "/api/search"];
       expect(
         parsed.guards.filter(
           (g) => !g.fromTable && moved.some((p) => describeMatch(g.match).includes(p)),
@@ -1907,6 +1961,12 @@ describe("the authenticated API's route contract", () => {
         parsed.guards.filter((g) => g.fromTable).map((g) => pairKey(g.method, g.match)),
         "the table's rows are the bottom of the chain in the order it had them; a domain is prepended, never appended, and the interleave inside jobs/uploads is not to be tidied",
       ).toEqual([
+        // search, 260907b stage 5
+        "GET regex /^\\/api\\/search\\/([\\w.%-]+)$/",
+        "POST regex /^\\/api\\/search\\/([\\w.%-]+)$/",
+        "PATCH regex /^\\/api\\/search\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
+        "DELETE regex /^\\/api\\/search\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
+        // referee, 260907e
         "GET regex /^\\/api\\/referee\\/criteria\\/([\\w.%-]+)$/",
         "POST regex /^\\/api\\/referee\\/criteria\\/([\\w.%-]+)$/",
         "PATCH regex /^\\/api\\/referee\\/criteria\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
@@ -1915,6 +1975,7 @@ describe("the authenticated API's route contract", () => {
         "POST regex /^\\/api\\/referee\\/claims\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/referee\\/scan\\/([\\w.%-]+)$/",
         "POST regex /^\\/api\\/referee\\/mirror\\/([\\w.%-]+)$/",
+        // jobs and uploads, 260907b stage 3b
         "GET literal /api/jobs",
         "POST literal /api/uploads",
         "DELETE regex /^\\/api\\/uploads\\/([\\w-]+)$/",
@@ -1924,6 +1985,7 @@ describe("the authenticated API's route contract", () => {
         "DELETE regex /^\\/api\\/jobs\\/([\\w.%-]+)$/",
         "POST regex /^\\/api\\/jobs\\/([\\w.%-]+)\\/(cancel|retry)$/",
         "POST regex /^\\/api\\/jobs\\/([\\w.%-]+)\\/advance$/",
+        // billing, stage 3a
         "POST literal /api/billing/checkout",
         "POST literal /api/billing/portal",
         "POST literal /api/billing/confirm",
