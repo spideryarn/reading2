@@ -325,6 +325,15 @@ The last one is worth keeping at the front of the note, because it shows the sha
 *outside* — not a convention we invented and then trusted, but an interface that presented a name and
 an identity as the same argument. Most instances of this class are somebody else's `-t`.
 
+- **A branded type is a claim that survives the operations which destroy what it claimed.** The
+  Overseer's `AdmissibleSnapshot` was an intersection brand meaning *this snapshot passed the gate* —
+  and `{...snapshot, error: "boom"}` keeps the brand, with no cast, on a value that would now fail
+  that gate. The fix was to stop naming the value and start *holding* it: a non-exported wrapper
+  class with an ECMAScript private field, which is nominal rather than structural. **The only
+  compile-time instance of the class**, and the one that shows it is not a habit of careless
+  programmers but a property of labels — TypeScript's brand is a name attached to a shape, and a
+  spread produces a new shape wearing the old name.
+
 **The rule it would carry.** When you match on a name, ask three things: *who wrote it, when, and
 what would make it stale.* Prefer a key you can **verify** over one you can only **read** — and when
 a name occurs at several depths of one structure, matching it counts one thing many times, which
