@@ -560,6 +560,36 @@ model call. The prose-question case is not: **"has this agent asked Greg somethi
 not a parse**, and it is exactly what the Overseer's short-lived model calls are for. A ranked list
 built on `statusOf` alone would have ranked the wrong sessions, confidently.
 
+**Measured on 2026-09-08, and it corrects the second bullet above rather than confirming it.** The
+Codex arm was built, and then run against the live fleet: **40 samples 60 seconds apart over 40
+minutes, 927 session-rows. Of the 623 rows the page called `idle`, the number with child work under
+them was zero.** A live probe agrees. That zero is real rather than a broken path — a positive
+control caught a deliberately-started `vitest` at depth 5 with a correct age, and four other sessions
+*were* found working, all hand-checked, no false positives.
+
+**The reason is the interesting part, and it narrows the original claim.** Throughout a real, paid
+`codex exec`, the dashboard reported that session as **`working`, not `idle`** — because its agent
+was mid-turn in the same session. **A review inside a foreground Bash call already reads as
+`working`.** So the population the bullet above describes is not "sessions running a review"; it is
+the narrower "sessions whose agent **ended its turn** while a backgrounded review carried on", and
+how many of those exist depends on how agents happen to dispatch reviews rather than on anything
+structural. The arm is correct. Its yield is smaller and more conditional than the finding implied,
+and that is worth knowing before ranking work on top of it.
+
+**And the number that made the case is not a constant.** A dispatched `codex exec` sits eight levels
+below the pane *with a `timeout` wrapper*, seven without, five for a plain `npx vitest run`, and
+three under `scripts/tmux-job.ts`. A depth limit tuned to eight would have been tuned to one
+person's typing. What survives intact is the counting trap: **five processes in that chain carry
+`run-codex.ts` and exactly one carries `codex exec`**, so a recogniser matching the wrapper reports
+one review five times.
+
+**The best thing the sweep found was not a Codex run.** `npx playwright@1.62.1 install webkit` had
+been running **5 hours 43 minutes** under a `shell` pane, present in all 40 samples, almost certainly
+wedged, and nobody had noticed. It needs no new recogniser: **for a `shell` pane the pane's own
+command line already says what it is doing**, so reading that generalises further than growing a
+table of recognised tools. That is the shape of the whole section — the box usually already knows;
+the vocabulary is what discards it.
+
 **Who builds which half, settled between the two agents on 2026-09-08.** The mechanical half is the
 Overseer's, and *not* as a new arm on `SessionState`:
 
