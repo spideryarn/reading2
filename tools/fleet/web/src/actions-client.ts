@@ -941,7 +941,7 @@ export type StateCount = { state: string; count: number };
  */
 export type BoxEffectReading =
   | { kind: "broadcast"; recipients: number; states: StateCount[] }
-  | { kind: "kill"; attempted: number; planCompleted: boolean; states: StateCount[] };
+  | { kind: "kill"; targeted: number; states: StateCount[] };
 
 /** Counts by state word, in first-seen order, so the rendering is stable. */
 function countStates(rows: readonly unknown[], field: string): StateCount[] {
@@ -972,14 +972,12 @@ export function parseBoxEffect(result: unknown): BoxEffectReading | null {
   }
   const kill = result["kill"];
   if (isRecord(kill) && Array.isArray(kill["observed"])) {
-    const attempted = Array.isArray(kill["attempted"]) ? kill["attempted"].length : kill["observed"].length;
-    return {
-      kind: "kill",
-      attempted,
-      // `=== true` for `parsePlanRun`'s reason: silence must not read as done.
-      planCompleted: kill["planCompleted"] === true,
-      states: countStates(kill["observed"], "observation"),
-    };
+    /* The pids the server SET OUT to signal. Falling back to the evidence list
+       when it is missing rather than to zero: the two are the same length on
+       every server that sends both, and the denominator a reader sees must not
+       shrink because a field went absent. */
+    const targeted = Array.isArray(kill["targeted"]) ? kill["targeted"].length : kill["observed"].length;
+    return { kind: "kill", targeted, states: countStates(kill["observed"], "observation") };
   }
   return null;
 }

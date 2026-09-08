@@ -385,9 +385,11 @@ const DELIVERY_OUTCOME: Record<Delivery, BroadcastRecipientOutcome> = {
  * settled fact. A `kill` that could not be spawned, timed out, or died on a
  * signal settles nothing: the signal may have gone first. Reading the second as
  * the first is how a page tells somebody a process survived when it did not.
+ *
+ * Takes a step rather than a step-or-nothing: every targeted pid has one, and
+ * `killReport` is where that is asserted.
  */
-function killObservation(step: StepOutcome | undefined): KillObservation {
-  if (step === undefined) return "not-attempted";
+function killObservation(step: StepOutcome): KillObservation {
   if (step.spawnError !== null || step.timedOut || step.code === null) return "not-established";
   return step.code === 0 ? "signal-accepted" : "signal-refused";
 }
@@ -395,26 +397,40 @@ function killObservation(step: StepOutcome | undefined): KillObservation {
 /**
  * A finished kill plan, as **intent and evidence side by side**.
  *
- * Exported and pure because the state that matters most here is the one the
- * route cannot currently reach: every step of a kill plan is `best-effort`, so
- * `judgeStep` never returns `failed` and `runPlan` never returns
- * `completed: false` for a kill. A stricter plan would, `PlanRun` allows it,
- * and a run that stopped leaves the tail of `pids` **unsignalled** — which must
- * never render as a completed kill. A test drives this directly for exactly
- * that reason.
+ * **ONE STEP PER PID IS ASSERTED HERE RATHER THAN COPED WITH.**
+ * `planKillProcesses` builds exactly one `kill -TERM <pid>` step per pid, and
+ * `runPlan` only stops early on a step it judges `failed` — which a
+ * `best-effort` kill step can never be. So a run shorter than the list is a bug
+ * in one of those two, not a state to report.
  *
- * The steps are one per pid, in order, by construction in `planKillProcesses`.
+ * It used to be reported. The missing pids came back as `not-attempted` beside
+ * a `planCompleted: false`, and both were unreachable: no test could produce
+ * either without building a `PlanRun` by hand. An arm no code can reach is
+ * decoration on a contract, and it costs a reader the assumption that every
+ * word in the vocabulary means something happened.
+ *
+ * **Throwing loses this run's evidence, and that is the direction to be wrong
+ * in.** `guard()` turns it into a 500 that names the mismatch; the alternative
+ * is a 200 naming fewer pids than were signalled, which is precisely the defect
+ * this stage removed. The `killRoute` log line is written before this is called
+ * so the journal still holds the run.
  */
 export function killReport(pids: readonly number[], run: PlanRun): KillReport {
-  const observed: KillAttempt[] = pids.map((pid, i) => {
+  const shortfall = () =>
+    new Error(
+      `killReport: ${run.steps.length} step(s) for ${pids.length} targeted pid(s) — ` +
+        "planKillProcesses builds one step per pid and a best-effort step cannot stop a plan",
+    );
+  if (run.steps.length !== pids.length) throw shortfall();
+  const observed: KillAttempt[] = [];
+  for (let i = 0; i < pids.length; i++) {
+    const pid = pids[i];
     const step = run.steps[i];
-    return {
-      pid,
-      observation: killObservation(step),
-      why: step?.verdict ?? "the plan stopped before this one, so no signal was sent to it",
-    };
-  });
-  return { attempted: [...pids], observed, planCompleted: run.completed };
+    // `noUncheckedIndexedAccess`, and unreachable after the length check.
+    if (pid === undefined || step === undefined) throw shortfall();
+    observed.push({ pid, observation: killObservation(step), why: step.verdict });
+  }
+  return { targeted: [...pids], observed };
 }
 
 export type ActionResponse =
@@ -1830,16 +1846,17 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
 
     deps.log(`action box: KILLING action=${action.id} pids=${pids.join(",")}`);
     const run = await runPlan(built.plan, deps.io);
-    /* WHAT CAME BACK, PID BY PID, and the log says the same thing the body
+    /* THE RUN FIRST, BEFORE THE REPORT IS BUILT, because `killReport` throws on
+       a run short of steps — and if it ever does, this line is the only record
+       left of a kill that has already happened. */
+    deps.log(`action box: ${run.completed ? "DONE" : "STOPPED"} action=${action.id} steps=${run.steps.length}/${pids.length}`);
+    /* THEN WHAT CAME BACK, PID BY PID, so the log says the same thing the body
        does. A line reading `killed=3` beside a body naming two refusals is the
        version of this defect that survives in the journal after the page has
        been closed. */
     const report = killReport(pids, run);
     const accepted = report.observed.filter((o) => o.observation === "signal-accepted").length;
-    deps.log(
-      `action box: ${run.completed ? "DONE" : "STOPPED"} action=${action.id} steps=${run.steps.length} ` +
-        `signal-accepted=${accepted}/${report.attempted.length}`,
-    );
+    deps.log(`action box: action=${action.id} signal-accepted=${accepted}/${report.targeted.length}`);
     respond(res, 200, { ok: true, op: "ran", action: action.id, dryRun: false, result: { run, kill: report, skipped } });
   }
 
@@ -1977,10 +1994,15 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
         result = deps.sendMessage(rec.target, text, rec.declaredStatus);
       } catch (e) {
         /* **A THROW IS THE CASE WITH THE LEAST EVIDENCE BEHIND IT**, and it
-           answered `refused` — the reading that says nothing reached them.
-           `fire()` throws from the middle of a sequence of tmux calls and the
+           answered `refused` — the reading that says nothing reached them. The
            exception carries no `Delivery`, so the honest arm is the one that
-           claims nothing either way. */
+           claims nothing either way.
+
+           **AND THIS `try` IS AROUND THE WHOLE CALL**, so it cannot say WHEN.
+           `fire()` may throw out of the middle of a tmux sequence, and it may
+           throw before the first keystroke — a bad target, a refused spawn.
+           The sentence said *partway through the send*, which asserts the
+           first and is false of the second. */
         outcomes.push({
           paneId: rec.target.paneId,
           sessionId: rec.target.sessionId,
@@ -1988,7 +2010,7 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
           outcome: "outcome-unknown",
           code: null,
           why:
-            `the delivery module threw partway through the send: ${(e as Error).message}. ` +
+            `the delivery module threw while handling this recipient: ${(e as Error).message}. ` +
             "Nothing here can tell whether any of it reached the pane.",
         });
         continue;

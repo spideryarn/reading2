@@ -4740,22 +4740,24 @@ describe("the box, which says what it would do before it does it", () => {
     expect(container.textContent).toContain("Done.");
   });
 
-  it("will not say Done over a kill whose plan stopped before it signalled anything", async () => {
-    /* **A KILL THAT SIGNALLED NOTHING READ EXACTLY LIKE ONE THAT SIGNALLED
-       EVERYTHING.** The heading came off `dryRun` alone, and the pids were in
-       `RawValue` underneath, where a list of three objects looks the same
-       whatever the `observation` on each says. `parseBoxEffect` is the real
-       one, so the counts are read from the answer rather than asserted about
-       a shape nothing produces. */
+  it("will not say Done over a kill where only one of three signals was accepted", async () => {
+    /* **A KILL THAT MOSTLY FAILED READ EXACTLY LIKE ONE THAT WORKED.** The
+       heading came off `dryRun` alone, and the pids were in `RawValue`
+       underneath, where a list of three objects looks the same whatever the
+       `observation` on each says. `parseBoxEffect` is the real one, so the
+       counts are read from the answer rather than asserted about a shape
+       nothing produces.
+
+       The three observations here are the three a real run produces — the
+       fourth arm, `not-attempted`, was cut because nothing could write it. */
     const result = {
-      run: { action: "kill-test-suites", steps: [], planned: 3, completed: false, stoppedAt: 0 },
+      run: { action: "kill-test-suites", steps: [{}, {}, {}], planned: 3, completed: true, stoppedAt: null },
       kill: {
-        attempted: [5001, 5002, 5003],
-        planCompleted: false,
+        targeted: [5001, 5002, 5003],
         observed: [
-          { pid: 5001, observation: "not-attempted", why: "the plan stopped before this one" },
-          { pid: 5002, observation: "not-attempted", why: "the plan stopped before this one" },
-          { pid: 5003, observation: "not-attempted", why: "the plan stopped before this one" },
+          { pid: 5001, observation: "signal-accepted", why: "it exited 0" },
+          { pid: 5002, observation: "signal-refused", why: "it exited 1, which this step is allowed to do" },
+          { pid: 5003, observation: "not-established", why: "it was killed for taking too long, which this step is allowed to do" },
         ],
       },
     };
@@ -4773,10 +4775,26 @@ describe("the box, which says what it would do before it does it", () => {
     await clickSaying("Kill test suites");
     await clickSaying("Yes — kill test suites");
 
-    expect(container.textContent).toContain("Signal accepted for 0 of 3 pids.");
-    expect(container.textContent).toContain("never signalled: the plan stopped first");
-    expect(container.textContent).toContain("the pids after it were never signalled at all");
+    expect(container.textContent).toContain("Signal accepted for 1 of 3 pids.");
+    // The ceiling on the strongest arm, on the DOM path a person actually uses.
+    expect(container.textContent).toContain("signal accepted — not proof the process is gone");
+    expect(container.textContent).toContain("no such process, or not ours to signal");
+    /* NOT "the kill could not be run": this row's `kill` was killed for taking
+       too long, so it RAN, and the summary would have contradicted the verdict
+       printed beside it. */
+    expect(container.textContent).toContain("the signal attempt did not settle — it may have gone out and it may not");
     expect(container.textContent).not.toContain("Done.");
+    /* SCOPED TO THE SUMMARY LIST, not the whole page: the raw dump underneath
+       carries the server's own verdicts, and "it was killed for taking too
+       long" is a true sentence about the `kill` COMMAND. The rule is that no
+       sentence this page writes is past tense about the target process. */
+    const summary = Array.from(container.querySelectorAll("li"))
+      .map((li) => li.textContent ?? "")
+      // `<count> <state> — <sentence>`, which the raw dump's rows are not.
+      .filter((t) => /^\d+ \S+ — /.test(t))
+      .join(" ");
+    expect(summary).toContain("signal-accepted");
+    expect(summary).not.toMatch(/killed|\bdead\b|\bdied\b/i);
   });
 
   it("shows a half-landed broadcast as half-landed rather than as a refusal", async () => {
