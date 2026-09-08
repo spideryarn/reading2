@@ -51,6 +51,27 @@ different phases, and RSS understates the working set on a thrashing machine.
 
 **So the quantity to bound is the number of concurrent runs, and nothing in this repo bounds it.**
 
+### Repeated on Linux, against the number the policy actually reads
+
+GPT Sol's review pointed out that the constants above are Mac RSS gating a Linux box, and that
+summed RSS is not what `decideAdmission` consumes. Re-run on the box (16 cores, other agents
+working, so the machine is not quiet):
+
+| workers | wall | peak RSS | **MemAvailable drop** |
+| --- | --- | --- | --- |
+| 1 | 1973.8s | 3.68 GB | **5.77 GB** |
+| 2 | 996.1s | 4.38 GB | **4.10 GB** |
+
+Two findings. Peak RSS transfers between the machines — 3.68/4.38 against the Mac's 3.88/4.33 — so
+the shape is not a macOS artefact. But **the drop in `MemAvailable` is larger than the RSS peak**,
+because RSS misses the page cache a run evicts and the kernel memory charged on its behalf. Two
+runs on a shared box cannot separate 3.8 from 5.8, so the policy constant is **5.0 GB**: above the
+RSS figure, below the noisiest `MemAvailable` one, chosen on the asymmetry that refusing too
+eagerly costs a slow run and admitting too eagerly costs the box.
+
+The wall times are also worth noting — 33 minutes at one worker on the box against 13 on the idle
+Mac — which is the contention the cap exists to reduce, and further reason not to have taken cap 1.
+
 ## The change
 
 Two levers, because the measurement says they do different jobs.
@@ -70,9 +91,18 @@ Two levers, because the measurement says they do different jobs.
      it is the sharpest point in the review.
    - otherwise take `min(nominal, capacity)`.
 
-   **No registry, no lock, no coordination.** Each run reads the kernel's own number, and a run
-   that starts is visible in the next run's reading — the shared state is `MemAvailable` itself.
-   That bounds concurrent runs adaptively, which is the thing that was unbounded.
+   **No registry, no lock, no coordination.** Each run reads the kernel's own number; the shared
+   state is `MemAvailable` itself, so there is nothing to keep in sync or leave behind on a crash.
+
+   **This is a valve, not a bound**, and the first draft of this plan claimed otherwise. Runs that
+   arrive one after another each see less memory than the last, are throttled, and are eventually
+   refused — the shape of 2026-09-08, whose eighteen suites arrived across an hour (their tmux
+   session names timestamp them 0100 to 0159). Runs that read `MemAvailable` in the same instant
+   all see the same figure and all admit, and the overshoot can be the whole cohort. The fixed
+   3.84 GB is also a *peak reached later*, not an allocation made on admission, so even a staggered
+   arrival can read a machine emptier than it is about to be. GPT Sol pressed on both and was right
+   about both. Bounding a cohort needs an atomic claim — a short admission critical section — which
+   is a home-grown scheduler, is not what this incident needed, and is not here.
 
 Linux only, and opt-in per machine: `/proc/meminfo` has `MemAvailable` and macOS has no honest
 equivalent, so a laptop keeps today's static behaviour rather than getting a guessed-at
@@ -108,6 +138,43 @@ carries its worker count, written and self-checked by `infra/hetzner/provision.s
   setup paths and 18 lease connections are worth measuring, but not worth a second mechanism until
   they prove material.
 - **A macOS implementation.** Stated rather than guessed.
+
+## What the code review changed
+
+[GPT Sol's review](260908b-adaptive-test-resource-limits-so-concurrent-suites-cannot-exhaust-the-box-review-sol.md)
+returned "request changes" and was right about four things:
+
+- **The bound that was not one.** Corrected above, and pinned by a test that asserts the cohort
+  overshoot rather than a bound the code does not deliver.
+- **Fail-open states.** An existing-but-empty reserve file read as "no policy", which is exactly
+  what a truncated write leaves behind — so the check would switch itself off on the one machine
+  that asked for it. It now throws, and provisioning writes through a temporary file and renames.
+  A `/proc/meminfo` that will not answer on an opted-in Linux box now refuses instead of waving the
+  run through; `MemorySnapshot` grew separate `not-linux` and `broken` members so the two cannot
+  share an outcome.
+- **The config's side effect.** `tests/vitest-worker-caps.test.ts` imports the worker logic, and
+  evaluating `vitest.config.ts` *runs* the admission decision — so near the threshold an import
+  from inside an admitted run could throw a refusal, producing precisely the misleading partial red
+  the refusal message promises cannot happen. The worker logic moved into `vitest-admission.ts`,
+  leaving only the glue in the config.
+- **Linux calibration.** The constants are Mac RSS and gate a Linux box. Summed RSS double-counts
+  shared pages, so it is *probably* conservative, but that was an argument rather than a
+  measurement. The spike now also records the drop in `MemAvailable` — the observable the policy
+  actually consumes — and the Linux numbers are below.
+
+And wrong, or overstated, about one:
+
+- **"`--maxWorkers` can exceed the admitted capacity."** Half true, and the important half is the
+  other way round. A **refusal cannot be bypassed**: it throws while the config is being evaluated,
+  before any CLI option is applied. Measured, not reasoned —
+  `npx vitest run --maxWorkers=8` against a forced low snapshot still stops with the refusal and
+  exits 1. What `--maxWorkers` *can* exceed is a capacity-based **reduction**, and that is the
+  escape hatch the cap deliberately sits at the config root to preserve.
+
+Sol also asked for a multi-process barrier test. With the registry gone there is no allocation
+algorithm left to prove oversubscribed, and the property in question is a pure function of one
+snapshot, so the cohort test above asserts the same arithmetic deterministically instead of paying
+for process spawning and its flakiness.
 
 ## Verification
 

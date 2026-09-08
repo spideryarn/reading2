@@ -59,8 +59,17 @@ test("a machine with room admits, and says how much room it found", () => {
 });
 
 test("a crowded machine reduces the run rather than refusing it", () => {
-  // 9 GB available, hold back 4: (9 - 4 - 3.84) / 0.198 = 5 workers of room.
-  const d = decideAdmission({ nominalWorkers: 8, snapshot: linux(9), reserveBytes: 4 * GB });
+  /* Room for exactly five workers, expressed in terms of the constants rather
+     than a memorised gigabyte figure: this test asserts the SHAPE — that a
+     squeeze reduces rather than refuses — and re-tuning the constants after a
+     re-measurement should not send anybody hunting for which literals to edit. */
+  const reserveBytes = 4 * GB;
+  const availableBytes = reserveBytes + FIXED_RUN_PEAK_BYTES + 5 * PER_WORKER_PEAK_BYTES;
+  const d = decideAdmission({
+    nominalWorkers: 8,
+    snapshot: { kind: "linux", availableBytes, swapTotalBytes: 0, swapFreeBytes: 0 },
+    reserveBytes,
+  });
   expect(d.kind).toBe("admit");
   if (d.kind !== "admit") throw new Error("unreachable");
   expect(d.capacity).toBe(5);
@@ -124,6 +133,51 @@ test("a hair under one worker's worth refuses", () => {
   expect(d.kind).toBe("refuse");
 });
 
+/**
+ * **A known limit, pinned rather than papered over.**
+ *
+ * The check is a valve, not a bound. Runs that arrive one after another each
+ * see less memory than the last and are throttled, then refused — that is the
+ * 2026-09-08 shape, where eighteen suites arrived across an hour. Runs that
+ * read `MemAvailable` in the *same instant* all see the same number and all
+ * admit, and the overshoot can be the whole cohort.
+ *
+ * This test asserts the overshoot, so that the day somebody adds an atomic
+ * claim it goes red and has to be rewritten as the bound it would then be.
+ * Asserting the bound today would be asserting a property the code does not
+ * have. GPT Sol asked for exactly this comparison, 2026-09-08.
+ */
+test("eighteen simultaneous starters all admit, and together overshoot the machine", () => {
+  const reserveBytes = 4 * GB;
+  // A machine with room for one run of two workers, and no more than that.
+  const availableBytes = reserveBytes + FIXED_RUN_PEAK_BYTES + 2 * PER_WORKER_PEAK_BYTES;
+  const snapshot = { kind: "linux" as const, availableBytes, swapTotalBytes: 0, swapFreeBytes: 0 };
+
+  // Every one of them reads the same instant, because none has allocated yet.
+  const cohort = Array.from({ length: 18 }, () =>
+    decideAdmission({ nominalWorkers: 2, snapshot, reserveBytes }),
+  );
+  expect(cohort.every((d) => d.kind === "admit")).toBe(true);
+
+  const predictedPeak = cohort.reduce((total, d) => {
+    if (d.kind !== "admit") return total;
+    return total + FIXED_RUN_PEAK_BYTES + d.workers * PER_WORKER_PEAK_BYTES;
+  }, 0);
+
+  // What a bound would guarantee, and what this deliberately does not: the
+  // cohort's own arithmetic says it needs eighteen times what fits.
+  expect(predictedPeak).toBeGreaterThan(availableBytes - reserveBytes);
+  expect(predictedPeak).toBeCloseTo(18 * (availableBytes - reserveBytes), -9);
+});
+
+test("but a later arrival, seeing what the earlier ones took, is refused", () => {
+  // The half that does work: the same eighteenth run, once the first seventeen
+  // have actually allocated, reads a machine with nothing left and is stopped.
+  const afterTheOthersAllocated = linux(1.7, { totalGb: 32, freeGb: 0 });
+  const d = decideAdmission({ nominalWorkers: 2, snapshot: afterTheOthersAllocated, reserveBytes: 4 * GB });
+  expect(d.kind).toBe("refuse");
+});
+
 test("a machine that has not opted in is left alone, not refused", () => {
   // The distinction that must never collapse: "no policy here" and "no room
   // here" are both "not admitted", and only one of them may stop the run.
@@ -134,7 +188,7 @@ test("a machine that has not opted in is left alone, not refused", () => {
 test("a platform without MemAvailable is left alone rather than guessed at", () => {
   const d = decideAdmission({
     nominalWorkers: 8,
-    snapshot: { kind: "unsupported", why: "platform is darwin, not linux" },
+    snapshot: { kind: "not-linux", platform: "darwin" },
     reserveBytes: 4 * GB,
   });
   expect(d.kind).toBe("not-applicable");
@@ -142,9 +196,31 @@ test("a platform without MemAvailable is left alone rather than guessed at", () 
   expect(d.why).toMatch(/darwin/);
 });
 
-test("an absent reserve file means no policy; an unreadable one is an error", () => {
+/**
+ * The two ways of not knowing, which must not share an outcome. A laptop is
+ * left alone; a Linux box that opted in and whose /proc/meminfo will not answer
+ * is stopped. A check that switches itself off when its input goes missing
+ * protects nothing and looks exactly like a check that ran.
+ */
+test("an opted-in machine whose memory cannot be read is refused, not waved through", () => {
+  const d = decideAdmission({
+    nominalWorkers: 8,
+    snapshot: { kind: "broken", why: "/proc/meminfo has no MemAvailable line" },
+    reserveBytes: 4 * GB,
+  });
+  expect(d.kind).toBe("refuse");
+  if (d.kind !== "refuse") throw new Error("unreachable");
+  expect(d.message).toMatch(/NO TESTS RAN/);
+  expect(d.message).toMatch(/broken check, not a test failure/);
+});
+
+test("an absent reserve file means no policy; an empty one is a truncated write", () => {
   expect(readReserveBytes(NO_FILE)).toBeUndefined();
-  expect(readReserveBytes(fileSaying(""))).toBeUndefined();
+  // NOT undefined: `>` truncates before it writes, so an interrupted
+  // provisioning run leaves exactly this, and reading it as "no policy" would
+  // take the check off the one machine that asked for it.
+  expect(() => readReserveBytes(fileSaying(""))).toThrow(/empty/);
+  expect(() => readReserveBytes(fileSaying("   \n"))).toThrow(/empty/);
   expect(readReserveBytes(fileSaying("4\n"))).toBe(4 * GB);
   // A directory where the file should be is a machine that meant to say
   // something and is not being heard — the same reasoning as the worker file.
@@ -164,7 +240,7 @@ test("MemAvailable is read from /proc/meminfo, not MemFree", () => {
   const snap = readMemorySnapshot(meminfo);
   if (process.platform !== "linux") {
     // On a laptop the platform gate fires first, and that IS the behaviour.
-    expect(snap.kind).toBe("unsupported");
+    expect(snap.kind).toBe("not-linux");
     return;
   }
   if (snap.kind !== "linux") throw new Error("expected a linux snapshot");

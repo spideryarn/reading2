@@ -74,18 +74,36 @@ in [260908b](../plans/260908b-adaptive-test-resource-limits-so-concurrent-suites
 What actually bounds the number of concurrent suites, since nothing else did.
 [`vitest-admission.ts`](../../vitest-admission.ts) asks `/proc/meminfo` before a run begins:
 
-    capacity = floor((MemAvailable - reserve - 3.84 GB) / 0.198 GB)
+    capacity = floor((MemAvailable - reserve - 5.0 GB) / 0.198 GB)
 
 Below one worker of capacity the run **stops, loudly**, saying `NO TESTS RAN` and naming the
 numbers. It does not quietly fall back to one worker: the sum has just said no worker fits, and
-starting a 3.84 GB process group anyway is how postgres gets OOM-killed — which it nearly was on
+starting a 5 GB process group anyway is how postgres gets OOM-killed — which it nearly was on
 2026-09-06.
 
-There is no lock, no lease file and no coordination between runs. A run that has started is already
-inside the next run's `MemAvailable`, so the kernel's own number is the shared state. (A registry
-was designed and rejected: it is write-after-read, so in the thundering herd it existed to handle,
-every starter reads zero and every starter takes the maximum. And `--maxWorkers` overrides the
-config, so a config-time lease can record 1 while the run uses 8.)
+**Why 5.0 and not the 3.84 measured above.** Those are different quantities. RSS is what the run's
+processes hold; `MemAvailable` is what the policy reads, and the same Linux runs saw it drop by
+5.77 GB and 4.10 GB — more than the RSS peak, because RSS misses the page cache a run evicts and
+the kernel memory charged on its behalf. Two runs on a box other agents were using cannot separate
+3.8 from 5.8, so 5.0 splits them on the asymmetry: refusing too eagerly costs a slow run, admitting
+too eagerly costs the box. **If the box starts refusing work it should have done, lower the
+reserve** — that is a policy about the machine; the 5.0 is a measurement about the suite.
+
+There is no lock, no lease file and no coordination between runs — the kernel's own number is the
+shared state. (A registry was designed and rejected: it is write-after-read, so in the thundering
+herd it existed to handle, every starter reads zero and every starter takes the maximum.)
+
+**It is a valve, not a bound**, and the difference is worth knowing before you rely on it. Runs
+arriving one after another each see less memory than the last, so they are throttled and then
+refused — which is the shape of 2026-09-08, whose eighteen suites arrived across an hour. Runs that
+read `MemAvailable` in the *same instant* all see the same number and all admit, and the overshoot
+can be the whole cohort; the fixed 3.84 GB is a peak reached later, not an allocation made on
+admission. Bounding a simultaneous cohort needs an atomic claim, which is a scheduler, and is not
+here. `tests/vitest-memory-admission.test.ts` pins that limit rather than papering over it.
+
+What `--maxWorkers` can and cannot do: it **cannot** bypass a refusal, because the refusal throws
+while the config is being evaluated, before any CLI option is applied — verified, not assumed. It
+**can** exceed a capacity-based reduction, which is the deliberate escape hatch.
 
 **Presence of `~/.config/spideryarn/vitest-memory-reserve-gb` is the opt-in**, and provisioning
 writes `4` on the box. A laptop has no file and is never refused: `MemAvailable` is Linux's number

@@ -1004,8 +1004,15 @@ echo "=== test worker cap ==="
 # tool call, not even the CLAUDE_CODE_SCROLL_SPEED that has been in it since the
 # box was built. A file vitest.config.ts reads has no propagation to be wrong
 # about. Written every run, not merged: one number, ours, nobody else's to keep.
+#
+# Written through a temporary file and renamed, for both files here: `>`opens
+# and TRUNCATES before it writes, so an interrupted run leaves a zero-byte file
+# rather than the old one. For the reserve below that state used to read as
+# "this machine has no policy" -- the check silently absent on the one machine
+# that asked for it. rename(2) is atomic within a filesystem, so a reader sees
+# the old contents or the new ones and never nothing. GPT Sol, 2026-09-08.
 run 30 "test worker cap" "${AS_USER[@]}" \
-  "mkdir -p \$HOME/.config/spideryarn && printf '2\n' > \$HOME/.config/spideryarn/vitest-max-workers"
+  "mkdir -p \$HOME/.config/spideryarn && printf '2\n' > \$HOME/.config/spideryarn/.vitest-max-workers.tmp && mv \$HOME/.config/spideryarn/.vitest-max-workers.tmp \$HOME/.config/spideryarn/vitest-max-workers"
 
 # How much RAM to keep back for everything that is not a test run: the agents
 # themselves (12.9 GB across 159 processes when this was measured), postgres,
@@ -1018,12 +1025,17 @@ run 30 "test worker cap" "${AS_USER[@]}" \
 # A laptop has no file, keeps the static behaviour, and is never refused:
 # MemAvailable is Linux's number and macOS has no honest equivalent.
 #
-# 4 GB, and the arithmetic is worth keeping: this box idles around 9-15 GB
-# available, so a run needs 4 + 3.84 = 7.84 GB before it may start, and gets
-# turned away below that. On 2026-09-08 it had 1.7 GB, and every one of the
-# eighteen runs would have been refused.
+# 4 GB, and the arithmetic is worth keeping: a run's fixed cost is 5 GB, so it
+# needs 9 GB available before it may start and is turned away below that. This
+# box idles around 14-18 GB available, so ordinary work is admitted and a box
+# already carrying several suites starts refusing. On 2026-09-08 it had 1.7 GB,
+# and every one of the eighteen runs would have been refused.
+#
+# Turn this DOWN, not the constant, if the box starts refusing work it should
+# have done: the reserve is a policy about this machine, and the 5 GB is a
+# measurement about the suite.
 run 30 "test memory reserve" "${AS_USER[@]}" \
-  "mkdir -p \$HOME/.config/spideryarn && printf '4\n' > \$HOME/.config/spideryarn/vitest-memory-reserve-gb"
+  "mkdir -p \$HOME/.config/spideryarn && printf '4\n' > \$HOME/.config/spideryarn/.vitest-memory-reserve-gb.tmp && mv \$HOME/.config/spideryarn/.vitest-memory-reserve-gb.tmp \$HOME/.config/spideryarn/vitest-memory-reserve-gb"
 
 echo "=== mcp servers ==="
 # Pin at provision time rather than resolving @latest on every session
