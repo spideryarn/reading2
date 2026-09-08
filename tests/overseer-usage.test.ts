@@ -61,6 +61,7 @@ import {
   parseAuthStatus,
   parseRateLimitLine,
   parseUsageCache,
+  parseUsageReport,
   parseUsageWindow,
   rateLimitHitId,
   scanForRateLimits,
@@ -71,6 +72,7 @@ import {
   type RateLimitHit,
   type ScanCoverage,
   type UsageCacheReading,
+  type UsageReport,
 } from "../tools/overseer/usage.js";
 
 const FIXTURES = path.resolve(import.meta.dirname, "fixtures/overseer-usage");
@@ -1595,5 +1597,180 @@ describe("RateLimitHit.id", () => {
     expect(id).not.toContain("greg");
     expect(id).not.toContain("secret");
     expect(id).not.toContain("/");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// `parseUsageReport` — reading a report back out of `current.json`.
+//
+// THE ROUND TRIP IS THE POSITIVE CONTROL AND IT COMES FIRST. A parser that
+// returned `null` for everything would pass every negative test below, so the
+// negatives prove nothing without it. Same shape as `ScanCoverage`: a refusal
+// is only meaningful from something that can also accept.
+// ---------------------------------------------------------------------------
+
+describe("parseUsageReport", () => {
+  /** A report exercising every arm the type has, built through the real producers. */
+  const fullReport = (): UsageReport => {
+    const h = hit({ hitAt: "2026-09-08T11:00:00.000Z", hitAtMs: Date.parse("2026-09-08T11:00:00.000Z") });
+    const scan = summariseRateLimitScan([h], emptyCoverage({ transcriptsOpened: 3, linesScanned: 300, sinceMs: null }));
+    const cache = parseUsageCache(fxJson("claude-json-stale.json"), NOW_REAL); // has value, expired AND unknown windows
+    if (cache.kind !== "value") throw new Error("unreachable");
+    expect(new Set(cache.windows.map((w) => w.kind))).toEqual(new Set(["value", "expired", "unknown"]));
+    return {
+      account: realAccount(),
+      cache,
+      rateLimits: scan,
+      verdict: computeUsageVerdict({ account: realAccount(), cache, rateLimits: scan, nowMs: NOW_REAL }),
+      collectedAt: new Date(NOW_REAL).toISOString(),
+      tookMs: 1234,
+    };
+  };
+
+  it("round-trips a real report through JSON unchanged", () => {
+    const before = fullReport();
+    const after = parseUsageReport(JSON.parse(JSON.stringify(before)));
+    expect(after).not.toBeNull();
+    expect(after).toEqual(before);
+  });
+
+  it("round-trips a report from an ACTUAL collection, arms and all", async () => {
+    // Built from the I/O half rather than hand-assembled, so a field the
+    // collector adds and the parser does not know about fails here.
+    const dir = await transcriptDir({ "a.jsonl": fx("transcript-429-five-hour-real.jsonl") });
+    const scan = await scanForRateLimits({ projectsDir: dir, sinceMs: null, maxTranscripts: 100, nowMs: NOW_REAL });
+    const cache = parseUsageCache(fxJson("claude-json-real.json"), NOW_REAL);
+    const account = realAccount();
+    const report: UsageReport = {
+      account,
+      cache,
+      rateLimits: scan,
+      verdict: computeUsageVerdict({ account, cache, rateLimits: scan, nowMs: NOW_REAL }),
+      collectedAt: new Date(NOW_REAL).toISOString(),
+      tookMs: 7,
+    };
+    expect(parseUsageReport(JSON.parse(JSON.stringify(report)))).toEqual(report);
+  });
+
+  it("round-trips each `account` arm", () => {
+    for (const account of [
+      realAccount(),
+      { kind: "logged-out", projectsDirectory: "/tmp/x" } as const,
+      { kind: "logged-out", projectsDirectory: null } as const,
+      { kind: "unknown", why: "claude auth status failed" } as const,
+    ]) {
+      const r = { ...fullReport(), account };
+      expect(parseUsageReport(JSON.parse(JSON.stringify(r))), JSON.stringify(account)).toEqual(r);
+    }
+  });
+
+  it("round-trips each `rateLimits` arm", () => {
+    const cov = emptyCoverage({ transcriptsOpened: 3, linesScanned: 300, sinceMs: null });
+    for (const rateLimits of [
+      summariseRateLimitScan([hit()], cov),
+      { kind: "none", coverage: cov } as const,
+      { kind: "unknown", why: "nothing opened", coverage: cov } as const,
+    ]) {
+      const r = { ...fullReport(), rateLimits, verdict: { level: "unknown" as const, reasons: ["x"], activeLimit: null } };
+      expect(parseUsageReport(JSON.parse(JSON.stringify(r))), rateLimits.kind).toEqual(r);
+    }
+  });
+
+  // --- and now the refusals, which mean something because of the above -------
+
+  it("returns null, not a partial report, when a top-level field is missing", () => {
+    for (const drop of ["account", "cache", "rateLimits", "verdict", "collectedAt", "tookMs"]) {
+      const r = JSON.parse(JSON.stringify(fullReport())) as Record<string, unknown>;
+      delete r[drop];
+      expect(parseUsageReport(r), drop).toBeNull();
+    }
+  });
+
+  it("refuses a union arm it does not know", () => {
+    for (const [path, value] of [
+      ["account", { kind: "sort-of", why: "x" }],
+      ["cache", { kind: "maybe" }],
+      ["rateLimits", { kind: "some", coverage: {} }],
+    ] as const) {
+      const r = JSON.parse(JSON.stringify(fullReport())) as Record<string, unknown>;
+      r[path] = value;
+      expect(parseUsageReport(r), path).toBeNull();
+    }
+  });
+
+  it("refuses a hit missing ANY field — the arm whose absence would read as merely-less", () => {
+    // A rejection with a field silently gone is the quiet failure: the report
+    // still parses, still lists a rejection, and the missing part reads as
+    // "not applicable" rather than "corrupt".
+    for (const drop of ["id", "window", "resetsAtMs", "hitAtMs", "hitAt", "status", "claudeSessionId", "transcriptPath", "message"]) {
+      const r = JSON.parse(JSON.stringify(fullReport())) as Record<string, unknown>;
+      const scan = r["rateLimits"] as { kind: string; hits: Record<string, unknown>[] };
+      expect(scan.kind).toBe("hits");
+      delete scan.hits[0]?.[drop];
+      expect(parseUsageReport(r), drop).toBeNull();
+    }
+  });
+
+  it("refuses a coverage missing any field, so a positive control cannot arrive half-empty", () => {
+    for (const drop of ["transcriptsFound", "transcriptsOpened", "transcriptsUnreadable", "unreadableWhy", "linesScanned", "candidateLines", "linesParsed", "malformedCandidates", "truncatedByLimit", "sinceMs", "tookMs"]) {
+      const r = JSON.parse(JSON.stringify(fullReport())) as Record<string, unknown>;
+      const scan = r["rateLimits"] as { coverage: Record<string, unknown> };
+      delete scan.coverage[drop];
+      expect(parseUsageReport(r), drop).toBeNull();
+    }
+  });
+
+  it("refuses an `expired` window that has grown a percentage", () => {
+    const r = JSON.parse(JSON.stringify(fullReport())) as Record<string, unknown>;
+    const cache = r["cache"] as { windows: Record<string, unknown>[] };
+    const expired = cache.windows.find((w) => w["kind"] === "expired");
+    expect(expired).toBeDefined();
+    if (expired) expired["utilizationPercent"] = 70;
+    // The arm exists precisely so no number can be rendered from it; one that
+    // has acquired a number was not written by this module.
+    expect(parseUsageReport(r)).toBeNull();
+  });
+
+  it("refuses a stored utilization outside 0-100, exactly as the producer does", () => {
+    const r = JSON.parse(JSON.stringify(fullReport())) as Record<string, unknown>;
+    const cache = r["cache"] as { windows: Record<string, unknown>[] };
+    const value = cache.windows.find((w) => w["kind"] === "value");
+    if (value) value["utilizationPercent"] = -1;
+    expect(parseUsageReport(r)).toBeNull();
+  });
+
+  it("refuses `hits` with an empty array — that is `none`, and the difference is the point", () => {
+    const r = JSON.parse(JSON.stringify(fullReport())) as Record<string, unknown>;
+    (r["rateLimits"] as { hits: unknown[] }).hits = [];
+    expect(parseUsageReport(r)).toBeNull();
+  });
+
+  it("refuses an activeLimit on any level but `limited`", () => {
+    const r = JSON.parse(JSON.stringify(fullReport())) as Record<string, unknown>;
+    const v = r["verdict"] as Record<string, unknown>;
+    v["level"] = "ok";
+    v["activeLimit"] = JSON.parse(JSON.stringify(hit()));
+    expect(parseUsageReport(r)).toBeNull();
+  });
+
+  it("refuses a missing `activeLimit` key, rather than reading it as null", () => {
+    const r = JSON.parse(JSON.stringify(fullReport())) as Record<string, unknown>;
+    delete (r["verdict"] as Record<string, unknown>)["activeLimit"];
+    expect(parseUsageReport(r)).toBeNull();
+  });
+
+  it("refuses the obvious rubbish without throwing", () => {
+    for (const bad of [null, undefined, 0, "", "{}", [], [1, 2], true, { kind: "report" }]) {
+      expect(parseUsageReport(bad), JSON.stringify(bad ?? null)).toBeNull();
+    }
+  });
+
+  it("is pure — the same input twice gives the same answer, and it reads no clock", () => {
+    const json = JSON.parse(JSON.stringify(fullReport()));
+    const a = parseUsageReport(json);
+    const b = parseUsageReport(json);
+    expect(a).toEqual(b);
+    // A parser that stamped or aged anything would differ across a tick.
+    expect(JSON.stringify(a)).toBe(JSON.stringify(b));
   });
 });

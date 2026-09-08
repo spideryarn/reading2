@@ -1456,3 +1456,314 @@ export async function scanForRateLimits(args: {
   };
   return summariseRateLimitScan(hits, coverage);
 }
+
+// ---------------------------------------------------------------------------
+// Reading a report back. Pure, exhaustive, and null on the first mismatch.
+// ---------------------------------------------------------------------------
+
+/**
+ * `UsageReport` from `unknown` — for the Overseer store reading its own
+ * `current.json` back after a restart.
+ *
+ * WHY THIS LIVES HERE AND NOT IN THE STORE. It is the `RateLimitHit.id`
+ * argument a second time: a parser written by the consumer is a second
+ * hand-written declaration of the type, and it fails in the quiet direction —
+ * a field silently absent reads as a report that merely says less. The arms of
+ * `UsageCacheReading`, `RateLimitScan` and `UsageAccount` are knowledge this
+ * module has and the store does not, so checking the discriminant and casting
+ * the tail is exactly the failure GPT Sol found in the attention session's
+ * parser: `{"evidence":{"kind":"dialog"}}` with no question and no options
+ * parsed as valid and threw at render, having crossed the one boundary the
+ * design exists to hold.
+ *
+ * A checkpoint is a persistence, version and corruption boundary even though we
+ * wrote the bytes, so nothing here trusts its input: every field is checked,
+ * every union arm is exhaustive, and no tail is cast once a discriminant looks
+ * right.
+ *
+ * NULL ON THE FIRST MISMATCH, never a partial report. The caller turns that
+ * into an explicit "could not read it, and here is why" — a half-parsed report
+ * is the thing a store most needs not to have.
+ *
+ * PURE: no clock, no I/O, no environment. It runs inside `parseCheckpoint`,
+ * which is called before the lock is proven and on a path that must not do
+ * anything.
+ */
+export function parseUsageReport(u: unknown): UsageReport | null {
+  const r = obj(u);
+  if (!r) return null;
+  const account = parseAccountBack(r["account"]);
+  if (account === null) return null;
+  const cache = parseCacheBack(r["cache"]);
+  if (cache === null) return null;
+  const rateLimits = parseScanBack(r["rateLimits"]);
+  if (rateLimits === null) return null;
+  const verdict = parseVerdictBack(r["verdict"]);
+  if (verdict === null) return null;
+  const collectedAt = str(r["collectedAt"]);
+  if (collectedAt === null) return null;
+  const tookMs = num(r["tookMs"]);
+  if (tookMs === null) return null;
+  return { account, cache, rateLimits, verdict, collectedAt, tookMs };
+}
+
+/** A string that is allowed to be null, but not absent and not another type. */
+function nullableStr(v: unknown): { ok: true; value: string | null } | { ok: false } {
+  if (v === null) return { ok: true, value: null };
+  return typeof v === "string" ? { ok: true, value: v } : { ok: false };
+}
+function nullableNum(v: unknown): { ok: true; value: number | null } | { ok: false } {
+  if (v === null) return { ok: true, value: null };
+  return typeof v === "number" && Number.isFinite(v) ? { ok: true, value: v } : { ok: false };
+}
+/** A string, required and non-empty — `str` already rejects "" and we keep that. */
+function reqStr(v: unknown): string | null {
+  return str(v);
+}
+function reqNum(v: unknown): number | null {
+  return num(v);
+}
+function reqBool(v: unknown): boolean | null {
+  return typeof v === "boolean" ? v : null;
+}
+function strArray(v: unknown): string[] | null {
+  if (!Array.isArray(v)) return null;
+  const out: string[] = [];
+  for (const item of v) {
+    if (typeof item !== "string") return null;
+    out.push(item);
+  }
+  return out;
+}
+
+function parseAccountBack(u: unknown): UsageAccount | null {
+  const a = obj(u);
+  if (!a) return null;
+  switch (a["kind"]) {
+    case "value": {
+      const email = nullableStr(a["email"]);
+      const orgId = nullableStr(a["orgId"]);
+      const orgName = nullableStr(a["orgName"]);
+      const subscriptionType = nullableStr(a["subscriptionType"]);
+      const accountUuid = nullableStr(a["accountUuid"]);
+      const rateLimitTier = nullableStr(a["rateLimitTier"]);
+      if (!email.ok || !orgId.ok || !orgName.ok || !subscriptionType.ok || !accountUuid.ok || !rateLimitTier.ok) return null;
+      return {
+        kind: "value",
+        email: email.value,
+        orgId: orgId.value,
+        orgName: orgName.value,
+        subscriptionType: subscriptionType.value,
+        accountUuid: accountUuid.value,
+        rateLimitTier: rateLimitTier.value,
+      };
+    }
+    case "logged-out": {
+      const projectsDirectory = nullableStr(a["projectsDirectory"]);
+      if (!projectsDirectory.ok) return null;
+      return { kind: "logged-out", projectsDirectory: projectsDirectory.value };
+    }
+    case "unknown": {
+      const why = reqStr(a["why"]);
+      return why === null ? null : { kind: "unknown", why };
+    }
+    default:
+      return null;
+  }
+}
+
+function parseWindowBack(u: unknown): UsageWindowReading | null {
+  const w = obj(u);
+  if (!w) return null;
+  const window = reqStr(w["window"]);
+  if (window === null) return null;
+  switch (w["kind"]) {
+    case "value": {
+      const utilizationPercent = reqNum(w["utilizationPercent"]);
+      const resetsAt = reqStr(w["resetsAt"]);
+      const resetsAtMs = reqNum(w["resetsAtMs"]);
+      const msUntilReset = reqNum(w["msUntilReset"]);
+      if (utilizationPercent === null || resetsAt === null || resetsAtMs === null || msUntilReset === null) return null;
+      // The same range the producer enforces. A stored -1 is as meaningless as
+      // a freshly parsed one.
+      if (utilizationPercent < 0 || utilizationPercent > 100) return null;
+      return { kind: "value", window, utilizationPercent, resetsAt, resetsAtMs, msUntilReset };
+    }
+    case "expired": {
+      const resetsAt = reqStr(w["resetsAt"]);
+      const resetsAtMs = reqNum(w["resetsAtMs"]);
+      const msSinceReset = reqNum(w["msSinceReset"]);
+      const why = reqStr(w["why"]);
+      if (resetsAt === null || resetsAtMs === null || msSinceReset === null || why === null) return null;
+      // Belt and braces on the arm's whole reason for existing: an expired
+      // reading must carry no percentage, so a stored one that has grown a
+      // numeric field is not a reading this module produced.
+      if ("utilizationPercent" in w) return null;
+      return { kind: "expired", window, resetsAt, resetsAtMs, msSinceReset, why };
+    }
+    case "unknown": {
+      const why = reqStr(w["why"]);
+      return why === null ? null : { kind: "unknown", window, why };
+    }
+    default:
+      return null;
+  }
+}
+
+function parseCacheBack(u: unknown): UsageCacheReading | null {
+  const c = obj(u);
+  if (!c) return null;
+  switch (c["kind"]) {
+    case "value": {
+      const accountUuid = nullableStr(c["accountUuid"]);
+      const fetchedAtMs = reqNum(c["fetchedAtMs"]);
+      const ageMs = reqNum(c["ageMs"]);
+      if (!accountUuid.ok || fetchedAtMs === null || ageMs === null) return null;
+      if (!Array.isArray(c["windows"])) return null;
+      const windows: UsageWindowReading[] = [];
+      for (const item of c["windows"]) {
+        const w = parseWindowBack(item);
+        if (w === null) return null;
+        windows.push(w);
+      }
+      return { kind: "value", accountUuid: accountUuid.value, fetchedAtMs, ageMs, windows };
+    }
+    case "unknown": {
+      const why = reqStr(c["why"]);
+      return why === null ? null : { kind: "unknown", why };
+    }
+    default:
+      return null;
+  }
+}
+
+function parseHitBack(u: unknown): RateLimitHit | null {
+  const h = obj(u);
+  if (!h) return null;
+  const id = reqStr(h["id"]);
+  const window = reqStr(h["window"]);
+  const resetsAtMs = reqNum(h["resetsAtMs"]);
+  const hitAtMs = nullableNum(h["hitAtMs"]);
+  const hitAt = nullableStr(h["hitAt"]);
+  const status = nullableStr(h["status"]);
+  const claudeSessionId = nullableStr(h["claudeSessionId"]);
+  const transcriptPath = reqStr(h["transcriptPath"]);
+  const message = nullableStr(h["message"]);
+  if (id === null || window === null || resetsAtMs === null || transcriptPath === null) return null;
+  if (!hitAtMs.ok || !hitAt.ok || !status.ok || !claudeSessionId.ok || !message.ok) return null;
+  return {
+    id,
+    window,
+    resetsAtMs,
+    hitAtMs: hitAtMs.value,
+    hitAt: hitAt.value,
+    status: status.value,
+    claudeSessionId: claudeSessionId.value,
+    transcriptPath,
+    message: message.value,
+  };
+}
+
+function parseCoverageBack(u: unknown): ScanCoverage | null {
+  const c = obj(u);
+  if (!c) return null;
+  const transcriptsFound = reqNum(c["transcriptsFound"]);
+  const transcriptsSelected = reqNum(c["transcriptsSelected"]);
+  const transcriptsOpened = reqNum(c["transcriptsOpened"]);
+  const transcriptsUnreadable = reqNum(c["transcriptsUnreadable"]);
+  const unreadableWhy = strArray(c["unreadableWhy"]);
+  const linesScanned = reqNum(c["linesScanned"]);
+  const candidateLines = reqNum(c["candidateLines"]);
+  const linesParsed = reqNum(c["linesParsed"]);
+  const malformedCandidates = reqNum(c["malformedCandidates"]);
+  const quotaLimitsWithoutErrorSignal = reqNum(c["quotaLimitsWithoutErrorSignal"]);
+  const truncatedByLimit = reqBool(c["truncatedByLimit"]);
+  const sinceMs = nullableNum(c["sinceMs"]);
+  const tookMs = reqNum(c["tookMs"]);
+  if (
+    transcriptsFound === null ||
+    transcriptsSelected === null ||
+    transcriptsOpened === null ||
+    transcriptsUnreadable === null ||
+    unreadableWhy === null ||
+    linesScanned === null ||
+    candidateLines === null ||
+    linesParsed === null ||
+    malformedCandidates === null ||
+    quotaLimitsWithoutErrorSignal === null ||
+    truncatedByLimit === null ||
+    !sinceMs.ok ||
+    tookMs === null
+  ) {
+    return null;
+  }
+  return {
+    transcriptsFound,
+    transcriptsSelected,
+    transcriptsOpened,
+    transcriptsUnreadable,
+    unreadableWhy,
+    linesScanned,
+    candidateLines,
+    linesParsed,
+    malformedCandidates,
+    quotaLimitsWithoutErrorSignal,
+    truncatedByLimit,
+    sinceMs: sinceMs.value,
+    tookMs,
+  };
+}
+
+function parseScanBack(u: unknown): RateLimitScan | null {
+  const s = obj(u);
+  if (!s) return null;
+  const coverage = parseCoverageBack(s["coverage"]);
+  if (coverage === null) return null;
+  switch (s["kind"]) {
+    case "hits": {
+      if (!Array.isArray(s["hits"])) return null;
+      const hits: RateLimitHit[] = [];
+      for (const item of s["hits"]) {
+        const h = parseHitBack(item);
+        if (h === null) return null;
+        hits.push(h);
+      }
+      // An empty `hits` array is not a `hits` scan — that is `none`, and the
+      // difference is the whole positive control.
+      if (hits.length === 0) return null;
+      return { kind: "hits", hits, coverage };
+    }
+    case "none":
+      return { kind: "none", coverage };
+    case "unknown": {
+      const why = reqStr(s["why"]);
+      return why === null ? null : { kind: "unknown", why, coverage };
+    }
+    default:
+      return null;
+  }
+}
+
+function parseVerdictBack(u: unknown): UsageVerdict | null {
+  const v = obj(u);
+  if (!v) return null;
+  const level = v["level"];
+  if (level !== "ok" && level !== "approaching" && level !== "limited" && level !== "unknown") return null;
+  const reasons = strArray(v["reasons"]);
+  if (reasons === null) return null;
+  // A MISSING `activeLimit` KEY IS REFUSED, but by the two lines below rather
+  // than by an `in` check of its own: an absent key is `undefined`, which is
+  // not `null`, so it goes to `parseHitBack(undefined)`, comes back null, and
+  // is rejected. There WAS an `in` guard here and a mutation pass showed
+  // deleting it changed nothing — the same redundancy GPT Sol caught me
+  // mis-describing as an equivalent mutant earlier in this file, except this
+  // time the whole observable value is identical rather than just the
+  // discriminator, so the line really was dead. The test that pins the
+  // behaviour stays; it just no longer names the line that enforces it.
+  const activeLimit = v["activeLimit"] === null ? null : parseHitBack(v["activeLimit"]);
+  if (v["activeLimit"] !== null && activeLimit === null) return null;
+  // `limited` is the only level that may carry one, and any other level
+  // carrying one is a report this module did not write.
+  if (activeLimit !== null && level !== "limited") return null;
+  return { level, reasons, activeLimit };
+}
