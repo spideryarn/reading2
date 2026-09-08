@@ -26,6 +26,7 @@ import {
   parseSessions,
   type Session,
   type SessionMeta,
+  type SessionRole,
 } from "../../scripts/gjd-remote-tmux.js";
 import { capturePane, parsePane, readPaneMode, type PaneAutoMode, type PaneQuestion } from "./pane.js";
 import { statusesOf, type FleetStatus } from "./status.js";
@@ -67,6 +68,18 @@ export type FleetRow = {
    * writing comments about.
    */
   meta: SessionMeta;
+  /**
+   * **WHETHER THIS SESSION IS THE OVERSEER**, and the box must have exactly one
+   * (docs/project/overseer.md). See `SessionRole` in scripts/gjd-remote-tmux.ts:
+   * it is a union rather than a nullable string because *nobody holds it* and
+   * *we could not look* are different facts, and this payload is read by things
+   * that decide whether to prod the Overseer.
+   *
+   * The claim lives in the session's own tmux environment, so it dies with the
+   * session and with the tmux server: after a reboot, no row carries it, which
+   * is the honest answer rather than a stale one.
+   */
+  role: SessionRole;
   startedAt: string;
   /**
    * What the session is doing. A union, never a bare string, and `unknown`
@@ -339,6 +352,7 @@ export function toRows(
       repo: s.meta.version === 1 ? s.meta.repo : null,
       worktree: s.meta.version === 1 ? worktreeOf(s.meta.dir) : null,
       meta: s.meta,
+      role: s.role,
       startedAt: s.created.toISOString(),
       paneId: panes.get(s.id)?.paneId ?? null,
       panePid: panes.get(s.id)?.panePid ?? null,

@@ -31,7 +31,8 @@ import type { ReactNode } from "react";
 
 import { Explain, type Tip } from "./Tooltip";
 import { Button, cx } from "./ui";
-import type { FleetState } from "./types";
+import { type FleetState, overseerClaim } from "./types";
+import { COMPLETE } from "../../overseer-claim.js";
 import { clockNote, collectedAge, formatDuration, tally } from "./view";
 
 /**
@@ -233,6 +234,60 @@ function Count({ n, label, className }: { n: number; label: string; className?: 
  */
 export const SHELL = "tw:mx-auto tw:w-full tw:max-w-[96rem] tw:px-[calc(0.75rem+var(--safe-left))]";
 
+/**
+ * The Overseer line: which session holds the claim, or that none does.
+ *
+ * **FOUR STATES AND NONE OF THEM IS BLANK.** *No Overseer session* is not the
+ * absence of news — it is what the box looks like after a reboot, since the
+ * claim dies with the tmux server, and it is the state the scheduler that prods
+ * the Overseer has to be able to see. Two claimants is a fault and is drawn in
+ * the alarm colour: picking one of them is how two sessions both go on believing
+ * they are it.
+ */
+function OverseerLine({ state }: { state: FleetState }): ReactNode {
+  /* **THE ROWS ARE NOT THE WHOLE STORY, and a short list must not pass as a
+     complete one.** Two things can hide the holder from this page: a payload
+     from before the first collection has no rows at all, which is not a box with
+     no Overseer; and `parseFleetState` DROPS rows it cannot read and counts
+     them, and the malformed row is as likely as any to be the holder's. Both go
+     in as incompleteness so the answer degrades to *unknown* rather than to a
+     confident *no Overseer session*. GPT Sol's P0-2. */
+  const claim = overseerClaim(
+    state.rows,
+    state.collectedAt === null
+      ? { ok: false, why: "no collection has finished yet" }
+      : state.unreadableRows > 0
+        ? { ok: false, why: `${state.unreadableRows} session row(s) in this payload could not be read` }
+        : COMPLETE,
+  );
+  switch (claim.kind) {
+    case "one":
+      return (
+        <p className="tw:mt-0.5 tw:text-[12px] tw:text-ink-soft">
+          Overseer: <span className="tw:font-semibold tw:text-ink">{claim.name}</span>
+        </p>
+      );
+    case "none":
+      return <p className="tw:mt-0.5 tw:text-[12px] tw:text-ink-faint">no Overseer session</p>;
+    case "contested":
+      return (
+        <p className="tw:mt-0.5 tw:text-[12px] tw:font-semibold tw:text-alarm">
+          {claim.names.length} sessions claim to be the Overseer: {claim.names.join(", ")}
+        </p>
+      );
+    case "cannot-tell":
+      return (
+        <p className="tw:mt-0.5 tw:text-[12px] tw:font-semibold tw:text-alarm">
+          Overseer unknown — {claim.why}
+        </p>
+      );
+    default: {
+      const never: never = claim;
+      return never;
+    }
+  }
+}
+
 export function Header({
   state,
   fresh,
@@ -294,6 +349,16 @@ export function Header({
             {fresh.stale ? `STALE — ${fresh.age}` : fresh.age}
           </Explain>
         </div>
+
+        {/* **WHO IS THE OVERSEER, INCLUDING WHEN NOBODY IS.** The box is meant
+            to have exactly one supervising session (docs/project/overseer.md),
+            and the claim lives in that session's tmux environment — so a reboot
+            leaves nobody holding it and nothing else on this page would say so.
+            *No Overseer session* is therefore the state this line exists for,
+            and it is drawn as loudly as the other three rather than as an empty
+            space. Suppressed only before the first payload arrives, where every
+            answer would be a guess. */}
+        {state === null ? null : <OverseerLine state={state} />}
 
         {/* Its own row rather than another item in the wrap above, so that on a
             phone it never lands between the tally and the age and pushes the

@@ -38,6 +38,7 @@ import { describeRuleOutcome } from "../tools/overseer/rules.js";
 import type { ProposingRuleWork } from "../tools/overseer/scheduler.js";
 import { describeStandingJobs, standingJobs } from "../tools/overseer/standing-jobs.js";
 import type { AttentionList } from "../tools/fleet/wire.js";
+import { type OverseerClaim, claimFromSnapshot, describeClaim } from "../tools/fleet/overseer-claim.js";
 import type { OverseerEvent } from "../tools/overseer/diff.js";
 import type { AuthorisedJob } from "../tools/overseer/jobs.js";
 import { describeNote, openConditions, readNotes, type DaemonNote } from "../tools/overseer/notes.js";
@@ -304,7 +305,56 @@ export function describeEvent(event: OverseerEvent): string {
  * anything wrong, and only then the fleet — because the register is the part
  * that looks fine when everything above it is broken.
  */
-export function statusLines(root: string, nowMs: number = Date.now()): string[] {
+/**
+ * **WHO HOLDS THE OVERSEER CLAIM**, asked of the dashboard rather than of tmux.
+ *
+ * The dashboard is the one collector on this box
+ * (docs/project/overseer-direction.md § Two tenses), so this reads its snapshot
+ * instead of growing a second inventory — which is also why it can fail, and why
+ * failing has to produce `cannot-tell` rather than *no Overseer*. A supervisor
+ * that reports "nobody is in charge" because it could not reach a web server is
+ * the exact substitution this whole area keeps writing comments about.
+ *
+ * Not in `statusLines`, which is synchronous and file-only by design: the claim
+ * is passed in, so the printing stays testable without a server.
+ */
+export async function readOverseerClaim(
+  baseUrl: string,
+  opts: { nowMs?: number; maxAgeMs?: number; fetchImpl?: typeof fetch } = {},
+): Promise<OverseerClaim> {
+  const fetchImpl = opts.fetchImpl ?? fetch;
+  try {
+    const response = await fetchImpl(`${baseUrl}/api/state`);
+    if (!response.ok) {
+      return { kind: "cannot-tell", why: `the dashboard answered ${response.status} for /api/state` };
+    }
+    // EVERY judgement about the payload — schema, a failed collection, an
+    // uncollected one, staleness, unreadable rows — is `claimFromSnapshot`'s,
+    // so this function's whole job is the network and its failures.
+    return claimFromSnapshot(await response.json(), {
+      nowMs: opts.nowMs ?? Date.now(),
+      maxAgeMs: opts.maxAgeMs ?? CLAIM_MAX_SNAPSHOT_AGE_MS,
+    });
+  } catch (cause) {
+    return {
+      kind: "cannot-tell",
+      why: `the dashboard could not be reached at ${baseUrl} (${cause instanceof Error ? cause.message : String(cause)})`,
+    };
+  }
+}
+
+/**
+ * How stale a snapshot may be before this reading stops trusting who it names.
+ *
+ * The dashboard collects on a chain roughly every 60 seconds and backs off 5×
+ * after a failure, so a healthy box is never more than a couple of cadences
+ * behind. Five minutes is several missed collections — long enough that a
+ * momentarily-busy box does not produce an alarm, short enough that a session
+ * killed since is unlikely to still be named.
+ */
+export const CLAIM_MAX_SNAPSHOT_AGE_MS = 5 * 60_000;
+
+export function statusLines(root: string, nowMs: number = Date.now(), claim?: OverseerClaim): string[] {
   requireAbsoluteRoot(root);
   const read = readCheckpoint(root);
   const checkpoint = read.kind === "checkpoint" ? read.checkpoint : null;
@@ -356,6 +406,18 @@ export function statusLines(root: string, nowMs: number = Date.now()): string[] 
       lines.push("            Clear it with: npx tsx scripts/overseer.ts reconcile-jobs --why '<what you checked>', then restart the daemon");
     }
   }
+
+  // WHO THE OVERSEER IS, ON ITS OWN LINE AND ALWAYS PRESENT. The box is meant
+  // to have exactly one, the claim dies with the tmux server, and nothing else
+  // on this page would notice — a daemon can be perfectly alive with no session
+  // holding the role. `not asked` is a fourth state and is not `none`: it is
+  // what a caller that did not look produces, and reading it as "nobody" would
+  // be the same substitution the source line above refuses to make.
+  lines.push(
+    claim === undefined
+      ? "overseer    not asked — this reading did not query the dashboard"
+      : `overseer    ${describeClaim(claim)}`,
+  );
 
   const open = openConditions(notes.notes);
   if (open.length === 0) lines.push("conditions  all clear");
@@ -744,7 +806,7 @@ async function main(argv: readonly string[]): Promise<number> {
 
   switch (command) {
     case "status":
-      console.log(statusLines(root).join("\n"));
+      console.log(statusLines(root, Date.now(), await readOverseerClaim(fleetUrl(process.env))).join("\n"));
       return 0;
     case "events": {
       const tail = readEventTail(root, Number(flag(argv, "--limit") ?? 40));

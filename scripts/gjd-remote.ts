@@ -55,19 +55,25 @@ import {
 import {
   META,
   METADATA_VERSION,
+  OVERSEER_ROLE,
+  type OverseerClaim,
   type Session,
   type SessionKind,
   type SessionState,
   bindingsVerdict,
   buildBindingsScript,
   buildSessionScript,
+  decideClaim,
+  decideRelease,
   formatWait,
   escapeName,
+  overseerClaim,
   parseSessions,
   printableName,
   resolveSession,
   sessionRepo,
   sessionState,
+  setRoleCommand,
 } from "./gjd-remote-tmux.js";
 import { bootstrapProbeScript, buildProvisionRunner, cloudInitGate, provisionVerdict } from "./gjd-remote-provision.js";
 import { declaredServers, mcpVerdict } from "./gjd-remote-mcp.js";
@@ -2131,6 +2137,113 @@ const visibleWidth = (s: string) => s.replace(SGR, "").length;
 
 const padVisible = (s: string, width: number) => s + " ".repeat(Math.max(0, width - visibleWidth(s)));
 
+/**
+ * What the ROLE column says about one session, and `""` for the great majority
+ * that hold no role at all.
+ *
+ * `?` for a role we could not read: it is not nothing, and a blank cell would
+ * claim it was.
+ */
+function roleCell(s: Session): string {
+  switch (s.role.kind) {
+    case "none":
+      return "";
+    case "overseer":
+      return OVERSEER_ROLE;
+    case "other":
+      return s.role.name;
+    case "cannot-tell":
+      return "?";
+    default: {
+      const never: never = s.role;
+      return never;
+    }
+  }
+}
+
+/**
+ * One line saying who is the Overseer — **including when nobody is**.
+ *
+ * Shared by `ls` and by the claim verbs so that the sentence a person reads
+ * after claiming is the same sentence `ls` will show them a minute later. There
+ * must be exactly one Overseer on the box (docs/project/overseer.md); two is a
+ * fault to shout about and never to pick from.
+ */
+function claimLine(claim: OverseerClaim): string {
+  switch (claim.kind) {
+    case "one":
+      return `${dim("overseer:")} ${cyan(printableName(claim.name))}`;
+    case "none":
+      return dim("no session holds the overseer claim");
+    case "contested":
+      return red(`${claim.names.length} sessions claim to be the overseer: ${claim.names.join(", ")}`);
+    case "cannot-tell":
+      return red(`overseer: ${claim.why}`);
+    default: {
+      const never: never = claim;
+      return never;
+    }
+  }
+}
+
+/**
+ * Mark one live session as the Overseer, or let go of the claim.
+ *
+ * **THE READ AFTERWARDS IS NOT DECORATION.** The refusal is decided against a
+ * listing taken a moment ago and then carried out by a second tmux call, so two
+ * claims racing can both pass it — see `decideClaim`. Re-reading turns that from
+ * a silent double-claim into a sentence on screen, which is the whole of what
+ * this design promises: not that a race cannot happen, but that it cannot happen
+ * quietly.
+ */
+function cmdRole(action: "claim" | "release", name: string | undefined): void {
+  if (!name) die(`usage: gjd-remote ${action}-overseer <name>`);
+  const before = sessions();
+  const verdict = action === "claim" ? decideClaim(before, name) : decideRelease(before, name);
+
+  // Before the switch rather than in it: `die` never returns, so a `case` for it
+  // is either unreachable code or a value returned from a void function, and
+  // there is no spelling of it that tsc and biome both accept.
+  if (verdict.kind === "refused") die(verdict.why);
+
+  switch (verdict.kind) {
+    case "already-yours":
+      console.log(green(`✓ ${printableName(name)} already holds the overseer claim`));
+      return;
+    case "claim":
+    case "release": {
+      ssh(setRoleCommand(verdict.id, verdict.kind === "claim" ? OVERSEER_ROLE : null));
+      appendLog({ cmd: `${action}-overseer`, name: verdict.name });
+      const list = sessions();
+      const after = overseerClaim(list);
+      // TWO DIFFERENT POSTCONDITIONS, because the two verbs promise different
+      // things. A claim promises *this session and no other*, so it is checked
+      // against the whole box. A release promises only *this session no longer
+      // holds it* — checked against the target, because releasing one of two
+      // claimants is the repair for a contested box and would otherwise be
+      // reported as a failure. GPT Sol's P1-2.
+      const wanted =
+        verdict.kind === "claim"
+          ? after.kind === "one" && after.id === verdict.id
+          : list.find((s) => s.id === verdict.id)?.role.kind !== "overseer";
+      // Reported as a warning rather than a success, and non-zero, because the
+      // interesting case is somebody else claiming it in the same second.
+      if (!wanted) {
+        console.error(red(`✗ the ${action} was sent, and the box does not now say what it should`));
+        console.error(`  ${claimLine(after)}`);
+        process.exit(1);
+      }
+      console.log(green(`✓ ${verdict.kind === "claim" ? "claimed" : "released"} by ${printableName(verdict.name)}`));
+      console.log(dim("— ") + claimLine(after));
+      return;
+    }
+    default: {
+      const never: never = verdict;
+      throw new Error(`unhandled role change: ${JSON.stringify(never)}`);
+    }
+  }
+}
+
 function cmdLs(): void {
   const { list: raw, agents, agentsWhy } = fleet({ agents: true });
   const list = adoptTitles(raw);
@@ -2167,20 +2280,35 @@ function cmdLs(): void {
   // column ragged.
   const rw = Math.max(4, ...list.map((s) => sessionRepo(s).text.length));
   const sw = Math.max(5, ...rows.map((r) => visibleWidth(r.label.text)));
-  console.log(bold(`${"NAME".padEnd(w)}  ${"REPO".padEnd(rw)}  AGE   ATT  ${"STATE".padEnd(sw)}  TITLE`));
+  // A COLUMN ONLY WHEN THERE IS SOMETHING IN IT. Almost every session on the box
+  // holds no role, so an unconditional column would be a stripe of dashes down
+  // the page for the one day in a hundred when it says something. The absent
+  // state is not lost by hiding it: the claim line under the table always says
+  // whether anybody holds it.
+  const oww = Math.max(0, ...list.map((s) => roleCell(s).length));
+  const ow = oww === 0 ? 0 : Math.max(4, oww);
+  const roleHead = ow === 0 ? "" : `${"ROLE".padEnd(ow)}  `;
+  console.log(bold(`${"NAME".padEnd(w)}  ${"REPO".padEnd(rw)}  ${roleHead}AGE   ATT  ${"STATE".padEnd(sw)}  TITLE`));
   for (const { s, label } of rows) {
     // Dimmed when it is not a real answer, the same treatment the empty TITLE
     // cell gets: a session started before the metadata existed, or against an
     // arbitrary --dir, cannot be attributed to a repo and should not look like
     // it has been.
     const repo = sessionRepo(s);
+    const role = roleCell(s);
     console.log(
       `${nameOf(s).padEnd(w)}  ${padVisible(repo.known ? repo.text : dim(repo.text), rw)}  ` +
+        (ow === 0 ? "" : `${padVisible(role === OVERSEER_ROLE ? cyan(role) : dim(role), ow)}  `) +
         `${age(s.created).padEnd(4)}  ${s.attached ? green("yes") : dim(" no")}  ` +
         `${padVisible(label.text, sw)}  ${s.title ? s.title : dim("(no title yet)")}`,
     );
   }
   if (rows.length > 1) console.log(dim("— ") + stateSummary(rows.map((r) => r.state)));
+  // ALWAYS printed, including when nobody holds it. "No session is the
+  // Overseer" is the state that most needs saying out loud: it is what a box
+  // looks like after a reboot, and a blank line where the answer should be
+  // reads exactly like a box that is fine.
+  console.log(dim("— ") + claimLine(overseerClaim(list)));
 
   // Every `unknown` carries a reason, and the first version threw them away —
   // so a row said `! unknown` and there was nowhere to find out why. Printed
@@ -5175,6 +5303,15 @@ ${bold("SESSIONS")}
   resume-all              one new iTerm tab per session, each attached to its own
       --include-attached    take over sessions something else is already in
   kill <name>             end a session ${dim("— any name ls shows, made by this tool or not")}
+  claim-overseer <name>   mark that session as ${bold("the Overseer")}, of which the box has
+                          exactly one ${dim("(docs/project/overseer.md)")}
+                          Refuses, naming the holder, if another live session
+                          already holds it. ${bold("There is no --force")} — release it
+                          there, or kill that session. The claim is a variable in
+                          the session's tmux environment, so it dies with the
+                          session and with the tmux server: after a reboot NO
+                          session is the Overseer, which ${dim("ls")} says out loud.
+  release-overseer <name> let go of the claim, leaving the session running
   log                     every session launched from here, and whether it ran
       --lost                only the ones that never started ${dim("— the reboot case")}
       --limit N             how many rows ${dim("(default 40)")}
@@ -5630,6 +5767,10 @@ async function main(): Promise<void> {
       console.log(green(`✓ killed ${printableName(target.name)}`));
       return;
     }
+
+    case "claim-overseer":
+    case "release-overseer":
+      return cmdRole(cmd === "claim-overseer" ? "claim" : "release", positionalName(rest));
 
     case "new-shell": {
       const { values, positionals } = parseArgs({
