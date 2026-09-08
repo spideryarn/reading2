@@ -64,7 +64,7 @@
  * answer this module could give"*. Rounding a speaker this build cannot name to
  * "agent" would misattribute a message, so it is labelled as unknown instead.
  */
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
 import {
   transcriptAge,
@@ -358,9 +358,33 @@ export function useRecentMessages(api: MessagesApi, row: FleetRow): MessagesRead
   const [view, setView] = useState<MessagesView | null>(null);
   const [busy, setBusy] = useState(false);
 
+  /**
+   * WHICH SESSION THE ANSWER IN FLIGHT IS ABOUT.
+   *
+   * **A read that lands after the reader has moved on must not be drawn.**
+   * `Read again` on session A, then a tap on session B, and A's answer arrives
+   * to find B's panel on screen — so the turns of one agent render under the
+   * name and status of another. On a page whose entire job is telling you which
+   * session needs you, that is the worst thing it can get wrong, and it renders
+   * perfectly: real turns, well formed, correctly parsed, attached to the wrong
+   * row.
+   *
+   * The effect below has always been safe — it holds a per-run `alive` flag
+   * closed over by its own cleanup. This is the manual path, which had none.
+   * `fleet-health-history` flagged the general shape on 2026-09-08 (two
+   * overlapping polls of one endpoint resolving out of order); here it is not
+   * two polls of one thing but one poll of two different things, which is
+   * worse, because the stale answer is not merely old — it is about somebody
+   * else.
+   */
+  const wantedFor = useRef(row.id);
+  wantedFor.current = row.id;
+
   const read = useCallback(async (): Promise<void> => {
+    const askedFor = row.id;
     setBusy(true);
     const answer = await api.recent(row);
+    if (wantedFor.current !== askedFor) return;
     setView(answer);
     setBusy(false);
   }, [api, row]);
