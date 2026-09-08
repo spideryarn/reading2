@@ -1,21 +1,27 @@
 # Make every environment-variable read literal, and inventory them
 
-**Status as of 2026-09-08: Stages 1 and 2 built and on `dev`. Stage 3 not started, and
-[260827b](../postmortems/260827b-health-check-green-while-uploads-dead.md) item 1 is therefore still
-not marked built.** Stage 1 took five GPT Sol verdicts — two refusals and three scoped checks — and
-the two changes that mattered both came from *giving up on making the checker clever*: pinning what
-cannot be reasoned about, and inverting the specifier rule to refuse by default. Stage 2 took one
-refusal, three P1s.
+**Status as of 2026-09-08: Stages 1 and 2 are on `dev`; Stage 3 is built, reviewed twice and lands
+with this commit, and
+[260827b](../postmortems/260827b-health-check-green-while-uploads-dead.md) item 1 is marked built
+with its limit stated.** Stage 1 took five GPT Sol verdicts — two refusals and three scoped checks —
+and the two changes that mattered both came from *giving up on making the checker clever*: pinning
+what cannot be reasoned about, and inverting the specifier rule to refuse by default. Stage 2 took
+one refusal, three P1s. Stage 3 was small and closed the one hole the other two left named.
 
-**What is true of `dev` right now:** every environment read written in `src/` is `process.env.NAME`,
-`import.meta.env.NAME`, or inside one of twelve checksum-pinned regions — or it is refused; and every
-name so collected is in exactly one of four doors. **What is not yet true:** `src/vercel-health.ts`'s
-`value()` is a pin whose declared names come from its *callers*, so a caller could hand it a name the
-sweep never sees. That seam is named in the sweep's header, and Stage 3 closes it by branding the
-argument type. Until then the guarantee is real but has a hole somebody has to know about, which is
-why the postmortem stays open.
+**What is true of `dev` now:** every environment read written in `src/` is `process.env.NAME`,
+`import.meta.env.NAME`, or inside one of twelve checksum-pinned regions — or it is refused; every
+name so collected is in exactly one of four doors; and the one pinned region whose names came from
+*outside* it, `src/vercel-health.ts`'s `value()`, now takes a `ReportedEnvName` derived from
+`EXPECTED`, so `value("NEW_ONE")` does not compile.
 
-Commits: `d403821d` (Stage 1), `ec1b2543` (Stage 2), `7b4102e7` (a false justification corrected).
+**What this still does not do, and it is the sentence to carry:** it inventories *names*, not
+*consequences*. It would not have caught the incident 260827b was written about, where the name was
+already in `EXPECTED` and what went stale was the truth of its `breaks` clause. Deriving the
+contract — one declaration each variable's reader and this reporter both import — is the fix for
+that, and is still not built.
+
+Commits: `d403821d` (Stage 1), `ec1b2543` (Stage 2), `7b4102e7` (a false justification corrected),
+`95b7f66a` (the status line), and Stage 3 below.
 
 The route was put to GPT Sol before anything was written and came back a
 **hybrid — route A for ordinary reads, plus narrow executable contracts for the five genuinely
@@ -450,10 +456,157 @@ But the correction exposed a question nobody had asked: **those are *build* vari
 into the bundle correctly — which is a *worse* failure than the one the entry was added for, and the
 same shape as the `VITE_SUPABASE_` caveat already in this table. That genuinely does want one look at
 a real deployment's `/api/health`, and the row stays report-only until somebody takes it.
+*Somebody took it an hour later; see below.*
 
 **A tool nobody reached for is not the same as an unanswerable question**, and this is the second
 time tonight the difference mattered — the first was a text survey that missed a read it had not
 thought to look for.
+
+### Stage 3 — what actually landed
+
+**The brand is four lines of type and no runtime code.** `EXPECTED` is now
+`[…] as const satisfies readonly Expected[]` — the `satisfies` is the shape check the old
+`: readonly Expected[]` annotation used to be, and the `as const` is what keeps each `name` a literal
+type. `ReportedEnvName` is the union of every `name` and `or` in the table, `value` takes one, and
+`value("NEW_ONE")` is now a compile error. A second binding, `ROWS`, views the same array through the
+interface for iterating, and its annotation is what states at the type level that **a `with` names a
+variable this table also declares** — `checkEnv` enforces that incidentally today by passing
+`expected.with` to `value`, and a refactor there would take it away with nothing going red.
+
+**Every check here was a false green, three times running, and GPT Sol broke them with seven edits
+of a few words each.** This is the finding worth keeping from Stage 3, and it is the plan's own
+failure class arriving inside the checks written to close it: **a guard that answers a weaker
+question than its message claims.** Three rounds, three refusals, and the shape of the mistake was
+the same every time — I kept checking a *spelling* and calling it a check on a *meaning*, and when I
+finally started asking the compiler, I asked it about one sample and then about one mechanism.
+
+**The general lesson, which is why this is written up at length for a four-line type:** a check
+whose subject is the same thing that defines "correct" cannot notice them moving together. Both
+halves of the comparison have to come from somewhere the mutation cannot reach at once — which is
+also why the checksum pins in Stage 1 work and why comparing `EXPECTED` against itself would not.
+
+Round one:
+
+1. **"Reaches `typeof EXPECTED`" is not "is derived from `EXPECTED`".** The alias walk asked whether
+   the brand's declaration mentioned the table *anywhere*. `type ReportedEnvName = string |
+   ExpectedRow["name"] | …` mentions it, typechecks, leaves the checksum pin green because `value`
+   itself is untouched, passes all eight tests — and makes `value("NEW_ONE")` legal again.
+2. **The locator required a `satisfies` wrapper and never looked at what was being satisfied.**
+   `readonly (Expected & Record<string, unknown>)[]` keeps both wrappers, passes everything, and
+   quietly stops `satisfies` refusing a misspelled key — Sol demonstrated it by writing `wher` for
+   `where`, which would drop a row's "only on Vercel" guard and warn on every laptop.
+
+I fixed both syntactically: every union *member* must reach the table, and the `satisfies` target
+must be spelled exactly `readonly Expected[]`. I also added one compile-time assertion — a single
+literal asserted not to be a `ReportedEnvName` — and asked Sol specifically to try widening
+`ExpectedRow`, the case I could see coming.
+
+Round two, and it walked through both fixes:
+
+3. **A sample is not a property.** `type ExpectedRow = (typeof EXPECTED)[number] | { name:
+   "NEW_ONE"; or: "NEW_TWO" }` — every union member still reaches `typeof EXPECTED`, my one sampled
+   literal is still excluded, all four TypeScript projects and all eight tests pass, and `NEW_ONE`
+   is admitted. **The widening moved inside the alias, where a syntactic walk cannot follow, and my
+   compile-time check was asking about one arbitrary name rather than about the set.**
+4. **Checking the name of a type is not checking what the type means** — the same sentence as (2),
+   one level down. Sol left the `satisfies readonly Expected[]` spelling exactly as required and put
+   `[key: string]: unknown` into `interface Expected` itself. Excess-property checking gone,
+   everything green.
+
+Round three was scoped to nothing but the two compile-time assertions, and it found three more:
+
+5. **`any` is assignable to everything**, so `type ReportedEnvName = any` compared equal to the
+   table and admitted every name.
+6. **Widening `EXPECTED` widens both sides of the comparison together.** Re-adding the
+   `: readonly Expected[]` annotation, or writing `{ name: "DATABASE_URL" as string }`, makes the
+   names `string` on both sides and the equality holds vacuously.
+7. **`string extends keyof Expected` only sees a *full* string index.**
+   `` [key: `w${string}`]: unknown `` is narrower than `string` and still wide enough for `wher`.
+
+**What landed asks the property, with the degenerate cases named**, because "ask the property"
+turned out to have its own weaker version. `ReportedEnvNameIsExactlyTheTable` rejects `any` first
+(`0 extends 1 & T`), then rejects a table whose names are no longer literal types
+(`string extends NamesInTable`), and only then compares the brand against a union taken *directly*
+from `typeof EXPECTED` — no alias in between — in both directions. `ExpectedHasExactlyItsDeclaredKeys`
+stops enumerating ways to turn excess-property checking off and states the key set exactly, in both
+directions, which catches a pattern index, a numeric index, a merged declaration, an emptied
+interface and `unknown` together. Adding a legitimate field to `Expected` now fails until the field
+is listed: the same trade the sweep's checksum pins make, and the reason it is acceptable is that it
+goes red rather than quiet.
+
+**The one Sol called impossible is caught by the layer that reads text, not types.** A finite lie —
+`{ name: "OPENAI_API_KEY" as "OPENAI_API_KEY" | "NEW_ONE" }` — is, as the review says, undisprovable
+from inside the type system. It is refused in `beforeAll` by the gate's own parser, which requires a
+row's `name` to be a string literal: *"EXPECTED.name is a TSAsExpression, not a string literal."*
+That is the argument for keeping both layers, and it is a better one than the one I had. **The
+syntactic checks stayed** not because they are a cheap approximation of the type checks but because
+they answer a question types cannot: what the table literally says.
+
+All seven bypasses — Sol's four from rounds one and two, and three from round three — were
+re-applied to the finished code by a script that aborts if a mutation fails to apply and verifies
+the file is byte-identical after reverting. Every one now fails, by name, in `npm run typecheck`, in
+`npm test`, or in both.
+
+**Two checks hold the brand, and they cover different halves.** The Stage 1 sweep's checksum pin on `value`
+notices the annotation being widened back to `string` — verified by doing it: the pin went red and
+the checksum reverted to `dbe16bbe3e6dc3d4`, exactly the value it held before Stage 3, which is also
+the proof that the new checksum was computed correctly rather than pasted. The pin cannot see the
+*brand*, though, because the type alias lives outside the pinned function — so
+`tests/env-names-are-inventoried.test.ts` reads three facts out of the source instead: `value` is
+declared once, its single parameter is annotated `ReportedEnvName`, and that alias still reaches
+`typeof EXPECTED` through however many alias hops. Rewriting the brand as a hand-typed union of the
+same names goes red on the third; the pin stays green through it.
+
+**The door had to be taught the new shape, and it refused first.** Stage 2's locator explicitly
+declined to unwrap a `TSAsExpression` — *"a shape this has not been taught, and it is refused rather
+than unwrapped on a guess"* — so `as const satisfies` made the whole gate throw in `beforeAll`, all
+eight tests skipped. That is the fail-closed behaviour working, and teaching it the shape was done
+step by step: `TSSatisfiesExpression` around `TSAsExpression` around `ArrayExpression`, with **both**
+wrappers required, because a bare `as const` and a bare `satisfies` each lose a guarantee while
+looking like a formatting change. Both were mutated and both refused, with the message naming which
+half went missing.
+
+**`VITE_VERCEL_ENV` left `EXPECTED` for the platform allowlist, and one HTTP request is what decided
+it.** `https://www.spideryarn.com/api/health` on commit `0f221810`, 2026-09-08: `"ok": true`, no
+warnings, `"VITE_VERCEL_ENV": false`. A correctly built, correctly configured production deployment
+reporting `false` — so the row was telling an operator to go and fix something that was not broken
+and that they could not act on. That is the mistake `EXPECTED`'s own header is about, and worse than
+the drift the entry was added for. It is build metadata; it is inventoried on the allowlist door,
+where nobody is asked to act on it.
+
+**The claim is deliberately narrower than the conclusion tempts, and the documentation turned out to
+contradict everybody.** Sol objected that one response cannot establish a platform-wide rule and
+offered the platform contract instead: framework-prefixed variables exposed only during the build,
+citing two pages. I fetched the framework environment variables page. Under the **`Vite`** preset
+this project declares, `VITE_VERCEL_ENV` is listed as *"Available at: **Both build and runtime**"* —
+as is every other entry on that page. So the platform documents the opposite of Sol's correction,
+and production reports `false` anyway.
+
+That is left as an observation rather than resolved, because resolving it needs Vercel and it does
+not change the decision. If anything it strengthens it: the row reports `false` about something
+documented to be present, on a healthy deployment, and no operator can act on the difference.
+**A reviewer's correction can be as unchecked as the thing it corrects** — three claims about this
+one variable have now been checked and two of them were false, including the original entry's.
+
+**Two prose corrections, both of which were wrong in the direction that sends somebody to the wrong
+file.** `SPIDERYARN_OWNER_ID`'s stated consequence claimed legacy jobs and *"every request that
+stamps one throws"*; it reaches neither. And the block comment saying **"there is no test holding
+this line"** was true for one day and is now false; it says what the gate holds and, in the same
+breath, what it does not.
+
+**My first correction of the first one was itself wrong, which is the third time in two days that a
+truncated command became a confident sentence.** I wrote that `environmentOwnerId()` is reached only
+when there is *no request box at all*, and that public read is that case. It is not: public read is
+wrapped in `runInRequest` (`src/vercel.ts:345`), so the box exists and is empty, and
+`currentOwnerId()` throws on the spot without consulting the variable at all. I also gave the caller
+list as three files because `grep … | head -20` had cut it off at three, and wrote the truncation
+down as though it were the set. GPT Sol caught both. The list is seven, `withLedger` is how most
+commands reach it, and it refuses only when `NODE_ENV === "production"` or `VERCEL` is set.
+
+**A stale comment two files away was made true rather than left contradicting the correction.**
+`environmentOwnerId()`'s own doc-comment still said its sole purpose was stamping `src/jobs.ts`'s
+`data/_jobs/` files, which went with the filesystem store on 2026-09-05. Correcting one end of a
+false claim and leaving the other end is how the claim comes back.
 
 ## A process failure worth recording, because it is mine
 

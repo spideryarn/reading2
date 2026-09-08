@@ -257,15 +257,24 @@ export function currentOwnerId(): OwnerId {
  * The owner this *process* was configured with, whoever is currently asking.
  *
  * Almost always the wrong function — `currentOwnerId()` is the one you want,
- * and inside a request this deliberately ignores the reader. It exists for one
- * job: stamping records that were written before they carried an owner.
+ * and inside a request this deliberately ignores the reader.
  *
- * The case is `src/jobs.ts`, whose `data/_jobs/` files predate the field. That
- * load is lazy, so it happens on whichever request first asks for the jobs
- * list — and `currentOwnerId()` there would hand every legacy job to whoever
- * happened to look at the page first. The right answer is fixed rather than
- * whoever is asking: at the time those files were written there was exactly one
- * owner, and it is this one.
+ * **What it is for now is work with no reader in it**: the CLI, the pipeline
+ * scripts and the evals, which have no request box and for which the
+ * environment is the only answer there is. `src/cli-ledger.ts` is the common
+ * route in — every command that spends money through `withLedger` attributes
+ * the spend to this owner — and `scripts/stage.ts`, `scripts/live-spike.ts` and
+ * five eval files (`cost/run.ts`, `cost/interactions.ts`, `debate/run.ts`,
+ * `deepen/run.ts`, `illustrated/run.ts`) call it directly.
+ *
+ * **The job it was written for is gone**, and the paragraph describing it stood
+ * here until 2026-09-08. It was stamping `src/jobs.ts`'s `data/_jobs/` files,
+ * which predated the owner field and were loaded lazily on whichever request
+ * first asked for the jobs list — so `currentOwnerId()` would have handed every
+ * legacy job to whoever happened to look first. Those files went with the
+ * filesystem store on 2026-09-05 and src/jobs.ts no longer calls this. The
+ * reasoning is kept because it is the reason the *ordering* below matters, not
+ * because the case still exists.
  */
 export function environmentOwnerId(): OwnerId {
   const fromEnv = process.env.SPIDERYARN_OWNER_ID;
