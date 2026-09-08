@@ -40,6 +40,7 @@ import path from "node:path";
 import { TextDecoder as SpecTextDecoder } from "@exodus/bytes/encoding.js";
 import { Agent } from "undici";
 import sniffHTMLEncoding from "html-encoding-sniffer";
+import type { DocumentOrigin } from "./document-origin.js";
 import { canonicalKey } from "./source.js";
 import { uploadContentType } from "./uploads.js";
 import { blobStore, storeRawSource, type RawSourceStore } from "./store/blobs.js";
@@ -124,8 +125,14 @@ export interface RawManifest {
    * step (src/pipeline.ts), `GET /api/source/:slug`, and anything asking "can a
    * refresh re-fetch this?" — for an upload the answer is no, and saying so is
    * better than a refresh that fails.
+   *
+   * **Named rather than spelled**, since 2026-09-08: this was the third
+   * hand-written `"url" | "upload"` in the tree, and the one an assignability
+   * check between the other two would not have caught ⟨GPT Sol, F25⟩.
+   * src/document-origin.ts holds the fact and imports nothing, which is what
+   * lets src/messages.ts read it too.
    */
-  origin?: "url" | "upload";
+  origin?: DocumentOrigin;
   /**
    * The two URLs, present **only for a fetched document**.
    *

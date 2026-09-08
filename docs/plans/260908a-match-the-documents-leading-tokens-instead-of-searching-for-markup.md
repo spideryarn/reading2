@@ -1,6 +1,11 @@
 # Match the document's leading tokens instead of searching for markup
 
-**Status:** planned, 2026-09-08. Not started.
+**Status:** **done, 2026-09-08.** Both stages landed on `dev` and reviewed clean — Stage 1 at
+`0ace43c5` after four rounds with GPT Sol, Stage 2 at `1ef41647` after two. Each stage's own record
+is below, under *What Stage 1 actually landed* and *What Stage 2 landed*, including where each
+departed from what is planned above and why. One idea is recorded and deliberately not built: an
+exhaustive `reason × origin` matrix behind one formatter, so a refusal that has nothing to say to an
+upload is a compile error rather than something a sweep has to catch — see the round-2 notes.
 
 **Why:** the fix that landed the night before
 ([260907c](../postmortems/260907c-a-heuristic-promoted-to-a-gate.md)) was landed **knowingly
@@ -329,6 +334,132 @@ nobody ran, which is precisely the class
   because a code is what a reader quotes.
 - Done when: uploading a `<div>` fragment produces a sentence with no address in it, pinned by a test
   that reads the message rather than only the failure kind.
+
+### What Stage 2 landed, and where it departed
+
+Built 2026-09-08. The acceptance criterion is met and its test is
+[`tests/job-failure.test.ts`](../../tests/job-failure.test.ts) § *tells a reader who uploaded a file
+with too little text in it how little* — a `<div>` fragment, through the real `extract` step, with
+the reader's sentence read rather than only its kind. **Three departures, all of which stand.**
+
+**1. The uploaded branches get their own codes**, `[jb-file-no-article]` and
+`[jb-file-too-little-text]`, where this plan said to keep the two existing ones. The plan was wrong
+and [copy.md](../project/copy.md) says why in one line: *"what must never happen is two different
+sentences sharing a code"*, which `tests/messages.test.ts` enforces — so keeping the codes was only
+available if the two sentences stayed one sentence, which is the bug. The rule the plan appealed to
+(*a code is what a reader quotes*) is satisfied anyway: `[jb-no-article]` keeps exactly the meaning
+it shipped with, so nothing quoted in a support conversation is orphaned, and the new code tells
+whoever is helping that this was a file before they have to ask.
+
+**2. One factory over an origin, not two constants.** `PAGE_HAS_NO_ARTICLE` and
+`pageHadTooLittleText` became `documentHasNoArticle(origin)` and `documentHadTooLittleText(origin,
+chars)`. The pair is one fact: a third framing, or a change to the named causes, has one place to go
+and cannot land in half of them. It also makes the coverage compulsory rather than remembered —
+`FROM_FACTORIES` in `tests/messages.test.ts` is keyed by a mapped type over the module's exports, so
+a constant that quietly grows a second sentence skips every invariant in that file, and a factory
+cannot.
+
+**3. `DocumentOrigin` is declared in `src/messages.ts` and checked in `src/source.ts`**, rather than
+aliased from `SourceOrigin["kind"]` where the fact belongs. A **type-only** import of it fails the
+build: `messages.ts` is in the browser client's type closure, `source.ts` reaches `fetch.ts` and its
+untyped packages, and `tsc` walks a type-only import for its types like any other. `src/web/tsconfig.json`
+predicts this failure in its own comment and names the remedy — *the fix, then and next time, is to
+move the shared piece into a module that imports nothing*. So the union is declared in `messages.ts`,
+and `source.ts` — which already imports that module's refusals — holds a two-element tuple asserting
+the spellings agree in both directions. **Verified red both ways** before it was left green: widening
+`DocumentOrigin` fails at that assertion, narrowing it fails at the branch sites.
+
+**The origin is read once, in `src/pipeline.ts`**, from `cameFromAnUpload(manifest)` — the same
+evidence that decides whether there is a base URL for relative links, and the same fact the masthead
+uses to say *"you uploaded this"*. It is `filename`, not `origin`, because that field does not
+survive the store; `cameFromAnUpload`'s header is the story. The log's own diagnostic said *"the
+fetched page"* too, and now says *"the document stage 1 stored"*.
+
+**Mutation, and it found a hole in a test that predates this stage.** Forcing `origin` to `"url"`
+kills both new cases and nothing else. Forcing it to `"upload"` killed only *one* of the two
+fetched cases: *calls a page Readability will not parse `blocked`* asserted `/no article/i`, which
+matches *"there was no article to find in the file you uploaded"* just as well. So a mutation handing
+every fetched reader the wrong sentence was invisible to it. It now asserts the code and the phrase
+that separates the branches, and both fetched cases go red. Found by mutation rather than by reading,
+which is [re-reading your own work is a zero check](../reusable/silent-success.md) in its usual shape.
+
+**One fixture is not the obvious one, deliberately.** A `<div>` fragment does not reach
+`ReadabilityRefused` — the library parses it and hands back 31 characters, so it lands on the
+capability floor. The no-article case uses empty bytes, as its fetched sibling already did. Written
+down because the plan's own acceptance sentence points at the fragment, and a later reader moving it
+to the other test would find it green for the wrong reason.
+
+#### Round 1 on the built Stage 2, and the third sentence
+
+Sol refused it: **not landable, one established P1**. The finding is the one that matters here.
+
+| ID | Sev | Finding | Disposition |
+|----|-----|---------|-------------|
+| F24 | **P1** | `ARTICLE_HAD_NO_TEXT` — **stage 3's** refusal — still says *"the address the article came from"*, and it is reachable from an upload | Fixed. See below. |
+| F25 | P2 | The two-way assignability assertion works but was one union short: `RawManifest.origin` is a third hand-written `"url" \| "upload"` | Fixed by Sol's own suggestion — a leaf module. |
+| F26 | P3 | Stale records: a `PAGE_HAS_NO_ARTICLE` reference, `content-extraction.md` naming only the URL codes, a present-tense claim in 260904e | Fixed. Stage 2's before-state above keeps the old names: that is history, not a stale record. |
+| F27 | P3 | Copy: *"nobody uploads one on purpose"* too absolute; *"the page"* ambiguous between the file and the original; *"because it will be the same file"* reads as a lecture | All three taken. |
+
+**F24 is the finding, and both of us had to be shown it.** I swept `src/messages.ts` for *"address"*,
+found this line, and filed it as out of scope on a guess: *you would have to get past two earlier
+refusals to reach it*. That guess is the postmortem's own mistake — declaring an input unreachable
+because I could not picture it — made for the third time in two days, in the stage written to fix the
+first one. Sol did not guess. It found the path: **an uploaded PDF**, not a web page. A scan whose
+only text is a `publisher` record passes stage 2's floor, `renderHtml`
+([`src/pdf-read.ts`](../../src/pdf-read.ts)) withholds that record on purpose, and stage 3 is handed
+a document with no prose in it. It ran the real renderer into the block builder to check.
+
+So `ARTICLE_HAD_NO_TEXT` is now `articleHadNoText(origin)`, `[jb-file-no-text]` is its uploaded code,
+and the uploaded sentence names **a scan or a picture of a page** — a cause with no fetched
+equivalent, and the likeliest true one. `src/pipeline.ts`'s `blocks` step reads stage 1's manifest
+**inside the catch**, since that is the only branch that wants it, and falls back to the fetched
+wording when there is no manifest to read — named in place, because a step whose stage-1 product has
+vanished is looking at a different failure that this catch is not entitled to report.
+
+**F25's fix is [`src/document-origin.ts`](../../src/document-origin.ts)**, a module holding one union
+and importing nothing. It replaced three hand-written copies and the assertion holding two of them
+together; `SourceOrigin`'s discriminant is the only spelling left that it cannot own — `kind: "url"`
+cannot be written `kind: DocumentOrigin` without collapsing the union's arms — so that one keeps a
+two-way check, verified red both ways. `tests/client-imports.test.ts` had to allow the new leaf, and
+in doing so caught a stale claim of its own: its note said `messages.js` *"imports nothing at all"*,
+which stopped being true some time ago and stayed green because everything it reaches is allowlisted.
+
+**Mutation, again, on the new branch.** Forcing the `blocks` step's origin to `"url"` kills only the
+new uploaded case; forcing it to `"upload"` kills only the fetched one. The fetched case now asserts
+its code and its distinguishing phrase, like the two in stage 2.
+
+#### Round 2: **approve and land**, with one P2 taken on the way
+
+| ID | Sev | Finding | Disposition |
+|----|-----|---------|-------------|
+| F28 | P2 | The uploaded stage-3 sentence named a scan and then offered the *saved page's* remedy | Taken. Two causes, two remedies. |
+
+**F28 is the more interesting half of F24.** Having split the sentence by origin, I gave the uploaded
+branch one way out — *open the original in a browser and save it again* — which for an image-only PDF
+produces the identical image-only PDF. Correct origin, correct code, correct kind, and advice that
+cannot work: docs/project/copy.md § rule 2, arrived at by a route the rule does not describe. So that
+sentence now carries a remedy per cause, and the clause *"an image of the words rather than the words
+themselves"*, without which *"a copy whose words can be selected"* reads as nonsense to somebody
+looking at a page covered in words.
+
+**The sweep question, answered over a closed set this time.** Two sweeps of the message *text* had
+each missed one. The enumerable thing is the refusal *sites*: `src/pipeline.ts` has fourteen
+`stageFailure` calls, of which six are reader-facing, and the other three of those six —
+`pdfTooManyPages`, `SOURCE_DOCUMENT_GONE`, `SOURCE_DOCUMENT_DAMAGED` — are already origin-neutral.
+`SOURCE_DOCUMENT_GONE` even says *"from its address or by uploading the file"*; somebody had already
+thought about it. Sol found no fourth either.
+
+**Sol's suggestion for making this checkable rather than swept**, recorded and not built: an
+exhaustive `reason × origin` matrix behind one formatter, so every cell is a compile error until it
+is written and a test can exercise all of them. All three of these findings would pass through it.
+That is a good idea and it is a different piece of work — it touches every reader-facing pipeline
+refusal, not the three this stage is about.
+
+**`src/document-origin.ts` must import nothing, and now that is executable.** The prose promise in
+its header was the only thing holding it: the shared-module guard permits an allowlisted module to
+import another allowlisted module, which is right everywhere else and not enough here — the closure
+this leaf exists to break could come back through an intermediate the guard would pass.
+`tests/client-imports.test.ts` now asserts the leaf's import list is empty, verified red.
 
 ## Review ledger
 

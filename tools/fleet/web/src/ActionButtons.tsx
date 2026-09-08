@@ -74,6 +74,7 @@
 import { useCallback, useState, type ReactNode } from "react";
 
 import { RawValue } from "./RawValue";
+import { Explain } from "./Tooltip";
 import {
   actingWarning,
   boxActions,
@@ -235,8 +236,14 @@ function ConfirmStrip({
 
       {action.effect === "enacted" ? (
         <>
+          {/* THE WARNING THAT USED TO LIVE ABOVE THE BUTTONS, permanently, on
+              every session page. It belongs here: read there it qualified a
+              button nobody had pressed, and read here it qualifies the one
+              that is about to run. Nothing is lost — the concrete examples
+              came down with it. */}
           <p className="tw:mt-1 tw:text-ink-soft">
-            This tool runs a command. It happens whether or not the agent cooperates.
+            This is not a sentence. This tool runs a command — a directory deleted, a process signalled — and it
+            happens whether or not the agent cooperates.
           </p>
           <p className="tw:mt-1 tw:text-ink-faint">What is checked first:</p>
           {/* The server's own sentence about its own gate. */}
@@ -298,6 +305,15 @@ function TheWords({ actions }: { actions: ClientAction[] }): ReactNode {
       <summary className="tw:cursor-pointer tw:rounded-md tw:px-1 tw:py-1 tw:text-[12px] tw:text-ink-faint tw:hover:text-ink-soft">
         What each of these actually says
       </summary>
+      {/* MOVED HERE FROM ABOVE THE BUTTONS, where it was a permanent paragraph
+          on twenty-two pages. The heading "Ask it to…" carries the same fact —
+          that these are requests an agent may decline — in three words, and
+          this is where somebody reading the exact wording wants the caveat
+          anyway. Fable's rule: an honest label replaces a paragraph. */}
+      <p className="tw:mt-1 tw:px-1 tw:text-[12px] tw:text-ink-faint">
+        Each of these types a sentence into its input box. The agent reads it and decides — if it ignores one,
+        nothing happened.
+      </p>
       <dl className="tw:mt-1 tw:space-y-2 tw:border-l tw:border-rule tw:pl-3">
         {spoken.map((action) => (
           <div key={action.id}>
@@ -352,10 +368,87 @@ function ActingOff({ feed }: { feed: ActionsFeed | null }): ReactNode {
   const why = actingWarning(feed);
   if (why === null) return null;
   return (
-    <p className="tw:mb-1.5 tw:px-1 tw:text-[12px] tw:break-words tw:text-alarm-ink">
-      This server will not act: {why} A dry run still works, and the second press will be refused.
-    </p>
+    /* FIVE LINES OF RED BECAME ONE, AND THE FACT DID NOT MOVE. This is a
+       server-wide setting rendered on every session page, so its full
+       explanation — the env var, the restart, what a dry run still does — is a
+       tap rather than a paragraph twenty-two times over. What stays visible is
+       the part that changes what a thumb does: the buttons below say "(dry
+       run)" in their own labels, which is the honest label doing the work the
+       paragraph was doing. Deleting the fact would break this page's one
+       non-negotiable rule; moving it behind the thing it qualifies does not. */
+    <Explain
+      tip={{
+        head: "This server will not act",
+        what: why,
+        how: "A dry run still works — ask what it would do, and do it in the terminal if that is what you want. The second press, the one that would act, will be refused.",
+      }}
+      placement="bottom"
+      className="tw:mb-1.5 tw:block tw:px-1 tw:text-[12px] tw:text-alarm-ink"
+    >
+      Dry runs only on this server
+    </Explain>
   );
+}
+
+/**
+ * The spoken vocabulary, cut into what a thumb wants first and what it does not.
+ *
+ * **Fifteen buttons at equal weight is a list, not a choice.** Fable's ruling,
+ * 2026-09-08, from the real page at 390px: within two seconds of opening a
+ * session you want to answer it, continue it, ask where it is, or wrap it up —
+ * and the other ten are deliberate acts you are willing to open a disclosure
+ * for. So four are visible and the rest are grouped behind *More*.
+ *
+ * **THE UNGROUPED GROUP IS THE POINT.** The server owns this catalogue and can
+ * add to it; a client that grouped by a closed list of ids would silently drop
+ * a new action it had never heard of, which is precisely the class of defect
+ * this module spent 2026-09-08 removing — sixteen instances of a consumer
+ * quietly not rendering what a producer sent. So anything not named below
+ * lands in *Other* and is still pressable. The list is a preference, not a
+ * filter.
+ */
+const FIRST_ROW: readonly string[] = ["continue", "report-status", "pull", "wrap-up"];
+const LATER_GROUPS: readonly { name: string; ids: readonly string[] }[] = [
+  { name: "Work", ids: ["push", "run-checks", "compact"] },
+  { name: "Pause", ids: ["ease-off", "sleep-1h", "sleep-3h", "sleep-5h", "sleep-10h"] },
+  { name: "Hand off", ids: ["ask-fable", "ask-sol", "stop-and-ask"] },
+];
+
+export function groupSpoken(spoken: ClientAction[]): {
+  first: ClientAction[];
+  rest: { name: string; actions: ClientAction[] }[];
+} {
+  const byId = new Map(spoken.map((a) => [a.id, a]));
+  const taken = new Set<string>();
+
+  const take = (ids: readonly string[]): ClientAction[] => {
+    const out: ClientAction[] = [];
+    for (const id of ids) {
+      const action = byId.get(id);
+      if (action === undefined) continue;
+      out.push(action);
+      taken.add(id);
+    }
+    return out;
+  };
+
+  const first = take(FIRST_ROW);
+  const rest = LATER_GROUPS.map((g) => ({ name: g.name, actions: take(g.ids) })).filter(
+    (g) => g.actions.length > 0,
+  );
+
+  // Everything the server offered that this build has never heard of. Named
+  // rather than dropped; see the header.
+  const other = spoken.filter((a) => !taken.has(a.id));
+  if (other.length > 0) rest.push({ name: "Other", actions: other });
+
+  // A catalogue with none of the four first-row ids in it would otherwise draw
+  // an empty row above a disclosure holding everything, which reads as broken.
+  if (first.length === 0 && rest.length > 0) {
+    const promoted = rest[0];
+    if (promoted !== undefined) return { first: promoted.actions, rest: rest.slice(1) };
+  }
+  return { first, rest };
 }
 
 /* ------------------------------------------------------------------ *
@@ -420,6 +513,11 @@ export function SessionActions({
   const spoken = actions.filter((a) => a.effect === "spoken");
   const enacted = actions.filter((a) => a.effect === "enacted");
   const disabled = busy || unaddressable !== null;
+  const grouped = groupSpoken(spoken);
+  /* Read once here so the button labels and the warning above them cannot
+     disagree about whether this server acts. `not-told` is not `off`: a server
+     that never said has made no claim, and a "(dry run)" suffix would be one. */
+  const acting = feed?.acting ?? { kind: "not-told" as const };
 
   /* Three empty pages, not one — the same distinction the sessions list makes.
      "Not asked yet", "asked and failed", and "asked and there are none" are
@@ -470,34 +568,69 @@ export function SessionActions({
 
       {spoken.length > 0 ? (
         <>
-          <GroupHeading>Say something to it</GroupHeading>
-          <p className="tw:px-1 tw:pb-1.5 tw:text-[12px] tw:text-ink-faint">
-            Each of these types a sentence into its input box. The agent reads it and decides — if it ignores one,
-            nothing happened.
-          </p>
+          {/* NO HEADING HERE. There used to be one — "Say something to it" —
+              nested inside a section of the same name, and then repeated 300px
+              lower over the composer, so the page said the same four words
+              about two different things. The section heading above this
+              component is the only one. Fable, 2026-09-08: the single most
+              confusing thing on the page, and it costs nothing to remove. */}
           <div className="tw:flex tw:flex-wrap tw:gap-1.5">
-            {spoken.map((action) => (
+            {grouped.first.map((action) => (
               <Button key={action.id} disabled={disabled} onClick={() => press(action)}>
                 {action.label}
               </Button>
             ))}
           </div>
+          {grouped.rest.length === 0 ? null : (
+            <details className="tw:mt-2">
+              <summary className="tw:cursor-pointer tw:rounded-md tw:px-1 tw:py-1 tw:text-[13px] tw:text-ink-soft tw:hover:text-ink">
+                More ({grouped.rest.reduce((n, g) => n + g.actions.length, 0)})
+              </summary>
+              <div className="tw:mt-1 tw:space-y-2 tw:border-l tw:border-rule tw:pl-3">
+                {grouped.rest.map((group) => (
+                  <div key={group.name}>
+                    <p className="tw:pb-1 tw:text-[11px] tw:font-semibold tw:tracking-widest tw:text-ink-faint tw:uppercase">
+                      {group.name}
+                    </p>
+                    <div className="tw:flex tw:flex-wrap tw:gap-1.5">
+                      {group.actions.map((action) => (
+                        <Button key={action.id} disabled={disabled} onClick={() => press(action)}>
+                          {action.label}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
+          {/* OUTSIDE THE DISCLOSURE, not inside it. Fable put it at the bottom
+              of "More", which is right when More holds ten buttons — but a
+              server offering only two or three actions has no More at all, and
+              nesting it there made "what each of these actually says"
+              unreachable exactly when the catalogue was small. That is the
+              shape of every bug in this module's postmortem: a thing that
+              renders in the case you looked at and not in the case you did
+              not. */}
           <TheWords actions={spoken} />
         </>
       ) : null}
 
       {enacted.length > 0 ? (
         <>
-          <GroupHeading>Change things directly</GroupHeading>
-          <p className="tw:px-1 tw:pb-1.5 tw:text-[12px] tw:text-ink-faint">
-            These are not sentences. This tool runs a command — a directory deleted, a process signalled — and it
-            happens whether or not the agent cooperates. Each one asks twice.
-          </p>
+          {/* "FORCE", NOT "CHANGE THINGS DIRECTLY". One word carries what a
+              paragraph was carrying, and the paragraph itself — "these are not
+              sentences, this tool runs a command, each one asks twice" — has
+              moved to ConfirmStrip, which is the moment it changes what
+              somebody does. Read here it is a warning about a button you have
+              not pressed; read there it is a warning about the one you have. */}
+          <GroupHeading>Force</GroupHeading>
           <ActingOff feed={feed} />
           <div className="tw:flex tw:flex-wrap tw:gap-1.5">
             {enacted.map((action) => (
               <Button key={action.id} variant="danger" disabled={disabled} onClick={() => press(action)}>
                 {action.label}
+                {acting.kind === "off" ? " (dry run)" : ""}
               </Button>
             ))}
           </div>

@@ -655,8 +655,37 @@ td.gist .sticky,
    the `:root:not(:has(.controls))` rule that then has to win in every other
    band mode. One selector rather than two, for the reason two paragraphs up:
    split, the no-bar case would be a tie decided by source order.
-   docs/plans/260908a-the-top-bar-stops-being-drawn-when-it-has-nothing-in-it.md */
-:root:has(:where(.reader) > .controls):has(:where(.reader) > .controls:focus-within, .mode-band) {
+   docs/plans/260908a-the-top-bar-stops-being-drawn-when-it-has-nothing-in-it.md
+
+   **`.mode-band` became `:where(.reader.band-covers) .mode-band` on 2026-09-08,
+   and the reader it was wrong for is the visitor.** This is the twin of the
+   dock's guard in narrow-window.css § a small device, and it had the same
+   defect for the same reason: it says *"a band is open"* and means *"the band
+   is the whole screen"*, which stopped being one sentence when
+   `MODE_PROSE_FLOOR` split off `PROSE_MIN` and a landscape iPhone started
+   showing a mode and the article side by side (docs/plans/260908e-…).
+
+   It looked safe here, and for an **owner** it is: since 260908a the bar is not
+   drawn at all in a band mode, so the leading `:has(:where(.reader) > .controls)`
+   never matches and the rest never runs. That is not true of a **visitor**.
+   `barHasContent` in layout.ts opens
+
+     if (!bar.owner) return true; // the read-only chip
+
+   so a signed-out reader on a public article has a `.controls`, and this guard
+   pinned their top bar in every band mode at every scroll position — the exact
+   bug `SPIDERYARN-READING2-2F` reported about the dock, one reader type wide
+   and on the other bar. Nobody reported it because the reader who hits it is
+   the reader least likely to write in.
+
+   Specificity is unchanged: `:where()` contributes nothing, so the second
+   `:has()`'s most specific argument is still
+   `:where(.reader) > .controls:focus-within` and the whole selector is the
+   (0,4,0) the paragraph above computes. */
+:root:has(:where(.reader) > .controls):has(
+    :where(.reader) > .controls:focus-within,
+    :where(.reader.band-covers) .mode-band
+  ) {
   --bar-bottom: calc(var(--bar-h) + var(--safe-top));
   /* Both, or the bar a keyboard reader is standing in stays off the top of the
      screen while everything under it politely moves down to make room. */
@@ -671,8 +700,17 @@ td.gist .sticky,
    getting out of the way; a bar coming back because the reader opened a panel is
    not announcing anything. Nothing else here transitions on `.mode-band`, so
    this only ever fires on that switch. The dock's twin is in narrow-window.css,
-   where the dock's half of the switch lives. GPT Sol, 2026-09-03. */
-:root:has(.mode-band) .controls {
+   where the dock's half of the switch lives. GPT Sol, 2026-09-03.
+
+   **`.band-covers` on it since 2026-09-08**, with the guard above and for the
+   same reason: everything written here is about a bar that came back *because a
+   panel opened*, which is only true where the band took the screen. Side by
+   side a visitor's bar now hides and shows on scroll like any other, and
+   killing its transition there would make it snap on every change of direction.
+
+   Specificity goes from (0,3,0) to (0,3,0) — `:where()` zeroes the two added
+   classes, so the `:has()` argument stays `.mode-band` at (0,1,0). */
+:root:has(:where(.reader.band-covers) .mode-band) .controls {
   transition: none;
 }
 
