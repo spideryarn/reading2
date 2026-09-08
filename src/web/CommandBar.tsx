@@ -1,7 +1,9 @@
 /**
  * **Type a word, press Enter, be in that mode** — or on that page, or with that
- * dialog open. Spotlight for the fourteen modes, and for the seven rows that
- * are not modes.
+ * dialog open. Spotlight for the fourteen modes, and for the eight rows that
+ * are not modes: **seven of them arrived on 2026-09-08** and `What’s new` was
+ * already there, which is the arithmetic this sentence got wrong at first and
+ * GPT Sol caught.
  *
  * Greg asked for it on 2026-09-05:
  *
@@ -337,7 +339,11 @@ const APP_PAGES: readonly Extract<Command, { kind: "page" }>[] = [
        shelf of other people's articles, and *Public shelf* is what
        docs/project/public-shelf.md calls it. */
     label: "Public shelf",
-    description: "Articles other readers have made public.",
+    /* *Anybody*, not *other readers*: public-shelf.md § It is not the owner's
+       shelf narrowed — the page lists every article anybody has shared, the
+       reader's own included, and describing it as other people's would be the
+       one distinction that page exists to make, got backwards. */
+    description: "Every article anybody has shared, yours included.",
     aliases: ["public", "public library", "shared", "browse"],
     generates: false,
   },
@@ -499,12 +505,23 @@ export function CommandBar({
    * falls to the mode, because `rankCommands` breaks ties on input order.
    *
    * **The dependency list is the four things a row can be built out of**, and
-   * `besideTheModes` is a pure function of exactly those — which is what makes
-   * a memo honest here rather than a guess. `openFeedback` is stable across
-   * renders by construction (`FeedbackHost` § `api`), and `openComments` is
-   * the caller's business; a caller that mints a new closure every render pays
-   * one array rebuild and nothing else, because `rankCommands` below is
-   * memoised on the same value and does no work a re-run would repeat.
+   * `besideTheModes` is a pure function of exactly those.
+   *
+   * **What it does not do is stop this recomputing**, which is worth saying
+   * because the list looks like it should. `openFeedback` is stable by
+   * construction (`FeedbackHost` § `api`, a `useMemo` with no dependencies),
+   * but the Dock mints `article` as an object literal and `openComments` as a
+   * closure on every render, so in practice this rebuilds whenever the Dock
+   * does. **That is fine and is not worth machinery to fix**: the work is a
+   * `map` over fourteen modes and two spreads, `rankCommands` below is
+   * memoised on the same value, and nothing downstream holds the array's
+   * identity — `selected` is an index, clamped at render.
+   *
+   * So the memo earns its keep against re-renders that change none of these,
+   * and it is here mainly because the dependency list is the honest statement
+   * of what the list is a function of. Memoising the two churning values at the
+   * call site would make it bite, and the day the Dock's own renders get
+   * expensive is the day to do that rather than now.
    */
   const commands = useMemo(
     () => [

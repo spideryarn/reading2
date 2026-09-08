@@ -170,10 +170,10 @@ export type Command =
  * **It does not touch punctuation either, and two page aliases exist because of
  * that**: the changelog's label is *What’s new* with a typographic apostrophe,
  * and the three ways a reader might type that — `’`, `'`, or nothing at all —
- * are three different strings here, so `PAGES` spells all three out. Folding
+ * are three different strings here, so `besideTheModes` spells all three out. Folding
  * punctuation would remove that need and would also quietly change what the
  * *mode* aliases match; one page is not the evidence for that.
- * CommandBar.tsx § `PAGES`.
+ * CommandBar.tsx § `besideTheModes`.
  */
 export function canonical(s: string): string {
   return s.trim().toLowerCase().replace(/\s+/g, " ");

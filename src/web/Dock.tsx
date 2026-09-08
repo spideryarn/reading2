@@ -1628,9 +1628,13 @@ export function Dock({
             **The fit ladder does not care where it sits.** `useDockFit`
             measures the row's scroll width against its client width and steps
             down by class (dock-fit.ts), so DOM order is not an input. What does
-            change is which label is second on a narrow bar: rung 1 drops
-            `.dock-home` and `.dock-feedback` only, so `Commands` now keeps its
-            word one rung longer than the wordmark beside it.
+            change is which label is second on a narrow bar: rungs 1 and 2 drop
+            `.dock-home` and `.dock-feedback`, and only rung 3 sweeps every
+            `.dock-btn-label` — so `Commands` keeps its word **two rungs longer
+            than the wordmark beside it**, and on a middling window the row
+            begins with a wordless mark and the word *Commands*. Read off
+            styles/dock-fit.css rather than assumed; the first draft of this
+            comment said one rung.
 
             Greg asked for the button as well as the chord (260906h, answer 2)
             for one reason: **⌘-K does not exist on a phone**, and the bar is

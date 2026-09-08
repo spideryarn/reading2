@@ -286,10 +286,17 @@ the top of that section ([url-state.md](url-state.md#the-unit-is-a-section-not-a
 
 ## The one chord that is not an arrow
 
-**⌘-K on a Mac, Ctrl-K everywhere else, opens the command bar** — type a mode's name or one of its
-nicknames, press Enter, and you are in it. What that bar is, and what it deliberately cannot do, is
+**⌘-K on a Mac, Ctrl-K everywhere else, opens the command bar** — type the name of a mode, a page or
+a thing to do, or one of its nicknames, press Enter, and you are there. What that bar is, and what it
+deliberately cannot do, is
 [reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar); this section
 is only the key.
+
+**The button moved and the chord did not**, which is worth a line because it looks like the kind of
+pair that would move together. Greg asked on 2026-09-07 for the ⌘ button to sit at the left-hand end
+of the Dock, just after the wordmark ([260908e](../plans/260908e-more-commands-in-the-command-bar-and-the-button-beside-the-logo.md));
+the chord is bound to the **window** in `useCommandBarChord`, not to that button, so it opens the
+same dialog from wherever the button happens to be — and everything below is unchanged by the move.
 
 It obeys three of the rules above, and it is worth saying which, because they are the rules and not
 a coincidence:

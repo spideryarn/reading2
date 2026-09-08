@@ -197,7 +197,7 @@ describe("the ranking normalises what the reader typed", () => {
  * claim of the 2026-09-07 widening: the bar did not grow a second matcher for
  * a second kind of row, it grew a wider input to the one it had.
  *
- * A **hand-made** page rather than the real `PAGES` entry, deliberately. This
+ * A **hand-made** page rather than the real `besideTheModes` entry, deliberately. This
  * file is about the ranking and runs without a DOM; importing the real list
  * means importing CommandBar.tsx, and therefore React and router.ts, to assert
  * something that is not about either. What the real entry says — that
@@ -253,7 +253,7 @@ describe("the ranking handles a page exactly as it handles a mode", () => {
     /* Both are `label-prefix` for `"s"` — *Search* and *Ship's log* — so
        nothing about the query separates them and the answer is the input
        order. That is the whole mechanism keeping pages beneath modes in the
-       bar: `CommandBar` spreads the Dock's modes first and `PAGES` after, and
+       bar: `CommandBar` spreads the Dock's modes first and `besideTheModes` after, and
        there is no rule anywhere that says "pages last".
 
        **Asserted in both directions**, because a ranker that special-cased
@@ -361,7 +361,7 @@ describe("a command says which one it is", () => {
  * and does not need to be: spreading a value whose declared type is the union
  * gives back the union, and `{ ...AN_ACTION, id: "search" }` then matches no
  * arm at all, because `id` is not a field the `mode` arm has. `Extract` is the
- * same narrowing `PAGES` in CommandBar.tsx uses for its own list.
+ * same narrowing `besideTheModes` in CommandBar.tsx uses for its own list.
  */
 const AN_ACTION: Extract<Command, { kind: "action" }> = {
   kind: "action",
@@ -413,14 +413,58 @@ describe("a row that starts work carries it as a property", () => {
   });
 
   it("says `false` on a row that only navigates, rather than saying nothing", () => {
-    /* Two things at once. The **vacuity guard**: a ranker that marked
-       everything would pass the line above, and `A_PAGE` is the ordinary case.
-       And the **shape of the field**: `false`, not `undefined`, because the
-       type makes it required — an optional flag was the design GPT Sol refused
-       on 2026-09-08, since a spending row could then omit it and go unmarked
-       with nothing to notice. This line goes red if it is ever made optional
-       again and this fixture stops saying so. */
+    /* The **vacuity guard** for the line above: a ranker that marked everything
+       would pass it, and `A_PAGE` is the ordinary case. What this does *not*
+       prove is that the field is required — see the type-level check below,
+       which is the honest version of a claim this comment used to make. */
     expect(A_PAGE.generates).toBe(false);
+  });
+
+  /**
+   * **`generates` is required, checked at the type level** — the assertion the
+   * runtime one above cannot make, and GPT Sol said so on 2026-09-08:
+   *
+   * > Change `generates: boolean` to `generates?: boolean` → this fixture still
+   * > explicitly contains `false` → the test and typecheck remain green. A later
+   * > spending row can then omit it, and `commandGenerates()` returns false.
+   *
+   * Exactly right. Every fixture in this file *volunteers* the field, so making
+   * it optional again would break nothing — the requirement would quietly stop
+   * being one, which is the whole failure the requirement exists to prevent.
+   *
+   * `@ts-expect-error` is what states it: the literals below are missing
+   * `generates`, and the comment **fails to compile if they ever become
+   * legal**. One per arm, because the two carry it through the same
+   * `CommandWords` and a check on one would go on passing if only the other
+   * were loosened.
+   *
+   * **It goes red at `npm run typecheck`, not at `npm test`** — vitest strips
+   * types and never checks them, so this file passing proves nothing about this
+   * block. That is a property of the tool, not a weakness here: the gate that
+   * catches it is one of the two that run on every change.
+   */
+  it("cannot be omitted from a page or an action (a type-level check)", () => {
+    // @ts-expect-error — a page without `generates` must not be a Command
+    const pageWithout: Command = {
+      kind: "page",
+      href: "/nowhere",
+      label: "No marker",
+      description: "A page that never said whether it spends.",
+      aliases: [],
+    };
+    // @ts-expect-error — nor an action without one
+    const actionWithout: Command = {
+      kind: "action",
+      id: "no-marker",
+      label: "No marker",
+      description: "An action that never said whether it spends.",
+      aliases: [],
+      run: () => {},
+    };
+    /* Read them, so `noUnusedLocals` does not delete the point of the test.
+       The runtime values are beside the point — what is asserted is above. */
+    expect(commandText(pageWithout).label).toBe("No marker");
+    expect(commandText(actionWithout).label).toBe("No marker");
   });
 });
 

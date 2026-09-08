@@ -49,6 +49,7 @@ says what happened.
 |---|---|
 | dictation privacy wording (2026-09-07, **already live — shipped unsigned-off**) | **A published zero-data-retention promise about a reader's voice has to go.** Greg chose the switch to an OpenAI transcriber on 2026-09-06 knowing it cost this; what needs your eye is not the decision but the four sentences that replace it, one of which is the line beside every microphone. Measured reason it cannot be kept: OpenRouter does not apply routing on its transcription endpoint, so `zdr: true` there is a flag nobody reads — `only: ["anthropic"]`, which no transcriber can satisfy, returns a transcript anyway. [plan](../plans/260907c-dictation-onto-an-openai-transcriber.md#the-proposed-reader-facing-wording) |
 | the Socratic wording, after the eval was repaired (2026-09-07) | **The eval you asked for now runs, and its first answer leans against the wording you picked.** It named no leader — the two completed repeats had different ones — but the run carried one generation of the **pre-V4** wording against three of V4, and the pre-V4 control ranked ahead of all three, head-to-head in 9, 8 and 11 of 12 lineups. One control generation on one document is directional and **not enough to revert a wording you chose that morning**, so nothing was changed. What is worth your minute is whether to spend on settling it: balanced replicates over several documents, about $0.05 a generation call. [note](260905_1803-only-the-socratic-question.md) · [plan](../plans/260907d-ship-socratic-v4-repair-the-eval-gate-and-answer-q7.md) |
+| [2D](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-2D) — more commands in the command bar (shipped 2026-09-08) | **An entry-point doc was edited without the approval its own process asks for.** [reading-view-overview.md § The command bar](../project/reading-view-overview.md#the-command-bar) stated as a rule that *a generation row … needs a verb this bar does not have* — and the Tweets row you asked for **is** a generation row, so the sentence had to change or stand false. [edit-important-docs.md](../reusable/edit-important-docs.md) wants one approved set at a time with the before and after shown, and an unattended run has nobody to show them to, so they are written out instead in [260908e § The entry-point edit](../plans/260908e-more-commands-in-the-command-bar-and-the-button-beside-the-logo.md#the-entry-point-edit) — three edits, all in that one section. Read the pair and say no if it reads wrong; nothing else in the file was touched. [note](260907_1737-more-commands-in-the-command-bar.md) |
 | [2A](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-2A) — upload an HTML file (shipped 2026-09-07) | **An uploaded file's name is in its public URL.** `slugFromFilename` mints the article slug from the filename's stem and the slug is in `PublicMeta`, so publishing `confidential-client-acme.html` publishes `confidential-client-acme`. This predates the report by weeks — it has been true of uploaded PDFs since August — and was found only because this work was about to assert the opposite in a comment. Minting an opaque slug for uploads instead would change existing addresses and is a decision about what a URL should look like, so no agent took it. [note](260906_1709-upload-an-html-file-and-a-url-for-a-pdf.md) · [plan](../plans/260907b-upload-an-html-file-and-a-url-for-a-pdf.md#a-privacy-question-this-work-did-not-create-and-did-not-fix) |
 
 **Answered 2026-09-06, in one sitting, and this is what happened to each** — kept here briefly
@@ -76,12 +77,14 @@ options put to Greg. Two of them dissolved a trade-off an agent had accepted as 
 mark by using a channel nobody had thought to use, and the quiz by removing the control rather than
 tuning it. That is the argument for this file existing rather than for agents deciding faster.
 
-## Three things are waiting on Greg
+## Four things are waiting on Greg
 
 The dictation privacy wording, which is already live rather than pending; the 2A slug question; and
-whether to spend on settling what the repaired Socratic eval leaned towards. All three added
-2026-09-07. Everything this file listed on 2026-09-06 has been
-answered. The `toc/6` question that stood here —
+whether to spend on settling what the repaired Socratic eval leaned towards — all three added
+2026-09-07. Plus, added 2026-09-08, the entry-point edit that 2D forced, which is the only one of the
+four that is a **review of something already done** rather than a decision still open: the doc is
+edited and on `dev`, and what is wanted is a yes or a no. Everything this file listed on 2026-09-06
+has been answered. The `toc/6` question that stood here —
 whether to re-run the structure stage across the library so existing articles picked up the new gist
 lengths — was answered *"leave it, new articles only"*, and is now recorded where it belongs, in
 [hierarchy.md § A new prompt reaches new articles only](../project/hierarchy.md#prompt-versions),

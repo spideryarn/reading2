@@ -27,9 +27,11 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MODES, type Mode } from "../src/modes.js";
 import { MODE_LABEL } from "../src/title-text.js";
-import { modeGenerates } from "../src/web/activation.js";
+import { modeGenerates, pendingActivation, resetActivations } from "../src/web/activation.js";
 import { GENERATES_MARKER, NO_MATCH } from "../src/web/CommandBar.js";
 import { Dock } from "../src/web/Dock.js";
+import { FeedbackHost } from "../src/web/FeedbackButton.js";
+import { CHANGELOG_LABEL } from "../src/web/router.js";
 import { EXPERIMENTAL_OFF, EXPERIMENTAL_ON } from "./helpers/experimental-fixtures.js";
 
 let host: HTMLDivElement;
@@ -54,6 +56,11 @@ beforeEach(() => {
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
+  /* **Armed activations are module state and outlive a render**, so a Tweets
+     row pressed in one test would be found still pending by the next — which
+     is how a check that arming *happened* passes for a bar that armed nothing.
+     activation.ts § `resetActivations` exists for exactly this. */
+  resetActivations();
 });
 
 afterEach(() => {
@@ -74,6 +81,51 @@ function reading(props: Record<string, unknown> = {}): void {
         experimental: EXPERIMENTAL_OFF,
         ...props,
       }),
+    );
+  });
+}
+
+/**
+ * **A drawer, of the shape the reading view really passes** (Reader.tsx), so
+ * that the bar draws its Comments button and the command bar gets its
+ * `openComments`. Empty and loaded, because none of the rows here is about what
+ * is in it.
+ */
+const A_DRAWER = {
+  comments: [],
+  loaded: true,
+  loadFailed: false,
+  error: null,
+  panel: null,
+  onPanel: () => {},
+};
+
+/**
+ * **The same bar with a `FeedbackHost` above it**, which is what the signed-in
+ * app has (App.tsx mounts the host below its signed-in gate).
+ *
+ * It is a separate helper rather than the default because the *absence* of a
+ * host is half of what the Feedback row asserts: `useFeedbackOpen()` answers
+ * `null` where there is none, and the row is then not drawn at all rather than
+ * drawn dead. Every other test in this file mounts the bare `Dock`, so they are
+ * all incidentally the no-host case.
+ */
+function readingSignedIn(props: Record<string, unknown> = {}): void {
+  act(() => {
+    root.render(
+      createElement(
+        FeedbackHost,
+        null,
+        // biome-ignore lint/suspicious/noExplicitAny: as `reading` above
+        createElement(Dock as any, {
+          slug: "a-piece",
+          view: "article",
+          mode: "plain",
+          onMode: () => {},
+          experimental: EXPERIMENTAL_OFF,
+          ...props,
+        }),
+      ),
     );
   });
 }
@@ -118,10 +170,6 @@ const rowsOfKind = (kind: RowKind): HTMLElement[] =>
 
 const listedOfKind = (kind: RowKind): string[] =>
   rowsOfKind(kind).map((row) => row.querySelector(".cmdbar-name")?.textContent ?? "");
-
-/** The row whose visible name is exactly this, or `undefined`. */
-const rowNamed = (label: string): HTMLElement | undefined =>
-  rows().find((row) => row.querySelector(".cmdbar-name")?.textContent === label);
 
 /** The mode buttons the Dock itself drew, in the order it drew them. */
 const dockLists = (): string[] =>
@@ -216,7 +264,7 @@ describe("the bar's mode rows are exactly what the Dock lists", () => {
    * (the `id` attribute `aria-activedescendant` points at), and a page whose
    * href were spelled like a mode's name would have collided under the scheme
    * this replaced. tests/command-match.test.ts states that as a unit; this
-   * states it over the actual `PAGES`, which is the list a future entry lands
+   * states it over the actual `besideTheModes`, which is the list a future entry lands
    * in.
    */
   it("gives every row it draws a distinct id", () => {
@@ -227,19 +275,56 @@ describe("the bar's mode rows are exactly what the Dock lists", () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it("draws its page rows after every mode row", () => {
+  /**
+   * **Every mode comes before everything that is not one** — which is product
+   * call 4 as it stands, and it is the claim that survives a third kind of row
+   * arriving.
+   *
+   * It said *"draws its page rows after every mode row"* until 2026-09-08 and
+   * asserted that every row from the first page onwards was itself a page. That
+   * was true while pages were the only other kind and became false the moment
+   * the Feedback row landed at the end as an `action` — GPT Sol predicted the
+   * failure from the plan alone, before either was written. The fix is to state
+   * the boundary the caller actually maintains (`CommandBar` § `commands`
+   * spreads the modes, then `besideTheModes`) rather than the composition of
+   * what happens to be on the far side of it.
+   */
+  it("draws every row that is not a mode after every mode row", () => {
     reading({ experimental: EXPERIMENTAL_ON });
     openBar();
     const kinds = rows().map((row) => row.dataset.kind);
-    const firstPage = kinds.indexOf("page");
-    expect(firstPage, "no page row in the bar at all").toBeGreaterThan(-1);
-    /* Every row from there on is a page — said as a slice rather than as a
-       sort, which would have leaned on `"mode" < "page"` being alphabetical
-       and would keep passing under a rename to `"link"`. */
-    expect(kinds.slice(firstPage).every((k) => k === "page")).toBe(true);
-    /* And there is at least one mode above it, so "pages come last" is not
-       being satisfied by a bar that is nothing but pages. */
-    expect(firstPage).toBeGreaterThan(0);
+    const firstOther = kinds.findIndex((k) => k !== "mode");
+    expect(firstOther, "nothing but modes in the bar at all").toBeGreaterThan(-1);
+    /* Said as a slice rather than as a sort, which would have leaned on
+       `"mode" < "page"` being alphabetical and would keep passing under a
+       rename to `"link"`. */
+    expect(kinds.slice(firstOther).some((k) => k === "mode")).toBe(false);
+    /* And there is at least one mode above it, so this is not being satisfied
+       by a bar with no modes in it. */
+    expect(firstOther).toBeGreaterThan(0);
+  });
+
+  /**
+   * **And the two kinds below the modes are in the order `besideTheModes`
+   * builds them**, which is what a reader sees on an empty query: this
+   * article's rows, the app's pages, then the one thing to *do*.
+   *
+   * Separate from the test above deliberately — that one is the product call,
+   * this one is the arrangement, and folding them together is how a genuine
+   * change to the arrangement comes to look like a broken promise.
+   */
+  it("draws the Feedback action last, below the pages", () => {
+    readingSignedIn({ experimental: EXPERIMENTAL_ON });
+    openBar();
+    const names = listed();
+    const feedback = names.indexOf("Feedback");
+    expect(feedback, "no Feedback row — is there a FeedbackHost above the Dock?").toBeGreaterThan(
+      -1,
+    );
+    expect(feedback).toBe(names.length - 1);
+    /* The changelog is the last of the pages, so this pins the boundary
+       between the two rather than only the far end of the list. */
+    expect(names.indexOf(CHANGELOG_LABEL)).toBe(feedback - 1);
   });
 
   /**
@@ -619,9 +704,12 @@ describe("the `generates` marker", () => {
    * `commandGenerates` reads it off `CommandWords` and not off the kind.
    */
   it("is on no action row", () => {
-    reading({ experimental: EXPERIMENTAL_ON });
+    /* Both of them, so this is not asserting over a list of one: Comments needs
+       a drawer and Feedback needs a host above the bar. */
+    readingSignedIn({ experimental: EXPERIMENTAL_ON, drawer: A_DRAWER });
     openBar();
     const actions = rowsOfKind("action");
+    expect(actions.length, "both actions should be here").toBe(2);
     expect(actions.length, "no action rows, so this asserts nothing").toBeGreaterThan(0);
     for (const row of actions) expect(row.querySelector(".cmdbar-generates")).toBeNull();
   });
@@ -774,16 +862,21 @@ describe("⌘/Ctrl-K", () => {
  * Greg, 2026-09-07: *"add the Changelog to the footer (e.g. of the Homepage,
  * and also as a command from the Command Bar."* That overrode product call 1 —
  * modes only — and narrowed call 4; CommandBar.tsx § the header carries the
- * reasoning and § `PAGES` carries the list.
+ * reasoning and § `besideTheModes` carries the list.
  *
- * **Against the real `PAGES`, through the real `Dock`**, like everything else
+ * **Against the real `besideTheModes`, through the real `Dock`**, like everything else
  * in this file: the words a reader would actually type are the substance of
  * this change, and a hand-made fixture would let all four of these pass while
  * the shipped entry answered to nothing. tests/command-match.test.ts covers the
  * *ranking* of a page with a fixture, which is a different claim.
  */
 describe("the changelog command", () => {
-  const CHANGELOG_LABEL = "What’s new";
+  /* `CHANGELOG_LABEL` is imported at the top of this file now, rather than
+     spelled out here again. It was a local copy carrying a `’` that had to
+     match router.ts's by hand — and the whole reason that constant exists is
+     that four places were doing exactly this (router.ts § `CHANGELOG_LABEL`).
+     Importing it also means the apostrophe test below is comparing the reader's
+     three spellings against the one string the page really uses. */
 
   /** Where the bar sent the reader, or `null` if it did not. */
   const wentTo = (): string | null =>
@@ -862,5 +955,218 @@ describe("the changelog command", () => {
     type("toc");
     press("Enter");
     expect(wentTo()).toBeNull();
+  });
+});
+
+/**
+ * **The seven rows of 2026-09-08**, from Greg's feedback report
+ * (SPIDERYARN-READING2-2D, and docs/plans/260908e-…):
+ *
+ * > Add Library, Feedback, Metadata, Tweets, Homepage, Profile, and a few more
+ * > likely/useful commands to Command Bar.
+ */
+describe("the rows that are not modes", () => {
+  /** Where the bar sent the reader, or `null` if it did not. */
+  const wentTo = (): string | null =>
+    location.pathname === "/read/a-piece" ? null : location.pathname;
+
+  it("offers each of the ones Greg named, by the name he used", () => {
+    readingSignedIn({ drawer: A_DRAWER });
+    openBar();
+    /* By label rather than by count, because a count passes for the wrong seven
+       — and each of these is one of his six, with `Homepage` folded into
+       Library per the plan's § Library and Homepage are one row. */
+    const names = listed();
+    for (const label of ["Metadata", "Tweets", "Comments", "Library", "Profile", "Feedback"]) {
+      expect(names, `no row called ${label}`).toContain(label);
+    }
+  });
+
+  /**
+   * **Homepage is a way of typing Library, not a second row.** Both of Greg's
+   * words reach it, and only one row comes back — which is the whole of the
+   * collapse, and the thing that would break silently if somebody later added
+   * the second row he literally asked for. Two rows at `href: "/"` would share
+   * the id `page:/`, and an id is what `aria-activedescendant` points at.
+   */
+  it("answers both `library` and `homepage` with the one Library row", () => {
+    readingSignedIn();
+    openBar();
+    for (const query of ["library", "homepage", "home", "add an article"]) {
+      type(query);
+      const names = listed();
+      /* **First, and exactly once.** Not *alone*, which is what this asserted
+         first and which `library` fails: `Public shelf` carries the alias
+         `public library`, so it is an alias-substring hit and ranks below.
+         That is the ranking working — a label prefix beats a substring
+         (command-match.ts § `TIERS`) — and demanding a one-row answer would
+         have been this test insisting on a worse bar. What matters is that
+         Greg's two words reach the same row, and that there is only ever one
+         of it. */
+      expect(names[0], `typing ${JSON.stringify(query)} did not put Library first`).toBe("Library");
+      expect(names.filter((n) => n === "Library")).toHaveLength(1);
+    }
+  });
+
+  it("navigates to this article's metadata page, carrying the reader's place", () => {
+    history.replaceState(null, "", "/read/a-piece?at=spya-k3m9qt");
+    readingSignedIn();
+    openBar();
+    type("metadata");
+    press("Enter");
+    /* The path *and* the query: `?at=` is how coming back returns you to the
+       paragraph you left (Dock.tsx § `search`), and a row that dropped it would
+       look right in a path-only assertion and lose the reader's place. */
+    expect(wentTo()).toBe("/read/a-piece/metadata");
+    expect(location.search).toBe("?at=spya-k3m9qt");
+  });
+
+  /**
+   * **The Tweets row arms the run *and* says it will**, and both halves are
+   * here because either alone is the bug.
+   *
+   * Arming without the marker is the silent-spending hole GPT Sol refused an
+   * optional `generates` over on 2026-09-08. The marker without the arming is
+   * the opposite failure and is what the plan's simpler option would have
+   * shipped: a row that promises to start something, then lands the reader on
+   * the thread page with a button still to press.
+   *
+   * `pendingActivation` is read rather than a spy on `armActivationForTweets`,
+   * so what is asserted is the state the run really consumes — `beforeEach`
+   * clears it, which is what makes "it was armed here" mean anything.
+   */
+  it("arms the thread run on the way to it, and wears the `generates` marker", () => {
+    readingSignedIn();
+    openBar();
+    type("tweets");
+    expect(listed()).toEqual(["Tweets"]);
+    expect(rows()[0]?.querySelector(".cmdbar-generates")?.textContent).toBe(GENERATES_MARKER);
+    expect(pendingActivation("a-piece", "tweets"), "armed before the press").toBeNull();
+    press("Enter");
+    expect(wentTo()).toBe("/read/a-piece/tweets");
+    expect(pendingActivation("a-piece", "tweets"), "the press armed nothing").not.toBeNull();
+  });
+
+  /**
+   * The vacuity guard for the line above: `pendingActivation` answering
+   * non-null has to be something this press did, not something every press
+   * does. Metadata is the neighbouring row and arms nothing.
+   */
+  it("arms nothing when a row that only navigates is taken", () => {
+    readingSignedIn();
+    openBar();
+    type("metadata");
+    press("Enter");
+    expect(pendingActivation("a-piece", "tweets")).toBeNull();
+  });
+
+  /**
+   * **Comments opens the drawer rather than going anywhere**, which is the one
+   * row here that is neither a mode nor a page and does not leave the page.
+   */
+  it("opens the comments drawer, without changing the address", () => {
+    const onPanel = vi.fn();
+    readingSignedIn({
+      drawer: { comments: [], loaded: true, loadFailed: false, error: null, panel: null, onPanel },
+    });
+    openBar();
+    type("comments");
+    expect(listed()).toEqual(["Comments"]);
+    press("Enter");
+    expect(onPanel).toHaveBeenCalledWith("questions");
+    expect(wentTo()).toBeNull();
+    expect(dialog().open).toBe(false);
+  });
+
+  it("offers no Comments row where the bar has no drawer", () => {
+    /* The other half, and it is why `openComments` is optional: the row is
+       built from the callback rather than gated on a boolean beside it, so a
+       bar with no drawer has no row instead of a row that does nothing. */
+    readingSignedIn();
+    openBar();
+    type("comments");
+    expect(listed()).not.toContain("Comments");
+  });
+
+  /**
+   * **Feedback opens the dialog**, and it is the only row that neither
+   * navigates nor touches the band — the `action` arm's one production caller.
+   */
+  it("opens the feedback dialog and leaves the address alone", () => {
+    readingSignedIn();
+    openBar();
+    type("feedback");
+    expect(listed()).toEqual(["Feedback"]);
+    expect(document.querySelector("dialog.fb-dialog")?.hasAttribute("open")).toBe(false);
+    press("Enter");
+    expect(document.querySelector("dialog.fb-dialog")?.hasAttribute("open")).toBe(true);
+    expect(wentTo()).toBeNull();
+  });
+
+  /**
+   * **No host above, no row** — the rule `FeedbackTrigger` already followed and
+   * `useFeedbackOpen` restates in a return type. A row drawn here would be one
+   * that pressed nothing, which is worse than an absent row because the reader
+   * would have no way to tell.
+   */
+  it("offers no Feedback row where nothing has mounted the dialog", () => {
+    reading();
+    openBar();
+    type("feedback");
+    expect(listed()).not.toContain("Feedback");
+    expect(dialog().textContent).toContain(NO_MATCH);
+  });
+});
+
+/**
+ * **Where the button sits in the row**, which is the other half of Greg's
+ * report and the half no other test in this file can see: every one of them
+ * finds `.dock-commands` by selector, so leaving it at the far end of the bar
+ * would keep them all green. GPT Sol asked for this, 2026-09-08.
+ *
+ * > And move Command bar to the left of the Dock, just after the logo.
+ */
+describe("the Commands button's place in the bar", () => {
+  /** The bar's own children, in the order they are drawn. */
+  const barChildren = (): Element[] => {
+    const dock = host.querySelector(".dock");
+    expect(dock, "no `.dock` in the tree").not.toBeNull();
+    return [...(dock as Element).children];
+  };
+
+  it("comes after the wordmark and before the modes", () => {
+    reading();
+    const at = (selector: string) => barChildren().findIndex((el) => el.matches(selector));
+    const home = at(".dock-home");
+    const commands = at(".dock-commands");
+    const modes = at(".dock-modes");
+    expect(home, "no wordmark in the bar").toBeGreaterThan(-1);
+    expect(commands, "no Commands button in the bar").toBeGreaterThan(-1);
+    expect(modes, "no mode segment in the bar").toBeGreaterThan(-1);
+    /* **`home + 1`, not merely `> home`**, and GPT Sol is the reason: Greg asked
+       for *"just after the logo"*, and two inequalities would go on passing with
+       anything at all slipped in between — which is a different bar from the one
+       he asked for, and the one assertion that would not have noticed.
+
+       Indices rather than `nextElementSibling` so that an intruder is a legible
+       failure (`expected 2 to be 1`) rather than a null dereference. */
+    expect(commands, "something is between the wordmark and Commands").toBe(home + 1);
+    expect(commands).toBeLessThan(modes);
+  });
+
+  /**
+   * **And it is still not a fifteenth mode.** The move put it next to the
+   * radiogroup, which is the arrangement in which being mistaken for a member
+   * is cheapest — `DockCommands` § Three ways it says it is not a fifteenth
+   * mode makes the claim and this is the half a screen reader would feel.
+   */
+  it("stays outside the radiogroup, and claims none of its state", () => {
+    reading();
+    const button = host.querySelector(".dock-commands") as HTMLElement;
+    expect(button.closest('[role="radiogroup"]')).toBeNull();
+    for (const attr of ["aria-checked", "aria-current", "aria-pressed"]) {
+      expect(button.hasAttribute(attr), `it claims ${attr}`).toBe(false);
+    }
+    expect(button.getAttribute("aria-haspopup")).toBe("dialog");
   });
 });

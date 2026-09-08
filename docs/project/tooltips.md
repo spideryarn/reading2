@@ -214,10 +214,12 @@ Three things about it are not true of any other set here.
   the experimental switch stays outside it, being the adjacent account-level control — a setting
   rather than a view of this article.
 - **And then the last two**, on 2026-09-08: the wordmark and the command button, which are not modes
-  either and do not go through `DockLink`. `DockCommands` joined the group above it — it is the
-  fourth thing in that end of the row that is not a mode, and its own docblock already argued three
-  ways that it is not a fifteenth one. `DockHome` is alone at the far end with a whole radiogroup
-  between it and the nearest other card, so it is in no group: there is no scrub from one to the next
+  either and do not go through `DockLink`. `DockCommands` joined the group above it that morning and
+  **left again the same day**, when Greg asked for it beside the logo — so the two are now neighbours
+  at the *left-hand* end, each in no group and each waiting its own 300ms. That is the cost of the
+  move and it was taken deliberately: one button, no longer about that group's subject. Its own
+  docblock already argued three ways that it is not a fifteenth mode, which matters more now that it
+  sits against the radiogroup. `DockHome` is likewise in no group — there is no scrub from one to the next
   to make instant. **No button in the bar row carries a `title` now** — the one left in
   `Dock.tsx` is the drawer's Close, and 260907b § Stage 3 says why it stays.
 
