@@ -16,12 +16,13 @@ import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
 
 import { STALL_AFTER_MS, daemonStanding, describeEvent, readEventTail, statusLines } from "../scripts/overseer.js";
-import type { OverseerEvent } from "../tools/overseer/diff.js";
+import type { SessionEvent } from "../tools/overseer/diff.js";
 import {
   CHECKPOINT_FILE,
   EVENTS_FILE,
   STORE_SCHEMA,
   attentionNotYetRun,
+  schedulerNotYetSaid,
   usageNotYetRun,
   type Checkpoint,
   type CheckpointRead,
@@ -59,6 +60,10 @@ function checkpointAt(agoMs: number, pid = 4242): Checkpoint {
     // Same reasoning one field down: a daemon with no usage pass wired in
     // publishes "nothing has looked", never a report saying no limits were found.
     usage: usageNotYetRun(new Date(NOW - agoMs).toISOString()),
+    scheduler: schedulerNotYetSaid(new Date(NOW - agoMs).toISOString()),
+    snapshotStaleAfterMs: null,
+    occurrenceHistory: null,
+    jobs: { occurrences: [] },
   };
 }
 
@@ -172,11 +177,11 @@ describe("telling a dead daemon from a quiet one", () => {
 describe("reading the event log without disturbing the daemon", () => {
   test("the tail is the last N events, and unreadable lines are counted", () => {
     const root = tempRoot();
-    const events: OverseerEvent[] = [1, 2, 3].map((n) => ({
+    const events: SessionEvent[] = [1, 2, 3].map((n) => ({
       kind: "tmux-session-gone",
       at: `2026-09-08T07:0${n}:00.000Z`,
       tmuxServerPid: 132280,
-      key: `$${n} none` as OverseerEvent["key"],
+      key: `$${n} none` as SessionEvent["key"],
       identity: { tmuxId: `$${n}`, claimedConversationId: null },
       name: `session-${n}`,
       why: "absent-from-snapshot",
@@ -196,11 +201,11 @@ describe("reading the event log without disturbing the daemon", () => {
   });
 
   test("every event kind renders as a sentence naming the session", () => {
-    const gone: OverseerEvent = {
+    const gone: SessionEvent = {
       kind: "tmux-session-gone",
       at: "2026-09-08T07:01:00.000Z",
       tmuxServerPid: 132280,
-      key: "$1 none" as OverseerEvent["key"],
+      key: "$1 none" as SessionEvent["key"],
       identity: { tmuxId: "$1", claimedConversationId: null },
       name: "overseer-o1-store",
       why: "tmux-server-changed",
@@ -214,11 +219,11 @@ describe("reading the event log without disturbing the daemon", () => {
     // "changed" on its own is unreadable: a rename and a move to another
     // worktree are the same event kind, and the field list is the only thing in
     // the line that tells a person which one happened.
-    const changed: OverseerEvent = {
+    const changed: SessionEvent = {
       kind: "session-row-changed",
       at: "2026-09-08T07:01:00.000Z",
       tmuxServerPid: 132280,
-      key: "$1 none" as OverseerEvent["key"],
+      key: "$1 none" as SessionEvent["key"],
       identity: { tmuxId: "$1", claimedConversationId: null },
       fields: ["name", "worktree"],
       row: {
@@ -243,11 +248,11 @@ describe("reading the event log without disturbing the daemon", () => {
   });
 
   test("a pane replacement names both pids, because that is the whole fact", () => {
-    const pane: OverseerEvent = {
+    const pane: SessionEvent = {
       kind: "session-pane-replaced",
       at: "2026-09-08T07:01:00.000Z",
       tmuxServerPid: 132280,
-      key: "$1 none" as OverseerEvent["key"],
+      key: "$1 none" as SessionEvent["key"],
       identity: { tmuxId: "$1", claimedConversationId: null },
       previousPaneId: "%1",
       previousPanePid: 4242,
@@ -326,6 +331,68 @@ describe("the status page a person actually reads", () => {
     // collected, and no register was mentioned at all.
     expect(lines).not.toContain("nothing has been collected yet");
     expect(lines).toMatch(/sessions\s+unknown/);
+  });
+
+  test("the scheduler gets a line of its own, and OFF is not the same sentence as ARMED", () => {
+    // GPT Sol's C1, in the surface a person actually reads. Both states produce
+    // an empty occurrence list and a green heartbeat, so if the page cannot say
+    // which it is, nobody can — and "the scheduler is off" then looks exactly
+    // like "the scheduler has nothing to do".
+    const root = tempRoot();
+    const at = new Date(NOW - 20_000).toISOString();
+    writeFileSync(
+      join(root, CHECKPOINT_FILE),
+      JSON.stringify({ ...checkpointAt(20_000), scheduler: { kind: "off", why: "OVERSEER_JOBS_ENABLED is not \"1\"", at } }),
+    );
+    const off = statusLines(root, NOW).join("\n");
+    expect(off).toMatch(/scheduler\s+OFF/);
+    expect(off).toContain("OVERSEER_JOBS_ENABLED");
+
+    writeFileSync(
+      join(root, CHECKPOINT_FILE),
+      JSON.stringify({ ...checkpointAt(20_000), scheduler: { kind: "armed", why: "get-ready-to-deploy, feedback-sweep", at } }),
+    );
+    const armed = statusLines(root, NOW).join("\n");
+    expect(armed).toMatch(/scheduler\s+ARMED/);
+    expect(armed).toContain("get-ready-to-deploy");
+    expect(off).not.toBe(armed);
+  });
+
+  test("an armed scheduler that is HOLDING everything does not read as a quiet one", () => {
+    // The two look identical from every other field: armed, ticking, no
+    // occurrences. A held ledger means nothing has been dispatched and nothing
+    // will be, so it gets its own line and the sentence that clears it.
+    const root = tempRoot();
+    const at = new Date(NOW - 20_000).toISOString();
+    writeFileSync(
+      join(root, CHECKPOINT_FILE),
+      JSON.stringify({
+        ...checkpointAt(20_000),
+        scheduler: { kind: "armed", why: "get-ready-to-deploy, feedback-sweep", at },
+        occurrenceHistory: { kind: "lost", why: "the event log could not be replayed (log-has-holes)" },
+      }),
+    );
+    const lines = statusLines(root, NOW).join("\n");
+    expect(lines).toContain("HOLDING EVERY JOB");
+    expect(lines).toContain("log-has-holes");
+    expect(lines).toContain("reconcile-jobs");
+  });
+
+  test("a checkpoint written before the scheduler existed says UNKNOWN, never OFF", () => {
+    // Inventing "off" for an old checkpoint would be a claim about a daemon
+    // nobody asked — the same mistake as reading an empty attention list as
+    // "nothing needs you".
+    const root = tempRoot();
+    const { scheduler: _dropped, ...withoutScheduler } = checkpointAt(20_000);
+    writeFileSync(join(root, CHECKPOINT_FILE), JSON.stringify(withoutScheduler));
+    const lines = statusLines(root, NOW).join("\n");
+    expect(lines).toMatch(/scheduler\s+UNKNOWN/);
+  });
+
+  test("an empty store says the scheduler is unknown rather than leaving the line out", () => {
+    // A MISSING LINE READS AS FINE. Every other block on this page prints
+    // something in every case for that reason.
+    expect(statusLines(tempRoot(), NOW).join("\n")).toMatch(/scheduler\s+unknown/i);
   });
 
   test("a relative store directory is refused rather than resolved", () => {

@@ -21,7 +21,7 @@ import {
   statusKey,
   waitDeadlineToleranceMs,
   type Baseline,
-  type OverseerEvent,
+  type SessionEvent,
 } from "../tools/overseer/diff.js";
 import type { JsonValue } from "../tools/overseer/observation.js";
 import { editableFixture, freshFixture, freshFrom, rowsOf, type FixtureName } from "./overseer-fixtures.js";
@@ -42,7 +42,7 @@ function edited(name: FixtureName, edit: (payload: Record<string, JsonValue>) =>
  * expects silence would go on passing if `diff()` quietly started holding
  * everything.
  */
-function diffed(previous: AdmissibleSnapshot | null, next: AdmissibleSnapshot): OverseerEvent[] {
+function diffed(previous: AdmissibleSnapshot | null, next: AdmissibleSnapshot): SessionEvent[] {
   const outcome = diff(previous === null ? null : mustBaseline(previous), next);
   if (outcome.kind !== "diffed") throw new Error(`expected a diff, got ${outcome.kind}: ${outcome.reason}`);
   return outcome.events;
@@ -65,7 +65,7 @@ function mustBaseline(snapshot: AdmissibleSnapshot): Baseline {
   return result.baseline;
 }
 
-function kinds(events: readonly OverseerEvent[]): string[] {
+function kinds(events: readonly SessionEvent[]): string[] {
   return events.map((e) => e.kind);
 }
 
@@ -83,9 +83,9 @@ function kinds(events: readonly OverseerEvent[]): string[] {
  * The first batch is a cold start — one `session-seen` per row — and every
  * caller here ignores it.
  */
-function chained(snapshots: readonly AdmissibleSnapshot[]): OverseerEvent[][] {
+function chained(snapshots: readonly AdmissibleSnapshot[]): SessionEvent[][] {
   let baseline: Baseline | null = null;
-  const batches: OverseerEvent[][] = [];
+  const batches: SessionEvent[][] = [];
   for (const snapshot of snapshots) {
     const outcome = diff(baseline, snapshot);
     if (outcome.kind !== "diffed") throw new Error(`expected a diff, got ${outcome.kind}: ${outcome.reason}`);
@@ -103,7 +103,7 @@ function chained(snapshots: readonly AdmissibleSnapshot[]): OverseerEvent[][] {
  * asserting about. Filtering by handle rather than by kind, so an unexpected
  * extra event on the constructed row still shows up.
  */
-function elsewhere(events: readonly OverseerEvent[]): OverseerEvent[] {
+function elsewhere(events: readonly SessionEvent[]): SessionEvent[] {
   return events.filter((e) => e.identity.tmuxId !== "$1991");
 }
 
@@ -521,7 +521,7 @@ describe("CONSTRUCTED: a different tmux generation", () => {
     // an `AdmissibleSnapshot` and this variable is a `Baseline`, so the
     // assignment that used to compile is now the error this describes.
     let baseline = mustBaseline(a);
-    const events: OverseerEvent[] = [];
+    const events: SessionEvent[] = [];
     const holds: string[] = [];
     for (const next of [b, c]) {
       const outcome = diff(baseline, next);
@@ -616,7 +616,7 @@ describe("CONSTRUCTED: a wait that was replaced by a longer one", () => {
   /** The gap between the two real collections. Every number below is derived from it. */
   const GAP_MS = 129_937;
 
-  function waits(beforeSeconds: number, afterSeconds: number): OverseerEvent[] {
+  function waits(beforeSeconds: number, afterSeconds: number): SessionEvent[] {
     const before = edited("waiting-first", (p) => {
       const row = rowsOf(p)[0];
       if (row) row["status"] = { kind: "waiting", secondsLeft: beforeSeconds };

@@ -118,45 +118,50 @@ const KINDS: Record<AttentionKind, { label: string; what: string; loud: boolean 
 };
 
 /**
- * How much of a future timestamp is the reader's clock rather than a fault.
- *
- * **The two clocks here are genuinely different**, and that is a known open
- * stage rather than a hypothetical: v0.4j in
- * docs/plans/260907e-agent-fleet-dashboard.md — *the page reads the box's clock
- * with the phone's* — every age on this page is `browserNow − aServerTimestamp`,
- * and nothing corrects for the difference yet. So a server timestamp a few
- * seconds ahead of `now` is ordinary and must not raise anything: an alarm a
- * phone's clock can manufacture is A17, healthy operation spending its time
- * alarming, which is how a caveat stops being read.
- *
- * Two minutes is generous against thresholds of five and six, and small against
- * the skews v0.4j measured mattering (a phone three minutes fast). When v0.4j
- * lands and timestamps are converted at the parse boundary, this tolerance is
- * what should shrink rather than what should be deleted — the conversion is
- * best-effort and the floor below it still has to do something.
- */
-const CLOCK_SKEW_MS = 2 * 60_000;
-
-/**
  * How old something is, or null when its timestamp is not one this page can use.
  *
- * **A timestamp further in the future than the skew allowance is UNREADABLE,
- * not fresh.** It used to be `Math.max(0, now − parsed)`, so a `scannedAt` in
- * the future read as "0s ago" — and went on reading as 0s ago for as long as it
- * stayed in the future, which is exactly as long as the fault lasts. That
+ * **A TIMESTAMP IN THE FUTURE IS UNREADABLE, NOT FRESH.** It used to be
+ * `Math.max(0, now − parsed)`, so a `scannedAt` ahead of `now` read as "0s ago"
+ * — and went on reading as 0s ago for exactly as long as the fault lasted. That
  * suppresses the staleness branch below, and an empty list with a suppressed
  * staleness branch is the permanently calm fleet this whole panel exists to
  * prevent. `null` is the honest answer and the loud one: every caller treats an
  * age it cannot compute as stale, because an age nobody can compute is not
  * evidence of freshness. GPT Sol's C2, 2026-09-08 — the client half. The server
- * half is the coherence check in tools/fleet/attention.ts, which CAN be strict
- * because both of its timestamps come off one clock.
+ * half is the coherence check in tools/fleet/attention.ts.
+ *
+ * **THE CLOCK-SKEW WINDOW IS GONE, AND ITS DELETION IS THE POINT OF v0.4j.**
+ * This carried a flat `CLOCK_SKEW_MS = 2 * 60_000`, added an hour before the
+ * stage that removed it, because these two timestamps came off two different
+ * clocks — the box's and the phone's — so a phone three minutes fast made a
+ * live inbox unreadable. That is fixed where it belongs: every server timestamp
+ * is converted into this browser's terms at the parse boundary (types.ts §
+ * `ClockSkew`), so both numbers below are readings of ONE clock and a
+ * `scannedAt` genuinely ahead of now means a broken clock rather than an
+ * ordinary phone.
+ *
+ * What is left is `RENDER_SLACK_MS`, and it is a different fact — not an
+ * allowance for a device nobody measured, but the granularity of this page's
+ * own clock. Every corrected timestamp is at most the moment the payload
+ * arrived (`servedAt` is later than everything it carries, so the shift lands
+ * them at or before receipt), while `now` comes from `useNow`, which ticks once
+ * a second — so a render triggered by an arriving payload compares a fresh
+ * timestamp against a `now` up to a tick old. Without slack a checkpoint
+ * written moments before it was served would flash *"the Overseer stopped
+ * checkpointing at a time this page could not read"* on a healthy fleet, which
+ * is the alarm-a-clock-manufactures failure with a different clock in it.
+ *
+ * Five seconds: one tick plus room for a slow render, and two orders of
+ * magnitude below the five- and six-minute thresholds it must not swallow.
+ * Anything past it is still `null`, still loud, and still the honest answer.
  */
+const RENDER_SLACK_MS = 5_000;
+
 function ageMs(at: string, now: number): number | null {
   const parsed = Date.parse(at);
   if (!Number.isFinite(parsed)) return null;
   const age = now - parsed;
-  if (age < -CLOCK_SKEW_MS) return null;
+  if (age < -RENDER_SLACK_MS) return null;
   return Math.max(0, age);
 }
 

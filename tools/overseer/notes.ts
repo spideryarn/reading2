@@ -121,6 +121,55 @@ export type DaemonNote =
       degradedAt: string;
       /** How long it was open. The number Greg actually wants: "deaf for four minutes" beats two timestamps. */
       forMs: number;
+    }
+  /**
+   * A SCHEDULED RUN NOBODY CAN ACCOUNT FOR — the note that exists because its
+   * absence was the bug.
+   *
+   * Not a condition, so not `condition-degraded`: a condition is a state that
+   * opens and closes, and this is a thing that happened once to one run. It is
+   * written here rather than only logged because the failure it reports is
+   * silence — a job whose lease ran out went on looking healthy from every other
+   * surface, which is GPT Sol's S6, and a line on a console nobody kept is not a
+   * report.
+   *
+   * `reason` separates the two ways it arises, because they want different
+   * things done about them: `lease-expired` means work that started and never
+   * came back (look at the pid), `reservation-abandoned` means a daemon died in
+   * the spawn window (nothing to look at, and nothing to retry).
+   */
+  | {
+      kind: "job-unaccounted";
+      at: string;
+      instanceId: string;
+      jobId: string;
+      occurrenceId: string;
+      reason: "lease-expired" | "reservation-abandoned";
+      why: string;
+    }
+  /**
+   * A FACT ABOUT A RUN THAT THE STORE WOULD NOT TAKE.
+   *
+   * The scheduler's reservation is fail-closed — nothing is spawned until it is
+   * on the disk — and every append AFTER it used to have its result thrown away
+   * (GPT Sol's C5). So a failed `finished` left the ledger saying `started` for
+   * ever while the console said the run had ended, and the two disagreed with
+   * nobody in a position to notice.
+   *
+   * It is deliberately not a condition: like `job-unaccounted` it happened once,
+   * to one run, and there is nothing for a later note to restore. `fact` says
+   * WHICH half of the history is missing, because the repair differs — a lost
+   * `finished` leaves an occurrence that will be swept as unaccounted when its
+   * lease runs out, and a lost `refused` leaves one that never started at all.
+   */
+  | {
+      kind: "job-record-lost";
+      at: string;
+      instanceId: string;
+      jobId: string;
+      occurrenceId: string;
+      fact: "started" | "finished" | "refused" | "unknown";
+      why: string;
     };
 
 export type OpenCondition = { condition: OverseerCondition; since: string; why: string };
@@ -200,6 +249,13 @@ export function openConditions(notes: readonly DaemonNote[]): readonly OpenCondi
       case "condition-restored":
         open.delete(note.condition);
         break;
+      // NOT A CONDITION, so it opens and closes nothing. An unaccounted run is
+      // a thing that happened to one run, and there is nothing for a later note
+      // to "restore" — the record of it is the log line, which is permanent.
+      // Named rather than defaulted, so a future arm has to be decided about.
+      case "job-unaccounted":
+      case "job-record-lost":
+        break;
       default: {
         const never: never = note;
         throw new Error(`no rule for note ${JSON.stringify(never)}`);
@@ -219,6 +275,10 @@ export function describeNote(note: DaemonNote): string {
       return `DEGRADED ${note.condition}: ${note.why}`;
     case "condition-restored":
       return `restored ${note.condition} after ${Math.round(note.forMs / 1000)}s: ${note.why}`;
+    case "job-unaccounted":
+      return `UNACCOUNTED job ${note.jobId} (${note.reason}): ${note.occurrenceId} — ${note.why}`;
+    case "job-record-lost":
+      return `NOT RECORDED job ${note.jobId} (${note.fact}): ${note.occurrenceId} — ${note.why}`;
     default: {
       const never: never = note;
       throw new Error(String(never));
@@ -321,6 +381,20 @@ function isNote(u: unknown): u is DaemonNote {
       return isCondition(record["condition"]) && typeof record["why"] === "string";
     case "condition-restored":
       return isCondition(record["condition"]) && typeof record["why"] === "string" && typeof record["degradedAt"] === "string";
+    case "job-unaccounted":
+      return (
+        typeof record["jobId"] === "string" &&
+        typeof record["occurrenceId"] === "string" &&
+        typeof record["why"] === "string" &&
+        (record["reason"] === "lease-expired" || record["reason"] === "reservation-abandoned")
+      );
+    case "job-record-lost":
+      return (
+        typeof record["jobId"] === "string" &&
+        typeof record["occurrenceId"] === "string" &&
+        typeof record["why"] === "string" &&
+        (record["fact"] === "started" || record["fact"] === "finished" || record["fact"] === "refused" || record["fact"] === "unknown")
+      );
     default:
       return false;
   }

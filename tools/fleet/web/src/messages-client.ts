@@ -73,7 +73,7 @@
  * itself a failure here:** a test globs this directory for the string, so the
  * rule is enforced rather than remembered.
  */
-import type { FleetRow, FleetStatus } from "./types";
+import { shiftToBrowserClock, type ClockSkew, type FleetRow, type FleetStatus } from "./types";
 
 export const MESSAGES_URL = "api/messages";
 
@@ -310,6 +310,13 @@ export const STALE_TRANSCRIPT_MS = 30 * 60 * 1000;
  * dialog writes nothing until somebody answers it, which is routinely hours,
  * so including it would put the warning on the very rows Greg opens this page
  * to look at — and a warning that is usually wrong is one nobody reads.
+ *
+ * **`lastModified` MUST ALREADY BE IN BROWSER-CLOCK TERMS**, which is what
+ * `withClockSkew` below is for. This subtracts it from `nowMs` directly, and
+ * before v0.4j the two came off different clocks: a phone half an hour fast put
+ * *"this may not be this session's conversation"* on every working row. The
+ * conversion is not done here because this function is also handed a `null` and
+ * a `"not a date"` and has no business knowing about the wire.
  */
 export type TranscriptAge =
   | { kind: "unstated" }
@@ -376,3 +383,49 @@ export function makeMessagesApi(fetchImpl: typeof fetch = fetch): MessagesApi {
 export const httpMessagesApi: MessagesApi = {
   recent: (row) => makeMessagesApi().recent(row),
 };
+
+/**
+ * **THE SECOND BOUNDARY, WEARING THE FIRST ONE'S CLOCK.**
+ *
+ * `lastModified` is the server's, and `transcriptAge` subtracts it from the
+ * browser's — so before v0.4j a phone thirty minutes fast put *"this may not be
+ * this session's conversation"* on every working row. The threshold is 30
+ * minutes (`STALE_TRANSCRIPT_MS`), which is a lot of skew, but `LastWrote` in
+ * SessionDetail.tsx prints the same subtraction in the header with no threshold
+ * at all, and it was simply wrong by the skew.
+ *
+ * **A WRAPPER RATHER THAN A `servedAt` ON THIS ROUTE TOO.** The route could
+ * carry its own clock and this could measure its own skew, and that was
+ * rejected: it is a second measurement of one fact, the two would disagree by a
+ * few milliseconds of latency, and a page whose transcript ages and snapshot
+ * ages were corrected by different numbers would be harder to reason about than
+ * one corrected by the same number. `/api/state` and `/api/messages` are the
+ * same process on the same box — one skew is the truth about both.
+ *
+ * **A FUNCTION rather than a value**, because the skew is re-measured on every
+ * poll and a wrapper holding the one it was built with would go stale the
+ * moment the page had been open for a cycle. App.tsx reads it out of a ref, so
+ * the correction applied is the freshest one the page has.
+ *
+ * The alternative to all of this was drilling a `skew` prop through
+ * SessionsPanel → SessionDetail → RecentMessages → `Found`, four components
+ * that have no business knowing about clocks, to reach two subtractions.
+ */
+export function withClockSkew(api: MessagesApi, skew: () => ClockSkew): MessagesApi {
+  return {
+    async recent(row): Promise<MessagesView> {
+      const view = await api.recent(row);
+      if (view.kind !== "found") return view;
+      const at = skew();
+      return {
+        ...view,
+        lastModified: shiftToBrowserClock(view.lastModified, at),
+        /* The turns' own timestamps too. They are printed as wall-clock times
+           beside each message, so on a phone five minutes fast they would read
+           five minutes earlier than the phone's own clock says it is now — and
+           a message stamped in the future is the reading a person notices. */
+        turns: view.turns.map((turn) => ({ ...turn, at: shiftToBrowserClock(turn.at, at) })),
+      };
+    },
+  };
+}

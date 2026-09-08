@@ -59,7 +59,9 @@ import type { AttentionList, StoredUsage, UsageReport } from "../fleet/wire.js";
 import { chooseUsage } from "./usage-carry.js";
 import { admissible, type AdmissibleSnapshot } from "./admissible.js";
 import { baselineOf, diff, sessionKey, type Baseline, type OverseerEvent, type SessionIdentity } from "./diff.js";
+import type { AuthorisedJob } from "./jobs.js";
 import { conditionTracker, describeNote, openNoteLog, type DaemonNote } from "./notes.js";
+import { describeReport, schedulerTick, type LostRecord, type SpawnJob } from "./scheduler.js";
 import { parseAttempt, parseObservation, type JsonValue, type ObservedAttemptClock, type ObservedRow } from "./observation.js";
 import { fleetSource, type SourceMessage, type SourceOptions, type Transport } from "./source.js";
 import {
@@ -70,6 +72,7 @@ import {
   type LockHolder,
   type OverseerStore,
   type SessionRegister,
+  type StoredScheduler,
   type StoreRefusal,
 } from "./store.js";
 
@@ -325,6 +328,38 @@ export type DaemonOptions = {
    * as the fresh one. A daemon given no runner publishes `usageNotYetRun`.
    */
   usage?: { intervalMs?: number; run: () => Promise<UsageReport> };
+  /**
+   * THE SCHEDULED JOBS, and the schedule as data.
+   *
+   * Injected like the two passes above and for the same reason: dispatching a
+   * job means creating a process, and this file's whole job is to keep folding
+   * when other things are broken. What it supplies is the clock and the store;
+   * `scheduler.ts` supplies the ordering; the caller supplies what a job
+   * actually does.
+   *
+   * **This path does NOT use the `attentionRunning` idiom two fields up.** That
+   * guard is an in-memory promise, and a job whose work never settles would
+   * leave it non-null for ever — every later tick correctly declining to
+   * overlap, the heartbeat green, and the job silently never running again (GPT
+   * Sol's S6). Scheduled jobs are guarded by a durable lease instead, and an
+   * overdue one is reported rather than skipped. The attention and usage guards
+   * are deliberately left exactly as they were: they belong to another stage.
+   */
+  jobs?: { intervalMs?: number; definitions: readonly AuthorisedJob[]; spawn: SpawnJob };
+  /**
+   * WHAT TO SAY ABOUT THE SCHEDULER on the status page — the job ids, and any
+   * whose definition no longer matches its pin.
+   *
+   * **Whether it is ARMED is decided by whether `jobs` above was supplied, not
+   * by this string**, so the two cannot disagree; this only carries the detail,
+   * which is the caller's knowledge (it read the environment and built the
+   * definitions, and this file did neither).
+   *
+   * It exists because a scheduler that is OFF must not look like a scheduler
+   * with nothing to do. Both produce an empty occurrence list and a green
+   * heartbeat, and until GPT Sol's C1 nothing anywhere could tell them apart.
+   */
+  schedulerDetail?: string;
 };
 
 /**
@@ -355,6 +390,21 @@ export const ATTENTION_INTERVAL_MS = 120_000;
  * limit sooner, and a rate limit that has just been hit does not clear for hours.
  */
 export const USAGE_INTERVAL_MS = 300_000;
+
+/**
+ * How often the scheduler looks: every tick's worth, 30 seconds.
+ *
+ * **It is deliberately the cheapest of the three timers**, and it can be,
+ * because a tick that finds nothing due does no I/O at all — it reads a map the
+ * store already holds and compares two numbers. The interval is therefore the
+ * granularity of the schedule rather than a cost, and the shortest job anyone
+ * has asked for is five minutes.
+ *
+ * It is a SEPARATE timer from the heartbeat rather than a line inside it,
+ * because a spawn is a syscall and `lastTickAt` is how a reader tells a dead
+ * Overseer from a quiet one. Astra's A17, the same argument the usage scan makes.
+ */
+export const JOBS_INTERVAL_MS = 30_000;
 
 export type DaemonOutcome =
   | { kind: "refused"; refusal: StoreRefusal }
@@ -506,9 +556,29 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
   // and "a pass ran and `chooseUsage` kept the stored one". Absent means the same
   // thing in each case: leave the store's own report alone.
   let usage: StoredUsage | null = null;
+  // ONE OBJECT, BUILT ONCE, WRITTEN ON EVERY CHECKPOINT. `armed` is read off the
+  // option rather than off a flag beside it, so "armed" and "there are jobs"
+  // cannot come apart.
+  const schedulerStanding: StoredScheduler = {
+    kind: options.jobs === undefined ? "off" : "armed",
+    why:
+      options.schedulerDetail ??
+      (options.jobs === undefined
+        ? "this daemon was started with no scheduled jobs at all, so nothing will be dispatched"
+        : `${options.jobs.definitions.length} standing job(s)`),
+    at: now().toISOString(),
+  };
   const checkpointUpdate = (): CheckpointUpdate => ({
     lastGoodSnapshotAt,
     tick: true,
+    scheduler: schedulerStanding,
+    // THE DEADLINE, NOT THE CADENCE, and written on every tick because
+    // `refreshMs` moves when a producer says so. `overseer-watchdog.ts` reads
+    // this instead of computing its own: sharing `staleAfterMs` stopped the
+    // formula drifting and did nothing about the INPUT drifting, which is GPT
+    // Sol's C6 — the daemon was using 300,000ms and the watchdog 325,000ms
+    // under the documented normal values.
+    snapshotStaleAfterMs: staleAfterMs(refreshMs),
     // Spread rather than assigned: `exactOptionalPropertyTypes` makes "absent"
     // and "present and undefined" different things, and here absent means *keep
     // the list the store already holds*.
@@ -617,6 +687,80 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
         }, usageOptions.intervalMs ?? USAGE_INTERVAL_MS);
   usageTicker?.unref?.();
 
+  /*
+   * The scheduler, on its own timer.
+   *
+   * NO IN-MEMORY GUARD AROUND IT, and that absence is the design rather than an
+   * omission. `schedulerTick` is synchronous: it appends, spawns, appends, and
+   * returns — it does not await the work, so there is no promise to hold and
+   * nothing to leave non-null. Overlap is prevented by the LEASE the tick reads
+   * out of the store, which a restart survives and which releases on its own
+   * deadline. That pair of properties is exactly what `attentionRunning` lacks,
+   * and adding a guard here "for symmetry" would put the bug back.
+   *
+   * Every report is written down, including the boring ones, at two volumes: a
+   * line in the log for all of them, and a durable `daemon.jsonl` note for the
+   * two that mean a run cannot be accounted for. A stuck job that produced only
+   * a console line would be a stuck job nobody could prove afterwards.
+   */
+  const jobOptions = options.jobs;
+  /**
+   * A fact about a run that the store would not accept, written down where a
+   * console line would not survive.
+   *
+   * GPT Sol's C5: the reservation append is fail-closed, and every later one had
+   * its result dropped — so a failed `finished` left the durable history saying
+   * `started` for ever while the report claimed the run had ended. It cannot
+   * throw (that would lose the child's outcome as well), so the only honest
+   * thing left is to say so loudly in both places.
+   */
+  const recordLost = (lost: LostRecord): void => {
+    write({
+      kind: "job-record-lost",
+      at: now().toISOString(),
+      instanceId: store.instanceId,
+      jobId: lost.jobId,
+      occurrenceId: lost.occurrenceId,
+      fact: lost.fact,
+      why: lost.why,
+    });
+  };
+  const jobsTicker =
+    jobOptions === undefined
+      ? null
+      : setInterval(() => {
+          if (halted() !== null) return;
+          for (const report of schedulerTick({
+            definitions: jobOptions.definitions,
+            store,
+            spawn: jobOptions.spawn,
+            now,
+            // The completion append lands after the tick has returned, so its
+            // failure cannot reach the reports above. This is where it goes.
+            onLostRecord: recordLost,
+          })) {
+            log(describeReport(report));
+            if (report.kind === "stuck" || report.kind === "unaccounted") {
+              write({
+                kind: "job-unaccounted",
+                at: now().toISOString(),
+                instanceId: store.instanceId,
+                jobId: report.jobId,
+                occurrenceId: report.occurrenceId,
+                reason: report.kind === "stuck" ? "lease-expired" : "reservation-abandoned",
+                why: report.why,
+              });
+            }
+            // The synchronous half of the same failure — a refusal or an
+            // unknown that could not be appended. Same note, so a reader has one
+            // place to look rather than two.
+            if (report.kind === "unrecorded") {
+              recordLost({ jobId: report.jobId, occurrenceId: report.occurrenceId, fact: report.fact, why: report.why });
+            }
+          }
+        }, jobOptions.intervalMs ?? JOBS_INTERVAL_MS);
+  jobsTicker?.unref?.();
+
   /**
    * Wait for a pass in flight, if there is one.
    *
@@ -698,6 +842,12 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     clearInterval(ticker);
     if (attentionTicker !== null) clearInterval(attentionTicker);
     if (usageTicker !== null) clearInterval(usageTicker);
+    // NOT AWAITED, unlike the two passes, because there is nothing to await: a
+    // dispatched job is a separate process with a durable reservation behind it,
+    // so a shutdown mid-run leaves a record rather than a second writer. What it
+    // does leave is an occurrence that may not get its `finished` — which is the
+    // lease's case, and the next daemon reports it.
+    if (jobsTicker !== null) clearInterval(jobsTicker);
   }
 
   /**
