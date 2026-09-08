@@ -15,11 +15,16 @@ built by different agents against the seam in [§ Two tenses](#two-tenses-the-se
 Status as of 2026-09-08 evening: **both exist; one of them has not yet run where it will live.**
 `tools/fleet/` serves a live page on the box and the tailnet, with per-session status and the pending
 question for blocked sessions. `tools/overseer/` is built — the store, the clock, the differ, the
-daemon and the work classifier — and has been run for real against the dashboard's stream, but only
-ever against a scratch store root: `~/.overseer` is still empty, and `systemd` units for both
-services are being installed now. So **nothing yet survives a reboot in practice**, and the sentence
-that will retire this paragraph is *events are accumulating in `~/.overseer/events.jsonl` under a
-unit that is `enabled`.* [260908b](../plans/260908b-overseer-store-and-clock.md) is the plan and holds
+daemon and the work classifier.
+
+**Half of that sentence retired itself at 16:04 the same evening, and the half that did not is the
+interesting one.** The retiring condition set here was *"events are accumulating in
+`~/.overseer/events.jsonl` under a unit that is `enabled`"*, and it was two conditions wearing one
+sentence. The first is now met: `~/.overseer/` holds 161 KB of `events.jsonl` and a `current.json`
+written minutes ago, against the real store root rather than a scratch one. The second is not:
+`systemctl is-active overseer.service fleet-dashboard.service` prints `inactive` twice, because both
+are running under `tmux`. **So nothing survives a reboot yet**, and what retires the rest of this
+paragraph is a unit that is `enabled` — not a process that happens to be up. [260908b](../plans/260908b-overseer-store-and-clock.md) is the plan and holds
 the evidence.
 
 ## What we are going towards
@@ -111,17 +116,166 @@ The division that follows:
   `Restart=always`. It costs nothing when idle, which matters more than it looks: **the Overseer must
   keep working when the subscriptions are exhausted, because that is exactly when it is needed.** A
   thinking loop that burns the quota it is supposed to be rationing has a bad failure mode.
-- **A session is an action, not a residence.** When judgement is needed — is this one stuck, what is
-  the one sentence to send — the daemon spawns a short-lived Claude that reads the store, answers,
-  and exits. A persistent brain can come later and the daemon can supervise one; it should not be
-  first, because a persistent session's context is precisely the thing that does not survive the
-  reboot Greg wants survived.
+- **A permanent session, resumed by the daemon.** Settled by Greg on 2026-09-08, and it replaces
+  what this page said the same morning:
+
+  > I think I am leaning towards a permanent session plus daemon, but I don't fully understand the
+  > counterargument above. And even if the box got rebooted, presumably the daemon *could* resume
+  > that session, no?
+  >
+  > — Greg, 2026-09-08
+
+  **It could, and the counterargument was wrong in the way that mattered.** This bullet used to read
+  *"a session is an action, not a residence"*, on the grounds that a persistent context is exactly
+  what a reboot destroys. It is not: `claude --resume <id>` replays the transcript out of
+  `~/.claude/projects/`, which survives the tmux server and the reboot both. So the objection does
+  not hold as stated, and the short-lived-session design it was defending is dropped.
+
+  **What survives the correction is why the store is still the record, and it is three things.** A
+  resumed session recovers *the Overseer's* memory and not *the fleet's* — every other session died
+  with the tmux server and its identity lived in that server's environment, so a perfectly resumed
+  Overseer wakes with an accurate memory of yesterday and an empty box in front of it. A transcript
+  cannot be queried: *"which agents did I tell to pause, and did they wake up?"* is a grep over
+  `events.jsonl`, and is not reliably re-derivable by re-reading a conversation. And **the
+  auto-compaction Greg wants is itself what makes that conversation untrustworthy as a record**,
+  because compaction drops the boring bookkeeping first — which is a fair description of a pause
+  issued forty minutes ago.
+
+  **So the session's context is a cache of the store, and never the record.** That is what demotes
+  resume from load-bearing to convenient: if it works the session keeps its feel, and if it fails, a
+  fresh session reading `current.json` is only slightly worse. **Which means the daemon needs a
+  start-fresh path that is exercised**, not only a resume path nobody has watched fail — a resume
+  that quietly produces an empty-headed Overseer looks exactly like one that worked
+  ([silent-success.md](../reusable/silent-success.md)).
 - **The dashboard is the face**, and belongs to whoever is building it — [§ Two tenses](#two-tenses-the-seam-between-the-overseer-and-the-dashboard).
 
-**Autonomy, as of 2026-09-08: it may dispatch scheduled jobs unattended, and nothing more.** Greg's
-choice from four options, the other three being observe-and-notify-only, steering live sessions, and
-pausing/killing. So starting a `get-ready-to-deploy` session on its cadence needs no permission;
-sending a live agent a steering message, or killing anything, still does.
+**Autonomy, widened by Greg the same evening.** This page said until then that the Overseer *"may
+dispatch scheduled jobs unattended, and nothing more"* — his choice from four options, the others
+being observe-and-notify-only, steering live sessions, and pausing/killing. **That is superseded.**
+Handed a proposed list to confirm, he took all of it and added to it:
+
+> Yes, pretty much all of that Unattended list. Dispatch scheduled jobs, steer live sessions, tell
+> agents to pause/stagger/kill their own tests and/or webserver or other processes, route questions
+> to Fable/Sol and pass the answer back to the agent, and/or surface it to me as needed, spawn agents
+> with `gjd-remote new-claude`, tell an agent to debrief, decide on that basis whether to tell it to
+> keep going and/or do more/different work, close a session and remove the worktree and kill the
+> Claude Code process, etc.
+>
+> — Greg, 2026-09-08
+
+**One item goes past what was proposed, and it is the one to notice: the Overseer may remove a
+worktree itself**, not merely tell the agent living in it to. The proposal drew that line
+deliberately — an agent running `npm run worktree:check` inside its own tree *is* the check, and the
+Overseer reaching in from outside is a different act — and Greg crossed it knowingly. So the check
+has to travel with the capability: an Overseer that removes a worktree runs `worktree:check` in it
+first and refuses on anything it cannot account for, because `data/` and `.env.local` are gitignored
+and a clean `git status` will say "safe" over the top of work nothing else has a copy of
+([worktrees.md § Before you remove one](worktrees.md#before-you-remove-one)).
+
+What it may *not* do is [§ The gates](#the-gates), which is the other half of the same conversation
+and is written as principles rather than as a list, because a list of forbidden actions is a list
+somebody has to keep complete.
+
+## The gates
+
+**The other half of the autonomy conversation, and Greg asked for it as principles rather than as a
+list**, because a list of forbidden actions is a list somebody has to keep complete:
+
+> Yes, it can answer on my behalf (e.g. for questions that don't need my input), but it should be
+> crystal-clear that it's the agent rather than me that's answering, and it should log ALL such
+> answers/decisions/assumptions somewhere that I can easily review (and add a new mode to the web
+> interface for viewing the past/outstanding ones). Yes, avoid really consequential, critical, risky,
+> irreversible, sensitive, regrettable. And also be wary about product decisions — I think I mostly
+> want to make those. I think it can sometimes edit important .md docs, but ideally only if very
+> confident and making very minimal changes — but err on the side of caution.
+>
+> — Greg, 2026-09-08
+
+**The gates themselves live in [overseer.md](overseer.md), because that is the file the Overseer
+reads.** Three things about them belong here, where the reasoning goes.
+
+**"Product decision" has no operational test, and foreclosure does.** Fable arbitrated a six-gate
+draft on 2026-09-08 and rejected the hinge before answering it:
+
+> "Reader-visible" is wrong in both directions: a bug fix is reader-visible and needs nobody; a
+> prompt rule, a stored field about a reader, or a privacy sentence is invisible and is the most
+> product-shaped thing in the repo … the cost of a wrong product call by the Overseer is not "a
+> reader sees it" (dev is not prod, and deploy is gated) — it is **agent-hours committed to a shape
+> Greg has not seen, and his option space narrowed by what now exists.**
+>
+> — Fable, 2026-09-08
+
+So the Overseer never *decides* a product question; it **defaults** to the standing simplest-first
+decision this repo already holds, logs the default as an assumption pending Greg, and stops at
+anything that **outlives the branch** — a schema, a prompt, a published sentence, a privacy promise,
+a field about a reader, or a case being dropped. That list is enumerable at 3am because it asks about
+files rather than about taste.
+
+**This page contradicted itself and the contradiction is resolved against itself.**
+[§ Route by who has the information](#route-by-who-has-the-information-not-by-confidence) gives
+*"whether a case can be dropped"* to Fable in one bullet and everything scope-shaped to Greg in the
+next. **It is Greg's.** Dropping a case is where his fifth options come from — the repo's own record
+of him is that when offered three options he takes a fourth about half the time, and that is evidence
+about what he wants to be asked, not a quirk.
+
+**The gate nobody had written down: the Overseer never originates work.** Fable's addition, and the
+only one with a mechanical test — *is it in the queue?* Scheduled jobs, plan docs and the feedback
+queue are queued. A job of the Overseer's own devising is a proposal in the log, never a dispatch.
+It is the direct expression of Greg's *"my job is basically new ideas"*.
+
+### The failure to design against, second entry: log blindness
+
+[§ The failure to design against](#the-failure-to-design-against) names notification blindness, for
+an Overseer that notifies. This is its equivalent for one that **acts**, and Fable's argument is that
+they have the same physics:
+
+> The whole draft rests on "vetoable after the fact," and a veto has the same physics as a buzz — its
+> value is proportional to how rarely it is needed, and its volume grows with everything the Overseer
+> does. Once the morning log is two hundred entries, Greg stops reading it; from then on the Overseer
+> has unbounded authority with a paper trail, and the signal that says so is *in the log*.
+>
+> — Fable, 2026-09-08
+
+Three design constraints follow, and they are constraints rather than preferences. **The 8am surface
+shows assumptions only**, ranked by agent-hours sunk since each was made — answered facts go on a
+second page nobody has to read. And **a week with zero vetoes is a red flag, not a clean bill**: it
+means either the Overseer stopped deciding anything, or Greg stopped reading.
+
+The web mode Greg asked for renders that surface. It is the dashboard's tense, not the Overseer's —
+[§ Two tenses](#two-tenses-the-seam-between-the-overseer-and-the-dashboard) — so the Overseer writes
+the log and the dashboard renders it.
+
+## The scheduler
+
+**Researched on 2026-09-08 per
+[third-party-library-selection.md](../reusable/third-party-library-selection.md), and the answer is
+to add no library.** Every job named — `get-ready-to-deploy` every few hours, box health and usage
+every five minutes, the feedback sweep twice a day, prod the Overseer if it has gone quiet — is a
+plain elapsed-time interval. The genuinely hard part a scheduling library sells is cron-expression
+arithmetic across DST and leap years, and nothing here needs a wall-clock hour or a weekday. The
+runner-up is `croner` (MIT, zero dependencies, TypeScript-native, ~8M weekly downloads), and the
+trigger to adopt it is the first job that needs calendar semantics rather than an interval.
+
+Greg had asked for something *"robust and external to the session"*, and named the reason: one of the
+scheduler's jobs is to prod the Overseer when it looks unresponsive. **A scheduler inside the
+Overseer cannot prod the Overseer**, so that one job — and only that one — is a **systemd system
+timer**. Not `systemd --user`, which needs `loginctl enable-linger` that nothing in this repo enables,
+and would therefore be dead at exactly the moment it was wanted.
+
+**Missed runs come out better than either alternative, and that is the argument for hand-rolling
+rather than an accident of it.** A state-based scheduler asks *has enough time passed since the last
+recorded run?*, so a job due while the box was down simply runs on the next tick. `systemd`'s
+`Persistent=true` fires one catch-up and only for `OnCalendar=`; `cron` skips silently, and a user
+crontab additionally strips the environment so `node` and `tsx` are not on its `PATH`.
+
+**The trade-off, named at the point of choosing** per
+[vision.md § Simpler first](vision.md#simpler-first): interval scheduling drifts across restarts — a
+"three-hourly" job is measured from its last actual run, not from a wall-clock boundary — and cannot
+express "9am on weekdays". Nothing in the job list needs either.
+
+**What this does to [cron-scheduler.md](cron-scheduler.md)** is close the gap it describes, for jobs
+the Overseer runs. It does not close it for anything else, and that doc stays the home of the general
+question.
 
 ## The store
 
@@ -308,6 +462,45 @@ store is not a detour before triage, it is triage's first half. And **the schedu
 choice despite having no home today** ([cron-scheduler.md](cron-scheduler.md)); that is a deliberate
 ordering, not an oversight, and it should not be quietly promoted.
 
+### It defers work; it never declines it
+
+**A13 says the most useful automation is *declining* to start expensive work. Greg overruled that on
+2026-09-08**, put the objection that dozens of concurrent agents do not fit on one 30 GB box, and
+answered:
+
+> I don't think the Overseer should ever decline work, but it might kick it off with `--wait` and/or
+> perhaps we build some infrastructure for it to write out to a queue that it grabs from every so
+> often when things calm down.
+>
+> — Greg, 2026-09-08
+
+**His version is better than A13's for a reason he did not have to give: a decline has to be
+remembered by whoever was declined, and nothing on this box remembers.** A deferral is held by the
+thing that deferred it. So A13 is **amended, not dropped** — the caps it asks for become the
+condition on *draining* the queue rather than a refusal at the door, and the load-391 incident is
+still what they are for.
+
+The trap that comes with the amendment, and it is the incident with an extra step: **a queue that
+drains when vitals allow will drain everything at the instant the load falls.** Whatever drains it
+does so one item at a time against a fresh reading, for the same reason the resource broadcast is
+staggered — thirty agents told to resume in the same second is the far end of the same failure.
+
+**And "many dozens of agents" needs splitting before it can be answered.** Fable, 2026-09-08, asked
+what Greg is wrong about here:
+
+> "Many dozens" is reachable **for the maintenance fleet** — improve-the-codebase, feedback reports,
+> postmortem preventions, get-ready-to-deploy — without giving up anything, because those jobs are
+> already queued and their product decisions were made when the docs were written. The **feature
+> fleet** stays at the number of plans he can read a day, and the only thing that lifts it is letting
+> the Overseer approve plans — which is the product authority he wants to keep.
+>
+> — Fable, 2026-09-08
+
+That is a trade Greg may want to take for a class of jobs, and it is his to take; it is written here
+so that it is offered rather than assumed.
+
+## Usage limits
+
 **Multiple Max subscriptions is medium-term.** Greg, 2026-09-08:
 
 > Right now, I have a couple of Claude Max subscriptions, and I run /login every couple of days to
@@ -316,6 +509,38 @@ ordering, not an oversight, and it should not be quietly promoted.
 
 So the near-term usage-limit work is **visibility** — how close is the current account, and what
 should stop when it is near — and not rotation.
+
+**Asked the same evening whether the Overseer should have a subscription of its own**, so that the
+thing rationing the quota is not throttled by it, Greg agreed in principle and declined in practice:
+
+> Ideally it would have its own account, but I don't want to deal with multiple simultaneous
+> subscription-accounts on the same box just yet, so perhaps it keeps an eye on the usage limits, and
+> proactively tells other agents to pause if getting close (and then checks later that they woke up!).
+>
+> — Greg, 2026-09-08
+
+**The parenthesis is the requirement, not an aside.** A pause nobody verifies is indistinguishable
+from an agent that died, and this page's whole argument is that those two must never render the same
+([silent-success.md](../reusable/silent-success.md)). So *pause* and *confirm the wake* are one
+action with two halves, and the second half is the one that will be skipped if it is not written
+down. It applies to the staggered resource broadcast identically.
+
+### Ticks on more than one timescale
+
+Greg, 2026-09-08, and it is the design that lets the Overseer obey *never spend what you are
+rationing*:
+
+> perhaps we have ticks on multiple timescales, e.g. cheap deterministic tick that checks box health
+> and usage limits every 5 minutes, and then stuff that involves the model's input less often.
+> Ideally all of these could be configured in the web interface, but that's a nice-to-have
+> future-stage.
+>
+> — Greg, 2026-09-08
+
+**The cheap tick is the one that must never stop**, because it is what still works when the
+subscriptions are exhausted — which is exactly the hour it is needed. The model tick is the
+expensive one and is bounded, per A30: thirty-six sessions must not produce thirty-six model reviews
+a minute. Configuring either from the web interface is explicitly a later stage.
 
 ### What is actually observable about usage limits
 
@@ -388,6 +613,42 @@ credentials and the projects directory — verified empirically by pointing it a
 accounts *concurrently*, each logged in under its own config dir, follows from that but has **not**
 been tested. Recorded because it is what a medium-term rotation would be built on; it is not a reason
 to build one now.
+
+## Reboot revival, and the thing `gjd-remote resume` does not do
+
+Greg, 2026-09-08, pointing at the machinery he expected to cover this:
+
+> see `gjd-remote resume` and also [find-previous-work.md](../reusable/find-previous-work.md) — it
+> should be possible to resume other agents after reboot and/or inspect their conversation logs. If
+> necessary, write scripts to make this kind of thing easier.
+>
+> — Greg, 2026-09-08
+
+**`gjd-remote resume` will not do it, and the reason is worth knowing before anybody builds against
+it.** It is a literal alias for `attach` — `case "resume": case "attach":` in
+[`scripts/gjd-remote.ts`](../../scripts/gjd-remote.ts) — which lists the **live** tmux sessions,
+resolves a name among them, and hands you the terminal. After a reboot the tmux server is gone and
+that list is empty, so `resume` has nothing to attach to and correctly says so. It resumes a
+*connection*, not a *conversation*.
+
+This is [name-is-evidence.md](../reusable/name-is-evidence.md) again, and in its first form: **a name
+that does not identify what you think it does.** Two different operations are called resuming — tmux
+reattachment and `claude --resume` — and only the second survives a reboot.
+
+**What does survive is enough, and it is already in two places.** The transcripts under
+`~/.claude/projects/` outlive everything, and their uuid is exactly what `claude --resume <uuid>`
+wants; and the Overseer's register already holds `claudeSessionId` per session alongside the
+directory, which is the join key. `find-previous-work.md` is the manual form of the same recovery.
+
+**So revival is a new verb rather than an existing one**: create a fresh tmux session in the recorded
+directory, running `claude --resume <claudeSessionId>` instead of a new conversation. That is a small
+amount of code beside `new-claude`, which already writes exactly this kind of job script — and it is
+the script Greg's *"if necessary"* is asking for.
+
+Two constraints on it, both already established on this page. **The goal is not "restore 36
+sessions"** (A26) — a stampede recreates the incident, so revival produces a queue drained under
+admission. And **a shell pane is not a resumable agent**: it has no conversation, so it gets a manual
+path and an honest label rather than a pretence.
 
 ## The four capabilities, and what each really needs
 
@@ -1145,6 +1406,13 @@ becoming reachable from anywhere that is not a device Greg controls.
   does nothing is worse than no write path, because it looks like it worked.
 - **Reuse `gjd-remote`, don't fork it.** It owns session inventory, naming, launching and killing,
   and it has absorbed a lot of accidents. New surfaces should call it.
+  <br>↳ And **no argument-parsing dependency**, which is that file's own researched decision rather
+  than an accident: `node:util`'s `parseArgs`, per subcommand. Greg asked on 2026-09-08 for *"nice
+  CLI scripts … using the same third-party argument-parsing library etc that we use elsewhere"* —
+  the honest answer is that there isn't one, deliberately, and the convention to match is `parseArgs`
+  plus the local-helper idiom in `run-claude.ts`. `gjd-remote.ts` is ~5,900 lines and its own comment
+  says Commander becomes right *"for a bigger surface"*; that judgement is close, and whoever adds
+  the tenth subcommand should make it rather than inherit it.
 - **One adapter per harness, and honest about what each can do.** Claude, Codex and bare shells have
   genuinely different capabilities; flattening them into one "message an agent" verb produces a UI
   that lies.

@@ -92,8 +92,9 @@ listed here; the names under each are files in `docs/project/`.
   `feedback.md` (the Feedback button, and where a bug report goes) ·
   `feedback-reports.md` (and what an agent does with one afterwards) ·
   `hetzner-remote-server-box.md` (the always-on box, and `gjd-remote`) ·
-  `overseer-direction.md` (where the fleet dashboard is going, and what talking to a session
-  actually costs) ·
+  `overseer-direction.md` (where the Overseer and its fleet dashboard are going, and what talking to
+  a session actually costs) ·
+  `overseer.md` (the runbook the Overseer itself reads: its four gates, and its standing jobs) ·
   `changelog.md` (turning deploys into the public `/changelog`) ·
   `worktrees.md` (one tree per agent, and how to start one) ·
   `cron-scheduler.md` (there is no scheduler, and what that keeps costing us)
