@@ -268,6 +268,18 @@ export function blockers(f: CheckFacts): Blocker[] {
 export const DISPOSABLE_IGNORED = [
   "node_modules/",
   "dist/",
+  /* **The fleet dashboard's build, which `dist/` above does NOT cover.** These
+     are prefixes matched against the spelling git reports from the repo root,
+     and the fleet's vite output lives at `tools/fleet/web/dist/` — so it arrived
+     as an unexplained ignored path and blocked the removal of a worktree whose
+     work was entirely pushed. Rebuilding it is `npm run build:fleet`, about two
+     seconds.
+
+     Its own entry rather than a looser rule: matching `dist/` anywhere in a path
+     would make any future directory of that name disposable by accident, and the
+     point of this list is that a path is thrown away only because somebody
+     decided it could be. 2026-09-08. */
+  "tools/fleet/web/dist/",
   "api-dist/",
   ".playwright-mcp/",
   "supabase/.temp/",
