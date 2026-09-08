@@ -383,8 +383,32 @@ interface Ran {
   status: number | null;
 }
 
+/**
+ * Every git command this file runs, and **none of them may write.**
+ *
+ * `GIT_OPTIONAL_LOCKS=0` is set here, once, rather than as a
+ * `--no-optional-locks` flag at each call site. A plain `git status` refreshes
+ * the index and writes it back, and taking `index.lock` at all changes the
+ * mtime of the worktree's admin directory — even when the index was already
+ * fresh and nothing needed writing, because the create-and-unlink of the lock
+ * file is itself a directory modification.
+ *
+ * Two things were wrong with that. `worktree:sweep` read that mtime back as
+ * evidence the tree was alive, so its own inspection kept every worktree it
+ * looked at (docs/plans/260907e — it had never removed anything). And this is an
+ * *inspector*: it takes `index.lock` inside trees other agents are actively
+ * working in, contending with their commands for nothing.
+ *
+ * On the env rather than on the args, so a command added below cannot
+ * reintroduce the write by forgetting the flag.
+ */
 function run(cwd: string, args: string[], timeout?: number): Ran {
-  const r = spawnSync("git", args, { cwd, encoding: "utf8", ...(timeout === undefined ? {} : { timeout }) });
+  const r = spawnSync("git", args, {
+    cwd,
+    encoding: "utf8",
+    env: { ...process.env, GIT_OPTIONAL_LOCKS: "0" },
+    ...(timeout === undefined ? {} : { timeout }),
+  });
   const out = `${r.stdout ?? ""}${r.stderr ?? ""}`.trim();
   if (r.error) return { ok: false, out: out === "" ? r.error.message : `${out} (${r.error.message})`, status: null };
   return { ok: r.status === 0, out, status: r.status };

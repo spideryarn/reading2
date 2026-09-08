@@ -1,0 +1,1754 @@
+/**
+ * **Every environment variable `src/` reads must be accounted for.**
+ *
+ * ## The bug this is the check for
+ *
+ * `src/vercel-health.ts` holds `EXPECTED`, a hand-written table of the
+ * variables a deployment is supposed to have. `GET /api/health` reports which
+ * of them are set, and warns about the ones that are missing and matter. It is
+ * the only instrument anybody has for "is this deployment configured", and on
+ * 2026-08-27 it was **green while PDF upload was dead**, because the variable
+ * that had gone missing was not on the list
+ * (docs/postmortems/260827b-health-check-green-while-uploads-dead.md).
+ *
+ * The list is maintained by hand, so the failure is not that somebody wrote it
+ * wrongly — it is that **the code and the list drift apart silently**, and
+ * nothing anywhere is the wrong colour while they do. That postmortem asks for
+ * this file twice: once in § *Four things it still does not reach*, item 1, and
+ * again in § *What would have caught the class* —
+ *
+ * > A test that walks `src/` for `process.env.` reads and asserts every one
+ * > appears in `EXPECTED` would close this, and is the cheapest of the four.
+ * > *Checked 2026-09-03: `ANTHROPIC_API_KEY` left `EXPECTED` on 2026-08-31 — by
+ * > hand, which is the point — and `SPIDERYARN_OWNER_ID` is still read by
+ * > `src/owner.ts` and still absent from it. **The test is still not built.***
+ *
+ * This is it.
+ *
+ * ## What "accounted for" means, and why there are two doors
+ *
+ * A name is accounted for when it is either:
+ *
+ * 1. an entry in `EXPECTED` (its `name`, or the `or` alternative that satisfies
+ *    the same need) — the report an operator reads; or
+ * 2. on `ALLOWED` below, in a group whose `why` says what kind of variable it is
+ *    and therefore why a *deployment health report* is the wrong place for it.
+ *
+ * The second door is not a weakening, it is the point. `VERCEL_REGION` is set by
+ * the platform, `MODE` is a Vite build constant, `SPIDERYARN_CHAT_MODEL` is set
+ * by whoever is comparing two models for an evening. Demanding those in a
+ * deployment's health report would be the `NODEJS_HELPERS` mistake in reverse —
+ * offering an operator names they cannot act on, which is exactly what
+ * `EXPECTED`'s own header argues against. What this check forbids is a name
+ * being in *neither* place, which is a name nobody has thought about since it
+ * was typed.
+ *
+ * **Nothing this file causes to be added to `EXPECTED` may carry a `breaks`
+ * clause.** A `breaks` clause warns on a deployment that may legitimately not
+ * set the variable, and deciding that a variable is genuinely *required* in
+ * production is a judgement about production, not a consequence of a static
+ * sweep. Report-only (`breaks: null`) is the existing idiom for exactly this —
+ * `DATABASE_URL`, `OPENAI_API_KEY`, `LOG_LEVEL`.
+ *
+ * ## The rule this whole file is written around
+ *
+ * **A read this check cannot enumerate must make it go red, never go quiet.**
+ * A guard that agrees with the code because it never looked is worse than no
+ * guard, because it is *evidence* — docs/reusable/silent-success.md, and the
+ * argument in full in tests/helpers/ts-ast.ts.
+ *
+ * The first version of this file broke that rule in four places, all found by
+ * GPT Sol on 2026-09-07 (F10–F13) and all reproduced against the tree before
+ * being fixed. They are worth stating, because each is a different way for a
+ * sweep to look sound and see nothing:
+ *
+ *  - **F10 — a whole namespace was invisible.** The sweep knew `process.env`
+ *    and nothing else, so every `import.meta.env` read in `src/web/` — the
+ *    client bundle's Sentry DSN among them — was not so much skipped as never
+ *    considered. Both namespaces are swept now.
+ *  - **F11 — the file filter had the bug.** Files were pre-filtered on the
+ *    exact text `"process.env"`, so `process?.env.X`, `process["env"].X`,
+ *    `process . env.X` and `const { env } = process` were dropped before the
+ *    parser ever saw them, and `globalThis.process.env.X` survived the filter
+ *    only to be dropped by the recogniser. **The prefilter is gone**: all 530
+ *    files are parsed, which costs about two and a half seconds. And the
+ *    recogniser now works from the *root object* rather than from a spelling —
+ *    the identifier `process` (or `globalThis.process`) in any position other
+ *    than "the thing a member expression reads from" is a refusal, because at
+ *    that point nothing can say whether `env` is reached through it. A sweep of
+ *    the tree on 2026-09-07 found **zero** such uses, so failing closed here
+ *    costs nothing today and closes the class permanently.
+ *  - **F12 — an exemption that did not defend its own premise.** See § *The one
+ *    exemption* below.
+ *  - **F13 — an exemption that hid a real missing variable.** See § *Whole-object
+ *    uses* below.
+ *
+ * The controls for F11 in particular run through `sweepTree`, the same entry
+ * point the real sweep uses, because the fixtures in the first version called
+ * the per-file function directly and therefore *could not* have caught a bug in
+ * the file gate above it. That was Sol's sharpest point and it is general: a
+ * control that starts below the layer with the bug proves nothing about it.
+ *
+ * ## Reads this resolves rather than skips
+ *
+ * A name that is not written as a literal is still a name:
+ *
+ *  - `process.env[IDENT]` where `IDENT` is a `const` holding a string literal —
+ *    `CONCURRENCY_ENV` (src/jobs.ts), `DEEPEN_ENV`, `REASK_ENV`,
+ *    `DEEPEN_RECORDS_ENV` (src/hierarchy-deepen.ts). Four names.
+ *  - `process.env[envVar]` at src/models.ts:1092, where `envVar` is
+ *    `MODEL_ENV_VAR[task]` and `MODEL_ENV_VAR` is a record of string literals
+ *    and `null`s. Twelve names, one per task with a model override.
+ *  - `process.env[name]` at src/fetch.ts:602 and `import.meta.env[name]` at
+ *    src/web/lib/supabase.ts:34 — both inside a local helper whose call sites
+ *    all pass a string literal. Four names, and two of them are
+ *    `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`, *the credentials the
+ *    2026-08-27 incident was about*. A version of this check that skipped what
+ *    it could not read would have skipped those.
+ *  - **Names read off an alias of the environment**, which is the F13 case.
+ *    `src/env.ts` hands `process.env` to `applyEnvFile`, which hands it to
+ *    `pinnedNames`, which reads `env[PINNED]` — and `PINNED` is the literal
+ *    `SPIDERYARN_ENV_PINNED`, a variable that was in neither door while the
+ *    first version of this file called `src/env.ts` exempt. So an environment
+ *    object passed into a local function makes that parameter an alias, to a
+ *    fixed point, and reads off the alias are swept exactly like reads off
+ *    `process.env`. `chooseTargetUrl`'s `inherited.DATABASE_URL` is the same
+ *    shape and is the positive control for it.
+ *
+ * ## Whole-object uses
+ *
+ * `{ ...process.env }` and `f(process.env)` name no variable. Two shapes are
+ * *recognised* rather than exempted, because they are how a name gets read
+ * somewhere else and the sweep follows them: assigning the environment (or a
+ * spread copy of it) to a `const`, and passing it to a local function. Anything
+ * else — returning it, handing it to an import, spreading it into something
+ * that is not a binding — is a refusal, because the names reached through it
+ * are then outside what this can see.
+ *
+ * `ENV_MECHANISM` is the exemption list for that, and it is two entries, each
+ * naming one function and saying why its reads are not code's reads at all.
+ * **It replaced a file-wide exemption for `src/env.ts`, and that is the F13
+ * fix**: exempting the file hid `pinnedNames` behind the loader's genuinely
+ * dynamic loop. Exempting the two functions that really are generic leaves
+ * `pinnedNames` in the sweep, where it belongs — and it went red on
+ * `SPIDERYARN_ENV_PINNED` the moment it did.
+ *
+ * ## The one exemption to the read rule, and what now defends it
+ *
+ * `value(name)` in src/vercel-health.ts reads `process.env[name]`, and its
+ * callers pass names taken **out of `EXPECTED` itself**. It is the reporter
+ * reading its own list, so a name cannot go missing from the list it is being
+ * read out of.
+ *
+ * That argument is only true while every caller really does derive its argument
+ * from `EXPECTED`, and **nothing checked that** until F12. `value("NEW_NAME")`
+ * would have read a brand-new variable through the already-exempted node with
+ * every assertion here still green. So `reporterPremiseFailures` now checks the
+ * shape of every reference to `value`: each call's argument must be traceable
+ * to `expected.<field>`, each `expected.<field>` that reaches it must be a field
+ * this file actually parses out of `EXPECTED`, and a reference that is not a
+ * call must be a callback on an `EXPECTED`-derived receiver (`names.map(value)`
+ * is the real one). A string literal argument is red.
+ *
+ * The same finding turned up a third door into `EXPECTED` that the parser did
+ * not read: `value(expected.with)` at src/vercel-health.ts:475. `with` is
+ * collected now, and a `with` value must be inventoried in its own right rather
+ * than being covered by the entry that mentions it — it was safe until now only
+ * because the one `with` in the table happens to repeat another entry's `name`.
+ *
+ * ## Why a parser and not a regular expression
+ *
+ * tests/helpers/ts-ast.ts makes the argument in full, and this file has its own
+ * worked example, found before a line of it was written. The obvious first pass,
+ * `grep -rhoE "process\.env\.[A-Za-z_]*" src/`, returns a name no code reads:
+ * `SPIDERYARN_` — from a **comment** at src/models.ts:1084 describing
+ * `process.env.SPIDERYARN_*_MODEL`. A text scan reports variables that do not
+ * exist, and then somebody adds one to a list to make a test go green. The
+ * second example arrived with F10: `src/web/boot.tsx` contains the text
+ * `import.meta.env` and reads nothing at all — it is prose.
+ */
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
+
+import { describe, expect, it } from "vitest";
+
+import { lineOf, parseSource, walkAst, type AstNode } from "./helpers/ts-ast.js";
+
+const SRC = "src";
+const HEALTH = "src/vercel-health.ts";
+/** Where this check's own decisions live, so a red line says what to go and edit. */
+const GUARD = "tests/env-names-are-inventoried.test.ts";
+
+/**
+ * **Names read by code that a deployment's health report has no business
+ * naming**, grouped by the reason — one `why` per group rather than thirty
+ * identical comments, so the reasons stay readable and a new name has to join a
+ * reason somebody already wrote down.
+ *
+ * A name here is a decision, not a suppression: it says *this is not something
+ * an operator reading a deployment's health would act on*. If that stops being
+ * true, move it to `EXPECTED`.
+ *
+ * **The wording matters and was wrong the first time.** Four of these groups
+ * originally said the variables were "never read by a deployment", and that was
+ * simply false — `PGAPPNAME` is applied to every deployed pool, deployed
+ * monitoring evaluates `SENTRY_FORCE_LOCAL` on every start, `owner.ts`
+ * evaluates its `SPIDERYARN_OWNER_EMAIL` expression at module load wherever it
+ * loads, and a model override changes what a deployed request sends. They are
+ * allowlisted because **nothing an operator would do about them appears in a
+ * health report**, which is a different and true claim. GPT Sol, 2026-09-07,
+ * F15. A reason that is false is worse than no reason: it is what somebody
+ * checks against next time instead of the code.
+ */
+interface AllowGroup {
+  readonly why: string;
+  readonly names: readonly string[];
+}
+
+const ALLOWED: readonly AllowGroup[] = [
+  {
+    /* The `NODEJS_HELPERS` mistake in reverse: that one is on `EXPECTED`
+       because the *platform* reads it and can have it wrong. These the platform
+       *writes*, so a deployment cannot be missing them, and a report that
+       demanded them would be telling an operator to go and set something they
+       have no control over. src/monitoring.ts, src/jobs.ts, src/billing/*.
+       `VITE_VERCEL_ENV` is **not** in this group and the near-miss is worth a
+       line: it looks platform-set and is not. Vercel writes `VERCEL_ENV`; Vite
+       only exposes names beginning `VITE_`, and nothing in this repo bridges
+       the two, so a person has to set it on the project. It is in `EXPECTED`. */
+    why: "Set by the Vercel runtime itself — a deployment cannot be missing one",
+    names: ["VERCEL", "VERCEL_ENV", "VERCEL_REGION", "VERCEL_URL", "VERCEL_GIT_COMMIT_SHA"],
+  },
+  {
+    /* `NODE_ENV` is Node's own, and every read of it here asks "am I in
+       production/test" rather than "how is this deployment configured".
+       `VITEST` is set by the runner (src/store/index.ts:174). */
+    why: "Set by the runtime or the test runner, and read to ask which of those we are in",
+    names: ["NODE_ENV", "VITEST"],
+  },
+  {
+    /* `import.meta.env.PROD` and `.MODE` in src/web/monitoring.ts. Vite
+       substitutes both at build time from how the build was invoked; there is
+       no such environment variable, and an operator cannot set one. They are
+       here rather than absent because the sweep reads them off the same object
+       as `VITE_SENTRY_DSN` and must account for every name it finds. */
+    why: "Vite build constants substituted at compile time — not environment variables at all",
+    names: ["PROD", "MODE"],
+  },
+  {
+    /* `PGAPPNAME` names the connection in `pg_stat_activity` and has a useful
+       default (src/db/client.ts:139) — a deployed pool does read it, and
+       nothing an operator would do follows from its absence.
+       `SENTRY_FORCE_LOCAL` is evaluated by deployed monitoring too
+       (src/monitoring.ts:168), and exists so a laptop can pretend to be
+       deployed; set on a real deployment it changes nothing, since that branch
+       is already true. `SPIDERYARN_OWNER_EMAIL`'s expression is evaluated
+       wherever src/owner.ts loads, deployments included, but the value it
+       computes (`DEV_OWNER_EMAIL`) is only ever reached by the seeded local
+       account, so what it says about a deployment is nothing. */
+    why: "Read by a deployment, but nothing an operator would act on in a health report",
+    names: ["PGAPPNAME", "SENTRY_FORCE_LOCAL", "SPIDERYARN_OWNER_EMAIL"],
+  },
+  {
+    /* **`SPIDERYARN_BASE_URL` was an `EXPECTED` entry until F14, and moving it
+       is the interesting one.** It is where Stripe returns a reader after
+       Checkout, and docs/project/deployment.md's production table lists it
+       under "**must stay unset here**, and it is listed so nobody adds it" —
+       production answers `PUBLIC_ORIGIN` before it reads any variable
+       (src/billing/checkout.ts:150), and a preview falls back to `VERCEL_URL`.
+       Reporting a setting production is forbidden to have is worse than not
+       reporting it: it invites somebody to set it. It exists for a worktree's
+       dev server on 5274, 5275…
+       `SPIDERYARN_ENV_PINNED` is the `.env.local` loader's own switch
+       (src/env.ts:370) and only `tests/setup/*` sets it. */
+    why: "A developer's own machine — and one of them production is documented as forbidden to set",
+    names: ["SPIDERYARN_BASE_URL", "SPIDERYARN_ENV_PINNED"],
+  },
+  {
+    /* Whole-run switches somebody sets for one command: the reasoning effort
+       every pipeline stage asks for (src/models.ts:1446), and the three
+       hierarchy-deepening experiments (src/hierarchy-deepen.ts). A deployment
+       has no opinion about any of them, and reporting them would put four lines
+       of tuning above the credentials that actually break things. */
+    why: "Per-run pipeline switches, set for one command on the machine running it",
+    names: [
+      "SPIDERYARN_PIPELINE_EFFORT",
+      "SPIDERYARN_DEEPEN_HIERARCHY",
+      "SPIDERYARN_DEEPEN_REASK",
+      "SPIDERYARN_DEEPEN_RECORDS",
+    ],
+  },
+  {
+    /* `MODEL_ENV_VAR` in src/models.ts, one per task that has an override, and
+       they exist for exactly one purpose: running the real feature against a
+       different model for an evening to see whether the cheap one is good
+       enough. Twelve names as a group rather than twelve identical comments —
+       they are one decision, not twelve.
+
+       **Set on a deployment one of these really would change what a request
+       sends**, which the first wording denied; they are allowlisted because
+       `/profile` already reports the model each task will actually use, with
+       `source: "override"` when a variable put it there, so the health report
+       is not where anybody would look and not where the answer is best. */
+    why: "Per-task model overrides for a comparison run — reported by /profile, not by health",
+    names: [
+      "SPIDERYARN_EXPLAIN_MODEL",
+      "SPIDERYARN_CHAT_MODEL",
+      "SPIDERYARN_QUIZ_MARK_MODEL",
+      "SPIDERYARN_QUIZ_VERDICT_MODEL",
+      "SPIDERYARN_SEARCH_MODEL",
+      "SPIDERYARN_PDF_FRONTMATTER_MODEL",
+      "SPIDERYARN_REFEREE_MIRROR_MODEL",
+      "SPIDERYARN_REFEREE_CRITERIA_MODEL",
+      "SPIDERYARN_REFEREE_CLAIMS_MODEL",
+      "SPIDERYARN_REFEREE_CANDIDATES_MODEL",
+      "SPIDERYARN_DEBATE_MODEL",
+      "SPIDERYARN_LINK_SUMMARY_MODEL",
+    ],
+  },
+];
+
+/**
+ * **`process.env[name]` inside a function whose argument comes from `EXPECTED`.**
+ *
+ * File and function, not file alone — and its premise is checked rather than
+ * asserted. See the header, § *The one exemption to the read rule*.
+ */
+const REPORTER_READS: readonly { readonly file: string; readonly fn: string }[] = [
+  { file: HEALTH, fn: "value" },
+];
+
+/**
+ * **The `EXPECTED` fields this file parses**, and therefore the only ones a
+ * `value(expected.…)` call may read. Adding a fourth field that carries a
+ * variable name without adding it here goes red rather than quiet — which is
+ * the hole `with` sat in until F12.
+ */
+const EXPECTED_FIELDS = ["name", "or", "with"] as const;
+
+/**
+ * **Functions whose environment access is a mechanism rather than a read.**
+ *
+ * Two, both in the `.env.local` loader, both named with the reason. This
+ * replaced a file-wide exemption for `src/env.ts`, which hid a real missing
+ * variable behind the loader's dynamic loop (F13, and the header says more).
+ *
+ * An entry suppresses *refusals* inside that function — a whole-object use it
+ * cannot follow, or a computed read it cannot name. It does **not** stop the
+ * sweep following the environment into functions those two call, which is
+ * exactly how `pinnedNames` stays in scope.
+ */
+const ENV_MECHANISM: readonly { readonly file: string; readonly fn: string; readonly why: string }[] =
+  [
+    {
+      file: `${SRC}/env.ts`,
+      fn: "applyEnvFile",
+      why: "copies a .env file's names into the environment — the names come from the file's own text, not from any code this could read",
+    },
+    {
+      file: `${SRC}/env.ts`,
+      fn: "withoutGitVars",
+      why: "returns a filtered copy of the whole environment for a subprocess; the names it removes are literals and it reads none",
+    },
+  ];
+
+/**
+ * A sample of what the sweep must find, named rather than counted.
+ *
+ * Every assertion below is that a list is *empty*, and an empty list is also
+ * what a sweep that examined nothing produces — a directory that moved, a Babel
+ * option that drifted, a `type` guard that stopped matching.
+ * docs/reusable/silent-success.md. These are chosen so that most of them can
+ * only appear if a specific resolution in § *Reads this resolves* is working.
+ */
+const KNOWN_READS = [
+  "DATABASE_URL", // plain `process.env.DATABASE_URL`
+  "SPIDERYARN_OWNER_ID", // the postmortem's own named example
+  "SPIDERYARN_JOB_CONCURRENCY", // via `CONCURRENCY_ENV`
+  "SPIDERYARN_DEEPEN_HIERARCHY", // via `DEEPEN_ENV`
+  "SPIDERYARN_CHAT_MODEL", // via `MODEL_ENV_VAR[task]`
+  "SUPABASE_SERVICE_ROLE_KEY", // via `seen(name)` in src/fetch.ts
+  "VITE_SENTRY_DSN", // `import.meta.env`, invisible until F10
+  "SPIDERYARN_ENV_PINNED", // through two alias hops, invisible until F13
+];
+
+/* ------------------------------------------------------------------ *
+ * The sweep. Every function below takes source *text* rather than a
+ * path, so that § `the check itself` at the bottom can feed the very
+ * same code a crafted disagreement. A check like this is green the day
+ * after it is fixed, and "it passes" is worth nothing on its own; the
+ * only evidence that it discriminates is watching it go red, and a
+ * fixture does that for ever where a one-off mutation has to be taken
+ * on trust. tests/routes-status-classes-survive-the-store-guard.test.ts
+ * makes the same argument.
+ *
+ * The controls enter at `sweepTree`, not at `sweepFile`, so that the
+ * file-selection step is inside what they exercise. F11 was a bug in
+ * exactly that step, and fixtures below it could not have found it.
+ * ------------------------------------------------------------------ */
+
+/** One resolved read: a variable name, and where the code asks for it. */
+interface EnvRead {
+  file: string;
+  line: number;
+  name: string;
+}
+
+/** A read this check refuses to guess at. Its presence is a failure. */
+interface Refusal {
+  file: string;
+  line: number;
+  what: string;
+}
+
+interface Sweep {
+  file: string;
+  reads: EnvRead[];
+  refusals: Refusal[];
+  /** What the exemptions matched, so a positive control can check they did. */
+  exempted: string[];
+}
+
+const start = (n: AstNode): number => Number(n.start ?? -1);
+const end = (n: AstNode): number => Number(n.end ?? -1);
+
+/** Is `n` in the position "the object a member expression reads from"? */
+const isMemberObject = (parent: AstNode | null, key: string): boolean =>
+  (parent?.type === "MemberExpression" || parent?.type === "OptionalMemberExpression") &&
+  key === "object";
+
+/**
+ * **The root objects an environment can be reached through.**
+ *
+ * `process`, and `globalThis.process` / `global.process`, which are the same
+ * object written the way somebody writes it when a bare identifier will not do.
+ * Keyed on the root rather than on the whole expression, because F11 was a list
+ * of spellings and a list of spellings is always missing one.
+ */
+function isProcessRoot(n: AstNode): boolean {
+  if (n.type === "Identifier") return n.name === "process";
+  if (n.type !== "MemberExpression" && n.type !== "OptionalMemberExpression") return false;
+  const object = n.object as AstNode | undefined;
+  if (object?.type !== "Identifier" || (object.name !== "globalThis" && object.name !== "global")) {
+    return false;
+  }
+  return propertyName(n) === "process";
+}
+
+/** The property a member expression names, or `null` if it is not static. */
+function propertyName(n: AstNode): string | null {
+  const property = n.property as AstNode | undefined;
+  if (!property) return null;
+  if (n.computed === true) {
+    return property.type === "StringLiteral" && typeof property.value === "string"
+      ? property.value
+      : null;
+  }
+  return property.type === "Identifier" && typeof property.name === "string" ? property.name : null;
+}
+
+type EnvKind = "process.env" | "import.meta.env";
+
+/**
+ * Is `n` an environment object — `<process root>.env` or `import.meta.env`?
+ *
+ * Every spelling of the property is accepted, static or a string literal in
+ * brackets, because they are the same read; a *computed* property that is not a
+ * literal is not answered here and is refused by the caller, since this cannot
+ * say whether it is `env`.
+ */
+function envKind(n: AstNode): EnvKind | null {
+  if (n.type !== "MemberExpression" && n.type !== "OptionalMemberExpression") return null;
+  const object = n.object as AstNode | undefined;
+  if (!object) return null;
+  if (propertyName(n) !== "env") return null;
+  if (isProcessRoot(object)) return "process.env";
+  if (object.type === "MetaProperty") return "import.meta.env";
+  return null;
+}
+
+/** The five node types that introduce a parameter scope. */
+const FUNCTION_TYPES = new Set([
+  "FunctionDeclaration",
+  "FunctionExpression",
+  "ArrowFunctionExpression",
+  "ClassMethod",
+  "ObjectMethod",
+]);
+
+interface FnFacts {
+  node: AstNode;
+  /** Plain identifier parameters, in order. A destructured one is not named. */
+  params: (string | null)[];
+}
+
+/**
+ * Everything the resolver needs from a file, gathered in one walk.
+ *
+ * Declarators are collected by name **file-wide rather than per scope**, and
+ * that is deliberately crude: this has no scope analyser, so it treats a name
+ * declared twice as unresolvable rather than picking one. Crude in the safe
+ * direction — the answer it refuses to give is the answer it would have had to
+ * guess.
+ */
+interface FileFacts {
+  ast: unknown;
+  declarators: Map<string, AstNode[]>;
+  functions: FnFacts[];
+  /** Identifier occurrences in value position, with parent and field. */
+  uses: { node: AstNode; parent: AstNode | null; key: string }[];
+  /**
+   * Member expressions that are written to rather than read.
+   *
+   * `env[name] = value` and `delete copy[name]` both look exactly like a read
+   * from one node up, and neither is one. src/env.ts does both.
+   */
+  writeTargets: Set<AstNode>;
+}
+
+/** Is this identifier occurrence a *use* of the name, or just the name itself? */
+function isValueUse(parent: AstNode | null, key: string, node: AstNode): boolean {
+  if (parent === null) return true;
+  /* `x.name` — the property is not a reference to anything called `name`. */
+  if (
+    (parent.type === "MemberExpression" || parent.type === "OptionalMemberExpression") &&
+    key === "property" &&
+    parent.computed !== true
+  ) {
+    return false;
+  }
+  /* `{ name: … }`, `class { name = … }`, `name() {}` — a key, not a reference. */
+  if (key === "key" && parent.computed !== true) return false;
+  /* The declaration itself. */
+  if (key === "id") return false;
+  if (key === "local" || key === "imported" || key === "exported") return false;
+  /* A parameter's own declaration. `parameters` is the same thing on a TS
+     signature — `valid?: { ok(value: string): … }` at src/vercel-health.ts:184
+     is a *type*, and counting its `value` as a reference to the function of
+     that name made the premise check refuse the whole file. */
+  if (key === "params" || key === "parameters") return false;
+  /* A named type, which is not a value at all. */
+  if (parent.type === "TSTypeReference" || parent.type === "TSQualifiedName") return false;
+  return node.type === "Identifier";
+}
+
+function factsOf(source: string): FileFacts {
+  const ast = parseSource(source);
+  const declarators = new Map<string, AstNode[]>();
+  const functions: FnFacts[] = [];
+  const uses: { node: AstNode; parent: AstNode | null; key: string }[] = [];
+  const writeTargets = new Set<AstNode>();
+  walkAst(ast, (node, parent, key) => {
+    if (node.type === "VariableDeclarator") {
+      const id = node.id as AstNode | undefined;
+      if (id?.type === "Identifier" && typeof id.name === "string") {
+        const list = declarators.get(id.name) ?? [];
+        list.push(node);
+        declarators.set(id.name, list);
+      }
+    }
+    if (typeof node.type === "string" && FUNCTION_TYPES.has(node.type)) {
+      const params = ((node.params as AstNode[] | undefined) ?? []).map((p) =>
+        p.type === "Identifier" && typeof p.name === "string" ? p.name : null,
+      );
+      functions.push({ node, params });
+    }
+    if (node.type === "AssignmentExpression") writeTargets.add(node.left as AstNode);
+    if (node.type === "UpdateExpression") writeTargets.add(node.argument as AstNode);
+    if (node.type === "UnaryExpression" && node.operator === "delete") {
+      writeTargets.add(node.argument as AstNode);
+    }
+    if (node.type === "Identifier" && isValueUse(parent, key, node)) {
+      uses.push({ node, parent, key });
+    }
+  });
+  return { ast, declarators, functions, uses, writeTargets };
+}
+
+/** The innermost function containing `node` that declares a parameter `param`. */
+function enclosingFunctionWithParam(facts: FileFacts, node: AstNode, param: string): FnFacts | null {
+  let best: FnFacts | null = null;
+  for (const fn of facts.functions) {
+    if (!fn.params.includes(param)) continue;
+    if (start(fn.node) > start(node) || end(fn.node) < end(node)) continue;
+    if (best === null || start(fn.node) > start(best.node)) best = fn;
+  }
+  return best;
+}
+
+/** The innermost function containing `node` at all, named or not. */
+function enclosingFunction(facts: FileFacts, node: AstNode): FnFacts | null {
+  let best: FnFacts | null = null;
+  for (const fn of facts.functions) {
+    if (fn.node === node) continue;
+    if (start(fn.node) > start(node) || end(fn.node) < end(node)) continue;
+    if (best === null || start(fn.node) > start(best.node)) best = fn;
+  }
+  return best;
+}
+
+/** What a function is called — its own name, or the `const` it was assigned to. */
+function nameOfFunction(facts: FileFacts, fn: FnFacts): string | null {
+  const own = fn.node.id as AstNode | undefined;
+  if (own?.type === "Identifier" && typeof own.name === "string") return own.name;
+  for (const [name, declared] of facts.declarators) {
+    if (declared.some((d) => d.init === fn.node)) return name;
+  }
+  return null;
+}
+
+/** The name of the innermost *named* function containing `node`, if any. */
+function enclosingFunctionName(facts: FileFacts, node: AstNode): string | null {
+  let current = enclosingFunction(facts, node);
+  while (current !== null) {
+    const name = nameOfFunction(facts, current);
+    if (name !== null) return name;
+    current = enclosingFunction(facts, current.node);
+  }
+  return null;
+}
+
+/**
+ * **Where a local helper's name can be referred to from** — the function it is
+ * declared inside, or the whole file for a top-level declaration.
+ *
+ * Not scope analysis, but the one piece of it this needs. Without it the scan
+ * below is file-wide, and file-wide is wrong in the direction that costs a real
+ * read: `seen` is a helper at src/fetch.ts:602 **and** an unrelated parameter at
+ * :1642, so a file-wide scan sees `new URL(seen)` on line 1646, concludes the
+ * helper escapes, and refuses two credentials it could perfectly well have
+ * resolved — `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`, which are the two
+ * the 2026-08-27 incident was about. A false refusal is the safe direction to be
+ * wrong in, and it is still worth not being wrong.
+ */
+function scopeOf(facts: FileFacts, node: AstNode): [number, number] {
+  const fn = enclosingFunction(facts, node);
+  return fn === null
+    ? [Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY]
+    : [start(fn.node), end(fn.node)];
+}
+
+const within = (node: AstNode, [from, to]: [number, number]): boolean =>
+  start(node) >= from && end(node) <= to;
+
+/**
+ * Does `name` appear in its own scope anywhere but as the callee of a call?
+ *
+ * `names.map(value)` is a call site this cannot read the argument of, and a
+ * function that escapes into a higher-order position has call sites the sweep
+ * cannot see — so it is refused rather than resolved from the calls it *can*
+ * see. That refusal is what makes `REPORTER_READS` load-bearing rather than
+ * decorative: `value` in src/vercel-health.ts escapes exactly this way.
+ */
+function escapesAsAValue(facts: FileFacts, name: string, scope: [number, number]): boolean {
+  return facts.uses.some(
+    ({ node, parent, key }) =>
+      node.name === name &&
+      within(node, scope) &&
+      !(parent?.type === "CallExpression" && key === "callee"),
+  );
+}
+
+/** The argument at `index` of every `name(…)` within `scope`. */
+function argumentsAt(
+  facts: FileFacts,
+  name: string,
+  index: number,
+  scope: [number, number],
+): AstNode[] {
+  const found: AstNode[] = [];
+  walkAst(facts.ast, (node) => {
+    if (node.type !== "CallExpression" || !within(node, scope)) return;
+    const callee = node.callee as AstNode | undefined;
+    if (callee?.type !== "Identifier" || callee.name !== name) return;
+    const argument = ((node.arguments as AstNode[] | undefined) ?? [])[index];
+    if (argument) found.push(argument);
+  });
+  return found;
+}
+
+/** Every string-literal value in a `const X = { … }` object, or a refusal. */
+function literalsOfRecord(facts: FileFacts, name: string): string[] | null {
+  const declared = facts.declarators.get(name);
+  if (declared?.length !== 1) return null;
+  const init = declared[0]?.init as AstNode | undefined;
+  if (init?.type !== "ObjectExpression") return null;
+  const values: string[] = [];
+  for (const property of (init.properties as AstNode[] | undefined) ?? []) {
+    if (property.type !== "ObjectProperty") return null;
+    const value = property.value as AstNode | undefined;
+    if (value?.type === "StringLiteral" && typeof value.value === "string") {
+      values.push(value.value);
+      continue;
+    }
+    /* `null` is "this one has no override", which is a real answer. Anything
+       else is a value this cannot read, and the whole record is refused. */
+    if (value?.type === "NullLiteral") continue;
+    return null;
+  }
+  return values;
+}
+
+type Resolved = { names: string[] } | { refused: string };
+
+/**
+ * `env[param]` inside a helper — resolved from what its callers pass.
+ *
+ * src/fetch.ts:602 and src/web/lib/supabase.ts:34 are the cases: a small
+ * `seen(name)` / `required(name)` called with a literal each time. Any call site
+ * whose argument is not a literal, or a helper this cannot enumerate the call
+ * sites of, is a refusal rather than a partial answer — half an answer here is a
+ * variable silently dropping out of the sweep.
+ */
+function resolveFromCallers(facts: FileFacts, fn: FnFacts, identifier: string): Resolved {
+  const fnName = nameOfFunction(facts, fn);
+  if (fnName === null) {
+    return { refused: `env[${identifier}] — parameter of an anonymous function` };
+  }
+  const scope = scopeOf(facts, fn.node);
+  if (escapesAsAValue(facts, fnName, scope)) {
+    return {
+      refused: `env[${identifier}] — \`${fnName}\` is used as a value, so its call sites cannot all be read`,
+    };
+  }
+  const args = argumentsAt(facts, fnName, fn.params.indexOf(identifier), scope);
+  if (args.length === 0) {
+    return { refused: `env[${identifier}] — \`${fnName}\` is never called in this file` };
+  }
+  const names: string[] = [];
+  for (const argument of args) {
+    if (argument.type !== "StringLiteral" || typeof argument.value !== "string") {
+      return {
+        refused: `env[${identifier}] — \`${fnName}\` is called with a <${String(argument.type)}> at line ${lineOf(argument)}`,
+      };
+    }
+    names.push(argument.value);
+  }
+  return { names };
+}
+
+/** What `env[expr]` reads, or why this check will not say. */
+function resolveComputed(facts: FileFacts, read: AstNode, expr: AstNode): Resolved {
+  if (expr.type === "StringLiteral" && typeof expr.value === "string") {
+    return { names: [expr.value] };
+  }
+  if (expr.type !== "Identifier" || typeof expr.name !== "string") {
+    return { refused: `env[<${String(expr.type)}>]` };
+  }
+  const identifier = expr.name;
+
+  /* A parameter shadows anything declared at file level, and both shapes
+     genuinely occur — src/fetch.ts:602 and src/vercel-health.ts's `value` both
+     read `process.env[name]` in files that also declare a `const name`. */
+  const fn = enclosingFunctionWithParam(facts, read, identifier);
+  if (fn !== null) return resolveFromCallers(facts, fn, identifier);
+
+  const declared = facts.declarators.get(identifier);
+  if (declared === undefined) {
+    return { refused: `env[${identifier}] — nothing in this file declares it` };
+  }
+  if (declared.length !== 1) {
+    return { refused: `env[${identifier}] — declared ${declared.length} times in this file` };
+  }
+  const init = declared[0]?.init as AstNode | undefined;
+  if (init?.type === "StringLiteral" && typeof init.value === "string") {
+    return { names: [init.value] };
+  }
+  /* `const envVar = MODEL_ENV_VAR[task]` — an index into a record of literals,
+     which is src/models.ts:1091 and the twelve model overrides. */
+  if (
+    (init?.type === "MemberExpression" || init?.type === "OptionalMemberExpression") &&
+    init.computed === true &&
+    (init.object as AstNode | undefined)?.type === "Identifier"
+  ) {
+    const record = (init.object as AstNode).name as string;
+    const values = literalsOfRecord(facts, record);
+    if (values !== null) return { names: values };
+    return {
+      refused: `env[${identifier}] — \`${record}\` is not a record of string literals this can read`,
+    };
+  }
+  return { refused: `env[${identifier}] — declared as <${String(init?.type ?? "nothing")}>` };
+}
+
+/* ------------------------------------------------------------------ *
+ * Aliases — the F13 machinery.
+ * ------------------------------------------------------------------ */
+
+/** A name that holds the environment, and the range it holds it over. */
+interface Alias {
+  name: string;
+  from: number;
+  to: number;
+}
+
+interface AliasFacts {
+  aliases: Alias[];
+  /**
+   * Whole-object uses that are *recognised* rather than exempted: the ones this
+   * follows. Their presence in this set is why they are not refusals.
+   */
+  followed: Set<AstNode>;
+  /** An env object handed to a local function whose parameter has no name. */
+  refusals: { node: AstNode; what: string }[];
+}
+
+/**
+ * Every name that holds the environment in this file, to a fixed point.
+ *
+ * Two ways in, and they are the two shapes `src/env.ts` uses: a `const` holding
+ * `process.env` or a spread copy of it, and a parameter of a local function that
+ * some call in this file hands one to. The second is what reaches
+ * `pinnedNames(env)` two hops from `process.env` — the read that a file-wide
+ * exemption hid until F13.
+ *
+ * A copy is treated as an alias, not as a different object: the question this
+ * file asks is *which names does the code go looking for*, and a spread copy
+ * answers to the same ones.
+ */
+function aliasFactsOf(facts: FileFacts): AliasFacts {
+  const aliases: Alias[] = [];
+  const followed = new Set<AstNode>();
+  const refusals: { node: AstNode; what: string }[] = [];
+
+  const inScope = (name: string, node: AstNode): boolean =>
+    aliases.some((a) => a.name === name && start(node) >= a.from && end(node) <= a.to);
+
+  /** `process.env`, `import.meta.env`, an alias, or a spread copy of one. */
+  const isEnvSource = (n: AstNode | undefined): boolean => {
+    if (!n) return false;
+    if (envKind(n) !== null) return true;
+    if (n.type === "Identifier" && typeof n.name === "string") return inScope(n.name, n);
+    if (n.type === "ObjectExpression") {
+      const properties = (n.properties as AstNode[] | undefined) ?? [];
+      return (
+        properties.length === 1 &&
+        properties[0]?.type === "SpreadElement" &&
+        isEnvSource(properties[0].argument as AstNode)
+      );
+    }
+    return false;
+  };
+
+  const add = (name: string, from: number, to: number): boolean => {
+    if (aliases.some((a) => a.name === name && a.from === from && a.to === to)) return false;
+    aliases.push({ name, from, to });
+    return true;
+  };
+
+  /**
+   * Record a whole-object use as followed — **and the env expression inside it**.
+   *
+   * `const INHERITED = { ...process.env }` is one recognised use and two nodes:
+   * the object literal, and the `process.env` the sweep will actually walk onto.
+   * Marking only the outer one left `src/env.ts:85` refusing itself.
+   */
+  const markFollowed = (n: AstNode | undefined): void => {
+    if (!n) return;
+    followed.add(n);
+    if (n.type !== "ObjectExpression") return;
+    const first = ((n.properties as AstNode[] | undefined) ?? [])[0];
+    if (first?.type === "SpreadElement") markFollowed(first.argument as AstNode);
+  };
+
+  /* A fixed point, because an alias created this round can be passed on the
+     next. Three hops is the deepest src/env.ts goes; the cap is a guard against
+     a cycle rather than a limit anybody should be near. */
+  for (let round = 0; round < 8; round += 1) {
+    let grew = false;
+    followed.clear();
+    refusals.length = 0;
+
+    for (const [name, declared] of facts.declarators) {
+      for (const declarator of declared) {
+        const init = declarator.init as AstNode | undefined;
+        if (!isEnvSource(init)) continue;
+        markFollowed(init);
+        const [from, to] = scopeOf(facts, declarator);
+        if (add(name, from, to)) grew = true;
+      }
+    }
+
+    walkAst(facts.ast, (node) => {
+      if (node.type !== "CallExpression") return;
+      const callee = node.callee as AstNode | undefined;
+      if (callee?.type !== "Identifier" || typeof callee.name !== "string") return;
+      const target = facts.functions.find((fn) => nameOfFunction(facts, fn) === callee.name);
+      const args = (node.arguments as AstNode[] | undefined) ?? [];
+      args.forEach((argument, index) => {
+        if (!isEnvSource(argument)) return;
+        if (target === undefined) return; // not a local function: refused below
+        markFollowed(argument);
+        const param = target.params[index];
+        if (typeof param !== "string") {
+          refusals.push({
+            node: argument,
+            what: `the environment is passed to \`${callee.name}\` at parameter ${index}, which is not a plain name this can follow`,
+          });
+          return;
+        }
+        if (add(param, start(target.node), end(target.node))) grew = true;
+      });
+    });
+
+    if (!grew) break;
+  }
+
+  return { aliases, followed, refusals };
+}
+
+/* ------------------------------------------------------------------ *
+ * The per-file sweep.
+ * ------------------------------------------------------------------ */
+
+/**
+ * Is this `env[…]` the reporter reading its own list?
+ *
+ * File **and** function. See the header, § *The one exemption*. Renaming
+ * `value` stops this matching, and the read then goes red rather than quiet.
+ */
+function isReporterRead(facts: FileFacts, file: string, member: AstNode): string | null {
+  const exemption = REPORTER_READS.find((entry) => entry.file === file);
+  if (exemption === undefined) return null;
+  const property = member.property as AstNode | undefined;
+  if (property?.type !== "Identifier" || typeof property.name !== "string") return null;
+  const fn = enclosingFunctionWithParam(facts, member, property.name);
+  if (fn === null || nameOfFunction(facts, fn) !== exemption.fn) return null;
+  return `${file}:${lineOf(member)} — ${exemption.fn}() reads its own list`;
+}
+
+/** The `ENV_MECHANISM` entry covering `node`, if any. */
+function mechanismFor(facts: FileFacts, file: string, node: AstNode) {
+  const fn = enclosingFunctionName(facts, node);
+  if (fn === null) return undefined;
+  return ENV_MECHANISM.find((entry) => entry.file === file && entry.fn === fn);
+}
+
+/** Every environment variable one file reads, and every read it refuses. */
+function sweepFile(source: string, file: string): Sweep {
+  const facts = factsOf(source);
+  const alias = aliasFactsOf(facts);
+  const sweep: Sweep = { file, reads: [], refusals: [], exempted: [] };
+
+  const refuse = (node: AstNode, what: string): void => {
+    const mechanism = mechanismFor(facts, file, node);
+    if (mechanism) {
+      sweep.exempted.push(`${file}:${lineOf(node)} — ${mechanism.fn}(): ${mechanism.why}`);
+      return;
+    }
+    sweep.refusals.push({ file, line: lineOf(node), what });
+  };
+
+  /** A member read off an environment object or an alias of one. */
+  const readOff = (member: AstNode): void => {
+    if (facts.writeTargets.has(member)) return; // `env[name] = v`, `delete env[name]`
+    const line = lineOf(member);
+    const property = member.property as AstNode | undefined;
+    if (property === undefined) return;
+    if (member.computed !== true) {
+      if (property.type === "Identifier" && typeof property.name === "string") {
+        sweep.reads.push({ file, line, name: property.name });
+        return;
+      }
+      refuse(member, "env.<not an identifier>");
+      return;
+    }
+    const exempt = isReporterRead(facts, file, member);
+    if (exempt !== null) {
+      sweep.exempted.push(exempt);
+      return;
+    }
+    const resolved = resolveComputed(facts, member, property);
+    if ("refused" in resolved) {
+      refuse(member, resolved.refused);
+      return;
+    }
+    for (const name of resolved.names) sweep.reads.push({ file, line, name });
+  };
+
+  /** The environment used as a whole object, rather than read from. */
+  const wholeUse = (node: AstNode, what: string): void => {
+    if (alias.followed.has(node)) return; // bound to a name, or passed to a local function
+    refuse(node, what);
+  };
+
+  for (const { node, what } of alias.refusals) refuse(node, what);
+
+  /**
+   * **A root object used as a value, rather than read from.**
+   *
+   * `process` anywhere but as the thing a member expression reads from:
+   * `const { env } = process`, `Reflect.get(process, "env")` and every other way
+   * of getting at it without writing `.env`. They land here rather than
+   * vanishing, which is the F11 fix — a list of spellings is always missing one,
+   * so the rule is about the root instead.
+   */
+  const rootAsValue = (node: AstNode, parent: AstNode | null, key: string): boolean => {
+    if (isMemberObject(parent, key)) return false;
+    if (node.type === "MetaProperty") {
+      refuse(node, "`import.meta` is used as a value, so this cannot say what is read from it");
+      return true;
+    }
+    if (node.type !== "Identifier" || !isProcessRoot(node)) return false;
+    if (isValueUse(parent, key, node)) {
+      refuse(
+        node,
+        "the `process` object is used as a value, so this cannot say which variables are reached through it",
+      );
+    }
+    return true;
+  };
+
+  /**
+   * A member expression off a root whose property this cannot name.
+   *
+   * It may or may not be `env`, and "may not" is not an answer a guard may give.
+   */
+  const unnameableProperty = (node: AstNode): boolean => {
+    if (node.type !== "MemberExpression" && node.type !== "OptionalMemberExpression") return false;
+    if (node.computed !== true || propertyName(node) !== null) return false;
+    const object = node.object as AstNode | undefined;
+    if (!object || !(isProcessRoot(object) || object.type === "MetaProperty")) return false;
+    refuse(node, "a computed property of `process`/`import.meta` this cannot name");
+    return true;
+  };
+
+  const holdsEnvironment = (node: AstNode): boolean =>
+    alias.aliases.some(
+      (a) => a.name === node.name && start(node) >= a.from && end(node) <= a.to,
+    );
+
+  walkAst(facts.ast, (node, parent, key) => {
+    if (rootAsValue(node, parent, key)) return;
+
+    const kind = envKind(node);
+    if (kind !== null) {
+      if (isMemberObject(parent, key)) readOff(parent as AstNode);
+      else wholeUse(node, `\`${kind}\` is used as a whole object, not read for a name`);
+      return;
+    }
+
+    if (unnameableProperty(node)) return;
+
+    /* An alias of the environment: read from, or handed on. */
+    if (node.type === "Identifier" && typeof node.name === "string") {
+      if (!isValueUse(parent, key, node) || !holdsEnvironment(node)) return;
+      if (isMemberObject(parent, key)) readOff(parent as AstNode);
+      else wholeUse(node, `\`${String(node.name)}\` holds the environment and is used as a whole object`);
+    }
+  });
+
+  return sweep;
+}
+
+/** Every `.ts`/`.tsx` under `dir`, deepest last, sorted. */
+function sourceFiles(dir: string): string[] {
+  const out: string[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) out.push(...sourceFiles(full));
+    else if (/\.tsx?$/.test(entry.name)) out.push(full);
+  }
+  return out.sort();
+}
+
+/**
+ * **The whole sweep, over a list of files and a way to read them.**
+ *
+ * *Every* file is parsed. There is no text prefilter, and its absence is the
+ * F11 fix rather than an oversight: the old one selected files containing the
+ * exact string `"process.env"`, which silently dropped `process?.env.X`,
+ * `process["env"].X`, `process . env.X`, `const { env } = process` and every
+ * `import.meta.env` read in the client bundle. 530 files parse in about two and
+ * a half seconds, which is a price worth paying for a gate with no hole in it.
+ *
+ * `read` is a parameter so that the controls at the bottom can enter here, with
+ * the file step inside what they exercise.
+ */
+function sweepTree(files: readonly string[], read: (file: string) => string): Sweep[] {
+  return files.map((file) => sweepFile(read(file), file));
+}
+
+/* ------------------------------------------------------------------ *
+ * `EXPECTED`, and the premise its one exemption rests on.
+ * ------------------------------------------------------------------ */
+
+interface ExpectedTable {
+  /** `name` and `or`: the names an entry says are acceptable. */
+  covered: string[];
+  /** `with` values: read by `value(expected.with)`, so they need a door too. */
+  required: { name: string; line: number }[];
+  refusals: string[];
+}
+
+/** One `EXPECTED` entry's fields, or why they could not be read. */
+function fieldsOfEntry(element: AstNode): ExpectedTable {
+  const covered: string[] = [];
+  const required: { name: string; line: number }[] = [];
+  const refusals: string[] = [];
+  if (element.type !== "ObjectExpression") {
+    return {
+      covered,
+      required,
+      refusals: [`${HEALTH}:${lineOf(element)} — an EXPECTED entry is not an object literal`],
+    };
+  }
+  let sawName = false;
+  for (const property of (element.properties as AstNode[] | undefined) ?? []) {
+    if (property.type !== "ObjectProperty") continue;
+    const key = property.key as AstNode | undefined;
+    const field = key?.type === "Identifier" ? String(key.name) : null;
+    if (field === null || !(EXPECTED_FIELDS as readonly string[]).includes(field)) continue;
+    const value = property.value as AstNode | undefined;
+    if (value?.type !== "StringLiteral" || typeof value.value !== "string") {
+      refusals.push(`${HEALTH}:${lineOf(property)} — \`${field}\` is not a string literal`);
+      continue;
+    }
+    if (field === "with") {
+      /* **Not a door, a read.** `value(expected.with)` looks this name up in
+         the environment, so it has to be inventoried in its own right rather
+         than being covered by the entry that mentions it. Safe until F12 only
+         because the one `with` in the table repeats another entry's `name`. */
+      required.push({ name: value.value, line: lineOf(property) });
+      continue;
+    }
+    covered.push(value.value);
+    if (field === "name") sawName = true;
+  }
+  if (!sawName) {
+    refusals.push(`${HEALTH}:${lineOf(element)} — an EXPECTED entry has no readable \`name\``);
+  }
+  return { covered, required, refusals };
+}
+
+/**
+ * The names `EXPECTED` covers, the names it reads, and what it could not read.
+ *
+ * Refuses an entry whose `name` it cannot read, rather than quietly covering one
+ * fewer variable than the table does.
+ */
+function expectedTable(healthSource: string): ExpectedTable {
+  const table: ExpectedTable = { covered: [], required: [], refusals: [] };
+  walkAst(parseSource(healthSource), (node) => {
+    if (node.type !== "VariableDeclarator") return;
+    const id = node.id as AstNode | undefined;
+    if (id?.type !== "Identifier" || id.name !== "EXPECTED") return;
+    let init = node.init as AstNode | undefined;
+    while (init?.type === "TSAsExpression" || init?.type === "TSSatisfiesExpression") {
+      init = init.expression as AstNode | undefined;
+    }
+    if (init?.type !== "ArrayExpression") {
+      table.refusals.push(`${HEALTH}: EXPECTED is not an array literal this check can read`);
+      return;
+    }
+    for (const element of (init.elements as AstNode[] | undefined) ?? []) {
+      const entry = fieldsOfEntry(element);
+      table.covered.push(...entry.covered);
+      table.required.push(...entry.required);
+      table.refusals.push(...entry.refusals);
+    }
+  });
+  return table;
+}
+
+/**
+ * **Does every caller of the exempted reporter really derive its argument from
+ * `EXPECTED`?**
+ *
+ * The exemption for `value(name)` says a name cannot be missing from the list it
+ * is being read out of. That is only true while the callers behave, and nothing
+ * checked them until F12: `value("NEW_VARIABLE")` would have read a brand-new
+ * variable through the already-exempted node with the exemption count still
+ * exactly one and every other assertion here green.
+ *
+ * So: every reference to `value` is examined. A call's argument must trace back
+ * to `expected.<field>` — directly, through a `const` built out of them, or
+ * through a `for … of` over one. A reference that is not a call must be a
+ * callback handed to a method on an `EXPECTED`-derived receiver, which is
+ * `names.map(value)`. And the `<field>` must be one of `EXPECTED_FIELDS`, so a
+ * fourth field carrying a variable name cannot appear without this file
+ * learning to parse it.
+ */
+/** The names bound by `for (const expected of EXPECTED)` — the entry object. */
+function expectedRoots(facts: FileFacts): Set<string> {
+  const roots = new Set<string>();
+  walkAst(facts.ast, (node) => {
+    if (node.type !== "ForOfStatement") return;
+    const right = node.right as AstNode | undefined;
+    if (right?.type !== "Identifier" || right.name !== "EXPECTED") return;
+    const id = forOfBinding(node);
+    if (id !== null) roots.add(id);
+  });
+  return roots;
+}
+
+/** The single name a `for (const X of …)` binds, or `null`. */
+function forOfBinding(node: AstNode): string | null {
+  const left = node.left as AstNode | undefined;
+  const declarator = ((left?.declarations as AstNode[] | undefined) ?? [])[0];
+  const id = declarator?.id as AstNode | undefined;
+  return id?.type === "Identifier" && typeof id.name === "string" ? id.name : null;
+}
+
+/**
+ * **"Could this expression only have come out of `EXPECTED`?"**
+ *
+ * `expected.name` yes; an array or a conditional built out of those yes; a name
+ * bound from one of those yes, to a fixed point, which is what carries `names`
+ * and then the `name` iterating it. A string literal no — that is the whole
+ * point. A field this file does not parse out of the table is reported rather
+ * than accepted, so a fourth field carrying a variable name cannot appear
+ * without this file learning to read it.
+ */
+function expectedDerivedTest(
+  facts: FileFacts,
+  roots: Set<string>,
+  fn: string,
+  failures: string[],
+): (n: AstNode | undefined) => boolean {
+  const derivedNames = new Set<string>();
+
+  const derived = (n: AstNode | undefined): boolean => {
+    if (!n) return false;
+    if (n.type === "Identifier" && typeof n.name === "string") return derivedNames.has(n.name);
+    if (n.type === "ArrayExpression") {
+      return ((n.elements as AstNode[] | undefined) ?? []).every((e) => derived(e));
+    }
+    if (n.type === "ConditionalExpression") {
+      return derived(n.consequent as AstNode) && derived(n.alternate as AstNode);
+    }
+    if (n.type !== "MemberExpression" && n.type !== "OptionalMemberExpression") return false;
+    const object = n.object as AstNode | undefined;
+    if (object?.type !== "Identifier" || !roots.has(String(object.name))) return false;
+    const field = propertyName(n);
+    if (field !== null && (EXPECTED_FIELDS as readonly string[]).includes(field)) return true;
+    failures.push(
+      `${HEALTH}:${lineOf(n)} — \`${String(object.name)}.${field ?? "<computed>"}\` reaches ${fn}(), and this file does not parse that field out of EXPECTED`,
+    );
+    return false;
+  };
+
+  for (let round = 0; round < 5; round += 1) {
+    const before = derivedNames.size;
+    walkAst(facts.ast, (node) => {
+      if (node.type === "VariableDeclarator") {
+        const id = node.id as AstNode | undefined;
+        if (id?.type === "Identifier" && derived(node.init as AstNode)) {
+          derivedNames.add(String(id.name));
+        }
+        return;
+      }
+      if (node.type !== "ForOfStatement" || !derived(node.right as AstNode)) return;
+      const bound = forOfBinding(node);
+      if (bound !== null) derivedNames.add(bound);
+    });
+    if (derivedNames.size === before) break;
+  }
+
+  return derived;
+}
+
+/**
+ * Is this occurrence of the name a reference to the exempted *function*?
+ *
+ * **`value` is an extremely ordinary identifier**, and src/vercel-health.ts has
+ * seventeen other bindings called that — `let value` in four cache helpers, and
+ * an `ok(value: string)` parameter in a type. Counting them as callers made this
+ * check refuse the whole file the first time it ran. A binding nearer than the
+ * top-level declaration shadows it, so a parameter of an enclosing function, or
+ * a `let`/`const` declared in a scope containing the node, means this occurrence
+ * is somebody else's `value`.
+ */
+function referencesTheFunction(facts: FileFacts, node: AstNode): boolean {
+  const name = String(node.name);
+  if (enclosingFunctionWithParam(facts, node, name) !== null) return false;
+  return !(facts.declarators.get(name) ?? []).some((declarator) =>
+    within(node, scopeOf(facts, declarator)),
+  );
+}
+
+/** One reference to the exempted function, judged against the premise. */
+function referenceFailure(
+  parent: AstNode | null,
+  key: string,
+  node: AstNode,
+  fn: string,
+  derived: (n: AstNode | undefined) => boolean,
+): string | null {
+  if (parent?.type === "CallExpression" && key === "callee") {
+    const args = (parent.arguments as AstNode[] | undefined) ?? [];
+    const argument = args[0];
+    if (args.length !== 1 || argument === undefined) {
+      return `${HEALTH}:${lineOf(node)} — ${fn}() called with ${args.length} arguments`;
+    }
+    if (derived(argument)) return null;
+    return `${HEALTH}:${lineOf(node)} — ${fn}(<${String(argument.type)}>) is not derived from EXPECTED, so the exemption's premise does not hold for it`;
+  }
+  /* `names.map(value)` — a callback, on a receiver that must itself be
+     EXPECTED-derived. Anything else escapes somewhere this cannot see. */
+  const receiver =
+    parent?.type === "CallExpression" && key === "arguments"
+      ? ((parent.callee as AstNode | undefined)?.object as AstNode | undefined)
+      : undefined;
+  if (receiver !== undefined && derived(receiver)) return null;
+  return `${HEALTH}:${lineOf(node)} — ${fn} is used as a value somewhere this cannot show is fed from EXPECTED`;
+}
+
+function reporterPremiseFailures(healthSource: string): string[] {
+  const failures: string[] = [];
+  for (const exemption of REPORTER_READS) {
+    if (exemption.file !== HEALTH) continue;
+    const facts = factsOf(healthSource);
+    const roots = expectedRoots(facts);
+    if (roots.size === 0) {
+      failures.push(
+        `${HEALTH}: no \`for (const … of EXPECTED)\` — this check cannot tell what ${exemption.fn}() is being fed`,
+      );
+      continue;
+    }
+    const derived = expectedDerivedTest(facts, roots, exemption.fn, failures);
+    for (const { node, parent, key } of facts.uses) {
+      if (node.name !== exemption.fn || !referencesTheFunction(facts, node)) continue;
+      const failure = referenceFailure(parent, key, node, exemption.fn, derived);
+      if (failure !== null) failures.push(failure);
+    }
+  }
+  return failures;
+}
+
+/* ------------------------------------------------------------------ *
+ * The verdict.
+ * ------------------------------------------------------------------ */
+
+/** Everything wrong, as lines somebody can act on. Empty means they agree. */
+function disagreements(
+  sweeps: readonly Sweep[],
+  healthSource: string,
+  allowed: readonly AllowGroup[],
+): string[] {
+  const failures: string[] = [];
+  for (const sweep of sweeps) {
+    for (const refusal of sweep.refusals) {
+      failures.push(
+        `${refusal.file}:${refusal.line} — ${refusal.what}. ` +
+          `This check will not guess at a read it cannot enumerate; write the name as a literal, ` +
+          `or add an explicit, reasoned exemption in ${GUARD}.`,
+      );
+    }
+  }
+  const expected = expectedTable(healthSource);
+  failures.push(...expected.refusals);
+  failures.push(...reporterPremiseFailures(healthSource));
+  const covered = new Set([...expected.covered, ...allowed.flatMap((group) => group.names)]);
+
+  const firstSeenAt = new Map<string, string>();
+  const note = (name: string, where: string): void => {
+    if (covered.has(name)) return;
+    if (!firstSeenAt.has(name)) firstSeenAt.set(name, where);
+  };
+  for (const sweep of sweeps) {
+    for (const read of sweep.reads) note(read.name, `${read.file}:${read.line}`);
+  }
+  for (const { name, line } of expected.required) note(name, `${HEALTH}:${line} (a \`with\`)`);
+
+  for (const [name, where] of [...firstSeenAt].sort()) {
+    failures.push(
+      `${name} — read at ${where}, and in neither EXPECTED (${HEALTH}) nor the allowlist in ${GUARD}. ` +
+        `Add it to EXPECTED with \`breaks: null\` if an operator would want it reported, ` +
+        `or to an ALLOWED group with the reason it is not a deployment setting.`,
+    );
+  }
+  return failures;
+}
+
+/** Allowlisted names nothing reads any more — the list rotting the other way. */
+function staleAllowances(sweeps: readonly Sweep[], allowed: readonly AllowGroup[]): string[] {
+  const read = new Set(sweeps.flatMap((sweep) => sweep.reads.map((r) => r.name)));
+  return allowed
+    .flatMap((group) => group.names)
+    .filter((name) => !read.has(name))
+    .map((name) => `${name} — allowlisted in ${GUARD}, and nothing under ${SRC}/ reads it any more`);
+}
+
+describe("every environment variable src/ reads is accounted for", () => {
+  const healthSource = readFileSync(HEALTH, "utf8");
+  const files = sourceFiles(SRC);
+  const sweeps = sweepTree(files, (file) => readFileSync(file, "utf8"));
+
+  it("parses every source file, with no text prefilter to skip one", () => {
+    /* **The F11 control, and it has to be here rather than in a fixture.** The
+       old gate selected files containing the exact text `process.env`, so this
+       file — which reads four variables off `import.meta.env` and contains no
+       `process.env` anywhere — was never opened. A control below this layer
+       cannot see that; this one names the file and the property it depends on. */
+    const client = `${SRC}/web/monitoring.ts`;
+    expect(files).toContain(client);
+    expect(readFileSync(client, "utf8")).not.toContain("process.env");
+    expect(sweeps.length).toBe(files.length);
+    expect(
+      sweeps.flatMap((sweep) => (sweep.file === client ? sweep.reads.map((r) => r.name) : [])),
+    ).toEqual(expect.arrayContaining(["VITE_SENTRY_DSN", "PROD", "VITE_VERCEL_ENV", "MODE"]));
+  });
+
+  it("finds the reads, including the ones that are not literals", () => {
+    /* The positive control. Most of these exist only if a specific resolution
+       is working, so a sweep that quietly stopped following one says so here
+       rather than by reporting nothing to complain about. */
+    const names = new Set(sweeps.flatMap((sweep) => sweep.reads.map((read) => read.name)));
+    expect([...names].sort()).toEqual(expect.arrayContaining(KNOWN_READS));
+    /* 50 on 2026-09-07. A floor rather than the number, because a name arriving
+       is normal and is caught by the assertions below; a sweep that stopped
+       finding things is what this line is for. */
+    expect(names.size).toBeGreaterThanOrEqual(46);
+    /* Named *and* placed: the read that resolving a local helper's call sites
+       buys, and one of the two credentials the incident was about. */
+    expect(
+      sweeps.flatMap((sweep) =>
+        sweep.reads.filter((r) => r.file === `${SRC}/fetch.ts`).map((r) => r.name),
+      ),
+    ).toEqual(expect.arrayContaining(["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"]));
+  });
+
+  it("follows the environment through the loader's aliases", () => {
+    /* **The F13 control.** `SPIDERYARN_ENV_PINNED` is two hops from
+       `process.env` — into `applyEnvFile`, then into `pinnedNames` — and it was
+       in neither door while this file called src/env.ts exempt.
+       `DATABASE_URL` off `inherited` in `chooseTargetUrl` is the same shape one
+       hop out, and proves the alias is being *read* rather than merely
+       tolerated. */
+    const inEnv = sweeps
+      .filter((sweep) => sweep.file === `${SRC}/env.ts`)
+      .flatMap((sweep) => sweep.reads.map((r) => r.name));
+    expect(inEnv).toEqual(expect.arrayContaining(["SPIDERYARN_ENV_PINNED", "DATABASE_URL"]));
+  });
+
+  it("finds EXPECTED, and reads every entry's name, `or` and `with`", () => {
+    /* The other positive control. If this came back empty every name below
+       would be judged against the allowlist alone, and the check would have
+       quietly halved. */
+    const table = expectedTable(healthSource);
+    expect(table.refusals).toEqual([]);
+    expect(table.covered).toContain("OPENROUTER_API_KEY");
+    expect(table.covered.length).toBeGreaterThanOrEqual(13);
+    /* `with` is a third door into EXPECTED that the parser did not read until
+       F12 — and it is a *read*, so it is required rather than covering. */
+    expect(table.required.map((r) => r.name)).toEqual(["STRIPE_SECRET_KEY"]);
+  });
+
+  it("shows that every caller of the exempted reporter is fed from EXPECTED", () => {
+    /* The F12 control: the exemption's premise, checked rather than asserted. */
+    expect(reporterPremiseFailures(healthSource)).toEqual([]);
+  });
+
+  it("uses each exemption, and only them", () => {
+    /* An exemption nobody matches is an exemption that has gone stale silently
+       — the same fault as the list it is written on. Each is asserted to have
+       actually fired, so renaming `value` or reworking the loader goes red. */
+    const exempted = sweeps.flatMap((sweep) => sweep.exempted);
+    /* Not pinned to a line number — that would go red every time somebody adds
+       an `EXPECTED` entry above it, which is a thing this file is *for*. */
+    expect(exempted.filter((e) => e.endsWith("value() reads its own list"))).toHaveLength(1);
+    for (const mechanism of ENV_MECHANISM) {
+      expect(exempted.filter((e) => e.includes(`${mechanism.fn}():`)).length).toBeGreaterThan(0);
+    }
+    /* Nothing else is exempt anywhere in the tree. */
+    const accounted = exempted.filter(
+      (e) =>
+        e.endsWith("value() reads its own list") ||
+        ENV_MECHANISM.some((m) => e.includes(`${m.fn}():`)),
+    );
+    expect(exempted.length).toBe(accounted.length);
+  });
+
+  it("accounts for every name, in EXPECTED or on the allowlist", () => {
+    /* Named rather than counted: a red line has to say which variable, where it
+       is read, and which of the two doors to put it through. */
+    expect(disagreements(sweeps, healthSource, ALLOWED)).toEqual([]);
+  });
+
+  it("has no allowlisted name that nothing reads", () => {
+    expect(staleAllowances(sweeps, ALLOWED)).toEqual([]);
+  });
+});
+
+/**
+ * **The control: make the code and the list disagree, and watch this go red.**
+ *
+ * Everything above asserts that a list is empty, and the tree agrees with itself
+ * the moment the fix lands — so without this section the file would be equally
+ * green if the sweep returned nothing at all. Each case below is a way the
+ * agreement can break, and every one of them is a shape that occurs in the tree
+ * or was demonstrated against it.
+ *
+ * **They enter at `sweepTree`**, so the file step is inside what they exercise.
+ * The first version's fixtures called the per-file function directly, which is
+ * why none of them could have caught F11 — the bug was in the layer above.
+ */
+describe("the check itself", () => {
+  const EXPECTED_SOURCE = `const EXPECTED: readonly Expected[] = [
+      { name: "DATABASE_URL", breaks: null },
+      { name: "SUPABASE_PUBLISHABLE_KEY", or: "SUPABASE_ANON_KEY", breaks: "sign-in" },
+    ];
+    for (const expected of EXPECTED) {
+      const names = expected.or ? [expected.name, expected.or] : [expected.name];
+      for (const name of names) env[name] = value(name) !== null;
+      const found = names.map(value).find((v) => v !== null);
+    }
+    function value(name: string): string | null { return process.env[name] ?? null; }`;
+  /** One fixture file, through the real entry point. */
+  const sweep = (source: string, file = "src/fixture.ts") => sweepTree([file], () => source);
+  const namesIn = (source: string) => sweep(source)[0]?.reads.map((r) => r.name) ?? [];
+  const refusalsIn = (source: string) => sweep(source)[0]?.refusals ?? [];
+
+  it("goes red for a name in neither place — the 2026-08-27 drift", () => {
+    const failures = disagreements(
+      sweep(`const id = process.env.SPIDERYARN_OWNER_ID;`),
+      EXPECTED_SOURCE,
+      [],
+    );
+    expect(failures).toHaveLength(1);
+    expect(failures[0]).toContain("SPIDERYARN_OWNER_ID");
+    expect(failures[0]).toContain("src/fixture.ts:1");
+  });
+
+  it("goes green through either door, and through `or`", () => {
+    /* Both doors, so a red result above is a real disagreement rather than this
+       check refusing everything it sees. */
+    expect(
+      disagreements(sweep(`const u = process.env.DATABASE_URL;`), EXPECTED_SOURCE, []),
+    ).toEqual([]);
+    expect(
+      disagreements(sweep(`const k = process.env.SUPABASE_ANON_KEY;`), EXPECTED_SOURCE, []),
+    ).toEqual([]);
+    expect(
+      disagreements(sweep(`const v = process.env.VITEST;`), EXPECTED_SOURCE, [
+        { why: "the test runner sets it", names: ["VITEST"] },
+      ]),
+    ).toEqual([]);
+  });
+
+  it("sees `import.meta.env`, direct and computed — F10", () => {
+    /* A whole namespace was invisible: the sweep knew one spelling of one
+       object. Both forms in src/web/ are here. */
+    expect(namesIn(`const dsn = import.meta.env.VITE_SENTRY_DSN;`)).toEqual(["VITE_SENTRY_DSN"]);
+    expect(
+      namesIn(`function required(name: "A" | "B") { return import.meta.env[name]; }
+               const both = [required("VITE_SUPABASE_URL"), required("VITE_SUPABASE_PUBLISHABLE_KEY")];`),
+    ).toEqual(["VITE_SUPABASE_URL", "VITE_SUPABASE_PUBLISHABLE_KEY"]);
+    /* And `import.meta.dirname` is not an environment read at all. */
+    expect(namesIn(`const here = import.meta.dirname;`)).toEqual([]);
+    expect(refusalsIn(`const here = import.meta.dirname;`)).toEqual([]);
+  });
+
+  it("sees the spellings the old text prefilter dropped — F11", () => {
+    /* Each of these was silently skipped, four of them before the parser ever
+       ran. They go through the same `sweepTree` the tree does, so this is a
+       control on the gate rather than on the recogniser alone. */
+    expect(namesIn(`const a = process?.env.DATABASE_URL;`)).toEqual(["DATABASE_URL"]);
+    expect(namesIn(`const b = process["env"].DATABASE_URL;`)).toEqual(["DATABASE_URL"]);
+    expect(namesIn(`const c = globalThis.process.env.DATABASE_URL;`)).toEqual(["DATABASE_URL"]);
+    expect(namesIn(`const d = process . env . DATABASE_URL;`)).toEqual(["DATABASE_URL"]);
+    expect(namesIn(`const e = process?.env?.["DATABASE_URL"];`)).toEqual(["DATABASE_URL"]);
+  });
+
+  it("refuses the `process` object itself rather than losing sight of it — F11", () => {
+    /* The two ways to reach `env` without writing it. A repo-wide sweep on
+       2026-09-07 found no bare `process` use at all, so failing closed here
+       costs nothing and closes the class. */
+    for (const source of [
+      `const { env } = process; const x = env.DATABASE_URL;`,
+      `const x = Reflect.get(process, "env").DATABASE_URL;`,
+      `sendTo(process);`,
+    ]) {
+      const refusals = refusalsIn(source);
+      expect(refusals.length).toBeGreaterThan(0);
+      expect(refusals[0]?.what).toContain("used as a value");
+    }
+    /* `process.cwd()` is not an environment read and must not be refused. */
+    expect(refusalsIn(`const here = process.cwd();`)).toEqual([]);
+  });
+
+  it("follows the environment into a local function, and on again — F13", () => {
+    /* The `src/env.ts` shape, minimised: `process.env` into `applyEnvFile`,
+       `env` on into `pinnedNames`, and the literal read at the end. The
+       file-wide exemption this replaced hid exactly this. */
+    const source = `const PINNED = "SPIDERYARN_ENV_PINNED";
+      function pinnedNames(env) { return env[PINNED]; }
+      function applyEnvFile(text, env, inherited) {
+        const pinned = pinnedNames(env);
+        return inherited.DATABASE_URL;
+      }
+      const INHERITED = { ...process.env };
+      applyEnvFile(text, process.env, INHERITED);`;
+    expect(namesIn(source)).toEqual(
+      expect.arrayContaining(["SPIDERYARN_ENV_PINNED", "DATABASE_URL"]),
+    );
+    expect(refusalsIn(source)).toEqual([]);
+  });
+
+  it("refuses an environment handed somewhere it cannot follow", () => {
+    /* A whole-object use that is neither bound to a name nor passed to a local
+       function: the names reached through it are outside what this can see. */
+    const refusals = refusalsIn(`import { ship } from "./ship.js";
+                                 ship(process.env);`);
+    expect(refusals).toHaveLength(1);
+    expect(refusals[0]?.what).toContain("whole object");
+  });
+
+  it("does not treat a write or a delete as a read", () => {
+    /* `env[name] = value` and `delete copy[name]` are what the loader does, and
+       neither is code going looking for a variable. */
+    expect(
+      namesIn(`function apply(env) { env.DATABASE_URL = "x"; delete env.LOG_LEVEL; }
+               apply(process.env);`),
+    ).toEqual([]);
+  });
+
+  it("refuses a computed read it cannot enumerate, rather than passing it", () => {
+    /* **Fail closed.** The computed form is exactly what gets reached for when
+       a literal will not do, so a sweep that skipped it would be blindest
+       precisely where the names are hardest to see.
+       tests/helpers/ts-ast.ts, docs/reusable/silent-success.md. */
+    const failures = disagreements(
+      sweep(`const v = process.env[nameOfTheVariable()];`),
+      EXPECTED_SOURCE,
+      [],
+    );
+    expect(failures).toHaveLength(1);
+    expect(failures[0]).toContain("src/fixture.ts:1");
+    expect(failures[0]).toContain("CallExpression");
+    expect(failures[0]).toContain("will not guess");
+  });
+
+  it("refuses a read via a helper whose call sites it cannot all see", () => {
+    /* `names.map(value)` in src/vercel-health.ts is this shape, and it is why
+       that one function needs a named exemption rather than resolution. */
+    const failures = disagreements(
+      sweep(`const look = (name: string) => process.env[name];
+             const all = names.map(look);`),
+      EXPECTED_SOURCE,
+      [],
+    );
+    expect(failures).toHaveLength(1);
+    expect(failures[0]).toContain("used as a value");
+  });
+
+  it("resolves the indirect shapes that really occur", () => {
+    /* A `const`, a helper's call sites, and a record of literals — the three
+       resolutions the header promises, proven on fixtures rather than only on
+       the tree, so a regression in one shows up as this case rather than as a
+       name quietly dropping out of the sweep. */
+    expect(namesIn(`const E = "SPIDERYARN_JOB_CONCURRENCY";
+                    const n = Number(process.env[E]);`)).toEqual(["SPIDERYARN_JOB_CONCURRENCY"]);
+    expect(namesIn(`const seen = (name: string) => process.env[name] ? 1 : 0;
+                    const both = seen("SUPABASE_URL") + seen("SUPABASE_SERVICE_ROLE_KEY");`)).toEqual(
+      ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"],
+    );
+    expect(namesIn(`const MODEL_ENV_VAR = { chat: "SPIDERYARN_CHAT_MODEL", arc: null };
+                    const envVar = MODEL_ENV_VAR[task];
+                    const override = envVar ? process.env[envVar] : undefined;`)).toEqual([
+      "SPIDERYARN_CHAT_MODEL",
+    ]);
+    expect(namesIn(`const v = process.env["LOG_LEVEL"];`)).toEqual(["LOG_LEVEL"]);
+  });
+
+  it("does not confuse a helper with an unrelated parameter of the same name", () => {
+    /* **The first draft got this wrong on the real tree.** Its scan for "does
+       this helper escape into a value position" was file-wide, and `seen` is a
+       local helper at src/fetch.ts:602 *and* an unrelated parameter at :1642 —
+       so `new URL(seen)` on line 1646 made it refuse two credentials it could
+       read perfectly well. `scopeOf` is the fix; this keeps it fixed. */
+    const source = `function credentials(): string {
+        const seen = (name: string) => (process.env[name] ? "set" : "not set");
+        return \`\${seen("SUPABASE_URL")} and \${seen("SUPABASE_SERVICE_ROLE_KEY")}\`;
+      }
+      function sameResource(seen: string, candidate: URL): boolean {
+        return new URL(seen).host === candidate.host;
+      }`;
+    expect(refusalsIn(source)).toEqual([]);
+    expect(namesIn(source)).toEqual(["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"]);
+  });
+
+  it("does not match `process.env.X` written in a comment or a string", () => {
+    /* The reason this parses. src/models.ts:1084 has exactly this comment, and
+       a text scan reports `SPIDERYARN_` — a variable no code reads. */
+    expect(
+      namesIn(`/* Overridden by process.env.SPIDERYARN_MADE_UP_MODEL, per task. */
+               const message = "set process.env.ALSO_NOT_REAL to change it";`),
+    ).toEqual([]);
+  });
+
+  it("goes red on an EXPECTED entry whose name it cannot read", () => {
+    /* Fail closed on the list too: an entry this cannot read is a name it is
+       not really covering, and "found nothing wrong" would be a lie. */
+    const failures = disagreements(
+      sweep(`const u = process.env.DATABASE_URL;`),
+      `const EXPECTED: readonly Expected[] = [{ name: KEY, breaks: null }];`,
+      [],
+    );
+    expect(failures.some((f) => f.includes("no readable `name`"))).toBe(true);
+  });
+
+  it("requires a `with` value to be inventoried in its own right — F12", () => {
+    /* `value(expected.with)` reads it, so it is a read. Until F12 the parser
+       did not look at `with` at all, and the one in the table was safe only
+       because it repeats another entry's `name`. */
+    const failures = disagreements(
+      sweep(`const u = process.env.DATABASE_URL;`),
+      `const EXPECTED: readonly Expected[] = [
+         { name: "DATABASE_URL", breaks: null },
+         { name: "STRIPE_WEBHOOK_SECRET", with: "STRIPE_SECRET_KEY", breaks: "x" },
+       ];`,
+      [],
+    );
+    expect(failures.some((f) => f.startsWith("STRIPE_SECRET_KEY —"))).toBe(true);
+    expect(failures.some((f) => f.includes("(a `with`)"))).toBe(true);
+  });
+
+  it("goes red when the exempted reporter is fed something else — F12", () => {
+    /* The concrete attack: a new variable read through the already-exempted
+       node, with the exemption count still exactly one. */
+    const withLiteral = EXPECTED_SOURCE.replace(
+      "const found = names.map(value)",
+      'const sneaky = value("NEW_VARIABLE");\n      const found = names.map(value)',
+    );
+    const failures = reporterPremiseFailures(withLiteral);
+    expect(failures.length).toBeGreaterThan(0);
+    expect(failures[0]).toContain("StringLiteral");
+    expect(failures[0]).toContain("premise");
+  });
+
+  it("goes red when a `value` argument uses a field this file does not parse", () => {
+    /* The other half of the same premise: a fourth `EXPECTED` field carrying a
+       variable name cannot appear without this file learning to read it. */
+    const withField = EXPECTED_SOURCE.replace(
+      "const found = names.map(value)",
+      "const extra = value(expected.fallback);\n      const found = names.map(value)",
+    );
+    const failures = reporterPremiseFailures(withField);
+    expect(failures.some((f) => f.includes("expected.fallback"))).toBe(true);
+  });
+
+  it("stays green on the shapes the reporter really uses", () => {
+    /* Both doors again: `value(name)` from the loop, `names.map(value)` as a
+       callback, and `value(expected.with)`. A red result above is a real
+       violation rather than this check refusing every caller. */
+    expect(reporterPremiseFailures(EXPECTED_SOURCE)).toEqual([]);
+    expect(
+      reporterPremiseFailures(
+        EXPECTED_SOURCE.replace(
+          "const found = names.map(value)",
+          "const w = expected.with && value(expected.with);\n      const found = names.map(value)",
+        ),
+      ),
+    ).toEqual([]);
+  });
+
+  it("notices an allowlisted name that nothing reads", () => {
+    expect(
+      staleAllowances(sweep(`const v = process.env.VITEST;`), [
+        { why: "…", names: ["VITEST", "GONE_LAST_WEEK"] },
+      ]),
+    ).toEqual([expect.stringContaining("GONE_LAST_WEEK")]);
+  });
+});

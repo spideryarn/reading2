@@ -51,8 +51,9 @@ Shipping unverified viewport geometry would be inventing a bug and a fix for it 
 | 4 step 1 — the diagnostic | **Done**, on `dev` (`2dfa5235`). |
 | 3 — A6, who owns Escape | **Done**, on `dev` (`3f2b37ad`). Two review rounds, eleven findings, all accepted. 30 one-press tests over real components; pairs 12 and 18 renounced with the reasoning written down. |
 | 4 — the fit itself | **Waiting on a requested iPhone trace; A5 remains incomplete.** Still externally blocked — the useful correction is not that it stopped being blocked but that *the blocker is a request nobody had sent*: `?probe=1` is **already in production** (verified 2026-09-07 in the deployed `assets/main-dDOSrXXx.js`), so the measurement is a two-minute task on the phone rather than hardware nobody has. `scripts/viewport-trace.ts` + `scripts/read-viewport-trace.ts` turn the file it produces into the decision. The fit is not delivered. |
-| 5a — the rest of A6: click-away, return focus, and the contract | Planned; [the focus inventory](260906f-the-active-mode-gets-one-surface-and-one-way-to-fit-the-screen-focus-inventory.md) is done. **Preparatory, and it does not complete A5's modal/modeless checkbox** — see stage 5b. |
-| 5b — the hover cards' keyboard reachability | **Not started, and needs a product decision** (§ *The fork* in the inventory). The checkbox stays unticked until this lands, whatever 5a achieves. |
+| 5a — the rest of A6: click-away, return focus, and the contract | **Done**, on `dev` (`3381e700`, `38a7cca6`, `b04e939a`). Reviewed: eight findings, five built and three carried to 5a-follow-up. One was a **regression this stage introduced** — the focus restore fired under StrictMode and left a reader with no caret — written up as [260907d](../postmortems/260907d-a-focus-fix-that-only-misbehaved-under-strictmode.md). 27 tests: five backdrops nothing had ever pressed, two focus restores, Floating UI's outside press in both consumers, the rename's focus-on-open, and **Tab itself in a real Chrome** — the first Tab traversal test in this repo. The contract is written into [keyboard.md](../project/keyboard.md). **Preparatory: it does NOT complete A5's modal/modeless checkbox** — see 5b. |
+| 5a-follow-up — four things the review found that are not patches | **Not started.** One carried return target for `ChatDialog` (Sol F64/F65, and **neither is a regression** — the dialog previously restored nothing); the Chrome traversal test made a *behaviour* test rather than a markup one (F63); Floating UI's restore observed in Chrome, which is what F46 actually asked for (F66); and the probe's `vis` field renamed on its next deploy (F38's remainder). |
+| 5b — the hover cards' keyboard reachability | **Not started, and needs a product decision** (§ *The fork* in the inventory). The checkbox stays unticked until this lands, whatever 5a achieves. Since the fork was written, one option got cheaper: rendering the card next to its trigger instead of portalling it **works in both directions with no focus code at all**, confirmed in headless Chrome — so the remaining risk there is visual (stacking, overflow clipping) rather than behavioural. |
 
 **The collision with A1, and how it was settled.** A1
 ([260906c](260906c-separate-article-access-reader-composition-and-mode-controllers.md)) landed while
@@ -735,11 +736,41 @@ completing Stage 5 is not."* That is right, and it is the F13 move I would other
    `isConnected`, and name a fallback for the case where the control that opened it has gone.
    **Every close route**, not only the button.
 
-   **These two need a *captured, dynamic* opener, and that is what makes them different from step 5
-   below.** The control that opened Annotate is a selection in the prose; the one that opened a chat
-   draft may be a gutter chip that is gone by the time the dialog is. Chat has a second case of its
-   own: focused content is unmounted when the `draft` arm becomes the `thread` arm, **before** the
-   dialog closes at all, so "restore on unmount" does not cover it.
+   **Built for Chat; deliberately NOT built for Annotate, and that is a finding rather than an
+   omission.** Sol's F42 named both. Annotate is reachable only through `onMouseUp` after a drag
+   across the prose (`TableView.tsx`), and **a drag across non-focusable text has already blurred
+   whatever was focused** — measured in real Chrome, 2026-09-07: a focused button loses focus to
+   `BODY` during the drag. So Annotate opens from `<body>` and returns to `<body>`, losing nothing.
+   There is no keyboard route in at all. Adding a restore there would be machinery for a defect no
+   reader can reach.
+
+   **Chat is different, and more urgent than the inventory made it sound.** Its opener is the block
+   gutter's Help button, whose handler calls `setOpen(false)` **before** `onHelp(id)` — so the
+   disclosure collapses and takes the pressed button with it, and `isConnected` is false on *every*
+   ordinary path rather than on an edge case. The fallback is therefore what actually runs, and it is
+   the passage's own `.blk-more`: there is **no Chat button in the dock** to fall back to (its labels
+   are Commands, Comments, Metadata, Tweets, Spideryarn; Chat is a mode in the radiogroup), and
+   falling back to a mode switch would put the reader somewhere they had never been.
+
+   **Two bugs in the fix, both found by its own tests rather than by reading it**, and both worth
+   recording because neither is visible in the source:
+
+   - The guard "has focus fallen to `<body>`?" never fires, because **React runs the cleanup before
+     it detaches the subtree** — the composer is still the active element at that moment. The
+     question has to be *"was the focus I am about to destroy inside this panel?"*.
+   - **Child effects run before parent effects**, so a parent effect asking `document.activeElement`
+     on mount gets *the composer*, which has already focused itself — not the control the reader
+     pressed. It recorded the panel as its own opener. The opener is now captured during the first
+     render, before any of that. `CommentDialog` never hit either, because it takes focus in the same
+     effect that records the opener, so the read happens first by construction.
+
+   **Still unfixed, and written down instead:** Chat loses focused content when the `draft` arm
+   becomes the `thread` arm — the composer is unmounted by the swap, before the dialog closes at all,
+   so focus falls to `<body>` the moment the reader's first question is sent. Sol noticed the same
+   thing. The right destination is the thread's own composer, and choosing it changes what happens
+   after you press Enter, which is a product question rather than a focus repair. A test pins the
+   half that *is* this stage's business — that the close control does not steal the caret on that
+   swap — and its comment says the rest.
 5. **Surface 17: `RefereeHowCard`.** Missed by the first inventory because it is in flow — and as
    Sol's F41 says, being in flow removes the *trap* requirement, not the *return-focus* one. Its
    Close button is the focused element and `how.show(false)` unmounts it, so a keyboard reader who
@@ -783,10 +814,18 @@ completing Stage 5 is not."* That is right, and it is the F13 move I would other
 
    **This step is a focus-restore fix, not a focus-on-open one**, and confusing the two is what makes
    `{1}` look right.
-7. **Write the modal/modeless contract down** where a reader of the code meets it — the tier table
-   in [keyboard.md](../project/keyboard.md) gained Escape's order in stage 3 and this is its
-   sibling. Not a new rule: a statement of the one the code already follows, so the next surface has
-   something to be consistent with instead of a precedent to guess at.
+7. **Write the modal/modeless contract down** where a reader of the code meets it —
+   [keyboard.md § Tab, and the surfaces it walks through](../project/keyboard.md). Not a new rule: a
+   statement of the one the code already follows, so the next surface has something to be consistent
+   with instead of a precedent to guess at. It says what a modeless surface owes *in exchange for*
+   not trapping, which is the thing the three defects in this stage all failed to do, and it carries
+   the jsdom caveat so the next person does not write a trap test that asserts a fake.
+
+   **An earlier draft of this step said keyboard.md "gained Escape's order in stage 3". It did
+   not** — stage 3 put the tier order in the escape inventory and left the reader-facing doc alone,
+   and the sentence was written from memory rather than from the file. Found while checking that an
+   anchor this step wanted to link to existed; it did not either. Both corrected, and the section now
+   links to the escape inventory rather than to a heading nobody wrote.
 8. **A real-Chrome traversal check** for one native modal and one modeless surface, on the
    `mark-sign-in-chrome` pattern. Sol's F45 offered an alternative ending — declare it unreliable
    and record a manual pass instead — and **that escape hatch is closed, because the feasibility was
@@ -803,6 +842,34 @@ completing Stage 5 is not."* That is right, and it is the F13 move I would other
    `body` appears in a modal's tab ring, so the assertion must be *"nothing outside the dialog is
    ever reached"* rather than an exact sequence — an exact-sequence test would be brittle for a
    reason that has nothing to do with the behaviour.
+
+#### Stage 5a-follow-up — four things the review found that are not patches
+
+Kept out of 5a deliberately, because each wants a design rather than a line, and bolting them on
+would have been the move this plan has spent four rounds learning not to make. Ordered by what a
+reader loses.
+
+1. **One return target for `ChatDialog`, carried rather than sampled.** Two findings are the same
+   bug: the Comment → Chat handoff captures a control inside the dialog that is closing (Sol F64),
+   and the keyboard Help route opens a draft with no composer to focus (F65). Both come of asking
+   `document.activeElement` where the *caller* is the only thing that knows where the reader should
+   end up. The fix is an explicit target passed in — likely the paragraph's `.blk-more`, which is
+   what "ask and keep reading" means — and it wants building once for both routes.
+   **Neither is a regression**: before stage 5a this dialog restored nothing at all, so those routes
+   are exactly as they were and every other route is better.
+2. **Make the Chrome traversal test a behaviour test.** It currently walks the real components'
+   *markup* (`renderToStaticMarkup`), which proves the platform contract and would not notice a Tab
+   trap implemented in JS — an `onKeyDown` on `AnnotateDialog` would leave it green (Sol F63). It
+   needs the components mounted or hydrated in Chrome, which is a harness this repo does not yet
+   have. Shift-Tab goes in at the same time; it is cheap and currently untested.
+3. **Observe Floating UI's restore in Chrome**, which is what F46 actually asked for and what stage
+   5a did not deliver (Sol F66). The two cases differ and both matter: an outside press on blank
+   space returns focus to the trigger; an outside press that lands on another real control leaves it
+   there. Until then the inventory's entry for those two surfaces stays *conditional and unsettled*,
+   which is what it says.
+4. **Rename or recompute the probe's `vis` field** on the next `ViewportProbe` deployment, so a
+   future raw trace does not carry a knowingly misleading "on screen" (Sol F38's remainder). Not
+   urgent: the reader ignores `vis` and computes occlusion from the rectangles.
 
 #### Stage 5b — the hover cards, which need a decision first
 
@@ -1088,3 +1155,32 @@ and **the instrument that would read Greg's one measurement was not**, twice ove
 blocker-grade defects — a baseline from the future, a subset exiting 0 as clean, and "the viewport
 moved" standing in for "a keyboard opened" — would each have produced a confident, wrong instruction
 about what to build, from a trace that can only be taken once.
+
+### Stage 5a code, round 1 — GPT Sol, 2026-09-07
+
+Eight findings. **Five accepted and built, three accepted and recorded as stage 5a-follow-up** with
+the reasons below. Sol's verdict on the thing I most wanted checked — *"no 5b code has crept into 5a,
+and the checkbox remains visibly unticked"* — but **not** that 5a was complete.
+
+| ID | Finding | Disposition |
+| --- | --- | --- |
+| F59 | **StrictMode breaks the ordinary draft focus, and the fix introduced it.** `main.tsx` wraps the app in `<StrictMode>`, which runs every effect setup → cleanup → setup on mount — so the new restore cleanup fires while the dialog is still mounted, hands focus back to the Help button, and leaves a reader who has just opened a draft with **no caret in the composer** | **Accepted, built, and it is the most serious finding of the stage** because it is a regression I shipped rather than a gap I left. Confirmed by writing the test before the fix: it failed with focus on the Help button. The restore is now **deferred by one microtask and checks `isConnected`** — the only way to tell a real unmount from StrictMode's synthetic cycle, since React runs cleanups *before* detaching and the panel is still in the document either way. **The mutation then refused to redden**, which exposed that the new test was passing for the wrong reason: it asserted synchronously, before the microtask. With an `await` added it reddens correctly. Sixth instance on this plan of a test green for the wrong reason, and the first caught by a mutation that *failed* to fail. |
+| F60 | **`buttonRef` is optional, so deleting `buttonRef={how.buttonRef}` from the one production call site leaves every focus test green** — the test's own probe supplies it independently. Sol: *"the cleanest uncaught mutation"* | **Accepted and built.** It is required now. Both call sites already pass it, so it costs nothing, and **the compiler refuses the mutation outright** — verified: deleting the wiring produces 2 type errors where it previously produced none. A guard that cannot be forgotten beats a test that can. |
+| F61 | **`keyboard.md` quietly turns 5b's defect into the declared contract.** "modeless Tab walks straight through, on purpose", then "hover cards owe nothing" — which contradicts 5b's requirement that their controls become reachable | **Accepted, and it is the finding I am least comfortable with**: I wrote a rule that legitimises the exact defect I am asking Greg to decide about. Rewritten. Modal/modeless is still the first split, but **"not trapped" is now three contracts** — passive (owes nothing), interactive (owes *reachability*: Tab must arrive at its controls rather than sail past them), and focus-taking (owes reachability *and* giving focus back). The counts are stated honestly: twelve untrapped, ten with correct traversal, **two hover cards defective and awaiting a decision** — named as a defect rather than an illustration of the rule. Sol's [W3C focus-order](https://www.w3.org/WAI/WCAG21/Understanding/focus-order.html) citation is the authority for "untrapped is not the same as unreachable". The restore rule is also split, because Sol was right that one `body/null` test cannot be universal: a surface that unmounts itself must ask containment *before* React detaches; one reacting to a flag can ask the simpler question afterwards. |
+| F62 | **Recording the draft → thread caret loss instead of fixing it was the wrong decision**, not merely an under-argued one: if the outgoing composer held focus, moving focus to its semantic replacement *preserves* an interaction rather than applying the disputed "focus every reopened thread" policy | **Accepted, overruling my own call.** The distinction is exact and it is what I had missed — Greg's 2026-08-26 decision rules out focusing a thread's composer *on open*, and says nothing about a reader who is already typing in one. Built, conditional on the caret having been inside the panel at the swap. Two attempts: the first sampled `activeElement` on the previous *draft* render, where the answer is always false because the reader has not started typing yet. It reads on the **swapping render** now, the only moment the outgoing composer is both focused and still in the document. Both directions mutation-verified. |
+| F63 | The Chrome traversal test measures the static markup accurately but **is not a regression test for the components' behaviour** — `renderToStaticMarkup` strips handlers and runs no effects, so an `onKeyDown` Tab trap added to `AnnotateDialog` would leave it green. It also never presses Shift-Tab | **Accepted; recorded, not built.** Sol is right and my stated reasoning was wrong: "focus navigation is a property of the DOM" is true of the *platform's* behaviour and false as a regression guard, because a trap can be implemented in JS. What the test does prove is the platform contract over the real components' real markup, which is more than existed before. Making it a behaviour test means mounting or hydrating in Chrome — a harness this repo does not have — so it is stage 5a-follow-up rather than a patch. Shift-Tab is a cheap addition and goes with it. |
+| F64 | **The `ChatDialog` opener capture fails on the Comment → Chat handoff.** `onOpenThread` closes the comment and opens the chat in one interaction, so the render-time capture takes a control inside the *outgoing* `CommentDialog`; by the time Chat closes it is disconnected, and there is no row to fall back to | **Accepted; recorded, not built.** Verified at `reader/Reader.tsx § onOpenThread`. **It is an incomplete fix rather than a regression** — before this stage `ChatDialog` restored nothing at all, so this route is no worse than it was and every other route is better. The right fix is Sol's: carry an explicit logical return target through the handoff rather than sampling `activeElement`, which is an API change worth designing rather than bolting on. |
+| F65 | The **keyboard Help route** opens a draft whose composer does not exist yet, and because `openedAs === "draft"` the close-focus effect does nothing — so the reader sits on `<body>` while the panel is open | **Accepted; recorded, not built.** Same family as F64 and wants the same answer, so they should be built together rather than patched apart. Sol's suggestion — the paragraph's `.blk-more`, on the grounds that Help means "ask and keep reading" — is the likely destination and is written down. |
+| F66 | **F46 was not discharged**: the plan required *observing* Floating UI's two conditional restore cases in Chrome, and the new tests prove dismissal in jsdom without asserting `activeElement` at all | **Accepted; recorded, not built**, and the plan's claim that F46 was carried through is corrected. The tests that landed pin the observable dismissal, which was genuinely unpinned before; they do not pin restore. Until the two browser observations exist, the inventory's entry for those two surfaces stays *conditional and unsettled*, which is what it already says. |
+
+**Two of my decisions Sol checked and let stand**, both recorded because I would rather they were
+challenged than assumed: **not** building Annotate's focus restore — *"the Annotate decision is sound
+for the current code"*, with `selectionchange`, Select All and keyboard selection all confirmed not
+to reach `onSelect`, and one wording correction adopted (*"no current application route preserves an
+opener"* rather than "no reader can reach it"); and leaving Floating UI's double protection alone —
+*"library-internal redundancy; the application should pin the observable behaviour, not require
+either private mechanism individually."*
+
+**Sol could not run the two Chrome tests** — Chrome exited on a permissions error in its sandbox — so
+it explicitly declined to claim a green traversal run. They pass here, and the mutations were watched
+here.

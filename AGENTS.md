@@ -69,6 +69,7 @@ listed here; the names under each are files in `docs/project/`.
   <br>↳ `colour-scales.md` · `typography.md` (one sans, the weight axis, the vertical rhythm) ·
   `controls.md` (one height, one radius, and the preflight we do not import) ·
   `narrow-windows.md` (rows wrap, columns are given up in JS, and the notch) · `icons.md` ·
+  `design-logo.md` (the thirteen animations the wordmark plays when you point at it) ·
   `marketing-pages.md` (the signed-out pages, and how to shoot a screenshot that shows what it
   claims to)
 - **[security-map.md](docs/project/security-map.md)** — start here for security: the untrusted
@@ -91,6 +92,8 @@ listed here; the names under each are files in `docs/project/`.
   `feedback.md` (the Feedback button, and where a bug report goes) ·
   `feedback-reports.md` (and what an agent does with one afterwards) ·
   `hetzner-remote-server-box.md` (the always-on box, and `gjd-remote`) ·
+  `orchestrator-direction.md` (where the fleet dashboard is going, and what talking to a session
+  actually costs) ·
   `changelog.md` (turning deploys into the public `/changelog`) ·
   `worktrees.md` (one tree per agent, and how to start one) ·
   `cron-scheduler.md` (there is no scheduler, and what that keeps costing us)

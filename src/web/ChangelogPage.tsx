@@ -47,6 +47,7 @@ import {
   type Section,
 } from "../changelog.js";
 import { Link } from "./Link.js";
+import { CHANGELOG_LABEL } from "./router.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { SiteFooter } from "./SiteFooter.js";
 /* The 210 KB the header above is about. Only ever reached through this
@@ -308,8 +309,11 @@ export function ChangelogPage() {
         Back
       </Link>
 
+      {/* The same string the footer, the command bar and the tab title use —
+          router.ts § `CHANGELOG_LABEL`. A heading that had drifted from the
+          link a reader followed to reach it would read as the wrong page. */}
       <h1 className="tw:m-0 tw:font-prose tw:text-2xl tw:leading-snug tw:text-foreground">
-        What’s new
+        {CHANGELOG_LABEL}
       </h1>
       <p className="tw:mt-2 tw:mb-0 tw:text-sm tw:leading-relaxed tw:text-muted-foreground">
         Every update to Spideryarn since it launched, newest first — each dated entry below is one

@@ -508,10 +508,18 @@
   color: var(--ink);
 }
 
-/* The wordmark. Structure and class names are the original app's so its
-   CSS-only logo animations can be dropped in later as one file — see
-   docs/project/original-version/design-system.md, and the argument there for
-   not doing that. */
+/* The wordmark. Structure and class names are the original app's, and on
+   2026-09-07 that stopped being a bet and started paying: `.logo-letter` and
+   `.logo-image` are what styles/logo-animations.css keys its dozen hover
+   animations off, so the set arrived as one new sheet and two spread props
+   rather than as a change to the markup. docs/project/design-logo.md.
+
+   The original app's own version of this cost ~4,700 lines and is
+   docs/project/original-version/design-system.md's headline example of scope
+   creep on a cosmetic feature. Its advice was to hand-write exactly one
+   animation; Greg asked for the random set instead, so what we kept from the
+   warning is the *apparatus* being small — one stylesheet, one hook, no route
+   of its own. */
 .logo {
   display: inline-flex;
   align-items: center;
@@ -519,7 +527,29 @@
   color: var(--highlight);
   font-size: 0.82rem;
   letter-spacing: 0.02em;
+  /* **These two exist for the long press**, which is how a reader with no
+     pointer asks the wordmark for an animation (src/web/logo-animation.ts).
+     Holding a link on iOS otherwise raises the callout menu and the selection
+     lens after roughly half a second — both of them arriving on top of the very
+     gesture they would be interrupting. They are here rather than in
+     styles/logo-animations.css so that `.logo` is one block a reader can see
+     the whole of; the reason for them is in that file's header. */
+  -webkit-touch-callout: none;
+  user-select: none;
 }
+/* **`.logo-mark` is a wrapper around the image and nothing else**, and it is
+   here rather than in styles/logo-animations.css because it is part of the
+   wordmark's structure — HomeLogo.tsx, Dock.tsx § DockHome and DesignPage.tsx §
+   LogoGlyph all render it. It exists so that the two animations which draw
+   something *at* the spider have a box that is exactly the spider, in every
+   layout that can move it — including the grown, centred one a tablet gives the
+   dock's wordmark, where the anchor's padding is not where the image starts.
+   docs/project/design-logo.md § The traps.
+
+   `display: flex` so it hugs the block-level image with no inline leading, and
+   so it is a flex item of `.logo` in its own right — which is the whole point:
+   whatever moves the mark moves this with it. */
+.logo-mark { display: flex; }
 .logo-image { display: block; }
 
 /* The way home, fixed in the very top-left of the window — HomeLogo.tsx.

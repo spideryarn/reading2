@@ -145,20 +145,27 @@ That is every band mode; `plain` and `hierarchy` are the two that open no band.
 
 ### The command bar
 
-**⌘/Ctrl-K, or the ⌘ button in the bottom bar, and you type the name of a mode.** Enter opens it
-**exactly as pressing its Dock button does** — same activation, same generate-on-open, same cost. It
-is an *additional door*, never a replacement: the Dock keeps every button it has, and the bar lists
-exactly what the Dock lists, because the Dock hands it the list it just drew rather than computing a
-second one.
+**⌘/Ctrl-K, or the ⌘ button in the bottom bar, and you type the name of what you want.** Almost
+everything it offers is a mode, and Enter opens one **exactly as pressing its Dock button does** —
+same activation, same generate-on-open, same cost. It
+is an *additional door*, never a replacement: the Dock keeps every button it has, and the bar's
+**mode rows** are exactly what the Dock lists, because the Dock hands it the list it just drew rather
+than computing a second one.
 
 It has no doc of its own because there is very little to say that is not the four decisions Greg made
 before it was written ([260906h](../plans/260906h-mode-catalog-and-a-command-bar.md) § The four
-product calls). **It is modes only.** No passage jump, no generation rows, no chat, no model call —
-each of those needs a verb this bar does not have, and the plan names every one of them as deferred
-rather than forgotten. A query that matches nothing says `No command matches.` and nothing else: no
-search fallback, no "did you mean", an honest empty state preferred to a helpful guess.
+product calls). **It was modes only until 2026-09-07**, when Greg asked for `/changelog` to be
+reachable from it as well as from the footer — so there is now one row that is not a mode, drawn
+below all of them, and Enter on it goes to the page.
 
-Two pieces of it are worth knowing about:
+**Everything else that call refused is still refused**, and the reason is the reason it gave: a
+passage jump, a generation row, a chat, a model call each need **a verb this bar does not have**. A
+page needs none — *go there* is the verb every link in the app already has — which is why this was
+the one extension that cost no new concept. The plan names the others as deferred rather than
+forgotten. A query that matches nothing says `No command matches.` and nothing else: no search
+fallback, no "did you mean", an honest empty state preferred to a helpful guess.
+
+Three pieces of it are worth knowing about:
 
 - **The words it will accept** are the mode's name, its description, and its **aliases** — `toc` for
   Hierarchy, `define` and `terms` for Glossary — which live in
@@ -166,6 +173,12 @@ Two pieces of it are worth knowing about:
   Aliases are deliberately sparse: the cost of a loose one is not a missed match, it is the *wrong*
   mode ranked first for somebody who typed the right thing. The ranking is five named tiers in
   [`src/web/command-match.ts`](../../src/web/command-match.ts), and ties break in Dock order.
+- **The page row is ranked by the same five tiers**, over words it carries itself rather than out of
+  the catalog — `src/web/CommandBar.tsx` § `PAGES` is the whole list, and a second page is one entry
+  in it. It is deliberately *not* the footer's list (`src/web/SiteFooter.tsx` § `LINKS`): the footer is the
+  site's navigation, and Home, Pricing and Privacy are not things a reader mid-article reaches for a
+  keyboard to get to. Pages sit below modes on a tie because the caller hands the modes over first,
+  not because anything says "pages last".
 - **A row that would start work says so**, in one muted trailing word: `generates`. No figure and no
   readiness check — readers hold slots rather than paying per call, and a bar with a price on it
   would be *more* disclosed than the button beside it, which reverses a decision Greg made on

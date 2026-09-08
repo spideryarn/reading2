@@ -341,6 +341,116 @@ const EXPECTED: readonly Expected[] = [
      mistake this list's own header is about: it offers an operator a name they
      cannot use, one line above the key that really does matter. Whether the
      tiers are configured is a database question now, not an environment one. */
+
+  /* ---------------------------------------------------------------- *
+   * **The six below arrived together on 2026-09-07, from a sweep
+   * rather than from an incident.**
+   *
+   * A one-off sweep walked every `process.env` and `import.meta.env` read
+   * under `src/` and asked which were accounted for here. It resolved 50
+   * distinct names — including ones reached through a `const`, a record,
+   * a helper's call sites and an environment passed into a function — and
+   * **36 were in neither this table nor any deliberate exclusion**, which
+   * is the drift
+   * docs/postmortems/260827b-health-check-green-while-uploads-dead.md is
+   * about, measured rather than argued. Thirty were things a deployment
+   * has no opinion about (platform variables, Vite build constants,
+   * per-run model overrides); these six are the ones an operator staring
+   * at a deployment would want to see.
+   *
+   * **There is no test holding this line, and that is the state of it.**
+   * The check was built and twice refused in review — nine established
+   * ways for a read to be silently skipped rather than refused, which in
+   * a check whose whole job is not to fail open is disqualifying. So
+   * these six entries are the *findings* of a sweep, not the output of a
+   * gate, and the next name to arrive will drift exactly as the last one
+   * did. The design that would hold it, the cheaper alternative of making
+   * the reads literal instead, and the nine attacks any rebuild must go
+   * red on first, are in
+   * docs/plans/260907e-small-uncontested-postmortem-preventions-batch.md
+   * § Stage 4.
+   *
+   * **Every one is `breaks: null`, and that is a rule rather than a
+   * coincidence.** A `breaks` clause warns on a deployment that does not
+   * set the variable, and none of these six was added because somebody
+   * decided production requires it — they were added because a static
+   * check found them unaccounted for. Promoting one is a judgement about
+   * production and belongs to a person; `SPIDERYARN_OWNER_ID` below is
+   * the standing candidate.
+   * ---------------------------------------------------------------- */
+
+  /**
+   * **The postmortem's own named example — the drift it was written about.**
+   *
+   * `environmentOwnerId()` (src/owner.ts:271) *throws* without it when
+   * `NODE_ENV === "production"` or `VERCEL` is set — there is no development
+   * owner in production, and the alternative was an `auth.users` foreign key
+   * violation three layers away from the actual fault.
+   *
+   * So this is the one entry here with a real case for a `breaks` clause, and
+   * it does not have one yet on purpose: a sweep found it, and a sweep is not
+   * entitled to decide that a deployment must warn. Worth promoting — the
+   * consequence would be *"jobs written before articles carried an owner cannot
+   * be listed, and every request that stamps one throws"*.
+   */
+  { name: "SPIDERYARN_OWNER_ID", breaks: null },
+  /* **`SPIDERYARN_BASE_URL` was here for a few hours on 2026-09-07 and is
+     not, and the reason is worth more than the entry was.** It is where
+     Stripe returns a reader after Checkout, and the production table in
+     docs/project/deployment.md lists it under "**must stay unset here**, and
+     it is listed so nobody adds it" — production answers `PUBLIC_ORIGIN`
+     before it reads any variable (src/billing/checkout.ts:150), and a preview
+     falls back to `VERCEL_URL`. A line reporting a setting production is
+     documented as forbidden to have is not neutral: it is an invitation to
+     set it. It belongs to a developer's own machine, which is what it is.
+     GPT Sol, F14. */
+  /**
+   * **The client bundle's error reporting** (src/web/monitoring.ts:72), and
+   * the first thing in this table read through `import.meta.env` rather than
+   * `process.env`.
+   *
+   * Compiled in at build time exactly like the two `VITE_SUPABASE_` names
+   * above, with the same caveat: what this sees is the current project
+   * setting, not what the running bundle was built with. Unset,
+   * `initClientMonitoring()` returns without starting anything and nothing
+   * anywhere says so — the same silence as the server's `SENTRY_DSN`, on the
+   * half of the app the reader actually looks at.
+   */
+  { name: "VITE_SENTRY_DSN", breaks: null },
+  /**
+   * **What the client's Sentry events are labelled with**, falling back to
+   * `import.meta.env.MODE` (src/web/monitoring.ts:79).
+   *
+   * **It looks platform-set and is not**, which is the only reason it is worth
+   * a line. Vercel writes `VERCEL_ENV`; Vite exposes only names beginning
+   * `VITE_`, and nothing here bridges the two — so a person has to set this on
+   * the project or every client error from every deployment arrives labelled
+   * with the build mode instead. Nothing else in the repo mentions it: this
+   * entry is the only place it is written down.
+   */
+  { name: "VITE_VERCEL_ENV", breaks: null },
+  /**
+   * Error reporting (src/monitoring.ts:175). Unset, `initMonitoring()` returns
+   * without starting anything and nothing anywhere says so — the failure is
+   * silence, which is what makes it worth a line in a report.
+   */
+  { name: "SENTRY_DSN", breaks: null },
+  /**
+   * How many Postgres connections this process may hold (src/db/client.ts:97),
+   * defaulting to 5. Reported because the failure mode of a wrong value is not
+   * slowness here but *other instances* being refused a connection by the
+   * shared pooler, which surfaces somewhere unrelated and reads as a database
+   * fault.
+   */
+  { name: "DATABASE_POOL_MAX", breaks: null },
+  /**
+   * How many ingest jobs run at once (`CONCURRENCY_ENV`, src/jobs.ts:401),
+   * defaulting to 3. A value that is not a positive whole number is ignored
+   * rather than obeyed — `0` would stop every ingest in the account and read
+   * exactly like the queue being wedged — so what an operator needs from this
+   * line is whether anything is set at all.
+   */
+  { name: "SPIDERYARN_JOB_CONCURRENCY", breaks: null },
 ];
 
 /**

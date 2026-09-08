@@ -119,7 +119,9 @@ import {
   liveJobDraft,
   lockOrCreateArticle,
   logDraftFailure,
+  logNavLabelsFailed,
   logPublication,
+  markNavLabelsFailedIn,
   publishRevisionIn,
   openOrBeginJobDraft,
   type PublishRevisionResult,
@@ -166,6 +168,8 @@ const NOTHING_UNCONVERTED: ReadonlySet<StepName> = new Set<StepName>();
 interface Announcement {
   readonly published?: PublishRevisionResult;
   readonly failed?: { readonly revisionId: string; readonly reason: string; readonly changed: number | null };
+  /** The published revision whose `nav_label_status` this failure moved to `failed`. */
+  readonly navLabelsFailed?: string;
 }
 
 /**
@@ -493,7 +497,32 @@ export function pgStoreSession(options: PgStoreSessionOptions): StoreSession {
       }
       const reason = reasonFor(ending);
       const failed = await failRevisionIn(tx, { slug, revisionId: ref.revisionId, reason, job });
-      announce = { failed: { revisionId: ref.revisionId, reason, changed: failed.changed } };
+      /**
+       * **The one step whose failure a reader is still looking at.**
+       *
+       * Every other step's failure discards a draft nobody was served, and the
+       * article on the shelf is unchanged and honest. `labels` is not: since
+       * stage 2a the article publishes saying *"Paragraph labels are still
+       * arriving"*, and the job that was going to make that stop being true is
+       * this one. So the base revision has to learn that it lost —
+       * `markNavLabelsFailedIn` is where the rule about *which* revision, and
+       * about a newer one having overtaken it, is written down.
+       *
+       * **`unfinished`, not the job's step list**, and it is exactly the right
+       * signal: it is the step that opened a `revision_step_runs` row and never
+       * closed it, so a two-step job whose `hierarchy` failed before `labels`
+       * ever started does not reach this line. And **`error` only** — a reader
+       * who pressed Stop has not been told anything went wrong, and asking again
+       * is the remedy the pending sentence already implies.
+       */
+      const navLabelsFailed =
+        unfinished === "labels" && ending.status === "error"
+          ? await markNavLabelsFailedIn(tx, slug, ref.revisionId)
+          : null;
+      announce = {
+        failed: { revisionId: ref.revisionId, reason, changed: failed.changed },
+        ...(navLabelsFailed ? { navLabelsFailed } : {}),
+      };
     }
 
     const after = await finishIn(tx, transition.jobId, transition.attempt, ending);
@@ -536,6 +565,7 @@ export function pgStoreSession(options: PgStoreSessionOptions): StoreSession {
         { changed: what.failed.changed },
       );
     }
+    if (what.navLabelsFailed) logNavLabelsFailed(slug, what.navLabelsFailed);
   };
 
   /**

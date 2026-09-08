@@ -226,7 +226,24 @@ export const CORRUPTIONS: Corruption[] = [
     damageClass:
       "A heading stops being one — the label is still there, and nothing can " +
       "tell it apart from the body any more",
-    observedOn: "archwiki_install (12 admonition labels in `<strong>` before a sibling `<ul>`)",
+    /* **This citation was wrong twice over and is now a page that actually has
+       the damage.** It read `archwiki_install (12 admonition labels …)`, and GPT
+       Sol was right that ArchWiki is the wrong page for this corruption: those
+       labels are `<strong>`s that were never headings, so nothing about them is
+       an `<h3>` being demoted. The count was wrong as well — 13 boxes, of which
+       4 have the detached shape, not 12. Both measured 2026-09-07.
+
+       `acx` is the page that loses real headings: 139 at `h2`-`h6` in the source
+       and 19 in the output, all `h5`, with 80 `h4`s gone
+       (docs/project/content-extraction.md). One domain on both sides — counting
+       `h1` it is 141 in and 20 out, and mixing the two is Sol's P1-04.
+       That is this damage class happening for real rather than a synthetic
+       imitation of it, which is what `observedOn` is for. The ArchWiki
+       label-detachment shape is real too and wants **its own corruption** —
+       detach a publisher-marked label from its body — which nobody has written. */
+    observedOn:
+      "acx (139 headings at h2-h6 in the source, 19 in the output, all h5 — 80 h4s simply gone; " +
+      "counting h1 as well it is 141 in and 20 out, and the two domains must not be mixed)",
     noticedBy: ["structureFidelity"],
     apply: onDom((doc) => {
       for (const h of Array.from(doc.querySelectorAll("h3"))) {
