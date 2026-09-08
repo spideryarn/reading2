@@ -224,7 +224,7 @@ way it worked this morning, and nothing half-built is load-bearing.
 |---|---|
 | **1** — the runbook and the gates | **done**, `dev`. `docs/project/overseer.md`, four gates, `/overseer` skill. |
 | **2** — the scheduler and the watchdog | **done**, `dev`, after two GPT Sol rounds. **Armed by `OVERSEER_JOBS_ENABLED` and OFF.** |
-| **3** — the three deterministic rules | **designed, 2026-09-08 evening**, and split 3a/3b/3c. Fable arbitrated how much each may act; the survey found the seam already exists and that `resource-broadcast` cannot reach the sessions causing the load. |
+| **3** — the three deterministic rules | **designed and reviewed, 2026-09-08 evening**, split 3a–3d. Fable arbitrated how much each rule may act; Sol blocked the first draft with four P0s, all accepted. The acting rule is now last, behind two named preconditions. |
 | **4** — the deferral queue | **not started.** |
 | **5** — reboot revival | **not started.** Needs a new verb: `gjd-remote resume` is `attach`. |
 | **6** — CLI ergonomics, and the rename | **the rename is done**; the CLI is not started. |
@@ -482,20 +482,119 @@ because the damage is done in one process and discovered in another.
 So the acceptance test for the new arm is **round-trip, not append**: write one, read it back through
 `parseEvent`, and assert on what comes out. An append that returns `ok` proves nothing here.
 
-#### Build order, revised
+#### The plan review, and what it changed — GPT Sol, 2026-09-08
 
-Three sub-stages, each committable, ordered by how much live evidence each can be tested against
-rather than by the order the rules were listed in:
+Sol reviewed `848938a7` before anything was built and **blocked the stage as written**, with four
+P0s. It is right about all of them and none is overruled. The full review is in
+[260908g-stage3-plan-review-sol.md](260908g-stage3-plan-review-sol.md). The four that block:
 
-- **3a — the in-process rule seam, and rule 2.** The seam plus the one rule with a specimen standing
-  in front of it. Done when the rule has fired against pid 2282035 and the event says
-  `proposed: kill, rule cwd-deleted, needs confirm`.
-- **3b — rule 3, and the wake-check.** The largest, and the only one that acts. The wake-check is
-  the half Greg named and the half that gets dropped: **nothing on this box today checks that a
-  paused agent woke up.** `pause.ts` reads the *intended* wake-up out of a transcript and never asks
-  whether it happened.
-- **3c — rule 1.** Last, because it is now a regression alarm rather than a live cost rather than
-  because it is hard.
+- **SP-1 — the rule implementation is outside the authorisation fingerprint.** `definitionHash`
+  covers `id`, `everyMs`, `leaseMs` and `what`. A dispatcher that selects executable code by
+  `definition.id` means **changing a threshold or an action leaves the pin valid**, so rule 3 could
+  go on acting after its behaviour changed. That is precisely the hole gate 3's *"never act on a job
+  definition that changed after it was authorised"* exists to close, and the code version of it is
+  worse than the document version it was written for. The fix needs no new machinery: thresholds and
+  the chosen action become **data in the hashed definition**, and the rule's source file goes into
+  `documents`, which is already a list of `{path, sha256}` for exactly this purpose.
+- **SP-2 — the seam cannot record the event, and logging after the action is not fail-closed.**
+  Verified: the store is opened privately inside `runOverseer` (`daemon.ts:424`) under an exclusive
+  lock, so a dispatcher cannot open a second one. And `SpawnJob` returns a `JobOutcome` that is an
+  exit code or a reason — there is nowhere for a rich finding to go. The deeper half is the
+  ordering: **gate 1 wants the decision recorded before the action, not after.** A broadcast followed
+  by a failed append is an action nobody can review. The fix is the pattern Stage 2 already
+  established for occurrences — append and fsync the intent, act only if that succeeded, then append
+  the outcome — so it is the same machinery generalised rather than new machinery. **But my claim
+  that Stage 3 adds no scheduler machinery is false, and Sol says so plainly.**
+- **SP-3 — a `RuleEvent` does not reach the surface gate 1 requires.** This is the one that
+  embarrasses the argument above it. I chose `events.jsonl` over `daemon.jsonl` on the ground that
+  gate 1 needs reviewability and events are in the panel. **They are not.** Verified:
+  `tools/fleet/attention.ts` parses *only* `schema`, `writtenAt` and `attention` out of
+  `current.json` and explicitly ignores the rest; `events.jsonl` is not on the wire at all, and the
+  Overseer panel says the decision log is later. The only reader of event history is the CLI. So the
+  distinction I drew between the two logs was **false in the direction that flattered my choice** —
+  and it is the fifth claim of mine today that was about a domain and checked against a subset of it.
+- **SP-4 — the acceptance test cannot be run without arming the paid jobs.** There is one global
+  `OVERSEER_JOBS_ENABLED`, and arming it supplies the two standing jobs as well as any rule
+  definitions. Both standing jobs have never run and are immediately due — my own status paragraph
+  says they fire about thirty seconds later. So *"watch each rule fire for real"* would start paid
+  model sessions under a gate 4 this plan admits is unbuilt. **A deterministic-only arming path is
+  needed**, and it is worth having anyway: being able to run one job is a thing you want at three in
+  the morning.
+
+Two of the P1s change what gets built, rather than how:
+
+- **SP-7 — rule 3 has not been granted the confirmation its route demands.** `resource-broadcast`
+  carries `needsConfirm: true`, and the route checks `confirm` *before* it checks
+  `FLEET_ACT_ENABLED`. So *"the only thing between a proposal and an action is a switch Greg owns"*
+  is wrong: the rule would also have to assert `confirm: true`, and **an unattended process
+  asserting a human-facing confirmation is the authority grant itself.** This converges exactly with
+  the one question Fable said to put to Greg, and sharpens it from a policy question into a
+  mechanical one.
+- **SP-8 — the broadcast text is false for the triggers proposed.** The fixed text asserts that load
+  and memory are both high and that processes are being OOM-killed. Rule 3 might fire because usage
+  is near a quota, or because of disk alone. **Telling fifteen agents a thing that is not true is a
+  worse failure than not telling them**, and it is not fixed by tuning a threshold. Separate
+  messages per predicate, and a trigger table that says which levels combine with OR and which with
+  AND.
+
+The remaining P1s are folded in where they belong: **SP-5** (a persisted `approaching` verdict can
+age into staleness, so recompute at execution and never branch on the stored level), **SP-6** (a
+durable `WakeExpectation` rather than a 10-minute in-memory cooldown against 5–60 minute pauses),
+**SP-9** (merged with the six-place count above; Sol adds that `parseEvent` casts to
+`SessionEvent["kind"]`, which is why the omission is not compiler-enforced), **SP-10** (a required
+new `ObservedRow` field would turn historical log lines into replay holes and could put the ledger
+into `history-lost`, **holding every job** — a consequence I had not seen, and it turns my decision
+not to thread `observation.ts` from a preference into a requirement), and **SP-11**, below.
+
+#### The reframe: what four P0s actually cost, which is less than it looks
+
+Taken literally the review turns a quick payback stage into a large one. It does not, and the reason
+is a coincidence between two findings.
+
+**SP-7 forces rule 3 to be dry-run-only in v1 regardless** — asserting `confirm: true` unattended is
+a grant only Greg can make. And **SP-3's review surface is only required before a rule acts.** Gate 1
+governs decisions taken on Greg's behalf; a rule that computes a plan, takes no action and records to
+a log the CLI can read has not yet decided anything on his behalf.
+
+So the two findings cancel: v1 does not act, therefore v1 does not need the web surface, therefore
+the largest P0 is **deferred behind a named condition rather than dropped**. It becomes a
+precondition on rule 3 ever acting, which is a stronger statement than a to-do, because the thing it
+gates cannot happen without Greg anyway.
+
+#### Build order, revised twice
+
+- **3a — the rule protocol, with rule 2 as its first consumer.** Sol's recommended order and it is
+  right: the authorisation that covers the implementation (SP-1), the two-phase
+  append-fsync-act-append runner with the store passed in (SP-2), the deterministic-only arming path
+  (SP-4), and the `RuleEvent` arm with a **round-trip** test (SP-9). Rule 2 rides on it, proposing
+  and never killing. Done when the rule has fired against pid 2282035 and the event round-trips out
+  of the store saying `proposed: kill, rule cwd-deleted, needs confirm`.
+- **3b — rule 1.** Small, observe-only, reading the raw payload rather than widening `ObservedRow`.
+- **3c — the review surface.** A bounded rule-event projection into `current.json`, the independent
+  fleet-side parser, the wire type, and the Overseer panel. **This is the gate on 3d, not a
+  nice-to-have.**
+- **3d — rule 3, acting.** Gated on 3c *and* on Greg's answer about unattended confirmation. Carries
+  SP-5's recomputed verdict, SP-6's durable `WakeExpectation`, and SP-8's trigger table and honest
+  per-predicate messages. It is the whole broadcast-and-wake lifecycle or it is nothing: Sol is right
+  that abandoning 3d half-built, with automatic broadcasting and no wake accounting, is worse than
+  not starting it.
+
+**What this ordering buys** is that the acting rule is last and behind two named preconditions rather
+than behind a flag — which is what the gates were asking for all along, and which the original
+ordering would have reached only by accident.
+
+#### SP-11, and a number I sent to somebody else
+
+Sol is right that *"3 of 15"* mixes eight agent sessions with seven shells, and that `working`
+describes a Claude pane's state rather than proving those sessions were consuming the machine. The
+honest statement is **"3 of 8 agent sessions were deliverable; 5 were held because working; 7 shells
+were never eligible"**, and attributing load to sessions needs `health.ts`'s attribution evidence
+rather than a status word.
+
+This one matters more than a P2 usually would, because **I had already sent the weaker number to the
+fleet dashboard's owner**, who is deciding on that evidence whether to cross a deliberate refusal in
+their own code. The sampler now records categorical counts, and they have been told which number
+changed and why.
 
 #### The Overseer sees less of the fleet than the fleet sends, and the rules should not fix that by widening the differ
 
