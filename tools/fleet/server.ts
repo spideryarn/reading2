@@ -38,6 +38,7 @@ import { collectHealth, type HealthReport } from "./health.js";
 import { applySecurityHeaders } from "./headers.js";
 import { broadcast, startHeartbeat, subscribe, subscriberCount } from "./live.js";
 import { newSessionRoutes } from "./routes-new.js";
+import { renameRoute } from "./routes-rename.js";
 import { handleSteerRequest } from "./routes-steer.js";
 import { fleetState } from "./state.js";
 import { readRecentMessages } from "./transcript.js";
@@ -284,6 +285,12 @@ function handler(req: import("node:http").IncomingMessage, res: import("node:htt
   // must not acquire opinions about steering that the tested modules do not
   // have, or there will be two places to read and they will diverge.
   if (handleSteerRequest(req, res)) return;
+
+  // Renaming a session. A write, but a mild one — it changes a label, not a
+  // conversation — and it is the one action here whose *second half* is the
+  // part that matters: clearing `GJD_PROVISIONAL`, without which `gjd-remote
+  // ls` renames the session straight back to Claude's own title.
+  if (renameRoute().handle(req, res)) return;
 
   // Starting a session, which is the other write. `startsWith` mounts it, but
   // the route 404s any path that is not exactly this one, so the prefix cannot
