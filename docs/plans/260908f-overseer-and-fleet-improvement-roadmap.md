@@ -371,7 +371,7 @@ read-only status wait for them. This is local request binding, not a durable wor
 - [ ] Change response/UI outcomes into operation-specific variants: steering has refused-before-effect, keys-submitted, partial and
   outcome-unknown; process actions distinguish command-exited from effect-observed, plus partial
   and unknown; broadcasts aggregate those per recipient. Do not reintroduce a generic submitted/Done
-  arm that conflates transport with process outcome. Preserve route `delivery` details. Inspect `PlanRun.completed` and actual step results: `killRoute` currently labels intended PIDs as killed even when the run is incomplete. Report attempted versus observed effects explicitly. Never show `Nothing happened` for a
+  arm that conflates transport with process outcome. Preserve route `delivery` details. Inspect `PlanRun.completed` and actual step results: `killRoute` currently labels intended PIDs as killed even when the run is incomplete. *(Corrected 2026-09-08 by the dashboard agent building this stage: `run.completed` is always true on that route, because `planKillProcesses` makes every step best-effort and `judgeStep` never maps best-effort to failed. The real defect was one level down — the intent list was reported while the per-step evidence sat discarded in the same response. Fixed in 854fac4b; do not look for a `completed:false` path.)* Report attempted versus observed effects explicitly. Never show `Nothing happened` for a
   network error or unreadable response. Show per-recipient counts for broadcasts.
 - [ ] Quarantine a queue target after partial/unknown delivery; later items cannot drain into an
   uncertain input buffer. Preserve target generation and the uncertain item for inspection. Manual
