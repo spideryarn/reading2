@@ -200,7 +200,19 @@ export function describeList(list: AttentionList): readonly string[] {
     // an empty inbox alone reads as one whether or not anything looked.
     return [`nothing needs you, out of ${list.sessionsScanned} sessions scanned at ${list.scannedAt}`];
   }
-  const lines = [`${list.items.length} thing(s) need you, out of ${list.sessionsScanned} sessions scanned:`];
+  // AT LEAST N, the same as `overseer status` says. An empty list cannot reach
+  // here with anything unjudged — `buildAttentionList` returns `unknown` for that
+  // — so the only incomplete case left is a list that found something, and the
+  // honest form of it is a floor rather than a figure. Two surfaces reading one
+  // field must not phrase it two ways: the one that sounds more certain is the
+  // one a person will quote.
+  const lines =
+    list.sessionsUnreadable === 0
+      ? [`${list.items.length} thing(s) need you, out of ${list.sessionsScanned} sessions scanned:`]
+      : [
+          `AT LEAST ${list.items.length} thing(s) need you, out of ${list.sessionsScanned} sessions scanned ` +
+            `(${list.sessionsUnreadable} could not be judged at all, so there may be more):`,
+        ];
   for (const item of list.items) {
     const age = describeWait(item.waitingSince, list.scannedAt);
     const phone =
