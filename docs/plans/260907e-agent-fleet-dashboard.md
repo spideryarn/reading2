@@ -1,9 +1,13 @@
 # Agent fleet dashboard
 
-**Status as of 2026-09-07: designed, nothing built.** No code, no domain bought, no `cloudflared`
-installed — evidence: `ls tools/` returns nothing, `which cloudflared` is empty. The three
-mechanism tests in [Evidence](#evidence-what-was-actually-tested) were run and passed; everything
-else here is a proposal.
+**Status as of 2026-09-08: re-sliced, nothing built.** No code, no Tailscale on the box — evidence:
+`ls tools/` returns nothing and `which tailscale` is empty. One claim in an earlier version of this
+plan was **retracted**; see [Evidence](#evidence-what-was-actually-tested), which now records what
+failed as well as what worked.
+
+The standing direction is [orchestrator-direction.md](../project/orchestrator-direction.md); this
+plan is one implementation of it. **Read that first** — it holds the constraints, and it outlives
+this file.
 
 ## Goal
 
@@ -33,14 +37,15 @@ box — across harnesses and across repos — and letting him send a message to 
 >
 > — Greg, 2026-09-07
 
-Scope chosen by Greg on 2026-09-07, from three options offered: **dashboard + nudge** — see the
-fleet, message one agent, get pushed at when one is blocked. Explicitly *not* orchestration (a
-coordinator directing worker agents); see [Alternatives](#alternatives-considered-and-rejected).
+**The scope moved on 2026-09-08, and this section is the record of it.** On 2026-09-07 Greg chose
+"dashboard + nudge" over orchestration. On 2026-09-08, asked who "the orchestrator" is, he chose
+**a coordinator agent** rather than himself with a mouse. So orchestration is back on the horizon —
+but as a destination, not as work to start. What it changes today is only this: every steering action
+is a typed function before it is a button, so a program can drive it later.
 
-Greg then added **recurring nudges** ("every 3h, do X") — Stage F. That is a message on a timer down
-the same path, so it stays inside the chosen scope; it does *not* reopen orchestration. But it is the
-first thing here that acts without a human present, and Stage F says why the target, not the timer,
-is the hard part.
+He also asked for the work to be cut into **many very thin stages**, and for v0.1 to be a read-only
+list of session titles, after which I stop. Recurring nudges are deferred (the built-in `/loop`
+covers reminders for now), and so is the decision log.
 
 ## Context
 
@@ -82,10 +87,14 @@ to "prefer boring". The CLI half reuses the colour and column helpers already in
 Sonnet's library research recommended Express 5 on pretraining-data grounds and named `node:http` as
 legitimate at this size; we are taking the smaller option.
 
-**`claude agents --json` is the data source, not `gjd-remote ls`.** It returns all 18–20 sessions in
-**~1 second**, spans repos, and is first-party. `gjd-remote ls` takes 10–12s because it greps whole
-multi-MB transcripts for `aiTitle`. We steal only the title trick from it, and read the tail of the
-transcript rather than the whole file.
+**~~`claude agents --json` is the data source.~~ CORRECTED 2026-09-08.** It is fast (~1s, cross-repo)
+but **incomplete**, and the repo already knew: `sessionState` in
+[`scripts/gjd-remote-tmux.ts`](../../scripts/gjd-remote-tmux.ts) says *"being absent from it does not
+mean not running"*, measured twice on 2026-09-01 when a live session went unlisted for 35+ seconds.
+So the data source is that file's **two-source join** — the agents list for busy/idle/blocked, the
+process table for what is actually running — which exists, is tested, and must not be reimplemented.
+What we do take from the speed finding: `gjd-remote ls` costs 10–12s only because it greps whole
+multi-MB transcripts for `aiTitle`, so read the tail instead.
 
 **One adapter per harness, one common record.** This is what makes it not-Claude-specific, and it is
 the seam every other decision hangs off:
@@ -111,25 +120,26 @@ dies and another takes it. `gjd-remote` learned this the hard way (see the `Sess
 so did the reference system ("two windows sent gate requests to a stale name for an hour"). Two
 independent systems converging is the strongest evidence available.
 
-**Use the supported message channel where one exists; degrade loudly where it does not.** Claude Code
-publishes an inbox socket protocol. Tested and working (below). Codex and shells get `tmux send-keys`,
-and the record says `degraded: true` so the UI can show it differently. The reference system types at
-*everything*, and pays for it — its own description mentions handling "the second-Enter quirk and
-Codex's type-ahead queue".
+**~~Use the supported inbox socket.~~ RETRACTED 2026-09-08 — `tmux send-keys` is the only proven
+channel.** The socket claim was false (see Evidence). What actually works is a keystroke to a pane,
+demonstrated by answering a real trust dialog with `Down` then `Enter`. That inverts the earlier
+preference and vindicates the reference system's choice — but only for a **narrow** case: a digit or
+an arrow at a dialog we can see. And it is not universal: Codex batch jobs spawn with
+`fd 0 = 'ignore'` and cannot receive keystrokes at all, while a bare shell would *execute* the text.
+Those must be shown as read-only, not as a degraded channel.
 
-**Access: Cloudflare Tunnel + Access on a throwaway domain.** Greg would rather not run a VPN client,
-which rules out the reference system's "the tailnet is the password". Same essential property —
-the server binds loopback, nothing is ever public, identity is established outside our code.
+**Access: Tailscale, for now** (Greg, 2026-09-08). Reachability is the access control — the server
+binds the tailnet interface and there is no public listener and no auth code. Chosen as scaffolding
+to get something onto a phone quickly, over Cloudflare Access, which needs a throwaway domain and
+several of Greg's clicks. **No inbound firewall change either way**; `infra/hetzner/main.tf` stays as
+it is, and its "no inbound rule for the web server on purpose" comment stays true.
 
-**Verify the Access JWT. Never trust the email header alone.** This is the one *new* failure mode we
-take on relative to the reference design, and it must be in from the first commit. A tailnet IP is
-unforgeable at the network layer; an HTTP header is not. If the origin were ever reachable directly,
-a forged `Cf-Access-Authenticated-User-Email` would be a complete bypass of a dashboard that can run
-code. So: bind `127.0.0.1` only, and verify `Cf-Access-Jwt-Assertion` against Cloudflare's public
-keys on every request, including the JSON ones.
-
-**No inbound firewall change.** `cloudflared` is outbound-only. `infra/hetzner/main.tf` stays as it is,
-and its "no inbound rule for the web server on purpose" comment stays true.
+**If it ever moves to Cloudflare Access, one thing must be designed in rather than discovered:** a
+tailnet IP is unforgeable at the network layer and an HTTP identity header is not. Verify the
+`Cf-Access-Jwt-Assertion` JWT — issuer, this app's `aud`, algorithm, expiry, clock skew, fail closed
+when JWKS is unreachable — and never trust `Cf-Access-Authenticated-User-Email` alone. Add CSRF on
+mutations: an Access cookie proves whose browser it is, not that a human pressed Send. Kept here
+because it is the migration's whole risk, and it is cheap to remember and expensive to retrofit.
 
 **Deploy from git, and put the commit SHA on the page.** The reference system's own handover notes
 that its served board has drifted from its repo. A `/api/version` endpoint and a one-command deploy
@@ -150,124 +160,77 @@ cost nothing and make that class of bug impossible to miss.
 
 ## Stages
 
-Ordered so the value lands early: after Stage B there is a useful page, and everything after that
-is improvement.
+**Re-sliced on 2026-09-08 at Greg's request** — "let's use engineering-manager to slice this into
+many many very thin stages that we can iterate through quickly. But get to the v0.1 first and stop."
+The direction these serve is [orchestrator-direction.md](../project/orchestrator-direction.md).
 
-### Stage A: the collector, and its tests
+Each slice must be **visible in a browser** and must **not need the next one to be worth having**.
+The earlier A–G staging is superseded; what it got right survives in the direction doc.
 
-- [ ] Pull latest `origin/dev` first. Work in a worktree, not the primary checkout.
-- [ ] Write tests first, against captured fixtures, before any collector code:
-  - [ ] `claude agents --json` output parses into `AgentSession[]` — including the `waiting` +
-        `waitingFor: "input needed"` case, which is what "needs you" means.
-  - [ ] A cwd inside `.claude/worktrees/<name>` resolves to the right repo *and* worktree.
-  - [ ] A malformed/truncated JSON line fails the whole listing rather than silently returning a
-        short list — the rule `gjd-remote`'s `parseSessions` already holds, and for the same reason:
-        a caller handed a partial list reasons from its absences.
-  - [ ] A session with no `aiTitle` yet renders as a title-less row, not a crash.
-- [ ] Build the Claude adapter: `claude agents --json` + `aiTitle` from the **tail** of the
-      transcript, not a whole-file grep.
-- [ ] Build the shell/Codex adapter from tmux state only.
-- [ ] `npm test` and `npm run typecheck` green.
+### Stage v0.1: a page listing session titles — READ ONLY, then stop
 
-### Stage B: the page and the CLI, on loopback only
+The whole of it. No status, no colours, no actions, no CLI, no auth code.
 
-- [ ] `node:http` server binding `127.0.0.1`. Routes: `/` (HTML), `/api/agents`, `/api/version`.
-- [ ] One HTML page, polling `/api/agents`. Phone-shaped first — this is the primary target, not an
-      afterthought. Counts at the top ("2 need you · 7 idle · 9 working"), rows below, sorted so
-      blocked agents are at the top.
-- [ ] The CLI: same collector, table to stdout, plus `--json`. Reuse `gjd-remote`'s colour helpers.
-- [ ] Verify over an SSH tunnel from Greg's Mac before anything is exposed. **Stop and review with
-      Greg here** — this is the last cheap moment to change the design.
-- [ ] `npm test`, `npm run typecheck`, `npm run lint` on touched files.
-- [ ] Commit. GPT Sol review of the code, per AGENTS.md.
+- [ ] Pull latest `origin/dev`. Work in a worktree.
+- [ ] `tools/fleet/collect.ts` — return `{ title, repo, worktree, startedAt }` per session. Reuse
+      `buildSessionScript()` / `parseSessions()` from
+      [`scripts/gjd-remote-tmux.ts`](../../scripts/gjd-remote-tmux.ts) rather than writing a second
+      inventory; read the transcript **tail** for `aiTitle` instead of grepping whole files.
+- [ ] One test, against a captured fixture: a well-formed listing parses, and a malformed one throws
+      rather than returning a short list.
+- [ ] `tools/fleet/server.ts` — `node:http`, binds `127.0.0.1`, two routes: `/` and `/api/agents`.
+      Escape every field on the way into HTML; titles are agent-authored text.
+- [ ] Tailscale: install on the box, `tailscale up` (needs Greg's browser click once), bind the
+      server to the tailnet address, `tailscale serve`. **Greg installs the phone app.**
+- [ ] Look at it on the phone. **Stop here.** Do not start v0.2 without Greg.
+- [ ] `npm test`, `npm run typecheck`. Commit.
 
-### Stage C: the message channel
+### Stage v0.2: send a steering message to one session
 
-- [ ] **Risk-first spike, before anything else in this stage**: a `SessionStart` hook writes
-      `{sessionId, socketPath, token}` to a 0600 file; a separate process reads it and delivers a
-      message to a *different* session. The single-session half is already proven (see Evidence);
-      what is unproven is that the hook sees the same values and that a third party can use them.
-      **If this fails, stop and tell Greg** — the fallback is `tmux send-keys` for everything, which
-      is what the reference system does, and that is a materially worse product.
-- [ ] The hook goes in `~/.claude/settings.json`, not the repo's, so it covers `hellozenno` and any
-      other checkout. That is a machine-level change — per AGENTS.md, ask Greg whether to make it
-      now, going forwards, or both, and get it into whatever file builds the next box.
-- [ ] Tests: a message to an unknown key is rejected; a stale registry entry (session died, pid
-      reused) is detected and refused rather than delivered to the wrong session.
-- [ ] `POST /api/agents/:key/message`, JWT-verified, rate-limited, and logged through `src/log.ts` —
-      never the message text, per logging.md.
-- [ ] Codex/shell fallback via `tmux send-keys`, surfaced in the UI as degraded.
-- [ ] `npm test`, `npm run typecheck`. Commit. GPT Sol review.
+- [ ] A text box per row, and `POST /api/agents/:key/steer`.
+- [ ] Delivery by `tmux send-keys` to the pane — the only channel proven to work. Type the text,
+      then Enter as a separate call.
+- [ ] **Refuse to send to anything that is not a Claude session at a prompt.** Codex batch jobs have
+      `fd 0 = 'ignore'` and cannot receive keystrokes at all; a bare shell would execute the text as
+      a command. Both must be visibly read-only, not silently degraded.
+- [ ] Address by pane handle **plus execution generation**, and re-check both immediately before
+      sending — a pane outlives its agent and pids get reused.
+- [ ] CSRF: same-origin check on the POST, JSON only, GETs side-effect-free.
 
-### Stage D: exposure
+### Stage v0.3: status
 
-- [ ] **Greg's actions**, and only these three: buy a throwaway domain at Cloudflare Registrar
-      (~$10/yr `.com`; *not* `spideryarn.com` — its nameservers stay at Namecheap); click authorize
-      once for `cloudflared login`; pick the SSO provider in the Zero Trust dashboard.
-- [ ] Everything else scripted: install `cloudflared`, create the named tunnel, write
-      `/etc/cloudflared/config.yml` pointing at `127.0.0.1:<port>`, install and enable the systemd
-      service.
-- [ ] Access policy: Greg's identity only. Session duration set to the one-month maximum so the
-      phone does not re-auth constantly.
-- [ ] JWT verification against Cloudflare's JWKS, with a test that a **request carrying a forged
-      email header and no valid JWT is refused**. This test must be seen to fail against a
-      header-trusting implementation before it is allowed to pass — a check never seen red proves
-      nothing ([silent-success.md](../reusable/silent-success.md)).
-- [ ] Confirm from the phone, on cellular with wifi off.
-- [ ] Separately, and not blocking: turn on `ufw` as defence in depth. The Hetzner cloud firewall is
-      the real gate, but the reference box runs both.
+- [ ] working / idle / blocked, from the two-source join in `sessionState` — never from
+      `claude agents --json` alone, which is incomplete by measurement.
+- [ ] Sort blocked to the top, and show the count.
 
-### Stage E: the nudge
+### Stage v0.4: what it is blocked on
 
-- [ ] A timer that diffs the "needs you" set and pushes one line per newly-blocked agent.
-- [ ] Check first whether Claude Code's own `agentPushNotifEnabled` already covers this well enough
-      for Claude sessions — if it does, this stage is only for Codex and shells, and shrinks a lot.
+- [ ] Scrape the pending question and its numbered options from the pane.
+- [ ] Tap an option → send that digit. The narrow, safe case, and the one that pays for the phone.
 
-### Stage F: scheduled nudges
+### Stage v0.5: the steering vocabulary
 
-Added at Greg's request, 2026-09-07:
+- [ ] The recurring ones as buttons rather than free text: keep going, pull latest, sleep N,
+      the box is short of resources, remove the worktree.
+- [ ] Anything with an effect outside the conversation — removing a worktree — is an action the
+      tool takes via `gjd-remote`, not a sentence an agent is asked to obey.
 
-> One other thing. We'll want a way to give the orchestrator a nudge on a regular schedule (e.g.
-> every 3h, do X).
->
-> — Greg, 2026-09-07
+### Stage v0.6: create and kill agents
 
-Depends on Stage C — a scheduled nudge is just a message on a timer, down the same path, so it
-should add almost no new mechanism.
+- [ ] Wrap `gjd-remote new-claude` and `gjd-remote kill`. Do not grow a second way to do either.
+- [ ] Killing needs a confirm step; it is the one irreversible action here.
 
-- [ ] A schedule is a small record: target agent key, cron-ish interval, message text, enabled flag,
-      `lastFiredAt`. Stored as a file next to the token registry, not in Postgres — this daemon must
-      not depend on the Spideryarn database.
-- [ ] Fire through the **same** `POST /api/agents/:key/message` code path as a manual nudge, so
-      there is one delivery mechanism and one set of failure modes, not two.
-- [ ] **The hard part is the target, not the timer.** An agent key is machine-scoped and a session
-      dies; a schedule pointing at a dead session must not deliver to whatever took its pid or pane.
-      Decide explicitly what a schedule targets: a *session* (and goes dormant when it dies), or a
-      *worktree/repo* (and finds the current session there, or starts one). Ask Greg — these are
-      materially different products and the second is much larger.
-- [ ] Show the schedules on the page, with when each last fired and what happened. A schedule you
-      cannot see is the failure mode below.
-- [ ] Tests: a schedule whose target is gone is skipped and marked, not delivered elsewhere; a
-      daemon restart does not re-fire something that already fired; two overlapping ticks deliver once.
-- [ ] `npm test`, `npm run typecheck`. Commit. Cross-family review.
+### Stage v0.7+: the decision log
 
-**A note on what this quietly becomes.** [cron-scheduler.md](../project/cron-scheduler.md) opens
-with "**There is no scheduler.** Nothing in this app runs on a clock", and documents two sweepers
-written against a runner that does not exist — correct code with no caller, which the next reader
-believes is running. This daemon would be the first always-on scheduled runner on the box, and the
-temptation to hang `sweepAbandonedDrafts` and friends off it will be immediate. **Resist it in this
-project.** This scheduler nudges agents; it is not a general job runner for Spideryarn, and wiring
-product cleanup into an ops dashboard would couple them in exactly the way we rejected `/admin` for.
-If a real scheduler is wanted, that is its own decision — worth telling Greg the option now exists,
-and letting him make it separately.
+Deferred by Greg on 2026-09-08 — "eventually both, start simple, defer this to a middle stage".
+Agents self-report through a small CLI plus a rule in [AGENTS.md](../../AGENTS.md); a transcript
+scrape later as the backstop. Ranked by importance then confidence, product-facing counting as more
+important. The dashboard makes decisions *visible*; it does not enforce the thresholds.
 
-### Stage G: write it down
+### Later: the coordinator agent
 
-- [ ] A new evergreen doc under `docs/project/`. **Ask Greg** where it hangs — it is arguably under
-      `dev-and-deployment-overview.md` next to `hetzner-remote-server-box.md`, but it is also the
-      first thing here that is not about Spideryarn at all.
-- [ ] A note in `docs/reusable/` if the thing turns out to be genuinely portable.
-- [ ] Test consolidation sweep via subagent: fold brittle low-level tests into fewer end-to-end ones.
+The orchestrator is eventually a program, not Greg (his call, 2026-09-08). Nothing here builds it,
+but every action above is a typed function before it is a button, so it has something to call.
 
 ## Evidence: what was actually tested
 
