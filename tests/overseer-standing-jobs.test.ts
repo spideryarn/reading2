@@ -21,7 +21,7 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, test } from "vitest";
 
 import { schedulerWiring } from "../scripts/overseer.js";
-import { definitionHash, type OccurrenceKey } from "../tools/overseer/jobs.js";
+import { behaviourHash, type Arming, type JobDefinition, type OccurrenceKey } from "../tools/overseer/jobs.js";
 import { gjdRemoteDispatch, jobsEnabled, JOBS_ENABLED_VAR, sessionName, TSX_RELATIVE_PATH, type ChildSpawner } from "../tools/overseer/dispatch.js";
 import {
   AUTHORISED_HASHES,
@@ -44,18 +44,29 @@ function tempRoot(): string {
   return root;
 }
 
+/**
+ * WHEN THIS SCHEDULER WAS ARMED, for `schedulerWiring`.
+ *
+ * It only ever reaches `TickInput.arming`, and nothing in this file runs a tick
+ * — these tests ask what the CLI would HAND the daemon, not what the daemon
+ * would then do with it. A real instant rather than the `unknown` arm all the
+ * same, because the shipped call site passes one and a fixture that could not
+ * would be a fixture the wiring never sees.
+ */
+const ARMED: Arming = { kind: "armed", at: "2026-09-08T00:00:00.000Z" };
+
 describe("the standing jobs, as this checkout would actually run them", () => {
   test("both are built, and each names the document its authority comes from", () => {
     const built = standingJobs(REPO);
     expect(built.problems).toEqual([]);
-    expect(built.jobs.map((job) => job.definition.id)).toEqual(["get-ready-to-deploy", "feedback-sweep"]);
+    expect(built.jobs.map((job) => job.definition.behaviour.id)).toEqual(["get-ready-to-deploy", "feedback-sweep"]);
     for (const job of built.jobs) {
-      expect(job.definition.what.length).toBeGreaterThan(20);
-      expect(job.definition.documents.length).toBeGreaterThan(0);
-      for (const document of job.definition.documents) expect(document.sha256).toMatch(/^[0-9a-f]{64}$/);
+      expect(job.definition.behaviour.what.length).toBeGreaterThan(20);
+      expect(job.definition.behaviour.documents.length).toBeGreaterThan(0);
+      for (const document of job.definition.behaviour.documents) expect(document.sha256).toMatch(/^[0-9a-f]{64}$/);
     }
-    expect(built.jobs[0]?.definition.documents.map((d) => d.path)).toEqual([...GET_READY_TO_DEPLOY_DOCS]);
-    expect(built.jobs[1]?.definition.documents.map((d) => d.path)).toEqual([...FEEDBACK_SWEEP_DOCS]);
+    expect(built.jobs[0]?.definition.behaviour.documents.map((d) => d.path)).toEqual([...GET_READY_TO_DEPLOY_DOCS]);
+    expect(built.jobs[1]?.definition.behaviour.documents.map((d) => d.path)).toEqual([...FEEDBACK_SWEEP_DOCS]);
   });
 
   test("THE PINS ARE CURRENT — every standing job would actually dispatch", () => {
@@ -72,7 +83,7 @@ describe("the standing jobs, as this checkout would actually run them", () => {
     // Copying it without reading is the ceremonial version of this check and
     // buys nothing.
     for (const job of standingJobs(REPO).jobs) {
-      expect(`${job.definition.id} ${definitionHash(job.definition)}`).toBe(`${job.definition.id} ${job.authorisedHash}`);
+      expect(`${job.definition.behaviour.id} ${behaviourHash(job.definition.behaviour)}`).toBe(`${job.definition.behaviour.id} ${job.authorisedHash}`);
     }
     expect(Object.keys(AUTHORISED_HASHES).sort()).toEqual(["feedback-sweep", "get-ready-to-deploy"]);
   });
@@ -99,10 +110,10 @@ describe("the standing jobs, as this checkout would actually run them", () => {
     const before = standingJobs(root).jobs;
     writeFileSync(join(root, GET_READY_TO_DEPLOY_DOCS[0]), "the document, with a new paragraph nobody reviewed\n");
     const after = standingJobs(root).jobs;
-    expect(before[0]?.definition.what).toBe(after[0]?.definition.what);
-    expect(definitionHash(after[0]!.definition)).not.toBe(definitionHash(before[0]!.definition));
+    expect(before[0]?.definition.behaviour.what).toBe(after[0]?.definition.behaviour.what);
+    expect(behaviourHash(after[0]!.definition.behaviour)).not.toBe(behaviourHash(before[0]!.definition.behaviour));
     // The other job is untouched: one document changing must not disarm the lot.
-    expect(definitionHash(after[1]!.definition)).toBe(definitionHash(before[1]!.definition));
+    expect(behaviourHash(after[1]!.definition.behaviour)).toBe(behaviourHash(before[1]!.definition.behaviour));
   });
 });
 
@@ -142,10 +153,10 @@ describe("armed or not, said out loud", () => {
     };
     const first = tampered.jobs[0];
     if (first === undefined) throw new Error("expected a job");
-    const broken = { jobs: [{ ...first, definition: { ...first.definition, what: "something else" } }], problems: [] };
+    const broken = { jobs: [{ ...first, definition: { ...first.definition, behaviour: { ...first.definition.behaviour, what: "something else" } } }], problems: [] };
     const sentence = describeStandingJobs({ armed: true, enableVar: JOBS_ENABLED_VAR, jobs: broken });
     expect(sentence).toContain("NOT AUTHORISED");
-    expect(sentence).toContain(definitionHash(broken.jobs[0]!.definition));
+    expect(sentence).toContain(behaviourHash(broken.jobs[0]!.definition.behaviour));
   });
 });
 
@@ -155,19 +166,19 @@ describe("the wiring the shipped CLI actually does", () => {
     // no `jobs` under any circumstances, so the installed Overseer scheduled
     // nothing while every scheduler test passed. This is the assertion that
     // would have caught it, and the one that catches it coming back.
-    const off = schedulerWiring({});
+    const off = schedulerWiring({}, ARMED);
     expect(off.armed).toBe(false);
     expect(off.detail).toContain(JOBS_ENABLED_VAR);
     // THE ASSERTION THAT MATTERS: the daemon is handed nothing at all, which is
     // what stops it building a scheduler timer.
     expect(off.jobs).toBeUndefined();
 
-    const on = schedulerWiring({ [JOBS_ENABLED_VAR]: "1" });
+    const on = schedulerWiring({ [JOBS_ENABLED_VAR]: "1" }, ARMED);
     expect(on.armed).toBe(true);
     // The deterministic rule rides along under the full arming, which is the
     // superset; `tests/overseer-rules.test.ts` covers the rules-only one, where
     // the daemon is handed no spawner at all.
-    expect(on.jobs?.definitions.map((job) => job.definition.id)).toEqual(["get-ready-to-deploy", "feedback-sweep", "wedged-work", "launch-mode"]);
+    expect(on.jobs?.definitions.map((job) => job.definition.behaviour.id)).toEqual(["get-ready-to-deploy", "feedback-sweep", "wedged-work", "launch-mode"]);
     expect(typeof on.jobs?.spawn).toBe("function");
     expect(on.detail).not.toContain(JOBS_ENABLED_VAR);
     expect(on.problems).toEqual([]);
@@ -176,7 +187,7 @@ describe("the wiring the shipped CLI actually does", () => {
   test("the definitions are built either way, so a disarmed daemon can still say what it would run", () => {
     // Off must not mean blind. A disarmed scheduler that could not name its jobs
     // would be indistinguishable from one that has none.
-    expect(schedulerWiring({}).definitions.map((job) => job.definition.id)).toEqual(["get-ready-to-deploy", "feedback-sweep", "wedged-work", "launch-mode"]);
+    expect(schedulerWiring({}, ARMED).definitions.map((job) => job.definition.behaviour.id)).toEqual(["get-ready-to-deploy", "feedback-sweep", "wedged-work", "launch-mode"]);
   });
 });
 
@@ -184,8 +195,13 @@ describe("what actually starts a session", () => {
   const KEY: OccurrenceKey = {
     jobId: "get-ready-to-deploy",
     scheduledAt: "2026-09-08T17:32:00.000Z",
-    definitionHash: definitionHash({ id: "x", everyMs: 1, leaseMs: 1, what: "x", documents: [], work: { kind: "session" } }),
+    behaviourHash: behaviourHash({ id: "x", what: "x", documents: [], work: { kind: "session" } }),
   };
+
+  /** A one-off session job. The schedule is arbitrary here: nothing in this describe consults the clock — the dispatcher is handed a definition and a key. */
+  function job(id: string, what: string): JobDefinition {
+    return { behaviour: { id, what, documents: [], work: { kind: "session" } }, schedule: { everyMs: 1, leaseMs: 1, initialDelayMs: 0 } };
+  }
 
   function fakeSpawner(): { spawn: ChildSpawner; calls: { command: string; args: readonly string[]; cwd: unknown }[]; stdin: string[]; exit(code: number | null): void } {
     const calls: { command: string; args: readonly string[]; cwd: unknown }[] = [];
@@ -224,7 +240,7 @@ describe("what actually starts a session", () => {
     // THE PROMPT, AND IT IS THE DEFINITION'S OWN `what` — the thing that was
     // fingerprinted and pinned. A dispatcher that composed its own prompt here
     // would be running something nobody authorised.
-    expect(fake.stdin).toEqual([`${definition.what}\n`]);
+    expect(fake.stdin).toEqual([`${definition.behaviour.what}\n`]);
     fake.exit(0);
     await expect(outcome.done).resolves.toEqual({ kind: "exited", code: 0 });
   });
@@ -235,7 +251,7 @@ describe("what actually starts a session", () => {
     // that never started.
     const fake = fakeSpawner();
     const spawn = gjdRemoteDispatch({ repoRoot: REPO, spawnProcess: fake.spawn, log: () => undefined });
-    spawn({ id: "j", everyMs: 1, leaseMs: 1, what: "do the thing", documents: [], work: { kind: "session" } }, KEY);
+    spawn(job("j", "do the thing"), KEY);
     expect(fake.stdin).toEqual(["do the thing\n"]);
   });
 
@@ -244,7 +260,7 @@ describe("what actually starts a session", () => {
     // started, and a throw means the runner broke its contract and produced an
     // `unknown` that is never retried. A missing binary is knowable.
     const spawn = gjdRemoteDispatch({ repoRoot: tempRoot(), spawnProcess: fakeSpawner().spawn, log: () => undefined });
-    const outcome = spawn({ id: "j", everyMs: 1, leaseMs: 1, what: "x", documents: [], work: { kind: "session" } }, KEY);
+    const outcome = spawn(job("j", "x"), KEY);
     expect(outcome.kind).toBe("refused");
     if (outcome.kind !== "refused") return;
     expect(outcome.why).toContain(TSX_RELATIVE_PATH);
@@ -253,7 +269,7 @@ describe("what actually starts a session", () => {
   test("a signal is a failure with a sentence, never an invented exit code", async () => {
     const fake = fakeSpawner();
     const spawn = gjdRemoteDispatch({ repoRoot: REPO, spawnProcess: fake.spawn, log: () => undefined });
-    const outcome = spawn({ id: "j", everyMs: 1, leaseMs: 1, what: "x", documents: [], work: { kind: "session" } }, KEY);
+    const outcome = spawn(job("j", "x"), KEY);
     if (outcome.kind !== "spawned") throw new Error("expected a spawn");
     fake.exit(null);
     await expect(outcome.done).resolves.toEqual({ kind: "failed", why: expect.stringContaining("killed") });

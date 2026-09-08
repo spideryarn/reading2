@@ -142,7 +142,7 @@ export function gjdRemoteDispatch(options: DispatchOptions): SpawnJob {
     // THE PROMPT DOWN STDIN, and the pipe closed straight after: `-p -` reads to
     // EOF, so a stdin left open is a gjd-remote that waits for ever and a job
     // that is `stuck` six hours later for no reason at all.
-    child.stdin?.end(`${definition.what}\n`);
+    child.stdin?.end(`${definition.behaviour.what}\n`);
 
     let stderr = "";
     child.stderr?.on("data", (chunk: unknown) => {
@@ -152,7 +152,7 @@ export function gjdRemoteDispatch(options: DispatchOptions): SpawnJob {
 
     const done = new Promise<JobOutcome>((resolve) => {
       child.on("exit", (code, signal) => {
-        if (stderr.trim() !== "") log(`job ${definition.id}: gjd-remote said: ${stderr.trim().slice(0, 2000)}`);
+        if (stderr.trim() !== "") log(`job ${definition.behaviour.id}: gjd-remote said: ${stderr.trim().slice(0, 2000)}`);
         if (code === null) {
           // Killed rather than exited. `failed` rather than an invented code —
           // a signal is not an exit status and the two must not share a slot.
@@ -168,7 +168,7 @@ export function gjdRemoteDispatch(options: DispatchOptions): SpawnJob {
       });
     });
 
-    log(`job ${definition.id}: gjd-remote new-claude ${name} (pid ${pid})`);
+    log(`job ${definition.behaviour.id}: gjd-remote new-claude ${name} (pid ${pid})`);
     return { kind: "spawned", pid, done };
   };
 }

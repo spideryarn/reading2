@@ -76,7 +76,7 @@ function deps(made: HealthRetention, over: Partial<RefreshDeps> = {}): RefreshDe
     refreshMs: 60_000,
     now: () => new Date("2026-09-08T12:00:30.000Z"),
     publish: () => {},
-    drain: () => ({ rows: 0, considered: 0, generation: 1, invalidated: 0, outcomes: [] }),
+    drain: () => ({ rows: 0, considered: 0, generation: 1, invalidated: 0, quarantined: 0, outcomes: [] }),
     log: () => {},
     logError: () => {},
     subscribers: () => 0,

@@ -23,6 +23,7 @@ import { PassThrough } from "node:stream";
 import { describe, expect, it, vi } from "vitest";
 
 import { classifyGate, fingerprintMaterial, type PaneOption } from "../tools/fleet/pane.js";
+import { QuarantineBook } from "../tools/fleet/quarantine.js";
 import type { FleetStatus } from "../tools/fleet/status.js";
 import type { SeenQuestion, SteerResult, SteerTarget } from "../tools/fleet/steer.js";
 import {
@@ -189,6 +190,16 @@ function harness(result: SteerResult | (() => SteerResult) = OK, over: Partial<S
     // still reading as a test of answering. The gate itself has its own
     // describe block below, which drives both sides of it explicitly.
     answeringEnabled: () => true,
+    /**
+     * ITS OWN BOOK, NEVER THE PROCESS-SHARED ONE.
+     *
+     * `realSteerDeps()` reaches for `sharedQuarantineBook()`, which is a
+     * module-level singleton — and a module-level singleton written to by every
+     * test in a file is the shape that makes a suite pass alone and fail in a
+     * batch. Nothing in THIS file reads the book; what it needs is that a
+     * `partial` fixture here cannot leak a hold into another test's world.
+     */
+    quarantine: new QuarantineBook({ now: () => 1_700_000_000_000, serverInstanceId: "1a2b3c4d" }),
     ...over,
   });
   return { routes, calls, logs };
