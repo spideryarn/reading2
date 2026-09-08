@@ -406,7 +406,12 @@ async function statFile(p: string): Promise<{ mtimeMs: number } | null> {
 // Reading the tail
 // ---------------------------------------------------------------------------
 
-/** One JSONL line, still raw. `null` when it did not parse. */
+/**
+ * One JSONL line, still raw. `null` when it did not parse.
+ *
+ * Exported as `TranscriptRecord` at the bottom of the file for consumers that
+ * need the record and not the turn — see `readRawTail`.
+ */
 type RawRecord = Record<string, unknown>;
 
 type TailRead = {
@@ -984,4 +989,98 @@ function isToolResultOnly(content: unknown): boolean {
 
 function errText(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
+}
+
+// ---------------------------------------------------------------------------
+// The raw tail, for consumers that need records rather than turns
+// ---------------------------------------------------------------------------
+
+/**
+ * One raw JSONL record, exactly as it was written.
+ *
+ * `TranscriptTurn` is the shape for *showing a person the conversation*, and it
+ * deliberately throws almost everything else away: `recordsToTurns` drops every
+ * `tool_result` block on sight and reduces a `tool_use` to a name and a
+ * one-line label. That is right for the detail pane and useless for anything
+ * asking a question ABOUT the machinery — `tools/fleet/pause.ts` needs a
+ * `CronCreate`'s `tool_use.id`, its cron expression, and the `toolUseResult`
+ * carried on the tool_result record that follows it, and all three are gone by
+ * the time a turn exists.
+ *
+ * So this is a second *view* of the same tail read, not a second tail reader.
+ */
+export type TranscriptRecord = RawRecord;
+
+export type RawTailOptions = {
+  /** `row.claudeSessionId` — the conversation uuid. Null is an answer, not an error. */
+  claudeSessionId: string | null;
+  /** `row.meta.dir`, a hint that saves a scan. See `RecentMessagesOptions.dir`. */
+  dir: string | null;
+  /**
+   * Hard cap on bytes read from the tail, and the ONLY stopping condition:
+   * unlike `readRecentMessages` there is no "enough turns" predicate here,
+   * because a caller counting tool calls cannot express what it wants in turns.
+   * So this reads back exactly `maxBytes` (or to byte 0, whichever comes first)
+   * and `reachedStartOfFile` says which happened.
+   */
+  maxBytes: number;
+  /** `~/.claude/projects` by default. An argument so tests need no fake home. */
+  projectsDir?: string;
+};
+
+export type RawTail =
+  | {
+      kind: "found";
+      path: string;
+      /** Oldest first, the same order `recordsToTurns` expects. */
+      records: TranscriptRecord[];
+      /**
+       * **The field that stops a negative from being ambiguous.** A caller that
+       * ignores it is making the mistake this dashboard has made repeatedly:
+       * "I read 32KB and found no `CronCreate`" is not "this session has no
+       * pending wake-up".
+       */
+      reachedStartOfFile: boolean;
+      bytesRead: number;
+      fileBytes: number;
+      lastModified: string;
+      recordsParsed: number;
+      /** 0 or 1 is normal — a live transcript's final line is often half-written. */
+      recordsUnparseable: number;
+    }
+  | { kind: "not-found"; reason: NotFoundReason; why: string }
+  | { kind: "unreadable"; path: string | null; why: string };
+
+/** The tail of one session's transcript, as records rather than as turns. */
+export async function readRawTail(opts: RawTailOptions): Promise<RawTail> {
+  const projectsDir = opts.projectsDir ?? path.join(homedir(), ".claude", "projects");
+
+  if (opts.claudeSessionId === null || opts.claudeSessionId === "") {
+    return {
+      kind: "not-found",
+      reason: "no-claude-session-id",
+      why: "this session has no conversation id, so there is no transcript to read — it may not be a Claude session, or it predates the launcher pinning one",
+    };
+  }
+
+  const located = await findTranscript(projectsDir, opts.claudeSessionId, opts.dir);
+  if (located.kind === "not-found") return located;
+
+  try {
+    // `() => false`: never stop early. The byte budget is the whole contract.
+    const tail = await readTail(located.path, opts.maxBytes, () => false);
+    return {
+      kind: "found",
+      path: located.path,
+      records: tail.records,
+      reachedStartOfFile: tail.reachedStartOfFile,
+      bytesRead: tail.bytesRead,
+      fileBytes: tail.fileBytes,
+      lastModified: tail.lastModified,
+      recordsParsed: tail.recordsParsed,
+      recordsUnparseable: tail.recordsUnparseable,
+    };
+  } catch (err) {
+    return { kind: "unreadable", path: located.path, why: `could not read the transcript: ${errText(err)}` };
+  }
 }

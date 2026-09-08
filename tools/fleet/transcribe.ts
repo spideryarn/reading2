@@ -216,7 +216,14 @@ export async function transcribeForFleet(args: {
       ok: false,
       status: 503,
       message:
-        "Dictation is not set up on this box — there is no OPENROUTER_API_KEY. [mic-not-set-up]",
+        /* **The product's exact sentence, for the product's exact branch.**
+           `tests/dictation-codes.test.ts` scans both trees since 2026-09-08, and
+           the reason is the reader rather than the code: Greg quotes four
+           characters off a phone and does not know which of the two servers
+           produced them. Mine said "on this box — there is no
+           OPENROUTER_API_KEY", which is more useful to me and less useful to
+           him, and made one code name two sentences. */
+        "Dictation is not configured on this server. [mic-not-set-up]",
     };
   }
   if (args.audio.length > MAX_AUDIO_BASE64) {
@@ -259,7 +266,12 @@ export async function transcribeForFleet(args: {
       }),
       signal: abort,
     });
-  } catch (err) {
+    /* **No binding, because nothing may be read off it.** `catch {}` rather than
+       `catch (err)` says that out loud: on this wire a thrown message can carry
+       a prefix of the request body, and the request body is somebody talking.
+       An unused binding would be a warning; an unused binding somebody later
+       "fixed" by logging it would be a voice in a log file. */
+  } catch {
     /* The caller's abort is somebody navigating away and needs no sentence; our
        own deadline is a person watching a spinner and does. */
     if (args.signal?.aborted === true) {
@@ -270,7 +282,7 @@ export async function transcribeForFleet(args: {
     return {
       ok: false,
       status: 502,
-      message: "Could not reach the transcriber. Check the box's network. [mic-no-upstream]",
+      message: "The transcription service could not be reached. [mic-no-upstream]",
     };
   }
 
@@ -293,14 +305,14 @@ export async function transcribeForFleet(args: {
     return {
       ok: false,
       status: 502,
-      message: "The transcriber answered with nothing we could read. [mic-unreadable]",
+      message: "The transcription service sent back something we could not read. [mic-unreadable]",
     };
   }
   if (text.length > MAX_TRANSCRIPT_CHARS) {
     return {
       ok: false,
       status: 502,
-      message: "The transcriber sent back far more than could have been said. [mic-upstream]",
+      message: "The transcription service could not transcribe that. [mic-upstream]",
     };
   }
   return { ok: true, text: stripFillers(text.trim()) };

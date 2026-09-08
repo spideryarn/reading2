@@ -24,15 +24,33 @@
  * Everything else here is quiet on purpose. A session waiting until 17:00 is
  * working as intended and must not compete with the one that needs a person.
  *
- * ## `cannot-tell` renders, and `none` does not
+ * ## `cannot-tell` renders where the question arises, and `none` never does
  *
- * That looks backwards for about a second. `none` means *we looked everywhere
- * we can look and it is waiting for nothing* — there is no line to draw,
- * because the status pill already says what it is doing. `cannot-tell` means a
- * source was shut, so the calm on this row is not evidence, and **that is worth
- * a line** — quiet, and with the server's own reason one tap away. This is the
- * distinction the page has got wrong three times: absence of a warning is not
- * the same as a warning of absence.
+ * `none` means *we looked everywhere we can look and it is waiting for
+ * nothing* — no line, because the status pill already says what it is doing.
+ *
+ * `cannot-tell` means a source was shut, so the calm on that row is not
+ * evidence. That is worth saying — absence of a warning is not the same as a
+ * warning of absence, and this page has had that wrong three times. **But only
+ * where the calm is the thing you are reading.** Measured on the live box,
+ * 2026-09-08: 29 of 32 rows were `cannot-tell`, and a phrase repeated on 29
+ * cards is not a caveat, it is wallpaper — the state this whole module exists
+ * to avoid, arrived at from the other direction.
+ *
+ * So the rule is the question itself. **`Pause` answers "why is this session
+ * not doing anything", and on a row that IS doing something the question does
+ * not arise.** A `working` row is working; a `shell` has no transcript to read
+ * by construction. Neither draws an unknown. A quiet row does, because there
+ * the question is live and unanswered: is this finished, or is it stuck?
+ *
+ * **Positive states always draw, whatever the status** — `in-a-shell-call` on a
+ * `working` row is the entire point of the stage, since that is the session the
+ * board has been calling *Working* while it sits blocked on a command.
+ *
+ * This will matter more this week than later: the rate-limit collector reports
+ * `unknown` until 2026-09-12, while 27 unattributable rejections from a
+ * signed-out account expire (w2-usage-limits, 2026-09-08). So `cannot-tell` is
+ * the common answer right now and should read as considered, not as broken.
  *
  * Nothing here is a bare number: every time carries what it is a time OF, and
  * every duration carries what it has been that long SINCE.
@@ -40,7 +58,7 @@
 import type { ReactNode } from "react";
 
 import { Explain } from "./Tooltip";
-import type { Pause } from "./types";
+import type { FleetStatus, Pause } from "./types";
 import { cx } from "./ui";
 import { formatDuration } from "./view";
 
@@ -66,13 +84,30 @@ function windowName(window: string): string {
   return window;
 }
 
-export function PauseLine({ pause, now, className }: { pause: Pause; now: number; className?: string }): ReactNode {
+export function PauseLine({
+  pause,
+  status,
+  now,
+  className,
+}: {
+  pause: Pause;
+  /** Whether the question this answers arises at all. See the header. */
+  status: FleetStatus;
+  now: number;
+  className?: string;
+}): ReactNode {
   if (pause.kind === "none") return null;
 
   const quiet = cx("tw:text-[12px] tw:text-ink-faint", className);
   const loud = cx("tw:text-[12px] tw:font-medium tw:text-alarm-ink", className);
 
   if (pause.kind === "cannot-tell") {
+    /* Only where the calm is the thing being read. A row that is visibly busy
+       is not a row whose quiet needs explaining, and a shell has no transcript
+       by construction — drawing "waiting? unknown" on those is a sentence about
+       our own instrumentation on a card about somebody's agent. See the header
+       for the measurement that decided it. */
+    if (status.kind !== "idle") return null;
     return (
       <Explain
         tip={{
