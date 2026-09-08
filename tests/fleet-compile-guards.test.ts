@@ -159,7 +159,6 @@ describe("nothing may come between the check and the send", () => {
       claudeCandidates: () => "",
       cmdline: () => null,
       capture: () => "",
-      claudeSessionState: () => null,
       sendKeys: () => undefined,
     };
     const out = answerQuestion(

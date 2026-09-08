@@ -2469,6 +2469,61 @@ describe("the rule about sending the server its own claims back", () => {
     expect(buttonSaying("Refresh and look again")).toBeDefined();
   });
 
+  /**
+   * **THE JOIN, AND IT IS A STRING COMPARISON NO TYPE PROTECTS.**
+   *
+   * `input-not-empty` is minted in steer.ts, given a status in routes-steer.ts,
+   * carried over the wire, and compared in `Outcome` — where the client models a
+   * refusal code as an arbitrary `string`, because it must accept codes from a
+   * server newer than itself. So a one-character mismatch there compiles, drops
+   * this refusal into the generic 409 branch, and shows *"Refresh and look
+   * again"* for the one 409 that refreshing cannot help. GPT Sol's finding: the
+   * join was correct and entirely unprotected, and every other test in this file
+   * would have stayed green through breaking it.
+   *
+   * This repo's standing failure is a page and a route that disagree about a
+   * field name — the box actions that sent `dryRun` at a route parsing `mode`,
+   * every one of them a dry run reported as "Done." So the assertion is on all
+   * three halves: the special sentence appears, the generic button does NOT, and
+   * the handoff carries the row's own name.
+   */
+  it("renders input-not-empty as its own refusal, with the handoff and no Refresh button", async () => {
+    const feed = manualTransport();
+    mountFull({
+      transport: feed.transport,
+      steer: refusingSteer({
+        ok: false,
+        code: "input-not-empty",
+        why: "pane %1646 has 1 line of text already in its input box; a message sent now would be added to the end of it and submitted as one",
+        status: 409,
+        from: "server",
+      }),
+    });
+    act(() => feed.push(state({ rows: [steerable({ id: "$1", title: "half-typed" })] })));
+    openSession("half-typed");
+
+    const box = container.querySelector<HTMLTextAreaElement>("#steer-text");
+    if (!box) throw new Error("no message box");
+    typeInto(box, "carry on");
+    await act(async () => {
+      buttonSaying("Send now")?.click();
+    });
+
+    const text = container.textContent ?? "";
+    expect(text).toContain("input-not-empty");
+    expect(text).toContain("would be added to the end of it");
+    // The advice that replaces the generic one.
+    expect(text).toContain("Refreshing will not help");
+    // The handoff, with the SESSION'S OWN NAME — not its id, which is what
+    // `gjd-remote resume` would choke on.
+    expect(text).toContain("gjd-remote resume");
+    // AND THE ABSENCE, which is the half that catches a broken comparison: if
+    // the code fell through to the generic 409 branch both the sentence above
+    // and this button would be on screen, and asserting only the sentence would
+    // pass.
+    expect(buttonSaying("Refresh and look again")).toBeUndefined();
+  });
+
   it("refuses locally only for a row that has no address at all, and says which", () => {
     const feed = manualTransport();
     mountFull({ transport: feed.transport });

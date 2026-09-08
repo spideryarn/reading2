@@ -586,21 +586,40 @@ describe("drainOnce fails honestly", () => {
       delivery: "none",
       sent: [],
     };
+    // TWO ITEMS, NOT ONE, AND THAT IS GPT SOL REVIEWING THE FIRST VERSION OF
+    // THIS TEST. With one item queued, "put back at the head" and "put back at
+    // the tail" are the same state, so a mutation that moved a refused item to
+    // the END of the queue would have left this green — and the cost of that
+    // mutation is real: the person's instructions would be delivered in the
+    // wrong order, which is the whole reason actions and messages share one
+    // queue (queue.ts, "a message that says 'actually do X instead' must land
+    // after the button that says 'do X'").
     const { deps, queue, sent } = harness({ result: occupied });
-    queue.enqueueMessage({ sessionId: SESSION_A, claudeSessionId: CONVO_A }, "hello", "greg");
+    queue.enqueueMessage({ sessionId: SESSION_A, claudeSessionId: CONVO_A }, "first", "greg");
+    queue.enqueueMessage({ sessionId: SESSION_A, claudeSessionId: CONVO_A }, "second", "greg");
 
     const result = drainOnce(snap([row()]), deps);
 
     expect(sent).toHaveLength(1);
+    // `toContain`, because the queue prefixes the speaker — the message that
+    // goes out is "[Greg, via the fleet dashboard] first". What is being
+    // asserted here is WHICH item, not how it is rendered.
+    expect(sent[0]?.text).toContain("first");
     const back = result.outcomes[0];
     expect(back?.kind).toBe("put-back");
     expect(back?.kind === "put-back" && back.code).toBe("input-not-empty");
-    expect(queue.size(SESSION_A)).toBe(1);
-    expect(queue.snapshot(SESSION_A).items[0]?.leasedAt).toBe(null);
 
-    // and the next pass tries it again, once that agent has sent its own text
+    // BOTH still queued, the refused one still FIRST, and not leased.
+    expect(queue.size(SESSION_A)).toBe(2);
+    const items = queue.snapshot(SESSION_A).items;
+    expect(items[0]?.leasedAt).toBe(null);
+
+    // The order proved by behaviour rather than by reading the store: the next
+    // pass must attempt "first" again, not "second".
     drainOnce(snap([row()]), deps);
     expect(sent).toHaveLength(2);
+    expect(sent[1]?.text).toContain("first");
+    expect(sent[1]?.text).not.toContain("second");
   });
 
   it("settles a refusal that may have reached the pane, and never sends it again", () => {

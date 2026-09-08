@@ -53,11 +53,33 @@
  *  - **We verify the pane, not the foreground process group.** `send-keys`
  *    delivers to the pane's tty and whichever process group is in front reads
  *    it. On this box `#{pane_current_command}` is `bash` for every Claude
- *    session — Claude Code does not put itself in its own process group — so
- *    that field cannot tell a Claude pane from a shell pane and is not used. If
- *    a verified Claude session has shelled out to something in the foreground,
- *    our text goes to that instead, and nothing here can see it. `inputSurface`
- *    narrows this and does not close it: see its own comment.
+ *    session, and `/proc`'s `tpgid` is no better: measured 2026-09-08 on
+ *    `%1999`, `%2085` and `%2166`, Claude, the pane's bash and any child all
+ *    sit in ONE process group, so `pgrp` = `sid` = `tpgid` = `pane_pid` for all
+ *    of them. If a verified Claude has shelled out to something in the
+ *    foreground, our text goes to that instead, and nothing here can see it.
+ *    `paneSurface` narrows this and does not close it: see its own comment.
+ *
+ *    **DO NOT REBUILD THE `~/.claude/sessions/<pid>.json` GUARD.** It was built
+ *    on 2026-09-08, against that file's `status` field reading `shell`, on the
+ *    assumption that `shell` means a program of Claude's is in front of the
+ *    tty. It does not, and the guard was removed the same day. GPT Sol read the
+ *    installed Claude Code 2.1.263 binary and found what writes it — the
+ *    expression is `_D==="idle"&&ZQr?"shell"`, i.e.
+ *    `baseStatus === "idle" && hasUnfinishedLocalBash`, and `local_bash`
+ *    includes a BACKGROUNDED task. So `shell` is true of the commonest healthy
+ *    state on this box: Claude sitting at an empty prompt, ready to be messaged,
+ *    with a dev server or a test run backgrounded behind it.
+ *
+ *    Two things that mistake cost, both worth keeping. The signal's NAME was
+ *    read as its meaning, without checking what produced it — the file is
+ *    another application's private state and its vocabulary is not ours. And
+ *    the argument for shipping it, *"it can only ever ADD a refusal, so it
+ *    cannot break anything"*, is **false**: it cannot cause an unsafe send, but
+ *    a long-running background job would have refused every message to that
+ *    session indefinitely, and `drain.ts` would have put the same queued item
+ *    back on every pass until it aged out. A guard that only refuses can still
+ *    destroy availability, and here it would have starved the queue.
  *  - **PANE TEXT IS NOT PROVENANCE.** Everything this file reads off a screen —
  *    the question, its material, the input box — was printed by the very
  *    process we are deciding whether to type at. An agent that prints a
@@ -82,7 +104,6 @@
  */
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { homedir } from "node:os";
 
 import {
   capturePane,
@@ -452,16 +473,6 @@ export type SteerIo = {
    * table we cannot read is not a process table that says no.
    */
   cmdline(pid: number): string | null;
-  /**
-   * Claude Code's own note about itself: `~/.claude/sessions/<pid>.json`, or
-   * `null` when there is not one.
-   *
-   * **NOT A tmux OR KERNEL READ, AND THAT IS WHY IT IS HERE.** It is the only
-   * thing on this box that can say a Claude session has SHELLED OUT — see
-   * `shelledOut` for what is done with it and, more importantly, for what is
-   * not.
-   */
-  claudeSessionState(pid: number): string | null;
   /** Runs `tmux <args…>`. Throws when tmux refuses. */
   sendKeys(args: readonly string[]): void;
 };
@@ -516,18 +527,6 @@ export function realIo(): SteerIo {
         const code = (e as { code?: unknown }).code;
         if (code === "ENOENT" || code === "ESRCH") return null;
         throw e;
-      }
-    },
-    claudeSessionState: (pid) => {
-      if (!Number.isSafeInteger(pid) || pid <= 0) throw new Error(`not a pid: ${pid}`);
-      try {
-        return readFileSync(`${homedir()}/.claude/sessions/${pid}.json`, "utf8");
-      } catch {
-        // ABSENT IS NOT A REFUSAL, and that is a deliberate asymmetry — see
-        // `shelledOut`. Every failure to read is swallowed here rather than
-        // only ENOENT, because this file is another application's private
-        // state and the ways it can be unavailable are not ours to enumerate.
-        return null;
       }
     },
     sendKeys: (args) => {
@@ -963,58 +962,6 @@ function fire(io: SteerIo, calls: readonly (readonly string[])[]): Fired {
   return { sent, refusal: null };
 }
 
-/**
- * **HAS THIS CLAUDE SHELLED OUT?** — the one signal on this box that can say so.
- *
- * `send-keys` delivers to the pane's tty and whichever process group is in
- * front reads it. `verifyTarget` proves a live Claude for this conversation is
- * a descendant of the pane; it cannot prove that Claude is the thing reading.
- * Neither can the two obvious sources: `#{pane_current_command}` is `bash` for
- * every Claude session on this box, and `tpgid` is no better, because — measured
- * 2026-09-08 on `%1999`, `%2085` and `%2166` — Claude, the pane's bash and any
- * child all sit in ONE process group, so `pgrp` = `sid` = `tpgid` = `pane_pid`
- * for all of them.
- *
- * Claude Code keeps its own note: `~/.claude/sessions/<pid>.json`, whose
- * `status` reads `shell` while a session has shelled out. Found by GPT Sol,
- * 2026-09-08, which pointed out that the process-group result disproves
- * `tpgid` rather than every foreground guard. It is real and it fires: while
- * this was being written, pid 1471795 under pane `%2085` was `"status":"shell"`.
- *
- * **FAIL-OPEN, AND THE ASYMMETRY IS THE WHOLE DESIGN.** A `shell` status is a
- * refusal. Anything else — a different status, a missing file, unparseable
- * JSON, a Claude Code release that stops writing it — is NOT. That is the
- * opposite of this file's usual bias, and it is deliberate: this is another
- * application's private state, undocumented and unsupported, and a guard that
- * refused on its absence would stop every message on this box the day the
- * format changed. So it can only ever ADD refusals, never permit a send that
- * the checks around it would have stopped.
- *
- * **WHICH MEANS IT IS A SUPPLEMENT AND NOT A CLOSURE.** The foreground gap is
- * still open: a shelled-out child that Claude Code has not recorded, a status
- * written a moment ago, a program the harness knows nothing about. Nothing here
- * may be read as "we know who is reading the tty".
- */
-function shelledOut(claudePid: number, io: SteerIo): Refusal | null {
-  let raw: string | null;
-  try {
-    raw = io.claudeSessionState(claudePid);
-  } catch {
-    return null;
-  }
-  if (raw === null) return null;
-  let status: unknown;
-  try {
-    status = (JSON.parse(raw) as { status?: unknown }).status;
-  } catch {
-    return null;
-  }
-  if (status !== "shell") return null;
-  return {
-    code: "not-at-input",
-    why: `claude ${claudePid} says it has shelled out, so a program of its own is in front of the terminal and would read the keys`,
-  };
-}
 
 /**
  * Free text to a session that is at a prompt.
@@ -1099,12 +1046,6 @@ export function sendMessage(
       return never;
     }
   }
-
-  // LAST, AND AFTER THE SCREEN. It reads a file rather than the pane, so it
-  // cannot be part of the capture, and it is the weakest of the checks — see
-  // `shelledOut`, which can only ever add a refusal.
-  const shell = shelledOut(check.verified.claudePid, io);
-  if (shell) return refuse(shell);
 
   const calls = [
     ["send-keys", "-t", target.paneId, "-l", "--", text],

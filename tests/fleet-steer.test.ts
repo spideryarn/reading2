@@ -114,14 +114,8 @@ type Box = {
   capture?: string;
   /** argv per pid, overriding what the pgrep line would flatten to. `null` = gone. */
   cmdlines?: Record<number, string[] | null>;
-  /**
-   * What `~/.claude/sessions/<pid>.json` holds, if anything. `undefined` means
-   * there is no such file, which is the DEFAULT and is not a refusal — see
-   * `shelledOut` in steer.ts for why that asymmetry is deliberate.
-   */
-  sessionState?: string;
   /** Make one of the reads fail the way an absent or angry command does. */
-  throwOn?: "panes" | "parents" | "pgrep" | "capture" | "cmdline" | "send" | "sessionState";
+  throwOn?: "panes" | "parents" | "pgrep" | "capture" | "cmdline" | "send";
   /** Which send call fails (0-based), and with what. */
   failSend?: { at: number; error: unknown };
 };
@@ -144,10 +138,6 @@ function fakeBox(box: Box = {}): { io: SteerIo; sent: string[][] } {
       const override = box.cmdlines?.[pid];
       if (override !== undefined) return override === null ? null : procCmdline(...override);
       return derived.get(pid) ?? null;
-    },
-    claudeSessionState: () => {
-      if (box.throwOn === "sessionState") boom("/home/greg/.claude/sessions");
-      return box.sessionState ?? null;
     },
     sendKeys: (args) => {
       if (failSend && sent.length === failSend.at) throw failSend.error;
@@ -623,95 +613,6 @@ describe("sendMessage will not append to a draft somebody else is still writing"
 });
 
 /* ---------------------------------------------------------------- *
- * A10, the other half: has this Claude shelled out?
- * ---------------------------------------------------------------- */
-
-/**
- * **THE ONE SIGNAL ON THIS BOX THAT CAN SEE A FOREGROUND CHILD**, and the
- * reason the plan's "this cannot be built at all" was too strong — GPT Sol,
- * 2026-09-08, which pointed out that the process-group measurement disproves
- * `tpgid` rather than every foreground guard.
- *
- * The measurement stands: on `%1999`, `%2085` and `%2166`, Claude, the pane's
- * bash and any child all sit in ONE process group, so `pgrp` = `sid` = `tpgid`
- * = `pane_pid` and neither the kernel nor `#{pane_current_command}` can say who
- * is reading the tty. Claude Code's own `~/.claude/sessions/<pid>.json` can:
- * its `status` reads `shell` while a session has shelled out, and it was
- * `"status":"shell"` for pid 1471795 under pane `%2085` while this was written.
- *
- * **THE ASYMMETRY IS THE DESIGN AND THESE TESTS ARE MOSTLY ABOUT IT.** A
- * `shell` status refuses; everything else — a different status, no file,
- * unparseable JSON, a read that throws — does not. That is the opposite of this
- * module's usual bias, on purpose: it is another application's undocumented
- * private state, and a guard that refused on its absence would stop every
- * message on the box the day the format changed. It can only ADD refusals.
- */
-describe("sendMessage refuses a session that says it has shelled out", () => {
-  const state = (status: string): string => JSON.stringify({ pid: 200, status });
-
-  it("refuses when Claude Code says a program of its own is in front", () => {
-    const { io, sent } = fakeBox({ sessionState: state("shell") });
-    refused(sendMessage(TARGET, "keep going", WORKING, io), sent, "not-at-input");
-  });
-
-  it("names the pid in the refusal, so it can be checked afterwards", () => {
-    const { io } = fakeBox({ sessionState: state("shell") });
-    const result = sendMessage(TARGET, "keep going", WORKING, io);
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    // 200 is the CLAUDE pid from the fake process table, not the pane's 100 —
-    // the file is keyed by the Claude process and reading the wrong one would
-    // silently never match.
-    expect(result.reason.why).toContain("200");
-  });
-
-  it("sends for every other status, so this can only ever add a refusal", () => {
-    for (const status of ["idle", "busy", "working", "something-invented-in-2027"]) {
-      const { io, sent } = fakeBox({ sessionState: state(status) });
-      const result = sendMessage(TARGET, "keep going", WORKING, io);
-      if (!result.ok) throw new Error(`status ${status} refused: ${result.reason.why}`);
-      expect(sent).toHaveLength(2);
-    }
-  });
-
-  /**
-   * **FAIL-OPEN ON ABSENCE, WHICH IS THE ONE THING THAT MUST NOT DRIFT.** A
-   * Claude Code release that stops writing this file, renames the field, or
-   * changes its shape must cost nothing. If somebody later "hardens" this into
-   * a refusal, every message on the fleet stops the day the format moves — and
-   * this is the test that should stop them.
-   */
-  it("sends when there is no file, unparseable JSON, no status, or a read that throws", () => {
-    const cases: { what: string; box: Parameters<typeof fakeBox>[0] }[] = [
-      { what: "no file at all", box: {} },
-      { what: "not JSON", box: { sessionState: "<html>404</html>" } },
-      { what: "JSON with no status", box: { sessionState: JSON.stringify({ pid: 200 }) } },
-      { what: "a status that is not a string", box: { sessionState: JSON.stringify({ status: 3 }) } },
-      { what: "a read that throws", box: { throwOn: "sessionState" } },
-    ];
-    for (const { what, box } of cases) {
-      const { io, sent } = fakeBox(box);
-      const result = sendMessage(TARGET, "keep going", WORKING, io);
-      if (!result.ok) throw new Error(`${what} refused, and absence must not: ${result.reason.why}`);
-      expect(sent, what).toHaveLength(2);
-    }
-  });
-
-  /**
-   * It is the LAST check, after the screen. A pane that fails an earlier one
-   * must report the earlier reason: "it has shelled out" is a confusing thing
-   * to be told about a pane that is showing a permission dialog.
-   */
-  it("does not pre-empt the refusals that describe the screen", () => {
-    const { io, sent } = fakeBox({
-      capture: fixture("dialog-bash-permission"),
-      sessionState: state("shell"),
-    });
-    refused(sendMessage(TARGET, "keep going", WORKING, io), sent, "pane-is-asking");
-  });
-});
-
-/* ---------------------------------------------------------------- *
  * F17: what a failed send left behind, and what it may say about it
  * ---------------------------------------------------------------- */
 
@@ -1174,7 +1075,6 @@ describe("answerQuestion re-reads the dialog before it answers it", () => {
       claudeCandidates: (id) => note("pgrep", () => io.claudeCandidates(id)),
       cmdline: (pid) => note("cmdline", () => io.cmdline(pid)),
       capture: (id) => note("capture", () => io.capture(id)),
-      claudeSessionState: (pid) => note("sessionState", () => io.claudeSessionState(pid)),
       sendKeys: (args) => note("send", () => io.sendKeys(args)),
     };
 

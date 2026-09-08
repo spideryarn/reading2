@@ -1012,6 +1012,17 @@ export type PaneSurface =
  * into, appending to whitespace nobody meant. It is the residue of reading a
  * rendering rather than an editor's state, and it is not closable here.
  */
+/**
+ * A line's drawn width and left indent, for comparing a border against a border.
+ *
+ * Trailing whitespace is dropped because `capture-pane` pads to the pane width
+ * on some lines and not others, so the raw length is not the drawn length.
+ */
+function shapeOf(raw: string): { width: number; indent: number } {
+  const trimmed = raw.replace(/\s+$/, "");
+  return { width: trimmed.length, indent: trimmed.length - trimmed.replace(/^\s*/, "").length };
+}
+
 function boxLineIsOccupied(raw: string, isPromptLine: boolean): boolean {
   if (!isPromptLine) return raw.trim() !== "";
   const marker = raw.indexOf("❯");
@@ -1079,10 +1090,11 @@ function isBoxBorder(line: Line | undefined): boolean {
  *    front. `#{pane_current_command}` cannot see it and neither can `tpgid`:
  *    measured on 2026-09-08, Claude, the pane's bash and any child all share
  *    ONE process group, so `pgrp` = `sid` = `tpgid` = `pane_pid` for every one
- *    of them. The signal that CAN see it is Claude Code's own
- *    `~/.claude/sessions/<pid>.json`, whose `status` field reads `shell` while
- *    a session has shelled out — see `steer.ts`, which uses it as a fail-closed
- *    supplement and says why it is not a guarantee.
+ *    of them. **`~/.claude/sessions/<pid>.json` LOOKS LIKE THE ANSWER AND IS
+ *    NOT** — a guard on its `status: "shell"` was built on 2026-09-08 and
+ *    removed the same day. See `steer.ts`'s KNOWN GAPS, which carries the
+ *    expression out of the Claude Code binary that decides that field, so
+ *    nobody has to re-derive it before rebuilding the same mistake.
  *  - **A pane mid-redraw is a torn screen.** Claude Code repaints every frame,
  *    and a capture can land between the box being cleared and the draft being
  *    repainted. Both halves of a tear are real text.
@@ -1112,16 +1124,41 @@ export function paneSurface(capture: string): PaneSurface {
     };
   }
 
-  // The prompt line first, then every line down to the closing border. A
-  // continuation line is counted before the border test rather than after, so a
-  // draft line made only of decoration — which `cleanLines` would classify as a
-  // rule and this loop would otherwise mistake for the border — cannot end the
-  // scan while it is still somebody's text.
+  // The prompt line first, then every line down to the closing border.
+  //
+  // **THE CLOSING BORDER IS MATCHED ON GEOMETRY, NOT ON "IS IT A RULE", AND
+  // THAT IS GPT SOL'S BLOCKER ON THE FIRST VERSION OF THIS.** `cleanLines`
+  // calls any line a rule when it holds nothing but decoration, and a person
+  // can type decoration: Claude Code takes multiline input on Ctrl+J, so a box
+  // holding an empty first line, then `────────`, then `  caption` had its
+  // SECOND line taken for the closing border and came back `empty-input` with
+  // `caption` never read. Sol ran that construction against the code and got
+  // `{"kind":"empty-input","promptLine":1}`.
+  //
+  // Worse, the comment that used to be here claimed the opposite — that
+  // continuations were counted before the border test — and the code returned
+  // at the rule first. A comment asserting a property the code does not have is
+  // the failure this module keeps writing postmortems about, and it was mine.
+  //
+  // **Reversing the two lines is NOT the fix**, which is the trap: the genuine
+  // closing border is also a rule with nothing on it, so counting first would
+  // count the border itself as a line of draft and call every empty box
+  // occupied. What separates them is measured rather than guessed — in all
+  // seven real captures the closing border has **exactly the top border's
+  // width and indent** (122 columns on one pane, 150 on another, indent 0 on
+  // both), because Claude Code draws the box as a matched pair. A rule typed
+  // into a draft is short, or indented, or both.
+  //
+  // Wrong in the safe direction if a build ever draws them mismatched: the
+  // closing border is not found, the scan runs off the window, and the pane
+  // comes back `unrecognised` — a refusal, loudly, rather than a send.
+  const border = shapeOf(lines[at - 1]?.raw ?? "");
   let occupied = boxLineIsOccupied(lines[at]?.raw ?? "", true) ? 1 : 0;
   for (let i = at + 1; i < lines.length && i <= at + INPUT_BOX_LINES; i++) {
     const line = lines[i];
     if (!line) break;
-    if (line.rule !== "none") {
+    const here = shapeOf(line.raw);
+    if (line.rule !== "none" && here.width === border.width && here.indent === border.indent) {
       return occupied === 0
         ? { kind: "empty-input", promptLine: at }
         : { kind: "occupied-input", promptLine: at, lines: occupied };

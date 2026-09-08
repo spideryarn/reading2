@@ -94,15 +94,58 @@ describe("paneSurface tells an empty input box from an occupied one", () => {
   });
 
   /**
-   * Sol's second half of the same finding: a draft line made only of decoration
-   * is classified a `rule` by `cleanLines`, so a scan that stopped at the first
-   * rule would take it for the box's closing border and never look at the lines
-   * below it. The prompt line is occupied here anyway, which is why this is a
-   * belt rather than the braces — but the scan must not end early either.
+   * A decoration-only draft line must not end the scan. The prompt line is
+   * occupied here anyway, so this one would pass even with the bug below —
+   * which is exactly why it is not enough on its own, and why the next test
+   * exists.
    */
   it("does not take a decoration-only draft line for the closing border", () => {
     const surface = paneSurface(boxed("❯ here is a table", "────────", "  and its caption"));
     expect(surface.kind).toBe("occupied-input");
+  });
+
+  /**
+   * **GPT SOL'S BLOCKER ON THE BUILT CODE, and the reason the closing border is
+   * now matched on geometry rather than on "is it a rule".**
+   *
+   * Claude Code takes multiline input on Ctrl+J, so a person can put an empty
+   * first line into the box and paste a table under it. `cleanLines` calls any
+   * line holding nothing but decoration a rule — so the FIRST version of this
+   * function took that `────────` for the box's closing border, stopped, never
+   * read `caption`, and returned `{"kind":"empty-input","promptLine":1}`. Sol
+   * ran the construction rather than describing it, which is why this is a
+   * blocker and not a note.
+   *
+   * **The test above passes with that bug present**, because its prompt line is
+   * already occupied. That is the shape this whole file is about: a case that
+   * passes for a reason other than the one it was written for proves nothing.
+   * Here the prompt line is EMPTY, so the only thing that can make it occupied
+   * is reading past the decoration.
+   *
+   * **Reversing the two statements is not the fix**, and that trap is why the
+   * code measures instead. The genuine closing border is also a rule with
+   * nothing on it, so counting continuations first would count the border as a
+   * line of draft and call every empty box occupied. In all seven real captures
+   * the closing border has exactly the top border's width and indent, because
+   * Claude Code draws the box as a matched pair; a rule typed into a draft does
+   * not.
+   */
+  it("reads past a decoration line into the draft under it, with an EMPTY prompt line", () => {
+    const surface = paneSurface(boxed("❯ ", "────────", "  caption"));
+    expect(surface.kind).toBe("occupied-input");
+    if (surface.kind !== "occupied-input") return;
+    expect(surface.lines).toBe(2);
+  });
+
+  /**
+   * The other side of the same rule, and the reason it is geometry rather than
+   * "count everything": the genuine closing border must still end the scan, or
+   * every empty box on the fleet reads as occupied and no message goes out
+   * again.
+   */
+  it("still stops at the real closing border, so an empty box stays empty", () => {
+    const surface = paneSurface(boxed("❯ "));
+    expect(surface.kind).toBe("empty-input");
   });
 
   /**

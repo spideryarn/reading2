@@ -928,11 +928,16 @@ door rather than the dialog one. Proved end to end on a throwaway session, and t
 things it cost and the two conclusions that turned out to be wrong are in
 [260908f-prose-needs-an-empty-input-box-not-merely-a-box.md](../plans/260908f-prose-needs-an-empty-input-box-not-merely-a-box.md).
 
-**One thing A10 did NOT close, stated because the row implies otherwise.** "Or reach a foreground
-program" is narrowed, not shut. Neither `#{pane_current_command}` nor `/proc`'s `tpgid` can see it —
-Claude, the pane's bash and any child share one process group on this box, measured — so the only
-signal is Claude Code's own `~/.claude/sessions/<pid>.json`, which is used fail-open and is another
-application's undocumented private state.
+**One thing A10 did NOT close, stated because the row implies otherwise.** *"Or reach a foreground
+program"* is still open. Neither `#{pane_current_command}` nor `/proc`'s `tpgid` can see it —
+Claude, the pane's bash and any child share one process group on this box, measured on three panes.
+**And Claude Code's own `~/.claude/sessions/<pid>.json` is not the answer either**, which is worth
+recording because it looks like one: a guard on its `status: "shell"` was built and removed on
+2026-09-08, after GPT Sol read the 2.1.263 binary and found that the field means *idle with an
+unfinished `local_bash` task* — true whenever a backgrounded job is running behind a session that is
+perfectly able to receive a message. The guard would have refused every message to such a session
+indefinitely and starved its queue. The expression is quoted in `steer.ts`'s KNOWN GAPS so nobody
+rebuilds it from the same wrong premise.
 
 | | what | owner |
 |---|---|---|

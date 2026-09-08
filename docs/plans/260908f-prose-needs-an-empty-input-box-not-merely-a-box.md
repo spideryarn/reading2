@@ -36,7 +36,8 @@ Astra's sentence for it:
 Of those three, **the draft is the one that is happening now**; the modal is largely covered by
 `parsePane`; and the foreground program is the one this doc got wrong twice and settled at
 [§ What we are not building](#what-we-are-not-building) — not closable by anything the kernel or
-tmux will tell us, but narrowed by a signal Claude Code writes about itself.
+tmux will tell us, and not by the application's own status field either — that guard was built and
+removed the same day, on a premise read out of the Claude Code binary.
 
 ## The measurement
 
@@ -241,17 +242,25 @@ shelled out to. A check built on one would read strong and mean nothing, which i
 this project keeps writing postmortems about. The gap stays named in `steer.ts`'s KNOWN GAPS, with
 the measurement attached so the next person does not re-derive it.
 
-**What DID get built, because the conclusion above does not follow from the measurement.** Claude
-Code keeps its own note — `~/.claude/sessions/<pid>.json` — whose `status` field reads `shell` while
-a session has shelled out. It fires: pid 1471795 under pane `%2085` was in that state while this was
-written. `shelledOut` in `steer.ts` is the last check `sendMessage` makes, and it is **fail-open**,
-which is the reverse of everything else in that file and is the whole design. A `shell` status
-refuses; a missing file, unparseable JSON, an unrecognised status or a read that throws all proceed.
-It is another application's undocumented private state, so a guard that refused on its absence would
-stop every message on this box the day the format changed — and one that only ever ADDS a refusal
-cannot do that. It narrows the gap and does not close it: a child Claude Code has not recorded, or a
-status written a moment ago, is still invisible. Nothing here may be read as "we know who is reading
-the tty".
+**What got built on that reasoning, and then removed the same day.** Claude Code keeps its own note
+— `~/.claude/sessions/<pid>.json` — whose `status` field reads `shell`, and I read that name as
+meaning a program of Claude's is in front of the tty. **It does not.** Sol read the installed 2.1.263
+binary and found the expression that writes it, `_D==="idle"&&ZQr?"shell"` — that is
+`baseStatus === "idle" && hasUnfinishedLocalBash`, and `local_bash` counts a **backgrounded** task.
+So `shell` is true of the commonest healthy state on this box: Claude at an empty prompt, ready to be
+messaged, with a dev server or a test run behind it.
+
+Two things that cost, and both are worth more than the guard would have been. **A signal's name is
+not its meaning**, and this one belongs to another application whose vocabulary is not ours; I
+inferred it rather than reading what produced it. And **the argument for shipping it was false** —
+*"it can only ever ADD a refusal, so it cannot break anything"*. It cannot cause an unsafe send. But
+a long-running background job would have refused every message to that session indefinitely, and
+`drain.ts` would have put the same queued item back on every pass until it aged out. A guard that
+only refuses can still destroy availability, and this one would have starved the queue. The binary's
+expression is now in `steer.ts`'s KNOWN GAPS so nobody rebuilds it from the same wrong premise.
+
+**So the foreground gap is open, and stays named.** Nothing on this box can say who is reading that
+tty.
 
 **~~A `clipped` signal out of `materialAbove`~~ — this one was wrong, and it is kept here rather
 than quietly deleted because the reasoning is a trap worth recognising.** The argument was: no
@@ -488,6 +497,61 @@ not pretended to have happened.
 **Left alone, deliberately.** Sol's finding 4 — the browser drops `delivery`, so a `send-partial`
 renders as *"Nothing was sent."* — is real and is A11b's consumer flattening an honest union. It
 belongs to the delivery-receipt owner and has been handed over rather than quietly fixed here.
+
+## What the SECOND review changed, and it was more than the first
+
+**Sol reviewed the built code and said "do not ship this exact version."** Weighted higher than the
+plan-stage pass on purpose, and it earned it: a plan-stage review cannot find a comment that lies
+about the code beneath it.
+[The answer](260908f-prose-needs-an-empty-input-box-not-merely-a-box-review2-sol.md).
+
+**The blocker, and it was my comment that was wrong before the code was.** I wrote that a
+continuation line is counted *before* the border test, "so a draft line made only of decoration
+cannot end the scan while it is still somebody's text". The code returned at the rule first and did
+exactly what the comment denied. Claude Code takes multiline input on Ctrl+J, so a box holding an
+empty first line, then `────────`, then `  caption` came back `empty-input` with `caption` never
+read — Sol ran the construction rather than describing it. **And the test I had written for that
+very case passed with the bug present**, because its prompt line was already occupied: a test that
+passes for a reason other than the one it was written for, which is the class of the postmortem
+sitting beside this file.
+
+Reversing the two statements is not the fix, which is the trap — the genuine closing border is also
+a rule with nothing on it, so counting first would call every empty box occupied. It is measured
+instead: in all seven real captures the closing border has **exactly the top border's width and
+indent** (122 columns on one pane, 150 on another, indent 0 on both), because Claude Code draws the
+box as a matched pair. A rule typed into a draft is short, or indented, or both. Wrong in the safe
+direction if a build ever draws them mismatched: the scan runs off the window and the pane comes
+back `unrecognised`.
+
+**`shelledOut` is gone, and it should never have been built.** Sol read the installed Claude Code
+2.1.263 binary and found what writes that field — `_D==="idle"&&ZQr?"shell"`, i.e.
+`baseStatus === "idle" && hasUnfinishedLocalBash` — and `local_bash` includes a **backgrounded**
+task. Verified here against the same binary. So `status: "shell"` is true of the commonest healthy
+state on this box: Claude at an empty prompt, ready to be messaged, with a dev server or a test run
+behind it. I had inferred the field's meaning from its name without checking what produced it.
+
+**And the argument I shipped it on was false.** *"It can only ever ADD a refusal, so it cannot break
+anything"* — it cannot cause an unsafe send, but a long-running background job would have refused
+every message to that session indefinitely, and `drain.ts` would have put the same queued item back
+on every pass until it aged out. **A guard that only refuses can still destroy availability**, and
+this one would have starved the queue. The expression from the binary is now in `steer.ts`'s KNOWN
+GAPS so the next person does not rebuild it.
+
+**Three smaller ones, all fixed.** The drain test queued one item, so "put back at the head" and
+"put back at the tail" were the same state and a mutation moving it to the tail would have passed —
+it queues two now and asserts which one the next pass attempts. The `input-not-empty` join was
+correct at every hop and entirely unprotected, because the client models a refusal code as an
+arbitrary `string`; there is a browser test now, and mutating the comparison by one character makes
+it red. And `Handoff` assumed every tmux name is a safe shell word — it quotes, and withholds the
+command entirely for a name it cannot quote, because a command that runs and resumes the *wrong*
+session is worse than no command.
+
+**One thing Sol did not find, which the fix for its last point did.** Writing `/[\x00-\x1f]/` into
+`SessionParts.tsx` put a literal NUL byte in the source, which made `grep` treat the whole file as
+binary and return nothing for every pattern — including the component's own name, so it appeared to
+have been deleted. `steer.ts` already carries the rule (*"a control character in a SOURCE file is a
+byte grep cannot see and a reviewer cannot read, and this repo has been bitten by writing one"*) and
+the fix here is the same code-point loop, with the story attached.
 
 ## Risks
 

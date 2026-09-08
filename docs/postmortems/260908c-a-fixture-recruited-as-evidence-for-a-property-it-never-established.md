@@ -214,7 +214,7 @@ below is mechanical rather than a resolution to read more carefully.
    title claims the corpus. One `readdirSync(FIXTURES).filter(f => f.startsWith("dialog-"))` fixes
    it.
 
-   **Done, in `d31c…`, on the strength of this paragraph.** The list is now
+   **Done, in `a9aeaaba`, on the strength of this paragraph — the same commit as this file.** The list is now
    `readdirSync(FLEET_PANES).filter(f => f.startsWith("dialog-"))`, with a floor asserted on the
    count — because a filter that matched nothing would iterate zero fixtures and pass, which is how
    this kind of test dies quietly. It covered six of sixteen and now covers sixteen; all sixteen
