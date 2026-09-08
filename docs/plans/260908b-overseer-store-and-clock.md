@@ -1,10 +1,20 @@
 # The Overseer's store, and the clock it gives everything else
 
-**Status 2026-09-08, 08:00: S1, S2 (fixed), S3 and S6 are landed and green; S4 is being built; S5
-not started.** Evidence: `npm run typecheck` reports **0** failures across the tree and 241 tests
-pass over the seven affected files, at `001deace`. Sol's reviews of the S2 fixes and of S3 are
-running now; S6 is landed but **not finished** — its reclassification measurement and its mutation
-sweep are outstanding, because the agent building it hit the account session limit.
+**Status 2026-09-08, 09:10: the Overseer runs.** S1, S2, S3, S4 and S6 are landed, reviewed and
+green; S5 (the systemd units) is being built now; S3-03 is the one deferred finding. Evidence:
+`npm run typecheck` reports **0** failures across all four projects, **245 tests pass** across the
+eight Overseer files, `tools/overseer/` plus `scripts/overseer.ts` is 5,830 lines, and the daemon has
+been run against the live dashboard — its `events.jsonl` contains a `tmux-session-gone` for its own
+previous incarnation.
+
+**Both P0s are closed**, one in the differ and one in the store's lock, each after a review round that
+found the first fix insufficient. Every Sol finding is either fixed or refused with reasons in this
+file.
+
+**What is NOT done, and is not an agent's to do:** the reboot criterion in § S5. Nobody has rebooted
+the box, and nobody should — it carries ~27 live agent sessions and ~15 worktrees of other people's
+uncommitted work. See § S5 for what is proven instead, and why that evidence is the thing Sol's F7
+was actually about.
 
 Greg, 2026-09-08, on the remaining work: *"Reprioritise as you see fit, work in parallel where you
 can."* What that changed is in § The order, reconsidered.
