@@ -15,13 +15,14 @@
  * See docs/reusable/codex-cli-as-subagent.md.
  */
 
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import {
-  chmodSync, closeSync, ftruncateSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync,
-  writeFileSync, writeSync,
+  chmodSync, closeSync, copyFileSync, existsSync, ftruncateSync, mkdirSync, mkdtempSync, openSync,
+  readFileSync, rmSync, writeFileSync, writeSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   authHint, authPlan, buildCodexArgs, childEnv, combinedLog, formatAnswer, isCredentialFailure,
@@ -38,13 +39,18 @@ const noiseGenerator = (marker: string) =>
   `pad=$(printf 'x%.0s' {1..200})\nfor i in $(seq 1 ${NOISE_LINES}); do printf '${marker}-%s %s\\n' "$i" "$pad"; printf '${marker}ERR-%s %s\\n' "$i" "$pad" >&2; done`;
 
 /** Write an executable stand-in for `codex` and return its path. */
+/** The repo root, so a test can spawn the wrapper the way a person does. */
+const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+
 function fakeCodex(body: string): string {
   const dir = mkdtempSync(join(tmpdir(), "fake-codex-"));
   const path = join(dir, "codex");
   // Every stand-in needs the -o path, since the wrapper fails closed without that file.
   writeFileSync(
     path,
-    `#!/usr/bin/env bash\nout=""; prev=""\nfor a in "$@"; do if [ "$prev" = "-o" ]; then out="$a"; fi; prev="$a"; done\n${body}\n`,
+    // `here` is the stand-in's own directory: somewhere a body can leave scratch files that the
+    // test then reads, without inventing an environment variable to pass one in.
+    `#!/usr/bin/env bash\nout=""; prev=""\nfor a in "$@"; do if [ "$prev" = "-o" ]; then out="$a"; fi; prev="$a"; done\nhere="$(cd "$(dirname "$0")" && pwd)"\n${body}\n`,
   );
   chmodSync(path, 0o755);
   return path;
@@ -97,7 +103,7 @@ describe("parseArgs", () => {
       expect(parsed.effort).toBe(effort);
       const built = buildCodexArgs({
         model: parsed.model, effort: parsed.effort, sandbox: "read-only",
-        repoDir: ".", outFile: "/tmp/o", prompt: "x",
+        repoDir: ".", outFile: "/tmp/o",
       });
       expect(built.join(" ")).toContain(`-c model_reasoning_effort=${effort}`);
     }
@@ -118,7 +124,7 @@ describe("parseArgs", () => {
 
 describe("buildCodexArgs", () => {
   const argv = buildCodexArgs({
-    model: "m", effort: "high", sandbox: "read-only", repoDir: ".", outFile: "/tmp/o", prompt: "-p",
+    model: "m", effort: "high", sandbox: "read-only", repoDir: ".", outFile: "/tmp/o",
   });
 
   it("pins approval_policy=never, without which read-only is not a boundary", () => {
@@ -127,16 +133,35 @@ describe("buildCodexArgs", () => {
     expect(argv.join(" ")).toContain("-c approval_policy=never");
   });
 
-  it("puts the prompt last, after `--`, so a leading dash stays a prompt", () => {
-    expect(argv.at(-1)).toBe("-p");
+  it("ends `-- -` and carries no prompt, so argv has no size to exceed", () => {
+    /* The prompt travels on fd 0 since 2026-09-08. In argv it was capped at Linux's
+       MAX_ARG_STRLEN — 128 KB for a single argument — and an ordinary 138 KB review prompt died
+       with `spawn E2BIG` before codex started, with no answer file to tell it from a killed run.
+
+       `--` still ends flag parsing, so the `-` after it is a positional; `-` is codex's sentinel
+       for "read the instructions from stdin".
+
+       **A SUPPORTING TEST, NOT THE ONE THAT MATTERS.** This asserts the argv's shape, and the
+       shape was never wrong — it was too long. The test that would have caught the bug spawns a
+       real stand-in with a 256 KB prompt; see "the prompt reaches codex" below. */
+    expect(argv.at(-1)).toBe("-");
     expect(argv.at(-2)).toBe("--");
+  });
+
+  it("passes `-` as the ONLY positional, so codex cannot append a second prompt", () => {
+    /* `codex exec --help`: "If stdin is piped and a prompt is also provided, stdin is appended as
+       a `<stdin>` block". A stray positional alongside `-` would therefore send the prompt twice
+       and neither copy would look wrong. */
+    const dashDash = argv.indexOf("--");
+    expect(dashDash).toBeGreaterThan(-1);
+    expect(argv.slice(dashDash + 1)).toEqual(["-"]);
   });
 
   it("selects the review profile by name and never alongside --sandbox", () => {
     // The config reference says not to combine default_permissions with sandbox_mode, and
     // approval_policy=never is as load-bearing for a profile as for a mode.
     const review = buildCodexArgs({
-      model: "m", effort: "high", sandbox: "review", repoDir: ".", outFile: "/tmp/o", prompt: "p",
+      model: "m", effort: "high", sandbox: "review", repoDir: ".", outFile: "/tmp/o",
     }).join(" ");
     expect(review).toContain("-c default_permissions=review");
     expect(review).not.toContain("--sandbox");
@@ -577,12 +602,145 @@ describe("readAnswerForConsole", () => {
   }, 30_000);
 });
 
+/* ------------------------------------------------------------------ *
+ * The prompt actually reaching codex — end to end, through the CLI.
+ * ------------------------------------------------------------------ */
+
+/**
+ * **The tests that would have caught `spawn E2BIG`, and the argv tests above could not.**
+ *
+ * Until 2026-09-08 the prompt was the last element of argv, and Linux caps a *single* argument at
+ * `MAX_ARG_STRLEN` — 32 pages, 128 KB. A code-review prompt carrying a scoped diff passes that
+ * easily; the one that failed was 138 KB. The wrapper died before codex started, wrote no answer
+ * file, and a *killed* codex run does write one — so neither the exit code nor the file's existence
+ * told the two apart.
+ *
+ * The unit tests above assert the argv's SHAPE, and the shape was correct. A test that checks what
+ * a command line says will never find a limit on how much it may say — so these spawn the wrapper
+ * for real, against a stand-in codex, and check what arrived. No model, no network, no credential.
+ *
+ * docs/plans/260908g-run-codex-sends-a-large-prompt-on-stdin-instead-of-dying-at-execve.md.
+ */
+describe("the prompt reaches codex", () => {
+  /** Runs `scripts/run-codex.ts` for real, with `bin` shadowing codex on PATH. */
+  function runWrapper(bin: string, argv: string[], timeoutMs = 60_000, env: NodeJS.ProcessEnv = {}) {
+    const dir = dirname(bin);
+    return new Promise<{ status: number | null; stdout: string; stderr: string }>((settle) => {
+      const child = spawn("npx", ["tsx", join(REPO, "scripts/run-codex.ts"), ...argv], {
+        cwd: REPO,
+        env: { ...process.env, ...env, PATH: `${dir}:${process.env["PATH"] ?? ""}` },
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+      let stdout = "";
+      let stderr = "";
+      child.stdout.on("data", (b: Buffer) => { stdout += b.toString(); });
+      child.stderr.on("data", (b: Buffer) => { stderr += b.toString(); });
+      const timer = setTimeout(() => child.kill("SIGKILL"), timeoutMs);
+      child.on("close", (status) => {
+        clearTimeout(timer);
+        settle({ status, stdout, stderr });
+      });
+    });
+  }
+
+  it("carries a prompt far larger than argv can hold, byte for byte", async () => {
+    /* 256 KB — twice the one-argument ceiling, so this fails at the real `spawn` boundary against
+       the old implementation rather than passing by luck.
+
+       The content is chosen to be hostile in the three ways a prompt can be: it STARTS WITH A DASH
+       (which `--` has to keep from being read as a flag), it contains multibyte text (so a
+       decode/re-encode round trip would corrupt it), and it has NO TRAILING NEWLINE (so a reader
+       that waits for one would hang rather than fail). */
+    const prompt = `-not-a-flag ✂ ünïcödé ${"x".repeat(256 * 1024)} tail-no-newline`;
+    const promptPath = join(mkdtempSync(join(tmpdir(), "run-codex-big-")), "prompt.txt");
+    writeFileSync(promptPath, prompt);
+    const answerPath = `${promptPath}.answer`;
+
+    /* The stand-in compares stdin against the original file BYTE FOR BYTE, and writes its answer
+       only if they match. So a truncated, re-encoded or empty prompt produces no answer rather than
+       a passing test — and the comparison cannot finish at all unless EOF arrived, which is the
+       other half of what is being claimed. */
+    const bin = fakeCodex(
+      `cat > "$here/got.txt"\n`
+      + `if cmp -s "$here/got.txt" "$here/want.txt"; then printf 'MATCHED\\n' > "$out"; else printf 'DIFFERED\\n' > "$out"; fi`,
+    );
+    const cmpDir = dirname(bin);
+    copyFileSync(promptPath, join(cmpDir, "want.txt"));
+    const r = await runWrapper(bin, [
+      "--prompt-file", promptPath, "--output", answerPath, "--sandbox", "read-only", "--quiet",
+    ]);
+    expect(r.stderr).not.toContain("E2BIG");
+    expect(r.status).toBe(0);
+    expect(readFileSync(answerPath, "utf8").trim()).toBe("MATCHED");
+  }, 90_000);
+
+  it("gives the SECOND credential attempt the whole prompt too, not an empty one", async () => {
+    /**
+     * **The trap in the fix, caught by GPT Sol before it was written.**
+     *
+     * An fd carries a file offset and the child shares it. Attempt one reads the prompt to EOF and
+     * leaves the offset there — so attempt two, handed the same fd, reads NOTHING. Codex would be
+     * asked to review an empty instruction and would answer something plausible: exit 0, an answer
+     * file, no error. The retry that exists to rescue a credential failure would silently become a
+     * review of no code at all.
+     *
+     * The stand-in fails attempt one with a message the wrapper recognises as a credential
+     * problem, and verifies stdin on BOTH attempts.
+     */
+    const prompt = `attempt-both ✂ ${"y".repeat(200 * 1024)}`;
+    const dir = mkdtempSync(join(tmpdir(), "run-codex-retry-"));
+    const promptPath = join(dir, "prompt.txt");
+    writeFileSync(promptPath, prompt);
+    const answerPath = join(dir, "answer.txt");
+
+    /* `$here/n` counts attempts; each one records how many bytes it was handed. */
+    const bin = fakeCodex(
+      `n=$(cat "$here/n" 2>/dev/null || echo 0); n=$((n+1)); echo "$n" > "$here/n"\n`
+      /* **`wc -c`, NOT `wc -c < /dev/stdin`.** On Linux `/dev/stdin` is `/proc/self/fd/0`, and
+         opening it for a REGULAR FILE creates a fresh open file description at offset 0 — so a
+         redirect re-reads the whole file however far fd 0 has been advanced, and could never
+         observe the shared-offset bug this test exists for. Reading fd 0 as inherited is what a
+         real codex does and is the only version of this that can fail. Found by mutating the fix
+         out and watching the first draft pass anyway. */
+      + `wc -c > "$here/bytes-$n"\n`
+      /* `ERROR` at the start of the line is load-bearing: `isCredentialFailure` filters to lines
+         matching /^\s*ERROR\b/ before it looks for the reason, so a message without it is not a
+         credential failure and the wrapper does not retry at all. The first draft said
+         "429 You've hit your usage limit" with no prefix, got one attempt, and failed on an
+         assertion about the second — which is at least a test that noticed. */
+      + `if [ "$n" = "1" ]; then echo "ERROR: 429 usage limit reached" >&2; exit 1; fi\n`
+      + `printf 'SECOND-ATTEMPT-OK\\n' > "$out"`,
+    );
+    const cmpDir = dirname(bin);
+    /* **`CODEX_API_KEY` is passed explicitly**, and that is load-bearing rather than tidy: with no
+       key set anywhere, `authPlan` is one entry long, there is no second attempt, and this test
+       passes while asserting nothing. It did exactly that on the first draft — which had an escape
+       hatch reading "no second attempt means no key, so return" — and that draft went GREEN against
+       a deliberately reintroduced shared-fd bug. An escape hatch that skips the assertion is the
+       failure this whole file is about. */
+    const r = await runWrapper(bin, [
+      "--prompt-file", promptPath, "--output", answerPath, "--sandbox", "read-only", "--quiet",
+      "--auth", "subscription-first",
+    ], 90_000, { CODEX_API_KEY: "sk-TEST-NOT-A-REAL-KEY" });
+
+    /* Both attempts ran — asserted, not assumed — and BOTH were handed the whole prompt. The
+       second number is the one that reads 0 if the fd is reused across attempts. */
+    expect(existsSync(join(cmpDir, "bytes-1"))).toBe(true);
+    expect(existsSync(join(cmpDir, "bytes-2"))).toBe(true);
+    const first = Number(readFileSync(join(cmpDir, "bytes-1"), "utf8").trim());
+    const second = Number(readFileSync(join(cmpDir, "bytes-2"), "utf8").trim());
+    expect(first).toBe(Buffer.byteLength(prompt));
+    expect(second).toBe(Buffer.byteLength(prompt));
+    expect(r.status).toBe(0);
+  }, 120_000);
+});
+
 describe("runCodex", () => {
   it("captures the activity log instead of streaming it", async () => {
     // 2000 fat lines stands in for a high-effort review dumping file contents and grep hits.
     const bin = fakeCodex(`${noiseGenerator("[")}\nprintf 'ANSWER\\n' > "$out"`);
     const r = await runCodex({ argv: buildCodexArgs({
-      model: "m", effort: "low", sandbox: "read-only", repoDir: ".", outFile: "/tmp/unused", prompt: "p",
+      model: "m", effort: "low", sandbox: "read-only", repoDir: ".", outFile: "/tmp/unused",
     }), timeoutMs: 30_000, stream: false, bin });
     expect(r.status).toBe(0);
     // The point: it is large, and it is in our hands rather than on the caller's stdout. Asserting
@@ -752,7 +910,20 @@ describe("the CLI, end to end", () => {
     expect(r.stderr).not.toContain("SENTINEL");
   }, 60_000);
 
-  it("--dry-run caps the prompt, which with --prompt-file is unbounded caller-supplied text", () => {
+  it("--dry-run prints a command that runs, and names the prompt rather than embedding it", () => {
+    /**
+     * **This assertion is the reverse of the one it replaces, and the reversal is the point.**
+     *
+     * It used to require the prompt's first bytes in the output (`PROMPT-HEAD`), capped, because
+     * the prompt WAS the last argv element and a dry run that omitted it would have been lying
+     * about the command. Since 2026-09-08 the prompt travels on fd 0, so a dry run that pasted it
+     * into the line would be describing a command nobody could run.
+     *
+     * What a dry run owes its reader is a line they can paste and a straight answer about where the
+     * rest comes from. So: the redirect is in the command, the prompt's path and byte count are on
+     * their own comment line, and **the prompt's contents are nowhere** — which also retires the
+     * third unbounded path to a caller's stdout that the old test existed to cap.
+     */
     const dir = mkdtempSync(join(tmpdir(), "dry-run-"));
     const promptPath = join(dir, "prompt.md");
     writeFileSync(promptPath, `PROMPT-HEAD${"w".repeat(2 * 1024 * 1024)}PROMPT-TAIL`);
@@ -760,8 +931,14 @@ describe("the CLI, end to end", () => {
       encoding: "utf8",
     });
     expect(r.status).toBe(0);
-    expect(r.stdout).toContain("PROMPT-HEAD");
     expect(r.stdout).toContain("approval_policy=never");
+    // The command ends `-- -` and takes the prompt from the file, by name.
+    expect(r.stdout).toContain("-- -");
+    expect(r.stdout).toContain(promptPath);
+    expect(r.stdout).toContain(`${2 * 1024 * 1024 + "PROMPT-HEAD".length + "PROMPT-TAIL".length} bytes`);
+    // Not the prompt itself, at either end — a 2 MB paste is not a dry run.
+    expect(r.stdout).not.toContain("PROMPT-HEAD");
+    expect(r.stdout).not.toContain("PROMPT-TAIL");
     expect(r.stdout.length).toBeLessThan(25_000);
   }, 60_000);
 
