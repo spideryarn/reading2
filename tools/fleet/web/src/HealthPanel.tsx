@@ -28,7 +28,9 @@
 import type { ReactNode } from "react";
 
 import { BoxActionsCard } from "./ActionButtons";
+import { HealthHistory } from "./HealthHistory";
 import { RawValue } from "./RawValue";
+import { httpHistoryApi, type HistoryApi } from "./health-history-client";
 import { Explain, type Tip } from "./Tooltip";
 import { readHealthStats, type Stat } from "./health-view";
 import type { ActionsUi } from "./useActions";
@@ -123,7 +125,18 @@ function Verdict({ health }: { health: unknown }): ReactNode {
   );
 }
 
-export function HealthPanel({ health, actions }: { health: unknown; actions: ActionsUi }): ReactNode {
+export function HealthPanel({
+  health,
+  actions,
+  /* Injectable for the same reason `MessagesApi` is: a test needs to hand this
+     panel a window of history without a server, and the default is the real
+     one so no caller has to know. */
+  historyApi = httpHistoryApi,
+}: {
+  health: unknown;
+  actions: ActionsUi;
+  historyApi?: HistoryApi;
+}): ReactNode {
   /**
    * **The buttons are drawn even when the readings are not.**
    *
@@ -184,6 +197,14 @@ export function HealthPanel({ health, actions }: { health: unknown; actions: Act
           </div>
         </>
       ) : null}
+
+      {/* **Under the tiles, above the raw dump.** The tiles say how the box is
+          now; this says how it has been, which is the question the tiles cannot
+          answer and the one Greg opens the page after an outage to ask. It
+          fetches its own data — the history is about a megabyte and changes
+          once a minute, so putting it in the five-second state poll would be
+          the wrong shape twice over. */}
+      <HealthHistory api={historyApi} nowMs={Date.now()} />
 
       {/* **The raw dump is a disclosure now, not the page.** It read as a debug
           view — load, memory, swap, disk and attribution as bare key-value

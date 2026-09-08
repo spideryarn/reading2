@@ -829,10 +829,35 @@ until Friday, and a gauge that had been reporting `ok` would have been wrong for
 expensive direction.
 
 So "waiting for information that will never arrive" is not quite it: the information can arrive, just
-not from looking again. **Whether four days of `unknown` is honest or merely useless is Greg's call**,
-and the two options are to keep it as it is, or to let an attributed cache showing plenty of headroom
-outweigh a contradicted rejection and report `ok` with the standing fact named beside it. Nothing has
-been changed on the strength of this note.
+not from looking again.
+
+**And the decision Greg is actually being asked for is not the one that first appears.** Two different
+`seven_day` boundaries — the rejections' 2026-09-12T18:00Z and the cache's 2026-09-15T04:59Z — cannot
+belong to one account's one window, so these are almost certainly *another account's* rejections,
+sitting in transcripts on a box that has only one `~/.claude/projects`. Which makes the four days of
+`unknown` **the cost of a deferral becoming visible**, not a defect in the verdict:
+
+> Right now, I have a couple of Claude Max subscriptions, and I run /login every couple of days to
+> switch when I hit limits. In future I expect to have more. But let's say that multiple Claude Max
+> subscriptions is MEDIUM-TERM, i.e. out of scope for the next day or two.
+>
+> — Greg, 2026-09-08
+
+A single-account gauge reading a multi-account box will meet contradicted evidence roughly every time
+he switches, and it will be right to refuse each time. So the question is not *"is `ok` or `unknown`
+more honest here"* but **"do I want a per-account gauge that goes quiet after every `/login`, or is it
+time to un-defer multi-account?"** — `orchestrator-setup`'s framing, and the better one.
+
+Three ways to go, if the answer is *stay single-account*: keep it as it is; let an attributed cache
+showing plenty of headroom outweigh a contradicted rejection and report `ok` with the standing fact
+beside it; or — cheapest, and not a judgement about which observation to believe — keep `unknown` and
+**render the reason**, since the verdict already carries it: *"27 rejections on this box belong to a
+weekly window that is not this account's; resolves 2026-09-12T18:00Z or when you switch accounts."*
+That is the dashboard's own move of scoping the question by saying what it is about, and a gauge that
+says why it cannot answer does not train a reader to ignore it the way a bare grey one does. It needs
+no change here at all — only a renderer that reads `verdict.reasons`.
+
+Nothing has been changed on the strength of this note.
 
 **Deliberately not done, and it is the half of "done looks like" that is missing**: the usage block
 is **not** written into `current.json`. That means a schema field, a `parseCheckpoint` arm, both
@@ -1114,10 +1139,35 @@ comment rather than left to be discovered.
 
 ### Stage D — box-health history (`fleet-health-history`)
 
-Owned elsewhere; the contract is [§ Where the health history lives](#where-the-health-history-lives-and-the-one-thing-owed-in-return)
-above. **Swap is not part of the work**: `SwapReading` already gives `usedBytes`/`totalBytes`/fraction
-and the per-file breakdown, `SwapActivityReading` already gives si/so and `activelySwapping`, and
-`health-view.ts` already draws the card. Greg's bullet asks for *history*; the measurement exists.
+The contract is [§ Where the health history lives](#where-the-health-history-lives-and-the-one-thing-owed-in-return)
+above, and it is met. **Swap is not part of the work**: `SwapReading` already gives
+`usedBytes`/`totalBytes`/fraction and the per-file breakdown, `SwapActivityReading` already gives
+si/so and `activelySwapping`, and `health-view.ts` already draws the card. Greg's bullet asks for
+*history*; the measurement exists.
+
+**Built 2026-09-08. The plan, the review and what changed because of it:**
+[260908f-box-health-history-24h-graphs-and-swap-retention.md](260908f-box-health-history-24h-graphs-and-swap-retention.md).
+
+- Store: `tools/fleet/health-history.ts` — append-only JSONL under `~/.fleet-health/`
+  (`FLEET_HEALTH_DIR`, absolute only), two files rotating at 8 MiB, `tools/overseer/jsonl.ts` for the
+  append discipline and `tools/overseer/lock.ts` for the writer lock. The whole `HealthReport` is
+  stored verbatim; there is no projection at the write boundary.
+- Join: `tools/fleet/health-wiring.ts` is the single composition, called once by `server.ts`.
+  `refreshOnce` gained `retainHealth`, `refreshMs` and `now`, and `refreshHealth` now returns what
+  happened instead of `void`.
+- Route: `GET /api/health/history?hours=` — gzipped, never downsampled.
+- Panel: a verdict strip and four series under the tiles on Box health.
+
+**What other agents should know:**
+
+- `nextWaitMs(refreshMs, collectionFailed)` is exported from `refresh.ts` and is now the **one** copy
+  of the backoff rule. `refreshLoop` in `server.ts` uses it, and so does every stored sample. Do not
+  inline it again.
+- **A break in the chart is never labelled with a cause.** It means no sample was written, which is
+  the box, the dashboard, a hung collection, a failed append, or a restart. If you add a state here,
+  it must not claim to know which.
+- A `HistoryPayload` type sits in `routes-health-history.ts` awaiting `wire.ts`;
+  `claude-agents-dashboard` owns that move.
 
 ### Stage E — dictation on every fleet input box (`w2-fleet-dictation`)
 

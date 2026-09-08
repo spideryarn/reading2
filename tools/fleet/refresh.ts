@@ -22,16 +22,39 @@
  *     which had it backwards: a collection fails when the box is in trouble, so
  *     the reading that would explain the failure was the one the failure
  *     prevented (GPT Astra's A17).
- *  3. **Publish.** The page and the stream get the fresh snapshot BEFORE
+ *  3. **Retain**, before publishing, so the file and the stream cannot disagree
+ *     about a turn. Sub-millisecond (measured), synchronous, and wrapped: a
+ *     retention layer that takes the dashboard down is worse than no retention
+ *     layer. See health-history.ts.
+ *  4. **Publish.** The page and the stream get the fresh snapshot BEFORE
  *     anything is delivered. Delivery blocks this process — see drain.ts — and
  *     nothing a person is looking at should wait behind a keystroke.
- *  4. **Drain, last, and only after a collection that worked**, in its own
+ *  5. **Drain, last, and only after a collection that worked**, in its own
  *     try/catch. A drain that throws must not set `lastError`, must not make a
  *     good collection report as failed, and must not stop the loop: those are
  *     three different ways of turning a delivery problem into a dead dashboard.
  */
 import type { FleetSnapshot } from "./collect.js";
 import { summariseDrain, type DrainResult } from "./drain.js";
+import type { HealthTurn, SampleStamp } from "./health-history.js";
+
+/**
+ * How long the loop waits before the next turn — **the one copy of the rule.**
+ *
+ * It is here, exported, rather than inline in `refreshLoop`, because two things
+ * need it and they must not disagree: the loop that does the waiting, and the
+ * sample that records what the next reading was expected at. A history whose
+ * `nextDueMs` said 60s while the loop actually waited 300s would draw every
+ * backed-off turn as an outage — an alarm that is usually wrong, which is the
+ * same picture as a quiet page over a dead box.
+ *
+ * A failure waits five times as long, capped at five minutes, so a broken box is
+ * not also hammered. That number is `server.ts`'s, from the day this box hit
+ * load average 391.
+ */
+export function nextWaitMs(refreshMs: number, collectionFailed: boolean): number {
+  return collectionFailed ? Math.min(refreshMs * 5, 300_000) : refreshMs;
+}
 
 /**
  * Everything one turn needs from the outside world.
@@ -46,8 +69,31 @@ export type RefreshDeps = {
   collect(): Promise<FleetSnapshot>;
   /** Store the snapshot, or the error beside the previous snapshot. Called before `publish`. */
   keep(result: { snapshot: FleetSnapshot } | { error: string }): void;
-  /** Take the box's vitals. Guarded by its own implementation; never throws here. */
-  refreshHealth(): void;
+  /**
+   * Take the box's vitals, and **say which of the two things happened.**
+   *
+   * It used to return `void`, and that was enough while nothing was written
+   * down. It is not enough now: `server.ts` catches a throw from
+   * `collectHealth` and leaves its `health` variable holding the PREVIOUS
+   * report, so a retention layer that read that variable would append a reading
+   * nobody took, wearing a fresh timestamp — a lie with a clock on it, which is
+   * the thing `fleetState` already refuses to write for `collectedAt`.
+   *
+   * Guarded by its own implementation; never throws here.
+   */
+  refreshHealth(): HealthTurn;
+  /**
+   * Write the turn down, before it is published.
+   *
+   * A required field rather than an optional one, so a caller cannot forget it
+   * and still compile — **the bug this whole file was re-shaped around was a
+   * missing line in exactly this function.**
+   */
+  retainHealth(turn: HealthTurn, stamp: SampleStamp): void;
+  /** How often the loop intends to collect, for `nextWaitMs`. */
+  refreshMs: number;
+  /** The clock, injectable so a test can assert on the stamp it wrote. */
+  now(): Date;
   /** Broadcast the current state to the stream, and make it available to pollers. */
   publish(): void;
   /** One delivery pass. The whole snapshot, because `tmuxServerPid` is load-bearing. */
@@ -85,11 +131,52 @@ export async function refreshOnce(deps: RefreshDeps): Promise<RefreshOutcome> {
     deps.logError(`collection failed: ${error}`);
   }
 
-  deps.refreshHealth();
+  const turn = deps.refreshHealth();
+
   // BEFORE THE DRAIN, ALWAYS. A subscriber sees the failure as well as the
   // success — silence is what a healthy quiet box looks like, and the Overseer
   // consumes this stream to record fleet history.
   deps.publish();
+
+  /**
+   * AFTER `publish`, BEFORE `drain`, and both halves of that are deliberate.
+   *
+   * **After publish** because publishing is what a person is waiting on, and
+   * writing the history down is not — an earlier draft had this before, on a
+   * "the file and the stream cannot disagree about a turn" argument that does
+   * not survive contact: the append is caught rather than fatal, so it was
+   * never atomic with the publish, and the page fetches the history on a
+   * separate request anyway. GPT Sol's finding 11. It is measurably cheap
+   * (0.017 ms median, 0.5 ms worst at load 17.5) but the box this watches is
+   * one where dirty-page writeback can stall, and nothing that can stall
+   * belongs in front of the live update.
+   *
+   * **Before drain** because the drain is up to six `execFileSync` calls at ten
+   * seconds each, and anything behind it can be starved for a minute.
+   *
+   * **In its own try/catch** because a full disk must not stop the loop that is
+   * keeping the page alive. The failure is not swallowed: the store records it
+   * on itself and the history route carries it, so the page can say *nothing is
+   * being written* rather than growing a hole that looks like the box going
+   * down.
+   *
+   * `nextDueMs` is what the writer EXPECTS the interval to the next sample to
+   * be, built from the three things this turn actually measured rather than
+   * from an assumed cadence: the wait the loop is about to take, how long this
+   * collection took, and how long the health reading took. A reader compares
+   * the real interval against it to tell a break from a legitimate backoff —
+   * health-history.ts § `nextDueMs`.
+   */
+  try {
+    const collectionTookMs = collected?.tookMs ?? 0;
+    const healthTookMs = turn.kind === "reading" ? turn.report.tookMs : 0;
+    deps.retainHealth(turn, {
+      at: deps.now().toISOString(),
+      nextDueMs: nextWaitMs(deps.refreshMs, collected === null) + collectionTookMs + healthTookMs,
+    });
+  } catch (err) {
+    deps.logError(`health history append failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
 
   if (collected === null) {
     // NOTHING IS DELIVERED OFF A FAILED COLLECTION. The rows we would aim at
