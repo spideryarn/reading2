@@ -2550,7 +2550,14 @@ async function cmdNewClaude(
       "claude",
       `--session-id ${sessionId}`,
       provisional ? "" : `--name ${shq(name)}`,
-      opts.prompt ? `"$(cat -- ${promptPath})"` : "",
+      // `--` BEFORE THE PROMPT, and it is not decoration. The prompt is text
+      // somebody typed — increasingly a web form, tools/fleet/routes-new.ts —
+      // and without this separator a prompt beginning `--dangerously-skip-permissions`
+      // is a Claude FLAG rather than prose: measured 2026-09-08 with
+      // `claude --session-id bad-uuid -p --nonexistent-flag`, which says
+      // "unknown option", against the same line with `--`, which gets past
+      // parsing to the session-id check. GPT Sol's F10.
+      opts.prompt ? `-- "$(cat -- ${promptPath})"` : "",
     ]
       .filter(Boolean)
       .join(" "),
