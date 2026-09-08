@@ -297,7 +297,7 @@ describe("the route and the drain share one queue", () => {
     // And the action's own reviewed words are still in there, unaltered.
     const pull = actionById("pull");
     expect(pull?.effect).toBe("spoken");
-    expect(sent[0]?.text.endsWith(pull?.effect === "spoken" ? pull.text : " ")).toBe(true);
+    expect(sent[0]?.text.endsWith(pull?.effect === "spoken" ? pull.text : "\0")).toBe(true);
   });
 
   it("reaches the same queue from handleActionRequest and drainSharedQueues", async () => {

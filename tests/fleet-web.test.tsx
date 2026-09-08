@@ -149,7 +149,18 @@ function steerable(over: Partial<FleetState["rows"][number]> & { id: string }): 
 
 function state(over: Partial<FleetState> = {}): FleetState {
   return {
-    collectedAt: new Date("2026-09-08T12:00:00Z").toISOString(),
+    /* NOW, NOT A DATE. This was `new Date("2026-09-08T12:00:00Z")`, which was
+       "now" on the morning it was written and stopped being so at 12:02:30Z
+       the same day — the moment the snapshot passed the 2m 30s staleness
+       threshold. Three rendering tests then started asserting `not.toContain
+       ("STALE")` against a page that had begun, correctly, to say STALE. The
+       tests were right about the page and wrong about the clock.
+       A fixture that means "fresh" has to be computed from the clock the
+       component reads, because freshness is a relation between two times and
+       an absolute constant can only ever be one of them. The tests that want
+       an OLD snapshot pass both times explicitly — see `freshness` below — and
+       are unaffected. */
+    collectedAt: new Date().toISOString(),
     tookMs: 12_000,
     error: null,
     rows: [],
