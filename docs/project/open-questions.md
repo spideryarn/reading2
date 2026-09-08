@@ -334,3 +334,42 @@ reads as a busy system rather than as a bug.
 that reports success while doing nothing. This is about code that does exactly what it says, to the
 wrong object — every step succeeds, and the answer is about something else. The two meet only in
 that both produce a confident, wrong, quiet result.
+
+---
+
+## Q14 — Two additions to `silent-success.md`, from the fleet work <a id="q14"></a>
+
+**Proposed, not written**, because `docs/reusable/` wording is a rule and edits there go one approved
+set at a time ([edit-important-docs.md](../reusable/edit-important-docs.md)). Both were earned on
+2026-09-08 and both are the same family as what that file already says.
+
+**1. A metric that can legitimately be zero is indistinguishable from a broken one, so record its
+positive control beside the number — permanently.** The Overseer's work classifier answered *zero*:
+of 623 fleet rows the dashboard called `idle`, none had child work under them. That is a true and
+useful answer, and it is also exactly what a silently broken probe returns. The fleet dashboard
+agent's framing:
+
+> A metric that can honestly be zero needs its *positive control* recorded next to the number,
+> permanently, not just at the moment of building. In six weeks the number will be in a dashboard and
+> the control will be in a session transcript nobody can find.
+
+This is the third face of the failure that file is about — after *a check that reports success while
+doing nothing*, and *a guard whose silence is not evidence*. The answer is the same each time: make
+the instrument prove it can still see, in a place that travels with the reading.
+
+**2. A hazard that is easy to describe and impossible to arrange is telling you a seam is missing.**
+The dashboard's collector wedged for thirty minutes and reported `error: null`, because a `bash` in
+uninterruptible IO does not die on the `SIGTERM` its timeout sends, and `promisify(execFile)` waited
+for a process that was never coming back. It had no test, and the reason it had no test is the rule:
+
+> A promise that never settles is the one behaviour no real tmux can arrange — which is precisely why
+> this had no test.
+
+The corollary is the practical half, and it is the agent's, not mine: **being unable to write the
+test is itself the finding.** They did not go looking for a seam and then write a test; they found
+they could not write the test. So when a hazard is easy to describe and impossible to arrange, stop
+and add the parameter — the difficulty is the design telling you something, not the test being
+awkward. "Untestable" is usually this sentence undiscovered.
+
+Both raised with `claude-agents-dashboard`, which is pointing at this entry rather than duplicating
+it. This entry is meant to be **deleted** once decided.

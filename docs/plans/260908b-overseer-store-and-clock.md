@@ -638,6 +638,32 @@ wrapper counts one review five times; **one pane held three concurrent Bash-tool
 them running `sleep`, so *"is there a bash under this pane"* says nothing; and **the pane can be
 older than its Claude** — 115341 s against 75741 s — so pane age is not session age.
 
+**S6's answer is zero, and a zero needs its positive control recorded beside it — permanently.** The
+fleet dashboard agent's point, 2026-09-08, and it is the right correction to how this result was
+about to be filed:
+
+> A metric that can honestly be zero needs its *positive control* recorded next to the number,
+> permanently, not just at the moment of building. In six weeks the number will be in a dashboard and
+> the control will be in a session transcript nobody can find.
+
+So, beside the zero: **the live control** was a `vitest` deliberately started under the measuring
+agent's own pane, caught by 2 of 8 probes at depth 5 with a correct age; and **the durable controls
+are in the suite**, as real captures with real child work under them —
+`tests/fixtures/overseer-process-trees/codex-review-under-pane.txt` (a paid `codex exec`) and
+`shell-pane-running-tests.txt` (a suite 21 minutes in). Those are what make "zero" mean *there was
+none* rather than *we stopped finding any*, and they are the reason this result can be trusted
+without re-reading this file.
+
+**The general shape is worth naming: a metric that can legitimately be zero is indistinguishable from
+a broken one**, which is this codebase's recurring failure wearing a third face — after the check that
+reports success while doing nothing, and the guard whose silence is not evidence. The answer is the
+same each time: make the instrument prove it can still see.
+
+**And the arm's yield may go to zero permanently, which would not be a regression.** Whether any
+session is caught depends on how agents happen to dispatch reviews — a backgrounded review after the
+turn ends, rather than a foreground one during it — and that is a habit, not a property of anything.
+Written down so that a future zero is not read as a fault.
+
 **The duplicated stage, and whose fault it was.** `worktree:check` could not see a running process,
 and both agents fixed it. Theirs landed (`f3817060`); mine was discarded, its diff kept at
 `scratchpad/mgr-agentD-worktree-check.patch`. **The cause was mine**: I told the dashboard agent the
