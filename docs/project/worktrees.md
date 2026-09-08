@@ -308,15 +308,99 @@ whole reason it can afford to be blunt is that nothing follows automatically fro
 - A half-finished merge, cherry-pick, rebase or bisect lives in the git dir and can sit under a
   clean-looking tree.
 
-Anything it does not recognise is a blocker rather than a shrug, so a new `.gitignore` entry makes it
-cautious instead of silent. What it does not check is printed when it passes rather than left to be
-discovered: file modes under `data/`, a commit reachable only through this worktree's HEAD reflog
-(which needs a branch-moving operation [AGENTS.md](../../AGENTS.md) bans), and whatever is only in the
-session's context.
+Anything it does not recognise is a blocker rather than a shrug. What it does not check is printed
+when it passes rather than left to be discovered: file modes under `data/`, a commit reachable only
+through this worktree's HEAD reflog (which needs a branch-moving operation
+[AGENTS.md](../../AGENTS.md) bans), and whatever is only in the session's context.
+
+#### A new `.gitignore` entry needs a verdict here
+
+Failing closed on the unrecognised is right, and it has a cost that took six days to show up.
+`/logs/` was gitignored three hours after the check first landed, by a commit about something else,
+and nobody classified it. From that afternoon **every worktree where a job had been run refused to be
+removed** — 13 of the box's 19 trees on 2026-09-08 — at a directory holding nothing but the stdout of
+a command you could run again.
+
+Nothing was lost, and that is the point. What it cost was the standing of the refusal: an agent that
+has argued its way past this printout four times will argue its way past the fifth, and the fifth is
+the pipeline run in `data/`. So **a false alarm here is not the cheap direction after all**, and two
+things follow.
+
+- **Adding a *literal directory* to the root `.gitignore` means classifying it.**
+  `tests/worktree-check.test.ts` reads the repo's own `.gitignore` and fails if one has no verdict in
+  `classifyIgnored` and is not in that test's `BLOCKS_ON_PURPOSE` — `uploads/` is, because a file
+  somebody handed the agent may be the only copy of it. **It catches the way `/logs/` actually
+  arrived, not every way one could**: globs name no single path and are skipped, and
+  `supabase/.gitignore` and `infra/hetzner/.gitignore` are not read, so a `.terraform/` left in a
+  worktree would block for ever exactly as `logs/` did. The runtime default is unchanged either way —
+  an unclassified path still blocks; the test only moves the noticing to the moment of adding it.
+- **A blocker should name the action that clears it.** `logs/` is now walked rather than counted:
+  `logs/tmux-jobs/` is captured stdout, and a loop's dated report under `logs/loops/` still blocks by
+  name. The allowlisted name buys an **inspection**, not a pass — anything in `logs/tmux-jobs/` that
+  is not a flat `<session>.log` is reported, so the only copy of something cannot be parked there.
+
+**A blocker is resolved by an action, not by an argument.** Move the file, make the comparison,
+re-run the check — and say in your report what you moved. If you find yourself explaining to yourself
+why a refusal does not count, that is the moment to stop and read it properly.
+
+#### `.env.local — DIFFERS`, and how to settle it without printing a secret
+
+The check compares byte for byte and cannot tell which side moved: an edit made here and a key
+rotated in the primary look identical from inside the worktree. Only the first loses anything.
+
+**Do not run a plain `diff` on two `.env.local`s** — that writes both the old and the new secret to
+stdout, and from there into a terminal transcript, a tmux job log, or a conversation. Compare key
+names and value hashes instead, and decide from that:
+
+```bash
+# run inside the worktree; the primary is wherever the shared .git lives
+P=$(dirname "$(git rev-parse --git-common-dir)")
+comm -23 <(grep -oE '^[A-Za-z_][A-Za-z0-9_]*' .env.local     | sort -u) \
+         <(grep -oE '^[A-Za-z_][A-Za-z0-9_]*' "$P/.env.local" | sort -u)
+```
+
+Anything that prints is a key **only here**, and that is the real version of this blocker — copy it
+out before removing anything. Nothing printed means the worktree is a stale copy of a file the
+primary has moved on from, and the usual cause is a rotated value.
+
+**Why the check does not conclude that for you.** A line-subset test — *if every line here is also in
+the primary's copy, nothing here is only here* — was written, measured, and reverted on 2026-09-08.
+It is wrong in three ways: a worktree that **deleted** a key is a subset too; two files with the same
+lines in a different order differ under this repo's last-wins parser
+([`src/env.ts`](../../src/env.ts)); and a comment only here is somebody's note. History cannot be read
+off two current snapshots — it would need the hash taken when the copy was made. It also cleared none
+of the box's nineteen trees, so it bought nothing and risked the one failure this whole file exists to
+prevent.
 
 It answers for the tree you are standing in and takes no arguments. For every tree at once, and for
 the removal itself, see below — the sweep calls `blockers(gather(path))` here rather than keeping a
 cheaper copy of the same judgement.
+
+### `ExitWorktree` refuses for two reasons that are not about your work
+
+Claude Code's own tool has its own two refusals, and neither is `worktree:check`. Both are worth
+knowing because both read as alarming and neither means what it appears to.
+
+- **"Worktree has N commits … Removing will discard this work permanently."** `N` counts every commit
+  not on the *base* branch, and `worktree:setup` merges `origin/dev` on day one — so `N` includes all
+  of the trunk's commits your merge brought in, and is large and frightening in a tree that has
+  pushed everything. `worktree:check` asks the better question, against a freshly fetched trunk. **If
+  it says SAFE, this count is the wrong question** and `discard_changes: true` throws nothing away.
+  The one command that settles it on its own:
+
+  ```bash
+  git fetch origin dev && git merge-base --is-ancestor HEAD origin/dev && echo landed
+  ```
+
+  If HEAD is *not* an ancestor, stop — that is the real version of this warning.
+- **"this session is not the owner of the worktree …"** — the standard case when you resumed somebody
+  else's abandoned tree, which is how most overnight jobs start. Nothing is wrong and there is nothing
+  to check. `ExitWorktree({action: "keep"})` to get back to the primary, then
+  `git worktree remove .claude/worktrees/<name>` from there.
+
+And what `ExitWorktree` will not tell you: it removes gitignored files without a prompt, and it counts
+untracked ones in a single line ("Discarded 854 commits and 44 uncommitted files"). Those 44 were once
+somebody's *paid* eval results. Run `worktree:check` first and read what the untracked files are.
 
 ### Sweeping them up
 
