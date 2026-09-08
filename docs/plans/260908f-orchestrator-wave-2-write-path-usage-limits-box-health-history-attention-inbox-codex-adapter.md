@@ -143,6 +143,98 @@ be wrong, and — the honest check — **it finds prose-ending questions that `n
 the count measured against the live fleet and written into this doc. A list that only reproduces
 `needs-you` is a failure of this stage, not a pass.
 
+#### The shape, and the four decisions inside it
+
+Published into `tools/fleet/wire.ts` (which landed as `3df3e833`), so the dashboard imports it rather
+than re-declaring it. Types only, no imports, no runtime values — a `const` there is bundled into the
+browser.
+
+```ts
+/** Why we believe this needs Greg. The two arms are answered by DIFFERENT MECHANISMS. */
+export type AttentionEvidence =
+  | {
+      /** The harness says a dialog is open. Mechanical, observed, and it has options. */
+      kind: "dialog";
+      question: string;
+      /** In the order the harness drew them. Answering picks one of these. */
+      options: readonly string[];
+    }
+  | {
+      /** The turn ended handing Greg a decision in prose. INFERRED, and it may be wrong. */
+      kind: "prose";
+      /** The tail of the turn, so a person can check the inference rather than trust it. */
+      excerpt: string;
+      /** What made us think so, in words. Never a score. */
+      why: string;
+    };
+
+/** Consequence and reversibility. NOT confidence, and NOT urgency. */
+export type AttentionKind = "irreversible" | "product" | "technical" | "other";
+
+/** Whether answering this from a phone is a real option. */
+export type AttentionAnswerability =
+  | { kind: "phone" }
+  | { kind: "needs-a-screen"; why: string }
+  | { kind: "unknown"; why: string };
+
+export type AttentionItem = {
+  /** Stable across snapshots, so a card cannot move under a finger. */
+  id: string;
+  /** tmux's own handle — the address, and stable across renames. */
+  sessionId: string;
+  sessionName: string;
+  /** When we FIRST saw this question. Not when we last saw it. */
+  waitingSince: string;
+  kind: AttentionKind;
+  evidence: AttentionEvidence;
+  answerability: AttentionAnswerability;
+  /** Other sessions asking the same thing. Answer once, apply to all. */
+  duplicates: readonly { sessionId: string; sessionName: string; waitingSince: string }[];
+};
+
+export type AttentionList =
+  | {
+      kind: "list";
+      /** Already sorted: by `kind` first, then by `waitingSince`. The renderer must not re-sort. */
+      items: readonly AttentionItem[];
+      /** THE POSITIVE CONTROL. Zero items out of zero scanned is a broken probe. */
+      sessionsScanned: number;
+      scannedAt: string;
+    }
+  | { kind: "unknown"; why: string; scannedAt: string };
+```
+
+**One — the evidence union is the load-bearing part, and flattening it is the bug this stage is most
+likely to ship.** A dialog is *observed*: the harness drew it, the options are enumerated, and
+answering means picking one. A prose question is *inferred*: we read the tail of a turn and decided it
+was a question, and answering means free text. Those are different risks, not different confidences —
+A10 says a live Claude descendant does not prove an empty input box owns the keystrokes, so **arbitrary
+prose must stay a narrower capability than answering a recognised dialog**. A single `question: string`
+field with a boolean beside it would let a renderer draw the same card for both, which is how the
+dangerous one gets the easy affordance.
+
+**Two — there is no confidence field anywhere, and that is deliberate.** Fable and Astra's A18 reached
+it independently: *ranking by self-reported confidence promotes exactly the confident mistakes you most
+want caught*. `AttentionKind` ranks by consequence and reversibility. If a score turns up in a later
+draft, it is a regression.
+
+**Three — `waitingSince` is first-seen, not last-seen, and it is why the store had to come first.**
+The pane says a dialog is open; it cannot say for how long. Duration is a fact only something with a
+memory can produce, which is the whole reason
+[§ The order of work](../project/orchestrator-direction.md#the-order-of-work) says attention triage
+*arrives* first but cannot be *built* first.
+
+**Four — the producer sorts, and the renderer must not.** *"Do not reorder or replace a card's options
+while his finger is approaching them"* (Astra). Stable `id`s make that possible; a renderer that
+re-sorts on every payload throws it away. And `sessionsScanned` is the positive control — an empty
+list is only good news if something looked.
+
+**What is deliberately NOT in the type**: a routing field. *Who should answer this* (the Overseer for
+what it can verify, Sol for evidence in the tree, Fable for wording and defaults, Greg for anything
+irreversible) is a real part of the design, but it is a **decision the Overseer acts on**, not
+something the phone renders — and shipping it as a field invites a UI that shows Greg a queue of
+things it has decided not to ask him. It lands when something answers, not when something lists.
+
 ### Stage B — usage limits, and the reading that refuses to lie
 
 - `tools/overseer/usage.ts`, pure parsers, string in and a discriminated union out — the shape
