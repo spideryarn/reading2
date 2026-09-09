@@ -20,13 +20,13 @@ import {
   runDescribePass,
   type SessionToDescribe,
 } from "../tools/fleet/describe-pass.js";
-import { EMPTY_DESCRIPTIONS, type DescriptionMemory } from "../tools/fleet/describe-store.js";
+import { EMPTY_DESCRIPTIONS } from "../tools/fleet/describe-store.js";
 import type { ExecutionReading } from "../tools/fleet/wire.js";
 
 const VERIFIED: ExecutionReading = {
   kind: "verified",
   token: { boot: "boot-a", pid: 4242, startTicks: 99 },
-  harness: "claude",
+  harness: "claude-code",
   conversation: { kind: "verified", id: "conv-1" },
 };
 
