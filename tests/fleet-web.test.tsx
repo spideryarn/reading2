@@ -153,6 +153,9 @@ function row(over: Partial<FleetState["rows"][number]> & { id: string }): FleetS
   return {
     paneId: null,
     name: over.id,
+    // Required on a row and not what this file is about — an old producer's
+    // shape, which is what `parseExecution` returns for a payload without one.
+    execution: { kind: "unknown", cause: "not-reported", why: "the fixture carried no execution reading" },
     title: null,
     repo: null,
     worktree: null,
@@ -2525,7 +2528,12 @@ describe("master and detail", () => {
 
     // Before: the list, and no detail.
     expect(container.textContent).toContain("the one I tapped");
-    expect(container.textContent).not.toContain("Recent messages");
+    /* **SCOPED TO `main`, BECAUSE THE DOCK NOW SAYS THESE WORDS TOO.** The
+       cross-agent feed's tab is also called "Recent messages", so a whole-page
+       search for that phrase finds the button at the bottom of the screen and
+       this assertion stops meaning "the detail pane is closed". `main` is the
+       panel area; the dock is a `nav` beside it. */
+    expect(container.querySelector("main")?.textContent).not.toContain("Recent messages");
 
     openSession("the one I tapped");
 
@@ -6608,7 +6616,7 @@ describe("the Overseer tab, which no longer says it is empty", () => {
     expect(container.textContent).toContain("still waiting");
   });
 
-  it("offers the broadcast, and refuses to draw a box that would swallow a message", async () => {
+  it("offers the broadcast, and a message box that names who it would reach", async () => {
     const rec = recordingActions(() => actionsWire({ actions: [BROADCAST_WIRE] }));
     window.location.hash = "#overseer";
     const feed = manualTransport();
@@ -6617,13 +6625,36 @@ describe("the Overseer tab, which no longer says it is empty", () => {
     await act(async () => {});
 
     expect(buttonLabels()).toContain("Broadcast: ease off, staggered");
-    // The wording changed on 2026-09-08 with the Overseer status card: the old
-    // sentence's premise was that no Overseer process existed, and one does. The
-    // refusal is unchanged and is the point — a daemon that publishes a
-    // checkpoint is still not an agent that can receive a message.
-    expect(container.textContent).toContain("There is still nothing here to send a message to.");
-    // A refusal with a way forward, not a shrug.
-    expect(container.textContent).toContain("the broadcast above is the real thing");
+
+    /* **THE HISTORY OF THIS ASSERTION IS THE POINT, so it is written down
+       rather than replaced silently.**
+
+       Until 2026-09-09 this tab carried a card headed *"There is still nothing
+       here to send a message to."*, and this test pinned it. That card was right
+       about the daemon — `tools/overseer/` publishes a checkpoint and reads no
+       inbox — and **wrong about the session**: the Overseer is a Claude agent in
+       a tmux pane, reachable by the same steer path as every other row. So the
+       refusal was replaced by a card that addresses the session and keeps the
+       daemon caveat (`MessageOverseerCard.tsx`, docs/plans/260909b-…).
+
+       What is asserted here is the HOP `App.tsx` makes and nothing else covers:
+       the panel gets `rows`, and the card resolves the claim off them. These
+       rows are empty, so the honest answer is *nobody holds it* — which is a
+       real state after a reboot, not a rendering gap, and drawing an input over
+       it would be the swallowed-message failure the old card existed to avoid.
+       tests/fleet-overseer-message.test.tsx drives all four claim arms. */
+    expect(container.textContent).toContain("Message the Overseer");
+    expect(container.textContent).toContain("There is no Overseer session.");
+    // The daemon caveat survived the replacement.
+    expect(container.textContent).toContain("does not reach the daemon");
+    /* And no box that would swallow words into nothing. **Scoped by label, not
+       by tag**: the tab grew a second textarea when the broadcast card landed
+       beside this one, and a bare `querySelector("textarea")` then asserted
+       something about whichever card React rendered first — which is not a
+       thing this test ever meant to be about. */
+    expect(container.querySelector('textarea[aria-label="Message the Overseer"]')).toBeNull();
+    // The broadcast's own box IS here, and is a different control entirely.
+    expect(container.querySelector('textarea[aria-label="Broadcast to all agents"]')).not.toBeNull();
   });
 
   it("hands the broadcast the rows the tab is showing, which is what makes it reach anybody", async () => {

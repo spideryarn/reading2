@@ -107,6 +107,9 @@ function observedRow(over: Partial<ObservedRow> = {}): ObservedRow {
   return {
     id: "$1991",
     name: "overseer-o1-store",
+    // Required on a row and not what this file is about — an old producer's
+    // shape, which is the honest default for a fixture nobody probed.
+    execution: { kind: "unknown", cause: "not-reported", why: "the fixture carried no execution reading" },
     title: null,
     repo: "spideryarn/reading2",
     worktree: "overseer-o1-store",

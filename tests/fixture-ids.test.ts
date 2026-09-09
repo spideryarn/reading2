@@ -91,6 +91,15 @@ interface Claim {
  * most of what this guard exists to watch, while still passing its own control.
  */
 const NOT_A_ROW: Record<string, string> = {
+  "404961e7-a9af-47c9-bf9e-38918ba8ffc4":
+    "a CLAUDE CONVERSATION id, not an article or a job — it is the `--session-id` on the `claude` " +
+    "process inside `tests/fixtures/overseer-process-trees/quiet-claude-pane.txt`, a real `ps` " +
+    "capture off this box. `tests/overseer-harness.test.ts` and " +
+    "`tests/fleet-execution-identity.test.ts` both assert against that capture, so both must spell " +
+    "the same uuid: it is the fixture's own content, and giving each file a different one would " +
+    "mean asserting against a process line that does not exist. Neither file touches the product " +
+    "database — the fleet and Overseer tools are forbidden from reaching it at all " +
+    "(`tests/fleet-imports.test.ts`) — so there is no row to insert and none to tear down.",
   "00000000-0000-4000-8000-000000000000":
     "the “no such row” sentinel. `tests/upload-records.test.ts` hands it to `claimUpload` in " +
     "order to be told “unknown”, and `tests/store-artefacts-pg.test.ts` uses it as the job id " +

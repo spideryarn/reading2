@@ -59,6 +59,8 @@
  * its own argument for being one.
  */
 import type { SessionMeta, SessionState } from "../../scripts/gjd-remote-tmux.js";
+import { executionTokenText } from "../fleet/execution-token.js";
+import type { ConversationReading } from "../fleet/wire.js";
 import type { AdmissibleSnapshot } from "./admissible.js";
 import type { BehaviourHash, JobOutcome, OccurrenceId } from "./jobs.js";
 import type { FreshSnapshot, ObservedRow, ObservedStatus } from "./observation.js";
@@ -527,6 +529,69 @@ export type SessionEvent =
       paneId: string | null;
       /** NEVER NULL: a pid that went away is a join miss and does not produce this event. */
       panePid: number;
+    }
+  /**
+   * **THE PANE DID NOT MOVE AND THE THING INSIDE IT DID** — the event every
+   * other arm of this union is blind to.
+   *
+   * `session-replaced` fires on a changed `claimedConversationId`, which the
+   * tmux environment almost never changes; `session-pane-replaced` fires on a
+   * changed pane pid, which a `respawn-pane` changes and a claude restarting
+   * inside its own shell does not. Between them they cover the pane being
+   * replaced and the launch claim being rewritten, and neither covers a fresh
+   * `claude` started under an unchanged shell — the case whose whole
+   * significance is that *nothing above it moved*.
+   *
+   * ## IT IS COMPARED AGAINST THE REGISTER, NOT AGAINST THE PREVIOUS SNAPSHOT
+   *
+   * The first version of this arm compared two consecutive snapshots, and GPT
+   * Sol showed that produced two real failures rather than the one cosmetic gap
+   * it was documented as having (2026-09-09):
+   *
+   *  - **On the upgrade path nothing ever fired.** Sessions already in the
+   *    register when this field shipped are never `session-seen` again, so
+   *    their `verifiedExecution` stayed null indefinitely — reproduced against
+   *    the checked-in fixtures, six of six entries null.
+   *  - **`verified(A) → unknown → verified(B)` left the register claiming A**,
+   *    *and kept A's `statusSince`* — so the attention projection ranked a
+   *    fresh Claude by its predecessor's age. That is the acceptance criterion
+   *    of this whole stage ("never silently inherits historical age"), so the
+   *    old claim that the gap cost history and not the guarantee was simply
+   *    wrong: `statusSince` is an existing event-dependent consumer.
+   *
+   * Comparing against the register's last VERIFIED token fixes both, and it is
+   * where the state honestly lives — `Baseline` could not carry it without
+   * ceasing to be a question about a value (see `unplaceable`). A reading that
+   * is not verified moves nothing, so `verified → unknown` is still evidence
+   * lost rather than a replacement, which was the one thing the first version
+   * had right.
+   *
+   * `previousToken` is null for a session the register has never verified —
+   * the upgrade path, and a session whose first readings were all unknown.
+   * **That is a first sighting of an identity, not a replacement**, and the
+   * fold treats it differently: it records the token and leaves `statusSince`
+   * alone, because learning what a session has been running all along is not
+   * evidence that it restarted.
+   */
+  | {
+      kind: "session-execution-changed";
+      at: string;
+      tmuxServerPid: number | null;
+      key: SessionKey;
+      identity: SessionIdentity;
+      /**
+       * The token as `continuityOf` compares it: `boot:pid:startTicks`. Null
+       * when the register had never verified one — see above; that arm records
+       * without resetting the status clock.
+       */
+      previousToken: string | null;
+      token: string;
+      /**
+       * What the new run says about its conversation. `conflicting` here is the
+       * loudest thing this log can say: the pane is running a conversation
+       * nobody addressed, under an id everything still uses.
+       */
+      conversation: ConversationReading;
     };
 
 /**
@@ -850,7 +915,25 @@ export type DiffOutcome =
  * S2-08. Also in tests/fixtures/overseer-snapshots/README.md, under what the
  * fixtures do not cover.
  */
-export function diff(previous: Baseline | null, next: AdmissibleSnapshot): DiffOutcome {
+/**
+ * **WHAT THE REGISTER HAS ACTUALLY VERIFIED**, keyed by session — the third
+ * input, and the one that is not a snapshot.
+ *
+ * A `ReadonlyMap` passed in rather than an import of `store.ts`: the differ
+ * still knows nothing about the store, and there is still no cycle. An absent
+ * key means *no run has ever been verified for this session*, which is what a
+ * session carried over from before this field existed looks like, and what a
+ * session whose readings have all been unknown looks like. Both are the same
+ * fact and both are handled by the same arm.
+ *
+ * **An EMPTY map is a legitimate value and is not a shortcut.** It says the
+ * register has verified nothing — true at a cold start, and true for a caller
+ * that keeps no register. It cannot cause a false replacement, because the
+ * `previousToken: null` arm is a first sighting rather than a change.
+ */
+export type KnownExecutions = ReadonlyMap<SessionKey, string>;
+
+export function diff(previous: Baseline | null, next: AdmissibleSnapshot, known: KnownExecutions): DiffOutcome {
   const nextSnapshot = next.snapshot;
   const at = nextSnapshot.clock.at;
 
@@ -1019,6 +1102,29 @@ export function diff(previous: Baseline | null, next: AdmissibleSnapshot): DiffO
         panePid: row.panePid,
       });
     }
+    // THE PANE STAYED AND THE RUN INSIDE IT DID NOT. Placed here, after the
+    // pane arm, because the two are independent and both can fire on one
+    // collection: a `respawn-pane` replaces the pane AND the process in it, and
+    // recording only one of those loses half of what happened.
+    //
+    // AGAINST THE REGISTER, NOT AGAINST `was`. The previous snapshot is one
+    // sample and the register is what we have actually verified; comparing to
+    // the sample missed the upgrade path entirely and let a fresh Claude
+    // inherit its predecessor's measured age. GPT Sol's P1-1, and the arm's own
+    // comment has the reproduction.
+    const replaced = executionChange(known, sessionKey(identityOf(row)), row);
+    if (replaced !== null) {
+      events.push({
+        kind: "session-execution-changed",
+        at,
+        tmuxServerPid: nextSnapshot.tmuxServerPid,
+        key: sessionKey(identityOf(row)),
+        identity: identityOf(row),
+        previousToken: replaced.previousToken,
+        token: replaced.token,
+        conversation: replaced.conversation,
+      });
+    }
     // THE ONE THING THE CANONICAL KEY DELIBERATELY CANNOT SEE. Both statuses
     // key as `waiting`, so without this a wait that ended and was replaced by a
     // longer one is one unbroken wait in the history. See
@@ -1055,6 +1161,32 @@ export function diff(previous: Baseline | null, next: AdmissibleSnapshot): DiffO
   }
 
   return { kind: "diffed", events, baseline: new BaselineBox(nextSnapshot) };
+}
+
+/**
+ * What the register's knowledge of this session's run should become, or null
+ * when it should not move.
+ *
+ * Two nulls, two different sentences: the current reading is not `verified`, so
+ * there is nothing to learn from it (**a `ps` that failed must not report every
+ * session on the box as replaced** — the same rule as `panePid`'s null on
+ * `session-pane-replaced`); or the register already holds this exact token, so
+ * nothing changed.
+ *
+ * Its own function rather than five lines inline, for the reason `waitRestart`
+ * is one: the arm's rule is the thing a reader has to check, and a rule inside
+ * a 200-line loop is read as part of the loop.
+ */
+function executionChange(
+  known: KnownExecutions,
+  key: SessionKey,
+  after: ObservedRow,
+): { previousToken: string | null; token: string; conversation: ConversationReading } | null {
+  if (after.execution.kind !== "verified") return null;
+  const token = executionTokenText(after.execution.token);
+  const previousToken = known.get(key) ?? null;
+  if (previousToken === token) return null;
+  return { previousToken, token, conversation: after.execution.conversation };
 }
 
 /**

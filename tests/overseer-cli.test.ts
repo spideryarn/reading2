@@ -77,6 +77,9 @@ function waitingEntry(tmuxId: string, name: string, statusSince: StatusSince): R
     key: `${tmuxId} none` as RegisterEntry["key"],
     tmuxId,
     claimedConversationId: null,
+    // Never verified: this entry was built by hand, and null is what the
+    // register holds for a session whose run nothing has confirmed.
+    verifiedExecution: null,
     name,
     meta: { version: "legacy" },
     repo: "spideryarn/reading2",
@@ -229,6 +232,7 @@ describe("reading the event log without disturbing the daemon", () => {
       row: {
         id: "$1",
         name: "renamed-by-a-person",
+        execution: { kind: "unknown", cause: "not-reported", why: "the fixture carried no execution reading" },
         title: null,
         repo: "spideryarn/reading2",
         worktree: "somewhere-else",
