@@ -309,6 +309,106 @@ spike (82% → 85%), but a dozen other sessions were live on the box, so nothing
 "my spike session wrote it" from "the fleet did". It is recorded as unattributable rather than
 reported as a result.
 
+#### Stage 0 complete — run against the real second account, 2026-09-09
+
+`greg@mindstone.com` exists (`/home/greg/.claude-gregmindstone`, account uuid `894bf540…`, org
+`68f57dc0…`, max, `default_claude_max_20x`). Every reading below is stated with its account and the
+time it was taken.
+
+**1. The new account works.** `claude -p` under its config dir returned `MINDSTONE_OK`, exit 0. A
+second run with the repo as cwd and `--permission-mode auto` also worked.
+
+**2. Nothing cheap writes `cachedUsageUtilization` — reproduced three times.** A short `-p`, a real
+interactive `tmux` session, and a repo-cwd run all completed without the dir's cache slot ever being
+created. It is still `null`. Transcripts *were* written and `oauthAccount` *was* populated, so the
+sessions genuinely ran. **The per-dir cache is therefore not a usable per-account instrument**, and
+the assumption behind both the pool model and the `projects/`-sharing idea is dead in its cheap form.
+
+**3. The endpoints answer, and they dissolve both P0s.** With the config dir's own credential read
+in-process and never printed:
+
+| | `greg@mindstone.com` | `greg@rehearsable.ai` |
+|---|---|---|
+| `/api/oauth/usage` five-hour | **0%** | **9%** |
+| `/api/oauth/usage` seven-day | **3%** | **85%** |
+| `/api/oauth/profile` | `uuid 894bf540…`, `email greg@mindstone.com` | `uuid eddd4c75…`, `email greg@rehearsable.ai` |
+
+- **P0-1 (false attribution) is gone.** The reading is attributed *by construction* — you asked with
+  that account's credential — so there is no shared slot to misattribute and no uuid to second-guess.
+- **P0-3 (a credential has no identity) is gone.** `/api/oauth/profile` returns the account uuid and
+  email for a credential, which is exactly the pin the checklist's step-4/step-6 gap needed.
+- **The response shape is the one `parseUsageCache` already parses** — `five_hour`, `seven_day`, the
+  rotating codename windows, `extra_usage`. It slots into the existing machinery rather than
+  replacing it.
+
+**4. An independent measurement that could have contradicted the cache, and did not.** The live probe
+for `greg@rehearsable.ai` returned seven-day **85%**; its cache, fetched 20:27:16Z, says **85%** under
+the same uuid (five-hour 9% live against 8% cached, the live one being fresher). Two joins that could
+disagree, agreeing. That is why the live reading can be trusted as a replacement rather than merely
+preferred.
+
+**5. Sharing `projects/` works under a real second account.** A throwaway copy of the mindstone dir
+with `projects/` symlinked to the shared tree ran a repo session on the mindstone account and its
+transcript landed in the shared directory. The default dir's slot was **not** touched (still
+20:27:16Z, still the rehearsable uuid) — no cross-contamination. Cleaned up afterwards; the real
+`~/.claude-gregmindstone` was never symlinked into, as instructed.
+
+##### The hazard this turned up: the credential expires in hours, and must never be refreshed by us
+
+`claudeAiOauth.expiresAt` for `greg@rehearsable.ai` was **21:00:04Z — about fifteen minutes after the
+probe**. Mindstone's had roughly eight hours left. So a collector reading `.credentials.json` directly
+will meet an expired token routinely.
+
+**The collector must treat a 401 as `unknown` and stop there.** It must **never** use the refresh
+token: refreshing rotates the credential, and a collector racing live sessions for that rotation
+could invalidate Greg's login on an account the whole fleet is using. Under the config-dir model this
+is self-correcting — an account being worked has its token refreshed by its own sessions — and the
+gap is an idle account, where the reading goes unknown exactly when we would like to confirm it is
+free. Stated rather than solved: *unknown* is the correct answer there, and gate 4's rule is that a
+reading we cannot make is never a percentage.
+
+##### The seeding list, which is the config-dir model's price
+
+What a fresh per-account dir lacks, compared with `/home/greg/.claude`, and whether a dispatched
+session needs it:
+
+| Missing | Needed? |
+|---|---|
+| `mcpServers` — `sentry`, `vercel`, `playwright`, `chrome-devtools` | **Yes.** User-level, so a fresh dir silently loses browser testing and the Sentry/Vercel reads. The repo's own `.mcp.json` is unaffected. |
+| `settings.json`: `model`, `permissions`, `autoMode`, `env` | **Yes** — `permissions` and `autoMode` especially; a fresh dir has a different safety posture and no auto-mode environment. |
+| `settings.json`: `theme`, `tui`, `statusLine`, `agentPushNotifEnabled` | No — cosmetic. |
+| `projects[<repo>].hasTrustDialogAccepted` (4 of 5 entries carry it) | **Yes**, or a session can stop on the trust dialog. |
+| `projects/<slug>/memory/` — 83 files for this repo | **Yes** — this is what the `projects/` symlink is for. |
+| `plugins/` | Probably — plugin-provided skills otherwise vanish. |
+| `hasCompletedOnboarding`, `numStartups`, and ~45 other first-run flags | **Yes**, enough of them to avoid a first-run flow. |
+
+**This is a script, not a manual step**, and it is Stage 1's job. Seed *surgically* — merge the named
+keys after the login, never copy `.claude.json` wholesale, because it also carries identity,
+eligibility caches and live-session metadata.
+
+#### The mechanism decision: the config-dir model
+
+**Take the config-dir model** — one `auth login` per account in its own dir, the launcher exporting
+`CLAUDE_CONFIG_DIR`, `projects/` shared by symlink, and usage read live from `/api/oauth/usage`.
+
+Why it wins now that the measurements are in:
+
+- **It needs nothing more from Greg.** No `setup-token`, no second browser flow per account — the
+  login he has already done is the whole of it. That also removes a step the checklist could not
+  verify.
+- **Both P0s are gone by construction**, not worked around: no account ever writes another account's
+  dir, and every reading is attributed by the credential that asked for it.
+- **Its one real cost — the seeding list — is a script**, and the measurements above enumerate it.
+- The pool model's remaining advantage was a shared config dir, and `projects/`-sharing gets the part
+  of that we actually needed (memory and transcripts) while keeping caches and credentials separate.
+
+**The one departure from *prefer boring* to declare out loud:** `/api/oauth/usage` and
+`/api/oauth/profile` are **undocumented endpoints**. The shipped CLI depends on both, and they are
+metadata rather than model calls, so gate 4 is satisfied. But an upgrade could move them, and the
+failure would be silent. The mitigations: every failure is *unknown* and never a fallback to another
+account's number; the cache stays a corroborating second source where it exists (finding 4 shows the
+two agree); and `usage-history.md`'s "absence is never a zero" already covers what to draw.
+
 ### Stage 1 — the checklist, and the account registry
 
 **Why first:** the checklist unblocks Greg tonight, and nothing downstream can be *tested against a
