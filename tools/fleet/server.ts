@@ -52,6 +52,11 @@ import { recentFeedRoute } from "./routes-recent-feed.js";
 import { renameRoute } from "./routes-rename.js";
 import { handleSteerRequest } from "./routes-steer.js";
 import { handleTranscribeRequest } from "./routes-transcribe.js";
+import { describeOne } from "./describe.js";
+import { runDescribePass, type SessionToDescribe } from "./describe-pass.js";
+import { descriptionsRoot, readDescriptionMemory, writeDescriptionMemory, EMPTY_DESCRIPTIONS } from "./describe-store.js";
+import { openRouterKey } from "./transcribe.js";
+import { readOpeningMessages } from "./transcript.js";
 import { notifyLine, notifyOverseer, promptExcerpt } from "./notify-overseer.js";
 import { claimFromSnapshot } from "./overseer-claim.js";
 import { statePayload as composePayload } from "./state.js";
@@ -431,6 +436,112 @@ async function refresh(): Promise<void> {
  * whatever the box is doing, which matters on a machine that hit load average
  * 391 today. A failure waits longer, so a broken box is not also hammered.
  */
+/**
+ * HOW OFTEN TO DESCRIBE. Far slower than the collector, because a description is
+ * about a session's opening and an opening does not change — the only work a
+ * steady-state pass does is notice a session it has not seen before.
+ */
+const DESCRIBE_MS = Number(process.env.FLEET_DESCRIBE_MS ?? 5 * 60_000);
+
+/**
+ * How many model calls one pass may make.
+ *
+ * A cold fleet catches up over several passes rather than paying for thirty at
+ * once, and what the budget drops is reported rather than hidden.
+ */
+const DESCRIBE_MAX_CALLS = Number(process.env.FLEET_DESCRIBE_MAX_CALLS ?? 8);
+
+/**
+ * DESCRIBING THE FLEET, BESIDE THE COLLECTOR RATHER THAN INSIDE IT.
+ *
+ * A collection has a deadline (`COLLECT_DEADLINE_MS`) and a gateway does not
+ * respect it, so no model call may happen on the collector's clock. This runs on
+ * its own, writes a file, and `readDescriptions` in `collect.ts` joins that file
+ * onto the rows — the cheap half — on the next collection.
+ *
+ * **It costs nothing when there is no key.** `openRouterKey()` reads the
+ * environment and then one variable out of `.env.local`; without one, the pass
+ * does not run and every row keeps saying `not-yet-described`, which is true.
+ *
+ * **And nothing when nothing is eligible**, which is every row until the
+ * dashboard and the daemon have been restarted onto execution readings. Before
+ * that this loop reads no transcripts and makes no calls.
+ */
+async function describeOnce(): Promise<void> {
+  const key = openRouterKey();
+  if (key === null) return;
+  const rows = snapshot?.rows ?? [];
+  if (rows.length === 0) return;
+
+  const root = descriptionsRoot();
+  const read = readDescriptionMemory(root);
+  /* An unusable file is REPLACED, not repaired — everything in it is
+     recoverable by asking again, and carrying a memory across a gap we cannot
+     vouch for is the mistake this neighbourhood keeps repairing. */
+  const memory = read.kind === "memory" ? read.memory : EMPTY_DESCRIPTIONS;
+
+  const sessions: SessionToDescribe[] = rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    claudeSessionId: row.claudeSessionId,
+    dir: row.meta.version === 1 ? row.meta.dir : null,
+    execution: row.execution,
+  }));
+
+  const result = await runDescribePass({
+    sessions,
+    memory,
+    maxCalls: DESCRIBE_MAX_CALLS,
+    readOpening: async (session) => {
+      const opening = await readOpeningMessages({ claudeSessionId: session.claudeSessionId, dir: session.dir });
+      if (opening.kind !== "found") {
+        return { ok: false, why: `${opening.kind}: ${"why" in opening ? opening.why : ""}` };
+      }
+      if (opening.turns.length === 0) return { ok: false, why: "the transcript opens with no turns" };
+      /* Flattened to text here rather than in the pass, so the pass stays pure
+         and the shape of a turn does not reach the prompt builder. */
+      return {
+        ok: true,
+        text: opening.turns.map((turn) => `${turn.speaker}: ${turn.text}`).join("\n\n"),
+      };
+    },
+    describe: async (text) => (await describeOne(text, { apiKey: key })).verdict,
+    now: () => new Date(),
+  });
+
+  try {
+    writeDescriptionMemory(root, result.memory);
+  } catch (err) {
+    console.log(`describe: could not write the memory: ${err instanceof Error ? err.message : String(err)}`);
+    return;
+  }
+  if (result.breakdown.called > 0 || result.breakdown.overBudget > 0) {
+    console.log(
+      `describe: ${result.breakdown.described} eligible, ${result.breakdown.called} call(s), ` +
+        `${result.breakdown.cached} cached, ${result.breakdown.overBudget} over budget, ` +
+        `${result.breakdown.notEligible} not eligible`,
+    );
+  }
+}
+
+/**
+ * Its own loop, so a slow gateway cannot delay a collection.
+ *
+ * **Never throws out of here.** A describer that took the server down would be a
+ * monitoring tool failing at the same time as the thing it monitors, which is
+ * the failure this whole tool is written against.
+ */
+async function describeLoop(): Promise<void> {
+  for (;;) {
+    try {
+      await describeOnce();
+    } catch (err) {
+      console.log(`describe: the pass threw: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    await new Promise((r) => setTimeout(r, DESCRIBE_MS).unref?.());
+  }
+}
+
 async function refreshLoop(): Promise<void> {
   for (;;) {
     await refresh();
@@ -704,6 +815,9 @@ for (const bind of BINDS) {
 
 console.log(`refreshing every ${REFRESH_MS / 1000}s`);
 void refreshLoop();
+/* Beside the collector, never inside it: a model call must not run on a
+   clock that has a deadline. */
+void describeLoop();
 
 // Keeps an idle SSE connection from being dropped by anything in between. Its
 // own timer is unref'd, so it cannot hold the process open by itself — the

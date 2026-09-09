@@ -43,6 +43,7 @@ import type { DeploysApi, DeploysView } from "../tools/fleet/web/src/deploys-cli
 import { MODES, MODE_LABELS } from "../tools/fleet/web/src/mode";
 import type { QueueApi, QueueView } from "../tools/fleet/web/src/queue-client";
 import { freshness } from "../tools/fleet/web/src/Header";
+import { headingFor } from "../tools/fleet/web/src/SessionsPanel";
 import { POLL_GIVE_UP_MS, POLL_MS } from "../tools/fleet/web/src/NewSessionPanel";
 import { BoxActions } from "../tools/fleet/web/src/ActionButtons";
 import { STATUS_TIPS } from "../tools/fleet/web/src/SessionParts";
@@ -154,6 +155,9 @@ function row(over: Partial<FleetState["rows"][number]> & { id: string }): FleetS
   return {
     paneId: null,
     name: over.id,
+    /* Not what this file is about, and required — the shape `parseDescription`
+       returns for a payload without one, which is what an older server sends. */
+    description: { kind: "not-yet-described", why: "no describe pass in this fixture" },
     // Required on a row and not what this file is about — an old producer's
     // shape, which is what `parseExecution` returns for a payload without one.
     execution: { kind: "unknown", cause: "not-reported", why: "the fixture carried no execution reading" },
@@ -9573,5 +9577,98 @@ describe("what the launch card says about telling the Overseer", () => {
     const text = await cardFor({ kind: "contested", names: ["Overseer", "overseer-2"] });
     expect(text).toContain("2 sessions claim the Overseer role");
     expect(text).toContain("overseer-2");
+  });
+});
+
+/**
+ * WHAT A ROW IS CALLED, AND WHO SAID SO.
+ *
+ * Three sources that are not interchangeable — the session's own title, a
+ * generated one, and the tmux name — and the reader has to be able to tell which
+ * they are looking at, because a model's guess drawn like a fact is what this
+ * page is written against.
+ */
+describe("the heading on a session card, and what it is about", () => {
+  function described(over: Record<string, unknown> = {}) {
+    return {
+      kind: "described" as const,
+      title: "Fix the table of contents",
+      description: "Repair the nested ToC on the reader.",
+      describedAt: "2026-09-09T03:00:00.000Z",
+      ...over,
+    };
+  }
+
+  it("prefers the session's own title, and does not mark it generated", () => {
+    expect(headingFor(row({ id: "$1", name: "wf-x", title: "Claude's own title" }))).toEqual({
+      kind: "own",
+      text: "Claude's own title",
+    });
+  });
+
+  /**
+   * F4, and it is the finding that makes the whole feature reach the sessions it
+   * is for. Launching with a name writes that name as the session's own title,
+   * so most of this fleet carries a "title" that merely repeats the line below
+   * it — and treating that as already-titled would make the generated one
+   * unreachable for exactly those sessions.
+   */
+  it("does not count a title that merely repeats the session name", () => {
+    const heading = headingFor(
+      row({ id: "$1", name: "worktree-removal-script", title: "worktree-removal-script", description: described() }),
+    );
+    expect(heading).toEqual({ kind: "generated", text: "Fix the table of contents" });
+  });
+
+  it("falls back to the generated title when there is no title of its own", () => {
+    const heading = headingFor(row({ id: "$1", name: "wf-x", title: null, description: described() }));
+    expect(heading.kind).toBe("generated");
+  });
+
+  /** Better than "no title yet", which tells a reader nothing they cannot see. */
+  it("falls back to the session name when nothing has described it either", () => {
+    expect(headingFor(row({ id: "$1", name: "wf-x", title: null }))).toEqual({ kind: "name", text: "wf-x" });
+  });
+
+  it("marks a generated title on the page, and does not mark one Claude gave itself", () => {
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport });
+    act(() =>
+      feed.push(
+        state({
+          rows: [
+            row({ id: "$1", name: "gen", title: null, description: described({ title: "A generated one" }) }),
+            row({ id: "$2", name: "own", title: "Claude's own" }),
+          ],
+        }),
+      ),
+    );
+
+    const headings = [...container.querySelectorAll("h3")].map((h) => h.textContent ?? "");
+    const generated = headings.find((h) => h.includes("A generated one"));
+    const own = headings.find((h) => h.includes("Claude's own"));
+    expect(generated).toContain("generated");
+    expect(own).not.toContain("generated");
+  });
+
+  it("shows the description on the card, which is the point of the feature", () => {
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport });
+    act(() => feed.push(state({ rows: [row({ id: "$1", name: "wf-x", description: described() })] })));
+    expect(container.textContent).toContain("Repair the nested ToC on the reader.");
+  });
+
+  /**
+   * Every row reads `not-yet-described` until the dashboard and daemon are
+   * restarted onto execution readings, so this is the NORMAL case for a while.
+   * It must not draw an empty paragraph that reads as a session with nothing to
+   * say — the row simply carries no description line.
+   */
+  it("draws no description line at all when there is not one yet", () => {
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport });
+    act(() => feed.push(state({ rows: [row({ id: "$1", name: "wf-x" })] })));
+    expect(container.textContent).not.toContain("not-yet-described");
+    expect(container.textContent).not.toContain("undefined");
   });
 });
