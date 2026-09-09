@@ -2238,6 +2238,23 @@ export type DeployVersion = {
 };
 
 /**
+ * **Which deploy the git comparison is measured from — or why there is not one.**
+ *
+ * A discriminated reason rather than a nullable sha, because the two ways of
+ * having no watermark need different sentences and had one between them until
+ * GPT Sol's F1, 2026-09-09: an EMPTY record genuinely names no deploy, whereas a
+ * record whose newest line is corrupt names plenty and simply cannot say which
+ * is newest. Rendering the first explanation over the second is a confident
+ * account of the wrong problem.
+ */
+export type Watermark =
+  | { kind: "sha"; sha: string }
+  /** The record holds no deploys at all. */
+  | { kind: "none" }
+  /** The record holds deploys, but its newest line would not parse. */
+  | { kind: "newest-unreadable" };
+
+/**
  * The three git readings, taken together as one snapshot.
  *
  * **One shape rather than three fields, because they must describe one tip.**
@@ -2252,7 +2269,12 @@ export type GitSnapshot = {
 };
 
 /**
- * Production's tip, as the dashboard's checkout last heard it.
+ * **This checkout's cached `origin/main`** — where a deploy attempt last pushed
+ * to, which is not the same as what is serving.
+ *
+ * `deploy.ts` pushes and only then waits for Vercel, so a build that failed
+ * leaves main advanced with nothing serving from it. This was called
+ * "production's tip" until GPT Sol's P3, 2026-09-09.
  *
  * `lastFetchAtMs` is the age of **the view, not of the commit**. The dashboard
  * never fetches — see `tools/fleet/git-probe.ts` — so a ref nobody has updated
@@ -2278,8 +2300,14 @@ export type MainRef =
  * So the probe asks the question the other way round too, and:
  *
  *  - `ancestor` — the recorded deploy is in the cached tip's history. Normal.
- *  - `cache-behind` — the cached tip is an ancestor of the recorded deploy: this
- *    checkout simply has not fetched since that deploy. Benign, and common.
+ *  - `record-ahead` — the cached tip is an ancestor of the recorded deploy.
+ *    **Named for the graph relation, not for the explanation**, because three
+ *    different things produce it: the checkout is merely stale (much the
+ *    commonest), the deploy was made from an unpushed working branch, or main
+ *    was rolled back to the cached commit afterwards. It was called
+ *    `cache-behind` and drawn as "nothing is wrong" for an hour on 2026-09-09,
+ *    and neither the name nor the sentence followed from the evidence —
+ *    GPT Sol's F2. The page says *usually* stale, and stops there.
  *  - `diverged` — neither contains the other. **This** is the rollback or the
  *    deploy from somebody's working directory, and it is worth a colour.
  *  - `unknown` — we could not ask. Never collapse this into any of the above; a
@@ -2287,7 +2315,7 @@ export type MainRef =
  */
 export type AncestryReading =
   | { kind: "ancestor" }
-  | { kind: "cache-behind" }
+  | { kind: "record-ahead" }
   | { kind: "diverged" }
   | { kind: "unknown"; why: string };
 

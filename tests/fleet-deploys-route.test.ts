@@ -34,7 +34,7 @@ import {
   readRecordFrom,
   type DeploysRouteDeps,
 } from "../tools/fleet/routes-deploys.js";
-import type { GitSnapshot } from "../tools/fleet/wire.js";
+import type { GitSnapshot, Watermark } from "../tools/fleet/wire.js";
 
 const SHA_A = "a".repeat(40);
 const SHA_B = "b".repeat(40);
@@ -61,13 +61,18 @@ const HEALTHY: GitSnapshot = {
   commitsSince: { kind: "count", commits: 287 },
 };
 
+/** A sha as a watermark. The real probe takes a discriminated reason now. */
+function at(sha: string): Watermark {
+  return { kind: "sha", sha };
+}
+
 /** A probe that answers whatever the test says, and records what it was asked. */
-function fakeGit(snapshot: GitSnapshot = HEALTHY): GitProbe & { asked: (string | null)[] } {
-  const asked: (string | null)[] = [];
+function fakeGit(snapshot: GitSnapshot = HEALTHY): GitProbe & { asked: Watermark[] } {
+  const asked: Watermark[] = [];
   return {
     asked,
-    async snapshot(recordedSha): Promise<GitSnapshot> {
-      asked.push(recordedSha);
+    async snapshot(watermark): Promise<GitSnapshot> {
+      asked.push(watermark);
       return snapshot;
     },
   };
@@ -152,7 +157,7 @@ describe("the payload", () => {
 
     if (payload.kind !== "deploys") throw new Error("unreachable");
     expect(payload.newestRecordedSha).toBe(SHA_C);
-    expect(git.asked).toEqual([SHA_C]);
+    expect(git.asked).toEqual([at(SHA_C)]);
   });
 
   it("parses the WHOLE file before applying the limit", async () => {
@@ -219,7 +224,10 @@ describe("not knowing, kept apart from knowing", () => {
 
     if (payload.kind !== "deploys") throw new Error("unreachable");
     expect(payload.newestLineRead).toBe(false);
-    expect(git.asked, "must not measure from a survivor").toEqual([null]);
+    /* **The REASON travels, not just the absence.** "the record names no deploy
+       to measure from" is true of an empty record and false of this one, which
+       names plenty — GPT Sol's F1. */
+    expect(git.asked, "must not measure from a survivor").toEqual([{ kind: "newest-unreadable" }]);
     /* The surviving deploys are still listed — the list and the comparison are
        independent axes. */
     expect(payload.versions).toHaveLength(1);
@@ -234,7 +242,7 @@ describe("not knowing, kept apart from knowing", () => {
 
     if (payload.kind !== "deploys") throw new Error("unreachable");
     expect(payload.newestLineRead).toBe(true);
-    expect(git.asked).toEqual([SHA_A]);
+    expect(git.asked).toEqual([at(SHA_A)]);
   });
 
   it("passes a null sha for an empty record rather than inventing one", async () => {
@@ -242,8 +250,30 @@ describe("not knowing, kept apart from knowing", () => {
     await deploysPayload(deps({ readRecord: () => ({ ok: true, text: "" }), git }), 10);
 
     /* The probe owns the "nothing to measure from" arm, so the reason lives in
-       one place rather than being invented at two call sites. */
-    expect(git.asked).toEqual([null]);
+       one place rather than being invented at two call sites.
+
+       **And `none`, not `newest-unreadable`.** An empty record has no newest
+       line to have read, so `newestLineRead` is false for it too — testing that
+       first reported "the record's newest line could not be read" about a file
+       with nothing in it, which is the mirror of the bug the watermark exists to
+       fix. This assertion caught it. */
+    expect(git.asked).toEqual([{ kind: "none" }]);
+  });
+
+  it("gives the two absences DIFFERENT sentences, which is the whole point of the watermark", async () => {
+    /* One arm said "the record names no deploy to measure from" for both — true
+       of an empty record, and false of one that names plenty and merely cannot
+       say which is newest. GPT Sol's F1. */
+    const empty = await gitProbe({ repoRoot: REPO_ROOT, ttlMs: 0 }).snapshot({ kind: "none" });
+    const corrupt = await gitProbe({ repoRoot: REPO_ROOT, ttlMs: 0 }).snapshot({ kind: "newest-unreadable" });
+
+    expect(empty.ancestry.kind).toBe("unknown");
+    expect(corrupt.ancestry.kind).toBe("unknown");
+    if (empty.ancestry.kind !== "unknown" || corrupt.ancestry.kind !== "unknown") throw new Error("unreachable");
+
+    expect(empty.ancestry.why).toContain("names no deploy");
+    expect(corrupt.ancestry.why).toContain("newest line");
+    expect(empty.ancestry.why).not.toBe(corrupt.ancestry.why);
   });
 });
 
@@ -295,7 +325,7 @@ describe("gitProbe against a real repository", () => {
   };
 
   it("reads the tip's sha and its committer date", async () => {
-    const { main } = await probe().snapshot(first);
+    const { main } = await probe().snapshot(at(first));
 
     expect(main.kind).toBe("ref");
     if (main.kind !== "ref") throw new Error("unreachable");
@@ -306,8 +336,30 @@ describe("gitProbe against a real repository", () => {
     expect(main.lastFetchAtMs).toBeNull();
   });
 
+  it("resolves git's relative dirs against the REPO, not the process's cwd", async () => {
+    /* **The regression I introduced folding two `rev-parse` calls into one**:
+       `path.resolve(line)` instead of `path.resolve(repoRoot, line)`. Git prints
+       these paths relative to the repository, so resolving them against
+       `process.cwd()` silently finds nothing and `lastFetchAtMs` comes back null
+       — which reads as "never fetched" on a perfectly healthy checkout. It
+       survived in production only because systemd's cwd happens to equal
+       repoRoot. GPT Sol's F7.
+
+       This asserts against THIS repository, whose `.git` is real and which has
+       certainly fetched — and it is run from a process whose cwd is the
+       worktree root, so a `resolve(line)` bug would still pass here. So the real
+       check is the throwaway repo above: its cwd is NOT its repoRoot, and it
+       gets a null only because it has genuinely never fetched. Both together
+       pin the behaviour; neither alone does. */
+    const here = await gitProbe({ repoRoot: REPO_ROOT, ttlMs: 0 }).snapshot({ kind: "none" });
+
+    expect(here.main.kind).toBe("ref");
+    if (here.main.kind !== "ref") throw new Error("unreachable");
+    expect(here.main.lastFetchAtMs, "this checkout has certainly fetched").not.toBeNull();
+  });
+
   it("says `ancestor` for a sha on the branch and counts the commits since", async () => {
-    const snapshot = await probe().snapshot(first);
+    const snapshot = await probe().snapshot(at(first));
 
     expect(snapshot.ancestry).toEqual({ kind: "ancestor" });
     /* Two commits from `first` to the tip, and this repo has no merges, so
@@ -316,7 +368,7 @@ describe("gitProbe against a real repository", () => {
   });
 
   it("says `diverged` for a sha beside the branch — the real alarm", async () => {
-    const snapshot = await probe().snapshot(offBranch);
+    const snapshot = await probe().snapshot(at(offBranch));
 
     expect(snapshot.ancestry).toEqual({ kind: "diverged" });
     /* **And refuses to put a number on it.** `rev-list A..B` across a divergence
@@ -325,7 +377,7 @@ describe("gitProbe against a real repository", () => {
     expect(snapshot.commitsSince.kind).toBe("not-comparable");
   });
 
-  it("says `cache-behind`, NOT an alarm, when the ref is older than the record", async () => {
+  it("says `record-ahead`, NOT an alarm, when the ref is older than the record", async () => {
     /* **The commonest benign state, and it used to raise a rollback warning.**
        Whenever the changelog job has run since this checkout last fetched, the
        recorded deploy is newer than the cached tip and is not its ancestor. An
@@ -333,14 +385,14 @@ describe("gitProbe against a real repository", () => {
        P1 finding 2. Modelled here by pointing the probe at an OLDER ref. */
     const behind = gitProbe({ repoRoot: dir, ref: first, ttlMs: 0 });
 
-    const snapshot = await behind.snapshot(tip);
+    const snapshot = await behind.snapshot(at(tip));
 
-    expect(snapshot.ancestry).toEqual({ kind: "cache-behind" });
+    expect(snapshot.ancestry).toEqual({ kind: "record-ahead" });
     expect(snapshot.commitsSince.kind).toBe("not-comparable");
   });
 
   it("counts zero when the record is level with the tip", async () => {
-    const snapshot = await probe().snapshot(tip);
+    const snapshot = await probe().snapshot(at(tip));
 
     expect(snapshot.commitsSince).toEqual({ kind: "count", commits: 0 });
     expect(snapshot.ancestry).toEqual({ kind: "ancestor" });
@@ -349,7 +401,7 @@ describe("gitProbe against a real repository", () => {
   it("does NOT collapse an unknown sha into `not-ancestor`", async () => {
     /* git exits 128 here, not 1. Treating every non-zero exit as "no" would
        draw a rollback that never happened. */
-    const snapshot = await probe().snapshot("f".repeat(40));
+    const snapshot = await probe().snapshot(at("f".repeat(40)));
 
     expect(snapshot.ancestry.kind).toBe("unknown");
     expect(snapshot.commitsSince.kind).toBe("unknown");
@@ -358,7 +410,7 @@ describe("gitProbe against a real repository", () => {
   it.each(["--upload-pack=touch /tmp/pwned", "HEAD", "", "; rm -rf /", "origin/main", "trunk"])(
     "refuses %j before it reaches an argv slot",
     async (bad) => {
-      const snapshot = await probe().snapshot(bad);
+      const snapshot = await probe().snapshot({ kind: "sha", sha: bad });
 
       expect(snapshot.ancestry).toEqual({
         kind: "unknown",
@@ -371,7 +423,7 @@ describe("gitProbe against a real repository", () => {
   );
 
   it("says `unavailable` for a ref that does not exist, rather than throwing", async () => {
-    const snapshot = await gitProbe({ repoRoot: dir, ref: "origin/does-not-exist", ttlMs: 0 }).snapshot(first);
+    const snapshot = await gitProbe({ repoRoot: dir, ref: "origin/does-not-exist", ttlMs: 0 }).snapshot(at(first));
 
     expect(snapshot.main.kind).toBe("unavailable");
     /* And the comparisons say the ref was the problem, rather than blaming the
@@ -381,7 +433,7 @@ describe("gitProbe against a real repository", () => {
   });
 
   it("says `unavailable` outside a repository, rather than throwing", async () => {
-    const snapshot = await gitProbe({ repoRoot: tmpdir(), ref: "trunk", ttlMs: 0 }).snapshot(first);
+    const snapshot = await gitProbe({ repoRoot: tmpdir(), ref: "trunk", ttlMs: 0 }).snapshot(at(first));
 
     expect(snapshot.main.kind).toBe("unavailable");
   });
@@ -403,12 +455,12 @@ describe("gitProbe against a real repository", () => {
       },
     });
 
-    const [a, b] = await Promise.all([counted.snapshot(first), counted.snapshot(first)]);
+    const [a, b] = await Promise.all([counted.snapshot(at(first)), counted.snapshot(at(first))]);
     const afterConcurrent = executions;
     expect(a).toEqual(b);
     expect(afterConcurrent, "two concurrent readers must share one probe").toBeGreaterThan(0);
 
-    const c = await counted.snapshot(first);
+    const c = await counted.snapshot(at(first));
     expect(c).toEqual(a);
     expect(executions, "a reader inside the TTL must run no commands at all").toBe(afterConcurrent);
   });
@@ -431,7 +483,7 @@ describe("gitProbe against a real repository", () => {
       },
     });
 
-    const snapshot = await slow.snapshot(first);
+    const snapshot = await slow.snapshot(at(first));
 
     /* It gives up rather than running the whole sequence... */
     expect(executions).toBeLessThan(5);
@@ -458,7 +510,7 @@ describe("gitProbe against a real repository", () => {
       },
     });
 
-    const snapshot = await stalled.snapshot(first);
+    const snapshot = await stalled.snapshot(at(first));
 
     expect(snapshot.main.kind).toBe("unavailable");
     if (snapshot.main.kind !== "unavailable") throw new Error("unreachable");
@@ -483,7 +535,7 @@ describe("gitProbe against a real repository", () => {
       },
     });
 
-    const snapshot = await tight.snapshot(first);
+    const snapshot = await tight.snapshot(at(first));
 
     expect(seen, "the first call should get through").toBeGreaterThan(0);
     const sentences = [
@@ -499,8 +551,8 @@ describe("gitProbe against a real repository", () => {
   it("does not serve one watermark's answer for another", async () => {
     const cached = gitProbe({ repoRoot: dir, ref: "trunk", ttlMs: 60_000 });
 
-    const onBranch = await cached.snapshot(first);
-    const beside = await cached.snapshot(offBranch);
+    const onBranch = await cached.snapshot(at(first));
+    const beside = await cached.snapshot(at(offBranch));
 
     expect(onBranch.ancestry.kind).toBe("ancestor");
     expect(beside.ancestry.kind).toBe("diverged");
