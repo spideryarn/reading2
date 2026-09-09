@@ -531,7 +531,14 @@ function Contents({
        "Jump to release 73" and so on with none of the day structure a sighted
        reader gets for free — the dates were unassociated `<span>`s beside them.
        `role="group"` plus `aria-labelledby` puts each day back on its own
-       buttons. GPT Sol's P3, round 2. */
+       buttons. GPT Sol's P3, round 2.
+
+       **And `role="group"` rather than the element biome asks for**, which is
+       `<fieldset>`: that is form markup — it groups controls that submit a
+       value, it cascades `disabled` to its children, and it wants a `<legend>`.
+       These are navigation buttons. What makes a screen reader announce the day
+       as focus enters it is the role and the label, and no element does that
+       here, so the rule is suppressed at the attribute with its reason. */
     <nav aria-labelledby="deploys-contents">
       <Card className="tw:px-3 tw:py-2.5">
         <h3
@@ -549,6 +556,7 @@ function Contents({
           {andList(OPEN_ZONE_LABELS)}.
         </p>
         {days.map((day) => (
+          // biome-ignore lint/a11y/useSemanticElements: the only element it offers is <fieldset>, which is form markup — see the header
           <div
             key={day.key}
             role="group"
