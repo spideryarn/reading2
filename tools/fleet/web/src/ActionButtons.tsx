@@ -1240,6 +1240,30 @@ function QuarantineNotice({
           {hold.incidents} sends to this session have ended this way. The sentence above is the most recent.
         </p>
       ) : null}
+      {/* **A REHYDRATED HOLD KNOWS LESS, AND THE PAGE SAYS SO.** The run that
+          made the send has ended, so nothing here has been re-checked since it
+          was written down — and the attempt case knows less again: nothing
+          recorded how far that send got, or whether it was made at all.
+
+          NO TIME IS PRINTED. Every other timestamp on this page goes through
+          the clock-skew shift, this component has no skew to shift by, and a
+          time that is quietly an hour out is worse than no time. The server's
+          own sentence above carries the moment where one matters.
+
+          Deliberately silent when `basis` is null: a server too old to send the
+          field has made no claim, and saying "this dashboard watched it happen"
+          on its behalf is the overstatement the field exists to prevent. */}
+      {hold.basis?.kind === "rehydrated-hold" ? (
+        <p className="tw:mt-1 tw:text-[12px] tw:text-ink-soft">
+          Carried over from the previous run of this dashboard. Nothing has been re-checked since it was written
+          down, and nothing has been re-sent.
+        </p>
+      ) : hold.basis?.kind === "rehydrated-attempt" ? (
+        <p className="tw:mt-1 tw:text-[12px] tw:text-ink-soft">
+          Carried over from the previous run of this dashboard, which stopped before it could record what happened.
+          It cannot say how far that send got, or whether it was made at all. Nothing has been re-sent.
+        </p>
+      ) : null}
       <p className="tw:mt-2 tw:text-[12px] tw:text-ink-soft">
         Neither button below sends anything, and neither can recall anything. Look at the terminal —
         <Mono>gjd-remote resume</Mono> — and then say what you found.

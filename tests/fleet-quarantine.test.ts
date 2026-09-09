@@ -124,7 +124,12 @@ describe("opening a hold", () => {
     expect(second.reading).toBe("unknown");
     expect(second.origin).toBe("direct-steer");
     expect(second.openedAt).toBe(first.openedAt);
-    expect(second.lastSendAt).toBeGreaterThan(first.openedAt);
+    /* `openedAt` became nullable in Stage 4b — null on a hold rehydrated from an
+       attempt nobody accounted for, which is not this one. Asserting it is a
+       number here is part of the claim: a hold this process watched open knows
+       when it did. */
+    expect(typeof first.openedAt).toBe("number");
+    expect(second.lastSendAt ?? 0).toBeGreaterThan(first.openedAt ?? 0);
   });
 
   it("each of the four readings produces its own sentence", () => {

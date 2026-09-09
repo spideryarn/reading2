@@ -1905,17 +1905,46 @@ export type QuarantineHoldView = {
    * gone either way.
    */
   firstSeenGeneration: number | null;
-  openedAt: number;
-  /** When the most recent uncertain send landed. Equals `openedAt` while `incidents` is 1. */
-  lastSendAt: number;
-  /** How many uncertain sends this hold has absorbed. Never below 1. */
+  /**
+   * When the send that opened this came back, or **null when nothing recorded
+   * that it ever opened**.
+   *
+   * Null on exactly one kind of hold: `basis.kind === "rehydrated-attempt"`,
+   * rebuilt from a line written before the keystrokes and never resolved. Such
+   * a hold cannot say when it opened, so it says so rather than offering the
+   * moment the attempt was written down as if it were the same fact. The
+   * attempt's own timestamp is on the basis, where it is labelled as what it is.
+   */
+  openedAt: number | null;
+  /**
+   * When the most recent uncertain send landed. Equals `openedAt` while
+   * `incidents` is 1, and null on a `rehydrated-attempt` — nothing landed.
+   */
+  lastSendAt: number | null;
+  /**
+   * How many recorded incidents this hold covers. Never below 1.
+   *
+   * Uncertain sends whose answer this dashboard read, plus — on a
+   * `rehydrated-attempt` — the one attempt nobody ever accounted for.
+   */
   incidents: number;
-  /** The reading of the most recent one. */
-  reading: UncertainSendReading;
+  /**
+   * What was read about the most recent send, or **null when nothing was ever
+   * read**: a `rehydrated-attempt` is a hold over a send whose answer no
+   * process survived to see.
+   */
+  reading: UncertainSendReading | null;
   /** Which path the most recent one came down. */
   origin: UncertainSendOrigin;
   why: string;
   outcome: HoldOutcome;
+  /**
+   * Whether this process watched this happen, or read it off a disk.
+   *
+   * See `HoldBasis`. It is the field that keeps the three nullable ones above
+   * honest: each null has exactly one basis that produces it.
+   */
+  basis: HoldBasis;
 };
 
 /* ------------------------------------------------------------------ *
@@ -2757,3 +2786,60 @@ export type UsageFeed =
   /** A report IS there and this reader could not make sense of it. Something is wrong, unlike above. */
   | { kind: "report-unreadable"; why: string; at: string }
   | { kind: "published"; summary: UsageSummary; coordinatorWrittenAt: string };
+
+/* ================================================================== *
+ * STAGE 4b — A HOLD THAT OUTLIVED THE PROCESS THAT RECORDED IT
+ *
+ * A uniquely named banner rather than the bare separator this file uses
+ * elsewhere: two sessions appending blocks that both open with the same
+ * line collide in git even when the blocks are about different things.
+ * ================================================================== */
+
+/**
+ * Where a hold's record came from, and therefore **what it is entitled to
+ * say.**
+ *
+ * `tools/fleet/hold-ledger.ts` makes a hold survive a dashboard restart, and
+ * the thing that must not survive with it is the impression that this process
+ * watched any of it happen. A rehydrated hold is a record read off a disk by a
+ * process that was not there: the run that made the send has ended, and nothing
+ * here has been re-checked since the line was written.
+ *
+ *  - `observed-here` — this process made the send and read what came back.
+ *  - `rehydrated-hold` — rebuilt at startup from a line the previous run wrote
+ *    **after** its send returned. It knows what was read and when the hold
+ *    opened, because that run wrote both down. What it cannot know is anything
+ *    that happened after that line: if the operator released it and the process
+ *    died before recording the release, this comes back holding. That is the
+ *    conservative direction — pressing release a second time costs a tap, and
+ *    the other mistake types into an input box nobody has looked at.
+ *  - `rehydrated-attempt` — rebuilt from a line written **before** the
+ *    keystrokes, which nothing ever resolved. **It does not know whether the
+ *    send was even made**, let alone how far it got, and there is no moment at
+ *    which anything opened, so `openedAt`, `lastSendAt` and `reading` are all
+ *    null on such a hold. It is the strongest reason the ledger exists — a
+ *    crash inside the transport is exactly the case where nobody can say what
+ *    is in that input box.
+ *
+ * **THE UNKNOWN FIELDS ARE NULLABLE BESIDE THIS RATHER THAN CARRIED INSIDE
+ * IT.** A union carrying `openedAt`, `lastSendAt`, `reading` and `incidents`
+ * per arm is the better shape in the abstract, and it was rejected here for one
+ * concrete reason: `HoldView` in web/src/actions-client.ts already re-types
+ * every one of those to `| null`, because a server too old to send a field has
+ * made no claim. So a union on the wire would be flattened back to exactly this
+ * shape one file later, and the flattening would be the second place to get it
+ * wrong. What the union buys — you cannot read `openedAt` without establishing
+ * which case you are in — is bought here by the field docs plus this arm.
+ */
+export type HoldBasis =
+  | { kind: "observed-here" }
+  | {
+      kind: "rehydrated-hold";
+      /** When the previous run last wrote this hold down. It knows nothing after this. */
+      recordedAt: number;
+    }
+  | {
+      kind: "rehydrated-attempt";
+      /** When the previous run wrote down that it was **about to** type. */
+      attemptedAt: number;
+    };
