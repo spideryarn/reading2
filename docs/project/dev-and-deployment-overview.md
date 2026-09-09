@@ -99,10 +99,10 @@ reference, and is authoritative wherever the two disagree.
   deferred, one line each and the product question it waits on, so a lull has something queued and
   gate 3's "is it in the queue?" has a place to look. The Spideryarn product plan sits there whole.
 - **[fleet-dashboard-modes.md](fleet-dashboard-modes.md)** — the checklist for adding a tab to that
-  dashboard: the four `Record<Mode, …>` registrations the compiler catches and the one mount in
-  `App.tsx` it does not, whether your data rides the pushed snapshot or wants its own route, why a
-  tab that writes is two files rather than one, and the etiquette for a night when several sessions
-  are adding tabs at once.
+  dashboard: six places across three files, two of which nothing checks; the end-to-end path for a
+  datum depending on whether it rides the pushed snapshot or wants its own route; why an on-demand
+  route may only block the event loop for work whose worst case it can state; and the etiquette for
+  a night when several sessions are adding tabs at once.
 - **[changelog.md](changelog.md)** — how a deploy becomes a line on the public `/changelog`: why a
   version *is* a deploy and why Vercel's list rather than git is the only place that knows which shas
   those were, the append-only NDJSON the process writes, and the four stages — a fan-out of small
