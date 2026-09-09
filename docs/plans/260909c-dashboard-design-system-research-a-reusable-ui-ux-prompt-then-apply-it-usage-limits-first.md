@@ -1,8 +1,14 @@
 # A design system for the fleet dashboard: research, a reusable UI/UX prompt, then apply it
 
-**Status as of 2026-09-09: Stages 1–3 done.** Screenshots and measurements taken, the research done,
-and [design-a-screen.md](../reusable/design-a-screen.md) written. Sol's read of the screens and the
-restyle follow.
+**Status as of 2026-09-09: Stages 1–4b and 6 done and on `dev`; 5a, 5b and 7 not started.**
+The research, the screenshots, [design-a-screen.md](../reusable/design-a-screen.md), two Sol
+reviews, the type scale, `StatCard`, and the Usage limits rewrite have landed. What remains is the
+landing surface (5a's data contract first, then 5b) and the tab-by-tab sweep, which Sol asked be a
+reassessment rather than a queue.
+
+**Readiness and Deploys are now mine outright**, handed over by their sessions; `dashboard-tooltips`
+has finished Recent messages, Queued ideas and Sessions/masthead, so those are unblocked too. The
+agreements and what each handover carried are in § Ownership below.
 
 Up: [dev-and-deployment-overview.md](../project/dev-and-deployment-overview.md) via
 [fleet-dashboard-modes.md](../project/fleet-dashboard-modes.md);
@@ -573,6 +579,28 @@ lines removed; Usage rebuilt from its typed epistemic states. It also names the 
 existing-screen deletion** as those two constant lines — which is where I had independently landed
 from the pixels, and it is a product call for Greg rather than mine.
 
+### One question for Greg, raised once by `deploys-ui` on behalf of both tabs
+
+**`zones.ts` says a clock time is always drawn in all three zones — UTC, London, Athens — and two
+sessions broke that rule on two tabs on the same night, from opposite directions.** Deploys tucked
+the three-zone line behind an expand on a row whose whole purpose was to stop being 950px tall; this
+plan turned nine of Usage's ten wall-clock instants into durations and kept all three zones only on
+the reset.
+
+The proposal — theirs, and better than the way I had it — is a distinction rather than an exception:
+
+> **the instant you act at versus the instant you judge freshness by.**
+
+A reset time is the first, and ambiguity there costs a decision. A deploy timestamp from yesterday
+is the second, and `25h ago` has already answered it before anyone reads a clock. If that holds,
+`zones.ts` is right about the case it was written for and over-broad everywhere else — a much
+smaller change than either tab backing out.
+
+**It is Greg's to settle** and `deploys-ui` is putting it to him in their debrief, with this tab's
+evidence, so he gets one question rather than two halves of one. Nothing here should be re-litigated
+until he answers; if he rules that all three zones must stay visible everywhere, `instantTip` is the
+cheapest place to look first.
+
 ### Stage 7+ — the remaining tabs: a reassessment, not a queue
 
 Each with a before/after pair, the gates, and a Sol code review. Order decided after Stage 4's
@@ -586,7 +614,7 @@ agreements, so the next agent does not have to re-negotiate them:
 | With | Agreed |
 |---|---|
 | `dashboard-tooltips` | **Their tooltips land on a tab first, my restyle after** — a restyle that moves prose into a card changes what an `Explain` is attached to. Their order: Recent messages → Queued ideas → Sessions/masthead → Overseer. **Usage limits, Readiness and Deploys are unclaimed by them and mine to take now** |
-| `deploys-ui` | Deploys stays in the sweep; they message me when their rework lands and I do the visual pass **on top of it**, not underneath. They decline `StatCard` for their tab, with a reason I accept: the freshness header's facts are qualified sentences, not stats, and turning them into big numbers is the "punchier" move that file exists to warn against |
+| `deploys-ui` | **Landed and handed over** (`4ccf4822`): 8,824px → 1,682px at 390px. The visual pass is mine, on top of their build. They decline `StatCard` for their tab, with a reason I accept: the freshness header's facts are qualified sentences, not stats, and turning them into big numbers is the "punchier" move that file exists to warn against. They also added four `.deploy-row` rules to `tailwind.css` — including hiding Safari's `::-webkit-details-marker`, which `list-none` does not reach — lifted from `src/web/styles/changelog.css` rather than re-derived |
 | `readiness-tab` | **Handed to me outright** — *"ReadinessPanel.tsx is finished and I'm stopping, so restyle it freely."* Their session has since ended; see § Readiness below for what they asked and my answer |
 | `claude-agents-dashboard` | `ActionButtons.tsx` and the detail's action machinery stay theirs; **the narrow-width layout question in `App.tsx` is mine**. An extraction of shared shapes out of `ActionButtons.tsx` is welcome *after* Stages 5–6, on the condition that the copy tests move with the components and **no string is tidied on the way** — several are worded around what the code can and cannot know, and the awkward ones are awkward on purpose |
 
