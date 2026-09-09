@@ -373,6 +373,40 @@ matching anywhere rather than as the terminal line; footers accepted on half the
 scan discovery and a FIFO named `*.log` that would block the dashboard outright; and a pending record
 identified by pid alone, which a recycled pid turns into a run that is "still going" for ever.
 
+**A second code review found two more, and a regression the first fix had introduced.** Also all
+real:
+
+1. **A partly readable failing check exposed a stale pass.** The guard was "the table has no rows at
+   all", so a failing `npm run check` whose summary named typecheck and not test emitted no event for
+   test — and a two-hour-old test pass survived into `ready`. A table we could only partly read is
+   not evidence the rest was fine, so a failed whole-check now contributes an event to **every**
+   required check, and a missing or non-convicting row is `unsettled`.
+2. **Equal-millisecond events were resolved by input order.** Two runs can finish in the same
+   millisecond; with the pass listed first, filesystem order decided whether the tree was broken.
+   Ties now go to the worse event.
+3. **A rerun erased a known failure** — the regression. Reducing on "the newest event of any kind"
+   turned `not-ready` into `unknown` the moment somebody retried a red check, contradicting the
+   policy stated three lines above it. The newest **settled** event decides now, and a later
+   unsettled one can only unsettle a pass.
+
+And **the discovery cap was not a cap**: it sat after `readdirSync`, which materialises every entry,
+so a directory of 100,000 logs was fully read whatever the number said. `opendirSync` and a cursor
+we abandon is a real bound. It reports truncation as a **boolean, not a count** — once you stop
+reading a directory you do not know what is left, and a number there would be exactly the confident
+wrong figure this feature exists to avoid.
+
+### What three review rounds cost, and why it was worth it
+
+Every round found at least one way to render a tree green that was not. None of them was visible by
+reading the code — they were all *interactions*: a shortcut versus a newer reading, a table that is
+partly readable, two events in the same millisecond, a cap on the wrong side of a `readdirSync`. The
+lesson for whoever builds Stage 2 is not "be careful"; it is that **this feature's bugs live in the
+seams between two rules that are each correct**, and only an adversary with the code in front of it
+has found them so far.
+
+Every fix carries a test that was **watched failing against the previous commit** — thirteen of
+them, checked out and re-run rather than assumed.
+
 **Three bugs found by building it, none of which reading would have caught.** Written down because
 each is a class rather than a slip:
 
