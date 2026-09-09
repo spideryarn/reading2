@@ -626,6 +626,51 @@ green: every other assertion is about words, and that one is about colour. There
 draws a window at 95% used against a verdict of `ok` and asserts the value carries neither the alarm
 nor the needs ink. Three of the four earlier mutations were caught; this is the fourth, closed.
 
+**UL-05's first fix was wrong in the other direction, and the screenshot caught that too.** Dropping
+the thresholds, I set the tone to `work` — and `work` is this palette's green, the status colour of
+a session that is running. On a headroom figure green does not read as *measured*, it reads as
+*healthy*, so `4% left` would have been drawn as good news. Sol's word was **neutral** and it was
+the right word; the tone is `idle` now, and the test asserts the absence of all three severity inks
+rather than only the loud two. Size and weight still make the number the biggest thing in its box,
+which is what the card is for.
+
+That makes **three** defects on this tab found by looking at the rendering rather than by running
+anything, all three after a green suite, and all three about *colour* — the one property every
+assertion here was blind to until this stage added one.
+
+### Round two: no P0, no P1, land it
+
+[260909c-dashboard-design-system-usage-code-review-2-sol.md](260909c-dashboard-design-system-usage-code-review-2-sol.md),
+scoped to the five fixes with discovery closed. *"The five fixes are sound; I would land
+`20f8c504`."* It confirmed the four judgement calls: withdrawing the fold was correct (folding all
+but today's known names *"would still invent a future compatibility contract"*); `Unknown` for both
+broad arms is right, and `Withheld` and `Unavailable` each having one precise caller is *"evidence
+that those states now mean something specific, not a smell"*; and 22 / 17 / 13 reads as three
+levels.
+
+**Two P2s, both about my own prose overclaiming, both fixed:**
+
+- The comment said the exact cache instant *"can remain in the tooltip"* while `USAGE_TIPS.cached`
+  was static and never received `fetchedAt`. A sentence asserting a behaviour that was not there —
+  [written-down-is-not-checked.md](../reusable/written-down-is-not-checked.md)'s exact shape.
+  `usageCachedTip(fetchedAt)` now computes it.
+- The new colour test used **95% used against a verdict of `ok`**, which the producer's 80%
+  threshold cannot emit. The mutation was still caught, but a fixture the real system cannot reach
+  proves something about nothing. It is 75% / `ok` now — inside the threshold, and exactly where the
+  withdrawn `left <= 25` rule would have shouted over a verdict saying the account is fine.
+
+#### And the mutation check that was itself wrong
+
+Re-running the threshold mutation after that change, a test failed — but **the wrong one**. There
+are three `tone: "idle"` in the file and the `perl` substitution took the first, which is
+`headline()`'s cleared arm, not `windowStat`'s. So the run "passed" the mutation check while having
+mutated a different function; the new colour test had not been exercised at all. Targeting line 412
+specifically, it fails as intended.
+
+**A mutation you did not verify landed where you meant is a green tick for a check you did not
+run** — the same family as everything else this stage turned up, and the reason to print what the
+mutation actually changed rather than trusting a pattern to be unique.
+
 ### One question for Greg, raised once by `deploys-ui` on behalf of both tabs
 
 **`zones.ts` says a clock time is always drawn in all three zones — UTC, London, Athens — and two

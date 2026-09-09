@@ -151,6 +151,24 @@ export const USAGE_TIPS: Record<string, Tip> = {
 };
 
 /**
+ * The cache's own card, carrying the instant its age is an age of.
+ *
+ * Computed rather than the static `USAGE_TIPS.cached`, because a comment
+ * claiming "the exact instant remains in the tip" while the tip was static was
+ * an overclaim in prose about the thing prose cannot check — GPT Sol's round-two
+ * P2, and [written-down-is-not-checked.md](../../../docs/reusable/written-down-is-not-checked.md)
+ * is the class. The age is what a reader judges freshness by; the instant is
+ * what they quote into a message, and it now exists.
+ */
+export function usageCachedTip(fetchedAt: string): Tip {
+  return {
+    head: USAGE_TIPS["cached"]!.head,
+    what: `${USAGE_TIPS["cached"]!.what} This one was fetched ${whenLine(fetchedAt)}.`,
+    how: USAGE_TIPS["cached"]!.how,
+  };
+}
+
+/**
  * One window's card. Computed rather than a map entry, because half of it is
  * the window's own name and reset instant — the same shape as `instantTip`.
  */
@@ -378,11 +396,20 @@ function windowStat(window: UsageWindowCard, asOf: number, skew: ClockSkew): {
        file's header forbids, and I had flagged the numbers as invented in the
        review prompt before knowing they were also wrong.
 
-       `work` unconditionally: a real number, drawn as a real number. The
+       **`idle`, which is the neutral one — NOT `work`.** The first attempt at
+       this fix used `work`, and `work` is the green in this palette: the status
+       colour for a session that is running. On a headroom figure green does not
+       mean "measured", it means "healthy" — so `4% left` would have been drawn
+       in the reassuring colour, which is a severity claim of exactly the kind
+       the finding was about, made in the other direction. Sol's word was
+       *neutral* and it was the right word.
+
+       A real number, drawn as a real number: 22px and semibold still make it
+       the biggest thing in its box, which is what the card is for. The
        account's severity is the verdict's to state, once, at the top. The way
        to earn a per-window colour is for the producer to carry a per-window
        status — noted in plan 260909c. */
-    tone: "work",
+    tone: "idle",
   };
 }
 
@@ -716,7 +743,7 @@ function Reading({
           this rewrite removed. Same rule, the other way up. */}
       {summary.cache.kind === "attributed" ? (
         <p className="tw:mt-1 tw:text-note tw:text-ink-faint">
-          <Explain tip={USAGE_TIPS["cached"]!}>
+          <Explain tip={usageCachedTip(summary.cache.fetchedAt)}>
             cached {ago(summary.cache.fetchedAt, asOf, skew).text}
           </Explain>
         </p>

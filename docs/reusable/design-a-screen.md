@@ -334,10 +334,26 @@ you start.
         already produced reads as two facts in a diff and as one long paragraph on screen. It is
         the most common way a redesign to remove a wall of text adds to it.
 
+      **The common factor in those is colour, and a suite of text assertions is blind to it.** If a
+      status colour carries meaning on your screen, assert on it — that the calm state does not wear
+      the alarm class, *and* that a measured value does not wear the reassuring one. The second half
+      is the one that gets left out: a redesign that stops shouting usually starts by making
+      everything look fine, which is the same error with the sign flipped.
+
+      And when you mutate the code to check such a test can fail: **print what the mutation actually
+      changed.** A pattern you assumed was unique in the file will match the first of three, the
+      suite will go red somewhere else, and you will record a check you never ran.
+
       So the last step is not a command. Open the screenshot, ask the question from Half One, and
       see whether the answer is where you put it. **If you delegated the screenshots, look at them
       yourself** — a report saying "nothing is broken" is an answer to a different question, and an
       agent measuring the DOM cannot see what is `sr-only`, what is off-screen, or what is loud.
+
+      Delegated *descriptions* of a layout are wrong often enough to be worth distrusting on their
+      own: over one session's screenshot rounds, agent reports variously called a two-column grid a
+      horizontally-scrolling strip, listed an above-the-fold order that omitted the first two things
+      on the page, and reported hidden `sr-only` prose as visible body text. The screenshots
+      themselves were right every time. **Take the files; check the prose against them.**
 
 ## Source quality, briefly
 
