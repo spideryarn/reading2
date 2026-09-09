@@ -1673,3 +1673,113 @@ export type QuarantineHoldView = {
   why: string;
   outcome: HoldOutcome;
 };
+
+/* ------------------------------------------------------------------ *
+ * Starting a session from the web UI, and telling the Overseer about it.
+ *
+ * The FOURTH endpoint to move behind this file, and it moved because of a bug
+ * rather than for tidiness. `LaunchRecord` was declared twice — in
+ * `routes-new.ts` and again in `web/src/new-session-client.ts` — related by
+ * nothing but hope, exactly like `QueueView` before it. A cross-family review
+ * found that a launch which reached `started` could carry no notification state
+ * at all, with no way to tell "not attempted" from "nobody wired it up", and
+ * fixing that needs a discriminated union. The union changes the shape on the
+ * wire, and changing the shape while the declaration is written twice is
+ * invisible to the compiler: `parseLaunch` reads `v["state"]` as a raw string,
+ * so a rename returns `null` for every record and the panel silently renders
+ * nothing. Shaped exactly like docs/postmortems/260908b.
+ * ------------------------------------------------------------------ */
+
+/**
+ * What became of the one line the dashboard sends the Overseer when a session
+ * is started from the web UI.
+ *
+ * **There is no "sent".** Nothing on this box can observe reception —
+ * `sendMessage` types keystrokes at a pane, and whether the agent read them,
+ * whether the Enter landed, and whether the text concatenated with something
+ * half-typed are all outside what we can see. So the success arm is
+ * `submitted`, which claims exactly what happened, and every failure carries the
+ * `Delivery` word that path already returns.
+ *
+ * The four not-a-send arms are four different facts, and the union exists so
+ * the launch record cannot flatten them into "not sent": nobody holds the role,
+ * which is what a box looks like after a reboot and is a real answer; the role
+ * is contested, which is a fault to report and never a pick; we could not
+ * establish who holds it or could not address them; and we found the holder and
+ * the send would not go.
+ */
+export type NotifyOutcomeView =
+  | { kind: "submitted"; to: string; paneId: string }
+  | { kind: "no-holder" }
+  | { kind: "contested"; names: readonly string[] }
+  | { kind: "cannot-tell"; why: string }
+  | { kind: "refused"; to: string; code: string; why: string; delivery: Delivery }
+  | { kind: "unknown"; to: string; why: string };
+
+/**
+ * Where a launch's notification has got to.
+ *
+ * `pending` is a real state and is set **before** the send is attempted, so a
+ * notification can never delay the launch result — the page says a session
+ * started the moment it started, and fills this in afterwards.
+ */
+export type NotifyState = { kind: "pending" } | NotifyOutcomeView;
+
+/**
+ * **THE DISCRIMINANT AND ITS NOTIFICATION, IN ONE FIELD, AND THE NESTING IS THE
+ * POINT.**
+ *
+ * A union on a top-level `state` would be the obvious shape and it cannot be
+ * used here: `routes-new.ts` mutates its record in place, and that record's
+ * OBJECT IDENTITY is load-bearing — `launch()` ends with
+ * `if (inFlight === record)`, a reference comparison an earlier review put there
+ * so that two launches being live at once is loud rather than silent. Moving a
+ * record between arms of a top-level union means replacing the object, which
+ * breaks that check.
+ *
+ * Nesting the discriminant under one field keeps the identity — `record.progress
+ * = {…}` is a single assignment — while still making the bad state
+ * unrepresentable: a `starting` launch cannot carry an outcome, and a `started`
+ * one cannot carry nothing.
+ */
+export type LaunchProgress =
+  | { state: "starting"; notification: { kind: "not-attempted" } }
+  | { state: "started"; notification: NotifyState }
+  /** A launch that never started has nothing to tell anyone about. */
+  | { state: "failed"; notification: { kind: "not-applicable" } };
+
+/** One attempt, from the moment it is accepted to whatever became of it. */
+export type LaunchRecordView = {
+  /** Ours, not the box's — the handle the client polls with. */
+  id: string;
+  progress: LaunchProgress;
+  /** The tmux session name: what the caller asked for, or the opaque one minted for them. */
+  name: string | null;
+  /** What was ASKED for. In repo mode the box may choose another — `startedDir`. */
+  dir: string;
+  /** `repo` is gjd-remote's verified origin resolution; `dir` is the `-d` escape hatch. */
+  resolution: "repo" | "dir" | null;
+  /** The directory the box says it actually started in, once it has said so. */
+  startedDir: string | null;
+  /** The prompt's size. **Never the prompt.** */
+  promptBytes: number;
+  requestedAt: string;
+  finishedAt: string | null;
+  /** Why it failed, in a sentence for a person. */
+  error: string | null;
+  /** A failure that MAY have started something — a timeout, a launcher that vanished. */
+  maybeStarted: boolean;
+  /** Anything true but awkward — a start whose name could not be read back. */
+  note: string | null;
+};
+
+/** Everything the client needs to draw the button's state. */
+export type NewSessionStatusView = {
+  ok: true;
+  /** A launch is in flight; a second POST would be refused. */
+  busy: boolean;
+  /** Milliseconds until a POST would be accepted; 0 when it would be now. */
+  retryAfterMs: number;
+  /** Newest first, capped — this is a live view, not a history. */
+  launches: readonly LaunchRecordView[];
+};

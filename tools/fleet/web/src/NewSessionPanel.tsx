@@ -102,14 +102,14 @@ type GaveUp =
 
 /** What a launch record means, in a sentence, and how loudly to say it. */
 function launchLine(record: LaunchRecord): { tone: "work" | "needs" | "alarm" | "idle"; head: string; body: string } {
-  if (record.state === "starting") {
+  if (record.progress.state === "starting") {
     return {
       tone: "work",
       head: "Starting…",
       body: "gjd-remote is bringing it up — six ssh round trips and a setup handshake, so tens of seconds. Nothing has succeeded yet.",
     };
   }
-  if (record.state === "started") {
+  if (record.progress.state === "started") {
     return {
       tone: "work",
       head: `Started${record.name === null ? "" : ` as ${record.name}`}.`,
@@ -136,7 +136,7 @@ function launchLine(record: LaunchRecord): { tone: "work" | "needs" | "alarm" | 
  * covers both "refused" and "the answer was lost", neither of which may be
  * reported as a thing that happened.
  */
-const DASH_D_VERB: Record<LaunchRecord["state"], string> = {
+const DASH_D_VERB: Record<LaunchRecord["progress"]["state"], string> = {
   starting: "Using",
   started: "Started with",
   /* Not "attempted and did not start": `maybeStarted` says a Claude may well be
@@ -199,7 +199,7 @@ function Launch({ record }: { record: LaunchRecord }): ReactNode {
           each other about whether anything ran. GPT Sol's M4. */}
       {record.resolution === "dir" ? (
         <p className="tw:mt-1 tw:text-[12px] tw:break-words tw:text-alarm-ink">
-          {DASH_D_VERB[record.state]} <Mono>-d</Mono>: outside the repo's setup lock, and without
+          {DASH_D_VERB[record.progress.state]} <Mono>-d</Mono>: outside the repo's setup lock, and without
           reading its setup status.
         </p>
       ) : null}
@@ -285,7 +285,7 @@ export function NewSessionPanel({ api }: { api: NewSessionApi }): ReactNode {
            page. **Settled beats expired** — a launch that finished on the last
            ask is finished, not abandoned, and `stopped` here is what keeps the
            tick below from overwriting that with a give-up. */
-        if (!result.feed.busy && !result.feed.launches.some((l) => l.state === "starting")) {
+        if (!result.feed.busy && !result.feed.launches.some((l) => l.progress.state === "starting")) {
           stopped = true;
           setPollingSince(null);
         }
