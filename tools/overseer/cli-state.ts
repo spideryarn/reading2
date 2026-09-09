@@ -32,24 +32,59 @@
  * overwrite the list it could not read. So every writer refuses on `unusable`
  * and says so. docs/reusable/silent-success.md is the general form.
  *
- * ## The temp file is per-process
+ * ## Every write takes a lock, and the first draft's reasoning was wrong
  *
  * `arming.ts` writes `${path}.tmp` and renames it, which is atomic for one
- * writer and a shared clobber target for two. Two `overseer mine add` runs in
- * the same second is not hypothetical — a tick is a burst of commands — so the
- * temp name carries this process's pid. The rename is still the atomic step;
- * what the pid buys is that neither process is writing into the other's
- * half-written file. **Last writer still wins on the file's contents**, and that
- * is accepted: the alternative is a lock, and a lock in the Overseer's own
- * tooling is a thing that can wedge the Overseer.
+ * writer and a shared clobber target for two — so the temp name here carries
+ * this process's pid. **That is not enough, and the first draft of this file
+ * said it was.** GPT Sol's P1-1 on the plan: two processes read `{mine:["a"]}`,
+ * one adds `b` and one adds `c`, both rename atomically, and the survivor holds
+ * `a,b` or `a,c`. Neither file is torn and one valid update has silently
+ * vanished — which is the exact shape (`silent-success.md`) this module's other
+ * half is built to refuse.
+ *
+ * That draft rejected a lock on the grounds that "a lock in the Overseer's own
+ * tooling is a thing that can wedge the Overseer". The answer is that
+ * `lock.ts` already clears a lock whose holder is dead, refuses in a named way
+ * rather than hanging, and is the machinery the daemon itself runs on. A
+ * **separate** `cli-state.lock` is used, never the daemon's `overseer.lock`: the
+ * daemon holds a long-lived lock on its own file and does not lock the
+ * directory, so a second lock beside it contends with nothing.
+ *
+ * ## And the file carries a schema
+ *
+ * A future incompatible shape must be `unusable`, not partially defaulted — the
+ * same rule the store's own `STORE_SCHEMA` follows, and for the same reason.
  */
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 import { NAME_RULE } from "../fleet/routes-rename.js";
+import { describeLockRefusal, releaseLock, stillOurs, takeLock } from "./lock.js";
 
 /** The file, inside whatever `storeRoot()` resolved to. */
 export const CLI_STATE_FILE = "cli-state.json";
+
+/**
+ * The lock every write takes — **beside** the daemon's `overseer.lock`, never it.
+ *
+ * The daemon's lock is long-lived and belongs to a process that runs for days;
+ * taking it would mean this CLI could never write while the fleet was being
+ * watched, which is all of the time. It locks its own file rather than the
+ * directory, so a second lock file here contends with nothing.
+ */
+export const CLI_STATE_LOCK_FILE = "cli-state.lock";
+
+/**
+ * The shape this build writes and the only one it will read.
+ *
+ * A file from a future incompatible build must be `unusable`, not partially
+ * defaulted into something that looks like a list — the same rule, for the same
+ * reason, as `STORE_SCHEMA` in `store.ts`. A file with no `schema` at all is the
+ * one written before this field existed and is read as 1, because that is what
+ * it was.
+ */
+export const CLI_STATE_SCHEMA = 1;
 
 /**
  * Which door the pause sentence went through.
@@ -132,6 +167,15 @@ export function parseCliState(raw: unknown): { kind: "read"; state: CliState } |
     return { kind: "unusable", why: `${CLI_STATE_FILE} is not a JSON object` };
   }
   const o = raw as Record<string, unknown>;
+  const schema = o["schema"] ?? CLI_STATE_SCHEMA;
+  if (schema !== CLI_STATE_SCHEMA) {
+    return {
+      kind: "unusable",
+      why:
+        `${CLI_STATE_FILE} is schema ${JSON.stringify(schema)} and this build reads ${CLI_STATE_SCHEMA} — ` +
+        "a newer Overseer wrote it, so read it with that build rather than letting this one guess",
+    };
+  }
   const rawMine = o["mine"] ?? [];
   if (!Array.isArray(rawMine)) return { kind: "unusable", why: `${CLI_STATE_FILE}: "mine" is not an array` };
   const mine: string[] = [];
@@ -191,7 +235,7 @@ export function writeCliState(storeRoot: string, state: CliState): { ok: true } 
   const temporary = `${path}.${process.pid}.tmp`;
   try {
     mkdirSync(dirname(path), { recursive: true });
-    writeFileSync(temporary, `${JSON.stringify(state, null, 2)}\n`, "utf8");
+    writeFileSync(temporary, `${JSON.stringify({ schema: CLI_STATE_SCHEMA, ...state }, null, 2)}\n`, "utf8");
     renameSync(temporary, path);
     return { ok: true };
   } catch (cause) {
@@ -201,6 +245,56 @@ export function writeCliState(storeRoot: string, state: CliState): { ok: true } 
       /* the rename is what matters; a stray temp file is not worth a second failure */
     }
     return { ok: false, why: `${CLI_STATE_FILE} could not be written (${cause instanceof Error ? cause.message : String(cause)})` };
+  }
+}
+
+/**
+ * **Read, decide, write — under a lock, so no update is lost.**
+ *
+ * The whole read-modify-write is inside the lock. `writeCliState` on its own is
+ * atomic against a *torn* file and does nothing about the lost update GPT Sol's
+ * P1-1 describes: two readers of `{mine:["a"]}` both rename, and one of `b` or
+ * `c` is simply gone.
+ *
+ * `edit` returns the new state, or a string to refuse with. It runs holding the
+ * lock, so it must not be slow and must not take another lock.
+ *
+ * **`stillOurs` is rechecked after the write** for the reason `releaseLock` has
+ * it: if a stale-lock sweep handed the file to somebody else while we were
+ * writing, we have just written beside a second writer and the honest answer is
+ * to say so rather than report success.
+ */
+export function updateCliState(
+  storeRoot: string,
+  edit: (state: CliState) => CliState | { refuse: string },
+  now: () => Date = () => new Date(),
+): { ok: true; state: CliState } | { ok: false; why: string } {
+  const lockPath = join(storeRoot, CLI_STATE_LOCK_FILE);
+  try {
+    mkdirSync(storeRoot, { recursive: true });
+  } catch (cause) {
+    return { ok: false, why: `could not open ${storeRoot} (${cause instanceof Error ? cause.message : String(cause)})` };
+  }
+  const taken = takeLock(lockPath, now);
+  if (!taken.ok) return { ok: false, why: describeLockRefusal(taken.refusal, lockPath) };
+  try {
+    const forWriting = cliStateForWriting(storeRoot);
+    if (!forWriting.ok) return { ok: false, why: forWriting.why };
+    const next = edit(forWriting.state);
+    if ("refuse" in next) return { ok: false, why: next.refuse };
+    const written = writeCliState(storeRoot, next);
+    if (!written.ok) return { ok: false, why: written.why };
+    if (!stillOurs(taken.lock, lockPath)) {
+      return {
+        ok: false,
+        why:
+          `${CLI_STATE_FILE} was written, but ${CLI_STATE_LOCK_FILE} is no longer ours — ` +
+          "another writer may have been running beside us, so read the file before trusting it",
+      };
+    }
+    return { ok: true, state: next };
+  } finally {
+    releaseLock(taken.lock, lockPath);
   }
 }
 

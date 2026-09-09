@@ -32,15 +32,7 @@ import { fileURLToPath } from "node:url";
 import { Command, InvalidArgumentError } from "commander";
 
 import { renderRootHelp } from "../tools/overseer/cli-help.js";
-import {
-  addMine,
-  cliStateForWriting,
-  cliStatePath,
-  readCliState,
-  removeMine,
-  whyNotASessionName,
-  writeCliState,
-} from "../tools/overseer/cli-state.js";
+import { addMine, cliStatePath, readCliState, removeMine, updateCliState, whyNotASessionName } from "../tools/overseer/cli-state.js";
 
 import { attentionRunner, DEFAULT_MAX_CALLS, runAttentionCommand } from "../tools/overseer/attention-cli.js";
 import {
@@ -1269,22 +1261,25 @@ export function runMine(root: string, parsed: Extract<Parsed, { command: "mine" 
     console.error(`✗ ${why}`);
     return 1;
   }
-  const forWriting = cliStateForWriting(root);
-  if (!forWriting.ok) {
-    console.error(`✗ ${forWriting.why}`);
+  // THE WHOLE READ-MODIFY-WRITE IS INSIDE THE LOCK. `changed` is decided in
+  // there too, so "it was already on the list" is a fact about the state we then
+  // wrote — decided outside, it would be a fact about a state somebody else had
+  // already replaced.
+  let already = false;
+  const out = updateCliState(root, (state) => {
+    const edit = parsed.action === "add" ? addMine(state, parsed.name) : removeMine(state, parsed.name);
+    already = !edit.changed;
+    return edit.state;
+  });
+  if (!out.ok) {
+    console.error(`✗ ${out.why}`);
     return 1;
   }
-  const edit = parsed.action === "add" ? addMine(forWriting.state, parsed.name) : removeMine(forWriting.state, parsed.name);
-  if (!edit.changed) {
+  if (already) {
     console.log(parsed.action === "add" ? `${parsed.name} was already on the list` : `${parsed.name} was not on the list`);
     return 0;
   }
-  const written = writeCliState(root, edit.state);
-  if (!written.ok) {
-    console.error(`✗ ${written.why}`);
-    return 1;
-  }
-  console.log(`${parsed.action === "add" ? "added" : "removed"} ${parsed.name} — ${edit.state.mine.length} session(s) now`);
+  console.log(`${parsed.action === "add" ? "added" : "removed"} ${parsed.name} — ${out.state.mine.length} session(s) now`);
   return 0;
 }
 

@@ -1,11 +1,52 @@
 # A rich `overseer` CLI: the Overseer's regular recipes, one command each
 
-**Status as of 2026-09-09: planned, nothing built.** Evidence: `git log --oneline -1` on
-`worktree-overseer-cli` is `f17a8cd1`, the merge-base with `origin/dev`; `commander` appears in
-neither `package.json` nor `node_modules/`.
+**Status as of 2026-09-09: Stage 1 built and committed (`0fe613bf`); Stage 2 in progress; Stages 3
+and 4 stopped before building, on GPT Sol's review.** Evidence: `commander@15.0.0` in
+`package.json`, 309 tests green across nine overseer suites, `npm run typecheck` clean.
 
 Session `overseer-cli`, worktree `overseer-cli`, queue item `qi-njy5v8ze`. Dispatched by the
 Overseer.
+
+## What changed after Sol read this plan
+
+The plan below was written first and reviewed by GPT Sol
+([260909d-plan-review-sol-r1.md](260909d-plan-review-sol-r1.md)). Its verdict was **not ready to
+build as written**: the read-only half is sound, and **four of the seven subcommands — `closeout`,
+`dispatch`, `pause`/`resume`, `log` — each cross a gate or lack a transaction**. Its diagnosis of the
+common fault is worth quoting, because it is the thing to check in anything built here later:
+
+> The plan's recurring mistake is treating "checked immediately before" as equivalent to "one atomic
+> operation." It is not, especially when the next step launches, kills, removes, commits, or sends
+> keystrokes.
+
+**One of those findings is a fact rather than a judgement, and it settles `closeout` on its own.**
+`npm run worktree:remove` waives its 24-hour idle floor only when the owning session's `(pid, start)`
+is in the *removing process's* ancestor chain (`shouldWaiveFloor` in
+[`scripts/worktree-remove.ts:752`](../../scripts/worktree-remove.ts)). A command the Overseer runs is
+not that process. So the sequence in the brief refuses at both ends:
+
+- **before the kill**, `live.inUse.kind === "in-use"` → *"refused: this worktree is in use"*;
+- **after the kill**, the owner is gone, the floor is no longer waived, and a tree that was active
+  four minutes ago is under a 24-hour floor → *"refused: … under the 24h floor"*.
+
+That floor is deliberate — [260908k](260908k-a-deterministic-worktree-removal-command-and-a-ban-on-hand-typed-branch-deletion.md)
+says *"nothing running in it is not the same as finished"*, and it is wrong in exactly one direction
+on purpose. **Third-party immediate removal is a policy question for Greg, not something an
+implementation may infer.**
+
+So the scope is now:
+
+| command | what happened |
+|---|---|
+| Stage 1: the parser, the help, `mine` | **built** — `0fe613bf`, with Sol's Stage-1 fixes applied |
+| `tick`, `last` | **built** — read-only, Stage 2 |
+| `closeout` | **not built** — needs Greg: may the Overseer remove a worktree it does not own, and may the sanctioned tool delete the branch? |
+| `dispatch` | **not built** — needs a durable reservation *before* the launch, and Greg's authorisation must cover the assembled brief, not just the queue item |
+| `pause` / `resume` | **not built** — the sending half belongs in the existing action vocabulary, not here |
+| `log` | **not built** — a merge-and-push per log entry is a git robot in a tree several agents share |
+
+Each is written up under [What is not built, and why](#what-is-not-built-and-why) with what would
+unblock it. **This is the "important work left" ending**, not "finished".
 
 ## Goal
 
@@ -235,40 +276,146 @@ Stages 2–4 and, where they bear on Stage 1, in a follow-up commit.
 
 Status: not started.
 
-### Stage 3 — `closeout` and `log` (the two that touch git)
+### Stage 1a — Sol's Stage-1 fixes
 
-- [ ] `overseer closeout <session> --sha <sha>` per the recipe above, `--dry-run` supported.
-- [ ] `overseer log '<one line>'` — `date -u`, append to the decision-log plan doc named by a
-      constant, `npm run check:staged-revert`, `git add` + `git commit -F` + pathspec, merge
-      `origin/dev`, push, print the sha.
-- [ ] Tests: a disposable git repo with a real remote for both; a stub `gjd-remote`; a stub
-      `worktree:remove`. Mutation-check the refusals — comment out the `worktree:check` step and the
-      test must go red.
+Applied after the plan review, before Stage 2:
 
-Status: not started.
+- [x] **Every write takes a lock.** `updateCliState` does the whole read-modify-write under a
+      separate `cli-state.lock` (never the daemon's `overseer.lock`, which is long-lived). The first
+      draft accepted last-writer-wins in a comment; that was wrong, and the reasoning it gave against
+      a lock is answered by `lock.ts` already clearing a lock whose holder is dead.
+- [x] **A `schema` field**, so a file from a newer build is `unusable` rather than partially
+      defaulted. A file without the field is read as schema 1, because that is what it is.
+- [x] **The lost-update test is two real child processes with a barrier**, not two calls in one
+      process and not a sleep. Two earlier drafts of this test **passed under the mutation** — the
+      first because the read-modify-write is fast enough that two processes serialise by luck, the
+      second because A waited on "B has started" rather than "B has read", leaving a window in which
+      A could finish first. Both are exactly the shape `silent-success.md` warns about, in a test
+      written to catch that shape.
 
-### Stage 4 — `dispatch`, `pause`, `resume`
+Mutation checked: pointing the lock at a per-process path makes the final state
+`['agent-a','agent-b']` instead of `['agent-a','agent-b','agent-c']` — `agent-c` silently gone.
 
-- [ ] `docs/project/overseer-brief-common.md` — the common "How to run this" brief, moved out of the
-      Overseer's scratchpad, with a signposting line under
-      [dev-and-deployment-overview.md](../project/dev-and-deployment-overview.md).
-- [ ] `overseer dispatch <qi-id> --name <session> --brief <file>` — queue `show`, refuse unless
-      `isDispatchable` (printing `whyNotDispatchable`), `gjd-remote ls` claim check refusing on an
-      existing name, assemble brief + common, `gjd-remote new-claude <name> --no-attach -p -`, then
-      queue `dispatched --by overseer --session <name>`, then `mine add`.
-- [ ] `overseer pause <session>` / `resume <session>` — the exact sentence from overseer.md § The
-      tick, through `POST /api/steer/message` with `speaker: "overseer"`, recorded in `cli-state`.
-      `--record-only` for when the Overseer sent it itself. `resume --check` reports which paused
-      sessions have since written a turn.
-- [ ] Tests: a stub `gjd-remote` and a fake steer route; a `partial` delivery is reported as
-      `partial` and **never** retried.
+### Stages 3 and 4 — stopped before building
 
-Status: not started.
+See [What is not built, and why](#what-is-not-built-and-why). `closeout` is blocked on a question for
+Greg and would not work as briefed in any case; `dispatch` needs a queue event that is in another
+agent's file set; `pause`/`resume`'s sending half belongs in `tools/fleet/actions.ts`; `log` should
+not merge and push per line.
+
+## What is not built, and why
+
+Four of the seven subcommands are **deliberately not built**. Each is here with what it would take to
+unblock it, so that none of this has to be rediscovered. The common shape is Sol's sentence at the
+top: *checked immediately before* is not *one atomic operation*.
+
+### `closeout` — blocked on a policy question for Greg
+
+Two independent blockers, and the first is mechanical.
+
+**1. The sanctioned removal tool will refuse, at both ends.** `npm run worktree:remove` waives its
+24-hour idle floor only when the owning session's `(pid, start)` is in the removing process's own
+ancestor chain (`shouldWaiveFloor`, [`scripts/worktree-remove.ts:752`](../../scripts/worktree-remove.ts)).
+A command the Overseer runs is a third party. So: before the kill it refuses because the tree is in
+use; after the kill it refuses because the tree was active four minutes ago. **There is no ordering
+that makes the briefed recipe work.** The floor is deliberate — 260908k's own words are *"nothing
+running in it is not the same as finished"*.
+
+**2. The branch deletion crosses a gate.** This plan originally argued that a compare-and-swap
+behind a complete landed proof throws nothing away, so it is not the *"no git command that throws
+work away"* gate. Sol's answer is right and I withdraw the argument:
+
+> A compare-and-swap proves safety; it does not grant authority.
+
+`docs/project/overseer.md` § gate 3 names *"branch or tag deletion"* without an exception, and the
+brief said *never delete a branch*.
+
+**What would unblock it — a question for Greg, in one piece:**
+
+*Today, a finished agent's worktree can only be removed by the agent itself (which is gone) or by
+waiting 24 hours (during which nine worktrees accumulated in one night and none could be removed).
+The Overseer would like to remove them when it has read the debrief and proved the work landed. Two
+ways: (a) let the Overseer pass a flag to `worktree:remove` that waives the floor when it attests it
+read the debrief, keeping the branch; or (b) have the Overseer tell the finished agent to run
+`npm run worktree:remove` on itself as its last act, which needs no new authority at all. (b) is
+simpler and is what I would do; its cost is that an agent that has already exited cannot be told.*
+
+Until that is answered, the honest command is **`overseer closeout check <session> --sha <sha>`**,
+which verifies and reports and destroys nothing. That is Sol's recommendation and it is small; it is
+not built here only because the budget ran to Stage 2.
+
+### `dispatch` — needs a reservation before the launch, not a record after it
+
+Two failures, both real:
+
+- **`--brief <file>` lets arbitrary text become the instruction after Greg authorised the queue
+  item.** The queue authorises a specific *revision of the item*; it does not authorise the brief
+  file or the common document. That is gate 3's last bullet (*acting on a job's instruction or its
+  documents when either changed after it was authorised*).
+- **Launch-then-record is not atomic.** The session starts, then the queue append fails on a stale
+  version or a lock, and the queue still says the item is dispatchable — leaving a paid session
+  nothing has reconciled. Sol: *"`dispatch` is the command most likely to pass its test while
+  failing in production."*
+
+What it needs: a durable `dispatch-reserved` event written **before** the launch, naming the queue
+revision, the session name, **a digest of the assembled brief**, and an idempotency id; then a settle
+to `dispatched` / `failed-before-launch` / `unknown`; and on retry, reconciliation against
+`gjd-remote ls` rather than a second launch. The launch itself should go through the already-tested
+`gjdRemoteDispatch()` in [`tools/overseer/dispatch.ts`](../../tools/overseer/dispatch.ts) rather than
+a second spawner. **That is a change to the queue's event vocabulary, which is not this session's
+file set** — `tools/overseer/idea-queue.ts` is explicitly not mine.
+
+### `pause` / `resume` — the sending half belongs to the existing action vocabulary
+
+`POST /api/steer/message` **types immediately**, and it addresses a session by pane handle, tmux
+session id, Claude conversation id and declared status — not by a name. A session that is *working*
+should get a queued action it reads at its next prompt, which is what `tools/fleet/actions.ts` and
+`/api/actions/session` already are, and `docs/project/overseer.md` § Steering says to call that
+vocabulary rather than grow a second one.
+
+And **"record first, send second" records a fact that is not yet true**. A steer has three outcomes
+(`none`, `partial`, `unknown`) and only one of them is *paused*. `partial` is the dangerous one: the
+text is sitting unsent in the agent's input box.
+
+What survives is the *record*, which is genuinely missing today: `overseer paused record | check |
+clear`, with honest states (`requested`, `queued`, `delivery-uncertain`, `woke`) and **no retry ever**
+on `partial` or `unknown`. `tools/fleet/pause.ts` already derives actual scheduled wake-ups from
+session evidence and should answer "did it wake up?" rather than CLI bookkeeping.
+
+### `log` — a merge-and-push per line is a git robot in a shared tree
+
+`overseer log '<one line>'` was to append a UTC line, commit, merge `origin/dev` and push. In a tree
+several agents share that is: a half-merged checkout on a conflict; a decision that exists locally and
+nowhere else when the push is rejected; concurrent calls committing each other's text; and a constant
+naming today's plan doc that is tomorrow's stale constant. It also does not mechanically hold the
+gate it claims to — a free-text line can omit who decided.
+
+What v1 should be: **format and append, and nothing else.** Required `--by overseer|greg` and
+`--kind decision|assumption|decline|fact`, the instant generated (`new Date().toISOString()` is UTC
+by construction — `date -u` is a shell habit that does not belong in TypeScript), appended under a
+short lock, and the correctly-formatted line printed for a human to land. The real decision log is
+`docs/project/overseer.md` § gate 1's **NOT BUILT** block and should be designed there, not inferred
+here.
 
 ## Open questions for the Overseer
 
-1. **The branch deletion** in `closeout` — see above. Implemented as delegation to `worktree:remove`;
-   say if the Overseer wants `--keep-branch` instead.
-2. **A doc section in `docs/project/overseer.md` § What you actually do** pointing at the CLI is a
+1. **Third-party worktree removal** — the question for Greg, worded above under `closeout`. Nothing
+   in that command can be built until it is answered.
+2. **`mine` is an annotation, not a filter.** Sol wanted `mine` dropped: the Overseer is *"the sole
+   Overseer for the whole box"*, so a hand-maintained allowlist guarantees that a session started
+   elsewhere, resumed after a reboot, or missed by a failed `mine add` silently disappears from the
+   tick — an omission that looks like a quiet fleet. That argument is right about the *filter* and
+   wrong about the *cost*: fetching the last turn of all 18–35 sessions every half hour is one HTTP
+   call each. So `tick` lists **every** session in the register, and `mine` decides only whose last
+   line is fetched — and **the tick names the sessions it did not fetch**, so an omission is visible
+   rather than invisible. Recorded as a decision; say if the Overseer disagrees.
+3. **A doc section in `docs/project/overseer.md` § What you actually do** pointing at the CLI is a
    rule-doc edit, so it is *not* in this branch's commits. It goes to the Overseer in the debrief as
    before/after, per [edit-important-docs.md](../reusable/edit-important-docs.md).
+4. **`scripts/overseer-queue.ts` still hand-rolls its own parser**, so "one parser in the repo" is
+   not yet true even after this stage — Sol's correction, and it is right. Converting it is a small
+   follow-up and belongs in whoever's file set that is.
+5. **The library-selection decision has no checked-in artifact.** `docs/reusable/third-party-library-selection.md`
+   asks for a doc recording the choice; this plan's authority for Commander is an unlanded sibling
+   session's transcript. When `gjd-remote-argument-parsing` lands, its plan is that artifact and this
+   should cite it.

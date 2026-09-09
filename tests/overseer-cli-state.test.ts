@@ -15,13 +15,18 @@
  * itself rather than inferred from its parts —
  * docs/postmortems/260908b-the-parts-were-all-tested-and-none-of-the-joins-were.md.
  */
+import { spawn } from "node:child_process";
 import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterEach, describe, expect, test } from "vitest";
 
 import {
   CLI_STATE_FILE,
+  CLI_STATE_LOCK_FILE,
+  CLI_STATE_SCHEMA,
+  updateCliState,
   EMPTY_CLI_STATE,
   addMine,
   cliStateForWriting,
@@ -36,6 +41,9 @@ import {
   type CliState,
 } from "../tools/overseer/cli-state.js";
 import { runMine } from "../scripts/overseer.js";
+
+/** The worktree root, so a spawned child resolves `tsx` and the repo's modules from the right place. */
+const REPO = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 const roots: string[] = [];
 
@@ -139,7 +147,7 @@ describe("writing", () => {
     const root = tempRoot();
     expect(writeCliState(root, EMPTY_CLI_STATE)).toEqual({ ok: true });
     const written = readFileSync(cliStatePath(root), "utf8");
-    expect(JSON.parse(written)).toEqual(EMPTY_CLI_STATE);
+    expect(JSON.parse(written)).toEqual({ schema: CLI_STATE_SCHEMA, ...EMPTY_CLI_STATE });
     // and nothing is left behind
     expect(() => readFileSync(`${cliStatePath(root)}.${process.pid}.tmp`, "utf8")).toThrow();
   });
@@ -157,6 +165,142 @@ describe("writing", () => {
     }
     expect(out.ok).toBe(false);
     if (!out.ok) expect(out.why).toContain(CLI_STATE_FILE);
+  });
+});
+
+describe("two writers at once", () => {
+  test("A LOST UPDATE IS THE FAILURE, and the lock is what stops it", async () => {
+    // GPT Sol's P1-1. Rename-atomicity stops a TORN file and does nothing about
+    // this: two processes read {mine:["a"]}, one adds "b" and one adds "c", both
+    // rename, and the survivor holds a,b or a,c with nothing said. The first
+    // draft of cli-state.ts accepted that in a comment.
+    //
+    // MUTATION TO CHECK: delete the takeLock/releaseLock pair in
+    // `updateCliState` and this test goes red — with the read-modify-write
+    // unguarded, the two children interleave and one name disappears.
+    //
+    // Real child processes, not two calls in one process: an in-process test
+    // shares a module and cannot see a file lock at all.
+    const root = tempRoot();
+    writeCliState(root, { mine: ["agent-a"], paused: [] });
+
+    // A BARRIER, NOT A SLEEP. The first version of this test slept 60ms in each
+    // child and passed under the mutation — the read-modify-write is fast enough
+    // that two processes serialise by luck, so the test proved nothing. Sol's
+    // review asked for "two barrier-synchronised child processes" and this is
+    // why. The barrier runs inside `edit`, which the lock already holds open, so
+    // no seam is added to the production code for the test's benefit:
+    //
+    //   A: take lock → read → touch a-read → WAIT for b-read → write → release
+    //   B: WAIT for a-read → take lock → read → touch b-read → write → release
+    //
+    // A waits for B to have READ, not merely to have started: waiting on "B has
+    // started" left a window in which A could finish first and B would then read
+    // the new state and lose nothing, which is how the second draft of this test
+    // also passed under the mutation.
+    //
+    // Unlocked, B's read happens inside A's window and one name is lost.
+    // Locked, B cannot get in at all until A releases; A's wait times out, and
+    // B then reads what A wrote. The timeout is the locked path's cost and it is
+    // why this test has a long budget.
+    const url = JSON.stringify(pathToFileURL(join(REPO, "tools/overseer/cli-state.ts")).href);
+    const common = [
+      `const { updateCliState, addMine } = await import(${url});`,
+      "const fs = await import('node:fs');",
+      "const [root, name] = process.argv.slice(2);",
+      "const p = (f) => `${root}/${f}`;",
+      "const waitFor = async (f) => { for (let i = 0; i < 400; i += 1) { if (fs.existsSync(p(f))) return true; await new Promise((r) => setTimeout(r, 10)); } return false; };",
+      "const attempt = async (edit) => { let last = null; for (let i = 0; i < 800; i += 1) { const out = updateCliState(root, edit); if (out.ok) return true; last = out.why; await new Promise((r) => setTimeout(r, 10)); } console.error(`${name} gave up: ${last}`); return false; };",
+    ].join("\n");
+
+    const first = join(root, "first.mjs");
+    writeFileSync(
+      first,
+      [
+        common,
+        // Synchronous inside `edit`, because `updateCliState` is synchronous and
+        // the whole point is to hold the read open across B's attempt.
+        "const holdOpen = () => { const until = Date.now() + 4000; while (Date.now() < until) { if (fs.existsSync(p('b-read'))) return; } };",
+        "const ok = await attempt((s) => { fs.writeFileSync(p('a-read'), ''); holdOpen(); return addMine(s, name).state; });",
+        "process.exit(ok ? 0 : 1);",
+      ].join("\n"),
+      "utf8",
+    );
+
+    const second = join(root, "second.mjs");
+    writeFileSync(
+      second,
+      [
+        common,
+        "if (!(await waitFor('a-read'))) { console.log('the first writer never read'); process.exit(1); }",
+        // A refusal is the lock working; retrying is what a caller does with it,
+        // and a test that treated a refusal as a pass would prove nothing.
+        // `b-read` is written INSIDE the edit, so it means "B has read", which is
+        // the fact A is waiting on.
+        "const ok = await attempt((s) => { fs.writeFileSync(p('b-read'), ''); return addMine(s, name).state; });",
+        "process.exit(ok ? 0 : 1);",
+      ].join("\n"),
+      "utf8",
+    );
+
+    const run = (script: string, name: string): Promise<number> =>
+      new Promise((resolve) => {
+        const child = spawn("npx", ["tsx", script, root, name], { cwd: REPO, stdio: "inherit" });
+        child.on("exit", (code) => resolve(code ?? 1));
+      });
+    const [b, c] = await Promise.all([run(first, "agent-b"), run(second, "agent-c")]);
+    expect(b).toBe(0);
+    expect(c).toBe(0);
+
+    const read = readCliState(root);
+    expect(read.kind).toBe("read");
+    if (read.kind === "read") expect([...read.state.mine].sort()).toEqual(["agent-a", "agent-b", "agent-c"]);
+  }, 60_000);
+
+  test("a lock held by a live process is a named refusal, not a hang and not a silent overwrite", () => {
+    const root = tempRoot();
+    // A lock file claiming THIS process, which is certainly alive.
+    writeFileSync(
+      join(root, CLI_STATE_LOCK_FILE),
+      `${JSON.stringify({ pid: process.pid, instanceId: "someone-else", hostname: "here", startedAt: new Date().toISOString() })}\n`,
+      "utf8",
+    );
+    const out = updateCliState(root, (s) => addMine(s, "agent-b").state);
+    expect(out.ok).toBe(false);
+    if (!out.ok) expect(out.why).toContain(CLI_STATE_LOCK_FILE);
+    // and nothing was written
+    expect(readCliState(root)).toEqual({ kind: "absent" });
+  });
+
+  test("an edit may refuse, and then nothing is written", () => {
+    const root = tempRoot();
+    writeCliState(root, { mine: ["agent-a"], paused: [] });
+    const out = updateCliState(root, () => ({ refuse: "not today" }));
+    expect(out).toEqual({ ok: false, why: "not today" });
+    const read = readCliState(root);
+    if (read.kind === "read") expect(read.state.mine).toEqual(["agent-a"]);
+  });
+});
+
+describe("the schema", () => {
+  test("a file from a newer build is unusable, not partially defaulted", () => {
+    const root = tempRoot();
+    put(root, JSON.stringify({ schema: CLI_STATE_SCHEMA + 1, mine: ["agent-a"], paused: [] }));
+    const read = readCliState(root);
+    expect(read.kind).toBe("unusable");
+    if (read.kind === "unusable") expect(read.why).toContain(String(CLI_STATE_SCHEMA + 1));
+  });
+
+  test("a file written before the field existed is read as schema 1, not refused", () => {
+    const root = tempRoot();
+    put(root, JSON.stringify({ mine: ["agent-a"], paused: [] }));
+    expect(readCliState(root).kind).toBe("read");
+  });
+
+  test("what we write carries the schema", () => {
+    const root = tempRoot();
+    writeCliState(root, EMPTY_CLI_STATE);
+    expect(JSON.parse(readFileSync(cliStatePath(root), "utf8")).schema).toBe(CLI_STATE_SCHEMA);
   });
 });
 
