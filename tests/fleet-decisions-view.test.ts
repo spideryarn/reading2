@@ -8,7 +8,7 @@ import { describe, expect, test } from "vitest";
 
 import {
   executionRefFor,
-  isStillLive,
+  isSameRunAsLastVerified,
   projectDecisions,
   type DecisionCheckpointInput,
   type RegisterEntryView,
@@ -107,7 +107,7 @@ function checkpoint(
 }
 
 describe("execution identity", () => {
-  test("the same verified token is live", () => {
+  test("the same verified token identifies only the same run as the last verification", () => {
     const stored: ExecutionRef = {
       kind: "verified",
       token: TOKEN_A,
@@ -122,11 +122,14 @@ describe("execution identity", () => {
       checkpoint([entry("same-run", TOKEN_A)]),
       NOW,
     );
-    expect(isStillLive(stored, { ...stored, since: "2026-09-09T10:00:00.000Z" })).toBe(true);
-    expect(projected.records[0]?.sessions[0]?.state).toEqual({ kind: "live" });
+    expect(isSameRunAsLastVerified(stored, { ...stored, since: "2026-09-09T10:00:00.000Z" })).toBe(true);
+    expect(projected.records[0]?.sessions[0]?.state).toEqual({
+      kind: "same-run-as-last-verified",
+      since: "2026-09-09T10:00:00.000Z",
+    });
   });
 
-  test("a changed token is ended-or-replaced, never live by name alone", () => {
+  test("a changed token is ended-or-replaced, never the same run by name alone", () => {
     const stored: ExecutionRef = {
       kind: "verified",
       token: TOKEN_A,
@@ -137,7 +140,7 @@ describe("execution identity", () => {
       token: TOKEN_B,
       since: "2026-09-09T11:00:00.000Z",
     };
-    expect(isStillLive(stored, current)).toBe(false);
+    expect(isSameRunAsLastVerified(stored, current)).toBe(false);
 
     const projected = projectDecisions(
       view([
@@ -153,7 +156,7 @@ describe("execution identity", () => {
     ]);
   });
 
-  test("not-found and unavailable stay distinct and neither can be live", () => {
+  test("not-found and unavailable stay distinct and neither can identify the same run", () => {
     const current = [entry("no-token", null)];
     expect(executionRefFor("missing", current, { kind: "current" })).toEqual({ kind: "not-found" });
     expect(executionRefFor("no-token", current, { kind: "current" })).toEqual({
@@ -166,9 +169,9 @@ describe("execution identity", () => {
         why: "the checkpoint is unreadable",
       }),
     ).toEqual({ kind: "unavailable", why: "the checkpoint is unreadable" });
-    expect(isStillLive({ kind: "not-found" }, { kind: "not-found" })).toBe(false);
+    expect(isSameRunAsLastVerified({ kind: "not-found" }, { kind: "not-found" })).toBe(false);
     expect(
-      isStillLive(
+      isSameRunAsLastVerified(
         { kind: "unavailable", why: "could not look then" },
         { kind: "unavailable", why: "could not look now" },
       ),
@@ -244,6 +247,29 @@ describe("execution identity", () => {
       kind: "unavailable",
       why: { kind: "checkpoint-unavailable" },
     });
+  });
+
+  test("a checkpoint more than two seconds in the future is unavailable and names its clock", () => {
+    const future = "2026-09-09T12:00:02.001Z";
+    const projected = projectDecisions(
+      view([record("dec-aaaaaaa2", "2026-09-09T10:00:00.000Z")]),
+      checkpoint([], { writtenAt: future, lastGoodSnapshotAt: future }),
+      NOW,
+    );
+    expect(projected.checkpoint).toEqual({
+      kind: "unavailable",
+      why: "the Overseer checkpoint is 2s in the future; its clock is ahead of this server",
+    });
+  });
+
+  test("tolerates up to two seconds of checkpoint clock skew", () => {
+    const future = "2026-09-09T12:00:02.000Z";
+    const projected = projectDecisions(
+      view([record("dec-aaaaaaa2", "2026-09-09T10:00:00.000Z")]),
+      checkpoint([], { writtenAt: future, lastGoodSnapshotAt: future }),
+      NOW,
+    );
+    expect(projected.checkpoint).toEqual({ kind: "current" });
   });
 
   test("a malformed current execution makes the checkpoint unavailable rather than claiming replacement", () => {

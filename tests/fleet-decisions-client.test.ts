@@ -22,7 +22,7 @@ const EMPTY: DecisionsFeed = {
     trailingSevenDays: { decisions: 0, reviews: 0, reversals: 0 },
   },
   rows: [],
-  reviewedWithheld: 0,
+  historyWithheld: 0,
   problems: [],
 };
 
@@ -61,7 +61,12 @@ const ROW: DecisionRow = {
   },
   ageMs: 3_600_000,
   pendingReview: true,
-  sessions: [{ name: "decisions-mode", state: { kind: "live" } }],
+  sessions: [
+    {
+      name: "decisions-mode",
+      state: { kind: "same-run-as-last-verified", since: "2026-09-09T10:00:00.000Z" },
+    },
+  ],
 };
 
 const WITH_ROW: DecisionsFeed = {
@@ -104,20 +109,37 @@ describe("strict parsing", () => {
   });
 
   it("accepts each server arm without changing whose voice its reason is in", () => {
-    expect(parseDecisionsFeed({ schema: 1, kind: "never-written", why: "nobody has written it" })).toEqual({
+    expect(
+      parseDecisionsFeed({
+        schema: 1,
+        kind: "never-written",
+        composedAt: "2026-09-09T12:00:00.000Z",
+        why: "nobody has written it",
+      }),
+    ).toEqual({
       schema: 1,
       kind: "never-written",
+      composedAt: "2026-09-09T12:00:00.000Z",
       why: "nobody has written it",
     });
-    expect(parseDecisionsFeed({ schema: 1, kind: "unreadable", why: "line 4 is broken" })).toEqual({
+    expect(
+      parseDecisionsFeed({
+        schema: 1,
+        kind: "unreadable",
+        composedAt: "2026-09-09T12:00:00.000Z",
+        why: "line 4 is broken",
+      }),
+    ).toEqual({
       schema: 1,
       kind: "unreadable",
+      composedAt: "2026-09-09T12:00:00.000Z",
       why: "line 4 is broken",
     });
     expect(
       parseDecisionsFeed({
         schema: 1,
         kind: "oversized-unreviewed",
+        composedAt: "2026-09-09T12:00:00.000Z",
         why: "the unseen rows do not fit",
         unreviewedCount: 2,
         limitBytes: 2 * 1024 * 1024,
@@ -125,16 +147,34 @@ describe("strict parsing", () => {
     ).toEqual({
       schema: 1,
       kind: "oversized-unreviewed",
+      composedAt: "2026-09-09T12:00:00.000Z",
       why: "the unseen rows do not fit",
       unreviewedCount: 2,
       limitBytes: 2 * 1024 * 1024,
+    });
+    expect(
+      parseDecisionsFeed({
+        schema: 1,
+        kind: "oversized-file",
+        composedAt: "2026-09-09T12:00:00.000Z",
+        why: "the input exceeds the synchronous-read bound",
+        sizeBytes: 4_000_001,
+        limitBytes: 4_000_000,
+      }),
+    ).toEqual({
+      schema: 1,
+      kind: "oversized-file",
+      composedAt: "2026-09-09T12:00:00.000Z",
+      why: "the input exceeds the synchronous-read bound",
+      sizeBytes: 4_000_001,
+      limitBytes: 4_000_000,
     });
   });
 
   it.each([
     ["wrong schema", { ...EMPTY, schema: 2 }],
     ["missing aggregate", { ...EMPTY, aggregates: undefined }],
-    ["coerced count", { ...EMPTY, reviewedWithheld: "0" }],
+    ["coerced count", { ...EMPTY, historyWithheld: "0" }],
     ["malformed nested count", { ...EMPTY, aggregates: { kind: "counts", notYetReviewed: "0" } }],
     ["malformed row", { ...EMPTY, rows: [{ pendingReview: false }] }],
     [
@@ -200,6 +240,18 @@ describe("strict parsing", () => {
       },
     ],
     [
+      "same-run state without the last verified instant",
+      {
+        ...WITH_ROW,
+        rows: [
+          {
+            ...ROW,
+            sessions: [{ name: "decisions-mode", state: { kind: "same-run-as-last-verified" } }],
+          },
+        ],
+      },
+    ],
+    [
       "a headline count that hides a pending row",
       { ...WITH_ROW, rows: [] },
     ],
@@ -230,13 +282,76 @@ describe("strict parsing", () => {
       },
     ],
     ["bad date", { ...EMPTY, composedAt: "not a date" }],
+    [
+      "a silence without a composition time",
+      { schema: 1, kind: "never-written", why: "nobody has written it" },
+    ],
   ])("rejects %s instead of coercing it", (_name, malformed) => {
+    expect(parseDecisionsFeed(malformed).kind).toBe("no-answer");
+  });
+
+  it.each([
+    [
+      "reviewed without a reviewed timestamp",
+      {
+        ...ROW.record,
+        reviewed: true,
+        touches: [
+          ...ROW.record.touches,
+          { kind: "reviewed", at: "2026-09-09T11:30:00.000Z", by: "greg", what: "reviewed" },
+        ],
+      },
+    ],
+    [
+      "reviewed without a Greg-authored review touch",
+      { ...ROW.record, reviewed: true, reviewedAt: "2026-09-09T11:30:00.000Z" },
+    ],
+    [
+      "reversed without being reviewed",
+      {
+        ...ROW.record,
+        reversed: true,
+        reversedAt: "2026-09-09T11:30:00.000Z",
+        reversedWhy: "the premise changed",
+        touches: [
+          ...ROW.record.touches,
+          { kind: "reversed", at: "2026-09-09T11:30:00.000Z", by: "greg", what: "reversed" },
+        ],
+      },
+    ],
+    [
+      "reversed without a Greg-authored reversal touch",
+      {
+        ...ROW.record,
+        reviewed: true,
+        reviewedAt: "2026-09-09T11:30:00.000Z",
+        reversed: true,
+        reversedAt: "2026-09-09T11:30:00.000Z",
+        reversedWhy: "the premise changed",
+        touches: [
+          ...ROW.record.touches,
+          { kind: "reviewed", at: "2026-09-09T11:30:00.000Z", by: "greg", what: "reviewed" },
+        ],
+      },
+    ],
+  ])("rejects a record that is %s", (_name, impossibleRecord) => {
+    const pendingReview = !impossibleRecord.reviewed && impossibleRecord.supersededBy === null;
+    const malformed = {
+      ...WITH_ROW,
+      aggregates: {
+        kind: "counts" as const,
+        notYetReviewed: pendingReview ? 1 : 0,
+        trailingSevenDays: { decisions: 1, reviews: 0, reversals: 0 },
+      },
+      rows: [{ ...ROW, pendingReview, record: impossibleRecord }],
+    };
     expect(parseDecisionsFeed(malformed).kind).toBe("no-answer");
   });
 });
 
 describe("this browser never got an answer", () => {
   it("times out a request that never answers, in this browser's voice", async () => {
+    expect(DECISIONS_FETCH_TIMEOUT_MS).toBe(10_000);
     vi.useFakeTimers();
     try {
       const request: DecisionsRequest = (_input, init) =>
@@ -245,16 +360,41 @@ describe("this browser never got an answer", () => {
         });
       const pending = makeDecisionsApi(request).fetch();
 
-      await vi.advanceTimersByTimeAsync(DECISIONS_FETCH_TIMEOUT_MS);
+      await vi.advanceTimersByTimeAsync(9_999);
+      let settled = false;
+      void pending.then(() => {
+        settled = true;
+      });
+      await vi.runAllTicks();
+      expect(settled).toBe(false);
+
+      await vi.advanceTimersByTimeAsync(1);
       const view = await pending;
 
       expect(view.kind).toBe("no-answer");
       if (view.kind !== "no-answer") throw new Error("unreachable");
       expect(view.why).toContain("this browser got no answer");
-      expect(view.why).toContain(`${DECISIONS_FETCH_TIMEOUT_MS / 1000}s`);
+      expect(view.why).toContain("10s");
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("reports caller cancellation as cancellation, not as a ten-second wait", async () => {
+    const request: DecisionsRequest = (_input, init) =>
+      new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(new Error("request aborted")));
+      });
+    const controller = new AbortController();
+    const pending = makeDecisionsApi(request).fetch(controller.signal);
+
+    controller.abort();
+    const view = await pending;
+
+    expect(view.kind).toBe("no-answer");
+    if (view.kind !== "no-answer") throw new Error("unreachable");
+    expect(view.why).toContain("cancelled");
+    expect(view.why).not.toContain("within 10s");
   });
 
   it("keeps a network failure distinct from both server-side silences", async () => {

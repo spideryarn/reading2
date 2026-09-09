@@ -177,9 +177,9 @@ function record(value: unknown): value is DecisionWireRecord {
   if (options === null || !choice(value["chose"], options)) return false;
   if (!advisers(value["advisers"]) || !bearsOn(value["bearsOn"])) return false;
   const touches = value["touches"];
-  return (
-    Array.isArray(touches) &&
-    touches.every(
+  if (
+    !Array.isArray(touches) ||
+    !touches.every(
       (touch) =>
         isRecord(touch) &&
         (touch["kind"] === "decided" || touch["kind"] === "reviewed" || touch["kind"] === "reversed") &&
@@ -187,12 +187,26 @@ function record(value: unknown): value is DecisionWireRecord {
         actor(touch["by"]) &&
         text(touch["what"]),
     )
+  ) {
+    return false;
+  }
+
+  const hasGregReviewTouch = touches.some(
+    (touch) =>
+      touch["by"] === "greg" && (touch["kind"] === "reviewed" || touch["kind"] === "reversed"),
   );
+  const hasGregReversalTouch = touches.some(
+    (touch) => touch["by"] === "greg" && touch["kind"] === "reversed",
+  );
+  if (value["reviewed"] && (value["reviewedAt"] === null || !hasGregReviewTouch)) return false;
+  if (value["reversed"] && (!value["reviewed"] || !hasGregReversalTouch)) return false;
+  return true;
 }
 
 function sessionState(value: unknown): value is DecisionWireSessionState {
   if (!isRecord(value)) return false;
-  if (value["kind"] === "live" || value["kind"] === "ended-or-replaced") return true;
+  if (value["kind"] === "same-run-as-last-verified") return iso(value["since"]);
+  if (value["kind"] === "ended-or-replaced") return true;
   if (value["kind"] !== "unavailable" || !isRecord(value["why"])) return false;
   const why = value["why"];
   return (
@@ -225,6 +239,9 @@ export function parseDecisionsFeed(body: unknown): DecisionsView {
       `this browser can read version 1 of the decisions API; the server sent ${JSON.stringify(body["schema"])}`,
     );
   }
+  if (!iso(body["composedAt"])) {
+    return noAnswer("this browser received a decisions answer without a valid composition time");
+  }
   if (body["kind"] === "never-written" || body["kind"] === "unreadable") {
     return nonBlank(body["why"])
       ? (body as DecisionsFeed)
@@ -235,16 +252,21 @@ export function parseDecisionsFeed(body: unknown): DecisionsView {
       ? (body as DecisionsFeed)
       : noAnswer("this browser received a malformed oversized-unreviewed answer");
   }
+  if (body["kind"] === "oversized-file") {
+    return nonBlank(body["why"]) && whole(body["sizeBytes"]) && whole(body["limitBytes"])
+      ? (body as DecisionsFeed)
+      : noAnswer("this browser received a malformed oversized-file answer");
+  }
   if (body["kind"] !== "decisions") {
     return noAnswer("this browser received a decisions answer with an unknown kind");
   }
-  if (!nonBlank(body["version"]) || !nonBlank(body["path"]) || !iso(body["composedAt"])) {
+  if (!nonBlank(body["version"]) || !nonBlank(body["path"])) {
     return noAnswer("this browser received a malformed decisions envelope");
   }
   if (!checkpoint(body["checkpoint"]) || !aggregates(body["aggregates"])) {
     return noAnswer("this browser received malformed decision context or aggregates");
   }
-  if (!whole(body["reviewedWithheld"]) || !Array.isArray(body["rows"]) || !body["rows"].every(row)) {
+  if (!whole(body["historyWithheld"]) || !Array.isArray(body["rows"]) || !body["rows"].every(row)) {
     return noAnswer("this browser received malformed decision rows or history count");
   }
   if (!Array.isArray(body["problems"]) || !body["problems"].every(problem)) {
@@ -273,8 +295,15 @@ export function makeDecisionsApi(
   return {
     async fetch(signal): Promise<DecisionsView> {
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), DECISIONS_FETCH_TIMEOUT_MS);
-      const onAbort = (): void => controller.abort();
+      let abortReason: "caller" | "timeout" | null = signal?.aborted === true ? "caller" : null;
+      const timer = setTimeout(() => {
+        abortReason ??= "timeout";
+        controller.abort();
+      }, DECISIONS_FETCH_TIMEOUT_MS);
+      const onAbort = (): void => {
+        abortReason ??= "caller";
+        controller.abort();
+      };
       signal?.addEventListener("abort", onAbort);
       if (signal?.aborted) controller.abort();
       try {
@@ -296,7 +325,9 @@ export function makeDecisionsApi(
         return parsed;
       } catch (cause) {
         return noAnswer(
-          controller.signal.aborted
+          abortReason === "caller"
+            ? "this browser cancelled the decisions request before it answered"
+            : abortReason === "timeout"
             ? `this browser got no answer within ${DECISIONS_FETCH_TIMEOUT_MS / 1000}s; what was on screen may be stale`
             : `this browser could not reach the dashboard: ${String(cause)}`,
         );

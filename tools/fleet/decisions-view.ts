@@ -4,7 +4,7 @@
  * This module performs no I/O. The CLI reads `current.json` through the
  * Overseer's store parser; the fleet route reads it through `loadCheckpoint`.
  * Both hand the already-read result here, so the intentional two-reader seam
- * does not become two definitions of fresh, live, pending, or recent.
+ * does not become two definitions of fresh, same-run, pending, or recent.
  *
  * The full raw register is projected rather than the dashboard's capped status
  * register. A name outside that cap is still present, and calling it missing
@@ -19,6 +19,7 @@ import type {
 } from "../overseer/decisions.js";
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60_000;
+const CHECKPOINT_CLOCK_SKEW_TOLERANCE_MS = 2_000;
 
 export type RegisterEntryView = {
   readonly name: string;
@@ -50,7 +51,7 @@ export type ResolvedDecisionCheckpoint =
   | { readonly kind: "unavailable"; readonly why: string };
 
 export type ProjectedSessionState =
-  | { readonly kind: "live" }
+  | { readonly kind: "same-run-as-last-verified"; readonly since: string }
   | { readonly kind: "ended-or-replaced" }
   | {
       readonly kind: "unavailable";
@@ -118,8 +119,8 @@ export function executionRefFor(
   return { kind: "verified", token: verified.token, since: verified.since };
 }
 
-/** Is the run recorded at decision time still the run the register names? */
-export function isStillLive(stored: ExecutionRef, current: ExecutionRef): boolean {
+/** Does the last verified run still have the token recorded at decision time? */
+export function isSameRunAsLastVerified(stored: ExecutionRef, current: ExecutionRef): boolean {
   return stored.kind === "verified" && current.kind === "verified" && stored.token === current.token;
 }
 
@@ -179,6 +180,14 @@ export function projectDecisionCheckpoint(
     };
   }
   const ageMs = now.getTime() - Date.parse(projected.lastGoodSnapshotAt);
+  if (ageMs < -CHECKPOINT_CLOCK_SKEW_TOLERANCE_MS) {
+    return {
+      kind: "unavailable",
+      why:
+        `the Overseer checkpoint is ${Math.round(-ageMs / 1000)}s in the future; ` +
+        "its clock is ahead of this server",
+    };
+  }
   if (ageMs > projected.sourceStaleAfterMs) {
     return {
       kind: "unavailable",
@@ -251,7 +260,12 @@ function sessionState(
       why: { kind: "execution-unavailable", detail: current.why },
     };
   }
-  return isStillLive(stored, current) ? { kind: "live" } : { kind: "ended-or-replaced" };
+  /* `verifiedExecution` is sticky when an observation cannot verify the
+     current process. Equal tokens therefore establish only that this is still
+     the last verified run for the name, not that the run is live now. */
+  return isSameRunAsLastVerified(stored, current) && current.kind === "verified"
+    ? { kind: "same-run-as-last-verified", since: current.since }
+    : { kind: "ended-or-replaced" };
 }
 
 function withinTrailingSevenDays(at: string | null, nowMs: number): boolean {

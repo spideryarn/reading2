@@ -45,12 +45,18 @@ function reviewState(row: DecisionRow): { label: string; tone: Tone } {
   return { label: "reviewed", tone: "idle" };
 }
 
-function sessionState(state: DecisionWireSessionState): { label: string; detail: string; tone: Tone } {
+function sessionState(state: DecisionWireSessionState): { label: string; detail: ReactNode; tone: Tone } {
   switch (state.kind) {
-    case "live":
+    // The register retains its last verified execution across observations that
+    // cannot verify the current process, so equality proves identity, not liveness.
+    case "same-run-as-last-verified":
       return {
-        label: "live",
-        detail: "the same verified run is still in the Overseer register",
+        label: "same run (as last verified)",
+        detail: (
+          <>
+            last verified since <time dateTime={state.since}>{state.since}</time>
+          </>
+        ),
         tone: "work",
       };
     case "ended-or-replaced":
@@ -201,6 +207,14 @@ function ProblemList({ problems }: { problems: readonly DecisionWireProblem[] })
   );
 }
 
+function ComposedAt({ instant }: { instant: string }): ReactNode {
+  return (
+    <p className="tw:mt-2 tw:text-[11px] tw:tabular-nums tw:text-ink-faint">
+      Composed at <time dateTime={instant}>{instant}</time>
+    </p>
+  );
+}
+
 /** Every absence has its own sentence; only a measured count is drawn as a number. */
 export function DecisionsPanel({
   api = httpDecisionsApi,
@@ -245,6 +259,7 @@ export function DecisionsPanel({
       <Card className="tw:p-3">
         <p className="tw:text-[13px] tw:text-ink">No decision has been recorded here yet.</p>
         <p className="tw:mt-1 tw:text-[12px] tw:text-ink-soft">{view.why}</p>
+        <ComposedAt instant={view.composedAt} />
       </Card>
     );
   }
@@ -258,6 +273,7 @@ export function DecisionsPanel({
         <p className="tw:mt-2 tw:text-[12px] tw:text-alarm-ink">
           This is not an empty record — a decision Greg has not reviewed could be hidden.
         </p>
+        <ComposedAt instant={view.composedAt} />
       </Card>
     );
   }
@@ -271,6 +287,21 @@ export function DecisionsPanel({
         <p className="tw:mt-2 tw:text-[12px] tw:text-alarm-ink">
           The server refused to truncate {view.unreviewedCount} unreviewed decisions at its {view.limitBytes}-byte limit.
         </p>
+        <ComposedAt instant={view.composedAt} />
+      </Card>
+    );
+  }
+  if (view.kind === "oversized-file") {
+    return (
+      <Card className="tw:border-l-4 tw:border-l-alarm tw:bg-alarm-wash tw:p-3">
+        <p className="tw:text-[13px] tw:font-semibold tw:text-alarm-ink">
+          The decision record is too large to read synchronously.
+        </p>
+        <p className="tw:mt-1 tw:text-[12px] tw:text-alarm-ink">{view.why}</p>
+        <p className="tw:mt-2 tw:text-[12px] tw:text-alarm-ink">
+          The server refused to read {view.sizeBytes} bytes at its {view.limitBytes}-byte input limit.
+        </p>
+        <ComposedAt instant={view.composedAt} />
       </Card>
     );
   }
@@ -305,9 +336,7 @@ export function DecisionsPanel({
             reversals
           </p>
         ) : null}
-        <p className="tw:mt-2 tw:text-[11px] tw:tabular-nums tw:text-ink-faint">
-          Composed at <time dateTime={view.composedAt}>{view.composedAt}</time>
-        </p>
+        <ComposedAt instant={view.composedAt} />
         {view.checkpoint.kind === "unavailable" ? (
           <p className="tw:mt-1 tw:text-[12px] tw:text-unknown-ink">
             Session states are unavailable: {view.checkpoint.why}.
@@ -335,9 +364,9 @@ export function DecisionsPanel({
         ))
       )}
 
-      {view.reviewedWithheld > 0 ? (
+      {view.historyWithheld > 0 ? (
         <p className="tw:mt-3 tw:px-1 tw:text-[12px] tw:text-ink-faint">
-          {view.reviewedWithheld} older reviewed {view.reviewedWithheld === 1 ? "decision is" : "decisions are"} not shown.
+          {view.historyWithheld} older {view.historyWithheld === 1 ? "decision is" : "decisions are"} not shown from history.
         </p>
       ) : null}
 

@@ -1,9 +1,19 @@
 # "Decisions made" — the Overseer's decision record, its CLI, and its dashboard mode
 
-**Status, 2026-09-09: planned, reviewed twice by GPT Sol, nothing built yet.** Round one returned
-*"needs rethinking"* (two P0s, seven P1s); round two on the rewrite found **no P0 remaining** and
-*"not yet safe to build exactly as written"* (seven P1s). Both rounds are taken in full — see
-§ What the plan-stage reviews changed. Stage checkboxes and a status paragraph under each heading are kept current as the work lands.
+**Status, 2026-09-09: stages 1–3 built and green; Stage 4 (browser verification) not started, and
+it is the one that decides whether the tab ships.** 183 tests, typecheck exit 0, nothing pushed to
+`dev` yet.
+
+Reviewed by GPT Sol four times: the plan twice (round one *"needs rethinking"*, two P0s and seven
+P1s; round two *"not yet safe to build exactly as written"*, no P0 and seven P1s), then the
+**implementation** independently — no P0, three P1s, seven P2s, all taken. A fifth review of the
+fixes could not run: Codex's app-server client failed on a read-only filesystem, twice. That is owed
+before the debrief and is recorded in § What the plan-stage reviews changed.
+
+**One P1 was mine and is the most instructive thing here**: Stage 2b moved the command-id retry
+check into the CLI for a good reason and dropped half of it in the move, so a *different* decision
+under a reused key exited 0 and silently wrote nothing. Fixed at `86e28e93`, reproduced by hand
+before and after.
 
 Up: [dev-and-deployment-overview.md](../project/dev-and-deployment-overview.md) via
 [overseer.md](../project/overseer.md), whose gate 1 this turns from a hand-kept Markdown list into a
@@ -528,29 +538,29 @@ I run the checks, review, and commit. Which stages Codex implemented is recorded
 
 ### Stage 1 — the record, and the CLI's writes
 
-- [ ] `tools/overseer/decisions.ts`: schema constant, `DecisionEvent`, envelope, strict `parseEvent`
+- [x] `tools/overseer/decisions.ts`: schema constant, `DecisionEvent`, envelope, strict `parseEvent`
       (every non-blank and uniqueness rule in § The record), `foldDecisions` → `DecisionView`,
       `appendEvents` under its own lock with the **clean-prefix** candidate comparison, `mintId`
       (`dec-` + eight of the queue's alphabet), `commandId` handling.
-- [ ] The fold's teeth, **each with a test seen red when the rule is removed**: only Greg's
+- [x] The fold's teeth, **each with a test seen red when the rule is removed**: only Greg's
       `reviewed`/`reversed`; `<2`, duplicate or blank options; a `chose.option` naming no option;
       blank `question`/`why`; empty, duplicated or contradictory `advisers` (`nobody` is exclusive);
       blank or duplicated session names; a malformed `ExecutionRef`; duplicate decision ids;
       duplicate `eventId`; an event for an unknown id; a review dated before its decision; repeated
       `reviewed`; `reversed` terminal, and implying reviewed; `supersedes` naming a missing or later
       record; and **superseding never reducing the pending count without replacing it**.
-- [ ] **`commandId` is a conflict key, not a mute button.** Same key + byte-identical payload → the
+- [x] **`commandId` is a conflict key, not a mute button.** Same key + byte-identical payload → the
       original result, nothing appended. Same key + different payload → **refused as a conflict**,
       never silently treated as the retry. Duplicate-`commandId` handling must not mask a duplicate
       `eventId`, which is a separate problem with a separate test.
-- [ ] The clean-prefix comparison specifically: a fixture with one unreadable line plus one illegal
+- [x] The clean-prefix comparison specifically: a fixture with one unreadable line plus one illegal
       new event must be **refused**, and the test written so that swapping the baseline for the
       queue's count-only shape turns it green. This is the test `queue-priority` can copy.
-- [ ] `scripts/overseer-decisions.ts` on Commander: `template`, `add --file <path|->`, `show <id>`,
+- [x] `scripts/overseer-decisions.ts` on Commander: `template`, `add --file <path|->`, `show <id>`,
       `export`, `reviewed <id>`, `reversed <id>`. `--by` required on every write, never defaulted.
       `add` resolves each session's `ExecutionRef` from the register at write time, with the three
       arms kept apart.
-- [ ] Three read arms carried through, not flattened: `never-written`, `decisions` (possibly empty),
+- [x] Three read arms carried through, not flattened: `never-written`, `decisions` (possibly empty),
       `unreadable`.
 
 **`list` is deliberately not in this stage.** It needs the age and live/not-found rendering, which is
@@ -558,15 +568,15 @@ Stage 2's module — round two caught that the first split made Stage 1 un-green
 
 ### Stage 2 — the view module, `list`, and the seed
 
-- [ ] `tools/fleet/decisions-view.ts`: per-record age from `decidedAt`; the session split, where
+- [x] `tools/fleet/decisions-view.ts`: per-record age from `decidedAt`; the session split, where
       **live means the stored token still matches the register's verified run**; the trailing
       seven-day factual counts; unreviewed-first then newest-first ordering; the composed-at instant;
       and the **all-aggregates-unavailable** arm whenever the view carries problems.
-- [ ] Mutation-checked: rendering `not-found` or `unavailable` as live must go red; matching on name
+- [x] Mutation-checked: rendering `not-found` or `unavailable` as live must go red; matching on name
       rather than token must go red; any aggregate surviving a problem in the view must go red;
       ordering falling back to newest-first while unreviewed rows exist must go red.
-- [ ] The CLI's `list` prints the same numbers from the same module.
-- [ ] **The seed, with a real application step.** A checked-in fixture is not a populated store, so:
+- [x] The CLI's `list` prints the same numbers from the same module.
+- [x] **The seed, with a real application step.** A checked-in fixture is not a populated store, so:
       `overseer-decisions seed` — idempotent by `commandId`, safe to run twice, and it must be run
       for the record to exist. It preserves the historical `decidedAt` (2026-09-09 08:12Z) against
       its own envelope `at`, and stores `execution: { kind: "unavailable", why: "seeded from the
@@ -575,22 +585,22 @@ Stage 2's module — round two caught that the first split made Stage 1 un-green
 
 ### Stage 3 — the route and the mode
 
-- [ ] `tools/fleet/routes-decisions.ts` (`GET /api/decisions`), mounted in `server.ts`, with a
+- [x] `tools/fleet/routes-decisions.ts` (`GET /api/decisions`), mounted in `server.ts`, with a
       **comment-stripped** source guard on the mount — the needle survives inside a `//`, which is
       how such a line actually dies.
-- [ ] The maximum, with numbers: every unreviewed record always; reviewed history capped at 100 with
+- [x] The maximum, with numbers: every unreviewed record always; reviewed history capped at 100 with
       an exact withheld count; 2 MiB overall; a named loud failure rather than truncation if the
       unreviewed set alone exceeds it.
-- [ ] Wire types in **one additive end block** of `wire.ts` (types only, no runtime values); any
+- [x] Wire types in **one additive end block** of `wire.ts` (types only, no runtime values); any
       vocabulary array stays in the node module with `as const satisfies`.
-- [ ] `decisions-client.ts` with an injectable `DecisionsApi` seam; strict client parsing; a
+- [x] `decisions-client.ts` with an injectable `DecisionsApi` seam; strict client parsing; a
       *this browser never got an answer* arm distinct from the server's own silences.
-- [ ] `DecisionsPanel.tsx`; **five** of the six registrations (the coarse-pointer share count is
+- [x] `DecisionsPanel.tsx`; **five** of the six registrations (the coarse-pointer share count is
       `questions-mode`'s to delete); the `Dock.tsx` active-into-view scroll and the
       overflow affordance (§ The mode). Copy: the tab is **things done in Greg's name that he has not
       yet reviewed**, not "decisions the Overseer made" — assumptions are one of the three classes and
       gate 2 says of those that the Overseer *is not deciding*.
-- [ ] Tests: `fleet-feed-panel.test.tsx`'s four assertions (`MODES` contains it with its label; the
+- [x] Tests: `fleet-feed-panel.test.tsx`'s four assertions (`MODES` contains it with its label; the
       hash opens into it — mutate the `App.tsx` arm and watch it red; the button writes the hash; the
       empty state names **which** nothing it is), asserted against `MODES` and never a literal list,
       driven by `mountFull()`. Plus: a complete row renders every required field; problems suppress

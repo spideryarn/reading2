@@ -78,7 +78,10 @@ const ROW: DecisionRow = {
   ageMs: 3_600_000,
   pendingReview: true,
   sessions: [
-    { name: "live-session", state: { kind: "live" } },
+    {
+      name: "live-session",
+      state: { kind: "same-run-as-last-verified", since: "2026-09-09T10:00:00.000Z" },
+    },
     { name: "old-session", state: { kind: "ended-or-replaced" } },
     {
       name: "unknown-session",
@@ -110,7 +113,7 @@ function decisionsView(
       trailingSevenDays: { decisions: 3, reviews: 2, reversals: 1 },
     },
     rows: [ROW],
-    reviewedWithheld: 0,
+    historyWithheld: 0,
     problems: [],
     ...over,
   };
@@ -162,7 +165,12 @@ describe("the tab is actually registered", () => {
     const calls: AbortSignal[] = [];
     await mountFull(
       "#decisions",
-      { schema: 1, kind: "never-written", why: "the decision log has never been written" },
+      {
+        schema: 1,
+        kind: "never-written",
+        composedAt: "2026-09-09T11:20:00.000Z",
+        why: "the decision log has never been written",
+      },
       calls,
     );
 
@@ -174,7 +182,12 @@ describe("the tab is actually registered", () => {
     const calls: AbortSignal[] = [];
     await mountFull(
       "#sessions",
-      { schema: 1, kind: "never-written", why: "the decision log has never been written" },
+      {
+        schema: 1,
+        kind: "never-written",
+        composedAt: "2026-09-09T11:20:00.000Z",
+        why: "the decision log has never been written",
+      },
       calls,
     );
     expect(calls).toHaveLength(0);
@@ -240,7 +253,12 @@ describe("the record's distinctions are visible", () => {
   });
 
   it("does not draw an unreadable record as an empty one", async () => {
-    await renderPanel({ schema: 1, kind: "unreadable", why: "line four is not valid JSON" });
+    await renderPanel({
+      schema: 1,
+      kind: "unreadable",
+      composedAt: "2026-09-09T11:20:00.000Z",
+      why: "line four is not valid JSON",
+    });
     expect(host.textContent).toContain("The decision record could not be read");
     expect(host.textContent).toContain("This is not an empty record");
     expect(host.textContent).not.toContain("Nothing is waiting for review");
@@ -250,12 +268,62 @@ describe("the record's distinctions are visible", () => {
     await renderPanel({
       schema: 1,
       kind: "oversized-unreviewed",
+      composedAt: "2026-09-09T11:20:00.000Z",
       why: "unreviewed rows alone exceed the response bound",
       unreviewedCount: 12,
       limitBytes: 2_097_152,
     });
     expect(host.textContent).toContain("too large to show safely");
     expect(host.textContent).toContain("refused to truncate 12 unreviewed decisions");
+  });
+
+  it("states when the input file exceeds the synchronous-read bound", async () => {
+    await renderPanel({
+      schema: 1,
+      kind: "oversized-file",
+      composedAt: "2026-09-09T11:20:00.000Z",
+      why: "the file exceeds the route's bounded synchronous work",
+      sizeBytes: 4_000_001,
+      limitBytes: 4_000_000,
+    });
+    expect(host.textContent).toContain("too large to read synchronously");
+    expect(host.textContent).toContain("refused to read 4000001 bytes");
+  });
+
+  it.each([
+    {
+      schema: 1 as const,
+      kind: "never-written" as const,
+      composedAt: "2026-09-09T11:20:00.000Z",
+      why: "the record has never been written",
+    },
+    {
+      schema: 1 as const,
+      kind: "unreadable" as const,
+      composedAt: "2026-09-09T11:20:00.000Z",
+      why: "the record cannot be read",
+    },
+    {
+      schema: 1 as const,
+      kind: "oversized-unreviewed" as const,
+      composedAt: "2026-09-09T11:20:00.000Z",
+      why: "required rows do not fit",
+      unreviewedCount: 2,
+      limitBytes: 2_097_152,
+    },
+    {
+      schema: 1 as const,
+      kind: "oversized-file" as const,
+      composedAt: "2026-09-09T11:20:00.000Z",
+      why: "the input is too large",
+      sizeBytes: 4_000_001,
+      limitBytes: 4_000_000,
+    },
+    decisionsView(),
+  ])("draws the composition instant for server answer $kind", async (view) => {
+    await renderPanel(view);
+    expect(host.textContent).toContain("Composed at 2026-09-09T11:20:00.000Z");
+    expect(host.querySelector('time[datetime="2026-09-09T11:20:00.000Z"]')).not.toBeNull();
   });
 
   it("states an unavailable aggregate without drawing a numeric headline", async () => {
@@ -274,6 +342,12 @@ describe("the record's distinctions are visible", () => {
     expect(headline?.textContent).not.toContain("0");
   });
 
+  it("names withheld rows as history without claiming every one was reviewed", async () => {
+    await renderPanel(decisionsView({ historyWithheld: 2 }));
+    expect(host.textContent).toContain("2 older decisions are not shown from history");
+    expect(host.textContent).not.toContain("older reviewed decisions");
+  });
+
   it("draws all three session states distinctly, including both unavailable reasons", async () => {
     await renderPanel(decisionsView());
     const opener = host.querySelector<HTMLButtonElement>('button[aria-expanded="false"]');
@@ -281,8 +355,8 @@ describe("the record's distinctions are visible", () => {
     await act(async () => opener.click());
 
     const text = host.textContent ?? "";
-    expect(text).toContain("live-sessionlive");
-    expect(text).toContain("same verified run is still in the Overseer register");
+    expect(text).toContain("live-sessionsame run (as last verified)");
+    expect(text).toContain("last verified since 2026-09-09T10:00:00.000Z");
     expect(text).toContain("old-sessionended or replaced");
     expect(text).toContain("recorded with the decision is no longer the verified run");
     expect(text).toContain("unknown-sessionstate unavailable");

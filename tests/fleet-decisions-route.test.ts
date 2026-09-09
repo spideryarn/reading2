@@ -4,18 +4,21 @@
  * `makeDecisionsRoute` is the function `server.ts` calls. These tests inject
  * readers into that same composition rather than rebuilding the projection and
  * route as two test-only pieces, so a missing production edge has somewhere to
- * go red. The final source guard covers the one line importing `server.ts`
- * cannot reach because that module binds the dashboard port.
+ * go red. The final test imports `server.ts` with only its listener and
+ * background collection replaced, captures its actual handler, and drives the
+ * real mount without binding a port or touching the live box.
  */
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   DECISIONS_PATH,
+  MAX_DECISIONS_INPUT_BYTES,
   MAX_DECISIONS_RESPONSE_BYTES,
   REVIEWED_HISTORY_LIMIT,
   makeDecisionsRoute,
@@ -78,6 +81,7 @@ function decisionRead(
 
 function readers(read: DecisionRead): DecisionsRouteReaders {
   return {
+    decisionFileSize: () => ({ path: "/tmp/fake/decisions.jsonl", sizeBytes: 0 }),
     readDecisions: () => read,
     loadCheckpoint: () => ({ kind: "absent" }),
     now: () => NOW,
@@ -113,12 +117,13 @@ function call(read: DecisionRead, url = DECISIONS_PATH, method = "GET") {
   };
 }
 
-describe("the four read arms", () => {
+describe("the five read arms", () => {
   it("keeps never-written distinct from an empty record", () => {
     const never = call({ kind: "never-written", path: "/tmp/fake/decisions.jsonl" }).body;
     const empty = call(decisionRead([])).body;
 
     expect(never?.kind).toBe("never-written");
+    expect(never?.composedAt).toBe(NOW.toISOString());
     expect(empty?.kind).toBe("decisions");
     if (empty?.kind !== "decisions") throw new Error("unreachable");
     expect(empty.rows).toEqual([]);
@@ -131,26 +136,64 @@ describe("the four read arms", () => {
       path: "/tmp/fake/decisions.jsonl",
     }).body;
 
-    expect(feed).toEqual({ schema: 1, kind: "unreadable", why: "line 4 is not an event" });
+    expect(feed).toEqual({
+      schema: 1,
+      kind: "unreadable",
+      composedAt: NOW.toISOString(),
+      why: "line 4 is not an event",
+    });
     expect(feed === null || "rows" in feed).toBe(false);
   });
 
   it("names oversized unreviewed input rather than truncating the unseen row", () => {
-    const huge = record("dec-unseen22", 0, { why: "x".repeat(MAX_DECISIONS_RESPONSE_BYTES + 1) });
+    const huge = record("dec-unseen22", 0, { why: "x".repeat(2_097_153) });
     const answer = call(decisionRead([huge]));
 
     expect(answer.body?.kind).toBe("oversized-unreviewed");
     if (answer.body?.kind !== "oversized-unreviewed") throw new Error("unreachable");
     expect(answer.body.unreviewedCount).toBe(1);
-    expect(answer.body.limitBytes).toBe(MAX_DECISIONS_RESPONSE_BYTES);
+    expect(answer.body.limitBytes).toBe(2_097_152);
+    expect(answer.body.composedAt).toBe(NOW.toISOString());
     expect(answer.raw).not.toContain(huge.why);
-    expect(Buffer.byteLength(answer.raw, "utf8")).toBeLessThanOrEqual(MAX_DECISIONS_RESPONSE_BYTES);
+    expect(Buffer.byteLength(answer.raw, "utf8")).toBeLessThanOrEqual(2_097_152);
+  });
+
+  it("refuses an oversized input before reading or folding it", () => {
+    const readDecisions = vi.fn<() => DecisionRead>(() => decisionRead([]));
+    const feed = makeDecisionsRoute({
+      decisionFileSize: () => ({ path: "/tmp/fake/decisions.jsonl", sizeBytes: 8_388_609 }),
+      readDecisions,
+      loadCheckpoint: () => ({ kind: "absent" }),
+      now: () => NOW,
+    });
+    const answer = (() => {
+      let raw = "";
+      const res = {
+        writeHead() { return res; },
+        end(chunk?: string) { if (chunk !== undefined) raw += chunk; return res; },
+      };
+      feed.handle(
+        { method: "GET", url: DECISIONS_PATH, headers: {} } as IncomingMessage,
+        res as unknown as ServerResponse,
+      );
+      return JSON.parse(raw) as DecisionsFeed;
+    })();
+
+    expect(MAX_DECISIONS_INPUT_BYTES).toBe(8_388_608);
+    expect(answer).toMatchObject({
+      kind: "oversized-file",
+      composedAt: NOW.toISOString(),
+      sizeBytes: 8_388_609,
+      limitBytes: 8_388_608,
+    });
+    expect(readDecisions).not.toHaveBeenCalled();
   });
 });
 
 describe("the maximum", () => {
   it("keeps every unreviewed row, caps reviewed history, and reports the exact withheld count", () => {
-    const reviewed = Array.from({ length: REVIEWED_HISTORY_LIMIT + 7 }, (_, index) =>
+    expect(REVIEWED_HISTORY_LIMIT).toBe(100);
+    const reviewed = Array.from({ length: 107 }, (_, index) =>
       record(`dec-reviewed-${index}`, index + 10, {
         reviewed: true,
         reviewedAt: new Date(NOW.getTime() - index * 30_000).toISOString(),
@@ -165,8 +208,34 @@ describe("the maximum", () => {
     expect(feed.rows.filter((row) => row.pendingReview).map((row) => row.record.id)).toEqual(
       unseen.map((item) => item.id),
     );
-    expect(feed.rows.filter((row) => !row.pendingReview)).toHaveLength(REVIEWED_HISTORY_LIMIT);
-    expect(feed.reviewedWithheld).toBe(7);
+    expect(feed.rows.filter((row) => !row.pendingReview)).toHaveLength(100);
+    expect(feed.historyWithheld).toBe(7);
+  });
+
+  it("keeps every ancestor of a pending supersession chain outside the 100-row history cap", () => {
+    const oldest = record("dec-original", 1_000, {
+      supersededBy: "dec-correction-1",
+    });
+    const correction = record("dec-correction-1", 999, {
+      supersedes: oldest.id,
+      supersededBy: "dec-correction-2",
+    });
+    const pending = record("dec-correction-2", 0, { supersedes: correction.id });
+    const newerHistory = Array.from({ length: 107 }, (_, index) =>
+      record(`dec-reviewed-${index}`, index + 1, {
+        reviewed: true,
+        reviewedAt: NOW.toISOString(),
+      }),
+    );
+
+    const feed = call(decisionRead([oldest, correction, ...newerHistory, pending])).body;
+    expect(feed?.kind).toBe("decisions");
+    if (feed?.kind !== "decisions") throw new Error("unreachable");
+    expect(feed.rows.map((row) => row.record.id)).toEqual(
+      expect.arrayContaining([oldest.id, correction.id, pending.id]),
+    );
+    expect(feed.rows.filter((row) => row.record.id.startsWith("dec-reviewed-"))).toHaveLength(100);
+    expect(feed.historyWithheld).toBe(7);
   });
 
   it("uses the byte ceiling to withhold reviewed rows too, while keeping the count exact", () => {
@@ -184,9 +253,10 @@ describe("the maximum", () => {
     expect(answer.body?.kind).toBe("decisions");
     if (answer.body?.kind !== "decisions") throw new Error("unreachable");
     const includedReviewed = answer.body.rows.filter((row) => !row.pendingReview).length;
-    expect(answer.body.reviewedWithheld).toBe(reviewed.length - includedReviewed);
-    expect(answer.body.reviewedWithheld).toBeGreaterThan(0);
-    expect(Buffer.byteLength(answer.raw, "utf8")).toBeLessThanOrEqual(MAX_DECISIONS_RESPONSE_BYTES);
+    expect(MAX_DECISIONS_RESPONSE_BYTES).toBe(2_097_152);
+    expect(answer.body.historyWithheld).toBe(reviewed.length - includedReviewed);
+    expect(answer.body.historyWithheld).toBeGreaterThan(0);
+    expect(Buffer.byteLength(answer.raw, "utf8")).toBeLessThanOrEqual(2_097_152);
   });
 
   it("does not call oversized context with zero unseen rows an oversized-unreviewed set", () => {
@@ -200,7 +270,7 @@ describe("the maximum", () => {
     expect(answer.body?.kind).toBe("unreadable");
     expect(answer.body?.kind).not.toBe("oversized-unreviewed");
     expect(answer.raw).toContain("required context exceeds");
-    expect(Buffer.byteLength(answer.raw, "utf8")).toBeLessThanOrEqual(MAX_DECISIONS_RESPONSE_BYTES);
+    expect(Buffer.byteLength(answer.raw, "utf8")).toBeLessThanOrEqual(2_097_152);
   });
 });
 
@@ -262,5 +332,87 @@ describe("server.ts wiring", () => {
 
   it("mounts the decisions route in its request path, outside comments", () => {
     expect(source).toContain("decisionsApiRoute.handle(req, res)");
+  });
+
+  it("answers a real request through the server.ts request composition", async () => {
+    const storeRoot = mkdtempSync(join(tmpdir(), "spideryarn-decisions-server-"));
+    const previous = {
+      FLEET_BIND: process.env.FLEET_BIND,
+      FLEET_HEALTH_DIR: process.env.FLEET_HEALTH_DIR,
+      FLEET_HOLDS_DIR: process.env.FLEET_HOLDS_DIR,
+      FLEET_READINESS_DIR: process.env.FLEET_READINESS_DIR,
+      OVERSEER_DECISIONS_DIR: process.env.OVERSEER_DECISIONS_DIR,
+      OVERSEER_STORE_DIR: process.env.OVERSEER_STORE_DIR,
+    };
+    process.env.FLEET_BIND = "127.0.0.1";
+    process.env.FLEET_HEALTH_DIR = join(storeRoot, "health");
+    process.env.FLEET_HOLDS_DIR = join(storeRoot, "holds");
+    process.env.FLEET_READINESS_DIR = join(storeRoot, "readiness");
+    process.env.OVERSEER_DECISIONS_DIR = join(storeRoot, "decisions");
+    process.env.OVERSEER_STORE_DIR = join(storeRoot, "overseer");
+
+    let handler: ((req: IncomingMessage, res: ServerResponse) => void) | null = null;
+    vi.doMock("node:http", async () => {
+      const actual = await vi.importActual<typeof import("node:http")>("node:http");
+      return {
+        ...actual,
+        createServer: (next: (req: IncomingMessage, res: ServerResponse) => void) => {
+          handler = next;
+          const fake = {
+            on: () => fake,
+            listen: (_port: number, _bind: string, ready: () => void) => {
+              ready();
+              return fake;
+            },
+          };
+          return fake;
+        },
+      };
+    });
+    /* Importing `server.ts` normally starts its permanent collection loop.
+       Keep that startup promise pending: this test owns request composition,
+       not collection, and must neither inspect the live box nor leave timers. */
+    vi.doMock("../tools/fleet/refresh.js", async () => {
+      const actual = await vi.importActual<typeof import("../tools/fleet/refresh.js")>(
+        "../tools/fleet/refresh.js",
+      );
+      return {
+        ...actual,
+        refreshOnce: () => new Promise<never>(() => {}),
+      };
+    });
+
+    try {
+      await import("../tools/fleet/server.js");
+      expect(handler).not.toBeNull();
+      let status = 0;
+      let raw = "";
+      const response = {
+        setHeader() {},
+        writeHead(code: number) { status = code; return response; },
+        end(chunk?: string | Buffer) {
+          if (chunk !== undefined) raw += typeof chunk === "string" ? chunk : chunk.toString("utf8");
+          return response;
+        },
+      };
+      const mountedHandler = handler as unknown as (req: IncomingMessage, res: ServerResponse) => void;
+      mountedHandler(
+        { method: "GET", url: DECISIONS_PATH, headers: {} } as IncomingMessage,
+        response as unknown as ServerResponse,
+      );
+
+      expect(status).toBe(200);
+      const feed = JSON.parse(raw) as DecisionsFeed;
+      expect(feed.kind).toBe("never-written");
+      expect(feed.composedAt).toEqual(expect.any(String));
+    } finally {
+      for (const [name, value] of Object.entries(previous)) {
+        if (value === undefined) delete process.env[name];
+        else process.env[name] = value;
+      }
+      vi.doUnmock("node:http");
+      vi.doUnmock("../tools/fleet/refresh.js");
+      rmSync(storeRoot, { recursive: true, force: true });
+    }
   });
 });

@@ -515,7 +515,7 @@ describe("reading and appending", () => {
     expect(read.view.problems.map((problem) => problem.kind)).toEqual(["unreadable-line"]);
   });
 
-  test("a successful append writes the marker first, durable JSONL, and a new version", () => {
+  test("a successful append creates the marker, writes one JSONL event, and reports a new version", () => {
     const root = tempRoot();
     const event = decided();
     const result = appendEvents([event], { root });

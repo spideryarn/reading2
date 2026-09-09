@@ -3152,7 +3152,7 @@ export type DecisionWireRecord = {
 };
 
 export type DecisionWireSessionState =
-  | { kind: "live" }
+  | { kind: "same-run-as-last-verified"; since: string }
   | { kind: "ended-or-replaced" }
   | {
       kind: "unavailable";
@@ -3195,15 +3195,25 @@ export type DecisionWireAggregates =
   | { kind: "unavailable"; why: string };
 
 /**
- * `GET /api/decisions`. The route keeps the record reader's three arms and
- * adds one loud refusal for mandatory, not-yet-reviewed data over its bound.
+ * `GET /api/decisions`. Every arm carries the instant at which its claim was
+ * composed. The route refuses loudly before either an input file or mandatory
+ * context can exceed the synchronous work and response bounds respectively.
  */
 export type DecisionsFeed =
-  | { schema: 1; kind: "never-written"; why: string }
-  | { schema: 1; kind: "unreadable"; why: string }
+  | { schema: 1; kind: "never-written"; composedAt: string; why: string }
+  | { schema: 1; kind: "unreadable"; composedAt: string; why: string }
+  | {
+      schema: 1;
+      kind: "oversized-file";
+      composedAt: string;
+      why: string;
+      sizeBytes: number;
+      limitBytes: number;
+    }
   | {
       schema: 1;
       kind: "oversized-unreviewed";
+      composedAt: string;
       why: string;
       unreviewedCount: number;
       limitBytes: number;
@@ -3218,6 +3228,6 @@ export type DecisionsFeed =
       aggregates: DecisionWireAggregates;
       rows: DecisionRow[];
       /** History omitted by either the 100-row cap or the 2 MiB byte cap. */
-      reviewedWithheld: number;
+      historyWithheld: number;
       problems: DecisionWireProblem[];
     };
