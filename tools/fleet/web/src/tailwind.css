@@ -224,28 +224,44 @@
 
   /* ------------------------------------------------------- the type scale --
    *
-   * **Five steps, hand-picked, each at least ~25% from its neighbour** — the
-   * rule in docs/reusable/design-a-screen.md, and the reason this exists at
-   * all. A census on 2026-09-09 found 356 of the client's 368 sizing utilities
-   * sitting between 10px and 13px: a 3px band, in which nothing can be dominant
-   * because nothing is bigger than anything else.
+   * **THREE LEVELS AND TWO DENSITY VARIANTS — not five steps of one scale**,
+   * and the difference is the correction GPT Sol made on 2026-09-09 (TYPE-01).
+   * The first draft claimed all five sat ~25% apart. They do not: the real
+   * ratios are 29%, 31%, 8%, 9%, and a claim a reader can measure and disprove
+   * is worse than no claim. What is true is more useful anyway.
    *
-   * The steps are not invented. `HealthPanel`'s stat tiles were already the
-   * only place on the page where the number that matters is the biggest thing
-   * in its box, and `answer`/`label`/`note` are that tile's three sizes, named.
+   * A census that day found 356 of the client's 368 sizing utilities sitting
+   * between 10px and 13px: a 3px band, in which nothing can be dominant because
+   * nothing is bigger than anything else. What that needed was not five evenly
+   * spaced sizes; it was **a top end that separates**.
+   *
+   * THE THREE LEVELS. Each is far enough from the next to carry hierarchy by
+   * size alone — the ~25% rule in docs/reusable/design-a-screen.md:
    *
    *   answer  22px   the one thing the screen exists to say. AT MOST ONE per
    *                  card, and a screen with three is a screen with no answer.
-   *   lead    15px   a headline sentence, or a card's title. The body size, so
-   *                  it is what an unstyled element already gets.
+   *   lead    17px   a headline sentence, or a card's title. **Widened from
+   *                  15px on Sol's finding**: 15px is the root body size, so
+   *                  `lead` was indistinguishable from an unstyled element and
+   *                  only 15% from `body`, which is not a step.
    *   body    13px   ordinary text: rows, sentences, values that are not THE
    *                  value.
+   *
+   * AND THE TWO BELOW IT, which are deliberately close together and are NOT
+   * hierarchy. A dense operational page needs secondary text smaller than body
+   * without implying a further demotion; 12 and 11 are density variants, and
+   * anything separating them is weight, colour or position:
+   *
    *   note    12px   evidence under a value, provenance, coverage, ids.
    *   label   11px   uppercase section labels and the caps line over a stat.
    *
-   * There is deliberately no sixth step, and nothing below 11px: 10px appears
-   * three times in the client today and every one of them is a note that lost
-   * an argument with a layout.
+   * `HealthPanel`'s stat tile was already using 22 / 12 / 11 before any of this
+   * — the only place on the page where the number that matters is the biggest
+   * thing in its box — so three of the five are named rather than invented.
+   *
+   * There is deliberately no sixth, and nothing below 11px: 10px appears three
+   * times in the client today and every one is a note that lost an argument
+   * with a layout.
    *
    * Emitted as `--text-*`, so Tailwind gives us `tw:text-answer` and friends
    * alongside its own `text-sm`. Sizes only — WEIGHT AND COLOUR ARE NOT PART OF
@@ -253,8 +269,8 @@
    * welding them to the size would take that choice away at every call site. */
   --text-answer: 22px;
   --text-answer--line-height: 1.15;
-  --text-lead: 15px;
-  --text-lead--line-height: 1.35;
+  --text-lead: 17px;
+  --text-lead--line-height: 1.3;
   --text-body: 13px;
   --text-body--line-height: 1.45;
   --text-note: 12px;
