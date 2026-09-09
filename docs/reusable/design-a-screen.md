@@ -8,6 +8,39 @@ questions you answer in prose before you touch a stylesheet; the second is a che
 against every rule. **Doing the second half without the first produces a tidier screen that is no
 easier to use**, which is the usual outcome of a redesign and the thing this doc exists to prevent.
 
+## Running it: what goes in, what must come out
+
+A checklist wearing the word "prompt" is still a checklist. So this is the contract — gather all
+four inputs before starting, and produce all six outputs before writing any code. If an input is
+missing, get it; a design review done without screenshots is a review of your memory of the screen.
+
+**Inputs**
+
+1. **Purpose** — who reads this screen and what they came to do. In their words if you can get them.
+2. **Screenshots at every supported width**, from real or realistic data, saved to files. Full-page
+   as well as viewport for anything that scrolls.
+3. **A state inventory** — every state the screen can be in, *including* the ones where it is
+   reporting that it does not know. This is the input people skip, and it is the one that makes the
+   difference between a redesign and a regression.
+4. **Measurements and the available data** — the numbers from § Measure below, and what the screen's
+   data source can and cannot actually support.
+
+**Outputs**
+
+1. **The decisions this screen supports**, ranked. If you cannot name one, say so — that is a
+   finding, not a failure.
+2. **Ranked obstacles**, each citing a screenshot or a line of code. "It feels cluttered" is not an
+   obstacle; "the number answering the screen's question is 13px, below three paragraphs, in the
+   fourth screenful" is.
+3. **The proposed hierarchy** — what is primary, what is secondary, what is provenance.
+4. **What to remove, collapse or move.** Required, not optional: a redesign that only adds has not
+   made a decision.
+5. **Claims the data cannot support** — named as missing rather than invented, and never filled with
+   a plausible default.
+6. **Checks that could fail after implementation.** See § Afterwards.
+
+Anything you cannot answer, write down as unanswered. The gaps are the useful part of the output.
+
 ## Half one: what is this screen for?
 
 ### 1. Write down the questions the reader arrives with
@@ -20,11 +53,12 @@ words; "can I start more work right now, or will it be rejected?" is the reader'
 decides the layout: the first is a list of fields, the second is one yes/no with its evidence
 underneath.
 
-Rank them, and be honest that the list is short. **A screen answers one question well.** Grafana's
-own guidance is one panel, one question; the SRE book's version is that a dashboard's top level
-shows what is broken and user-visible *now*, with cause and diagnosis one level down. If your
-ranked list has six equal items, you have either two screens or a screen with a summary and a
-drill-in, and finding that out now is the cheapest it will ever be.
+Rank them, and be honest that the list is short. **One screen supports one decision or task** —
+an overview may legitimately need several subordinate questions, but they must be subordinate to
+something. Grafana's own guidance is one panel, one question; the SRE book's version is that a
+dashboard's top level shows what is broken and user-visible *now*, with cause and diagnosis one
+level down. If your ranked list has six *equal* items, you have either two screens or a screen with
+a summary and a drill-in, and finding that out now is the cheapest it will ever be.
 
 **Ask the reader if you can.** One sentence from the person who uses it beats a day of inference,
 and their answer is usually blunter and narrower than anything you would have written for them. If
@@ -35,9 +69,15 @@ screen that does not help answer it is not finished, however tidy it looks.
 
 For each question: **what action does the answer lead to, and is that action on this screen?** An
 answer with its action three taps away is a screen that informs rather than one that helps. This is
-also the test for a caveat, an explanation, a provenance line: *would it change what the reader does
-on this screen in the next ten seconds?* If it would only change what they **believe**, it belongs
-one tap away, attached to the fact it qualifies — not deleted, and not on the page.
+also the test for a caveat, an explanation, a provenance line: *would it change the reader's
+immediate action, or their confidence in taking it?* If it would change neither — if it only alters
+what they believe about how the system works — it belongs one tap away, attached to the fact it
+qualifies. Not deleted, and not on the page.
+
+The confidence half is not a loophole, and leaving it out makes the rule wrong: an operator who
+does not trust a number will go and check it by hand, which is a worse outcome than the caveat
+costing a line. What fails the test is the material that explains the *mechanism* rather than
+qualifying the *reading*.
 
 ### 3. Say what the screen must never do
 
@@ -62,13 +102,29 @@ they routinely name the cause outright before anybody has argued about taste.
 
 - [ ] **Count the distinct font sizes actually rendered**, and how often each occurs. A page whose
       sizes all sit within a few pixels of each other has no dominant element and *cannot* be
-      scanned, whatever else is done to it. Count the weights too.
+      scanned, whatever else is done to it. Count the weights too. **The diagnostic is the spread,
+      not the count** — fixing this usually makes the number of distinct sizes go *up*, because a
+      scale is a set of deliberately separated steps and what you started with was a cluster. A
+      redesign that reduced the count by flattening everything to one size would score better on the
+      tally and be worse.
 - [ ] **Count the distinct text colours, by frequency.** If the quietest colour is the most common
       one, nothing on the page is quiet: the reader's eye has nothing to land on, so it lands on
       whatever happens to be accented instead.
 - [ ] **Full page height at the narrowest supported width**, in CSS pixels, and the count of
       interactive elements on it. Both are proxies for how much the screen is asking of somebody
       holding a phone.
+- [ ] **Count the interactive elements by tabbing, not by selector**, on any page with a disclosure.
+      A `querySelectorAll` of buttons and links counts everything inside a *closed* `<details>`, and
+      the obvious filters do not save you: `content-visibility` clears neither `offsetParent` nor
+      `getClientRects()`, so "visible" checks return the same inflated number with more confidence.
+      Press Tab a few hundred times and count what actually receives focus. Measured on one page,
+      **both numbers from that same page after the change**: the selector said 171, the tab cycle
+      said 34.
+- [ ] **Do not compare a before taken one way with an after taken the other.** The trap sits right
+      next to the rule above: once you switch method for the "after", the improvement you report is
+      part real and part instrument. Either re-measure the "before" the same way, or say in the same
+      breath which number came from which method — otherwise the next person to re-measure finds a
+      figure that does not match and cannot tell which half to distrust.
 - [ ] **Does it scroll horizontally?** `scrollWidth > clientWidth` at the narrow width is a bug
       almost every time.
 - [ ] **The squint test.** Blur the screenshot until you cannot read words. What is still visible is
@@ -141,9 +197,16 @@ making the important thing loud is the same gesture as making a caveat invisible
 - [ ] **A reassuring sentence is only worth saying beside the evidence that makes it falsifiable.**
       "Nothing is wrong" and "nothing was checked" read identically; print what was actually
       examined — *opened 235 of 240, 232,961 lines* — under the reassurance, every time.
-- [ ] **Every live number carries when it was taken**, especially where different figures on one
-      screen refresh at different rates.
+- [ ] **Every live number carries when it was taken** — but *once per group of readings taken
+      together*, not once per tile. Where figures on one screen refresh at different rates, each
+      rate needs its own stamp; where twelve numbers came from one pass, twelve timestamps is the
+      wall of provenance this checklist exists to prevent. Applying the rule naively is itself a
+      way to fail it.
       ([Smashing, 2025](https://www.smashingmagazine.com/2025/09/ux-strategies-real-time-dashboards/))
+- [ ] **Prefer a duration to an instant** for anything the reader is judging freshness by. *Read 6m
+      ago* survives being read in another timezone; `05:51 UTC · 06:51 London · 08:51 Athens` is the
+      same fact three times and ages badly on a phone. Keep the wall-clock instant for the thing a
+      reader must act *at* — a deadline, a reset — and put the rest one tap away.
 - [ ] **Stale must look stale.** Showing the last good reading rather than a blank is right; showing
       it at full weight with no mark is not.
 - [ ] **A fetch failure gets its own banner**, distinct from stale and from empty, because it is a
@@ -203,6 +266,11 @@ The sources genuinely disagree, and **the task decides it, not the width**:
       ([NN/g](https://www.nngroup.com/videos/progressive-disclosure/))
 - [ ] **Filters and sort are zoom, not new information.** If a filter reveals something that was not
       derivable from the overview, the overview is lying by omission.
+- [ ] **De-duplicate down the column before you hide along the row.** The bigger win is usually
+      moving what repeats on every row up onto a group heading — a date, a repo, an owner — not
+      folding away what is unique to each. Measured on one list: what turned a two-line row into a
+      one-line row was the date moving to the day heading, not the disclosure that had just been
+      added. Hiding the unique part costs a tap; removing the repeated part costs nothing.
 
 Folklore flag: "30–50% faster with progressive disclosure" circulates widely and traces to a
 secondhand citation. Do not quote it as a number.
@@ -247,6 +315,21 @@ you start.
       the scale — consider whether it is expressible as a test or a lint rule. Not everything is
       worth one; the ones guarding an *absence* usually are, because absences are what nobody
       notices breaking.
+- [ ] **Then look at the picture anyway, yourself.** A suite that asserts *which words appear*
+      cannot see *how a screen reads*, and that gap is where the interesting defects live. Two
+      failures it will never catch:
+      - **An honest state drawn as the wrong honest state.** *Nobody measured this*, *this cannot be
+        shown to be yours* and *the source broke* are all legitimate, so every arm passes every
+        assertion — and picking the loudest one paints a page of red alarms over what is merely a
+        gap. Only a person looking at the rendering sees that the screen is shouting.
+      - **Saying the same thing twice.** A caption you wrote in front of a message the system
+        already produced reads as two facts in a diff and as one long paragraph on screen. It is
+        the most common way a redesign to remove a wall of text adds to it.
+
+      So the last step is not a command. Open the screenshot, ask the question from Half One, and
+      see whether the answer is where you put it. **If you delegated the screenshots, look at them
+      yourself** — a report saying "nothing is broken" is an answer to a different question, and an
+      agent measuring the DOM cannot see what is `sr-only`, what is off-screen, or what is loud.
 
 ## Source quality, briefly
 

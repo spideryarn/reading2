@@ -47,8 +47,32 @@ import { describe, expect, it } from "vitest";
 
 import { tipText, type Tip } from "../tools/fleet/web/src/Tooltip";
 import { MODE_TIPS } from "../tools/fleet/web/src/Dock";
-import { STATUS_TIPS, UPTIME_TIP } from "../tools/fleet/web/src/SessionParts";
-import { GENERATED_TITLE_TIP, OVERSEER_BADGE_TIP } from "../tools/fleet/web/src/SessionsPanel";
+import { HANDLE_TIPS, STATUS_TIPS, UPTIME_TIP } from "../tools/fleet/web/src/SessionParts";
+import {
+  ANY_BAND_TIP,
+  BAND_TIPS,
+  GENERATED_TITLE_TIP,
+  ORDER_TIP,
+  OVERSEER_BADGE_TIP,
+} from "../tools/fleet/web/src/SessionsPanel";
+import { CLAIM_TIPS, COUNT_TIPS } from "../tools/fleet/web/src/Header";
+import { SPEAKER_TIPS } from "../tools/fleet/web/src/Turn";
+/* The Usage tab's stat cards, exported for this guard rather than written
+   inline — session `dashboard-design-system`, 2026-09-09, on this file's own
+   author pointing out that a tip written inline in a component gets none of the
+   three rules below and does not count towards the floor. `usageWindowTip` is
+   computed from a window, so it is registered on one value each way, like
+   `instantTip`. */
+import { USAGE_TIPS, usageWindowTip } from "../tools/fleet/web/src/UsagePanel";
+import {
+  BADGE_TIPS,
+  FACT_TIPS,
+  HISTORY_TIP,
+  PROBLEM_TIPS,
+  SETTLED_TIP,
+  badgeTip,
+} from "../tools/fleet/web/src/QueuePanel";
+import { instantTip } from "../tools/fleet/web/src/instant";
 
 const WEB_SRC = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -68,7 +92,7 @@ const WEB_SRC = path.join(
  * not a door: an addition here is somebody about to ship hover-only text on a
  * page read on a phone.
  */
-const KNOWN_HOVER_ONLY: readonly string[] = ["ReadinessPanel.tsx"];
+const KNOWN_HOVER_ONLY: Readonly<Record<string, number>> = { "ReadinessPanel.tsx": 1 };
 
 /** Every `.tsx` in the client, as `[filename, source]`. */
 function components(): [string, string][] {
@@ -78,13 +102,24 @@ function components(): [string, string][] {
 }
 
 /**
- * The source with every comment and string literal blanked out, newlines kept.
+ * The source with every comment blanked out, newlines kept.
  *
  * **Without this the check reads its own prose.** The first version flagged
  * `SessionsPanel.tsx` for a `title=` that was in the doc comment explaining
  * that the two badges used to have one — a checker fooled by a file talking
  * about the thing it is being checked for. Blanking rather than deleting so
  * that a reported line number is still the line in the file.
+ *
+ * **Comments only, and string literals deliberately NOT.** The version before
+ * this one blanked strings too, and GPT Sol found what that costs: this is a
+ * character scanner, not a parser, so it cannot tell a JavaScript quote from an
+ * apostrophe in JSX text — and this codebase is full of `session's transcript`.
+ * From that apostrophe to the next one, everything was blanked, and a real
+ * `title=` in between would have vanished. **A guard that goes quiet is worse
+ * than one that cries wolf**, so the trade is now the other way round: a
+ * `title=` inside a string literal WOULD be reported, and that is a loud
+ * one-line diagnosis rather than a silent miss. A real parse (a TypeScript/JSX
+ * AST walk) would beat both and is what to reach for if this ever gets fiddly.
  */
 function codeOnly(source: string): string {
   const out = source.split("");
@@ -101,14 +136,6 @@ function codeOnly(source: string): string {
     } else if (two === "/*") {
       const end = source.indexOf("*/", i + 2);
       const stop = end === -1 ? source.length : end + 2;
-      blankTo(stop);
-      i = stop;
-    } else if (source[i] === '"' || source[i] === "'" || source[i] === "`") {
-      const quote = source[i];
-      let j = i + 1;
-      while (j < source.length && source[j] !== quote) j += source[j] === "\\" ? 2 : 1;
-      const stop = Math.min(j + 1, source.length);
-      i += 1;
       blankTo(stop);
       i = stop;
     } else {
@@ -135,17 +162,62 @@ function owningTag(source: string, index: number): string | null {
 describe("nothing on this page explains itself by hover alone", () => {
   it("has no `title=` attribute on a host element", () => {
     const found: string[] = [];
+    const allowed: Record<string, number> = {};
     for (const [name, raw] of components()) {
-      if (KNOWN_HOVER_ONLY.includes(name)) continue;
       const source = codeOnly(raw);
-      for (const hit of source.matchAll(/\btitle=/g)) {
+      for (const hit of source.matchAll(/\btitle\s*=\s*["'{]/g)) {
         const tag = owningTag(source, hit.index);
         /* A lowercase tag is a DOM element and `title` is the browser's own
            tooltip; a capitalised one is a component of ours and `title` is an
            ordinary prop. */
         if (tag !== null && /^[a-z]/.test(tag)) {
           const line = source.slice(0, hit.index).split("\n").length;
-          found.push(`${name}:${line} — <${tag} title=…>`);
+          if (KNOWN_HOVER_ONLY[name] !== undefined) allowed[name] = (allowed[name] ?? 0) + 1;
+          else found.push(`${name}:${line} — <${tag} title=…>`);
+        }
+      }
+    }
+    expect(found).toEqual([]);
+    /* **The exemption is a COUNT, not a file.** Skipping the whole file let a
+       second hover-only tooltip land in it unnoticed while the stale-entry
+       check below still passed. GPT Sol's P2. */
+    expect(allowed).toEqual(KNOWN_HOVER_ONLY);
+  });
+
+  it("never puts an explanation trigger inside a `<label>`", () => {
+    /* **An accessibility regression introduced by an accessibility
+       improvement**, and it is invisible: everything renders, the card opens,
+       and the control the label was for quietly loses its name.
+
+       `Explain` renders a `<button>`, and a `<button>` is a labelable element.
+       So a `<label>` wrapping `<Explain>Order</Explain>` and then a `<select>`
+       labels the BUTTON — the first labelable descendant — and the select ends
+       up with no accessible name at all. That is what `ListControls` in
+       `SessionsPanel` did for about an hour on 2026-09-09; GPT Sol found it.
+
+       The fix is always the same shape: take the trigger out of the label, and
+       name the control explicitly. So the rule is simply that the two do not
+       nest, which is checkable without a parser and without mounting anything. */
+    const offenders = (source: string): number =>
+      [...source.matchAll(/<label[\s>]/g)].filter((open) => {
+        const close = source.indexOf("</label>", open.index);
+        return close !== -1 && /<Explain[\s>]/.test(source.slice(open.index, close));
+      }).length;
+
+    /* **The check's own check**, because this one is green from the moment it
+       is written and a green test that never could have gone red is not
+       evidence. This is the exact shape the file had before the fix. */
+    expect(offenders('<label>\n<Explain tip={T}>Order</Explain>\n<select /></label>')).toBe(1);
+    expect(offenders('<div>\n<Explain tip={T}>Order</Explain>\n<select /></div>')).toBe(0);
+
+    const found: string[] = [];
+    for (const [name, raw] of components()) {
+      const source = codeOnly(raw);
+      for (const open of [...source.matchAll(/<label[\s>]/g)]) {
+        const close = source.indexOf("</label>", open.index);
+        if (close === -1) continue;
+        if (/<Explain[\s>]/.test(source.slice(open.index, close))) {
+          found.push(`${name}:${source.slice(0, open.index).split("\n").length} — <label> containing <Explain>`);
         }
       }
     }
@@ -160,12 +232,22 @@ describe("nothing on this page explains itself by hover alone", () => {
        it, and each of the three ways of writing prose does not.
        docs/reusable/silent-success.md. */
     const attribute = codeOnly('<span title="hover only">x</span>');
-    expect(/\btitle=/.test(attribute)).toBe(true);
+    expect(/\btitle\s*=\s*["'{]/.test(attribute)).toBe(true);
     expect(owningTag(attribute, attribute.indexOf("title="))).toBe("span");
 
-    for (const prose of ['<b>x</b>\n// it had title="x" once', "<b>x</b>\n/* it had title=\"x\" once */", '<b>x</b>\nconst s = "it had title=\'x\' once";']) {
-      expect(/\btitle=/.test(codeOnly(prose))).toBe(false);
+    // Whitespace before `=` is legal JSX, and the first pattern missed it.
+    expect(/\btitle\s*=\s*["'{]/.test(codeOnly("<span title = 'x'>y</span>"))).toBe(true);
+
+    // Both comment forms are blanked — the false positive this exists for.
+    for (const prose of ['<b>x</b>\n// it had title="x" once', '<b>x</b>\n/* it had title="x" once */']) {
+      expect(/\btitle\s*=\s*["'{]/.test(codeOnly(prose))).toBe(false);
     }
+
+    /* **An apostrophe in JSX text must not blank what follows it.** This is the
+       false NEGATIVE that blanking string literals bought, and it is the reason
+       this function no longer does. */
+    const apostrophe = codeOnly("<p>the session's transcript</p>\n<span title=\"real\">x</span>");
+    expect(/\btitle\s*=\s*["'{]/.test(apostrophe)).toBe(true);
     // And the line numbers a finding is reported at still line up.
     expect(codeOnly("a\n// b\nc").split("\n").length).toBe(3);
   });
@@ -197,9 +279,41 @@ function everyTip(): [string, Tip][] {
     ["UPTIME_TIP", UPTIME_TIP],
     ["OVERSEER_BADGE_TIP", OVERSEER_BADGE_TIP],
     ["GENERATED_TITLE_TIP", GENERATED_TITLE_TIP],
+    ["ANY_BAND_TIP", ANY_BAND_TIP],
+    ["ORDER_TIP", ORDER_TIP],
+    ["HISTORY_TIP", HISTORY_TIP],
+    ["SETTLED_TIP", SETTLED_TIP],
+    /* The two computed ones, on a value each can read. `instantTip`'s other arm
+       — an instant it cannot parse — is covered in fleet-speaker-tips. */
+    ["instantTip", instantTip("2026-09-08T23:40:00.000Z")],
+    ["badgeTip(unknown)", badgeTip("a badge from a newer server")],
+    [
+      "usageWindowTip(value)",
+      usageWindowTip({
+        kind: "value",
+        window: "five_hour",
+        utilizationPercent: 40,
+        resetsAt: "2026-09-09T12:00:00.000Z",
+      }),
+    ],
+    ["usageWindowTip(unknown)", usageWindowTip({ kind: "unknown", window: "five_hour", why: "no resets_at on it" })],
   ];
-  for (const [key, tip] of Object.entries(MODE_TIPS)) out.push([`MODE_TIPS.${key}`, tip]);
-  for (const [key, tip] of Object.entries(STATUS_TIPS)) out.push([`STATUS_TIPS.${key}`, tip]);
+  const maps: [string, Record<string, Tip>][] = [
+    ["MODE_TIPS", MODE_TIPS],
+    ["STATUS_TIPS", STATUS_TIPS],
+    ["HANDLE_TIPS", HANDLE_TIPS],
+    ["BAND_TIPS", BAND_TIPS],
+    ["COUNT_TIPS", COUNT_TIPS],
+    ["CLAIM_TIPS", CLAIM_TIPS],
+    ["SPEAKER_TIPS", SPEAKER_TIPS],
+    ["BADGE_TIPS", BADGE_TIPS],
+    ["PROBLEM_TIPS", PROBLEM_TIPS],
+    ["FACT_TIPS", FACT_TIPS],
+    ["USAGE_TIPS", USAGE_TIPS],
+  ];
+  for (const [name, map] of maps) {
+    for (const [key, tip] of Object.entries(map)) out.push([`${name}.${key}`, tip]);
+  }
   return out;
 }
 
@@ -220,6 +334,18 @@ function contentWords(text: string): Set<string> {
 }
 
 describe("the shape of a card, over every tip that can be reached from a module", () => {
+  it("still reaches the tips it thinks it does", () => {
+    /* **A floor, not an exact count**, because new cards arrive weekly and a
+       test that had to be edited for each of them would be edited without being
+       read. What it catches is the other direction: an import quietly dropped in
+       a refactor, which leaves every assertion below passing over a shorter
+       list. The three rules under it are only worth what this number is. */
+    /* Set just under the real count, so dropping ANY ONE of the imported maps
+       fails. A floor of 60 against ~70 reachable tips did not do that, which
+       GPT Sol pointed out was the stated purpose unmet. */
+    expect(everyTip().length).toBeGreaterThanOrEqual(68);
+  });
+
   it("gives each one a head, a what and a how", () => {
     for (const [name, tip] of everyTip()) {
       expect(`${name}: ${tip.head}`).toMatch(/: \S/);
