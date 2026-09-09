@@ -33,6 +33,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { readCheckpointFeeds } from "../tools/fleet/overseer-status.js";
 import { statePayload } from "../tools/fleet/state.js";
+import type { OverseerRegisterWork, PaneWork } from "../tools/fleet/wire.js";
 import { OverseerStatusCard } from "../tools/fleet/web/src/OverseerPanel";
 import { CLOCK_SKEW_UNMEASURED, parseFleetState, parseOverseer, type OverseerView } from "../tools/fleet/web/src/types";
 import { identityOf, sessionKey, statusKey, type OverseerEvent } from "../tools/overseer/diff.js";
@@ -281,7 +282,14 @@ function card(args: {
   lastGoodSnapshotAt: string | null;
   lastTickAt: string | null;
   sourceStaleAfterMs?: number | null;
-  sessions?: { name: string; tmuxId: string; status: string; since: { kind: "observed" | "lower-bound"; at: string } }[];
+  work?: OverseerRegisterWork;
+  sessions?: {
+    name: string;
+    tmuxId: string;
+    status: string;
+    since: { kind: "observed" | "lower-bound"; at: string };
+    work?: PaneWork | null;
+  }[];
   total?: number;
 }): OverseerView {
   return {
@@ -305,7 +313,8 @@ function card(args: {
       register: {
         kind: "read",
         total: args.total ?? (args.sessions?.length ?? 0),
-        sessions: args.sessions ?? [],
+        work: args.work ?? { kind: "unavailable", why: "this fixture carries no work scan" },
+        sessions: (args.sessions ?? []).map((entry) => ({ ...entry, work: entry.work ?? null })),
       },
     },
   };
@@ -383,7 +392,168 @@ describe("the history, which is history", () => {
   it("says how many it is showing out of how many it holds", () => {
     draw(published({ sessions: entries, total: 36 }), NOW);
     expect(screen()).toContain("36 sessions in the Overseer's register");
-    expect(screen()).toContain("the longest-waiting 2");
+    expect(screen()).toContain("the oldest 2 status records worth showing");
+  });
+
+  const review: PaneWork = {
+    kind: "work",
+    jobs: [
+      {
+        recogniser: "codex-review",
+        label: "GPT review",
+        startedAt: "2026-09-08T12:41:00.000Z",
+        ranForMs: 18 * 60_000,
+        pid: 42_812,
+        depth: 8,
+        command: "codex exec",
+      },
+    ],
+    inspected: 11,
+    paneCommand: "claude",
+    paneStartedAt: "2026-09-08T10:00:00.000Z",
+  };
+
+  const idleReview = {
+    name: "codex-cli-as-subagent-agent",
+    tmuxId: "$2077",
+    status: "idle",
+    since: { kind: "lower-bound" as const, at: "2026-09-08T12:18:00.000Z" },
+    work: review,
+  };
+
+  it("shows an idle pane beside fresh recognised work, using the frozen duration", () => {
+    draw(
+      published({
+        work: { kind: "scanned", scannedAt: "2026-09-08T12:59:00.000Z" },
+        sessions: [idleReview],
+      }),
+      NOW,
+    );
+    expect(screen()).toContain("pane: idle · work: GPT review, running 18m");
+    expect(screen()).toContain("Work checked 1m ago");
+  });
+
+  it("freezes a stale scan's duration and says when it was checked", () => {
+    draw(
+      published({
+        lastGoodSnapshotAt: "2026-09-08T12:00:00.000Z",
+        work: { kind: "scanned", scannedAt: "2026-09-08T12:00:00.000Z" },
+        sessions: [idleReview],
+      }),
+      NOW,
+    );
+    expect(screen()).toContain("pane: idle · work: GPT review — was running 18m when checked 1h ago");
+    expect(screen()).not.toContain("running 1h 18m");
+  });
+
+  it("keeps cannot-tell separate from nothing recognised", () => {
+    draw(
+      published({
+        work: { kind: "scanned", scannedAt: "2026-09-08T12:59:00.000Z" },
+        sessions: [
+          {
+            ...idleReview,
+            status: "working",
+            work: { kind: "cannot-tell", cause: "pane-start-unavailable", why: "the pane start could not be read" },
+          },
+        ],
+      }),
+      NOW,
+    );
+    expect(screen()).toContain("pane: working · work: cannot tell — the pane start could not be read");
+    expect(screen()).not.toContain("work: idle");
+    expect(screen()).not.toContain("nothing recognised");
+  });
+
+  it("says how many processes a no-work reading inspected", () => {
+    draw(
+      published({
+        work: { kind: "scanned", scannedAt: "2026-09-08T12:59:00.000Z" },
+        sessions: [
+          {
+            ...idleReview,
+            status: "working",
+            work: {
+              kind: "none",
+              inspected: 17,
+              paneCommand: "claude",
+              paneStartedAt: "2026-09-08T10:00:00.000Z",
+            },
+          },
+        ],
+      }),
+      NOW,
+    );
+    expect(screen()).toContain("work: nothing recognised under it (17 processes inspected)");
+  });
+
+  it("puts stale negative readings in the past rather than turning them into current claims", () => {
+    draw(
+      published({
+        lastGoodSnapshotAt: "2026-09-08T12:00:00.000Z",
+        work: { kind: "scanned", scannedAt: "2026-09-08T12:00:00.000Z" },
+        sessions: [
+          {
+            ...idleReview,
+            status: "working",
+            work: {
+              kind: "none",
+              inspected: 17,
+              paneCommand: "claude",
+              paneStartedAt: "2026-09-08T10:00:00.000Z",
+            },
+          },
+          {
+            ...idleReview,
+            name: "unreadable-pane",
+            status: "working",
+            work: { kind: "cannot-tell", cause: "pane-missing", why: "the pane process was absent" },
+          },
+        ],
+      }),
+      NOW,
+    );
+    expect(screen()).toContain("work: nothing was recognised under it when checked 1h ago (17 processes inspected)");
+    expect(screen()).toContain("work: could not tell when checked 1h ago — the pane process was absent");
+    expect(screen()).not.toContain("work: nothing recognised under it");
+  });
+
+  it("draws an unavailable scan once above the list and no per-row work", () => {
+    draw(
+      published({
+        work: { kind: "unavailable", why: "the process table could not be read" },
+        sessions: [
+          idleReview,
+          {
+            name: "worktree-schema-move",
+            tmuxId: "$215",
+            status: "needs-you",
+            since: { kind: "lower-bound", at: "2026-09-08T12:30:00.000Z" },
+            work: review,
+          },
+        ],
+      }),
+      NOW,
+    );
+    expect(screen()).toContain("Work evidence is unavailable — the process table could not be read");
+    expect(screen()).not.toContain("pane:");
+    expect(screen()).not.toContain("work: GPT review");
+  });
+
+  it("puts the scan evidence and ordering caveat in the work tooltip", () => {
+    draw(
+      published({
+        work: { kind: "scanned", scannedAt: "2026-09-08T12:59:00.000Z" },
+        sessions: [idleReview],
+      }),
+      NOW,
+    );
+    expect(screen()).toContain("codex exec");
+    expect(screen()).toContain("pid 42812");
+    expect(screen()).toContain("depth 8");
+    expect(screen()).toContain("11 processes inspected");
+    expect(screen()).toContain("2026-09-08T12:59:00.000Z");
+    expect(screen()).toContain("ordered by pane-status age, not by child-work age");
   });
 
   it("leaves the legend off when every row is a reading", () => {
@@ -454,6 +624,106 @@ describe("the five ways there is no reading", () => {
 });
 
 describe("the client's own parse", () => {
+  it("shifts work instants onto the browser clock but leaves the observed duration alone", () => {
+    const view = parseOverseer(
+      {
+        kind: "published",
+        status: {
+          schema: 2,
+          writtenAt: "2026-09-08T12:59:30.000Z",
+          lastGoodSnapshotAt: "2026-09-08T12:59:00.000Z",
+          sourceStaleAfterMs: 300_000,
+          heartbeat: { kind: "reading", pid: 1, instanceId: "i", startedAt: "2026-09-08T12:00:00.000Z", lastTickAt: null, ticks: 3 },
+          scheduler: { kind: "armed", why: "on", at: "2026-09-08T12:00:00.000Z" },
+          register: {
+            kind: "read",
+            total: 1,
+            work: { kind: "scanned", scannedAt: "2026-09-08T12:59:00.000Z" },
+            sessions: [
+              {
+                name: "review",
+                tmuxId: "$1",
+                status: "idle",
+                since: { kind: "observed", at: "2026-09-08T12:30:00.000Z" },
+                work: {
+                  kind: "work",
+                  jobs: [{ recogniser: "codex-review", label: "GPT review", startedAt: "2026-09-08T12:41:00.000Z", ranForMs: 1_080_000, pid: 42_812, depth: 8, command: "codex exec" }],
+                  inspected: 11,
+                  paneCommand: "claude",
+                  paneStartedAt: "2026-09-08T10:00:00.000Z",
+                },
+              },
+            ],
+          },
+        },
+      },
+      { kind: "known", ms: 20 * 60_000 },
+    );
+    if (view.kind !== "published" || view.status.register.kind !== "read") throw new Error("expected register");
+    expect(view.status.register.work).toEqual({ kind: "scanned", scannedAt: "2026-09-08T12:39:00.000Z" });
+    const entry = view.status.register.sessions[0];
+    if (entry?.work?.kind !== "work") throw new Error("expected work");
+    expect(entry.work.paneStartedAt).toBe("2026-09-08T09:40:00.000Z");
+    expect(entry.work.jobs[0]?.startedAt).toBe("2026-09-08T12:21:00.000Z");
+    expect(entry.work.jobs[0]?.ranForMs).toBe(1_080_000);
+  });
+
+  it("degrades malformed work without losing the register", () => {
+    const raw = published({
+      work: { kind: "scanned", scannedAt: "2026-09-08T12:59:00.000Z" },
+      sessions: [
+        {
+          name: "review",
+          tmuxId: "$1",
+          status: "idle",
+          since: { kind: "observed", at: "2026-09-08T12:30:00.000Z" },
+          work: null,
+        },
+      ],
+    });
+    if (raw.kind !== "published" || raw.status.register.kind !== "read") throw new Error("fixture");
+    const payload: unknown = {
+      ...raw,
+      status: {
+        ...raw.status,
+        register: {
+          ...raw.status.register,
+          sessions: raw.status.register.sessions.map((entry) => ({ ...entry, work: { kind: "work", jobs: [] } })),
+        },
+      },
+    };
+    const view = parseOverseer(payload, CLOCK_SKEW_UNMEASURED);
+    if (view.kind !== "published") throw new Error("expected published");
+    expect(view.status.register.kind).toBe("read");
+    if (view.status.register.kind !== "read") return;
+    expect(view.status.register.work.kind).toBe("unavailable");
+    expect(view.status.register.sessions).toHaveLength(1);
+  });
+
+  it("degrades impossible measured work without losing the register", () => {
+    const raw = published({
+      work: { kind: "scanned", scannedAt: "2026-09-08T12:59:00.000Z" },
+      sessions: [
+        {
+          name: "review",
+          tmuxId: "$1",
+          status: "working",
+          since: { kind: "observed", at: "2026-09-08T12:30:00.000Z" },
+          work: {
+            kind: "none",
+            inspected: 1,
+            paneCommand: "claude",
+            paneStartedAt: "2026-09-08T13:00:00.000Z",
+          },
+        },
+      ],
+    });
+    const view = parseOverseer(raw, CLOCK_SKEW_UNMEASURED);
+    if (view.kind !== "published" || view.status.register.kind !== "read") throw new Error("expected register");
+    expect(view.status.register.work.kind).toBe("unavailable");
+    expect(view.status.register.sessions).toHaveLength(1);
+    expect(view.status.register.sessions[0]?.work).toBeNull();
+  });
   it("reads an absent field as `not-asked` and a broken one as `feed-unreadable`", () => {
     /* ABSENT IS SILENCE, PRESENT-AND-WRONG IS A FAULT. Collapsing the second
        into the first would say *nobody asked* about a server that did. */

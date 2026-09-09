@@ -307,18 +307,44 @@ projects, lint clean bar the pre-existing `daemon.ts:602` warning.
 
 ### Stage 3 — the projection and the browser
 
-- [ ] `tools/fleet/overseer-status.ts`: join `json["work"]` onto register entries by key, **only when
+- [x] `tools/fleet/overseer-status.ts`: join `json["work"]` onto register entries by key, **only when
   `sourceCollectedAt` matches `lastGoodSnapshotAt`** (finding 2); keep idle-with-work; restate the
   card's ranking claim (finding 5).
-- [ ] `tools/fleet/wire.ts`: `OverseerSessionHistory.work`, and the register's own work clock.
-- [ ] `tools/fleet/web/src/types.ts`: parse it, on the browser's clock.
-- [ ] `tools/fleet/web/src/OverseerPanel.tsx`: the `pane: idle · work: …` line in **both** its
+- [x] `tools/fleet/wire.ts`: `OverseerSessionHistory.work`, and the register's own work clock.
+- [x] `tools/fleet/web/src/types.ts`: parse it, on the browser's clock.
+- [x] `tools/fleet/web/src/OverseerPanel.tsx`: the `pane: idle · work: …` line in **both** its
   sentences — fresh and stale (finding 1) — and the evidence detail.
-- [ ] `tests/fleet-overseer-status.test.ts` and `tests/fleet-overseer-panel.test.tsx`, including the
+- [x] `tests/fleet-overseer-status.test.ts` and `tests/fleet-overseer-panel.test.tsx`, including the
   acceptance fixture: `pane: idle` beside `work: … running 18m`; the stale sentence; a failed probe
   reading *cannot tell*; and a `sourceCollectedAt` mismatch refusing the join rather than making it.
 
-**Status:** not started.
+**Status:** done, 2026-09-09. The server refuses stale, future-clock and malformed work without
+losing the register; the browser keeps the scan's duration frozen, shifts only instants to its own
+clock, and exposes the process evidence in an `Explain` tooltip. A real-daemon end-to-end test now
+drives an injected captured process table through the checkpoint, projection, browser parser and DOM.
+
+### Round 3: GPT Sol on its own stage 3 code — and what that is worth
+
+**This round is Sol reviewing its own work**, and it says so itself: its usual wrapper could not
+start a nested process in that sandbox, so it dispatched the same brief through the runner it
+already had. That is closer to re-reading your own work than to an independent check: the same model
+that chose a framing is the worst-placed thing to notice the framing was wrong. It found two real
+P1s, so it was not worthless — but it is **not** the cross-family round the house workflow asks for,
+and Round 4 below is. Recorded rather than quietly counted as one.
+
+Two established P1s were found and fixed in the review-capable pass, then accepted unchanged in a
+fixes-only second round ([review artefact](260909h-stage3-code-review-sol.md)):
+
+- A stale positive reading changed tense, but stale `none` and `cannot-tell` readings still sounded
+  current. They now say what *was* observed and when; fresh copy is unchanged.
+- A semantically impossible pane start after the scan clock passed both parsers. Both boundaries now
+  reject pane or job starts after `scannedAt` and depth-zero positive child jobs, while keeping valid
+  bare panes (`inspected: 0`) and unknown job starts.
+
+**Gates after the fixes:** five focused suites green (505 tests), including the real-daemon browser
+join; all four TypeScript projects clean when run directly; fleet production build and diff check
+clean. The `npm run typecheck` wrapper itself could not open tsx's IPC socket in this sandbox, so its
+four underlying projects were run separately.
 
 ### Stage 4 — gates, review, docs
 

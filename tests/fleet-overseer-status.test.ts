@@ -171,6 +171,37 @@ function writeCheckpoint(root: string, over: Record<string, unknown> = {}): void
   writeFileSync(join(root, "current.json"), `${JSON.stringify(checkpointObject(over), null, 2)}\n`, "utf8");
 }
 
+function recognisedWork(over: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    kind: "work",
+    jobs: [
+      {
+        recogniser: "codex-review",
+        label: "GPT review",
+        startedAt: "2026-09-08T12:23:00.000Z",
+        ranForMs: 18 * 60_000,
+        pid: 8123,
+        depth: 8,
+        command: "codex exec",
+      },
+    ],
+    inspected: 12,
+    paneCommand: "claude",
+    paneStartedAt: "2026-09-08T09:00:00.000Z",
+    ...over,
+  };
+}
+
+function workScan(panes: unknown[], over: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    kind: "scan",
+    scannedAt: "2026-09-08T12:41:01.000Z",
+    sourceCollectedAt: "2026-09-08T12:41:00.000Z",
+    panes,
+    ...over,
+  };
+}
+
 /** The projection, or a failure this test would rather see than a `toMatchObject` on undefined. */
 function mustPublish(root: string): Extract<ReturnType<typeof readCheckpointFeeds>["overseer"], { kind: "published" }> {
   const feed = readCheckpointFeeds(root).overseer;
@@ -205,7 +236,7 @@ describe("against a checkpoint the real store wrote", () => {
     });
   });
 
-  it("carries the register's two arms as the fold produced them, longest wait first", () => {
+  it("carries the register's two arms as the fold produced them, oldest status first", () => {
     const root = tempRoot();
     realCheckpoint(root, "2026-09-08T12:41:00.000Z");
 
@@ -408,10 +439,149 @@ describe("the parts that degrade on their own", () => {
     expect(mustPublish(root).status.scheduler.kind).toBe("unreadable");
   });
 
+  it("joins a scan only to the register entry carrying the same session key", () => {
+    const root = tempRoot();
+    writeCheckpoint(root, {
+      register: [
+        { key: "a", tmuxId: "$1", name: "review", lastStatusKey: "idle", statusSince: { kind: "observed", at: "2026-09-08T09:00:00.000Z" } },
+        { key: "b", tmuxId: "$2", name: "working", lastStatusKey: "working", statusSince: { kind: "observed", at: "2026-09-08T12:00:00.000Z" } },
+      ],
+      work: workScan([{ key: "a", work: recognisedWork() }]),
+    });
+
+    const register = mustPublish(root).status.register;
+    expect(register.kind).toBe("read");
+    if (register.kind !== "read") return;
+    expect(register.work).toEqual({ kind: "scanned", scannedAt: "2026-09-08T12:41:01.000Z" });
+    expect(register.sessions.map((session) => [session.name, session.work])).toEqual([
+      ["review", recognisedWork()],
+      ["working", null],
+    ]);
+  });
+
+  it("refuses a scan for a different inventory while leaving the register readable", () => {
+    const root = tempRoot();
+    writeCheckpoint(root, {
+      work: workScan([{ key: "$215 none", work: recognisedWork() }], {
+        sourceCollectedAt: "2026-09-08T12:40:00.000Z",
+      }),
+    });
+
+    const register = mustPublish(root).status.register;
+    expect(register.kind).toBe("read");
+    if (register.kind !== "read") return;
+    expect(register.sessions.map((session) => session.name)).toEqual(["worktree-schema-move"]);
+    expect(register.sessions[0]?.work).toBeNull();
+    expect(register.work.kind).toBe("unavailable");
+    if (register.work.kind === "unavailable") {
+      expect(register.work.why).toContain("2026-09-08T12:40:00.000Z");
+      expect(register.work.why).toContain("2026-09-08T12:41:00.000Z");
+    }
+  });
+
+  it("carries the daemon's own reason for work that has not run and for a failed probe", () => {
+    const notRun = tempRoot();
+    writeCheckpoint(notRun, {
+      work: { kind: "not-yet-run", why: "the work pass has not run yet", at: WRITTEN_AT },
+    });
+    const notRunRegister = mustPublish(notRun).status.register;
+    expect(notRunRegister.kind).toBe("read");
+    if (notRunRegister.kind === "read") {
+      expect(notRunRegister.work).toEqual({ kind: "unavailable", why: "the work pass has not run yet" });
+    }
+
+    const failed = tempRoot();
+    writeCheckpoint(failed, {
+      work: {
+        kind: "probe-failed",
+        why: "ps was denied",
+        attemptedAt: "2026-09-08T12:41:01.000Z",
+        sourceCollectedAt: "2026-09-08T12:41:00.000Z",
+      },
+    });
+    const failedRegister = mustPublish(failed).status.register;
+    expect(failedRegister.kind).toBe("read");
+    if (failedRegister.kind === "read") {
+      expect(failedRegister.work).toEqual({ kind: "unavailable", why: "ps was denied" });
+    }
+  });
+
+  it("treats an absent work field as an old producer, without failing the register", () => {
+    const root = tempRoot();
+    const { work: _dropped, ...withoutWork } = checkpointObject();
+    writeFileSync(join(root, "current.json"), JSON.stringify(withoutWork), "utf8");
+
+    const register = mustPublish(root).status.register;
+    expect(register.kind).toBe("read");
+    if (register.kind === "read") {
+      expect(register.work.kind).toBe("unavailable");
+      if (register.work.kind === "unavailable") expect(register.work.why).toContain("before the Overseer recorded work scans");
+    }
+  });
+
+  it("degrades malformed work rather than the register", () => {
+    const root = tempRoot();
+    writeCheckpoint(root, {
+      work: workScan([{ key: "$215 none", work: recognisedWork({ inspected: "twelve" }) }]),
+    });
+
+    const { status } = mustPublish(root);
+    expect(status.register.kind).toBe("read");
+    expect(status.heartbeat.kind).toBe("reading");
+    if (status.register.kind === "read") {
+      expect(status.register.sessions.map((session) => session.name)).toEqual(["worktree-schema-move"]);
+      expect(status.register.sessions[0]?.work).toBeNull();
+      expect(status.register.work.kind).toBe("unavailable");
+      if (status.register.work.kind === "unavailable") expect(status.register.work.why).toContain("could not be read");
+    }
+  });
+
+  it("degrades a measured pane start after the scan rather than reporting an impossible absence", () => {
+    const root = tempRoot();
+    writeCheckpoint(root, {
+      work: workScan([
+        {
+          key: "$215 none",
+          work: {
+            kind: "none",
+            inspected: 1,
+            paneCommand: "claude",
+            paneStartedAt: "2026-09-08T12:42:00.000Z",
+          },
+        },
+      ]),
+    });
+
+    const register = mustPublish(root).status.register;
+    expect(register.kind).toBe("read");
+    if (register.kind === "read") {
+      expect(register.work.kind).toBe("unavailable");
+      expect(register.sessions.map((session) => session.name)).toEqual(["worktree-schema-move"]);
+      expect(register.sessions[0]?.work).toBeNull();
+    }
+  });
+
+  it("refuses a scan timestamp after the checkpoint that reports it", () => {
+    const root = tempRoot();
+    writeCheckpoint(root, {
+      work: workScan([], { scannedAt: "2026-09-08T12:41:08.000Z" }),
+    });
+
+    const register = mustPublish(root).status.register;
+    expect(register.kind).toBe("read");
+    if (register.kind === "read") {
+      expect(register.work.kind).toBe("unavailable");
+      if (register.work.kind === "unavailable") {
+        expect(register.work.why).toContain("2026-09-08T12:41:08.000Z");
+        expect(register.work.why).toContain(WRITTEN_AT);
+      }
+    }
+  });
+
   it("degrades the whole register on one unreadable entry, and keeps everything else", () => {
     /* One bad ITEM degrades the list, the way the inbox does and unlike the way
-       a bad row is dropped from `rows`: *these are the ones that have waited
-       longest* is a negative claim about everything not shown. */
+       a bad row is dropped from `rows`: *these are the oldest status records
+       worth showing* is a negative claim about everything not shown. */
     const root = tempRoot();
     writeCheckpoint(root, {
       register: [
@@ -444,24 +614,27 @@ describe("the parts that degrade on their own", () => {
     expect(mustPublish(root).status.register.kind).toBe("unreadable");
   });
 
-  it("leaves out the idle sessions and says how many it is holding", () => {
+  it("keeps idle sessions with recognised work, drops idle sessions with none, and counts the whole register", () => {
     const root = tempRoot();
     writeCheckpoint(root, {
       register: [
-        { key: "a", tmuxId: "$1", name: "quiet", lastStatusKey: "idle", statusSince: { kind: "observed", at: "2026-09-08T09:00:00.000Z" } },
-        { key: "b", tmuxId: "$2", name: "busy", lastStatusKey: "working", statusSince: { kind: "observed", at: "2026-09-08T12:00:00.000Z" } },
+        { key: "a", tmuxId: "$1", name: "review", lastStatusKey: "idle", statusSince: { kind: "observed", at: "2026-09-08T09:00:00.000Z" } },
+        { key: "b", tmuxId: "$2", name: "quiet", lastStatusKey: "idle", statusSince: { kind: "observed", at: "2026-09-08T10:00:00.000Z" } },
+        { key: "c", tmuxId: "$3", name: "busy", lastStatusKey: "working", statusSince: { kind: "observed", at: "2026-09-08T12:00:00.000Z" } },
       ],
+      work: workScan([
+        { key: "a", work: recognisedWork() },
+        { key: "b", work: { kind: "none", inspected: 1, paneCommand: "claude", paneStartedAt: "2026-09-08T09:00:00.000Z" } },
+      ]),
     });
     const register = mustPublish(root).status.register;
     expect(register.kind).toBe("read");
     if (register.kind !== "read") return;
-    /* An idle session that has been idle for six hours wants nothing — but it
-       is still in the register, and the total says so. */
-    expect(register.total).toBe(2);
-    expect(register.sessions.map((s) => s.name)).toEqual(["busy"]);
+    expect(register.total).toBe(3);
+    expect(register.sessions.map((s) => s.name)).toEqual(["review", "busy"]);
   });
 
-  it("caps the rows and keeps the longest waits, so the card is not a second session list", () => {
+  it("caps the rows and keeps the oldest status records, so the card is not a second session list", () => {
     const root = tempRoot();
     writeCheckpoint(root, {
       register: Array.from({ length: 12 }, (_, i) => ({
@@ -487,7 +660,7 @@ describe("the parts that degrade on their own", () => {
        other says we cannot tell. */
     const root = tempRoot();
     writeCheckpoint(root, { register: [] });
-    expect(mustPublish(root).status.register).toEqual({ kind: "read", total: 0, sessions: [] });
+    expect(mustPublish(root).status.register).toMatchObject({ kind: "read", total: 0, sessions: [] });
   });
 });
 
