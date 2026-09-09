@@ -18,7 +18,7 @@
  * why at length.
  */
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -430,5 +430,44 @@ describe("makeDeploys, the composition the server mounts", () => {
 
     expect(handled).toBe(true);
     expect(status).toBe(404);
+  });
+});
+
+/**
+ * **The one line no test above can reach.**
+ *
+ * Everything else here drives `makeDeploys`, the function `server.ts` calls —
+ * so there is no second composition to get wrong. What it still cannot prove is
+ * that `server.ts` actually *calls* `route.handle` in its request path, because
+ * importing that file binds port 8787.
+ *
+ * A source check is the cheap guard, the same kind
+ * `tests/fleet-health-wiring.test.ts` and `tests/fleet-web.test.tsx` already
+ * use. It cannot prove the mount works; it can prove somebody deleted it — and
+ * a route mounted nowhere answers 404 on a page that would then say the record
+ * is unreadable, which is a lie about production told by a missing line.
+ */
+describe("server.ts", () => {
+  const source = readFileSync(path.join(REPO_ROOT, "tools", "fleet", "server.ts"), "utf8");
+  /** Lines that are actually code — a commented-out mount is not a mount. */
+  const code = source
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => !l.startsWith("//") && !l.startsWith("*") && !l.startsWith("/*"));
+
+  it("mounts the deploys route in its request path", () => {
+    /* **Asserted against uncommented lines, and that is not fussiness.** The
+       first version of this guard was `expect(source).toContain(…)`, and when I
+       checked it could fail — by commenting the mount out — **it passed**: the
+       needle was still there, inside the comment. A guard that a `//` satisfies
+       is a guard against deletion only, and deletion is not how a line like
+       this actually dies. docs/reusable/silent-success.md. */
+    expect(code).toContain("if (deploys.route.handle(req, res)) return;");
+  });
+
+  it("builds the composition exactly once", () => {
+    /* Two `makeDeploys()` calls would mean two probes with two caches, which is
+       the shape of the bug health-wiring.ts was rearranged around. */
+    expect(code.filter((l) => l.includes("makeDeploys("))).toHaveLength(1);
   });
 });
