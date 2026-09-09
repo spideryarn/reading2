@@ -84,16 +84,23 @@ choice rather than a new one.
   tmux sessions, and nothing alarms. What makes that survivable is that its absence is not silent
   *in the thing it feeds*: the tab goes `unknown` on every commit after the last recorded run and
   names the missing clause, which is the sentence a reader needs anyway.
-- **No singleton, unless we build one.** Two loops would advance the same worktree and put two
-  26-minute suites on the same box. `tools/overseer/lock.ts`, held for the process's life.
+- **A singleton has to stay proved.** Two loops would advance the same worktree and put two
+  26-minute suites on the same box. `tools/overseer/lock.ts` makes the atomic claim, and the loop
+  rechecks the inode and record before each tick and immediately before spawning a check.
 - **Its code is frozen at process start.** So the loop is launched from
   `.claude/worktrees/readiness-checks` — the worktree it keeps at `origin/dev` — which persists after
   the worktree this work was built in is removed, and which a restart brings up to date for free. It
   is not launched from the primary, whose `HEAD` is nobody's in particular, and not from a
   task worktree that is about to be deleted.
-- **An unbounded log.** The check's own output is megabytes, several times a day. The child's output
-  goes to its own file per run under `logs/readiness-runs/`, a bounded number kept; the loop's own
-  log gets one line a tick.
+- **An unbounded tmux log.** The check's own output is megabytes, several times a day. The child's
+  output goes to its own file per run under `logs/readiness-runs/`; after a run completes, pruning
+  keeps the latest twenty. The loop's tmux log gets at least one decision line per tick, plus outcomes
+  and errors.
+- **A red full suite is what this shared box observed, not proof of causation.** A contention flake
+  and a deterministic regression both exit 1, and a generic immediate rerun only fishes for a
+  different answer; there is no cheap honest classifier between them. A nested command killed by a
+  signal is different and cheaply knowable, but `check.ts` currently collapses that status into its
+  own exit 1. Preserving the per-step signal is wider than this runner and remains follow-up work.
 
 **And the systemd follow-up is not one file.** This repo keeps a unit, its `provision.sh` heredoc, an
 activation self-check and a drift test in step, so "hand Greg a unit" was wrong in the first draft —
@@ -116,7 +123,8 @@ harder to see than wrong code.
 - **F3 — `void` was going to be sticky forever** (P1). Stage 2c deliberately mints a terminal `void`
   record for a box refusal, and Stage 2a's "any terminal state → skip" then guaranteed that commit
   could never be answered. The skip is now **outcome-aware**: a settled `pass` or `fail` is sticky, a
-  `void` is retried after a cooldown and a bounded number of times.
+  `void` is retried after spacing attempts, with at most three void outcomes in the rolling 24-hour
+  window. That is a rate bound (the initial attempt plus two retries), not a lifetime retry budget.
 - **F3, second half — a pass has a shelf life.** The loop was going to read seven days of records
   while the tab renders a 24-hour window, so a pass that aged out would leave the tab saying
   `unknown` while the loop said *already answered*. The loop now asks over **the same window the tab
@@ -125,7 +133,8 @@ harder to see than wrong code.
   many words that it has no lock, and `PENDING_TRUST_MS` is a liveness horizon, not a lease: two
   loops both read "nothing running", both pass admission — which `vitest-admission.ts` explicitly
   documents a simultaneous cohort doing — and both spawn a suite. Exclusivity now comes from
-  `tools/overseer/lock.ts`, whose claim is one `O_CREAT|O_EXCL` syscall, held for the loop's life.
+  `tools/overseer/lock.ts`, whose claim is one `O_CREAT|O_EXCL` syscall and whose inode and record
+  are rechecked before work and before spawn.
   The running-record check stays, demoted to what it always was: an observation about *manual* runs.
 - **F5 — Stage 1 turned a synchronous gate into a detached command** (P1, reasoned, and right).
   `tmux-job.ts` returns when tmux has *started*, so a sweep that reads its exit status learns only
@@ -156,7 +165,7 @@ harder to see than wrong code.
 
 ## Stage 1 — § 4 of the sweep records what it runs
 
-**Status: not started.**
+**Status: complete in `ebf64db4`.**
 
 `docs/reusable/get-ready-to-deploy.md` is a pinned document
 (`AUTHORISED_HASHES["get-ready-to-deploy"]` in `tools/overseer/standing-jobs.ts`), so the digest is
@@ -170,7 +179,7 @@ pin exists to make loud.
 - [ ] **And that the step is not over until it is read** (Sol's F5). `tmux-job.ts` returns when tmux
       has *started*, so its exit status says the job launched and nothing about the checks. A sweep
       that took it for a gate would go on to fix, commit and push having verified nothing — which is
-      [silent-success.md](silent-success.md) wearing this feature's clothes. The doc carries the
+      [silent-success.md](../reusable/silent-success.md) wearing this feature's clothes. The doc carries the
       command that waits for `EXIT=`, and says what the two ways of failing look like.
 - [ ] Re-pin `AUTHORISED_HASHES["get-ready-to-deploy"]` with the new digest, in the same commit, with
       a dated comment saying what changed and that the job itself did not.
@@ -182,8 +191,9 @@ Doing this myself: it is a paragraph and a hex string.
 
 ## Stage 2 — the periodic runner
 
-**Status: complete, left uncommitted for Greg's review.** Codex implemented the pure decision, the
-locked tmux-hosted loop and the bounded per-run logs on 2026-09-09. The focused tests were written
+**Status: committed in `0dc023fb`; the code review fixes remain uncommitted for Greg's review.**
+Codex implemented the pure decision, the locked tmux-hosted loop and the eventually-pruned per-run
+logs on 2026-09-09. The focused tests were written
 first: the file went red with exit 1 before the decision module existed, and the 2c outcome assertion
 went red again with exit 1 while exit 1 still had no refusal override. The required focused test and
 project typecheck now pass. The Stage 2c trace held with one wording correction: `decideAdmission`
@@ -228,8 +238,9 @@ burn 26 minutes of a shared box, or record something untrue:
 - **A settled `pass` or `fail` record already exists for this sha, inside the tab's window** → skip.
   This is what makes a *failure sticky*: we do not re-run a red commit hoping for a different answer.
   Two corrections from Sol are in that sentence and neither was in the first draft. **`void` is not
-  settled** (F3) — a run the box killed is not an answer, so it is retried after a cooldown and a
-  bounded number of times, or a single OOM would make that commit permanently unanswerable. And
+  settled** (F3) — a run that reached no verdict is not an answer. Attempts are spaced, with at most
+  three void outcomes per rolling tab window (the initial attempt plus two retries); the budget
+  replenishes when an old void ages out, so this is not a lifetime cap. And
   **the window is the tab's, not the store's retention** (F3 again): asking over seven days while the
   tab renders twenty-four hours would leave the loop calling a commit answered while the page says
   `unknown`.
@@ -237,7 +248,8 @@ burn 26 minutes of a shared box, or record something untrue:
   possibly a person. **This is an observation, not a lease** (F4). `readiness-store.ts` has no lock
   and `PENDING_TRUST_MS` is a liveness horizon; exclusivity between loops comes from the lock in
   Stage 2b and from nothing else.
-- **`decideAdmission` does not say `admit`** → skip. Same function `vitest.config.ts` calls, so there
+- **`decideAdmission` says `refuse`** → skip. `not-applicable` remains permission on a machine that
+  has not opted into the Linux policy. This is the same function `vitest.config.ts` calls, so there
   is exactly one home for the memory arithmetic and no threshold to drift.
 - **`computeVerdict` is not `ok`** → skip. `tools/fleet/health.ts`'s own verdict, not a number
   invented here.
@@ -262,8 +274,9 @@ they are the ones that were actually load-bearing on 2026-09-08.
       about something newer than the last time somebody happened to fetch.
 - [x] Tick every 10 minutes; a run takes ~26, so the loop is idle most of the time and this only
       decides how soon a new dev head is noticed.
-- [x] One line per tick to stdout — the sha, the decision, the reason — so the tmux log is a legible
-      record of why nothing ran, which is the state it will be in most of the time.
+- [x] At least one decision line per tick to stdout — the sha, the decision, the reason — plus an
+      outcome after a run and any preparation error, so the tmux log is a legible record of why
+      nothing ran, which is the state it will be in most of the time.
 - [x] The check is run by spawning `scripts/readiness-run.ts check` **in the runner worktree**, which
       is what makes the record about that tree: `readiness-run.ts` stamps the checkout it belongs to,
       not `cwd`.
@@ -276,9 +289,10 @@ so `outcomeFromExit` records **`fail`** — and the tab would then say dev is re
 busy. The refusal even prints `NO TESTS RAN AND NOTHING WAS VERIFIED`, which is the sentence
 `readiness-run.ts` most needs to read and currently does not.
 
-- [x] `readiness-parse.ts` learns that banner; a run carrying it is recorded `void` with the box's own
-      words as `why`, whatever its exit code. Red first, against a captured fixture of the real
-      refusal text.
+- [x] `readiness-parse.ts` learns an authenticated form of that banner: a random per-run token is
+      consumed by `vitest.config.ts` before workers inherit it, so an ordinary test or fixture cannot
+      turn its own failure into `void` by printing the sentence. For a full `check`, only the test row
+      becomes `did-not-run`; a real earlier gate failure remains `fail`. Red first against both paths.
 - [x] Named as the one change outside "what a record needs" that this work makes, because a record
       that says *the tests failed* when no test ran is the same lie the whole feature exists to
       refuse.

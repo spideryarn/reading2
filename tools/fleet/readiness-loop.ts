@@ -26,10 +26,11 @@ export const TICK_INTERVAL_MS = 10 * 60 * 1000;
 export const VOID_RETRY_COOLDOWN_MS = 30 * 60 * 1000;
 
 /**
- * Three kills in the tab's window are evidence about the box rather than bad
- * luck. Bound the retries there instead of burning another 26 minutes forever.
+ * At most three attempts may end without a verdict in one rolling tab window:
+ * the initial attempt plus two retries. This is a rate bound, not a lifetime
+ * bound; one slot returns when the oldest void ages out of the 24-hour window.
  */
-export const MAX_VOID_RETRIES = 3;
+export const MAX_VOIDS_PER_WINDOW = 3;
 
 export type TickDecision =
   | { kind: "run"; sha: string }
@@ -40,6 +41,37 @@ export type AdmissionReadings = Parameters<typeof decideAdmission>[0];
 export type HealthReadings = Pick<HealthReport, "load" | "memory" | "swap" | "disk" | "swapActivity">;
 
 export type TickHistory = Pick<StoreRead, "readings" | "unreadable">;
+
+export type PreparationNeeds = {
+  dependencies: boolean;
+  migrations: boolean;
+  fleetClient: boolean;
+};
+
+/**
+ * Preparation is state convergence, not an edge triggered by one merge.
+ * Starting unprepared makes a restarted loop repair an install or migration
+ * that the previous process was killed halfway through.
+ */
+export function initialPreparationNeeds(): PreparationNeeds {
+  return { dependencies: true, migrations: true, fleetClient: true };
+}
+
+/** Changes that make already-completed preparation stale. */
+export function preparationAfterChanges(
+  current: PreparationNeeds,
+  changedPaths: readonly string[],
+): PreparationNeeds {
+  return {
+    dependencies: current.dependencies || changedPaths.includes("package-lock.json"),
+    migrations: current.migrations || changedPaths.some((name) => name.startsWith("drizzle/")),
+    fleetClient:
+      current.fleetClient ||
+      changedPaths.includes("package-lock.json") ||
+      changedPaths.includes("vite.fleet.config.ts") ||
+      changedPaths.some((name) => name.startsWith("tools/fleet/web/")),
+  };
+}
 
 export type TickInput = {
   /** Supplied by the caller so this decision takes no clock of its own. */
@@ -136,10 +168,22 @@ export function decideTick(input: TickInput): TickDecision {
   }
 
   const relevant = input.history.readings.filter((reading) => isFullWrapperCheck(reading, sha));
-  const settled = relevant
-    .filter((reading) => reading.state === "pass" || reading.state === "fail")
-    .sort((a, b) => b.atMs - a.atMs)[0];
-  if (settled !== undefined) {
+  const failed = relevant.filter((reading) => reading.state === "fail").sort((a, b) => b.atMs - a.atMs)[0];
+  const passed = relevant.filter((reading) => reading.state === "pass").sort((a, b) => b.atMs - a.atMs)[0];
+  const settled = failed ?? passed;
+  /* A pass is settled only until a later attempt reaches no verdict. The
+     verdict above applies that rule too; repeating it here matters when an
+     unreadable record has conservatively forced the verdict to unknown. A
+     failure is ordinarily caught by the verdict first, but this arm also
+     keeps an outer failure sticky when its summary table was incomplete. */
+  const laterUnsettled =
+    settled === undefined || settled.state === "fail"
+      ? undefined
+      : relevant.find(
+          (reading) =>
+            (reading.state === "running" || reading.state === "void") && reading.atMs >= settled.atMs,
+        );
+  if (settled !== undefined && laterUnsettled === undefined) {
     return {
       kind: "skip",
       why:
@@ -160,12 +204,12 @@ export function decideTick(input: TickInput): TickDecision {
   }
 
   const voids = relevant.filter((reading) => reading.state === "void").sort((a, b) => b.atMs - a.atMs);
-  if (voids.length >= MAX_VOID_RETRIES) {
+  if (voids.length >= MAX_VOIDS_PER_WINDOW) {
     return {
       kind: "skip",
       why:
-        `The box has killed this commit's full check ${voids.length} times in the Readiness tab's ` +
-        `${WINDOW_HOURS}-hour window. Stop retrying ${shortSha(sha)} and inspect the box.`,
+        `This commit's full check ended without a verdict ${voids.length} times in the Readiness tab's ` +
+        `${WINDOW_HOURS}-hour window. Stop for this window and inspect the recorded reasons.`,
     };
   }
   const newestVoid = voids[0];
@@ -173,8 +217,8 @@ export function decideTick(input: TickInput): TickDecision {
     return {
       kind: "skip",
       why:
-        `The box killed the latest full check for ${shortSha(sha)} less than ` +
-        `${VOID_RETRY_COOLDOWN_MS / 60_000} minutes ago. Wait for that cooldown before asking the same box again.`,
+        `The latest full check for ${shortSha(sha)} ended without a verdict less than ` +
+        `${VOID_RETRY_COOLDOWN_MS / 60_000} minutes after its recorded instant. Wait for that spacing before trying again.`,
     };
   }
 

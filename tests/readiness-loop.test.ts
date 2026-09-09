@@ -3,16 +3,21 @@
  * /proc. Every input is a reading the impure loop can take; this file only asks
  * what those readings mean.
  */
-import { describe, expect, it } from "vitest";
+import { EventEmitter } from "node:events";
+
+import { describe, expect, it, vi } from "vitest";
 
 import {
   decideAdmission,
   FIXED_RUN_PEAK_BYTES,
+  markReadinessAdmissionRefusal,
   PER_WORKER_PEAK_BYTES,
 } from "../vitest-admission.js";
 import {
   decideTick,
-  MAX_VOID_RETRIES,
+  initialPreparationNeeds,
+  MAX_VOIDS_PER_WINDOW,
+  preparationAfterChanges,
   TICK_INTERVAL_MS,
   VOID_RETRY_COOLDOWN_MS,
   type TickInput,
@@ -25,11 +30,20 @@ import {
 import {
   outcomeFromExit,
   resolveRecord,
+  type Counts,
   type FinishedRecord,
   type Reading,
   type StartedRecord,
   type TreeStamp,
 } from "../tools/fleet/readiness.js";
+import {
+  CHECK_TIMEOUT_MS,
+  localDatabaseEnv,
+  TERMINATION_GRACE_MS,
+  requireHeldLoopLock,
+  waitForReadinessChild,
+  worktreeAddArgs,
+} from "../scripts/readiness-loop.js";
 
 const NOW_MS = Date.parse("2026-09-09T18:00:00.000Z");
 const SHA_A = "3333333333333333333333333333333333333333";
@@ -197,15 +211,35 @@ describe("decideTick", () => {
     const recent = reading(finished({ at: new Date(NOW_MS - VOID_RETRY_COOLDOWN_MS + 1).toISOString() }));
     expect(decideTick(input({ history: { readings: [recent], unreadable: [] } }))).toEqual({
       kind: "skip",
-      why: "The box killed the latest full check for 333333333333 less than 30 minutes ago. Wait for that cooldown before asking the same box again.",
+      why: "The latest full check for 333333333333 ended without a verdict less than 30 minutes after its recorded instant. Wait for that spacing before trying again.",
     });
 
     const cooled = reading(finished({ at: new Date(NOW_MS - VOID_RETRY_COOLDOWN_MS).toISOString() }));
     expect(decideTick(input({ history: { readings: [cooled], unreadable: [] } }))).toEqual({ kind: "run", sha: SHA_A });
   });
 
-  it("stops after three voids for one sha and says the box killed it three times", () => {
-    const voids = Array.from({ length: MAX_VOID_RETRIES }, (_, index) =>
+  it("retries a newer void after cooldown even when an older pass exists", () => {
+    const passed = reading(finished({
+      runId: "loopolderpass",
+      startedAt: new Date(NOW_MS - 3 * 60 * 60_000).toISOString(),
+      at: new Date(NOW_MS - 2 * 60 * 60_000).toISOString(),
+      outcome: "pass",
+      exit: 0,
+    }));
+    const killedLater = reading(finished({
+      runId: "loopnewervoid",
+      startedAt: new Date(NOW_MS - 90 * 60_000).toISOString(),
+      at: new Date(NOW_MS - 60 * 60_000).toISOString(),
+    }));
+
+    expect(decideTick(input({ history: { readings: [passed, killedLater], unreadable: [] } }))).toEqual({
+      kind: "run",
+      sha: SHA_A,
+    });
+  });
+
+  it("stops after three voids for one sha in the rolling window", () => {
+    const voids = Array.from({ length: MAX_VOIDS_PER_WINDOW }, (_, index) =>
       reading(finished({
         runId: `loopvoid0${index}`,
         startedAt: new Date(NOW_MS - (index + 2) * 60 * 60_000).toISOString(),
@@ -214,7 +248,7 @@ describe("decideTick", () => {
     );
     expect(decideTick(input({ history: { readings: voids, unreadable: [] } }))).toEqual({
       kind: "skip",
-      why: "The box has killed this commit's full check 3 times in the Readiness tab's 24-hour window. Stop retrying 333333333333 and inspect the box.",
+      why: "This commit's full check ended without a verdict 3 times in the Readiness tab's 24-hour window. Stop for this window and inspect the recorded reasons.",
     });
   });
 
@@ -260,6 +294,100 @@ describe("decideTick", () => {
   });
 });
 
+describe("runner preparation follows the checked-out state", () => {
+  it("starts unprepared so a restart repairs an interrupted install or migration", () => {
+    expect(initialPreparationNeeds()).toEqual({ dependencies: true, migrations: true, fleetClient: true });
+  });
+
+  it("recognises this repo's drizzle migrations, including metadata", () => {
+    expect(preparationAfterChanges(
+      { dependencies: false, migrations: false, fleetClient: false },
+      ["drizzle/0053_new_table.sql", "drizzle/meta/_journal.json"],
+    )).toEqual({ dependencies: false, migrations: true, fleetClient: false });
+  });
+
+  it("marks dependency preparation pending when the lockfile changes", () => {
+    expect(preparationAfterChanges(
+      { dependencies: false, migrations: false, fleetClient: false },
+      ["package-lock.json"],
+    )).toEqual({ dependencies: true, migrations: false, fleetClient: true });
+  });
+});
+
+describe("the unattended process boundary", () => {
+  it("never resets the dedicated branch while recreating its worktree", () => {
+    expect(worktreeAddArgs("/repo/runner", false)).toEqual([
+      "worktree", "add", "-b", "readiness-checks", "/repo/runner", "origin/dev",
+    ]);
+    expect(worktreeAddArgs("/repo/runner", true)).toEqual([
+      "worktree", "add", "/repo/runner", "readiness-checks",
+    ]);
+    expect(worktreeAddArgs("/repo/runner", true)).not.toContain("-B");
+  });
+
+  it("pins database commands to the runner's local connection despite remote shell values", () => {
+    expect(localDatabaseEnv({
+      DATABASE_URL: "postgres://production.invalid/db",
+      DB_MIGRATE_ALLOW_REMOTE: "yes",
+      KEEP_ME: "yes",
+      SPIDERYARN_ENV_PINNED: "SUPABASE_URL",
+    }, "DATABASE_URL=postgres://postgres:postgres@127.0.0.1:54362/postgres\n")).toEqual({
+      DATABASE_URL: "postgres://postgres:postgres@127.0.0.1:54362/postgres",
+      DB_MIGRATE_ALLOW_REMOTE: "no",
+      KEEP_ME: "yes",
+      SPIDERYARN_ENV_PINNED: "SUPABASE_URL,DATABASE_URL,DB_MIGRATE_ALLOW_REMOTE",
+    });
+    expect(() => localDatabaseEnv(
+      {},
+      "DATABASE_URL=postgres://production.invalid/db\nDB_MIGRATE_ALLOW_REMOTE=yes\n",
+    )).toThrow(/does not name the local database/);
+  });
+
+  it("refuses to keep working after the lifetime lock is replaced", () => {
+    const held = { holder: { pid: 1, instanceId: "ours", hostname: "box", startedAt: new Date().toISOString() }, fd: 3 };
+    expect(() => requireHeldLoopLock(held, "/tmp/readiness-loop.lock", () => false)).toThrow(
+      /no longer owns.*readiness-loop\.lock/,
+    );
+  });
+
+  it("terminates a hung child process group and escalates after a grace period", async () => {
+    vi.useFakeTimers();
+    try {
+      const child = Object.assign(new EventEmitter(), { pid: 1234 });
+      const signal = vi.fn();
+      const waiting = waitForReadinessChild(
+        child as never,
+        CHECK_TIMEOUT_MS,
+        TERMINATION_GRACE_MS,
+        signal,
+      );
+
+      await vi.advanceTimersByTimeAsync(CHECK_TIMEOUT_MS);
+      expect(signal).toHaveBeenCalledWith(child, "SIGTERM");
+      child.emit("close", null, "SIGTERM");
+      await vi.advanceTimersByTimeAsync(TERMINATION_GRACE_MS);
+      expect(signal).toHaveBeenLastCalledWith(child, "SIGKILL");
+      await expect(waiting).resolves.toMatchObject({ timedOut: true, signal: "SIGTERM" });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("returns immediately for an ordinary child completion without signalling it", async () => {
+    vi.useFakeTimers();
+    try {
+      const child = Object.assign(new EventEmitter(), { pid: 1234 });
+      const signal = vi.fn();
+      const waiting = waitForReadinessChild(child as never, 1000, 100, signal);
+      child.emit("close", 0, null);
+      await expect(waiting).resolves.toEqual({ code: 0, signal: null, error: null, timedOut: false });
+      expect(signal).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 describe("a Vitest admission refusal is not a red tree", () => {
   function realRefusal(): string {
     const decision = decideAdmission({
@@ -278,27 +406,72 @@ describe("a Vitest admission refusal is not a red tree", () => {
 
   it("extracts the box's own refusal sentence and ignores an ordinary failure", () => {
     const message = realRefusal();
-    const why = parseAdmissionRefusal(message);
+    const token = "0123456789abcdef0123456789abcdef";
+    const authenticated = markReadinessAdmissionRefusal(message, token);
+    const why = parseAdmissionRefusal(authenticated, token);
     expect(why).toBe(
       "NO TESTS RAN AND NOTHING WAS VERIFIED — this is resource pressure, not a test failure.",
     );
-    expect(parseAdmissionRefusal("A gate failed. Fix it and run the suite again.")).toBeNull();
+    expect(parseAdmissionRefusal("A gate failed. Fix it and run the suite again.", token)).toBeNull();
+    expect(parseAdmissionRefusal(message, token)).toBeNull();
+    expect(parseAdmissionRefusal(
+      `NO TESTS RAN AND NOTHING WAS VERIFIED — fixture text, not a real refusal.\nREADINESS_ADMISSION_REFUSAL=wrong`,
+      token,
+    )).toBeNull();
 
     const exitOne = outcomeFromExit(1);
-    expect(exitOne.outcome).toBe("fail");
-    expect(outcomeAfterAdmissionRefusal(exitOne, why)).toEqual({
+    expect(outcomeAfterAdmissionRefusal(exitOne, why, "test", { kind: "vitest", files: null, tests: null })).toEqual({
       outcome: "void",
       why: "NO TESTS RAN AND NOTHING WAS VERIFIED — this is resource pressure, not a test failure.",
+      counts: { kind: "vitest", files: null, tests: null },
     });
+  });
+
+  it("preserves an earlier gate failure when Vitest later refuses admission", () => {
+    const counts: Counts = {
+      kind: "check" as const,
+      steps: [
+        { name: "typecheck", gate: "gate", verdict: "failed", findings: null },
+        { name: "build", gate: "unknown", verdict: "clean", findings: null },
+        { name: "test", gate: "gate", verdict: "failed", findings: null },
+      ],
+    };
+    expect(outcomeAfterAdmissionRefusal(
+      outcomeFromExit(1),
+      "NO TESTS RAN AND NOTHING WAS VERIFIED — this is resource pressure, not a test failure.",
+      "check",
+      counts,
+    )).toEqual({
+      outcome: "fail",
+      why: null,
+      counts: {
+        kind: "check",
+        steps: [
+          { name: "typecheck", gate: "gate", verdict: "failed", findings: null },
+          { name: "build", gate: "unknown", verdict: "clean", findings: null },
+          { name: "test", gate: "gate", verdict: "did-not-run", findings: null },
+        ],
+      },
+    });
+  });
+
+  it("keeps a full check failed when its summary cannot prove the other gates clean", () => {
+    expect(outcomeAfterAdmissionRefusal(
+      outcomeFromExit(1),
+      "NO TESTS RAN AND NOTHING WAS VERIFIED — this is resource pressure, not a test failure.",
+      "check",
+      { kind: "none" },
+    )).toEqual({ outcome: "fail", why: null, counts: { kind: "none" } });
   });
 
   it("finds a refusal split across chunks in the discarded middle of a long check log", () => {
     const banner = realRefusal().split("\n").find((line) => line.includes("NO TESTS RAN"));
     if (banner === undefined) throw new Error("the admission fixture has no refusal banner");
-    const detector = makeAdmissionRefusalCapture();
+    const token = "fedcba9876543210fedcba9876543210";
+    const detector = makeAdmissionRefusalCapture(token);
     detector.push("x".repeat(80_000));
     detector.push(`\n  ${banner.slice(0, 24)}`);
-    detector.push(`${banner.slice(24)}\n${"y".repeat(80_000)}`);
+    detector.push(`${banner.slice(24)}\nREADINESS_ADMISSION_REFUSAL=${token}\n${"y".repeat(80_000)}`);
     expect(detector.why()).toBe(banner.trim());
   });
 });

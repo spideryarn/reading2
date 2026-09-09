@@ -19,12 +19,15 @@ import {
   existsSync,
   mkdirSync,
   openSync,
+  readFileSync,
   readdirSync,
   unlinkSync,
 } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { isLocalDatabaseUrl } from "../src/db/ssl.js";
+import { parseEnvFile, pinnedNames } from "../src/env.js";
 import {
   readMemorySnapshot,
   readReserveBytes,
@@ -32,14 +35,17 @@ import {
 } from "../vitest-admission.js";
 import {
   decideTick,
+  initialPreparationNeeds,
+  preparationAfterChanges,
   TICK_INTERVAL_MS,
+  type PreparationNeeds,
   type TickDecision,
 } from "../tools/fleet/readiness-loop.js";
 import { primaryCheckout, snapshotDev, stampTree, type DevSnapshot } from "../tools/fleet/readiness-git.js";
 import { openReadinessStore, readinessDirFromEnv, type ReadinessStore } from "../tools/fleet/readiness-store.js";
 import { WINDOW_HOURS } from "../tools/fleet/readiness-wiring.js";
 import { collectHealth } from "../tools/fleet/health.js";
-import { describeLockRefusal, releaseLock, takeLock, type HeldLock } from "../tools/overseer/lock.js";
+import { describeLockRefusal, releaseLock, stillOurs, takeLock, type HeldLock } from "../tools/overseer/lock.js";
 
 const RUNNER_WORKTREE = path.join(".claude", "worktrees", "readiness-checks");
 const RUNNER_BRANCH = "readiness-checks";
@@ -47,6 +53,9 @@ const LOOP_LOCK = "readiness-loop.lock";
 const RUN_LOG_DIR = path.join("logs", "readiness-runs");
 const RUN_LOGS_KEPT = 20;
 const COMMAND_TIMEOUT_MS = 10 * 60 * 1000;
+/** Four times the longest observed full check, then a short graceful shutdown. */
+export const CHECK_TIMEOUT_MS = 2 * 60 * 60 * 1000;
+export const TERMINATION_GRACE_MS = 10 * 1000;
 
 type CommandResult = {
   status: number | null;
@@ -56,17 +65,117 @@ type CommandResult = {
   error: Error | null;
 };
 
+type ReadinessChildResult = {
+  code: number | null;
+  signal: NodeJS.Signals | null;
+  error: Error | null;
+  timedOut: boolean;
+};
+
+class LostLoopLockError extends Error {}
+
+export function requireHeldLoopLock(
+  lock: HeldLock,
+  lockPath: string,
+  isStillHeld: (lock: HeldLock, path: string) => boolean = stillOurs,
+): void {
+  if (!isStillHeld(lock, lockPath)) {
+    throw new LostLoopLockError(`this process no longer owns ${lockPath}; stopping before two loops can run together`);
+  }
+}
+
+function signalReadinessChild(child: ChildProcess, signal: NodeJS.Signals): void {
+  try {
+    if (process.platform !== "win32" && child.pid !== undefined) process.kill(-child.pid, signal);
+    else child.kill(signal);
+  } catch (cause) {
+    if ((cause as NodeJS.ErrnoException).code !== "ESRCH") throw cause;
+  }
+}
+
+/**
+ * Wait for one check without letting a hung subprocess hold the loop forever.
+ * On Unix the child is a process-group leader, so both signals reach npm,
+ * check.ts, Vitest and their workers rather than killing only the wrapper.
+ */
+export function waitForReadinessChild(
+  child: ChildProcess,
+  timeoutMs = CHECK_TIMEOUT_MS,
+  graceMs = TERMINATION_GRACE_MS,
+  signal: (child: ChildProcess, signal: NodeJS.Signals) => void = signalReadinessChild,
+): Promise<ReadinessChildResult> {
+  return new Promise((resolve) => {
+    let spawnError: Error | null = null;
+    let closed: Omit<ReadinessChildResult, "timedOut"> | null = null;
+    let done = false;
+    let timedOut = false;
+    const finish = (result: ReadinessChildResult): void => {
+      if (done) return;
+      done = true;
+      resolve(result);
+    };
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      signal(child, "SIGTERM");
+      setTimeout(() => {
+        signal(child, "SIGKILL");
+        finish(closed === null
+          ? { code: null, signal: null, error: new Error(`readiness check exceeded ${elapsed(timeoutMs)}`), timedOut: true }
+          : { ...closed, timedOut: true });
+      }, graceMs);
+    }, timeoutMs);
+
+    child.once("error", (error) => {
+      spawnError = error;
+    });
+    child.once("close", (code, childSignal) => {
+      closed = { code, signal: childSignal, error: spawnError };
+      if (!timedOut) {
+        clearTimeout(timeout);
+        finish({ ...closed, timedOut: false });
+      }
+      /* After a timeout, deliberately wait through the grace timer so SIGKILL
+         still reaches descendants after the group leader closes. */
+    });
+  });
+}
+
 function repoRoot(): string {
   return path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 }
 
-function run(cwd: string, command: string, args: readonly string[], timeout = COMMAND_TIMEOUT_MS): CommandResult {
+export function localDatabaseEnv(source: NodeJS.ProcessEnv, envLocalText: string): NodeJS.ProcessEnv {
+  const localUrl = parseEnvFile(envLocalText).DATABASE_URL;
+  if (localUrl === undefined || !isLocalDatabaseUrl(localUrl)) {
+    throw new Error("the runner's .env.local does not name the local database; refusing unattended database work");
+  }
+  const env = { ...source };
+  env.DATABASE_URL = localUrl;
+  env.DB_MIGRATE_ALLOW_REMOTE = "no";
+  const pinned = pinnedNames(source.SPIDERYARN_ENV_PINNED);
+  pinned.add("DATABASE_URL");
+  pinned.add("DB_MIGRATE_ALLOW_REMOTE");
+  env.SPIDERYARN_ENV_PINNED = [...pinned].join(",");
+  return env;
+}
+
+function runnerLocalDatabaseEnv(runner: string): NodeJS.ProcessEnv {
+  return localDatabaseEnv(process.env, readFileSync(path.join(runner, ".env.local"), "utf8"));
+}
+
+function run(
+  cwd: string,
+  command: string,
+  args: readonly string[],
+  timeout = COMMAND_TIMEOUT_MS,
+  sourceEnv: NodeJS.ProcessEnv = process.env,
+): CommandResult {
   const result = spawnSync(command, [...args], {
     cwd,
     encoding: "utf8",
     timeout,
     maxBuffer: 32 * 1024 * 1024,
-    env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+    env: { ...sourceEnv, GIT_TERMINAL_PROMPT: "0" },
     stdio: ["ignore", "pipe", "pipe"],
   });
   return {
@@ -94,8 +203,14 @@ function usefulOutput(result: CommandResult): string {
   return `exit ${result.status ?? "unknown"}`;
 }
 
-function requireCommand(cwd: string, command: string, args: readonly string[], label: string): CommandResult {
-  const result = run(cwd, command, args);
+function requireCommand(
+  cwd: string,
+  command: string,
+  args: readonly string[],
+  label: string,
+  sourceEnv: NodeJS.ProcessEnv = process.env,
+): CommandResult {
+  const result = run(cwd, command, args, COMMAND_TIMEOUT_MS, sourceEnv);
   if (!commandSucceeded(result)) throw new Error(`${label} failed: ${usefulOutput(result)}`);
   return result;
 }
@@ -122,6 +237,20 @@ function runSetup(runner: string): CommandResult {
   return run(runner, "npx", ["tsx", "scripts/worktree-setup.ts"]);
 }
 
+export function worktreeAddArgs(runner: string, branchExists: boolean): string[] {
+  return branchExists
+    ? ["worktree", "add", runner, RUNNER_BRANCH]
+    : ["worktree", "add", "-b", RUNNER_BRANCH, runner, "origin/dev"];
+}
+
+function runnerBranchExists(primary: string): boolean {
+  const result = run(primary, "git", ["show-ref", "--verify", "--quiet", `refs/heads/${RUNNER_BRANCH}`]);
+  if (result.error !== null || result.signal !== null || (result.status !== 0 && result.status !== 1)) {
+    throw new Error(`checking for the runner branch failed: ${usefulOutput(result)}`);
+  }
+  return result.status === 0;
+}
+
 function ensureRunnerWorktree(primary: string, nowIso: string): string {
   const runner = path.join(primary, RUNNER_WORKTREE);
   if (existsSync(runner)) {
@@ -131,17 +260,22 @@ function ensureRunnerWorktree(primary: string, nowIso: string): string {
     return runner;
   }
 
-  /* Creation starts from the ref we just fetched. setup has its own ordinary
-     merge, so equality and cleanliness are checked afterwards rather than
-     inferred from either command's success. */
+  /* A new branch starts from the ref just fetched; an existing one is attached
+     without `-B`, whose reset semantics would violate the fast-forward-only
+     contract. setup has its own ordinary merge, so we make that a no-op below
+     and still verify equality and cleanliness afterwards. */
   requireCommand(primary, "git", ["fetch", "origin", "dev"], "fetch before creating the runner worktree");
   mkdirSync(path.dirname(runner), { recursive: true });
   requireCommand(
     primary,
     "git",
-    ["worktree", "add", "-B", RUNNER_BRANCH, runner, "origin/dev"],
+    worktreeAddArgs(runner, runnerBranchExists(primary)),
     "creating the runner worktree",
   );
+  /* An existing dedicated branch may lag origin/dev. Advance it before setup,
+     whose reusable freshener permits an ordinary merge; making that merge a
+     no-op is how this runner keeps its stricter fast-forward-only contract. */
+  requireCommand(runner, "git", ["merge", "--ff-only", "origin/dev"], "advancing the recreated runner branch");
 
   let setup = runSetup(runner);
   if (!commandSucceeded(setup)) throw new Error(`runner worktree setup failed: ${usefulOutput(setup)}`);
@@ -168,7 +302,7 @@ function changedPaths(runner: string, before: string, after: string): Set<string
   const diff = requireCommand(
     runner,
     "git",
-    ["diff", "--name-only", before, after, "--", "package-lock.json", "supabase/migrations"],
+    ["diff", "--name-only", before, after, "--", "package-lock.json", "drizzle", "tools/fleet/web", "vite.fleet.config.ts"],
     "reading the files changed by the fast-forward",
   );
   return new Set(diff.stdout.split("\n").map((line) => line.trim()).filter((line) => line !== ""));
@@ -194,17 +328,19 @@ function changedPaths(runner: string, before: string, after: string): Set<string
  * it is deliberately not silent about being one.
  *
  * The output is gitignored (`dist/`, unanchored), so it does not dirty the tree
- * the record is about — verified, not assumed.
+ * the record is about — verified, not assumed. A failed build aborts this tick
+ * and remains pending for the next one; running the known-broken prerequisite
+ * into the suite would manufacture the permanent false red this exists to
+ * prevent.
  */
-function ensureFleetClient(runner: string): void {
-  if (existsSync(path.join(runner, "tools", "fleet", "web", "dist"))) return;
+function ensureFleetClient(runner: string, rebuild: boolean): void {
+  const entry = path.join(runner, "tools", "fleet", "web", "dist", "index.html");
+  if (!rebuild && existsSync(entry)) return;
   const built = run(runner, "npm", ["run", "build:fleet"]);
   if (!commandSucceeded(built)) {
-    /* Not fatal. If it stays missing the check records a red naming that test,
-       which is worse than this line but is still an honest record of what the
-       box did — and a throw here would stop the loop for every later commit. */
-    console.log(`${new Date().toISOString()} could not build the fleet client: ${usefulOutput(built)}`);
+    throw new Error(`building the fleet client prerequisite failed: ${usefulOutput(built)}`);
   }
+  if (!existsSync(entry)) throw new Error(`build:fleet exited 0 but did not create ${entry}`);
 }
 
 function databaseProblem(result: CommandResult): string | null {
@@ -257,21 +393,16 @@ async function runReadinessCheck(runner: string, sha: string, store: ReadinessSt
   const logPath = path.join(logDir, `${timestamp}-${sha.slice(0, 12)}.log`);
   const fd = openSync(logPath, "w");
 
-  let result: { code: number | null; signal: NodeJS.Signals | null; error: Error | null };
+  let result: ReadinessChildResult;
   try {
     const child = spawn("npx", ["tsx", "scripts/readiness-run.ts", "check"], {
       cwd: runner,
-      env: process.env,
+      env: runnerLocalDatabaseEnv(runner),
       stdio: ["ignore", fd, fd],
+      detached: process.platform !== "win32",
     });
     activeChild = child;
-    result = await new Promise((resolve) => {
-      let spawnError: Error | null = null;
-      child.once("error", (error) => {
-        spawnError = error;
-      });
-      child.once("close", (code, signal) => resolve({ code, signal, error: spawnError }));
-    });
+    result = await waitForReadinessChild(child);
   } finally {
     activeChild = null;
     closeSync(fd);
@@ -306,7 +437,13 @@ async function runReadinessCheck(runner: string, sha: string, store: ReadinessSt
   );
 }
 
-async function tick(runner: string, store: ReadinessStore): Promise<void> {
+async function tick(
+  runner: string,
+  store: ReadinessStore,
+  preparation: PreparationNeeds,
+  assertLock: () => void,
+): Promise<void> {
+  assertLock();
   const tickMs = Date.now();
   const nowIso = new Date(tickMs).toISOString();
   const before = stampTree(runner);
@@ -329,19 +466,39 @@ async function tick(runner: string, store: ReadinessStore): Promise<void> {
     afterMerge.kind === "known"
   ) {
     changed = changedPaths(runner, before.sha, afterMerge.sha);
-    if (changed.has("package-lock.json")) {
-      requireCommand(runner, "npm", ["ci", "--prefer-offline"], "installing dependencies after package-lock.json changed");
+    Object.assign(preparation, preparationAfterChanges(preparation, [...changed]));
+    if (preparation.dependencies) {
+      requireCommand(runner, "npm", ["ci", "--prefer-offline"], "installing dependencies for the runner checkout");
+      preparation.dependencies = false;
     }
-    if ([...changed].some((name) => name.startsWith("supabase/migrations/"))) {
-      /* db:migrate's own guard refuses a remote target. Do not weaken it here;
-         db:check below decides whether this box is now usable. */
-      run(runner, "npm", ["run", "db:migrate"]);
+    if (preparation.migrations) {
+      /* This deterministic runner is local-only: strip the two shell values
+         that can deliberately select and authorise a remote database, then
+         let db:migrate load the copied .env.local. db:check below decides
+         whether this box is now usable. A failed
+         migration remains pending and is retried: the migrator's own ledger
+         preflight is the authority on whether retrying may change anything. */
+      requireCommand(
+        runner,
+        "npm",
+        ["run", "db:migrate"],
+        "applying local database migrations",
+        runnerLocalDatabaseEnv(runner),
+      );
+      preparation.migrations = false;
     }
   }
 
-  ensureFleetClient(runner);
+  ensureFleetClient(runner, preparation.fleetClient);
+  preparation.fleetClient = false;
 
-  const db = run(runner, "npm", ["run", "--silent", "db:check"]);
+  const db = run(
+    runner,
+    "npm",
+    ["run", "--silent", "db:check"],
+    COMMAND_TIMEOUT_MS,
+    runnerLocalDatabaseEnv(runner),
+  );
   const tree = stampTree(runner);
   const history = store.read({
     sinceMs: tickMs - WINDOW_HOURS * 3_600_000,
@@ -363,7 +520,10 @@ async function tick(runner: string, store: ReadinessStore): Promise<void> {
     databaseProblem: databaseProblem(db),
   });
   console.log(decisionLine(nowIso, dev, decision));
-  if (decision.kind === "run") await runReadinessCheck(runner, decision.sha, store);
+  if (decision.kind === "run") {
+    assertLock();
+    await runReadinessCheck(runner, decision.sha, store);
+  }
 }
 
 const HELP = [
@@ -414,7 +574,7 @@ async function main(): Promise<number> {
     releaseLock(lock, lockPath);
   };
   const stop = (signal: NodeJS.Signals): void => {
-    activeChild?.kill(signal);
+    if (activeChild !== null) signalReadinessChild(activeChild, signal);
     release();
     process.exit(signal === "SIGINT" ? 130 : 143);
   };
@@ -425,6 +585,11 @@ async function main(): Promise<number> {
 
   try {
     const runner = ensureRunnerWorktree(primary.path, new Date().toISOString());
+    const preparation = initialPreparationNeeds();
+    const assertLock = (): void => {
+      if (held === null) throw new LostLoopLockError(`this process no longer holds ${lockPath}`);
+      requireHeldLoopLock(held, lockPath);
+    };
     let anotherTick = true;
     while (anotherTick) {
       const started = Date.now();
@@ -445,8 +610,9 @@ async function main(): Promise<number> {
        * person who asked for one tick wants its status.
        */
       try {
-        await tick(runner, opened.store);
+        await tick(runner, opened.store, preparation, assertLock);
       } catch (error) {
+        if (error instanceof LostLoopLockError) throw error;
         if (once) throw error;
         console.error(`${new Date().toISOString()} tick failed, carrying on: ${(error as Error).message}`);
       }

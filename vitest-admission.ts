@@ -68,6 +68,23 @@ import { join } from "node:path";
 /** Bump when the arithmetic changes, so a log line can be traced to a rule. */
 export const ADMISSION_POLICY_VERSION = 1;
 
+/**
+ * A readiness wrapper gives Vitest a one-run token so the wrapper can tell
+ * this config's refusal from identical words printed by a test or fixture.
+ * The config consumes the variable before workers inherit their environment.
+ */
+export const READINESS_ADMISSION_TOKEN_ENV = "SPIDERYARN_READINESS_ADMISSION_TOKEN";
+export const READINESS_ADMISSION_MARKER_PREFIX = "READINESS_ADMISSION_REFUSAL=";
+
+export function markReadinessAdmissionRefusal(message: string, token: string | undefined): string {
+  if (token === undefined || !/^[0-9a-f]{32}$/.test(token)) return message;
+  const lines = message.split("\n");
+  const refusal = lines.findIndex((line) => line.trim().startsWith("NO TESTS RAN AND NOTHING WAS VERIFIED —"));
+  if (refusal === -1) return message;
+  lines.splice(refusal + 1, 0, `  ${READINESS_ADMISSION_MARKER_PREFIX}${token}`);
+  return lines.join("\n");
+}
+
 const GB = 1024 ** 3;
 
 /**

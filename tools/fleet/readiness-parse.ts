@@ -38,6 +38,7 @@ import {
   type Scope,
   type TestTally,
 } from "./readiness.js";
+import { READINESS_ADMISSION_MARKER_PREFIX } from "../../vitest-admission.js";
 
 /**
  * Strip ANSI. Vitest colours everything, and a colourised `✓` will not match a
@@ -57,29 +58,71 @@ export function stripAnsi(text: string): string {
  * ------------------------------------------------------------------ */
 
 /**
- * The sentence `vitest-admission.ts` prints when no test was allowed to run.
- * Its words, rather than the outer exit status, are the evidence: `check.ts`
- * quite properly exits 1 because a gate did not run, but that status is not a
- * verdict about the tree.
+ * The sentence `vitest-admission.ts` prints when no test was allowed to run,
+ * authenticated by a random token the config consumes before workers start.
+ * The token is what keeps an ordinary test, fixture or quoted log line from
+ * laundering a genuine failure into `void`. `check.ts` quite properly exits 1
+ * because a gate did not run, but that status is not a verdict about the tree.
  */
-export function parseAdmissionRefusal(text: string): string | null {
-  const line = stripAnsi(text)
+export function parseAdmissionRefusal(text: string, expectedToken: string): string | null {
+  const lines = stripAnsi(text)
     .split(/\r?\n/)
-    .map((part) => part.trim())
-    .find((part) => part.startsWith("NO TESTS RAN AND NOTHING WAS VERIFIED —"));
-  return line ?? null;
+    .map((part) => part.trim());
+  const marker = `${READINESS_ADMISSION_MARKER_PREFIX}${expectedToken}`;
+  for (let index = 1; index < lines.length; index += 1) {
+    if (lines[index] !== marker) continue;
+    const refusal = lines[index - 1] ?? "";
+    if (
+      refusal === "NO TESTS RAN AND NOTHING WAS VERIFIED — this is resource pressure, not a test failure." ||
+      refusal === "NO TESTS RAN AND NOTHING WAS VERIFIED — this is a broken check, not a test failure."
+    ) {
+      return refusal;
+    }
+  }
+  return null;
 }
 
 /**
- * Give an admission refusal precedence over the ordinary exit classification.
- * Exit 1 still belongs on the record as the observed process status, but it no
- * longer gets to say the tree failed when the output says no test ran.
+ * Apply an authenticated admission refusal without erasing an earlier gate.
+ * Exit 1 still belongs on the record as the observed process status. A direct
+ * test refusal becomes void; a full check keeps any other failing gate and
+ * changes only its misleading test row to `did-not-run`.
  */
 export function outcomeAfterAdmissionRefusal(
   fallback: { outcome: Outcome; why: string | null },
   refusalWhy: string | null,
-): { outcome: Outcome; why: string | null } {
-  return refusalWhy === null ? fallback : { outcome: "void", why: refusalWhy };
+  check: CheckKind,
+  counts: Counts,
+): { outcome: Outcome; why: string | null; counts: Counts } {
+  if (refusalWhy === null) return { ...fallback, counts };
+
+  /* The authenticated sentence proves only that the test gate did not run.
+     Without check.ts's own table there is no evidence about the gates it ran
+     first, so the aggregate failure remains the conservative answer. */
+  if (check === "check" && counts.kind !== "check") return { ...fallback, counts };
+
+  if (check === "check" && counts.kind === "check") {
+    /* `check.ts` runs every step even after an earlier gate fails. The refusal
+       says only that TESTS did not run; it must not erase a real typecheck,
+       build or other gate failure that happened first. Correct the test row
+       to the state its own banner establishes, then preserve the aggregate
+       failure when another gate really failed. */
+    const adjusted: Counts = {
+      kind: "check",
+      steps: counts.steps.map((step) =>
+        step.name === "test" && step.verdict === "failed"
+          ? { ...step, verdict: "did-not-run" as const }
+          : step,
+      ),
+    };
+    const anotherGateFailed = adjusted.steps.some(
+      (step) => step.name !== "test" && step.verdict === "failed",
+    );
+    if (anotherGateFailed) return { ...fallback, counts: adjusted };
+    return { outcome: "void", why: refusalWhy, counts: adjusted };
+  }
+
+  return { outcome: "void", why: refusalWhy, counts };
 }
 
 /**
@@ -88,7 +131,7 @@ export function outcomeAfterAdmissionRefusal(
  * head and tail: in a full `check`, Vitest runs in the middle and later noisy
  * advisories can push this one load-bearing sentence out of both windows.
  */
-export function makeAdmissionRefusalCapture(): {
+export function makeAdmissionRefusalCapture(expectedToken: string): {
   push(chunk: string): void;
   why(): string | null;
 } {
@@ -98,7 +141,7 @@ export function makeAdmissionRefusalCapture(): {
     push(chunk) {
       if (found !== null) return;
       const joined = tail + chunk;
-      found = parseAdmissionRefusal(joined);
+      found = parseAdmissionRefusal(joined, expectedToken);
       /* Longer than either refusal line, and bounded independently of how long
          the check runs. It exists only to bridge a line split between chunks. */
       tail = joined.slice(-512);
