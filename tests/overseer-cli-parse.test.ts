@@ -12,9 +12,13 @@
  * `parseArgv` opens no store, reads no environment and starts no daemon, which
  * is why this file can ask about `run` without one existing.
  */
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 
-import { buildProgram, help, parseArgv, positiveNumber } from "../scripts/overseer.js";
+import { buildProgram, help, parseArgv, positiveNumber, runReconcileJobs } from "../scripts/overseer.js";
+import { RECONCILE_FILE } from "../tools/overseer/store.js";
 import { usageRows } from "../tools/overseer/cli-help.js";
 import { DEFAULT_MAX_CALLS } from "../tools/overseer/attention-cli.js";
 
@@ -25,7 +29,9 @@ describe("the shape of a command line", () => {
 
   test("--help, -h and help are all the help, and none of them is an error", () => {
     for (const word of ["--help", "-h", "help"]) {
-      expect(parseArgv([word])).toEqual({ kind: "help" });
+      // `text: null` means "print the root briefing" — the prose help, not
+      // Commander's reference page. A subcommand's `--help` carries its own text.
+      expect(parseArgv([word]), word).toEqual({ kind: "help", text: null });
     }
   });
 
@@ -137,12 +143,91 @@ describe("reconcile-jobs guards the reason twice", () => {
 
   test("a --why that is present and blank still parses — the emptiness check is the command's", () => {
     // Said out loud because it is the seam: `requiredOption` cannot refuse a
-    // value it was given, so `runParsed` refuses `"   "` itself. A test that
-    // asserted the parser caught it would be testing the wrong half.
+    // value it was given, so `runReconcileJobs` refuses `"   "` itself. A test
+    // that asserted the parser caught it would be testing the wrong half — and
+    // for a while this was the ONLY test near the blank reason, so deleting the
+    // real check left the suite green. GPT Sol's P1. The check itself is tested
+    // below, through the function that performs it.
     expect(parseArgv(["reconcile-jobs", "--why", "   "])).toEqual({
       kind: "run",
       parsed: { command: "reconcile-jobs", why: "   " },
     });
+  });
+
+  test("A BLANK REASON IS REFUSED AND WRITES NOTHING", () => {
+    // MUTATION: delete the `why.trim() === ""` guard in `runReconcileJobs`; this
+    // goes red on both the exit code and the absent file. Before this test,
+    // deleting it cleared the scheduler hold with a blank audit reason and every
+    // check stayed green.
+    const root = mkdtempSync(join(tmpdir(), "overseer-reconcile-test-"));
+    try {
+      const errors: string[] = [];
+      const realErr = console.error;
+      console.error = (...a: unknown[]) => errors.push(a.map(String).join(" "));
+      let code: number;
+      try {
+        code = runReconcileJobs(root, "   ");
+      } finally {
+        console.error = realErr;
+      }
+      expect(code).toBe(1);
+      expect(existsSync(join(root, RECONCILE_FILE))).toBe(false);
+      // The four lines of operational guidance, not Commander's generic refusal.
+      expect(errors.join("\n")).toContain("gjd-remote ls");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("a real reason writes the file, so the refusal above is not just a broken command", () => {
+    // The positive control. Without it, a `runReconcileJobs` that returned 1 for
+    // everything would pass the test above.
+    const root = mkdtempSync(join(tmpdir(), "overseer-reconcile-test-"));
+    try {
+      const realLog = console.log;
+      console.log = () => {};
+      let code: number;
+      try {
+        code = runReconcileJobs(root, "checked the log and gjd-remote ls; no job ran");
+      } finally {
+        console.log = realLog;
+      }
+      expect(code).toBe(0);
+      expect(existsSync(join(root, RECONCILE_FILE))).toBe(true);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("help is a request, not a failure", () => {
+  test("a SUBCOMMAND's --help is help with its own text, and exits 0", () => {
+    // It used to be an unknown option: `.helpOption(false)` on the root is
+    // inherited at creation, so every subcommand lost its help and `usage
+    // --help` exited 1 with empty stdout. GPT Sol's P1.
+    //
+    // MUTATION: remove the `restoreHelp` walk in `buildProgram` and this reddens.
+    for (const line of [["usage", "--help"], ["status", "--help"], ["mine", "--help"], ["mine", "add", "--help"]]) {
+      const out = parseArgv(line);
+      expect(out.kind, line.join(" ")).toBe("help");
+      if (out.kind === "help") {
+        expect(out.text, line.join(" ")).not.toBeNull();
+        expect(out.text ?? "").toContain("Usage: overseer");
+      }
+    }
+  });
+
+  test("the ROOT's help is our briefing, not Commander's reference page", () => {
+    const out = parseArgv(["--help"]);
+    expect(out).toEqual({ kind: "help", text: null });
+  });
+
+  test("a subcommand's help names that subcommand's own flags", () => {
+    const out = parseArgv(["usage", "--help"]);
+    if (out.kind === "help") {
+      expect(out.text ?? "").toContain("--max-transcripts");
+      expect(out.text ?? "").not.toContain("--tick-ms");
+    }
   });
 });
 
@@ -220,6 +305,20 @@ describe("the help cannot drift from the parser", () => {
         expect(row).toContain(option.flags);
       }
     }
+  });
+
+  test("A GROUP WITH A DEFAULT CHILD advertises the spelling that actually works", () => {
+    // `mine` runs `mine list`, and the parser test above proves bare `mine`
+    // works — but the generated rows listed only `mine list`, so the help was
+    // missing a supported spelling in the file whose whole claim is that it
+    // cannot be. GPT Sol's P1, and a direct correction to this plan's own
+    // "mine is not runnable".
+    //
+    // MUTATION: drop the `_defaultCommandName` branch in `usageRows`; this reddens.
+    const rows = usageRows(buildProgram(), "overseer");
+    expect(rows).toContain("  overseer mine [list]");
+    expect(rows).not.toContain("  overseer mine list");
+    expect(rows).toContain("  overseer mine add <name>");
   });
 
   test("a mandatory option is printed bare and an optional one in brackets", () => {

@@ -48,11 +48,24 @@ export function usageRows(program: Command, prefix: string): string[] {
     // from its own help and so does this.
     if ((command as { _hidden?: boolean })._hidden === true) continue;
     const here = `${prefix} ${command.name()}`;
-    // A GROUP GETS NO ROW OF ITS OWN — its leaves do. `mine` is not a thing you
-    // can run; `mine add <name>` is. A row for the group would be a line naming
-    // no arguments and no options, which reads as a command that takes neither.
+    // A GROUP GETS NO ROW OF ITS OWN — its leaves do. But **a group with a
+    // DEFAULT child is itself runnable**, and the first version of this function
+    // forgot that: `mine` runs `mine list`, the parser test asserts bare `mine`
+    // works, and the help advertised only `mine list`. A supported spelling
+    // missing from the generated rows, in the one file whose entire claim is
+    // that generated help cannot drift from the parser. GPT Sol's P1 on Stage 1.
+    //
+    // So the default child is rendered as the bracketed form, `mine [list]`,
+    // which says both spellings in one row.
     if (command.commands.length > 0) {
-      rows.push(...usageRows(command, here));
+      const fallback = (command as { _defaultCommandName?: string | null })._defaultCommandName;
+      for (const row of usageRows(command, here)) {
+        rows.push(
+          fallback !== undefined && fallback !== null && row.startsWith(`  ${here} ${fallback}`)
+            ? row.replace(`${here} ${fallback}`, `${here} [${fallback}]`)
+            : row,
+        );
+      }
       continue;
     }
     const parts = [here];

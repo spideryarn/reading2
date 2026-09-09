@@ -428,9 +428,12 @@ export function buildProgram(sink: (parsed: Parsed) => void = () => {}): Command
   const program = new Command();
   program
     .name("overseer")
-    // Commander's own help would be a reference page; ours is a briefing with
-    // generated rows in it. `help()` is the renderer, and this is what `-h` and
-    // an unknown command both print.
+    // **THE ROOT'S help is ours; a SUBCOMMAND's is Commander's.** `help()` is a
+    // briefing — what a command costs, who decides whether it is armed — which
+    // Commander cannot generate, so the root turns its own off. Subcommands keep
+    // theirs, and they must: `helpOption(false)` is inherited at creation, so
+    // turning it off here once made `usage --help` an *unknown option* that
+    // exited 1 with empty stdout, on every subcommand. GPT Sol's P1 on Stage 1.
     .helpOption(false)
     .addHelpCommand(false)
     .exitOverride();
@@ -544,6 +547,19 @@ export function buildProgram(sink: (parsed: Parsed) => void = () => {}): Command
       }),
     );
 
+  // EVERY SUBCOMMAND GETS ITS HELP BACK, and its own `exitOverride`, after the
+  // whole tree exists. Both settings are copied from the parent when a child is
+  // created, so doing this at the top would reach nothing that had not been
+  // built yet — the same creation-time trap as `configureOutput`.
+  const restoreHelp = (command: Command): void => {
+    for (const child of command.commands) {
+      child.helpOption("-h, --help", "what this command takes");
+      child.exitOverride();
+      restoreHelp(child);
+    }
+  };
+  restoreHelp(program);
+
   return program;
 }
 
@@ -556,7 +572,8 @@ export function buildProgram(sink: (parsed: Parsed) => void = () => {}): Command
  */
 export type ParseOutcome =
   | { kind: "run"; parsed: Parsed }
-  | { kind: "help" }
+  /** `text` is a subcommand's own generated help; `null` means print the root briefing. */
+  | { kind: "help"; text: string | null }
   | { kind: "error"; why: string };
 
 export function parseArgv(argv: readonly string[]): ParseOutcome {
@@ -565,7 +582,7 @@ export function parseArgv(argv: readonly string[]): ParseOutcome {
   // for an empty line is its own help.
   const words = argv.length === 0 ? ["status"] : [...argv];
   const first = words[0];
-  if (first === "--help" || first === "-h" || first === "help") return { kind: "help" };
+  if (first === "--help" || first === "-h" || first === "help") return { kind: "help", text: null };
 
   let parsed: Parsed | undefined;
   const program = buildProgram((p) => {
@@ -582,13 +599,20 @@ export function parseArgv(argv: readonly string[]): ParseOutcome {
   // real stderr by a function whose whole job is to return the message instead.
   // Found by a test run's output, not by an assertion, which is why there is now
   // an assertion.
-  let written = "";
+  //
+  // **STDOUT AND STDERR ARE CAPTURED SEPARATELY**, because they answer different
+  // questions: Commander writes generated help to stdout and refusals to stderr,
+  // and merging them made "was this help or an error?" unanswerable. That is why
+  // the fallback below is no longer "any captured output beats the exception" —
+  // that rule would hand a later thrown message back as help.
+  let out = "";
+  let err = "";
   const capture = {
     writeOut: (s: string) => {
-      written += s;
+      out += s;
     },
     writeErr: (s: string) => {
-      written += s;
+      err += s;
     },
   };
   // RECURSIVE, because `mine add` is two levels down and inherits from `mine`,
@@ -601,8 +625,17 @@ export function parseArgv(argv: readonly string[]): ParseOutcome {
   try {
     program.parse(words, { from: "user" });
   } catch (cause) {
-    const why = cause instanceof Error ? cause.message : String(cause);
-    return { kind: "error", why: written.trim() === "" ? why : written.trim() };
+    // A `CommanderError` carries its own verdict: `exitCode === 0` with
+    // `commander.helpDisplayed` (or `.version`) is a REQUEST that was satisfied,
+    // and the help it wrote is on stdout. Anything else is a refusal. Classifying
+    // on the exception rather than on which stream had bytes is what stops
+    // `usage --help` being reported as a failure.
+    const e = cause as { exitCode?: number; code?: string; message?: string };
+    if (typeof e.exitCode === "number" && e.exitCode === 0) {
+      return { kind: "help", text: out.trimEnd() === "" ? null : out.trimEnd() };
+    }
+    const thrown = cause instanceof Error ? cause.message : String(cause);
+    return { kind: "error", why: err.trim() === "" ? thrown : err.trim() };
   }
   if (parsed === undefined) {
     // Commander parsed something and no action fired — an empty subcommand
@@ -615,10 +648,19 @@ export function parseArgv(argv: readonly string[]): ParseOutcome {
 async function main(argv: readonly string[]): Promise<number> {
   const outcome = parseArgv(argv);
   if (outcome.kind === "help") {
-    console.log(help());
+    console.log(outcome.text ?? help());
     return 0;
   }
   if (outcome.kind === "error") {
+    // AN ABSENT `--why` GETS THE SAME FOUR LINES AS A BLANK ONE. Commander's
+    // generic "required option '--why' not specified" is true and useless here:
+    // the operator's next move — read the log and `gjd-remote ls` before
+    // clearing a hold that exists because nobody can tell whether a job already
+    // ran — is the same in both cases, and it is the reason the flag exists.
+    if (outcome.why.includes("--why")) {
+      console.error(WHY_IS_NOT_OPTIONAL);
+      return 1;
+    }
     console.error(`✗ ${outcome.why}\n\n${help()}`);
     return 1;
   }
@@ -674,6 +716,48 @@ export function runMine(root: string, parsed: Extract<Parsed, { command: "mine" 
   console.log(`${parsed.action === "add" ? "added" : "removed"} ${parsed.name} — ${out.state.mine.length} session(s) now`);
   return 0;
 }
+
+/**
+ * The four lines somebody needs before they clear a hold, and the guard.
+ *
+ * **THE ONE WAY OUT OF A HELD SCHEDULER**, and deliberately a person's act
+ * rather than a setting. A start that could not reconstruct the occurrence
+ * ledger holds every scheduled job — a cold start is not permission — and
+ * carries that forward across restarts, so without this there is no way back
+ * except deleting the store. It writes a file the NEXT start consumes and
+ * deletes; not an env var, because one left set turns "somebody decided this
+ * once" into "the protection is off for ever".
+ *
+ * **Extracted from `runParsed` so it can be tested.** GPT Sol's P1 on Stage 1
+ * was two findings in one place. The first: Commander's `requiredOption` gives
+ * a generic *required option not specified*, and the four lines telling the
+ * operator to read the log and `gjd-remote ls` first — on the most consequential
+ * write this CLI has — had quietly gone. The second, and worse: deleting the
+ * blank-reason check left the whole suite green, because the only test near it
+ * asserted that a blank reason *parses*. A function with its own tests is what
+ * closes that; the wording lives here so both paths print it.
+ */
+export function runReconcileJobs(root: string, why: string): number {
+  if (why.trim() === "") {
+    console.error(WHY_IS_NOT_OPTIONAL);
+    return 1;
+  }
+  const path = join(root, RECONCILE_FILE);
+  writeFileSync(path, `${JSON.stringify({ at: new Date().toISOString(), why }, null, 2)}\n`, { mode: 0o600 });
+  console.log(
+    `wrote ${path}\n` +
+      "The NEXT Overseer start consumes it and clears the hold — a daemon already running keeps\n" +
+      "holding its jobs until it is restarted (`systemctl restart overseer`).",
+  );
+  return 0;
+}
+
+/** Said the same way whether the flag was absent or blank, because the operator's next move is the same. */
+export const WHY_IS_NOT_OPTIONAL =
+  '✗ reconcile-jobs needs --why "<what you checked>", and a blank reason is not one.\n' +
+  "  This clears a hold that exists because nobody can tell whether some job already ran.\n" +
+  "  Look at the log and at `gjd-remote ls` first, and put what you found in the reason —\n" +
+  "  it is written into the store and read by whoever asks why a job ran twice.";
 
 async function runParsed(parsed: Parsed): Promise<number> {
   const root = requireAbsoluteRoot(storeRoot());
@@ -741,40 +825,8 @@ async function runParsed(parsed: Parsed): Promise<number> {
     }
     case "mine":
       return runMine(root, parsed);
-    case "reconcile-jobs": {
-      // THE ONE WAY OUT OF A HELD SCHEDULER, and it is deliberately a person's
-      // act rather than a setting. A start that could not reconstruct the
-      // occurrence ledger holds every scheduled job — a cold start is not
-      // permission — and carries that verdict forward across restarts, so
-      // without this there would be no way back except deleting the store.
-      //
-      // It writes a file the NEXT start consumes and deletes. Not an env var:
-      // one left set turns "somebody decided this once" into "the protection is
-      // off for ever".
-      //
-      // ABSENT `--why` is Commander's `requiredOption` now; what it cannot
-      // refuse is `--why ''`, because an empty string is a value it was given.
-      // That check stays here, with its own sentences, because a blank reason is
-      // the shape somebody types to get past the flag.
-      const why = parsed.why;
-      if (why.trim() === "") {
-        console.error(
-          "✗ reconcile-jobs needs --why \"<what you checked>\", and a blank reason is not one.\n" +
-            "  This clears a hold that exists because nobody can tell whether some job already ran.\n" +
-            "  Look at the log and at `gjd-remote ls` first, and put what you found in the reason —\n" +
-            "  it is written into the store and read by whoever asks why a job ran twice.",
-        );
-        return 1;
-      }
-      const path = join(root, RECONCILE_FILE);
-      writeFileSync(path, `${JSON.stringify({ at: new Date().toISOString(), why }, null, 2)}\n`, { mode: 0o600 });
-      console.log(
-        `wrote ${path}\n` +
-          "The NEXT Overseer start consumes it and clears the hold — a daemon already running keeps\n" +
-          "holding its jobs until it is restarted (`systemctl restart overseer`).",
-      );
-      return 0;
-    }
+    case "reconcile-jobs":
+      return runReconcileJobs(root, parsed.why);
     case "run": {
       const controller = new AbortController();
       // SIGTERM is what systemd sends and SIGINT is what a person sends; both

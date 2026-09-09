@@ -346,24 +346,34 @@ Mutation checked: pointing the lock at a per-process path makes the final state
 Mutation checked, both: restoring `?? []`, and relaxing `isCanonicalInstant` to
 `!Number.isNaN(Date.parse(s))`, each turn their test red.
 
-Still open, and they live in `scripts/overseer.ts` which a Codex run holds while Stage 2 is built:
+Done after Stage 2 released the file:
 
-- [ ] **`usage --help` exits 1 as an unknown option.** `.helpOption(false)` is inherited at
-      creation, so every subcommand's `--help` is an unknown option. Re-enabling help alone is not
-      enough: `exitOverride` then throws a `CommanderError` with `exitCode === 0` and code
-      `commander.helpDisplayed`, which the current catch would still turn into an error. Keep stdout
-      and stderr captures separate and classify on `CommanderError.exitCode`/`code`.
-- [ ] **`overseer mine [list]` is missing from the generated help** — see the correction above.
-- [ ] **`reconcile-jobs` lost its safety-specific refusal.** An absent `--why` used to print four
-      lines telling the operator to look at the log and `gjd-remote ls` before clearing a hold that
-      exists because nobody can tell whether a job already ran; it now prints Commander's generic
-      *required option not specified*. Worse: **deleting the `why.trim()` check leaves the new suite
-      green**, because the blank-reason test only asserts that parsing succeeds. That is a hole in a
-      test I wrote about a seam I had explicitly noticed.
+- [x] **`usage --help` exited 1 as an unknown option.** `.helpOption(false)` is inherited at
+      *creation*, so turning the root's off took every subcommand's with it — the same creation-time
+      trap as `configureOutput`, hit twice in one file. Subcommands get their help back after the
+      tree exists; stdout and stderr are captured separately; and the classification is on
+      `CommanderError.exitCode === 0`, not on which stream had bytes, because *"any captured output
+      beats the exception"* cannot tell help from a refusal.
+- [x] **`overseer mine [list]`** is in the generated rows: a group with a `_defaultCommandName` is
+      itself runnable and is rendered in the bracketed form.
+- [x] **`reconcile-jobs` has its four lines back — on the absent flag as well as the blank one**,
+      because the operator's next move is the same either way. Extracted as `runReconcileJobs` so the
+      guard can be tested through the function that performs it; the old test only asserted that a
+      blank reason *parses*, so deleting the real check left the suite green while the CLI cleared a
+      scheduler hold with a blank audit reason.
+
+Mutation checked, all three at once: deleting the blank-reason guard, the `restoreHelp` walk, and
+the default-child branch each turns its own test red and nothing else.
+
+Still open, and outside this session's file set:
+
 - [ ] **P2 — `NAME_RULE` is imported from an HTTP route module.** Not dangerous today (no
       import-time effects, and the seam test guards the other direction), but the session-name
       grammar should be a dependency-free leaf that both the route and the CLI use. `tools/fleet/`
       is not this session's file set.
+- [ ] **The shared message-client core.** `tools/fleet/web/src/messages-client.ts` cannot be imported
+      into the root NodeNext project as it stands — its Vite-valid extensionless `./types` import is
+      TS2835 — so `cli-messages.ts` keeps its own copy of the four-arm contract. Also `tools/fleet/`.
 
 ### Stages 3 and 4 — stopped before building
 
