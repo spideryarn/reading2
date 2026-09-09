@@ -221,6 +221,62 @@
 
   --font-sans: var(--font-ui);
   --font-mono: var(--font-mono);
+
+  /* ------------------------------------------------------- the type scale --
+   *
+   * **THREE LEVELS AND TWO DENSITY VARIANTS — not five steps of one scale**,
+   * and the difference is the correction GPT Sol made on 2026-09-09 (TYPE-01).
+   * The first draft claimed all five sat ~25% apart. They do not: the real
+   * ratios are 29%, 31%, 8%, 9%, and a claim a reader can measure and disprove
+   * is worse than no claim. What is true is more useful anyway.
+   *
+   * A census that day found 356 of the client's 368 sizing utilities sitting
+   * between 10px and 13px: a 3px band, in which nothing can be dominant because
+   * nothing is bigger than anything else. What that needed was not five evenly
+   * spaced sizes; it was **a top end that separates**.
+   *
+   * THE THREE LEVELS. Each is far enough from the next to carry hierarchy by
+   * size alone — the ~25% rule in docs/reusable/design-a-screen.md:
+   *
+   *   answer  22px   the one thing the screen exists to say. AT MOST ONE per
+   *                  card, and a screen with three is a screen with no answer.
+   *   lead    17px   a headline sentence, or a card's title. **Widened from
+   *                  15px on Sol's finding**: 15px is the root body size, so
+   *                  `lead` was indistinguishable from an unstyled element and
+   *                  only 15% from `body`, which is not a step.
+   *   body    13px   ordinary text: rows, sentences, values that are not THE
+   *                  value.
+   *
+   * AND THE TWO BELOW IT, which are deliberately close together and are NOT
+   * hierarchy. A dense operational page needs secondary text smaller than body
+   * without implying a further demotion; 12 and 11 are density variants, and
+   * anything separating them is weight, colour or position:
+   *
+   *   note    12px   evidence under a value, provenance, coverage, ids.
+   *   label   11px   uppercase section labels and the caps line over a stat.
+   *
+   * `HealthPanel`'s stat tile was already using 22 / 12 / 11 before any of this
+   * — the only place on the page where the number that matters is the biggest
+   * thing in its box — so three of the five are named rather than invented.
+   *
+   * There is deliberately no sixth, and nothing below 11px: 10px appears three
+   * times in the client today and every one is a note that lost an argument
+   * with a layout.
+   *
+   * Emitted as `--text-*`, so Tailwind gives us `tw:text-answer` and friends
+   * alongside its own `text-sm`. Sizes only — WEIGHT AND COLOUR ARE NOT PART OF
+   * THE STEP, because emphasis wants two dimensions moving together and
+   * welding them to the size would take that choice away at every call site. */
+  --text-answer: 22px;
+  --text-answer--line-height: 1.15;
+  --text-lead: 17px;
+  --text-lead--line-height: 1.3;
+  --text-body: 13px;
+  --text-body--line-height: 1.45;
+  --text-note: 12px;
+  --text-note--line-height: 1.4;
+  --text-label: 11px;
+  --text-label--line-height: 1.3;
 }
 
 /* --------------------------------------------------------------- base -- */
@@ -687,5 +743,46 @@
     outline: 2px solid var(--focus);
     outline-offset: 2px;
     border-radius: 4px;
+  }
+
+  /* A collapsed deploy row's disclosure triangle — DeploysPanel.tsx.
+     Lifted from the product's own changelog page (src/web/styles/changelog.css),
+     which is the reader-facing twin of that tab and had already paid for the
+     browser knowledge below. The two files cannot share code — the fleet may
+     not import from `src/` (tests/fleet-imports.test.ts) — so this is a copy,
+     and it is a copy of four lines rather than of a decision.
+
+     `tw:list-none` in the JSX covers Chrome and Firefox, which take
+     `list-style` on a summary. **Safari does not**, and Safari is where this
+     page is actually read: its marker is a shadow pseudo element and
+     `::-webkit-details-marker` is the only thing that reaches it. A rule here
+     rather than an arbitrary variant in the JSX, for the reason changelog.css
+     gives: a vendor pseudo element inside `tw:[&::-webkit-details-marker]:hidden`
+     is unreadable and, in a v4 prefix build, one bracket away from silently
+     emitting nothing.
+
+     The native triangle is drawn differently in every browser and cannot be
+     aligned with a baseline row; the chevron in the JSX is ours and turns
+     because `group-open:` reads the parent's `open` attribute. */
+  .deploy-row > summary::-webkit-details-marker {
+    display: none;
+  }
+  /* **Where a row jumped to from the contents comes to rest**, and it belongs
+     on the `<details>` because that is the element `scrollIntoView` is called
+     on — `scroll-margin` is read off the target and an offset on an ancestor
+     does nothing at all. It was `tw:scroll-mt-20` in the JSX until GPT Sol
+     pointed out that 80px is a fixed number while the masthead above adds
+     `--safe-top`: on a notched iPhone with `viewport-fit=cover` the row lands
+     back under the header, and a 390px desktop emulation passes happily
+     because there is no notch to emulate. So it is arithmetic on the same
+     variable the masthead uses, written here rather than as a bracketed
+     arbitrary value for the reason the marker rule above gives. */
+  .deploy-row {
+    scroll-margin-top: calc(5rem + var(--safe-top, 0px));
+  }
+  /* Safari again: `<summary>` is `display: list-item` by default there, and a
+     flex row that is also a list item keeps a marker box. */
+  .deploy-row > summary {
+    display: flex;
   }
 }

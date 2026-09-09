@@ -229,6 +229,7 @@ describe("the row badge", () => {
         order="status"
         onOrder={() => {}}
         selectedId={null}
+        selectedPid={null}
         onSelect={() => {}}
         steer={{} as never}
         rename={{} as never}

@@ -2174,6 +2174,26 @@ export type FeedPayload =
       readStartedAt: string;
       readFinishedAt: string;
       servedAt: string;
+      /**
+       * **WHICH TMUX SERVER THE `sessionId`s IN THIS ANSWER BELONG TO.**
+       *
+       * Every `sessionId` here is a tmux session handle, and a `$1643` is only
+       * meaningful within one tmux server — the same argument `collect.ts` makes
+       * about comparing two snapshots. So a page that joins these messages to
+       * the session list from `/api/state` is comparing two sets of handles, and
+       * without this it cannot tell whether they name the same world.
+       *
+       * The failure it prevents is not hypothetical and is silent: after a tmux
+       * server restart, a `$1643` in a feed read a minute ago is a *different*
+       * session from the `$1643` in the current snapshot, so the row would take
+       * an unrelated session's status and a click on it would open the wrong
+       * conversation. Both look entirely normal. GPT Sol's P0 on the plan for
+       * the clickable/scannable pass.
+       *
+       * `null` when the collector could not read it, which is a reason to
+       * withhold the join rather than to guess at it.
+       */
+      tmuxServerPid: number | null;
     }
   /** We could not look. Never merged with an empty `messages`, which would say the fleet was quiet. */
   | { schema: 1; kind: "unreadable"; why: string };
