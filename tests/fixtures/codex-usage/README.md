@@ -14,6 +14,12 @@ Schema to hold arms the live account does not currently produce. Each file says 
 | `session-rollout-token-count.json` | **real** — one line of `~/.codex/sessions/**/rollout-*.jsonl` | the fallback source, in the real envelope |
 | `app-server-degenerate-windows.json` | **synthetic** | null durations, null resets, a reversed primary/secondary, a limit actually reached, an unrecognised window length |
 
+An earlier version of this file said the unrecognised 42-minute window should not be plotted. **That
+was wrong and contradicted the plan** — Codex caught the two disagreeing while implementing stage 2.
+An unfamiliar *positive* duration stays a `value` and is drawn by its raw duration; only a missing or
+unvalidatable duration is `unknown`. The rule is that we refuse to publish numbers we cannot validate,
+not numbers we cannot *name*.
+
 ## Two things the real files show that a tidied fixture would hide
 
 **The two sources spell the same fields differently, and not only in case.** The app-server replies in

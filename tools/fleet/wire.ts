@@ -3105,3 +3105,47 @@ export type HoldBasis =
       /** When the previous run wrote down that it was **about to** type. */
       attemptedAt: number;
     };
+
+/* ================================================================== *
+ * CODEX SUBSCRIPTION USAGE — THE LIVE APP-SERVER READING
+ * ================================================================== */
+
+export type CodexUsageWindow =
+  | {
+      kind: "value";
+      /** Which slot the payload put it in. Provenance, never identity. */
+      slot: "primary" | "secondary";
+      windowMinutes: number;
+      usedPercent: number;
+      resetsAt: string;
+      resetsAtMs: number;
+    }
+  | {
+      kind: "unknown";
+      slot: "primary" | "secondary";
+      windowMinutes: number | null;
+      why: string;
+    };
+
+export type CodexUsageBucket = {
+  limitId: string;
+  limitName: string | null;
+  windows: CodexUsageWindow[];
+  planType: string | null;
+  credits: {
+    hasCredits: boolean;
+    unlimited: boolean;
+    balance: string | null;
+  } | null;
+  rateLimitReachedType: string | null;
+};
+
+export type CodexUsageReading =
+  | {
+      kind: "value";
+      accountId: string | null;
+      readAt: string;
+      buckets: CodexUsageBucket[];
+      resetCredits: number | null;
+    }
+  | { kind: "unknown"; why: string; retryable: boolean };

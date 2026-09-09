@@ -72,6 +72,13 @@ positional-mapping test first and run it against a deliberately naive implementa
 `primary → five_hour`) so you watch it fail, then implement properly and watch it pass. Say in your
 report that you did this and what the failure output was.
 
+> **This instruction was wrong, and Codex caught it.** `primary → five_hour` is *correct* for the
+> `reversed` fixture, whose primary really is the 300-minute window — so that mutation cannot make
+> that test red. The naive mapping the test actually detects is `primary → weekly`, which is what was
+> used. Left uncorrected above so the brief stays what was actually sent; noted here because a
+> mutation specified without checking that it fails is a red-first ritual that proves nothing, which
+> is the very thing the rule exists to prevent.
+
 That test: the `reversed` bucket in `app-server-degenerate-windows.json` has `primary` at 300 minutes
 and `secondary` at 10080. It must not report the 300-minute window as the weekly one.
 
