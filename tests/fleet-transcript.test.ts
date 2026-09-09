@@ -44,6 +44,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   findTranscript,
   isClaudeSessionId,
+  readOpeningMessages,
   readRecentMessages,
   recordsToTurns,
   slugifyDir,
@@ -930,5 +931,117 @@ describe("findTranscript on its own", () => {
       expect(res.why).toContain("not a uuid");
       expect(res.why).not.toContain("<script>");
     }
+  });
+});
+
+/**
+ * READING THE HEAD RATHER THAN THE TAIL.
+ *
+ * Every other reader in this module seeks from EOF, which answers *what is this
+ * session doing now*. A description of what a session is FOR has to come from
+ * its opening — and one built from the newest turns would churn on every turn,
+ * turning "one model call per session" into one per turn.
+ */
+describe("the opening of a transcript", () => {
+  /** A transcript with numbered user turns, oldest first. */
+  function conversation(n: number): string {
+    const lines: string[] = [];
+    for (let i = 1; i <= n; i += 1) {
+      lines.push(
+        JSON.stringify({
+          type: "user",
+          uuid: `u${i}`,
+          message: { role: "user", content: [{ type: "text", text: `turn ${i}` }] },
+        }),
+      );
+    }
+    return `${lines.join("\n")}\n`;
+  }
+
+  async function opening(body: string, opts: { limit?: number; maxBytes?: number } = {}) {
+    const projects = stage(body);
+    const res = await readOpeningMessages({
+      claudeSessionId: UUID,
+      dir: DIR,
+      projectsDir: projects,
+      ...(opts.limit === undefined ? {} : { limit: opts.limit }),
+      ...(opts.maxBytes === undefined ? {} : { maxBytes: opts.maxBytes }),
+    });
+    if (res.kind !== "found") throw new Error(`${res.kind}: ${"why" in res ? res.why : ""}`);
+    return res;
+  }
+
+  it("returns the FIRST turns, oldest first — the opposite end from readRecentMessages", async () => {
+    const res = await opening(conversation(10), { limit: 3 });
+    expect(res.turns.map((t) => t.text)).toEqual(["turn 1", "turn 2", "turn 3"]);
+  });
+
+  it("says it reached the end when the whole file fitted", async () => {
+    const res = await opening(conversation(3));
+    expect(res.reachedEndOfFile).toBe(true);
+    expect(res.turns).toHaveLength(3);
+  });
+
+  /**
+   * A capped read almost always ends mid-line, and half a JSON object is not a
+   * record. Dropping the last line is what keeps a truncated read from
+   * reporting a parse failure it caused itself.
+   */
+  it("drops the half-line a cap leaves behind rather than counting it unreadable", async () => {
+    const body = conversation(40);
+    const res = await opening(body, { maxBytes: 300 });
+    expect(res.reachedEndOfFile).toBe(false);
+    expect(res.recordsUnparseable).toBe(0);
+    expect(res.turns.length).toBeGreaterThan(0);
+    expect(res.turns[0]?.text).toBe("turn 1");
+  });
+
+  /**
+   * The honest half. A caller fingerprinting an opening needs to know whether it
+   * has a whole thing or a prefix — a prefix that later grows would otherwise
+   * look like the same opening.
+   */
+  it("says it did NOT reach the end when the cap bit", async () => {
+    const res = await opening(conversation(400), { maxBytes: 512 });
+    expect(res.reachedEndOfFile).toBe(false);
+    expect(res.bytesRead).toBeLessThanOrEqual(512);
+    expect(res.fileBytes).toBeGreaterThan(512);
+  });
+
+  it("refuses without a conversation id rather than returning nothing", async () => {
+    const res = await readOpeningMessages({ claudeSessionId: null, dir: DIR });
+    expect(res.kind).toBe("not-found");
+    if (res.kind === "not-found") expect(res.reason).toBe("no-claude-session-id");
+  });
+
+  it("says not-found when nothing on disk names the conversation", async () => {
+    const projects = stage(conversation(2));
+    const res = await readOpeningMessages({
+      claudeSessionId: "00000000-0000-4000-8000-000000000000",
+      dir: DIR,
+      projectsDir: projects,
+    });
+    expect(res.kind).toBe("not-found");
+  });
+
+  /** Coalescing and sidechain-dropping are `recordsToTurns`', and are reused. */
+  it("coalesces an assistant turn split across records, as the tail reader does", async () => {
+    const body = [
+      JSON.stringify({ type: "user", uuid: "u1", message: { role: "user", content: [{ type: "text", text: "hello" }] } }),
+      JSON.stringify({
+        type: "assistant",
+        uuid: "a1",
+        message: { id: "m1", role: "assistant", content: [{ type: "text", text: "part one" }] },
+      }),
+      JSON.stringify({
+        type: "assistant",
+        uuid: "a2",
+        message: { id: "m1", role: "assistant", content: [{ type: "text", text: " and two" }] },
+      }),
+      "",
+    ].join("\n");
+    const res = await opening(body);
+    expect(res.turns).toHaveLength(2);
+    expect(res.turns[1]?.speaker).toBe("assistant");
   });
 });
