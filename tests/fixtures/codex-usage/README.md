@@ -34,5 +34,24 @@ capture script keeps everything else verbatim, including the reset-credit prose,
 that has been tidied stops being evidence about the source. Token counts in the session fixture are
 real and say nothing about any person or project.
 
-Re-capture with the scripts recorded in the plan's stage 1; the `resetsAt` values move every time,
-which is itself the measurement that the reading is live rather than cached.
+## The scripts in `capture/`
+
+| Script | What it settles |
+|---|---|
+| `capture-app-server.py` | takes a fresh live reading as a fixture, redacting the account id |
+| `capture-session-line.py` | takes one real line of the fallback source |
+| `scan-session-history.py` | characterises every historical snapshot — how many exist, which window shapes occur |
+| `measure-used-percent-over-time.py` | **the liveness evidence**: prints every transition of the `codex` bucket's `used_percent`, oldest first |
+| `spike-app-server-from-node.ts` | drives the protocol from Node, both arms, the way the collector will |
+
+`measure-used-percent-over-time.py` is the one to re-run if anybody doubts the reading is live. It
+showed the counter taking every integer from 0 to 90 across 25,179 snapshots and climbing 11 → 24 over
+one working day — and it is also what turned up the finding nobody predicted, that the number
+**oscillates by a point between snapshots seconds apart**, so a threshold crossing can flap and a
+one-point drop is not a refund.
+
+Re-capturing changes the `resetsAt` values every time. That on its own is *not* proof the reading is
+live — it was the plan's first argument for it and a bad one, since a rolling window is
+`now + duration` whether it came from a backend or a local adapter. The proof is the counter's
+behaviour above, plus the fact that blocking the network makes the call fail rather than serve a cached
+value.
