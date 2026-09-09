@@ -46,6 +46,7 @@ import { SteeringQueue } from "../tools/fleet/queue.js";
 import { makeSendCoordinator, type SendCoordinator, type SendCoordinatorDeps } from "../tools/fleet/send-coordinator.js";
 import type { FleetStatus } from "../tools/fleet/status.js";
 import type { SteerResult, SteerTarget } from "../tools/fleet/steer.js";
+import type { FleetActionPreview } from "../tools/fleet/wire.js";
 
 /**
  * A coordinator over the queue's OWN book, with a fake transport.
@@ -330,22 +331,32 @@ function recipient(over: Record<string, unknown> = {}): Record<string, unknown> 
  * here would be a fixture of the state payload — a different file's subject —
  * that could go stale against it in silence.
  */
-type PageRow = Parameters<ReturnType<typeof makeActionsApi>["box"]>[2][number];
+type PageRow = Parameters<ReturnType<typeof makeActionsApi>["boxPreview"]>[1][number];
 
 /**
  * The rows argument where the request genuinely has none to give.
  *
- * `NO_ROWS_NEEDED` is a KILL: `killRoute` reads `pids`, never `recipients`, so
- * a kill with no rows is not a kill to nobody — it is the only shape a kill
- * has. (Its own list is missing from the browser's request too; that gap is
- * named where the kill tests are.)
+ * `NO_ROWS_NEEDED` is a KILL: its preview asks the server to scan by rule, not
+ * to address a fleet row. The returned receipt owns the process list used by
+ * the later confirmation.
  *
- * `REQUEST_IGNORED` is a call through `replay`, which answers a RECORDED
- * response and never reads what was posted. Named rather than `[]` at seven
- * call sites so nobody reads one of them as a broadcast addressed to nobody.
  */
 const NO_ROWS_NEEDED: readonly PageRow[] = [];
-const REQUEST_IGNORED: readonly PageRow[] = [];
+
+/** A call through `replay` answers recorded bytes and never reads this body. */
+function ignoredPreview(actionId: "kill-test-suites" | "resource-broadcast"): FleetActionPreview {
+  return {
+    schema: "fleet-action-preview/1",
+    previewId: "recorded-response-only",
+    serverInstanceId: "recorded-response-only",
+    actionId,
+    expiresAt: 0,
+    material:
+      actionId === "resource-broadcast"
+        ? { kind: "broadcast", speaker: "greg", recipients: [] }
+        : { kind: "kill", confirmable: [], excluded: [] },
+  };
+}
 
 function pageRow(over: Record<string, unknown> = {}): PageRow {
   return {
@@ -1364,7 +1375,7 @@ describe("POST /api/actions/box — killing", () => {
     // only one that runs the real client parse over the real response.
     const { io, ran } = fakeIo({ procs: [...suites, ...bystanders] });
     const { routes } = harness({ io });
-    const outcome = await makeActionsApi(browserFetch(routes)).box("kill-test-suites", true, NO_ROWS_NEEDED);
+    const outcome = await makeActionsApi(browserFetch(routes)).boxPreview("kill-test-suites", NO_ROWS_NEEDED);
     expect(outcome.ok).toBe(true);
     const shown = outcome.ok ? outcome.result : null;
     // Written as "what a person would read off the panel" rather than as a
@@ -1382,17 +1393,22 @@ describe("POST /api/actions/box — killing", () => {
     // and `parseBoxBody` has only ever read `mode`, which defaults here to
     // `dry-run` — so every box action ever pressed on the page was a dry run,
     // including the confirmed one, and the panel said "Done." over it. The
-    // refusal below is the PROOF the route read `run`: a body it read as a dry
-    // run answers 200 with a preview, and this answers 409.
+    // successful signal below is the proof the route read `run` and received
+    // the exact receipt from the first press. The old refusal is kept in this
+    // comment because it was the record of the defect, not an intended result.
     const { io, ran } = fakeIo({ procs: [...suites] });
     const { routes } = harness({ io });
-    const outcome = await makeActionsApi(browserFetch(routes)).box("kill-test-suites", false, NO_ROWS_NEEDED);
+    const api = makeActionsApi(browserFetch(routes));
+    const preview = await api.boxPreview("kill-test-suites", NO_ROWS_NEEDED);
+    if (!preview.ok || preview.preview === null) throw new Error("the dry run carried no confirmable preview");
+    const outcome = await api.boxConfirm(preview.preview);
 
-    expect(outcome.ok).toBe(false);
-    // Stage 2 now requires the server-minted receipt. Stage 3 replaces this old
-    // client call with boxPreview/boxConfirm and turns the join green.
-    expect(outcome.ok === false && outcome.code).toBe("preview-required");
-    expect(ran).toEqual([]);
+    expect(outcome.ok).toBe(true);
+    expect(outcome.ok && outcome.dryRun).toBe(false);
+    expect(ran.map((step) => step.argv)).toEqual([
+      ["kill", "-TERM", "5001"],
+      ["kill", "-TERM", "5002"],
+    ]);
   });
 
   it("dry-runs a kill: the named rule decides, and nothing is signalled", async () => {
@@ -1523,7 +1539,7 @@ describe("POST /api/actions/box — the staggered broadcast", () => {
    * button stayed dead.
    *
    * `true`, because the first press is the dry run: `ActionButtons` calls
-   * `api.box(action.id, true, rows)` for the preview and only offers Confirm
+   * `api.boxPreview(action.id, rows)` for the preview and only offers Confirm
    * once that has come back.
    */
   it("carries the rows the page is showing into the request, so the route has somebody to speak to", async () => {
@@ -1533,7 +1549,7 @@ describe("POST /api/actions/box — the staggered broadcast", () => {
       pageRow({ id: "$2", paneId: "%2", rawStatus: { kind: "working" } }),
       pageRow({ id: "$3", paneId: "%3", rawStatus: { kind: "needs-you" } }),
     ];
-    const preview = await makeActionsApi(browserFetch(routes)).box("resource-broadcast", true, rows);
+    const preview = await makeActionsApi(browserFetch(routes)).boxPreview("resource-broadcast", rows);
 
     expect(preview.ok).toBe(true);
     /* SOMEBODY WAS SELECTED, read through the real client parse rather than off
@@ -1578,7 +1594,7 @@ describe("POST /api/actions/box — the staggered broadcast", () => {
         rawStatus: { kind: "idle" },
       }),
     ];
-    const preview = await makeActionsApi(browserFetch(routes)).box("resource-broadcast", true, rows);
+    const preview = await makeActionsApi(browserFetch(routes)).boxPreview("resource-broadcast", rows);
 
     expect(preview.ok).toBe(true);
     const shown = (preview.ok ? preview.result : null) as { recipients?: { paneId: string; outcome: string }[] } | null;
@@ -1616,7 +1632,7 @@ describe("POST /api/actions/box — the staggered broadcast", () => {
       pageRow({ id: "$3", paneId: null }),
       pageRow({ id: "$4", paneId: "%4" }),
     ];
-    const preview = await makeActionsApi(browserFetch(routes)).box("resource-broadcast", true, rows);
+    const preview = await makeActionsApi(browserFetch(routes)).boxPreview("resource-broadcast", rows);
 
     expect(preview.ok).toBe(true);
     const shown = (preview.ok ? preview.result : null) as { recipients?: { paneId: string; outcome: string }[] } | null;
@@ -1637,14 +1653,15 @@ describe("POST /api/actions/box — the staggered broadcast", () => {
        `addressableRows` drops, and inventing a pid to fill the hole would be
        the client signing its name to a check it did not make. */
     const rows = [pageRow({ id: "$1", paneId: "%1" }), pageRow({ id: "$2", paneId: "%2", panePid: null })];
-    const body = boxActionBody("resource-broadcast", false, rows);
+    const body = boxActionBody("resource-broadcast", rows);
 
     expect(body.recipients).toEqual([
       { paneId: "%1", sessionId: "$1", claudeSessionId: CLAUDE_ID, panePid: 424242, status: { kind: "idle" } },
       { paneId: "%2", sessionId: "$2", claudeSessionId: CLAUDE_ID, panePid: null, status: { kind: "idle" } },
     ]);
-    // And the rest of the body is unchanged: `mode` is the field the route reads.
-    expect(body).toMatchObject({ actionId: "resource-broadcast", mode: "run", confirm: true, speaker: "greg" });
+    // And the rest is explicitly a preview. The run body is built only from
+    // the receipt and cannot accept these rows.
+    expect(body).toMatchObject({ actionId: "resource-broadcast", mode: "dry-run", speaker: "greg" });
   });
 
   it("staggers across the recipients it can actually speak to", async () => {
@@ -2113,7 +2130,7 @@ describe("a kill reports what it established, not what it intended", () => {
     });
     const { routes } = harness({ io });
     const recorded = await previewAndConfirm(routes, killBody());
-    const outcome = await makeActionsApi(replay(recorded)).box("kill-test-suites", false, REQUEST_IGNORED);
+    const outcome = await makeActionsApi(replay(recorded)).boxConfirm(ignoredPreview("kill-test-suites"));
     const effect = outcome.ok ? outcome.effect : null;
     if (effect === null) throw new Error("expected the answer to carry an effect reading");
     /* `strip` turns every tag into a space, so the runs are collapsed before
@@ -2354,7 +2371,7 @@ describe("the heading over a box answer is a ratio, not a verdict", () => {
   const broadcastBody = { actionId: "resource-broadcast", mode: "run", confirm: true, speaker: "greg", recipients: five };
 
   async function headingFor(recorded: { status: number | null; body: string }): Promise<string | null> {
-    const outcome = await makeActionsApi(replay(recorded)).box("resource-broadcast", false, REQUEST_IGNORED);
+    const outcome = await makeActionsApi(replay(recorded)).boxConfirm(ignoredPreview("resource-broadcast"));
     return effectHeadline(outcome.ok ? outcome.effect : null);
   }
 
@@ -2383,7 +2400,7 @@ describe("the heading over a box answer is a ratio, not a verdict", () => {
           : SENT_OK,
     });
     const recorded = await previewAndConfirm(routes, broadcastBody);
-    const outcome = await makeActionsApi(replay(recorded)).box("resource-broadcast", false, REQUEST_IGNORED);
+    const outcome = await makeActionsApi(replay(recorded)).boxConfirm(ignoredPreview("resource-broadcast"));
     const effect = outcome.ok ? outcome.effect : null;
     expect(effect?.kind).toBe("broadcast");
     expect(effect?.states.find((s) => s.state === "partial")?.count).toBe(1);
@@ -2401,16 +2418,8 @@ describe("the heading over a box answer is a ratio, not a verdict", () => {
     const good = harness({ io: fakeIo({ procs }).io });
     const gone = harness({ io: fakeIo({ procs, step: () => ({ ...OK_STEP, code: 1, stderr: "No such process" }) }).io });
 
-    const a = await makeActionsApi(replay(await previewAndConfirm(good.routes, body))).box(
-      "kill-test-suites",
-      false,
-      REQUEST_IGNORED,
-    );
-    const b = await makeActionsApi(replay(await previewAndConfirm(gone.routes, body))).box(
-      "kill-test-suites",
-      false,
-      REQUEST_IGNORED,
-    );
+    const a = await makeActionsApi(replay(await previewAndConfirm(good.routes, body))).boxConfirm(ignoredPreview("kill-test-suites"));
+    const b = await makeActionsApi(replay(await previewAndConfirm(gone.routes, body))).boxConfirm(ignoredPreview("kill-test-suites"));
 
     expect(effectHeadline(a.ok ? a.effect : null)).toBe("Signal accepted for 2 of 2 pids.");
     expect(effectHeadline(b.ok ? b.effect : null)).toBe("Signal accepted for 0 of 2 pids.");
@@ -2435,7 +2444,7 @@ describe("the heading over a box answer is a ratio, not a verdict", () => {
           result: { kill: { observed: [{ pid: 5001, observation: "signal-accepted" }] } },
         }),
       }),
-    ).box("kill-test-suites", false, REQUEST_IGNORED);
+    ).boxConfirm(ignoredPreview("kill-test-suites"));
 
     const effect = outcome.ok ? outcome.effect : null;
     expect(effect?.kind === "kill" && effect.targeted).toBe(1);
@@ -2935,7 +2944,7 @@ describe("a box action confirms the preview it was given, and nothing else", () 
        what the client parse actually handed it. */
     const envelope = preview.ok ? preview.preview : null;
     expect(envelope?.material.kind).toBe("kill");
-    expect(envelope?.material.kind === "kill" ? envelope.material.candidates.map((c) => c.pid) : null).toEqual([5001, 5002]);
+    expect(envelope?.material.kind === "kill" ? envelope.material.confirmable.map((c) => c.pid) : null).toEqual([5001, 5002]);
 
     const done = await api.boxConfirm(envelope as NonNullable<typeof envelope>);
     expect(done.ok).toBe(true);

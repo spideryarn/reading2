@@ -76,6 +76,8 @@ import type {
   ActionScope as ActionScopeWire,
   BroadcastAction as BroadcastActionWire,
   EnactedAction as EnactedActionWire,
+  FleetActionMaterial,
+  FleetActionPreview,
   HoldBasis,
   HoldOutcome,
   HoldReleaseGesture,
@@ -1015,23 +1017,10 @@ export function sessionMessageBody(row: FleetRow, text: string): SessionMessageB
 }
 
 /**
- * `mode`, WHICH IS THE FIELD THE ROUTE READS.
- *
- * This said `dryRun: boolean` until 2026-09-08 and the route has only ever
- * parsed `mode` — so every box action ever pressed on this page was a dry run,
- * including the one behind the second tap, and the panel then said "Done."
- * over it. `parseMode` defaults this route to `dry-run`, which is why the
- * mismatch was survivable rather than dangerous; it is still a button that has
- * never once done what it says.
- *
- * `confirm` is the second half of the same silence. The route refuses a `run`
- * of an action whose `needsConfirm` is true unless the body says so, and this
- * page never said so — so even a body that had reached the route as a run would
- * have been refused `confirm-required`. It is `!dryRun` rather than a parameter
- * because on this page the only thing that asks for a real run IS the second
- * tap: `commit` runs after the person has read the preview, which is exactly
- * the claim the field makes. A caller that wants to run without confirming
- * should not be calling this function.
+ * TWO REQUESTS, with no boolean that can turn one into the other accidentally.
+ * A preview carries the rows the page was showing. A confirmation cannot take
+ * rows at all: it carries the server's receipt and echoes that receipt's whole
+ * material, including fields this build has never learned to draw.
  *
  * `speaker` is sent for the same reason `sessionActionBody` sends one: a
  * broadcast is rendered with the sender's name in front of it, and an absent
@@ -1054,16 +1043,19 @@ export function sessionMessageBody(row: FleetRow, text: string): SessionMessageB
  * The status in particular must be `rawStatus` rather than the parsed
  * `row.status`: see steer-client.ts § `SteerTargetBody`.
  *
- * An enacted kill reads `pids` rather than this field and has the same gap;
- * that is the preview envelope's to close, not this function's.
+ * A kill preview needs no page rows. Its candidates are minted into the
+ * receipt by the server, and the confirmation returns those full identities
+ * rather than trying to rebuild them from a process list.
  */
-export type BoxActionBody = {
+type BoxPreviewBody = { actionId: string; mode: "dry-run"; confirm?: false; speaker?: "greg"; recipients?: SteerTargetBody[] };
+type BoxConfirmBody = {
   actionId: string;
-  mode: "dry-run" | "run";
-  confirm: boolean;
-  speaker: "greg";
-  recipients: SteerTargetBody[];
+  mode: "run";
+  confirm: true;
+  preview: Pick<FleetActionPreview, "previewId" | "serverInstanceId" | "actionId">;
+  material: FleetActionMaterial;
 };
+export type BoxActionBody = BoxPreviewBody | BoxConfirmBody;
 
 /**
  * The rows that are ADDRESSES, which is not all of them — and sending the rest
@@ -1094,14 +1086,34 @@ export function addressableRows(rows: readonly FleetRow[]): FleetRow[] {
   return rows.filter((row) => row.paneId !== null && row.claudeSessionId !== null);
 }
 
-export function boxActionBody(actionId: string, dryRun: boolean, rows: readonly FleetRow[]): BoxActionBody {
-  return {
-    actionId,
-    mode: dryRun ? "dry-run" : "run",
-    confirm: !dryRun,
-    speaker: GREG,
-    recipients: addressableRows(rows).map(steerTargetBody),
-  };
+export function boxActionBody(actionId: string, rows: readonly FleetRow[]): BoxPreviewBody;
+export function boxActionBody(preview: FleetActionPreview): BoxConfirmBody;
+export function boxActionBody(actionOrPreview: string | FleetActionPreview, rows: readonly FleetRow[] = []): BoxActionBody {
+  if (typeof actionOrPreview !== "string") {
+    return {
+      actionId: actionOrPreview.actionId,
+      mode: "run",
+      confirm: true,
+      preview: {
+        previewId: actionOrPreview.previewId,
+        serverInstanceId: actionOrPreview.serverInstanceId,
+        actionId: actionOrPreview.actionId,
+      },
+      // THE MATERIAL THE SERVER SENT, by reference. Reconstructing even one
+      // arm here would let an excluded process or a recipient's opaque status
+      // disappear between what was shown and what the equality check receives.
+      material: actionOrPreview.material,
+    };
+  }
+  if (actionOrPreview === "resource-broadcast") {
+    return {
+      actionId: actionOrPreview,
+      mode: "dry-run",
+      speaker: GREG,
+      recipients: addressableRows(rows).map(steerTargetBody),
+    };
+  }
+  return { actionId: actionOrPreview, mode: "dry-run" };
 }
 
 /**
@@ -1313,6 +1325,92 @@ export function parseBoxEffect(result: unknown): BoxEffectReading | null {
   return null;
 }
 
+function actionMaterialKind(actionId: string): FleetActionMaterial["kind"] | null {
+  if (actionId === "resource-broadcast") return "broadcast";
+  if (actionId === "kill-test-suites" || actionId === "kill-safe-processes") return "kill";
+  return null;
+}
+
+/**
+ * The receipt is executable input, so it is parsed all-or-nothing. In
+ * particular, the returned value is the original object: `boxActionBody`
+ * echoes its material verbatim instead of rebuilding the part this build knew
+ * how to draw and silently dropping the rest.
+ */
+function parseActionMaterial(raw: unknown, expected: FleetActionMaterial["kind"]): FleetActionMaterial | null {
+  if (!isRecord(raw) || raw["kind"] !== expected) return null;
+  if (expected === "kill") {
+    const confirmable = raw["confirmable"];
+    const excluded = raw["excluded"];
+    if (!Array.isArray(confirmable) || !Array.isArray(excluded)) return null;
+    for (const value of confirmable) {
+      if (!isRecord(value)) return null;
+      if (typeof value["pid"] !== "number" || !Number.isSafeInteger(value["pid"]) || value["pid"] <= 1) return null;
+      if (
+        typeof value["startTicks"] !== "number" ||
+        !Number.isSafeInteger(value["startTicks"]) ||
+        value["startTicks"] < 0
+      ) {
+        return null;
+      }
+      if (typeof value["bootId"] !== "string" || value["bootId"] === "") return null;
+    }
+    for (const value of excluded) {
+      if (!isRecord(value)) return null;
+      if (typeof value["pid"] !== "number" || !Number.isSafeInteger(value["pid"]) || value["pid"] <= 1) return null;
+      if (typeof value["why"] !== "string" || value["why"] === "") return null;
+    }
+    return raw as FleetActionMaterial;
+  }
+
+  if (raw["speaker"] !== "greg" && raw["speaker"] !== "overseer") return null;
+  const recipients = raw["recipients"];
+  if (!Array.isArray(recipients)) return null;
+  for (const value of recipients) {
+    if (!isRecord(value)) return null;
+    if (typeof value["paneId"] !== "string" || value["paneId"] === "") return null;
+    if (typeof value["sessionId"] !== "string" || value["sessionId"] === "") return null;
+    if (value["claudeSessionId"] !== null && (typeof value["claudeSessionId"] !== "string" || value["claudeSessionId"] === "")) {
+      return null;
+    }
+    if (
+      value["panePid"] !== null &&
+      (typeof value["panePid"] !== "number" || !Number.isSafeInteger(value["panePid"]) || value["panePid"] <= 1)
+    ) {
+      return null;
+    }
+    if (!Object.hasOwn(value, "status")) return null;
+    if (
+      value["minutes"] !== null &&
+      (typeof value["minutes"] !== "number" || !Number.isSafeInteger(value["minutes"]) || value["minutes"] < 0)
+    ) {
+      return null;
+    }
+  }
+  return raw as FleetActionMaterial;
+}
+
+function parseActionPreview(answer: Record<string, unknown>, pressedActionId: string): FleetActionPreview | null {
+  const kind = actionMaterialKind(pressedActionId);
+  const expectedOp = kind === "broadcast" ? "broadcast-preview" : kind === "kill" ? "dry-run" : null;
+  if (
+    kind === null ||
+    expectedOp === null ||
+    answer["dryRun"] !== true ||
+    answer["action"] !== pressedActionId ||
+    answer["op"] !== expectedOp
+  ) {
+    return null;
+  }
+  const raw = answer["preview"];
+  if (!isRecord(raw) || raw["schema"] !== "fleet-action-preview/1" || raw["actionId"] !== pressedActionId) return null;
+  if (typeof raw["previewId"] !== "string" || raw["previewId"] === "") return null;
+  if (typeof raw["serverInstanceId"] !== "string" || raw["serverInstanceId"] === "") return null;
+  if (typeof raw["expiresAt"] !== "number" || !Number.isSafeInteger(raw["expiresAt"]) || raw["expiresAt"] < 0) return null;
+  const material = parseActionMaterial(raw["material"], kind);
+  return material === null ? null : (raw as FleetActionPreview);
+}
+
 export type ActionOutcome =
   | { ok: true; kind: "queued"; position: number | null; why: string | null }
   | { ok: true; kind: "delivered"; sent: string[][] }
@@ -1413,8 +1511,11 @@ function queueOp(v: unknown): QueueOp | null {
 export type BoxOutcome =
   | {
       ok: true;
+      op: string | null;
+      action: string | null;
       dryRun: boolean;
       dryRunStated: boolean;
+      preview: FleetActionPreview | null;
       /**
        * WHAT THE BOX DID, OR WOULD DO, in the server's own structure — the
        * steps, the candidate pids, the recipients, the sample sentence.
@@ -1477,13 +1578,10 @@ export type ActionsApi = {
    * `releaseHoldBody`. Safe to call twice with the same arguments.
    */
   releaseHold: (holdId: string, version: number, gesture: HoldReleaseGesture) => Promise<ActionOutcome>;
-  /**
-   * A box-wide action. **`rows` is required, and it is the fix for a button
-   * that could not reach anybody** — see `boxActionBody`. It is the list the
-   * page is showing, verbatim; a caller with nothing on screen passes an empty
-   * array and gets the server's refusal, which is the true answer.
-   */
-  box: (actionId: string, dryRun: boolean, rows: readonly FleetRow[]) => Promise<BoxOutcome>;
+  /** Ask what this action would do, against exactly the rows now on screen. */
+  boxPreview: (actionId: string, rows: readonly FleetRow[]) => Promise<BoxOutcome>;
+  /** Confirm exactly one parsed server receipt. There is no rows parameter by design. */
+  boxConfirm: (preview: FleetActionPreview) => Promise<BoxOutcome>;
 };
 
 /** A thrown thing, as a sentence. Never "[object Object]". */
@@ -1650,6 +1748,28 @@ export function makeActionsApi(fetchImpl: typeof fetch = fetch): ActionsApi {
     return readActionOutcome(posted.response, posted.parsed);
   };
 
+  const box = async (actionId: string, body: BoxActionBody, requestedDryRun: boolean): Promise<BoxOutcome> => {
+    const posted = await postJson(BOX_ACTION_URL, body, fetchImpl);
+    if ("failure" in posted) return { ...posted.failure, ok: false, from: "client" };
+    const { response, parsed } = posted;
+    if (!isRecord(parsed) || parsed["ok"] !== true) return refusal(response, parsed);
+    const stated = typeof parsed["dryRun"] === "boolean";
+    return {
+      ok: true,
+      op: str(parsed["op"]),
+      action: str(parsed["action"]),
+      /* The ANSWER's flag, not the request's. See `BoxOutcome`. When the
+         server did not state one, `dryRunStated` is false and the panel says
+         it cannot tell — it does not fall back to what it asked for. */
+      dryRun: stated ? parsed["dryRun"] === true : requestedDryRun,
+      dryRunStated: stated,
+      preview: parseActionPreview(parsed, actionId),
+      result: parsed["result"] ?? null,
+      why: typeof parsed["why"] === "string" ? parsed["why"] : null,
+      effect: parseBoxEffect(parsed["result"]),
+    };
+  };
+
   return {
     async feed(): Promise<FeedOutcome> {
       let response: Response;
@@ -1681,24 +1801,8 @@ export function makeActionsApi(fetchImpl: typeof fetch = fetch): ActionsApi {
     clear: (sessionId, itemIds) => send(CLEAR_URL, clearBody(sessionId, itemIds)),
     releaseHold: (holdId, version, gesture) => send(RELEASE_HOLD_URL, releaseHoldBody(holdId, version, gesture)),
 
-    async box(actionId, dryRun, rows): Promise<BoxOutcome> {
-      const posted = await postJson(BOX_ACTION_URL, boxActionBody(actionId, dryRun, rows), fetchImpl);
-      if ("failure" in posted) return { ...posted.failure, ok: false, from: "client" };
-      const { response, parsed } = posted;
-      if (!isRecord(parsed) || parsed["ok"] !== true) return refusal(response, parsed);
-      const stated = typeof parsed["dryRun"] === "boolean";
-      return {
-        ok: true,
-        /* The ANSWER's flag, not the request's. See `BoxOutcome`. When the
-           server did not state one, `dryRunStated` is false and the panel says
-           it cannot tell — it does not fall back to what it asked for. */
-        dryRun: stated ? parsed["dryRun"] === true : dryRun,
-        dryRunStated: stated,
-        result: parsed["result"] ?? null,
-        why: typeof parsed["why"] === "string" ? parsed["why"] : null,
-        effect: parseBoxEffect(parsed["result"]),
-      };
-    },
+    boxPreview: (actionId, rows) => box(actionId, boxActionBody(actionId, rows), true),
+    boxConfirm: (preview) => box(preview.actionId, boxActionBody(preview), false),
   };
 }
 
@@ -1716,5 +1820,6 @@ export const httpActionsApi: ActionsApi = {
   abandon: (sessionId, itemId) => makeActionsApi().abandon(sessionId, itemId),
   clear: (sessionId, itemIds) => makeActionsApi().clear(sessionId, itemIds),
   releaseHold: (holdId, version, gesture) => makeActionsApi().releaseHold(holdId, version, gesture),
-  box: (actionId, dryRun, rows) => makeActionsApi().box(actionId, dryRun, rows),
+  boxPreview: (actionId, rows) => makeActionsApi().boxPreview(actionId, rows),
+  boxConfirm: (preview) => makeActionsApi().boxConfirm(preview),
 };

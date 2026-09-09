@@ -96,9 +96,17 @@ functions; it does not re-derive a process identity.
 identifies a Linux process exactly; it does not make a subsequent `kill -TERM <pid>` land on that
 process, because the verified process can exit between the `/proc` read and the signal and its pid
 can be reused in the gap. The case the roadmap is worried about — a preview left open while the box
-turns over — is minutes wide and is closed. What is left is a window of a few milliseconds that also
-requires a pid to wrap the whole pid space. See § *What Sol changed* for why the pidfd fix that would
-close that too is not in this stage, and on what condition it comes back.
+turns over — is minutes wide and is closed.
+
+**What is left is wider than "a few milliseconds", and this paragraph said that until Sol's code
+review established otherwise.** The gap for any one candidate runs from its own identity read to its
+own `kill` step, and the run reads every candidate's identity first and then signals them in order —
+so the first candidate in a list of sixty waits through fifty-nine `/proc` reads and fifty-nine
+signal steps. A second, separate limit: the fresh scan establishes rule membership **at scan time**,
+and a process's command line and cwd can change afterwards without its pid or start ticks changing,
+so `killVerdict`'s judgement is as old as the scan. Both are written into the comments beside the
+code. See § *What Sol changed* for why the pidfd fix that would close the first is not in this stage,
+and on what condition it comes back.
 
 ## Product decisions taken here (recorded, not asked — per the brief)
 
@@ -251,49 +259,74 @@ deleted.
   - [ ] `op` and `action` survive into the parsed `BoxOutcome`. **Red today**: both discarded.
 ### Stage 2 — the envelope, minted and checked, with kill identity in its material
 
-**Status:** not started. Brief: `260909h-box-contracts-stage2-codex-task.md`.
+**Status: done**, in `2c9a6d9a` and then `b47d7828`. Implemented by GPT from
+`260909h-box-contracts-stage2-codex-task.md`; sixteen server cases watched red first. Reviewed by
+GPT Sol with fix authority (`260909h-box-contracts-stage2-code-review-sol-r1.md`), which found **four
+established P1s in the committed stage** and fixed all four red-first:
+
+- **The preview could display one process and store another's identity.** The scan came first and the
+  start-tick reads came after, so a pid that turned over in between joined the old process's command
+  line and rule to the replacement's token. Now bracketed the way `execution-identity.ts` brackets
+  its own — token, re-scan, token, and both reads must agree — with the displayed details taken from
+  the settled scan, so what is shown and what is stored are one observation.
+- **The tombstone was a sentence rather than a behaviour**: one confirmation and 32 dry runs evicted
+  the claimed receipt, and the replay went back to saying *unknown*. Only fresh entries are evicted
+  now, and a table of 32 live tombstones refuses to mint until one expires. **That is a real trade** —
+  a burst of confirmations can block previews for up to five minutes — and it is the right way round,
+  because the alternative silently invites a second irreversible press.
+- **The server could not confirm its own preview** when a recipient's opaque status carried a `-0`,
+  which `JSON.stringify` renders as `0` and `isDeepStrictEqual` then rejects. Both operands cross a
+  JSON boundary in opposite directions, so the comparison is now by JSON value semantics.
+- **~2,000 nested arrays fit under the 64 KiB cap**, survived the preview, and made the confirmation
+  throw `RangeError` and answer 500. The comparator is iterative, and still exact on array order and
+  object key sets.
+
+It also answered the accuracy question against me: *"immediately before signalling"* was not
+established, because an early candidate waits through every later identity read and every earlier
+signal step; and the fresh scan establishes rule membership only at scan time, since command and cwd
+can change without the pid or the start ticks changing. Both comments now say so.
 
 Merged from what were two stages. The envelope's kill material **is** the identity list, so an
 envelope stage that first defined the material as bare pids and an identity stage that then changed
 it would be one design written twice.
 
-- [ ] `tools/fleet/wire.ts`: browser-safe request/response shapes — the preview envelope, its two
+- [x] `tools/fleet/wire.ts`: browser-safe request/response shapes — the preview envelope, its two
       material arms, a kill candidate identity, and distinct request arms for kill and broadcast.
       **Types only, no imports, no runtime values**; `tests/fleet-compile-guards.test.ts` enforces
       that and stays passing. Runtime parsers still validate; a shared compile-time type is not
       validation of network data. Shared with the `work-evidence` session, so additions are small,
       targeted, and the file is re-read immediately before each edit.
-- [ ] A bounded in-memory preview table on `makeActionRoutes` (32 entries, five-minute TTL, ids
+- [x] A bounded in-memory preview table on `makeActionRoutes` (32 entries, five-minute TTL, ids
       `<serverInstanceId>-p<n>`). Expired entries are purged before capacity is considered, then the
       oldest goes — which is also the one closest to expiring. It dies with the process, by
       construction: a restart makes every outstanding preview unknown, which is the true answer.
-- [ ] **`fresh → claimed`, atomically, before the first `await`**, with a tombstone until expiry. A
+- [x] **`fresh → claimed`, atomically, before the first `await`**, with a tombstone until expiry. A
       replay is told *this confirmation was already submitted* — a different sentence from *unknown*,
       and the only one of the two that does not invite pressing again.
-- [ ] `serverInstanceId` becomes an injected `ActionDeps` field, so a test can build two runs in one
+- [x] `serverInstanceId` becomes an injected `ActionDeps` field, so a test can build two runs in one
       process — the way `SteeringQueue` and `QuarantineBook` already take theirs.
-- [ ] Both dry-run arms answer with the envelope beside the existing `result`. `result` keeps its
+- [x] Both dry-run arms answer with the envelope beside the existing `result`. `result` keeps its
       shape and `RawValue` keeps drawing it: this is additive.
-- [ ] The broadcast's canonical material carries **the speaker, the recipient claims and their
+- [x] The broadcast's canonical material carries **the speaker, the recipient claims and their
       declared statuses, the order, and the computed pause assignment** — everything that decides the
       sentence or who hears it. Nothing outside the equality check may determine the effect.
-- [ ] The kill's material splits `confirmable` (full identity) from `excluded` (display-only, with
+- [x] The kill's material splits `confirmable` (full identity) from `excluded` (display-only, with
       the reason), so "the material matches" has one meaning rather than three.
-- [ ] `ActionIo` gains `readProcessStart(pid)` and `readBootIdentity()`, wired in `realActionIo` to
+- [x] `ActionIo` gains `readProcessStart(pid)` and `readBootIdentity()`, wired in `realActionIo` to
       `tools/fleet/execution-identity.ts`'s existing functions and faked in the tests. **No test
       reads a real `/proc`.**
-- [ ] `parseBoxBody`: a required `preview` claim on a run, the echoed `material` in place of `pids`,
+- [x] `parseBoxBody`: a required `preview` claim on a run, the echoed `material` in place of `pids`,
       and a body still carrying `pids` refused rather than ignored.
-- [ ] `boxRoute` admits in Sol's order — origin/body, scope/mode/confirm, `FLEET_ACT_ENABLED`,
+- [x] `boxRoute` admits in Sol's order — origin/body, scope/mode/confirm, `FLEET_ACT_ENABLED`,
       **envelope validation, then** rate and cooldown, then the atomic claim, then the fresh re-probe,
       then the effect. A malformed envelope must not spend rate-limit capacity, and the acting gate
       stays where it is so that repairing this code cannot turn acting on.
-- [ ] `killRoute`'s run re-reads each submitted candidate's start ticks and the boot id **as the last
+- [x] `killRoute`'s run re-reads each submitted candidate's start ticks and the boot id **as the last
       thing before the plan runs**, and signals only where pid **and** start ticks **and** boot id all
       still match — on top of, not instead of, today's fresh-scan-still-matches-the-rule intersection.
       An unreadable boot identity refuses the whole request; one vanished `/proc` entry excludes one
       candidate.
-- [ ] Tests, all asserting on recorded execution and recipient calls: wrong action, expired preview,
+- [x] Tests, all asserting on recorded execution and recipient calls: wrong action, expired preview,
       restart between preview and run (two harnesses, two instance ids — the pattern § *"an item id
       from a previous run of the server"* already uses), **a replayed receipt, two concurrent
       confirms**, a reused pid, a mutated candidate token, a mutated recipient status, a changed

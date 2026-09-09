@@ -33,7 +33,7 @@ import { RawValue } from "./RawValue";
 import { httpHistoryApi, type HistoryApi } from "./health-history-client";
 import { Explain, type Tip } from "./Tooltip";
 import { readHealthStats, type Stat } from "./health-view";
-import type { ClockSkew } from "./types";
+import type { ClockSkew, FleetRow } from "./types";
 import type { ActionsUi } from "./useActions";
 import { Card, Pill, SectionHeading, cx, toneClasses } from "./ui";
 import type { Tone } from "./view";
@@ -129,6 +129,7 @@ function Verdict({ health }: { health: unknown }): ReactNode {
 export function HealthPanel({
   health,
   actions,
+  rows,
   /* Injectable for the same reason `MessagesApi` is: a test needs to hand this
      panel a window of history without a server, and the default is the real
      one so no caller has to know. */
@@ -137,6 +138,7 @@ export function HealthPanel({
 }: {
   health: unknown;
   actions: ActionsUi;
+  rows: readonly FleetRow[];
   historyApi?: HistoryApi;
   /**
    * **PASSED STRAIGHT THROUGH TO THE CHART'S LABELS, and nothing else here
@@ -163,6 +165,7 @@ export function HealthPanel({
       asked={actions.asked}
       error={actions.error}
       onChanged={actions.refresh}
+      rows={rows}
     />
   );
 
