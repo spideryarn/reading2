@@ -1,6 +1,6 @@
 # Wire the work classifier into the Overseer daemon
 
-**Status:** in progress, 2026-09-09.
+**Status:** done, 2026-09-10. On `dev`; the live daemon needs a restart before any of it is visible.
 **Roadmap stage:** [260908f](260908f-overseer-and-fleet-improvement-roadmap.md) § "Stage: Work
 evidence — connect the classifier that is already written". Queue item `qi-z8ascd78`.
 **Waits on:** Execution identity (landed) and Overseer status (landed). Both are in.
@@ -444,10 +444,12 @@ Three things worth having written down:
 
 ### Stage 4 — gates, review, docs
 
-- [ ] `npm test`, `npm run typecheck`, lint on touched files.
-- [ ] GPT Sol code review, `--sandbox workspace-write`, two rounds.
-- [ ] A section in [overseer-direction.md](../project/overseer-direction.md) or
-  [fleet-dashboard-modes.md](../project/fleet-dashboard-modes.md) saying where work evidence lives
-  and what it may not claim.
+- [x] `npm test`, `npm run typecheck`, lint on touched files.
+- [x] GPT Sol code review, `--sandbox workspace-write` — four rounds in the end, not two: the plan,
+  stages 1–2, Sol's own pass over stage 3, and an independent pass over the same commit.
+- [x] A section in [overseer-direction.md](../project/overseer-direction.md) § "Where the work reading
+  now lives, and the four things it may not claim", plus a line closing one of the two instances in
+  its "Built, tested, and called from nothing but its own tests" section — which is the class this
+  classifier had been sitting in for two days.
 
-**Status:** not started.
+**Status:** done, 2026-09-10.

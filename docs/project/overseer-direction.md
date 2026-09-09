@@ -1196,6 +1196,36 @@ showing a prompt right now"*, while `permission-mode` answers *"will this sessio
 it does anything"* — **a prediction rather than an observation**, which is the more valuable of the
 two and the reason to build it properly rather than quickly.
 
+### Where the work reading now lives, and the four things it may not claim
+
+**Wired on 2026-09-10** — [260909h](../plans/260909h-wire-the-work-classifier-into-the-overseer-daemon.md).
+Until then `classifyPaneWork` was the section above's own example of *built, tested, and called from
+nothing but its own tests*. The daemon now reads the process table **once per inventory that reaches
+a checkpoint**, classifies every pane from that one reading, and publishes `work` on
+`~/.overseer/current.json` beside `attention` and `usage`. The dashboard joins it to the register
+entries on the Overseer card. Nothing about `SessionState` changed, per the agreement quoted above.
+
+Four claims it is built not to make, each because a review found it making one:
+
+- **It never says a pane is quiet when nothing looked.** A failed probe is one `probe-failed` arm for
+  the whole scan, not an absence per session; a pane that could not be walked is `cannot-tell` with a
+  cause; an idle row is dropped from the card **only when it measured `none`**.
+- **It never grows a duration it did not observe.** `ranForMs` is frozen at the scan. Once the reading
+  is older than the card's source deadline the sentence changes — *was running 18m when checked 1h
+  ago* — rather than the number climbing.
+- **It never attaches a scan to an inventory it does not belong to.** The scan carries the
+  `collectedAt` it was taken for, and the projection joins only on an exact match, within
+  `sourceCollectedAt ≤ scannedAt ≤ writtenAt`.
+- **It never persists a command line.** Only the executable and, for a closed allowlist, its
+  subcommand — `codex exec`, `vitest run`. An argv redactor was written, then deleted: `ps` has
+  already lost quoting, and no rule over option names can tell a subcommand from a positional secret.
+
+**Its yield, measured 2026-09-10 on 20 live sessions: 18 `none`, 2 `work`** — two real `codex exec`
+reviews at depth 5, 27 and 13 minutes old. **Both already read as `shell`**, so what this added was
+*which* review and *how long*, not the discovery that the pane was busy. That is the correction two
+paragraphs up holding rather than a disappointment, and it is the honest ceiling on this arm: it
+enriches rows that already look busy, and catches the backgrounded and wedged cases when they occur.
+
 ### Remote Control fails quietly, which is A27's shape again
 
 **8 of 23 live sessions had Remote Control broken**, measured 2026-09-08 — the feature that was
@@ -1338,6 +1368,10 @@ library of honest mechanisms — a lease, a prefix, a three-armed reading — ea
 in isolation*, and isolation is exactly the condition under which a green suite says nothing about
 whether the thing runs. The tests are not weak; they are answering the narrower question, and both
 times the passing suite was the reason nobody looked.
+
+**One of the two is now closed**: the work classifier gained its caller on 2026-09-10 — see
+[§ Where the work reading now lives](#where-the-work-reading-now-lives-and-the-four-things-it-may-not-claim).
+It sat built-and-uncalled for two days, which is roughly how long the class takes to become invisible.
 
 **Three things catch it, in order of how mechanical they are.** Make the wiring a *type* obligation
 rather than an option, the way `QueuedItem.speaker` was made required so the compiler found 111 sites
