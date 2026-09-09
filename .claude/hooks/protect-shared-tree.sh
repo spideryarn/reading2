@@ -116,8 +116,18 @@ fi
 # `-vvvvD`, which is a real deletion an earlier three-letter bound let through. An
 # unbounded run would also match `-committerdate`, so what excludes
 # `git branch --sort=-committerdate` is not a length cap but the requirement that
-# the `-` be preceded by whitespace or nothing: there it is preceded by `=`.
-DELETE_FLAG='(^|[[:space:]])(--delete|-[[:alpha:]]*[dD][[:alpha:]]*)([^[:alnum:]_-]|$)'
+# the `-` start a word: there it is preceded by `=`.
+#
+# "Starts a word" has to mean more than "follows a space", because the shell eats
+# quotes and backslashes before git ever sees them. All three of these are real
+# deletions, and all three passed while the class was whitespace alone:
+#
+#     git branch "-D" worktree-x
+#     git branch '-d' worktree-x
+#     git branch \-D worktree-x
+#
+# So a quote or a backslash counts as the start of a word too. `=` still does not.
+DELETE_FLAG='(^|[[:space:]"'"'"'\])(--delete|-[[:alpha:]]*[dD][[:alpha:]]*)([^[:alnum:]_-]|$)'
 
 # Prove the matcher before trusting it, both directions, exactly as above — a
 # matcher that hits everything and one that hits nothing each pass one half.
@@ -126,6 +136,8 @@ flag_in 'branch -D x'                  || refuse "self-test failed: delete match
 flag_in 'branch --delete x'            || refuse "self-test failed: delete matcher missed --delete"
 flag_in 'branch -df x'                 || refuse "self-test failed: delete matcher missed a -df cluster"
 flag_in 'branch -vvvvD x'              || refuse "self-test failed: delete matcher missed a long cluster"
+flag_in 'branch "-D" x'                || refuse "self-test failed: delete matcher missed a quoted flag"
+flag_in 'branch \-D x'                 || refuse "self-test failed: delete matcher missed an escaped flag"
 flag_in 'branch --sort=-committerdate' && refuse "self-test failed: delete matcher hit an ordinary --sort"
 flag_in 'branch --show-current'        && refuse "self-test failed: delete matcher hit --show-current"
 
@@ -158,18 +170,27 @@ segments=$(printf '%s' "$text" | sed 's/&&/;/g' | tr ';|&' '\n\n\n')
 
 carry=""
 while IFS= read -r segment; do
-    # A line ending in `\` continues into the next one. Without this,
-    # `git branch \` + newline + `-D x` splits into a segment with the word and a
-    # segment with the flag, and neither matches — measured, it was a bypass, and
-    # the verb rule above has a test for exactly this shape.
-    segment="$carry$segment"
-    carry=""
-    case "$segment" in
-      *\\)
-        carry="${segment%\\} "
-        continue
-        ;;
-    esac
+  # A line ending in `\` continues into the next one. Without this,
+  # `git branch \` + newline + `-D x` splits into a segment with the word and a
+  # segment with the flag, and neither matches — measured, it was a bypass, and
+  # the verb rule above has a test for exactly this shape.
+  #
+  # **Parity, not presence.** A continuation is an ODD number of trailing
+  # backslashes; an even number is escaped backslashes and the line really ends.
+  # Treating any trailing `\` as a continuation carried `echo git branch \\` across
+  # a real `&&` into `npm install -D pkg` and refused an innocent command.
+  segment="$carry$segment"
+  carry=""
+  trailing="$segment"
+  slashes=0
+  while [ "${trailing%\\}" != "$trailing" ]; do
+    trailing="${trailing%\\}"
+    slashes=$((slashes + 1))
+  done
+  if [ $((slashes % 2)) -eq 1 ]; then
+    carry="$trailing "
+    continue
+  fi
 
   # All three in ONE command: the tool, the noun, the flag. Requiring the tool per
   # segment rather than anywhere in the payload is what stops

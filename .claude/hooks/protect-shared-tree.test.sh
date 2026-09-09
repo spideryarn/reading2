@@ -70,6 +70,11 @@ git branch -D worktree-x'
   check 2 "over-refusal: a grep that quotes it" 'grep -rn "git branch -D" docs/'
   # A long cluster is a valid deletion; an earlier three-letter bound missed it.
   check 2 "long flag cluster"       'git branch -vvvvD worktree-x'
+  # The shell eats quotes and backslashes before git sees them, so "starts a word"
+  # cannot mean "follows a space". All three of these really delete.
+  check 2 "double-quoted flag"      'git branch "-D" worktree-x'
+  check 2 "single-quoted flag"      "git branch '-d' worktree-x"
+  check 2 "backslash-escaped flag"  'git branch \-D worktree-x'
 
   echo "--- controls: must be $ctrl ---"
   # The rule needs the word `git` SOMEWHERE in the payload, so a command that
@@ -79,6 +84,10 @@ git branch -D worktree-x'
   # The rule is per-COMMAND: the tool, the noun and the flag must land in one
   # segment. Measured as a false refusal before that was required per segment.
   check "$ctrl" "git in one, quote in the next" 'git status && grep -n "branch -D" notes.txt'
+  # A continuation is an ODD number of trailing backslashes. An even number means
+  # escaped backslashes and the line really ends — carrying it across the `&&`
+  # welded `branch` onto `-D` and refused this.
+  check "$ctrl" "even backslashes, real separator" 'echo git branch \\&& npm install -D pkg'
   check "$ctrl" "reading the doc about it"      'git log --oneline -3 && cat docs/project/worktrees.md | grep "branch -D"'
   # These are the daily commands. The first draft of this rule matched the whole
   # payload and refused the second one, which is why the match is per-command.
