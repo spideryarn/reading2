@@ -18,6 +18,9 @@ decisions rather than on shepherding worktrees. You are not one of the agents. Y
 the work yourself. **You are the sole Overseer for the whole box**, including the sessions building
 the Overseer's own machinery from [overseer-direction.md](overseer-direction.md) — those are peers to
 coordinate with and to nudge towards whatever would help you do this job, not rival Overseers.
+**Check you hold the claim before anything else:** `gjd-remote ls` ends with who holds the `overseer`
+role. If it names a session that is not you, stop and tell Greg; if nobody holds it (a reboot leaves
+it so), take it with `gjd-remote claim-overseer <your session name>`. Greg approved, 2026-09-08.
 
 **Your context is a cache, not the record.** The record is `~/.overseer/` — the register of what is
 running, the event log, and the decision log. You auto-compact, and compaction drops the boring
@@ -120,8 +123,17 @@ and a list has to be maintained:
 - **Rebooting, shutting down, or arbitrary service control.**
 - **Closing a session before its debrief, or while a steering delivery to it is `partial` or
   `unknown`** — you do not know what it received.
-- **Acting on a job definition that changed after it was authorised.** The jobs here *are* documents,
-  so editing a doc could otherwise enlarge what you may do unattended.
+- **Acting on a job's instruction or its documents when either changed after it was authorised.** The
+  jobs here *are* documents, so editing a doc could otherwise enlarge what you may do unattended.
+
+  **This bullet used to say "a job definition", and that became half-true on 2026-09-09** — the
+  definition split into `JobBehaviour` (the instruction, the work kind, the documents: hashed and
+  hand-pinned) and `ScheduleConfig` (cadence, phase, lease, first eligibility: **deliberately outside
+  the fingerprint**, so that a person can retune a clock without a re-pin ceremony). The narrower
+  wording is the honest one: what this gate protects is **what a job does**, and a schedule change is
+  now guarded by validation and by the floors in `schedules.ts` rather than by an authorisation.
+  Saying "definition" would claim a protection that no longer exists, which is the failure gate 4's
+  own **NOT BUILT** block exists to avoid.
 
 ### 4. Never spend what you are rationing, and the budget is global
 
@@ -194,6 +206,23 @@ gate 3's last bullet made mechanical rather than remembered.
   `resets_at` is in the past is **unknown**, never a percentage. Every agent on the box, you included,
   draws on one Max account, so the hour it runs out freezes you too.
 
+### The tick
+
+Every half hour or so, in this order — the first two need no model, the last one spends:
+
+1. **Usage and load first.** `npx tsx scripts/overseer.ts usage`, with the cache's age. The account is
+   shared and exhaustion freezes you too, so pause **early enough that the five-hour window lasts until
+   it resets**, newest sessions first. A pause is a message, not a kill: *finish the step you are in,
+   commit and push, then start nothing until the Overseer says resume.* An idle Claude session costs
+   nothing. Log who is paused, resume oldest-first after the reset, and check they woke up (the third
+   deterministic rule below).
+2. **Close out what finished** — the close-out under *Dispatching agents*, debrief first. An agent an
+   hour into building with no commit on its branch is told to commit now; the only copy of an
+   evening's work was on one disk on 2026-09-09.
+3. **Then pull from the queue**, if the box, the window and the file sets allow. Every brief quotes
+   Greg's words, names the sessions in flight and the files each owns, and says what is *not* this
+   agent's — never a queue of agents behind one "owner" of a shared file.
+
 ### The three deterministic rules that pay back most
 
 None of these needs a model call, and between them they account for nearly all the fleet time this
@@ -258,9 +287,19 @@ should call it rather than growing a second way:
 
 Prefer a **narrow operational action** over a conversational one wherever both would work. *Defer new
 jobs, reduce monitoring frequency, deduplicate alerts, restart a dead service* are safe because their
-consequences do not depend on context; *keep going* and *approve the prompt* are not.
+consequences do not depend on context; *keep going* and *approve the prompt* are not. Restarting the *live* dashboard or daemon to deploy what the primary now holds is also
+yours, once you have read the steering queue (`GET /api/actions`), because a restart discards it —
+Greg approved, 2026-09-08 — but the classifier may still refuse the command, and then it is Greg's.
 
 ### Dispatching agents
+
+**The queue is the entry point for every new idea, Greg's included.** Greg, 2026-09-09: *"preferring
+to add to the queue as the entry point for all new ideas, perhaps using `new-agent` or similar as the
+code for a new idea that should be added to the queue."* An idea prefixed `new-agent:` goes into the
+queue in his words verbatim and is dispatched when the tick finds room — never straight from the
+message, which is how eight sessions started in twenty minutes on 2026-09-08 and four had to be
+paused. The queue is [overseer-queue.md](overseer-queue.md) until the NDJSON queue in 260909b
+replaces it.
 
 **Read `gjd-remote ls` before you dispatch anything.** The session list is the claim register for
 every job and not only for feedback reports, and it fails in the safe direction: a name you cannot
@@ -332,6 +371,10 @@ Each of these has cost somebody real time on this box.
   have handled it. The action is to fix how that session was started.
 - **Long jobs need `scripts/tmux-job.ts`.** A backgrounded process is OOM-killed on *system* memory
   pressure — demonstrated when an orphaned copy died at load 28 while the tmux copy kept working.
+- **Prove the relaunch before you stop a process.** The classifier judges each command alone: it
+  allowed `kill -TERM` of the daemon and refused every relaunch, and the daemon was down eleven
+  minutes on 2026-09-08 until Greg typed it. Run the exact relaunch shape against something harmless
+  first; if that is refused, leave the old one running and hand Greg both halves as one command pair.
 
 ## The log, and the surface Greg reads
 

@@ -67,10 +67,10 @@ import {
   type SessionIdentity,
   type SessionKey,
 } from "./diff.js";
-import type { AuthorisedJob, SpawnJob } from "./jobs.js";
+import type { Arming, AuthorisedJob, SpawnJob } from "./jobs.js";
 import { conditionTracker, describeNote, openNoteLog, type DaemonNote } from "./notes.js";
 import type { ProposingRuleWork } from "./rule-protocol.js";
-import { describeReport, schedulerTick, type LostRecord, type RuleRun } from "./scheduler.js";
+import { describeReport, schedulerStandingOf, schedulerTick, type LostRecord, type RuleRun } from "./scheduler.js";
 import { parseAttempt, parseObservation, type JsonValue, type ObservedAttemptClock, type ObservedRow } from "./observation.js";
 import { fleetSource, type SourceMessage, type SourceOptions, type Transport } from "./source.js";
 import {
@@ -377,6 +377,17 @@ export type DaemonOptions = {
      */
     rules?: ProposingRuleWork;
     /**
+     * **WHEN THIS SCHEDULER WAS ARMED**, from `arming.ts`. The anchor a
+     * never-run job's first eligibility is measured from (GPT Sol's S8-6).
+     *
+     * Required rather than defaulted, for the reason `TickInput.arming` gives:
+     * a default here would be this file quietly deciding the one thing the field
+     * exists to stop anybody deciding by accident.
+     */
+    arming: Arming;
+    /** The minimum gap between two session launches. `schedules.ts` § `LAUNCH_SEPARATION_MS`, and GPT Sol's S8-5. */
+    launchSeparationMs: number;
+    /**
      * How long a shutdown waits for rule runs still in flight, before giving up
      * on them **loudly**. Defaults to `RULE_SETTLE_GRACE_MS`.
      *
@@ -615,15 +626,22 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
   // ONE OBJECT, BUILT ONCE, WRITTEN ON EVERY CHECKPOINT. `armed` is read off the
   // option rather than off a flag beside it, so "armed" and "there are jobs"
   // cannot come apart.
-  const schedulerStanding: StoredScheduler = {
-    kind: options.jobs === undefined ? "off" : "armed",
-    why:
-      options.schedulerDetail ??
-      (options.jobs === undefined
-        ? "this daemon was started with no scheduled jobs at all, so nothing will be dispatched"
-        : `${options.jobs.definitions.length} standing job(s)`),
+  //
+  // **AND `armed` IS A CLAIM ABOUT THE LOADED DEFINITIONS, not about a switch**
+  // (GPT Sol's S8-7). It used to be `jobs === undefined ? "off" : "armed"`,
+  // which made the headline on the status page a restatement of an environment
+  // variable: a daemon whose jobs were all unauthorised, or all absent because a
+  // document could not be read, still said `ARMED`. Now the switch being on with
+  // nothing runnable is `blocked`, which is its own word because it is its own
+  // situation — not off, and not working.
+  const schedulerStanding: StoredScheduler = schedulerStandingOf({
+    jobs:
+      options.jobs === undefined
+        ? undefined
+        : { definitions: options.jobs.definitions, held: { session: options.jobs.spawn !== undefined, rules: options.jobs.rules !== undefined } },
+    detail: options.schedulerDetail,
     at: now().toISOString(),
-  };
+  });
   const checkpointUpdate = (): CheckpointUpdate => ({
     lastGoodSnapshotAt,
     tick: true,
@@ -824,6 +842,8 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
             store,
             spawn: jobOptions.spawn,
             rules: jobOptions.rules,
+            arming: jobOptions.arming,
+            launchSeparationMs: jobOptions.launchSeparationMs,
             now,
             // The completion append lands after the tick has returned, so its
             // failure cannot reach the reports above. This is where it goes.

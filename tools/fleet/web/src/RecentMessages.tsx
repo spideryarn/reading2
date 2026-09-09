@@ -237,7 +237,175 @@ function Refusal({ head, why, detail, said }: { head: string; why: string; detai
   );
 }
 
-function Found({ view, row, now }: { view: MessagesView & { kind: "found" }; row: FleetRow; now: number }): ReactNode {
+/**
+ * The newest turn on its own, with the one caveat that qualifies it.
+ *
+ * **The stale note comes up here and the provenance does not**, which is the
+ * same cut `Found` already argued for one level down: how much of the file we
+ * read changes what you BELIEVE about the turns, and the age changes what you
+ * DO. A turn shown at the top of the page as the current state of a session is
+ * exactly where "this may be much older than it looks" has to be readable
+ * without opening anything.
+ */
+/**
+ * The newest turn we could read, and every caveat that changes what you would
+ * DO about it.
+ *
+ * **Four of the five things here were found by a cross-family review of the
+ * first version (F13–F16), and they are all the same mistake**: this section
+ * moved to the top of the page, where a sentence is read as the session's
+ * current state, and it went on saying things that were only ever true of a
+ * footnote. Each is now qualified where it is read rather than where it was
+ * written.
+ */
+function Latest({ view, row, now }: { view: MessagesView & { kind: "found" }; row: FleetRow; now: number }): ReactNode {
+  const age = transcriptAge(view.lastModified, row.status, now);
+  const newest = view.turns[view.turns.length - 1];
+
+  /* THE CAVEATS COME FIRST AND ARE DRAWN WHETHER OR NOT THERE IS A TURN. The
+     first version returned early on an empty read and skipped the stale
+     warning it had already computed (F13) — so the emptiest, least certain
+     reading was the one shown with the fewest qualifications. */
+  const caveats = (
+    <>
+      {age.kind === "suspect" ? <StaleNote ms={age.ms} /> : null}
+
+
+      {/* PROMOTED OUT OF THE PROVENANCE (F15). Which file is live changes what
+          you DO — steering on this message may answer a different conversation
+          — and by this file's own rule that puts it beside the turn rather than
+          inside a closed disclosure. The byte counts and the path stay down
+          there, because they only change what you believe. */}
+      {view.copies !== null && view.copies !== 1 ? (
+        <p className="tw:mt-1 tw:text-[13px] tw:text-unknown-ink">
+          {view.copies} files carry this conversation id, and which of them is the live one is not something this
+          page can tell. Anything you send from here may reach a different conversation.
+        </p>
+      ) : null}
+
+      {/* PROMOTED FOR THE SAME REASON (F14), and this one is sharper than it
+          looks. `parseRecentMessages` drops a turn it cannot read and keeps
+          only a COUNT — the position is lost — so the last readable turn is not
+          necessarily the last turn, and the one below may not be the newest
+          thing this session said. */}
+      {view.unreadableTurns > 0 ? (
+        <p className="tw:mt-1 tw:text-[13px] tw:text-unknown-ink">
+          {view.unreadableTurns} {view.unreadableTurns === 1 ? "turn came" : "turns came"} back in a shape this page
+          could not read. This is the latest turn it COULD read, and one of the missing ones may be newer.
+        </p>
+      ) : null}
+    </>
+  );
+
+  if (newest === undefined) {
+    return (
+      <div>
+        {caveats}
+        <p className="tw:mt-1 tw:text-[13px] tw:text-ink-soft">
+          {!view.turnsOffered
+            ? "The server said it found the transcript and then sent no turns at all. That is not an empty conversation; it is an answer this page cannot read."
+            : view.unreadableTurns > 0
+              ? "No turns could be read. That is not the same as a session that has said nothing — every turn the server sent came back in a shape this page could not read."
+              : view.reachedStartOfFile === true
+                ? "The transcript was read from its beginning and there are no turns in it. That is a file that exists and has nothing to say — a session that has not spoken yet."
+                : /* F13: `false` says outright that the read did not reach the
+                     start, and `null` makes no claim at all. Neither
+                     establishes silence, and this used to say it had. */
+                  "No turns were found in the part of the transcript that was read, and the read did not reach the beginning of the file — so this is not evidence that the session has said nothing."}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {caveats}
+      <ul className="tw:mt-1">
+        <Turn turn={newest} />
+      </ul>
+    </div>
+  );
+}
+
+/**
+ * EVERYTHING OLDER, AND EVERYTHING ABOUT WHERE THE TURNS CAME FROM.
+ *
+ * A native `<details>`, which is the pattern this client already uses five
+ * times for "hide the bulky thing behind a control" — Rename and Where it is in
+ * SessionDetail, `TheWords` in ActionButtons, and the attention evidence.
+ * Greg asked for "a popup panel or something"; a disclosure is the cheaper end
+ * of that and there is no dialog component in this client to reach for. If it
+ * reads badly on a phone the answer is a screenshot, not an argument.
+ *
+ * **Closed by default and therefore not read**, so nothing that changes what
+ * you believe about the turn *above* may live only in here — that is why the
+ * stale note is upstairs and only the provenance is down here.
+ */
+function EarlierMessages({
+  view,
+  row,
+  now,
+}: {
+  /** ONLY the `found` arm (F18). See `Conversation` for why this is narrowed. */
+  view: MessagesView & { kind: "found" };
+  row: FleetRow;
+  now: number;
+}): ReactNode {
+  const older = view.turns.slice(0, -1);
+
+  return (
+    <details className="tw:mt-3">
+      {/* DRESSED AS A CONTROL, NOT AS A HEADING — and the first version of this
+          was the heading, which is why the note is here. It copied *Where it
+          is*'s summary styling (11px, uppercase, tracking-widest, ink-faint),
+          which is right for a section label and wrong for the one thing on this
+          page Greg explicitly asked to be a button. A browser check at 390px
+          reported it sitting between LATEST MESSAGE and SAY SOMETHING TO IT
+          looking like a third section label, with nothing but the native 8px
+          triangle to say otherwise — and `cursor: pointer` says nothing at all
+          on a phone. Sentence case, a border and a panel fill, at reading size. */}
+      <summary className="tw:cursor-pointer tw:rounded-md tw:border tw:border-rule-strong tw:bg-panel tw:px-2 tw:py-1.5 tw:text-[13px] tw:text-ink-soft tw:hover:text-ink">
+        {older.length === 0
+          ? "Where this came from"
+          : `${older.length} earlier message${older.length === 1 ? "" : "s"}, and where they came from`}
+      </summary>
+      {/* CAPPED, WITH ITS OWN SCROLL. Opening this inline pushed the composer
+          ~2,600px down the page at 390px — measured, y=1576 to y=2841 — so
+          reading back through the conversation and then replying was a long
+          scroll each way. A capped panel is also closer to the "popup panel"
+          Greg asked for than an unbounded expansion is, so this costs nothing
+          in fidelity to the request. Measured after: +548px at 1280 and +515px
+          at 390, against +1265px uncapped.
+
+          THE BORDER IS THE POINT, NOT THE DECORATION. The first version of the
+          cap had none, and a browser check found what that caused: this box
+          scrolls under overlay scrollbars, so `offsetWidth - clientWidth` is 0
+          — no gutter, no persistent bar, and nothing else marking the bottom
+          edge. The last visible turn simply stopped and the next section
+          began, and at 390px the cut landed mid-turn, so a panel with six more
+          messages inside it read as A CONVERSATION THAT ENDS HERE. That is
+          this tool's own failure mode wearing a new hat: an absence rendering
+          as a fact. A boundary the same shape as the control that opened it
+          makes the cut legible as a cap rather than as an ending. */}
+      <div className="tw:mt-2 tw:max-h-[60vh] tw:overflow-y-auto tw:rounded-md tw:border tw:border-rule tw:px-2">
+        <Found view={view} row={row} now={now} turns={older} />
+      </div>
+    </details>
+  );
+}
+
+function Found({
+  view,
+  row,
+  now,
+  turns,
+}: {
+  view: MessagesView & { kind: "found" };
+  row: FleetRow;
+  now: number;
+  /** The turns this block draws — the newest one is drawn by `Latest` instead. */
+  turns: MessageTurn[];
+}): ReactNode {
   const age = transcriptAge(view.lastModified, row.status, now);
   const written =
     view.lastModified === null
@@ -279,7 +447,9 @@ function Found({ view, row, now }: { view: MessagesView & { kind: "found" }; row
         </Explain>
       )}
 
-      {age.kind === "suspect" ? <StaleNote ms={age.ms} /> : null}
+      {/* The stale note is NOT here — it is drawn beside the newest turn by
+          `Latest`, because this block is closed by default and a caveat nobody
+          opens is a caveat nobody has. */}
 
       {view.copies !== null && view.copies !== 1 ? (
         <p className="tw:mt-1 tw:text-[12px] tw:text-unknown-ink">
@@ -288,15 +458,21 @@ function Found({ view, row, now }: { view: MessagesView & { kind: "found" }; row
         </p>
       ) : null}
 
-      {view.turns.length === 0 ? (
+      {/* THE SENTENCE HERE BRANCHES ON THE TOTAL, NOT ON THE SLICE (F16). An
+          empty slice has two causes that mean opposite things: one turn was
+          read and it is above, or NOTHING was read and the thing above is an
+          empty-state sentence. The first version said "the message above is the
+          only turn read" for both, which on a zero-turn view directly
+          contradicted the sentence it was pointing at. */}
+      {turns.length === 0 ? (
         <p className="tw:mt-2 tw:text-[13px] tw:text-ink-soft">
-          {view.turnsOffered
-            ? "The transcript was read and there are no turns in it. That is a file that exists and has nothing to say — a session that has not spoken yet."
-            : "The server said it found the transcript and then sent no turns at all. That is not an empty conversation; it is an answer this page cannot read."}
+          {view.turns.length === 0
+            ? "No turns were read, so there is nothing earlier to show."
+            : "Nothing earlier — the message above is the only turn read."}
         </p>
       ) : (
         <ul className="tw:mt-2">
-          {view.turns.map((turn, i) => (
+          {turns.map((turn, i) => (
             <Turn key={turn.uuid ?? `turn-${i}`} turn={turn} />
           ))}
         </ul>
@@ -488,7 +664,35 @@ export function useRecentMessages(api: MessagesApi, row: FleetRow): MessagesRead
   return { view, busy, read: () => begin(row) };
 }
 
-export function RecentMessages({
+/**
+ * THE CONVERSATION: the newest turn we could read, then everything older.
+ *
+ * **ONE exported component owning the exhaustive switch, not two (F18).** The
+ * first version exported the two halves separately, and although the only
+ * caller paired them correctly, the *API* let a future consumer render the
+ * earlier-messages half alone — which returns `null` for every refusal state
+ * and would have flattened all four of them into a blank. The pairing is now a
+ * property of the module rather than of the caller's good manners, and
+ * `EarlierMessages` takes only the `found` arm, so "render the history without
+ * the refusals" is not expressible.
+ *
+ * Greg, 2026-09-09: *"show the most recent message (perhaps with a summary if
+ * idle) prominently near the top, with the input-box and command-lists
+ * underneath"*. So the conversation moved from the bottom of the page to the
+ * second section, and split in two: the last thing the agent said is what you
+ * came to read, and the eleven turns before it are what you open when that is
+ * not enough.
+ *
+ * **THE REFUSALS COME UP HERE WITH IT, and that is the load-bearing half of the
+ * split.** `not-found`, `unreadable`, `no-answer` and *not read yet* are the
+ * states in which there is no latest message, and if they had stayed downstairs
+ * with the provenance the top of the page would render **nothing** — which reads
+ * as a session that has said nothing rather than as a transcript we could not
+ * read. A reading that could not be taken must not render as silence any more
+ * than it may render as a reading
+ * (docs/project/overseer-direction.md § A higher bar for robustness).
+ */
+export function Conversation({
   row,
   now,
   reading,
@@ -507,7 +711,10 @@ export function RecentMessages({
           {busy ? "Reading the tail of this session's transcript…" : "Not read yet."}
         </p>
       ) : view.kind === "found" ? (
-        <Found view={view} row={row} now={now} />
+        <>
+          <Latest view={view} row={row} now={now} />
+          <EarlierMessages view={view} row={row} now={now} />
+        </>
       ) : view.kind === "not-found" ? (
         <Refusal
           head="There is no transcript to read for this session."

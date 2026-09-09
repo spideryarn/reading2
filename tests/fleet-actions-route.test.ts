@@ -32,14 +32,16 @@ import {
   runPlan,
   type ActionDeps,
   type ActionIo,
+  type PlanRun,
   type StepRun,
 } from "../tools/fleet/routes-actions.js";
 import { createRateLimiter } from "../tools/fleet/routes-steer.js";
 /* THE REAL CARD, rendered to a string rather than into a DOM, so the route,
    the client parse and the component a person actually reads can meet in one
    test without this node-lane file acquiring jsdom. */
-import { ActionOutcomeCard, effectHeadline } from "../tools/fleet/web/src/ActionButtons";
-import { makeActionsApi, type ActionsApi } from "../tools/fleet/web/src/actions-client";
+import { ActionOutcomeCard, BoxEffectSummary, effectHeadline } from "../tools/fleet/web/src/ActionButtons";
+import { boxActionBody, makeActionsApi, type ActionsApi } from "../tools/fleet/web/src/actions-client";
+import { QuarantineBook } from "../tools/fleet/quarantine.js";
 import { SteeringQueue } from "../tools/fleet/queue.js";
 import type { FleetStatus } from "../tools/fleet/status.js";
 import type { SteerResult, SteerTarget } from "../tools/fleet/steer.js";
@@ -175,7 +177,17 @@ function harness(
   const sent: Sent[] = [];
   const logs: string[] = [];
   let clock = 1_000_000;
-  const queue = over.queue ?? new SteeringQueue({ now: () => clock, serverInstanceId: over.instanceId ?? INSTANCE });
+  const instanceId = over.instanceId ?? INSTANCE;
+  const queue =
+    over.queue ??
+    new SteeringQueue({
+      now: () => clock,
+      serverInstanceId: instanceId,
+      // A REAL BOOK, sharing this harness's clock and run id. The hold
+      // machinery is tests/fleet-quarantine.test.ts's subject; what this needs
+      // is that `next()` here asks the same question production's does.
+      quarantine: new QuarantineBook({ now: () => clock, serverInstanceId: instanceId }),
+    });
   const { result, instanceId: _instanceId, ...rest } = over;
   const routes = makeActionRoutes({
     queue,
@@ -269,6 +281,50 @@ function sessionBody(over: Record<string, unknown> = {}): Record<string, unknown
 
 function recipient(over: Record<string, unknown> = {}): Record<string, unknown> {
   return { paneId: "%99001", sessionId: "$99001", claudeSessionId: CLAUDE_ID, panePid: 424242, status: { kind: "idle" }, ...over };
+}
+
+/**
+ * A ROW AS THE PAGE HOLDS IT, which is what `recipient()` above is a
+ * hand-written picture of.
+ *
+ * The two exist for opposite reasons and both are needed: `recipient()` is the
+ * wire shape, so a test can post a body the browser could not build; this is
+ * the browser's own input, so a test can make the browser build one. Typed off
+ * `box`'s own parameter rather than off `FleetRow` directly, so a change to
+ * what the API takes reaches these fixtures.
+ *
+ * A cast rather than a full `FleetRow`, for the reason the `ROW` further down
+ * gives: `steerTargetBody` reads five fields and nothing else, and a full row
+ * here would be a fixture of the state payload — a different file's subject —
+ * that could go stale against it in silence.
+ */
+type PageRow = Parameters<ReturnType<typeof makeActionsApi>["box"]>[2][number];
+
+/**
+ * The rows argument where the request genuinely has none to give.
+ *
+ * `NO_ROWS_NEEDED` is a KILL: `killRoute` reads `pids`, never `recipients`, so
+ * a kill with no rows is not a kill to nobody — it is the only shape a kill
+ * has. (Its own list is missing from the browser's request too; that gap is
+ * named where the kill tests are.)
+ *
+ * `REQUEST_IGNORED` is a call through `replay`, which answers a RECORDED
+ * response and never reads what was posted. Named rather than `[]` at seven
+ * call sites so nobody reads one of them as a broadcast addressed to nobody.
+ */
+const NO_ROWS_NEEDED: readonly PageRow[] = [];
+const REQUEST_IGNORED: readonly PageRow[] = [];
+
+function pageRow(over: Record<string, unknown> = {}): PageRow {
+  return {
+    id: "$99001",
+    paneId: "%99001",
+    claudeSessionId: CLAUDE_ID,
+    panePid: 424242,
+    status: { kind: "idle" },
+    rawStatus: { kind: "idle" },
+    ...over,
+  } as unknown as PageRow;
 }
 
 function proc(over: Partial<ProcRecord>): ProcRecord {
@@ -1276,7 +1332,7 @@ describe("POST /api/actions/box — killing", () => {
     // only one that runs the real client parse over the real response.
     const { io, ran } = fakeIo({ procs: [...suites, ...bystanders] });
     const { routes } = harness({ io });
-    const outcome = await makeActionsApi(browserFetch(routes)).box("kill-test-suites", true);
+    const outcome = await makeActionsApi(browserFetch(routes)).box("kill-test-suites", true, NO_ROWS_NEEDED);
     expect(outcome.ok).toBe(true);
     const shown = outcome.ok ? outcome.result : null;
     // Written as "what a person would read off the panel" rather than as a
@@ -1298,7 +1354,7 @@ describe("POST /api/actions/box — killing", () => {
     // run answers 200 with a preview, and this answers 409.
     const { io, ran } = fakeIo({ procs: [...suites] });
     const { routes } = harness({ io });
-    const outcome = await makeActionsApi(browserFetch(routes)).box("kill-test-suites", false);
+    const outcome = await makeActionsApi(browserFetch(routes)).box("kill-test-suites", false, NO_ROWS_NEEDED);
 
     expect(outcome.ok).toBe(false);
     // AND THE REMAINING GAP, NAMED RATHER THAN HIDDEN: the page does not yet
@@ -1336,7 +1392,7 @@ describe("POST /api/actions/box — killing", () => {
     expect(r.status).toBe(200);
     // The intersection is what got a step; what the step ESTABLISHED is the
     // block below this describe.
-    expect((resultOf(r).kill as { attempted: number[] }).attempted).toEqual([5001]);
+    expect((resultOf(r).kill as { targeted: number[] }).targeted).toEqual([5001]);
     expect(ran.map((x) => x.argv)).toEqual([["kill", "-TERM", "5001"]]);
     const skipped = resultOf(r).skipped as { pid: number; why: string }[];
     expect(skipped.map((s) => s.pid).sort()).toEqual([5002, 5005]);
@@ -1421,46 +1477,148 @@ describe("POST /api/actions/box — the staggered broadcast", () => {
   }
 
   /**
-   * **THE NEGATIVE CONTROL FOR THE `body()` ABOVE, AND IT IS NOT A HYPOTHETICAL
-   * REQUEST.**
+   * **THE JOIN, DRIVEN FROM THE BROWSER'S END — AND IT WAS SEVERED FOR A DAY.**
    *
-   * Every test in this block hands the route a body with `recipients` in it,
-   * hand-written here. `boxActionBody` — the only thing that builds this request
-   * in the browser — returns `{actionId, mode, confirm, speaker}` and nothing
-   * else (`web/src/actions-client.ts`), so the body the page actually sends is
-   * the one below and no test in this file had ever put it through the route.
-   * Both halves were right about their own object and had never met: the same
-   * shape as the `kill-test-suites` pair above, where the request the panel
-   * sends is refused by a rule every hand-written fixture satisfies.
+   * Every other test in this block hands the route a body with `recipients` in
+   * it, hand-written above. Until 2026-09-09 `boxActionBody` — the only thing
+   * that builds this request in the browser, and the only thing posted by
+   * `makeActionsApi().box` — returned `{actionId, mode, confirm, speaker}` and
+   * nothing else, so the body the page actually sent was refused `bad-request`
+   * by the first line of `broadcastRoute`. Both halves were right about their
+   * own object and had never met: the same shape as the `kill-test-suites` pair
+   * above, which still has it.
    *
-   * So this asserts the refusal rather than papering over it, for the same
-   * reason the kill one does: an honest 400 in the server's own words is the
-   * true state of this path today, and the repair — the panel carrying the rows
-   * it previewed into the confirmed request — belongs to the roadmap's Box
-   * contracts stage (finding E-actions), not here. Written at the Baseline
-   * stage, 2026-09-08, through `browserFetch` so it is the real serializer
-   * meeting the real route.
+   * The test that stood here asserted that refusal as the honest state of the
+   * path, and it was — but two sessions then spent an evening measuring which
+   * sessions a broadcast reaches, on a selection rule that had never once run.
+   * **So the assertion that matters is not that the body has a `recipients`
+   * field: it is that a recipient is actually SELECTED at the far end.** A test
+   * of the field would have passed at every moment of that evening while the
+   * button stayed dead.
+   *
+   * `true`, because the first press is the dry run: `ActionButtons` calls
+   * `api.box(action.id, true, rows)` for the preview and only offers Confirm
+   * once that has come back.
    */
-  it("refuses the body the page really sends, because the browser carries no recipients", async () => {
+  it("carries the rows the page is showing into the request, so the route has somebody to speak to", async () => {
     const { routes, sent } = harness();
-    /* **`true`, BECAUSE THE FIRST PRESS IS THE DRY RUN.** `ActionButtons` calls
-       `api.box(action.id, true)` for the preview and only offers Confirm once
-       that came back — so on this path the confirmed request is unreachable, and
-       a test written against `false` would be checking a request no reader can
-       make. The route happens to check recipients before mode, so both spell
-       the same refusal; this one is the press that actually happens. Sol's
-       third P2, 2026-09-08. */
-    const preview = await makeActionsApi(browserFetch(routes)).box("resource-broadcast", true);
-    expect(preview.ok).toBe(false);
-    expect(preview.ok === false && preview.code).toBe("bad-request");
-    expect(preview.ok === false ? preview.why : "").toContain("a broadcast needs recipients");
+    const rows = [
+      pageRow({ id: "$1", paneId: "%1" }),
+      pageRow({ id: "$2", paneId: "%2", rawStatus: { kind: "working" } }),
+      pageRow({ id: "$3", paneId: "%3", rawStatus: { kind: "needs-you" } }),
+    ];
+    const preview = await makeActionsApi(browserFetch(routes)).box("resource-broadcast", true, rows);
 
-    // And the confirmed one, which the panel cannot reach because of the above.
-    const confirmed = await makeActionsApi(browserFetch(routes)).box("resource-broadcast", false);
-    expect(confirmed.ok).toBe(false);
-
-    // The point of a negative control: nothing was said to anybody, either time.
+    expect(preview.ok).toBe(true);
+    /* SOMEBODY WAS SELECTED, read through the real client parse rather than off
+       the raw body, so this is the count the panel would draw. */
+    expect(preview.ok ? preview.effect : null).toEqual({
+      kind: "broadcast",
+      recipients: 3,
+      states: [
+        { state: "would-send", count: 2 },
+        { state: "held", count: 1 },
+      ],
+    });
+    // Which rows, in the page's order, and which one the working status held.
+    const shown = (preview.ok ? preview.result : null) as { recipients?: { paneId: string; outcome: string }[] } | null;
+    expect((shown?.recipients ?? []).map((x) => `${x.paneId}:${x.outcome}`)).toEqual([
+      "%1:would-send",
+      "%2:held",
+      "%3:would-send",
+    ]);
+    // A dry run still says nothing to anybody.
     expect(sent).toEqual([]);
+  });
+
+  /**
+   * **THE VALUES ARE THE SNAPSHOT'S, NOT A FRESH READING OF THE BOX.**
+   *
+   * `steerTargetBody` sends `row.rawStatus` — the server's own object, kept
+   * beside the parsed `row.status` precisely so a stale-but-honest claim can be
+   * checked at the far end (steer-client.ts § `SteerTargetBody`). This row is
+   * built so the two DISAGREE: what the page drew is `unknown`, which
+   * `drainGate` refuses, and what the server said is `idle`, which it delivers
+   * to. A client that rebuilt the claim out of what it had rendered — or that
+   * re-fetched the row to make its own claim true — cannot pass this.
+   */
+  it("sends the status the row was carrying, not the one the page drew", async () => {
+    const { routes } = harness();
+    const rows = [
+      pageRow({
+        id: "$7",
+        paneId: "%7",
+        status: { kind: "unknown", why: "drawn from a stale collection" },
+        rawStatus: { kind: "idle" },
+      }),
+    ];
+    const preview = await makeActionsApi(browserFetch(routes)).box("resource-broadcast", true, rows);
+
+    expect(preview.ok).toBe(true);
+    const shown = (preview.ok ? preview.result : null) as { recipients?: { paneId: string; outcome: string }[] } | null;
+    expect((shown?.recipients ?? []).map((x) => `${x.paneId}:${x.outcome}`)).toEqual(["%7:would-send"]);
+  });
+
+  /**
+   * **A ROW THAT IS NOT AN ADDRESS MUST NOT SINK THE WHOLE BROADCAST**, and
+   * this one was found the way the last one should have been: by tracing a real
+   * call end to end.
+   *
+   * With the recipients wired up, the page's own payload was built from the
+   * LIVE `/api/state` — 23 rows, through `parseFleetState` and `boxActionBody`
+   * — and posted at the running server on 2026-09-09. It answered **400**:
+   * `a recipient is not addressable: claudeSessionId is missing`. `parseTarget`
+   * requires a `paneId` and a `claudeSessionId` on every recipient and refuses
+   * the request over any one of them, and a real fleet always holds a few rows
+   * with neither: a shell, and a session too old to have pinned a conversation
+   * id. So sending the rows *entirely* raw fixed nothing — one shell on the box
+   * and the broadcast still reached nobody.
+   *
+   * `steer-client.ts` already says what such a row is: a null `claudeSessionId`
+   * means *the row cannot be steered at all*. It is not a recipient the server
+   * should judge; it is not an address. So the client drops it and keeps the
+   * count — see `addressableRows`, and the sentence the panel puts under the
+   * confirmation so the narrowing is not silent.
+   */
+  it("does not let a row it cannot address sink the whole broadcast", async () => {
+    const { routes } = harness();
+    const rows = [
+      pageRow({ id: "$1", paneId: "%1" }),
+      // A session too old to have pinned a conversation id — or a shell.
+      pageRow({ id: "$2", paneId: "%2", claudeSessionId: null }),
+      // A row whose pane never resolved. Also not an address.
+      pageRow({ id: "$3", paneId: null }),
+      pageRow({ id: "$4", paneId: "%4" }),
+    ];
+    const preview = await makeActionsApi(browserFetch(routes)).box("resource-broadcast", true, rows);
+
+    expect(preview.ok).toBe(true);
+    const shown = (preview.ok ? preview.result : null) as { recipients?: { paneId: string; outcome: string }[] } | null;
+    expect((shown?.recipients ?? []).map((x) => `${x.paneId}:${x.outcome}`)).toEqual(["%1:would-send", "%4:would-send"]);
+  });
+
+  /**
+   * **THE PIN.** The two above go through HTTP, so a regression there arrives
+   * as a 400 that a reader can talk themselves out of. This one names the one
+   * field whose removal severs the join and drives the real builder, so
+   * `boxActionBody` dropping `recipients` fails in one line rather than in an
+   * argument about fixtures.
+   */
+  it("builds the request body with the rows in it, verbatim", () => {
+    /* The second row's `panePid` is null ON PURPOSE and is still sent: the
+       server reads a null pid as "no respawn check", which is a weaker guard
+       and a real answer. That is a different thing from the two identifiers
+       `addressableRows` drops, and inventing a pid to fill the hole would be
+       the client signing its name to a check it did not make. */
+    const rows = [pageRow({ id: "$1", paneId: "%1" }), pageRow({ id: "$2", paneId: "%2", panePid: null })];
+    const body = boxActionBody("resource-broadcast", false, rows);
+
+    expect(body.recipients).toEqual([
+      { paneId: "%1", sessionId: "$1", claudeSessionId: CLAUDE_ID, panePid: 424242, status: { kind: "idle" } },
+      { paneId: "%2", sessionId: "$2", claudeSessionId: CLAUDE_ID, panePid: null, status: { kind: "idle" } },
+    ]);
+    // And the rest of the body is unchanged: `mode` is the field the route reads.
+    expect(body).toMatchObject({ actionId: "resource-broadcast", mode: "run", confirm: true, speaker: "greg" });
   });
 
   it("staggers across the recipients it can actually speak to", async () => {
@@ -1611,7 +1769,7 @@ describe("POST /api/actions/box — the staggered broadcast", () => {
     let clock = 1_000_000;
     const sent: string[] = [];
     const routes = makeActionRoutes({
-      queue: new SteeringQueue({ now: () => clock, serverInstanceId: "1a2b3c4d" }),
+      queue: new SteeringQueue({ now: () => clock, serverInstanceId: "1a2b3c4d", quarantine: new QuarantineBook({ now: () => clock, serverInstanceId: "1a2b3c4d" }) }),
       sendMessage: (target) => {
         sent.push(target.paneId);
         clock += 60_000;
@@ -1817,9 +1975,11 @@ describe("a kill reports what it established, not what it intended", () => {
     const r = await call(routes, fakeReq({ url: "/api/actions/box", body: killBody([5001, 5002, 5003]) }));
     expect(r.status).toBe(200);
 
-    const kill = resultOf(r).kill as { attempted: number[]; observed: { pid: number; observation: string }[]; planCompleted: boolean };
-    // ATTEMPTED is the intent, and it is allowed to name all three.
-    expect(kill.attempted).toEqual([5001, 5002, 5003]);
+    const kill = resultOf(r).kill as { targeted: number[]; observed: { pid: number; observation: string }[] };
+    /* TARGETED is the intent, and it is allowed to name all three. It was
+       called `attempted` for a day, which named the intent after the attempt in
+       the stage built to stop exactly that. */
+    expect(kill.targeted).toEqual([5001, 5002, 5003]);
     // OBSERVED is what came back, and it is not allowed to agree with it.
     expect(kill.observed.map((o) => `${o.pid}:${o.observation}`)).toEqual([
       "5001:signal-accepted",
@@ -1852,15 +2012,20 @@ describe("a kill reports what it established, not what it intended", () => {
     expect(kill.observed[1]?.why).toContain("ENOENT");
   });
 
-  it("names a pid the plan never got to as not attempted, and says the plan stopped", () => {
-    /* DRIVEN THROUGH `killReport` RATHER THAN THE ROUTE, and the reason is
-       worth writing down: every step of a kill plan is `best-effort`, so
-       `judgeStep` can only return `passed` or `failed-ignored` and `runPlan`
-       cannot currently return `completed: false` for a kill. The route has no
-       path to this state today. It is still the state the type allows and the
-       one that must never render as a completed kill, so it is tested against
-       the real reducer with the `PlanRun` a stricter plan would produce. */
-    const report = killReport([5001, 5002, 5003], {
+  it("refuses a run short of steps rather than inventing an outcome for the pids it cannot see", () => {
+    /* **WHAT THIS REPLACES WAS DECORATION.** `not-attempted` and
+       `planCompleted` shipped for a day and no code could produce either: every
+       step of a kill plan is `best-effort`, so `judgeStep` never returns
+       `failed` and `runPlan` never stops one early. The only way to see them
+       was to build a `PlanRun` by hand — which the test that asserted them did,
+       so the arm existed to satisfy its own test. A vocabulary word nothing can
+       write costs a reader the assumption that the other words mean something.
+
+       So the shortfall is an invariant now. Throwing loses this run's evidence
+       and that is the direction to be wrong in: `guard()` turns it into a 500
+       naming the mismatch, where the alternative is a 200 naming fewer pids
+       than were signalled — the exact defect this stage removed. */
+    const short: PlanRun = {
       action: "kill-test-suites",
       planned: 3,
       completed: false,
@@ -1878,13 +2043,10 @@ describe("a kill reports what it established, not what it intended", () => {
           tail: "",
         },
       ],
-    });
-    expect(report.planCompleted).toBe(false);
-    expect(report.observed.map((o) => `${o.pid}:${o.observation}`)).toEqual([
-      "5001:signal-refused",
-      "5002:not-attempted",
-      "5003:not-attempted",
-    ]);
+    };
+    expect(() => killReport([5001, 5002, 5003], short)).toThrow(/1 step\(s\) for 3 targeted pid\(s\)/);
+    // And the same run against the list it actually covers reports normally.
+    expect(killReport([5001], short).observed.map((o) => `${o.pid}:${o.observation}`)).toEqual(["5001:signal-refused"]);
   });
 
   it("never says a process is dead, because nothing here looked", async () => {
@@ -1899,6 +2061,64 @@ describe("a kill reports what it established, not what it intended", () => {
     expect(words).not.toContain("killed");
     expect(words).not.toContain("dead");
     expect(words).toContain("signal-accepted");
+  });
+
+  it("renders each arm through the real card, and no sentence a person reads is past tense about a process", async () => {
+    /* **THE GUARD ON THE THING THIS STAGE EXISTS TO PREVENT**, and it was the
+       piece missing from it. The assertions above forbid `killed` in the JSON
+       and in the heading; the browser test rendered only the arm the route
+       cannot reach. So the sentence a person ACTUALLY READS after a kill —
+       `BOX_STATE_COPY`'s line for `signal-accepted` — could have been changed
+       to *process killed* with the whole suite still green. A review found
+       exactly that by mutating it.
+
+       Real route bytes, the real client parse, the real component. Three pids
+       and three fates in one press, and nothing re-read the process table
+       between them, so the ceiling on all three is the same. */
+    const { io } = fakeIo({
+      procs: suites,
+      step: (step) =>
+        step.argv[2] === "5002"
+          ? { ...OK_STEP, code: 1, stderr: "kill: (5002) - No such process" }
+          : step.argv[2] === "5003"
+            ? { ...OK_STEP, code: null, timedOut: true }
+            : OK_STEP,
+    });
+    const { routes } = harness({ io });
+    const recorded = await call(routes, fakeReq({ url: "/api/actions/box", body: killBody([5001, 5002, 5003]) }));
+    const outcome = await makeActionsApi(replay(recorded)).box("kill-test-suites", false, REQUEST_IGNORED);
+    const effect = outcome.ok ? outcome.effect : null;
+    if (effect === null) throw new Error("expected the answer to carry an effect reading");
+    /* `strip` turns every tag into a space, so the runs are collapsed before
+       anything is matched against them. */
+    const text = strip(renderToStaticMarkup(createElement(BoxEffectSummary, { effect }))).replace(/\s+/g, " ");
+
+    // The join first: three pids, three different words, one each.
+    expect(text).toContain("1 signal-accepted");
+    expect(text).toContain("1 signal-refused");
+    expect(text).toContain("1 not-established");
+
+    /* THE CEILING, ARM BY ARM, in the words on the page.
+
+       `signal-accepted` is the strongest thing this route can establish and it
+       stops at the signal: a process may ignore SIGTERM and nothing here looks
+       again. */
+    expect(text).toContain("signal accepted — not proof the process is gone");
+    // A settled negative, and the only one: `kill` said the pid was not there.
+    expect(text).toContain("no such process, or not ours to signal");
+    /* And the arm that settles NOTHING must not read like either of them. It
+       covers a timeout and a `kill` killed by a signal — in both of which the
+       command RAN, so "could not be run" was false of the case driven here and
+       could be contradicted by the verdict printed underneath it. */
+    expect(text).toContain("the signal attempt did not settle — it may have gone out and it may not");
+    expect(text).not.toContain("could not be run");
+
+    /* No past tense about the process, anywhere on the list a person reads.
+       Named words rather than a shape, because this is the assertion a
+       mutation has to get past. */
+    for (const claim of [/killed/i, /\bdead\b/i, /\bdied\b/i, /terminat/i, /no longer running/i, /shut down/i]) {
+      expect(text).not.toMatch(claim);
+    }
   });
 });
 
@@ -1958,9 +2178,14 @@ describe("a broadcast keeps one delivery reading per recipient", () => {
   });
 
   it("reads a throw from the delivery module as unknown, never as a refusal", async () => {
-    /* A throw happens PARTWAY THROUGH a sequence of tmux calls and there is no
-       `Delivery` to read: the exception carries none. `refused` was the
-       reassuring reading of the one case with the least evidence behind it. */
+    /* A throw carries no `Delivery`, so there is nothing to read: `refused` was
+       the reassuring reading of the one case with the least evidence behind it.
+
+       **AND THE SENTENCE MUST NOT SAY WHEN THE THROW HAPPENED.** The `try` is
+       around the WHOLE `sendMessage` call, so a throw before the first keystroke
+       lands in the same branch as one out of the middle of a tmux sequence —
+       and the fake below throws immediately, which is exactly the case the copy
+       used to describe as *partway through the send*. */
     const { routes } = harness({
       result: (t) => {
         if (t.paneId === "%3") throw new Error("execFileSync: EAGAIN");
@@ -1971,6 +2196,10 @@ describe("a broadcast keeps one delivery reading per recipient", () => {
     const row = (resultOf(r).recipients as { paneId: string; outcome: string; why: string }[]).find((x) => x.paneId === "%3");
     expect(row?.outcome).toBe("outcome-unknown");
     expect(row?.why).toContain("EAGAIN");
+    expect(row?.why).toContain("the delivery module threw while handling this recipient");
+    // The uncertainty survives the rewrite; the invented timing does not.
+    expect(row?.why).toContain("Nothing here can tell whether any of it reached the pane.");
+    expect(row?.why).not.toContain("partway");
   });
 
   it("says `would-send` in a preview, so a plan cannot be read as a delivery", async () => {
@@ -2068,26 +2297,15 @@ describe("a refusal that carried a plan run reaches the card", () => {
     const text = strip(renderToStaticMarkup(createElement(ActionOutcomeCard, { outcome, onRefresh: () => {} })));
     expect(text).toContain("It stopped part-way: 2 of 2 steps ran.");
     expect(text).toContain("the server used a word this page does not know");
-  });
-
-  it("does not read a kill that said nothing about its plan as a completed plan", async () => {
-    /* The same silence, one field over: `parseBoxEffect` reads
-       `planCompleted === true` for the reason above, and the reassuring
-       default is the one that must not be reachable by omission. */
-    const outcome = await makeActionsApi(
-      replay({
-        status: 200,
-        body: JSON.stringify({
-          ok: true,
-          op: "ran",
-          action: "kill-test-suites",
-          dryRun: false,
-          result: { kill: { attempted: [5001], observed: [{ pid: 5001, observation: "signal-accepted" }] } },
-        }),
-      }),
-    ).box("kill-test-suites", false);
-    const effect = outcome.ok ? outcome.effect : null;
-    expect(effect?.kind === "kill" && effect.planCompleted).toBe(false);
+    /* **A STEP IS NOT NECESSARILY A COMMAND THAT EXITED.** `PlanRun` records a
+       spawn failure, a timeout and a subprocess killed by a signal, and none of
+       those exited. The card said all three did, one line under a list that
+       could be naming them. */
+    /* Split around the apostrophe: `renderToStaticMarkup` escapes it to
+       `&#x27;` and `strip` only removes tags. */
+    expect(text).toContain("Each row below is a plan step the server reached, with the gate");
+    expect(text).toContain("s own verdict.");
+    expect(text).not.toContain("a command that exited");
   });
 });
 
@@ -2109,7 +2327,7 @@ describe("the heading over a box answer is a ratio, not a verdict", () => {
   const broadcastBody = { actionId: "resource-broadcast", mode: "run", confirm: true, speaker: "greg", recipients: five };
 
   async function headingFor(recorded: { status: number | null; body: string }): Promise<string | null> {
-    const outcome = await makeActionsApi(replay(recorded)).box("resource-broadcast", false);
+    const outcome = await makeActionsApi(replay(recorded)).box("resource-broadcast", false, REQUEST_IGNORED);
     return effectHeadline(outcome.ok ? outcome.effect : null);
   }
 
@@ -2138,7 +2356,7 @@ describe("the heading over a box answer is a ratio, not a verdict", () => {
           : SENT_OK,
     });
     const recorded = await call(routes, fakeReq({ url: "/api/actions/box", body: broadcastBody }));
-    const outcome = await makeActionsApi(replay(recorded)).box("resource-broadcast", false);
+    const outcome = await makeActionsApi(replay(recorded)).box("resource-broadcast", false, REQUEST_IGNORED);
     const effect = outcome.ok ? outcome.effect : null;
     expect(effect?.kind).toBe("broadcast");
     expect(effect?.states.find((s) => s.state === "partial")?.count).toBe(1);
@@ -2159,10 +2377,12 @@ describe("the heading over a box answer is a ratio, not a verdict", () => {
     const a = await makeActionsApi(replay(await call(good.routes, fakeReq({ url: "/api/actions/box", body })))).box(
       "kill-test-suites",
       false,
+      REQUEST_IGNORED,
     );
     const b = await makeActionsApi(replay(await call(gone.routes, fakeReq({ url: "/api/actions/box", body })))).box(
       "kill-test-suites",
       false,
+      REQUEST_IGNORED,
     );
 
     expect(effectHeadline(a.ok ? a.effect : null)).toBe("Signal accepted for 2 of 2 pids.");
@@ -2171,9 +2391,12 @@ describe("the heading over a box answer is a ratio, not a verdict", () => {
     expect(effectHeadline(a.ok ? a.effect : null)).not.toContain("killed");
   });
 
-  it("says a plan that did not complete left pids unsignalled, and never heads it as done", async () => {
-    /* The `completed: false` state the route cannot reach — see `killReport`'s
-       own comment — driven through the real parse and the real heading. */
+  it("takes the denominator from the pids the server targeted, and falls back to the evidence rather than to zero", async () => {
+    /* THE ONLY SHAPE THAT REACHES THE FALLBACK is a body from a server that
+       predates `targeted`, so it is hand-written on purpose and says so. The
+       fallback is the observed list because that is the most this page can
+       prove; falling back to zero would head a real kill *0 of 0*, which reads
+       as nothing having been aimed at. */
     const outcome = await makeActionsApi(
       replay({
         status: 200,
@@ -2182,18 +2405,14 @@ describe("the heading over a box answer is a ratio, not a verdict", () => {
           op: "ran",
           action: "kill-test-suites",
           dryRun: false,
-          result: {
-            run: { action: "kill-test-suites", steps: [], planned: 3, completed: false, stoppedAt: 0 },
-            kill: killReport([5001, 5002, 5003], { action: "kill-test-suites", steps: [], planned: 3, completed: false, stoppedAt: 0 }),
-          },
+          result: { kill: { observed: [{ pid: 5001, observation: "signal-accepted" }] } },
         }),
       }),
-    ).box("kill-test-suites", false);
+    ).box("kill-test-suites", false, REQUEST_IGNORED);
 
     const effect = outcome.ok ? outcome.effect : null;
-    expect(effect?.kind === "kill" && effect.planCompleted).toBe(false);
-    expect(effectHeadline(effect)).toBe("Signal accepted for 0 of 3 pids.");
-    expect(effect?.states).toEqual([{ state: "not-attempted", count: 3 }]);
+    expect(effect?.kind === "kill" && effect.targeted).toBe(1);
+    expect(effectHeadline(effect)).toBe("Signal accepted for 1 of 1 pids.");
   });
 
   it("heads a preview as a promise, not as a receipt", async () => {

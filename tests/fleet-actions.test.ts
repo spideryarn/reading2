@@ -39,6 +39,7 @@ import {
   planKillSession,
   planRemoveWorktree,
   renderBroadcast,
+  renderMessage,
   renderSpoken,
   SAFE_KILL_RULES,
   selectForKill,
@@ -51,6 +52,27 @@ import {
   type ProcRecord,
   type SpokenAction,
 } from "../tools/fleet/actions.js";
+import type { Speaker } from "../tools/fleet/wire.js";
+
+/**
+ * Every arm of `Speaker`, ANNOTATED rather than inferred.
+ *
+ * The annotation is the mechanism: `readonly Speaker[]` does not force
+ * completeness on its own, so the tuple below is checked by
+ * `EVERY_SPEAKER_IS_COMPLETE`, which fails to compile if an arm exists that is
+ * not listed. A hand-written list of speakers is a list that silently stops
+ * being exhaustive, which is exactly what happened before `dashboard` was
+ * added — the loop that renders every action for every speaker was iterating
+ * two of three.
+ */
+const EVERY_SPEAKER = ["greg", "overseer", "dashboard"] as const satisfies readonly Speaker[];
+
+/** Compile-time proof that `EVERY_SPEAKER` names every arm, not merely valid ones. */
+type EverySpeakerIsComplete = Exclude<Speaker, (typeof EVERY_SPEAKER)[number]> extends never
+  ? true
+  : ["EVERY_SPEAKER is missing an arm of Speaker", Exclude<Speaker, (typeof EVERY_SPEAKER)[number]>];
+const EVERY_SPEAKER_IS_COMPLETE: EverySpeakerIsComplete = true;
+void EVERY_SPEAKER_IS_COMPLETE;
 import { checkText } from "../tools/fleet/steer.js";
 
 const spoken = (): SpokenAction[] => ACTIONS.filter((a): a is SpokenAction => a.effect === "spoken");
@@ -182,15 +204,52 @@ describe("every spoken message can actually be delivered", () => {
     }
   });
 
-  it("still passes it after the speaker prefix is added", () => {
+  it("still passes it after the speaker prefix is added, for EVERY speaker", () => {
     // The prefix is not free: it is added at delivery, and it counts towards
     // the 4000-character limit.
+    //
+    // EVERY_SPEAKER is annotated rather than inferred, so adding an arm to
+    // `Speaker` without adding it here stops this file compiling. It used to be
+    // a hand-written `["greg", "overseer"] as const`, which is a list that
+    // silently stops being exhaustive — the `dashboard` arm was added on
+    // 2026-09-09 and this loop would not have covered it.
     for (const a of spoken()) {
-      for (const speaker of ["greg", "overseer"] as const) {
+      for (const speaker of EVERY_SPEAKER) {
         const rendered = renderSpoken(a, speaker);
         expect(checkText(rendered), `${a.id}/${speaker}`).toBeNull();
       }
     }
+  });
+
+  it("gives every speaker a prefix that names it, and only Greg an unprefixed slash command", () => {
+    const cont = spokenNamed("continue");
+    for (const speaker of EVERY_SPEAKER) {
+      // Every non-slash rendering must carry SOMETHING that attributes it. An
+      // arm added with an empty prefix would otherwise deliver anonymously,
+      // which is the one outcome this vocabulary exists to prevent.
+      const rendered = renderSpoken(cont, speaker);
+      expect(rendered.startsWith("["), `${speaker} renders unattributed`).toBe(true);
+    }
+
+    // The slash-command exception is Greg's alone, and a new arm inherits the
+    // refusal rather than the exception. Checked for every speaker so that
+    // adding one cannot quietly widen the hole.
+    for (const speaker of EVERY_SPEAKER) {
+      const out = renderMessage("/compact", speaker);
+      expect(out.ok, `${speaker} and /compact`).toBe(speaker === "greg");
+    }
+  });
+
+  it("says nothing is being asked, when nothing is", () => {
+    // `dashboard` reports an event; the other two ask for something. If this
+    // arm ever carries an instruction the prefix is false and the arm splits —
+    // see `Speaker` in wire.ts. This test is what makes that a decision rather
+    // than a drift.
+    const out = renderMessage("a session was started from the web UI", "dashboard");
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    expect(out.text).toContain("Nobody is asking you for anything");
+    expect(out.text).not.toContain("NOT Greg");
   });
 
   it("says who is speaking, and says when it is not Greg", () => {

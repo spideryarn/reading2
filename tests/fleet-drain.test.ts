@@ -26,6 +26,7 @@ import { describe, expect, it, vi } from "vitest";
 import { actionById } from "../tools/fleet/actions.js";
 import type { FleetRow, FleetSnapshot } from "../tools/fleet/collect.js";
 import { createDrainCursor, DRAIN_BUDGET_MS, drainOnce, MAX_SENDS_PER_PASS, summariseDrain, type DrainDeps, type DrainOutcome } from "../tools/fleet/drain.js";
+import { QuarantineBook } from "../tools/fleet/quarantine.js";
 import { SteeringQueue, type UnsentFailure } from "../tools/fleet/queue.js";
 import { drainSharedQueues, handleActionRequest, makeActionRoutes, type ActionDeps } from "../tools/fleet/routes-actions.js";
 import { createRateLimiter } from "../tools/fleet/routes-steer.js";
@@ -139,7 +140,7 @@ const GREG = "[Greg, via the fleet dashboard] ";
 /** The delivery module as a recorder, and optionally as a thing that fails. */
 function harness(over: { result?: SteerResult | ((t: SteerTarget, text: string) => SteerResult); queue?: SteeringQueue } = {}) {
   let clock = 1_000_000;
-  const queue = over.queue ?? new SteeringQueue({ now: () => clock, serverInstanceId: "1a2b3c4d" });
+  const queue = over.queue ?? new SteeringQueue({ now: () => clock, serverInstanceId: "1a2b3c4d", quarantine: new QuarantineBook({ now: () => clock, serverInstanceId: "1a2b3c4d" }) });
   const sent: Sent[] = [];
   const logs: string[] = [];
   const deps: DrainDeps = {
@@ -227,7 +228,7 @@ describe("the route and the drain share one queue", () => {
     const sent: Sent[] = [];
     let clock = 1_000_000;
     const routes = makeActionRoutes({
-      queue: new SteeringQueue({ now: () => clock, serverInstanceId: "1a2b3c4d" }),
+      queue: new SteeringQueue({ now: () => clock, serverInstanceId: "1a2b3c4d", quarantine: new QuarantineBook({ now: () => clock, serverInstanceId: "1a2b3c4d" }) }),
       sendMessage: (target, text, declaredStatus) => {
         sent.push({ target, text, declaredStatus });
         return SENT_OK;
@@ -275,7 +276,7 @@ describe("the route and the drain share one queue", () => {
     const sent: Sent[] = [];
     let clock = 1_000_000;
     const routes = makeActionRoutes({
-      queue: new SteeringQueue({ now: () => clock, serverInstanceId: "1a2b3c4d" }),
+      queue: new SteeringQueue({ now: () => clock, serverInstanceId: "1a2b3c4d", quarantine: new QuarantineBook({ now: () => clock, serverInstanceId: "1a2b3c4d" }) }),
       sendMessage: (target, text, declaredStatus) => {
         sent.push({ target, text, declaredStatus });
         return SENT_OK;
@@ -766,7 +767,7 @@ describe("drainOnce is bounded", () => {
     // The clock is injected, so a slow transport is a fake that advances it —
     // no waiting, and the bound is measured rather than assumed.
     let clock = 1_000_000;
-    const queue = new SteeringQueue({ now: () => clock, serverInstanceId: "1a2b3c4d" });
+    const queue = new SteeringQueue({ now: () => clock, serverInstanceId: "1a2b3c4d", quarantine: new QuarantineBook({ now: () => clock, serverInstanceId: "1a2b3c4d" }) });
     const sent: string[] = [];
     const deps: DrainDeps = {
       queue,
@@ -925,7 +926,7 @@ describe("an enacted action cannot be queued", () => {
   it("is refused by the route with a code the page can act on", async () => {
     let clock = 1_000_000;
     const routes = makeActionRoutes({
-      queue: new SteeringQueue({ now: () => clock, serverInstanceId: "1a2b3c4d" }),
+      queue: new SteeringQueue({ now: () => clock, serverInstanceId: "1a2b3c4d", quarantine: new QuarantineBook({ now: () => clock, serverInstanceId: "1a2b3c4d" }) }),
       sendMessage: () => SENT_OK,
       now: () => clock,
       limiter: createRateLimiter({ minIntervalMs: 0, burstMax: 1_000, burstWindowMs: 1 }),

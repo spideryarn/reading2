@@ -78,10 +78,12 @@ import {
 } from "./actions.js";
 import type { FleetSnapshot } from "./collect.js";
 import { createDrainCursor, drainOnce, type DrainResult } from "./drain.js";
-import { newServerInstanceId } from "./instance.js";
+import { serverInstanceId } from "./instance.js";
+import { sharedQuarantineBook, type ReleaseRefusalRule } from "./quarantine.js";
 import {
   deliveryGate,
   drainGate,
+  nothingWasSent,
   SteeringQueue,
   type DrainGate,
   type EnqueueRefusalRule,
@@ -242,7 +244,35 @@ export type ActionErrorCode =
    * 409 rather than 404 for `stale-view`'s reason: the body was well formed,
    * the world moved.
    */
-  | "other-instance";
+  | "other-instance"
+  /**
+   * No hold by that id in this run — `quarantine.ts`'s `no-such-hold`.
+   *
+   * Its own code rather than `no-such-item`, because the two name different
+   * things and a page that could not tell them apart would offer the wrong
+   * gesture: an item is something you cancel, a hold is something you release.
+   */
+  | "no-such-hold"
+  /**
+   * The hold has moved on since the page drew it — another uncertain send
+   * landed on that session — or the version is one this run never minted.
+   *
+   * **THIS IS THE STALE-PHONE REFUSAL AND IT IS THE POINT OF THE VERSION.**
+   * Releasing on a reading two incidents old would clear a hold whose reason
+   * the person has never seen. 409, for `stale-view`'s reason.
+   */
+  | "hold-version-mismatch"
+  /**
+   * It is already released, with the OTHER gesture. Repeating the SAME gesture
+   * is a 200 — that is what makes a lost response recoverable — so this fires
+   * only when two different answers are being recorded over each other.
+   */
+  | "hold-other-gesture"
+  /**
+   * A tmux restart already ended it: the pane, and whatever was in its input
+   * box, are gone. Nothing is being held back, so there is nothing to release.
+   */
+  | "hold-superseded";
 
 /**
  * A refusal's HTTP status.
@@ -284,6 +314,24 @@ export const ACTION_ERROR_STATUS: Record<ActionErrorCode, number> = {
   cooldown: 429,
   "stale-view": 409,
   "other-instance": 409,
+  "no-such-hold": 404,
+  "hold-version-mismatch": 409,
+  "hold-other-gesture": 409,
+  "hold-superseded": 409,
+};
+
+/**
+ * The book's refusals, as HTTP-visible codes.
+ *
+ * A `Record` keyed by the union, the same trick as `ENQUEUE_CODE` and for the
+ * same reason: a new refusal rule in quarantine.ts stops this compiling rather
+ * than inheriting somebody's guess about what to call it.
+ */
+const RELEASE_CODE: Record<ReleaseRefusalRule, ActionErrorCode> = {
+  "no-such-hold": "no-such-hold",
+  "version-mismatch": "hold-version-mismatch",
+  "other-gesture": "hold-other-gesture",
+  "already-superseded": "hold-superseded",
 };
 
 /**
@@ -302,8 +350,11 @@ import type {
   KillReport,
   PlanRunView,
   PlanStepStatus,
+  HoldReleaseGesture,
   PlanStepView,
+  QuarantineHoldView,
   QueueView,
+  UncertainSendReading,
 } from "./wire.js";
 
 export type { QueuedItemView, QueueView } from "./wire.js";
@@ -385,9 +436,11 @@ const DELIVERY_OUTCOME: Record<Delivery, BroadcastRecipientOutcome> = {
  * settled fact. A `kill` that could not be spawned, timed out, or died on a
  * signal settles nothing: the signal may have gone first. Reading the second as
  * the first is how a page tells somebody a process survived when it did not.
+ *
+ * Takes a step rather than a step-or-nothing: every targeted pid has one, and
+ * `killReport` is where that is asserted.
  */
-function killObservation(step: StepOutcome | undefined): KillObservation {
-  if (step === undefined) return "not-attempted";
+function killObservation(step: StepOutcome): KillObservation {
   if (step.spawnError !== null || step.timedOut || step.code === null) return "not-established";
   return step.code === 0 ? "signal-accepted" : "signal-refused";
 }
@@ -395,26 +448,40 @@ function killObservation(step: StepOutcome | undefined): KillObservation {
 /**
  * A finished kill plan, as **intent and evidence side by side**.
  *
- * Exported and pure because the state that matters most here is the one the
- * route cannot currently reach: every step of a kill plan is `best-effort`, so
- * `judgeStep` never returns `failed` and `runPlan` never returns
- * `completed: false` for a kill. A stricter plan would, `PlanRun` allows it,
- * and a run that stopped leaves the tail of `pids` **unsignalled** — which must
- * never render as a completed kill. A test drives this directly for exactly
- * that reason.
+ * **ONE STEP PER PID IS ASSERTED HERE RATHER THAN COPED WITH.**
+ * `planKillProcesses` builds exactly one `kill -TERM <pid>` step per pid, and
+ * `runPlan` only stops early on a step it judges `failed` — which a
+ * `best-effort` kill step can never be. So a run shorter than the list is a bug
+ * in one of those two, not a state to report.
  *
- * The steps are one per pid, in order, by construction in `planKillProcesses`.
+ * It used to be reported. The missing pids came back as `not-attempted` beside
+ * a `planCompleted: false`, and both were unreachable: no test could produce
+ * either without building a `PlanRun` by hand. An arm no code can reach is
+ * decoration on a contract, and it costs a reader the assumption that every
+ * word in the vocabulary means something happened.
+ *
+ * **Throwing loses this run's evidence, and that is the direction to be wrong
+ * in.** `guard()` turns it into a 500 that names the mismatch; the alternative
+ * is a 200 naming fewer pids than were signalled, which is precisely the defect
+ * this stage removed. The `killRoute` log line is written before this is called
+ * so the journal still holds the run.
  */
 export function killReport(pids: readonly number[], run: PlanRun): KillReport {
-  const observed: KillAttempt[] = pids.map((pid, i) => {
+  const shortfall = () =>
+    new Error(
+      `killReport: ${run.steps.length} step(s) for ${pids.length} targeted pid(s) — ` +
+        "planKillProcesses builds one step per pid and a best-effort step cannot stop a plan",
+    );
+  if (run.steps.length !== pids.length) throw shortfall();
+  const observed: KillAttempt[] = [];
+  for (let i = 0; i < pids.length; i++) {
+    const pid = pids[i];
     const step = run.steps[i];
-    return {
-      pid,
-      observation: killObservation(step),
-      why: step?.verdict ?? "the plan stopped before this one, so no signal was sent to it",
-    };
-  });
-  return { attempted: [...pids], observed, planCompleted: run.completed };
+    // `noUncheckedIndexedAccess`, and unreachable after the length check.
+    if (pid === undefined || step === undefined) throw shortfall();
+    observed.push({ pid, observation: killObservation(step), why: step.verdict });
+  }
+  return { targeted: [...pids], observed };
 }
 
 export type ActionResponse =
@@ -440,6 +507,16 @@ export type ActionResponse =
    * the only thing left to name them with is what came back.
    */
   | { ok: true; op: "cleared"; removed: QueuedItem[]; keptInFlight: QueuedItem | null }
+  /**
+   * A hold ended by a person. **Nothing was sent, in either gesture.**
+   *
+   * `repeat` is the whole of the idempotence: the same request twice records
+   * one gesture and answers 200 both times, and the second answer says it was
+   * already done rather than that it has just been done. A phone on a train
+   * loses responses, and a recovery gesture that cannot be pressed twice is one
+   * that leaves a hold nothing can clear.
+   */
+  | { ok: true; op: "hold-released"; hold: QuarantineHoldView; repeat: boolean }
   /*
    * THE FOUR ARMS THAT DESCRIBE AN EFFECT, and they agree on two field names.
    *
@@ -655,6 +732,41 @@ export function parseCancelBody(raw: unknown): Parsed<CancelRequest> {
   if (sessionId === null) return bad("sessionId is missing, and it says which queue");
   if (itemId === null) return bad("itemId is missing");
   return { ok: true, value: { sessionId, itemId } };
+}
+
+export type ReleaseHoldRequest = { holdId: string; version: number; gesture: HoldReleaseGesture };
+
+/**
+ * `POST /api/actions/hold/release`'s body.
+ *
+ * **THERE IS NO `sessionId` IN IT, AND THAT IS DELIBERATE.** A hold is
+ * addressed by its own id and nothing else, so releasing one asks nothing of a
+ * snapshot, a queue, a session list or a pane. The failure this stage cares
+ * most about is a hold that outlives every gesture that could clear it, and the
+ * commonest way to build one is to make the recovery gesture depend on the
+ * thing that has gone away. The book knows about holds; that is all this needs.
+ *
+ * `version` is required for the same reason `clear`'s `itemIds` is: it says
+ * WHICH reading the person was looking at. A release built from a reading two
+ * incidents old is refused rather than applied.
+ */
+export function parseReleaseHoldBody(raw: unknown): Parsed<ReleaseHoldRequest> {
+  const o = asRecord(raw);
+  if (!o) return bad("the body is not a JSON object");
+  const holdId = asString(o.holdId);
+  if (holdId === null) return bad("holdId is missing, and it says which hold you are answering");
+  const version = o.version;
+  if (typeof version !== "number" || !Number.isSafeInteger(version) || version < 1) {
+    return bad("version is missing or is not a whole number — send the one you were shown, so a stale reading cannot release a newer hold");
+  }
+  const gesture = o.gesture;
+  if (gesture !== "operator-confirmed" && gesture !== "abandoned-unknown") {
+    return bad(
+      "gesture must be 'operator-confirmed' (you looked at the terminal and saw it) or 'abandoned-unknown' (you are dropping the uncertainty). " +
+        "Neither sends anything.",
+    );
+  }
+  return { ok: true, value: { holdId, version, gesture } };
 }
 
 export type ClearRequest = { sessionId: string; itemIds: string[] };
@@ -1084,7 +1196,15 @@ export function realActionDeps(): ActionDeps {
     // ONE INSTANCE ID PER PROCESS, minted at the composition root and passed
     // down. Later stages reuse it for request ids and preview identity, which
     // is why it is `instance.ts`'s to mint rather than the queue's.
-    queue: new SteeringQueue({ now: () => Date.now(), serverInstanceId: newServerInstanceId() }),
+    // ONE RUN ID AND ONE BOOK PER PROCESS. `serverInstanceId()` is memoised in
+    // instance.ts because the quarantine book is built in a different file —
+    // `routes-steer.ts` has to reach it and cannot reach this one — and two
+    // mints would put two different run ids in one process's refusal messages.
+    queue: new SteeringQueue({
+      now: () => Date.now(),
+      serverInstanceId: serverInstanceId(),
+      quarantine: sharedQuarantineBook(),
+    }),
     sendMessage: realSendMessage,
     io: realActionIo(),
     now: () => Date.now(),
@@ -1226,6 +1346,10 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
       volatile: true,
       warning: s.warning,
       since: s.since,
+      // THE QUEUE'S OWN, verbatim. A queue is in `snapshots()` when it has
+      // items OR this, which is what makes a hold with nothing left behind it
+      // reach the page at all — see `SteeringQueue.snapshots`.
+      quarantine: s.quarantine,
     }));
     respond(res, 200, {
       ok: true,
@@ -1661,6 +1785,69 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
     respond(res, 200, { ok: true, op: "cleared", removed: result.removed, keptInFlight: result.keptInFlight });
   }
 
+  /* ---------------- POST /api/actions/hold/release ---------------- */
+
+  /**
+   * End a hold on a session. **Neither gesture sends anything.**
+   *
+   * `quarantine.ts` explains what a hold is; this is the only way out of one
+   * that is not a tmux restart. Two gestures, and the difference between them
+   * is what gets written down rather than what happens:
+   *
+   *  - **`operator-confirmed`** — *I looked at the terminal and saw it.* A
+   *    person's claim, stored as a person's claim. The dashboard observed
+   *    nothing, and no copy anywhere may say it did.
+   *  - **`abandoned-unknown`** — *Abandon the uncertainty.* It stops holding and
+   *    **claims nothing in either direction**. The half that is easy to get
+   *    wrong is the second one: it must not read as *nothing was delivered*,
+   *    which is `abandonRoute`'s lesson one route along.
+   *
+   * **IT ASKS NOTHING OF A SNAPSHOT, A QUEUE OR A PANE.** A hold whose session
+   * has ended, whose queue is empty, or whose pane is gone is exactly the hold
+   * somebody needs to clear, so every one of those would be the wrong thing to
+   * require. The id and the version are the whole of the address.
+   *
+   * **AND IT IS IDEMPOTENT BY ANSWERING THE SAME THING TWICE.** A phone loses
+   * responses; a recovery gesture that only works once is one that leaves a
+   * hold nothing can clear. The key is `(holdId, version)`, and a repeat comes
+   * back 200 with `repeat: true` rather than recording a second gesture.
+   */
+  async function releaseHoldRoute(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    const parsed = await parsedBody(req, res, MAX_BODY_BYTES);
+    if (parsed === null) return;
+    const body = parseReleaseHoldBody(parsed);
+    if (!body.ok) {
+      deps.log(`action hold: refused code=bad-request why=${body.why}`);
+      refuse(res, "bad-request", body.why);
+      return;
+    }
+    const { holdId, version, gesture } = body.value;
+    const book = deps.queue.quarantineBook();
+    // **BEFORE THE LOOKUP**, the same order and the same reason as `clearRoute`:
+    // an id from a dead run can collide with a live one exactly, and "no such
+    // hold" would then be the misleading answer rather than the true one.
+    if (book.idOrigin(holdId) === "other-instance") {
+      const why =
+        `${holdId} was recorded by a different run of this dashboard; this one is ${book.serverInstanceId}. ` +
+        "Holds do not survive a restart, so that one is gone — and nothing is being held back on its account. " +
+        "Reload the page and look at what is actually held.";
+      deps.log(`action hold: refused code=other-instance hold=${holdId}`);
+      refuse(res, "other-instance", why);
+      return;
+    }
+    const result = book.release({ holdId, version, gesture });
+    if (!result.ok) {
+      deps.log(`action hold: refused code=${RELEASE_CODE[result.rule]} hold=${holdId} v${version} gesture=${gesture}`);
+      refuse(res, RELEASE_CODE[result.rule], result.why);
+      return;
+    }
+    deps.log(
+      `action hold: ${result.repeat ? "ALREADY-RELEASED" : "RELEASED"} hold=${holdId} v${version} ` +
+        `session=${result.hold.sessionId} gesture=${gesture} — nothing was sent`,
+    );
+    respond(res, 200, { ok: true, op: "hold-released", hold: result.hold, repeat: result.repeat });
+  }
+
   /* ---------------- POST /api/actions/box ---------------- */
 
   /**
@@ -1830,16 +2017,17 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
 
     deps.log(`action box: KILLING action=${action.id} pids=${pids.join(",")}`);
     const run = await runPlan(built.plan, deps.io);
-    /* WHAT CAME BACK, PID BY PID, and the log says the same thing the body
+    /* THE RUN FIRST, BEFORE THE REPORT IS BUILT, because `killReport` throws on
+       a run short of steps — and if it ever does, this line is the only record
+       left of a kill that has already happened. */
+    deps.log(`action box: ${run.completed ? "DONE" : "STOPPED"} action=${action.id} steps=${run.steps.length}/${pids.length}`);
+    /* THEN WHAT CAME BACK, PID BY PID, so the log says the same thing the body
        does. A line reading `killed=3` beside a body naming two refusals is the
        version of this defect that survives in the journal after the page has
        been closed. */
     const report = killReport(pids, run);
     const accepted = report.observed.filter((o) => o.observation === "signal-accepted").length;
-    deps.log(
-      `action box: ${run.completed ? "DONE" : "STOPPED"} action=${action.id} steps=${run.steps.length} ` +
-        `signal-accepted=${accepted}/${report.attempted.length}`,
-    );
+    deps.log(`action box: action=${action.id} signal-accepted=${accepted}/${report.targeted.length}`);
     respond(res, 200, { ok: true, op: "ran", action: action.id, dryRun: false, result: { run, kill: report, skipped } });
   }
 
@@ -1967,6 +2155,29 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
         });
         continue;
       }
+      /**
+       * Hold this recipient's session, because this send may have left text in
+       * its input box.
+       *
+       * **THE THIRD PRODUCER, AND IT IS THE SAME BOOK AS THE OTHER TWO.** A
+       * fan-out that half-reached six agents used to leave six half-filled
+       * input boxes and no record anywhere; the queue would then drain into
+       * them one by one. `deps.queue` owns the book so this reaches the same
+       * one the drain consults — see `SteeringQueue.quarantineBook`.
+       */
+      const holdRecipient = (reading: UncertainSendReading): void => {
+        const hold = deps.queue.quarantineBook().hold({
+          sessionId: rec.target.sessionId,
+          paneId: rec.target.paneId,
+          claudeSessionId: rec.target.claudeSessionId,
+          reading,
+          origin: "broadcast",
+          what: `action ${action.id}`,
+        });
+        deps.log(
+          `action box: HELD session=${rec.target.sessionId} hold=${hold.id} v${hold.version} reading=${reading}`,
+        );
+      };
       const minutes = staggerMinutes(index, total, action.stagger);
       // RENDERED HERE, ONE LINE ABOVE THE SEND. Not above the loop, not in the
       // parse, not in the queue.
@@ -1977,10 +2188,16 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
         result = deps.sendMessage(rec.target, text, rec.declaredStatus);
       } catch (e) {
         /* **A THROW IS THE CASE WITH THE LEAST EVIDENCE BEHIND IT**, and it
-           answered `refused` — the reading that says nothing reached them.
-           `fire()` throws from the middle of a sequence of tmux calls and the
+           answered `refused` — the reading that says nothing reached them. The
            exception carries no `Delivery`, so the honest arm is the one that
-           claims nothing either way. */
+           claims nothing either way.
+
+           **AND THIS `try` IS AROUND THE WHOLE CALL**, so it cannot say WHEN.
+           `fire()` may throw out of the middle of a tmux sequence, and it may
+           throw before the first keystroke — a bad target, a refused spawn.
+           The sentence said *partway through the send*, which asserts the
+           first and is false of the second. */
+        holdRecipient("threw");
         outcomes.push({
           paneId: rec.target.paneId,
           sessionId: rec.target.sessionId,
@@ -1988,7 +2205,7 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
           outcome: "outcome-unknown",
           code: null,
           why:
-            `the delivery module threw partway through the send: ${(e as Error).message}. ` +
+            `the delivery module threw while handling this recipient: ${(e as Error).message}. ` +
             "Nothing here can tell whether any of it reached the pane.",
         });
         continue;
@@ -2006,7 +2223,17 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
       } else {
         /* THE READING `sendMessage` ALREADY MADE, kept rather than flattened.
            `partial` is not `refused`: the text is in that agent's input box
-           and the next Enter anybody presses submits it. */
+           and the next Enter anybody presses submits it.
+
+           **AND KEEPING THE WORD WAS NEVER THE WHOLE ANSWER.** The text is
+           still in that box after this response has been drawn, so the session
+           is held too — asked of `nothingWasSent`, which reads the `sent` list
+           as well as the summary, rather than of `result.delivery` alone. */
+        if (nothingWasSent(result) === null) {
+          holdRecipient(
+            result.delivery === "partial" ? "partial" : result.delivery === "unknown" ? "unknown" : "none-contradicted",
+          );
+        }
         outcomes.push({
           paneId: rec.target.paneId,
           sessionId: rec.target.sessionId,
@@ -2153,6 +2380,17 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
           return true;
         }
         void guard(clearRoute(req, res), res);
+        return true;
+      }
+      // The fifth gesture, and the only one that is not about a queued item.
+      // POST for `revive` and `abandon`'s reason: it changes a record rather
+      // than removing one, and it must be safe to send twice.
+      if (pathname === "/api/actions/hold/release") {
+        if (method !== "POST") {
+          refuse(res, "method-not-allowed", "releasing a hold is POST only", undefined, { allow: "POST" });
+          return true;
+        }
+        void guard(releaseHoldRoute(req, res), res);
         return true;
       }
       // Ours by prefix and not a route. Claimed rather than returned false, so

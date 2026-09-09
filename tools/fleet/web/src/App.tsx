@@ -1,5 +1,5 @@
 /**
- * The whole page: a masthead, one of three panels, and a bar along the bottom.
+ * The whole page: a masthead, one of several panels, and a bar along the bottom.
  *
  * **Phone first, and now a desk too.** Greg reads this on a phone over
  * Tailscale, so the layout starts as a single column and the mode switch is at
@@ -16,15 +16,27 @@
  * below exists so a test can drive the page without a clock or a network, and
  * it is the same seam.
  */
-import { useMemo, useRef, type ReactNode } from "react";
+import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { AttentionPanel } from "./AttentionPanel";
+import { DeploysPanel } from "./DeploysPanel";
 import { Dock } from "./Dock";
+import { FeedPanel } from "./FeedPanel";
 import { Header, SHELL, freshness } from "./Header";
 import { HealthPanel } from "./HealthPanel";
 import { OverseerPanel } from "./OverseerPanel";
 import { SessionsPanel } from "./SessionsPanel";
+import { UsageCard } from "./UsagePanel";
 import { httpActionsApi, type ActionsApi } from "./actions-client";
+import {
+  FILTER_KEYS,
+  filtersFromParams,
+  httpFeedApi,
+  limitFromParams,
+  paramsFromFilters,
+  type FeedApi,
+} from "./feed-client";
+import { httpDeploysApi, type DeploysApi } from "./deploys-client";
 import { useDockFit } from "./fit";
 import { httpHistoryApi, type HistoryApi } from "./health-history-client";
 import { httpMessagesApi, withClockSkew, type MessagesApi } from "./messages-client";
@@ -48,6 +60,8 @@ export function App({
   actionsApi = httpActionsApi,
   messagesApi = httpMessagesApi,
   historyApi = httpHistoryApi,
+  feedApi = httpFeedApi,
+  deploysApi = httpDeploysApi,
   actionsPollMs,
 }: {
   transport?: Transport;
@@ -69,6 +83,20 @@ export function App({
    * this page measures and the times that chart prints.
    */
   historyApi?: HistoryApi;
+  /**
+   * The cross-agent feed. Injected like the rest, and — like `messagesApi` —
+   * deliberately NOT wrapped in a hook here: it is asked for when the tab is
+   * open rather than polled, so there is no shared feed for this page to hold.
+   * FeedPanel.tsx says why.
+   */
+  feedApi?: FeedApi;
+  /**
+   * The deploy record. Injected here as well as defaulted in `DeploysPanel`, so
+   * that no test in this file can reach `fetch` by accident — a suite that
+   * quietly made real requests would pass and tell you nothing about the seam
+   * it thought it was exercising.
+   */
+  deploysApi?: DeploysApi;
   /** Only a test passes this, to keep a poll off a fake clock. */
   actionsPollMs?: number;
 }): ReactNode {
@@ -98,7 +126,19 @@ export function App({
      died. An age that only moves when data arrives is an age that freezes at
      the exact moment it matters. */
   const now = useNow();
-  const { mode, params, chooseMode, setParam } = useHashState();
+  const { mode, params, chooseMode, setParam, setParams } = useHashState();
+  /* **The dock's Refresh means "the page", not "the feed".** Its tooltip
+     presents it as the page's refresh control, and until 2026-09-09 it called
+     `feed.refresh()` only — so on a panel with its own route, pressing it did
+     nothing at all, which is indistinguishable from a broken button on the one
+     page whose job is to say whether things are broken. GPT Sol's P2 finding 9.
+     A counter rather than a callback registry: a panel that wants to be told
+     puts this in its effect's dependencies and needs to know nothing else. */
+  const [refreshNonce, setRefreshNonce] = useState(0);
+  const refreshEverything = useCallback(() => {
+    feed.refresh();
+    setRefreshNonce((n) => n + 1);
+  }, [feed]);
   /* Both of these live in the URL for the reason the mode does: this page is
      reloaded by the browser whenever iOS reclaims the tab, and a sort order
      that resets every time is one nobody bothers to set. mode.ts § the hash. */
@@ -125,7 +165,7 @@ export function App({
 
   return (
     <div className="tw:min-h-dvh tw:bg-page">
-      <Header state={feed.state} fresh={fresh} onRefresh={feed.refresh} />
+      <Header state={feed.state} fresh={fresh} onRefresh={refreshEverything} />
 
       {/* The bottom padding is the bar's resting room plus a card's worth of
           air, so the last session does not finish underneath the dock — which
@@ -188,6 +228,34 @@ export function App({
             />
           </>
         ) : null}
+        {mode === "messages" ? (
+          <div className="tw:mx-auto tw:max-w-3xl">
+            {/* **THE REGISTRATION NOTHING CATCHES.** The four `Record<Mode, …>`
+                maps make a half-added mode a compile error; this arm does not,
+                because it is a ternary rather than an exhaustive switch. A mode
+                registered everywhere but here draws a button, switches the
+                hash, and shows an empty page. `tests/fleet-feed-panel.test.tsx`
+                asserts this tab renders its panel, which is the only thing that
+                would notice. */}
+            <FeedPanel
+              api={feedApi}
+              limit={limitFromParams(params)}
+              onLimit={(next) => setParam(FILTER_KEYS.limit, next === 50 ? null : String(next))}
+              /* The filters live in the hash for the reason the mode does: this
+                 page is reloaded whenever iOS reclaims the tab, and a filter
+                 that resets every time is one nobody sets. */
+              filters={filtersFromParams(params)}
+              onFilters={(next) => {
+                /* **ONE WRITE, NOT FOUR.** `setParam` closes over the params it
+                   was built with, so four sequential calls all start from the
+                   same snapshot and only the last survives — which silently
+                   dropped every filter but `hideToolCalls`. mode.ts §
+                   `setParams`. */
+                setParams(paramsFromFilters(next));
+              }}
+            />
+          </div>
+        ) : null}
         {mode === "health" ? (
           <div className="tw:mx-auto tw:max-w-3xl">
             <HealthPanel
@@ -200,6 +268,22 @@ export function App({
                  the box's clock would disagree with both. Only the labels move:
                  the geometry is server-to-server arithmetic and is right as it
                  is (HealthHistory.tsx § `timeLabel`). */
+              skew={feed.state?.clockSkew ?? CLOCK_SKEW_UNMEASURED}
+            />
+          </div>
+        ) : null}
+        {/* **The same `UsageCard` the Overseer tab draws, mounted a second time
+            rather than copied.** If this tab and that card could disagree, one
+            of them would be a second interpretation of the same bytes — and the
+            whole point of the reading rules in tools/overseer/usage.ts is that
+            there is one. The history chart lands beneath it in a later stage;
+            until then this tab is the card with room around it. */}
+        {mode === "usage" ? (
+          <div className="tw:mx-auto tw:max-w-3xl">
+            <UsageCard
+              usage={feed.state === null ? null : feed.state.usage}
+              now={now}
+              receivedAt={feed.receivedAt}
               skew={feed.state?.clockSkew ?? CLOCK_SKEW_UNMEASURED}
             />
           </div>
@@ -217,9 +301,23 @@ export function App({
                  otherwise a rollback puts this tab back to its pre-stage
                  appearance with nothing saying why. GPT Sol's P1. */
               overseer={feed.state === null ? null : feed.state.overseer}
+              /* The same distinction one field along, and for the same reason. */
+              usage={feed.state === null ? null : feed.state.usage}
               now={now}
               receivedAt={feed.receivedAt}
+              skew={feed.state?.clockSkew ?? CLOCK_SKEW_UNMEASURED}
             />
+          </div>
+        ) : null}
+        {/* **Deploys takes no snapshot props, and that is the shape rather than
+            an omission.** The deploy record is read on its own route, on its own
+            cadence, and costs nothing until somebody opens the tab — the rule in
+            fleet-dashboard-modes.md § Where the panel's data comes from: no read
+            inside the collection loop. All it needs from here is the page's
+            clock, so every age on screen is anchored to the same tick. */}
+        {mode === "deploys" ? (
+          <div className="tw:mx-auto tw:max-w-3xl">
+            <DeploysPanel api={deploysApi} now={now} refreshNonce={refreshNonce} />
           </div>
         ) : null}
       </main>
@@ -228,7 +326,7 @@ export function App({
         mode={mode}
         onChoose={chooseMode}
         needsYou={needsYou}
-        onRefresh={feed.refresh}
+        onRefresh={refreshEverything}
         fitClass={fitClass}
         barRef={dockRef}
       />

@@ -126,7 +126,7 @@ import {
   adoptOccurrence,
   foldOccurrences,
   occurrenceId as occurrenceIdOf,
-  type DefinitionHash,
+  type BehaviourHash,
   type JobOutcome,
   type Occurrence,
   type OccurrenceHistory,
@@ -578,13 +578,26 @@ export type Checkpoint = {
 /**
  * What a checkpoint says about the scheduler.
  *
- * Three arms rather than a boolean, because *nobody has said* is a third fact
- * and the most dangerous one to fold into `off`: an old checkpoint would then
- * claim a scheduler is disarmed when what is true is that this build cannot
- * tell. Same reasoning as `StoredUsage`'s `none` arm two fields up.
+ * Four arms rather than a boolean. *Nobody has said* is a fact and the most
+ * dangerous one to fold into `off`: an old checkpoint would then claim a
+ * scheduler is disarmed when what is true is that this build cannot tell. Same
+ * reasoning as `StoredUsage`'s `none` arm two fields up.
+ *
+ * **`blocked` is GPT Sol's S8-7, and it is the arm this design was missing.**
+ * The word on the status page came from an environment variable alone, so
+ * systemd could be active, the daemon healthy, the headline reading `ARMED` —
+ * and both jobs unauthorised, or absent because a document could not be read.
+ * A person reading that page would have been told the opposite of the truth by
+ * the one line they trusted.
+ *
+ * So `armed` is now a claim about the **loaded, authorised definitions**: the
+ * switch is on AND at least one job could actually run. Switched on with nothing
+ * runnable is `blocked`, which is neither of the other two and needs its own
+ * word.
  */
 export type StoredScheduler =
   | { kind: "armed"; why: string; at: string }
+  | { kind: "blocked"; why: string; at: string }
   | { kind: "off"; why: string; at: string }
   | { kind: "unknown"; why: string; at: string };
 
@@ -1176,17 +1189,21 @@ function parseJobEvent(kind: JobEvent["kind"], u: Record<string, unknown>, at: s
     case "job-occurrence-reserved": {
       const jobId = u["jobId"];
       const scheduledAt = u["scheduledAt"];
-      const hash = u["definitionHash"];
+      // EITHER NAME, and the old one is not a kindness. Lines written before
+      // 2026-09-09 spell it `definitionHash`; the field means the same thing and
+      // the id it is checked against is byte-identical, so refusing them would
+      // turn a rename into a lost ledger — and a lost ledger holds every job.
+      const hash = u["behaviourHash"] ?? u["definitionHash"];
       const instanceId = u["instanceId"];
       const leaseUntil = u["leaseUntil"];
       const what = u["what"];
       if (!isName(jobId)) return { ok: false, reason: "jobId is not a job id" };
       if (!isIsoTimestamp(scheduledAt)) return { ok: false, reason: "scheduledAt is not an ISO timestamp" };
-      if (!isName(hash)) return { ok: false, reason: "definitionHash is not a hash" };
+      if (!isName(hash)) return { ok: false, reason: "behaviourHash is not a hash" };
       if (!isName(instanceId)) return { ok: false, reason: "instanceId is not an instance id" };
       if (!isIsoTimestamp(leaseUntil)) return { ok: false, reason: "leaseUntil is not an ISO timestamp" };
       if (typeof what !== "string") return { ok: false, reason: "what is not a string" };
-      const expected = occurrenceIdOf({ jobId, scheduledAt, definitionHash: hash as DefinitionHash });
+      const expected = occurrenceIdOf({ jobId, scheduledAt, behaviourHash: hash as BehaviourHash });
       if (expected !== occurrence) {
         return { ok: false, reason: `occurrenceId ${JSON.stringify(id)} is not the id of its own key (${expected})` };
       }
@@ -1197,7 +1214,7 @@ function parseJobEvent(kind: JobEvent["kind"], u: Record<string, unknown>, at: s
           at,
           jobId,
           scheduledAt,
-          definitionHash: hash as DefinitionHash,
+          behaviourHash: hash as BehaviourHash,
           occurrenceId: occurrence,
           instanceId,
           leaseUntil,
@@ -1910,11 +1927,13 @@ function parseOccurrence(u: unknown): ParseResult<Occurrence> {
   if (!isRecord(key)) return { ok: false, reason: "key is not an object" };
   const jobId = key["jobId"];
   const scheduledAt = key["scheduledAt"];
-  const hash = key["definitionHash"];
+  // Either name, for the reason `parseJobEvent` gives: a checkpoint written
+  // before the 2026-09-09 rename says `definitionHash` and means this.
+  const hash = key["behaviourHash"] ?? key["definitionHash"];
   if (!isName(jobId)) return { ok: false, reason: "key.jobId is not a job id" };
   if (!isIsoTimestamp(scheduledAt)) return { ok: false, reason: "key.scheduledAt is not an ISO timestamp" };
-  if (!isName(hash)) return { ok: false, reason: "key.definitionHash is not a hash" };
-  const parsedKey = { jobId, scheduledAt, definitionHash: hash as DefinitionHash };
+  if (!isName(hash)) return { ok: false, reason: "key.behaviourHash is not a hash" };
+  const parsedKey = { jobId, scheduledAt, behaviourHash: hash as BehaviourHash };
   const id = u["id"];
   const expected = occurrenceIdOf(parsedKey);
   if (id !== expected) return { ok: false, reason: `id ${JSON.stringify(id)} is not the id of its own key (${expected})` };
@@ -2034,7 +2053,7 @@ function parseStoredScheduler(u: unknown, writtenAt: string): StoredScheduler {
   const bad = (why: string): StoredScheduler => ({ kind: "unknown", why: `the stored scheduler block was unusable: ${why}`, at: writtenAt });
   if (!isRecord(u)) return bad("it is not an object");
   const kind = u["kind"];
-  if (kind !== "armed" && kind !== "off" && kind !== "unknown") return bad(`kind ${JSON.stringify(kind)} is not one this build knows`);
+  if (kind !== "armed" && kind !== "blocked" && kind !== "off" && kind !== "unknown") return bad(`kind ${JSON.stringify(kind)} is not one this build knows`);
   const why = u["why"];
   const at = u["at"];
   if (typeof why !== "string") return bad("it has no reason");

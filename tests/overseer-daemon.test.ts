@@ -34,7 +34,7 @@ import {
   staleAfterMs,
   type DaemonOptions,
 } from "../tools/overseer/daemon.js";
-import { definitionHash, type AuthorisedJob, type JobDefinition } from "../tools/overseer/jobs.js";
+import { behaviourHash, type Arming, type AuthorisedJob, type JobDefinition } from "../tools/overseer/jobs.js";
 import { NOTES_FILE, openConditions, readNotes, type DaemonNote } from "../tools/overseer/notes.js";
 import { parseAttempt, parseObservation, type JsonValue, type ObservedAttemptClock } from "../tools/overseer/observation.js";
 import { EVENTS_FILE, readCheckpoint } from "../tools/overseer/store.js";
@@ -792,9 +792,26 @@ describe("the scheduler on the daemon's clock", () => {
   /** Real milliseconds, only so the timers under test actually fire. The daemon's own clock is still the fake one. */
   const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
-  const JOB: JobDefinition = { id: "prod-the-overseer", everyMs: 60_000, leaseMs: 120_000, what: "say hello", documents: [], work: { kind: "session" } };
+  const JOB: JobDefinition = {
+    behaviour: { id: "prod-the-overseer", what: "say hello", documents: [], work: { kind: "session" } },
+    schedule: { everyMs: 60_000, leaseMs: 120_000, initialDelayMs: 0 },
+  };
   /** Pinned to its own fingerprint: this file is about the daemon's timers, and the pin itself is tested in overseer-jobs.test.ts. */
-  const AUTHORISED: AuthorisedJob = { definition: JOB, authorisedHash: definitionHash(JOB) };
+  const AUTHORISED: AuthorisedJob = { definition: JOB, authorisedHash: behaviourHash(JOB.behaviour) };
+
+  /**
+   * THE ARMING AND THE SPACING GATE, both set so the daemon's TIMERS are what
+   * these tests measure.
+   *
+   * The arming instant is long before any clock in this file and every schedule
+   * here carries `initialDelayMs: 0`, so a job with no history is due on the
+   * first tick — which is what `due` said unconditionally before the first-run
+   * delay arrived (GPT Sol's S8-6). Zero spacing because a live gate would hold
+   * the SECOND dispatch in the stuck-lease test below, and that test is about
+   * the lease.
+   */
+  const ARMED: Arming = { kind: "armed", at: "2026-09-08T00:00:00.000Z" };
+  const NO_SPACING = 0;
 
   test("a job whose work never settles is dispatched, reported STUCK, and dispatched again — while the heartbeat goes on ticking", async () => {
     // The daemon-level statement of GPT Sol's S6. The in-memory
@@ -823,6 +840,8 @@ describe("the scheduler on the daemon's clock", () => {
         })(),
       jobs: {
         intervalMs: 5,
+        arming: ARMED,
+        launchSeparationMs: NO_SPACING,
         definitions: [AUTHORISED],
         spawn: () => {
           spawned.push(spawned.length);
@@ -859,14 +878,15 @@ describe("the scheduler on the daemon's clock", () => {
 
   /** A rule job, pinned to its own fingerprint. The shipped pin lives in `rule-jobs.ts` and is tested in overseer-rules.test.ts; this file is about the daemon's timers. */
   const RULE: JobDefinition = {
-    id: "wedged-work",
-    everyMs: 60_000,
-    leaseMs: 120_000,
-    what: "propose kills for wedged work",
-    documents: [],
-    work: { kind: "rule", rule: { kind: "wedged-work", minAgeSeconds: 4 * 3600, policy: "safe-to-kill", disposition: "propose" } },
+    behaviour: {
+      id: "wedged-work",
+      what: "propose kills for wedged work",
+      documents: [],
+      work: { kind: "rule", rule: { kind: "wedged-work", minAgeSeconds: 4 * 3600, policy: "safe-to-kill", disposition: "propose" } },
+    },
+    schedule: { everyMs: 60_000, leaseMs: 120_000, initialDelayMs: 0 },
   };
-  const RULE_AUTHORISED: AuthorisedJob = { definition: RULE, authorisedHash: definitionHash(RULE) };
+  const RULE_AUTHORISED: AuthorisedJob = { definition: RULE, authorisedHash: behaviourHash(RULE.behaviour) };
 
   test("A RULE STILL LOOKING WHEN THE DAEMON STOPS IS WAITED FOR, so its settlement is not lost", async () => {
     // GPT Sol's SC-1, the half that bites today. `runProposingRule` returns a hot
@@ -894,6 +914,8 @@ describe("the scheduler on the daemon's clock", () => {
       {
         jobs: {
           intervalMs: 5,
+          arming: ARMED,
+          launchSeparationMs: NO_SPACING,
           definitions: [RULE_AUTHORISED],
           rules: {
             selfPid: 4242,
@@ -931,6 +953,8 @@ describe("the scheduler on the daemon's clock", () => {
       {
         jobs: {
           intervalMs: 5,
+          arming: ARMED,
+          launchSeparationMs: NO_SPACING,
           // Short enough that the test is quick; the shipped one is measured in
           // seconds against a ten-second observer timeout.
           settleGraceMs: 20,
@@ -996,6 +1020,8 @@ describe("the scheduler on the daemon's clock", () => {
         outcome: "lock-lost",
         jobs: {
           intervalMs: 5,
+          arming: ARMED,
+          launchSeparationMs: NO_SPACING,
           definitions: [AUTHORISED],
           spawn: () => ({
             kind: "spawned",
@@ -1020,6 +1046,8 @@ describe("the scheduler on the daemon's clock", () => {
     }, {
       jobs: {
         intervalMs: 5,
+        arming: ARMED,
+        launchSeparationMs: NO_SPACING,
         definitions: [AUTHORISED],
         // Refused, so nothing is started and nothing outlives the test — the
         // arming is what is under test, not the dispatch.

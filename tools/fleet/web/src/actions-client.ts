@@ -73,11 +73,16 @@
    these types reaches `node:child_process` transitively, and this project has no
    node types. See wire.ts's header. */
 import type {
+  HoldOutcome,
+  HoldReleaseGesture,
   PlanRunView,
   PlanStepStatus,
   PlanStepView,
+  QuarantineHoldView,
   QueuedItemView as QueuedItemViewWire,
   QueueView as QueueViewWire,
+  UncertainSendOrigin,
+  UncertainSendReading,
 } from "../../wire.js";
 /* `DeliveryReading` and `parseDelivery` come from steer-client.ts for the same
    reason `steerTargetBody` does: there is one vocabulary for what became of a
@@ -95,6 +100,14 @@ export const REVIVE_URL = "api/actions/revive";
 export const ABANDON_URL = "api/actions/abandon";
 /** Emptying one session's queue in a single gesture. Its body is NOT cancel's; see `clearBody`. */
 export const CLEAR_URL = "api/actions/clear";
+/**
+ * The fifth gesture, and the only one that is not about a queued item.
+ *
+ * `hold/release` rather than `release`, because "release" on its own reads as
+ * *let the message go* — the opposite of what it does. It ends a HOLD; it sends
+ * nothing.
+ */
+export const RELEASE_HOLD_URL = "api/actions/hold/release";
 
 /* ------------------------------------------------------------------ *
  * The vocabulary, as this page reads it.
@@ -377,6 +390,7 @@ export type QueueView = Omit<
   /* Re-typed below. */
   | "items"
   | "deliverable"
+  | "quarantine"
   /* Deliberately unread. `volatile` is always `true` and the sentence in
      `warning` is what the page actually shows; `since` is the snapshot's own
      timestamp and nothing renders it. */
@@ -410,7 +424,100 @@ export type QueueView = Omit<
    * parse of an `unknown` is exactly what the compiler has no opinion about.
    */
   itemsUnreadable: boolean;
+  /**
+   * The hold stopping this session from being drained, or null.
+   *
+   * **`null` HERE MEANS TWO THINGS AND THE PAGE MUST NOT SAY WHICH.** A server
+   * too old to send the field and a server saying there is no hold both land
+   * here, exactly as `stale` and `invalidated` do — and the fold is safe in
+   * this direction only because the page's one use for the field is to DRAW a
+   * hold and offer the two gestures. Drawing nothing when the server said
+   * nothing is silence; drawing *nothing is held* would be a claim, and no copy
+   * in ActionButtons.tsx makes it.
+   */
+  quarantine: HoldView | null;
+  /**
+   * **The server sent a hold this page could not read.**
+   *
+   * `itemsUnreadable`'s twin, and it is here for a sharper version of the same
+   * reason. A malformed `quarantine` object parses to `null`, and `null` is
+   * also what "nothing is held" looks like — so on a queue with no items the
+   * whole row would disappear, and with it both gestures. **That is the one
+   * failure this stage is most against: a hold nothing can see is a hold
+   * nothing can clear.** So a hold that would not parse keeps the row on the
+   * page and says the session is stopped and this page cannot say why.
+   */
+  holdUnreadable: boolean;
 };
+
+/**
+ * A hold, as this page reads it.
+ *
+ * **DERIVED FROM THE WIRE TYPE**, the same as `QueueItemView` and for the same
+ * reason: a field added on the server is a compile error here until somebody
+ * reads it or names it in the `Omit<>`. The re-typed fields become `| null`,
+ * because a server too old to send one has made no claim and this page must not
+ * make one on its behalf.
+ */
+export type HoldView = Omit<
+  QuarantineHoldView,
+  /* Re-typed below, each to `| null`. */
+  | "reading"
+  | "origin"
+  | "outcome"
+  | "openedAt"
+  | "lastSendAt"
+  | "incidents"
+  | "tmuxGeneration"
+  /* Deliberately unread. The hold is only ever drawn inside the queue whose
+     `sessionId` the page already has; the pane and the conversation are the
+     server's business; and which run recorded it is what its own id carries —
+     the route refuses a foreign one by name rather than the page parsing it. */
+  | "sessionId"
+  | "paneId"
+  | "claudeSessionId"
+  | "serverInstanceId"
+> & {
+  /** What `releaseHold` names, with the version below. Opaque, like an item id. */
+  id: string;
+  /**
+   * **SENT BACK VERBATIM WITH THE RELEASE, AND THAT IS THE SAFETY PROPERTY.**
+   * It says which reading the person was looking at, so a phone that has been
+   * in a pocket since another uncertain send landed is refused rather than
+   * clearing a hold whose reason nobody has read.
+   */
+  version: number;
+  /** The server's sentence. This is what a person decides from. */
+  why: string;
+  /** What was read about the most recent send, or null when the server did not say. */
+  reading: UncertainSendReading | null;
+  /** Which send path it came down, or null when the server did not say. */
+  origin: UncertainSendOrigin | null;
+  /** How many uncertain sends this hold has absorbed, or null. */
+  incidents: number | null;
+  openedAt: number | null;
+  lastSendAt: number | null;
+  /** The tmux server it was opened against, or null. */
+  tmuxGeneration: number | null;
+  /** Where the hold has got to, or null when the server did not say. */
+  outcome: HoldOutcome | null;
+};
+
+/**
+ * Is this session being held back right now?
+ *
+ * **A FUNCTION RATHER THAN `quarantine !== null`, because a released or
+ * superseded hold is still on the wire.** The server keeps the record so the
+ * page can say what happened to it; treating any record as a live hold would
+ * grey out a session nothing is stopping. A hold whose `outcome` the server did
+ * not describe is treated as live, which is the conservative direction: showing
+ * a stopped queue that is not stopped is a smaller failure than showing a
+ * flowing one that is.
+ */
+export function isHolding(hold: HoldView | null): boolean {
+  if (hold === null) return false;
+  return hold.outcome === null || hold.outcome.kind === "holding";
+}
 
 /**
  * Is anything in this queue genuinely ahead of a message queued now?
@@ -503,6 +610,68 @@ export function parseQueueItem(v: unknown): QueueItemView | null {
   };
 }
 
+/**
+ * One hold, as the server sends it — or null when this page cannot read it.
+ *
+ * `id`, `version` and `why` are the load-bearing three and an absent one makes
+ * the whole thing unreadable: without an id there is nothing to release, without
+ * a version the release would be built from a reading nobody can name, and
+ * without the sentence there is nothing for a person to decide from. Everything
+ * else folds to `null` — no claim — the way `stale` and `speaker` do.
+ */
+export function parseHold(v: unknown): HoldView | null {
+  if (!isRecord(v)) return null;
+  const id = str(v["id"]);
+  const why = str(v["why"]);
+  const version = finite(v["version"]);
+  if (id === null || why === null || version === null) return null;
+  const reading = v["reading"];
+  const origin = v["origin"];
+  return {
+    id,
+    version,
+    why,
+    reading:
+      reading === "partial" || reading === "unknown" || reading === "threw" || reading === "none-contradicted"
+        ? reading
+        : null,
+    origin: origin === "queued-delivery" || origin === "direct-steer" || origin === "broadcast" ? origin : null,
+    incidents: finite(v["incidents"]),
+    openedAt: millis(v["openedAt"]),
+    lastSendAt: millis(v["lastSendAt"]),
+    tmuxGeneration: finite(v["tmuxGeneration"]),
+    outcome: parseHoldOutcome(v["outcome"]),
+  };
+}
+
+/**
+ * Where a hold has got to, or null when the server said nothing this page knows.
+ *
+ * **AN UNRECOGNISED `kind` IS `null`, NOT `holding`.** The two would be drawn
+ * the same way — `isHolding` treats an absent outcome as live — but they are
+ * different facts and the fold happens in one named place rather than by a
+ * parse quietly picking the safe-looking arm.
+ */
+function parseHoldOutcome(v: unknown): HoldOutcome | null {
+  if (!isRecord(v)) return null;
+  if (v["kind"] === "holding") return { kind: "holding" };
+  const at = millis(v["at"]);
+  const what = str(v["what"]);
+  if (v["kind"] === "released") {
+    const gesture = v["gesture"];
+    if (gesture !== "operator-confirmed" && gesture !== "abandoned-unknown") return null;
+    if (at === null || what === null) return null;
+    return { kind: "released", gesture, at, what };
+  }
+  if (v["kind"] === "superseded") {
+    const was = finite(v["was"]);
+    const now = finite(v["now"]);
+    if (at === null || what === null || was === null || now === null) return null;
+    return { kind: "superseded", at, was, now, what };
+  }
+  return null;
+}
+
 export function parseQueue(v: unknown): QueueView | null {
   if (!isRecord(v)) return null;
   const sessionId = str(v["sessionId"]);
@@ -522,6 +691,8 @@ export function parseQueue(v: unknown): QueueView | null {
     }
     items.push(read);
   }
+  const rawHold = v["quarantine"];
+  const hold = parseHold(rawHold);
   return {
     sessionId,
     items,
@@ -529,6 +700,12 @@ export function parseQueue(v: unknown): QueueView | null {
     deliverable: finite(v["deliverable"]),
     unreadableItems,
     itemsUnreadable,
+    quarantine: hold,
+    /* PRESENT AND UNREADABLE, not merely absent. `null` and `undefined` are the
+       server saying there is no hold (or an older server saying nothing); an
+       object that would not parse is a hold this page cannot draw, and the row
+       has to survive so the gestures can be reached. */
+    holdUnreadable: rawHold !== null && rawHold !== undefined && hold === null,
   };
 }
 
@@ -785,11 +962,72 @@ export function sessionMessageBody(row: FleetRow, text: string): SessionMessageB
  * `speaker` is sent for the same reason `sessionActionBody` sends one: a
  * broadcast is rendered with the sender's name in front of it, and an absent
  * field means the weaker claim.
+ *
+ * `recipients` IS WHO THE BROADCAST IS FOR, AND WITHOUT IT THERE IS NOBODY.
+ * This body had no such field until 2026-09-09, so `broadcastRoute` refused
+ * every press on its first line — `a broadcast needs recipients` — before it
+ * selected anybody, and the button had never once reached a session. The rule
+ * it refuses on is deliberate and is the route's to keep: a broadcast must act
+ * on **the list the person was actually looking at**, not on a list the server
+ * re-fetches behind them, so the caller has to say what it saw.
+ *
+ * So these are the rows the page is showing, mapped through the SAME
+ * `steerTargetBody` the session path uses: the identifiers and the server's own
+ * `rawStatus` object, copied off the snapshot and not re-read. The discipline is
+ * `cancelBody`'s and `clearBody`'s — a stale-but-honest claim, checked at the
+ * far end — and rebuilding or refreshing the list here would defeat the point,
+ * because a claim the client refreshed to make true is a claim about nothing.
+ * The status in particular must be `rawStatus` rather than the parsed
+ * `row.status`: see steer-client.ts § `SteerTargetBody`.
+ *
+ * An enacted kill reads `pids` rather than this field and has the same gap;
+ * that is the preview envelope's to close, not this function's.
  */
-export type BoxActionBody = { actionId: string; mode: "dry-run" | "run"; confirm: boolean; speaker: "greg" };
+export type BoxActionBody = {
+  actionId: string;
+  mode: "dry-run" | "run";
+  confirm: boolean;
+  speaker: "greg";
+  recipients: SteerTargetBody[];
+};
 
-export function boxActionBody(actionId: string, dryRun: boolean): BoxActionBody {
-  return { actionId, mode: dryRun ? "dry-run" : "run", confirm: !dryRun, speaker: GREG };
+/**
+ * The rows that are ADDRESSES, which is not all of them — and sending the rest
+ * cost the fix its first evening.
+ *
+ * `parseTarget` requires a `paneId` and a `claudeSessionId` on every recipient
+ * and **refuses the whole request over any one that lacks either**, which is
+ * right for a route: an unaddressable target is a caller bug, not a delivery
+ * outcome. A real fleet always holds a few — a shell, and a session too old to
+ * have pinned a conversation id — so a body carrying the page's rows entirely
+ * raw was answered `400 a recipient is not addressable` by the running server
+ * on 2026-09-09, with 23 rows in it. One shell on the box and the broadcast
+ * still reached nobody.
+ *
+ * This is NOT the client second-guessing the server's selection rule. Which
+ * rows may be SPOKEN TO stays entirely the route's: a working session, a shell,
+ * a session at a dialog are all sent, and come back `held` or `blocked` with
+ * the reason. What is dropped here is only what steer-client.ts already calls
+ * unsteerable-by-construction — *a null `claudeSessionId` means the row cannot
+ * be steered at all* — because it is not a claim about a session, it is a row
+ * with nowhere to send anything.
+ *
+ * And the narrowing is not silent: `BoxActions` counts what this drops and says
+ * so under the confirmation, because a denominator that quietly shrank would be
+ * this whole stage's own defect one layer up.
+ */
+export function addressableRows(rows: readonly FleetRow[]): FleetRow[] {
+  return rows.filter((row) => row.paneId !== null && row.claudeSessionId !== null);
+}
+
+export function boxActionBody(actionId: string, dryRun: boolean, rows: readonly FleetRow[]): BoxActionBody {
+  return {
+    actionId,
+    mode: dryRun ? "dry-run" : "run",
+    confirm: !dryRun,
+    speaker: GREG,
+    recipients: addressableRows(rows).map(steerTargetBody),
+  };
 }
 
 /**
@@ -826,6 +1064,25 @@ export type ClearBody = { sessionId: string; itemIds: string[] };
 
 export function clearBody(sessionId: string, itemIds: readonly string[]): ClearBody {
   return { sessionId, itemIds: [...itemIds] };
+}
+
+/**
+ * Ending a hold, and **neither gesture sends anything.**
+ *
+ * No `sessionId`: a hold is addressed by its own id, so this works for a
+ * session that has ended, whose queue is empty, or whose pane is gone — which
+ * are exactly the holds somebody most needs to clear. `version` is `itemIds`'s
+ * counterpart: it says which reading was on screen, so a phone that has been in
+ * a pocket since another uncertain send landed is refused rather than clearing
+ * a hold whose reason nobody has read.
+ *
+ * Sending the same body twice is safe and is the point — a lost response is
+ * recoverable by pressing again, and the answer says `repeat`.
+ */
+export type ReleaseHoldBody = { holdId: string; version: number; gesture: HoldReleaseGesture };
+
+export function releaseHoldBody(holdId: string, version: number, gesture: HoldReleaseGesture): ReleaseHoldBody {
+  return { holdId, version, gesture };
 }
 
 /* ------------------------------------------------------------------ *
@@ -941,7 +1198,7 @@ export type StateCount = { state: string; count: number };
  */
 export type BoxEffectReading =
   | { kind: "broadcast"; recipients: number; states: StateCount[] }
-  | { kind: "kill"; attempted: number; planCompleted: boolean; states: StateCount[] };
+  | { kind: "kill"; targeted: number; states: StateCount[] };
 
 /** Counts by state word, in first-seen order, so the rendering is stable. */
 function countStates(rows: readonly unknown[], field: string): StateCount[] {
@@ -972,14 +1229,12 @@ export function parseBoxEffect(result: unknown): BoxEffectReading | null {
   }
   const kill = result["kill"];
   if (isRecord(kill) && Array.isArray(kill["observed"])) {
-    const attempted = Array.isArray(kill["attempted"]) ? kill["attempted"].length : kill["observed"].length;
-    return {
-      kind: "kill",
-      attempted,
-      // `=== true` for `parsePlanRun`'s reason: silence must not read as done.
-      planCompleted: kill["planCompleted"] === true,
-      states: countStates(kill["observed"], "observation"),
-    };
+    /* The pids the server SET OUT to signal. Falling back to the evidence list
+       when it is missing rather than to zero: the two are the same length on
+       every server that sends both, and the denominator a reader sees must not
+       shrink because a field went absent. */
+    const targeted = Array.isArray(kill["targeted"]) ? kill["targeted"].length : kill["observed"].length;
+    return { kind: "kill", targeted, states: countStates(kill["observed"], "observation") };
   }
   return null;
 }
@@ -1012,6 +1267,17 @@ export type ActionOutcome =
    * short rather than quietly presenting it as complete.
    */
   | { ok: true; kind: "queue-cleared"; removed: QueueItemView[]; keptInFlight: QueueItemView | null; unreadable: number }
+  /**
+   * A hold ended. **Nothing was sent, in either gesture.**
+   *
+   * Its own arm rather than a fourth `QueueOp` for `queue-cleared`'s reason:
+   * `repeat` is a fact a word cannot carry, and the two answers a person needs
+   * to be able to tell apart are *that has been recorded* and *that was already
+   * recorded, and your first press did work*. A phone loses responses; the
+   * whole reason this gesture is idempotent is so pressing again is safe, and
+   * a card that could not say which press had counted would waste it.
+   */
+  | { ok: true; kind: "hold-released"; gesture: HoldReleaseGesture; repeat: boolean }
   | { ok: true; kind: "accepted" }
   /**
    * **A FAILURE IS NOT THE SAME THING AS AN ABSENCE OF EFFECT**, and this arm
@@ -1132,7 +1398,18 @@ export type ActionsApi = {
    * `clearBody` — and an item already going out is kept, not dropped.
    */
   clear: (sessionId: string, itemIds: readonly string[]) => Promise<ActionOutcome>;
-  box: (actionId: string, dryRun: boolean) => Promise<BoxOutcome>;
+  /**
+   * End a hold on a session. **Neither gesture sends anything** — see
+   * `releaseHoldBody`. Safe to call twice with the same arguments.
+   */
+  releaseHold: (holdId: string, version: number, gesture: HoldReleaseGesture) => Promise<ActionOutcome>;
+  /**
+   * A box-wide action. **`rows` is required, and it is the fix for a button
+   * that could not reach anybody** — see `boxActionBody`. It is the list the
+   * page is showing, verbatim; a caller with nothing on screen passes an empty
+   * array and gets the server's refusal, which is the true answer.
+   */
+  box: (actionId: string, dryRun: boolean, rows: readonly FleetRow[]) => Promise<BoxOutcome>;
 };
 
 /** A thrown thing, as a sentence. Never "[object Object]". */
@@ -1244,6 +1521,23 @@ function refusal(
 
 function readActionOutcome(response: Response, parsed: unknown): ActionOutcome {
   if (!isRecord(parsed) || parsed["ok"] !== true) return refusal(response, parsed);
+  /* BEFORE `queueOp` and before the `item` check, for the same reason `cleared`
+     is: this response carries a `hold`, and a reading that fell through to the
+     bottom would draw "Done." over the one gesture whose whole value is saying
+     precisely what was and was not recorded. The gesture is read off the HOLD
+     the server sent back rather than off the request, so a server that recorded
+     something else cannot be reported as having agreed with us. */
+  if (parsed["op"] === "hold-released") {
+    const outcome = parseHoldOutcome(isRecord(parsed["hold"]) ? parsed["hold"]["outcome"] : undefined);
+    if (outcome !== null && outcome.kind === "released") {
+      return { ok: true, kind: "hold-released", gesture: outcome.gesture, repeat: parsed["repeat"] === true };
+    }
+    /* The server said it released a hold and did not say how. `accepted` rather
+       than inventing a gesture: the page then says the server answered without
+       saying what it recorded, which is true, instead of putting a sentence
+       about somebody looking at a terminal over a body that never said so. */
+    return { ok: true, kind: "accepted" };
+  }
   /* BEFORE `queueOp`, and deliberately not one of its words: reading this as a
      bare "cleared" would drop `keptInFlight`, which is the only thing on this
      response that a person must not be left guessing about. */
@@ -1311,9 +1605,10 @@ export function makeActionsApi(fetchImpl: typeof fetch = fetch): ActionsApi {
     revive: (sessionId, itemId) => send(REVIVE_URL, cancelBody(sessionId, itemId)),
     abandon: (sessionId, itemId) => send(ABANDON_URL, cancelBody(sessionId, itemId)),
     clear: (sessionId, itemIds) => send(CLEAR_URL, clearBody(sessionId, itemIds)),
+    releaseHold: (holdId, version, gesture) => send(RELEASE_HOLD_URL, releaseHoldBody(holdId, version, gesture)),
 
-    async box(actionId, dryRun): Promise<BoxOutcome> {
-      const posted = await postJson(BOX_ACTION_URL, boxActionBody(actionId, dryRun), fetchImpl);
+    async box(actionId, dryRun, rows): Promise<BoxOutcome> {
+      const posted = await postJson(BOX_ACTION_URL, boxActionBody(actionId, dryRun, rows), fetchImpl);
       if ("failure" in posted) return { ...posted.failure, ok: false, from: "client" };
       const { response, parsed } = posted;
       if (!isRecord(parsed) || parsed["ok"] !== true) return refusal(response, parsed);
@@ -1346,5 +1641,6 @@ export const httpActionsApi: ActionsApi = {
   revive: (sessionId, itemId) => makeActionsApi().revive(sessionId, itemId),
   abandon: (sessionId, itemId) => makeActionsApi().abandon(sessionId, itemId),
   clear: (sessionId, itemIds) => makeActionsApi().clear(sessionId, itemIds),
-  box: (actionId, dryRun) => makeActionsApi().box(actionId, dryRun),
+  releaseHold: (holdId, version, gesture) => makeActionsApi().releaseHold(holdId, version, gesture),
+  box: (actionId, dryRun, rows) => makeActionsApi().box(actionId, dryRun, rows),
 };

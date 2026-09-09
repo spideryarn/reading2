@@ -1354,6 +1354,26 @@ Environment=HOME=/home/@USER@
 Environment=OVERSEER_STORE_DIR=/home/@USER@/.overseer
 Environment=OVERSEER_FLEET_URL=http://127.0.0.1:8787
 
+# ARMING, AND IT IS RUNTIME STATE RATHER THAN A REPO EDIT.
+#
+# NO LEADING `-`, deliberately, and it is the opposite choice from the fleet
+# dashboard's optional override two units along. That one is an override with a
+# correct default; this one is the file that says whether this box may start paid
+# Claude sessions unattended, and a missing one must be an error rather than a
+# silent disarm -- because "the switch file vanished" and "the switch is off"
+# would otherwise look identical from every side.
+#
+# provision.sh creates it ONCE with OVERSEER_JOBS_ENABLED=0 and never overwrites
+# it, so re-provisioning cannot re-arm or disarm a box behind its owner's back.
+#
+# The alternative was Environment="OVERSEER_JOBS_ENABLED=1" here, which the plan
+# preferred on the grounds that a change to the box should be a change to a file.
+# GPT Sol's S8-8: that makes every ordinary restart a re-arm, and makes a repo
+# edit plus a unit install the only way to stop paid work at 3am while keeping
+# the observational daemon. The real state is then untracked but NOT invisible --
+# `systemctl show overseer -p Environment` and `overseer status` both report it.
+EnvironmentFile=/etc/overseer.env
+
 # The checkout's own tsx, not `npx tsx`. npx with no local install goes to the
 # network and fetches SOME tsx; this path either exists or fails loudly, which
 # is the difference between a service that is wrong and one that says so.
@@ -1600,6 +1620,44 @@ Unit=overseer-watchdog.service
 [Install]
 WantedBy=timers.target
 OVERSEER_WATCHDOG_TIMER_UNIT
+
+# THE OVERSEER'S ARMING FILE. Created ONCE, disarmed, and never overwritten.
+#
+# overseer.service reads it with EnvironmentFile= and no `-`, so it has to exist
+# or the unit will not start; and the value it ships with is
+# OVERSEER_JOBS_ENABLED=0, which is not "1" and therefore arms nothing
+# (tools/overseer/dispatch.ts § jobsEnabled: exactly "1", nothing else).
+#
+# `test -e` FIRST, and that guard is the whole point rather than an optimisation:
+# whether this box may start paid Claude sessions unattended is its owner's
+# decision, taken at some later moment, and a provisioning run that rewrote the
+# file would silently undo it. Re-provisioning an armed box must leave it armed;
+# re-provisioning a disarmed one must leave it disarmed. Contrast the fleet
+# dashboard's env file below, which provisioning DOES own and does rewrite --
+# that one is derived from `tailscale ip`, and this one is a decision.
+if test -e /etc/overseer.env; then
+  echo "overseer arming file already exists -- left exactly as it is ($(grep -c . /etc/overseer.env) line(s))"
+else
+  overseer_env_tmp=$(mktemp /etc/.overseer.env.tmp.XXXXXX)
+  trap 'rm -f "$overseer_env_tmp"' EXIT
+  cat > "$overseer_env_tmp" <<'OVERSEER_ENV'
+# Whether the Overseer may dispatch its standing jobs -- real Claude sessions on
+# this box, started with nobody watching. EXACTLY "1" arms it; anything else,
+# including "true" and "yes", does not.
+#
+# Change it with `sudo npx tsx scripts/overseer-activate.ts --arm` from the
+# primary checkout, which validates, installs, restarts and then CHECKS -- not by
+# hand, because `systemctl daemon-reload` does not install the checked-in unit
+# and a hand sequence can restart the old one and look successful (GPT Sol's
+# S8-3).
+OVERSEER_JOBS_ENABLED=0
+OVERSEER_ENV
+  chown root:root "$overseer_env_tmp"
+  chmod 0644 "$overseer_env_tmp"
+  mv -f -T "$overseer_env_tmp" /etc/overseer.env
+  trap - EXIT
+  echo "created /etc/overseer.env DISARMED (OVERSEER_JOBS_ENABLED=0)"
+fi
 
 # The dashboard's bind list. The unit falls back to LOOPBACK ALONE -- the one
 # address that is right on every box and cannot fail to bind -- and this file is
@@ -2059,6 +2117,16 @@ check "fleet dashboard binds the tailnet once tailscale is logged in" 'fleet_now
 # A unit that named it, even as false, is one edit away from enabling it, and a
 # unit file is exactly the sort of file somebody skims and completes.
 check "fleet dashboard does not name FLEET_ACT_ENABLED" '! grep -q FLEET_ACT_ENABLED /etc/systemd/system/fleet-dashboard.service && { ! test -f /etc/fleet-dashboard.env || ! grep -q FLEET_ACT_ENABLED /etc/fleet-dashboard.env; }'
+# THE ARMING FILE EXISTS, because the unit reads it without a `-` and a missing
+# one is a service that will not start. This asserts existence, NOT a value: a
+# box whose owner has armed it must stay armed across a re-provision, so a check
+# demanding =0 would be a check that goes red on exactly the boxes doing the
+# right thing.
+check "overseer arming file exists" 'test -f /etc/overseer.env && grep -q OVERSEER_JOBS_ENABLED /etc/overseer.env'
+# The unit reads it, and reads it as REQUIRED. `EnvironmentFile=-` would turn a
+# deleted or unreadable switch file into a silently disarmed daemon, which is the
+# state this whole design refuses to make indistinguishable from "off on purpose".
+check "overseer unit requires its arming file" 'grep -qx "EnvironmentFile=/etc/overseer.env" /etc/systemd/system/overseer.service'
 check "supabase cli pinned"      'timeout 30 su - '"$USER_NAME"' -c "supabase --version" | grep -qx "'"$SUPABASE_VERSION"'"'
 # The editor, in the three places that name it -- because they come apart. The
 # package can be present while $EDITOR still says nothing, and both can be right

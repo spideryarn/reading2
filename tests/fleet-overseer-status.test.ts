@@ -386,6 +386,21 @@ describe("the parts that degrade on their own", () => {
     expect(mustPublish(root).status.scheduler.kind).toBe("not-said");
   });
 
+  it("says BLOCKED for a scheduler that is switched on with nothing runnable", () => {
+    /* GPT Sol's S8-7. Until 2026-09-09 the daemon wrote `armed` for this — the
+       word came from an environment variable rather than from the definitions —
+       so the page reported a healthy scheduler about a box on which not one job
+       could run. It must reach the page as its own state, and NOT be folded into
+       either `armed` or `off`. */
+    const root = tempRoot();
+    writeCheckpoint(root, {
+      scheduler: { kind: "blocked", why: "the scheduler is switched on and NOT ONE loaded job can run", at: WRITTEN_AT },
+    });
+    const scheduler = mustPublish(root).status.scheduler;
+    expect(scheduler.kind).toBe("blocked");
+    if (scheduler.kind === "blocked") expect(scheduler.why).toContain("NOT ONE loaded job can run");
+  });
+
   it("cannot tell about a scheduler line that is simply absent", () => {
     const root = tempRoot();
     const { scheduler: _dropped, ...without } = checkpointObject();
