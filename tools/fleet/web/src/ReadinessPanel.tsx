@@ -131,7 +131,10 @@ function DayBand({
 }): ReactNode {
   const span = Math.max(1, toMs - fromMs);
   return (
-    <div className="tw:relative tw:h-5 tw:w-full tw:rounded tw:bg-hover">
+    /* **The empty track is drawn**, faintly. A day on which nothing ran is a
+       real answer and it should look like an empty shelf, not like a row that
+       failed to render — which is what a transparent band gave. */
+    <div className="tw:relative tw:h-5 tw:w-full tw:rounded tw:border tw:border-rule tw:bg-hover/60">
       {readings.map((reading) => {
         const left = Math.min(100, Math.max(0, ((reading.atMs - fromMs) / span) * 100));
         const provenance = provenanceOf(reading, devSha);
@@ -140,11 +143,16 @@ function DayBand({
           <span
             key={`${reading.atMs}-${reading.check}-${reading.source}-${reading.commandLine ?? ""}`}
             className={cx(
-              "tw:absolute tw:top-0.5 tw:h-4 tw:w-1 tw:rounded-sm",
+              /* **Two pixels, not one.** A 24-hour band is about 200px on a
+                 phone, and a 1px mark at 45% opacity was invisible in the first
+                 screenshot — a graph that draws its data where nobody can see it
+                 is the same as not drawing it. */
+              "tw:absolute tw:top-0.5 tw:h-4 tw:w-0.5 tw:min-w-[2px] tw:rounded-sm",
               tone.pill,
-              /* The two weaker provenances recede. They are history, and the
-                 eye should not read them as the answer. */
-              provenance === "dev" ? "tw:opacity-100 tw:ring-1 tw:ring-ink-faint" : "tw:opacity-45",
+              /* The two weaker provenances recede — they are history, and the
+                 eye should not read them as the answer — but they stay legible.
+                 Receding is not disappearing. */
+              provenance === "dev" ? "tw:opacity-100 tw:ring-1 tw:ring-ink-faint" : "tw:opacity-70",
             )}
             style={{ left: `${left}%` }}
             title={`${formatTime(reading.atMs)} · ${reading.state}${
@@ -332,9 +340,14 @@ export function ReadinessPanel({
             );
           })}
         </div>
+        {/* **The left edge says "24h ago", not a clock time.** Both ends of a
+            24-hour window fall at the same hour and minute, so two
+            `toLocaleTimeString` labels read `05:43` and `05:43` — a window that
+            looks zero-width. Caught by looking at the first screenshot; no test
+            would have. */}
         <div className="tw:flex tw:justify-between tw:pt-2 tw:text-[10px] tw:text-ink-faint">
-          <span>{formatTime(fromMs)}</span>
-          <span>{formatTime(view.collectedAtMs)}</span>
+          <span>{view.windowHours}h ago · {formatTime(fromMs)}</span>
+          <span>now · {formatTime(view.collectedAtMs)}</span>
         </div>
       </Card>
 
