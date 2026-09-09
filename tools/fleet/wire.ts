@@ -36,7 +36,32 @@
  * the text says which it is. A model's recommendation must not mint its own
  * approval.
  */
-export type Speaker = "greg" | "overseer";
+export type Speaker = "greg" | "overseer" | "dashboard";
+
+/*
+ * **`dashboard` IS A REPORT, NEVER AN INSTRUCTION, AND THE ARM SPLITS IF THAT
+ * STOPS BEING TRUE.** Added 2026-09-09 for the line the web UI sends when a
+ * person starts a new session, so the receiving agent is told an event happened
+ * rather than asked for anything.
+ *
+ * It is a third arm rather than a reuse of either existing one, and both
+ * alternatives were wrong in the direction this type exists to prevent.
+ * `greg` would mint his authority for something nobody instructed — the exact
+ * failure A12 names. `overseer` would attribute a notification to a coordinator
+ * that did not send it. A person acted and software is reporting it, which is
+ * neither.
+ *
+ * So its prefix says plainly that nothing is being asked, which the other two
+ * do not need to say because both of theirs ARE asking something. The wording
+ * was reviewed by the session that receives it, which is a better test of it
+ * than the judgement of the session that wrote it.
+ *
+ * **If anything ever goes through this arm that IS an instruction, the prefix
+ * becomes a false statement** and this must split into two arms rather than
+ * having its wording softened. Do not reach for `dashboard` as a
+ * general-purpose "not Greg" speaker; that is what `overseer` is, and it says
+ * so.
+ */
 
 /* ------------------------------------------------------------------ *
  * The spoken half of the vocabulary.
@@ -213,6 +238,18 @@ export type QueueView = {
   volatile: true;
   warning: string;
   since: number;
+  /**
+   * The hold stopping this session from being drained, or null.
+   *
+   * **A QUEUE IS ON THE WIRE WHEN IT HAS ITEMS *OR* THIS**, which is the
+   * whole reason the field is here rather than on a feed of its own: the
+   * commonest hold has NO items behind it — one message was queued, the send
+   * came back `partial`, the item settled `uncertain` and left — so a page
+   * that drew a queue only when `items.length > 0` would draw nothing at all
+   * over a session nothing may be sent to. See `QuarantineHoldView`, and
+   * `SteeringQueue.snapshots`, which is the filter that had to change.
+   */
+  quarantine: QuarantineHoldView | null;
 };
 
 /* ------------------------------------------------------------------ *
@@ -1256,6 +1293,13 @@ export type OverseerHeartbeat =
  */
 export type OverseerScheduler =
   | { kind: "armed"; why: string; at: string }
+  /**
+   * **SWITCHED ON, AND NOT ONE LOADED JOB CAN RUN.** GPT Sol's S8-7: this state
+   * used to render as `armed`, because the word came from an environment
+   * variable rather than from the definitions. It is neither `off` nor working,
+   * so it gets its own word here as it does in the store.
+   */
+  | { kind: "blocked"; why: string; at: string }
   | { kind: "off"; why: string; at: string }
   | { kind: "not-said"; why: string; at: string }
   | { kind: "unreadable"; why: string };
@@ -1433,38 +1477,52 @@ export type KillObservation =
   /** `kill` exited non-zero: no such process, or not ours to signal. Nothing happened to it. */
   | "signal-refused"
   /**
-   * The `kill` could not be run, was killed for taking too long, or died on a
-   * signal itself. **The most expensive arm to get wrong in either direction**:
-   * the signal may have gone out before it died, and it may not have.
+   * The attempt did not settle. The `kill` could not be spawned, or was killed
+   * for taking too long, or died on a signal itself — and in two of those three
+   * **it ran**. **The most expensive arm to get wrong in either direction**:
+   * the signal may have gone out before the command died, and it may not.
+   *
+   * There is deliberately no `not-attempted` beside this. `planKillProcesses`
+   * builds one step per pid and a `best-effort` step cannot stop a plan, so no
+   * pid on this route goes unreached; `killReport` asserts that rather than
+   * carrying an arm nothing can produce. An arm no code can reach is
+   * decoration, and the plan cut `reception observed` for the same reason.
    */
-  | "not-established"
-  /** The plan stopped before reaching this pid, so nothing was sent to it at all. */
-  | "not-attempted";
+  | "not-established";
 
 /** One pid, and what became of the attempt to signal it. */
 export type KillAttempt = {
   pid: number;
   observation: KillObservation;
-  /** The step's own verdict, verbatim, or why there was no step. */
+  /** The step's own verdict, verbatim. */
   why: string;
 };
 
 /**
  * A kill, reported as **intent and evidence separately**.
  *
- * `attempted` is the list the route meant to signal and is a fact about the
+ * `targeted` is the list the route set out to signal and is a fact about the
  * request; `observed` is what came back and is a fact about the box. They are
  * two fields rather than one because the route used to answer with the first
  * under a name that reads as the second, and a page cannot recover a
  * distinction the wire has already collapsed.
+ *
+ * **`targeted` WAS CALLED `attempted` FOR ONE DAY AND THAT WAS THE SAME
+ * MISTAKE ONE NOTCH SMALLER.** This stage exists to stop a kill reporting
+ * intent as outcome, and then named its own intent field after the attempt.
+ * The list is who we aimed at; whether each was attempted is `observed`, one
+ * entry at a time.
+ *
+ * There is no `planCompleted`. Every pid here has a step — `killReport`
+ * asserts it — so a flag saying the plan reached the end of the list could
+ * only ever be true, and a field that cannot be false is a claim rather than a
+ * reading.
  */
 export type KillReport = {
   /** Every pid the plan set out to signal, in order. INTENT, not effect. */
-  attempted: readonly number[];
-  /** One entry per attempted pid, in the same order. EVIDENCE. */
+  targeted: readonly number[];
+  /** One entry per targeted pid, in the same order. EVIDENCE. */
   observed: readonly KillAttempt[];
-  /** Every step ran. False means the tail of `attempted` was never signalled. */
-  planCompleted: boolean;
 };
 
 /**
@@ -1499,6 +1557,425 @@ export type BroadcastRecipientOutcome =
   | "blocked"
   /** The fan-out ran out of time before this row. Nothing was sent. */
   | "not-reached";
+
+/* ------------------------------------------------------------------ *
+ * A SESSION HELD BACK AFTER A SEND NOBODY CAN ACCOUNT FOR.
+ *
+ * Stage 4 of docs/plans/260908j. The dashboard types into other people's
+ * input boxes, and `Delivery` already distinguishes the three things a
+ * send can end as. Two of them — `partial` and `unknown` — mean **text
+ * may be sitting in that agent's input box with no Enter behind it**,
+ * and until somebody looks at the terminal nothing in this process can
+ * find out. The next queued item draining into that same box would
+ * concatenate itself onto half a sentence.
+ *
+ * So the ambiguity becomes a per-session HOLD. **Nothing below observes
+ * a consequence**, for the reason the block above says: no agent
+ * acknowledges a keystroke. `operator-confirmed` is a person's claim
+ * about what they saw with their own eyes, recorded as a claim; it is
+ * never a reading this software made.
+ *
+ * **AND NOTHING HERE IS EVER A RETRY.** A hold stops the NEXT item; it
+ * never re-sends the one that went wrong. Releasing a hold sends nothing
+ * either — both gestures below are records, not actions.
+ * ------------------------------------------------------------------ */
+
+/**
+ * What was read about the send that opened or extended a hold.
+ *
+ * Four arms, and each one names a producer, because an arm nothing can
+ * write is decoration — the rule the plan cut `reception observed` and
+ * `not-attempted` under.
+ *
+ *  - `partial` — `fire()` in steer.ts reached some of the sequence and not
+ *    the end of it (`Delivery` of `"partial"`).
+ *  - `unknown` — `fire()` could not say (`Delivery` of `"unknown"`).
+ *  - `threw` — the delivery module threw. It carries no `Delivery` at all,
+ *    and the `try` surrounds the whole call, so it cannot say whether
+ *    anything went out first. Produced by the direct steer route and by
+ *    the broadcast; **the drain does not produce it**, and the comment on
+ *    `deliverOne` says why — there the lease is left open instead, which
+ *    stops that session's queue harder than a hold would.
+ *  - `none-contradicted` — the transport said `delivery: "none"` and listed
+ *    tmux calls that completed anyway. `nothingWasSent` refuses to certify
+ *    that, and the honest reading of a self-contradicting report is the one
+ *    that assumes something went out.
+ */
+export type UncertainSendReading = "partial" | "unknown" | "threw" | "none-contradicted";
+
+/** Which of the three send paths left the input box in doubt. */
+export type UncertainSendOrigin =
+  /** The refresh loop's drain pass, delivering a queued item. */
+  | "queued-delivery"
+  /** Somebody typed into one session from the page — `POST /api/steer/…`. */
+  | "direct-steer"
+  /** One recipient of a fan-out — `POST /api/actions/box`. */
+  | "broadcast";
+
+/**
+ * The two gestures that end a hold, **neither of which sends anything.**
+ *
+ *  - `operator-confirmed` — *I looked at the terminal and saw it.* A
+ *    person's claim, stored as a person's claim. The dashboard did not
+ *    observe it and the copy must never say it did.
+ *  - `abandoned-unknown` — *Abandon the uncertainty.* It releases the hold
+ *    and **claims nothing in either direction**: not that the text
+ *    arrived, and — the half that is easy to get wrong — not that it did
+ *    not.
+ */
+export type HoldReleaseGesture = "operator-confirmed" | "abandoned-unknown";
+
+/**
+ * Where a hold has got to.
+ *
+ * A union rather than a `state` string beside three optional fields, so
+ * that reading the release gesture forces you to have established that it
+ * WAS released. `superseded` carries both generations because the whole
+ * argument for it is the comparison: a tmux server restart takes every
+ * pane with it, so the input box the hold was about no longer exists.
+ */
+export type HoldOutcome =
+  /** Still holding. Nothing drains into this session. */
+  | { kind: "holding" }
+  | {
+      kind: "released";
+      gesture: HoldReleaseGesture;
+      at: number;
+      /** What that gesture asserted, in words, for the page and the log. */
+      what: string;
+    }
+  | {
+      kind: "superseded";
+      at: number;
+      /** The tmux server the hold was opened against. */
+      was: number;
+      /** The one running now. */
+      now: number;
+      what: string;
+    };
+
+/**
+ * One session's hold, as `GET /api/actions` sends it.
+ *
+ * **`why` IS A SENTENCE, following `QueuedItem.invalidated`** rather than
+ * a code the page has to translate: a hold is a thing a person has to
+ * decide about, and the deciding is done from the sentence.
+ *
+ * `version` is what makes the release idempotent AND safe. It goes up
+ * every time another uncertain send lands on a session that is already
+ * held, so a phone that has been in a pocket since version 1 cannot
+ * release a hold that has since absorbed a second incident.
+ */
+export type QuarantineHoldView = {
+  /** `<instance>-h<n>`. Opaque to the client, exactly like a queued item's id. */
+  id: string;
+  /** Bumped by each further uncertain send. Starts at 1. */
+  version: number;
+  sessionId: string;
+  /** The pane the send was aimed at, or null when the producer had none to give. */
+  paneId: string | null;
+  claudeSessionId: string | null;
+  /** Which run of this server opened it. */
+  serverInstanceId: string;
+  /** The tmux server it was opened against, or null if this server had not been told yet. */
+  tmuxGeneration: number | null;
+  openedAt: number;
+  /** When the most recent uncertain send landed. Equals `openedAt` while `incidents` is 1. */
+  lastSendAt: number;
+  /** How many uncertain sends this hold has absorbed. Never below 1. */
+  incidents: number;
+  /** The reading of the most recent one. */
+  reading: UncertainSendReading;
+  /** Which path the most recent one came down. */
+  origin: UncertainSendOrigin;
+  why: string;
+  outcome: HoldOutcome;
+};
+
+/* ------------------------------------------------------------------ *
+ * The Deploys tab: what shipped to production, and how stale the record is.
+ * ------------------------------------------------------------------ */
+
+/**
+ * The three headings a deploy's reader-facing entries appear under.
+ *
+ * A type rather than the `as const` array, which is a runtime value and belongs
+ * in `deploys.ts` — this file may not hold one. docs/project/changelog.md
+ * § The file has the reasoning for three rather than four: there is no section
+ * for engineering, because a change a reader would notice is a headline change
+ * whatever it took to build.
+ */
+export type DeploySection = "headline" | "enhancement" | "fix";
+
+/** One thing a reader would notice, as the changelog pipeline wrote it. */
+export type DeployEntry = {
+  section: DeploySection;
+  title: string;
+  body: string;
+  /** Where in the app, in the pipeline's words. Null when it named nowhere. */
+  where: string | null;
+  /** Full 40-character shas. The panel renders them as links into the repository. */
+  commits: string[];
+};
+
+/**
+ * One production deploy, as `src/web/changelog-versions.ndjson` has it.
+ *
+ * **Declared here rather than in `deploys.ts` because both ends read it**, and
+ * this file's whole existence is the four fields that reached the browser and
+ * were dropped by a client holding its own unrelated copy of a type. The reader
+ * and the panel import this one.
+ */
+export type DeployVersion = {
+  /** The deploy's timestamp, UTC. It is also the version's id. */
+  version: string;
+  /** Which release this is, counted from the OLDEST line — the number `/changelog` shows. */
+  release: number;
+  deploymentId: string;
+  sha: string;
+  previousSha: string | null;
+  /**
+   * How many commits this deploy shipped, or null when the line does not say.
+   *
+   * **A NON-MERGE COUNT** — the changelog pipeline drops merge commits, because
+   * every one of them here is a `Merge remote-tracking branch 'origin/dev'`
+   * carrying no change of its own. Anything drawn beside it must be counted the
+   * same way or the two are not comparable. **Null is not zero**: a line that
+   * has forgotten what it shipped has not shipped nothing.
+   */
+  commitCount: number | null;
+  /**
+   * Nothing a reader would notice. The common case, and not a fault.
+   *
+   * **Only ever true when `changelogReadable` is** — a deploy whose changelog
+   * could not be read is not a quiet one, and saying so was the bug GPT Sol
+   * found on 2026-09-09.
+   */
+  invisible: boolean;
+  /**
+   * **Whether "what changed" could be read at all**, as distinct from there
+   * being nothing.
+   *
+   * False when `entries` is absent, is not an array, or held nothing readable
+   * on a line that does not claim to be quiet. The panel must draw this as
+   * *we could not read what changed*, never as *nothing changed*: the two look
+   * identical and mean opposite things, and one of them is a headline feature
+   * rendered as an empty deploy.
+   */
+  changelogReadable: boolean;
+  /** Entries on this line that would not parse. Counted, never hidden. */
+  unreadableEntries: number;
+  /** When the changelog job wrote this line — **not** when the deploy happened. */
+  generatedAt: string | null;
+  entries: DeployEntry[];
+};
+
+/**
+ * The three git readings, taken together as one snapshot.
+ *
+ * **One shape rather than three fields, because they must describe one tip.**
+ * `origin/main` is mutable between processes — a dozen agents fetch all night —
+ * so three independently-resolved calls can answer about three different
+ * commits, and the result is a reading of nothing. GPT Sol's P2 finding 6.
+ */
+export type GitSnapshot = {
+  main: MainRef;
+  ancestry: AncestryReading;
+  commitsSince: CountReading;
+};
+
+/**
+ * Production's tip, as the dashboard's checkout last heard it.
+ *
+ * `lastFetchAtMs` is the age of **the view, not of the commit**. The dashboard
+ * never fetches — see `tools/fleet/git-probe.ts` — so a ref nobody has updated
+ * in a week looks exactly like a week with no deploys unless the page can tell
+ * the two apart.
+ */
+export type MainRef =
+  | { kind: "ref"; sha: string; committedAt: string; lastFetchAtMs: number | null }
+  | { kind: "unavailable"; why: string };
+
+/**
+ * Whether the newest recorded deploy is behind production's tip.
+ *
+ * **Three arms, and the third is why this is not a boolean.** `not-ancestor`
+ * means a rollback or a deploy from somebody's working directory; `unknown`
+ * means we could not ask. Collapsed into one `false`, a git that would not run
+ * renders as a rollback that never happened.
+ */
+export type AncestryReading =
+  | { kind: "ancestor" }
+  | { kind: "not-ancestor" }
+  | { kind: "unknown"; why: string };
+
+/**
+ * How many commits separate the newest recorded deploy from production's tip.
+ *
+ * Non-merge, to match `DeployVersion.commitCount`. **`unknown` rather than a
+ * fallback of `0`**: every failure of this question has a plausible, reassuring
+ * wrong answer, and "0 commits behind" is the most reassuring possible way to
+ * say we have no idea.
+ */
+export type CountReading = { kind: "count"; commits: number } | { kind: "unknown"; why: string };
+
+/**
+ * `GET /api/deploys`.
+ *
+ * **`deploys` with an empty `versions` and `unreadable` are different claims** —
+ * *we read the record and it is empty* against *we could not read it* — and the
+ * page must never draw them the same way. Same discipline as the health chart's
+ * blank day, and the same reason: the collapsed version is a confident sentence
+ * about production that nobody checked.
+ *
+ * On `commitsSince`, read `routes-deploys.ts` before writing a sentence about
+ * the number. **It is not undeployed work.** Everything on `main` has shipped or
+ * is shipping, since `main` is written only by `npm run deploy`; the number
+ * lumps together deploys the changelog job has not recorded yet and a tip that
+ * has not been deployed, and nothing on this box can separate those without a
+ * Vercel token.
+ */
+export type DeploysPayload =
+  | {
+      schema: 1;
+      kind: "deploys";
+      /** Newest first, at most `limit` of them. */
+      versions: DeployVersion[];
+      /** How many the record holds altogether, so "show more" knows there is more. */
+      total: number;
+      /** What was served, after clamping — so the page can say if it got less. */
+      limit: number;
+      /** A sentence per line of the record that would not parse. Never merely counted. */
+      unreadable: string[];
+      /** Non-blank lines in the record, parsed or not. The denominator. */
+      recordLines: number;
+      /** When the changelog job last wrote a line. **Not** when anything deployed. */
+      lastGeneratedAt: string | null;
+      /** The newest deploy the record knows about, or null for an empty record. */
+      newestRecordedSha: string | null;
+      /**
+       * The git readings, as **one snapshot of one tip**.
+       *
+       * Nested rather than spread across three sibling fields, so it is not
+       * possible to build a payload whose `ancestry` and `commitsSince` were
+       * measured against different commits. GitSnapshot says why that is a real
+       * risk here rather than a theoretical one.
+       */
+      git: GitSnapshot;
+      /** The server's clock, so the page can age the record against it. */
+      servedAtMs: number;
+    }
+  | { schema: 1; kind: "unreadable"; why: string };
+
+/* ------------------------------------------------------------------ *
+ * Starting a session from the web UI, and telling the Overseer about it.
+ *
+ * The FOURTH endpoint to move behind this file, and it moved because of a bug
+ * rather than for tidiness. `LaunchRecord` was declared twice — in
+ * `routes-new.ts` and again in `web/src/new-session-client.ts` — related by
+ * nothing but hope, exactly like `QueueView` before it. A cross-family review
+ * found that a launch which reached `started` could carry no notification state
+ * at all, with no way to tell "not attempted" from "nobody wired it up", and
+ * fixing that needs a discriminated union. The union changes the shape on the
+ * wire, and changing the shape while the declaration is written twice is
+ * invisible to the compiler: `parseLaunch` reads `v["state"]` as a raw string,
+ * so a rename returns `null` for every record and the panel silently renders
+ * nothing. Shaped exactly like docs/postmortems/260908b.
+ * ------------------------------------------------------------------ */
+
+/**
+ * What became of the one line the dashboard sends the Overseer when a session
+ * is started from the web UI.
+ *
+ * **There is no "sent".** Nothing on this box can observe reception —
+ * `sendMessage` types keystrokes at a pane, and whether the agent read them,
+ * whether the Enter landed, and whether the text concatenated with something
+ * half-typed are all outside what we can see. So the success arm is
+ * `submitted`, which claims exactly what happened, and every failure carries the
+ * `Delivery` word that path already returns.
+ *
+ * The four not-a-send arms are four different facts, and the union exists so
+ * the launch record cannot flatten them into "not sent": nobody holds the role,
+ * which is what a box looks like after a reboot and is a real answer; the role
+ * is contested, which is a fault to report and never a pick; we could not
+ * establish who holds it or could not address them; and we found the holder and
+ * the send would not go.
+ */
+export type NotifyOutcomeView =
+  | { kind: "submitted"; to: string; paneId: string }
+  | { kind: "no-holder" }
+  | { kind: "contested"; names: readonly string[] }
+  | { kind: "cannot-tell"; why: string }
+  | { kind: "refused"; to: string; code: string; why: string; delivery: Delivery }
+  | { kind: "unknown"; to: string; why: string };
+
+/**
+ * Where a launch's notification has got to.
+ *
+ * `pending` is a real state and is set **before** the send is attempted, so a
+ * notification can never delay the launch result — the page says a session
+ * started the moment it started, and fills this in afterwards.
+ */
+export type NotifyState = { kind: "pending" } | NotifyOutcomeView;
+
+/**
+ * **THE DISCRIMINANT AND ITS NOTIFICATION, IN ONE FIELD, AND THE NESTING IS THE
+ * POINT.**
+ *
+ * A union on a top-level `state` would be the obvious shape and it cannot be
+ * used here: `routes-new.ts` mutates its record in place, and that record's
+ * OBJECT IDENTITY is load-bearing — `launch()` ends with
+ * `if (inFlight === record)`, a reference comparison an earlier review put there
+ * so that two launches being live at once is loud rather than silent. Moving a
+ * record between arms of a top-level union means replacing the object, which
+ * breaks that check.
+ *
+ * Nesting the discriminant under one field keeps the identity — `record.progress
+ * = {…}` is a single assignment — while still making the bad state
+ * unrepresentable: a `starting` launch cannot carry an outcome, and a `started`
+ * one cannot carry nothing.
+ */
+export type LaunchProgress =
+  | { state: "starting"; notification: { kind: "not-attempted" } }
+  | { state: "started"; notification: NotifyState }
+  /** A launch that never started has nothing to tell anyone about. */
+  | { state: "failed"; notification: { kind: "not-applicable" } };
+
+/** One attempt, from the moment it is accepted to whatever became of it. */
+export type LaunchRecordView = {
+  /** Ours, not the box's — the handle the client polls with. */
+  id: string;
+  progress: LaunchProgress;
+  /** The tmux session name: what the caller asked for, or the opaque one minted for them. */
+  name: string | null;
+  /** What was ASKED for. In repo mode the box may choose another — `startedDir`. */
+  dir: string;
+  /** `repo` is gjd-remote's verified origin resolution; `dir` is the `-d` escape hatch. */
+  resolution: "repo" | "dir" | null;
+  /** The directory the box says it actually started in, once it has said so. */
+  startedDir: string | null;
+  /** The prompt's size. **Never the prompt.** */
+  promptBytes: number;
+  requestedAt: string;
+  finishedAt: string | null;
+  /** Why it failed, in a sentence for a person. */
+  error: string | null;
+  /** A failure that MAY have started something — a timeout, a launcher that vanished. */
+  maybeStarted: boolean;
+  /** Anything true but awkward — a start whose name could not be read back. */
+  note: string | null;
+};
+
+/** Everything the client needs to draw the button's state. */
+export type NewSessionStatusView = {
+  ok: true;
+  /** A launch is in flight; a second POST would be refused. */
+  busy: boolean;
+  /** Milliseconds until a POST would be accepted; 0 when it would be now. */
+  retryAfterMs: number;
+  /** Newest first, capped — this is a live view, not a history. */
+  launches: readonly LaunchRecordView[];
+};
 
 /* ------------------------------------------------------------------ *
  * CAN THIS ACCOUNT AFFORD MORE WORK? — the usage card's own shapes.

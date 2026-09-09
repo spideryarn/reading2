@@ -156,6 +156,10 @@ function schedulerLine(scheduler: OverseerScheduler): string {
   switch (scheduler.kind) {
     case "armed":
       return `Scheduler armed — ${scheduler.why}`;
+    case "blocked":
+      /* Switched on and nothing can run. Shouted, because this is the state that
+         used to render as "armed" and therefore as fine. */
+      return `Scheduler BLOCKED — ${scheduler.why}`;
     case "off":
       return `Scheduler OFF — ${scheduler.why}`;
     case "not-said":

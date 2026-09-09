@@ -1,5 +1,5 @@
 /**
- * The whole page: a masthead, one of three panels, and a bar along the bottom.
+ * The whole page: a masthead, one of several panels, and a bar along the bottom.
  *
  * **Phone first, and now a desk too.** Greg reads this on a phone over
  * Tailscale, so the layout starts as a single column and the mode switch is at
@@ -16,15 +16,17 @@
  * below exists so a test can drive the page without a clock or a network, and
  * it is the same seam.
  */
-import { useMemo, useRef, type ReactNode } from "react";
+import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { AttentionPanel } from "./AttentionPanel";
+import { DeploysPanel } from "./DeploysPanel";
 import { Dock } from "./Dock";
 import { Header, SHELL, freshness } from "./Header";
 import { HealthPanel } from "./HealthPanel";
 import { OverseerPanel } from "./OverseerPanel";
 import { SessionsPanel } from "./SessionsPanel";
 import { httpActionsApi, type ActionsApi } from "./actions-client";
+import { httpDeploysApi, type DeploysApi } from "./deploys-client";
 import { useDockFit } from "./fit";
 import { httpHistoryApi, type HistoryApi } from "./health-history-client";
 import { httpMessagesApi, withClockSkew, type MessagesApi } from "./messages-client";
@@ -48,6 +50,7 @@ export function App({
   actionsApi = httpActionsApi,
   messagesApi = httpMessagesApi,
   historyApi = httpHistoryApi,
+  deploysApi = httpDeploysApi(),
   actionsPollMs,
 }: {
   transport?: Transport;
@@ -69,6 +72,13 @@ export function App({
    * this page measures and the times that chart prints.
    */
   historyApi?: HistoryApi;
+  /**
+   * The deploy record. Injected here as well as defaulted in `DeploysPanel`, so
+   * that no test in this file can reach `fetch` by accident — a suite that
+   * quietly made real requests would pass and tell you nothing about the seam
+   * it thought it was exercising.
+   */
+  deploysApi?: DeploysApi;
   /** Only a test passes this, to keep a poll off a fake clock. */
   actionsPollMs?: number;
 }): ReactNode {
@@ -99,6 +109,18 @@ export function App({
      the exact moment it matters. */
   const now = useNow();
   const { mode, params, chooseMode, setParam } = useHashState();
+  /* **The dock's Refresh means "the page", not "the feed".** Its tooltip
+     presents it as the page's refresh control, and until 2026-09-09 it called
+     `feed.refresh()` only — so on a panel with its own route, pressing it did
+     nothing at all, which is indistinguishable from a broken button on the one
+     page whose job is to say whether things are broken. GPT Sol's P2 finding 9.
+     A counter rather than a callback registry: a panel that wants to be told
+     puts this in its effect's dependencies and needs to know nothing else. */
+  const [refreshNonce, setRefreshNonce] = useState(0);
+  const refreshEverything = useCallback(() => {
+    feed.refresh();
+    setRefreshNonce((n) => n + 1);
+  }, [feed]);
   /* Both of these live in the URL for the reason the mode does: this page is
      reloaded by the browser whenever iOS reclaims the tab, and a sort order
      that resets every time is one nobody bothers to set. mode.ts § the hash. */
@@ -125,7 +147,7 @@ export function App({
 
   return (
     <div className="tw:min-h-dvh tw:bg-page">
-      <Header state={feed.state} fresh={fresh} onRefresh={feed.refresh} />
+      <Header state={feed.state} fresh={fresh} onRefresh={refreshEverything} />
 
       {/* The bottom padding is the bar's resting room plus a card's worth of
           air, so the last session does not finish underneath the dock — which
@@ -225,13 +247,24 @@ export function App({
             />
           </div>
         ) : null}
+        {/* **Deploys takes no snapshot props, and that is the shape rather than
+            an omission.** The deploy record is read on its own route, on its own
+            cadence, and costs nothing until somebody opens the tab — the rule in
+            fleet-dashboard-modes.md § Where the panel's data comes from: no read
+            inside the collection loop. All it needs from here is the page's
+            clock, so every age on screen is anchored to the same tick. */}
+        {mode === "deploys" ? (
+          <div className="tw:mx-auto tw:max-w-3xl">
+            <DeploysPanel api={deploysApi} now={now} refreshNonce={refreshNonce} />
+          </div>
+        ) : null}
       </main>
 
       <Dock
         mode={mode}
         onChoose={chooseMode}
         needsYou={needsYou}
-        onRefresh={feed.refresh}
+        onRefresh={refreshEverything}
         fitClass={fitClass}
         barRef={dockRef}
       />

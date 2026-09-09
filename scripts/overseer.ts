@@ -47,7 +47,10 @@ import { type OverseerClaim, claimFromSnapshot, describeClaim } from "../tools/f
 import { groupUsageIncidents } from "../tools/fleet/usage-feed.js";
 import { zonedLine } from "../tools/fleet/zones.js";
 import type { OverseerEvent } from "../tools/overseer/diff.js";
-import type { AuthorisedJob } from "../tools/overseer/jobs.js";
+import { reconcileArming } from "../tools/overseer/arming.js";
+import type { Arming, AuthorisedJob } from "../tools/overseer/jobs.js";
+import { eligibilityOf, type JobEligibility } from "../tools/overseer/scheduler.js";
+import { LAUNCH_SEPARATION_MS } from "../tools/overseer/schedules.js";
 import { describeNote, openConditions, readNotes, type DaemonNote } from "../tools/overseer/notes.js";
 import {
   CHECKPOINT_FILE,
@@ -852,12 +855,23 @@ const HELP = [
  */
 export type SchedulerArming = "off" | "rules-only" | "all";
 
-export function schedulerWiring(env: NodeJS.ProcessEnv): {
+export function schedulerWiring(env: NodeJS.ProcessEnv, armedAt: Arming): {
   /** True for either arming. Kept because the status page and the start note both ask the yes/no question. */
   armed: boolean;
   arming: SchedulerArming;
   detail: string;
   problems: readonly string[];
+  /**
+   * **WHETHER EACH LOADED JOB COULD ACTUALLY RUN**, under the capabilities this
+   * wiring would hand the daemon.
+   *
+   * GPT Sol's S8-7. The word this function used to hand its callers came from
+   * `jobsEnabled(env)` and nothing else, so `ARMED` was a restatement of an
+   * environment variable rather than a claim about the box. This is the fact the
+   * activation command exits non-zero on, and the fact the daemon's checkpoint
+   * headline is now made of.
+   */
+  eligibility: readonly JobEligibility[];
   /** What the definitions WOULD be under a full arming — so a disarmed daemon can still say what it is not running. */
   definitions: readonly AuthorisedJob[];
   /**
@@ -878,9 +892,15 @@ export function schedulerWiring(env: NodeJS.ProcessEnv): {
   const problems = [...standing.problems, ...rules.problems];
   const definitions = [...standing.jobs, ...rules.jobs];
   const work = (): ProposingRuleWork => ruleWork({ baseUrl: fleetUrl(env), selfPid: process.pid });
+  // WHAT THIS PROCESS WOULD HOLD, matching the `jobs` fragment below exactly. A
+  // second reading of the same decision would be the drift GPT Sol's S8-7 is
+  // about, one level in, so both come from `arming`.
+  const held = { session: arming === "all", rules: arming !== "off" };
+  const eligibility = arming === "off" ? [] : eligibilityOf(arming === "all" ? definitions : rules.jobs, held);
   return {
     armed: arming !== "off",
     arming,
+    eligibility,
     detail:
       arming === "rules-only"
         ? // THE ONE SENTENCE THAT MATTERS MOST HERE. A reader must not have to
@@ -893,11 +913,20 @@ export function schedulerWiring(env: NodeJS.ProcessEnv): {
     definitions,
     jobs:
       arming === "all"
-        ? { definitions, spawn: gjdRemoteDispatch({ repoRoot: root }), rules: work() }
+        ? {
+            definitions,
+            spawn: gjdRemoteDispatch({ repoRoot: root }),
+            rules: work(),
+            arming: armedAt,
+            launchSeparationMs: LAUNCH_SEPARATION_MS,
+          }
         : arming === "rules-only"
           ? // NO `spawn` KEY AT ALL. Not `spawn: undefined`, not a spawner that
             // refuses: the capability is absent from the process.
-            { definitions: rules.jobs, rules: work() }
+            //
+            // The spacing gate is still passed and is still inert here, because
+            // it only ever gates session work and this process can start none.
+            { definitions: rules.jobs, rules: work(), arming: armedAt, launchSeparationMs: LAUNCH_SEPARATION_MS }
           : undefined,
   };
 }
@@ -1090,12 +1119,27 @@ async function main(argv: readonly string[]): Promise<number> {
       const usageOff = argv.includes("--no-usage");
       if (usageOff) console.log("usage: off (--no-usage)");
 
-      const wiring = schedulerWiring(process.env);
+      // THE ARMING INSTANT, RECONCILED BEFORE THE DAEMON STARTS.
+      //
+      // Here rather than inside `daemon.ts` because it is a decision about this
+      // process's environment, which is the CLI's knowledge and not the folder's
+      // — and because the daemon takes it as a required option, so there is no
+      // path on which it is silently defaulted. `reconcileArming` writes the
+      // record on the first armed start and leaves it alone on every one after,
+      // which is what stops a restarting service postponing its first run for
+      // ever (GPT Sol's S8-6).
+      const armedAt = reconcileArming({ storeDir: root, armed: jobsEnabled(process.env) || rulesEnabled(process.env), now: () => new Date() });
+      const wiring = schedulerWiring(process.env, armedAt);
       // THE ARMING, not a yes/no. "off", "deterministic rules only" and "armed"
       // are three states and the middle one is the whole of SP-4; printing two
       // of them would put a reader back where they started.
       console.log(`scheduler: ${wiring.arming === "all" ? "ARMED" : wiring.arming === "rules-only" ? "RULES ONLY" : "OFF"} — ${wiring.detail}`);
+      if (armedAt.kind === "armed") console.log(`scheduler: armed at ${armedAt.at}; a job that has never run is first eligible its own delay after that`);
+      else if (wiring.armed) console.error(`✗ scheduler: ${armedAt.why} — every job that has never run is HELD until this is fixed`);
       for (const problem of wiring.problems) console.error(`✗ ${problem}`);
+      for (const one of wiring.eligibility) {
+        if (one.kind === "ineligible") console.error(`✗ scheduler: ${one.jobId} cannot run — ${one.why}`);
+      }
       const outcome = await runOverseer({
         root,
         baseUrl: flag(argv, "--url") ?? process.env["OVERSEER_FLEET_URL"] ?? DEFAULT_FLEET_URL,

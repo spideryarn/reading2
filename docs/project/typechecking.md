@@ -10,7 +10,7 @@ seconds and needs nothing running.
 
 **Run the second before you commit anything another file depends on.** It answers a different
 question, and the difference is the subject of
-[§ three ways to report it clean while it is red](#three-ways-to-report-it-clean-while-it-is-red): the first
+[§ four ways to report it clean while it is red](#four-ways-to-report-it-clean-while-it-is-red): the first
 reads your working tree, the build reads the repository, and they differ by exactly the files you
 have not committed.
 
@@ -292,9 +292,9 @@ there. So the binary is checked once before any project is, and a catch with no 
 *tsc did not run* rather than guessing at your config. Both were verified by breaking them: a tree
 with no `node_modules` at all, and one whose `tsc` was present but unexecutable.
 
-## Three ways to report it clean while it is red
+## Four ways to report it clean while it is red
 
-All three happened. None is a flaw in the gate — the gate said the right thing every time.
+All four happened. None is a flaw in the gate — the gate said the right thing every time.
 
 **Filtering the summary away from the names.** `npm run typecheck 2>&1 | grep -E "^✓|^✗"` looks like
 a reasonable way to see the three results at a glance. It is not: the per-error lines are **indented**
@@ -322,6 +322,32 @@ yet committed. On 2026-08-28 four lanes each had a green gate and `HEAD` did not
 errors across four files; every one was a commit whose missing file was sitting untracked beside it.
 The next day it happened again, to the person who had written that up: `113ce17` landed `App.tsx`
 without the five panel files whose `Props` it had reshaped.
+
+**Verifying a compile-time guard with a compiler that cannot see it.** Added 2026-09-09, and it is
+the only one of the four found *twice in one night* — by two agents, in different files, about an hour
+apart, neither aware of the other until they compared notes.
+
+A compile-time guard is a test made of types: an `EveryKeyRequired<T>` that must stay `true`, or a
+`@ts-expect-error` that must stay *used*. Both live in `tests/`, and **`tests/` is a separate project**
+(§ The layout). So `npx tsc --noEmit -p tsconfig.json` and
+`npx tsc --noEmit -p tools/fleet/web/tsconfig.json` do not read them at all. Both invocations exit `0`
+over a guard that has stopped guarding, and exit `0` is exactly what you were looking for.
+
+What makes this worse than the other three is that it fails in the direction of *confidence*. The
+other three leave you with a red gate you have not looked at; this one leaves you believing you have
+proved something. **A guard verified with a compiler invocation that cannot see it is
+indistinguishable from a guard that does not work** — and the ritual that is supposed to catch exactly
+this, mutating the guard and watching it go red, produces a green run under the wrong invocation and
+reassures you.
+
+> **Verify a guard by breaking it, under `npm run typecheck` and nothing narrower.** The mutation must
+> make the gate exit non-zero. A `@ts-expect-error` guard fails as `TS2578: Unused '@ts-expect-error'
+> directive`, which is the error to expect and to check by name — its absence is the whole signal.
+
+The two instances, so the pattern is visible rather than asserted: a `Record<Speaker, string>`
+exhaustiveness guard "verified" with `npx tsc -p tsconfig.json`, and a `LaunchProgress` union guard
+"verified" with `npx tsc -p tools/fleet/web/tsconfig.json`. Different files, different projects, same
+green.
 
 **An import check does not catch it either**, which is the trap inside the trap. Resolving a file's
 relative imports and refusing any that `git ls-files` does not know answers *can this be resolved*.

@@ -791,10 +791,49 @@ export function buildSessionScript(opts: { agents: boolean } = { agents: false }
           }')
         case "$proc" in claude|none|busy|wait:[1-9]*) ;; *) proc='?' ;; esac
       fi
+      # TWO KINDS OF TITLE RECORD, AND READING ONLY ONE OF THEM HID MOST OF THEM.
+      # Claude Code writes an aiTitle record when it generates a title itself,
+      # and a customTitle record when a person or a launcher chose one. Until
+      # 2026-09-09 this read aiTitle alone, so every session launched by
+      # gjd-remote with a name -- which is most of the fleet -- displayed as
+      # untitled for its whole life. Measured on the box that morning: of 8 live
+      # Claude sessions, 3 had an aiTitle and 8 had one or the other. Nothing in
+      # this repo writes either record; the harness does.
+      #
+      # A CHOSEN TITLE WINS OUTRIGHT, AND "MOST RECENT" WOULD BE WRONG. The
+      # harness emits the two AS A PAIR, customTitle first and aiTitle
+      # immediately after, and it goes on doing so every time it re-titles -- so
+      # the last record of either kind is always the generated one, and a rule
+      # that took it would discard the chosen name every time. Census over every
+      # transcript under ~/.claude/projects on 2026-09-09: 70 files carry a
+      # customTitle, 3 of those also carry an aiTitle, and in all 3 the last
+      # title record is the aiTitle. One of the 3 is the Overseer's own session,
+      # where Greg had set "Overseer" and the page kept showing "Overseer and
+      # fleet improvement roadmap".
+      #
+      # ONE READ OF THE FILE, because this grep is the dominant cost of a whole
+      # collection -- gjd-remote ls takes 10-12s almost entirely here, over
+      # multi-MB transcripts. The matches are then filtered twice, which is free
+      # because there are a few dozen of them.
+      #
+      # WHAT THIS DOES NOT FIX, so nobody re-reports it as a bug: renaming a
+      # TMUX SESSION writes nothing to the transcript. The tmux name is a
+      # separate fact, carried on Session.name, and the page decides how to
+      # show it.
+      #
+      # cut -f4 reads the value under either key: splitting on the quote gives
+      # ["", key, ":", value], whichever key it was.
+      #
+      # NO BACKTICKS IN THIS COMMENT. The whole script is a TypeScript template
+      # literal, so one would end it and the file would not parse.
       title=""
       if [ -n "$id" ]; then
         f=$(ls -1 "$HOME"/.claude/projects/*/"$id".jsonl 2>/dev/null | head -1)
-        [ -n "$f" ] && title=$(grep -o '"aiTitle":"[^"]*"' "$f" 2>/dev/null | tail -1 | cut -d'"' -f4)
+        if [ -n "$f" ]; then
+          titles=$(grep -oE '"(aiTitle|customTitle)":"[^"]*"' "$f" 2>/dev/null)
+          title=$(printf '%s\n' "$titles" | grep '"customTitle"' | tail -1 | cut -d'"' -f4)
+          [ -z "$title" ] && title=$(printf '%s\n' "$titles" | tail -1 | cut -d'"' -f4)
+        fi
       fi
       printf '%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\\n' "$sid" "$created" "$attached" "$windows" "$prov" \\
         "$id" "$proc" "$(printf '%s' "$name" | base64 -w0)" "$(printf '%s' "$title" | base64 -w0)" \\
