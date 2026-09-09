@@ -1173,16 +1173,35 @@ describe("round two: an append that would break the record is refused", () => {
     if (result.ok) expect(result.view.problems).toHaveLength(1);
   });
 
-  it("an existing unreadable line cannot mask one new fold problem", () => {
+  /**
+   * **THE MASKING BUG, AND IT IS AN AUTHORISATION BYPASS RATHER THAN A TIDINESS
+   * ONE.** `current` came from `readQueue`, whose problems include the
+   * `unreadable-line` ones; the candidate was folded from `readEvents`, which
+   * drops unparseable lines, with no seed problems. So one malformed line
+   * already in the file made `1 > 1` false and the batch was written.
+   *
+   * The three cases below are the same hole and only the first is about
+   * ordering: **an `authorized` from anybody but Greg, and a `dispatched` for
+   * an id nobody added, would land permanently behind an unrelated parse
+   * error** — in the file whose entire purpose is to say who authorised what.
+   * Found by GPT Sol reviewing this plan, and independently by the session
+   * building decisions-mode, on the same morning.
+   */
+  it.each([
+    ["a priority against an unknown item", () => prioritized(B, 0.9)],
+    ["an authorisation by anybody but Greg", () => ({ ...env("overseer"), kind: "authorized" as const, id: A, revision: 0 })],
+    ["a dispatch of an item nobody added", () => ({ ...env(), kind: "dispatched" as const, id: B, session: "ghost", plan: null })],
+  ])("an existing unreadable line cannot mask %s", (_what, event) => {
     const root = withRoot();
     appendEvents([added(A)], { root });
     appendFileSync(join(root, QUEUE_FILE), "{not json}\n");
     const before = readFileSync(join(root, QUEUE_FILE));
 
-    const result = appendEvents([prioritized(B, 0.9)], { root });
+    const result = appendEvents([event()], { root });
 
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.code).toBe("would-break");
+    /* A refusal that had already written is not a refusal. */
     expect(readFileSync(join(root, QUEUE_FILE))).toEqual(before);
   });
 });
