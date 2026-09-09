@@ -4,9 +4,10 @@ Up: [overseer-direction.md](../project/overseer-direction.md) ·
 [fleet-dashboard-modes.md](../project/fleet-dashboard-modes.md) ·
 queue item `qi-25bs5ysg` · session `questions-mode` · worktree `questions-mode`
 
-Status: **two GPT Sol rounds, both *not fit to build*, both right; rewritten again after round two
-found the round-one fix rested on a source reading of mine that was false. Round three pending;
-nothing built.** § What the reviews changed.
+Status: **three GPT Sol rounds. Round three's blocking finding was settled by the Overseer under
+gate 2 — the prose half ships read-only — and its remaining corrections are bounded Stage 1 work by
+its own account. Building the dialog half now.** § A decision taken in Greg's name ·
+§ What the reviews changed.
 
 ---
 
@@ -43,6 +44,75 @@ The third quotation is the one that shapes the hardest part of this:
 
 ---
 
+## A decision taken in Greg's name, which he may reverse
+
+Recorded here at the Overseer's instruction because it was decided under gate 2 rather than by Greg,
+and it changes what he gets. **Decided 2026-09-09. Adviser: GPT Sol, across three review rounds.**
+
+### The question
+
+Greg asked for questions to be *answerable in place* — *"if they're multiple choice, let me click,
+but also type and use voice dictation"*. The things waiting on him split in two, and only one half
+turned out to be safe to build:
+
+- a **dialog** question — a session parked on a multiple-choice menu;
+- a **prose** question — a session that ended its turn handing him a decision in sentences.
+
+Prose is the larger half: on 2026-09-08, **ten of fifteen** genuinely-waiting sessions had ended
+their turn in prose.
+
+### Why the prose half is not safe
+
+To send Greg's words to the session that asked, this tab must find that session's address. The
+attention inbox identifies the asker by tmux `sessionId` alone. But `sessionId`, `paneId`, `panePid`
+and `claudeSessionId` **can all stay the same while the Claude process in that pane exits and another
+one starts** — which is exactly why `ExecutionToken {boot, pid, startTicks}` exists in this repo.
+`CLAUDE_SESSION_ID` is pinned into the tmux environment once and never rewritten, so the replacement
+claims the same conversation id and the `conflicting` arm that would otherwise catch it does not
+fire.
+
+So an old prose observation can be bound to a **different execution**, and an instruction carrying
+Greg's authority delivered to an agent that never asked anything. The send-time checks prove the
+target is alive; they cannot prove it is the asker. There is no check available in `tools/fleet/`:
+the producer publishes no execution identity beside the item.
+
+### The two options
+
+**A — prose read-only in v1.** A prose card shows the excerpt, how long it has waited and its
+ranking; tapping it selects the session and the existing `SessionDetail` composer does the answering.
+Costs one extra gesture on the larger half. Every waiting thing is still on one screen.
+
+**B — rescope this job to build the guarded write.** A new steer operation that sends a tail
+fingerprint with the message, re-captures the pane immediately before sending, and refuses unless the
+same ended-turn evidence is still there. Makes interactive prose *correctly bound* rather than merely
+disclosed. It is a change to `steer.ts` and `routes-steer.ts` — outside this session's file set — and
+a stage of work in its own right.
+
+### What was decided, and why
+
+**A, with B queued as its own item** (priority 0.7; the two producer gaps below at 0.6).
+
+The reasoning: one extra tap on the prose half is a much smaller cost than a wrongly-addressed
+instruction, and A still delivers the thing Greg actually asked the dashboard for — one screen that
+answers *"is anything needed from me?"*. B is worth doing precisely because prose is most of the
+volume, which is why it is queued rather than dropped.
+
+**This plan argued the other way for two rounds and was overruled on the third by evidence, not by
+caution.** The prose card says in one short line why answering is one tap away — that the address
+cannot yet be proved to belong to the asker — rather than leaving it to look like an oversight.
+
+### Two producer gaps this job found and did not fix
+
+Both queued; neither is in this session's file set.
+
+1. **The AGENTS.md "explain plainly" rule cannot be enforced from the dashboard for a dialog
+   question.** `sendMessage` refuses a pane showing a dialog, and a *queued* message drains only once
+   the dialog is gone — that is, only after Greg has answered the menu he could not understand.
+2. **`AttentionItem` publishes no question identity a consumer can recompute** — `id` is a hash of
+   the classifying model's `topic`. Nothing outside `tools/overseer/` can tell whether an inbox item
+   and a live pane concern the same question, which is what killed this plan's first two designs.
+---
+
 ## Half one of `design-a-screen.md`, answered in prose before any stylesheet
 
 [design-a-screen.md](../reusable/design-a-screen.md) says the three questions get answered before a
@@ -66,7 +136,7 @@ and then answering it.**
 | The answer is | What he does | On this screen? |
 |---|---|---|
 | a live multiple-choice dialog | picks an option | **yes** — a button per option |
-| a decision handed over in prose | says which, in words | **yes** — a text box and a microphone |
+| a decision handed over in prose | says which, in words | **one tap away** — the card selects the session; § A decision taken in Greg's name |
 | a question he cannot understand | asks for it to be rewritten | **no, and nothing can** — § The chip cannot be built |
 | a queued idea awaiting his authority | authorises it | **no** — a counted link to Queued ideas |
 
@@ -161,8 +231,8 @@ to hold onto: *this mode introduces a write path from a card.* That is what agre
 it is what Greg has now asked for, and every further control this tab grows is one more thing down a
 path that now exists. So the question for anything added later is not *may a card write?* — that is
 settled — but *does this control bind to something mechanical?* The option buttons do, and they are
-the only control on a dialog card. The prose text box does not, and § Answering a prose item is what
-that costs and what is done about it.
+the only control that writes from a card in v1. The prose half was to have had a text box, and
+§ A decision taken in Greg's name is why it does not.
 
 ---
 
@@ -197,6 +267,77 @@ Round two found that the revision's central mechanism — a join on question ide
 **source reading that was simply wrong**, and checking it confirmed the review. The design below has
 no join at all, and is smaller for it. § What the reviews changed has the whole record.
 
+### What round three changed, and the one decision that left the branch
+
+Round three accepted that deleting the dialog join removed the original defect, and found that the
+**prose address lookup had inherited an equivalent one**. Three things follow, and the first is the
+only one that is not bounded Stage 1 work.
+
+**1. Prose is read-only in v1, and interactive prose is escalated.** The inbox identifies an asking
+session by tmux `sessionId` alone. `sessionId`, `paneId`, `panePid` and `claudeSessionId` can *all*
+stay fixed while the Claude process in that pane exits and another starts — which is precisely why
+`ExecutionToken {boot, pid, startTicks}` exists in `wire.ts`, whose comment says so at length. And
+`ExecutionReading.conversation`'s `conflicting` arm does not rescue it: `CLAUDE_SESSION_ID` is pinned
+into the tmux environment once and never rewritten, so a replacement in the same pane claims the same
+id and does not conflict.
+
+So **an old prose observation can be bound to a different execution**, and Greg's authoritative
+instruction delivered to an agent that never asked anything. The send-time checks prove the target is
+live; they cannot prove it produced the excerpt on the card. There is no check available in
+`tools/fleet/`: the producer publishes no execution identity beside the item, and `startTicks` cannot
+be compared against `waitingSince` without a boot wall-clock.
+
+This plan argued for interactive prose across two rounds and was talked out of it on the third, on
+evidence rather than on caution. **v1: a prose card shows the excerpt, the age and the ranking, and
+tapping it selects the session so the existing `SessionDetail` composer answers.** One extra gesture,
+and every waiting thing is still on one screen. The guarded write — a tail fingerprint sent,
+re-captured and compared before the keystrokes — is the right fix, is a `steer.ts` change outside
+this file set, and is **escalated to the Overseer as a scope decision** with Sol's three findings
+attached.
+
+*Everything below is bounded Stage 1 work, per round three's own last paragraph.*
+
+**2. A prose item is never suppressed by a row dialog.** The revision dropped a prose card whenever
+its session showed a dialog, on the theory that the dialog card stood in its place. **Both halves are
+wrong.** A dialog does not prove an earlier prose decision was superseded — prose A can be followed
+by unrelated dialog B — and for a `permission` or `unknown` dialog there *is* no dialog card, so the
+prose item would vanish with nothing in its place. With the identity join deleted there is
+deliberately no evidence that two observations concern the same question, and presence cannot supply
+it. **Both cards are kept.**
+
+**3. `questionGroupKey` is withdrawn, and v1 is one dialog card per row.** It is an excellent
+stale-answer *safety* comparison and an unsound *semantic* grouping: two sessions can show an
+identical prompt, material and options while asking about different repositories — a false merge,
+since session context is excluded — and `sameQuestion` deliberately treats a moved cursor as
+different because option keys change, which is a false split. Safe where false negatives are cheap;
+not safe as *"these sessions are asking the same thing"*. One card per row needs no identity at all.
+
+**4. The inbox's dialog items are still discarded, but the loss is stated honestly.** The revision
+called them *"strictly a staler reading"* and that is false: the two collectors run independently so
+either may be newer, both use the same `parsePane`, and the inbox item uniquely carries
+`waitingSince`, the classifier's ranking, `answerability` and the producer's duplicates. Discarding
+them is an accepted simplification — the pane is the authority on what is on the pane *now* — and its
+cost is that a dialog observed by the inbox and missed by the collector is not shown. That case
+raises a completeness gap, so it cannot produce a false *nothing needs you*.
+
+**5. The union narrows and grows a mixed-member representation.** A grouped item may contain both
+addressable and unaddressable sessions, which no whole-group arm could express; with one card per row
+(3 above) that dissolves for dialogs, and for prose the duplicates list carries per-member
+addressability rather than a bare `QuestionTarget[]`. And `material` on the dialog arm is **narrowed
+structurally to the `read` arm**: `classifyGate` requires `material.kind === "read"` before returning
+`conversation`, so `unreadable` and `no-material` conversation dialogs are impossible on the server
+path — but the **client parses `gate` and `material` independently** and will accept a
+`{kind: "conversation"}` beside either. That cross-field inconsistency is a **gap**, detected in the
+resolver, not an ordinary item.
+
+**6. The gap list grows again**, with the causes round three found still missing: `collectedAt ===
+null` (no snapshot has ever completed); a stale fleet snapshot; a stale checkpoint; a stale scan;
+`sessionsScanned === 0`, which the existing panel already treats as a broken probe; client
+`unreadableRows > 0`; and **a view that was complete when parsed and has since aged past its
+threshold in the browser**. The composer takes `refreshMs` so it applies the dashboard's own
+cadence-derived staleness rule rather than inventing a second threshold. And the downgrade **cannot
+happen only in `parseFleetState`** — freshness changes while the page is open, so a derived selector
+re-applies it against current client time on every render.
 ### The rule that replaces the join
 
 > **The pane is the authority on dialogs. The inbox is the authority on prose.**
@@ -261,9 +402,12 @@ item says *session X ended its turn handing you a decision*; the row for X suppl
 question identity is involved, because a prose item has no dialog to identify. If X has no row, the
 card is drawn without controls and says so; it is never dropped.
 
-**A prose item whose row is now showing a dialog is dropped from the prose list** — the pane is the
-authority, and that session's dialog is already a card. This is the one place the two sources meet,
-and it is a check on *presence*, not on identity.
+**A prose item whose row is now showing a dialog is kept, not dropped.** An earlier draft dropped
+it on the theory that the dialog card stood in its place; round three showed both halves are wrong —
+a dialog does not prove an earlier prose decision was superseded, and a `permission` or `unknown`
+dialog produces no card at all, so the prose item would have vanished with nothing in its place.
+With no identity join there is deliberately no evidence that two observations concern the same
+question, and presence cannot supply it.
 
 ### Ordering, and the age a dialog card does not have
 
@@ -304,7 +448,7 @@ export type QuestionItem =
 ```
 
 Four arms, each carrying **only what it can support**, with the capability inside the arm — so
-*prose + buttons* and *dialog + text box* are states the compiler refuses. Specifically:
+*prose + buttons* is a state the compiler refuses. Specifically:
 
 - **`material` is carried on the dialog arm** and `unreadable` is representable, but a dialog with
   unreadable material **cannot reach the `dialog` arm in the first place**: `classifyGate` makes such
@@ -324,37 +468,45 @@ Four arms, each carrying **only what it can support**, with the capability insid
   strong as the check the send will make. `sessions` is a non-empty list, so a grouped card always
   names who answering will reach.
 
-### Answering a prose item: what is guarded, what is accepted, and one thing withdrawn
+### The prose card, and what it does not do
 
-Round two says the residual risk is **worse** than the revision stated, and it is right:
+**Settled by the Overseer under gate 2 on 2026-09-09** — the full record, with both options and the
+trade-off, is in § A decision taken in Greg's name, which he may reverse. In short: a prose card
+carries the excerpt, how long it has waited and its ranking, and **nothing on it writes**. Tapping it
+selects the session, and the `SessionDetail` composer that exists today does the answering, with its
+text box and its microphone.
 
-> A stale or misclassified card sends a real authoritative Greg message to a live agent. The agent
-> may interpret it as a product decision or instruction and act on it.
+The card says so itself, in one short line, because an absent control that looks like an oversight
+gets reported as a bug and an absent control with a reason does not: **the address cannot yet be
+proved to belong to the asker.**
 
-That is the honest statement and it replaces *"one confusing turn"*. It is still not a permission
-grant — that remains impossible here by construction — but the effects are not bounded to one turn.
+Three things about this are worth keeping when somebody comes to lift the restriction.
 
-**Withdrawn: the local status refusal.** Round two calls it security theatre as specified and is
-right — the reconciliation and the row come out of the same payload, so comparing them is
-tautological. It survives only as what it actually is: the card **freezes the row's status when a
-draft begins** and warns if a later payload disagrees, which catches an observed-and-persisting
-change and misses same-status tail changes, changes between polls, and leave-then-return. It is
-labelled a stale-draft convenience **and explicitly not a mitigation**, so nobody later reads it as
-one.
+**Why it is not merely cautious.** The inbox names the asker by tmux `sessionId`; `sessionId`,
+`paneId`, `panePid` and `claudeSessionId` all survive one Claude process exiting and another starting
+in the same pane. `ExecutionToken` exists in `wire.ts` precisely because of that, and its comment
+says so. So a prose observation can be bound to a **different execution**, and the send-time checks —
+which prove the target is alive and its input box empty — cannot tell the difference. The risk is not
+the *"one confusing turn"* this plan first wrote: in GPT Sol's words, *"a stale or misclassified card
+sends a real authoritative Greg message to a live agent, [which] may interpret it as a product
+decision or instruction and act on it."*
 
-**Kept and strengthened: the draft key.** Round two is right that "session identity" was too loose.
-The key is the **execution identity** — `paneId`, `panePid` and `claudeSessionId` together, which is
-what `steer.ts` itself compares — plus the inbox item's id. Any change discards the draft and the
-receipt.
+**What was tried and does not work.** A local check comparing the row's status against the status the
+item was composed from is tautological — both come out of the same payload — and round two was right
+to call it theatre. `ExecutionReading.conversation`'s `conflicting` arm does not help either:
+`CLAUDE_SESSION_ID` is pinned into the tmux environment once and never rewritten, so a replacement
+claims the same id and does not conflict. And `startTicks` cannot be compared against `waitingSince`
+without a boot wall-clock. There is no check available in `tools/fleet/`.
 
-**Kept: the excerpt drawn at full size above the box**, so the premise is on screen with the control.
+**What would lift it**, queued as its own item: a guarded prose-answer operation that sends a tail
+fingerprint with the message, re-captures the pane immediately before sending, and refuses unless the
+same ended-turn evidence is still there. That makes the operation *correctly bound* rather than
+disclosed. It is a `steer.ts` and `routes-steer.ts` change, outside this session's file set.
 
-**Still overruled: read-only prose.** Prose is ten of the fifteen genuinely-waiting sessions measured
-on 2026-09-08, and *"let me type and use voice dictation"* is half of what Greg asked for. The real
-fix is the guarded prose-answer operation — send a tail fingerprint, re-capture, refuse unless the
-same ended-turn evidence is still there — which is a `steer.ts` write path outside this session's
-file set. **It goes to the Overseer with Sol's finding attached**, and this plan states the risk
-rather than arguing it away.
+**Card state is still keyed by `row.execution.token`**, even though v1 sends nothing from a prose
+card. The key costs nothing now and is the thing a later interactive version must have — and putting
+it in while the reasoning is fresh is cheaper than rediscovering, a third time, that a pane's handles
+are not a run's identity.
 
 ### Where the composition happens, and what it publishes
 
@@ -592,9 +744,6 @@ writes the task prompts, runs the tests and the typecheck, reviews, and commits.
 - [ ] `tools/fleet/questions.ts`: `composeQuestions({rows, attentionFeed, collectionError, collectedAt, now})
       → QuestionsView`, pure, no I/O. The signature carries the collection error and freshness
       because the view promises things the rows alone cannot establish (Sol round two).
-- [ ] `questionGroupKey(q: FleetQuestion)` in the same file, over exactly `sameQuestion`'s fields —
-      prompt, material, and every option's label, consequence and key. **This tab's own key over its
-      own rows**, never an identity shared with the Overseer's producer.
 - [ ] Wired into `state.ts` beside `attention`, off the **same single checkpoint read**.
 - [ ] `web/src/types.ts`: the client's parser; its own gap for *this payload's field was present and
       unreadable*; reference resolution against `rows` and `attention`; and the **downgrade** — the
@@ -609,13 +758,14 @@ occur** — Sol's round-two correction, which is why several of the round-one li
 
 - [ ] a **`permission`**-gate and an **`unknown`**-gate dialog → neither becomes a card;
 - [ ] a `conversation` dialog with `no-material` → a card with buttons (the `/loop` menu shape);
-- [ ] two rows on the same question → **one grouped card naming both sessions**; two rows whose
-      options differ only in a `consequence` or a `key` → **two cards**, which is the assertion that
-      pins `questionGroupKey` to `sameQuestion`'s strength;
+- [ ] two rows showing the same question → **two cards**, one per row (grouping is withdrawn in v1;
+      § What round three changed, 3);
 - [ ] a `conversation` dialog on a row with no `paneId`, and one with no `claudeSessionId` →
       `dialog-unaddressable`, with the reason, never buttons;
-- [ ] an inbox **prose** item whose row is now showing a dialog → dropped from the prose list, the
-      dialog card standing in its place (the pane is the authority);
+- [ ] an inbox **prose** item whose row is now showing a dialog → **both cards kept**; and the same
+      with a `permission` dialog, where there is no dialog card to stand in its place;
+- [ ] an inbox prose item whose row's execution has been replaced under the same handles → the card
+      still says *one tap away*, and nothing on it writes;
 - [ ] an inbox prose item with **no row at all** → `prose-unaddressable`, never dropped;
 - [ ] **every gap cause in the table above**, each on its own, and `not-observed`;
 - [ ] **a genuinely empty but partial observation** → must not say *nothing needs you*;
@@ -634,24 +784,25 @@ occur** — Sol's round-two correction, which is why several of the round-one li
 ### Stage 2 — the panel, the answering, and the registrations
 
 - [ ] `QuestionsPanel.tsx`, modelled on `MessageOverseerCard.tsx`. One arm per item kind with a
-      `never` default: **buttons** on `dialog`, **a text box with `DictationControl`** on `prose`,
-      **the reason and no control** on the two `unaddressable` arms. `SteerReceipt` for the outcome.
-- [ ] The submit rule at the action boundary, not only on the button: `dictate.sendBlocked` guards
-      the send, or Enter mid-sentence sends the rough live guesses — or, on Safari and Firefox,
-      nothing that was said at all.
-- [ ] Card state keyed by the **execution identity** — `paneId`, `panePid`, `claudeSessionId` — plus
-      the item's own id, and discarded when any of them changes (Sol round two).
-- [ ] The **frozen-status stale-draft warning**, labelled as a convenience and **not** as a
-      mitigation; § Answering a prose item says why that label is load-bearing.
+      `never` default: **buttons** on `dialog`; **the excerpt, the age, the ranking and a tap that
+      selects the session** on `prose`, with one short line saying why answering is one tap away;
+      **the reason and no control** on the two `unaddressable` arms. `SteerReceipt` for the outcome
+      of a dialog answer.
+- [ ] Card state keyed by **`row.execution.token`** — `{boot, pid, startTicks}`, the only thing in
+      this payload that identifies a *run* rather than a *pane* — plus the item's own id, and
+      discarded when either changes. **Not** `paneId + panePid + claudeSessionId`, which round three
+      showed is exactly the tuple that survives one Claude exiting and another starting.
 - [ ] The six registrations, plus the `--dock-mode-count` custom property (agreed with
       `decisions-mode`).
 - [ ] The four tests from
       [§ The test](../project/fleet-dashboard-modes.md#the-test), driven through `SteerApi`'s seam
       rather than a stub of `fetch`; and four that are this tab's own: **a click sends the row's
-      `rawQuestion` verbatim**; **it refuses when the row no longer carries a question**; **a draft
-      does not survive a change of execution identity**; and **a successful, a `partial` and an
-      `unknown` send each leave the controls in the right state**, rather than inviting a retry that
-      would append to half-sent text.
+      `rawQuestion` verbatim**; **it refuses when the row no longer carries a question**; **card
+      state does not survive a change of `row.execution.token`**; and **a successful, a `partial` and
+      an `unknown` send each leave the controls in the right state**, rather than inviting a retry
+      that would append to half-sent text.
+- [ ] **No prose card renders anything that writes** — the assertion that keeps v1's decision from
+      being undone by a later edit that looks harmless.
 - [ ] `answeringEnabled` in both its `false` and its not-reported readings, drawn as two different
       things.
 
