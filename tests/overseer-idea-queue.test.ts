@@ -31,6 +31,7 @@ import {
   IDEA_QUEUE_SCHEMA,
   ID_RULE,
   QUEUE_FILE,
+  QUEUE_INIT_FILE,
   QUEUE_LOCK_FILE,
   VERSION_ZERO,
   appendEvents,
@@ -729,20 +730,45 @@ describe("the migration of the sixteen clusters", () => {
     }
   });
 
-  it("makes the twelve unblocked ones dispatchable and the four not", () => {
+  it("SEEDS NOTHING DISPATCHABLE — every row is a proposal until Greg authorises", () => {
+    /* **The change GPT Sol argued for twice.** The first version wrote
+       `by: "greg"`, so all sixteen arrived pre-authorised on the strength of a
+       conversation the day before. Under the documented meaning of `by` — *who
+       recorded this* — that was false provenance: a script recorded them.
+       Seeding them as proposals costs one command at cutover and makes the
+       authorisation a fresh, dated, attributed act by the only person who can
+       make one. */
     const view = foldQueue(events);
-    expect(view.items.filter((i) => isDispatchable(view, i))).toHaveLength(12);
+    expect(view.items.every((i) => i.addedBy === "overseer")).toBe(true);
+    expect(view.items.every((i) => i.authority.kind === "proposed")).toBe(true);
+    expect(view.items.filter((i) => isDispatchable(view, i))).toHaveLength(0);
   });
 
-  it("does NOT migrate the Overseer's own proposals", () => {
-    /* Sol's P1-4. Moving a proposal into the authorisation record is the one
-       thing the migration must not do — they stay in the Markdown, under the
-       heading that says the Overseer may not originate them. */
+  it("and Greg authorising them makes exactly the twelve unblocked ones dispatchable", () => {
+    /* What the cutover does, in one act. The four whose `waiting on` names him
+       stay blocked afterwards, which is the whole point of that column. */
+    const seeded = foldQueue(events);
+    const approvals: IdeaEvent[] = seeded.items.map((item) => ({
+      ...env("greg"),
+      kind: "authorized" as const,
+      id: item.id,
+      revision: item.revision,
+    }));
+    const view = foldQueue([...events, ...approvals]);
+    expect(view.problems).toEqual([]);
+    expect(view.items.filter((i) => isDispatchable(view, i))).toHaveLength(12);
+    expect(view.items.filter((i) => i.needsGreg)).toHaveLength(4);
+  });
+
+  it("does NOT migrate the two the Overseer only noticed", () => {
+    /* Sol's P1-4. The seeded sixteen are proposals now too, but these two are a
+       different thing: they are not among the work Greg deferred at all, and
+       they stay in the Markdown under the heading saying the Overseer may not
+       originate them. */
     const view = foldQueue(events);
-    expect(view.items.every((i) => i.addedBy === "greg")).toBe(true);
     for (const item of view.items) {
       expect(item.text).not.toContain("decision log in the store");
-      expect(item.text).not.toContain("Local-time display");
+      expect(item.text).not.toContain("local-time display");
     }
   });
 
@@ -775,6 +801,29 @@ describe("what can honestly be said about the wait", () => {
     /* The parts must not exceed the whole — a reader adding them up would
        otherwise find the queue longer than it is. */
     expect(depth.dispatchable + depth.needsGreg + depth.unauthorized + depth.dispatched).toBe(view.items.length);
+  });
+
+  it("counts a row held ONLY by a broken file under queueHeld, not as unapproved", () => {
+    /* **SOL'S P2-2, and it had no test until a mutation run said so.**
+       `isDispatchable` is false for everything while the file has a problem, so
+       inferring authority from it reported `12 not approved` beside twelve
+       perfectly approved rows — in the same view as the alarm explaining that
+       the file was the trouble. */
+    const view = foldQueue([added(A), added(B), { ...env(), kind: "done", id: "qi-nosuchid" }]);
+    expect(view.problems).toHaveLength(1);
+    const depth = queueDepth(view);
+    expect(depth).toMatchObject({ queueHeld: 2, unauthorized: 0, dispatchable: 0, needsGreg: 0 });
+    /* Still a partition. */
+    expect(depth.dispatchable + depth.needsGreg + depth.unauthorized + depth.queueHeld + depth.dispatched).toBe(
+      view.items.length,
+    );
+  });
+
+  it("and itemWait says the FILE is the problem rather than promising a place in line", () => {
+    const view = foldQueue([added(A), { ...env(), kind: "done", id: "qi-nosuchid" }]);
+    const wait = itemWait(view, only(view, A));
+    expect(wait.kind).toBe("queue-held");
+    expect(wait.why).toContain("waiting for somebody to fix the record");
   });
 
   it("counts an item that is both unauthorised and waiting on Greg exactly once", () => {
@@ -846,5 +895,262 @@ describe("what can honestly be said about the wait", () => {
     const view = foldQueue([added(A), added(B)]);
     expect(itemWait(view, only(view, A)).why).toContain("next in line");
     expect(itemWait(view, only(view, B)).why).toContain("1 item ahead");
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * The bypasses GPT Sol reproduced in round two, each now closed.
+ *
+ * Every test in this block was written from a sequence Sol actually ran against
+ * the built code and got the wrong answer from. They are the calibration for
+ * whether the rest of this file is load-bearing: the queue passed 120 tests
+ * while all of these were true.
+ * ------------------------------------------------------------------ */
+
+describe("round two: only Greg can answer his own question", () => {
+  it("the Overseer cannot clear needsGreg, and the attempt is a problem", () => {
+    /* **SOL'S P0-2.** `needsGreg` was writable by any actor and excluded from
+       `changesContent`, so `edit --by overseer --ready` cleared Greg's blocker
+       without bumping the revision or lapsing his approval — and the item came
+       out dispatchable. An honestly attributed Overseer edit answering a
+       question only Greg can answer. */
+    const view = foldQueue([
+      added(A, { needsGreg: true }),
+      { ...env("overseer"), kind: "edited", id: A, needsGreg: false },
+    ]);
+    const item = only(view, A);
+    expect(item.needsGreg).toBe(true);
+    expect(isDispatchable(view, item)).toBe(false);
+    expect(view.problems.map((p) => p.kind)).toEqual(["unauthorized-authorization"]);
+  });
+
+  it("but Greg can clear it, and the item becomes dispatchable", () => {
+    const view = foldQueue([added(A, { needsGreg: true }), { ...env("greg"), kind: "edited", id: A, needsGreg: false }]);
+    expect(only(view, A).needsGreg).toBe(false);
+    expect(isDispatchable(view, only(view, A))).toBe(true);
+    expect(view.problems).toEqual([]);
+  });
+
+  it("and anyone may still SET it — noticing is what the coordinator is for", () => {
+    const view = foldQueue([added(A), { ...env("overseer"), kind: "edited", id: A, needsGreg: true }]);
+    expect(only(view, A).needsGreg).toBe(true);
+    expect(view.problems).toEqual([]);
+  });
+});
+
+describe("round two: a dispatch the gate would not have allowed is a problem", () => {
+  it("an unauthorised item cannot be dispatched, and says WHICH rule refused it", () => {
+    /* **SOL'S P1-3.** The arm checked only `lifecycle === "queued"`, so a
+       proposal could become `dispatched` with nothing recorded — a dispatch
+       nobody agreed to, sitting in the record looking like permission.
+
+       **The message is asserted, not just the refusal**, and that is what makes
+       this test isolate the guard it is about. A mutation run found the
+       authority check could be deleted and this still passed: a `proposed`
+       authority has no `revision`, so `undefined !== 0` fires the NEXT check and
+       refuses for an accidental reason. Both guards stay — defence in depth is
+       fine — but a test that cannot tell them apart is not testing either. */
+    const view = foldQueue([
+      added(A, { by: "overseer" }),
+      { ...env("overseer"), kind: "dispatched", id: A, session: "s", plan: null },
+    ]);
+    expect(view.problems.map((p) => p.kind)).toEqual(["illegal-transition"]);
+    expect(view.problems[0]?.why).toContain("nobody had authorised it");
+    expect(only(view, A).lifecycle).toBe("queued");
+  });
+
+  it("an item whose approval lapsed cannot be dispatched", () => {
+    const view = foldQueue([
+      added(A),
+      { ...env("overseer"), kind: "edited", id: A, text: "enlarged" },
+      { ...env("overseer"), kind: "dispatched", id: A, session: "s", plan: null },
+    ]);
+    expect(view.problems[0]?.why).toContain("authorised only for");
+    expect(only(view, A).lifecycle).toBe("queued");
+  });
+
+  it("an item waiting on Greg cannot be dispatched", () => {
+    const view = foldQueue([
+      added(A, { needsGreg: true }),
+      { ...env("overseer"), kind: "dispatched", id: A, session: "s", plan: null },
+    ]);
+    expect(view.problems[0]?.why).toContain("still waiting on Greg");
+    expect(only(view, A).lifecycle).toBe("queued");
+  });
+
+  it("a problem found LATER does not retrospectively invalidate an earlier dispatch", () => {
+    /* The clean-queue clause is deliberately absent from the fold's check: a log
+       can only answer whether the item was dispatchable AT THAT POINT. */
+    const view = foldQueue([
+      added(A),
+      { ...env("overseer"), kind: "dispatched", id: A, session: "s", plan: null },
+      { ...env(), kind: "done", id: "qi-nosuchid" },
+    ]);
+    expect(only(view, A).lifecycle).toBe("dispatched");
+    expect(view.problems.map((p) => p.kind)).toEqual(["unknown-item"]);
+  });
+});
+
+describe("round two: a settled item cannot come back as an ordering anchor", () => {
+  it("refuses to move a done item, so it cannot be reinserted invisibly", () => {
+    /* **SOL'S P2-1**, reproduced exactly: `A,B,C → done A → move A front →
+       move C after A` gave a visible order of `C,B` with no problem — the
+       stale-anchor bug re-entering through a different door. */
+    const view = foldQueue([
+      added(A),
+      added(B),
+      added(C),
+      { ...env("overseer"), kind: "done", id: A },
+      { ...env(), kind: "moved", id: A, placement: { at: "front" } },
+      { ...env(), kind: "moved", id: C, placement: { at: "after", anchor: A } },
+    ]);
+    expect(currentOrder(view)).toEqual([B, C]);
+    expect(view.problems.map((p) => p.kind)).toEqual(["illegal-transition", "missing-anchor"]);
+  });
+});
+
+describe("round two: present-but-invalid is not absent", () => {
+  it('rejects needsGreg: "yes" rather than reading it as false', () => {
+    /* **SOL'S P1-1**, and the sharpest of the parse findings: it fed a
+       Greg-added event carrying `needsGreg: "yes"`, `metadata: null` and
+       `title: 42`, and got back an authorised, unblocked, DISPATCHABLE item
+       with no problem recorded. A route straight around `problems`. */
+    expect(parseEvent(JSON.stringify({ ...added(A, { needsGreg: true }), needsGreg: "yes" }))).toBeNull();
+    expect(parseEvent(JSON.stringify({ ...added(A), needsGreg: 1 }))).toBeNull();
+  });
+
+  it("rejects a title that is not a string", () => {
+    expect(parseEvent(JSON.stringify({ ...added(A), title: 42 }))).toBeNull();
+  });
+
+  it("rejects metadata that is present and not an object", () => {
+    expect(parseEvent(JSON.stringify({ ...added(A), metadata: 7 }))).toBeNull();
+    expect(parseEvent(JSON.stringify({ ...added(A), metadata: "a lull" }))).toBeNull();
+  });
+
+  it("rejects a metadata field of the wrong type, and an areas list that is not strings", () => {
+    expect(parseEvent(JSON.stringify({ ...added(A), metadata: { size: 3 } }))).toBeNull();
+    expect(parseEvent(JSON.stringify({ ...added(A), metadata: { areas: "tools/" } }))).toBeNull();
+    expect(parseEvent(JSON.stringify({ ...added(A), metadata: { areas: ["ok", 5] } }))).toBeNull();
+  });
+
+  it("still accepts an ABSENT optional field as its default", () => {
+    /* The other half of the rule: leniency about what is missing, strictness
+       about what is there and wrong. */
+    const line = JSON.stringify({ ...env(), kind: "added", id: A, text: "t", placement: { at: "back" } });
+    const event = parseEvent(line);
+    expect(event).not.toBeNull();
+    if (event?.kind !== "added") return;
+    expect(event.title).toBeNull();
+    expect(event.metadata).toEqual(EMPTY_METADATA);
+    expect(event.needsGreg).toBe(false);
+  });
+
+  it("rejects a wrong-typed field on an edit, a dispatch and a drop too", () => {
+    expect(parseEvent(JSON.stringify({ ...env(), kind: "edited", id: A, text: 5 }))).toBeNull();
+    expect(parseEvent(JSON.stringify({ ...env(), kind: "edited", id: A, needsGreg: "yes" }))).toBeNull();
+    expect(parseEvent(JSON.stringify({ ...env(), kind: "edited", id: A, metadata: 4 }))).toBeNull();
+    expect(
+      parseEvent(JSON.stringify({ ...env("overseer"), kind: "dispatched", id: A, session: "s", plan: 9 })),
+    ).toBeNull();
+    expect(parseEvent(JSON.stringify({ ...env(), kind: "dropped", id: A, why: 9 }))).toBeNull();
+  });
+});
+
+describe("round two: a lost queue never reads as an empty one", () => {
+  it("writes an initialisation marker on the first append", () => {
+    const root = withRoot();
+    expect(existsSync(join(root, QUEUE_INIT_FILE))).toBe(false);
+    appendEvents([added(A)], { root });
+    expect(existsSync(join(root, QUEUE_INIT_FILE))).toBe(true);
+  });
+
+  it("a DELETED queue is unreadable, not never-written", () => {
+    /* **SOL'S P1-2**, and the one finding that put a false sentence on screen:
+       after cutover, deleting the live queue rendered "Nothing has been queued
+       here yet". */
+    const root = withRoot();
+    appendEvents([added(A)], { root });
+    rmSync(join(root, QUEUE_FILE));
+    const read = readQueue(root);
+    expect(read.kind).toBe("unreadable");
+    if (read.kind === "unreadable") {
+      expect(read.why).toContain("LOST queue");
+      expect(read.why).toContain("not a new one");
+    }
+  });
+
+  it("a TRUNCATED queue is unreadable, not an emptied one", () => {
+    const root = withRoot();
+    appendEvents([added(A)], { root });
+    writeFileSync(join(root, QUEUE_FILE), "");
+    const read = readQueue(root);
+    expect(read.kind).toBe("unreadable");
+    if (read.kind === "unreadable") expect(read.why).toContain("truncated");
+  });
+
+  it("an empty file with NO marker is still never-written", () => {
+    /* The marker is what draws the line; without one there is nothing to lose. */
+    const root = withRoot();
+    writeFileSync(join(root, QUEUE_FILE), "");
+    const read = readQueue(root);
+    expect(read.kind).toBe("queue");
+  });
+
+  it("the READER refuses a relative root, which its comment used to claim while only the writer did", () => {
+    const read = readQueue("relative/queue");
+    expect(read.kind).toBe("unreadable");
+    if (read.kind === "unreadable") expect(read.why).toContain("absolute path");
+  });
+});
+
+describe("round two: an append that would break the record is refused", () => {
+  it("refuses a move with a missing anchor rather than writing an irreparable problem", () => {
+    /* **SOL'S P1-3, second half.** `appendEvents` used to write first and hand
+       back the problematic view afterwards, so this printed a tick and put a
+       problem in the log that only hand-editing could remove — in an
+       authorisation record. */
+    const root = withRoot();
+    appendEvents([added(A)], { root });
+    const before = readFileSync(join(root, QUEUE_FILE), "utf8");
+
+    const result = appendEvents([{ ...env(), kind: "moved", id: A, placement: { at: "after", anchor: B } }], { root });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe("would-break");
+      expect(result.why).toContain("no way to take them back");
+    }
+    expect(readFileSync(join(root, QUEUE_FILE), "utf8")).toBe(before);
+  });
+
+  it("refuses `done` on an unknown id", () => {
+    const root = withRoot();
+    appendEvents([added(A)], { root });
+    const result = appendEvents([{ ...env(), kind: "done", id: "qi-nosuchid" }], { root });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe("would-break");
+  });
+
+  it("refuses to record a dispatch of an unauthorised item", () => {
+    const root = withRoot();
+    appendEvents([added(A, { by: "overseer" })], { root });
+    const result = appendEvents(
+      [{ ...env("overseer"), kind: "dispatched", id: A, session: "s", plan: null }],
+      { root },
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe("would-break");
+  });
+
+  it("still ALLOWS an append to a queue that already has problems", () => {
+    /* Otherwise one bad line freezes the record forever, and there is no way to
+       write the note explaining it. The check asks only whether this batch
+       makes things worse. */
+    const root = withRoot();
+    appendEvents([added(A)], { root });
+    appendFileSync(join(root, QUEUE_FILE), "{not json}\n");
+    const result = appendEvents([added(B)], { root });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.view.problems).toHaveLength(1);
   });
 });

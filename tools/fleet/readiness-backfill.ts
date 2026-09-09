@@ -28,12 +28,22 @@
  * by a rule somebody has to remember. It is history, and history is worth
  * having; it is not evidence that dev is green.
  */
-import { readdirSync, readFileSync, openSync, closeSync, readSync, fstatSync } from "node:fs";
+import {
+  closeSync,
+  fstatSync,
+  openSync,
+  opendirSync,
+  readFileSync,
+  readSync,
+  readdirSync,
+  statSync,
+  type Dir,
+  type Dirent,
+} from "node:fs";
 import { basename, join } from "node:path";
 
 import {
   footerRequired,
-  joinEnds,
   parseBanner,
   parseExitLine,
   parseOutput,
@@ -51,8 +61,18 @@ import {
 /** The tmux-job log directory, relative to a checkout. Mirrors `scripts/tmux-job.ts` § LOG_DIR. */
 export const LOG_DIR = "logs/tmux-jobs";
 
-/** At most this many logs are opened per scan, newest first. */
+/** At most this many logs are READ per scan, newest first. */
 export const MAX_LOGS = 200;
+
+/**
+ * At most this many directory entries are even stat'ed.
+ *
+ * A separate, larger bound from {@link MAX_LOGS}, because the two protect
+ * against different things: that one bounds the reading, this one bounds the
+ * *looking*, which used to be unbounded and is what a pathological directory
+ * would exploit first.
+ */
+export const MAX_DISCOVERED = 5000;
 
 /** The two ends of a log we read. A full-suite log is megabytes; everything we need is here. */
 export const HEAD_BYTES = 2 * 1024;
@@ -68,11 +88,18 @@ export const TAIL_BYTES = 8 * 1024;
  * >
  * > — GPT Sol, 2026-09-09
  *
- * Two minutes is longer than any gap a live check leaves between writes (vitest
- * prints per file, `check.ts` per step) and short enough that a killed run is
- * reported while somebody still cares.
+ * This said two minutes, and claimed to exceed every gap a live check leaves
+ * between writes. **Neither half was established.** A database wait, a slow
+ * import, or one long test file can go quiet for far longer than two minutes,
+ * and the code checked nothing about whether the run was alive — so a healthy
+ * suite could be reported as killed.
+ *
+ * Ten minutes is a bound with some margin, and it is the WEAKER of the two
+ * signals: when the caller can say whether the job's tmux session is still
+ * alive ({@link ScanOptions.isSessionLive}), that answer wins outright and this
+ * is never consulted. GPT Sol's P1.3.
  */
-export const QUIET_BEFORE_VOID_MS = 2 * 60 * 1000;
+export const QUIET_BEFORE_VOID_MS = 10 * 60 * 1000;
 
 /** Why a scanned run can never vote. Stored on the record, so the page can say it. */
 export const NO_SHA_IN_LOGS =
@@ -87,9 +114,31 @@ export type ScanOptions = {
   nowMs: number;
   /** Run ids already held by the store, so a wrapper's own log is not doubled. */
   knownRunIds: ReadonlySet<string>;
-  /** `package.json` script bodies, for telling a full run from a narrowed one. */
-  scriptBodies: Readonly<Record<string, string>>;
+  /**
+   * `package.json` script bodies **per checkout root**, for telling a full run
+   * from a narrowed one.
+   *
+   * Per root rather than one map for all of them: a branch whose `package.json`
+   * differs would otherwise be classified against the wrong script body. It
+   * cannot affect readiness — a scanned run never votes — but it can put the
+   * wrong scope on somebody's history. GPT Sol's P2.
+   */
+  scriptBodiesFor: (root: string) => Readonly<Record<string, string>>;
+  /**
+   * Is the tmux session that produced this log still alive?
+   *
+   * Optional, and **`undefined` means "we did not look"**, which falls back to
+   * the quiet window rather than to a guess. Supplied by the caller rather than
+   * looked up here: asking tmux belongs off the request path.
+   *
+   * It does **not** outrank direct observation — see the ladder in
+   * {@link readingFromLog}. A file that is growing right now is being written by
+   * something, whatever a session lookup from a moment ago says.
+   */
+  isSessionLive?: (logPath: string) => boolean | undefined;
   maxLogs?: number;
+  /** How many directory entries to consider before giving up and saying so. */
+  maxDiscovered?: number;
 };
 
 export type ScanResult = {
@@ -103,6 +152,16 @@ export type ScanResult = {
    * would not parse, with its reason. GPT Sol's P1.7 and P2.
    */
   skippedForBudget: number;
+  /**
+   * A directory held more entries than the discovery cap, so the listing was
+   * abandoned part way.
+   *
+   * A boolean rather than a count, because once you stop reading a directory you
+   * genuinely do not know how much of it is left — and inventing a number for it
+   * would be exactly the sort of confident wrong figure this feature is built to
+   * avoid. What the page needs is that the answer is incomplete.
+   */
+  discoveryTruncated: boolean;
   unreadable: { file: string; why: string }[];
   /** Directories that could not be listed at all. Not the same as an empty one. */
   unreadableRoots: { root: string; why: string }[];
@@ -135,7 +194,17 @@ function readEnds(path: string): { head: string; text: string; sizeBefore: numbe
       /* **Joined by size, not concatenated.** For a log smaller than the two
          windows together these overlap completely, and feeding both to the
          parsers counts every line twice — `joinEnds` is where that is argued. */
-      text: joinEnds(headText, tailText, before.size),
+      /* `before.size` is BYTES and these are JavaScript strings. Passing the
+         byte count made a small log full of `✓` — three bytes, one character —
+         miss both whole-window branches and get concatenated with itself, which
+         is the doubling `joinEnds` exists to prevent, reintroduced through a
+         unit mismatch. Decide it here, where the byte bounds are known. */
+      text:
+        before.size <= HEAD_BYTES
+          ? headText
+          : before.size <= TAIL_BYTES
+            ? tailText
+            : `${headText}\n…\n${tailText}`,
       sizeBefore: before.size,
       sizeAfter: after.size,
       mtimeMs: after.mtimeMs,
@@ -153,7 +222,17 @@ function readEnds(path: string): { head: string; text: string; sizeBefore: numbe
 export function readingFromLog(
   file: string,
   contents: { head: string; text: string; mtimeMs: number; stillMoving: boolean },
-  options: { cwd: string; nowMs: number; scriptBodies: Readonly<Record<string, string>> },
+  options: {
+    cwd: string;
+    nowMs: number;
+    scriptBodies: Readonly<Record<string, string>>;
+    /**
+     * Is the tmux session behind this log still alive? `undefined` means nobody
+     * looked — treated as possibly-alive, because calling a live run void is
+     * manufacturing an outage that never happened.
+     */
+    sessionLive?: boolean | undefined;
+  },
 ): { reading: Reading } | { skip: "not-a-check" } | { unreadable: string } {
   const banner = parseBanner(contents.head);
   /* **A banner, or nothing.** An overseer daemon log and a codex run are not
@@ -175,8 +254,11 @@ export function readingFromLog(
        identity rather than two runs. */
     runId: `log-${basename(file).replace(/\.log$/, "")}`,
     startedAt,
+    /* A reconstructed run has no process to identify: it is finished (or its
+       liveness comes from the tmux session, not from a pid we recorded). */
     pid: null,
     host: null,
+    procStartToken: null,
     cwd: options.cwd,
     check,
     scope,
@@ -186,11 +268,34 @@ export function readingFromLog(
   };
 
   if (exit === null) {
-    /* No `EXIT=` line means "not complete when I looked", which is not the same
-       as "killed" — so a log still being written, or written to recently, is
-       RUNNING. Only one that has gone quiet is void. */
+    /**
+     * **No `EXIT=` line means "not complete when I looked", not "killed".**
+     *
+     * A ladder, in order of how much each rung actually proves:
+     *
+     *  1. **The file grew under the read** — running. Direct observation, and it
+     *     beats everything below: something is writing to this file *now*,
+     *     whatever a session lookup from a moment ago believed.
+     *  2. **`sessionLive === true`** — somebody looked and the job is alive.
+     *     Running, however long it has been quiet: a suite waiting on a
+     *     database, or grinding through one slow file, prints nothing for
+     *     minutes at a time.
+     *  3. **`sessionLive === false`** — somebody looked and the job is gone.
+     *     Void straight away; waiting out a timer to agree with an answer we
+     *     already have only delays the truth.
+     *  4. **`undefined`** — nobody looked, so fall back to the quiet window.
+     *
+     * Making `undefined` mean *possibly alive* on its own was the first attempt
+     * and it was worse than the bug it fixed: with no caller supplying the hook,
+     * no log could ever become void and the killed-run detection vanished
+     * silently. The fallback has to stay a real branch.
+     */
     const quiet = options.nowMs - contents.mtimeMs;
-    if (contents.stillMoving || quiet < QUIET_BEFORE_VOID_MS) {
+    const live =
+      contents.stillMoving ||
+      options.sessionLive === true ||
+      (options.sessionLive === undefined && quiet < QUIET_BEFORE_VOID_MS);
+    if (live) {
       const started: StartedRecord = { ...common, state: "started" };
       return {
         reading: { record: started, state: "running", atMs: contents.mtimeMs, why: null },
@@ -207,10 +312,22 @@ export function readingFromLog(
       treeAtEnd: UNKNOWN_TREE,
       logPath: file,
       why:
-        `the log has no EXIT= line and has been quiet for ${Math.round(quiet / 60000)} minutes — ` +
-        "whatever it printed, nothing recorded how it ended",
+        options.sessionLive === false
+          ? "the log has no EXIT= line and the tmux session that was writing it is gone — whatever it printed, nothing recorded how it ended"
+          : `the log has no EXIT= line and has been quiet for ${Math.round(quiet / 60000)} minutes — ` +
+            "whatever it printed, nothing recorded how it ended (nobody checked whether its session is still alive)",
     };
     return { reading: { record: finished, state: "void", atMs: contents.mtimeMs, why: finished.why } };
+  }
+
+  /* **A file that grew under the read is still going, whatever it appears to
+     end with.** A check that prints its own `EXIT=`-shaped line and carries on
+     would otherwise be read as finished. `parseExitLine` already requires the
+     terminal line; this is the second half of that guard, and it is the half
+     that does not depend on the format. */
+  if (contents.stillMoving) {
+    const started: StartedRecord = { ...common, state: "started" };
+    return { reading: { record: started, state: "running", atMs: contents.mtimeMs, why: null } };
   }
 
   const read = outcomeFromExit(exit);
@@ -240,53 +357,120 @@ export function readingFromLog(
   return { reading: { record: finished, state: outcome, atMs: contents.mtimeMs, why } };
 }
 
+type Candidate = { path: string; cwd: string; mtimeMs: number };
+
+/**
+ * **Which logs are worth reading — bounded, and opening nothing.**
+ *
+ * A separate function from {@link scanLogs} because it is a separate job:
+ * finding candidates and spending a reading budget on them are answers to
+ * different questions, and keeping them in one loop is what let the bound sit in
+ * the wrong place.
+ *
+ * It used to `openSync` every `*.log` in every root before truncating to 200.
+ * GPT Sol's P1.6: a directory that has accumulated 100,000 logs makes one
+ * request perform 100,000 opens and an unbounded sort — and **a FIFO named
+ * `something.log` blocks `openSync` outright**, which on a single-threaded
+ * dashboard is the whole page hanging.
+ *
+ * So: `withFileTypes` to reject anything that is not a regular file (a FIFO
+ * never reaches an open), `statSync` rather than an open for the mtime (stat
+ * does not block on a FIFO either), and a hard cap on how many entries are
+ * considered at all — reported, because a truncated scan that says nothing
+ * becomes "no reading".
+ */
+export function discoverLogs(options: {
+  roots: readonly string[];
+  sinceMs: number;
+  maxDiscovered?: number;
+}): {
+  candidates: Candidate[];
+  /** True when a directory held more entries than the cap, so we stopped early. */
+  truncated: boolean;
+  unreadable: { file: string; why: string }[];
+  unreadableRoots: { root: string; why: string }[];
+} {
+  const candidates: Candidate[] = [];
+  const unreadable: { file: string; why: string }[] = [];
+  const unreadableRoots: { root: string; why: string }[] = [];
+  const cap = options.maxDiscovered ?? MAX_DISCOVERED;
+  let discovered = 0;
+  let truncated = false;
+
+  for (const root of options.roots) {
+    const dir = join(root, LOG_DIR);
+    let handle: Dir;
+    try {
+      handle = opendirSync(dir);
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      /* A checkout with no logs directory has simply never run a job. That is
+         not a fault and must not be reported as one. Anything else is. */
+      if (code !== "ENOENT") unreadableRoots.push({ root: dir, why: (err as Error).message });
+      continue;
+    }
+    try {
+      for (;;) {
+        if (discovered >= cap) {
+          /* **The cap has to stop the LISTING, not just the stat-ing.** With
+             `readdirSync` it did not: that call materialises every entry before
+             returning, so a directory holding 100,000 logs was fully read and
+             fully walked whatever the cap said, and the bound existed only on
+             paper. `opendirSync` hands back a cursor we can abandon. GPT Sol,
+             round 2, 2026-09-09. */
+          truncated = true;
+          break;
+        }
+        const entry: Dirent | null = handle.readSync();
+        if (entry === null) break;
+        discovered += 1;
+        if (!entry.name.endsWith(".log")) continue;
+        /* `isFile()` is false for a FIFO, a socket, a device and a directory.
+           Some filesystems report UNKNOWN, in which case this is false too and
+           we skip — losing a log rather than risking a blocking open. */
+        if (!entry.isFile()) continue;
+        const path = join(dir, entry.name);
+        try {
+          const stat = statSync(path);
+          if (stat.mtimeMs < options.sinceMs) continue;
+          candidates.push({ path, cwd: root, mtimeMs: stat.mtimeMs });
+        } catch (err) {
+          const code = (err as NodeJS.ErrnoException).code;
+          /* Swept away between the listing and the stat: routine, not a hole.
+             Anything else — a permission problem, most likely — is reported,
+             because the rest of this design insists on explicit unreadable arms. */
+          if (code !== "ENOENT") unreadable.push({ file: path, why: (err as Error).message });
+        }
+      }
+    } finally {
+      try {
+        handle.closeSync();
+      } catch {
+        /* Already closed, or the directory went away under us. */
+      }
+    }
+  }
+
+  return { candidates, truncated, unreadable, unreadableRoots };
+}
+
 export function scanLogs(options: ScanOptions): ScanResult {
   const result: ScanResult = {
     readings: [],
     skippedForBudget: 0,
+    discoveryTruncated: false,
     unreadable: [],
     unreadableRoots: [],
     dedupedAgainstWrapper: 0,
   };
   const budget = options.maxLogs ?? MAX_LOGS;
 
-  /* Everything in the window from every root first, so the budget is spent on
-     the newest logs across the box rather than on whichever directory was
-     listed first. */
-  const candidates: { path: string; cwd: string; mtimeMs: number }[] = [];
-  for (const root of options.roots) {
-    const dir = join(root, LOG_DIR);
-    let names: string[];
-    try {
-      names = readdirSync(dir);
-    } catch (err) {
-      const code = (err as NodeJS.ErrnoException).code;
-      /* A checkout with no logs directory has simply never run a job. That is
-         not a fault and must not be reported as one. */
-      if (code !== "ENOENT") {
-        result.unreadableRoots.push({ root: dir, why: (err as Error).message });
-      }
-      continue;
-    }
-    for (const name of names) {
-      if (!name.endsWith(".log")) continue;
-      const path = join(dir, name);
-      try {
-        const fd = openSync(path, "r");
-        try {
-          const stat = fstatSync(fd);
-          if (stat.mtimeMs < options.sinceMs) continue;
-          candidates.push({ path, cwd: root, mtimeMs: stat.mtimeMs });
-        } finally {
-          closeSync(fd);
-        }
-      } catch {
-        /* Gone between listing and opening, or not ours to read. Neither is
-           worth a line: the next scan will find out. */
-      }
-    }
-  }
+  const found = discoverLogs(options);
+  result.discoveryTruncated = found.truncated;
+  result.unreadable.push(...found.unreadable);
+  result.unreadableRoots.push(...found.unreadableRoots);
 
+  const candidates = found.candidates;
   candidates.sort((a, b) => b.mtimeMs - a.mtimeMs);
   if (candidates.length > budget) {
     result.skippedForBudget = candidates.length - budget;
@@ -319,7 +503,12 @@ export function scanLogs(options: ScanOptions): ScanResult {
         mtimeMs: ends.mtimeMs,
         stillMoving: ends.sizeAfter !== ends.sizeBefore,
       },
-      { cwd: candidate.cwd, nowMs: options.nowMs, scriptBodies: options.scriptBodies },
+      {
+        cwd: candidate.cwd,
+        nowMs: options.nowMs,
+        scriptBodies: options.scriptBodiesFor(candidate.cwd),
+        sessionLive: options.isSessionLive?.(candidate.path),
+      },
     );
     if ("reading" in outcome) {
       if (outcome.reading.atMs >= options.sinceMs) result.readings.push(outcome.reading);
@@ -338,18 +527,35 @@ export function scanLogs(options: ScanOptions): ScanResult {
  * Worktrees are where most of the box's suites actually run, so a scan of the
  * primary alone would show a nearly empty day on a night when a dozen agents
  * were testing continuously.
+ *
+ * Bounded, and it reports both a truncation and a listing failure rather than
+ * returning a short list either way — "there are no worktrees" and "we could not
+ * see the worktrees" are different facts, and only one of them is fine.
  */
-export function checkoutRoots(primary: string): string[] {
+export const MAX_ROOTS = 100;
+
+export function checkoutRoots(primary: string): { roots: string[]; truncated: boolean; why: string | null } {
   const roots = [primary];
   const worktrees = join(primary, ".claude", "worktrees");
+  let truncated = false;
   try {
     for (const name of readdirSync(worktrees, { withFileTypes: true })) {
-      if (name.isDirectory()) roots.push(join(worktrees, name.name));
+      if (!name.isDirectory()) continue;
+      if (roots.length >= MAX_ROOTS) {
+        truncated = true;
+        break;
+      }
+      roots.push(join(worktrees, name.name));
     }
-  } catch {
-    /* No worktrees directory: a checkout nobody has branched from. */
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    /* No worktrees directory is a checkout nobody has branched from — normal,
+       and not a fault. Anything else is a fault, and this used to swallow both
+       identically, so a permissions problem read as "no worktrees" and the scan
+       quietly covered a fraction of the box. */
+    if (code !== "ENOENT") return { roots, truncated: false, why: (err as Error).message };
   }
-  return roots;
+  return { roots, truncated, why: null };
 }
 
 /** `package.json` script bodies for a checkout, or `{}` when it has none we can read. */

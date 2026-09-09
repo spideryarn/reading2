@@ -78,9 +78,23 @@ function git(cwd: string, args: string[]): GitRun {
 /**
  * The tree as it is right now, in one directory.
  *
- * Three commands, and the `dirty` one is `--porcelain` with a limit: on a tree
- * with a large untracked `data/` a full status is slow, and all we need to know
- * is whether the first line exists.
+ * ## `dirty` INCLUDES UNTRACKED FILES, and that is not fussiness
+ *
+ * This used `--untracked-files=no`, on the grounds that a big untracked `data/`
+ * makes a full status slow. GPT Sol produced the scenario that kills it:
+ *
+ * > dev accidentally contains an import of `src/reserved.ts`, but that file was
+ * > omitted from the commit. The executing checkout still has `src/reserved.ts`
+ * > untracked. `npm run typecheck` passes by reading it. Both stamps say
+ * > `dirty: false`. The committed dev tree does not compile, but readiness can
+ * > become green.
+ *
+ * That is not a hypothetical class — it is why `npm run typecheck:committed`
+ * exists in this repo at all (`scripts/check.ts` § committed). A stamp used for
+ * *voting* has to mean "what is on disk is exactly this commit", and an
+ * untracked file that the build reads is a difference from the commit however
+ * git chooses to categorise it. `data/` and `logs/` are gitignored, so they do
+ * not appear here; a genuinely untracked source file does, which is the point.
  */
 export function stampTree(cwd: string): TreeStamp {
   const sha = git(cwd, ["rev-parse", "HEAD"]);
@@ -89,7 +103,7 @@ export function stampTree(cwd: string): TreeStamp {
     return { kind: "unknown", why: `git rev-parse HEAD returned something that is not a sha: ${sha.out.slice(0, 60)}` };
   }
   const branch = git(cwd, ["rev-parse", "--abbrev-ref", "HEAD"]);
-  const status = git(cwd, ["status", "--porcelain", "--untracked-files=no"]);
+  const status = git(cwd, ["status", "--porcelain", "--untracked-files=normal"]);
   return {
     kind: "known",
     sha: sha.out,

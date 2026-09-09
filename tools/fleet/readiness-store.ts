@@ -5,9 +5,20 @@
  *     ~/.fleet-readiness/runs/<startedAtEpochMs>-<runId>.json
  *
  * Written with `writeAtomically` from `tools/overseer/jsonl.ts`: a sibling temp
- * file, `fsync`, `rename` into place, `fsync` the directory. No lock. No
- * rotation. No append. The terminal record **replaces** the pending one at the
- * same path, so there is no pair to join and no window in which both exist.
+ * file, `fsync`, `rename` into place, and a **best-effort** `fsync` of the
+ * directory — that last one is swallowed if the platform will not let you open a
+ * directory for reading, so what is guaranteed here is that a reader sees either
+ * the whole old file or the whole new one, not that the rename survives a power
+ * cut. No lock. No rotation. No append. The terminal record **replaces** the
+ * pending one at the same path, so there is no pair to join and no window in
+ * which both exist.
+ *
+ * What this store does NOT defend is identity reuse: two `put`s with the same
+ * runId and different `startedAt` make two files, and a pending write delayed
+ * past its own terminal write would overwrite it. The wrapper mints a random id
+ * per run and writes both records from one process in order, so neither is
+ * reachable from here — it is written down because the store alone does not
+ * enforce it. GPT Sol, 2026-09-09.
  *
  * ## Why not the append-only jsonl this feature's sibling uses
  *
@@ -46,12 +57,14 @@
  * idempotent, so two writers racing on the same victim is not an event.
  */
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs";
+import { hostname } from "node:os";
 import { isAbsolute, join } from "node:path";
 
 import { writeAtomically } from "../overseer/jsonl.js";
 import {
   parseRunRecord,
   resolveRecord,
+  type IsRunProcessAlive,
   type Reading,
   type RunRecord,
 } from "./readiness.js";
@@ -117,14 +130,12 @@ export type ReadOptions = {
   sinceMs: number;
   nowMs: number;
   /**
-   * Is this pid still running? Injected so a test can drive the pending-record
-   * resolution without spawning anything.
+   * Is the process that wrote a pending record still running? Injected so a test
+   * can drive the resolution without spawning anything.
    *
-   * The default asks the kernel with signal 0. `EPERM` counts as alive: the
-   * process exists, we simply may not signal it — reading that as dead would
-   * turn somebody else's running suite into a `void`.
+   * The default is {@link processStillAlive}.
    */
-  isAlive?: (pid: number) => boolean;
+  isAlive?: IsRunProcessAlive;
 };
 
 export type StoreRead = {
@@ -170,15 +181,64 @@ export function startedAtFromFileName(name: string): number | null {
   return Number.isFinite(ms) && ms > 0 ? ms : null;
 }
 
-function defaultIsAlive(pid: number): boolean {
+/**
+ * The kernel's start time for a pid — field 22 of `/proc/<pid>/stat`, in clock
+ * ticks since boot.
+ *
+ * **A pid is not an identity; the pair (pid, start time) is.** Fields are
+ * counted from after the FINAL `)` rather than from the start of the line,
+ * because field 2 is the executable name in parentheses and it may itself
+ * contain spaces and brackets — splitting from the left is the classic way to
+ * parse this file wrong. What follows that `)` begins at field 3, so field 22
+ * is index 19 of it.
+ *
+ * Null off Linux, or when `/proc` cannot be read; callers fall back to the pid
+ * alone and to `PENDING_TRUST_MS`.
+ */
+export function procStartToken(pid: number): string | null {
   try {
-    process.kill(pid, 0);
-    return true;
-  } catch (err) {
-    /* EPERM means it exists and is not ours to signal. Reading that as dead
-       would turn another agent's running suite into a void reading. */
-    return (err as NodeJS.ErrnoException).code === "EPERM";
+    const stat = readFileSync(`/proc/${pid}/stat`, "utf8");
+    const close = stat.lastIndexOf(")");
+    if (close === -1) return null;
+    /* After the ")" the fields are: state, ppid, … — field 3 onwards. Field 22
+       is therefore index 19 of what follows. */
+    const rest = stat.slice(close + 2).trim().split(/\s+/);
+    return rest[19] ?? null;
+  } catch {
+    return null;
   }
+}
+
+/**
+ * Is the process behind a pending record still there?
+ *
+ * Three questions, and it takes the whole record because none of them can be
+ * answered from a bare number:
+ *
+ *  - **The same box?** A pid recorded elsewhere means nothing here. (There is
+ *    one box today; the field exists so that stops being an assumption.)
+ *  - **Does the pid exist?** Signal 0. `EPERM` counts as alive — the process is
+ *    there and simply not ours to signal, and reading that as dead would turn
+ *    another agent's running suite into a void reading.
+ *  - **Is it the SAME process?** The start-time token. Without it, a recycled
+ *    pid makes a dead run read as running for ever, and the tab reports a suite
+ *    in progress that nobody is running. GPT Sol's P1.2.
+ */
+export function processStillAlive(record: RunRecord): boolean {
+  if (record.pid === null) return false;
+  if (record.host !== null && record.host !== hostname()) return false;
+  try {
+    process.kill(record.pid, 0);
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== "EPERM") return false;
+  }
+  /* A record written without a token, or a box with no readable `/proc`, falls
+     back to the pid alone — weaker, and bounded by `PENDING_TRUST_MS`. What must
+     not happen is treating an ABSENT token as a MISMATCH, which would call every
+     live run void. */
+  const now = procStartToken(record.pid);
+  if (record.procStartToken === null || now === null) return true;
+  return record.procStartToken === now;
 }
 
 export function openReadinessStore(dir: string = DEFAULT_READINESS_DIR): OpenedStore {
@@ -223,7 +283,7 @@ export function openReadinessStore(dir: string = DEFAULT_READINESS_DIR): OpenedS
     },
 
     read(options) {
-      const isAlive = options.isAlive ?? defaultIsAlive;
+      const isAlive = options.isAlive ?? processStillAlive;
       const readings: Reading[] = [];
       const unreadable: { file: string; why: string }[] = [];
       let filesInWindow = 0;

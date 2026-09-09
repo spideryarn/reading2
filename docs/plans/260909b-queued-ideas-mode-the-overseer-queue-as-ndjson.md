@@ -1,10 +1,11 @@
 # "Queued ideas" — the Overseer's queue as NDJSON, editable from the dashboard
 
-**Status, 2026-09-09: Stages 1–3 landed on `dev` (`774f2d4f`). Stages 4–5 not started, and 4 is
-blocked on Greg.** What exists: the append-only file, the fold, its own lock, the CLI, the migration
-seed (built, **not applied**), `GET /api/queue`, and the read-only **Queued ideas** tab — 120 tests
-of its own, 553 across the affected fleet suites, typecheck and lint clean, and verified in a real
-browser at 430px and 1280px against a seeded queue on a throwaway port.
+**Status, 2026-09-09: Stages 1–3 landed, then a second GPT Sol review found two authorisation
+bypasses and they are now closed. Stages 4–5 not started, and 4 is blocked on Greg.** What exists:
+the append-only file, the fold, its own lock, the CLI, the migration seed (built, **not applied**),
+`GET /api/queue`, and the read-only **Queued ideas** tab — 148 tests of its own, typecheck and lint
+clean, verified in a real browser at 430px and 1280px, and **every round-two fix mutation-tested**
+(§ What the code review changed).
 
 Up: [dev-and-deployment-overview.md](../project/dev-and-deployment-overview.md) via
 [overseer-queue.md](../project/overseer-queue.md), which is the doc this work turns into a file.
@@ -69,6 +70,12 @@ So every content edit bumps `revision`, and an approval carries the revision it 
 would train him to press twice); an edit by anyone else lapses the approval, and the CLI says
 `this LAPSES Greg's authorisation` as it happens.
 
+**Half of this is still open, and the code says so where somebody will read it.** `revision` covers
+the fields in the queue file. It does not cover the documents they point at: `source` and `runs` are
+paths, so editing the plan or `engineering-manager.md` changes the job while the approval sits still.
+That is Sol's round-two P0-1 and it is Stage 4's, because pinning contents needs the dispatch design
+to say which documents a brief uses.
+
 ### What this does not do, said plainly
 
 Any process running as this user can append `by: "greg"` to the file. That is equally true of the
@@ -105,7 +112,9 @@ built:
 - **the reader distinguishes three silences** — `never-written`, an empty-but-real file, and
   `unreadable`. The Overseer's own store may cold-start because losing it costs only history; this
   file is original human input and is not disposable, so a lost one must never render as a healthy
-  empty queue.
+  empty queue. **Which took a marker outside the log to actually deliver** — a `queue.created` file,
+  because the difference between *never used* and *lost* cannot be drawn from inside a log that has
+  been deleted. Sol found the promise unkept; § What the code review changed.
 
 ### A reorder is one placement, not a reordered array
 
@@ -191,6 +200,53 @@ Two of its findings were **not** taken as written, and both are recorded rather 
   is where the two are designed together. **Nothing in Stage 1 launches anything**, so the ghost
   dispatch it describes cannot happen yet.
 
+## What the code review changed
+
+The code went back to GPT Sol (`--effort high`, exit 0). Its verdict: *"do not cut over yet. The
+direct queue-field revision mechanism works, but two authorization bypasses remain, and the 'lost
+queue never looks empty' guarantee is not implemented."* All of it was right, and the queue had been
+passing 120 tests while every one of these was true.
+
+**Closed, each with a test that a mutation run proves fails without the fix:**
+
+| finding | the bypass | the fix |
+|---|---|---|
+| **P0-2** | `edit --by overseer --ready` cleared Greg's blocker without bumping the revision or lapsing his approval — an honestly attributed Overseer edit **answering a question only Greg can answer**. Sol ran it. | Setting `needsGreg` is anybody's; **clearing it is Greg's alone**, and the attempt is a recorded problem. |
+| **P1-1** | The "strict" parser read `needsGreg: "yes"` as *false*, `metadata: null` as empty and `title: 42` as absent — so a malformed line became an authorised, unblocked, **dispatchable** item with no problem raised. A route straight around `problems`. | **Present-but-invalid rejects the line.** Absent is still a default. |
+| **P1-2** | After cutover, **deleting** the live queue rendered *"Nothing has been queued here yet"* and **truncating** it rendered *"everything in it has been dispatched or dropped"*. Both reassuring, both false. | A `queue.created` marker outside the log. With the marker present and the log gone or empty, the read is `unreadable` and says **LOST**. The reader also refuses a relative root, which its comment had claimed while only the writer did. |
+| **P1-3** | `dispatched` checked only the lifecycle, so an unauthorised or blocked item could become dispatched with nothing recorded. And `appendEvents` **wrote first and reported problems after**, so a bad `move` or `done` printed a tick and put an *irreparable* problem in the log. | The fold checks what the gate would have checked, at that point in the replay. `appendEvents` **folds the candidate and refuses a batch that adds a problem**. `--anyway` is gone. |
+| **P2-1** | `A,B,C → done A → move A front → move C after A` gave a visible order of `C,B` with no problem — the stale-anchor bug re-entering through `moved`. | A settled item cannot be moved. |
+| **P2-2** | With one bad line the page said **`12 not approved`** of twelve approved rows, and each row still said *"next in line"* — directly under the alarm explaining the file was the trouble. | `queueHeld` is its own count, authority is asked directly, and `itemWait` has a `queue-held` arm. |
+| **P2-3** | `place()` rewrote the whole ordering on every add: Sol measured 41ms at 1,000 items, 686ms at 5,000, **2.37s at 10,000** — folded synchronously in the dashboard's single process. | Back-add is O(1). The alarm on measured GET latency is left for later, on Sol's advice to trigger on that rather than a guessed count. |
+| **provenance** | `by: "greg"` on the seeded sixteen was, under the documented meaning of `by` (*who recorded this*), **false provenance** — a script recorded them. | The seed writes them as **proposals**, and `seed` prints the `authorize` commands for Greg to run at cutover. The judgement call is gone rather than defended. |
+
+**Two mutations initially stayed green, which is the more useful result.** Disabling the dispatch
+authority check changed nothing, because a `proposed` authority has no `revision` and `undefined !==
+0` refuses for an accidental reason — so the test could not tell the two guards apart, and now
+asserts the message. And `queueHeld` had **no behavioural test at all**; only fixtures passing zero.
+Both gaps were invisible to reading and to a green suite.
+
+**Still open, and honestly named rather than claimed shut:**
+
+- **`source` and `runs` are paths, not pinned contents** (Sol's round-two P0-1). Editing the plan, or
+  editing `engineering-manager.md`, changes the job that gets dispatched while the revision and
+  therefore the approval sit still. Closing it means an authorisation naming a digest or commit for
+  every instruction document, rechecked at dispatch — which belongs with the dispatch design,
+  because that is where the document set is decided. Stage 4, and written into
+  [`idea-queue.ts`](../../tools/overseer/idea-queue.ts)'s header so it cannot be forgotten.
+- **`commandId` is stored and never queried**, so it buys no idempotency yet. Only `add` even accepts
+  one. Needs duplicate-result lookup before a write path exists to retry.
+- **`GET` does not take the lock**, so it can observe the file mid-append. Cheap to fix by taking the
+  same short lock for a read; deferred because the window is one `writeAll` and the page re-reads.
+- **The fold is uncapped**, so a very long history is fully parsed per `GET`.
+
+**One finding pushed back on.** Sol suggested a dependency-free `idea-queue-types.ts` that both the
+core and the wire DTO import, rather than the core aliasing types out of `wire.ts`. That would make
+`wire.ts` acquire an import, and its header's rule — *"this file has no imports and must never
+acquire one"* — exists because `tools/fleet/web/tsconfig.json` compiles it a second time under
+DOM-only libs. The current direction keeps that invariant: `wire.ts` still imports nothing, and
+`attention-classify.ts` and `usage-carry.ts` already reach into it the same way.
+
 ## Stages
 
 - [x] **Stage 1 — the authority contract, the fold, the lock, the CLI, the migration seed.**
@@ -227,7 +283,11 @@ Two of its findings were **not** taken as written, and both are recorded rather 
       `unreadable` (the loud one), `no-answer` in the browser's own voice, and `loading`.
 - [ ] **Stage 4 — writes from the page, and dispatch.** ***Blocked on Greg*** — see below. Add
       (front/back), edit, reorder (up/down buttons first, drag as enhancement), authorise, drop; and
-      the reservation-based dispatch lifecycle designed with the coordinator.
+      the reservation-based dispatch lifecycle designed with the coordinator
+      (`queued → reserved → started → completed | failed | unknown`, reservation durable **before**
+      launch — Sol's P1-2 in round one, deferred rather than refused). This stage also owns
+      **pinning instruction contents** so an approval names what it approves, and **making
+      `commandId` mean something**.
 - [ ] **Stage 5 — the cutover.** Applying the seed to the live queue, and switching
       `overseer.md` and `overseer-queue.md` to one canonical source **in one approved change**.
       Sol's P1-4: two sources of authorisation is worse than an old one, and `overseer.md`'s rule
@@ -259,7 +319,9 @@ started with. That is the Overseer's to arrange, and it is in the debrief.
    rather than merely later. The cheap shape Sol suggests: mutations only from allowlisted
    Greg-device tailnet identities, loopback read-only.
 3. **No wait forecast, though he asked for one.** § The wait estimate above.
-4. **`by: "greg"` on the migrated sixteen** is a judgement call over Sol's objection.
+4. ~~**`by: "greg"` on the migrated sixteen**~~ — **withdrawn.** Sol was right twice; the seed now
+   writes proposals and prints the `authorize` commands for the cutover, so there is no judgement
+   call left to make.
 
 ## The simpler option this passed over
 

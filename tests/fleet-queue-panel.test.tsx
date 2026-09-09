@@ -69,7 +69,7 @@ const ROW: QueueRow = {
   history: [{ kind: "added", at: "2026-09-09T00:00:00.000Z", by: "greg", what: "added" }],
 };
 
-const DEPTH: QueueDepth = { dispatchable: 1, needsGreg: 0, unauthorized: 0, dispatched: 0, done: 0, dropped: 0 };
+const DEPTH: QueueDepth = { dispatchable: 1, needsGreg: 0, unauthorized: 0, queueHeld: 0, dispatched: 0, done: 0, dropped: 0 };
 
 function queueView(over: Partial<Extract<QueueView, { kind: "queue" }>> = {}): QueueView {
   return {
@@ -163,6 +163,10 @@ describe("the badge keeps the four reasons apart", () => {
     });
   }
 
+  it("labels a row held only by the file as `on hold`", () => {
+    expect(badgeFor({ ...ROW, wait: { kind: "queue-held", why: "x" } }, true).label).toBe("on hold");
+  });
+
   it("a queue-wide problem outranks every per-item verdict", () => {
     /* While the file has a hole in it nothing is dispatchable, so a green
        "ready" badge on a perfectly good row would be a lie about the queue. */
@@ -195,6 +199,33 @@ describe("problems", () => {
     expect(text.indexOf("One problem")).toBeLessThan(text.indexOf("an idea Greg approved"));
   });
 
+  it("does NOT also say those rows are unapproved, or promise them a place in line", async () => {
+    /* **GPT Sol's P2-2: the panel used to contradict itself in one view.**
+       `isDispatchable` is false for everything while the file has a problem, so
+       the header said `12 not approved` — of twelve perfectly approved rows —
+       and each row still said "next in line", directly under the alarm
+       explaining that the file was the trouble. */
+    await render(
+      queueView({
+        problems: [{ kind: "unknown-item", why: "an event names an id that was never added" }],
+        depth: { ...DEPTH, dispatchable: 0, queueHeld: 1 },
+        rows: [
+          {
+            ...ROW,
+            ready: false,
+            why: "the queue has 1 unresolved problem(s), so nothing in it is dispatchable",
+            wait: { kind: "queue-held", why: "waiting for somebody to fix the record" },
+          },
+        ],
+      }),
+    );
+    const text = container.textContent ?? "";
+    expect(text).toContain("held by a broken queue file");
+    expect(text).toContain("waiting for somebody to fix the record");
+    expect(text).not.toContain("not approved");
+    expect(text).not.toContain("next in line");
+  });
+
   it("pluralises honestly", async () => {
     await render(
       queueView({
@@ -210,11 +241,11 @@ describe("problems", () => {
 
 describe("the header", () => {
   it("shows only the non-zero clauses", () => {
-    expect(depthClauses({ dispatchable: 12, needsGreg: 4, unauthorized: 0, dispatched: 0, done: 9, dropped: 1 })).toEqual([
+    expect(depthClauses({ dispatchable: 12, needsGreg: 4, unauthorized: 0, queueHeld: 0, dispatched: 0, done: 9, dropped: 1 })).toEqual([
       "12 ready",
       "4 need you",
     ]);
-    expect(depthClauses({ dispatchable: 0, needsGreg: 0, unauthorized: 0, dispatched: 0, done: 0, dropped: 0 })).toEqual([]);
+    expect(depthClauses({ dispatchable: 0, needsGreg: 0, unauthorized: 0, queueHeld: 0, dispatched: 0, done: 0, dropped: 0 })).toEqual([]);
   });
 
   it("says the queue is empty rather than printing a row of zeroes", async () => {

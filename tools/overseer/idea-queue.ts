@@ -62,6 +62,21 @@
  * him press twice would train him to press twice. An edit by the Overseer does
  * not, so enrichment lapses the approval and says so on the page.
  *
+ * **AND HERE IS THE HALF THAT IS NOT CLOSED, because a comment claiming more
+ * than the code does is worse than one that admits a gap.** `revision` covers
+ * the fields *in this file*. It does not cover the documents those fields point
+ * at: `source` and `runs` are **paths**, so editing the plan, or editing
+ * `engineering-manager.md`, changes the job that will actually be dispatched
+ * while the revision — and therefore the approval — sits still. Sol's round-two
+ * P0-1, and it is the exact second half of the round-one finding.
+ *
+ * Closing it means an authorisation naming the **contents**: a digest or a
+ * commit for every instruction document, rechecked at dispatch. That belongs
+ * with the dispatch design rather than here, because the set of documents a
+ * brief uses is decided there — and nothing in this file launches anything, so
+ * the gap is not yet reachable. It is stage 4 in the plan, and it is written
+ * down rather than remembered.
+ *
  * ## GATE 3, MADE MECHANICAL
  *
  * Only Greg can authorise. An `added` by the Overseer is born `proposed`, and an
@@ -103,6 +118,28 @@ import { describeLockRefusal, releaseLock, stillOurs, takeLock, type HeldLock } 
 export const IDEA_QUEUE_SCHEMA = 1;
 
 export const QUEUE_FILE = "queue.jsonl";
+
+/**
+ * **PROOF THAT THIS QUEUE HAS EVER EXISTED — outside the log it describes.**
+ *
+ * GPT Sol's P1-2 in round two, and it is the one finding that made a false
+ * sentence appear on screen. `readQueue` treated *file absent* as
+ * `never-written` and a *zero-byte file* as a valid empty queue, so after
+ * cutover **deleting the live queue would render "Nothing has been queued here
+ * yet"** and truncating it would render "everything in it has been dispatched or
+ * dropped". Both reassuring, both false, and the whole file is built on the
+ * opposite promise.
+ *
+ * The distinction cannot be drawn from inside a replaceable log — that is the
+ * point. So the first successful append writes this tiny marker beside it, and
+ * from then on *no queue file* means **lost**, not new. It is never rewritten
+ * and never read for its contents; its existence is the entire signal, which is
+ * why a truncated or garbled marker is still proof of initialisation.
+ *
+ * A deliberate reset is therefore two deletions rather than one, and that is the
+ * intended friction: the second one is a person saying they meant it.
+ */
+export const QUEUE_INIT_FILE = "queue.created";
 
 /**
  * **The queue's OWN lock, and it cannot borrow the store's.**
@@ -443,6 +480,19 @@ function mergeMetadata(base: IdeaMetadata, patch: Partial<IdeaMetadata>): IdeaMe
  * ordering nobody asked for, in the one file whose ordering is the instruction.
  */
 export function place(order: string[], id: string, placement: Placement): { ok: true } | { ok: false; why: string } {
+  /* **THE COMMON CASE IS O(1), and it was O(n) until GPT Sol measured it.** Every
+     `added` goes to the back, so filtering and rewriting the whole array each
+     time made a back-appended seed quadratic: it timed 41ms for 1,000 items,
+     686ms for 5,000 and 2.37s for 10,000 — and the route folds synchronously in
+     the dashboard's single process, so at the top of that range one GET stalls
+     every session, action and heartbeat. Sixteen items are fine either way; this
+     costs two lines and removes the shape of the problem rather than its current
+     size. Sol's P2-3, and its advice was to trigger on measured GET latency
+     rather than a guessed item count. */
+  if (placement.at === "back" && !order.includes(id)) {
+    order.push(id);
+    return { ok: true };
+  }
   const without = order.filter((o) => o !== id);
   if (placement.at === "front") {
     order.splice(0, order.length, id, ...without);
@@ -574,7 +624,28 @@ export function foldQueue(events: readonly IdeaEvent[], seedProblems: readonly Q
         if (event.text !== undefined) item.text = event.text;
         if (event.title !== undefined) item.title = event.title;
         if (event.metadata !== undefined) item.metadata = mergeMetadata(item.metadata, event.metadata);
-        if (event.needsGreg !== undefined) item.needsGreg = event.needsGreg;
+        /* **CLEARING `needsGreg` IS GREG'S ALONE; SETTING IT IS ANYBODY'S.**
+           GPT Sol's P0-2 in round two, which it reproduced: `needsGreg` was
+           writable by any actor and excluded from `changesContent`, so
+           `edit <id> --by overseer --ready` cleared Greg's blocker without
+           bumping the revision or lapsing his approval — and the item came out
+           `isDispatchable`. An honestly attributed Overseer edit could
+           therefore answer a question only Greg can answer.
+           The asymmetry is the fix, and it is the safe direction on both
+           sides: *noticing* that something needs him is exactly what the
+           coordinator is for, and *deciding it no longer does* is the answer
+           itself. */
+        if (event.needsGreg === true) item.needsGreg = true;
+        else if (event.needsGreg === false) {
+          if (event.by === "greg") item.needsGreg = false;
+          else {
+            problem(
+              "unauthorized-authorization",
+              `${event.by} tried to clear needsGreg on ${event.id}; only Greg can answer his own question`,
+              event.eventId,
+            );
+          }
+        }
         if (changesContent(event)) {
           item.revision += 1;
           /* **AN EDIT BY GREG RE-AUTHORISES; ANYONE ELSE'S LAPSES IT.** He is
@@ -619,6 +690,18 @@ export function foldQueue(events: readonly IdeaEvent[], seedProblems: readonly Q
         break;
       }
       case "moved": {
+        /* **A SETTLED ITEM CANNOT BE MOVED, AND THAT GUARD BELONGS HERE.**
+           `done`/`dropped` take an item out of `order`, and without this a
+           later `moved` puts it straight back in as an invisible ordering
+           anchor: GPT Sol reproduced `A,B,C → done A → move A front → move C
+           after A`, which yields a visible order of `C,B` with no problem
+           recorded. That is the stale-anchor bug this file already claims to
+           have fixed, re-entering through a different door — which is why the
+           check is on the transition rather than inside `place`. */
+        if (!IN_PLAY.includes(item.lifecycle)) {
+          problem("illegal-transition", `${event.id} was moved while ${item.lifecycle}`, event.eventId);
+          break;
+        }
         const placed = place(order, event.id, event.placement);
         if (!placed.ok) {
           problem("missing-anchor", placed.why, event.eventId);
@@ -629,12 +712,38 @@ export function foldQueue(events: readonly IdeaEvent[], seedProblems: readonly Q
         break;
       }
       case "dispatched": {
+        /* **THE FOLD CHECKS WHAT THE GATE WOULD HAVE CHECKED, not merely the
+           lifecycle.** GPT Sol's P1-3 in round two: this arm asked only
+           `lifecycle === "queued"`, so an unauthorised item, one whose approval
+           had lapsed, or one still waiting on Greg could become `dispatched`
+           with nothing recorded — a dispatch nobody agreed to, sitting in the
+           record looking exactly like permission.
+
+           Written out rather than calling `isDispatchable`, because that takes
+           a finished view and this is mid-replay: the question here is whether
+           the item was dispatchable **at this point in the history**, which is
+           the only version of the question a log can answer. The clean-queue
+           clause is deliberately absent for the same reason — problems found
+           later in the file cannot retrospectively make an earlier dispatch
+           wrong. */
         if (item.lifecycle !== "queued") {
+          problem("illegal-transition", `${event.id} was dispatched while ${item.lifecycle}`, event.eventId);
+          break;
+        }
+        if (item.authority.kind !== "authorized") {
+          problem("illegal-transition", `${event.id} was dispatched while nobody had authorised it`, event.eventId);
+          break;
+        }
+        if (item.authority.revision !== item.revision) {
           problem(
             "illegal-transition",
-            `${event.id} was dispatched while ${item.lifecycle}`,
+            `${event.id} was dispatched at revision ${item.revision}, authorised only for ${item.authority.revision}`,
             event.eventId,
           );
+          break;
+        }
+        if (item.needsGreg) {
+          problem("illegal-transition", `${event.id} was dispatched while still waiting on Greg`, event.eventId);
           break;
         }
         item.lifecycle = "dispatched";
@@ -756,25 +865,72 @@ function asStringOrNull(u: unknown): string | null | undefined {
   return undefined;
 }
 
-function asMetadata(u: unknown): IdeaMetadata {
-  if (!isRecord(u)) return EMPTY_METADATA;
-  const areas = Array.isArray(u["areas"]) ? u["areas"].filter((a): a is string => typeof a === "string") : [];
-  return {
-    source: asStringOrNull(u["source"]) ?? null,
-    waitingOn: asStringOrNull(u["waitingOn"]) ?? null,
-    size: asStringOrNull(u["size"]) ?? null,
-    areas,
-    runs: asStringOrNull(u["runs"]) ?? null,
+/**
+ * Metadata, or null when a field is present and wrong.
+ *
+ * **PRESENT-BUT-INVALID IS NOT ABSENT**, and the difference is the whole of GPT
+ * Sol's P1-1 in round two. The lenient version of this function defaulted a
+ * malformed `metadata` to empty, a numeric `title` to `null`, and anything other
+ * than literal `true` for `needsGreg` to `false` — so Sol fed in a Greg-added
+ * event carrying `needsGreg: "yes"`, `metadata: null` and `title: 42`, and it
+ * parsed with no problem at all into an authorised, unblocked, **dispatchable**
+ * item. A route straight around `problems`, which is the mechanism the whole
+ * file leans on.
+ *
+ * So: a missing key is a default, and a key that is there and of the wrong type
+ * rejects the line. `undefined` from `asStringOrNull` means *present and not a
+ * string*, which is why the `?? null` that used to swallow it is gone.
+ */
+function asMetadata(u: unknown): IdeaMetadata | null {
+  /* An absent `metadata` is the empty one; `null` is spelled by every writer
+     here for "none", so it is accepted as the same thing. Anything else that is
+     not an object is a rejection. */
+  if (u === undefined || u === null) return EMPTY_METADATA;
+  if (!isRecord(u)) return null;
+
+  const fields: Record<"source" | "waitingOn" | "size" | "runs", string | null> = {
+    source: null,
+    waitingOn: null,
+    size: null,
+    runs: null,
   };
+  for (const key of ["source", "waitingOn", "size", "runs"] as const) {
+    if (!(key in u)) continue;
+    const value = asStringOrNull(u[key]);
+    /* `undefined` here means PRESENT AND NOT A STRING — the whole point. */
+    if (value === undefined) return null;
+    fields[key] = value;
+  }
+
+  let areas: readonly string[] = [];
+  if ("areas" in u) {
+    const raw = u["areas"];
+    if (!Array.isArray(raw) || raw.some((a) => typeof a !== "string")) return null;
+    areas = raw as string[];
+  }
+  return { ...fields, areas };
 }
 
-function asMetadataPatch(u: unknown): Partial<IdeaMetadata> | undefined {
-  if (!isRecord(u)) return undefined;
+/**
+ * A metadata patch, `undefined` for "not mentioned", or `null` for "present and
+ * wrong" — three outcomes, because two of them are legitimate and one is a
+ * rejection. Same rule as `asMetadata`: a wrong type is refused, never defaulted.
+ */
+function asMetadataPatch(u: unknown): Partial<IdeaMetadata> | undefined | null {
+  if (u === undefined) return undefined;
+  if (!isRecord(u)) return null;
   const patch: Record<string, unknown> = {};
   for (const key of ["source", "waitingOn", "size", "runs"] as const) {
-    if (key in u) patch[key] = asStringOrNull(u[key]) ?? null;
+    if (!(key in u)) continue;
+    const value = asStringOrNull(u[key]);
+    if (value === undefined) return null;
+    patch[key] = value;
   }
-  if (Array.isArray(u["areas"])) patch["areas"] = u["areas"].filter((a): a is string => typeof a === "string");
+  if ("areas" in u) {
+    const raw = u["areas"];
+    if (!Array.isArray(raw) || raw.some((a) => typeof a !== "string")) return null;
+    patch["areas"] = raw as string[];
+  }
   return Object.keys(patch).length === 0 ? undefined : (patch as Partial<IdeaMetadata>);
 }
 
@@ -822,21 +978,34 @@ export function parseEvent(line: string): IdeaEvent | null {
       if (typeof text !== "string" || text.trim() === "") return null;
       const placement = asPlacement(json["placement"]);
       if (placement === null) return null;
+      /* Absent is `null`; present and not a string is a REJECTION. */
+      const title = "title" in json ? asStringOrNull(json["title"]) : null;
+      if (title === undefined) return null;
+      const metadata = asMetadata(json["metadata"]);
+      if (metadata === null) return null;
+      /* **`needsGreg` MUST BE A BOOLEAN IF IT IS THERE AT ALL.** It used to be
+         `json["needsGreg"] === true`, which read `"yes"` as *no* — turning a
+         blocked item into a dispatchable one by way of a typo. */
+      if ("needsGreg" in json && typeof json["needsGreg"] !== "boolean") return null;
       return {
         ...envelope,
         kind: "added",
         id,
         text,
-        title: asStringOrNull(json["title"]) ?? null,
-        metadata: asMetadata(json["metadata"]),
+        title,
+        metadata,
         placement,
         needsGreg: json["needsGreg"] === true,
       };
     }
     case "edited": {
+      if ("text" in json && typeof json["text"] !== "string") return null;
       const text = typeof json["text"] === "string" ? json["text"] : undefined;
       const title = "title" in json ? asStringOrNull(json["title"]) : undefined;
+      if ("title" in json && title === undefined) return null;
       const metadata = asMetadataPatch(json["metadata"]);
+      if (metadata === null) return null;
+      if ("needsGreg" in json && typeof json["needsGreg"] !== "boolean") return null;
       const needsGreg = typeof json["needsGreg"] === "boolean" ? json["needsGreg"] : undefined;
       return {
         ...envelope,
@@ -861,12 +1030,17 @@ export function parseEvent(line: string): IdeaEvent | null {
     case "dispatched": {
       const session = json["session"];
       if (typeof session !== "string" || session === "") return null;
-      return { ...envelope, kind: "dispatched", id, session, plan: asStringOrNull(json["plan"]) ?? null };
+      const plan = "plan" in json ? asStringOrNull(json["plan"]) : null;
+      if (plan === undefined) return null;
+      return { ...envelope, kind: "dispatched", id, session, plan };
     }
     case "done":
       return { ...envelope, kind: "done", id };
-    case "dropped":
-      return { ...envelope, kind: "dropped", id, why: asStringOrNull(json["why"]) ?? null };
+    case "dropped": {
+      const why = "why" in json ? asStringOrNull(json["why"]) : null;
+      if (why === undefined) return null;
+      return { ...envelope, kind: "dropped", id, why };
+    }
     default:
       return null;
   }
@@ -914,8 +1088,14 @@ export function queueRoot(env: NodeJS.ProcessEnv = process.env): string {
  * store, is original human input and is not disposable.
  */
 export type QueueRead =
+  /** No queue file and no marker: nobody has ever used this queue. */
   | { kind: "never-written"; path: string }
   | { kind: "queue"; view: QueueView; path: string }
+  /**
+   * Includes **lost**: a marker with no log behind it, or an initialised queue
+   * whose file is now empty. Carries its own sentence, and the page draws this
+   * arm loudly rather than as an empty list.
+   */
   | { kind: "unreadable"; why: string; path: string };
 
 /**
@@ -925,14 +1105,74 @@ export type QueueRead =
  * queue quietly two items short is exactly the failure this file's discipline
  * exists to prevent, and a silent skip would manufacture it.
  */
+/**
+ * The file's events, parsed, with unparseable lines dropped.
+ *
+ * Split out of `readQueue` so the pre-write fold and the read fold are the same
+ * parse — two copies of that would be two answers to *what does the file say*,
+ * and the pre-write check would eventually bless a batch the reader then
+ * rejects. Callers that need to know about the bad lines use `readQueue`.
+ */
+function readEvents(root: string): IdeaEvent[] {
+  const file = path.join(root, QUEUE_FILE);
+  if (!existsSync(file)) return [];
+  let text: string;
+  try {
+    text = readFileSync(file, "utf8");
+  } catch {
+    return [];
+  }
+  const events: IdeaEvent[] = [];
+  for (const line of text.split("\n")) {
+    if (line.trim() === "") continue;
+    const event = parseEvent(line);
+    if (event !== null) events.push(event);
+  }
+  return events;
+}
+
 export function readQueue(root: string = queueRoot()): QueueRead {
   const file = path.join(root, QUEUE_FILE);
-  if (!existsSync(file)) return { kind: "never-written", path: file };
+  /* **THE READER REFUSES A RELATIVE ROOT TOO, and the comment above used to
+     claim this while only the WRITER did it** — Sol found the gap. A relative
+     root follows the process's cwd, so two callers started from different
+     directories read two different apparent queues and neither can tell. */
+  if (!path.isAbsolute(root)) {
+    return {
+      kind: "unreadable",
+      why: `the queue directory must be an absolute path, not '${root}' — a relative one follows the caller's cwd`,
+      path: file,
+    };
+  }
+  const initialised = existsSync(path.join(root, QUEUE_INIT_FILE));
+  if (!existsSync(file)) {
+    /* **THE DISTINCTION SOL'S P1-2 IS ABOUT.** A marker with no log behind it
+       is a queue that was lost, not one that never began. */
+    if (initialised) {
+      return {
+        kind: "unreadable",
+        why:
+          `${file} is gone, but ${QUEUE_INIT_FILE} beside it says this queue was initialised — so this is a ` +
+          `LOST queue, not a new one. Nothing should be dispatched until somebody has looked.`,
+        path: file,
+      };
+    }
+    return { kind: "never-written", path: file };
+  }
   let text: string;
   try {
     text = readFileSync(file, "utf8");
   } catch (cause) {
     return { kind: "unreadable", why: `could not read ${file}: ${String(cause)}`, path: file };
+  }
+  if (text.trim() === "" && initialised) {
+    return {
+      kind: "unreadable",
+      why:
+        `${file} is empty, but ${QUEUE_INIT_FILE} says this queue was initialised — so it has been truncated ` +
+        `rather than emptied by dropping its items. Nothing should be dispatched until somebody has looked.`,
+      path: file,
+    };
   }
   const events: IdeaEvent[] = [];
   const problems: QueueProblem[] = [];
@@ -961,9 +1201,43 @@ export function viewOf(read: QueueRead): QueueView | null {
   return null;
 }
 
+/**
+ * Put down the "this queue exists" marker, once.
+ *
+ * `wx` so it is written exactly once and never rewritten, and a failure is
+ * swallowed **only** for the already-exists case: any other failure would mean
+ * the directory is unusable, which the append about to follow will report
+ * properly. Nothing reads the contents — the file's existence is the signal —
+ * so the line inside it is for a person who finds it and wonders.
+ */
+function writeInitMarker(root: string): void {
+  const marker = path.join(root, QUEUE_INIT_FILE);
+  if (existsSync(marker)) return;
+  try {
+    const fd = openSync(marker, "wx");
+    try {
+      writeAll(
+        fd,
+        `this queue was initialised at ${new Date().toISOString()}\n` +
+          `Its existence is the whole signal: with this file present and ${QUEUE_FILE} absent or empty,\n` +
+          `the queue has been LOST rather than never used. Delete both to reset deliberately.\n`,
+      );
+      fsyncSync(fd);
+    } finally {
+      closeSync(fd);
+    }
+  } catch {
+    /* Somebody else created it first, which is the outcome we wanted. */
+  }
+}
+
 export type AppendResult =
   | { ok: true; view: QueueView; path: string; repaired: JsonlRepair }
-  | { ok: false; code: "stale-version" | "locked" | "unreadable" | "refused"; why: string };
+  | {
+      ok: false;
+      code: "stale-version" | "locked" | "unreadable" | "refused" | "would-break";
+      why: string;
+    };
 
 /**
  * Append events under the lock, then re-read — Sol's P1-1 transaction.
@@ -1022,6 +1296,39 @@ export function appendEvents(
         why:
           `the queue has moved on: you sent version ${spellVersion(options.expect)} and it is now ` +
           `${spellVersion(current.version)}. Nothing was written — look again before writing.`,
+      };
+    }
+
+    /* **THE MARKER GOES DOWN BEFORE THE FIRST RECORD, not after.** Written the
+       other way round, a crash in between leaves a log with no marker — which
+       reads as a brand-new queue, which is the exact false sentence the marker
+       exists to prevent. The opposite order fails safe: a marker with no log is
+       reported as LOST, which is the reading that makes somebody look. */
+    writeInitMarker(root);
+
+    /* **FOLD THE CANDIDATE BEFORE WRITING IT, AND REFUSE IF IT WOULD ADD A
+       PROBLEM.** GPT Sol's P1-3 in round two, and the sharpest finding of the
+       round: this used to append first and hand back the folded view
+       afterwards, so `move` with a missing anchor, or `done` on an unknown id,
+       would write an **irreparable** problem and still print a tick. In an
+       append-only log with no problem-resolution event, the only repair left is
+       editing the file by hand — of an authorisation record.
+
+       Comparing counts rather than contents because the existing problems are
+       already in `current`: what is being asked is only *does this batch make
+       it worse*. A queue that already has problems can still be appended to,
+       which matters — otherwise one bad line would freeze the record forever
+       and leave no way to write the note explaining it. */
+    const candidate = foldQueue([...readEvents(root), ...events], []);
+    if (candidate.problems.length > current.problems.length) {
+      const added = candidate.problems.slice(current.problems.length);
+      return {
+        ok: false,
+        code: "would-break",
+        why:
+          `refusing to write: these ${events.length} event(s) would put ${added.length} new problem(s) into the ` +
+          `record, and an append-only log has no way to take them back — ` +
+          added.map((p) => `${p.kind}: ${p.why}`).join("; "),
       };
     }
 

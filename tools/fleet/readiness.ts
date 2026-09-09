@@ -22,11 +22,18 @@
  *
  *  1. **Pass.** The check ran to completion and exited 0.
  *  2. **Fail.** It ran to completion and exited non-zero.
- *  3. **Void.** It started and we do not know how it ended. **Four different
+ *  3. **Void.** It started and we do not know how it ended. **Three different
  *     ways in**, and a design that merged them would lose the only thing that
  *     says which: no `EXIT=` line at all; a shell's 128+signal, which is a kill
- *     and not a verdict; *the wrapper itself died before it could record*; or
- *     the tree changed under the run.
+ *     and not a verdict; or *the wrapper itself died before it could record*.
+ *     (A run whose exit says 0 but which never printed its own summary is the
+ *     third by another road — nothing showed it reached a conclusion.)
+ *
+ *     **A tree that changed under the run is NOT void**, and this used to say it
+ *     was. Such a run reached a perfectly real verdict; what it cannot do is say
+ *     that verdict was about any commit. That is a question for
+ *     `readiness-verdict.ts`, which refuses it a vote, and the distinction
+ *     matters because the run's own result is still worth drawing.
  *  4. **Running.** It started and has not finished. Its own state, because "no
  *     terminal record yet" and "no terminal record ever" differ in that only the
  *     first resolves itself.
@@ -113,7 +120,16 @@ export type TreeStamp =
       sha: string;
       /** The branch name, or null on a detached HEAD. */
       branch: string | null;
-      /** Uncommitted changes present at this instant. */
+      /**
+       * **Anything on disk that is not this commit**, at this instant —
+       * modifications, staged changes, and untracked files that are not
+       * gitignored.
+       *
+       * Untracked counts. A source file that was imported but never committed
+       * makes the working tree compile and the commit not, which is the exact
+       * failure `npm run typecheck:committed` exists for; a stamp used for
+       * voting has to mean *what ran was this commit*.
+       */
       dirty: boolean;
     }
   | { kind: "unknown"; why: string };
@@ -142,7 +158,10 @@ export type CheckStep = {
    * noisy advisory, so those two marks are proof. A `✓` is printed for both,
    * and the `── typecheck (gate)` heading that would settle it is hundreds of
    * lines earlier — inside the part of a multi-megabyte log the scanner does
-   * not read. A wrapper record, which holds the whole output, fills it in.
+   * not read — and a wrapper record does not fill it in either: it keeps only
+   * bounded ends of the output, and it does not try to infer a clean row's
+   * gate status from the headings. So `unknown` is what a `✓` row gets from
+   * either source, and the page shows it as unknown.
    *
    * Defaulting to `gate` would promote every clean advisory; defaulting to
    * `advisory` would demote every clean gate. Copying `check.ts`'s own list in
@@ -178,9 +197,13 @@ export type Counts =
       kind: "typecheck";
       projects: number | null;
       /**
-       * `error TS…` lines. **Supplementary, never the verdict** —
-       * `scripts/typecheck.ts` writes failures to stderr and its last two lines
-       * are always ticks, so the exit status is the only thing that decides.
+       * `error TS…` lines. **Supplementary, never the verdict.**
+       *
+       * `scripts/typecheck.ts` writes its failures to stderr and still ends with
+       * `✓ all N source files are covered by some project` — so that tick
+       * coexists with errors. It proves the run FINISHED; the exit status is the
+       * only thing that says whether it passed. Counting the error lines here is
+       * for the page to show, not for anything to conclude from.
        */
       errors: number | null;
     }
@@ -217,6 +240,20 @@ type RunCommon = {
   pid: number | null;
   /** `os.hostname()`. A pid is only meaningful on the box that minted it. */
   host: string | null;
+  /**
+   * **The kernel's own start time for that pid**, field 22 of
+   * `/proc/<pid>/stat`, in clock ticks since boot. Null off Linux, or when
+   * `/proc` could not be read.
+   *
+   * A pid alone does not identify a process. GPT Sol's P1.2: the wrapper dies,
+   * the box reboots or the pid is recycled within the trust window, and an
+   * unrelated process now owns the number — so a dead run reads as *running*
+   * for ever, and the tab reports a suite in progress that nobody is running.
+   *
+   * The pair (pid, starttime) is unique for the life of a boot, so comparing it
+   * turns "some process has this number" into "this process is still here".
+   */
+  procStartToken: string | null;
   cwd: string;
   check: CheckKind;
   scope: Scope;
@@ -308,19 +345,33 @@ export type Reading = {
 /**
  * A pending record we refuse to believe, however alive its pid looks.
  *
- * Pid reuse could make a long-dead run look like a running one. Six hours is
- * comfortably longer than the longest check here (`npm run check`, ~26 minutes)
- * and short enough that a reused pid has to be a remarkable coincidence. Stated
- * on the page rather than hidden. The alternative — a heartbeat the wrapper
- * keeps writing — is a second mechanism to maintain for a case that has not
- * happened.
+ * The **second** line of defence, behind the (pid, host, start-time) identity
+ * in {@link RunCommon.procStartToken}. That identity is exact where `/proc` is
+ * readable; this backstop covers the platforms and failures where it is not,
+ * and it is what makes a stale record eventually resolve even if a pid were
+ * somehow reused perfectly.
+ *
+ * Six hours is comfortably longer than the longest check here (`npm run check`,
+ * ~26 minutes). A genuinely live run older than that reads as void, which is
+ * deliberate and stated on the page rather than hidden. The alternative — a
+ * heartbeat the wrapper keeps writing — is a second mechanism to maintain for a
+ * case that has not happened.
  */
 export const PENDING_TRUST_MS = 6 * 60 * 60 * 1000;
+
+/**
+ * Is the process that wrote this pending record still the one running?
+ *
+ * Takes the whole record rather than a pid, because a pid on its own is not an
+ * identity: it needs the host it was minted on and the kernel's start time for
+ * it. See {@link RunCommon.procStartToken}.
+ */
+export type IsRunProcessAlive = (record: RunRecord) => boolean;
 
 export function resolveRecord(
   record: RunRecord,
   nowMs: number,
-  isAlive: (pid: number) => boolean,
+  isAlive: IsRunProcessAlive,
 ): Reading {
   if (record.state === "finished") {
     return {
@@ -342,7 +393,7 @@ export function resolveRecord(
         "too long ago to trust a pid, so whether anything is still running is not knowable from here",
     };
   }
-  if (record.pid !== null && isAlive(record.pid)) {
+  if (record.pid !== null && isAlive(record)) {
     return { record, state: "running", atMs: startedMs, why: null };
   }
   return {
@@ -366,12 +417,25 @@ export function resolveRecord(
  * green ticks. That is not a failing suite and it is certainly not a passing
  * one.
  *
- * Signals are 1..31 on Linux, so 129..159. **128 itself is excluded**: it is
- * what a shell reports for an invalid argument to `exit`, not a signal, and
- * 160+ is nobody's signal.
+ * Linux's signals run to `SIGRTMAX` (64), so 129..192. **128 itself is
+ * excluded**: it is what a shell reports for an invalid argument to `exit`,
+ * not a signal at all.
  */
 export const SIGNALLED_EXIT_MIN = 129;
-export const SIGNALLED_EXIT_MAX = 159;
+/**
+ * 128 + `SIGRTMAX`, **not 128 + 31.**
+ *
+ * This said 159 on the grounds that "signals are 1..31 and 160+ is nobody's
+ * signal". That is false on Linux: the real-time signals run to 64, so a shell
+ * status of 162 is signal 34. Reading that as an ordinary failure is the one
+ * direction that costs something — a killed run drawn as a red suite sends
+ * somebody hunting a bug that is not there — so the whole platform range is
+ * treated as a kill. GPT Sol, 2026-09-09.
+ *
+ * The trade is that a check exiting 137 or 162 deliberately would be read as
+ * killed. No check here does, and the failure mode is `void` rather than green.
+ */
+export const SIGNALLED_EXIT_MAX = 192;
 
 export function isSignalledExit(exit: number): boolean {
   return Number.isInteger(exit) && exit >= SIGNALLED_EXIT_MIN && exit <= SIGNALLED_EXIT_MAX;
@@ -478,13 +542,33 @@ function asCounts(v: unknown): Counts {
   }
 }
 
+/** A full commit id, and nothing that merely looks like one. */
+const SHA = /^[0-9a-f]{40}$/;
+
+/**
+ * A tree stamp, **validated strictly enough that it cannot vote by accident.**
+ *
+ * The first version read `dirty: v["dirty"] === true`, which turns a *missing*
+ * field into `false` — so a record with no `dirty` at all, from an older schema
+ * or a corrupt write, parsed as a clean tree and could satisfy the readiness
+ * conjunction. GPT Sol's P0.3:
+ *
+ * > `{"treeAtStart":{"kind":"known","sha":"<dev-sha>"}, …}` parses as clean and
+ * > can vote. It should be unreadable, causing `unknown`.
+ *
+ * Returning `null` here makes the whole record unreadable, and an unreadable
+ * record forces the verdict to `unknown` — which is the machinery that exists
+ * so a corrupt latest record cannot expose an older green one. Making the field
+ * lenient quietly routed around it.
+ */
 function asTree(v: unknown): TreeStamp | null {
   if (!isRecord(v)) return null;
   if (v["kind"] === "known") {
     const sha = asString(v["sha"]);
-    if (sha === null) return null;
+    if (sha === null || !SHA.test(sha)) return null;
+    if (typeof v["dirty"] !== "boolean") return null;
     const branch = v["branch"] === null ? null : asString(v["branch"]);
-    return { kind: "known", sha, branch, dirty: v["dirty"] === true };
+    return { kind: "known", sha, branch, dirty: v["dirty"] };
   }
   if (v["kind"] === "unknown") {
     return { kind: "unknown", why: asString(v["why"]) ?? "no reason was recorded" };
@@ -502,15 +586,16 @@ function asTree(v: unknown): TreeStamp | null {
  * every consumer downstream a promise nobody checked: `health-history.ts`'s
  * finding 8, one file along.
  *
- * Two invariants are enforced rather than trusted, because the feature rests on
- * them:
+ * **The outcome and the exit status must agree**, and in both directions.
+ * `pass` requires exactly 0; `fail` requires an ordinary non-zero. `void` keeps
+ * the latitude, because it is the arm that means *we do not know* — it may
+ * carry a kill status, an ordinary one, or none at all.
  *
- *  - **No status means void.** A record claiming `pass` or `fail` with no exit
- *    status is a guess, not a reading. (The converse is not an invariant: a void
- *    run may well have a status, and that status says what killed it.)
- *  - **A signalled status is never a verdict.** A record saying `pass` on exit
- *    143 contradicts itself, and nothing downstream should have to pick a half
- *    to believe.
+ * Checking only the obvious contradictions was not enough: it left
+ * `{"outcome":"pass","exit":1}` readable, and two records like that produce a
+ * green verdict. GPT Sol's P0.3, 2026-09-09. Nothing downstream should ever
+ * have to choose which half of a self-contradicting record to believe — an
+ * unreadable record is a state the verdict already handles, by going `unknown`.
  */
 export function parseRunRecord(text: string): RunRecord | null {
   let parsed: unknown;
@@ -541,6 +626,7 @@ export function parseRunRecord(text: string): RunRecord | null {
     startedAt,
     pid: asFiniteNumber(parsed["pid"]),
     host: asString(parsed["host"]),
+    procStartToken: asString(parsed["procStartToken"]),
     cwd,
     check: check as CheckKind,
     scope,
@@ -558,9 +644,15 @@ export function parseRunRecord(text: string): RunRecord | null {
   if (at === null || Number.isNaN(Date.parse(at)) || treeAtEnd === null) return null;
   if (outcome !== "pass" && outcome !== "fail" && outcome !== "void") return null;
 
+  /* **The outcome and the status have to agree, in both directions.**
+     Checking only the two obvious contradictions left `{"outcome":"pass","exit":1}`
+     perfectly readable, and two records like that produce a `ready` verdict —
+     GPT Sol's P0.3. `void` keeps the widest latitude, because it is the arm
+     that means *we do not know*: it may carry a kill status, an ordinary
+     status (a run that exited 0 without printing its own footer), or none. */
   const exit = asFiniteNumber(parsed["exit"]);
-  if (exit === null && outcome !== "void") return null;
-  if (exit !== null && isSignalledExit(exit) && outcome !== "void") return null;
+  if (outcome === "pass" && exit !== 0) return null;
+  if (outcome === "fail" && (exit === null || exit === 0 || isSignalledExit(exit))) return null;
 
   return {
     ...common,
