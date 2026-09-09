@@ -46,7 +46,7 @@
  * the three bands dealt into as many columns as the window affords. That is not
  * a third layout, it is the second one with the detail absent.
  */
-import type { ReactNode } from "react";
+import { useCallback, useRef, type ReactNode } from "react";
 
 import { NewSessionPanel } from "./NewSessionPanel";
 import { PauseLine } from "./PauseLine";
@@ -368,6 +368,7 @@ export function SessionsPanel({
   order,
   onOrder,
   selectedId,
+  selectedPid,
   onSelect,
   steer,
   rename,
@@ -410,6 +411,12 @@ export function SessionsPanel({
   onOrder: (order: Ordering) => void;
   /** The session the URL names, whether or not the box still lists it. */
   selectedId: string | null;
+  /**
+   * Which tmux server the selected handle came from, when whoever wrote the URL
+   * said. `null` means nobody said, which resolves exactly as it always did —
+   * only a pid that is PRESENT and disagrees refuses. See `wrongWorld`.
+   */
+  selectedPid: number | null;
   onSelect: (id: string | null) => void;
   steer: SteerApi;
   rename: RenameApi;
@@ -450,10 +457,139 @@ export function SessionsPanel({
   const columns = chooseColumns(width);
 
   const sorted = sortRows(rows, order);
-  const selected = selectedId === null ? null : (sorted.find((r) => r.id === selectedId) ?? null);
+  /**
+   * **A HANDLE FROM ANOTHER TMUX SERVER IS NOT THIS SESSION**, however exactly
+   * it matches.
+   *
+   * `sel` is a tmux session handle and `$1643` is only meaningful inside one
+   * tmux server, so a selection that arrived from somewhere carrying a `selpid`
+   * is checked against the one this snapshot came from before it is resolved.
+   * Without this, the Recent messages tab's own check was cosmetic: it proved
+   * the join safe on the row and then handed over a bare handle, which this
+   * matched against whatever world it was looking at by the time it rendered —
+   * and the pane it opened would print a handle that agreed. GPT Sol's P0.
+   *
+   * **A MISSING `selectedPid` RESOLVES EXACTLY AS BEFORE.** Not knowing is not
+   * evidence: a tap on the list, a hand-typed URL, a link written before this
+   * existed and every bookmark anyone already has arrive without one, and a
+   * check that refused them would break the feature it is guarding.
+   */
+  const wrongWorld =
+    selectedPid !== null && tmuxServerPid !== null && selectedPid !== tmuxServerPid;
+  const selected =
+    selectedId === null || wrongWorld ? null : (sorted.find((r) => r.id === selectedId) ?? null);
+
+  /**
+   * **BRING THE DETAIL ONTO THE SCREEN WHEN A SELECTION ARRIVES.**
+   *
+   * A selection can now come from somewhere the reader cannot see: the Recent
+   * messages tab writes `sel` into the hash and switches mode, and the page
+   * keeps whatever scroll offset the feed had — a thousand pixels down a list
+   * of other people's messages. Without this the click appears to do nothing.
+   *
+   * **The DETAIL rather than the selected card**, one rule at both widths. At
+   * 390 there is one pane and the detail has replaced the list, so this is "go
+   * to the top of the thing I just opened". At 1280 the detail is the right-hand
+   * column and is what the click was *for*; the card keeps its `selected`
+   * highlight so it is still findable in the list. Scrolling to the CARD is the
+   * other candidate and it is worse in both directions: `block: "nearest"` on an
+   * element taller than the viewport aligns its bottom edge, and `block: "start"`
+   * on a card halfway down the column pushes the detail's top off screen.
+   *
+   * It fires for a selection made in the list too, which is right — you tapped a
+   * row to read it — and costs nothing when the detail is already at the top.
+   *
+   * **FOCUS MOVES TOO, and scrolling alone would not be enough.** The control
+   * that was activated is on the Recent messages tab, which at 390 has just been
+   * unmounted and at 1280 can be several screens away — so a keyboard or
+   * screen-reader user is left with focus nowhere useful while the page silently
+   * scrolls somewhere else. `focus({ preventScroll: true })` first, then the
+   * scroll: focusing scrolls by default, and letting it would fight the line
+   * below over which of them decides where the page ends up. GPT Sol's P1.
+   *
+   * **NOT `behavior: "smooth"`, and a browser check is why.** The first version
+   * animated, and from a feed scrolled to the bottom of a 1280×600 window the
+   * page moved 25px of the ~90 it owed and stopped: the detail's own status
+   * badge finished 68px above the top of the viewport, so the reader landed in
+   * the middle of the card with nothing on screen saying which session they were
+   * looking at. A smooth scroll is an animation, and an animation that overlaps
+   * a mode switch, a container measurement and a re-render is one that can be
+   * cut short — silently, and looking exactly like a scroll that never fired.
+   * This is a navigation, so it is instant.
+   *
+   * **A CALLBACK REF RATHER THAN AN EFFECT, because the node this wants is not
+   * reliably there when an effect on `selectedId` runs.** The detail is rendered
+   * into one of two mutually exclusive branches depending on a MEASURED width
+   * (fit.ts), and it is not rendered at all until there are rows to list — so
+   * the element can attach one or two renders after the selection changed, with
+   * `selectedId` unmoved and an effect keyed to it already spent. This fires
+   * when the node for a new selection actually attaches, whenever that is;
+   * `scrolledFor` keeps it to once per selection, so a later re-attach (a window
+   * resize crossing the two-pane threshold) does not yank a reader who has since
+   * scrolled somewhere of their own accord.
+   *
+   * **The optional calls are not defensiveness about browsers.** jsdom does not
+   * implement `scrollIntoView` at all, so an unguarded call would turn every
+   * existing test that selects a session red for a reason that has nothing to do
+   * with what it is testing.
+   */
+  const scrolledFor = useRef<string | null>(null);
+  if (selectedId === null) scrolledFor.current = null;
+  const detailRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      if (node === null || selectedId === null || scrolledFor.current === selectedId) return;
+      scrolledFor.current = selectedId;
+      node.focus?.({ preventScroll: true });
+      /* **THE MASTHEAD IS STICKY, SO THE TOP OF THE VIEWPORT IS NOT THE TOP OF
+         THE PAGE** — tailwind.css § `.masthead`, and the rule stated beside it:
+         *every piece of fixed or sticky chrome adds the edge it faces*. Without
+         this, `block: "start"` aligns the detail to the scroll box and the
+         masthead then paints over the top of it: measured at 27.92px under a
+         116.92px header at 1280, and 107px under a 255px one at 390, where the
+         reader landed below the session's own name and status with nothing
+         saying whose pane they were looking at. Two browser passes to find,
+         because it only misses by the height of a bar that is not there in
+         jsdom.
+
+         **Measured rather than a constant**, because the masthead wraps: it is
+         116.92px at 1280 and 255.375px at 390, and a fixed number would be
+         wrong at one of them by more than a header. There is no `--masthead-h`
+         to read the way there is a `--dock-space` for the bar at the bottom;
+         publishing one means a `ResizeObserver` in `Header.tsx`, which is not
+         this branch's file. **The fallback is zero**, which is exactly the
+         behaviour before this line — so a masthead that is renamed or absent
+         degrades to the old miss rather than to a broken scroll. */
+      const masthead = document.querySelector(".masthead");
+      const chrome = masthead === null ? 0 : Math.ceil(masthead.getBoundingClientRect().height);
+      node.style.scrollMarginTop = `${chrome}px`;
+      node.scrollIntoView?.({ block: "start" });
+    },
+    [selectedId],
+  );
 
   const detail =
-    selectedId === null ? null : selected === null ? (
+    selectedId === null ? null : wrongWorld ? (
+      /* **NOT "we could not find it" — "we will not look".** `MissingSession`
+         says the box did not list it, which would be a false statement about
+         this session: it is a true statement about a handle belonging to a tmux
+         server that no longer exists. */
+      <Card className="tw:border-l-4 tw:border-l-unknown tw:p-4">
+        <p className="tw:font-medium tw:text-ink">That link is for a different tmux server.</p>
+        <p className="tw:mt-1 tw:text-[13px] tw:text-ink-soft">
+          It selects <span className="tw:font-mono">{selectedId}</span> on tmux server{" "}
+          {selectedPid ?? "—"}, and this page is looking at {tmuxServerPid ?? "—"}. A handle like that
+          only means something inside one tmux server, so the row it would open here is somebody
+          else's session rather than the one the link was made for.
+        </p>
+        <button
+          type="button"
+          onClick={() => onSelect(null)}
+          className="tw:mt-2 tw:text-[13px] tw:text-work-ink tw:underline"
+        >
+          Show every session
+        </button>
+      </Card>
+    ) : selected === null ? (
       <MissingSession id={selectedId} onBack={() => onSelect(null)} />
     ) : (
       <SessionDetail
@@ -572,6 +708,20 @@ export function SessionsPanel({
       <div className="tw:mx-auto tw:max-w-3xl">
         {unreadable}
         <NewSessionPanel api={newSession} />
+        {/* **A SELECTION SURVIVES AN EMPTY LIST, and it did not until now.**
+            This arm returned before `detail` was rendered, so a `sel` naming
+            the only session on the box — or naming anything at all in a
+            snapshot every row of which was dropped — showed "No sessions." or
+            "Collecting…" and swallowed the selection whole. Nothing was wrong
+            on screen, it was simply an answer to a question nobody asked.
+
+            The Recent messages tab is what made that reachable: it hands out
+            links to sessions the reader has not looked at, so the destination
+            has to say something about the one they asked for. `MissingSession`
+            already exists for exactly this and was merely unreachable here.
+            GPT Sol's P0 on the code review, over my "this branch does not own
+            it" — the branch that adds the path owns where it leads. */}
+        {detail}
         {empty}
       </div>
     );
@@ -600,7 +750,9 @@ export function SessionsPanel({
       {detail !== null && panes === 1 ? (
         /* ONE PANE, SOMETHING SELECTED: the detail is a push. The list is not
            on screen at all, and the detail carries the button back to it. */
-        <div className="tw:mx-auto tw:max-w-3xl tw:pt-2">{detail}</div>
+        <div ref={detailRef} tabIndex={-1} aria-label="The selected session" className="tw:mx-auto tw:max-w-3xl tw:pt-2 tw:outline-none">
+          {detail}
+        </div>
       ) : detail !== null ? (
         /* TWO PANES. The list column is exactly `COLUMN_MIN_PX` wide, which is
            the same number `chooseColumns` gives a column up at — one constant,
@@ -610,7 +762,9 @@ export function SessionsPanel({
           style={{ gridTemplateColumns: `minmax(0, ${COLUMN_MIN_PX}px) minmax(0, 1fr)` }}
         >
           <div>{oneColumnList}</div>
-          <div className="tw:max-w-3xl">{detail}</div>
+          <div ref={detailRef} tabIndex={-1} aria-label="The selected session" className="tw:max-w-3xl tw:outline-none">
+            {detail}
+          </div>
         </div>
       ) : spread ? (
         <div

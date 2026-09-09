@@ -44,19 +44,28 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
+import { zonedLine } from "../../zones.js";
+
+import { StatusPill } from "./SessionParts";
 import { SPEAKERS } from "./Turn";
 import { Explain } from "./Tooltip";
 import {
   NO_FILTERS,
   applyFilters,
   httpFeedApi,
+  sessionStatusOf,
+  turnAge,
   type FeedApi,
   type FeedFilters,
   type FeedRow,
+  type FeedSessionStatus,
   type FeedView,
+  type SessionListReading,
 } from "./feed-client";
 import type { MessageSpeaker } from "./messages-client";
-import { Button, Card, Mono, SectionHeading, cx } from "./ui";
+import type { ClockSkew } from "./types";
+import { Button, Card, Mono, SectionHeading, cx, toneClasses } from "./ui";
+import { formatDuration, statusLabel } from "./view";
 
 /** The speakers offered as filter chips, in the order a reader thinks of them. */
 const FILTERABLE: MessageSpeaker[] = [
@@ -225,6 +234,136 @@ export function firstLine(text: string): { head: string; rest: boolean } {
 }
 
 /**
+ * What the session this message came from is doing — **the Sessions list's own
+ * answer, drawn with the Sessions list's own component.**
+ *
+ * `StatusPill` rather than a chip of this panel's own: it carries the tone map,
+ * the vocabulary and the per-status tooltips, so the two tabs cannot drift into
+ * calling the same state two things. feed-client.ts § `FeedSessionStatus` has
+ * the argument for reading it out of the live rows rather than off `/api/feed`.
+ *
+ * **Every arm that is not a status is words, not silence.** The reader was never
+ * watching these sessions, so an unlabelled row is one they would read as fine.
+ */
+function SessionStatus({ status }: { status: FeedSessionStatus }): ReactNode {
+  if (status.kind === "listed") return <StatusPill status={status.row.status} />;
+  const said = ((): { label: string; what: string; how: string } => {
+    switch (status.kind) {
+      case "not-arrived":
+        return {
+          label: "session list has not arrived",
+          what: "This page has not received a session list, so it cannot say what this session is doing now.",
+          how: "The messages come from /api/feed, which is read when this tab opens; the statuses come from /api/state, which is polled. Until the first of those lands there is nothing to look this session up in.",
+        };
+      case "not-collected":
+        return {
+          label: "no session census yet",
+          what: "The dashboard has answered, but it has not finished a collection — so it does not yet know which sessions exist.",
+          how: "The first collection after a restart takes about ten seconds. This is not an empty fleet; it is a fleet nobody has looked at yet.",
+        };
+      case "unverifiable":
+        return {
+          label: "status not checked",
+          what: status.why,
+          how: "A tmux session handle like $1643 is only meaningful inside one tmux server, so this page will not read a status off a handle it cannot place — it would be some other session's. The link is still here, because the session it opens says its own name and handle.",
+        };
+      case "different-world":
+        return {
+          label: "cannot be matched to a session",
+          what: status.why,
+          how: "A tmux session handle like $1643 is only meaningful inside one tmux server. These two answers name different ones, so every handle in the older of them now belongs to somebody else — which is why there is nothing to click.",
+        };
+      default: {
+        /* **NOT-LISTED IS TWO CLAIMS, and which one it is depends on whether
+           the payload was wholly readable.** With rows dropped, "this session
+           is not on the box" is more than the page knows: it can only say the
+           session is not in the part of the list it could read. */
+        const partial = status.unreadableRows > 0;
+        return {
+          label: partial ? "not in the readable session list" : "not in the current session list",
+          what: partial
+            ? `This session was not among the rows this page could read, and ${status.unreadableRows} row${status.unreadableRows === 1 ? "" : "s"} in the last session list could not be read at all — so it may be running and merely unreadable.`
+            : "The last session list this page received holds no session with this handle. The feed's census of the fleet is taken before the session list's, so a session really can have gone between the two.",
+          how: "The message above is still real: it was read from that session's transcript. What cannot be said is what the session is doing now.",
+        };
+      }
+    }
+  })();
+  return (
+    <Explain tip={{ head: "What this session is doing", what: said.what, how: said.how }} placement="bottom">
+      <span className="tw:font-semibold tw:tracking-wide tw:uppercase tw:text-unknown-ink">{said.label}</span>
+    </Explain>
+  );
+}
+
+/**
+ * How long ago this turn was written — and, on the tooltip, the instant itself
+ * in all three zones.
+ *
+ * **An age is what a reader scans; an ISO string is what they parse.** The row
+ * carried `2026-09-09T04:17:22.118Z` before this, which answers *when* only
+ * after arithmetic nobody does at a glance. The exact instant does not go away:
+ * it moves into the tooltip, where `Explain` also puts it in the accessible
+ * name.
+ *
+ * **The age is shifted onto this device's clock and the instant is not** —
+ * feed-client.ts § `turnAge` and GPT Sol's K4 in messages-client.ts. Both
+ * come off the same `at`.
+ */
+function TurnAge({ at, now, skew }: { at: string | null; now: number; skew: ClockSkew }): ReactNode {
+  /* **MEMOISED ON THE TIMESTAMP, because the page re-renders every second.**
+     `zonedLine` runs three `Intl.DateTimeFormat`s, and at the 200-message limit
+     that is 600 of them a second for a string that cannot have changed. The
+     Deploys panel measured the same un-memoised work at 110–126 ms per second
+     over 200 rows; GPT Sol raised it here before it was written. */
+  const zoned = useMemo(() => (at === null ? null : zonedLine(at)), [at]);
+  if (at === null) return null;
+  const age = turnAge(at, now, skew);
+  /* A timestamp this page cannot parse is shown as it came rather than dropped:
+     the server said something, and swallowing it would leave the row looking
+     like one that carried no time at all — which is a different thing, and has
+     its own group at the foot of the panel. */
+  if (age.kind === "unplaceable") return <span className="tw:text-ink-faint">{at}</span>;
+  /* **AN UNMEASURED SKEW IS LABELLED, NOT HEDGED.** Before the first state
+     payload the masthead prints no clock note at all (Header.tsx), and this tab
+     has its own route — so it can be on screen with an age nothing else on the
+     page qualifies.
+
+     This was the word "about" for a review round, and GPT Sol was right to
+     refuse it: an unknown skew is not a small error, it is an error nobody has
+     bounded, so "about 2m ago" may be hours out and "about" quietly promises it
+     is not. The number still earns its place — it is right whenever the clocks
+     agree, which is nearly always — but what it is gets said beside it in
+     words. */
+  const uncorrected = skew.kind !== "known";
+  return (
+    <Explain
+      tip={{
+        head: "When this was written",
+        what: zoned ?? at,
+        how:
+          skew.kind === "known"
+            ? "The age is measured against this device's clock; the times above are the box's own, unshifted."
+            : "This device's clock has not been checked against the box's, so the age is the box's timestamp subtracted from this device's clock as though they agree. Nothing has bounded how far apart they are. The times above are the box's own.",
+      }}
+      placement="bottom"
+    >
+      {age.kind === "ahead" ? (
+        /* **A TURN STAMPED IN THE FUTURE IS A FINDING, not a zero.** Clamping it
+           to "0s ago" would hide a clock disagreement behind the most reassuring
+           answer on the row. */
+        <span className="tw:text-unknown-ink">{formatDuration(age.ms)} ahead of this device's clock</span>
+      ) : (
+        <span className="tw:text-ink-faint">
+          {formatDuration(age.ms)} ago
+          {uncorrected ? <span className="tw:pl-1 tw:text-unknown-ink">clocks not compared</span> : null}
+        </span>
+      )}
+    </Explain>
+  );
+}
+
+/**
  * One row: the session it came from, then the message, collapsed to its first
  * line until it is opened.
  *
@@ -242,16 +381,81 @@ export function firstLine(text: string): { head: string; rest: boolean } {
  * `dashboard-titles-descriptions-detail` made when it asked for the extraction,
  * and it is fully satisfied by sharing the map.
  */
-function Row({ row }: { row: FeedRow }): ReactNode {
+function Row({
+  row,
+  status,
+  now,
+  skew,
+  feedTmuxServerPid,
+  onOpenSession,
+}: {
+  row: FeedRow;
+  status: FeedSessionStatus;
+  now: number;
+  skew: ClockSkew;
+  /** Which tmux server this feed read, so the click can carry it. */
+  feedTmuxServerPid: number | null;
+  onOpenSession: ((id: string, tmuxServerPid: number | null) => void) | null;
+}): ReactNode {
   const [open, setOpen] = useState(false);
   const who = SPEAKERS[row.turn.speaker];
   const { head, rest } = firstLine(row.turn.text);
   return (
-    <li className="tw:border-t tw:border-rule tw:py-2 tw:first:border-t-0">
-      <p className="tw:flex tw:flex-wrap tw:items-baseline tw:gap-x-2 tw:text-[11px]">
-        <Mono>{row.sessionName}</Mono>
+    /* **THE LEFT EDGE IS THE SESSION'S STATUS TONE**, the same `tone.edge` a
+       `SessionCard` carries. It is what turns "which of these are from sessions
+       that are still working" from a word on each row into a colour you sweep —
+       and every arm that is not a status takes the `unknown` edge rather than none,
+       because a row with no edge would read as the calm end of the scale. */
+    <li
+      className={cx(
+        "tw:border-t tw:border-rule tw:border-l-4 tw:py-2 tw:pl-2 tw:first:border-t-0",
+        toneClasses(status.kind === "listed" ? statusLabel(status.row.status).tone : "unknown").edge,
+      )}
+    >
+      <p className="tw:flex tw:flex-wrap tw:items-baseline tw:gap-x-2 tw:gap-y-1 tw:text-[11px]">
+        <SessionStatus status={status} />
+        {/* **THE SESSION NAME IS THE WAY IN, AND THE ROW IS NOT.** Greg,
+            2026-09-09: *"click to be taken to that session in Sessions"*. A
+            row-sized click target would swallow the expand control below and
+            any attempt to select the agent's own words, which on this tab is
+            most of what a reader does with a row. The name is what somebody
+            points at when they mean "that one". */}
+        {/* **AND THE WAY IN IS WITHHELD WHEN THE HANDLES ARE PROVABLY NOT THE
+            SAME WORLD.** `sel` addresses a session by the same tmux handle, so
+            a click here would select whatever now wears it — a different
+            conversation, opened confidently. The status beside it says why
+            there is nothing to click.
+
+            **`unverifiable` KEEPS ITS LINK, and that asymmetry is the point.**
+            Not knowing is not proof, and a server that predates
+            `tmuxServerPid` answers that way for every row — so treating the two
+            alike would switch the whole feature off against it, permanently and
+            for no evidence. feed-client.ts § `FeedSessionStatus`. */}
+        {onOpenSession === null || status.kind === "different-world" ? (
+          <Mono>{row.sessionName}</Mono>
+        ) : (
+          <button
+            type="button"
+            /* **THE HANDLE AND THE WORLD IT BELONGS TO, TOGETHER.** Passing the
+               handle alone is what made the pid gate cosmetic: it proved the
+               join safe HERE and then threw away the proof, leaving the
+               destination to resolve `$1643` against whatever tmux server it
+               happens to be looking at by the time it renders. `null` when this
+               feed named no server, which is what makes the destination decline
+               to select rather than guess. GPT Sol's P0 on the code review. */
+            onClick={() => onOpenSession(row.sessionId, feedTmuxServerPid)}
+            aria-label={
+              feedTmuxServerPid === null
+                ? `Show Sessions — ${row.sessionName} cannot be selected from here`
+                : `Open the session ${row.sessionName} in Sessions`
+            }
+            className="tw:rounded tw:underline tw:decoration-dotted tw:underline-offset-2 tw:hover:text-ink"
+          >
+            <Mono>{row.sessionName}</Mono>
+          </button>
+        )}
         <span className={cx("tw:font-semibold tw:tracking-wide tw:uppercase", who.tone)}>{who.label}</span>
-        {row.turn.at === null ? null : <span className="tw:text-ink-faint">{row.turn.at}</span>}
+        <TurnAge at={row.turn.at} now={now} skew={skew} />
         {row.attribution.kind === "suspect" ? (
           <Explain tip={{ ...ATTRIBUTION_TIP, how: row.attribution.why }} placement="bottom">
             <span className="tw:font-semibold tw:text-alarm-ink">may not be this session</span>
@@ -332,6 +536,10 @@ export function FeedPanel({
   onLimit,
   filters,
   onFilters,
+  onOpenSession = null,
+  sessions = { kind: "not-arrived" },
+  now,
+  skew,
 }: {
   api?: FeedApi;
   limit: number;
@@ -339,6 +547,44 @@ export function FeedPanel({
   /** Held in the URL hash by App.tsx, so a filtered view survives a reload. */
   filters: FeedFilters;
   onFilters: (next: FeedFilters) => void;
+  /**
+   * Take the reader to this session on the Sessions tab.
+   *
+   * **`null` DRAWS PLAIN TEXT RATHER THAN A DEAD BUTTON.** A control that looks
+   * like a way in and does nothing is worse on this page than no control at
+   * all — it is the same shape as the Refresh button that refreshed nothing.
+   * The default is `null` so a test mounting the panel alone gets a panel that
+   * is honest about having nowhere to go.
+   */
+  onOpenSession?: ((id: string, tmuxServerPid: number | null) => void) | null;
+  /**
+   * **THE LAST SESSION LIST THIS PAGE RECEIVED — the same rows the Sessions tab
+   * renders**, in the shape that can tell "nothing has arrived" from "a
+   * collection has not finished" from "we looked and it holds nobody".
+   *
+   * Defaults to `not-arrived`, which is the honest default: a panel mounted
+   * without one has been told nothing. feed-client.ts § `SessionListReading`.
+   */
+  sessions?: SessionListReading;
+  /**
+   * The page's one clock, so every age here ticks with every other age on
+   * screen — useNow.ts. Required rather than defaulted to `Date.now()`: a
+   * component that reads the clock itself is one whose ages can disagree with
+   * the rest of the page, and a test could not pin it.
+   */
+  now: number;
+  /**
+   * The correction between the box's clock and this device's. `unknown` shifts
+   * by zero and the row says so in words — types.ts § `ClockSkew`.
+   *
+   * **REQUIRED, with no default.** It was `= CLOCK_SKEW_UNMEASURED` for a review
+   * round, and GPT Sol was right that a defaulted one is a way for a future
+   * caller to sit permanently unmeasured without ever deciding to: the page
+   * would go on labelling every age "clocks not compared" and nobody would know
+   * whether that was true of the payload or true of the call site. `App` has one
+   * to give; anything else has to say what it is holding.
+   */
+  skew: ClockSkew;
 }): ReactNode {
   const { reading, refresh, busy } = useFeed(api, limit);
 
@@ -495,7 +741,14 @@ export function FeedPanel({
           ) : (
             <ul className="tw:mt-2">
               {shown.map((row) => (
-                <Row key={row.turn.uuid ?? `${row.sessionId}-${row.turn.at}-${row.turn.text.slice(0, 24)}`} row={row} />
+                <Row key={row.turn.uuid ?? `${row.sessionId}-${row.turn.at}-${row.turn.text.slice(0, 24)}`}
+                  row={row}
+                  status={sessionStatusOf(sessions, view.tmuxServerPid, row.sessionId)}
+                  now={now}
+                  skew={skew}
+                  feedTmuxServerPid={view.tmuxServerPid}
+                  onOpenSession={onOpenSession}
+                />
               ))}
             </ul>
           )}
@@ -509,7 +762,14 @@ export function FeedPanel({
               </p>
               <ul className="tw:mt-2">
                 {shownUndated.map((row) => (
-                  <Row key={row.turn.uuid ?? `${row.sessionId}-undated-${row.turn.text.slice(0, 24)}`} row={row} />
+                  <Row key={row.turn.uuid ?? `${row.sessionId}-undated-${row.turn.text.slice(0, 24)}`}
+                  row={row}
+                  status={sessionStatusOf(sessions, view.tmuxServerPid, row.sessionId)}
+                  now={now}
+                  skew={skew}
+                  feedTmuxServerPid={view.tmuxServerPid}
+                  onOpenSession={onOpenSession}
+                />
                 ))}
               </ul>
             </>
