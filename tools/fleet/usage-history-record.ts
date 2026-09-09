@@ -102,7 +102,10 @@ export {
   type MergedIncident,
 } from "./usage-incident-merge.js";
 
-/** The envelope. Bumped if the LINE's shape changes. */
+/**
+ * The envelope. Bumped if the LINE's shape changes incompatibly. An additive
+ * optional field with explicit absence semantics is not a breaking change.
+ */
 export const LINE_SCHEMA = 1;
 
 /**
@@ -182,6 +185,60 @@ export type ScanObservation = {
   incidents: HistoryIncident[];
 };
 
+export type CodexWindowObservation =
+  | {
+      kind: "value";
+      slot: "primary" | "secondary";
+      windowMinutes: number;
+      usedPercent: number;
+      resetsAt: string;
+      resetsAtMs: number;
+    }
+  | {
+      kind: "unknown";
+      slot: "primary" | "secondary";
+      windowMinutes: number | null;
+      why: string;
+    };
+
+export type CodexBucketObservation = {
+  limitId: string;
+  limitName: string | null;
+  windows: CodexWindowObservation[];
+  planType: string | null;
+  credits: {
+    hasCredits: boolean;
+    unlimited: boolean;
+    balance: string | null;
+  } | null;
+  individualLimit: {
+    limit: string;
+    used: string;
+    remainingPercent: number;
+    resetsAt: number;
+  } | null;
+  spendControlReached: boolean | null;
+  rateLimitReachedType: string | null;
+};
+
+/**
+ * The Codex observation made concurrently with the Claude pass.
+ *
+ * Absence of the top-level key is reserved for lines written before this field
+ * existed. Every current writer supplies one of these two arms. Facts a source
+ * could not observe remain nullable inside the value arm; they are never
+ * manufactured as zeroes.
+ */
+export type CodexObservation =
+  | {
+      kind: "value";
+      accountId: string | null;
+      readAt: string;
+      buckets: CodexBucketObservation[];
+      resetCredits: number | null;
+    }
+  | { kind: "unknown"; why: string; retryable: boolean };
+
 export type UsagePass =
   | {
       kind: "pass";
@@ -217,6 +274,8 @@ export type UsageHistoryLine = {
    */
   nextDueMs: number;
   pass: UsagePass;
+  /** Absent only on legacy lines whose writer predates Codex collection. */
+  codex?: CodexObservation;
 };
 
 export type DecodedLine =
@@ -247,6 +306,136 @@ function isInstant(value: unknown): value is string {
   return typeof value === "string" && value.length > 0 && Number.isFinite(Date.parse(value));
 }
 
+function isNullableString(value: unknown): value is string | null {
+  return value === null || typeof value === "string";
+}
+
+function isSlot(value: unknown): value is CodexWindowObservation["slot"] {
+  return value === "primary" || value === "secondary";
+}
+
+function recordOf(value: unknown): Record<string, unknown> | null {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function codexWindowValidationError(
+  rawWindow: unknown,
+  location: string,
+  readAtMs: number,
+): string | null {
+  const window = recordOf(rawWindow);
+  if (window === null) return `${location} was not an object`;
+  if (!isSlot(window.slot)) return `${location} had an invalid slot`;
+  if (window.kind === "unknown") {
+    if (!(window.windowMinutes === null || (Number.isFinite(window.windowMinutes) && (window.windowMinutes as number) > 0))) {
+      return `${location} had invalid windowMinutes`;
+    }
+    return typeof window.why === "string" && window.why.length > 0 ? null : `${location} had no reason`;
+  }
+  if (window.kind !== "value") return `${location} had an unknown kind`;
+  if (!Number.isFinite(window.windowMinutes) || (window.windowMinutes as number) <= 0) {
+    return `${location} had invalid windowMinutes`;
+  }
+  if (!Number.isFinite(window.usedPercent) || (window.usedPercent as number) < 0) {
+    return `${location} had invalid usedPercent`;
+  }
+  if (!isInstant(window.resetsAt)) return `${location} had an invalid resetsAt`;
+  const windowMinutes = window.windowMinutes as number;
+  const resetsAtMs = window.resetsAtMs as number;
+  const latestPossible = readAtMs + windowMinutes * 60_000;
+  if (
+    !Number.isSafeInteger(windowMinutes) ||
+    windowMinutes <= 0 ||
+    !Number.isSafeInteger(resetsAtMs) ||
+    !Number.isSafeInteger(latestPossible) ||
+    Math.abs(resetsAtMs) > MAX_EPOCH_MS ||
+    Date.parse(window.resetsAt) !== resetsAtMs ||
+    resetsAtMs <= readAtMs ||
+    resetsAtMs > latestPossible
+  ) {
+    return `${location} had an invalid resetsAtMs`;
+  }
+  return null;
+}
+
+function codexCreditsValidationError(value: unknown, location: string): string | null {
+  if (value === null) return null;
+  const credits = recordOf(value);
+  if (
+    credits === null ||
+    typeof credits.hasCredits !== "boolean" ||
+    typeof credits.unlimited !== "boolean" ||
+    !isNullableString(credits.balance)
+  ) {
+    return `${location} had invalid credits`;
+  }
+  return null;
+}
+
+function codexIndividualLimitValidationError(value: unknown, location: string): string | null {
+  if (value === null) return null;
+  const limit = recordOf(value);
+  if (
+    limit === null ||
+    typeof limit.limit !== "string" ||
+    typeof limit.used !== "string" ||
+    !Number.isInteger(limit.remainingPercent) ||
+    !Number.isSafeInteger(limit.resetsAt)
+  ) {
+    return `${location} had an invalid individualLimit`;
+  }
+  return null;
+}
+
+function codexBucketValidationError(rawBucket: unknown, bucketIndex: number, readAtMs: number): string | null {
+  const location = `bucket ${bucketIndex}`;
+  const bucket = recordOf(rawBucket);
+  if (bucket === null) return `${location} was not an object`;
+  if (typeof bucket.limitId !== "string" || bucket.limitId.length === 0) return `${location} had no limitId`;
+  if (!isNullableString(bucket.limitName)) return `${location} had an invalid limitName`;
+  if (!isNullableString(bucket.planType)) return `${location} had an invalid planType`;
+  if (!isNullableString(bucket.rateLimitReachedType)) return `${location} had an invalid rateLimitReachedType`;
+  if (!(bucket.spendControlReached === null || typeof bucket.spendControlReached === "boolean")) {
+    return `${location} had an invalid spendControlReached`;
+  }
+  const creditsWhy = codexCreditsValidationError(bucket.credits, location);
+  if (creditsWhy !== null) return creditsWhy;
+  const limitWhy = codexIndividualLimitValidationError(bucket.individualLimit, location);
+  if (limitWhy !== null) return limitWhy;
+  if (!Array.isArray(bucket.windows)) return `${location} windows was not an array`;
+  for (const [windowIndex, window] of bucket.windows.entries()) {
+    const why = codexWindowValidationError(window, `${location} window ${windowIndex}`, readAtMs);
+    if (why !== null) return why;
+  }
+  return null;
+}
+
+function codexValidationError(value: unknown): string | null {
+  const observation = recordOf(value);
+  if (observation === null) return "not an object";
+  if (observation.kind === "unknown") {
+    if (typeof observation.why !== "string" || observation.why.length === 0) return "unknown arm without a reason";
+    return typeof observation.retryable === "boolean" ? null : "unknown arm without retryability";
+  }
+  if (observation.kind !== "value") return `unknown kind ${JSON.stringify(observation.kind)}`;
+  if (!isInstant(observation.readAt)) return "value arm without a valid readAt";
+  if (!(observation.accountId === null || (typeof observation.accountId === "string" && observation.accountId.length > 0))) {
+    return "accountId was not a non-empty string or null";
+  }
+  if (!(observation.resetCredits === null || (Number.isSafeInteger(observation.resetCredits) && (observation.resetCredits as number) >= 0))) {
+    return "resetCredits was not a non-negative integer or null";
+  }
+  if (!Array.isArray(observation.buckets)) return "buckets was not an array";
+  const readAtMs = Date.parse(observation.readAt);
+  for (const [bucketIndex, bucket] of observation.buckets.entries()) {
+    const why = codexBucketValidationError(bucket, bucketIndex, readAtMs);
+    if (why !== null) return why;
+  }
+  return null;
+}
+
 function bounded(pass: UsagePass): UsagePass {
   if (pass.kind === "collector-failed" || pass.kind === "omitted") {
     return { ...pass, why: truncateWhy(pass.why) };
@@ -266,6 +455,31 @@ function bounded(pass: UsagePass): UsagePass {
   };
 }
 
+function boundedCodex(codex: CodexObservation): CodexObservation {
+  if (codex.kind === "unknown") return { ...codex, why: truncateWhy(codex.why) };
+  return {
+    ...codex,
+    buckets: codex.buckets.map((bucket) => ({
+      ...bucket,
+      windows: bucket.windows.map((window) =>
+        window.kind === "unknown" ? { ...window, why: truncateWhy(window.why) } : window,
+      ),
+    })),
+  };
+}
+
+function codexForEncoding(line: UsageHistoryLine): CodexObservation {
+  if (line.codex !== undefined) return line.codex;
+  return {
+    kind: "unknown",
+    why:
+      line.pass.kind === "omitted"
+        ? "the Codex observation was not retained because this usage-history record was omitted"
+        : "the current writer supplied no Codex observation for this usage pass",
+    retryable: false,
+  };
+}
+
 /**
  * Serialise one line, or throw. Validation is at the WRITE side deliberately —
  * the health precedent types its writer and loosens only bytes coming back from
@@ -273,10 +487,13 @@ function bounded(pass: UsagePass): UsagePass {
  * because it still occupies a position on the chart.
  */
 export function encodeUsageHistoryLine(line: UsageHistoryLine): string {
+  const codex = codexForEncoding(line);
   if (!Number.isFinite(line.nextDueMs) || line.nextDueMs <= 0) {
     throw new Error(`usage history: nextDueMs must be finite and positive, got ${String(line.nextDueMs)}`);
   }
   requireInstant(line.recordedAt, "recordedAt");
+  const why = codexValidationError(codex);
+  if (why !== null) throw new Error(`usage history: codex ${why}`);
   if (line.pass.kind === "collector-failed" || line.pass.kind === "omitted") requireInstant(line.pass.at, "at");
   else {
     requireInstant(line.pass.collectedAt, "collectedAt");
@@ -292,7 +509,11 @@ export function encodeUsageHistoryLine(line: UsageHistoryLine): string {
     }
   }
 
-  const encoded = `${JSON.stringify({ ...line, pass: bounded(line.pass) })}\n`;
+  const encoded = `${JSON.stringify({
+    ...line,
+    pass: bounded(line.pass),
+    codex: boundedCodex(codex),
+  })}\n`;
   const bytes = Buffer.byteLength(encoded, "utf8");
   if (bytes > MAX_LINE_BYTES) {
     throw new Error(`usage history: a record serialised to ${bytes} bytes, over MAX_LINE_BYTES (${MAX_LINE_BYTES})`);
@@ -341,7 +562,23 @@ export function decodeUsageHistoryLine(raw: string): DecodedLine {
     return { kind: "unreadable", why: `unknown pass kind ${JSON.stringify((pass as { kind?: unknown }).kind)}` };
   }
 
-  return { kind: "line", line: record as unknown as UsageHistoryLine };
+  if (!Object.hasOwn(record, "codex")) {
+    return { kind: "line", line: record as unknown as UsageHistoryLine };
+  }
+  const codexWhy = codexValidationError(record.codex);
+  if (codexWhy === null) return { kind: "line", line: record as unknown as UsageHistoryLine };
+
+  return {
+    kind: "line",
+    line: {
+      ...(record as unknown as UsageHistoryLine),
+      codex: {
+        kind: "unknown",
+        why: truncateWhy(`the persisted Codex observation was malformed: ${codexWhy}`),
+        retryable: false,
+      },
+    },
+  };
 }
 
 // The merge contract and its types live in `usage-incident-merge.ts` - see the

@@ -22,8 +22,14 @@
  */
 import { openUsageHistoryForWrite, type UsageHistoryWriter } from "./usage-history.js";
 import { usageHistoryLineFrom, type PassInput } from "./usage-history-from-report.js";
+import type { CodexUsageReading } from "./wire.js";
 
 export type UsageRetention = {
+  /**
+   * Leave the concurrent Codex reading for the next synchronous `onPass`.
+   * The daemon's single-flight guard is what makes "next" mean this same pass.
+   */
+  stashCodex: (reading: CodexUsageReading) => void;
   /** Hand this straight to `DaemonOptions.usage.onPass`. */
   onPass: (outcome: PassInput) => void;
   /** Release the fd when the daemon stops. Safe to call when nothing was ever opened. */
@@ -49,17 +55,35 @@ export type UsageRetentionOptions = {
 export function makeUsageRetention(dir: string, options: UsageRetentionOptions): UsageRetention {
   const now = options.now ?? (() => new Date());
   let writer: UsageHistoryWriter | null = null;
+  let stashedCodex: CodexUsageReading | null = null;
 
   return {
     path: () => writer?.path ?? null,
     close: () => writer?.close(),
+    stashCodex(reading: CodexUsageReading): void {
+      stashedCodex = reading;
+    },
     onPass(outcome: PassInput): void {
+      /* Consume before touching the writer. If append fails, a later pass must
+         not silently inherit this pass's Codex observation. */
+      const codex =
+        stashedCodex ??
+        ({
+          kind: "unknown",
+          why: "the Codex collector left no observation for this usage pass",
+          retryable: true,
+        } satisfies CodexUsageReading);
+      stashedCodex = null;
       if (writer === null) {
         writer = openUsageHistoryForWrite(dir, { daemonLockHeld: () => true });
         options.log?.(`usage history: ${writer.path}`);
       }
       writer.append(
-        usageHistoryLineFrom(outcome, { nextDueMs: options.nextDueMs, recordedAt: now().toISOString() }),
+        usageHistoryLineFrom(outcome, {
+          nextDueMs: options.nextDueMs,
+          recordedAt: now().toISOString(),
+          codex,
+        }),
       );
     },
   };
