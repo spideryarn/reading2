@@ -132,20 +132,31 @@ and printed bare beside the UTC time that reads as three hours in the past.
 ### Stage 1 — the reader
 
 `tools/fleet/deploys.ts`: pure, no HTTP, no clock. Takes the file's text, returns
-`{ versions, unreadableLines }` with versions **newest first** (the file is oldest first; the tab is
-not). Plus `tests/fleet-deploys.test.ts` against a fixture cut **and** the real committed file.
+`{ versions, unreadable, lines }` with versions **newest first** (the file is oldest first; the tab
+is not). Plus `tests/fleet-deploys.test.ts` against a fixture cut **and** the real committed file.
 
-- [ ] not started
+- [x] **Done.** 47 tests. Three deliberate breaks were checked red before the stage was believed:
+  dropping the newest-first reversal (5 fail), counting successes rather than lines for the release
+  number (1), and no longer recognising the `entries` field (4).
+- [x] **Reworked after the plan review.** `readChangelog()` was lifted out of `readVersion` and now
+  answers three ways rather than two — see § What the review changed. Sentinels (`-1`, `""`) went to
+  `null` before the review: a line that has forgotten how many commits it shipped has not shipped
+  zero, and zero is a number a panel would draw and a reader would believe.
 
 ### Stage 2 — the route
 
 `tools/fleet/routes-deploys.ts`: `GET /api/deploys`, two arms (`deploys` / `unreadable`) like
 `routes-health-history.ts`, a `limit` clamped the way `windowHoursFrom` clamps hours, and the git
-probe — three `spawnSync` calls with argv arrays, no shell, a timeout each, every failure an arm
-rather than a throw. One mount line in `server.ts`; one block at the **end** of `wire.ts` for the
-payload type. Tests drive `deploysPayload` directly and a fake git.
+probe in `tools/fleet/git-probe.ts`. One mount line in `server.ts`, one composition in
+`deploys-wiring.ts` (the lesson `health-wiring.ts` exists for), one block at the **end** of
+`wire.ts`. Tests drive `deploysPayload` and `makeDeploys` directly, plus a real throwaway repository.
 
-- [ ] not started
+- [x] **Done**, and then substantially reworked by the review: the probe is asynchronous, takes one
+  snapshot against one resolved sha, and caches behind a single flight. See § What the review
+  changed.
+- [x] Verified against reality rather than only against fixtures: the route answers 287 commits since
+  the newest recorded deploy, which is what `git rev-list --count --no-merges` says by hand. Two
+  independently-built joins agreeing is worth more than one.
 
 ### Stage 3 — the client, the panel, the tab
 
@@ -158,17 +169,63 @@ same commit as the panel so nobody clicks a tab with no mount behind it. Compone
 
 **Three sessions are adding entries to the same `MODES` array tonight** (`usage`, `messages`,
 `deploys`) and git will merge all three without a conflict marker while being free to drop one.
-`Record<Mode, …>` is what saves it — a dropped entry makes the maps over- or under-specified — but
-only on the post-merge tree, so: merge `origin/dev`, then typecheck, then count the entries by eye.
+I planned to rely on `Record<Mode, …>` plus a count by eye. **That was wrong, and Sol said why:**
+`Mode` is *derived from* `MODES`, so a merge that drops `"deploys"` from the array **and** its four
+map entries leaves every `Record<Mode, …>` perfectly typed and the tab simply gone. There is now an
+explicit assertion that `"deploys"` is in `MODES` — the only thing that can catch it.
 
-- [ ] not started
+- [x] **Done.** Panel, client, four registrations and the `App.tsx` mount, all in one commit, per the
+  convention `usage-limits-tab` set tonight so nobody clicks a tab with no mount behind it.
+- [x] The missing-mount test was checked red by removing the `App.tsx` arm: 11 of the tab's tests
+  fail. It is the one the type system cannot do.
+- [x] Two bottom-bar tests that hard-coded three mode labels now derive from `MODES`, so the next tab
+  does not go red in a file four sessions are editing.
 
 ### Stage 4 — gates and review
 
 `npm test`, `npm run typecheck`, lint the touched files, GPT Sol on the scoped diff plus raw test
 output, two rounds.
 
-- [ ] not started
+- [x] Round 1 on the plan: `260909b-deploys-tab-plan-review-sol-r1.md`. Verdict *not ready to build
+  unchanged* — four P1s. Every factual claim in it was checked before acting; all held.
+- [x] Round 2 on the code: `260909b-deploys-tab-code-review-prompt.md`.
+- [x] `npm run typecheck` clean; lint clean on the touched files.
+
+## What the review changed
+
+Worth its own section, because three of the four P1s were about the tab **telling the truth**, which
+is the only thing it is for.
+
+- **The claim about `main` was false.** See § The honest sentence, rewritten.
+- **"We could not read what changed" was rendering as "nothing changed".** `invisible` was derived as
+  `entries.length === 0`, so a line whose `entries` was missing, not an array, or full of unreadable
+  objects came out as a *quiet deploy* — and the panel says *Nothing a reader would notice*, which is
+  the opposite of the truth and looks exactly like the common case. A deploy that shipped a headline
+  feature would have rendered as one that shipped nothing, with no error anywhere. There are now
+  three outcomes and `changelogReadable` on the wire.
+- **Three `spawnSync` calls in an HTTP route can freeze the whole control plane.** The dashboard is
+  one Node process and the Overseer has no independent source of fleet state, so a slow disk would
+  let one Deploys request block every session, action and heartbeat for the sum of three timeouts.
+  Now `execFile`, one snapshot, single flight, 15 s TTL.
+- **The staleness number measured the wrong thing.** Measured on this box rather than argued about:
+  `FETCH_HEAD`'s mtime does advance on a no-op fetch, so it says when we last *asked* — but it names
+  whatever was last fetched, so it does not prove `origin/main` was refreshed, and the loose ref may
+  be packed and have no mtime at all. Relabelled to exactly what it measures.
+- **The drift mitigation was too weak.** "One version per non-blank line" passes while the two
+  readers disagree about every field. The test now runs both over the real file and compares
+  `release`, `sha`, `previous_sha`, `deployment_id`, `commit_count`, `generated_at`, `invisible` and
+  every entry's `section`/`title`/`body`/`where`/`commits`. The import of `src/changelog.ts` is
+  test-only and adds no runtime dependency, because `tests/fleet-imports.test.ts` walks the graph
+  rooted at `tools/`.
+- **The dock's Refresh did nothing on this tab.** Its tooltip presents it as the page's refresh
+  control and it called `feed.refresh()` only — so on a panel with its own route, pressing it was
+  indistinguishable from a broken button, on the one page whose job is to say whether things are
+  broken.
+
+**One finding deliberately not taken**, and it is the most interesting: production publishes its own
+token-free build stamps, so *"commits included in the serving build"* and *"commits that are not"* is
+answerable without Vercel. See § The honest sentence for what it would take. It is the right next
+step and it is not this branch.
 
 ## What this deliberately does not do
 
