@@ -55,6 +55,8 @@
 import { isRepoValue } from "../../scripts/gjd-remote-repo.js";
 import type { SessionKind, SessionMeta, SessionState, SessionUnknownCause } from "../../scripts/gjd-remote-tmux.js";
 import { readAttemptClock } from "../fleet/attempt-clock.js";
+import { isAddressableHarness } from "../fleet/execution-token.js";
+import type { ConversationReading, ExecutionReading, ExecutionUnknownCause, HarnessKind } from "../fleet/wire.js";
 
 /**
  * Anything `JSON.parse` can return, which is the honest type for a field we
@@ -212,6 +214,25 @@ export type ObservedRow = {
    * a function really does mint and really does gate.
    */
   readonly claimedConversationId: string | null;
+  /**
+   * **WHICH RUN THE PRODUCER SAW IN THIS PANE — the corroboration
+   * `claimedConversationId` above cannot give.**
+   *
+   * The comment on that field says a uuid that changes is evidence and a uuid
+   * that stays the same is evidence of nothing, and ends by saying that nothing
+   * in that stage could resolve it. This is the resolution: the dashboard walks
+   * the pane's process tree, finds the harness holding it, and mints a durable
+   * token out of the boot id, the pid and the process's exact start tick. Two
+   * snapshots whose tokens differ describe two different runs however identical
+   * every other field is — which is the case `session-pane-replaced` and
+   * `session-replaced` between them cannot see.
+   *
+   * **NEVER FAILS THE SNAPSHOT**, on `parseAttempt`'s rule: a dashboard from
+   * before this field existed is an old producer rather than a broken one, and
+   * its rows arrive as `unknown`/`not-reported` and stay inspectable. There is
+   * no path from a missing field to a verified reading.
+   */
+  readonly execution: ExecutionReading;
   /** Volatile prose, kept verbatim and never diffed. */
   readonly question: JsonValue;
   /**
@@ -582,10 +603,165 @@ function parseRow(u: unknown, index: number): ParseResult<ObservedRow> {
       paneId: paneId.value,
       panePid: panePid.value,
       claimedConversationId: claimed.value,
+      execution: coherentWith(parseExecution(u["execution"]), claimed.value),
       question: u["question"] as JsonValue,
       status: status.value,
     },
   };
+}
+
+/**
+ * **THE READING MUST AGREE WITH THE ROW IT ARRIVED ON.**
+ *
+ * `parseExecution` checks the reading's own shape; nothing until here checked
+ * it against its neighbours. A payload can assert a `verified` conversation
+ * whose id is not the one the row claims, or assert one on a harness that
+ * cannot hold a conversation at all — combinations this box's producer cannot
+ * construct and a parser will happily rebuild. GPT Sol's P2-4.
+ *
+ * **IT DOWNGRADES THE CONVERSATION RATHER THAN FAILING THE SNAPSHOT**, and
+ * rather than inventing a ninth `ExecutionUnknownCause`. The PROCESS reading is
+ * still good — the token is well-formed and says which run is there — and it is
+ * only the claim about which transcript that run is writing that nothing
+ * corroborates. `unverifiable` is exactly that sentence, and it is already the
+ * arm the write gate refuses.
+ */
+function coherentWith(reading: ExecutionReading, claimed: string | null): ExecutionReading {
+  if (reading.kind !== "verified" || reading.conversation.kind !== "verified") return reading;
+  const observed = reading.conversation.id;
+  if (claimed !== null && observed === claimed && isAddressableHarness(reading.harness)) return reading;
+  const why =
+    claimed === null
+      ? `this row claims no conversation, so a producer's report that it is running ${observed} agrees with nothing`
+      : observed !== claimed
+        ? `the producer reports this pane running ${observed} while the row claims ${claimed}, and the two cannot both be verified`
+        : `the producer reports a verified conversation on ${reading.harness}, which cannot hold one`;
+  return { ...reading, conversation: { kind: "unverifiable", claimed: claimed ?? observed, why } };
+}
+
+/**
+ * The named causes, as a `Record` over the closed union so that a new arm in
+ * `wire.ts` cannot be forgotten here.
+ */
+const EXECUTION_CAUSES: Record<ExecutionUnknownCause, true> = {
+  "not-probed": true,
+  "not-reported": true,
+  "no-pane-pid": true,
+  "process-table-unreadable": true,
+  "pane-tree-unreadable": true,
+  "platform-unsupported": true,
+  "boot-identity-unreadable": true,
+  "process-start-unreadable": true,
+  "process-changed-under-read": true,
+  "uptime-unreadable": true,
+};
+
+/**
+ * The execution reading, off a row.
+ *
+ * **DELIBERATELY NOT ABLE TO FAIL THIS PARSE**, exactly as `parseAttempt` is
+ * not, and for the same reason: a producer that predates the field is old
+ * rather than broken, and refusing its whole snapshot would take the Overseer's
+ * eyes off a live box to punish a deploy ordering.
+ *
+ * **AND THERE IS NO ROUTE FROM A MISSING FIELD TO `verified`.** Every failure
+ * below lands on `unknown` with a cause. `verified` requires a token whose
+ * three parts are each present and each the right shape — a token missing
+ * `startTicks` is the identity with its pid-reuse defence removed, so it is
+ * refused rather than half-believed.
+ *
+ * This is a SECOND, INDEPENDENT reader of the same wire type; the browser has
+ * its own in `tools/fleet/web/src/types.ts`. That is the roadmap's stated
+ * design — *"independent runtime validation and contract fixtures in their
+ * owning modules"* — rather than an oversight: fleet parses at its boundary and
+ * the Overseer parses at its own, and `wire.ts` is the one declaration relating
+ * them.
+ */
+export function parseExecution(u: unknown): ExecutionReading {
+  const unread = (why: string, cause: ExecutionUnknownCause = "not-reported"): ExecutionReading => ({
+    kind: "unknown",
+    cause,
+    why,
+  });
+  if (!isRecord(u)) {
+    return unread("this collection carried no execution reading, so what is running in this pane is unverified");
+  }
+  const kind = u["kind"];
+  if (kind === "unknown") {
+    const cause = typeof u["cause"] === "string" && Object.hasOwn(EXECUTION_CAUSES, u["cause"]) ? (u["cause"] as ExecutionUnknownCause) : "not-reported";
+    return { kind: "unknown", cause, why: typeof u["why"] === "string" ? u["why"] : "no reason was given" };
+  }
+  if (kind === "claimed-only") {
+    const conversation = parseConversation(u["conversation"]);
+    if (conversation === null) return unread("the producer sent a claimed-only execution with no readable conversation reading");
+    return { kind: "claimed-only", conversation, why: typeof u["why"] === "string" ? u["why"] : "no reason was given" };
+  }
+  if (kind === "verified") {
+    const token = u["token"];
+    const conversation = parseConversation(u["conversation"]);
+    const harness = u["harness"];
+    if (!isRecord(token) || conversation === null || typeof harness !== "string") {
+      return unread("the producer sent a verified execution without a token, a harness and a conversation reading");
+    }
+    const boot = token["boot"];
+    const pid = token["pid"];
+    const startTicks = token["startTicks"];
+    if (
+      typeof boot !== "string" ||
+      boot === "" ||
+      typeof pid !== "number" ||
+      !Number.isSafeInteger(pid) ||
+      pid <= 0 ||
+      typeof startTicks !== "number" ||
+      !Number.isSafeInteger(startTicks) ||
+      startTicks < 0
+    ) {
+      return unread("the producer sent a verified execution whose token is not a boot id, a pid and a start tick");
+    }
+    return {
+      kind: "verified",
+      token: { boot, pid, startTicks },
+      harness: Object.hasOwn(HARNESS_KINDS, harness) ? (harness as HarnessKind) : "unknown",
+      conversation,
+    };
+  }
+  return unread(
+    typeof kind === "string"
+      ? `this reader does not know the execution reading ${JSON.stringify(kind)}`
+      : "the producer sent an execution reading with no kind",
+  );
+}
+
+/** A `Record` over the closed union, so a new `HarnessKind` stops the build here. */
+const HARNESS_KINDS: Record<HarnessKind, true> = {
+  "claude-code": true,
+  "claude-headless": true,
+  "codex-batch": true,
+  "codex-interactive": true,
+  shell: true,
+  unknown: true,
+};
+
+function parseConversation(u: unknown): ConversationReading | null {
+  if (!isRecord(u)) return null;
+  const kind = u["kind"];
+  if (kind === "not-claimed") return { kind: "not-claimed" };
+  if (kind === "verified") {
+    const id = u["id"];
+    return typeof id === "string" && id !== "" ? { kind: "verified", id } : null;
+  }
+  if (kind === "conflicting") {
+    const claimed = u["claimed"];
+    const observed = u["observed"];
+    return typeof claimed === "string" && typeof observed === "string" ? { kind: "conflicting", claimed, observed } : null;
+  }
+  if (kind === "unverifiable") {
+    const claimed = u["claimed"];
+    return typeof claimed === "string"
+      ? { kind: "unverifiable", claimed, why: typeof u["why"] === "string" ? u["why"] : "no reason was given" }
+      : null;
+  }
+  return null;
 }
 
 /**

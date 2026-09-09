@@ -317,13 +317,21 @@ agent may delete any tree* to *an agent must deliberately forge a lock*, which i
 And it can fail the other way — a supervisor that detached the session from this process tree leaves
 a legitimate owner unauthorised, and waiting out the floor like anybody else.
 
-The recommended flow from inside a Claude session, because removing the directory you are standing in
-leaves your shell in one that no longer exists:
+**Run it from inside the tree, before you leave.** That order is not a preference:
 
 ```
-ExitWorktree({action: "keep"})                 # back to the primary; the owning process is still an ancestor
-npm run worktree:remove -- --branch worktree-<name>
+npm run worktree:remove          # inside the worktree. Its lock proves you own it.
+ExitWorktree({action: "keep"})   # and now get the session out
 ```
+
+**`ExitWorktree({action: "keep"})` releases the worktree lock**, and the lock is the entire evidence
+for "its own session is asking". Leave first and you become a third party to your own tree, and the
+24h floor refuses you — measured, on this doc's own worktree, which then had to wait out the floor
+like anybody else. **`EnterWorktree({path})` does not put the lock back**, so there is no undo.
+
+Removing the directory you are standing in leaves your shell in one that no longer exists; the
+command says so and names the primary to `cd` to. That is a smaller problem than losing the proof,
+and `ExitWorktree({action: "keep"})` afterwards puts the session back where it belongs.
 
 **An orphaned branch is a target too.** `--branch <name>` with no worktree on it runs the same proof
 and the same compare-and-swap deletion, so a removal whose branch deletion failed is not a stuck
@@ -490,16 +498,22 @@ knowing because both read as alarming and neither means what it appears to.
   If HEAD is *not* an ancestor, stop — that is the real version of this warning.
 - **"this session is not the owner of the worktree …"** — the standard case when you resumed somebody
   else's abandoned tree, which is how most overnight jobs start. Nothing is wrong and there is nothing
-  to check. `ExitWorktree({action: "keep"})` to get back to the primary, then
-  `npm run worktree:remove -- --branch worktree-<name>` from there.
+  to check. `npm run worktree:remove` from inside it, then `ExitWorktree({action: "keep"})` — that
+  order, for the reason below. (A tree you resumed was locked by the session that made it, so its
+  lock names a pid that is gone: the lock reads as stale, you are a third party, and the 24h floor
+  applies. That is usually fine, because an abandoned tree is normally well over it.)
 
 And what `ExitWorktree` will not tell you: it removes gitignored files without a prompt, and it counts
 untracked ones in a single line ("Discarded 854 commits and 44 uncommitted files"). Those 44 were once
 somebody's *paid* eval results.
 
-**So `ExitWorktree` is for leaving a worktree, not for removing one.** `action: "keep"` is the first
-half of the removal flow above — it is what gets your shell out before the directory disappears —
-and `discard_changes: true` is the one path in this repo that bypasses every guard described here.
+**So `ExitWorktree` is for leaving a worktree, not for removing one** — and `action: "keep"` is the
+**second** half of the flow above, never the first. It **releases the worktree lock**, which is the
+whole evidence `worktree:remove` reads to know that a tree's own session is asking; leave first and
+you are a third party to your own tree, under the 24h floor, with `EnterWorktree({path})` offering no
+way to put the lock back. Measured the hard way, on the worktree this section was written in.
+
+`discard_changes: true` is the one path in this repo that bypasses every guard described here.
 Nothing can intercept it: it is Claude Code's own tool, and a wrapper that half-worked would be a
 guard whose failure looks like success. If you find yourself reaching for it, run
 `npm run worktree:remove` instead and read what it says.

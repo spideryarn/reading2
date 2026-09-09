@@ -42,8 +42,10 @@ import { applySecurityHeaders } from "./headers.js";
 import { broadcast, startHeartbeat, subscribe, subscriberCount } from "./live.js";
 import { readCheckpointFeeds } from "./overseer-status.js";
 import { drainSharedQueues, handleActionRequest } from "./routes-actions.js";
+import { handleBroadcastRequest } from "./routes-broadcast.js";
 import { nextWaitMs, refreshOnce, singleFlightCollect } from "./refresh.js";
 import { newSessionRoutes } from "./routes-new.js";
+import { recentFeedRoute } from "./routes-recent-feed.js";
 import { renameRoute } from "./routes-rename.js";
 import { handleSteerRequest } from "./routes-steer.js";
 import { handleTranscribeRequest } from "./routes-transcribe.js";
@@ -151,6 +153,14 @@ const retention = makeHealthRetention({
 });
 for (const line of retention.lines.log) console.log(line);
 for (const line of retention.lines.error) console.error(line);
+
+/**
+ * The cross-agent feed. **The snapshot is passed as a function, not a value** —
+ * it is replaced wholesale by every collection, and a route holding the one it
+ * was built with would serve the fleet as it was at startup for ever. Same
+ * reason the actions routes take it that way below.
+ */
+const feedRoute = recentFeedRoute({ snapshot: () => snapshot, nowMs: () => Date.now() });
 
 /**
  * The Deploys tab's record and its probe.
@@ -366,6 +376,13 @@ function handler(req: import("node:http").IncomingMessage, res: import("node:htt
   // reads nothing but this process's own append-only file.
   if (retention.route.handle(req, res)) return;
 
+  // The last N messages across EVERY session, for the Recent messages tab.
+  // Read-only, and deliberately not on the collection loop: it is a fan-out of
+  // byte-bounded tail reads (~250 ms and ~10 MB of page cache for the whole
+  // fleet, measured), asked for only when somebody is looking at that tab.
+  // Everything it decides lives in routes-recent-feed.ts.
+  if (feedRoute.handle(req, res)) return;
+
   // The most recent production deploys, for the Deploys tab. Read-only twice
   // over: it reads one committed file and asks three read-only questions of the
   // checkout. It never fetches, never calls Vercel — this box has no token —
@@ -444,6 +461,16 @@ function handler(req: import("node:http").IncomingMessage, res: import("node:htt
   // Enacted actions are off by default (`FLEET_ACT_ENABLED=1`), so what is live
   // here today is the catalogue, the queue and the dry runs.
   if (handleActionRequest(req, res)) return;
+
+  // One free-text line to every live Claude session — the Overseer tab's
+  // broadcast. A SECOND write path, mounted beside the first two rather than
+  // folded into either: the steer route's per-pane rate limiter is calibrated
+  // for a person typing at one session and would refuse a fan-out at its sixth
+  // recipient, and the action vocabulary's broadcast carries a reviewed
+  // sentence rather than arbitrary prose. routes-broadcast.ts § the header says
+  // which of those two this is eventually meant to absorb, and where the
+  // authority boundary between them has to stay.
+  if (handleBroadcastRequest(req, res)) return;
 
   // Dictation. The only route here that takes AUDIO, which is a class of
   // payload nothing else on this server handles — so it is neither logged nor

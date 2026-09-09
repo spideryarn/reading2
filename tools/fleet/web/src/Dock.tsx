@@ -25,7 +25,7 @@
  * `MODE_ICONS` and `MODE_TIPS` here — and then a mount in App.tsx.
  * docs/project/fleet-dashboard-modes.md is the checklist.
  */
-import { Gauge, Hourglass, ListChecks, Network, RefreshCw, Rocket, type LucideIcon } from "lucide-react";
+import { Gauge, Hourglass, ListChecks, MessagesSquare, Network, RefreshCw, Rocket, type LucideIcon } from "lucide-react";
 import type { ReactNode, RefObject } from "react";
 
 import { Tooltip, TooltipGroup, TipCard, type Tip } from "./Tooltip";
@@ -48,6 +48,7 @@ import { cx } from "./ui";
  */
 const MODE_ICONS: Record<Mode, LucideIcon> = {
   sessions: ListChecks,
+  messages: MessagesSquare,
   health: Gauge,
   /* An hourglass rather than a second dial: `health` already owns `Gauge`, and
      at dock size two dials are one shape. A limit is a window that runs out and
@@ -62,6 +63,16 @@ const MODE_TIPS: Record<Mode, Tip> = {
     head: "Sessions",
     what: "Every tmux session on the box, worst first: who needs an answer, then what is moving, then everything quiet.",
     how: "Read off the box about once a minute. Open one to see what it is asking, answer it, or say something to it — the dashboard types at the pane, and checks first that the pane is still the one you were shown.",
+  },
+  messages: {
+    head: "Recent messages",
+    what: "The last N messages across every session at once, newest first, filtered by session, speaker or text.",
+    /* **The artefact, not the gesture** — this copy is read on the button, in
+       the panel and by a screen reader, and "pressing this reads every
+       transcript" is false on the surfaces where nothing is being pressed.
+       What it could not have guessed is that the window is a snapshot rather
+       than a live tail, and that it says what it could not read. */
+    how: "A snapshot of the moment it was fetched, not a live tail — and it names the sessions it could not read, so a short list is never mistaken for a quiet fleet.",
   },
   health: {
     head: "Box health",
@@ -78,10 +89,16 @@ const MODE_TIPS: Record<Mode, Tip> = {
        limited" are different claims, and only the verdict makes the second. */
     how: "The percentages are a cache the box reads, so an expired window shows as unknown rather than as a number. A rejection is exact, but carries no account — so it says a limit was hit, not whose.",
   },
+  /* This said "It is a roadmap, not a feature. Nothing on that panel is live,
+     and it says so." Both halves were true when written and neither was by
+     2026-09-09: the status card computes everything it shows, and the tab now
+     carries two controls that type at real sessions. A tip that describes a
+     panel as inert is worse than no tip on the one tab where pressing something
+     costs money. */
   overseer: {
     head: "Overseer",
-    what: "What this tool is meant to become: a coordinator agent rather than a person with a mouse.",
-    how: "It is a roadmap, not a feature. Nothing on that panel is live, and it says so.",
+    what: "Whether supervision is still working, everything queued across the fleet, and the two ways to say something to more than one agent.",
+    how: "The status card computes what it shows, and tells a dead Overseer from a deaf one. The message and broadcast controls type at real sessions — a broadcast spends a turn of a paid model per recipient, so it asks the server what it would do before it does it.",
   },
   deploys: {
     head: "Deploys",

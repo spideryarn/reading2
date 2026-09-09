@@ -9,8 +9,11 @@
  * hand, so **a deploy can have happened hours before it appears here**, and a
  * page that showed only the list would present a stale record as the current
  * state of production with nothing saying otherwise. So the first thing on the
- * page is when the record was last written, where production's tip actually is,
- * and how far apart those two are.
+ * page is when the record was last written, where this checkout's cached main
+ * actually is, and how far apart those two are. **Cached, and not "production's
+ * tip"** — that phrase was in this comment after the rendered line had already
+ * been qualified, which is how a corrected fact survives in the copy nobody
+ * re-read. Sol's P3.
  *
  * ## The sentence this panel must not get wrong
  *
@@ -70,7 +73,7 @@ const RECORD_TIP: Tip = {
 const BEHIND_TIP: Tip = {
   head: "Commits after the last recorded deploy",
   what: "Non-merge commits between the newest deploy in the record and this checkout\u2019s cached tip of main.",
-  how: "Not a count of work awaiting release: main is advanced by a deploy attempt before its build is known to have succeeded, so some of these shipped and some did not. Telling them apart needs the live build stamp or Vercel.",
+  how: "Not a count of work awaiting release: main is advanced by a deploy attempt before its build is known to have succeeded, so any of them may already have shipped \u2014 all, none, or some. Telling which needs the live build stamp or Vercel.",
 };
 
 /** A sha, linked into the repository. */
@@ -116,6 +119,12 @@ function Freshness({
      when data arrives freezes at the moment it matters. */
   const skewed = view.servedAtMs + (nowMs - arrivedAtMs);
   const generatedAgo = ago(view.lastGeneratedAt, skewed);
+  /* Same reason as the cards': three `Intl` formatters, once a second, for a
+     string that cannot change. */
+  const generatedWhen = useMemo(
+    () => (view.lastGeneratedAt === null ? null : deployWhen(view.lastGeneratedAt)),
+    [view.lastGeneratedAt],
+  );
   const mainRef = view.git.main;
 
   return (
@@ -126,8 +135,9 @@ function Freshness({
           <span>says nothing about when it was written.</span>
         ) : (
           <span>
-            was last written {generatedAgo ?? "at a time this page cannot read"}
-            <span className="tw:text-ink-faint"> ({deployWhen(view.lastGeneratedAt) ?? view.lastGeneratedAt})</span>, and
+            was last written {view.newestLineRead ? "" : "at least "}
+            {generatedAgo ?? "at a time this page cannot read"}
+            <span className="tw:text-ink-faint"> ({generatedWhen ?? view.lastGeneratedAt})</span>, and
             holds {view.total} {view.total === 1 ? "deploy" : "deploys"}.
           </span>
         )}
@@ -175,10 +185,15 @@ function Freshness({
       <div className="tw:mt-1.5 tw:flex tw:flex-wrap tw:items-baseline tw:gap-x-2 tw:gap-y-1">
         {view.git.ancestry.kind === "ancestor" ? (
           <span className="tw:text-ink-faint">The newest recorded deploy is in this checkout&rsquo;s history of main.</span>
-        ) : view.git.ancestry.kind === "cache-behind" ? (
+        ) : view.git.ancestry.kind === "record-ahead" ? (
+          /* **"Usually", because ancestry alone does not prove why.** The same
+             graph is produced by a stale checkout (much the commonest), by a
+             deploy from an unpushed branch, and by main having been rolled back
+             to the cached commit. This said "Nothing is wrong" for an hour and
+             that did not follow from the evidence — GPT Sol's F2. */
           <span className="tw:text-ink-faint">
-            This checkout has not fetched since the newest recorded deploy, so it cannot say how far behind the record
-            is. Nothing is wrong.
+            The newest recorded deploy is ahead of this checkout&rsquo;s cached main, so no distance can be measured.
+            Usually that just means nobody has fetched here since it shipped.
           </span>
         ) : view.git.ancestry.kind === "diverged" ? (
           <span className="tw:font-semibold tw:text-alarm-ink">
@@ -221,7 +236,13 @@ function Freshness({
           from the wrong place, because the record is append-only and its last
           line is its newest deploy. The route refuses to measure at all in that
           case, and this is where the page says why. GPT Sol's P1 finding 4. */}
-      {!view.newestLineRead && view.recordLines > 0 ? (
+      {/* **`=== false`, not `!`.** The client's parser defaults a missing
+          `newestLineRead` to true, but that only covers the HTTP path — a
+          payload reaching this component any other way (an older server, a
+          caller handing it a view) would have `undefined` here, which is falsy,
+          and the page would announce a corrupt record because of a version
+          skew. An alarm must be raised by evidence, not by absence. */}
+      {view.newestLineRead === false && view.recordLines > 0 ? (
         <div className="tw:mt-1.5 tw:font-semibold tw:text-alarm-ink">
           The record&rsquo;s newest line could not be read, so the newest deploy is unknown and nothing above is
           measured against it.
@@ -243,8 +264,14 @@ function Freshness({
 
 /** One deploy. */
 function DeployCard({ version, nowMs }: { version: DeployVersion; nowMs: number }): ReactNode {
-  const groups = groupedEntries(version);
-  const when = deployWhen(version.version);
+  const groups = useMemo(() => groupedEntries(version), [version]);
+  /* **Memoised because this page re-renders once a second and the answer never
+     changes.** `zonedLine` builds three `Intl.DateTimeFormat` instances per
+     call; GPT Sol measured the un-memoised version at 46–64 ms per render for
+     70 deploys and 110–126 ms for 200 — every second, on a phone. The absolute
+     time of a deploy that already happened is the most immutable value on the
+     page. Sol's F4. */
+  const when = useMemo(() => deployWhen(version.version), [version.version]);
 
   return (
     <Card className="tw:px-3 tw:py-2.5">
@@ -449,12 +476,23 @@ export function DeploysPanel({
             </div>
           )}
 
-          {more > 0 ? (
+          {/* **The button disappears at the ceiling rather than sitting there
+              doing nothing.** `showMore` cannot raise the limit past `MAX_LIMIT`,
+              so past that point a visible button is a control that lies. Not
+              reachable today at 74 deploys; at ~11 deploys a day it is next
+              year's problem, and next year's problem drawn as a working button
+              is worse than one drawn as a sentence. Sol's F5. */}
+          {more > 0 && state.limit < MAX_LIMIT ? (
             <div className="tw:flex tw:justify-center tw:py-1">
               <Button onClick={showMore}>
                 Show more ({more} older {more === 1 ? "deploy" : "deploys"})
               </Button>
             </div>
+          ) : more > 0 ? (
+            <p className="tw:py-1 tw:text-center tw:text-[12px] tw:text-ink-faint">
+              Showing the newest {MAX_LIMIT}. {more} older {more === 1 ? "deploy is" : "deploys are"} in the record and
+              not on this page.
+            </p>
           ) : null}
         </>
       )}

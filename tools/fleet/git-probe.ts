@@ -58,14 +58,14 @@ import { stat } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 
-import type { AncestryReading, CountReading, GitSnapshot, MainRef } from "./wire.js";
+import type { AncestryReading, CountReading, GitSnapshot, MainRef, Watermark } from "./wire.js";
 
 /**
  * The readings are declared in `wire.ts` and re-exported here, so a caller that
  * wants "what the probe answers" imports it from the probe. One declaration,
  * two doors — the twin types wire.ts's header is about were two declarations.
  */
-export type { AncestryReading, CountReading, GitSnapshot, MainRef };
+export type { AncestryReading, CountReading, GitSnapshot, MainRef, Watermark };
 
 const run = promisify(execFile);
 
@@ -86,6 +86,15 @@ export const GIT_TIMEOUT_MS = 2_500;
  * 8 s against the client's 15 s leaves room for the file read, the JSON and the
  * gzip, and means a slow git costs the reader some greyed-out comparisons rather
  * than the list.
+ *
+ * **It is a budget, not a wall-clock ceiling, and the difference matters.** Each
+ * call is given `min(timeoutMs, remaining)` and the next one is skipped once
+ * nothing is left — so the SEQUENCE cannot keep starting fresh timeouts, which
+ * is the ~20 s defect this fixes. What it does not do is enforce a deadline
+ * against a runner that ignores its own timeout, a `stat` that hangs, or event
+ * loop delay under load. Sol's F6: the arithmetic is sound for normal git
+ * (~2.5 s + ~2.5 s + ~2.5 s), and the guarantee is "does not compound", not
+ * "returns within 8 s".
  */
 export const SNAPSHOT_BUDGET_MS = 8_000;
 
@@ -116,7 +125,7 @@ export type GitProbe = {
    * reading of anything. GPT Sol's P2 finding 6. The ref is resolved once and
    * the literal sha is used for the rest.
    */
-  snapshot(recordedSha: string | null): Promise<GitSnapshot>;
+  snapshot(watermark: Watermark): Promise<GitSnapshot>;
 };
 
 export type Ran = { ok: true; stdout: string } | { ok: false; why: string; status: number | null };
@@ -182,16 +191,24 @@ async function git(repoRoot: string, args: string[], timeoutMs: number): Promise
  * it. Anything stronger needs `git ls-remote`, which is network work this route
  * has decided not to do.
  */
-async function lastFetchAtMs(call: (args: string[]) => Promise<Ran>): Promise<number | null> {
+async function lastFetchAtMs(repoRoot: string, call: (args: string[]) => Promise<Ran>): Promise<number | null> {
   /* Both dirs in ONE call rather than two sequential ones — it halves this
      step's share of the snapshot budget, and `rev-parse` takes several flags. */
   const read = await call(["rev-parse", "--git-dir", "--git-common-dir"]);
   if (!read.ok) return null;
+  /* **`resolve(repoRoot, line)`, not `resolve(line)`.** Git prints these paths
+     relative to the repository, not to `process.cwd()`, and collapsing the two
+     was a regression I introduced folding the two `rev-parse` calls into one.
+     It survives in production only because systemd's working directory happens
+     to equal `repoRoot`; anywhere else — a throwaway repo in a test, a server
+     started from elsewhere — it silently resolves to nothing and
+     `lastFetchAtMs` comes back null, which reads as "never fetched" on a
+     healthy checkout. GPT Sol's F7, 2026-09-09. */
   const dirs = read.stdout
     .split("\n")
     .map((line) => line.trim())
     .filter((line) => line !== "")
-    .map((line) => path.resolve(line));
+    .map((line) => path.resolve(repoRoot, line));
   let newest: number | null = null;
   for (const dir of dirs) {
     try {
@@ -238,7 +255,7 @@ export function gitProbe(options: {
   let cached: { key: string; atMs: number; snapshot: GitSnapshot } | null = null;
   let inFlight: { key: string; promise: Promise<GitSnapshot> } | null = null;
 
-  async function take(recordedSha: string | null): Promise<GitSnapshot> {
+  async function take(watermark: Watermark): Promise<GitSnapshot> {
     /* The budget is opened here and consumed by every call below, so the four
        sequential waits cannot add up past it. `left()` returning 0 means the
        remaining calls fail fast with a stated reason rather than each starting
@@ -260,10 +277,21 @@ export function gitProbe(options: {
       const why = `${ref} could not be read`;
       return { main, ancestry: { kind: "unknown", why }, commitsSince: { kind: "unknown", why } };
     }
-    if (recordedSha === null) {
-      const why = "the record names no deploy to measure from";
+    if (watermark.kind !== "sha") {
+      /* **Two different absences, and they were one sentence until Sol's F1.**
+         "The record names no deploy to measure from" is true of an EMPTY record
+         and false of one whose newest line is corrupt — that record names
+         plenty of deploys, and the reason we cannot measure is that the newest
+         one is unreadable. Saying the first about the second is a confident
+         explanation of the wrong problem. The reason travels with the
+         watermark now. */
+      const why =
+        watermark.kind === "none"
+          ? "the record names no deploy to measure from"
+          : "the record's newest line could not be read, so its newest deploy is unknown";
       return { main, ancestry: { kind: "unknown", why }, commitsSince: { kind: "unknown", why } };
     }
+    const recordedSha = watermark.sha;
     if (!SHA.test(recordedSha)) {
       const why = "the record's newest sha is not 40 hex characters";
       return { main, ancestry: { kind: "unknown", why }, commitsSince: { kind: "unknown", why } };
@@ -297,8 +325,8 @@ export function gitProbe(options: {
             : {
                 kind: "not-comparable",
                 why:
-                  ancestry.kind === "cache-behind"
-                    ? "this checkout has not fetched since that deploy, so it cannot measure the distance"
+                  ancestry.kind === "record-ahead"
+                    ? "the recorded deploy is ahead of this checkout's cached main, so there is no distance to measure"
                     : "the recorded deploy and the cached tip have diverged, so there is no distance between them",
               },
     };
@@ -314,7 +342,7 @@ export function gitProbe(options: {
     if (sha === undefined || !SHA.test(sha) || committedAt === undefined) {
       return { kind: "unavailable", why: `${ref}: git answered something unreadable` };
     }
-    return { kind: "ref", sha, committedAt, lastFetchAtMs: await lastFetchAtMs(call) };
+    return { kind: "ref", sha, committedAt, lastFetchAtMs: await lastFetchAtMs(repoRoot, call) };
   }
 
   /**
@@ -347,7 +375,7 @@ export function gitProbe(options: {
        If IT could not be asked we must not guess: an unreadable second answer
        makes the pair unknown rather than divergent. */
     if (typeof backwards !== "boolean") return { kind: "unknown", why: backwards.why };
-    return backwards ? { kind: "cache-behind" } : { kind: "diverged" };
+    return backwards ? { kind: "record-ahead" } : { kind: "diverged" };
   }
 
   async function readCount(call: (args: string[]) => Promise<Ran>, sha: string, tip: string): Promise<CountReading> {
@@ -366,13 +394,13 @@ export function gitProbe(options: {
   }
 
   return {
-    async snapshot(recordedSha): Promise<GitSnapshot> {
-      const key = recordedSha ?? "none";
+    async snapshot(watermark): Promise<GitSnapshot> {
+      const key = watermark.kind === "sha" ? watermark.sha : watermark.kind;
       const at = now();
       if (cached !== null && cached.key === key && at - cached.atMs < ttlMs) return cached.snapshot;
       if (inFlight !== null && inFlight.key === key) return inFlight.promise;
 
-      const promise = take(recordedSha)
+      const promise = take(watermark)
         .then((snapshot) => {
           cached = { key, atMs: now(), snapshot };
           return snapshot;

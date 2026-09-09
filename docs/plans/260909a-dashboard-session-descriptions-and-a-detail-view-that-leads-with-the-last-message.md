@@ -839,3 +839,43 @@ option 2 looks most attractive and is least likely to be revisited.
   would still pass. Process identity is not current role ownership.
 - Mark the launch `started` **before** notifying, so the notification can never delay the launch result.
 - The panel line, after `record.note` (`NewSessionPanel.tsx:165-167`).
+
+## Where this stopped, 2026-09-09 ~02:20
+
+**On `dev`:** Stage 0, Stage E and both its review rounds, the `/api/sessions/new` migration behind
+`wire.ts`, the notify module, the notification wired into the launch record, and the adoption of the
+shared `Turn` renderer.
+
+**Stage D is one binding short of done.** `realIo()`'s `notifyOverseer` answers *cannot-tell, this
+server has no fleet snapshot wired to the launch route* — true, printed, and not a silent nothing, but
+not the feature. `server.ts` must bind a real notifier, and **that binding is where the last two P1s
+live**:
+
+- **F7 — off the event loop.** `sendMessage` is synchronous `execFileSync` across as many as six tmux
+  and process calls at ten seconds each. `notifyOverseer` is already `async`, so the module does not
+  need to change; the binding runs it in a child process with one total deadline. **If the deadline
+  expires after an effect may have begun, record `unknown`, never `refused`** — the module's `unknown`
+  arm exists for exactly that and must not be reused for a clean refusal.
+- **F8 — re-read the claim immediately before delivery.** A holder can release the role between the
+  snapshot and the send while staying in the same pane, and every one of `sendMessage`'s guards would
+  still pass. Process identity is not current role ownership.
+
+**And Stages A–C are now unblocked**: `260908f-roadmap-exec-identity` landed at `8ed9ae59`.
+
+Three things changed from what is written above and must be re-read rather than assumed:
+
+- `ExecutionToken` and `ConversationReading` are **unchanged**, so the cache key design stands — that
+  carried risk did not fire.
+- **`identityWriteGate` and `continuityOf` moved to `tools/fleet/execution-token.ts`, a leaf with only
+  type imports, which the browser CAN import.** That reverses the advice recorded above: import them
+  rather than hand-narrowing inline. `isAddressableHarness` is exported there too.
+- **The row parsers now downgrade an incoherent reading** — a `verified` conversation whose id is not
+  the row's claim becomes `unverifiable` at the parse. So a `verified` conversation on a row now
+  genuinely agrees with `claudeSessionId`, which simplifies the check the table above describes.
+- Two new `unknown` causes (`process-changed-under-read`, `uptime-unreadable`) both land in the
+  existing `cannot-tell` arm; no new arm to handle.
+
+Measured on the live box after that landed: 26 sessions, 26 verified, 0 unknown, 0 claimed-only, the
+whole pass costing 236 ms. **But every row reads `unknown`/`not-reported` until the Overseer restarts
+the dashboard and the daemon**, so `cannot-tell` remains the normal case for a while and its copy
+should read as informative rather than broken.
