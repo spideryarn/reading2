@@ -1005,24 +1005,72 @@ silently release capacity. Starting the admission owner costs no model calls and
 
 ### Stage: Usage visibility — one account, honest freshness
 
-- [ ] Revalidate the direction doc's locally observed usage sources against installed CLI output.
+**Status 2026-09-09 (session `260908f-roadmap-usage`): built, under review — not yet on `dev`.**
+(This line says "landed" only once a sha exists; GPT Sol caught it claiming so while every file was
+still uncommitted in a worktree.) Boundary wiring, as the brief
+predicted — `collectUsage` already ran on its own 300 s timer and stored a report every tick, and
+nothing rendered it. What arrived: `projectUsage`/`groupUsageIncidents` in a new
+`tools/fleet/usage-feed.ts`, a third projection out of the one `loadCheckpoint` read in
+`readCheckpointFeeds`, `UsageFeed`/`UsageSummary`/`UsageIncident` at the end of `wire.ts`, a browser
+parser and a card, and the three-zone clock Greg asked for as a leaf formatter, `tools/fleet/zones.ts`.
+
+Four things the plan did not know, each found by running it rather than by reading:
+
+- **Anthropic's `resets_at` is not `toISOString()` form.** `~/.claude.json` writes
+  `2026-09-09T02:50:00.313670+00:00`; a strict round-trip check on that field rejected every cached
+  window, which failed the cache, which degraded the whole report to *no usage pass has run*. A page
+  confidently reporting an absence off a file that was fine. `instant()` in `usage-feed.ts` parses
+  permissively and emits canonically; the fixture pins the awkward form.
+- **"Not reset" is not "in force", and the card may not upgrade one to the other.** An earlier draft
+  drew **IN FORCE seven_day** over a live verdict of **UNKNOWN**. `computeUsageVerdict` classifies
+  every unexpired rejection three ways — `ours`, `contradicted`, `unattributable` — and only the
+  first may set `limited`, because a `/login` swap leaves the previous account's 429s in the
+  transcripts and a transcript rejection carries no account id. The verdict is the only thing on the
+  card that claims the account is blocked; the incident row states whether the window has reset.
+- **Nine incidents, eight of them history.** Drawn as nine equal rows the one that matters is the
+  middle of a wall of dates, so both renderers show the unreset ones in full and count the rest.
+- **`~/.overseer/` has six files, not five.** `attention.json` added to the direction doc's seam
+  table, as the brief assigned.
+
+**Why the wire carries a narrowed `UsageSummary` rather than the stored report**, measured on the
+live checkpoint by session `usage-limits-tab` while planning the history tab on top of this: the
+`usage` blob is 61 KB of a 99 KB checkpoint, and `rateLimits` is **96%** of it — 140 hits that group
+to **9 incident clusters**, 4.2 KB against 58.4 KB, a 14× reduction. Its third argument is the one
+neither session had at first and is the strongest: a raw hit carries `transcriptPath` and `message`,
+so anything storing raw reports copies project and worktree names, and API error prose, into a
+long-lived file that nothing prunes. Grouping before the data crosses is what keeps the field a few
+hundred bytes whether the box hit one limit or thirty.
+
+Deliberately not built: any connection to *new-job* deferral. The measurement that would drive it —
+whether a rejection is attributable to the logged-in account — is `usage.ts`'s and is `unknown` on
+this box most of the time, so a gate hung off it would defer work for a limit that is not ours.
+Named here so the next stage decides it rather than inherits it.
+
+- [x] Revalidate the direction doc's locally observed usage sources against installed CLI output.
   Read only fields needed for account label/window utilization/reset and transcript rate-limit events;
   never export credentials, tokens or entire config. Use bounded incremental transcript offsets.
-- [ ] Model actual observed rate-limit events separately from cached utilization hints, with source,
+- [x] Model actual observed rate-limit events separately from cached utilization hints, with source,
   observed time and reset time. Expired cache entries become stale/unknown; no fabricated percentage.
   Distinguish 5-hour and 7-day windows and account identity; a post-reset old 429 is history.
-- [ ] Show a small usage card with uncertainty and a source timestamp. Group sessions affected by the
-  same account/window incident. Connect only reliable blocking evidence to *new-job* deferral;
-  do not rotate credentials or pause running work from an uncertain hint.
-- [ ] Test malformed/missing cache, account change, 429 event, expired reset, clock correction and
+- [x] Show a small usage card with uncertainty and a source timestamp. Group sessions affected by the
+  same account/window incident. ~~Connect only reliable blocking evidence to *new-job* deferral~~ —
+  **not built, deliberately**; see the status note above. No credential is rotated and no running
+  work is paused by anything here: the card is read-only.
+- [x] Test malformed/missing cache, account change, 429 event, expired reset, clock correction and
   overlapping limits. Prefer sanitized fixtures; do not perform paid requests to measure headroom.
-- [ ] Recheck official provider documentation if proposing a new usage API. The already researched
-  Admin API measures a different billing system; do not ask Greg for an admin key for Max headroom.
-  Unsupported OAuth endpoints are not the v1 dependency.
+  (`tests/fleet-usage-feed.test.ts`, `tests/fleet-usage-card.test.tsx`, `tests/fleet-zones.test.ts`;
+  no paid request was made — the only live commands run were `overseer status` and one bounded
+  `overseer usage --since-hours 24 --max-transcripts 40`, both local reads.)
+- [x] Recheck official provider documentation if proposing a new usage API. **None is proposed**: the
+  reading rules and their evidence are `tools/overseer/usage.ts`'s and were reused unchanged. No
+  admin key is asked for.
 
 **Acceptance:** the page says what it knows about the current account and what it cannot tell;
 thirty sessions affected by one quota window create one incident. Multiple-account rotation remains
 medium-term and outside this batch. No unattended credential changes.
+**Met** — the acceptance line is `tests/fleet-usage-card.test.tsx` § "the join, all five hops": ninety
+rejections across thirty conversations in a checkpoint the real store wrote, through `statePayload`
+and `parseFleetState`, arriving as one row reading *30 conversations, 90 rejections*.
 
 ### Stage: Session continuity — protect drafts and keep context current
 

@@ -315,6 +315,7 @@ describe("the shared wire state cannot acquire an optional field", () => {
       null,
       { kind: "not-asked" },
       { kind: "not-asked" },
+      { kind: "not-asked" },
     );
 
     /* Runtime, and the paired positive: the observable shape of the whole design

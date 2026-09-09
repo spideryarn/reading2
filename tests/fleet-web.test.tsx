@@ -238,6 +238,10 @@ function state(over: Partial<FleetState> = {}): FleetState {
        assertion in this file reads. Anything else would have each fixture
        quietly asserting that this server looked at `~/.overseer/`. */
     overseer: { kind: "not-asked" },
+    /* And the account's usage, on the same argument: `not-asked` draws one
+       quiet line on the Overseer tab, and any other default would have every
+       fixture in this file silently claiming a usage pass had run. */
+    usage: { kind: "not-asked" },
     /* Same argument again. `readClockSkew` produces this for a payload with no
        `servedAt`, so a fixture that does not care about clocks gets the state
        the page would really build off an older server — and nothing is shifted.
@@ -1508,7 +1512,11 @@ describe("the box's clock, read with the phone's", () => {
         refreshMs: 60_000,
         answeringEnabled: true,
         attemptedAt: null,
-        readCheckpoint: () => ({ attention: { kind: "not-asked" }, overseer: { kind: "not-asked" } }),
+        readCheckpoint: () => ({
+          attention: { kind: "not-asked" },
+          overseer: { kind: "not-asked" },
+          usage: { kind: "not-asked" },
+        }),
       }),
     );
     const servedAt = (payload as { servedAt?: unknown }).servedAt;
