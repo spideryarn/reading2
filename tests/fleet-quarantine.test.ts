@@ -362,6 +362,9 @@ const TMUX = 970_001;
 
 function fleetRow(over: Partial<FleetRow> = {}): FleetRow {
   return {
+    /* `not-yet-described` rather than a blank: a row nobody has described
+       is a different fact from a session with nothing to say. */
+    description: { kind: "not-yet-described", why: "no describe pass in this fixture" },
     id: SESSION,
     name: "wf-quarantine-fixture",
     title: null,

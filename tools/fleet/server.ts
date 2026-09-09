@@ -45,6 +45,7 @@ import { drainSharedQueues, enqueueSharedMessage, handleActionRequest } from "./
 import { handleBroadcastRequest } from "./routes-broadcast.js";
 import { nextWaitMs, refreshOnce, singleFlightCollect } from "./refresh.js";
 import { configureNewSessionNotifier, newSessionRoutes } from "./routes-new.js";
+import { ideaQueueRoute } from "./routes-idea-queue.js";
 import { recentFeedRoute } from "./routes-recent-feed.js";
 import { renameRoute } from "./routes-rename.js";
 import { handleSteerRequest } from "./routes-steer.js";
@@ -163,6 +164,17 @@ for (const line of retention.lines.error) console.error(line);
  * reason the actions routes take it that way below.
  */
 const feedRoute = recentFeedRoute({ snapshot: () => snapshot, nowMs: () => Date.now() });
+
+/**
+ * The queue of ideas. Built once, at module scope, like the feed route above —
+ * it holds no state, but a route rebuilt per request is a habit that becomes a
+ * second queue the first time one of them does.
+ *
+ * Reads `~/.overseer/queue.jsonl` fresh on every request rather than caching:
+ * it is tens of kilobytes at most, it is the answer to *what is authorised*,
+ * and a stale answer to that question is worse than a slow one.
+ */
+const queueRoute = ideaQueueRoute();
 
 /**
  * The Deploys tab's record and its probe.
@@ -564,6 +576,14 @@ function handler(req: import("node:http").IncomingMessage, res: import("node:htt
   // part that matters: clearing `GJD_PROVISIONAL`, without which `gjd-remote
   // ls` renames the session straight back to Claude's own title.
   if (renameRoute().handle(req, res)) return;
+
+  // The queue of ideas, for the Queued ideas tab. READ-ONLY, and that is a
+  // security decision rather than an unfinished one: the queue is gate 3's
+  // authorisation record and this server has no authentication, so a write
+  // route here would let anything able to reach the port append an item
+  // attributed to Greg. routes-idea-queue.ts § read-only says what a write path
+  // would need first. Writes go through `scripts/overseer-queue.ts`.
+  if (queueRoute.handle(req, res)) return;
 
   // Starting a session, which is the other write. `startsWith` mounts it, but
   // the route 404s any path that is not exactly this one, so the prefix cannot

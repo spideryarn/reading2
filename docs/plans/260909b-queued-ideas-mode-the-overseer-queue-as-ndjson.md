@@ -1,12 +1,10 @@
-# "Queued ideas" mode — the Overseer's queue as NDJSON, editable from the dashboard
+# "Queued ideas" — the Overseer's queue as NDJSON, editable from the dashboard
 
-**Status, 2026-09-09 01:15 UTC: PAUSED AT THE SKELETON, nothing built.** The Overseer asked every
-session it had dispatched to stop before spending anything: the five-hour usage window went 8% → 40%
-in the 84 minutes to 23:50 UTC with half the current session count, it resets at 02:50 UTC, and Greg
-had gone to bed having asked for agents to be paused rather than risk the fleet freezing the window
-shut. So this file is the design as far as reading the tree got it, written down so the next session
-— or this one after "resume" — does not have to re-derive it. **No code, no tests, no Sol review, no
-subagent has run.**
+**Status, 2026-09-09: Stages 1–3 landed on `dev` (`774f2d4f`). Stages 4–5 not started, and 4 is
+blocked on Greg.** What exists: the append-only file, the fold, its own lock, the CLI, the migration
+seed (built, **not applied**), `GET /api/queue`, and the read-only **Queued ideas** tab — 120 tests
+of its own, 553 across the affected fleet suites, typecheck and lint clean, and verified in a real
+browser at 430px and 1280px against a seeded queue on a throwaway port.
 
 Up: [dev-and-deployment-overview.md](../project/dev-and-deployment-overview.md) via
 [overseer-queue.md](../project/overseer-queue.md), which is the doc this work turns into a file.
@@ -23,147 +21,263 @@ Up: [dev-and-deployment-overview.md](../project/dev-and-deployment-overview.md) 
 >
 > — Greg, 2026-09-08
 
-## What this queue is, and why that constrains the design
+## What this queue is, and why that constrains everything
 
 The queue is not a todo list; it is **the Overseer's authorisation**.
 [overseer.md § gate 3](../project/overseer.md) ends *"nothing dispatched that Greg did not queue"*,
-and its test is literally *"is it in the queue?"*. Three consequences the design has to respect:
+and its test is *"is it in the queue?"*.
 
-- **Editing, reordering and adding are Greg's acts.** Every write records who did it and when, and
-  the dashboard writes as speaker `greg` — the same `Speaker` discipline
-  [`wire.ts`](../../tools/fleet/wire.ts) already enforces, and for the same reason (gate 1: an
-  Overseer proposal must never acquire Greg's authority by looking like his instruction).
-- **The Overseer reads the queue and does not reorder it.** A supervisor that can promote its own
-  proposals has no gate 3 left.
-- **An item is two things at once:** Greg's idea *in his words*, and enough metadata for the
-  Overseer to write the brief it would otherwise compose by hand. Tonight's dispatches show what a
-  brief needs — the quoted words, the file set, the sessions already in flight, and the reusable doc
-  to run — so those are the metadata fields, not a guess at what might be useful.
+That test was adequate while the queue was a Markdown file only a person edited. **It stops being
+adequate the moment the Overseer both reads and writes the file**: a coordinator that can append a
+line can authorise its own work and then pass its own gate. So the central thing Stage 1 built is not
+storage, it is a **replacement for that test**:
 
-## The decision that has to be made before any code: one line per item, or append-only events
+```
+isDispatchable = the queue read cleanly
+              && somebody authorised it   (and only Greg can)
+              && they authorised THIS revision, not an earlier one since edited
+              && it is still queued
+              && it is not waiting on a person
+```
 
-Greg said NDJSON, which settles the format and not the shape. Two shapes, and this plan recommends
-(b):
+Five clauses, each ruling out a real way of dispatching something nobody agreed to, and all five
+enforced in **the fold** rather than in the writers — because a rule enforced at one entrance has an
+unguarded second entrance, and there are three (the CLI, a route, a hand-edited file). All three
+fold.
 
-**(a) One line per item, file rewritten on reorder or edit.** Simple to read and to reason about.
-Loses history, so *who moved this to the front and when* is unanswerable. Two writers lose each
-other's edit with nothing to say so.
+### Three axes, not one status
 
-**(b) Append-only events — `added`, `edited`, `moved`, `dispatched`, `done`, `dropped` — folded to
-the current list.** Append is the only write, so the file is never rewritten and a torn line is the
-only failure mode (and [`jsonl.ts`](../../tools/overseer/jsonl.ts) already repairs exactly that, on
-open, for the two logs that came before this one). History and provenance are free rather than a
-feature. A reorder is a `moved` event naming the neighbour ids. The fold is a pure function with a
-test, which is the part worth having a test for.
+The first draft had a single `status` running `queued | blocked-on-greg | dispatched | done |
+dropped`. Sol's P1-7 pointed out those are three questions wearing one field, and it was right — a
+*running* item can also be waiting on Greg. So:
 
-**Recommendation: (b).** The repo has two precedents and both are append-only —
-`~/.fleet-health/health.jsonl` (writer under `writer.lock`,
-[`health-wiring.ts`](../../tools/fleet/health-wiring.ts), bounded reader in
-[`routes-health-history.ts`](../../tools/fleet/routes-health-history.ts)) and
-`src/web/changelog-versions.ndjson`, whose rule
-([changelog.md](../project/changelog.md)) is *"a run adds lines to the end and never rewrites what is
-above"*. And the two primitives this needs — append-only discipline and single-writer exclusion —
-exist already as [`jsonl.ts`](../../tools/overseer/jsonl.ts) and
-[`lock.ts`](../../tools/overseer/lock.ts), both extracted precisely because the rule had been written
-twice. Shape (a) would reuse neither. **To confirm with Sol before Stage 1 is built.**
+| axis | values | the question it answers |
+|---|---|---|
+| `authority` | `proposed` · `authorized{by, at, revision}` | who says this may happen |
+| `lifecycle` | `queued` · `dispatched` · `done` · `dropped` | where it has got to |
+| `needsGreg` + `waitingOn` | boolean + free text | what it is waiting for |
 
-### Where the file lives — *needs Greg*
+### An authorisation names the revision it authorises
 
-A product call that outlives the branch, so it goes to the Overseer as *needs Greg* rather than being
-defaulted quietly:
+Sol's P0-2, and the hole the review earned its keep on. Greg approves *"investigate X"*; an agent
+edits the text or enlarges the file set; the changed job is still marked approved. The runbook
+already forbids acting on an instruction that changed after it was authorised — nothing in the first
+draft made that checkable.
 
-- **In the repo** (versioned, visible to every agent and to Greg's Mac) — but a live web page editing
-  a checked-in file leaves the primary checkout dirty and collides with other agents' commits, and
-  the queue would then change under `git merge`.
-- **On the box, `~/.overseer/queue.jsonl`** (single writer, survives a reboot, no merge conflicts,
-  same directory and the same lock discipline as everything else the Overseer owns) — but not
-  versioned, and invisible from the Mac.
+So every content edit bumps `revision`, and an approval carries the revision it was granted for.
+**An edit by Greg re-authorises in the same act** (he is the authority, and making him press twice
+would train him to press twice); an edit by anyone else lapses the approval, and the CLI says
+`this LAPSES Greg's authorisation` as it happens.
 
-**Default while waiting: the box file**, beside the store the Overseer already treats as the record,
-with a CLI that can print or export it so nothing is trapped there.
+### What this does not do, said plainly
 
-## Item shape (proposed, for Sol)
+Any process running as this user can append `by: "greg"` to the file. That is equally true of the
+Markdown file this replaces, so nothing is lost — but it means **gate 3 is a governance constraint,
+not an OS capability boundary**, and `by` is a self-declaration rather than a proven identity. Sol's
+P0-1. A claimed protection is worse than an admitted gap, so it is admitted in
+[`idea-queue.ts`](../../tools/overseer/idea-queue.ts)'s header, in the CLI's header, and here.
 
-`id` · Greg's `text` verbatim · optional `title` · position · metadata (`source` plan, `waitingOn`,
-size guess, files/areas touched, the reusable doc to run — e.g. `engineering-manager.md`) ·
-`status` (`queued` | `blocked-on-greg` | `dispatched` with session name | `done` | `dropped`) ·
-`addedBy`/`addedAt` · edit history (free, given shape (b)).
+The consequence for staging is the important part: **nothing that landed accepts a write over HTTP**,
+so the exposure Sol described is not created yet. The route is `GET`/`HEAD` only and refuses anything
+else with a sentence saying why, rather than 404ing it — a reader who wants a write path is sent to
+the question rather than to a gap. That question is Stage 4's, and it is Greg's.
 
-## The wait estimate: honest, or absent
+## The file shape: append-only events
 
-Position in queue × observed median session length ÷ the concurrency the Overseer is actually running
-at. Session lengths come from the store — `RegisterEntry.startedAt` in
-[`store.ts`](../../tools/overseer/store.ts), and `session-seen`/`tmux-session-gone` in
-`events.jsonl`. Shown **as a range with its assumptions printed beside it**, never a single confident
-number, and **"cannot estimate yet" when there is no history** — a survey cannot see an
-absent state, and a fabricated estimate is worse than a blank.
+Greg said NDJSON, which settles the format and not the shape. The rejected shape is one line per
+item, rewritten on every edit: it loses *who moved this to the front, and when* — of a record whose
+purpose is to say who authorised what — and two writers silently lose each other's edit.
 
-Times in UTC/London/Athens. `tools/fleet/zones.ts` does not exist yet (checked: not on `dev` at
-`15e2d48b`) — it is landing from `260908f-roadmap-usage`, so this must not hard-depend on it.
+Sol agreed with append-only and corrected the reasoning: **the justification is auditability and a
+serial history, not that "history is free"**. An event log's costs are the envelope, the strict
+per-event parse, the transition validation and the idempotency key, and naming them is what got them
+built:
+
+- **the envelope** — `schema`, `eventId`, `commandId`, `at`, `by`. `eventId` makes a line citable and
+  lets the version name the tail; `commandId` is the idempotency key, because *"the append succeeded
+  and the response was lost"* otherwise duplicates an add on retry, and a duplicated add in an
+  authorisation record is the worst kind of duplicate.
+- **the version is opaque** — `{events, lastEventId}`, spelled `17.a4f9…`. A bare count cannot tell
+  *behind* from *different*: two histories of the same length are the same number.
+- **problems, not skips** — anything the fold cannot accept becomes a named `QueueProblem`, and **any
+  problem makes the entire queue undispatchable.** A queue two items short must not authorise the
+  items it did manage to read.
+- **the reader distinguishes three silences** — `never-written`, an empty-but-real file, and
+  `unreadable`. The Overseer's own store may cold-start because losing it costs only history; this
+  file is original human input and is not disposable, so a lost one must never render as a healthy
+  empty queue.
+
+### A reorder is one placement, not a reordered array
+
+The plan asked Sol which of these was sounder and its answer was clear. The rejected shape had the
+client send the complete ordering; it cannot be *validated* — an array is a claim about the whole
+queue, so a stale one is indistinguishable from an intentional reshuffle and the fold has to guess.
+
+A placement (`front` · `back` · `before(id)` · `after(id)`) is an intent, and an intent can be
+checked. Replay is in log order, so an anchor dropped by a *later* event is fine: the move happened
+first. An anchor missing when its own move replays is recorded as a problem — **never rounded to an
+end**, which is how a corrupt record becomes a plausible one.
+
+LexoRank was considered and rejected for v1 on Sol's advice: key generation, collisions, precision
+exhaustion and renormalisation, to solve concurrent order editing that the lock and the version check
+already serialise.
+
+## Concurrency
+
+One whole-log version, and **every stale mutation is refused rather than merged** — including two
+nominally disjoint reorders. Conservative on purpose: one human plus a low-volume coordinator, and
+"apply this move only to the exact queue state Greg saw" is a meaningful promise where silent merging
+is not.
+
+The lock is the queue's own (`queue.lock`), and **it cannot borrow the store's** — `overseer.lock` is
+held by the daemon for its whole lifetime, so anything waiting on it waits forever (Sol's P1-1). It
+spans exactly repair → fold → version check → append → `fsync`, and nothing else: not the request
+body, not a launch, not the response.
+
+## The wait estimate: observations, not a forecast — ***needs Greg***
+
+**Greg asked for "an estimate of how long the wait time is" and Stage 1 does not give him one.**
+That is flagged rather than quietly decided, and he can overrule it.
+
+A first version computed *position × median session length ÷ concurrency*, with a ±60% band and its
+assumptions printed. Sol rejected it twice over and every term was wrong:
+
+- **median session length is a fact about the mix of work**, not about any item — sessions here run
+  from a ten-minute doc fix to a six-hour build;
+- **a session is not a queue item**; most sessions on this box were never queued at all, so measuring
+  the fleet to predict the queue measures the wrong population;
+- **`startedAt → tmux-session-gone` is session lifetime, not work duration** — and it is *censored*,
+  because the long sessions still running are missing from the sample of finished ones, so the
+  average of what has completed is biased short by construction;
+- **concurrency is a policy number**, not an observation;
+- and the queue is not FIFO: *"a lull"* work starts only when nothing more important is waiting.
+
+> A wide range does not repair a wrong estimator.
+>
+> — GPT Sol, 2026-09-09
+
+So [`idea-queue-wait.ts`](../../tools/overseer/idea-queue-wait.ts) reports **depth split by why each
+item is not moving** (ready · needs Greg · unauthorised · running) and **throughput over 7 and 30
+days measured on the queue's own events**, with the sample count. *"Three dispatched in the last 7
+days"* is an observation; *"about four days"* is an inference this data cannot support. The
+`duration` field has exactly one arm — `not-enough` — so a page cannot render a confident figure by
+forgetting a comparison, and it says how far off a real one is.
+
+A duration becomes possible once the queue has ~8 of its own `dispatched → done` observations grouped
+by size. `throughput` is what will measure it.
+
+## What the review changed
+
+GPT Sol reviewed this plan before anything was built
+(`--model gpt-5.6-sol --effort high`, 2026-09-09, exit 0). Its verdict: *"keep the append-only
+design, but do not build or cut over the queue as currently specified."* Acted on: P0-1 (no actor
+from a request body; read-only Stage 1), P0-2 (revision-bound authorisation), P1-1 (own lock, opaque
+version, named refusal codes), P1-3 (problems and three read arms), P1-4 (migration is a cutover,
+and the proposals are not migrated), P1-5 (no forecast), P1-6 (envelope), P1-7 (three axes), P2-1
+(restaged), P2-3 (placement intent, and up/down buttons before drag).
+
+Two of its findings were **not** taken as written, and both are recorded rather than dropped:
+
+- **`by: "greg"` on the seeded sixteen.** Sol noted the migration records the events while Greg's
+  prior decision supplies their authority, so naming him the recorder is loose. It stands: `by` is
+  carrying the authorisation, and his is real and documented — he approved all sixteen in principle
+  and deferred them, in his own words in that doc. A third actor for the migration would record the
+  clerk accurately and then need a way to say the work was nevertheless approved. **A judgement
+  call, and Greg may disagree.**
+- **P1-2, the dispatch state machine** (`reserved → started → completed | failed | unknown`, with a
+  durable reservation before launch). Sol is right that `dispatched → done` omits the crash cases,
+  and right that this argues for designing dispatch before freezing the lifecycle. It is deferred
+  rather than refused: dispatch belongs to the coordinator session that owns `jobs.ts`, and Stage 4
+  is where the two are designed together. **Nothing in Stage 1 launches anything**, so the ghost
+  dispatch it describes cannot happen yet.
 
 ## Stages
 
-- [ ] **Stage 1 — the file, the fold, the CLI, the migration, and a read-only mode.** The queue
-      module and its pure fold (test first, red then green); `npx tsx scripts/overseer-queue.ts
-      list|add|move|edit|drop`, because the Overseer works from a terminal; the sixteen clusters and
-      their *waiting on* column from [overseer-queue.md](../project/overseer-queue.md) migrated in as
-      the first items; a `GET` route on the fleet server; and the "Queued ideas" mode showing the
-      queue in order with status, waiting-on and the estimate. `overseer-queue.md` keeps its one
-      parent and becomes the explanation, pointing at the file and the mode — pointers need no
-      approval, but rewording its rule sentences is an approved-set edit
-      ([edit-important-docs.md](../reusable/edit-important-docs.md)).
-- [ ] **Stage 2 — writes from the page.** Add (front or back), edit text and metadata, reorder (drag
-      on a desktop, up/down buttons on a phone), drop. Each a `POST` with the
-      client-claims-server-checks shape of [`routes-rename.ts`](../../tools/fleet/routes-rename.ts) —
-      same-origin check, the hostname allowlist that closes DNS rebinding, a body cap, an error
-      `Record` so a new code fails to compile rather than inheriting a guess. **A write whose base
-      version is stale is refused, not merged over.**
-- [ ] **Stage 3 — design only.** The Overseer taking the head of the queue into a brief and a
-      `new-claude`, and what it writes back (`dispatched`, session name, plan path). Dispatch stays
-      `gjdRemoteDispatch` in `tools/overseer/jobs.ts` and belongs to the coordinator session; **this
-      stage builds no launcher** and is not started before the coordinator and Greg agree.
+- [x] **Stage 1 — the authority contract, the fold, the lock, the CLI, the migration seed.**
+      `tools/overseer/idea-queue.ts` (types, fold, parse, lock, append),
+      `idea-queue-wait.ts` (depth and throughput), `idea-queue-seed.ts` (the sixteen as data),
+      `scripts/overseer-queue.ts` (`list · show · add · authorize · move · edit · dispatched · done ·
+      drop · seed · export`), and `tests/overseer-idea-queue.test.ts` — 74 tests.
+      **Three bugs were found by their own tests going red**, each recorded in a comment where it
+      lives: a status guard that read the item's current state instead of the incoming one (so a
+      crafted `edited` could drop an item); a settled item left anchorable in the ordering; and
+      `Number("")` being `0`, so an empty version string parsed as *the queue is empty*.
+- [x] **Stage 2 — the read route.** [`routes-idea-queue.ts`](../../tools/fleet/routes-idea-queue.ts):
+      pure payload builder, the three read arms carried rather than flattened, `problems` on the
+      wire, and **`ready`/`why` computed server-side** — `ready` is `isDispatchable`, and a second
+      implementation of it in browser TypeScript would be a second answer to *"may this go out?"*.
+      **`GET`/`HEAD` only**: a `POST` gets 405 with a sentence naming the reason, and a test asserts
+      that refusal so adding a write path has to change a test that says why it exists.
+      19 tests.
+- [x] **Stage 3 — the "Queued ideas" mode.** Key **`ideas`**, deliberately not `queue`
+      (`tools/fleet/queue.ts` is the dashboard's *steering* queue and the confusion would be
+      permanent). Four registrations plus the mount in `App.tsx`, per
+      [fleet-dashboard-modes.md](../project/fleet-dashboard-modes.md); `expect(MODES).toContain("ideas")`
+      is the one that survives a clean merge dropping the entry, and the mount test was **verified by
+      mutation** — commenting the `App.tsx` arm out reds it, which no type can do.
+      27 tests in [`fleet-queue-panel.test.tsx`](../../tests/fleet-queue-panel.test.tsx).
+
+      **The badge is the tab, not the list.** Four reasons an item sits still — *needs you*,
+      *proposal*, *approval lapsed*, *ready* — and only the first is Greg's to clear, so flattening
+      them into "blocked" would delete the point. A queue-wide problem outranks all four with *on
+      hold*, because while the file has a hole in it nothing is dispatchable.
+
+      **Five kinds of nothing, each drawn differently**, since collapsing any two gives an empty
+      list that reads as *nothing is queued*: `never-written`, an emptied-but-readable queue,
+      `unreadable` (the loud one), `no-answer` in the browser's own voice, and `loading`.
+- [ ] **Stage 4 — writes from the page, and dispatch.** ***Blocked on Greg*** — see below. Add
+      (front/back), edit, reorder (up/down buttons first, drag as enhancement), authorise, drop; and
+      the reservation-based dispatch lifecycle designed with the coordinator.
+- [ ] **Stage 5 — the cutover.** Applying the seed to the live queue, and switching
+      `overseer.md` and `overseer-queue.md` to one canonical source **in one approved change**.
+      Sol's P1-4: two sources of authorisation is worse than an old one, and `overseer.md`'s rule
+      text is Greg's to change.
+
+## What the browser check showed
+
+Built the client, seeded a queue into the scratchpad, ran a **throwaway server on 8799** — not the
+live dashboard on 8787, which the Overseer reads and which this stage was told not to disturb; it
+was still serving afterwards. At 430px and 1280px the sixteen migrated clusters render with four
+*needs you* badges and twelve *ready*, the Overseer's test proposal renders as *proposal*, the depth
+line reads `12 ready · 4 need you · 1 not approved`, and the footer names the file and the version.
+`/api/queue` answered with `problems: []` and the same counts, so the route and the panel agree.
+
+**The live dashboard will not show this tab until it is restarted** — it serves the `web/dist/` it
+started with. That is the Overseer's to arrange, and it is in the debrief.
+
+## Needs Greg
+
+1. **Where the file lives.** Taken as an assumption pending him: `~/.overseer/queue.jsonl` on the
+   box — single writer, survives a reboot, no merge conflicts, and `export` copies it out. The
+   alternative is a file in the repo: versioned and visible from the Mac, but a live page editing a
+   checked-in file dirties the shared primary and hands `git merge` authority over the live order.
+   Sol agreed with the box, and named the shape actually taken: one runtime file off the repo, a
+   checked-in deterministic seed, and an export.
+2. **Writes from the page need an identity story.** The fleet server has no authentication —
+   reachability is the boundary — so a write route would let anything that can reach it write
+   `greg`. That is a privilege boundary reachable from a web page, and it is why Stage 4 is blocked
+   rather than merely later. The cheap shape Sol suggests: mutations only from allowlisted
+   Greg-device tailnet identities, loopback read-only.
+3. **No wait forecast, though he asked for one.** § The wait estimate above.
+4. **`by: "greg"` on the migrated sixteen** is a judgement call over Sol's objection.
 
 ## The simpler option this passed over
 
-**Leaving it as prose in `overseer-queue.md`.** It works today, costs nothing, and needs no route, no
-fold and no lock. It is being replaced because Greg asked for the three things a Markdown table
-cannot do — reorder, edit and estimate from a phone — and because *"is it in the queue?"* is a
-question a gate asks mechanically, which wants a file with ids rather than a table somebody greps.
+**Leaving it as prose in `overseer-queue.md`.** It works today and needs no fold, lock or route. It
+is being replaced because Greg asked for the three things a Markdown table cannot do — reorder, edit
+and see the wait from a phone — and because *"is it in the queue?"* is a question a gate asks
+mechanically, which wants a file with ids over a table somebody greps.
+
+The second simpler option, taken: **no drag, no dispatch, no forecast, and no write path** in the
+first landing.
 
 ## File set
 
-Mine, and new: the queue module and its fold, the CLI, the route, the client, the mode component,
-the tests. `docs/project/overseer-queue.md` — pointers freely, rule sentences by approved set.
-`server.ts` — one mount line. `wire.ts` — one new block at the END only.
-`tools/fleet/web/src/mode.ts` and `Dock.tsx` — my own entries in `MODES`, `MODE_ICONS`, `MODE_TIPS`,
-`MODE_LABELS`, added in one commit, never touching another mode's; and **count the entries after
-merging `origin/dev`**, because a merge can drop one with no conflict marker. `App.tsx` — one
-additive mount.
+Mine, all new: `tools/overseer/idea-queue.ts`, `idea-queue-wait.ts`, `idea-queue-seed.ts`,
+`scripts/overseer-queue.ts`, `tests/overseer-idea-queue.test.ts`. Later stages add
+`tools/fleet/routes-idea-queue.ts`, a client and a panel; `server.ts` gets one mount line, `wire.ts`
+one block at the END only, and `mode.ts`/`Dock.tsx` my own four entries and nobody else's.
 
-Not mine: `tools/overseer/jobs.ts`, `scheduler.ts`, `infra/` (the coordinator, session
-`overseer-md-agent-coordinator`); actions/steer/kill/drain and `tools/fleet/queue.ts`, which is the
-dashboard's **steering** queue and is why this one must not be called `queue.ts`
-(`claude-agents-dashboard`); `collect.ts`/`store.ts`/`daemon.ts`/`diff.ts`; `scripts/gjd-remote*.ts`;
-`docs/project/overseer.md`, whose rule text is Greg's.
-
-Keys already taken in `MODES` by sessions in flight tonight: `usage`, `messages`, `deploys`, and
-`readiness-tab` is choosing one. On `dev` at `15e2d48b` the list is still the original three
-(`sessions`, `health`, `overseer`), so all four are unlanded and this must merge before it counts
-entries.
-
-**Read [fleet-dashboard-modes.md](../project/fleet-dashboard-modes.md) before Stage 1's client
-work** — it landed on `dev` at 01:03 UTC on 2026-09-09, after this skeleton was written, and it is
-the checklist for exactly this: four registrations across two files, of which the type system catches
-three, plus **the mount in `App.tsx`, which is the fifth place and the one nothing checks**. That
-last one is the failure this plan would otherwise have found by opening the page.
-
-## What was verified rather than assumed, at `15e2d48b`
-
-- `MODES` on `origin/dev` is `["sessions", "health", "overseer"]` — the four new keys are all still
-  in flight.
-- `tools/fleet/zones.ts` does not exist on `dev`, so the multi-zone clock is a soft dependency.
-- `jsonl.ts` (`truncateToLastLine`, `writeAll`, `writeAtomically`) and `lock.ts` (`takeLock`,
-  `stillOurs`, `releaseLock`) are importable and know nothing about stores — they take a path. This
-  needs no new append-only or locking code.
-- `~/.overseer/` holds `events.jsonl`, `current.json`, `daemon.jsonl` and `overseer.lock`; the queue
-  file would be a fifth thing in a directory that already has one writer and one lock convention.
+Not mine: `tools/overseer/jobs.ts`, `scheduler.ts`, `infra/` (the coordinator); actions/steer/kill/
+drain and `tools/fleet/queue.ts`; `collect.ts`/`store.ts`/`daemon.ts`/`diff.ts`;
+`scripts/gjd-remote*.ts`; `docs/project/overseer.md`, whose rule text is Greg's.
