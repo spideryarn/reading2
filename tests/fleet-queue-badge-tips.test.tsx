@@ -25,7 +25,8 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { QueuePanel, badgeTip } from "../tools/fleet/web/src/QueuePanel";
+import { FACT_TIPS, QueuePanel, badgeTip } from "../tools/fleet/web/src/QueuePanel";
+import type { Tip } from "../tools/fleet/web/src/Tooltip";
 import { badgeFor, type QueueApi, type QueueView } from "../tools/fleet/web/src/queue-client";
 import type { QueueDepth, QueueLifecycle, QueueRow } from "../tools/fleet/wire";
 
@@ -168,10 +169,13 @@ describe("the badge, which is what this tab is for", () => {
       await mount(view([r], label === "on hold" ? [{ kind: "unreadable-line", why: "line 4 is not JSON" }] : []));
       const text = container.textContent ?? "";
       expect(`${label}: ${text.includes(label)}`).toBe(`${label}: true`);
-      // The card's own second paragraph — the half the word could not have said.
-      expect(`${label}: ${/[Tt]he server computed it|only one of the four stuck reasons|Authority and progress|an agent's edit lapses it|says a session was started|nothing is ever removed from it|considered and rejected|outranks the row's own reasons|no description for a/.test(text)}`).toBe(
-        `${label}: true`,
-      );
+      /* **The card's own second paragraph, read out of the map rather than
+         spelled out here.** A literal phrase would be a second copy of the copy,
+         and this file's first version broke on a Sol round that improved the
+         wording — which is the failure tests/dock-mode-tooltips.test.tsx warns
+         about at length. The claim is unchanged: the half the word could not
+         have said reaches the DOM. */
+      expect(`${label}: ${text.includes(badgeTip(label).how)}`).toBe(`${label}: true`);
     }
   });
 
@@ -206,9 +210,17 @@ describe("a row's fields say which is which", () => {
     const text = container.textContent ?? "";
     expect(text).toContain("docs/plans/260908f-something.md");
     expect(text).toContain("docs/plans/260909c-rich-tooltips-across-the-fleet-dashboard.md");
-    // And each label explains itself, so the difference is answerable on the page.
-    expect(text).toContain("where the idea came from");
-    expect(text).toContain("Points forwards");
+    /* And each label explains itself, so the difference between them is
+       answerable on the page. Read from `FACT_TIPS` for the same reason as
+       above — the distinction is what matters, not the sentence carrying it. */
+    const source = FACT_TIPS["source"];
+    const plan = FACT_TIPS["plan"];
+    expect(source).toBeDefined();
+    expect(plan).toBeDefined();
+    expect(text).toContain((source as Tip).what);
+    expect(text).toContain((plan as Tip).what);
+    // …and they are genuinely two different explanations, not one twice.
+    expect((source as Tip).what).not.toBe((plan as Tip).what);
   });
 
   it("gives the whole id behind the eight characters the row prints", async () => {

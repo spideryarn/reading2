@@ -26,7 +26,7 @@
  * in a test that has none.
  */
 import type { DeploysPayload, DeployVersion } from "../../wire";
-import { zonedLine } from "../../zones";
+import { DISPLAY_ZONES, zonedLine, zonedReadings } from "../../zones";
 
 export const DEPLOYS_URL = "api/deploys";
 
@@ -303,4 +303,182 @@ export function groupedEntries(
       entries: version.entries.filter((e) => e.section === section),
     }))
     .filter((group) => group.entries.length > 0);
+}
+
+/* ------------------------------------------------------------------ *
+ * The collapsed row: which zone, what it shipped, and which day it was.
+ * ------------------------------------------------------------------ */
+
+/**
+ * **The one zone a closed row and a day heading are drawn in: UTC.**
+ *
+ * This was the device's own zone for about an hour, on the argument that
+ * `zones.ts` only forbids an *unlabelled* local time and every rendering here
+ * carries its zone's name. GPT Sol's P1, and it is right: that is not what
+ * `zones.ts` says. It rejects **detection** —
+ *
+ * > There is no setting, no detection of where he is, and no "local time": a
+ * > page rendered on the box and a page rendered on a phone in Athens would
+ * > disagree about what "local" means, and the one thing a reset time may not
+ * > be is ambiguous.
+ *
+ * — and a detected zone does not merely risk an unlabelled clock. It makes the
+ * page **disagree with itself across devices**: the box would file a 23:19 UTC
+ * deploy under the 8th and the phone in Athens under the 9th, for the same
+ * release, and neither is wrong. A day heading is not a thing to be
+ * device-dependent about.
+ *
+ * UTC is the zone the record's own timestamps are in, so a reader comparing
+ * this page against the file or a log line has the identical string in front of
+ * them. No detection, no ambiguity, nothing to configure, and the tests stop
+ * depending on where they happen to run.
+ *
+ * **What is still an open question for Greg** is that a closed row shows one of
+ * the three clocks rather than all three — the brief for this pass said to tuck
+ * the three-zone line behind the expand, and `zones.ts` says all three are
+ * always shown. Tucked, not lost: opening a deploy gives the canonical line.
+ */
+export const ROW_ZONE: { zone: string; label: string } = { zone: "UTC", label: "UTC" };
+
+/** The zones a deploy shows once it is open, so the page can say so in words rather than repeat the list. */
+export const OPEN_ZONE_LABELS: readonly string[] = DISPLAY_ZONES.map((z) => z.label);
+
+/**
+ * One instant, in one zone, as the collapsed row draws it.
+ *
+ * **Through `zonedReadings`, not through a second `Intl` call**, so the row's
+ * time and the three-zone line beneath it are produced by the same code and
+ * cannot come to disagree about a DST boundary. `null` for an instant that
+ * cannot be read — the row says so rather than printing `Invalid Date`.
+ *
+ * **`zone` is a parameter with the product's answer as its default**, which is
+ * `zones.ts`'s own shape and its own reason: it keeps this a formatter rather
+ * than a formatter with a product decision welded into it, and it keeps the
+ * `(+1d)` case — a deploy that falls on a different calendar day in another
+ * zone — reachable from a test. Production passes nothing.
+ */
+export function deployWhenIn(
+  iso: string,
+  zone: { zone: string; label: string } = ROW_ZONE,
+): { date: string; time: string; label: string } | null {
+  const readings =
+    zonedReadings(iso, [{ zone: zone.zone, label: zone.label }]) ??
+    /* An ICU that does not know this zone. UTC is the record's own zone, so it
+       is the honest retreat rather than a guess at another civil one. */
+    zonedReadings(iso, [{ zone: "UTC", label: "UTC" }]);
+  const only = readings?.[0];
+  if (only === undefined) return null;
+  return { date: only.date, time: only.time, label: only.label };
+}
+
+/**
+ * What one deploy shipped, in as much as fits on a closed row.
+ *
+ * **The three kinds of nothing stay apart here too**, which is the whole risk a
+ * collapsed view introduces: the expanded card fought this out entry by entry
+ * in 260909b, and a summary saying *nothing changed* over a deploy whose
+ * changelog could not be READ would undo it in one line. `kind` is what the
+ * panel branches on, so it never has to re-derive the distinction.
+ *
+ * `unreadable` rides on every arm because a partly-read deploy is understated
+ * by its own gist: "Hover cards on links +2 more" is a short list presented as
+ * a whole one unless the row says how much it is missing.
+ */
+export type DeployGist = {
+  kind: "unreadable" | "quiet" | "entries";
+  /** The entry this row leads with — a headline one when there is one. Null on the other arms. */
+  title: string | null;
+  /** Further entries that were read and are not on the row. */
+  more: number;
+  /** Entries on this deploy that would not parse at all. */
+  unreadable: number;
+};
+
+export function deployGist(version: DeployVersion): DeployGist {
+  const unreadable = version.unreadableEntries;
+  if (!version.changelogReadable) return { kind: "unreadable", title: null, more: 0, unreadable };
+  /* `groupedEntries` already orders headline, then enhancement, then fix — so
+     the first entry of the first group IS the most newsworthy one, and picking
+     it here needs no second opinion about which section outranks which. */
+  const first = groupedEntries(version)[0]?.entries[0];
+  if (first === undefined) return { kind: "quiet", title: null, more: 0, unreadable };
+  return { kind: "entries", title: first.title, more: Math.max(0, version.entries.length - 1), unreadable };
+}
+
+/** The deploys of one calendar day, in the zone the rows are drawn in. */
+export type DeployDay = {
+  /** `YYYY-MM-DD` in that zone, or `""` for deploys whose instant could not be read. */
+  key: string;
+  /** `Tue 8 Sep 2026`, or the sentence that says the instant was unreadable. */
+  label: string;
+  versions: DeployVersion[];
+};
+
+/**
+ * The window, grouped into days.
+ *
+ * **In the same zone the rows are drawn in, whatever that is.** A deploy at
+ * 23:19 UTC is 02:19 Athens the next day, so a heading measured in one zone
+ * over a time measured in another files it under a day it did not happen on —
+ * the case the `(+1d)` suffix exists to warn about, arriving as a wrong
+ * heading instead. The default is `ROW_ZONE` for exactly that reason: one
+ * constant, so the two cannot drift apart.
+ *
+ * Order is preserved: the record is time-ordered, so equal keys are contiguous,
+ * and a `Map` keeps the first appearance of each. Unreadable instants collect
+ * under one honest heading rather than each inventing a day of its own.
+ */
+export function deployDays(
+  versions: DeployVersion[],
+  zone: { zone: string; label: string } = ROW_ZONE,
+): DeployDay[] {
+  const days = new Map<string, DeployVersion[]>();
+  for (const version of versions) {
+    const key = deployWhenIn(version.version, zone)?.date ?? "";
+    const bucket = days.get(key);
+    if (bucket === undefined) days.set(key, [version]);
+    else bucket.push(version);
+  }
+  return [...days].map(([key, group]) => ({ key, label: dayLabel(key), versions: group }));
+}
+
+/** `2026-09-08` as a person reads it. The key itself if the host's `Intl` will not say. */
+export function dayLabel(key: string): string {
+  if (key === "") return "at a time this page cannot read";
+  /* Noon, so the formatter cannot be nudged onto the neighbouring day by an
+     offset — and formatted IN UTC, because the key is already a calendar date
+     in the reader's zone and re-projecting it into a zone would move it again. */
+  const at = new Date(`${key}T12:00:00Z`);
+  if (!Number.isFinite(at.getTime())) return key;
+  try {
+    /* **`timeZone: "UTC"` is what stops the label moving**, and that is worth
+       stating correctly: the key is already a calendar date, and formatting it
+       in any other zone would re-project it onto a neighbouring day. Noon
+       rather than midnight is belt to that braces — it costs nothing and it
+       makes a later edit that changes the zone produce a wrong label rather
+       than a wrong day. The comment here claimed noon was the mechanism until
+       GPT Sol pointed out it is not. */
+    /* **Parts rather than a formatted string**, which is zones.ts's rule and
+       its reason: the order and the separators of a formatted date are the
+       locale's business, and `en-GB` spells this one `Tue, 8 Sept 2026`. The
+       numbers and the names are what is wanted; the shape is ours. `en-US`
+       because its short month is the three letters everything else on this page
+       uses. */
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: "UTC",
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    }).formatToParts(at);
+    const found = new Map(parts.map((p) => [p.type, p.value]));
+    const weekday = found.get("weekday");
+    const day = found.get("day");
+    const month = found.get("month");
+    const year = found.get("year");
+    if (weekday === undefined || day === undefined || month === undefined || year === undefined) return key;
+    return `${weekday} ${day} ${month} ${year}`;
+  } catch {
+    return key;
+  }
 }

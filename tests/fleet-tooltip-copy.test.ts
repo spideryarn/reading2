@@ -92,7 +92,7 @@ const WEB_SRC = path.join(
  * not a door: an addition here is somebody about to ship hover-only text on a
  * page read on a phone.
  */
-const KNOWN_HOVER_ONLY: readonly string[] = ["ReadinessPanel.tsx"];
+const KNOWN_HOVER_ONLY: Readonly<Record<string, number>> = { "ReadinessPanel.tsx": 1 };
 
 /** Every `.tsx` in the client, as `[filename, source]`. */
 function components(): [string, string][] {
@@ -102,13 +102,24 @@ function components(): [string, string][] {
 }
 
 /**
- * The source with every comment and string literal blanked out, newlines kept.
+ * The source with every comment blanked out, newlines kept.
  *
  * **Without this the check reads its own prose.** The first version flagged
  * `SessionsPanel.tsx` for a `title=` that was in the doc comment explaining
  * that the two badges used to have one — a checker fooled by a file talking
  * about the thing it is being checked for. Blanking rather than deleting so
  * that a reported line number is still the line in the file.
+ *
+ * **Comments only, and string literals deliberately NOT.** The version before
+ * this one blanked strings too, and GPT Sol found what that costs: this is a
+ * character scanner, not a parser, so it cannot tell a JavaScript quote from an
+ * apostrophe in JSX text — and this codebase is full of `session's transcript`.
+ * From that apostrophe to the next one, everything was blanked, and a real
+ * `title=` in between would have vanished. **A guard that goes quiet is worse
+ * than one that cries wolf**, so the trade is now the other way round: a
+ * `title=` inside a string literal WOULD be reported, and that is a loud
+ * one-line diagnosis rather than a silent miss. A real parse (a TypeScript/JSX
+ * AST walk) would beat both and is what to reach for if this ever gets fiddly.
  */
 function codeOnly(source: string): string {
   const out = source.split("");
@@ -125,14 +136,6 @@ function codeOnly(source: string): string {
     } else if (two === "/*") {
       const end = source.indexOf("*/", i + 2);
       const stop = end === -1 ? source.length : end + 2;
-      blankTo(stop);
-      i = stop;
-    } else if (source[i] === '"' || source[i] === "'" || source[i] === "`") {
-      const quote = source[i];
-      let j = i + 1;
-      while (j < source.length && source[j] !== quote) j += source[j] === "\\" ? 2 : 1;
-      const stop = Math.min(j + 1, source.length);
-      i += 1;
       blankTo(stop);
       i = stop;
     } else {
@@ -159,21 +162,26 @@ function owningTag(source: string, index: number): string | null {
 describe("nothing on this page explains itself by hover alone", () => {
   it("has no `title=` attribute on a host element", () => {
     const found: string[] = [];
+    const allowed: Record<string, number> = {};
     for (const [name, raw] of components()) {
-      if (KNOWN_HOVER_ONLY.includes(name)) continue;
       const source = codeOnly(raw);
-      for (const hit of source.matchAll(/\btitle=/g)) {
+      for (const hit of source.matchAll(/\btitle\s*=\s*["'{]/g)) {
         const tag = owningTag(source, hit.index);
         /* A lowercase tag is a DOM element and `title` is the browser's own
            tooltip; a capitalised one is a component of ours and `title` is an
            ordinary prop. */
         if (tag !== null && /^[a-z]/.test(tag)) {
           const line = source.slice(0, hit.index).split("\n").length;
-          found.push(`${name}:${line} — <${tag} title=…>`);
+          if (KNOWN_HOVER_ONLY[name] !== undefined) allowed[name] = (allowed[name] ?? 0) + 1;
+          else found.push(`${name}:${line} — <${tag} title=…>`);
         }
       }
     }
     expect(found).toEqual([]);
+    /* **The exemption is a COUNT, not a file.** Skipping the whole file let a
+       second hover-only tooltip land in it unnoticed while the stale-entry
+       check below still passed. GPT Sol's P2. */
+    expect(allowed).toEqual(KNOWN_HOVER_ONLY);
   });
 
   it("would still catch one — the blanking keeps attributes and drops prose", () => {
@@ -184,12 +192,22 @@ describe("nothing on this page explains itself by hover alone", () => {
        it, and each of the three ways of writing prose does not.
        docs/reusable/silent-success.md. */
     const attribute = codeOnly('<span title="hover only">x</span>');
-    expect(/\btitle=/.test(attribute)).toBe(true);
+    expect(/\btitle\s*=\s*["'{]/.test(attribute)).toBe(true);
     expect(owningTag(attribute, attribute.indexOf("title="))).toBe("span");
 
-    for (const prose of ['<b>x</b>\n// it had title="x" once', "<b>x</b>\n/* it had title=\"x\" once */", '<b>x</b>\nconst s = "it had title=\'x\' once";']) {
-      expect(/\btitle=/.test(codeOnly(prose))).toBe(false);
+    // Whitespace before `=` is legal JSX, and the first pattern missed it.
+    expect(/\btitle\s*=\s*["'{]/.test(codeOnly("<span title = 'x'>y</span>"))).toBe(true);
+
+    // Both comment forms are blanked — the false positive this exists for.
+    for (const prose of ['<b>x</b>\n// it had title="x" once', '<b>x</b>\n/* it had title="x" once */']) {
+      expect(/\btitle\s*=\s*["'{]/.test(codeOnly(prose))).toBe(false);
     }
+
+    /* **An apostrophe in JSX text must not blank what follows it.** This is the
+       false NEGATIVE that blanking string literals bought, and it is the reason
+       this function no longer does. */
+    const apostrophe = codeOnly("<p>the session's transcript</p>\n<span title=\"real\">x</span>");
+    expect(/\btitle\s*=\s*["'{]/.test(apostrophe)).toBe(true);
     // And the line numbers a finding is reported at still line up.
     expect(codeOnly("a\n// b\nc").split("\n").length).toBe(3);
   });
@@ -282,7 +300,10 @@ describe("the shape of a card, over every tip that can be reached from a module"
        read. What it catches is the other direction: an import quietly dropped in
        a refactor, which leaves every assertion below passing over a shorter
        list. The three rules under it are only worth what this number is. */
-    expect(everyTip().length).toBeGreaterThanOrEqual(60);
+    /* Set just under the real count, so dropping ANY ONE of the imported maps
+       fails. A floor of 60 against ~70 reachable tips did not do that, which
+       GPT Sol pointed out was the stated purpose unmet. */
+    expect(everyTip().length).toBeGreaterThanOrEqual(68);
   });
 
   it("gives each one a head, a what and a how", () => {

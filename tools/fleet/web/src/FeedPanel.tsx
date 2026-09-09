@@ -141,7 +141,14 @@ function Chip({
    * looking exactly like a page with no tooltips on it."* This component ate
    * both until 2026-09-09, because it declared four props and dropped the rest.
    */
-} & Omit<ButtonHTMLAttributes<HTMLButtonElement>, "onClick" | "aria-label">): ReactNode {
+  /* `type`, `aria-pressed` and `className` are this component's invariants, so
+     they are not offered: the spread below sits after them and would otherwise
+     let a caller override the first two, while `className` was accepted by the
+     type and then silently thrown away. GPT Sol's P2. */
+} & Omit<
+  ButtonHTMLAttributes<HTMLButtonElement>,
+  "onClick" | "aria-label" | "type" | "aria-pressed" | "className"
+>): ReactNode {
   return (
     <button
       type="button"
