@@ -6603,6 +6603,56 @@ describe("the Overseer tab, which no longer says it is empty", () => {
     expect(buttonLabels()).not.toContain("Abandon the uncertainty");
   });
 
+  it("tells the reader to do nothing impossible when it cannot address the hold", async () => {
+    /* **THE HALF OF THE PREVIOUS TEST THAT WAS WORSE THAN THE BUG.** Keeping
+       the row was right; the sentence on it ended *"clear it from the server if
+       the page stays like this"*, and there is no such interface. An
+       instruction to do something impossible is worse than the missing row,
+       because the missing row at least looked broken and this reads as a
+       procedure somebody failed to follow.
+
+       So the copy is asserted on both sides: it names the terminal, which
+       exists and answers the question the reader actually has, and it says
+       plainly that this page cannot clear it. */
+    const rec = recordingActions(() =>
+      actionsWire({ queues: [queueWire({ sessionId: "$1643", items: [], quarantine: { id: 7, version: "one" } })] }),
+    );
+    await mountHeld(rec);
+    const text = container.textContent ?? "";
+    expect(text).not.toContain("clear it from the server");
+    expect(text).toContain("gjd-remote resume");
+    expect(text).toContain("nothing you can do about the hold itself from this page");
+    // And no instruction to press, restart or run anything that does not exist.
+    expect(text).not.toMatch(/restart the (dashboard|server)/i);
+  });
+
+  it("keeps both gestures when only the SENTENCE is unreadable, and warns instead", async () => {
+    /* **THE UNCLEARABLE HOLD, BUILT ON PURPOSE.** `parseHold` used to reject
+       the whole object if `why` did not read, and the row then fell into the
+       unaddressable arm above — both gestures withheld over the one field a
+       person can most easily do without. The address and the description are
+       parsed separately now: if `id` and `version` read, the hold can be
+       released, whatever else the server garbled. */
+    const wire = holdWire();
+    delete wire["why"];
+    const rec = recordingActions(() =>
+      actionsWire({ queues: [queueWire({ sessionId: "$1643", items: [], quarantine: { ...wire, reading: "a new one" } })] }),
+    );
+    await mountHeld(rec);
+
+    // The row is a HOLD, not the "cannot read this at all" arm.
+    expect(container.textContent).toContain("Nothing is being delivered to this session.");
+    expect(container.textContent).not.toContain("in a shape this page cannot read");
+    // A generic warning stands in for the sentence, and does not invent one.
+    expect(container.textContent).toContain("did not send a sentence this page can read");
+    // BOTH GESTURES, and they still carry the address they were drawn with.
+    expect(buttonLabels()).toContain("Abandon the uncertainty");
+    await clickSaying("Abandon the uncertainty");
+    expect(rec.calls.filter((c) => c.op === "releaseHold")).toEqual([
+      { op: "releaseHold", arg: "1a2b3c4d-h1@1", second: "abandoned-unknown" },
+    ]);
+  });
+
   it("does not draw a released hold as one that is still holding", async () => {
     // The route never sends one today — `snapshot.quarantine` is `holding()` —
     // but the record exists, and a page that read any hold as a live one would

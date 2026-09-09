@@ -41,8 +41,12 @@ import type {
   NotifyOutcomeView,
   QueuedItem,
 } from "../tools/fleet/wire.js";
+import type { DrainDeps } from "../tools/fleet/drain.js";
+import { realActionDeps, type ActionDeps } from "../tools/fleet/routes-actions.js";
+import { realBroadcastDeps, type BroadcastDeps } from "../tools/fleet/routes-broadcast.js";
 import { RENAME_STATUS, type RenameErrorCode } from "../tools/fleet/routes-rename.js";
-import { REFUSAL_STATUS } from "../tools/fleet/routes-steer.js";
+import { REFUSAL_STATUS, realSteerDeps, type SteerDeps } from "../tools/fleet/routes-steer.js";
+import type { SendCoordinator } from "../tools/fleet/send-coordinator.js";
 import { grantsPermission } from "../tools/fleet/pane.js";
 import { answerQuestion, type RefusalCode, type SteerIo, type SteerResult } from "../tools/fleet/steer.js";
 
@@ -399,5 +403,58 @@ describe("the launch record's own shape", () => {
     ];
     for (const arm of arms) expect(arm).not.toBe("sent");
     expect(arms).toContain("submitted");
+  });
+});
+
+/**
+ * **NO PRODUCER HOLDS A TRANSPORT.**
+ *
+ * The quarantine's guarantee is that a held session is not typed into, and the
+ * check that enforces it lives on the line above the transport call inside
+ * `send-coordinator.ts`. A producer that could reach `sendMessage` or
+ * `answerQuestion` from its own dependency object could send without ever
+ * consulting the book — which is precisely what the direct steer route and the
+ * two broadcasts were doing until the review of Stage 4 found it.
+ *
+ * **A RUNTIME TEST CANNOT SAY THIS.** "There is no such field" is a statement
+ * about a type, so the assertion has to be one too: each directive below says
+ * *this property does not exist*, and TypeScript reports an UNUSED
+ * `@ts-expect-error` as an error of its own. Put a transport back on any of the
+ * three dependency types and the directive goes unused and `npm run typecheck`
+ * fails.
+ *
+ * The paired positive is the runtime half, so `npm test` has something to run:
+ * the coordinator IS on each of them, and it is the only way through.
+ *
+ * `tests/fleet-imports.test.ts` closes the other door — importing the transport
+ * directly rather than taking it as a dependency.
+ */
+describe("the transport is the coordinator's and nobody else's", () => {
+  it("refuses a transport on any producer's dependencies", () => {
+    // @ts-expect-error the steering route sends through `deps.send`, and there
+    // is no `sendMessage` beside it. If this compiles, a route can type into a
+    // pane without asking whether the session is held.
+    type SteerTransport = SteerDeps["sendMessage"];
+    // @ts-expect-error the same for answering a dialog, which is keystrokes too.
+    type SteerAnswerTransport = SteerDeps["answerQuestion"];
+    // @ts-expect-error and for the ease-off broadcast next door.
+    type ActionTransport = ActionDeps["sendMessage"];
+    // @ts-expect-error and for the free-text broadcast, which held one until
+    // 2026-09-09 and could therefore type into a session the page showed as HELD.
+    type BroadcastTransport = BroadcastDeps["sendMessage"];
+    // @ts-expect-error and for the drain.
+    type DrainTransport = DrainDeps["sendMessage"];
+    type Unused = [SteerTransport, SteerAnswerTransport, ActionTransport, BroadcastTransport, DrainTransport];
+    void (undefined as unknown as Unused);
+
+    // THE PAIRED POSITIVE, built rather than described: every producer carries
+    // the one object that can type at a pane, and it is the same type in each.
+    const coordinators: SendCoordinator[] = [
+      realSteerDeps().send,
+      realActionDeps().send,
+      realBroadcastDeps().send,
+    ];
+    for (const c of coordinators) expect(typeof c.message).toBe("function");
+    expect(coordinators.every((c) => typeof c.book === "function")).toBe(true);
   });
 });

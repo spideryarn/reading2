@@ -35,7 +35,9 @@
  *
  * **Never "sent to everybody".** A row was `submitted` (the tmux calls
  * completed), `queued` (it is working, so the line is in its queue and is attempted
- * when it is next eligible), `skipped`, or `not-reached`. Even a submitted row is not
+ * when it is next eligible), `skipped`, `held` (that session is holding text
+ * nobody could account for, so the server did not reach the transport at all),
+ * or `not-reached`. Even a submitted row is not
  * a receipt: nothing on this box can establish that an agent read a line, and
  * `verified` is a pre-send identity check. So the headline counts what was
  * measured and the words are `submitted` and `queued`, never *heard*.
@@ -116,6 +118,10 @@ function headline(result: BroadcastResult, preview: boolean): string {
   }
   const parts = [`Keys submitted to ${c.submitted}`, `queued for ${c.queued}`];
   if (c.skipped > 0) parts.push(`${c.skipped} could not be reached`);
+  /* **A HELD ROW IS NAMED, NOT ABSORBED.** Nothing was typed at it and nothing
+     was queued for it, so leaving it out of this line is how a fan-out that
+     reached most of the fleet reads as one that reached all of it. */
+  if (c.held > 0) parts.push(`${c.held} held after an earlier send nobody could account for`);
   if (c.notReached > 0) parts.push(`${c.notReached} never got a turn before the deadline`);
   return `${parts.join(", ")} — of ${c.asked} asked.`;
 }
@@ -159,6 +165,13 @@ function Receipt({ row, name, sent }: { row: RecipientOutcome; name: string; sen
         <p className="tw:mt-1 tw:text-ink-soft">
           Not reached — {row.why} <Mono>{row.code}</Mono>
         </p>
+      ) : null}
+      {row.kind === "held" ? (
+        /* **NOT "REFUSED", AND NOT "SENT".** The transport was never reached:
+           this session is already holding text nobody could account for, and a
+           second line landing behind half a first would be read as one
+           instruction neither person wrote. The sentence is the server's. */
+        <p className="tw:mt-1 tw:font-medium tw:text-alarm-ink">Nothing was typed at it — {row.why}</p>
       ) : null}
       {row.kind === "not-reached" ? <p className="tw:mt-1 tw:text-ink-soft">{row.why}</p> : null}
       {row.kind === "would-send" ? <p className="tw:mt-1 tw:text-ink-soft">Would be typed at now.</p> : null}

@@ -42,11 +42,6 @@ import type { Readable } from "node:stream";
 
 import { renderMessage, type Speaker } from "./actions.js";
 import { addressableHost } from "./origin.js";
-/* `nothingWasSent` ONLY — the one audited reading of a `SteerFailure`. This is
-   not a dependency on the queue: `queue.ts` imports `steer.ts`, never this
-   file, so the direction is safe, and a second copy of that two-field check
-   here would be the drift its own header warns about. */
-import { nothingWasSent } from "./queue.js";
 import {
   classifyConsequence,
   classifyGate,
@@ -55,15 +50,14 @@ import {
   type PaneMaterial,
   type PaneOption,
 } from "./pane.js";
-import { sharedQuarantineBook, type QuarantineBook, type UncertainSendReading } from "./quarantine.js";
+import type { QuarantineHoldView } from "./quarantine.js";
+import { sharedSendCoordinator, type SendAttempt, type SendCoordinator, type SendPurpose } from "./send-coordinator.js";
 import type { FleetStatus } from "./status.js";
 import {
-  answerQuestion as realAnswerQuestion,
   describeSend,
-  sendMessage as realSendMessage,
   type RefusalCode,
   type SeenQuestion,
-  type SteerResult,
+  type SteerFailure,
   type SteerTarget,
   type Verified,
 } from "./steer.js";
@@ -116,6 +110,17 @@ export type RouteErrorCode =
    * must not retry on this.
    */
   | "answering-disabled"
+  /**
+   * **This session is HELD** — an earlier send to it came back with no account
+   * of how far it got, so text may be sitting unsent in its input box and a
+   * second send could land behind half a sentence. `quarantine.ts`.
+   *
+   * A `RouteErrorCode` rather than a `RefusalCode`, for `answering-disabled`'s
+   * reason: nothing about the box or the request was wrong and nothing was
+   * typed, so refreshing and pressing again will not help. What clears it is a
+   * person saying what is actually in that input box, on the Queue panel.
+   */
+  | "session-held"
   | "internal";
 
 export type SteerOp = "message" | "answer";
@@ -446,16 +451,21 @@ function asString(v: unknown): string | null {
  * names; what stops a dishonest one is the Tailscale-only bind.
  */
 /**
- * Send the attributed words, or refuse — the two arms of `renderMessage`, as a
- * `SteerResult`.
+ * `renderMessage`'s refusal, as the failure the rest of the route already knows
+ * how to answer.
  *
  * A function rather than an `if` at the call site so that the refusal has one
  * shape and one code: `bad-text` is what `checkText` refuses with, and this is
  * the same class of thing — words that cannot be typed at a pane as they stand.
+ *
+ * **IT NEVER REACHES THE COORDINATOR**, and that is right rather than an
+ * oversight: nothing is sent, so there is nothing to be uncertain about and no
+ * session to hold. The one thing that must not happen is this arm being
+ * answered differently from a transport refusal, which is why it is a
+ * `SteerFailure` and goes down the same branch.
  */
-function spoken(rendered: { ok: true; text: string } | { ok: false; why: string }, send: (text: string) => SteerResult): SteerResult {
-  if (rendered.ok) return send(rendered.text);
-  return { ok: false, reason: { code: "bad-text", why: rendered.why }, delivery: "none", sent: [] };
+function notSendable(why: string): SteerFailure {
+  return { ok: false, reason: { code: "bad-text", why }, delivery: "none", sent: [] };
 }
 
 export function parseSpeaker(v: unknown): Parsed<Speaker> {
@@ -830,15 +840,32 @@ export function createRateLimiter(
  * ------------------------------------------------------------------ */
 
 /**
- * The seam. `sendMessage` and `answerQuestion` are injected so that this file's
- * own tests can prove what it passes DOWN without a single real keystroke going
- * out — there are ~37 live agent sessions on this box doing other people's work,
- * and a test suite is not a reason to type into one. The delivery module has its
- * own live-fire evidence; these tests must not repeat it.
+ * The seam. The transport is injected one level down, inside the coordinator,
+ * so that this file's own tests can prove what it passes DOWN without a single
+ * real keystroke going out — there are ~37 live agent sessions on this box
+ * doing other people's work, and a test suite is not a reason to type into one.
+ * The delivery module has its own live-fire evidence; these tests must not
+ * repeat it.
  */
 export type SteerDeps = {
-  sendMessage: typeof realSendMessage;
-  answerQuestion: typeof realAnswerQuestion;
+  /**
+   * **The only thing here that can type into a pane** — `send-coordinator.ts`.
+   *
+   * THERE IS NO `sendMessage` BESIDE IT, and the absence is the design rather
+   * than tidiness. This route used to hold the transport itself and never asked
+   * whether its target was already held, so a session the page was showing as
+   * quarantined could still be typed into from a phone — and pressing an
+   * `unknown` send again could leave a second copy of the sentence in the same
+   * input box, which is the one thing this neighbourhood forbids everywhere.
+   * The check now sits on the line above the transport call, inside the
+   * coordinator, where a producer cannot get past it by forgetting.
+   *
+   * The book lives there too, so this file no longer takes one:
+   * `deps.send.book()` is the same book the drain consults.
+   * `tests/fleet-compile-guards.test.ts` fails if a transport ever reappears as
+   * a field on this type.
+   */
+  send: SendCoordinator;
   now: () => number;
   limiter: RateLimiter;
   log: (line: string) => void;
@@ -852,27 +879,11 @@ export type SteerDeps = {
    * and the failure looks like a flake rather than a bug.
    */
   answeringEnabled: () => boolean;
-  /**
-   * The one book of per-session holds — `quarantine.ts`.
-   *
-   * **THIS ROUTE IS A PRODUCER OF UNCERTAINTY AND USED NOT TO SAY SO.** A
-   * `partial` here leaves exactly the same half-typed input box a queued
-   * delivery does, and until Stage 4 the only path that recorded it was the
-   * drain — so a message typed from the phone could leave text sitting in an
-   * agent's box and the queue would go on draining into it a minute later.
-   * There is one book per server and every producer writes to the same one.
-   *
-   * A DEP RATHER THAN AN IMPORT OF THE QUEUE'S, because `routes-actions.ts`
-   * already imports this file for the rate limiter and the reverse import would
-   * be a cycle. `quarantine.ts` is the leaf both sides can reach.
-   */
-  quarantine: QuarantineBook;
 };
 
 export function realSteerDeps(): SteerDeps {
   return {
-    sendMessage: realSendMessage,
-    answerQuestion: realAnswerQuestion,
+    send: sharedSendCoordinator(),
     now: () => Date.now(),
     limiter: createRateLimiter(),
     log: (line) => console.log(line),
@@ -885,7 +896,6 @@ export function realSteerDeps(): SteerDeps {
     // `FLEET_ANSWER_ENABLED=0` to stop all answering; anything else, including
     // the variable being unset, leaves the gate to decide dialog by dialog.
     answeringEnabled: () => process.env["FLEET_ANSWER_ENABLED"] !== "0",
-    quarantine: sharedQuarantineBook(),
   };
 }
 
@@ -1068,64 +1078,98 @@ export function makeSteerRoutes(overrides: Partial<SteerDeps> = {}): SteerRoutes
         ? `message (${request.text.length} characters)`
         : `an answer to a dialog (option ${request.optionIndex + 1} of ${request.seen.options.length})`;
     /**
-     * Hold this session, because this send may have left text in its input box.
+     * What this send is, for the coordinator — and therefore for the hold.
      *
-     * **THE SAME HOLD THE DRAIN OPENS, IN THE SAME BOOK.** Whichever of the
-     * three producers left the uncertainty, the consequence has to be one thing
-     * — otherwise the queue goes on delivering into a box the page has already
-     * been told not to trust, which is the missing-join failure this whole
-     * neighbourhood keeps writing postmortems about.
+     * **THE SAME BOOK THE DRAIN CONSULTS.** Whichever producer left the
+     * uncertainty, the consequence has to be one thing, otherwise the queue goes
+     * on delivering into a box the page has already been told not to trust —
+     * the missing-join failure this neighbourhood keeps writing postmortems
+     * about.
+     *
+     * `onThrow: "hold"` because there is no lease here to leave open: an
+     * exception out of the transport cannot say whether it happened before the
+     * first keystroke or out of the middle of the sequence, and a hold is the
+     * only record there is. The drain's opposite choice is stronger rather than
+     * weaker — see `ThrowPolicy`.
      */
-    const holdSession = (reading: UncertainSendReading): void => {
-      const hold = deps.quarantine.hold({
-        sessionId: target.sessionId,
-        paneId: target.paneId,
-        claudeSessionId: target.claudeSessionId,
-        reading,
-        origin: "direct-steer",
-        what,
-      });
+    const purpose: SendPurpose = { origin: "direct-steer", what, onThrow: "hold", record: { kind: "book" } };
+
+    /** The HELD line, wherever the hold came from. */
+    const noteHold = (hold: QuarantineHoldView): void => {
       deps.log(
-        `steer ${op}: HELD session=${target.sessionId} hold=${hold.id} v${hold.version} reading=${reading} — ` +
+        `steer ${op}: HELD session=${target.sessionId} hold=${hold.id} v${hold.version} reading=${hold.reading} — ` +
           "nothing else will be delivered to it until somebody says what is in that input box",
       );
     };
 
-    let result: SteerResult;
-    try {
-      // ATTRIBUTED AT THE MOMENT OF THE SEND. `request.text` must never reach
-      // `sendMessage` on its own: it is the raw thing a caller typed, and the
-      // prefix is what tells the receiving agent whether it is reading Greg or
-      // an automated coordinator. The parse already asked and refused the
-      // request if the answer was no, so the `false` arm below is unreachable —
-      // and it is written out rather than asserted away because the readable
-      // failure for an unreachable case is a refusal, not a bare send.
-      result =
-        "text" in request
-          ? spoken(renderMessage(request.text, request.speaker), (text) => deps.sendMessage(target, text, request.declaredStatus))
-          : deps.answerQuestion(target, request.seen, request.optionIndex, request.declaredStatus);
-    } catch (e) {
+    // ATTRIBUTED AT THE MOMENT OF THE SEND. `request.text` must never reach the
+    // transport on its own: it is the raw thing a caller typed, and the prefix
+    // is what tells the receiving agent whether it is reading Greg or an
+    // automated coordinator. The parse already asked and refused the request if
+    // the answer was no, so `notSendable` below is unreachable — and it is
+    // written out rather than asserted away because the readable failure for an
+    // unreachable case is a refusal, not a bare send.
+    let attempt: SendAttempt;
+    if ("text" in request) {
+      const rendered = renderMessage(request.text, request.speaker);
+      if (!rendered.ok) {
+        refused(notSendable(rendered.why));
+        return;
+      }
+      attempt = deps.send.message(target, rendered.text, request.declaredStatus, purpose);
+    } else {
+      attempt = deps.send.answer(target, request.seen, request.optionIndex, request.declaredStatus, purpose);
+    }
+
+    // **NOTHING WAS TYPED**, because the coordinator refused before the
+    // transport. This is the arm the page's own copy has been promising since
+    // Stage 4 and the route did not keep: a held session is one nothing may be
+    // delivered to, and "nothing" has to include the button on the phone.
+    if (attempt.kind === "held") {
+      const hold = attempt.hold;
+      deps.log(
+        `steer ${op}: refused code=session-held pane=${target.paneId} session=${target.sessionId} ` +
+          `hold=${hold.id} v${hold.version}`,
+      );
+      // `delivery: "none"` is a claim, and it is the one claim this arm can
+      // honestly make: the transport was never reached, so no keystroke left
+      // this process for THIS request. What may be sitting in that input box is
+      // the earlier send's, and the hold's own sentence says so.
+      respond(res, 409, { ok: false, code: "session-held", why: attempt.why, delivery: "none" });
+      return;
+    }
+
+    if (attempt.kind === "threw") {
       // Only a bug reaches here: every expected failure is a `Refusal`. So this
       // is the one 5xx in the file, and it says `internal` rather than a refusal
       // code so the client can tell a broken server from a stale view.
-      const why = `the delivery module threw: ${(e as Error).message}`;
+      const why = `the delivery module threw: ${attempt.error.message}`;
       deps.log(`steer ${op}: FAILED pane=${target.paneId} ${why}`);
-      // **A THROW IS THE CASE WITH THE LEAST EVIDENCE BEHIND IT**, and this
-      // `try` surrounds the whole call, so it cannot say WHEN: `fire()` may
-      // throw before the first keystroke or out of the middle of the sequence.
-      // That is not a reason to assume the first — it is the reason to hold.
-      //
-      // The DRAIN deliberately does not do this on its own throw, and the two
-      // are not inconsistent: there the lease is left open, which stops that
-      // session's queue harder than a hold would and puts the decision in front
-      // of a person. Here there is no lease to leave open, so the hold is the
-      // only thing there is.
-      holdSession("threw");
+      if (attempt.hold !== null) noteHold(attempt.hold);
       respond(res, 500, { ok: false, code: "internal", why });
       return;
     }
 
+    const result = attempt.result;
     if (!result.ok) {
+      refused(result, attempt.hold);
+      return;
+    }
+
+    deps.log(
+      `steer ${op}: SENT pane=${result.verified.paneId} session=${result.verified.sessionId} ` +
+        `panePid=${result.verified.panePid} claudePid=${result.verified.claudePid} calls=${result.sent.length}`,
+    );
+    respond(res, 200, { ok: true, op, verified: result.verified, sent: result.sent });
+
+    /**
+     * One refusal, logged and answered the same way whoever refused.
+     *
+     * A hoisted function rather than a branch, so that the `bad-text` arm above
+     * and the transport's own refusals cannot drift apart in what they say or
+     * in what status they carry.
+     */
+    function refused(result: SteerFailure, hold: QuarantineHoldView | null = null): void {
       // `describeSend`, never `result.sent` — THE ARGV IS THE MESSAGE, and this
       // file's header promises the message is never logged. A refusal that
       // leaked it into the log would be the promise broken at the one moment
@@ -1142,15 +1186,13 @@ export function makeSteerRoutes(overrides: Partial<SteerDeps> = {}): SteerRoutes
         `steer ${op}: refused pane=${target.paneId} code=${result.reason.code} ` +
           `delivery=${result.delivery} landed=${describeSend(result.sent)} why=${oneLine(result.reason.why)}`,
       );
-      // **ASKED OF `nothingWasSent`, NOT OF `result.delivery`.** That function
-      // is the one audited place that reads BOTH halves — the summary and the
-      // `sent` list of tmux calls that completed — and a `delivery: "none"`
-      // with a non-empty list is a self-contradicting report whose honest
-      // reading is that something went out. Comparing the summary here would be
-      // a second opinion, and the more confident of the two.
-      if (nothingWasSent(result) === null) {
-        holdSession(result.delivery === "partial" ? "partial" : result.delivery === "unknown" ? "unknown" : "none-contradicted");
-      }
+      // **THE COORDINATOR ALREADY DECIDED THIS, ASKED OF `nothingWasSent`
+      // RATHER THAN OF `result.delivery`** — the one audited place that reads
+      // BOTH halves, the summary and the `sent` list of tmux calls that
+      // completed. A second opinion here would be the more confident of the
+      // two, and this route no longer has one: it logs the hold the coordinator
+      // opened, or logs nothing because there was none.
+      if (hold !== null) noteHold(hold);
       respond(res, REFUSAL_STATUS[result.reason.code], {
         ok: false,
         code: result.reason.code,
@@ -1161,14 +1203,7 @@ export function makeSteerRoutes(overrides: Partial<SteerDeps> = {}): SteerRoutes
         // "try again" is the worst available advice.
         delivery: result.delivery,
       });
-      return;
     }
-
-    deps.log(
-      `steer ${op}: SENT pane=${result.verified.paneId} session=${result.verified.sessionId} ` +
-        `panePid=${result.verified.panePid} claudePid=${result.verified.claudePid} calls=${result.sent.length}`,
-    );
-    respond(res, 200, { ok: true, op, verified: result.verified, sent: result.sent });
   }
 
   return {

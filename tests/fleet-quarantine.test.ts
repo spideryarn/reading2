@@ -24,6 +24,7 @@ import { describe, expect, it } from "vitest";
 
 import type { FleetRow, FleetSnapshot } from "../tools/fleet/collect.js";
 import { createDrainCursor, drainOnce } from "../tools/fleet/drain.js";
+import { classifyGate, type PaneOption } from "../tools/fleet/pane.js";
 import {
   QuarantineBook,
   MAX_CLOSED_PER_SESSION,
@@ -32,8 +33,37 @@ import {
 import { SteeringQueue } from "../tools/fleet/queue.js";
 import { makeActionRoutes } from "../tools/fleet/routes-actions.js";
 import { createRateLimiter, makeSteerRoutes } from "../tools/fleet/routes-steer.js";
+import { makeSendCoordinator, type SendCoordinator, type SendCoordinatorDeps } from "../tools/fleet/send-coordinator.js";
 import type { FleetStatus } from "../tools/fleet/status.js";
-import type { SteerResult } from "../tools/fleet/steer.js";
+import type { SeenQuestion, SteerResult } from "../tools/fleet/steer.js";
+
+/**
+ * A coordinator over a named book, with a fake transport.
+ *
+ * **THE BOOK IS PASSED IN RATHER THAN MADE HERE, AND THAT IS THE WHOLE POINT
+ * OF THE HELPER.** Every producer's own tests used to inject a book each, which
+ * proved that each producer talks to *a* book and nothing about whether they
+ * talk to the SAME one. These tests still inject — a module-level singleton
+ * written to by every test in a file is the shape that passes alone and fails
+ * in a batch — but the injection is now explicit at the seam, and the join
+ * between the two real compositions is asserted in
+ * tests/fleet-send-composition.test.ts, where it belongs.
+ */
+function sends(
+  book: SendCoordinatorDeps["book"],
+  sendMessage: SendCoordinatorDeps["sendMessage"],
+  answerQuestion?: SendCoordinatorDeps["answerQuestion"],
+): SendCoordinator {
+  return makeSendCoordinator({
+    book,
+    sendMessage,
+    answerQuestion:
+      answerQuestion ??
+      (() => {
+        throw new Error("this test does not answer dialogs");
+      }),
+  });
+}
 
 const SESSION = "$97001";
 const OTHER_SESSION = "$97002";
@@ -221,23 +251,54 @@ describe("generations", () => {
     expect(book.holding(SESSION)?.id).toBe(hold.id);
   });
 
-  it("a hold opened before this server knew the generation goes on holding, whatever changes later", () => {
-    // THE CONSERVATIVE ARM, AND IT IS DELIBERATE. Only a PROVEN change of
-    // generation proves the old input box is gone. A hold opened while this
-    // server had not yet been told which tmux server it was reading is bound to
-    // no generation at all, so no later change proves anything about it, and it
-    // keeps holding until a person releases it. The window is one refresh
-    // cycle wide — the drain tells the book on every pass — and both release
-    // gestures are available throughout it.
+  it("a hold opened before this server knew the generation is remembered against the first one it sees", () => {
+    // THE CONSERVATIVE ARM, AND IT IS DELIBERATE — but only for one
+    // observation. A hold opened while this server had not yet been told which
+    // tmux server it was reading is bound to no generation, so the FIRST thing
+    // heard afterwards proves nothing: it may well be the same server the send
+    // went to. It is recorded and nothing else, on a field of its own, because
+    // it is not a claim about the moment of the send.
+    const { book } = makeBook();
+    const hold = book.hold(evidence());
+    expect(hold.tmuxGeneration).toBeNull();
+    expect(hold.firstSeenGeneration).toBeNull();
+    expect(book.noteGeneration(770_001)).toBe(0);
+    expect(book.holding(SESSION)?.id).toBe(hold.id);
+    // Recorded, and NOT written into `tmuxGeneration`, which would be a claim
+    // that this is where the send went.
+    expect(book.holding(SESSION)?.firstSeenGeneration).toBe(770_001);
+    expect(book.holding(SESSION)?.tmuxGeneration).toBeNull();
+    // Hearing the same one again is still not a change.
+    expect(book.noteGeneration(770_001)).toBe(0);
+    expect(book.holding(SESSION)?.id).toBe(hold.id);
+    // …and it is releasable throughout, which is what stops it being a hold
+    // nothing can clear.
+    expect(book.release({ holdId: hold.id, version: 1, gesture: "abandoned-unknown" }).ok).toBe(true);
+  });
+
+  it("and a SECOND, different generation supersedes it — the window is not indefinite", () => {
+    // **THE CORRECTION TO THE CONSERVATIVE ARM, AND IT WAS TOO BROAD.** Saying
+    // *no later change proves anything about this hold* is true of the first
+    // observation and false of the second: two different tmux servers seen
+    // after it opened means one replaced the other, whichever of them the send
+    // went to — every pane went with it either way. Without this, a hold opened
+    // in the seconds before the first collection held its session for ever, and
+    // the "one refresh cycle wide" window in the plan was indefinite.
     const { book } = makeBook();
     const hold = book.hold(evidence());
     expect(hold.tmuxGeneration).toBeNull();
     book.noteGeneration(770_001);
-    expect(book.holding(SESSION)?.id).toBe(hold.id);
-    book.noteGeneration(770_002);
-    expect(book.holding(SESSION)?.id).toBe(hold.id);
-    // …and it is releasable, which is what stops it being a hold nothing can clear.
-    expect(book.release({ holdId: hold.id, version: 1, gesture: "abandoned-unknown" }).ok).toBe(true);
+    expect(book.noteGeneration(770_002)).toBe(1);
+    expect(book.holding(SESSION)).toBeNull();
+    const record = book.find(hold.id);
+    expect(record?.outcome.kind).toBe("superseded");
+    if (record?.outcome.kind !== "superseded") return;
+    expect(record.outcome.was).toBe(770_001);
+    expect(record.outcome.now).toBe(770_002);
+    // AND THE SENTENCE DOES NOT CLAIM THE SEND WENT TO 770_001. It cannot know
+    // that, and a superseded record is read by a person deciding whether
+    // anything is still owed to that session.
+    expect(record.outcome.what).toMatch(/had not been told|cannot say which/i);
   });
 
   it("a superseded hold cannot be released, and says so rather than dead-ending", () => {
@@ -328,6 +389,39 @@ function snapshot(rows: FleetRow[] = [fleetRow()]): FleetSnapshot {
 }
 
 /** The body the page posts to steer one session. */
+/**
+ * A dialog on screen, for the answer path.
+ *
+ * `gate` is CALLED rather than written out, matching tests/fleet-steer-route.ts:
+ * `parseQuestion` recomputes it, so a literal here would be this file's opinion
+ * of the classifier rather than the classifier's.
+ */
+const SEEN_OPTIONS: PaneOption[] = [
+  { label: "Yes, proceed", key: { via: "selected" }, consequence: "once" },
+  { label: "No, exit", key: { via: "arrows", key: "Down", presses: 1 }, consequence: "decline" },
+];
+
+const SEEN: SeenQuestion = {
+  kind: "question",
+  prompt: "Do you trust the files in this folder?",
+  material: { kind: "no-material" },
+  options: SEEN_OPTIONS,
+  gate: classifyGate({ kind: "no-material" }, SEEN_OPTIONS),
+};
+
+function answerBody(over: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    paneId: PANE,
+    sessionId: SESSION,
+    claudeSessionId: CONVO,
+    panePid: 424242,
+    status: { kind: "needs-you" },
+    question: SEEN,
+    optionIndex: 1,
+    ...over,
+  };
+}
+
 function steerBody(over: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     paneId: PANE,
@@ -505,20 +599,20 @@ describe("every ambiguous send holds the session — the drain", () => {
     const outcome = drainOnce(snapshot(), {
       queue: q,
       cursor: createDrainCursor(),
-      sendMessage: () => PARTIAL,
+      send: sends(quarantine, () => PARTIAL),
       log: () => {},
       now: () => clock.t,
     });
-    expect(outcome.outcomes.map((o) => o.kind)).toEqual(["refused"]);
+    expect(outcome.outcomes.map((o) => o.kind)).toEqual(["uncertain"]);
     expect(outcome.quarantined).toBe(1);
     expect(quarantine.holding(SESSION)).not.toBeNull();
     // THE ASSERTION: the next pass hands nothing out.
     const second = drainOnce(snapshot(), {
       queue: q,
       cursor: createDrainCursor(),
-      sendMessage: () => {
+      send: sends(quarantine, () => {
         throw new Error("a second send must not be attempted while the session is held");
-      },
+      }),
       log: () => {},
       now: () => clock.t,
     });
@@ -526,9 +620,9 @@ describe("every ambiguous send holds the session — the drain", () => {
   });
 
   it("settles the first item `uncertain`, and does not put it back", () => {
-    const { q, clock } = makeQueue();
+    const { q, quarantine, clock } = makeQueue();
     q.enqueueMessage(TARGET, "first", "greg");
-    drainOnce(snapshot(), { queue: q, cursor: createDrainCursor(), sendMessage: () => PARTIAL, log: () => {}, now: () => clock.t });
+    drainOnce(snapshot(), { queue: q, cursor: createDrainCursor(), send: sends(quarantine, () => PARTIAL), log: () => {}, now: () => clock.t });
     expect(q.size(SESSION)).toBe(0);
   });
 
@@ -547,7 +641,7 @@ describe("every ambiguous send holds the session — the drain", () => {
     for (const [result, reading] of cases) {
       const { q, quarantine, clock } = makeQueue();
       q.enqueueMessage(TARGET, "first", "greg");
-      drainOnce(snapshot(), { queue: q, cursor: createDrainCursor(), sendMessage: () => result, log: () => {}, now: () => clock.t });
+      drainOnce(snapshot(), { queue: q, cursor: createDrainCursor(), send: sends(quarantine, () => result), log: () => {}, now: () => clock.t });
       expect(quarantine.holding(SESSION)?.reading).toBe(reading);
       expect(quarantine.holding(SESSION)?.origin).toBe("queued-delivery");
     }
@@ -560,7 +654,7 @@ describe("every ambiguous send holds the session — the drain", () => {
     const { q, quarantine, clock } = makeQueue();
     q.enqueueMessage(TARGET, "first", "greg");
     const unsent: SteerResult = { ok: false, reason: { code: "pane-is-asking", why: "a dialog is up" }, delivery: "none", sent: [] };
-    const r = drainOnce(snapshot(), { queue: q, cursor: createDrainCursor(), sendMessage: () => unsent, log: () => {}, now: () => clock.t });
+    const r = drainOnce(snapshot(), { queue: q, cursor: createDrainCursor(), send: sends(quarantine, () => unsent), log: () => {}, now: () => clock.t });
     expect(r.outcomes.map((o) => o.kind)).toEqual(["put-back"]);
     expect(r.quarantined).toBe(0);
     expect(quarantine.holding(SESSION)).toBeNull();
@@ -573,9 +667,9 @@ describe("every ambiguous send holds the session — the drain", () => {
     const r = drainOnce(snapshot(), {
       queue: q,
       cursor: createDrainCursor(),
-      sendMessage: () => {
+      send: sends(quarantine, () => {
         throw new Error("tmux went away");
-      },
+      }),
       log: () => {},
       now: () => clock.t,
     });
@@ -590,8 +684,7 @@ describe("every ambiguous send holds the session — the direct steer route", ()
     const { q, quarantine } = makeQueue();
     q.enqueueMessage(TARGET, "queued behind it", "greg");
     const routes = makeSteerRoutes({
-      sendMessage: () => PARTIAL,
-      quarantine,
+      send: sends(quarantine, () => PARTIAL),
       log: () => {},
       limiter: createRateLimiter({ minIntervalMs: 0, burstMax: 1_000, burstWindowMs: 1 }),
     });
@@ -606,10 +699,9 @@ describe("every ambiguous send holds the session — the direct steer route", ()
     const { q, quarantine } = makeQueue();
     q.enqueueMessage(TARGET, "queued behind it", "greg");
     const routes = makeSteerRoutes({
-      sendMessage: () => {
+      send: sends(quarantine, () => {
         throw new Error("tmux went away");
-      },
-      quarantine,
+      }),
       log: () => {},
       limiter: createRateLimiter({ minIntervalMs: 0, burstMax: 1_000, burstWindowMs: 1 }),
     });
@@ -623,8 +715,7 @@ describe("every ambiguous send holds the session — the direct steer route", ()
     const { q, quarantine } = makeQueue();
     q.enqueueMessage(TARGET, "queued behind it", "greg");
     const routes = makeSteerRoutes({
-      sendMessage: () => ({ ok: false, reason: { code: "pane-is-asking", why: "a dialog is up" }, delivery: "none", sent: [] }),
-      quarantine,
+      send: sends(quarantine, () => ({ ok: false, reason: { code: "pane-is-asking", why: "a dialog is up" }, delivery: "none", sent: [] })),
       log: () => {},
       limiter: createRateLimiter({ minIntervalMs: 0, burstMax: 1_000, burstWindowMs: 1 }),
     });
@@ -637,12 +728,11 @@ describe("every ambiguous send holds the session — the direct steer route", ()
     const { q, quarantine } = makeQueue();
     q.enqueueMessage(TARGET, "queued behind it", "greg");
     const routes = makeSteerRoutes({
-      sendMessage: () => ({
+      send: sends(quarantine, () => ({
         ok: true,
         verified: { paneId: PANE, sessionId: SESSION, panePid: 424242, claudePid: 424299 },
         sent: [["send-keys", "-t", PANE, "-l", "--", "…"]],
-      }),
-      quarantine,
+      })),
       log: () => {},
       limiter: createRateLimiter({ minIntervalMs: 0, burstMax: 1_000, burstWindowMs: 1 }),
     });
@@ -658,10 +748,10 @@ describe("every ambiguous send holds the session — the broadcast", () => {
     q.enqueueMessage(TARGET, "queued behind it", "greg");
     const routes = makeActionRoutes({
       queue: q,
-      sendMessage: (target) =>
+      send: sends(quarantine, (target) =>
         target.sessionId === SESSION
           ? PARTIAL
-          : { ok: true, verified: { paneId: target.paneId, sessionId: target.sessionId, panePid: 1, claudePid: 2 }, sent: [] },
+          : { ok: true, verified: { paneId: target.paneId, sessionId: target.sessionId, panePid: 1, claudePid: 2 }, sent: [] }),
       now: () => clock.t,
       limiter: createRateLimiter({ minIntervalMs: 0, burstMax: 1_000, burstWindowMs: 1 }),
       log: () => {},
@@ -688,9 +778,9 @@ describe("every ambiguous send holds the session — the broadcast", () => {
     const { q, quarantine, clock } = makeQueue();
     const routes = makeActionRoutes({
       queue: q,
-      sendMessage: () => {
+      send: sends(quarantine, () => {
         throw new Error("tmux went away");
-      },
+      }),
       now: () => clock.t,
       limiter: createRateLimiter({ minIntervalMs: 0, burstMax: 1_000, burstWindowMs: 1 }),
       log: () => {},
@@ -711,7 +801,7 @@ describe("every ambiguous send holds the session — the broadcast", () => {
     const { q, quarantine, clock } = makeQueue();
     const routes = makeActionRoutes({
       queue: q,
-      sendMessage: () => PARTIAL,
+      send: sends(quarantine, () => PARTIAL),
       now: () => clock.t,
       limiter: createRateLimiter({ minIntervalMs: 0, burstMax: 1_000, burstWindowMs: 1 }),
       log: () => {},
@@ -729,6 +819,149 @@ describe("every ambiguous send holds the session — the broadcast", () => {
 });
 
 /* ================================================================== *
+ * THE OTHER HALF, AND IT WAS MISSING.
+ *
+ * Recording the hold is not the guarantee. **The guarantee is that a held
+ * session is not typed into**, and for a stage of this file's life exactly one
+ * of the four paths kept it: `SteeringQueue.next()`. The direct steer route
+ * never asked, and the broadcast chose its recipients on `drainGate` alone — so
+ * a session the page was drawing as HELD could still be sent a message from the
+ * phone, or a fan-out sentence, landing behind half of somebody else's.
+ *
+ * **EACH TEST BELOW ASSERTS THE TRANSPORT WAS NOT REACHED**, not that a refusal
+ * came back. A route that answered 409 and typed anyway would pass the weaker
+ * assertion, and typing anyway is the whole failure.
+ * ================================================================== */
+
+/** A recorder that fails the test loudly if anything reaches it. */
+function transportThatMustNotBeReached(typedAt: string[]) {
+  return (target: { sessionId: string }): SteerResult => {
+    typedAt.push(target.sessionId);
+    return PARTIAL;
+  };
+}
+
+describe("a held session is not typed into — every path", () => {
+  it("the direct message route does not reach the transport", async () => {
+    const { q, quarantine } = makeQueue();
+    const typedAt: string[] = [];
+    quarantine.hold(evidence());
+    const routes = makeSteerRoutes({
+      send: sends(quarantine, transportThatMustNotBeReached(typedAt)),
+      log: () => {},
+      limiter: createRateLimiter({ minIntervalMs: 0, burstMax: 1_000, burstWindowMs: 1 }),
+    });
+    const r = await post(routes.handle, fakeReq("/api/steer/message", steerBody()));
+
+    expect(typedAt).toEqual([]);
+    expect(r.status).toBe(409);
+    expect(r.json.code).toBe("session-held");
+    // `delivery: "none"` is the one claim this arm can make, and it is true:
+    // no keystroke left this process for THIS request.
+    expect(r.json.delivery).toBe("none");
+    // The hold is unchanged — a refused send is not a second incident.
+    expect(quarantine.holding(SESSION)?.version).toBe(1);
+    expect(quarantine.holding(SESSION)?.incidents).toBe(1);
+    // And nothing was queued behind it either: this route sends or refuses.
+    expect(q.size(SESSION)).toBe(0);
+  });
+
+  it("the direct answer route does not reach the transport", async () => {
+    // A DIALOG ANSWER IS A KEYSTROKE TOO — a digit, or a Down and a Return —
+    // and it lands in the same input box as the half-typed sentence. The path
+    // is separate in the route, so it is separate here.
+    const { quarantine } = makeQueue();
+    const typedAt: string[] = [];
+    quarantine.hold(evidence());
+    const routes = makeSteerRoutes({
+      send: makeSendCoordinator({
+        book: quarantine,
+        sendMessage: transportThatMustNotBeReached(typedAt),
+        answerQuestion: (target) => {
+          typedAt.push(target.sessionId);
+          return PARTIAL;
+        },
+      }),
+      log: () => {},
+      answeringEnabled: () => true,
+      limiter: createRateLimiter({ minIntervalMs: 0, burstMax: 1_000, burstWindowMs: 1 }),
+    });
+    const r = await post(routes.handle, fakeReq("/api/steer/answer", answerBody()));
+
+    expect(typedAt).toEqual([]);
+    expect(r.status).toBe(409);
+    expect(r.json.code).toBe("session-held");
+  });
+
+  it("a broadcast skips a held recipient and reaches the transport for the others", async () => {
+    // BOTH HALVES IN ONE TEST, deliberately. A fan-out that refused everybody
+    // the moment one session was held would also pass "the transport was not
+    // reached for the held one", and would be a different bug of the same size:
+    // thirty-five agents told nothing because one was holding half a sentence.
+    const { quarantine, q, clock } = makeQueue();
+    const typedAt: string[] = [];
+    quarantine.hold(evidence());
+    const routes = makeActionRoutes({
+      queue: q,
+      send: sends(quarantine, (target) => {
+        typedAt.push(target.sessionId);
+        return { ok: true, verified: { paneId: target.paneId, sessionId: target.sessionId, panePid: 1, claudePid: 2 }, sent: [] };
+      }),
+      now: () => clock.t,
+      limiter: createRateLimiter({ minIntervalMs: 0, burstMax: 1_000, burstWindowMs: 1 }),
+      log: () => {},
+      actEnabled: () => true,
+      yieldToLoop: () => Promise.resolve(),
+    });
+    const r = await post(routes.handle, fakeReq("/api/actions/box", {
+      actionId: "resource-broadcast",
+      mode: "run",
+      confirm: true,
+      speaker: "greg",
+      recipients: [
+        { paneId: PANE, sessionId: SESSION, claudeSessionId: CONVO, status: { kind: "idle" } },
+        { paneId: "%97009", sessionId: OTHER_SESSION, claudeSessionId: CONVO, status: { kind: "idle" } },
+      ],
+    }));
+
+    expect(r.status).toBe(200);
+    expect(typedAt).toEqual([OTHER_SESSION]);
+    const rows = (r.json.result as { recipients: { sessionId: string; outcome: string; why: string | null }[] }).recipients;
+    const held = rows.find((x) => x.sessionId === SESSION);
+    expect(held?.outcome).toBe("held");
+    // The hold's own sentence, not one this route made up about it.
+    expect(held?.why ?? "").toContain("held");
+    expect(rows.find((x) => x.sessionId === OTHER_SESSION)?.outcome).toBe("keys-submitted");
+  });
+
+  it("the drain does not reach the transport, and stops at `next()` rather than at the send", () => {
+    // THE PATH THAT ALREADY KEPT THE PROMISE, asserted the same way as the
+    // three that did not — and asserted at BOTH depths, because the two are
+    // different guarantees. `next()` refusing is what stops the item being
+    // leased at all; the coordinator refusing is the floor under it.
+    const { q, quarantine, clock } = makeQueue();
+    q.enqueueMessage(TARGET, "queued behind the hold", "greg");
+    quarantine.hold(evidence());
+    const typedAt: string[] = [];
+    const r = drainOnce(snapshot(), {
+      queue: q,
+      cursor: createDrainCursor(),
+      send: sends(quarantine, transportThatMustNotBeReached(typedAt)),
+      log: () => {},
+      now: () => clock.t,
+    });
+
+    expect(typedAt).toEqual([]);
+    expect(r.outcomes[0]).toMatchObject({ kind: "held", reason: "quarantined" });
+    // AND THE ITEM IS STILL THERE, unleased. Nothing about a hold destroys what
+    // somebody queued; it waits for the person who has to say what is in that
+    // input box.
+    expect(q.size(SESSION)).toBe(1);
+    expect(q.snapshot(SESSION).items[0]?.leasedAt).toBeNull();
+  });
+});
+
+/* ================================================================== *
  * THE WAY OUT. A hold that outlives every gesture that could clear it is the
  * worst thing in this design, so these tests try to build one.
  * ================================================================== */
@@ -738,7 +971,7 @@ function releaseHarness() {
   const logs: string[] = [];
   const routes = makeActionRoutes({
     queue: q,
-    sendMessage: () => PARTIAL,
+    send: sends(quarantine, () => PARTIAL),
     now: () => clock.t,
     limiter: createRateLimiter({ minIntervalMs: 0, burstMax: 1_000, burstWindowMs: 1 }),
     log: (line) => logs.push(line),
@@ -767,13 +1000,13 @@ describe("POST /api/actions/hold/release", () => {
   it("neither gesture sends anything — the property the whole protocol turns on", async () => {
     for (const gesture of ["operator-confirmed", "abandoned-unknown"] as const) {
       const { q, quarantine, clock } = makeQueue();
-      const sends: string[] = [];
+      const typedAt: string[] = [];
       const routes = makeActionRoutes({
         queue: q,
-        sendMessage: (target) => {
-          sends.push(target.sessionId);
+        send: sends(quarantine, (target) => {
+          typedAt.push(target.sessionId);
           return PARTIAL;
-        },
+        }),
         now: () => clock.t,
         limiter: createRateLimiter({ minIntervalMs: 0, burstMax: 1_000, burstWindowMs: 1 }),
         log: () => {},
@@ -785,7 +1018,7 @@ describe("POST /api/actions/hold/release", () => {
       const hold = quarantine.hold(evidence());
       const r = await release(routes, { holdId: hold.id, version: 1, gesture });
       expect(r.status).toBe(200);
-      expect(sends).toEqual([]);
+      expect(typedAt).toEqual([]);
     }
   });
 
@@ -867,7 +1100,7 @@ describe("POST /api/actions/hold/release", () => {
   it("works when the hold has no queue items left behind it — the commonest shape", async () => {
     const { q, quarantine, clock, routes } = releaseHarness();
     q.enqueueMessage(TARGET, "the only thing queued", "greg");
-    drainOnce(snapshot(), { queue: q, cursor: createDrainCursor(), sendMessage: () => PARTIAL, log: () => {}, now: () => clock.t });
+    drainOnce(snapshot(), { queue: q, cursor: createDrainCursor(), send: sends(quarantine, () => PARTIAL), log: () => {}, now: () => clock.t });
     expect(q.size(SESSION)).toBe(0);
     const hold = quarantine.holding(SESSION);
     expect(hold).not.toBeNull();

@@ -91,6 +91,12 @@ export type RecipientOutcome = { sessionId: string; paneId: string } & (
   | { kind: "would-send" }
   | { kind: "would-queue" }
   | { kind: "attempted"; outcome: SteerOutcome }
+  /**
+   * Nothing was typed at this one: the session is HELD, and the server's
+   * coordinator refused before the transport. **No delivery reading, because
+   * there was no delivery** — the sentence is the hold's own.
+   */
+  | { kind: "held"; why: string }
   | { kind: "queued"; position: number | null }
   | { kind: "skipped"; code: string; why: string }
   | { kind: "not-reached"; why: string }
@@ -103,6 +109,8 @@ export type BroadcastCounts = {
   submitted: number;
   queued: number;
   skipped: number;
+  /** Rows nothing was typed at because that session is held. */
+  held: number;
   notReached: number;
 };
 
@@ -198,6 +206,12 @@ function parseRecipient(v: unknown, at: number): RecipientOutcome {
         code: str(v["code"], "unknown"),
         why: str(v["why"], "the server did not say why"),
       };
+    case "held":
+      /* A held row that fell through to `unreadable` would say the server sent
+         something this build cannot read, when what it sent is the one row a
+         person most needs to act on — that session is holding text nobody has
+         accounted for. */
+      return { ...where, kind: "held", why: str(v["why"], "that session is held and nothing was typed at it") };
     case "not-reached":
       return { ...where, kind: "not-reached", why: str(v["why"], "the server did not say why") };
     case "attempted": {
@@ -233,7 +247,7 @@ function parseRecipient(v: unknown, at: number): RecipientOutcome {
 }
 
 function parseResult(v: unknown): BroadcastResult {
-  if (!isRecord(v)) return { counts: { asked: 0, submitted: 0, queued: 0, skipped: 0, notReached: 0 }, recipients: [], sample: null };
+  if (!isRecord(v)) return { counts: { asked: 0, submitted: 0, queued: 0, skipped: 0, held: 0, notReached: 0 }, recipients: [], sample: null };
   const counts = isRecord(v["counts"]) ? v["counts"] : {};
   const rows = Array.isArray(v["recipients"]) ? v["recipients"] : [];
   // Every row survives — see `parseRecipient`. The index is passed so a row
@@ -245,6 +259,7 @@ function parseResult(v: unknown): BroadcastResult {
       submitted: num(counts["submitted"]),
       queued: num(counts["queued"]),
       skipped: num(counts["skipped"]),
+      held: num(counts["held"]),
       notReached: num(counts["notReached"]),
     },
     recipients,

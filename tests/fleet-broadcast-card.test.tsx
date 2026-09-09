@@ -29,6 +29,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { BroadcastCard } from "../tools/fleet/web/src/BroadcastCard";
+import { makeBroadcastApi } from "../tools/fleet/web/src/broadcast-client";
 import type { BroadcastApi, BroadcastOutcome, RecipientOutcome } from "../tools/fleet/web/src/broadcast-client";
 import type { FleetRow } from "../tools/fleet/web/src/types";
 
@@ -103,6 +104,7 @@ function ran(op: "broadcast" | "broadcast-preview", recipients: RecipientOutcome
         submitted: 0,
         queued: 0,
         skipped: 0,
+        held: 0,
         notReached: 0,
         ...counts,
       } as never,
@@ -460,7 +462,7 @@ describe("what the receipts are allowed to say", () => {
         why: "none of the 2 rows you sent can be reached right now",
         status: 409,
         result: {
-          counts: { asked: 2, submitted: 0, queued: 0, skipped: 2, notReached: 0 },
+          counts: { asked: 2, submitted: 0, queued: 0, skipped: 2, held: 0, notReached: 0 },
           recipients: [
             { sessionId: "$1", paneId: "%1", kind: "skipped", code: "declared-not-steerable", why: "it is a shell, which would EXECUTE the message" },
             { sessionId: "$3", paneId: "%3", kind: "skipped", code: "declared-not-steerable", why: "its Claude has exited" },
@@ -496,5 +498,61 @@ describe("a lost answer is not an answer of no", () => {
        saying everything twice, to everybody. */
     expect(text()).toContain("Do NOT simply send it again");
     expect(text()).not.toContain("Nothing was broadcast.");
+  });
+});
+
+describe("a session that was HELD is said so, not folded into something else", () => {
+  /**
+   * The server never reached the transport for these rows: that session is
+   * holding text nobody could account for, and a second line landing behind
+   * half a first is read by the agent as one instruction neither person wrote
+   * — routes-broadcast.ts § `BroadcastRecipient`.
+   *
+   * Two ways to get this wrong, and one test each: reading the row as a
+   * delivery that failed, and not reading it at all.
+   */
+  it("renders the hold's own sentence and names the held rows in the headline", async () => {
+    const { api } = fakeApi([
+      ran("broadcast-preview", [{ sessionId: "$1", paneId: "%1", kind: "would-send" }]),
+      ran(
+        "broadcast",
+        [{ sessionId: "$1", paneId: "%1", kind: "held", why: "nothing was sent: this session is held" }],
+        { held: 1 },
+      ),
+    ]);
+    render(<BroadcastCard rows={ROWS} unreadableRows={0} api={api} />);
+    type("ease off");
+    await press("Preview");
+    await press("Send it");
+
+    expect(text()).toContain("Nothing was typed at it");
+    expect(text()).toContain("this session is held");
+    /* **IN THE HEADLINE TOO.** A row nothing was typed at, counted nowhere and
+       named nowhere, is how a fan-out that reached most of the fleet reads as
+       one that reached all of it. */
+    expect(text()).toContain("1 held");
+  });
+
+  it("reads a held row off the wire rather than calling it unreadable", async () => {
+    /* THE PARSE, not the card. An arm this build did not know would come back
+       as `unreadable` — "the server sent something this build cannot read" —
+       over the top of the one row a person most needs to act on. */
+    const body = {
+      ok: true,
+      op: "broadcast",
+      result: {
+        counts: { asked: 1, submitted: 0, queued: 0, skipped: 0, held: 1, notReached: 0 },
+        recipients: [{ sessionId: "$1", paneId: "%1", kind: "held", why: "nothing was sent: this session is held" }],
+      },
+    };
+    const api = makeBroadcastApi(
+      (async () => ({ ok: true, status: 200, json: async () => body }) as unknown as Response) as unknown as typeof fetch,
+    );
+    const outcome = await api.send(ROWS, "ease off", false);
+    expect(outcome.kind).toBe("ran");
+    const held = outcome.kind === "ran" ? outcome.result.recipients[0] : undefined;
+    expect(held?.kind).toBe("held");
+    expect(held?.kind === "held" && held.why).toContain("this session is held");
+    expect(outcome.kind === "ran" && outcome.result.counts.held).toBe(1);
   });
 });
