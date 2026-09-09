@@ -51,7 +51,7 @@ export function App({
   actionsApi = httpActionsApi,
   messagesApi = httpMessagesApi,
   historyApi = httpHistoryApi,
-  deploysApi = httpDeploysApi(),
+  deploysApi = httpDeploysApi,
   actionsPollMs,
 }: {
   transport?: Transport;

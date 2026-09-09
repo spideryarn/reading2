@@ -1823,16 +1823,31 @@ export type MainRef =
   | { kind: "unavailable"; why: string };
 
 /**
- * Whether the newest recorded deploy is behind production's tip.
+ * How the newest recorded deploy sits against this checkout's cached tip.
  *
- * **Three arms, and the third is why this is not a boolean.** `not-ancestor`
- * means a rollback or a deploy from somebody's working directory; `unknown`
- * means we could not ask. Collapsed into one `false`, a git that would not run
- * renders as a rollback that never happened.
+ * **Four arms, and the split between the middle two is the one that matters.**
+ * It was three until 2026-09-09, with a single `not-ancestor` drawn as *a
+ * rollback, or a deploy from a working directory* — an alarm. GPT Sol pointed
+ * out that a **merely stale cached ref produces exactly that reading**: when the
+ * changelog job has run since this checkout last fetched, the recorded deploy is
+ * newer than the cached tip and is not its ancestor, and nothing has gone wrong
+ * at all. Raising a rollback alarm on the commonest benign state would have
+ * taught Greg to ignore the alarm.
+ *
+ * So the probe asks the question the other way round too, and:
+ *
+ *  - `ancestor` — the recorded deploy is in the cached tip's history. Normal.
+ *  - `cache-behind` — the cached tip is an ancestor of the recorded deploy: this
+ *    checkout simply has not fetched since that deploy. Benign, and common.
+ *  - `diverged` — neither contains the other. **This** is the rollback or the
+ *    deploy from somebody's working directory, and it is worth a colour.
+ *  - `unknown` — we could not ask. Never collapse this into any of the above; a
+ *    git that would not run must not render as a rollback that never happened.
  */
 export type AncestryReading =
   | { kind: "ancestor" }
-  | { kind: "not-ancestor" }
+  | { kind: "cache-behind" }
+  | { kind: "diverged" }
   | { kind: "unknown"; why: string };
 
 /**
@@ -1843,7 +1858,19 @@ export type AncestryReading =
  * wrong answer, and "0 commits behind" is the most reassuring possible way to
  * say we have no idea.
  */
-export type CountReading = { kind: "count"; commits: number } | { kind: "unknown"; why: string };
+export type CountReading =
+  { kind: "count"; commits: number }
+  /**
+   * **Only meaningful when the ancestry is `ancestor`.**
+   *
+   * `git rev-list A..B` on divergent histories is a set difference, not "the
+   * commits after A" — so on a rollback it would answer a number that reads like
+   * a distance and is not one. The probe answers `not-comparable` instead, and
+   * the panel draws nothing rather than a plausible wrong figure. GPT Sol,
+   * 2026-09-09.
+   */
+  | { kind: "not-comparable"; why: string }
+  | { kind: "unknown"; why: string };
 
 /**
  * `GET /api/deploys`.
@@ -1879,6 +1906,16 @@ export type DeploysPayload =
       lastGeneratedAt: string | null;
       /** The newest deploy the record knows about, or null for an empty record. */
       newestRecordedSha: string | null;
+      /**
+       * **Whether the record's last line parsed** — and therefore whether
+       * `newestRecordedSha` really is the newest deploy or merely the newest
+       * one that survived.
+       *
+       * When false, every comparison below is measured from the wrong deploy,
+       * and the page must say so instead of presenting a confident distance.
+       * The record is append-only, so its last line is its newest deploy.
+       */
+      newestLineRead: boolean;
       /**
        * The git readings, as **one snapshot of one tip**.
        *
