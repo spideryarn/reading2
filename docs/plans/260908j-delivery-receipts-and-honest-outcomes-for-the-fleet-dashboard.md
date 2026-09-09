@@ -1,8 +1,18 @@
 # Delivery receipts and honest outcomes for the fleet dashboard
 
-**Status:** planned 2026-09-08 22:15, reviewed and reordered 22:30. **Stage 1 landed**; stages 2-6
-specified and not started. Baseline `d9f4dcc4`, 692 fleet tests green, typecheck clean across 1,743
-files.
+**Status, 2026-09-09 10:20: all six stages built and on `dev`, plus Stage 4b and three unplanned
+repairs. Stage 5 is the one thing left** — it is specified and waits on another session's
+`SessionDetail` re-layout, because building receipt rendering into a layout about to be replaced is
+wasted work.
+
+Each stage went out for a cross-family review of the built code, and **four of the six came back
+with findings that changed them**; three needed a fix round. The reviews found three P0s in Stage 4
+alone, one of which said the stage's own commit subject was true of one producer out of three.
+
+Started from `d9f4dcc4`. Stage 6 and its fix round were implemented by GPT Terra from written
+briefs, at Greg's request to delegate implementation; the diffs were read, the guards mutated and
+the gates run here, which mattered — `npm run typecheck` is blocked by a sandbox restriction in that
+environment, and it is the only command that covers `tests/`.
 
 This is stage **v0.2c** of [260907e](260907e-agent-fleet-dashboard.md) — Astra's A11 — and the
 **Delivery uncertainty** stage of
