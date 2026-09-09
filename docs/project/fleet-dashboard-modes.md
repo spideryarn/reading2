@@ -179,6 +179,36 @@ browser bundle read it. So a vocabulary and its union cannot live together there
 stops the two drifting. Without the `satisfies` you get a mode whose section silently never renders
 — `deploys-tab`, 2026-09-09.
 
+**The same rule has a second consequence, and its failure is quieter than a missing section: a
+CONSTANT that both sides read cannot live there either.** A threshold the server applies when it
+composes and the browser re-applies against its own clock is one fact, and `wire.ts` — the one file
+both of them already import — is closed to it, because a number is a runtime value.
+
+So it gets copied, and copying looks like the only option. It is not: `web/src/types.ts` already
+imports runtime values from four `tools/fleet/*.ts` modules (`attempt-clock.js`,
+`execution-token.js`, `overseer-claim.js`, `usage-absence.js`), so **a browser-safe module with no
+node imports is both feasible and precedented**. Put the constant in one and import it from both
+sides.
+
+Found on 2026-09-09 by `questions-mode`, in its own Stage 2, after `decisions-mode` asked the
+question that turns one finding into a class: *if your stage moved any check across a boundary, that
+is the shape worth re-reading before you call it done.* The Questions composer named three staleness
+thresholds and the client selector re-applied the same rule with the numbers written as bare
+literals. **They agreed, and nothing would have noticed if they stopped** — and the dangerous
+direction is not the loud one: a server threshold widened alone leaves the browser holding
+`complete` open past the server's own deadline, which on a tab whose whole job is *is anything
+waiting on me* is a wrong answer in the reassuring direction.
+
+Two things generalise from it:
+
+- **A closed obvious home is what makes duplication look like the only option**, so it predicts where
+  the next one lands rather than describing the last one. Anyone adding a value that a server and a
+  browser both apply hits this wall.
+- **A test that restates the number agrees with the drift instead of catching it.** The check has to
+  reference the shared home. That is the same defect from the opposite direction as a test whose
+  expected value is *derived from* production code, which also cannot go red — both are assertions
+  that cannot fail in the case they exist for ([silent-success.md](../reusable/silent-success.md)).
+
 If you do add a field to the pushed payload, it goes on the wire type as a **required** key — an
 optional one crosses the client's `Omit<>` derivation untouched and ships to a browser that never
 reads it, which is the exact drop that derivation exists to prevent.

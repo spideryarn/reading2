@@ -5,6 +5,11 @@
  */
 import { describe, expect, it } from "vitest";
 
+import {
+  CHECKPOINT_STALE_MS,
+  FLEET_STALE_CADENCES,
+  SCAN_STALE_MS,
+} from "../tools/fleet/question-freshness.js";
 import { parseFleetState, questionsAtTime } from "../tools/fleet/web/src/types.js";
 import type { FleetState } from "../tools/fleet/web/src/types.js";
 
@@ -115,6 +120,49 @@ function gapKinds(state: FleetState): string[] {
   return state.questions.kind === "complete" ? [] : state.questions.gaps.map((gap) => gap.kind);
 }
 
+/**
+ * **A STATUS IS NOT A CONTRADICTION, AND MAY NOT DOWNGRADE THE VIEW.**
+ *
+ * The resolver asks whether the payload is self-consistent; the panel asks
+ * whether it may offer a button. Only the first is a claim about completeness.
+ * A gate saying `conversation` beside material that is not `read` is a real
+ * contradiction the server's classifier cannot produce, and earns a gap. A row
+ * whose status is `unknown` is exactly what the composer should have sent.
+ *
+ * Measured 2026-09-09 before this split: a row whose only defect was
+ * `status: unknown` turned `complete` into `partial` and drew *"This list may be
+ * incomplete."* over a list with nothing missing. `steer.ts § steerableStatus`
+ * records that a failing agents call turns every Claude row `unknown` at once,
+ * so it fired for every waiting dialog at the same moment — A17, and the second
+ * gap this area has had to delete for it.
+ */
+describe("a non-steerable status withholds the control without claiming the list is short", () => {
+  /* The baseline first, so a green below is about the status rather than about
+     the fixture never having been complete. */
+  it("is complete for an ordinary steerable row", () => {
+    expect(read().questions.kind).toBe("complete");
+  });
+
+  for (const status of [
+    { kind: "waiting" },
+    { kind: "no-claude" },
+    { kind: "shell" },
+    { kind: "unknown", why: "the agents call failed" },
+  ]) {
+    it(`stays complete for status ${status.kind}`, () => {
+      expect(read({ rows: [{ ...row(), status }] }).questions.kind).toBe("complete");
+    });
+  }
+
+  /* The other half of the pair: a genuine cross-field contradiction still
+     downgrades, so this is a narrowing rather than the check switched off. */
+  it("still downgrades a conversation gate whose material is not readable", () => {
+    const state = read({ rows: [row("$1", rowQuestion({ material: { kind: "no-material" } }))] });
+    expect(state.questions.kind).toBe("partial");
+    expect(gapKinds(state)).toContain("dialog-source-inconsistent");
+  });
+});
+
 describe("the Questions field's fifth and sixth states", () => {
   it("keeps an older server's absent field distinct from a present field this page cannot read", () => {
     const absentPayload = payload();
@@ -143,6 +191,33 @@ describe("the Questions field's fifth and sixth states", () => {
 });
 
 describe("reference resolution can only downgrade", () => {
+  it("downgrades a reported item set that omits an eligible live dialog", () => {
+    const state = read({ questions: { kind: "complete", items: [] } });
+    expect(state.questions.kind).toBe("partial");
+    expect(gapKinds(state)).toContain("eligible-observation-omitted");
+  });
+
+  it("downgrades a reported item set that omits an eligible prose observation", () => {
+    const source = attentionItem();
+    const state = read({
+      rows: [row("$1", { kind: "none" })],
+      attention: attention([source]),
+      questions: { kind: "complete", items: [] },
+    });
+    expect(state.questions.kind).toBe("partial");
+    expect(gapKinds(state)).toContain("eligible-observation-omitted");
+  });
+
+  it("adds no omission gap when an ordinary server composition represents every eligible observation", () => {
+    const source = attentionItem();
+    const state = read({
+      attention: attention([source]),
+      questions: { kind: "complete", items: [dialogItem(), proseItem()] },
+    });
+    expect(state.questions.kind).toBe("complete");
+    expect(gapKinds(state)).not.toContain("eligible-observation-omitted");
+  });
+
   it("keeps a dialog card and adds a gap when its row reference dangles", () => {
     const state = read({ rows: [], questions: { kind: "complete", items: [dialogItem("$9")] } });
     expect(state.questions).toMatchObject({ kind: "partial", items: [{ kind: "dialog", rowId: "$9" }] });
@@ -180,14 +255,18 @@ describe("reference resolution can only downgrade", () => {
 
   it("validates a prose reference against the authoritative attention item", () => {
     const source = attentionItem();
-    const state = read({ attention: attention([source]), questions: { kind: "complete", items: [proseItem()] } });
+    const state = read({ attention: attention([source]), questions: { kind: "complete", items: [dialogItem(), proseItem()] } });
     expect(state.questions.kind).toBe("complete");
 
     const changed = proseItem();
     changed.excerpt = "different copied words";
-    const inconsistent = read({ attention: attention([source]), questions: { kind: "complete", items: [changed] } });
+    const inconsistent = read({ attention: attention([source]), questions: { kind: "complete", items: [dialogItem(), changed] } });
     expect(gapKinds(inconsistent)).toContain("attention-reference-unresolved");
-    expect(inconsistent.questions).toMatchObject({ items: [{ itemId: "prose-1", excerpt: "different copied words" }] });
+    expect(inconsistent.questions.kind).toBe("partial");
+    if (inconsistent.questions.kind !== "partial") return;
+    expect(inconsistent.questions.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ itemId: "prose-1", excerpt: "different copied words" }),
+    ]));
   });
 
   /* The client half of the same correction: it had its own independent copy of
@@ -216,6 +295,33 @@ describe("reference resolution can only downgrade", () => {
 });
 
 describe("freshness is a current-time selector, not a parse-time fact", () => {
+  it("uses every shared freshness threshold at the exact boundary and one millisecond beyond it", () => {
+    const stamp = new Date(NOW).toISOString();
+    const state = read({
+      rows: [],
+      collectedAt: stamp,
+      refreshMs: 137_000,
+      attention: {
+        kind: "published",
+        coordinatorWrittenAt: stamp,
+        list: { kind: "list", items: [], sessionsScanned: 3, sessionsUnreadable: 0, scannedAt: stamp },
+      },
+      questions: { kind: "complete", items: [] },
+    });
+    const kindsAt = (at: number): string[] => {
+      const view = questionsAtTime(state, at);
+      return view.kind === "complete" ? [] : view.gaps.map((gap) => gap.kind);
+    };
+
+    const fleetDeadline = 137_000 * FLEET_STALE_CADENCES;
+    expect(kindsAt(NOW + fleetDeadline)).not.toContain("fleet-snapshot-stale");
+    expect(kindsAt(NOW + fleetDeadline + 1)).toContain("fleet-snapshot-stale");
+    expect(kindsAt(NOW + CHECKPOINT_STALE_MS)).not.toContain("checkpoint-stale");
+    expect(kindsAt(NOW + CHECKPOINT_STALE_MS + 1)).toContain("checkpoint-stale");
+    expect(kindsAt(NOW + SCAN_STALE_MS)).not.toContain("attention-scan-stale");
+    expect(kindsAt(NOW + SCAN_STALE_MS + 1)).toContain("attention-scan-stale");
+  });
+
   it("lets a complete view age into partial while the page remains open", () => {
     const state = read();
     expect(state.questions.kind).toBe("complete");

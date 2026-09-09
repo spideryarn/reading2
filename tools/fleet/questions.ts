@@ -13,6 +13,11 @@
  * being a timing-dependent claim no test has watched fail.
  */
 import type { FleetRow } from "./collect.js";
+import {
+  CHECKPOINT_STALE_MS,
+  FLEET_STALE_CADENCES,
+  SCAN_STALE_MS,
+} from "./question-freshness.js";
 import type {
   AttentionFeed,
   AttentionItem,
@@ -21,11 +26,6 @@ import type {
   QuestionTarget,
   QuestionsView,
 } from "./wire.js";
-
-/** The same generous deadlines the existing masthead and attention card use. */
-const FLEET_STALE_CADENCES = 2.5;
-const CHECKPOINT_STALE_MS = 5 * 60_000;
-const SCAN_STALE_MS = 6 * 60_000;
 
 export type ComposeQuestionsInput = {
   rows: readonly FleetRow[];

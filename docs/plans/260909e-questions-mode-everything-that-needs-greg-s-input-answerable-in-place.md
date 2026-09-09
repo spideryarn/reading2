@@ -699,9 +699,35 @@ which had it as a single derivation until asked:
   lands near **520px**.
 
 They agree at eight, which is the only count either session can currently check; **nine and ten are
-unmeasured**. This session is at 390 in Stage 3 anyway, so it takes the reading and sends the number
-back to replace the arithmetic. Past the last fit rung the row scrolls rather than clipping, which is
-the honest stopgap. Two things follow:
+unmeasured**. Past the last fit rung the row scrolls rather than clipping, which is the honest
+stopgap.
+
+**The reading is split rather than duplicated, settled by message with `decisions-mode` on
+2026-09-09.** They take **nine**, because their own Stage 4 gating check is a direct `#decisions`
+load at 390 × 844 and they have to measure it anyway; this session takes **ten**, which only it can
+take once `questions` exists. Two details, both of which decide whether the number means anything:
+
+- **The tenth is simulated with `decisions-mode`'s real label**, not a stub. A mode's width is its
+  glyph plus its label, so a tenth called `Temp` measures a shorter bar than the one that will
+  exist. The reading is taken with a local tenth entry labelled exactly *Decisions*, then reverted —
+  and the note that goes back says the tenth was simulated rather than merged, so nobody later reads
+  it as a measurement of a shipped state.
+- **Their arithmetic is a prediction this measurement is entitled to falsify**, and they said so
+  first. Their own correction, 2026-09-09: an earlier *"≥360px at nine"* counted the 40px button
+  floors alone and understated it; with Refresh, the active mode's retained label, the two `0.15rem`
+  gaps and the gutters it is nearer 480px. Whether the ruler confirms or contradicts it, the number
+  and the method go back — a prediction that was checked and held is worth more in the joint question
+  to Greg than one nobody tested.
+
+**One constraint on the share-count fix, from `decisions-mode`, 2026-09-09:** their edge fades are
+CSS **masks on `.dock`**, not child elements, *deliberately* — `fit.ts` picks its rung from
+`scrollWidth`, so anything that contributes width feeds back into the measurement and the ladder can
+oscillate. `--dock-mode-count` is therefore a custom property set in the `style` of the existing
+`.dock-modes` element and a `var()` inside the existing `flex` declaration: no new element, no
+padding, no margin. **Read the diff for that specifically** — a wrapper `div` is the plausible wrong
+move and nothing in the suite would notice.
+
+Two things follow from the dock being full:
 
 1. **The coarse-pointer share count.** `.dock-modes { flex: 8 0 auto }` hard-codes the mode count in
    CSS where no type and no test can see it, and its own comment says *"CSS cannot read a TypeScript
@@ -713,7 +739,32 @@ the honest stopgap. Two things follow:
    other: if this lands first the literal is gone and they drop their bump; if theirs lands first
    this replaces a `flex: 9` rather than a `flex: 8`. Their scroll fix does not touch that
    declaration at all, so it merges cleanly against either state.
-2. **Whether the dock should become something else** is **a product question and it is Greg's**. It
+2. **ANSWERED BY GREG, 2026-09-09 — a scrolling strip, and none of the rest.** His words:
+   *"Re dock, use a scrolling strip - borrow/follow/reuse from Spideryarn"*. No More-menu, no
+   grouping, no tab dropped. **So the option this session asked to have added was rejected**: Queued
+   ideas, Decisions and Questions stay three tabs, and the bar stays at ten. Recorded here rather
+   than only in the joint draft because this plan is what proposed the merge.
+
+   **And it needs no build, which is the part worth checking before somebody starts one.** The
+   referent is [`src/web/styles/dock.css`](../../src/web/styles/dock.css) — checked, because
+   `mode-band.css` also matches a grep for horizontal scrolling and is a vertical panel shell rather
+   than a tab strip. The fleet dock is already a **port** of that file, and everything the answer
+   names is on `dev`: `overflow-x: auto` at every width rather than inside a media query
+   ([narrow-windows.md](../project/narrow-windows.md) says why that distinction cost a release),
+   `scrollbar-width: none` and the webkit rule so there is no trough, `.dock-gap` collapsing so the
+   buttons close up and the row scrolls, the measured fit ladder dropping labels *before* it
+   scrolls, and `decisions-mode`'s scroll-into-view and edge fades on top. Greg's answer also
+   matches his own call on the product on 2026-08-28 — *"maybe also row scrolls sideways if it
+   doesn't fit horizontally"* — which is the quote attached to that CSS.
+
+   **What the answer does not settle, and it is not this tab's to carry:** Refresh is off screen at
+   eight, nine and ten modes, including at `scrollLeft: 0`. A scrolling strip answers *the bar is
+   full*; it does not answer *a control is unreachable at rest*. Going to Greg separately, via the
+   Overseer.
+
+   The original framing, kept because the reasoning outlives the answer:
+
+2. **Whether the dock should become something else** was **a product question and Greg's**. It
    is being put to him **once, jointly** — drafted by `decisions-mode` at `45a202f3` § *The joint
    question for Greg: the dock is full*, and carried by whichever of the two sessions debriefs
    second. It is not asked twice from two halves. The option this session asked to have added, and
@@ -739,16 +790,16 @@ writes the task prompts, runs the tests and the typecheck, reviews, and commits.
 
 ### Stage 1 — the contract and the composition (server side, all pure)
 
-- [ ] `wire.ts`: one additive end block — `QuestionItem`'s four arms, `QuestionsView`'s three, the
+- [x] `wire.ts`: one additive end block — `QuestionItem`'s four arms, `QuestionsView`'s three, the
       gap vocabulary and `QuestionTarget`. Every arm's name and comment says what was **observed**.
-- [ ] `tools/fleet/questions.ts`: `composeQuestions({rows, attentionFeed, collectionError, collectedAt, now})
+- [x] `tools/fleet/questions.ts`: `composeQuestions({rows, attentionFeed, collectionError, collectedAt, now})
       → QuestionsView`, pure, no I/O. The signature carries the collection error and freshness
       because the view promises things the rows alone cannot establish (Sol round two).
-- [ ] Wired into `state.ts` beside `attention`, off the **same single checkpoint read**.
-- [ ] `web/src/types.ts`: the client's parser; its own gap for *this payload's field was present and
+- [x] Wired into `state.ts` beside `attention`, off the **same single checkpoint read**.
+- [x] `web/src/types.ts`: the client's parser; its own gap for *this payload's field was present and
       unreadable*; reference resolution against `rows` and `attention`; and the **downgrade** — the
       client may lower `complete` to `partial` and never raise it.
-- [ ] A **payload-size regression fixture** (Sol P2-1), which is meaningful now that items carry
+- [x] A **payload-size regression fixture** (Sol P2-1), which is meaningful now that items carry
       references rather than question text.
 
 Tests, each **watched red first**, and each **routed to the boundary where its state can actually
@@ -756,27 +807,35 @@ occur** — Sol's round-two correction, which is why several of the round-one li
 
 *Server composer, over real pane fixtures:*
 
-- [ ] a **`permission`**-gate and an **`unknown`**-gate dialog → neither becomes a card;
-- [ ] a `conversation` dialog with `no-material` → a card with buttons (the `/loop` menu shape);
-- [ ] two rows showing the same question → **two cards**, one per row (grouping is withdrawn in v1;
+- [x] a **`permission`**-gate and an **`unknown`**-gate dialog → neither becomes a card;
+- [~] a `conversation` dialog with `no-material` → a card with buttons (the `/loop` menu shape).
+      **Left unticked deliberately: this test was not built as written, because the state it
+      describes cannot occur on the server path** — `classifyGate` requires `material.kind ===
+      "read"` before it will return `conversation`. Stage 1 moved the case to the client parser,
+      where a malformed material can actually arrive, and it is a **gap** there rather than a card
+      with buttons. Stage 4 then went further: `isLocallyAnswerableDialog` refuses `no-material`, so
+      a retained item of that shape draws no buttons at all. The bullet is kept, struck rather than
+      deleted, because a plan that quietly loses a requirement it decided against is worse than one
+      that says it changed its mind and why.
+- [x] two rows showing the same question → **two cards**, one per row (grouping is withdrawn in v1;
       § What round three changed, 3);
-- [ ] a `conversation` dialog on a row with no `paneId`, and one with no `claudeSessionId` →
+- [x] a `conversation` dialog on a row with no `paneId`, and one with no `claudeSessionId` →
       `dialog-unaddressable`, with the reason, never buttons;
-- [ ] an inbox **prose** item whose row is now showing a dialog → **both cards kept**; and the same
+- [x] an inbox **prose** item whose row is now showing a dialog → **both cards kept**; and the same
       with a `permission` dialog, where there is no dialog card to stand in its place;
-- [ ] an inbox prose item whose row's execution has been replaced under the same handles → the card
+- [x] an inbox prose item whose row's execution has been replaced under the same handles → the card
       still says *one tap away*, and nothing on it writes;
-- [ ] an inbox prose item with **no row at all** → `prose-unaddressable`, never dropped;
-- [ ] **every gap cause in the table above**, each on its own, and `not-observed`;
-- [ ] **a genuinely empty but partial observation** → must not say *nothing needs you*;
-- [ ] asserted through the same `statePayload` composition `server.ts` calls, never a graph the test
+- [x] an inbox prose item with **no row at all** → `prose-unaddressable`, never dropped;
+- [x] **every gap cause in the table above**, each on its own, and `not-observed`;
+- [x] **a genuinely empty but partial observation** → must not say *nothing needs you*;
+- [x] asserted through the same `statePayload` composition `server.ts` calls, never a graph the test
       rebuilds.
 
 *Client parser, where a malformed payload can actually arrive:*
 
-- [ ] a malformed `gate`, and a malformed `material` → a gap, not an ordinary item;
-- [ ] a dangling row or attention reference → a gap, never a dropped card;
-- [ ] an absent `questions` field (an older server) and a present-but-unreadable one → two different
+- [x] a malformed `gate`, and a malformed `material` → a gap, not an ordinary item;
+- [x] a dangling row or attention reference → a gap, never a dropped card;
+- [x] an absent `questions` field (an older server) and a present-but-unreadable one → two different
       gaps.
 
 **Delegated to Codex** (`gpt-5.6-sol`, `--sandbox workspace-write`) from
@@ -810,31 +869,66 @@ silence there discards the one case where the inbox genuinely knows something th
 
 ### Stage 2 — the panel, the answering, and the registrations
 
-- [ ] `QuestionsPanel.tsx`, modelled on `MessageOverseerCard.tsx`. One arm per item kind with a
+- [x] `QuestionsPanel.tsx`, modelled on `MessageOverseerCard.tsx`. One arm per item kind with a
       `never` default: **buttons** on `dialog`; **the excerpt, the age, the ranking and a tap that
       selects the session** on `prose`, with one short line saying why answering is one tap away;
       **the reason and no control** on the two `unaddressable` arms. `SteerReceipt` for the outcome
       of a dialog answer.
-- [ ] Card state keyed by **`row.execution.token`** — `{boot, pid, startTicks}`, the only thing in
+- [x] Card state keyed by **`row.execution.token`** — `{boot, pid, startTicks}`, the only thing in
       this payload that identifies a *run* rather than a *pane* — plus the item's own id, and
       discarded when either changes. **Not** `paneId + panePid + claudeSessionId`, which round three
       showed is exactly the tuple that survives one Claude exiting and another starting.
-- [ ] The six registrations, plus the `--dock-mode-count` custom property (agreed with
+- [x] The six registrations, plus the `--dock-mode-count` custom property (agreed with
       `decisions-mode`).
-- [ ] The four tests from
+- [x] The four tests from
       [§ The test](../project/fleet-dashboard-modes.md#the-test), driven through `SteerApi`'s seam
       rather than a stub of `fetch`; and four that are this tab's own: **a click sends the row's
       `rawQuestion` verbatim**; **it refuses when the row no longer carries a question**; **card
       state does not survive a change of `row.execution.token`**; and **a successful, a `partial` and
       an `unknown` send each leave the controls in the right state**, rather than inviting a retry
       that would append to half-sent text.
-- [ ] **No prose card renders anything that writes** — the assertion that keeps v1's decision from
+- [x] **No prose card renders anything that writes** — the assertion that keeps v1's decision from
       being undone by a later edit that looks harmless.
-- [ ] `answeringEnabled` in both its `false` and its not-reported readings, drawn as two different
+- [x] `answeringEnabled` in both its `false` and its not-reported readings, drawn as two different
       things.
 
-**Delegated to Codex.** Status: *not started.* **This is where the session that picks this up
-begins**; Stage 1's contract is on `dev` and its shape is settled.
+**Delegated to Codex** (`gpt-5.6-sol`, high, `workspace-write`, 75 minutes — Stage 1's run was killed
+at 45), from [the task](260909e-questions-mode-stage2-codex-task.md). Its report is
+[here](260909e-questions-mode-stage2-report.md) and the review it ran on itself
+[here](260909e-questions-mode-stage2-review-sol.md).
+
+**Status: built, and green on checks this session ran rather than took from the implementer's
+claim** — seven suites, 509 tests, and `node --import tsx scripts/typecheck.ts` at `EXIT=0` across
+all four projects. Every box above is done. Codex's own GPT Sol pass found one P1 in its first
+attempt — a retained dialog item whose current row had lost its `paneId` still drew two enabled
+option buttons — reproduced it red, and closed it by requiring current-row addressability and exact
+row/target agreement at the action boundary.
+
+**Two defects this session found that neither Codex nor its reviewer did, both in one place, and
+both watched red before they were fixed.**
+
+**1. The answering notice spoke for a server that had not spoken.** `App.tsx` defaults
+`answeringEnabled` to `ANSWERING_NOT_REPORTED`, which is right — silence must never become `false` —
+but that arm's sentence is *this server did not report whether answering works*, and **before the
+first payload arrives no server has said anything at all**. So the tab drew *No Questions payload has
+arrived yet* and, underneath it, a paragraph attributing a silence to somebody who had not spoken.
+That is the same fabrication the default exists to prevent, one level along. The notice is now drawn
+only when there is a view, because it explains why cards have no buttons and with no view there are
+no cards.
+
+**2. The share-count fix replaced one unchecked register with another.** `--dock-mode-count` removes
+the hand-kept `8` from `tailwind.css` — but `var(--dock-mode-count, 8)` has a **fallback**, so if the
+property never reaches the element (a refactor to a wrapper, a value React declines to write) the bar
+looks exactly as it did while it was wrong. **A fallback that hides its own failure needs a test that
+reads the DOM.** There is now one, asserting `.dock-modes`'s inline custom property against
+`MODES.length` rather than against a literal, so the next session to add a mode inherits a check that
+is still true rather than one that has to be edited. Watched red by removing the `style` prop:
+`expected '' to be '9'`.
+
+**Kept from `decisions-mode`'s constraint**: the property is set in the `style` of the **existing**
+`.dock-modes` element. No wrapper, no padding, no margin — nothing that contributes width, because
+`fit.ts` picks its rung from `scrollWidth` and anything that adds width feeds back into the
+measurement.
 
 **One requirement carried forward from Stage 1's code review, and it is not optional.** GPT Sol's
 second P1: `questionsAtTime` in `web/src/types.ts` recomputes all three clocks against a supplied
@@ -846,21 +940,189 @@ add a DOM test that **advances time without delivering another payload** and wat
 `complete`. A selector that is only ever called at parse time is the shape of a check that cannot
 fail.
 
+#### Five decisions this session took before writing the task, each with the thing it refused
+
+Written down here rather than discovered in the diff, because four of the five are the kind of
+choice that reads as arbitrary afterwards.
+
+**1. The answering-state notice is drawn once at the top, not on every card.** `SessionDetail.tsx`
+has `HeldBack`, which is three paragraphs per dialog explaining why the buttons are withheld — right
+there, where one dialog fills the screen, and wrong here, where six cards would carry six copies of
+one server-wide fact. `answeringEnabled` is a claim about **the server**, so it is stated once,
+above the list, and the cards simply have no buttons under it. The per-card sentence that stays
+per-card is the server's own refusal (`answering-disabled`, `grants-permission`), because that one
+is about *that* send.
+
+**`HeldBack` is deliberately not lifted, imported or copied.** It lives in `SessionDetail.tsx`,
+which session `claude-agents-dashboard` is live in; moving it would be an edit outside this file
+set, and copying its words would make a third home for a sentence this repo has already had to
+de-duplicate twice. The notice here is shorter and says a different thing in a different place —
+which is the honest version of *not a second vocabulary*.
+
+**2. The gate cases `HeldBack` exists for cannot arise on this tab.** A `permission` or `unknown`
+gate never becomes a `QuestionItem` at all (§ The item arms), so the panel needs no arm for them and
+must not grow one — an arm for an impossible state is a branch no test can ever make true, and the
+comment on it becomes the only evidence anyone reads.
+
+**3. `QuestionCard` from `SessionParts.tsx` draws the dialog, unchanged.** It already takes
+`onAnswer`, `busy` and `sessionName`, already refuses to make buttons out of `unreadable` material,
+and already carries the *"a long menu scrolls, so there may be more below"* line. Reusing it is the
+house rule and it costs nothing here; a second question renderer would be the *"second way to do the
+same thing"* § Prefer simple forbids, and the two would drift on the day one of them learned about a
+new `FleetOption` field.
+
+**4. A dialog whose row reference did not resolve is drawn as a stub card, not dropped and not
+crashed.** The client resolver already raises `dialog-reference-unresolved` for it, so the gap is
+said; the card is still drawn, saying that a session was observed showing a dialog and its row could
+not be read on this side. **A gap without a card would be a card silently missing from a list whose
+whole promise is that nothing is missing from it** — and the panel must not index into `rows` and
+render whatever `find` returned.
+
+**5. Card state is keyed by the item's own id and `row.execution.token`, and a row with no verified
+execution keys as `"unverified"`.** `ExecutionReading` has three arms and only `verified` carries a
+token; `claimed-only` and `unknown` carry none. The choice is between refusing to hold state on such
+a row and holding it under a constant. Holding it under a constant is right and is the smaller
+claim: the state being kept is *what the server said about the last tap*, which is discarded on any
+change of key — and a row that never has a token simply never invalidates on that axis, which is the
+same position every other surface on this page is already in. Refusing would withhold the receipt
+from exactly the rows whose sends are most worth reading.
+
+### Stage 4 — closing the independent review
+
+[GPT Sol's independent review](260909e-questions-mode-stage2-review-sol-r2.md) of what actually
+landed, run after Codex's own pass because a model reviewing its own diff on a pre-fix state is the
+weaker check. **No P0; three P1s and two P2s, every one reproduced rather than reasoned.** The task
+is [here](260909e-questions-mode-stage4-codex-task.md).
+
+| ID | The finding | Checked |
+|---|---|---|
+| QM2-01 | `canAnswer` admits rows the answer route refuses — `no-material`, and non-steerable statuses | **Real, and wider than the review.** `steer.ts § steerableStatus` refuses **four** statuses (`waiting`, `no-claude`, `shell`, `unknown`), so the fix is an allow-list with a `never`, not a block-list of the one case found |
+| QM2-02 | The card key carries no question identity, so a new dialog on an unchanged row inherits the old receipt and its dead buttons | Real. This is the **safe** use of the `sameQuestion` fields — a staleness comparison, not the semantic grouping § What round three changed, 3 withdrew |
+| QM2-03 | **The browser never checks for OMITTED items.** A payload with a live dialog row and `items: []` kept `complete` through parse, the ticking clock and the renderer, and printed *Nothing needs you.* | Real, and the most important of the five: the plan's own promise is that the client is the final authority on `complete`, and `resolveQuestionReferences` only ever validates items that are **present** |
+| QM2-04 | The prose no-write guard checks for controls, not for what the click does — a `steer.message` added to it left all 14 tests green | Real |
+| QM2-05 | The answering notice shows on empty and prose-only lists | Real, and its reason is better than mine: on a prose-only list answering happens in Sessions as a **message**, which an answer-hold does not affect, so the banner is misleading rather than merely redundant |
+
+**Two of this session's suspicions were disconfirmed, which is worth as much as the findings.** A
+future `waitingSince` is already corrected by `shiftToBrowserClock` in `parseQuestionItem`, so the
+clock-skew worry was unfounded; and no duplicate-gap path could be reproduced. Dialogs-first
+ordering is held by the server composition test, so a later reversal fails there rather than
+silently.
+
+**The merge resolution was checked by the reviewer independently and is correct** — both sides'
+registrations, both icons, both React imports, `--dock-mode-count` and the overflow classes all
+retained.
+
+#### The dock reading, taken and replicated — 2026-09-09
+
+Both sessions measured on `692fd230` at 390 × 844 coarse, after the fit rung settled. Nine is
+`decisions-mode`'s, ten is this session's with their real label on the tenth.
+
+| load | rung | scrollWidth @9 | scrollWidth @10 | clientWidth | active button | Refresh |
+|---|---|---|---|---|---|---|
+| `#sessions` | `dock-fit-2` | 479 | 519 | 390 | on screen | **off screen** |
+| `#deploys` | `dock-fit-2` | 475 | 515 | 390 | on screen | **off screen** |
+| `#questions` (last of ten) | `dock-fit-2` | — | 526 | 390 | on screen, flush | **off screen** |
+
+**The prediction held: ~41px predicted, 40px measured, on two loads independently.**
+
+**Why that subtraction is trustworthy, which is not obvious and belongs in the joint draft.**
+`scrollWidth` moves with *which tab is active*, because the active button keeps its label under the
+fit ladder — an 11px spread here, 9px there. So a delta between two different active tabs would be
+one mode's width plus or minus a label, and unreadable. Both subtractions hold the active tab fixed,
+so the label cost is identical on each side and cancels. That is why two loads agreeing at 40 is a
+replication rather than the same number twice: they sit at different scroll positions and different
+bar totals and still agree. **The natural-looking comparison — `#decisions` at nine against
+`#questions` at ten — is the one that cannot be done.**
+
+Equal rungs turned out to be the *condition* for the comparison rather than a threat to it: their 41
+was derived from `.dock-btn { min-width: 2.5rem }` plus the hairline, so it was always an icon-width
+figure, and two fully-compacted bars is exactly the case it was computed for.
+
+**Refresh is off screen at eight, nine and ten, and neither tab caused it.** `readiness-tab` had it
+past the edge at eight; `decisions-mode` measured it off screen at the scroll origin at nine; it is
+off screen on every load at ten. A pre-existing dock defect both tabs make one notch worse — so Greg
+is not being asked to choose between them. Their counterfactual is the strongest number either
+session has, and the dock section should lead with it rather than with any table: with the scroll
+disabled and the client rebuilt, `#deploys` at nine reads an active right edge of **416 against a 390
+viewport**. Tables show a crowded bar; that shows a button that disappears. **The fix trades
+Refresh's reachability for the active tab's** — the right trade, and still a trade.
+
+That fact lives in their draft at `45a202f3`, not here.
+
 ### Stage 3 — see it, and the queue pointer
 
-- [ ] Browser verify at **1280 × 800** and **390 × 844**, in a Sonnet subagent, against a throwaway
+- [x] Browser verify at **1280 × 800** and **390 × 844**, in a Sonnet subagent, against a throwaway
       server on a free port confirmed from its bind line — never `:8787`, whose process is not to be
       touched. Screenshots land in the repo root, are copied out, and are deleted.
-- [ ] **The screenshots are looked at by this session, not only reported on.** Delegated
+- [x] **The ten-mode dock reading, in the method agreed with `decisions-mode`** — § Where the tab
+      goes has the split and the simulated tenth. Their two corrections, both adopted:
+      - **Three loads, not one, and the last mode is the worst case.** Their own gating check was a
+        direct `#decisions` load, and they found it proves almost nothing: `decisions` sits seventh
+        of nine, and the tab furthest from the scroll origin is the one that tests whether
+        scroll-into-view works. At ten the order is `sessions … deploys, questions`, so **this tab
+        is the worst case** — measured at `#sessions`, `#deploys` (the load both readings share, so
+        the two can be checked against each other) and `#questions`.
+      - **Read after the fit rung has settled**, never during first paint: the rung changes button
+        widths, so a `scrollWidth` sampled early is a different bar. If the two sessions' numbers
+        disagree, this is the first thing to check before believing either.
+      - **`scrollLeft` beside `scrollWidth` and `clientWidth`.** Those three together are the only
+        thing that separates *the bar overflows and we scrolled to the right place* from *the bar
+        overflows and the active button is off screen*. **Overflow on its own is expected** and is
+        the honest failure mode the dock was built to have; reporting it as a fault would be the
+        wrong number.
+- [x] **The shared `#deploys` load's prediction, written down before either session measures.**
+      `decisions-mode` proposed the shared load as a cross-check and read a matching pair as *one of
+      us sampled before the fit rung settled*. That names one cause for a symptom with at least
+      three, and the other two are likelier: **one of us measured a tree with the wrong mode count**
+      (which produces identical numbers for the honest reason that it was the same bar twice), or
+      **the rung is the same at nine and ten** because both are past the last one, in which case the
+      per-mode delta is icon-width rather than glyph-plus-label. So a matching pair says something
+      is wrong and not which thing. What makes it diagnostic is the prediction, agreed 2026-09-09
+      and binding on both readings:
+      - `clientWidth` on `.dock` must be **identical** in both (390 at coarse). If it is not,
+        somebody is not at 390 × 844 coarse and nothing else in the two readings is comparable.
+      - `scrollWidth` at ten must exceed nine by **one mode's width** — their arithmetic says about
+        41px, **and that is the number under test.** A delta near zero means one of us measured the
+        wrong tree; a delta far from 41 falsifies the per-mode figure in the joint draft, which is a
+        result worth having on its own.
+      - The **fit rung** at each, reported as a rung rather than as a description. Equal rungs mean
+        the expected delta is icon-width, and that is said rather than the 41 being called wrong.
+- [x] **Which half of that reading depends on `decisions-mode`'s fix, said on the reading itself.**
+      Reachability at the last tab is a property of their scroll-into-view, which is on their branch
+      and not on `dev`. So the **overflow** half (`scrollWidth` vs `clientWidth`, the fit rung,
+      Refresh past the edge, bar height) is taken whenever, and the **reachability** half
+      (`scrollLeft`, active button on screen) is taken only against a tree that contains their fix —
+      merging their branch locally to measure and reverting, if they have not pushed — with the
+      commit named on every number. Otherwise a failing `#questions` load measures the absence of
+      their fix and gets reported as a dock finding, which is the shape of wrong number that ends up
+      in a question to Greg.
+- [x] **The screenshots are looked at by this session, not only reported on.** Delegated
       descriptions of a layout are wrong often enough to distrust on their own.
-- [ ] Every state from § 3 above forced and looked at individually — including each silence.
-- [ ] The queue pointer with a real count, through `queue-client.ts`'s seam. **Acceptance-critical**
+- [x] Every state from § 3 above forced and looked at individually — including each silence.
+- [x] The queue pointer with a real count, through `queue-client.ts`'s seam. **Acceptance-critical**
       (Sol P1-5): without it the tab's own promise is knowingly false, so if it cannot ship, the tab
       does not.
-- [ ] `docs/project/` — a line under the entry point that owns it, and this plan kept matching the
+- [x] `docs/project/` — a line under the entry point that owns it, and this plan kept matching the
       code.
 
-Status: *not started.*
+**Status: built and green.** The queue pointer landed with the sentence it forces:
+`Nothing needs you.` is now conditional on the queue having been read and found empty, because a
+failed queue read establishes that no **session** needs him, not that nothing does. Six queue arms,
+six sentences, none collapsed into another; the four false-reassurance cases were watched red first.
+
+**What was seen with eyes, and what was not — said plainly because "verified at 390px" would imply
+more than is true.**
+
+- **Seen**: the populated list at 390 × 844 and at 1280 × 800, the `partial` arm with a real gap
+  sentence, the `complete` arm with prose cards, the clamped excerpt, the once-only prose caveat,
+  and the ten-mode dock on three loads.
+- **Not seen, covered only by DOM tests**: **every dialog card, including the option buttons.** The
+  live fleet carried no open `conversation` dialog during any browser pass, so the answering half of
+  this panel has never been drawn against a real menu. The tests cover it thoroughly — the verbatim
+  `rawQuestion` send, the four refused statuses, the sticky refusals, the receipt arms — but no
+  person has looked at it. **That is the first thing to look at when a dialog next appears.**
+- **Not seen**: the forced silences — `not-observed`, the empty `complete`, the hold notice. Each has
+  its own DOM test; none has been looked at in a browser.
 
 ---
 
@@ -975,8 +1237,14 @@ a filter would make *what is blocking* and *what was decided in my name* one pil
 
 ## Open, and going to Greg rather than being decided here
 
-- **The dock's shape at ten tabs** — joint with `decisions-mode`, drafted by them (§ Where the tab
-  goes).
+- ~~**The dock's shape at ten tabs**~~ — **answered 2026-09-09: a scrolling strip, reusing the
+  product's, which is already what the fleet dock is.** § Where the tab goes has his words and the
+  evidence that it needs no build. **What came out of it and is still open is a different question**,
+  put to Greg via the Overseer — *Refresh is off screen at eight, nine and ten modes, including at
+  rest* — and **he answered that too, 2026-09-09: *"It's fine if they need to scroll to see
+  Refresh."*** So both dock questions are closed and nothing is built for either. Recorded rather
+  than dropped, because the measurement stands and the next session to find Refresh off screen
+  should find the decision beside it rather than re-raise it.
 - **There is no way to ask a session to rewrite a question Greg cannot act on.** The AGENTS.md rule
   landed this morning and the dashboard cannot enforce it for a dialog question, because the message
   route refuses a pane showing a dialog and a queued copy drains only after he has answered. His
