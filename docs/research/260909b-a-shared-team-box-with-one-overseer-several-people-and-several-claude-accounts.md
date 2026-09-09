@@ -6,6 +6,12 @@ decided or built. The question was put to GPT 6 Astra (prompt:
 [260909b-team-box-review-astra.md](../plans/260909b-team-box-review-astra.md)); its input is folded
 in below and marked.
 
+**Superseded in part by the plan, 2026-09-09.** Greg answered the questions at the end of this doc
+the same evening, and the biggest answer — *a separate team, box and product, not Spideryarn's* —
+removed most of the compatibility constraints below. What we would build is
+[260909i](../plans/260909i-a-team-box-for-a-separate-product-one-overseer-that-carries-each-person-s-authority.md);
+this doc stays as the working and the options weighed.
+
 Greg, 2026-09-09:
 
 > I'm contemplating renting a much bigger remote box, and making it available to my whole team.
