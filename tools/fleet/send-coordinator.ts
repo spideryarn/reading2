@@ -157,6 +157,33 @@ export type SendAttempt =
  * looking at two different books, which is the failure a review found could be
  * introduced by changing one `??=` to `=` with the whole suite staying green.
  */
+/**
+ * **THE GUARANTEE IN THIS FILE IS PROCESS-LOCAL, AND EVERY GUARD ON IT IS TOO.**
+ *
+ * The book lives in memory in one process. A CHILD PROCESS — a spawned script, a
+ * worker, anything with its own module graph — calls `sharedSendCoordinator()`
+ * and gets a **fresh, empty book**. `holding()` then answers `null` for every
+ * session on the box, and the send goes into a pane that may be holding half a
+ * sentence. Nothing about that looks wrong from inside the child.
+ *
+ * **None of the three enforcements can see it.** The import walk in
+ * `tests/fleet-imports.test.ts` checks who may hold the transport, and the child
+ * legitimately holds a coordinator. `tests/fleet-compile-guards.test.ts` checks
+ * dependency types, which are correct. `tests/fleet-send-composition.test.ts`
+ * asserts one book across two compositions **within one process**, which is the
+ * failure it was written for and is silent about this one.
+ *
+ * So this is written down rather than guarded, because the guard would have to
+ * be a durable store and that is Stage 4b. **Do not send keystrokes from a child
+ * process.** If something needs to, it must ask the parent — the parent owns the
+ * book — or wait for the ledger that makes a hold survive its process.
+ *
+ * Found 2026-09-09 by `dashboard-titles-descriptions-detail`, which had been
+ * asked to build a child-process send and abandoned it after reading the
+ * paragraph above about the check and the call being adjacent. It reasoned from
+ * the header to the consequence without having been there for the bug, which is
+ * the whole reason the header says what it says rather than merely doing it.
+ */
 export type SendCoordinator = {
   message(target: SteerTarget, text: string, declaredStatus: FleetStatus, purpose: SendPurpose): SendAttempt;
   answer(target: SteerTarget, seen: SeenQuestion, optionIndex: number, declaredStatus: FleetStatus, purpose: SendPurpose): SendAttempt;

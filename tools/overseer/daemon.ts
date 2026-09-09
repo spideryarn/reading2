@@ -299,6 +299,22 @@ export function collectorVerdict(input: {
   };
 }
 
+/**
+ * What happened on one usage pass, told to `DaemonOptions.usage.onPass`.
+ *
+ * `take-fresh` and `keep-stored` are `chooseUsage`'s own two arms, and **both
+ * carry the report the pass produced** — on `keep-stored` that is the report
+ * that was DISCARDED, which is the only copy of that pass's cache observation
+ * anywhere. `collector-failed` is a pass that threw, and has no report at all.
+ *
+ * `at` is when the pass started, so a consumer can tell the observation's own
+ * instant (`report.collectedAt`) from when the daemon noticed it.
+ */
+export type UsagePassOutcome =
+  | { kind: "take-fresh"; report: UsageReport; why: string; at: string }
+  | { kind: "keep-stored"; report: UsageReport; why: string; at: string }
+  | { kind: "collector-failed"; why: string; at: string };
+
 export type DaemonOptions = {
   /** Defaults to `~/.overseer`, or `OVERSEER_STORE_DIR`. Tests always pass one. */
   root?: string;
@@ -336,7 +352,38 @@ export type DaemonOptions = {
    * `chooseUsage`, applied here, because it needs the store's held report as well
    * as the fresh one. A daemon given no runner publishes `usageNotYetRun`.
    */
-  usage?: { intervalMs?: number; run: () => Promise<UsageReport> };
+  usage?: {
+    intervalMs?: number;
+    run: () => Promise<UsageReport>;
+    /**
+     * **Told once per PASS, whatever happened — for a history nobody else can
+     * write.**
+     *
+     * `~/.overseer/current.json` keeps only the latest reading, and the cache it
+     * comes from is a point-in-time hint that gets overwritten, so usage history
+     * cannot be reconstructed after the fact. Something has to record each pass
+     * as it happens, and only this file knows when one happened.
+     *
+     * **`keep-stored` carries the DISCARDED report, and that is the point.**
+     * `chooseUsage` declining to publish an incomplete scan says nothing about
+     * that pass's *cache* reading, which is independent of the transcript scan.
+     * The fresh report is the only place that observation exists — the
+     * checkpoint carries the held one, and the dashboard never sees this. A
+     * consumer that treated `keep-stored` as "no reading was taken" would drop
+     * real, attributed observations off a chart every time one transcript was
+     * unreadable.
+     *
+     * **This file imports nothing to serve it**, deliberately: the callback is
+     * composed in `scripts/overseer.ts`, which already straddles the
+     * `tools/overseer` ↔ `tools/fleet` seam. Putting the projection or the store
+     * in here would drag the dashboard's modules into the process you reach for
+     * when everything else is broken.
+     *
+     * Errors thrown by the callback are **contained and logged** — see
+     * `safeOnPass` below. A retention failure is not a usage failure.
+     */
+    onPass?: (outcome: UsagePassOutcome) => void;
+  };
   /**
    * THE SCHEDULED JOBS, and the schedule as data.
    *
@@ -722,12 +769,38 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
    * writers on the store.
    */
   const usageOptions = options.usage;
+
+  /**
+   * **The callback cannot be allowed to throw into the collector's chain.**
+   *
+   * `onPass` is called inside `.then()` and inside `.catch()`. An unguarded
+   * throw in the `.then()` is caught by the chain's own `.catch()`, which would
+   * rewrite the live checkpoint to `{kind:"none"}` though the collection
+   * SUCCEEDED — Greg then investigates his account instead of his disk — and
+   * would very likely throw again handling that, ending as an unhandled
+   * rejection that terminates the daemon. In the `.catch()` there is nowhere for
+   * it to go at all.
+   *
+   * So the boundary is here rather than in each consumer: a history that cannot
+   * be written is a thing to log, never a thing that changes what the usage pass
+   * reports or stops the next one running. GPT Sol's G5.
+   */
+  function safeOnPass(outcome: UsagePassOutcome): void {
+    if (usageOptions?.onPass === undefined) return;
+    try {
+      usageOptions.onPass(outcome);
+    } catch (cause: unknown) {
+      log(`usage pass hook failed (the reading itself is unaffected): ${String(cause)}`);
+    }
+  }
+
   let usageRunning: Promise<void> | null = null;
   const usageTicker =
     usageOptions === undefined
       ? null
       : setInterval(() => {
           if (halted() !== null || usageRunning !== null) return;
+          const passAt = now().toISOString();
           usageRunning = usageOptions
             .run()
             .then((report) => {
@@ -742,6 +815,7 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
               // is logged either way: "kept the 11:00 reading, this scan did not
               // finish" is the sentence a person can act on.
               log(`usage pass: ${choice.kind} - ${choice.why}`);
+              safeOnPass({ kind: choice.kind, report, why: choice.why, at: passAt });
             })
             .catch((cause: unknown) => {
               // A THROWN PASS BECOMES `none` WITH A REASON, not silence and not
@@ -754,6 +828,11 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
                 at: now().toISOString(),
               };
               log(`usage pass failed: ${String(cause)}`);
+              safeOnPass({
+                kind: "collector-failed",
+                why: cause instanceof Error ? cause.message : String(cause),
+                at: passAt,
+              });
             })
             .finally(() => {
               usageRunning = null;

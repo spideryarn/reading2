@@ -9395,3 +9395,108 @@ describe("the caveats that have to be readable without opening anything", () => 
     expect(inside).toContain("the message above is the only turn read");
   });
 });
+
+/**
+ * WHETHER THE OVERSEER WAS TOLD, ON THE PAGE.
+ *
+ * The last join of this feature: the record carries a notification outcome, and
+ * these assert it is drawn rather than parsed and dropped. Every arm is here,
+ * including the quiet ones — nobody holding the role is a real answer and a
+ * different fact from not being able to tell who holds it, and a card showing
+ * only the happy case would leave a reader assuming the Overseer knows.
+ */
+describe("what the launch card says about telling the Overseer", () => {
+  /**
+   * One started launch on the card, with a given notification outcome.
+   *
+   * It goes through the REAL panel flow — press Start, let the poll answer —
+   * rather than rendering a record directly, because the thing under test is
+   * whether the outcome survives the parse and reaches the DOM. A fixture handed
+   * straight to a component would skip the half where fields get dropped.
+   */
+  /* Local copies: the two existing ones are scoped to other describe blocks,
+     and hoisting them would reorganise a file several sessions are appending
+     to tonight. */
+  function openNewSession(): void {
+    const button = buttonSaying("New session");
+    if (!button) throw new Error("there is no New session button");
+    act(() => button.click());
+  }
+
+  function type(id: string, value: string): void {
+    const box = container.querySelector<HTMLTextAreaElement>(`#${id}`);
+    if (!box) throw new Error(`no textarea #${id}`);
+    typeInto(box, value);
+  }
+
+  async function cardFor(notification: Record<string, unknown>): Promise<string> {
+    const record = parseLaunch({
+      id: "L20",
+      progress: { state: "started", notification },
+      name: "wf-x",
+      dir: "/home/greg/code/spideryarn2",
+      resolution: "repo",
+      startedDir: "/home/greg/code/spideryarn2",
+      promptBytes: 9,
+      requestedAt: "",
+      finishedAt: null,
+      error: null,
+      maybeStarted: false,
+      note: null,
+    });
+    if (record === null) throw new Error("the fixture did not parse");
+    const feed = manualTransport();
+    mountFull({
+      transport: feed.transport,
+      newSession: fakeNewSession({
+        start: async () => ({ accepted: true, launch: record }),
+        poll: async () => ({ ok: true, feed: { busy: false, retryAfterMs: 0, launches: [record] } }),
+      }),
+    });
+    act(() => feed.push(state({ rows: [] })));
+    openNewSession();
+    type("new-session-prompt", "start me");
+    await act(async () => {
+      buttonSaying("Start it")?.click();
+    });
+    return container.textContent ?? "";
+  }
+
+  it("says queued, and does not claim the Overseer was told", async () => {
+    const text = await cardFor({ kind: "queued", to: "Overseer", position: 3 });
+    expect(text).toContain("Queued for Overseer");
+    expect(text).toContain("position 3");
+    /* The words this page may not use about keystrokes it did not watch land. */
+    expect(text).not.toMatch(/\bnotified\b/);
+    expect(text).not.toMatch(/\bdelivered\b/);
+  });
+
+  it("says plainly when nobody holds the role, rather than staying silent", async () => {
+    const text = await cardFor({ kind: "no-holder" });
+    expect(text).toContain("Nobody holds the Overseer role");
+  });
+
+  it("keeps not-being-able-to-tell separate from nobody-holding-it", async () => {
+    const text = await cardFor({ kind: "cannot-tell", why: "the snapshot was 4m old" });
+    expect(text).toContain("Could not tell who to notify");
+    expect(text).toContain("the snapshot was 4m old");
+    expect(text).not.toContain("Nobody holds");
+  });
+
+  it("names the queue's own refusal rule rather than a generic failure", async () => {
+    const text = await cardFor({
+      kind: "not-queued",
+      to: "Overseer",
+      rule: "session-queue-full",
+      why: "eight already waiting",
+    });
+    expect(text).toContain("session-queue-full");
+    expect(text).toContain("eight already waiting");
+  });
+
+  it("reports a contested role as a fault rather than picking one", async () => {
+    const text = await cardFor({ kind: "contested", names: ["Overseer", "overseer-2"] });
+    expect(text).toContain("2 sessions claim the Overseer role");
+    expect(text).toContain("overseer-2");
+  });
+});

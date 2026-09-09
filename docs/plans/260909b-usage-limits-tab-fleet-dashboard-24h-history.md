@@ -257,16 +257,24 @@ No store. The first thing anybody can see, and a safe stopping point by Sol's ow
   - Register is the artefact, not the gesture. Do not touch `MODE_TIPS.overseer`.
 - [ ] `App.tsx` — one additive `{mode === "usage" ? … : null}` block
 - [ ] Mount `UsageCard` unchanged (D1). The Overseer tab keeps its card; this is a second mount.
-- ⏸ **DEFERRED, not skipped — browser check.** Run it as the **first thing after the five-hour
-      window resets at 02:50 UTC**, before Stage 4. The Overseer's ruling, and the reasoning is
-      sound: a Sonnet browser agent is a real spend of a window whose slope nobody can see, and this
-      tab is a second mount of a card that was browser-checked two hours earlier, so the exposure
-      until then is small and known. **It is still a gap**: tests going green is not evidence a
-      reader can see the tab, and this one is on `dev` unverified in a real browser.
-  - The brief when it runs: the tab appears, is keyboard-reachable, renders the real reading, and
-    matches the Overseer card field for field **including the three unknown windows**. Conclusion
-    and one screenshot, not page dumps. It kills **its own** dev-server pid, never `pkill -f vite`,
-    and never touches port 8787.
+- ✅ **Browser check — done 2026-09-09 ~03:55, once the Overseer lifted the usage hold.** Deferred
+      for about ninety minutes and then run as the first thing, per its ruling. Playwright against
+      system Chrome, its own server on 8791, killed by its own pid; 8787 untouched.
+  - The tab opens from the dock and from `#usage`; keyboard-reachable by both Enter and Space.
+  - **It matches the Overseer tab's card verbatim** — `main.innerText` captured on both and
+    compared line by line. The only differences are the live "reading taken Xm Ys ago" clocks, which
+    is what two reads moments apart should differ by. That is D1 demonstrated rather than asserted.
+  - **All three unknown windows render as named rows with their `why`**, never dropped and never as
+    `0%` — `nimbus_quill`, `spend`, and `member_dashboard_available` ("window entry was not an
+    object: false").
+  - 📔 **What the live box actually showed**, which no fixture would have: verdict `UNKNOWN`,
+    `five_hour` **expired with no number printed** (the reading rules working — an expired window is
+    unknown, never a percentage), `seven_day` at 58%, and *"137 rate-limit rejections found, none of
+    them confirmed in force for this account (110 already reset, 27 unattributable)"*. The 27
+    unattributable are the `/login`-swap case this plan's D6 is written around, sitting in the live
+    data.
+  - At 390×844 the dock keeps the full "Usage limits" label and nothing overflows horizontally.
+  - No visual defects. The hourglass reads as distinct from Box health's gauge at dock size.
 - ✅ Focused suites (386 fleet-web), `npm run typecheck`, committed, merged, pushed
 - 📔 Also corrected `Dock.tsx`'s header, which claimed a new mode needs no change there. True of the
       bar's layout and fit, false of the two `Record<Mode, …>` maps immediately below it — and this
@@ -307,7 +315,28 @@ anything so the tree is unchanged for everyone else.
 
 ### Stage 3 — the store
 
-- [ ] Tests first, red:
+**Status: ✅ done and on `dev` at `977279f8`** (stage commit `3138327e`). `tools/fleet/usage-history.ts`
++ `tests/fleet-usage-history.test.ts`; 39 tests across the two usage-history suites, typecheck exit
+0, no lint errors. Wired to nothing — Stage 4 is the daemon hook and the route.
+
+📔 **What this stage cost that the plan did not predict:**
+
+- **Mutation testing found a second real hole.** Ten mutations, nine caught; swapping the read order
+  to `[live, prev]` passed everything, because the rotation test counted samples and never looked at
+  their order. A renderer walking that array draws the newer half first and the older after it — a
+  sawtooth, from a store that recorded the truth perfectly. *"Oldest first" is in the type's own doc
+  comment and nothing checked it.* That is now two stages running where the mutation found something
+  no amount of re-reading would have.
+- **Two of my own tests had gone green against something that could not fail.** The unreadable-store
+  test pointed at an empty directory, so the injected error was never called; and a span assertion
+  was off by one, replaced with the thing it actually meant (`read.files === 2`).
+- **`read` hit cognitive complexity 44**, split into `decodeAll`. The extracted function is where the
+  "place the damage, don't just count it" rule now lives, which is a better home for it than a branch
+  inside a reader.
+- The **`omitted` arm was added to the record here**, not in Stage 2 — a record too large to write
+  needs somewhere to stand, and that was not obvious until the store existed.
+
+- ✅ Tests first, red:
   - [ ] one line per pass; the three arms; a `collector-failed` line keyed on the daemon's `at`
   - [ ] **a `keep-stored` pass still contributes its cache observation** (D5) while its scan reads
         inconclusive — the failure this design exists to avoid
@@ -331,8 +360,17 @@ anything so the tree is unchanged for everyone else.
 
 ### Stage 4 — the writer hook and the read route
 
-- [ ] Tests first — the **join test**, which must fail if `onPass` is never called:
-  - [ ] fires once per pass, right arm for each outcome
+**Status: 4a ✅ (`8fbbd686`) — `onPass` is in `daemon.ts`, importing nothing from `tools/fleet/`, with
+`safeOnPass` containment. Seven tests, five mutations all caught. 4b (the composition in
+`scripts/overseer.ts`) and 4c (the read route) are still to do.**
+
+📔 The mutation that mattered here: *the hook fires on every tick as well as every pass*. It was
+caught — which is what makes the "does not fire on a tick" test meaningful. Before the hook existed
+that test passed **vacuously**, because nothing could fire; a test that has only ever been green
+against an absent feature proves nothing about the present one.
+
+- ✅ Tests first — the **join test**, which must fail if `onPass` is never called:
+  - ✅ fires once per pass, right arm for each outcome
   - [ ] **does not fire on a tick** — drive several `checkpointUpdate()`s with no pass, assert zero
         calls (D4's trap, relocated; this is the test that catches it coming back)
   - [ ] **a throwing callback cannot become a false collector failure** (this is a P0): a throw

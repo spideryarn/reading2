@@ -1116,8 +1116,35 @@ export function createNewSessionRoutes(options: NewSessionOptions = {}): NewSess
  * that imports this module must not read the environment or the clock.
  */
 let shared: NewSessionRoutes | null = null;
+let configuredNotifier: NewSessionIo["notifyOverseer"] | null = null;
+
+/**
+ * Give the shared routes a real way to tell the Overseer, once, at startup.
+ *
+ * **This exists because the notifier needs things this module must not have.**
+ * Resolving who holds the `overseer` role needs a live fleet snapshot, and
+ * reaching them needs the shared steering queue — both of which live in
+ * `server.ts`. Importing either from here would drag the collector and the
+ * action routes into a module whose whole header is about having no import side
+ * effects.
+ *
+ * **It refuses rather than silently missing its moment.** Called after the
+ * routes exist, it throws: the alternative is a server that configured the
+ * notifier too late and reports *cannot-tell* for every launch, which is a true
+ * sentence about a broken wiring and reads exactly like a box with no Overseer.
+ * That is the shape this whole file is written against.
+ */
+export function configureNewSessionNotifier(notify: NewSessionIo["notifyOverseer"]): void {
+  if (shared !== null) {
+    throw new Error("the new-session routes already exist; configure the notifier before the first request");
+  }
+  configuredNotifier = notify;
+}
+
 export function newSessionRoutes(): NewSessionRoutes {
-  shared ??= createNewSessionRoutes();
+  shared ??= createNewSessionRoutes(
+    configuredNotifier === null ? {} : { io: { ...realIo(), notifyOverseer: configuredNotifier } },
+  );
   return shared;
 }
 

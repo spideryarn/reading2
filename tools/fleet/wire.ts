@@ -2453,12 +2453,25 @@ export type DeploysPayload =
  * the send would not go.
  */
 export type NotifyOutcomeView =
-  | { kind: "submitted"; to: string; paneId: string }
+  /**
+   * **HANDED TO THE QUEUE, WHICH IS AS FAR AS THIS ROUTE'S KNOWLEDGE GOES.**
+   *
+   * Not "sent" and not even "submitted": the notice is in the drain's hands and
+   * will go out on a later refresh, through the same coordinator every other
+   * producer uses. What became of the keystrokes is the queue's story and the
+   * queue's surface tells it — this record would have to poll to find out, and a
+   * launch record that went stale claiming a delivery would be worse than one
+   * that says plainly where it put the thing.
+   */
+  | { kind: "queued"; to: string; position: number }
+  /** The queue turned it down — a full queue, a message it will not carry. */
+  | { kind: "not-queued"; to: string; rule: string; why: string }
+  /** The snapshot was readable and nobody holds the `overseer` role. */
   | { kind: "no-holder" }
+  /** More than one session claims it. Reported, never resolved here. */
   | { kind: "contested"; names: readonly string[] }
-  | { kind: "cannot-tell"; why: string }
-  | { kind: "refused"; to: string; code: string; why: string; delivery: Delivery }
-  | { kind: "unknown"; to: string; why: string };
+  /** We could not establish who holds it, or could not address them. */
+  | { kind: "cannot-tell"; why: string };
 
 /**
  * Where a launch's notification has got to.
