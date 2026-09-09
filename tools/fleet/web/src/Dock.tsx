@@ -16,11 +16,16 @@
  *
  * **What is NOT here, deliberately.** No drawer, no scrim, no sliding away as
  * you scroll: the product's bar hides itself to give a long article the whole
- * screen, and nothing on this page is a long read. If a fourth mode arrives,
- * nothing here needs touching — `MODES` in mode.ts is the list, and the bar
- * measures its own fit (fit.ts).
+ * screen, and nothing on this page is a long read.
+ *
+ * **A new mode DOES need touching here**, and this comment used to say it did
+ * not. That was true of the bar's layout and fit (fit.ts) and false of the two
+ * `Record<Mode, …>` maps below, which is the half a reader acts on. Adding a
+ * mode is four registrations — `MODES` and `MODE_LABELS` in mode.ts, plus
+ * `MODE_ICONS` and `MODE_TIPS` here — and then a mount in App.tsx.
+ * docs/project/fleet-dashboard-modes.md is the checklist.
  */
-import { Gauge, ListChecks, Network, RefreshCw, Rocket, type LucideIcon } from "lucide-react";
+import { Gauge, Hourglass, ListChecks, Network, RefreshCw, Rocket, type LucideIcon } from "lucide-react";
 import type { ReactNode, RefObject } from "react";
 
 import { Tooltip, TooltipGroup, TipCard, type Tip } from "./Tooltip";
@@ -44,6 +49,10 @@ import { cx } from "./ui";
 const MODE_ICONS: Record<Mode, LucideIcon> = {
   sessions: ListChecks,
   health: Gauge,
+  /* An hourglass rather than a second dial: `health` already owns `Gauge`, and
+     at dock size two dials are one shape. A limit is a window that runs out and
+     turns over, which is the thing this tab is actually about. */
+  usage: Hourglass,
   overseer: Network,
   deploys: Rocket,
 };
@@ -58,6 +67,16 @@ const MODE_TIPS: Record<Mode, Tip> = {
     head: "Box health",
     what: "Load, memory, swap and disk, with a verdict over them.",
     how: "The verdict is the collector's own, and it has a fourth level — a reading nobody could take never renders as a healthy zero.",
+  },
+  usage: {
+    head: "Usage limits",
+    what: "How much of each Claude window has been spent, and every rate-limit rejection we can find in the transcripts.",
+    /* The non-obvious half is the ATTRIBUTION, not the freshness. The cached
+       percentages belong to the account that is logged in; a 429 in a transcript
+       carries no account id at all, and the scan looks back eight days, which
+       may span a /login swap. So "we were limited" and "this account was
+       limited" are different claims, and only the verdict makes the second. */
+    how: "The percentages are a cache the box reads, so an expired window shows as unknown rather than as a number. A rejection is exact, but carries no account — so it says a limit was hit, not whose.",
   },
   overseer: {
     head: "Overseer",
