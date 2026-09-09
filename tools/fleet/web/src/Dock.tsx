@@ -25,7 +25,7 @@
  * `MODE_ICONS` and `MODE_TIPS` here — and then a mount in App.tsx.
  * docs/project/fleet-dashboard-modes.md is the checklist.
  */
-import { Gauge, Hourglass, Lightbulb, ListChecks, MessagesSquare, Network, RefreshCw, Rocket, type LucideIcon } from "lucide-react";
+import { Gauge, Hourglass, Lightbulb, ListChecks, MessagesSquare, Network, RefreshCw, Rocket, ShieldCheck, type LucideIcon } from "lucide-react";
 import type { ReactNode, RefObject } from "react";
 
 import { Tooltip, TooltipGroup, TipCard, type Tip } from "./Tooltip";
@@ -54,6 +54,10 @@ const MODE_ICONS: Record<Mode, LucideIcon> = {
      at dock size two dials are one shape. A limit is a window that runs out and
      turns over, which is the thing this tab is actually about. */
   usage: Hourglass,
+  /* A shield-with-a-tick rather than another tick or gauge: the question this
+     tab answers is "is it safe to ship", and at dock size a bare tick would be
+     indistinguishable from the pass marks inside the panel. */
+  readiness: ShieldCheck,
   overseer: Network,
   /* A lightbulb, because the rows are ideas before they are work — and because
      every other glyph in this bar is a machine. */
@@ -98,6 +102,15 @@ const MODE_TIPS: Record<Mode, Tip> = {
      carries two controls that type at real sessions. A tip that describes a
      panel as inert is worse than no tip on the one tab where pressing something
      costs money. */
+  readiness: {
+    head: "Readiness",
+    what: "Whether dev is green: the latest test and typecheck runs on the commit origin/dev is on, and a day of every run behind them.",
+    /* The non-obvious half is WHICH runs count. Most test runs on this box are
+       bare `npx vitest run`, which could be one file or all of them, and a run
+       reconstructed from a tmux log carries no commit at all — so the tab is
+       mostly full of history that deliberately has no vote. */
+    how: "Only a full run recorded by readiness-run.ts, on that exact commit, with a clean tree at both ends, can make it green — everything else is history, drawn faded.",
+  },
   overseer: {
     head: "Overseer",
     what: "Whether supervision is still working, everything queued across the fleet, and the two ways to say something to more than one agent.",

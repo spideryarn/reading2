@@ -303,12 +303,40 @@ function timelines(
 
     if (record.check === "check") {
       if (reading.state === "pass") {
+        /**
+         * **A passing outer status does not overrule an explicitly non-clean
+         * required row.** This used to emit a pass for every required check
+         * without consulting the table at all, and GPT Sol drove the
+         * consequence to a green verdict:
+         *
+         * > `check` with `outcome: "pass"`, `exit: 0`, and steps
+         * > `test: did-not-run`, `typecheck: clean` … parsed successfully and
+         * > emitted pass evidence for both required checks.
+         *
+         * An ABSENT row is still a pass — `check.ts` prints a row per step, so a
+         * missing one means the table was truncated, and the outer status
+         * already proves the gates ran. What must not happen is a row that says
+         * something *other than clean* being read as clean.
+         */
+        const rows = rowsOfCheck(reading);
         for (const target of required) {
+          const row = rows.get(target);
+          if (row === undefined || row === "pass") {
+            add(target, {
+              atMs: reading.atMs,
+              state: "pass",
+              reading,
+              why: "a full `npm run check` passed on this commit, and its gates include this one",
+            });
+            continue;
+          }
           add(target, {
             atMs: reading.atMs,
-            state: "pass",
+            state: row === "fail" ? "fail" : "unsettled",
             reading,
-            why: "a full `npm run check` passed on this commit, and its gates include this one",
+            why:
+              "a full `npm run check` reported success overall, but its own summary does not show " +
+              "this check clean — the two halves of that record disagree",
           });
         }
       } else {

@@ -521,11 +521,17 @@
       --dock-h: 3.5rem;
     }
     /* Grow to share the bar, never shrink below the floor. `.dock-modes` grows
-       as three buttons against each loose button's one, so a wide bar spreads
-       it in proportion to what is inside rather than handing the segment the
-       same share as a single icon. */
+       in proportion to how many buttons are inside it, so a wide bar spreads it
+       by its contents rather than handing the whole segment the same share as a
+       single loose icon.
+
+       **THIS NUMBER IS A HAND-KEPT COPY OF `MODES.length` IN mode.ts.** It said
+       3 while there were seven modes and then eight, so the segment was asking
+       for less than a third of what it holds and the bar apportioned badly on a
+       wide phone. CSS cannot read a TypeScript array; if you add a mode, add one
+       here. GPT Sol flagged the drift, 2026-09-09. */
     .dock-modes {
-      flex: 3 0 auto;
+      flex: 8 0 auto;
     }
     .dock > .dock-btn,
     .dock-modes .dock-btn {

@@ -43,17 +43,17 @@ function record(over: Partial<DescriptionRecord> = {}): DescriptionRecord {
 describe("what survives a round trip", () => {
   it("writes and reads a record back unchanged", () => {
     const dir = root();
-    writeDescriptionMemory(dir, { records: new Map([["$1 claims:u1", record()]]) });
+    writeDescriptionMemory(dir, { records: new Map([[`$1 conv-1 ${record().executionToken}`, record()]]), refusals: new Map() });
 
     const read = readDescriptionMemory(dir);
     expect(read.kind).toBe("memory");
     if (read.kind !== "memory") return;
-    expect(read.memory.records.get("$1 claims:u1")).toEqual(record());
+    expect(read.memory.records.get(`$1 conv-1 ${record().executionToken}`)).toEqual(record());
   });
 
   it("writes a file a person can read, with its schema on it", () => {
     const dir = root();
-    writeDescriptionMemory(dir, { records: new Map([["$1", record()]]) });
+    writeDescriptionMemory(dir, { records: new Map([[`$1 conv-1 ${record().executionToken}`, record()]]), refusals: new Map() });
     const raw = JSON.parse(readFileSync(path.join(dir, DESCRIPTIONS_FILE), "utf8"));
     expect(raw.schema).toBe(DESCRIPTIONS_SCHEMA);
     expect(typeof raw.writtenAt).toBe("string");
@@ -86,7 +86,7 @@ describe("the three answers a read can give", () => {
   it("refuses the whole file when one record is unreadable", () => {
     const read = parseDescriptionMemory({
       schema: DESCRIPTIONS_SCHEMA,
-      records: { "$1": record(), "$2": { fingerprint: "x" } },
+      records: { "$1 c boot:4242:99": record(), "$2 c boot:4242:99": { fingerprint: "x" } },
     });
     expect(read.kind).toBe("unusable");
     if (read.kind === "unusable") expect(read.why).toContain("$2");
@@ -101,18 +101,63 @@ describe("the three answers a read can give", () => {
   it("refuses a stored description that is an empty string", () => {
     const read = parseDescriptionMemory({
       schema: DESCRIPTIONS_SCHEMA,
-      records: { "$1": { ...record(), described: { title: "t", description: "   " } } },
+      records: { "$1 c boot:4242:99": { ...record(), described: { title: "t", description: "   " } } },
     });
     expect(read.kind).toBe("unusable");
   });
 
-  it("keeps a record with no execution token, because unverified is a real state", () => {
+  /**
+   * INVERTED BY F20, and the old expectation was the hole.
+   *
+   * This used to accept a record with no execution token, on the reasoning that
+   * "unverified is a real state". It is — but such a record cannot be *coherent*,
+   * because a coherent record's token is the last field of the key it was filed
+   * under. And an incoherent record is worse than useless: the pass looks its
+   * cache up by fingerprint alone, so a record like this could be fetched by
+   * content and then re-filed under a valid key and token, laundering a
+   * description onto a session it is not about.
+   */
+  it("refuses a record with no execution token, because its key could not have contained one", () => {
     const read = parseDescriptionMemory({
       schema: DESCRIPTIONS_SCHEMA,
       records: { "$1": { ...record(), executionToken: null } },
     });
+    expect(read.kind).toBe("unusable");
+  });
+
+  it("refuses a record whose token is not the one in its key", () => {
+    const read = parseDescriptionMemory({
+      schema: DESCRIPTIONS_SCHEMA,
+      records: { "$1 conv-1 boot:1:1": { ...record(), executionToken: "boot:9:9" } },
+    });
+    expect(read.kind).toBe("unusable");
+  });
+
+  it("remembers a permanent refusal, so the same opening is not paid for twice", () => {
+    const read = parseDescriptionMemory({
+      schema: DESCRIPTIONS_SCHEMA,
+      records: {},
+      refusals: { abc123: "the opening is only machinery" },
+    });
     expect(read.kind).toBe("memory");
-    if (read.kind === "memory") expect(read.memory.records.get("$1")?.executionToken).toBeNull();
+    if (read.kind === "memory") expect(read.memory.refusals.get("abc123")).toContain("machinery");
+  });
+
+  /**
+   * A bad refusal costs a model call, not a wrong sentence — so it is skipped
+   * rather than failing the whole file, unlike a bad record.
+   */
+  it("skips an unreadable refusal rather than refusing the file for it", () => {
+    const read = parseDescriptionMemory({
+      schema: DESCRIPTIONS_SCHEMA,
+      records: {},
+      refusals: { good: "a reason", bad: 42 },
+    });
+    expect(read.kind).toBe("memory");
+    if (read.kind === "memory") {
+      expect(read.memory.refusals.get("good")).toBe("a reason");
+      expect(read.memory.refusals.has("bad")).toBe(false);
+    }
   });
 });
 

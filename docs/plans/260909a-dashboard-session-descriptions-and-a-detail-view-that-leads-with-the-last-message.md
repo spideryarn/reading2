@@ -980,3 +980,50 @@ So that entry now has **three instances and the third is the author of the entry
 the thing to name: the narrow invocation is ~15 s against ~2 minutes, which is exactly what makes the
 class recur. Found by `queued-ideas-mode` after merging, relayed by the Overseer, green again at
 `9a332ab9`.
+
+## Review ledger — GPT Sol on the Stage A–C code, 2026-09-09
+
+Verdict **refuse**: five established P1s, two P2s. Artefact:
+[260909a-dashboard-session-descriptions-review-ac-sol.md](260909a-dashboard-session-descriptions-review-ac-sol.md).
+It ran the four scoped suites itself (497/497) **and wrote probes** — two of its findings come with a
+reproduction rather than an argument. All seven accepted; the two mechanical claims verified first.
+
+| ID | Finding | Disposition |
+|---|---|---|
+| F19 | A fingerprint collision transfers a description between unrelated sessions | **Fixed** — collision reproduced |
+| F20 | An invalid stored record is laundered into a valid current record | **Fixed** |
+| F21 | Permanent refusals are paid for for ever, and starve later sessions for ever | **Fixed** |
+| F22 | A persistence failure repeats successful paid calls every five minutes | **Fixed** — verified |
+| F23 | The cache distinguishes inputs the paid request makes identical | **Fixed** |
+| F24 | The transcript identity requirement relies on an upstream convention | **Fixed** |
+| F25 | The bookkeeping balances planning, not publication, and never ran in production | **Fixed** |
+
+**Two of the five cost money rather than correctness, and that class had no coverage at all here.**
+F21 and F22 are both "pays again, for ever": a permanent refusal stored nothing, so it was fresh next
+pass, and because the budget takes fresh openings in a deterministic order the same refusals
+monopolised the same eight slots and every session behind them was **never described**. F22 is worse
+because a *fresh box* is the failing state — `writeAtomically` does not create its directory
+(verified: it throws `ENOENT`), so on a box without `~/.overseer` every pass read `absent`, paid,
+failed to persist, logged, and paid again five minutes later.
+
+**F19 is the one where my own stated reasoning was the hole.** My review prompt said a collision
+"would need two sessions with the same id and token" — wrong, because the cache is looked up by
+fingerprint *before* the session/conversation/token key is applied, so the key constrains where a
+description is *stored* and not which one is *fetched*. Sol found a live pair — `opening-229599` and
+`opening-432382` both hashing to `95984682` — and I reproduced it before changing anything. A 32-bit
+hash must not gate anything that publishes confident prose; it is SHA-256 now, over
+`canonicalMaterial`, which also closes F23.
+
+**F25 is the third can't-fail check this file has shipped.** The first was an inequality; the second
+balanced two honest identities that nevertheless both held with zero descriptions published and one
+session starved; and neither version was ever *called* outside its tests. It now has a published
+term and runs in `describeOnce`.
+
+**And one thing the review did not find, which I hit while fixing it: two NUL bytes in
+`describe-pass.ts`**, in the cache-key template, present since the file was written. Tests passed, the
+typecheck passed, and the file was classified as *binary* — so `grep` silently found nothing in it,
+which is how it was noticed at all, and it had already broken one of my own patch scripts by making an
+anchor unmatchable. That is the **second** raw-control-byte incident of the night in my own code
+(the first was a C0 range written into a regex in `notify-overseer.ts`), which makes it a habit rather
+than an accident: writing a template string with an intended separator can land a real control
+character. Every file in this stage is now checked to be free of them.
