@@ -682,7 +682,61 @@ Built only after the state machine is written down, which is what Sol refused th
 with a different body is refused before any effect; a repeat during an in-flight send does not start
 a second one; the capacity policy is stated in the code and tested at its boundary.
 
-### Stage 6 — the actions catalogue joins `wire.ts`
+### ✅ Stage 6 — the actions catalogue joins `wire.ts` (landed 2026-09-09)
+
+**The last hand-written twin is gone.** `ClientAction`'s comment used to say it
+"mirror[s] `Action` in tools/fleet/actions.ts" — related to the server declaration by that sentence
+and nothing else. `ActionScope`, `EnactedAction`, `BroadcastAction`, `Stagger`, `Action` and the
+three id unions now live in `wire.ts`, `actions.ts` aliases them, and the client derives via
+`Omit<Wire, …> & {…}` with each omission justified inline as *re-typed* or *declined*. The
+`unrecognised` arm stays — no server counterpart, and it is the point of a client type rather than a
+duplicate.
+
+**Verified by mutation in the session that committed it, not only where it was written.** A required
+field added to wire's `EnactedAction` fails the **client** arm:
+
+    tests/fleet-compile-guards.test.ts(114,11): error TS2322:
+    Type '{...}' is not assignable to type 'ClientEnactedAction'.
+
+That distinction is the stage: a guard that only caught the server re-stating itself would have
+passed every day the twin existed. The guard also refuses a field becoming *optional* —
+`EveryKeyRequired` with a `@ts-expect-error` on the negative — because the guarantee holds only for
+required, top-level, non-omitted fields, which an earlier stage found the hard way.
+
+**Implemented by GPT Terra from a written brief**, at Greg's request to delegate implementation and
+slow the burn rate. `npm run typecheck` was blocked by a sandbox IPC restriction in that
+environment, so the gate that decides the stage was run here. It found one thing the brief did not
+name: a malformed spoken or broadcast action with an impossible scope now becomes `unrecognised`,
+matching their shared literal scopes.
+
+688 tests green across eight suites; typecheck exit 0.
+
+#### The review found no P0s, and one correction to a claim rather than to the code
+
+**The guarantee is real**: for every required, top-level, non-omitted field, `Omit<Wire, …>` changes
+the *client* arm itself, so the failure lands on `ClientEnactedAction` and not only on a server
+fixture. What sits outside it, enumerated by the reviewer and worth keeping: optional fields, nested
+changes, widened union members, and same-typed mistakes. *"The catalogue is almost entirely required
+scalar data. `Stagger` is its only nested object and therefore the concrete weak point."*
+
+**The correction is to something this session asserted three times, including to another session.**
+*"`wire.ts` is types-only and import-free, and `tests/fleet-imports.test.ts` enforces it."* The rule
+is real. **The enforcement did not exist.** That suite checks the fleet's transitive `src/` and
+package dependencies and the leaf-module rule; it contains no assertion about `wire.ts`. A runtime
+`const` there, or a type import from another module, passed.
+
+**That is the fifth claim tonight about a property nothing measured** — after an outcome arm no code
+could produce, a flag that could only be true, a guarantee that a new producer would turn a test
+red, and a compile guard verified with a compiler that could not see it. The pattern is narrow
+enough to carry: **the claim is almost never wrong about the rule, it is wrong about whether
+anything checks the rule.** Both halves sound identical in a sentence and only one survives a
+mutation.
+
+The other four findings were P2/P3 and are fixed in the round below: `stagger` was still a
+hand-written structural twin (the defect this stage removed, surviving in the one nested object the
+catalogue has); `EveryKeyRequired` covered one arm of three; the scope tightening had no regression
+test and restoring `scope === null` was a mutation that left the suite green; and a comment still
+said the client arms "mirror" the server's.
 
 Narrowed on R12 and R15: the receipt, outcome and quarantine types went into `wire.ts` in their own
 stages, so this is catalogue hardening alone.

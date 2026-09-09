@@ -96,17 +96,35 @@ describe("an enacted action is never one-tap", () => {
 describe("the actions catalogue's shared wire shapes", () => {
   type EveryKeyRequired<T> = [T] extends [Required<T>] ? true : false;
   type EnactedWire = Extract<ActionWire, { effect: "enacted" }>;
+  type SpokenWire = Extract<ActionWire, { effect: "spoken" }>;
+  type BroadcastWire = Extract<ActionWire, { effect: "broadcast" }>;
   type EnactedClient = Extract<ClientAction, { effect: "enacted" }>;
 
-  it("requires every top-level field on the server's enacted arm in the client arm", () => {
-    const total: EveryKeyRequired<EnactedWire> = true;
-    expect(total).toBe(true);
+  it("requires every top-level field on all three server arms", () => {
+    const enactedTotal: EveryKeyRequired<EnactedWire> = true;
+    const spokenTotal: EveryKeyRequired<SpokenWire> = true;
+    const broadcastTotal: EveryKeyRequired<BroadcastWire> = true;
+    expect(enactedTotal).toBe(true);
+    expect(spokenTotal).toBe(true);
+    expect(broadcastTotal).toBe(true);
 
     // @ts-expect-error `false` is assignable ONLY when an enacted wire field is
     // optional. If this compiles, the directive goes unused and `npm run
     // typecheck` fails rather than a new field quietly becoming optional.
-    const optional: EveryKeyRequired<EnactedWire> = false;
-    void optional;
+    const enactedOptional: EveryKeyRequired<EnactedWire> = false;
+    void enactedOptional;
+
+    // @ts-expect-error `false` is assignable ONLY when a spoken wire field is
+    // optional. If this compiles, the directive goes unused and `npm run
+    // typecheck` fails rather than a new field quietly becoming optional.
+    const spokenOptional: EveryKeyRequired<SpokenWire> = false;
+    void spokenOptional;
+
+    // @ts-expect-error `false` is assignable ONLY when a broadcast wire field
+    // is optional. If this compiles, the directive goes unused and `npm run
+    // typecheck` fails rather than a new field quietly becoming optional.
+    const broadcastOptional: EveryKeyRequired<BroadcastWire> = false;
+    void broadcastOptional;
 
     /* This is deliberately the CLIENT arm, not a second server fixture. Add a
        required top-level field to `EnactedAction` in wire.ts and this object

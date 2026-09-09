@@ -124,8 +124,8 @@ export type ActionScope = ActionScopeWire;
 /**
  * One entry of the catalogue.
  *
- * The three real arms mirror `Action` in tools/fleet/actions.ts. The fourth is
- * this client's, and it is the arm that matters when the two get out of step:
+ * The three real arms derive from the shared wire arms. The fourth is this
+ * client's, and it is the arm that matters when the two get out of step:
  * an action this build cannot classify is still NAMED on the page, with the
  * reason, and cannot be pressed. Rendering it as a button would mean offering a
  * tap whose consequences nothing on screen can describe.
@@ -152,7 +152,7 @@ export type ClientBroadcastAction = Omit<
   | "id"
   | "stagger"
   /* Declined at the boundary: none. Every remaining field is carried whole. */
-> & { id: string; stagger: { minMinutes: number; windowMinutes: number } | null };
+> & { id: string; stagger: BroadcastActionWire["stagger"] | null };
 
 export type ClientAction =
   | ClientSpokenAction

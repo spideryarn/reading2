@@ -5948,6 +5948,17 @@ describe("the action buttons, which are the server's vocabulary", () => {
     expect(container.textContent).toContain("Other");
   });
 
+  it("names and explains a broadcast sent to a session, without offering it", async () => {
+    const wrongScope = { ...BROADCAST_WIRE, scope: "session" };
+    const rec = openWith([wrongScope]);
+    await act(async () => {});
+
+    expect(container.textContent).toContain("resource-broadcast");
+    expect(container.textContent).toContain("broadcast must be addressed to the box");
+    expect(buttonLabels()).not.toContain("Broadcast: ease off, staggered");
+    expect(rec.calls.filter((call) => call.op === "run")).toEqual([]);
+  });
+
   it("has no hand-written list: a server offering nothing offers no buttons", async () => {
     openWith([]);
     await act(async () => {});
@@ -6630,6 +6641,19 @@ describe("the box, which says what it would do before it does it", () => {
     await act(async () => {});
 
     expect(container.textContent).not.toContain("This server will not act");
+  });
+
+  it("names and explains a spoken action sent to the box, without offering it", async () => {
+    const wrongScope = { ...CONTINUE_WIRE, scope: "box" };
+    const rec = openBox([wrongScope]);
+    await act(async () => {});
+
+    expect(container.textContent).toContain("continue");
+    expect(container.textContent).toContain("spoken action must be addressed to one session");
+    const named = [...container.querySelectorAll<HTMLButtonElement>("button")].filter((button) => button.textContent === "Continue");
+    expect(named).toHaveLength(1);
+    expect(named[0]?.disabled).toBe(true);
+    expect(rec.calls.filter((call) => call.op === "box")).toEqual([]);
   });
 
   it("asks what it would do, and does not do it, on the first press", async () => {
@@ -7365,6 +7389,27 @@ describe("what comes off the actions wire", () => {
 
   it("reads a spoken action with no words as one it cannot offer", () => {
     expect(parseAction({ ...CONTINUE_WIRE, text: undefined })?.effect).toBe("unrecognised");
+  });
+
+  it("refuses a spoken action addressed to the box", () => {
+    const spokenAtBox = parseAction({ ...CONTINUE_WIRE, scope: "box" });
+
+    expect(spokenAtBox).toMatchObject({ effect: "unrecognised", id: "continue", scope: "box", label: "Continue" });
+    expect(spokenAtBox?.effect === "unrecognised" ? spokenAtBox.why : "").toContain("spoken action must be addressed to one session");
+  });
+
+  it("refuses a broadcast addressed to one session", () => {
+    const broadcastAtSession = parseAction({ ...BROADCAST_WIRE, scope: "session" });
+
+    expect(broadcastAtSession).toMatchObject({
+      effect: "unrecognised",
+      id: "resource-broadcast",
+      scope: "session",
+      label: "Broadcast: ease off, staggered",
+    });
+    expect(broadcastAtSession?.effect === "unrecognised" ? broadcastAtSession.why : "").toContain(
+      "broadcast must be addressed to the box",
+    );
   });
 
   it("keeps needsConfirm true unless the server said false", () => {
