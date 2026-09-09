@@ -497,6 +497,28 @@ marks were 1px on a ~200px band at 45% opacity, which is drawing your data where
 and both axis labels read the same clock time, because 24 hours earlier is the same hour and minute.
 No test would have caught any of them.
 
+Two more the pixels found afterwards, worse than they looked: the marks used
+`toneClasses(...).pill`, which for `idle` is `bg-quiet-wash` — a near-white **chip background** meant
+to sit behind dark text — so a *passing run on dev*, the most important mark on the page, rendered at
+RGB(239,239,239) on white. And `running` was green while `pass` was grey, because the dashboard's
+session vocabulary (`work` = green = something is happening, `quiet` = fine) is exactly inverted for
+a pass/fail chart. **The first fix for the contrast — 1px→2px, 45%→70% opacity — moved the right
+numbers and did nothing**, which is the lesson: an adjustment that should have worked and did not is
+evidence the diagnosis was wrong, not that the adjustment was too small.
+
+### The dock has run out of rungs, and the eighth tab is where it shows
+
+Measured at 390 px with a coarse pointer: the eight modes render as 40 px icon buttons with only the
+active one keeping its label, which is the fit ladder working — and the standalone **Refresh** button
+then sits at x≈399, past the viewport edge. The bar is `overflow-x: auto`, so it is reachable by
+scrolling sideways and nothing is lost, but it is not visible without that.
+
+This is **not** the `flex: 3` → `flex: 8` correction: `flex-grow` only distributes *free* space, and
+at 448 px of content in a 390 px bar there is none, so that token is inert in exactly this case and
+matters only on wider bars. It is the eighth tab itself. The ladder has no rung left beyond "labels
+off", so the next tab makes it worse, and that is a decision for whoever owns the dock rather than
+for the tab that happened to be eighth.
+
 ### Stage 3 — trigger/refresh
 
 - [ ] The design: which command, in which checkout, what it costs the box, how the result becomes a
