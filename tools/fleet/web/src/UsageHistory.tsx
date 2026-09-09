@@ -142,6 +142,15 @@ export function UsageHistory({
 
       {hasPoints ? (
         <>
+          <div className="tw:relative">
+          <div
+            className="tw:pointer-events-none tw:absolute tw:inset-y-0 tw:left-0 tw:flex tw:flex-col tw:justify-between tw:text-[10px] tw:opacity-60"
+            aria-hidden
+          >
+            <span>100%</span>
+            <span>50%</span>
+            <span>0%</span>
+          </div>
           <svg
             viewBox={`0 0 ${PLOT_W} ${SERIES_H}`}
             preserveAspectRatio="none"
@@ -150,6 +159,22 @@ export function UsageHistory({
             aria-label={`Utilisation over the last ${WINDOW_HOURS} hours`}
           >
             <rect x={0} y={0} width={PLOT_W} height={SERIES_H} fill="var(--quiet-wash)" />
+            {/* Gridlines at 0/50/100%. Without them the height of a line means
+                nothing — a browser check read the chart and could not say what
+                any point was worth. The numbers are in HTML beside the svg,
+                because `preserveAspectRatio="none"` stretches the viewBox and
+                would stretch text with it. */}
+            {[0, 50, 100].map((pct) => (
+              <line
+                key={pct}
+                x1={0}
+                x2={PLOT_W}
+                y1={SERIES_H - (pct / 100) * SERIES_H}
+                y2={SERIES_H - (pct / 100) * SERIES_H}
+                stroke="var(--rule)"
+                strokeWidth={0.5}
+              />
+            ))}
             {/* Where nothing was recorded. Shaded rather than joined, because the
                 alternative is a straight line across an unobserved period. */}
             {plot.recorderGaps.map((gap) => (
@@ -193,6 +218,7 @@ export function UsageHistory({
               )),
             )}
           </svg>
+          </div>
 
           <div className="tw:flex tw:flex-wrap tw:gap-x-4 tw:gap-y-1 tw:text-xs tw:opacity-80">
             {plot.accounts.flatMap((account) =>
@@ -203,8 +229,12 @@ export function UsageHistory({
                 </span>
               )),
             )}
+            {/* **NOT "05:28 – 05:28".** A 24-hour window ends at the same wall
+                time it began, so a bare start-and-end reads as a zero-width
+                range — which is exactly how it looked in the browser. Say the
+                span and anchor it to the end instead. */}
             <span>
-              {clockLabel(plot.fromMs, skew)} – {clockLabel(plot.toMs, skew)}, as observed
+              the {WINDOW_HOURS} hours to {clockLabel(plot.toMs, skew)}, as observed
             </span>
           </div>
         </>
