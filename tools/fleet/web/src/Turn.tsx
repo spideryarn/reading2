@@ -109,7 +109,7 @@ export const SPEAKER_TIPS: Record<MessageSpeaker, Tip> = {
   human: {
     head: "Typed at the pane",
     what: "Somebody typed this into the session's own terminal. A steer sent from this dashboard lands here too, and deliberately.",
-    how: "Across two real transcripts, only 64 of 389 records wearing a person's role had actually been typed by one — which is why this is a label about where the words entered the session rather than about who composed them.",
+    how: "Across two real transcripts, 64 of 389 records wearing a person's role were classified here and the other 325 were machinery of one kind or another. It says where the words entered the session, never who composed them: a steer and Greg at the keyboard look the same to a transcript.",
   },
   assistant: {
     head: "The agent",
@@ -124,17 +124,17 @@ export const SPEAKER_TIPS: Record<MessageSpeaker, Tip> = {
   notification: {
     head: "Machinery",
     what: "A subagent finishing, or an auto-continuation. The harness telling the session that something happened.",
-    how: "The largest category by far of what looks like a person speaking: 319 of the 389 user-role records counted on disk were these, which is the measurement the whole nine-way split came out of.",
+    how: "The largest category by far of what looks like a person speaking: 321 of the 389 user-role records counted on disk were these — 319 subagent notifications and two auto-continuations, which this one label covers both of. That count is the measurement the nine-way split came out of.",
   },
   "compact-summary": {
     head: "A compaction summary",
     what: "Claude Code's recap of the conversation so far, written when the context ran out and the older turns were dropped.",
-    how: "It wears a person's role and opens *“This session is being continued from a previous conversation…”* — transcript.ts calls it the single most convincing wrong answer it could give, because it reads exactly like somebody restating the task.",
+    how: "It wears a person's role and opens “This session is being continued from a previous conversation…” — transcript.ts calls it the single most convincing wrong answer it could give, because it reads exactly like somebody restating the task.",
   },
   injected: {
     head: "An injected reminder",
     what: "A reminder or caveat the harness put into the conversation. Nobody typed it, and nobody chose to send it.",
-    how: "Machinery wearing a person's role, like a compaction summary. Rounding either of them to *typed at the pane* would put the harness's words in Greg's mouth, which is the specific misattribution this vocabulary exists to stop.",
+    how: "Machinery wearing a person's role, like a compaction summary. Rounding either of them to “typed at the pane” would put the harness's words in Greg's mouth, which is the specific misattribution this vocabulary exists to stop.",
   },
   "api-error": {
     head: "An API error",
@@ -144,12 +144,12 @@ export const SPEAKER_TIPS: Record<MessageSpeaker, Tip> = {
   system: {
     head: "Claude Code itself",
     what: "The harness's own notes — records that carry text but come from neither the model nor anybody at the keyboard.",
-    how: "Talk about the session rather than anything in it, which is why it is neither *the agent* nor *machinery*: nothing was delivered to the agent and nothing finished.",
+    how: "It is a separate speaker because it is demonstrably neither the model nor anybody at the keyboard — not because anything here knows more about it than that. The source says only that these are Claude Code's own records that carry text.",
   },
   unrecognised: {
     head: "An unknown speaker",
-    what: "A turn this build of the dashboard has no name for. It is shown, with its words, and left unattributed.",
-    how: "Deliberately not rounded to the nearest familiar speaker. Two of the eight kinds it might be are machine-written text in a person's role, so a guess here would misattribute a message rather than merely describe it vaguely.",
+    what: "A turn whose kind is not one of the eight this build knows. It is shown, with its words, and left unattributed.",
+    how: "Deliberately not rounded to the nearest familiar speaker. Two of the eight kinds it is not are machine-written text wearing a person's role, so a wrong guess here would misattribute a message rather than merely describe it vaguely.",
   },
 };
 

@@ -263,7 +263,7 @@ export const COUNT_TIPS: Record<"needsYou" | "working" | "quiet" | "unknown", Ti
     /* **The word is this tally's own and appears on no row**, which is exactly
        what a reader gets stuck on: they look for a `quiet` badge in the list and
        there is none. Saying so is the whole value of this card. */
-    how: "A band rather than a status — no row anywhere on the page says “quiet”. The list spells out which kind each one is, because *sleeping until 4pm* and *nobody is home* are different things to find out at midnight.",
+    how: "A band rather than a status — no row anywhere on the page says “quiet”. The list spells out which kind each one is, because “sleeping until 4pm” and “nobody is home” are different things to find out at midnight.",
   },
   unknown: {
     head: "Unknown",
@@ -282,17 +282,24 @@ export const CLAIM_TIPS: Record<"one" | "none" | "contested" | "cannot-tell", Ti
   none: {
     head: "No Overseer session",
     what: "Nobody currently holds the claim. This is a real answer, not a blank.",
-    how: "What the box looks like after a reboot: the claim lives in the tmux server's memory and dies with it. Nothing else on this page would say so, and every agent on the box goes unsupervised until a session takes it.",
+    how: "What the box looks like after a reboot: the claim lives in the tmux server's memory and dies with it. It is only reached on a complete reading — anything uncertain says it cannot tell instead — and nothing else on this page would say it.",
   },
   contested: {
-    head: "Two claimants",
-    what: "More than one session says it is the Overseer. That is a fault, and both of them are acting on it.",
-    how: "Never resolved by picking one: choosing between two claimants is how both go on believing they are it. It has to be settled on the box, by stopping one.",
+    /* `contested` is two OR MORE, and the line beside this card prints the
+       actual number. A head that says "Two" can be false on the page that is
+       showing three. */
+    head: "More than one claimant",
+    what: "Two or more sessions say they are the Overseer. That is a fault to report.",
+    how: "Never resolved by picking one: choosing between claimants is how each of them goes on believing it holds the role. It is the one verdict that survives an incomplete reading, because rows nobody could read could only add claimants.",
   },
   "cannot-tell": {
     head: "Overseer unknown",
     what: "This page will not answer the question, and says why rather than guessing.",
-    how: "Either the snapshot is too old to describe now — two holders an hour ago do not prove two holders, since killing one is what somebody would have done — or rows were dropped that could not be read, any of which could be the holder's.",
+    /* Not an either/or: ANY uncertainty forces this arm when there are fewer
+       than two known holders — a stale snapshot, a failed collection, no
+       collection yet, or a row whose role could not be read.
+       overseer-claim.ts § the truth table. */
+    how: "Any uncertainty at all forces it when fewer than two holders are known: a snapshot too old to describe now, a collection that has not finished or failed, or rows dropped because they could not be read. One holder plus one unreadable row is not single ownership — the unreadable row could be a second claimant, and exactly one is the whole promise.",
   },
 };
 

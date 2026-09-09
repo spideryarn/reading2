@@ -179,6 +179,88 @@ every card on the biggest one.
 it enforces are worth exactly what the size of the list is: an import dropped in a refactor would
 leave every assertion passing over a shorter one.
 
+### The cross-family review, and what it changed
+
+*Status: done. GPT Sol, `logs/tooltips/review-answer.md`, exit 0 and a fresh non-empty answer.*
+
+**Six P0s and every one of them was the same mistake: a card asserting more than its source
+establishes.** That is the rule this plan opens with, which is the point — the rule was easy to
+state and I broke it six times while believing I was following it, because every sentence *felt*
+quoted. Each one is fixed and each carries a comment saying what it used to claim.
+
+The two worth reading twice:
+
+- **A source that contradicts itself, and I quoted the wrong half.** `types.ts` says
+  `claudeSessionId` is what distinguishes this agent from the one that replaced it — and then, two
+  paragraphs down, that every identifier above `execution` *survives* a claude exiting and another
+  starting in the same pane, that one included, because it is a launch claim written once. Both
+  paragraphs are in the same doc comment. **Quoting a source is not enough when the source disagrees
+  with itself**; the later, narrower paragraph is the careful one. The field comment still needs
+  reconciling by whoever owns `types.ts` — flagged to the Overseer, not edited here.
+- **The `ready` badge card said the page never recomputes the verdict, and the page does.**
+  `badgeFor` derives the badge on the client from three axes and never reads `row.ready`. The
+  server-computed thing is the *sentence under the title*. I had read the panel's header — which
+  says the verdict is the server's — and attached it to the wrong element.
+
+**An accessibility regression introduced by an accessibility improvement.** A `<button>` is a
+labelable element, so wrapping `Order` in an `Explain` *inside* the `<label>` made the button the
+labelled control and left the `<select>` with no accessible name.
+
+**And a retreat I asserted was sufficient, which was not.** I argued that a phone reader still has
+`row.why` — but `why` is null exactly when an item is ready, `sr-only` reaches a screen reader and
+nobody else, and neither ever gives the full `qi-` id. Naming a fallback is not the same as checking
+it covers the case.
+
+**The guard was quieter than it looked.** Blanking string literals as well as comments meant that an
+apostrophe in JSX text (`session's transcript`) blanked everything up to the next one — so a real
+`title=` in between would have vanished. **A guard that goes quiet is worse than one that cries
+wolf**, so it blanks comments only now and accepts a loud false positive. The allow-list is a count
+rather than a file; the coverage floor was 60 against ~70 reachable tips, so dropping a whole map
+passed it.
+
+**Two of my own tests broke, and broke for the right change** — they asserted on phrases from the
+copy the review improved. They read the sentence out of the exported map now.
+
+### What this pass learned, that the plan did not know
+
+**Adding an explanation is not a read-only act on the DOM.** Three of the four things that went
+wrong here were caused by the *trigger*, not by the words:
+
+- `Explain` renders a `<button>`, so a trigger has to hand over its ref and its handlers. `Chip` in
+  `FeedPanel` declared four props and dropped the rest, and the resulting chip had no hover
+  behaviour at all — no error, and identical to a page with no tooltips on it. It typechecks either
+  way.
+- A `<button>` inside a `<button>` is invalid and reads as one control, which is why the queue
+  badge and short id are `Tooltip` + an `sr-only` span rather than `Explain`: they sit inside the
+  row's own disclosure button.
+- A button is `display: inline-block` where a `<span>` is inline, so wrapping the three handles on
+  `name · $2705 · %2708` changed the wrapping objects on the one line where `break-all` is
+  load-bearing (`Mono`'s comment: an unbreakable `$1643`-shaped string is what pushes a card wider
+  than a phone).
+
+**A card can trip a check that greps the page for a word**, and the trap is already documented one
+file over: `Header.tsx` deliberately keeps `STALE` out of its own freshness tip, because *"an
+explanation that quoted the word would satisfy that search on every page and quietly retire the
+check."* The `on hold` tip hit exactly this with *not approved*.
+
+**A check written to catch prose can read its own prose.** The `title=` scan reported a doc comment
+that merely mentioned the attribute. The fix — blanking comments and strings — can just as easily
+blank the thing being looked for, so it has its own test that a real attribute survives it.
+
+**Two more, from `dashboard-design-system` working the same page in parallel**, recorded here
+because they are the same lesson from the other side and it should be learned once:
+
+- The over-long thing on a tab full of tooltips turned out to be **visible copy, not a tip** — a
+  hand-written prefix restating the sentence the producer already supplied. So: check the visible
+  copy alongside the cards.
+- **An honest absence drawn as a fault is invisible to every test you can write.** A window whose
+  reading could not be validated was mapped onto the *the source broke* state rather than the *it
+  cannot be shown to be about you* state, producing red alarm cards on a tab whose verdict was
+  "cannot tell". Both arms are legitimate, so everything stayed green; only the picture showed it.
+
+The common thread is that all six were found by a picture, a peer, or a test going red — and none by
+re-reading the diff.
+
 ### Stage 5 — the rest, by agreement
 
 *Status: not started.* The Overseer tab's daemon line (`schema 2 · pid … · 351 ticks · instance

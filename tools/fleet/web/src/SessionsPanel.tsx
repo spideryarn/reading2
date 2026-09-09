@@ -333,7 +333,7 @@ export const BAND_TIPS: Record<string, Tip> = {
   "Everything else": {
     head: "Everything else",
     what: "Idle agents, sessions sleeping until a time, and shells with no agent in them at all — one band, not three.",
-    how: "Deliberately not split further: a screen with seven ranks is one nobody reads the bottom of. The distinctions are still on every row, because *sleeping until 4pm* and *nobody is home* are different things to find out at midnight.",
+    how: "Deliberately not split further: a screen with seven ranks is one nobody reads the bottom of. The distinctions are still on every row, because “sleeping until 4pm” and “nobody is home” are different things to find out at midnight.",
   },
 };
 
@@ -416,14 +416,18 @@ function ListControls({
       <h2 className="tw:text-[11px] tw:font-semibold tw:tracking-widest tw:text-ink-faint tw:uppercase">
         {count} {count === 1 ? "session" : "sessions"}
       </h2>
-      <label className="tw:ml-auto tw:flex tw:items-center tw:gap-1.5 tw:text-[12px] tw:text-ink-faint">
-        {/* The card is on the word, not on the `<select>`: a native select is
-            the platform's control and wrapping it in a hover trigger would put
-            a card over the menu it opens. */}
+      {/* **NOT a `<label>` wrapping both**, which is what this was for about an
+          hour. A `<button>` is a labelable element, so an `Explain` trigger
+          placed inside a label before the select becomes the control that label
+          names — and the select silently loses its accessible name. An
+          accessibility regression introduced by an accessibility improvement;
+          GPT Sol found it. The word keeps its card, the select names itself. */}
+      <div className="tw:ml-auto tw:flex tw:items-center tw:gap-1.5 tw:text-[12px] tw:text-ink-faint">
         <Explain tip={ORDER_TIP} placement="bottom">
           Order
         </Explain>
         <select
+          aria-label="Order the session list"
           value={order}
           onChange={(e) => onOrder(e.target.value as Ordering)}
           /* `h-7` and `rounded-md`, the one height and the one radius this page
@@ -437,7 +441,7 @@ function ListControls({
             </option>
           ))}
         </select>
-      </label>
+      </div>
     </div>
   );
 }
