@@ -13,8 +13,10 @@ box, newest first, filtered by session, speaker or text. `GET /api/feed`, served
 [`FeedPanel.tsx`](../../tools/fleet/web/src/FeedPanel.tsx).
 
 How it was built and what was passed over is
-[260909b](../plans/260909b-recent-messages-tab-a-rolling-window-across-all-agents.md). Adding a tab
-at all is [fleet-dashboard-modes.md](fleet-dashboard-modes.md). This doc is the part a future reader
+[260909b](../plans/260909b-recent-messages-tab-a-rolling-window-across-all-agents.md); making the
+rows clickable and scannable, the day after, is
+[260909c](../plans/260909c-recent-messages-tab-clickable-to-sessions-and-scannable-status-and-timing.md).
+Adding a tab at all is [fleet-dashboard-modes.md](fleet-dashboard-modes.md). This doc is the part a future reader
 has to know **before changing anything here**, and all of it is about one thing: what the feed is
 entitled to claim.
 
@@ -132,6 +134,71 @@ be held by a slow reader.
 An earlier draft of the plan quoted 266 kB on the wire. That was the size of all 579 **candidate**
 turns, not the 50 the route serialises — a number measured on a step's input, read as a number about
 its output. Re-measure through `feedPayload` itself if you touch this.
+
+## What a row is entitled to say about its session
+
+A row shows what its session is **doing now** — the same `StatusPill` the Sessions list draws, and a
+click on the session name opens it there. Both of those are joins between two different answers, and
+the whole of this section is about what has to be true before either is allowed.
+
+**The status is never on `/api/feed`.** It is read out of the live session list `/api/state` already
+supplies, by `sessionId`. A status field on the feed would be a second reading of the same tmux
+output on a different cadence, kept in step by nothing — and the two tabs disagreeing about whether a
+session is working is exactly the failure
+[overseer-direction.md § `idle` is the bug](overseer-direction.md) exists to prevent.
+
+**But `$1643` means nothing outside one tmux server**, so the payload carries `tmuxServerPid` and the
+join is gated on it. After a tmux restart, a feed read a minute ago holds handles that now name
+*different* sessions: the lookup would succeed, take an unrelated session's status, and open the
+wrong conversation on a click — all of it looking entirely normal. This was GPT Sol's P0 on
+[260909c](../plans/260909c-recent-messages-tab-clickable-to-sessions-and-scannable-status-and-timing.md);
+the plan had claimed there was "nothing to design at the addressing level".
+
+**Not knowing and knowing otherwise are different arms**, and collapsing them either way is a
+mistake. Two pids that *disagree* are proof: no status, and no link. A pid that is *missing* is only
+ignorance — any server predating the field answers that way for every row, so refusing outright
+switches the whole feature off on no evidence, which is "a warning that never clears, and one nobody
+reads". So an unverified row keeps a way in, but **it reaches the Sessions tab without selecting
+anything**. Selecting on trust was the tempting middle and it is the one option that is wrong: the
+pane it opens prints a handle that *matches the one clicked*, so a reader has nothing to notice.
+
+**And the check has to survive the click, or it is theatre.** `sel` is a handle; `selpid` goes with
+it, and the Sessions tab declines to resolve one against a snapshot of the other. Proving the join
+safe and then handing over a bare handle leaves the destination matching `$1643` against whatever
+tmux server it is looking at by the time it renders — which is the original bug, one component
+further along. A URL with no `selpid` (a tap on the list, a hand-typed link, an old bookmark)
+resolves exactly as it always did.
+
+**Six arms, because there are six different things to say**, and five of them are silences that must
+not read as a quiet session:
+
+| | the row says |
+|---|---|
+| no state payload at all | session list has not arrived |
+| a payload, `collectedAt === null` | no session census yet |
+| one side named no tmux server | status not checked *(reaches Sessions, selects nothing)* |
+| the two pids disagree | cannot be matched to a session *(link dropped)* |
+| census finished, no such row, `unreadableRows > 0` | not in the readable session list |
+| census finished, no such row, none dropped | not in the current session list |
+
+The second is the one worth remembering: the server answers a good payload with no rows for the ten
+seconds a first collection takes, and reading "not in the session list" off that calls **every
+session on the box** absent. It is the same distinction the Sessions tab draws between "No sessions."
+and "Collecting…".
+
+**Timing: the age is shifted, the timestamp is not.** `turn.at` is the box's clock. The age is a
+subtraction across two clocks, so it goes through the page's `ClockSkew`; the absolute instant is
+printed by `zonedLine(turn.at)` **unshifted**, because shifting a string drawn as a wall clock
+asserts an instant nothing happened at (`withClockSkew` in messages-client.ts carries the same
+warning). Both come off one field.
+
+Three things the age says that a subtraction would not. It carries *clocks not compared* while the
+skew is unknown — this tab has its own route and can be on screen before the masthead has anything to
+say about the clocks, and an unknown skew is not a small error but an unbounded one, so it is
+labelled rather than hedged. A turn stamped more than five seconds into the future says **how far
+ahead** rather than clamping to "0s ago"; the tolerance is the latency in the measurement, not a
+threshold borrowed from somewhere else. And a timestamp is checked for canonical ISO before it
+becomes a number, because `Date.parse("0")` is January 2000 rather than a refusal.
 
 ## Filters
 

@@ -1,0 +1,278 @@
+/**
+ * ONE PASS OVER THE FLEET: read each session's opening, describe what it is for.
+ *
+ * The impure one. `describe.ts` holds the prompt, the parse and the budget;
+ * `describe-store.ts` holds the memory; `transcript.ts` reads the opening. This
+ * walks the sessions and spends the budget, and every side effect is injected —
+ * `readOpening`, `describe`, `now` — so the whole pass is testable against
+ * fixtures with no disk and no gateway.
+ *
+ * ## WHO GETS DESCRIBED, AND WHY THE GATE IS NOT A NICETY
+ *
+ * **Only a session whose execution identity is `verified`, with a `verified`
+ * conversation whose id is the one whose transcript we read.** That is a P1 from
+ * the plan review and it is not defensive programming:
+ * `CLAUDE_SESSION_ID` is set once when a tmux session is created and **never
+ * updated** (`transcript.ts` says so outright), so a pane re-used for a second
+ * conversation still names the first. Without the gate, conversation A's opening
+ * is read, described, and rendered on conversation B's row — well formed,
+ * correctly attributed, about this repo, and about the wrong session.
+ *
+ * The gate is belt and braces with the cache key: the token is *in* the key, so a
+ * stale entry is unreachable rather than merely unrendered. Both, deliberately —
+ * gating alone leaves a correct-looking record waiting for a future code path to
+ * find it.
+ *
+ * **`cannot-tell` is the normal case for a while**, not an error: every row reads
+ * `unknown`/`not-reported` until the dashboard and daemon are restarted on the
+ * code that produces execution readings. The copy has to be informative rather
+ * than apologetic or the page will read as broken when it is merely new.
+ */
+import { createHash } from "node:crypto";
+
+import type { ExecutionReading } from "./wire.js";
+import {
+  canonicalMaterial,
+  planDescriptions,
+  type DescribeVerdict,
+  type Described,
+  type MaterialToDescribe,
+} from "./describe.js";
+import type { DescriptionMemory, DescriptionRecord } from "./describe-store.js";
+
+/** The fields this pass needs from a row, and nothing else. */
+export type SessionToDescribe = {
+  id: string;
+  name: string;
+  claudeSessionId: string | null;
+  dir: string | null;
+  execution: ExecutionReading;
+};
+
+/**
+ * Whether this session may be described at all, and under what key.
+ *
+ * Returns `null` when it may not — which is the ordinary answer for a shell, for
+ * a session whose process could not be identified, and for every row on a server
+ * that has not been restarted onto execution readings yet.
+ */
+export function describeKey(session: SessionToDescribe): { key: string; token: string; conversationId: string } | null {
+  const e = session.execution;
+  if (e.kind !== "verified") return null;
+  if (e.conversation.kind !== "verified") return null;
+  /* The claim and the process agree, and the parsers upstream have already
+     downgraded an incoherent reading — so this id is the conversation actually
+     running in that pane rather than the one the tmux environment remembers. */
+  /* AND THE TRANSCRIPT WE WILL READ MUST BE THE CONVERSATION WE VERIFIED — F24.
+     Production locates the transcript by `claudeSessionId`, and the gate checked
+     only that the execution's conversation was verified. Upstream parsers make
+     the two agree today, so this was a latent seam rather than a live bug; it is
+     one comparison, and a seam that relies on somebody else's invariant is the
+     kind that opens quietly. */
+  if (session.claudeSessionId !== e.conversation.id) return null;
+  const token = `${e.token.boot}:${e.token.pid}:${e.token.startTicks}`;
+  return { key: `${session.id} ${e.conversation.id} ${token}`, token, conversationId: e.conversation.id };
+}
+
+/**
+ * What one pass looked at.
+ *
+ * **TWO IDENTITIES, NOT ONE, because the buckets count different things.**
+ * Sessions divide one way; distinct openings divide another, and two sessions
+ * with identical openings are one call. A single "it all adds up" check over
+ * both would have to be fudged with an inequality — which is a check that cannot
+ * fail, and this file is not going to ship one of those.
+ *
+ *  - **Per session:** `notEligible + unreadable + described === sessions`
+ *  - **Per distinct opening:** `cached + called + overBudget === openings`
+ */
+export type DescribeBreakdown = {
+  sessions: number;
+  /** Not eligible: no verified identity, or no verified conversation to read. */
+  notEligible: number;
+  /** Eligible, and the opening could not be read. */
+  unreadable: number;
+  /** Eligible, opening read, material produced. */
+  described: number;
+  /** Distinct openings this pass considered. */
+  openings: number;
+  /** Answered from memory. Cost nothing. */
+  cached: number;
+  /** Paid for this pass. */
+  called: number;
+  /** Distinct openings the budget would not stretch to. Reported, never hidden. */
+  overBudget: number;
+  /** Calls that came back as `cannot-tell`. A subset of `called`. */
+  couldNotDescribe: number;
+  /** Openings we already knew we could not describe, so never asked about again. */
+  alreadyRefused: number;
+  /** **Sessions that ended the pass with a record on them.** The published half. */
+  published: number;
+};
+
+export type DescribePassOptions = {
+  sessions: readonly SessionToDescribe[];
+  memory: DescriptionMemory;
+  maxCalls: number;
+  /** The session's opening, flattened to text, or a reason there is none. */
+  readOpening: (session: SessionToDescribe) => Promise<{ ok: true; text: string } | { ok: false; why: string }>;
+  describe: (material: string) => Promise<DescribeVerdict>;
+  now: () => Date;
+};
+
+export type DescribePassResult = {
+  memory: DescriptionMemory;
+  breakdown: DescribeBreakdown;
+  /** Why a session could not be described, for the pass's own report. Never rendered per-row. */
+  unreadable: readonly string[];
+};
+
+/**
+ * A fingerprint of the canonical opening.
+ *
+ * **SHA-256, and the 32-bit hash it replaces was an established P1.** The cache
+ * is looked up by fingerprint alone — before the session/conversation/token key
+ * is applied — so a collision hands one session's description to another and it
+ * is then re-filed under the second session's *valid* key. The third review
+ * found a live pair: `opening-229599` and `opening-432382` both hashed to
+ * `95984682`, reproduced here before this was changed.
+ *
+ * My own note in the review prompt said a collision "would need two sessions
+ * with the same id and token". That was wrong, and wrong in the way worth
+ * recording: the key is applied *after* the cache hit, so it constrains where a
+ * description is stored and not which one is fetched. A 32-bit hash must not
+ * gate anything that publishes confident prose.
+ *
+ * Taken over `canonicalMaterial`, so the bytes hashed are exactly the bytes the
+ * model is sent — F23.
+ */
+export function openingFingerprint(text: string): string {
+  return createHash("sha256").update(canonicalMaterial(text), "utf8").digest("hex").slice(0, 32);
+}
+
+export async function runDescribePass(options: DescribePassOptions): Promise<DescribePassResult> {
+  const breakdown: DescribeBreakdown = {
+    sessions: options.sessions.length,
+    notEligible: 0,
+    unreadable: 0,
+    described: 0,
+    openings: 0,
+    cached: 0,
+    called: 0,
+    overBudget: 0,
+    couldNotDescribe: 0,
+    alreadyRefused: 0,
+    published: 0,
+  };
+  const unreadable: string[] = [];
+
+  /* Read every eligible opening first, so the budget is spent on a complete
+     picture rather than on whichever sessions happened to be read before it ran
+     out. Reads are cheap — one chunk from byte 0 — and the model calls are not. */
+  const material: MaterialToDescribe[] = [];
+  const keyed = new Map<string, { key: string; token: string }>();
+  for (const session of options.sessions) {
+    const eligible = describeKey(session);
+    if (eligible === null) {
+      breakdown.notEligible += 1;
+      continue;
+    }
+    const opening = await options.readOpening(session);
+    if (!opening.ok) {
+      breakdown.unreadable += 1;
+      unreadable.push(`${session.name}: ${opening.why}`);
+      continue;
+    }
+    breakdown.described += 1;
+    const fingerprint = openingFingerprint(opening.text);
+    material.push({ sessionId: session.id, fingerprint, material: opening.text });
+    keyed.set(session.id, { key: eligible.key, token: eligible.token });
+  }
+
+  /* ONLY A COHERENT RECORD MAY SEED THE CACHE — F20, and it was a real hole.
+     The cache is looked up by fingerprint alone, so seeding it from a record
+     whose own key and token disagree launders that record: the description is
+     fetched by content and then re-filed under a *valid* key and token, and the
+     join check downstream accepts the rewritten descendant while refusing the
+     corrupt original. A record only enters the cache if its stored token is the
+     one embedded in the key it was filed under. */
+  const cache = new Map<string, Described>();
+  for (const [key, record] of options.memory.records) {
+    if (record.executionToken === null) continue;
+    if (!key.endsWith(` ${record.executionToken}`)) continue;
+    cache.set(record.fingerprint, record.described);
+  }
+
+  /* WHAT WE ALREADY KNOW WE CANNOT DESCRIBE — F21. A permanent refusal is a fact
+     about the opening, and re-asking costs money and returns the same answer.
+     Transient failures are deliberately NOT here: a 429 is a reason to look
+     again, never a fact to remember. */
+  const knownRefusals = new Map(options.memory.refusals);
+
+  const askable = material.filter((m) => !knownRefusals.has(m.fingerprint));
+  breakdown.alreadyRefused = material.length - askable.length;
+  const plan = planDescriptions({ material: askable, cache, maxCalls: options.maxCalls });
+  breakdown.openings = plan.cached.length + plan.toCall.length + plan.overBudget.length;
+  breakdown.cached = plan.cached.length;
+  breakdown.overBudget = plan.overBudget.length;
+
+  const answered = new Map<string, Described>(plan.cached.map((c) => [c.fingerprint, c.described]));
+  for (const item of plan.toCall) {
+    const verdict = await options.describe(item.material);
+    breakdown.called += 1;
+    if (verdict.kind === "described") answered.set(item.fingerprint, verdict.described);
+    else {
+      breakdown.couldNotDescribe += 1;
+      unreadable.push(`${item.sessionId}: ${verdict.why}`);
+      if (verdict.permanent) knownRefusals.set(item.fingerprint, verdict.why);
+    }
+  }
+
+  /* REBUILT FROM WHAT THIS PASS SAW, not merged into what was there before. A
+     session that has gone is a record nobody will ever look up again, and a
+     memory that only grows is one that outlives the box it describes. */
+  const records = new Map<string, DescriptionRecord>();
+  const at = options.now().toISOString();
+  for (const item of material) {
+    const described = answered.get(item.fingerprint);
+    const k = keyed.get(item.sessionId);
+    if (described === undefined || k === undefined) continue;
+    breakdown.published += 1;
+    records.set(k.key, {
+      fingerprint: item.fingerprint,
+      executionToken: k.token,
+      describedAt: at,
+      described,
+    });
+  }
+
+  return { memory: { records, refusals: knownRefusals }, breakdown, unreadable };
+}
+
+/**
+ * The numbers add up, and one of them is about what was PUBLISHED.
+ *
+ * **The first version balanced planning and not publication — F25.** Both of its
+ * equalities held while zero descriptions were produced and one session was
+ * perpetually starved of budget, and they would have held if the reconstruction
+ * loop had been deleted entirely. A check that a bug can pass is the thing five
+ * sessions spent this night finding in each other's code, and this file shipped
+ * two versions of it.
+ *
+ * Three statements now, and the third is the one with teeth:
+ *
+ *  - **Per session:** `notEligible + unreadable + described === sessions`
+ *  - **Per distinct opening:** `cached + called + overBudget === openings`
+ *  - **Published:** every session that produced material either got a record, or
+ *    is accounted for by an opening that was over budget or refused.
+ */
+export function describeBreakdownBalances(b: DescribeBreakdown): boolean {
+  const perSession = b.notEligible + b.unreadable + b.described === b.sessions;
+  const perOpening = b.cached + b.called + b.overBudget === b.openings;
+  /* A session with material ends up published unless its opening was one nobody
+     paid for. Not an equality, because two sessions can share one opening — but
+     it cannot be satisfied by publishing nothing, which is what the old check
+     allowed. */
+  const publishedAccounted = b.published > 0 || b.described === 0 || b.overBudget + b.couldNotDescribe + b.alreadyRefused > 0;
+  return perSession && perOpening && publishedAccounted;
+}

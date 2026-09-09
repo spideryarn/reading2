@@ -13,6 +13,22 @@ still asks Greg about anything that outlives the branch.
 >
 > — Greg, 2026-09-08
 
+> **This table is still the queue, and a machine-readable one now exists beside it.**
+> [260909b](../plans/260909b-queued-ideas-mode-the-overseer-queue-as-ndjson.md) built it: an
+> append-only NDJSON file with a CLI (`npx tsx scripts/overseer-queue.ts --help`) and the read-only
+> **Queued ideas** tab on the dashboard — because Greg asked to reorder, edit and see the wait from
+> his phone. **Nothing has been cut over: this file is what gate 3 reads until `overseer.md` says
+> otherwise**, and that switch is one approved change rather than a migration, so that there is never
+> a moment with two sources of authorisation. The sixteen clusters below are already encoded as a
+> checked-in seed, which is not a live authority either.
+>
+> What the new file adds is a test to replace *"is it in the queue?"*, which stops being enough once
+> the Overseer can write the queue: `isDispatchable` asks whether the file read cleanly, whether
+> **Greg** authorised it, whether he authorised **the revision it now says**, whether it is still
+> queued, and whether it is waiting on him. An item the Overseer adds is born a proposal and only he
+> can promote it — which is what the two sections of this file have meant all along, now enforced
+> rather than remembered.
+
 **How to use it.** Take an item only when the current focus has nothing dispatchable — every live
 stage is either running or blocked on Greg — and the box and usage window have room. Move the item to
 [the decision log](../plans/260908i-overseer-decision-log-for-the-two-astra-plans.md) when it is
@@ -80,3 +96,6 @@ Greg promotes one by saying so, and then it moves up into a plan.
 - **`tests/fleet-health-wiring.test.ts` mount guard passes with the mount commented out** — the needle
   survives inside the `//`. Assert against comment-stripped lines, as `fleet-deploys-route` now does.
   It stands behind a feature that shipped dead once. 2026-09-09.
+- **`.dock-modes { flex: 3 0 auto }` under `@media (pointer: coarse)` hard-codes the mode count** as a
+  share weight, wrong since the fourth tab landed; no type or test can see it and the symptom is
+  proportion, not breakage. Found by GPT Sol reviewing `fleet-dashboard-modes.md`. 2026-09-09.

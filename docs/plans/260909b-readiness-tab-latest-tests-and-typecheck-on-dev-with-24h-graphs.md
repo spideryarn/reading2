@@ -1,6 +1,25 @@
 # Readiness: a tab that says whether the tree is green, and has said so for a day
 
-**Status:** Stage 1 not started. Written 2026-09-09.
+**Status: Stages 1 and 2 are built and on `dev`. Stage 3 is design-only and blocked on Greg.**
+
+Written 2026-09-09; **Sections 2–5 rewritten the same day after GPT Sol's plan review**, which
+returned *"do not build Stage 1 roughly as written"* and was right. What that review changed is
+recorded in [§ What the first draft got wrong](#what-the-first-draft-got-wrong) rather than quietly
+edited away, because the discarded design is the one somebody will otherwise propose again.
+
+**Five review rounds, and every one found a way to render a tree green that was not.** That is the
+single most useful thing to know before touching this code, and
+[§ What five review rounds cost](#what-five-review-rounds-cost-and-why-it-was-worth-it) says why it
+kept happening.
+
+### The one command an agent needs
+
+    npx tsx scripts/tmux-job.ts npx tsx scripts/readiness-run.ts test
+
+That is the only way a run gets recorded with the commit it ran on. A plain `npm test` leaves no
+wrapper reading — it will appear in the tab's history, faded, with no vote. Until the Overseer's
+standing jobs run checks this way, the tab's headline will usually and correctly read *we do not
+know*.
 
 > add a tab for "Readiness" that shows information about the latest tests and type-checking (on dev,
 > when last run, able to trigger/refresh) and anything else you can think of. Ideally shows graphs of
@@ -11,7 +30,8 @@
 Parent: [dev-and-deployment-overview.md](../project/dev-and-deployment-overview.md) once it lands;
 this plan is the working document until then. Sibling of
 [260908f-box-health-history-24h-graphs-and-swap-retention.md](260908f-box-health-history-24h-graphs-and-swap-retention.md),
-which is the feature this one is modelled on and, in two places, deliberately not modelled on.
+whose store this one deliberately does **not** copy — see § 2. The tab itself follows
+[fleet-dashboard-modes.md](../project/fleet-dashboard-modes.md).
 
 ---
 
@@ -25,201 +45,294 @@ record **which commit was tested** — the one fact the question "is dev green?"
 So the tab cannot be built by querying something. The record has to be created, and the first design
 question is what a *reading* is and who is honest enough to take one.
 
-### The four states, which are the whole design
+### The states, which are the whole design
 
 Copied deliberately from `health-history.ts`, because the failure it exists to prevent is exactly
 the failure available here — a page that renders *nothing was recorded* as *everything is fine*.
 
 1. **Pass.** A check ran to completion and exited 0.
-2. **Fail.** A check ran to completion and exited non-zero.
-3. **Void.** A check started and we do not know how it ended: the process was killed, the box OOMed,
-   the tmux log has no `EXIT=` line. **This is not a fail and it is certainly not a pass.** It is the
-   state [silent-success.md](../reusable/silent-success.md) is about. The specimen is a run that
-   ends `EXIT=143` with a log full of green ticks, because something else on the box killed it. A
-   void reading must never contribute a green pixel.
-4. **No reading.** Nobody ran the check. Cannot be written down, only inferred from the absence of a
-   line, and rendered as its own thing: "nothing has run since 03:41", not a gap in a green bar.
+2. **Fail.** It ran to completion and exited non-zero.
+3. **Void.** It started and we do not know how it ended. Four ways in, and they are not the same:
+   the log has no `EXIT=` line; the exit is a shell's 128 + signal, which is a kill and not a verdict;
+   the exit is 0 but the check never printed its own summary, so nothing shows it reached a
+   conclusion; or **the wrapper itself died before it could record anything**.
 
-### And the fifth, which is this feature's own
-
-5. **A reading about a different tree.** Nine worktrees run suites on nine branches tonight. A green
-   `npm test` in `worktree-260909a-dashboard-descriptions` is a true fact about that branch and says
-   *nothing* about dev. Pooling those is the specific lie this tab must not tell, and it is the one
-   `health.jsonl` never had to think about because there is only one box.
-
----
-
-## What gets built
-
-### Stage 1 — the record (the writer, the store, the backfill)
-
-Server-side and headless. Nothing visual.
-
-**Reordered from the brief, which put the read-only tab first.** A tab whose only possible content
-is "no reading" is not a stage anybody can evaluate — it looks identical whether it works or not,
-which is the shape of bug this repo keeps writing postmortems about. So the data comes first and the
-tab in Stage 2 has something real to draw on its first render.
-
-- `tools/fleet/readiness-history.ts` — the store. Append-only jsonl at `~/.fleet-readiness/readiness.jsonl`,
-  `FLEET_READINESS_DIR` overriding it absolutely or not at all (the same argument
-  `health-history.ts` makes: a relative override resolves differently per worktree, which is two
-  plausible histories and nothing to say so).
-- `scripts/readiness-run.ts` — **a new file, so no shared file is edited.** Runs one named check,
-  times it, records the sha, parses the counts out of its own captured output, appends one line.
-
-      npx tsx scripts/tmux-job.ts npx tsx scripts/readiness-run.ts test
-
-  This is the honest source: it knows the argv it ran, the cwd it ran in, and the sha at the moment
-  it started, none of which can be recovered from a log afterwards.
-- `tools/fleet/readiness-backfill.ts` — a bounded scan of `logs/tmux-jobs/` (the primary's, and each
-  worktree's) for runs inside the window, so the tab is not empty on day one.
-- `tools/fleet/readiness-git.ts` — the sha questions, answered locally and never over the network.
-
-### Stage 2 — the tab
-
-- `tools/fleet/routes-readiness.ts` + `tools/fleet/readiness-wiring.ts` (the composition, so a test
-  drives the same function `server.ts` does — `health-wiring.ts` exists because the first version of
-  that test would have stayed green over a route mounted against a different store).
-- `tools/fleet/web/src/readiness-client.ts`, `readiness-series.ts`, `ReadinessPanel.tsx`.
-- `Dock.tsx` / `mode.ts`: the `readiness` mode's own four entries, added in the same commit as the
-  panel. Per the Overseer's correction of 2026-09-09, nobody owns the list; the rule is *never edit
-  another mode's entries*, and count the entries after every merge — a merge can drop one with no
-  conflict marker, and the `Record<Mode, …>` types are what catch it.
-- One mount line in `server.ts`; one block at the END of `wire.ts` if a shared type is needed.
-
-### Stage 3 — trigger/refresh: design only
-
-Greg asked for it and it is not built in this plan. Written up, agreed with `claude-agents-dashboard`
-(which owns every write path), and started only on Greg's word — running the suite from a phone tap
-is a box-load decision, not a UI decision.
+   **A tree that changed under the run is not void** — this said it was, and it is worth being
+   precise: such a run reached a real verdict, and what it cannot do is claim that verdict was about
+   any commit. That is § 5's business, not this list's.
+4. **Running.** It started and has not finished. Its own state, because "no terminal record yet" and
+   "no terminal record ever" are different, and only the first resolves itself.
+5. **No reading.** Nobody ran the check. Cannot be written down — the thing that would write it is
+   the thing that was not there — so it is only ever an *absence*, drawn as its own state.
+6. **A reading about a different tree.** A dozen worktrees run suites on a dozen branches on this
+   box. A green `npm test` in someone else's worktree is a true fact about their branch and says
+   nothing whatever about `dev`. Pooling those is the specific lie this tab exists not to tell.
 
 ---
 
-## The design decisions worth arguing about
+## 1. Where a reading comes from
 
-### 1. Where the reading comes from, and why not a flag on `tmux-job.ts`
+Two sources, and **they are not equally good**, so they are never merged.
 
-The brief offered a flag on `scripts/tmux-job.ts` as an alternative. Rejected, for two reasons and
-neither is ownership:
+**`wrapper` — `scripts/readiness-run.ts` runs the check itself.** It knows the argv, the cwd, both
+instants, and the sha at each end. This is the source the feature is built on.
 
-- **`tmux-job.ts` does not know what it is running.** It takes an argv and forks a subshell. To
-  record "this was the test suite, and 371 tests passed" it would have to parse output it
-  deliberately never reads — the whole point of that file is that the log is opened before the
-  command runs and the command's stdout goes straight to it. Teaching it to tee and parse would put
-  a parser inside the one file whose correctness argument is that it does nothing but redirect.
-- **Not every check goes through tmux.** A typecheck takes 40 seconds and is run directly a dozen
-  times a night. A wrapper script is invocable both ways; a tmux flag is not.
+    npx tsx scripts/tmux-job.ts npx tsx scripts/readiness-run.ts test
 
-The wrapper is a separate binary that *runs* the check, so it knows the argv, the cwd, the sha, the
-start and end instants, and holds the output to parse. It composes with `tmux-job.ts` rather than
-competing with it.
+A new file, so no shared file is edited. The alternative the brief offered — a flag on
+`scripts/tmux-job.ts` — is rejected on design rather than ownership: that file takes an argv and
+forks a subshell, and its whole correctness argument is that it does nothing but redirect. Teaching
+it to tee and parse would put a parser inside the one file that must not have one. And not every
+check goes through tmux; a typecheck is run directly a dozen times a night.
 
-**The cost, named:** an agent has to type `readiness-run.ts test` instead of `npm test`, and one
-that types `npm test` leaves no reading. That is exactly why the backfill exists, and why the tab
-distinguishes a wrapper reading from a scanned one rather than merging them.
+**`tmux-log` — reconstructed afterwards from `logs/tmux-jobs/*.log`.** It can say when a run
+finished and how it ended. **It cannot say which commit it ran on**, because nothing writes that
+into the log, and it cannot reliably say what scope it ran at. So it is **historical context only**:
+it draws on the 24 h graph, and it can never satisfy the readiness verdict in § 5. That rule is
+absolute and is the reason the two sources stay apart.
 
-### 2. Many writers, one file — and why the health store's lock is the wrong model
+**The cost, named:** an agent who types plain `npm test` leaves no wrapper reading. That is exactly
+why the backfill exists, and exactly why the backfill may not vote.
 
-`health.jsonl` has one writer (the dashboard) and takes an exclusive lock. This file has **many**:
-every worktree, every agent, several at once, each appending one line and exiting. A writer lock
-here would mean a check whose reading is silently dropped because a peer held the file for the
-0.017 ms it takes to append — a lost reading, which is state (4), which the page will draw as *this
-never ran*.
+---
 
-So: **`O_APPEND` and one `writeSync` per line, with the line bounded below 4096 bytes.** A single
-write of at most `PIPE_BUF` to an `O_APPEND` fd is not interleaved on Linux; that is the standard
-multi-process append guarantee and it is why syslog and every logger works. The bound is therefore
-load-bearing, not tidiness: a line over it may tear, so a record that would exceed it is written as
-a `record-omitted` arm carrying only the fields that fit, in its own arm rather than as a silently
-truncated reading.
+## 2. The store: one atomic file per run
 
-Rotation is the one operation that is not a single append. It runs under
-`tools/overseer/lock.ts` and **skips rather than waits** when the lock is held — the next writer
-rotates, the file overshoots by a few kilobytes, and nothing blocks. At a measured ~500 bytes a
-reading and perhaps a hundred readings on a busy night, the 8 MiB cap is about six months, so this
-path will run approximately never and must therefore be correct by construction rather than by
-observation.
+`~/.fleet-readiness/runs/<startedAtEpochMs>-<runId>.json`, written with
+`writeAtomically` from [`tools/overseer/jsonl.ts`](../../tools/overseer/jsonl.ts) — write a sibling
+temp file, `fsync` it, `rename` it into place, `fsync` the directory. No lock. No rotation. No
+append. `FLEET_READINESS_DIR` overrides the root absolutely or not at all, the same argument
+`health-history.ts` makes: a relative override resolves differently per worktree, which is two
+plausible histories and nothing to say so.
 
-### 3. "On dev" is a sha, and the answer has an age
+**The first draft used a shared append-only jsonl and it was wrong.** Its argument was that a single
+`writeSync` under 4096 bytes to an `O_APPEND` fd cannot interleave. Sol showed that `PIPE_BUF` is a
+pipe guarantee and says nothing about regular files, and — decisively — that
+[`writeAll`](../../tools/overseer/jsonl.ts) *loops* over `writeSync` because a short write is
+possible, so a record is several syscalls and record-level atomicity is gone anyway:
 
-The writer records `sha`, `branch` and `dirty` (uncommitted changes present when the check started —
-a green suite on a dirty tree is a reading about no commit at all, and says so).
+> writer A writes the first 100 bytes of JSON and gets a short result → writer B appends its
+> complete line → A appends its remainder. The file contains `A-prefix + B-line`, followed by
+> `A-suffix`; both readings are corrupt.
+>
+> — GPT Sol, 2026-09-09
 
-The reader answers *was this dev's head?* by comparing against `origin/dev` **as the primary
-checkout already knows it**. It does not fetch: a dashboard poll that hits the network every ten
-seconds is a new failure mode for a page whose job is to be up when things are down. Instead it
-reads the ref and **reports how stale the ref itself is** (the mtime of `refs/remotes/origin/dev`,
-or of `packed-refs`), so the page can say "dev as this box last fetched it, 6 minutes ago" rather
-than implying a freshness it does not have.
+A waiting lock around append-plus-repair-plus-rotation would also be correct. Per-file is chosen
+over it because it is **smaller**: it removes the torn-line repair, the rotation race, the
+double-rotation overwrite, the reader-mid-rotation race, the orphaned-lock deadlock and the
+open-fd-through-a-rename hazard *as a class*, rather than defending against each. Fewer parts
+touching each other — [vision.md § Principles](../project/vision.md#principles).
 
-Per distinct sha, cached, bounded:
+Its costs, weighed:
 
-| verdict | how | what the page says |
-|---|---|---|
-| `dev-head` | `sha === origin/dev` | on dev |
-| `behind-dev` | `git rev-list --count sha..origin/dev` | dev has moved N commits since |
-| `not-on-dev` | not an ancestor | a branch — names it |
-| `unknown` | sha not in this repo, or git failed | says which, never guesses |
+- **A directory of files instead of one file.** At ~100 runs a day and 7 days' retention that is
+  ~700 files of ~600 bytes. The 24 h window is selected **from the filenames**, before anything is
+  opened, so a read touches only what it will use.
+- **Two writes per run instead of one** (see § 3). Both are renames; neither blocks anyone.
+- **Retention is deletion, not rotation.** A writer opportunistically unlinks records older than the
+  retention age, at most a bounded number per run. `unlink` is idempotent, so two writers racing is
+  not an event.
 
-A backfilled reading has **no sha at all** and gets its own verdict, `sha-unknown`. It is drawn
-differently from every other state. This is the asymmetry the whole tab rests on and it must be
-visible without reading a tooltip.
+### The record
 
-### 4. What the backfill can and cannot claim
+    { schema: 1, runId, state: "started",  startedAt, pid, host, cwd, check, scope, commandLine, treeAtStart }
+    { schema: 1, runId, state: "finished", …the same fields…, at, durationMs, outcome, exit, counts, treeAtEnd, logPath, why }
 
-From a `logs/tmux-jobs/*.log` the scanner can honestly recover:
+Same path both times: the terminal record **replaces** the pending one. So there is no pair to join,
+no ordering to get wrong, and no window in which both exist.
 
-- **when it finished** — the file's mtime, and only when the log ends `EXIT=<n>`;
-- **how it ended** — that `EXIT=` line, or *void* when there is none;
-- **what it probably was** — the npm banner `> spideryarn@1.0.0 <script>` in the first lines, which
-  is emitted by npm itself and is reliable; failing that, vitest's `RUN v4.x` banner, which says
-  *a test run* without saying which script;
-- **the counts** — vitest's `Test Files  1 failed (1)` / `Tests  1 failed | 4 passed (5)` block, and
-  `npm run check`'s summary table (`✓ typecheck    clean` / `✗ test  FAILED` / `! dupes  308 finding(s)`).
+---
 
-It cannot recover the sha, and it must not attempt to infer one from the log's timestamp against the
-reflog. That is a plausible join with no way to be checked, and a join that cannot contradict
-anything is not a measurement. Unclassifiable logs are **skipped,
-not guessed**: an overseer daemon log and a codex run are not readiness readings.
+## 3. Pending before spawn, or the box's own failure is invisible
 
-Bounds, because this reads a directory other agents write to continuously: files filtered by mtime
-into the window first; at most 200 files; the first 2 KiB and the last 8 KiB of each, never the
-middle (a full-suite log is megabytes and the two ends carry everything above).
+The wrapper writes its `started` record **before** it spawns the child, and replaces it after.
 
-### 5. The graphs
+This is Sol's P0.2 and it is the finding that matters most, because the case it describes is the
+exact one the whole feature exists to expose:
 
-Three per check, over 24 h, drawn the way `HealthHistory.tsx` draws its bands:
+> dev's previous run passed → a new run starts → the wrapper is selected by the OOM killer before
+> append → the store contains no evidence of the attempt → the dashboard continues displaying the
+> old pass as the latest readiness result.
 
-- **outcome** — a band per reading, green/red/violet(void), with **no interpolation between
-  readings**. A gap is a gap: `mergeSpans`/`complementSpans`/`subtractSpans` in `history-series.ts`
-  are generic and get reused rather than rewritten.
-- **duration** — points, not a line, for the same reason. A suite that took 26 minutes and one that
-  took 4 are two facts, not a trend.
-- **failing count** — where the check reports one.
+A `started` record with no terminal record is resolved **at read time**, never by a writer:
 
-Time formatting reuses `shiftMsToBrowserClock` from `web/src/types.ts` — a phone with a drifted
-clock drawing its own "24h ago" produces missing hours that look exactly like an outage. `zones.ts`
-has not landed; when it does, this adopts it rather than keeping a second formatter.
+- the pid is alive → **running**;
+- the pid is gone → **void**, "the wrapper died before it could record an outcome".
 
-### 6. What else goes on the tab ("anything else you can think of")
+Pid reuse could in principle make a dead run look alive. Bounded by refusing to believe a `started`
+record older than six hours whatever the pid says, and stated on the page rather than hidden. The
+alternative — a heartbeat — is a second mechanism to keep alive for a case that has not happened.
 
-Built, because each is one cheap local read:
+**The wrapper's exit contract**, also Sol's:
 
-- **the trunk gap** `dev` → `main`: how many commits are on dev that production does not have
-  (`scripts/deploy-checks.ts` `trunkGap` already computes it).
-- **is the primary checkout behind `origin/dev`**, with the same ref-staleness caveat as above.
-- **per-step verdicts from the last `npm run check`** — the gate/advisory split is the interesting
-  half of that command and the summary table parses cleanly.
-- **the lint baseline count**, labelled as advice and not a gate, because
-  `docs/project/linting.md` says the baseline is deliberately not clean.
+- a child killed by a signal must **not** become `process.exit(status ?? 0)`;
+- **a failure to record is a failure.** Disk full, directory unwritable: the wrapper exits non-zero
+  and says so, even when the child passed. Otherwise the suite passes, nothing is written, and the
+  dashboard keeps showing yesterday's green — a silent success inside the tool built to catch them.
 
-Considered and **not** built now, with the reason:
+---
 
-- **Coverage.** Nothing produces it today; adding a coverage run is a new expensive job, not a read.
-- **Which tests failed, by name.** Recoverable from a vitest log and genuinely useful, but it is a
-  second parser with its own fixtures and it can be added to the store later without a schema break
-  (the counts arm is already per-check-kind).
-- **Anything from CI.** There is no CI; a push to `dev` builds nothing.
+## 4. The sha, and the honest sentence about `origin/dev`
+
+The wrapper records `treeAtStart` **and** `treeAtEnd` — sha, branch, dirty — because a 26-minute
+suite on a tree somebody edited at minute three is a reading about no commit that ever existed:
+
+> the wrapper records clean SHA A → an agent edits a source file during the 26-minute suite → the
+> suite reads the uncommitted fix and passes → the record says clean SHA A passed, although that
+> tree was never tested.
+
+If either end differs, or either is dirty, the run is `tree-changed` and **cannot** satisfy § 5. It
+still draws on the graph. This does not catch edit-and-revert-within-the-run; proving that needs a
+dedicated immutable checkout, which is not worth it and is written down here so nobody thinks it is
+covered.
+
+### What "on dev" may claim
+
+The reader compares against `origin/dev` **as the box's git already knows it**, and the first draft
+proposed reporting the ref's mtime as "last fetched N minutes ago". That is false, in both
+directions:
+
+> `git pack-refs` rewrites `packed-refs` because of an unrelated ref → another machine pushes a new
+> `dev` → the box's old `origin/dev` value remains, but `packed-refs` has a recent mtime → an old
+> recorded SHA is reported as "on dev" against an apparently fresh ref.
+
+And a fetch in which `dev` did not move refreshes no mtime at all. So the page says only what is
+true: **"matches this box's cached `origin/dev` — when that was last checked against the remote is
+not knowable from the ref."** A green verdict never implies the remote.
+
+Two more things this got wrong and now does not:
+
+- **The cache key.** Caching an ancestry answer per reading-sha alone freezes it: sha `A` is cached
+  as `dev-head`, dev advances to `B`, and `A` stays "on dev" for ever. The key is
+  `(readingSha, observedDevSha)`.
+- **Which checkout.** The dashboard's own `HEAD` is not the primary's. The primary is resolved
+  deliberately through `git rev-parse --git-common-dir`; remote-tracking refs are shared through it.
+
+### Git stays out of the request path
+
+`spawnSync("git", …)` in a request handler blocks the single-threaded fleet server, and under the
+load this box actually reaches that makes the whole diagnostic dashboard unresponsive at the moment
+somebody needs it. So the git snapshot is computed **on a timer**, with a subprocess timeout, cached
+by observed dev sha, and has an explicit `unknown` arm when git fails. Same discipline as
+`health.ts`: a reading nobody could take is not a zero.
+
+---
+
+## 5. What "ready" actually means
+
+The first draft never said, and Sol found the hole that leaves:
+
+> tests pass on SHA A → dev advances to B → typecheck passes on B → both latest tiles are green →
+> the tab says ready even though no commit has passed both checks.
+
+So readiness is **a conjunction keyed to one sha**, computed by one pure function, and every clause
+is required:
+
+1. there is an observed dev sha;
+2. for each required check, a **wrapper** record, `state: finished`, `outcome: pass`,
+   `scope: full`;
+3. `treeAtStart.sha === treeAtEnd.sha === devSha`, and neither end dirty;
+4. all required checks on **that same sha** — or one full `npm run check` pass, which contains them;
+5. no later `started`, `running` or `void` attempt on that sha, which makes the state unknown
+   rather than green — **except over a failure**, which is sticky: a check that failed has not
+   stopped having failed because somebody pressed go again, and only a later *settled* pass clears
+   it.
+
+Anything short of all five is **not** "not ready" — it is `unknown`, with the clause that failed
+named in a sentence. A tab that says *unknown, because typecheck has no reading on this commit* is
+useful; one that says *not ready* is wrong.
+
+Backfilled evidence is displayed and never counted. Neither is a `narrowed` run: `npm test -- one-file.test.ts`
+is not "the tests passed", and it is the easiest lie available here.
+
+---
+
+## 6. The backfill, and what it may claim
+
+**Computed at read time, never persisted.** This is a change from the first draft and it removes
+three problems at once: a persisted backfill would duplicate the wrapper record for the *normal*
+path (the wrapper runs inside `tmux-job`, so its own run has a log), would write yesterday's records
+after today's and break any "last line wins" reader, and would freeze a provisional reading of a
+still-growing log for ever. Computed fresh, a provisional answer simply corrects itself on the next
+poll.
+
+Deduplication against wrapper records: the wrapper prints `readiness-run <runId>` as its first line,
+which lands in its own tmux log; the scan skips any log naming a runId the store already holds.
+
+What the scan may recover, and nothing else:
+
+- **when it finished** — the file's mtime, and only for a log that has terminated;
+- **how it ended** — the `EXIT=` line; **a signal-like status is void, not fail**, because `sh`
+  writes 128 + signal and `EXIT=137` under a page of green ticks is the OOM killer. The range runs
+  to 192, not 159: Linux's real-time signals go past 31;
+- **what it was** — npm's own two banner lines. The second carries the arguments, so
+  `> vitest run tests/one.test.ts` and `> tsx scripts/check.ts --fast` are recorded as `narrowed`
+  with the command shown, not flattened into the plain check;
+- **the counts** — vitest's `Test Files` / `Tests` block, and `npm run check`'s summary table.
+
+And two refusals:
+
+- **`EXIT=0` alone is not a pass** for `test` or `check`. A coherent terminal footer must be there
+  too; a nested process can die while an outer wrapper exits 0. Without the footer it is `void`.
+- **No `EXIT=` line means "not complete when I looked"**, not "killed". A log whose mtime is inside
+  a grace window is `running`; only a log that has been quiet past it, with no live session, is
+  `void`. The file is `stat`ed again after reading, so head and tail cannot come from two states.
+
+Bounds, because this reads a directory a dozen agents write to continuously, and **two of them, at
+two different stages**: at most 5,000 directory entries are even looked at, and at most 200 of those
+are read (newest first, the first 2 KiB and last 8 KiB of each). The second bound alone was not
+enough — discovery opened every `*.log` before truncating, so a directory holding 100,000 of them
+made one request perform 100,000 opens, and **a FIFO named `something.log` blocks `open` outright**,
+which on a single-threaded dashboard is the whole page hanging. Only regular files are considered,
+and the mtime comes from a `stat` rather than an open.
+
+**Truncation is reported** — as a flag rather than a count, because once you abandon a directory
+listing you do not know what is left in it, and a number there would be the confident wrong figure
+this feature exists to avoid. A truncated scan that says nothing turns into "no reading". Likewise a log that looks like a check but would not parse is
+**counted and shown with its reason** — otherwise a format change silently deletes history.
+
+Measured across this box's 14 checkouts: 45 readings in 43 ms.
+
+---
+
+## 7. The graphs, and what they must not paint
+
+Three per check over 24 h, drawn the way `HealthHistory.tsx` draws its bands:
+
+- **outcome** — a mark per reading. **Events, not coverage**: extending a pass rightwards until the
+  next run paints eight unobserved hours green. `mergeSpans` / `subtractSpans` / `complementSpans`
+  in `history-series.ts` are genuinely generic and get reused; health's cadence and gap inference
+  are health-specific and do not.
+- **duration** — points. A suite that took 26 minutes and one that took 4 are two facts, not a trend.
+  Measured on a monotonic clock, displayed on the wall clock, so an NTP step cannot produce a
+  negative duration.
+- **failing count**, where the check reports one.
+
+**The graph must segregate the three provenances visually** — current-dev wrapper runs, other-tree
+runs, and sha-unknown backfill. Otherwise:
+
+> a branch run passes between two dev failures → the 24-hour band contains a prominent green mark
+> that visually reads as dev recovery.
+
+Times go through `tools/fleet/zones.ts` (landed 2026-09-09) and `shiftMsToBrowserClock` in
+`web/src/types.ts`; a phone computing its own "24 h ago" on a drifted clock draws missing hours that
+look exactly like an outage.
+
+---
+
+## 8. What else goes on the tab
+
+Built — each is one cheap local read:
+
+- the trunk gap `dev` → `main` (`scripts/deploy-checks.ts` `trunkGap` already computes it);
+- whether the primary checkout is behind `origin/dev`, with § 4's caveat attached;
+- the per-step gate/advisory table from the last full `npm run check`;
+- the lint baseline count, labelled advice and not a gate ([linting.md](../project/linting.md)).
+
+Considered and not built, with the reason: **coverage** (nothing produces it; a new expensive job,
+not a read); **which tests failed by name** (a second parser and its fixtures — and the counts arm
+takes it later without a schema break); **anything from CI** (there is no CI; a push to `dev` builds
+nothing).
 
 ---
 
@@ -227,40 +340,214 @@ Considered and **not** built now, with the reason:
 
 ### Stage 1 — the record
 
-- [ ] `readiness-history.ts`: the arms, `parseReadingLine`, `openReadiness`, `append`, `read`,
-      `status`, rotation-under-lock-or-skip, the 4 KiB line bound and its `record-omitted` arm.
-- [ ] `readiness-git.ts`: sha, branch, dirty, `origin/dev` and its ref age, ancestry with a cache.
-- [ ] `scripts/readiness-run.ts`: the wrapper. Records *void* when its child is killed by a signal.
-- [ ] `readiness-backfill.ts`: the bounded scan and the three parsers, with fixtures **cut from real
-      logs** and copied into `tests/fixtures/` (`logs/` is gitignored, so a fixture that points at
-      one is a test that passes only on this box tonight).
-- [ ] Red-first test: a tmux log with no `EXIT=` line records `void`, never `pass`. Watch it fail.
-- [ ] Red-first test: two concurrent writers each land a whole line.
-- [ ] `npm test`, `npm run typecheck`, lint the touched files. GPT Sol review.
+**Status: built and pushed as `37a21805`, awaiting the Sol code review.** 67 tests;
+`npm run typecheck` clean across four projects.
+
+- [x] `readiness.ts` — the record shapes, the per-field parser, signalled-exit handling, `scope`.
+- [x] `readiness-store.ts` — per-run atomic files, the `started`/`finished` states, read-time
+      resolution of a pending record, retention by age.
+- [x] `readiness-git.ts` — the tree stamp, the observed dev sha, ancestry keyed on both shas, the
+      snapshot with its `unknown` arm.
+- [x] `readiness-parse.ts` — the banner, vitest, typecheck and check-table parsers, and `joinEnds`.
+- [x] `readiness-backfill.ts` — the bounded read-time scan, its dedup, its skip counters.
+- [x] `readiness-verdict.ts` — § 5's conjunction, pure.
+- [x] `scripts/readiness-run.ts` — the wrapper: pending-before-spawn, bounded streaming capture
+      (**not** `spawnSync`'s buffered output, which under OOM conditions kills the run it measures),
+      the exit contract.
+- [x] A log with no `EXIT=` records `void` or `running`, never `pass`.
+- [x] A `started` record whose pid is gone reads as `void`, not as absence — **proven against a real
+      SIGKILL**, not only in a test: the wrapper killed four seconds in leaves a pending record, and
+      the store reads it back as void.
+- [x] The § 5 conjunction refuses tests-on-A + typecheck-on-B.
+- [x] `npm run typecheck`, the focused suites, lint on the touched files.
+- [x] GPT Sol review of the code, and its findings triaged — see below.
+
+**The code review found three more false-green paths, and they are fixed.** Verdict was again *"do
+not build Stage 2 yet"*, and again it was right. The three:
+
+1. **An old `npm run check` pass outranked every newer result.** The shortcut returned `ready`
+   before newer evidence was looked at; and in its mirror image, a *failing* newer check run left
+   stale standalone passes as the newest test/typecheck readings. Both come from one mistake —
+   modelling a `check` run as a row of its own, when it **is** a run of the test and typecheck
+   gates. Now every reading is decomposed into events on **one timeline per required check**, and
+   each timeline is reduced by taking its newest event. Nine tests, each verified red against the
+   previous code.
+2. **The wrapper stamped one checkout and executed another.** It recorded `process.cwd()` while npm
+   ran in the script's own root. One resolved root is now used for the stamp, the record, the
+   `package.json` and the child.
+3. **`dirty` ignored untracked files.** A source file imported but never committed makes the working
+   tree compile and the commit not — the exact failure `npm run typecheck:committed` exists for — and
+   both stamps would have said clean. `--untracked-files=normal`.
+
+And in the persistence parser, three records that could vote and should not have been readable at
+all: `{"outcome":"pass","exit":1}`, a tree stamp with no `dirty` field (which defaulted to clean),
+and a `sha` that was not a sha. An unreadable record already forces `unknown`; being lenient about
+these quietly routed around that.
+
+Also fixed: the wrapper exiting 0 after recording a `void`; a hand-written signal table that turned
+SIGABRT and SIGSEGV into SIGTERM; exit statuses 160–192, which are real-time signals on Linux and
+were being read as ordinary failures; `joinEnds` being handed **bytes** where it compares
+**characters**, which reintroduced the double-counting for any log containing a `✓`; `EXIT=`
+matching anywhere rather than as the terminal line; footers accepted on half the evidence; unbounded
+scan discovery and a FIFO named `*.log` that would block the dashboard outright; and a pending record
+identified by pid alone, which a recycled pid turns into a run that is "still going" for ever.
+
+**A second code review found two more, and a regression the first fix had introduced.** Also all
+real:
+
+1. **A partly readable failing check exposed a stale pass.** The guard was "the table has no rows at
+   all", so a failing `npm run check` whose summary named typecheck and not test emitted no event for
+   test — and a two-hour-old test pass survived into `ready`. A table we could only partly read is
+   not evidence the rest was fine, so a failed whole-check now contributes an event to **every**
+   required check, and a missing or non-convicting row is `unsettled`.
+2. **Equal-millisecond events were resolved by input order.** Two runs can finish in the same
+   millisecond; with the pass listed first, filesystem order decided whether the tree was broken.
+   Ties now go to the worse event.
+3. **A rerun erased a known failure** — the regression. Reducing on "the newest event of any kind"
+   turned `not-ready` into `unknown` the moment somebody retried a red check, contradicting the
+   policy stated three lines above it. The newest **settled** event decides now, and a later
+   unsettled one can only unsettle a pass.
+
+And **the discovery cap was not a cap**: it sat after `readdirSync`, which materialises every entry,
+so a directory of 100,000 logs was fully read whatever the number said. `opendirSync` and a cursor
+we abandon is a real bound. It reports truncation as a **boolean, not a count** — once you stop
+reading a directory you do not know what is left, and a number there would be exactly the confident
+wrong figure this feature exists to avoid.
+
+### What five review rounds cost, and why it was worth it
+
+Every round found at least one way to render a tree green that was not:
+
+| Round | Found |
+|---|---|
+| plan | the store's atomicity argument, the missing pending record, the ref-mtime claim, and that "ready" was never defined |
+| code 1 | a stale whole-check outranking newer evidence; the wrapper stamping one checkout and running another; `dirty` ignoring untracked files |
+| code 2 | a partly-readable check table exposing a stale pass; same-millisecond ties broken by input order; a rerun erasing a known failure |
+| code 3 | a record whose outcome contradicts its own counts; duplicate rows resolved last-wins; `did-not-run` convicting |
+| code 4 | a *passing* check promoting a non-clean row; a cap counting the wrong thing |
+
+**None was visible by reading the code.** They were all *interactions* — a shortcut versus a newer
+reading, a table that is partly readable, two events in one millisecond, a cap on the wrong side of a
+`readdirSync`. The lesson is not "be careful"; it is that **this feature's bugs live in the seams
+between two rules that are each correct on their own**, and that an adversary with the code in front
+of it found every one of them while re-reading found none.
+
+The severity did converge: rounds 1 and 2 found paths reachable from records the wrapper produces,
+rounds 3 and 4 only from corrupt or hand-written ones. That convergence is the reason to stop, not a
+proof that none remain.
+
+Every fix carries a test that was **watched failing against the previous commit** — seventeen of
+them, checked out and re-run rather than assumed. Two are marked in the source as regression guards
+rather than reproductions, because the fix changed resource use and not output, and no behavioural
+test can see that.
+
+**Three bugs found by building it, none of which reading would have caught.** Written down because
+each is a class rather than a slip:
+
+1. **The store wrote filenames its own reader skipped.** A `runId` under four characters produced a
+    name `startedAtFromFileName` refused, so the record was written, appeared on disk, and was
+    invisible to every read — with the wrapper exiting 0 to say all was well. `put` now refuses a
+    name it cannot read back. *Class: two functions that have to agree about a format, and only one
+    of them enforcing it.*
+2. **The head and tail windows overlap.** For output smaller than both bounds, every line reached
+    the parsers twice: a typecheck of four projects reported eight, and `npm run check`'s table
+    would have arrived with every step duplicated. `joinEnds` takes the total length. *Class: a
+    wrong number that looks plausible.*
+3. **Most test runs on this box are `npx vitest run`, not `npm test`.** The first backfill
+    classified only npm banners and was therefore nearly blind. A bare vitest banner is now a test
+    run of `unknown` scope — history, with no vote. *Class: a design validated against the output it
+    was designed from.*
 
 ### Stage 2 — the tab
 
-- [ ] Route + wiring + the wiring test that drives the same function `server.ts` calls.
-- [ ] Client parser (validated per arm, never cast — these bytes crossed a version boundary).
-- [ ] `ReadinessPanel.tsx` and the graphs; the "no reading" state written first, not last.
-- [ ] Dock entries for `readiness` only; entry count checked after the pre-push merge.
-- [ ] GPT Sol review on the diff, weighted higher than Stage 1's.
+**Status: built and on `dev`.** The tab renders, `/api/readiness` is proven over HTTP, and the other
+tabs are unharmed (the 405 existing `fleet-web` tests still pass).
+
+- [x] `routes-readiness.ts` + `readiness-wiring.ts` (the composition, so a test drives the same
+      function `server.ts` calls — `health-wiring.ts` exists because the first version of that test
+      would have stayed green over a route mounted against a different store).
+- [x] Client parser, panel, 24 h bands; the "no reading", "unavailable" and "unknown" states written
+      first, not last.
+- [x] The four registrations for `readiness` **and only** `readiness`, plus the `App.tsx` mount, per
+      [fleet-dashboard-modes.md](../project/fleet-dashboard-modes.md) — and
+      `expect(MODES).toContain("readiness")` in my own test, because a merge that removes all five
+      registrations at once typechecks clean. The test also reads `App.tsx` and `server.ts` as
+      source, for the mount and the route call that no type can check.
+- [ ] GPT Sol review on the Stage 2 diff, weighted higher than Stage 1's.
+
+**Everything expensive is on the timer, not in the request.** git, the scan of every checkout and
+`tmux ls` all run on a two-minute cadence and the route serves a snapshot from memory. A handler that
+spawned git would block the single-threaded server at load 391 — exactly when somebody is trying to
+find out why. The cost is that the answer is up to one refresh old, and `collectedAt` says so.
+
+**Three things the panel refuses to do**, each of them a review round's worth of argument:
+
+1. **It never turns `unknown` into a colour that reads as fine.** Unknown is the common answer on
+   this box, so it gets its own tone, its own sentence, and the failing clause named in it.
+2. **It never draws a reading as coverage.** Marks sit at instants; extending a pass rightwards to
+   the next run would paint hours nobody observed in green.
+3. **It separates the three provenances visually.** A full wrapper run on dev's commit is crisp and
+   ringed; a branch run, a narrowed command and a log reconstruction are faded. Without that, a
+   branch's green mark between two red ones reads as a recovery that never happened — and on this
+   box, where most test runs are bare `npx vitest run`, that would be most of the marks.
+
+**Three legibility bugs that only a screenshot could find**, and worth naming as a class: the band
+had no visible track, so a day on which nothing ran looked like a row that had failed to render; the
+marks were 1px on a ~200px band at 45% opacity, which is drawing your data where nobody can see it;
+and both axis labels read the same clock time, because 24 hours earlier is the same hour and minute.
+No test would have caught any of them.
+
+Two more the pixels found afterwards, worse than they looked: the marks used
+`toneClasses(...).pill`, which for `idle` is `bg-quiet-wash` — a near-white **chip background** meant
+to sit behind dark text — so a *passing run on dev*, the most important mark on the page, rendered at
+RGB(239,239,239) on white. And `running` was green while `pass` was grey, because the dashboard's
+session vocabulary (`work` = green = something is happening, `quiet` = fine) is exactly inverted for
+a pass/fail chart. **The first fix for the contrast — 1px→2px, 45%→70% opacity — moved the right
+numbers and did nothing**, which is the lesson: an adjustment that should have worked and did not is
+evidence the diagnosis was wrong, not that the adjustment was too small.
+
+### The dock has run out of rungs, and the eighth tab is where it shows
+
+Measured at 390 px with a coarse pointer: the eight modes render as 40 px icon buttons with only the
+active one keeping its label, which is the fit ladder working — and the standalone **Refresh** button
+then sits at x≈399, past the viewport edge. The bar is `overflow-x: auto`, so it is reachable by
+scrolling sideways and nothing is lost, but it is not visible without that.
+
+This is **not** the `flex: 3` → `flex: 8` correction: `flex-grow` only distributes *free* space, and
+at 448 px of content in a 390 px bar there is none, so that token is inert in exactly this case and
+matters only on wider bars. It is the eighth tab itself. The ladder has no rung left beyond "labels
+off", so the next tab makes it worse, and that is a decision for whoever owns the dock rather than
+for the tab that happened to be eighth.
 
 ### Stage 3 — trigger/refresh
 
 - [ ] The design: which command, in which checkout, what it costs the box, how the result becomes a
-      reading, and what stops two taps starting two suites.
-- [ ] Agreed with `claude-agents-dashboard` as a catalogue entry on its action path. **No second way
-      to run a command from the page.**
+      record, what stops two taps starting two suites.
+- [ ] Agreed with `claude-agents-dashboard`, which owns every write path. **No second way to run a
+      command from the page.**
 - [ ] Blocked on Greg.
+
+---
+
+## What the first draft got wrong
+
+Kept because the discarded design is the one somebody will propose again. All five were GPT Sol's,
+2026-09-09; all five were right and are fixed above.
+
+| The claim | Why it was wrong |
+|---|---|
+| A sub-4 KiB `O_APPEND` write cannot interleave | `PIPE_BUF` is a pipe guarantee. And `writeAll` loops, so a record is several syscalls |
+| The wrapper records the outcome when the child ends | It cannot record its own death, which is the box failure the tab is *for* |
+| The `origin/dev` ref's mtime is when we last fetched | `pack-refs` touches it without fetching; a fetch that changes nothing does not touch it |
+| Wrapper and scanned readings are distinguished, so they are safe | The normal path produces both for the same run, and the weaker one is later |
+| The tab shows the latest reading per check | Two green tiles on two different commits is not a green tree, and nothing said so |
 
 ## The simpler option this passed over
 
-**A file with the last result in it, no history, no graphs.** `~/.fleet-readiness/latest.json`,
-overwritten by the wrapper, read by the route. It is a tenth of the code and it answers "is dev
-green right now", which is most of the question.
+**A file with the last result in it, no history, no graphs** — `latest.json`, overwritten by the
+wrapper, read by the route. A tenth of the code, and it answers "is dev green right now", which is
+most of the question.
 
-It was rejected because the 24 h graph is the half Greg asked for explicitly, and because a
-single-slot file cannot express state (5) at all: the last writer wins, so one green run in a
-worktree erases the red one on dev and the page says *green* with total confidence. The append-only
-file is not a richer version of that design — it is the one that can be honest.
+Rejected because the 24 h graph is the half Greg asked for explicitly, and because a single slot
+cannot express state (6) at all: the last writer wins, so one green run in a worktree erases the red
+one on dev and the page says *green* with total confidence.

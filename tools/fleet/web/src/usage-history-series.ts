@@ -1,0 +1,362 @@
+/**
+ * **Turning 24 hours of usage records into something drawable, without claiming
+ * more than was observed.**
+ *
+ * Pure: no React, no clock of its own, no fetch. Everything the chart shows is
+ * decided here and tested here, because every rule below is a way a usage chart
+ * can be confidently wrong.
+ *
+ * ## The three absences, kept apart
+ *
+ * 1. **Within a window** — value, expired, or unknown. The producer's own arm,
+ *    adjudicated at the reading's instant and **never re-adjudicated here**.
+ * 2. **Within a scan** — was this scan's failure to find a rejection believable?
+ *    That is `absenceGapReason`'s question, answered by the server and carried on
+ *    the record as `scan.conclusive`.
+ * 3. **Between records** — nothing was recorded. Derived only from source
+ *    instants and each record's own `nextDueMs`.
+ *
+ * Collapsing (2) and (3) is the tempting mistake: they share the word absence
+ * and answer different questions. A complete scan at 10:00 establishes "no 429
+ * found" and says **nothing** about an hour in which no record arrived. Joining
+ * the line across that hour would claim continuous observation of a period
+ * nobody observed.
+ *
+ * ## Validity is never recomputed
+ *
+ * A reading of 70% taken at 10:00 for a window resetting at 12:00 is a true
+ * observation. Re-deciding at 18:00 whether that window has expired would delete
+ * it — and on a five-hour window that erases most of the day. The live card
+ * re-derives expiry because it describes *now*; a chart describes *then*, and
+ * the two need different clocks. So the stored arm is drawn as it stands, and
+ * points are labelled *as observed*.
+ *
+ * ## Utilisation is per-account. Rejections are not attributed at all.
+ *
+ * A cached percentage belongs to the account the cache named. A transcript 429
+ * carries **no account id**, and the scan looks back eight days, which may span
+ * a `/login` swap — 27 such rejections were live on this box while this was
+ * written. So incidents are drawn on a shared axis as observed window clusters,
+ * never split by account, and never given one.
+ */
+import { mergeIncidents, type IncidentSighting } from "../../usage-incident-merge.js";
+import type { UsageHistorySample, UsageHistoryView } from "./usage-history-client";
+
+export type Span = { fromMs: number; toMs: number };
+export type Point = { atMs: number; value: number };
+
+/** One window's line for one account. Breaks are where the line must not join. */
+export type WindowSeries = {
+  window: string;
+  points: Point[];
+  /** Where the line is cut, and why — rendered as a gap, never interpolated. */
+  breaks: (Span & { why: string })[];
+  /**
+   * The points already split into drawable runs — **one polyline each, and
+   * never joined across a break.**
+   *
+   * The renderer used to derive these itself by comparing timestamps, which is
+   * wrong the moment the clock goes backwards: for file-order points 10:05 then
+   * 10:00 its "is there a cut between these" predicate asked `10:05 < 10:00`,
+   * got false, and drew one line straight across the regression it had just
+   * shaded in alarm colours. GPT Sol H7. Splitting here puts it under the tests
+   * that already describe when a line must break.
+   */
+  runs: Point[][];
+};
+
+export type AccountSeries = {
+  accountUuid: string;
+  windows: WindowSeries[];
+};
+
+/**
+ * A rejection cluster placed at **when it happened**, not when history saw it.
+ *
+ * `fromMs`/`toMs` are the real first and last hit instants. `beganBeforeWindow`
+ * says the cluster started before the visible period — the scan looks back eight
+ * days, so this is common, and clipping it to the left edge would claim it began
+ * there.
+ *
+ * `unplaced` is a cluster whose hits carried no timestamp at all. It is listed
+ * and not drawn on the axis: pinning it to scan time would claim the rejection
+ * happened when we happened to look.
+ */
+export type PlacedIncident = {
+  id: string;
+  window: string;
+  resetsAt: string;
+  fromMs: number | null;
+  toMs: number | null;
+  rejections: number;
+  conversations: number;
+  /** False when the count came only from scans that did not finish. */
+  fromConclusiveScan: boolean;
+  beganBeforeWindow: boolean;
+  unplaced: boolean;
+  /**
+   * Two sightings disagreed about this incident's window or reset instant, so
+   * neither label can be published.
+   *
+   * The shared merge has always marked this; `placeIncidents` used to drop the
+   * field, so the check existed and never reached the page — which is the same
+   * shape as the bug it was written to prevent.
+   */
+  unreadable: boolean;
+  why: string | null;
+};
+
+export type UsagePlot = {
+  fromMs: number;
+  toMs: number;
+  accounts: AccountSeries[];
+  incidents: PlacedIncident[];
+  /** Windows the producer could not read, with its own reason. Named, never dropped, never zero. */
+  unknownWindows: { window: string; why: string }[];
+  /** Nothing was recorded here. Derived from source instants and each record's own cadence. */
+  recorderGaps: (Span & { why: string })[];
+  /** The source clock went backwards between two records. Reported, never sorted away. */
+  clockRegressions: Span[];
+  /** Before the first record we hold — its own region, distinct from a hole. */
+  beforeHistory: Span | null;
+  unsupportedLines: number;
+  unreadableLines: number;
+};
+
+function sourceMs(sample: UsageHistorySample): number | null {
+  return sample.kind === "unsupported" ? null : sample.sourceAtMs;
+}
+
+/**
+ * How long after a record the next one was due, from **that record's own**
+ * declared cadence.
+ *
+ * Never a constant. A daemon on a different interval would otherwise have every
+ * ordinary gap drawn as a failure, which is a monitor alarming at its own
+ * configuration.
+ */
+const GAP_SLACK = 1.5;
+
+function dueWithinMs(sample: UsageHistorySample): number | null {
+  if (sample.kind !== "sample") return null;
+  return sample.line.nextDueMs * GAP_SLACK;
+}
+
+export function plotUsageHistory(view: Extract<UsageHistoryView, { kind: "history" }>): UsagePlot {
+  const byAccount = new Map<string, Map<string, WindowSeries>>();
+  const sightings: IncidentSighting[] = [];
+  const unknownWindows = new Map<string, string>();
+  const recorderGaps: (Span & { why: string })[] = [];
+  const clockRegressions: Span[] = [];
+
+  let previousAtMs: number | null = null;
+  let previousDue: number | null = null;
+  /* The series that had a real point on the LAST record, so a record that
+     stops carrying one cuts its line rather than joining across.
+
+     THE SERIES OBJECTS THEMSELVES, not `${account} ${window}` keys. That key
+     was joined and split on a separator that turned out to be a literal NUL
+     byte rather than the space it looked like — it worked, because both ends
+     used the same byte, and `no-raw-nul-bytes.test.ts` was the only thing that
+     could see it. `seriesFor` already caches one object per pair, so identity
+     is the key and there is nothing to parse. */
+  let live = new Set<WindowSeries>();
+
+  for (const sample of view.samples) {
+    const atMs = sourceMs(sample);
+
+    /* An unsupported record has no time and cannot be placed — but it breaks
+       every series, because this build cannot say what was in it. */
+    if (atMs === null || sample.kind === "unsupported") {
+      for (const series of live) cut(series, previousAtMs, null, "a record this build cannot read");
+      live = new Set();
+      continue;
+    }
+
+    if (previousAtMs !== null) {
+      /* A LINE THE STORE COULD NOT PARSE IS A HOLE, and the series must break
+         across it. `view.holes` was carried faithfully from the store, through
+         the route, into the client — and then ignored here, so the chart drew
+         straight over bytes this build could not read. GPT Sol H6. */
+      const hole = view.holes.find(
+        (h) => h.afterAt !== null && Date.parse(h.afterAt) === previousAtMs,
+      );
+      if (hole !== undefined) {
+        for (const series of live) cut(series, previousAtMs, atMs, "a line that could not be read");
+        live = new Set();
+      }
+      if (atMs < previousAtMs) {
+        /* The source clock went backwards. Preserve file order, break the
+           series, and report it — sorting it into plausibility would hide the
+           one condition worth seeing. */
+        clockRegressions.push({ fromMs: atMs, toMs: previousAtMs });
+        for (const series of live) cut(series, previousAtMs, atMs, "the clock went backwards between records");
+        live = new Set();
+      } else if (previousDue !== null && atMs - previousAtMs > previousDue) {
+        recorderGaps.push({
+          fromMs: previousAtMs,
+          toMs: atMs,
+          why: `nothing was recorded for ${Math.round((atMs - previousAtMs) / 60_000)} minutes`,
+        });
+        for (const series of live) cut(series, previousAtMs, atMs, "nothing was recorded");
+        live = new Set();
+      }
+    }
+
+    if (sample.kind === "omitted") {
+      for (const series of live) cut(series, previousAtMs, atMs, "a record too large to write");
+      live = new Set();
+      previousAtMs = atMs;
+      previousDue = null;
+      continue;
+    }
+
+    const pass = sample.line.pass;
+    if (pass.kind !== "pass") {
+      /* A collector failure is a real event and breaks the line: we did not
+         observe the account during it. */
+      for (const series of live) cut(series, previousAtMs, atMs, "the usage pass failed");
+      live = new Set();
+      previousAtMs = atMs;
+      previousDue = dueWithinMs(sample);
+      continue;
+    }
+
+    const nowLive = new Set<WindowSeries>();
+    if (pass.cache.kind === "attributed") {
+      for (const window of pass.cache.windows) {
+        if (window.kind === "unknown") {
+          unknownWindows.set(window.window, window.why);
+          continue;
+        }
+        if (window.kind === "expired") continue;
+        /* ONLY positively attributed, non-null uuids form a series. */
+        const series = seriesFor(byAccount, pass.cache.accountUuid, window.window);
+        const point = { atMs, value: window.utilizationPercent };
+        series.points.push(point);
+        (series.runs.at(-1) ?? series.runs[series.runs.push([]) - 1])?.push(point);
+        nowLive.add(series);
+      }
+    }
+    /* An `unattributed` or `unknown` cache carries no windows at all, so every
+       live line simply stops — a break, never a zero. */
+    for (const series of live) {
+      if (!nowLive.has(series)) cut(series, previousAtMs, atMs, "no reading for this window");
+    }
+    live = nowLive;
+
+    /* THE MERGE RULE IS NOT REIMPLEMENTED HERE. Sightings are collected and
+       handed to the one shared `mergeIncidents`, so the chart and the store
+       cannot disagree about what an incident is. They DID disagree in shape for
+       a few hours on 2026-09-09: this file had a hand-written copy while the
+       server's tested one had no caller at all. */
+    sightings.push({ conclusive: pass.scan.conclusive, incidents: pass.scan.incidents });
+
+    previousAtMs = atMs;
+    previousDue = dueWithinMs(sample);
+  }
+
+  const firstAtMs = view.samples.map(sourceMs).find((v): v is number => v !== null) ?? null;
+  return {
+    fromMs: view.fromMs,
+    toMs: view.toMs,
+    accounts: [...byAccount.entries()].map(([accountUuid, windows]) => ({
+      accountUuid,
+      windows: [...windows.values()],
+    })),
+    incidents: placeIncidents(mergeIncidents(sightings), view.fromMs, view.toMs),
+    unknownWindows: [...unknownWindows.entries()].map(([window, why]) => ({ window, why })),
+    recorderGaps,
+    clockRegressions,
+    /* "Before history began" is its own region and NOT a hole: one says nothing
+       was ever recorded then, the other says something was and we lost it. */
+    beforeHistory:
+      view.predecessor === null && firstAtMs !== null && firstAtMs > view.fromMs
+        ? { fromMs: view.fromMs, toMs: firstAtMs }
+        : null,
+    unsupportedLines: view.unsupportedLines,
+    unreadableLines: view.unreadableLines,
+  };
+}
+
+function seriesFor(
+  byAccount: Map<string, Map<string, WindowSeries>>,
+  accountUuid: string,
+  window: string,
+): WindowSeries {
+  let windows = byAccount.get(accountUuid);
+  if (windows === undefined) {
+    windows = new Map();
+    byAccount.set(accountUuid, windows);
+  }
+  let series = windows.get(window);
+  if (series === undefined) {
+    series = { window, points: [], breaks: [], runs: [[]] };
+    windows.set(window, series);
+  }
+  return series;
+}
+
+function cut(series: WindowSeries, fromMs: number | null, toMs: number | null, why: string): void {
+  if (fromMs === null) return;
+  series.breaks.push({ fromMs, toMs: toMs ?? fromMs, why });
+  /* And start a fresh run, so the renderer cannot rejoin what this just cut. */
+  if ((series.runs.at(-1)?.length ?? 0) > 0) series.runs.push([]);
+}
+
+/**
+ * Put a merged incident on the time axis, or refuse to.
+ *
+ * The two refusals are the point. **`unplaced`** is a cluster whose hits carried
+ * no timestamp: it is listed and left off the axis, because pinning it to scan
+ * time would claim the rejection happened when we happened to look.
+ * **`beganBeforeWindow`** is a cluster that started before the visible period —
+ * common, since the scan looks back eight days — and it must read as beginning
+ * earlier rather than being clipped to the left edge, which would claim it
+ * started there.
+ */
+function placeIncidents(
+  merged: ReturnType<typeof mergeIncidents>,
+  windowFromMs: number,
+  windowToMs: number,
+): PlacedIncident[] {
+  return merged
+    .filter((incident) => {
+      /* AN INCIDENT THAT ENDED BEFORE THE WINDOW IS NOT IN THE WINDOW. They were
+         all kept, and the renderer clamped a negative start to zero while
+         computing width from two negative coordinates — drawing a visible bar at
+         the left edge for rejections that happened before the chart begins, and
+         listing them under "the last 24 hours". GPT Sol H8.
+
+         An unplaced incident (no hit ever carried a time) is kept: it is listed
+         rather than drawn, and dropping it would lose a rejection entirely. */
+      if (incident.firstHitAt === null) return true;
+      const endMs = Date.parse(incident.lastHitAt ?? incident.firstHitAt);
+      return !Number.isFinite(endMs) || endMs >= windowFromMs;
+    })
+    .filter((incident) => {
+      /* And one that begins after the window ends is not in it either. */
+      if (incident.firstHitAt === null) return true;
+      const startMs = Date.parse(incident.firstHitAt);
+      return !Number.isFinite(startMs) || startMs <= windowToMs;
+    })
+    .map((incident) => {
+      const fromMs = incident.firstHitAt === null ? null : Date.parse(incident.firstHitAt);
+      const toMs = incident.lastHitAt === null ? null : Date.parse(incident.lastHitAt);
+      return {
+        id: incident.id,
+        window: incident.window,
+        resetsAt: incident.resetsAt,
+        fromMs,
+        toMs,
+        rejections: incident.rejections,
+        conversations: incident.conversations,
+        fromConclusiveScan: incident.fromConclusiveScan,
+        beganBeforeWindow: fromMs !== null && fromMs < windowFromMs,
+        unplaced: fromMs === null,
+        unreadable: incident.unreadable,
+        why: incident.why,
+      };
+    })
+    .sort((a, b) => (b.fromMs ?? 0) - (a.fromMs ?? 0));
+}

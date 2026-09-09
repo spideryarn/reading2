@@ -491,6 +491,13 @@ export const UNMETERED_SPEND: readonly UnmeteredSpend[] = [
     why: "It cannot go through `src/ai-call.ts` and it cannot go through `declaredFetch` either, and for one reason: docs/project/overseer-direction.md § Principles says the Overseer must not depend on the product database or on anything under `src/`, and both seams live there. That is the whole point of the tool — the thing you reach for when the product is broken cannot be built on the product. So it has its own thin client, one endpoint, a hard `maxCalls` ceiling per pass, and both cost pockets read back from the gateway and printed (`callCost`). It is here as well as in the test's ALLOWED map for the reason the entry above gives: a green test is not a register, and an allow-list says a file MAY spend without saying what it spends. If a second file under tools/overseer/ ever needs a line here, that is a fork of this seam and should be refused rather than listed.",
     since: "2026-09-08",
   },
+  {
+    file: "tools/fleet/describe.ts",
+    account: "OPENROUTER_API_KEY — the same key as the app's, so inside the OpenRouter spend cap, but on rows the app's ledger never sees",
+    what: "The fleet dashboard's session describer: one `openai/gpt-5.6-luna` call per session opening, and one per idle session whose tail fingerprint changed. Keyed on the opening rather than the latest turn, so a described session costs nothing ever again — the file's own header sets out the three ceilings that hold the total down.",
+    why: "The same reason as `attention-classify.ts` above, one directory along: `tools/fleet` must run with the product's server absent, so it can import neither `src/ai-call.ts` nor `declaredFetch`, and both seams live under `src/` and `evals/`. Greg decided this shape explicitly for this file (2026-09-09, quoted in its header: *a plain `fetch`, no import from `src/`, because the fleet tools must not depend on the product*).\n\nIt is HERE rather than in `DECLARATIONS` for a reason worth stating, because the shape of `fleet-dictation` invites the other choice: a `Declaration` requires a `job: AiJob`, and `AiJob` is the closed union of the calls *this app* pays for. `fleet-dictation` could borrow `\"dictation\"` because the product genuinely has that job. Describing an agent session is not one of this app's jobs and has no member to borrow, and minting one would force a non-app job into `AI_JOB_WIRE` and every other exhaustive table keyed off it — a fork of the seam rather than an entry in it.",
+    since: "2026-09-09",
+  },
 ];
 
 export function declarationFor(id: string): Declaration {

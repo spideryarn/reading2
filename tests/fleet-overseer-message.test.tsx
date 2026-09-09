@@ -71,6 +71,9 @@ afterEach(() => {
 function row(over: Partial<FleetRow> & { id: string }): FleetRow {
   const status = over.status ?? { kind: "idle" as const };
   return {
+    /* Required and not what this file is about — the shape
+       `parseDescription` returns for a payload without one. */
+    description: { kind: "not-yet-described", why: "no describe pass in this fixture" },
     paneId: "%2108",
     name: over.id,
     // Required on a row and not what this file is about — an old producer's

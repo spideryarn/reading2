@@ -256,7 +256,7 @@ export function loadCheckpoint(root?: string): CheckpointLoad {
  * two stores and two histories — and there is no sensible value to carry on
  * with. `readAttention` catches it and says so on the page.
  */
-function storeRoot(env: NodeJS.ProcessEnv = process.env): string {
+export function storeRoot(env: NodeJS.ProcessEnv = process.env): string {
   const override = env["OVERSEER_STORE_DIR"];
   if (override === undefined || override.trim() === "") return join(homedir(), ".overseer");
   const trimmed = override.trim();

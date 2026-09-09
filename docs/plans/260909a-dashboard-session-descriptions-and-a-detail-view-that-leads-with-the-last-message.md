@@ -879,3 +879,151 @@ Measured on the live box after that landed: 26 sessions, 26 verified, 0 unknown,
 whole pass costing 236 ms. **But every row reads `unknown`/`not-reported` until the Overseer restarts
 the dashboard and the daemon**, so `cannot-tell` remains the normal case for a while and its copy
 should read as informative rather than broken.
+
+## Stage D landed — and the child process was replaced, not built
+
+**The instruction changed under the work, which is the interesting part.** The Overseer asked for the
+send in a child process with one total deadline (Sol's F7). Between that instruction and the work,
+**`send-coordinator.ts` landed**, and it makes the child process the wrong answer:
+
+- `sendMessage` and `answerQuestion` are now **private to that file**, enforced by
+  `tests/fleet-imports.test.ts`, and every producer goes through one coordinator whose whole point is
+  that the quarantine check and the transport call are adjacent with nothing between them.
+- **A child process carries its own quarantine book.** `holding()` would answer `null` for the entire
+  box, so the notice could type a second sentence into a session already held behind half of one.
+  Duplicate keystrokes are the one thing that neighbourhood forbids. The child process traded a P1 for
+  a worse one.
+- Its owner confirmed and documented the hole at `176258e3`: **none of the three existing guards can
+  see it.** The import walk checks who may hold the transport, and a child would legitimately hold a
+  coordinator; the compile guard checks dependency types, which would be correct; and the composition
+  test asserts one book across two compositions *within one process*. A child-process send defeats the
+  quarantine while passing everything.
+
+**Queueing dissolves F7 rather than mitigating it.** `enqueueSharedMessage` — which also landed since
+this plan was written; there was no in-process entry point when it was surveyed — makes **no tmux
+calls**, so nothing blocks the event loop at all. The drain then delivers on the refresh loop through
+the coordinator, with the hold check in-process where it belongs. It is also what Greg named:
+*"route it through the existing steer machinery (`queue.ts`/`drain.ts` deliver keystrokes to a pane)
+rather than a new sender"*.
+
+**What that costs, stated rather than buried.** The role holder is resolved at enqueue and delivery is
+up to ~73 s later, so if the role changes hands in between the note reaches the **former** Overseer —
+F8, unsolved. Accepted, on the arm's own rule: this is a **report**, nobody is being asked for
+anything, so a misroute delivers a stale fact to a peer rather than an instruction to the wrong agent.
+**The moment anything sent under the `dashboard` speaker is an instruction, that reasoning collapses
+along with the prefix**, which is the same reason the arm splits rather than softens. Overseer's
+decision, logged.
+
+**Two things the coordinator's docstrings caught that no test would have.** The transport must not be
+reached from a child — reasoned from the header by someone who was not present for the bug it
+describes. And **the queue takes the RAW line**: `enqueueMessage` renders and `drain.ts` renders again
+at delivery, so a pre-rendered string is prefixed twice — which fails no test, trips no type, and
+reads as clumsy rather than broken. There is now an assertion that the string reaching the queue
+carries no prefix, which cannot be read past.
+
+**Joined end to end**, which is what F10 asked for: `server.ts` binds the notifier through
+`configureNewSessionNotifier` (which **throws** if called after the routes exist, because a notifier
+configured too late would report `cannot-tell` for every launch — a true sentence about broken wiring
+that reads exactly like a box with no Overseer); the launch record carries the outcome; and the card
+draws every arm. Mutation-checked at both ends: dropping the notification result reds four route
+tests, and removing the line from the card reds all five panel tests.
+
+488 tests across five suites, typecheck clean.
+
+## Stages A–C landed, 2026-09-09 ~05:20
+
+Six commits, each a save point: the forward reader, the describer, the store, the pass, the join, and
+the render plus the server wiring.
+
+**The pieces, and the one sentence each that is worth keeping:**
+
+- **`readOpeningMessages`** (`transcript.ts`) — every other reader in that file seeks from EOF, which
+  answers *what is this session doing now*. A description of what a session is *for* needs its
+  opening, and a description built from the tail re-keys on every turn, turning "one call per session"
+  into one per turn. It is **cheaper** than the backwards reader: one chunk from byte 0, no seeking.
+- **`describe.ts`** — the prompt, the parse and the budget. **An empty string is never a description**
+  (Greg's rule, and not hypothetical: a model that answered a different question returns the right
+  *shape* with empty strings in it). The prompt forbids claiming the work is finished, because `idle`
+  means the agent stopped generating and ten of fifteen sessions waiting on Greg showed as idle.
+- **`describe-store.ts`** — the memory, keyed on `session + conversation + execution token`. The token
+  is in the **key**, so a re-used pane misses and describes itself: the stale record is *unreachable*
+  rather than merely unrendered.
+- **`describe-pass.ts`** — the gate. Only a `verified` execution with a `verified` conversation gets
+  described, which is the P1 from the plan review. **Two balance identities rather than one**: the
+  first draft had a single check fudged with an inequality, which is a check that cannot fail.
+- **`collect.ts`** — `readDescriptions` beside `readPauses`, which **reads a file and nothing else**.
+  The join is server-side because matching a description to a row needs the token and the verified
+  conversation id, and a client doing that would be a second hand-written copy of the identity rule.
+- **`SessionsPanel.tsx`** — the heading falls through *own title → generated (marked) → tmux name*,
+  and **a title that merely repeats the session name is not a title** (F4). Launching with a name
+  writes it as the session's own title, so most of this fleet carries one that duplicates the line
+  below it; treating that as already-titled would have made the generated title unreachable for
+  exactly the sessions that need it.
+
+**What a reader sees before the restart, and it is the normal case:** no description on any row, and
+headings falling back to the tmux name. Every row carries `not-yet-described` until the dashboard and
+daemon are restarted onto execution readings, and until then the pass reads no transcripts and makes
+no model calls at all. A row with no description draws **no line**, not an empty one — an empty line
+reads as a session with nothing to say, which is a different fact.
+
+### The mistake worth recording
+
+**I pushed a red typecheck to `dev` and it was the trap I had documented four hours earlier.** Two
+commits carried a type-invalid test file — a `HarnessKind` that does not exist, and four literals
+spreading a verified reading over an `unknown` one — because I verified them with
+`npx tsc --noEmit -p tsconfig.json`, **which does not cover `tests/`**. That is the fourth entry in
+[typechecking.md § Four ways to report it clean while it is red](../project/typechecking.md), which I
+wrote into that file the same night after two other sessions nearly shipped broken compile-time guards
+the same way. Vitest ran 16 tests green through it the whole time.
+
+So that entry now has **three instances and the third is the author of the entry**. The incentive is
+the thing to name: the narrow invocation is ~15 s against ~2 minutes, which is exactly what makes the
+class recur. Found by `queued-ideas-mode` after merging, relayed by the Overseer, green again at
+`9a332ab9`.
+
+## Review ledger — GPT Sol on the Stage A–C code, 2026-09-09
+
+Verdict **refuse**: five established P1s, two P2s. Artefact:
+[260909a-dashboard-session-descriptions-review-ac-sol.md](260909a-dashboard-session-descriptions-review-ac-sol.md).
+It ran the four scoped suites itself (497/497) **and wrote probes** — two of its findings come with a
+reproduction rather than an argument. All seven accepted; the two mechanical claims verified first.
+
+| ID | Finding | Disposition |
+|---|---|---|
+| F19 | A fingerprint collision transfers a description between unrelated sessions | **Fixed** — collision reproduced |
+| F20 | An invalid stored record is laundered into a valid current record | **Fixed** |
+| F21 | Permanent refusals are paid for for ever, and starve later sessions for ever | **Fixed** |
+| F22 | A persistence failure repeats successful paid calls every five minutes | **Fixed** — verified |
+| F23 | The cache distinguishes inputs the paid request makes identical | **Fixed** |
+| F24 | The transcript identity requirement relies on an upstream convention | **Fixed** |
+| F25 | The bookkeeping balances planning, not publication, and never ran in production | **Fixed** |
+
+**Two of the five cost money rather than correctness, and that class had no coverage at all here.**
+F21 and F22 are both "pays again, for ever": a permanent refusal stored nothing, so it was fresh next
+pass, and because the budget takes fresh openings in a deterministic order the same refusals
+monopolised the same eight slots and every session behind them was **never described**. F22 is worse
+because a *fresh box* is the failing state — `writeAtomically` does not create its directory
+(verified: it throws `ENOENT`), so on a box without `~/.overseer` every pass read `absent`, paid,
+failed to persist, logged, and paid again five minutes later.
+
+**F19 is the one where my own stated reasoning was the hole.** My review prompt said a collision
+"would need two sessions with the same id and token" — wrong, because the cache is looked up by
+fingerprint *before* the session/conversation/token key is applied, so the key constrains where a
+description is *stored* and not which one is *fetched*. Sol found a live pair — `opening-229599` and
+`opening-432382` both hashing to `95984682` — and I reproduced it before changing anything. A 32-bit
+hash must not gate anything that publishes confident prose; it is SHA-256 now, over
+`canonicalMaterial`, which also closes F23.
+
+**F25 is the third can't-fail check this file has shipped.** The first was an inequality; the second
+balanced two honest identities that nevertheless both held with zero descriptions published and one
+session starved; and neither version was ever *called* outside its tests. It now has a published
+term and runs in `describeOnce`.
+
+**And one thing the review did not find, which I hit while fixing it: two NUL bytes in
+`describe-pass.ts`**, in the cache-key template, present since the file was written. Tests passed, the
+typecheck passed, and the file was classified as *binary* — so `grep` silently found nothing in it,
+which is how it was noticed at all, and it had already broken one of my own patch scripts by making an
+anchor unmatchable. That is the **second** raw-control-byte incident of the night in my own code
+(the first was a C0 range written into a regex in `notify-overseer.ts`), which makes it a habit rather
+than an accident: writing a template string with an intended separator can land a real control
+character. Every file in this stage is now checked to be free of them.

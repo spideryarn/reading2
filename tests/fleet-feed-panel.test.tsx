@@ -40,12 +40,18 @@ import {
   limitFromParams,
   paramsFromFilters,
   parseFeed,
+  sessionStatusOf,
+  TURN_AHEAD_TOLERANCE_MS,
+  turnAge,
   type FeedApi,
   type FeedRow,
   type FeedView,
+  type SessionListReading,
 } from "../tools/fleet/web/src/feed-client";
 import type { MessageSpeaker } from "../tools/fleet/web/src/messages-client";
 import { MODES, MODE_LABELS } from "../tools/fleet/web/src/mode";
+import type { Transport, TransportSink } from "../tools/fleet/web/src/transport";
+import { CLOCK_SKEW_UNMEASURED, parseFleetState, type FleetRow, type FleetState } from "../tools/fleet/web/src/types";
 
 const NOW = Date.parse("2026-09-09T01:00:00.000Z");
 
@@ -115,6 +121,39 @@ function snapshotOf(names: string[]): FleetSnapshot {
   } as unknown as FleetSnapshot;
 }
 
+/**
+ * One session row of the shape `parseFleetState` produces.
+ *
+ * Every field is named rather than inherited from a default, which is the rule
+ * `tests/fleet-web.test.tsx` states at length: a fixture that quietly says
+ * "we looked and this session is waiting for nothing" is making a claim no
+ * fixture is in a position to make. All the vague arms here are the ones the
+ * parser produces for a payload that carried no such field.
+ */
+function sessionRow(id: string, name: string, status: FleetRow["status"] = { kind: "idle" }): FleetRow {
+  return {
+    id,
+    paneId: null,
+    name,
+    title: null,
+    description: { kind: "not-yet-described", why: "no describe pass in this fixture" },
+    execution: { kind: "unknown", cause: "not-reported", why: "the fixture carried no execution reading" },
+    repo: null,
+    worktree: null,
+    startedAt: "2026-09-08T10:00:00.000Z",
+    status,
+    question: null,
+    permissionMode: { kind: "cannot-tell", why: "the fixture did not say" },
+    pause: { kind: "cannot-tell", why: "the fixture did not say", cause: "rate-limits-not-collected" },
+    meta: { version: "legacy" },
+    role: { kind: "none" },
+    panePid: null,
+    claudeSessionId: null,
+    rawStatus: status,
+    rawQuestion: null,
+  };
+}
+
 /** An api that answers with a view, for driving the panel directly. */
 function apiOf(view: FeedView): FeedApi {
   return { recent: () => Promise.resolve(view) };
@@ -128,7 +167,15 @@ async function draw(node: React.ReactElement): Promise<string> {
   return host.textContent ?? "";
 }
 
+/**
+ * `now` is destructured out of the overrides rather than spread through it,
+ * because it is REQUIRED on the panel and `exactOptionalPropertyTypes` will not
+ * let a `Partial<>` spread satisfy a required prop. The panel takes no clock of
+ * its own on purpose — a component that calls `Date.now()` is one whose ages can
+ * disagree with the rest of the page, and one a test cannot pin.
+ */
 function panel(view: FeedView, over: Partial<Parameters<typeof FeedPanel>[0]> = {}): React.ReactElement {
+  const { now, skew, ...rest } = over;
   return (
     <FeedPanel
       api={apiOf(view)}
@@ -136,9 +183,26 @@ function panel(view: FeedView, over: Partial<Parameters<typeof FeedPanel>[0]> = 
       onLimit={() => {}}
       filters={NO_FILTERS}
       onFilters={() => {}}
-      {...over}
+      now={now ?? NOW}
+      skew={skew ?? CLOCK_SKEW_UNMEASURED}
+      {...rest}
     />
   );
+}
+
+/**
+ * What the row actually SHOWS, with the screen-reader-only text removed.
+ *
+ * **`host.textContent` is not what a sighted reader sees.** `Explain` puts the
+ * whole tooltip — including the three-zone absolute timestamp — into an
+ * `sr-only` span inside the control, so a test asserting "the ISO string is
+ * gone" against the raw text is asserting nothing at all: it is reading the
+ * tooltip it just put there. GPT Sol's P2 on the code review.
+ */
+function visibleText(): string {
+  const clone = host.cloneNode(true) as HTMLElement;
+  for (const hidden of clone.querySelectorAll('[class*="sr-only"]')) hidden.remove();
+  return clone.textContent ?? "";
 }
 
 describe("the join, server to screen", () => {
@@ -397,6 +461,7 @@ describe("what the panel must not hide", () => {
       readStartedAt: null,
       readFinishedAt: null,
       servedAt: null,
+      tmuxServerPid: 132280,
       ...over,
     };
   }
@@ -594,6 +659,7 @@ describe("expanding a message in place", () => {
       readStartedAt: null,
       readFinishedAt: null,
       servedAt: null,
+      tmuxServerPid: 132280,
     };
   }
 
@@ -662,10 +728,13 @@ describe("two refreshes that land out of order", () => {
       readStartedAt: null,
       readFinishedAt: null,
       servedAt: null,
+      tmuxServerPid: 132280,
     });
 
     await act(async () => {
-      root.render(<FeedPanel api={api} limit={50} onLimit={() => {}} filters={NO_FILTERS} onFilters={() => {}} />);
+      root.render(
+        <FeedPanel api={api} limit={50} onLimit={() => {}} filters={NO_FILTERS} onFilters={() => {}} now={NOW} skew={CLOCK_SKEW_UNMEASURED} />,
+      );
     });
     /* A second read started before the first has answered — through the SIZE
        control rather than the refresh button, because the button disables
@@ -673,7 +742,9 @@ describe("two refreshes that land out of order", () => {
        size control can: changing it restarts the read with a new limit, and
        nothing stops the reader doing that twice in a second. */
     await act(async () => {
-      root.render(<FeedPanel api={api} limit={100} onLimit={() => {}} filters={NO_FILTERS} onFilters={() => {}} />);
+      root.render(
+        <FeedPanel api={api} limit={100} onLimit={() => {}} filters={NO_FILTERS} onFilters={() => {}} now={NOW} skew={CLOCK_SKEW_UNMEASURED} />,
+      );
     });
     expect(answers).toHaveLength(2);
 
@@ -766,6 +837,7 @@ describe("a filter survives being set", () => {
       readStartedAt: null,
       readFinishedAt: null,
       servedAt: null,
+      tmuxServerPid: 132280,
     };
     window.location.hash = "#messages";
     await act(async () => {
@@ -843,6 +915,7 @@ describe("the tab is actually registered", () => {
       readStartedAt: null,
       readFinishedAt: null,
       servedAt: null,
+      tmuxServerPid: 132280,
     };
     window.location.hash = "#messages";
     await act(async () => {
@@ -858,5 +931,648 @@ describe("the tab is actually registered", () => {
     });
     expect(host.textContent ?? "").toContain("a message from the fleet");
     window.location.hash = "";
+  });
+});
+
+/**
+ * **THE ROW HAS TO LEAD SOMEWHERE.**
+ *
+ * > can we make "Recent messages" much more clickable (e.g. click to be taken
+ * > to that session in Sessions)
+ * >
+ * > — Greg, 2026-09-09
+ *
+ * The hazard is not *does a button exist*. It is that this navigation writes a
+ * MODE and a PARAMETER in one go, and mode.ts already carries the scar of doing
+ * that in two calls: `chooseMode` and `setParam` each close over the same
+ * captured snapshot, so the second silently discards the first. A version built
+ * from those two would either switch the tab and land on an unselected list, or
+ * select a session and stay on the feed. Neither looks broken; both are.
+ *
+ * So these drive the real page and read the real hash, which is the only place
+ * that composition is visible.
+ */
+describe("clicking through to the session", () => {
+  function feedOf(sessionId: string, sessionName: string): FeedView {
+    return {
+      kind: "feed",
+      limit: 50,
+      messages: [
+        {
+          sessionId,
+          sessionName,
+          sessionTitle: null,
+          attribution: { kind: "claimed-only", why: "w" },
+          turn: {
+            speaker: "assistant",
+            at: "2026-09-09T00:58:00.000Z",
+            text: "merging dev before the push",
+            truncated: false,
+            fullChars: 27,
+            toolCalls: [],
+            uuid: "a",
+          },
+        },
+      ],
+      undated: [],
+      sessions: [],
+      sessionsOffered: true,
+      unreadableRows: 0,
+      coverage: { kind: "complete" },
+      collectedAt: null,
+      readStartedAt: null,
+      readFinishedAt: null,
+      servedAt: null,
+      tmuxServerPid: 132280,
+    };
+  }
+
+  async function mountFeed(hash: string, view: FeedView): Promise<void> {
+    window.location.hash = hash;
+    await act(async () => {
+      root.render(
+        <App transport={() => ({ refresh: () => {}, stop: () => {} })} feedApi={apiOf(view)} actionsPollMs={0} />,
+      );
+    });
+  }
+
+  /**
+   * A transport a test pushes one payload into, and the payload itself — built
+   * through `parseFleetState`, which is the page's own parser, so a fixture this
+   * build could not read fails as itself.
+   *
+   * **These exist because a hash assertion is not the feature.** The tests above
+   * prove the URL changes; only a page holding real fleet state can show that
+   * the URL change actually opens the session. GPT Sol's P2 on the plan, and it
+   * is the composition-root rule: an injected fake cannot tell you whether the
+   * real things are wired to each other.
+   */
+  function stateWith(row: FleetRow, tmuxServerPid = 132280): FleetState {
+    const read = parseFleetState(
+      {
+        schema: 1,
+        rows: [row],
+        collectedAt: "2026-09-09T00:59:30.000Z",
+        tmuxServerPid,
+        servedAt: "2026-09-09T01:00:00.000Z",
+      },
+      Date.parse("2026-09-09T01:00:00.000Z"),
+    );
+    if (!read.ok) throw new Error(`the fixture did not parse: ${read.why}`);
+    return read.state;
+  }
+
+  function pushableTransport(): { transport: Transport; push: (next: FleetState) => void } {
+    let sink: TransportSink | null = null;
+    return {
+      transport: (s) => {
+        sink = s;
+        return { refresh: () => {}, stop: () => { sink = null; } };
+      },
+      push: (next) => sink?.onState(next),
+    };
+  }
+
+  /**
+   * **IT THROWS RATHER THAN RETURNING `undefined`**, and that is not fussiness.
+   * Written as an optional find, `opener("alpha")?.click()` on a missing button
+   * is a no-op — so a test that asserts "the hash still holds the filters"
+   * would PASS on a page with no button at all, having navigated nowhere. Two
+   * of the four tests below did exactly that on the first red run.
+   */
+  function opener(name: string): HTMLButtonElement {
+    const found = [...host.querySelectorAll("button")].find(
+      (b) => b.getAttribute("aria-label") === `Open the session ${name} in Sessions`,
+    );
+    if (found === undefined) throw new Error(`no way in to the session ${name} was drawn on the feed`);
+    return found;
+  }
+
+  /**
+   * The way in on a row whose tmux server this page could not check.
+   *
+   * **A DIFFERENT ACCESSIBLE NAME, because it does a different thing** — it
+   * reaches the Sessions tab without selecting anything. A screen reader that
+   * announced both as "Open the session alpha" would be describing an action one
+   * of them does not perform, so the tests have to know the difference too.
+   */
+  function weakOpener(name: string): HTMLButtonElement {
+    const found = [...host.querySelectorAll("button")].find(
+      (b) => b.getAttribute("aria-label") === `Show Sessions — ${name} cannot be selected from here`,
+    );
+    if (found === undefined) throw new Error(`no unverified way in to ${name} was drawn on the feed`);
+    return found;
+  }
+
+  /**
+   * **BOTH HALVES OF THE HASH, IN ONE ASSERTION.** A `chooseMode`-then-`setParam`
+   * implementation passes the mode half and fails the `sel` half, which is
+   * exactly the bug this is written to catch.
+   */
+  it("switches to Sessions AND selects the session, in one write", async () => {
+    await mountFeed("#messages", feedOf("$1643", "alpha"));
+    const button = opener("alpha");
+    await act(async () => button.click());
+
+    const hash = decodeURIComponent(window.location.hash);
+    expect(hash.startsWith("#sessions")).toBe(true);
+    expect(hash).toContain("sel=$1643");
+    window.location.hash = "";
+  });
+
+  /**
+   * **THE FILTERS RIDE ALONG, so that Back is worth pressing.** They are what
+   * makes the return trip useful, and dropping them is the quiet way to turn a
+   * click-through into a one-way door.
+   */
+  it("carries the feed's filters through the trip", async () => {
+    await mountFeed("#messages?mq=merging&mt=1&mn=100", feedOf("$1643", "alpha"));
+    await act(async () => opener("alpha").click());
+
+    const hash = decodeURIComponent(window.location.hash);
+    expect(hash).toContain("mq=merging");
+    expect(hash).toContain("mt=1");
+    expect(hash).toContain("mn=100");
+    window.location.hash = "";
+  });
+
+  /**
+   * **AND BACK IS THE BROWSER'S OWN BUTTON, not a control we drew.** That is
+   * only true if the navigation is a PUSH; a `location.replace` would look
+   * identical on screen and silently swallow the return trip. jsdom traverses
+   * history in a queued task, hence the flush.
+   */
+  it("returns to the feed, filters intact, when the browser goes back", async () => {
+    await mountFeed("#messages?mq=merging&mt=1", feedOf("$1643", "alpha"));
+    await act(async () => opener("alpha").click());
+    expect(decodeURIComponent(window.location.hash)).toContain("sel=$1643");
+
+    await act(async () => {
+      window.history.back();
+      /* jsdom queues the traversal as a task of its own, so a zero-delay flush
+         can be scheduled AHEAD of it and observe nothing having happened. */
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    const hash = decodeURIComponent(window.location.hash);
+    expect(hash.startsWith("#messages"), `expected to be back on the feed, got ${hash}`).toBe(true);
+    expect(hash).toContain("mq=merging");
+    expect(hash).toContain("mt=1");
+    window.location.hash = "";
+  });
+
+  /**
+   * **THE ROW'S OTHER CONTROLS STILL WORK**, which is why the button is the
+   * session name rather than the whole row. A row-sized click target swallows
+   * "Show the rest of this message" and any attempt to select the agent's own
+   * text.
+   */
+  it("leaves the expand control working", async () => {
+    const view = feedOf("$1643", "alpha");
+    if (view.kind === "feed") {
+      const first = view.messages[0];
+      if (first !== undefined) first.turn.text = "first line\nsecond line";
+    }
+    await mountFeed("#messages", view);
+    const expand = [...host.querySelectorAll("button")].find(
+      (b) => b.textContent === "Show the rest of this message",
+    );
+    expect(expand, "the expand control should still be there").toBeDefined();
+    await act(async () => expand?.click());
+    expect(host.textContent ?? "").toContain("second line");
+    expect(window.location.hash).toBe("#messages");
+    window.location.hash = "";
+  });
+
+  /**
+   * **AND THE SESSION ACTUALLY OPENS — the assertion the hash tests cannot
+   * make.** Everything above proves the URL changed; a page that wrote a
+   * perfect `#sessions?sel=$1643` and then drew a list with nothing selected
+   * would pass every one of them. This one holds real fleet state, so the whole
+   * chain has to work: the hash, `SessionsPanel`'s `selectedId`, and the detail.
+   *
+   * **Focus goes with it.** The button that was activated is on a tab that has
+   * just been swapped out, so leaving focus on it strands a keyboard or
+   * screen-reader user somewhere that no longer exists. GPT Sol's P1.
+   */
+  it("opens that session's detail, and moves focus to it", async () => {
+    const { transport, push } = pushableTransport();
+    window.location.hash = "#messages";
+    await act(async () => {
+      root.render(<App transport={transport} feedApi={apiOf(feedOf("$1643", "alpha"))} actionsPollMs={0} />);
+    });
+    await act(async () => push(stateWith(sessionRow("$1643", "alpha"))));
+    await act(async () => opener("alpha").click());
+
+    const detail = host.querySelector('[aria-label="The selected session"]');
+    expect(detail, "the detail pane should be on screen after the click").not.toBeNull();
+    expect(detail?.textContent ?? "").toContain("$1643");
+    /* **THE REAL PANE, NOT THE APOLOGY FOR ITS ABSENCE.** `MissingSession`
+       renders inside the same wrapper and repeats the same handle, so the two
+       assertions above pass on an implementation that always drew it — GPT
+       Sol's P2. `Rename` is a control only the live detail has. */
+    expect(detail?.textContent ?? "").toContain("Rename");
+    expect(detail?.textContent ?? "").not.toContain("not in the latest snapshot");
+    expect(document.activeElement, "focus should follow the reader to the detail").toBe(detail);
+    window.location.hash = "";
+  });
+
+  /**
+   * **THE PID HAS TO SURVIVE THE NAVIGATION, or the check on the row was
+   * theatre.**
+   *
+   * `sessionStatusOf` proves the handle and the session list name one tmux
+   * server — and then the click used to hand over the handle alone, leaving the
+   * destination to match `$1643` against whatever world it was looking at by the
+   * time it rendered. The pane it opened would print a handle that agreed with
+   * the one clicked, so nothing on screen would contradict it. GPT Sol's P0 on
+   * the code review, and it is his suggested test: click in world A, serve world
+   * B holding the same handle, and prove B's detail is never drawn.
+   */
+  it("does not open a same-handle session belonging to another tmux server", async () => {
+    const { transport, push } = pushableTransport();
+    window.location.hash = "#messages";
+    await act(async () => {
+      root.render(<App transport={transport} feedApi={apiOf(feedOf("$1643", "alpha"))} actionsPollMs={0} />);
+    });
+    /* World A: the feed's fixture says tmux server 132280, and so does this. */
+    await act(async () => push(stateWith(sessionRow("$1643", "alpha"), 132280)));
+    await act(async () => opener("alpha").click());
+    expect(host.querySelector('[aria-label="The selected session"]')?.textContent ?? "").toContain("Rename");
+
+    /* World B arrives on the next poll: the tmux server has restarted, and
+       `$1643` is now somebody else's — with the same handle, and a name that
+       looks just as plausible. */
+    await act(async () => push(stateWith(sessionRow("$1643", "a-stranger"), 999_999)));
+
+    const after = host.textContent ?? "";
+    expect(after, "the wrong session's detail must not be drawn").not.toContain("Rename");
+    expect(after).toContain("That link is for a different tmux server");
+    window.location.hash = "";
+  });
+
+  /**
+   * **A FEED THAT NAMED NO TMUX SERVER SELECTS NOTHING**, rather than selecting
+   * on trust. The reader still gets to the Sessions tab — the link is not taken
+   * away, because a server predating the field answers this way for every row —
+   * but the handle it could not vouch for is not acted on.
+   */
+  it("takes an unverifiable row to the session list without selecting anything", async () => {
+    const view = { ...feedOf("$1643", "alpha"), tmuxServerPid: null } as FeedView;
+    await mountFeed("#messages", view);
+    await act(async () => weakOpener("alpha").click());
+
+    const hash = decodeURIComponent(window.location.hash);
+    expect(hash.startsWith("#sessions")).toBe(true);
+    expect(hash).not.toContain("sel=");
+    window.location.hash = "";
+  });
+});
+
+/**
+ * **A ROW YOU CAN READ WITHOUT OPENING ANYTHING.**
+ *
+ * > can we make "Recent messages" … much more … scannable (e.g. to see at a
+ * > glance the status and human-readable timing of each)
+ * >
+ * > — Greg, 2026-09-09
+ *
+ * Two claims per row, and both of them are the kind this page gets wrong by
+ * being helpful: a status that is a SECOND reading of what the Sessions tab
+ * already says, and an absence drawn as a calm state. So the status comes from
+ * the live session list by id and nothing else, and the two ways of having no
+ * status are two different sentences.
+ */
+describe("what a row says at a glance", () => {
+  const AT = "2026-09-09T00:58:00.000Z";
+  const NOW_MS = Date.parse("2026-09-09T01:00:00.000Z");
+
+  function rowOf(sessionId: string, over: Partial<FeedRow["turn"]> = {}): FeedRow {
+    return {
+      sessionId,
+      sessionName: "alpha",
+      sessionTitle: null,
+      attribution: { kind: "claimed-only", why: "w" },
+      turn: {
+        speaker: "assistant",
+        at: AT,
+        text: "merging dev before the push",
+        truncated: false,
+        fullChars: 27,
+        toolCalls: [],
+        uuid: "a",
+        ...over,
+      },
+    };
+  }
+
+  function viewOf(rows: FeedRow[]): FeedView {
+    return {
+      kind: "feed",
+      limit: 50,
+      messages: rows,
+      undated: [],
+      sessions: [],
+      sessionsOffered: true,
+      unreadableRows: 0,
+      coverage: { kind: "complete" },
+      collectedAt: null,
+      readStartedAt: null,
+      readFinishedAt: null,
+      servedAt: null,
+      tmuxServerPid: 132280,
+    };
+  }
+
+  /** The shared row fixture, under the name every message in this block carries. */
+  const session = (id: string, status: FleetRow["status"]): FleetRow => sessionRow(id, "alpha", status);
+
+  /** A collected list, from the rows a test cares about. `PID` is the box's world. */
+  const PID = 132280;
+  function collected(rows: FleetRow[], over: Partial<Extract<SessionListReading, { kind: "collected" }>> = {}) {
+    return { kind: "collected" as const, rows, unreadableRows: 0, tmuxServerPid: PID, ...over };
+  }
+
+  /* --- the status join, as a pure decision --- */
+
+  /**
+   * **FIVE ARMS, BECAUSE THERE ARE FIVE DIFFERENT THINGS TO SAY.** The plan had
+   * three and GPT Sol was right that they are neither complete nor safe: a
+   * payload can arrive before any census has finished, and a payload's handles
+   * can belong to a tmux server that no longer exists.
+   */
+  it("says nothing at all before a payload has arrived", () => {
+    expect(sessionStatusOf({ kind: "not-arrived" }, PID, "$1643")).toEqual({ kind: "not-arrived" });
+  });
+
+  /**
+   * **A PAYLOAD WITH NO FINISHED CENSUS LISTS NOBODY, and reading "absent" off
+   * that would call every session on the box gone.** The server answers exactly
+   * this for the ten seconds a first collection takes.
+   */
+  it("does not read an unfinished census as a session that is gone", () => {
+    expect(sessionStatusOf({ kind: "not-collected" }, PID, "$1643")).toEqual({ kind: "not-collected" });
+  });
+
+  /**
+   * **THE HANDLES MUST BELONG TO ONE WORLD BEFORE THEY MAY BE COMPARED.**
+   *
+   * `$1643` means nothing outside one tmux server, so a feed read before a tmux
+   * restart holds handles that now name different sessions. The lookup would
+   * succeed, and it would find somebody else. GPT Sol's P0.
+   */
+  it("refuses the join when the two answers came from different tmux servers", () => {
+    const row = session("$1643", { kind: "working" });
+    const across = sessionStatusOf(collected([row]), 999_999, "$1643");
+    expect(across.kind).toBe("different-world");
+    /* And it does NOT quietly hand back the row it found. */
+    expect(across).not.toMatchObject({ kind: "listed" });
+  });
+
+  /**
+   * **NOT KNOWING IS A DIFFERENT ARM FROM KNOWING OTHERWISE**, and the split is
+   * load-bearing rather than pedantic: a server that predates `tmuxServerPid`
+   * answers this way for **every** row, so collapsing the two would switch the
+   * whole feature off against it on no evidence at all — the "warning that never
+   * clears" this tab's doc already names as its characteristic failure. Found by
+   * a browser check, when a fixture server that had not been given the new field
+   * turned every row on the page into a refusal.
+   */
+  it("says it could not check, rather than that it disagrees, when either side was silent", () => {
+    const row = session("$1643", { kind: "working" });
+    expect(sessionStatusOf(collected([row]), null, "$1643").kind).toBe("unverifiable");
+    expect(sessionStatusOf(collected([row], { tmuxServerPid: null }), PID, "$1643").kind).toBe("unverifiable");
+  });
+
+  /** And an unverified row keeps its way in, where a contradicted one loses it. */
+  it("keeps the way in when the check could not be made, and removes it when it failed", async () => {
+    const unverified = { ...viewOf([rowOf("$1643")]), tmuxServerPid: null } as FeedView;
+    await draw(
+      panel(unverified, {
+        sessions: collected([session("$1643", { kind: "working" })]),
+        now: NOW_MS,
+        onOpenSession: () => {},
+      }),
+    );
+    /* **A WAY IN, BUT NOT THE SAME ONE.** It reaches the Sessions tab without
+       selecting a handle this page could not vouch for, and its accessible name
+       says so — a screen reader announcing "open the session alpha" would be
+       describing something this control deliberately does not do. */
+    expect(
+      [...host.querySelectorAll("button")].some(
+        (b) => b.getAttribute("aria-label") === "Show Sessions — alpha cannot be selected from here",
+      ),
+      "an unverified row must still be a way in",
+    ).toBe(true);
+    expect(
+      [...host.querySelectorAll("button")].some(
+        (b) => b.getAttribute("aria-label") === "Open the session alpha in Sessions",
+      ),
+      "but it must not claim it opens the session",
+    ).toBe(false);
+    expect(host.textContent ?? "").toContain("status not checked");
+  });
+
+  /**
+   * **AN ABSENCE FROM A PAYLOAD IS NOT AN ABSENCE FROM THE BOX, and the
+   * difference is whether that payload was wholly readable.** A page that
+   * dropped rows it could not parse is in no position to say a session is gone
+   * — it can only say the session is not in the part it could read.
+   */
+  it("distinguishes a session that is absent from one that may only be unreadable", () => {
+    expect(sessionStatusOf(collected([]), PID, "$1643")).toEqual({ kind: "not-listed", unreadableRows: 0 });
+    expect(sessionStatusOf(collected([], { unreadableRows: 3 }), PID, "$1643")).toEqual({
+      kind: "not-listed",
+      unreadableRows: 3,
+    });
+  });
+
+  it("hands back the live row when the session is listed", () => {
+    const row = session("$1643", { kind: "working" });
+    expect(sessionStatusOf(collected([row]), PID, "$1643")).toEqual({ kind: "listed", row });
+  });
+
+  /* --- the clock --- */
+
+  /**
+   * **THE AGE IS SHIFTED; THE INSTANT IS NOT.** Both come off one `at`, and
+   * getting the split backwards is GPT Sol's K4 in messages-client.ts: a shifted
+   * wall-clock string asserts an instant nothing happened at, and an unshifted
+   * age is measured against the wrong clock.
+   *
+   * A device two minutes behind the box's clock: a turn written at 00:58 on the
+   * box lands at 00:56 in this browser's terms, so against a browser `now` of
+   * 01:00 it is 4 minutes old rather than 2.
+   */
+  it("shifts the age onto this browser's clock", () => {
+    const known = { kind: "known", ms: 120_000 } as const;
+    expect(turnAge(AT, NOW_MS, known)).toEqual({ kind: "aged", ms: 4 * 60_000 });
+    expect(turnAge(AT, NOW_MS, CLOCK_SKEW_UNMEASURED)).toEqual({ kind: "aged", ms: 2 * 60_000 });
+  });
+
+  it("refuses to place a turn with no timestamp, or one it cannot parse", () => {
+    expect(turnAge(null, NOW_MS, CLOCK_SKEW_UNMEASURED)).toEqual({ kind: "unplaceable" });
+    expect(turnAge("not a time", NOW_MS, CLOCK_SKEW_UNMEASURED)).toEqual({ kind: "unplaceable" });
+  });
+
+  /**
+   * **A TURN STAMPED IN THE FUTURE IS ITS OWN ANSWER, not a zero.** These are
+   * two clocks, so a real minute of disagreement is a fact — and "0s ago" would
+   * bury it under the most reassuring words available. Noise inside the page's
+   * own noticing threshold still rounds to now, because the skew this corrects
+   * by is itself understated by one-way latency.
+   */
+  it("says when a turn is stamped ahead of this device's clock, and shrugs off noise", () => {
+    const inTenMinutes = new Date(NOW_MS + 10 * 60_000).toISOString();
+    expect(turnAge(inTenMinutes, NOW_MS, CLOCK_SKEW_UNMEASURED)).toEqual({ kind: "ahead", ms: 10 * 60_000 });
+    const inThreeSeconds = new Date(NOW_MS + 3_000).toISOString();
+    expect(turnAge(inThreeSeconds, NOW_MS, CLOCK_SKEW_UNMEASURED)).toEqual({ kind: "aged", ms: 0 });
+  });
+
+  /* --- and what all of that looks like on the row --- */
+
+  it("draws the live status word, in the Sessions list's own vocabulary", async () => {
+    const text = await draw(
+      panel(viewOf([rowOf("$1643")]), {
+        sessions: collected([session("$1643", { kind: "working" })]),
+        now: NOW_MS,
+      }),
+    );
+    expect(text).toContain("working");
+  });
+
+  /**
+   * **FOUR SILENCES, AND NONE OF THEM READS AS A QUIET SESSION.** The word this
+   * checks for the absence of is `idle`, because that is the specific wrong
+   * answer: it is the calm end of the vocabulary and it is what a reader would
+   * take from a row that said nothing.
+   */
+  it("says which kind of not-knowing it is", async () => {
+    const notArrived = await draw(panel(viewOf([rowOf("$1643")]), { sessions: { kind: "not-arrived" }, now: NOW_MS }));
+    expect(notArrived).toContain("session list has not arrived");
+    expect(notArrived).not.toContain("idle");
+
+    const notCollected = await draw(
+      panel(viewOf([rowOf("$1643")]), { sessions: { kind: "not-collected" }, now: NOW_MS }),
+    );
+    expect(notCollected).toContain("no session census yet");
+    expect(notCollected).not.toContain("idle");
+
+    const notListed = await draw(panel(viewOf([rowOf("$1643")]), { sessions: collected([]), now: NOW_MS }));
+    expect(notListed).toContain("not in the current session list");
+    expect(notListed).not.toContain("idle");
+
+    const partial = await draw(
+      panel(viewOf([rowOf("$1643")]), { sessions: collected([], { unreadableRows: 2 }), now: NOW_MS }),
+    );
+    expect(partial).toContain("not in the readable session list");
+  });
+
+  /**
+   * **AND AN UNJOINABLE ROW LOSES ITS WAY IN.** `sel` addresses a session by the
+   * same handle the join could not place, so a click would open whatever now
+   * wears it — confidently, and wrongly.
+   */
+  it("withholds the way in when the handles are provably a different world", async () => {
+    const view = { ...viewOf([rowOf("$1643")]), tmuxServerPid: 999_999 } as FeedView;
+    await draw(
+      panel(view, {
+        sessions: collected([session("$1643", { kind: "working" })]),
+        now: NOW_MS,
+        onOpenSession: () => {},
+      }),
+    );
+    const button = [...host.querySelectorAll("button")].find(
+      (b) => b.getAttribute("aria-label") === "Open the session alpha in Sessions",
+    );
+    expect(button, "an unplaceable row must not offer a way in").toBeUndefined();
+    expect(host.textContent ?? "").toContain("cannot be matched to a session");
+  });
+
+  /**
+   * A human age on the row, and the exact instant kept for whoever wants it.
+   * The ISO string was what the row carried before, and it is a thing you parse
+   * rather than a thing you scan.
+   */
+  it("prints an age rather than an ISO timestamp", async () => {
+    const text = await draw(
+      panel(viewOf([rowOf("$1643")]), {
+        sessions: collected([session("$1643", { kind: "idle" })]),
+        now: NOW_MS,
+        skew: { kind: "known", ms: 0 },
+      }),
+    );
+    expect(text).toContain("2m ago");
+    /* The absolute instant is still REACHABLE — `Explain` carries it in the
+       accessible name and the tooltip — but it is no longer VISIBLE, and those
+       are two different claims. Asserting the second against `host.textContent`
+       would be reading back the tooltip this very test put on screen. */
+    expect(text, "the instant is still reachable").toContain("2026-09-09");
+    expect(visibleText(), "but it is not what the eye lands on").not.toContain("2026-09-09");
+    expect(visibleText()).toContain("2m ago");
+  });
+
+  /**
+   * **AN AGE ACROSS TWO CLOCKS THAT WERE NEVER COMPARED IS NOT A MEASUREMENT.**
+   *
+   * This tab has its own route and can be on screen before any state payload —
+   * and the masthead prints its clock note only once one has arrived
+   * (Header.tsx), so nothing else on the page would qualify this number. The
+   * hedge is one word and it is the difference between a reading and a guess.
+   * GPT Sol's P0.
+   */
+  it("labels the age while the clocks have not been compared", async () => {
+    await draw(panel(viewOf([rowOf("$1643")]), { sessions: { kind: "not-arrived" }, now: NOW_MS }));
+    expect(visibleText()).toContain("2m ago");
+    expect(visibleText()).toContain("clocks not compared");
+
+    await draw(
+      panel(viewOf([rowOf("$1643")]), {
+        sessions: collected([session("$1643", { kind: "idle" })]),
+        now: NOW_MS,
+        skew: { kind: "known", ms: 0 },
+      }),
+    );
+    expect(visibleText()).toContain("2m ago");
+    expect(visibleText()).not.toContain("clocks not compared");
+  });
+
+  /**
+   * **THE TOLERANCE IS SMALL, AND ITS BOUNDARY IS TESTED FROM BOTH SIDES.**
+   *
+   * It was `CLOCK_SKEW_NOTICE_MS` — a minute — which made a turn 59 seconds in
+   * the future read "0s ago" on a row whose own formatter prints seconds under
+   * five minutes. GPT Sol's P1. The number this wants is the latency in the
+   * measurement, not the threshold at which a masthead mentions a clock.
+   */
+  it("clamps only the noise, at a boundary worth naming", () => {
+    const ahead = (ms: number): string =>
+      new Date(NOW_MS + ms).toISOString();
+    expect(turnAge(ahead(TURN_AHEAD_TOLERANCE_MS - 1), NOW_MS, CLOCK_SKEW_UNMEASURED)).toEqual({
+      kind: "aged",
+      ms: 0,
+    });
+    expect(turnAge(ahead(TURN_AHEAD_TOLERANCE_MS), NOW_MS, CLOCK_SKEW_UNMEASURED)).toEqual({ kind: "aged", ms: 0 });
+    expect(turnAge(ahead(TURN_AHEAD_TOLERANCE_MS + 1), NOW_MS, CLOCK_SKEW_UNMEASURED)).toEqual({
+      kind: "ahead",
+      ms: TURN_AHEAD_TOLERANCE_MS + 1,
+    });
+    /* And it is small enough that a minute in the future is still a finding. */
+    expect(turnAge(ahead(60_000), NOW_MS, CLOCK_SKEW_UNMEASURED).kind).toBe("ahead");
+  });
+
+  /**
+   * **`Date.parse` IS NOT A VALIDATOR.** `Date.parse("0")` is January 2000, so a
+   * junk timestamp would be drawn as a confident age twenty-six years old rather
+   * than as the unreadable thing it is. types.ts documents the same trap for
+   * `servedAt`; GPT Sol's P2 pointed out this client had not borrowed it.
+   */
+  it("refuses a timestamp that is not canonical ISO, however willingly Date.parse takes it", () => {
+    expect(Number.isNaN(Date.parse("0")), "Date.parse really does accept this").toBe(false);
+    expect(turnAge("0", NOW_MS, CLOCK_SKEW_UNMEASURED)).toEqual({ kind: "unplaceable" });
+    expect(turnAge("2026-09-09", NOW_MS, CLOCK_SKEW_UNMEASURED)).toEqual({ kind: "unplaceable" });
+    expect(turnAge("2026-09-09T00:58:00Z", NOW_MS, CLOCK_SKEW_UNMEASURED)).toEqual({ kind: "unplaceable" });
+    /* What the transcripts actually carry, which is `toISOString()` output. */
+    expect(turnAge(AT, NOW_MS, CLOCK_SKEW_UNMEASURED).kind).toBe("aged");
   });
 });

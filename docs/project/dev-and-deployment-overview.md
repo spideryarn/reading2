@@ -99,10 +99,21 @@ reference, and is authoritative wherever the two disagree.
   deferred, one line each and the product question it waits on, so a lull has something queued and
   gate 3's "is it in the queue?" has a place to look. The Spideryarn product plan sits there whole.
 - **[fleet-dashboard-modes.md](fleet-dashboard-modes.md)** — the checklist for adding a tab to that
-  dashboard: the four `Record<Mode, …>` registrations the compiler catches and the one mount in
-  `App.tsx` it does not, whether your data rides the pushed snapshot or wants its own route, why a
-  tab that writes is two files rather than one, and the etiquette for a night when several sessions
-  are adding tabs at once.
+  dashboard: six places across three files, two of which nothing checks; the end-to-end path for a
+  datum depending on whether it rides the pushed snapshot or wants its own route; why an on-demand
+  route may only block the event loop for work whose worst case it can state; and the etiquette for
+  a night when several sessions are adding tabs at once.
+- **[readiness.md](readiness.md)** — the Readiness tab: whether the commit `origin/dev` is on is
+  known to pass its checks. The one command that makes a run count
+  (`readiness-run.ts`, because a plain `npm test` records nothing), the five clauses a green answer
+  needs, why `unknown` is the common and correct answer, and why "on dev" is never a claim about
+  what is on GitHub now.
+- **[usage-history.md](usage-history.md)** — the Usage limits tab's second half: the last 24 hours of
+  Claude's limits, which exists only because nothing else writes them down. Why the daemon writes the
+  store and the dashboard only reads it, why this one has no writer lock when `~/.fleet-health/`
+  does, why recorder health is derived rather than reported across the process boundary, and the
+  eight things the chart may not claim — including why a historical point must never be re-checked
+  against today's clock.
 - **[fleet-recent-messages.md](fleet-recent-messages.md)** — the Recent messages tab, which reads
   every session's transcript at once: why "the last N messages" is a claim the payload has to earn
   rather than a description, the four premises behind it and the six things that demote it, the guard

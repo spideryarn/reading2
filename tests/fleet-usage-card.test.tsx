@@ -233,10 +233,36 @@ describe("the join, all five hops", () => {
        satisfy `toContain` while failing the requirement exactly. So count the
        rows, and count the reset instant they would each have repeated.
        GPT Sol's P2(4), 2026-09-09. */
-    /* One incident row, one verdict reason, two cached windows. The count is
-       spelled out so that a change to any of them is a decision rather than a
-       number quietly going up. */
-    expect(container.querySelectorAll("li").length).toBe(1 + 1 + 2);
+    /* **COUNTED WHERE THEY LIVE, NOT AS A TOTAL.** A bare `li` count was the
+       right assertion when the card had one list. It now has three — incidents,
+       verdict reasons, and the cache entries that carried no usable number — so
+       a total would move for a good reason and a bad one indistinguishably, and
+       the number would be edited rather than read. The requirement has not
+       changed and is pinned directly instead: **one incident row**, whatever
+       else the card grows around it (plan 260909c). */
+    expect(container.querySelectorAll('[data-slot="usage-provenance"] li').length).toBe(1);
+    /* Three stats: both cached windows — one with a reading, one without — and
+       — new on 2026-09-09 — **when work can actually resume**, which is the
+       number this whole card exists to deliver and which used to be reachable
+       only by reading an incident row's third line. It is drawn from
+       `dueBackAt`, the window that frees up LAST, so a reader who acts on it is
+       not caught out by a second window still in force. */
+    expect(container.querySelectorAll('[data-slot="stat-value"], [data-slot="stat-absent"]').length).toBe(3);
+    expect(screen()).toContain("Work can resume in");
+    /* **`nimbus_quill` GETS ITS OWN CARD, and no window is folded away.** A
+       draft folded the windows that never carried a number into a disclosure;
+       it was withdrawn on GPT Sol's UL-03 because it partitioned by epistemic
+       state when only relevance justified it, and `UsageWindowName` is `string`
+       so nothing in the data says which windows are ancillary. Pinned here so
+       the idea cannot come back without this assertion being read. */
+    expect(container.querySelectorAll('[data-slot="stat-absent"]').length).toBe(1);
+    expect(screen()).toContain("nimbus_quill");
+    expect(screen()).toContain("no resets_at, so the utilization (0) cannot be checked for validity");
+    /* **THE CACHE'S OWN AGE, WHICH IS NOT THE READING'S.** A fresh pass can
+       republish a cache fetched hours earlier, so a card showing only
+       `collectedAt` makes a stale percentage read as freshly taken — Sol's
+       UL-04, found by diffing the old render against the new one. */
+    expect(screen()).toContain("cached 10m ago");
     expect(screen().match(/five_hour has not reset yet/g)).toHaveLength(1);
     expect(screen()).toContain("five_hour has not reset yet");
     /* **AND IT DOES NOT SAY "IN FORCE".** Only the verdict may claim the
@@ -318,6 +344,13 @@ describe("the card, against its own clock", () => {
     expect(screen()).toContain("The limit that stopped this account has since reset.");
     expect(screen()).toContain("Every rejection this scan found names a window that has already reset.");
     expect(screen()).toContain("cleared");
+    /* **AND IT DOES NOT ALSO SAY "Work can resume in — Unknown".** The first
+       draft drew that card here, reading the same passed instant the headline
+       had just resolved, and answering `Unknown` to a question the sentence
+       above had answered. Two components disagreeing about one instant in view
+       of each other. GPT Sol's UL-01, 2026-09-09 — and this test is what was
+       missing, since it asserted the headline and never looked at the card. */
+    expect(screen()).not.toContain("Work can resume in");
   });
 
   it("shows the unreset window in full and counts the ones that have already gone", () => {
@@ -458,11 +491,19 @@ describe("the card, against its own clock", () => {
       },
     });
     draw(feed, BASE);
-    expect(screen()).toContain("this window has already reset, so the cached number describes nothing");
+    /* **THE STATE WORD CARRIES IT NOW, AND THE PRODUCER'S SENTENCE EXPLAINS IT.**
+       Until 2026-09-09 this pinned a prefix the card wrote — "this window has
+       already reset, so the cached number describes nothing: " — glued in front
+       of a `why` that already said exactly that, so the card printed the fact
+       twice and ran to eleven lines on a phone. The prefix went; the meaning is
+       pinned in two pieces instead, and the second is the producer's own words
+       rather than ours. */
+    expect(container.querySelector('[data-slot="stat-absent"]')?.textContent).toBe("Unknown");
     /* THE STALE NUMBER SURVIVES ONLY AS PROSE. There is no numeric field for a
        renderer to find, so it cannot come back wearing a percentage label. */
     expect(screen()).toContain("the cached 70% describes");
     expect(screen()).not.toMatch(/\b70%\s*resets/);
+    expect(container.querySelector('[data-slot="stat-value"]')).toBeNull();
     /* AN UNKNOWN SCAN IS NOT `no limits hit`. */
     expect(screen()).toContain("this page cannot tell whether anything was rejected");
   });
@@ -501,11 +542,127 @@ describe("the card, against its own clock", () => {
       },
     });
     draw(feed, BASE);
-    expect(screen()).toContain("five_hour — this window reset at");
+    /* **THE VOID NUMBER IS NOWHERE ON THE CARD**, which is the whole assertion
+       and is unchanged. `96%` may not appear as the value, in the evidence, in
+       a tooltip, or anywhere else. */
     expect(screen()).not.toContain("96%");
+    /* The window that has passed says WHICH KIND of absence it is, in a word,
+       rather than drawing a dash — GPT Sol's S2-01, 2026-09-09. It used to read
+       "five_hour — this window reset at …" as one run-on row; it is now a card
+       whose label is the window, whose value is the state, and whose reason is
+       the sentence. The substance is identical and pinned piece by piece. */
+    const five = container.querySelector('[data-slot="stat-absent"]');
+    expect(five?.textContent).toBe("Unknown");
+    expect(screen()).toContain("five_hour");
+    expect(screen()).toContain("this window reset at");
+    expect(screen()).toContain("so its cached number describes nothing");
     /* The window that has NOT passed still shows its number: the rule is about
-       a void reading, not about hiding the cache. */
+       a void reading, not about hiding the cache. Both forms are on screen —
+       the producer's `41% used`, and the `59% left` the reader actually asked
+       for — so the derived number can be checked against the source one. */
     expect(screen()).toContain("41%");
+    expect(screen()).toContain("59% left");
+  });
+
+  it("does not invent a severity of its own for a window the verdict calls fine", () => {
+    /* **THE CARD MAY NOT SECOND-GUESS THE VERDICT.** A draft coloured each
+       window by thresholds this file made up — alarm under 10% left, needs
+       under 25% — and GPT Sol measured what that costs against the producer's
+       actual default of 80% used: at 75% the card would shout `needs` while the
+       verdict still said `ok`, and at 90% `alarm` against a producer saying only
+       `approaching`. A card contradicting the sentence above it is the second
+       interpretation of one measurement this file's header forbids.
+
+       **This is the mutation the rest of the suite could not see.** Re-adding
+       those thresholds left all fourteen tests green, because every other
+       assertion is about words and this one is about colour. Asserted on the
+       ink class, which is the only place the invented severity could show.
+       GPT Sol's UL-05, 2026-09-09. */
+    const feed = parseUsage({
+      kind: "published",
+      coordinatorWrittenAt: ago(20_000),
+      summary: {
+        collectedAt: ago(60_000),
+        account: { kind: "value", email: "greg@example.test", accountUuid: "acct-1111", orgId: null, orgName: null, subscriptionType: "max", rateLimitTier: null },
+        /* **A COMBINATION THE PRODUCER CAN ACTUALLY EMIT.** The first version of
+           this test used 95% used against `ok`, which its 80% threshold cannot
+           produce — the mutation was still caught, but a fixture the real system
+           cannot reach is a test that proves something about nothing. GPT Sol's
+           round-two P2. 75% against `ok` is inside the threshold and is exactly
+           where the withdrawn `left <= 25` rule would have shouted `needs` over
+           a verdict saying the account is fine. */
+        level: "ok",
+        reasons: [],
+        cache: {
+          kind: "attributed",
+          fetchedAt: ago(60_000),
+          accountUuid: "acct-1111",
+          windows: [
+            {
+              kind: "value",
+              window: "five_hour",
+              utilizationPercent: 75,
+              resetsAt: new Date(BASE + 60 * 60_000).toISOString(),
+            },
+          ],
+        },
+        limits: { kind: "none", coverage: COVERAGE },
+        dueBackAt: null,
+      },
+    });
+    draw(feed, BASE);
+    const value = container.querySelector('[data-slot="stat-value"]');
+    expect(value?.textContent).toBe("25% left");
+    expect(value?.className).not.toContain("alarm");
+    expect(value?.className).not.toContain("needs");
+    /* **AND NOT THE REASSURING COLOUR EITHER**, which the first fix got wrong:
+       it used the `work` tone, and `work` is this palette's green — the status
+       colour of a session that is running. On a headroom figure green does not
+       read as "measured", it reads as "healthy", so `5% left` would have been
+       drawn as good news. A severity claim in the opposite direction is still a
+       severity claim. */
+    expect(value?.className).not.toContain("work");
+  });
+
+  it("does not print floating-point debris as the answer to how much is left", () => {
+    /* **`100 - 99.99` IS `0.010000000000005116`.** Both parsers require a
+       finite value in [0, 100], so the complement can never be negative, NaN or
+       over 100 — but it can be sixteen digits of noise in the largest text on
+       the card, which is the one place on this page a reader is meant to look
+       first. GPT Sol's UL-06, 2026-09-09. Rounded to one place, then trailing
+       zeroes dropped: 42 stays `42`, and 0.01 becomes `0`, which is the safe
+       direction because it does not overstate the headroom. */
+    const feed = parseUsage({
+      kind: "published",
+      coordinatorWrittenAt: ago(20_000),
+      summary: {
+        collectedAt: ago(60_000),
+        account: { kind: "value", email: "greg@example.test", accountUuid: "acct-1111", orgId: null, orgName: null, subscriptionType: "max", rateLimitTier: null },
+        level: "approaching",
+        reasons: [],
+        cache: {
+          kind: "attributed",
+          fetchedAt: ago(60_000),
+          accountUuid: "acct-1111",
+          windows: [
+            {
+              kind: "value",
+              window: "five_hour",
+              utilizationPercent: 99.99,
+              resetsAt: new Date(BASE + 60 * 60_000).toISOString(),
+            },
+          ],
+        },
+        limits: { kind: "none", coverage: COVERAGE },
+        dueBackAt: null,
+      },
+    });
+    draw(feed, BASE);
+    expect(container.querySelector('[data-slot="stat-value"]')?.textContent).toBe("0% left");
+    expect(screen()).not.toContain("0.0100000");
+    /* The producer's own number survives beside the derived one, so the
+       rounding can be checked rather than trusted. */
+    expect(screen()).toContain("99.99% used");
   });
 
   it("will not draw another account's percentages under this account's name", () => {

@@ -15,8 +15,18 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { agoFrom, ago, readPayload, shortSha, groupedEntries } from "../tools/fleet/web/src/deploys-client";
-import type { DeploysPayload } from "../tools/fleet/wire";
+import {
+  agoFrom,
+  ago,
+  dayLabel,
+  deployDays,
+  deployGist,
+  deployWhenIn,
+  readPayload,
+  shortSha,
+  groupedEntries,
+} from "../tools/fleet/web/src/deploys-client";
+import type { DeploysPayload, DeployVersion } from "../tools/fleet/wire";
 
 const SHA = "8cd2206ae24e16c65f76ea9f954c5b300616cd57";
 
@@ -215,6 +225,148 @@ describe("small helpers", () => {
        nothing. */
     expect(groups.map((g) => g.section)).toEqual(["headline", "fix"]);
     expect(groups.map((g) => g.label)).toEqual(["Headline changes", "Bug fixes"]);
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * The collapsed row.
+ * ------------------------------------------------------------------ */
+
+function version(over: Partial<DeployVersion> = {}): DeployVersion {
+  return {
+    version: "2026-09-08T05:32:17Z",
+    release: 74,
+    deploymentId: "dpl",
+    sha: SHA,
+    previousSha: null,
+    commitCount: 12,
+    invisible: false,
+    changelogReadable: true,
+    unreadableEntries: 0,
+    generatedAt: null,
+    entries: [
+      { section: "fix", title: "F", body: "b", where: null, commits: [] },
+      { section: "headline", title: "H", body: "b", where: null, commits: [] },
+    ],
+    ...over,
+  };
+}
+
+describe("deployGist — the one line a closed deploy gets", () => {
+  it("leads with the headline entry, not the first one in the file", () => {
+    /* Same argument as `groupedEntries`: the order the record happens to hold
+       is not the order a reader cares about, and a closed row shows exactly
+       one title. */
+    expect(deployGist(version())).toEqual({ kind: "entries", title: "H", more: 1, unreadable: 0 });
+  });
+
+  it("says NOTHING CHANGED only when the changelog was read", () => {
+    expect(deployGist(version({ entries: [], invisible: true })).kind).toBe("quiet");
+  });
+
+  it("does NOT call an unreadable changelog a quiet deploy", () => {
+    /* **The collapse this whole design could commit.** A deploy whose entries
+       would not parse has an empty `entries` array, so any gist that branched
+       on "are there entries" would draw a headline release as *nothing a reader
+       would notice* — the identical bug GPT Sol found in the open card on
+       2026-09-09, re-introduced one level up. */
+    const gist = deployGist(version({ entries: [], changelogReadable: false, unreadableEntries: 3 }));
+    expect(gist.kind).toBe("unreadable");
+    expect(gist.title).toBeNull();
+  });
+
+  it("carries the unparsed count, so a short list is not shown as a whole one", () => {
+    expect(deployGist(version({ unreadableEntries: 2 }))).toMatchObject({ kind: "entries", more: 1, unreadable: 2 });
+  });
+});
+
+describe("deployWhenIn — one instant, one zone, always labelled", () => {
+  it("reads an instant in the zone it is given", () => {
+    expect(deployWhenIn("2026-09-08T05:32:17Z", { zone: "Europe/Athens", label: "Athens" })).toEqual({
+      date: "2026-09-08",
+      time: "08:32",
+      label: "Athens",
+    });
+  });
+
+  it("falls back to UTC — and SAYS UTC — for a zone this host does not know", () => {
+    /* The retreat is named rather than silent: a row reading `05:32 UTC` on a
+       host whose zone `Intl` refuses is true, where `05:32` under an Athens
+       heading would not be. */
+    expect(deployWhenIn("2026-09-08T05:32:17Z", { zone: "Mars/Olympus", label: "Olympus" })).toEqual({
+      date: "2026-09-08",
+      time: "05:32",
+      label: "UTC",
+    });
+  });
+
+  it("returns null for an instant it cannot read, rather than an invented time", () => {
+    expect(deployWhenIn("not a time", { zone: "UTC", label: "UTC" })).toBeNull();
+  });
+});
+
+describe("deployDays — grouped in whatever zone the rows are drawn in", () => {
+  it("files a late-evening deploy under the day that ZONE had", () => {
+    /* **The assertion this parameter exists for.** 23:19 UTC is 02:19 Athens the
+       next morning, so a heading measured in one zone over a time measured in
+       another files a release under a day it did not happen on — the `(+1d)`
+       case zones.ts carries a suffix for, arriving as a wrong heading.
+
+       Production passes no zone and gets UTC (`ROW_ZONE`), so this case cannot
+       arise on the page today. It is checked anyway, because the parameter is
+       what stops the heading and the row's clock ever being measured
+       differently, and a branch no test reaches is one nobody can trust —
+       zones.ts's own argument for keeping `zones` a parameter. */
+    const days = deployDays(
+      [
+        version({ version: "2026-09-08T23:19:14Z", deploymentId: "late", release: 74 }),
+        version({ version: "2026-09-08T05:32:17Z", deploymentId: "early", release: 73 }),
+      ],
+      { zone: "Europe/Athens", label: "Athens" },
+    );
+
+    expect(days.map((d) => d.key)).toEqual(["2026-09-09", "2026-09-08"]);
+    expect(days[0]?.versions.map((v) => v.deploymentId)).toEqual(["late"]);
+    expect(days[1]?.versions.map((v) => v.deploymentId)).toEqual(["early"]);
+  });
+
+  it("keeps a day's deploys together and in the order they arrived", () => {
+    const days = deployDays(
+      [
+        version({ version: "2026-09-08T10:00:00Z", deploymentId: "a" }),
+        version({ version: "2026-09-08T09:00:00Z", deploymentId: "b" }),
+        version({ version: "2026-09-07T09:00:00Z", deploymentId: "c" }),
+      ],
+      { zone: "UTC", label: "UTC" },
+    );
+
+    expect(days).toHaveLength(2);
+    expect(days[0]?.versions.map((v) => v.deploymentId)).toEqual(["a", "b"]);
+    expect(days[1]?.versions.map((v) => v.deploymentId)).toEqual(["c"]);
+  });
+
+  it("puts an unreadable instant under a heading that says so", () => {
+    /* Never its own invented day, and never silently dropped: a deploy missing
+       from the list is the failure this tab's whole first pass was about. */
+    const days = deployDays([version({ version: "nonsense", deploymentId: "x" })], { zone: "UTC", label: "UTC" });
+    expect(days).toHaveLength(1);
+    expect(days[0]?.label).toBe("at a time this page cannot read");
+    expect(days[0]?.versions).toHaveLength(1);
+  });
+});
+
+describe("dayLabel", () => {
+  it("spells a key as a person reads it, with the weekday", () => {
+    expect(dayLabel("2026-09-08")).toBe("Tue 8 Sep 2026");
+  });
+
+  it("does not slip onto the neighbouring day", () => {
+    /* **`timeZone: "UTC"` is the guarantee, not the hour.** The key is already
+       a calendar date, and formatting it in UTC cannot move it whatever hour is
+       chosen; noon is belt to that braces, so a later edit that changed the
+       zone would produce a wrong LABEL rather than a wrong DAY. This comment
+       said noon was the mechanism until GPT Sol pointed out that it is not. */
+    expect(dayLabel("2026-01-01")).toBe("Thu 1 Jan 2026");
   });
 });
 

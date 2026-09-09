@@ -12,6 +12,13 @@ to reverse (a schema, a shared contract, a prompt), somebody has unease that ano
 won't settle, or **you can see a product tweak that would take a lot of the engineering out** — ask
 about that one even mid-run; often it's the route the user will prefer. Technical forks are yours — settle them with a second opinion, not a question.
 
+When you do ask, make the question answerable by someone who has not been in the code with you:
+first the goal, the background and any jargon in plain words, then each option explained fully — an
+example of it in use, an ASCII diagram where the shape matters, what it costs and gives up — and
+then what would decide between them. A bare list of labels is not a question yet. (Greg, 2026-09-09:
+*"Often I get asked a question and I don't understand what the question is asking, or the options,
+or how to choose between them."*)
+
 Running low on context is not a reason to stop. The plan doc is the memory: update it and keep going.
 
 ## The plan doc

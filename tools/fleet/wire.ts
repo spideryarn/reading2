@@ -2203,6 +2203,26 @@ export type FeedPayload =
       readStartedAt: string;
       readFinishedAt: string;
       servedAt: string;
+      /**
+       * **WHICH TMUX SERVER THE `sessionId`s IN THIS ANSWER BELONG TO.**
+       *
+       * Every `sessionId` here is a tmux session handle, and a `$1643` is only
+       * meaningful within one tmux server — the same argument `collect.ts` makes
+       * about comparing two snapshots. So a page that joins these messages to
+       * the session list from `/api/state` is comparing two sets of handles, and
+       * without this it cannot tell whether they name the same world.
+       *
+       * The failure it prevents is not hypothetical and is silent: after a tmux
+       * server restart, a `$1643` in a feed read a minute ago is a *different*
+       * session from the `$1643` in the current snapshot, so the row would take
+       * an unrelated session's status and a click on it would open the wrong
+       * conversation. Both look entirely normal. GPT Sol's P0 on the plan for
+       * the clickable/scannable pass.
+       *
+       * `null` when the collector could not read it, which is a reason to
+       * withhold the join rather than to guess at it.
+       */
+      tmuxServerPid: number | null;
     }
   /** We could not look. Never merged with an empty `messages`, which would say the fleet was quiet. */
   | { schema: 1; kind: "unreadable"; why: string };
@@ -2482,12 +2502,25 @@ export type DeploysPayload =
  * the send would not go.
  */
 export type NotifyOutcomeView =
-  | { kind: "submitted"; to: string; paneId: string }
+  /**
+   * **HANDED TO THE QUEUE, WHICH IS AS FAR AS THIS ROUTE'S KNOWLEDGE GOES.**
+   *
+   * Not "sent" and not even "submitted": the notice is in the drain's hands and
+   * will go out on a later refresh, through the same coordinator every other
+   * producer uses. What became of the keystrokes is the queue's story and the
+   * queue's surface tells it — this record would have to poll to find out, and a
+   * launch record that went stale claiming a delivery would be worse than one
+   * that says plainly where it put the thing.
+   */
+  | { kind: "queued"; to: string; position: number }
+  /** The queue turned it down — a full queue, a message it will not carry. */
+  | { kind: "not-queued"; to: string; rule: string; why: string }
+  /** The snapshot was readable and nobody holds the `overseer` role. */
   | { kind: "no-holder" }
+  /** More than one session claims it. Reported, never resolved here. */
   | { kind: "contested"; names: readonly string[] }
-  | { kind: "cannot-tell"; why: string }
-  | { kind: "refused"; to: string; code: string; why: string; delivery: Delivery }
-  | { kind: "unknown"; to: string; why: string };
+  /** We could not establish who holds it, or could not address them. */
+  | { kind: "cannot-tell"; why: string };
 
 /**
  * Where a launch's notification has got to.
@@ -2787,6 +2820,235 @@ export type UsageFeed =
   | { kind: "report-unreadable"; why: string; at: string }
   | { kind: "published"; summary: UsageSummary; coordinatorWrittenAt: string };
 
+
+/* ------------------------------------------------------------------ *
+ * The queue of ideas.
+ * ------------------------------------------------------------------ */
+
+/**
+ * Who recorded a queue write.
+ *
+ * **Narrower than `Speaker` on purpose.** That type's third arm, `dashboard`,
+ * means *a person acted and software is reporting it* — a report, never an
+ * instruction. A queue write IS an instruction, and an item nobody authored is
+ * exactly what gate 3 exists to refuse, so it must not be spellable here.
+ *
+ * `tools/overseer/idea-queue.ts` imports this rather than declaring its own,
+ * which reads backwards — the record's model importing from the HTTP wire — and
+ * is deliberate anyway: this file is the one home for a shape that crosses the
+ * boundary, and the alternative is the twin declaration this file's header was
+ * written about. `attention-classify.ts` and `usage-carry.ts` already reach here
+ * the same way.
+ */
+export type QueueActor = "greg" | "overseer";
+
+/** Where an item has got to. ONE axis — see `QueueRow` for the other two. */
+export type QueueLifecycle = "queued" | "dispatched" | "done" | "dropped";
+
+/** Whether anybody has said it may happen. */
+export type QueueAuthorityKind = "proposed" | "authorized";
+
+export type QueueProblemKind =
+  | "unreadable-line"
+  | "unknown-item"
+  | "duplicate-item"
+  | "missing-anchor"
+  | "unauthorized-authorization"
+  | "illegal-transition";
+
+/** One thing that happened to an item. `what` is the server's own phrase. */
+export type QueueTouch = { kind: string; at: string; by: QueueActor; what: string };
+
+/**
+ * How deep the queue is, split by **why** each item is not moving.
+ *
+ * The split is the useful part: a single number conflates *nobody has got to it*
+ * with *it is waiting on you*, and only one of those is Greg's to fix.
+ *
+ * The four fields partition `rows` — an item that is both unauthorised and
+ * waiting on Greg is counted once, under `needsGreg`, because that is the
+ * actionable half. Adding them up must give the number of rows.
+ */
+export type QueueDepth = {
+  dispatchable: number;
+  needsGreg: number;
+  unauthorized: number;
+  /**
+   * Rows held only because the FILE has a problem — approved, unblocked, and
+   * still not dispatchable.
+   *
+   * Its own count because without it those rows were reported as
+   * `unauthorized`, so a queue with one bad line said *12 not approved* beside
+   * twelve perfectly approved rows, in the same view as the alarm explaining
+   * that the file was the trouble. GPT Sol's P2-2.
+   */
+  queueHeld: number;
+  dispatched: number;
+  done: number;
+  dropped: number;
+};
+
+export type QueueWindow = { days: number; dispatched: number; done: number };
+
+/**
+ * What the queue has actually done — **measured on the queue's own events**,
+ * never on the fleet's session log.
+ *
+ * `duration` has exactly ONE arm, and that is a deliberate piece of type design
+ * rather than an unfinished union. Greg asked for a wait estimate; GPT Sol
+ * rejected the obvious one twice (P1-5 and its answer 3) and was right on every
+ * term — median session length is a fact about the mix of work, a session is not
+ * a queue item, session lifetime is censored by the long runs still going, and
+ * concurrency is a policy number. *"Three dispatched in the last 7 days"* is an
+ * observation; *"about four days"* is an inference this data cannot support.
+ *
+ * With one arm, a page cannot render a confident figure by forgetting a
+ * comparison. When a real duration becomes possible — enough of this queue's own
+ * `dispatched → done` pairs, grouped by size — it arrives as a second arm and
+ * every reader is made to handle it.
+ */
+export type QueueThroughput = {
+  windows: QueueWindow[];
+  dispatchesEver: number;
+  completionsEver: number;
+  duration: { kind: "not-enough"; why: string };
+};
+
+/**
+ * What can honestly be said about one item's wait.
+ *
+ * Four arms and none is a duration. *Running*, *waiting on you* and *nobody has
+ * approved it* send a reader to three different actions; a single "unknown"
+ * sends them nowhere.
+ */
+export type QueueItemWait =
+  | { kind: "ahead"; ahead: number; why: string }
+  /**
+   * The FILE is the problem, not the item.
+   *
+   * Separate from every per-item reason because it outranks them: while the
+   * record has a hole in it nothing may go out, so *"next in line"* would be a
+   * promise the queue cannot keep — which the panel was making, beside the
+   * alarm saying the opposite. Sol's P2-2.
+   */
+  | { kind: "queue-held"; why: string }
+  | { kind: "running"; session: string | null; why: string }
+  | { kind: "needs-greg"; waitingOn: string | null; why: string }
+  | { kind: "not-authorized"; why: string };
+
+/**
+ * One row of the queue.
+ *
+ * **`ready` and `why` are computed on the SERVER**, and that is not an
+ * optimisation. `ready` is `isDispatchable`, which is gate 3's own test; a
+ * second implementation of it in browser TypeScript would be a second answer to
+ * *"may this go out?"*, and the two would disagree the first time one moved. The
+ * client renders the sentence it is given.
+ */
+export type QueueRow = {
+  id: string;
+  title: string | null;
+  text: string;
+  lifecycle: QueueLifecycle;
+  authority: QueueAuthorityKind;
+  /** The revision the approval names — `null` when it is only proposed. */
+  authorizedRevision: number | null;
+  /** Bumped by every content edit. Not equal to `authorizedRevision` means the approval lapsed. */
+  revision: number;
+  needsGreg: boolean;
+  /** The server's `isDispatchable`. Never recomputed here. */
+  ready: boolean;
+  /** Why not, in the server's words. `null` exactly when `ready`. */
+  why: string | null;
+  wait: QueueItemWait;
+  waitingOn: string | null;
+  size: string | null;
+  source: string | null;
+  runs: string | null;
+  areas: string[];
+  addedBy: QueueActor;
+  addedAt: string;
+  lastTouchedAt: string | null;
+  dispatchedTo: string | null;
+  dispatchedAt: string | null;
+  plan: string | null;
+  droppedWhy: string | null;
+  history: QueueTouch[];
+};
+
+/**
+ * `GET /api/queue`, with three arms because two of them are silences that mean
+ * different things.
+ *
+ * **`never-written` is not an empty `queue`.** Nobody has used this queue is
+ * ordinary; a file that exists and folds to nothing has had everything
+ * dispatched or dropped. Drawn as the same blank list they become one claim.
+ *
+ * **`unreadable` is neither, and it is the one that matters.** The Overseer's
+ * own store may cold-start because losing it costs only history. This file is
+ * original human input and is not disposable, so a lost one rendering as a
+ * healthy empty queue is the single worst thing this tab could do.
+ */
+export type QueueFeed =
+  | { schema: 1; kind: "never-written"; why: string }
+  | { schema: 1; kind: "unreadable"; why: string }
+  | {
+      schema: 1;
+      kind: "queue";
+      /** Opaque; names the tail as well as the count, so `behind` and `different` are distinguishable. */
+      version: string;
+      rows: QueueRow[];
+      settled: QueueRow[];
+      /** Withheld by the settled cap, so the page says "and N more" rather than implying that is all. */
+      settledWithheld: number;
+      depth: QueueDepth;
+      throughput: QueueThroughput;
+      /**
+       * Anything the fold could not accept. **Non-empty means nothing in the
+       * queue is dispatchable** — a queue two items short must not authorise
+       * the items it did manage to read.
+       */
+      problems: { kind: QueueProblemKind; why: string }[];
+      /** Where the file is, so a person can go and look at it. */
+      path: string;
+    };
+
+/* ------------------------------------------------------------------ *
+ * What a session is about, in a sentence.
+ * ------------------------------------------------------------------ */
+
+/**
+ * A generated description of one session, or an honest account of why there
+ * isn't one.
+ *
+ * Greg, 2026-09-09: *"For each session, provide a 1-2-sentence description of
+ * what it's about, and show in the Session List."*
+ *
+ * **`not-yet-described` is the normal state for a while, and it is not an
+ * error.** A description needs a *verified* execution identity, and every row
+ * reads `unknown` until the dashboard and the daemon have been restarted onto
+ * the code that produces one. So its wording has to be informative rather than
+ * apologetic, or a page that is merely new will read as broken.
+ *
+ * **There is no arm carrying an empty string.** Greg ruled that out by name — a
+ * model that answered a different question routinely returns the right shape
+ * with empty strings in it, and publishing one is a row saying nothing
+ * confidently.
+ */
+export type SessionDescription =
+  | {
+      kind: "described";
+      /** A short display title. **Never renames the tmux session** — that name is an address. */
+      title: string;
+      /** One or two sentences: what this session is FOR. */
+      description: string;
+      /** When it was generated, so a reader can age it. */
+      describedAt: string;
+    }
+  /** The pass has not reached this session yet, or has nothing to describe it from. */
+  | { kind: "not-yet-described"; why: string }
+  /** We know why there is no description and it is worth saying. */
+  | { kind: "cannot-tell"; why: string };
 /* ================================================================== *
  * STAGE 4b — A HOLD THAT OUTLIVED THE PROCESS THAT RECORDED IT
  *
