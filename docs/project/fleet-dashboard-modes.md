@@ -71,6 +71,31 @@ true of the bar's layout and false of the file:
 
 That split is a known cost, not a design — see [§ What this costs](#what-this-costs).
 
+## Ask this before you design the panel: may the fleet touch what your tab is about?
+
+[`tests/fleet-imports.test.ts`](../../tests/fleet-imports.test.ts) walks `tools/`'s whole transitive
+import graph and fails if it reaches anything under `src/` outside a small allowlist of leaf,
+browser-only, product-agnostic modules. The dashboard has to keep working with the product absent,
+and to stay movable to its own repo. **So the reuse this repo tells you to prefer everywhere else is
+the thing that is forbidden here**, and it is cheapest to discover before you have a panel:
+
+> My tab reads the deploy record — and `src/changelog.ts` is already a complete, dependency-free
+> parser for exactly that file. Reusing it is the house rule and my first instinct, and it's not
+> allowed […] So the question to ask before designing a data-backed mode is not "what parses this
+> already" but "**is the thing my tab is about a product artefact the fleet may only read as data at
+> a path?**" — for me the answer was yes, and the coupling belongs on the path rather than on the
+> type. The cost is a second reader that can drift, and the mitigation worth writing down is that the
+> fixture is not enough: my test reads the **real committed file** and asserts one version per
+> non-blank line, which is the only assertion that can go red on a day nobody touched my branch.
+>
+> — session `deploys-tab`, 2026-09-09
+
+That last sentence is the general rule and not a detail of one tab. A second reader of a product
+artefact will drift, and a fixture cannot tell you it has: only a test that reads the real file can.
+
+If the answer pushes a coupling onto a path rather than a type, say so in your plan — it is a
+trade-off Greg should inherit knowingly rather than find later.
+
 ## Where the panel's data comes from — decide before you write the panel
 
 There are two shapes, and picking the wrong one is the expensive mistake on this page.
@@ -99,6 +124,13 @@ own route.
 > inside the 60 s collection loop.
 >
 > — session `recent-messages-tab`, 2026-09-09, measured
+
+**A new mode's cross-boundary types belong in `wire.ts`, and its rule has a sharp edge.** That file
+is *"types only, no runtime values, no imports"*, forced by the fact that both a node module and the
+browser bundle read it. So a vocabulary and its union cannot live together there: the type goes in
+`wire.ts`, the array stays in the node module, and `as const satisfies readonly Section[]` is what
+stops the two drifting. Without the `satisfies` you get a mode whose section silently never renders
+— `deploys-tab`, 2026-09-09.
 
 If you do add a field to the pushed payload, it goes on the wire type as a **required** key — an
 optional one crosses the client's `Omit<>` derivation untouched and ships to a browser that never
@@ -181,13 +213,17 @@ Three assertions earn their place for a new mode:
    `App.tsx` arm;
 3. the panel's empty state says which nothing it is, rather than drawing nothing.
 
-Two other suites will notice you without being asked.
-[`tests/fleet-imports.test.ts`](../../tests/fleet-imports.test.ts) walks the whole transitive import
-graph and fails if `tools/` reaches anything under `src/` outside its allowlist — the dashboard must
-keep running with the product absent. `tests/fleet-compile-guards.test.ts` holds the guards only the
-compiler can enforce, and **`vitest` never type-checks**, so a type-level guard cannot go red under
-`npm test`; run `npm run typecheck` as well and judge it by its exit code
-([typechecking.md](typechecking.md)).
+**A mode with its own route needs a third suite of its own** — `tests/fleet-deploys-route.test.ts` is
+one. Drive it through the same composition the server calls rather than through a route the test
+assembles: a test that rebuilds the missing edge inside itself stays green when production stops
+making it, which is exactly why `statePayload` was lifted out of `server.ts` into `state.ts` in the
+first place. `health-wiring.ts` makes the argument at length.
+
+Two other suites will notice you without being asked. `tests/fleet-imports.test.ts` is the one above
+— [§ may the fleet touch what your tab is about?](#ask-this-before-you-design-the-panel-may-the-fleet-touch-what-your-tab-is-about).
+`tests/fleet-compile-guards.test.ts` holds the guards only the compiler can enforce, and **`vitest`
+never type-checks**, so a type-level guard cannot go red under `npm test`; run `npm run typecheck` as
+well and judge it by its exit code ([typechecking.md](typechecking.md)).
 
 ## When several sessions add a tab at once
 
