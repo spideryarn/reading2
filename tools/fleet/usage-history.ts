@@ -63,6 +63,7 @@ import { chmodSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 
 import { truncateToLastLine, writeAll } from "../overseer/jsonl.js";
+import { storeRoot } from "./attention.js";
 import {
   MAX_LINE_BYTES,
   decodeUsageHistoryLine,
@@ -112,11 +113,19 @@ export function worstCaseRetainedHours(): number {
   return (linesPerFile * MIN_PASS_INTERVAL_MS) / (60 * 60 * 1000);
 }
 
-/** Where the daemon writes, honouring the Overseer's own store override. */
-export function defaultUsageHistoryDir(): string {
-  const override = process.env["OVERSEER_STORE_DIR"];
-  if (override !== undefined && override.length > 0) return override;
-  return join(process.env["HOME"] ?? "/home/greg", ".overseer");
+/**
+ * Where the store lives: **the Overseer's own store directory**, resolved by the
+ * Overseer's own rule.
+ *
+ * `attention.ts`'s `storeRoot` rather than a fourth copy of the same six lines.
+ * It already exists in `tools/overseer/store.ts` and in `attention.ts`, and the
+ * rule it encodes is not obvious — a *relative* `OVERSEER_STORE_DIR` throws,
+ * because it resolves differently for systemd and for a person in a worktree,
+ * which is two stores and two histories that cannot see each other. A fresh copy
+ * here would be a fourth place for that rule to drift.
+ */
+export function defaultUsageHistoryDir(env: NodeJS.ProcessEnv = process.env): string {
+  return storeRoot(env);
 }
 
 /** A line, an unsupported line kept in place, or a record the store could not write. */
