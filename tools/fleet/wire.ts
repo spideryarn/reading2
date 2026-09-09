@@ -1211,6 +1211,28 @@ export type FleetState<Row, Health> = {
    * `ClockSkew` argue it in full.
    */
   servedAt: string;
+  /**
+   * **WHAT IS WAITING ON GREG, AND WHETHER THAT LIST MAY BE BELIEVED** — the
+   * Questions tab's reconciliation of two observations that are never joined.
+   *
+   * A field here rather than a route of its own, for `attention`'s reason one
+   * screen up: **one payload, one clock, one staleness.** It is also free —
+   * `composeQuestions` is pure over the rows and the attention projection that
+   * `fleetState` already holds, so it opens no file and captures no pane. It
+   * carries REFERENCES rather than copies: a dialog item names a row id and the
+   * panel reads the question off the row it already has, which it must do
+   * anyway because an answer sends `rawQuestion` verbatim.
+   *
+   * **Required, not optional.** An optional top-level key crosses the client's
+   * `Omit<>` derivation untouched and ships to a browser that never reads it,
+   * which is the exact drop that derivation exists to prevent;
+   * tests/fleet-compile-guards.test.ts refuses one. It was briefly an
+   * intersection alias — `FleetStateWithQuestions` — because the task prompt
+   * that produced this stage forbade editing anything already in this file.
+   * That left two names for one payload and a plain `FleetState` that did not
+   * require the field, which is a drift nobody would notice; the alias is gone.
+   */
+  questions: QuestionsView;
 };
 /* ------------------------------------------------------------------ *
  * IS SUPERVISION STILL WORKING? — the Overseer's own status.
@@ -3112,6 +3134,135 @@ export type HoldBasis =
       attemptedAt: number;
     };
 
+/* ===== DECISIONS MADE — THE ON-DEMAND REVIEW RECORD ============== *
+ * A uniquely named banner rather than a bare separator: two blocks that
+ * both open with the same separator line collide even when they share no
+ * identifier. That is what happened here on 2026-09-09. The Codex usage
+ * block below learnt it first; this is the same lesson applied.
+ *
+ * Types only: the node route and browser client both import this leaf.
+ * ================================================================== */
+
+export type DecisionWireClass = "assumption" | "decision" | "decline";
+export type DecisionWireActor = "greg" | "overseer";
+export type DecisionWireAdviser = "sol" | "fable" | "nobody";
+
+export type DecisionWireExecution =
+  | { kind: "verified"; token: string; since: string }
+  | { kind: "not-found" }
+  | { kind: "unavailable"; why: string };
+
+export type DecisionWireRecord = {
+  id: string;
+  recordedBy: DecisionWireActor;
+  class: DecisionWireClass;
+  question: string;
+  options: { name: string; tradeoffs: string }[];
+  chose: { option: string; note: string | null };
+  why: string;
+  advisers: DecisionWireAdviser[];
+  bearsOn: {
+    sessions: { name: string; execution: DecisionWireExecution }[];
+    plan: string | null;
+  };
+  decidedAt: string;
+  supersedes: string | null;
+  supersededBy: string | null;
+  reviewed: boolean;
+  reviewedAt: string | null;
+  reviewNote: string | null;
+  reversed: boolean;
+  reversedAt: string | null;
+  reversedWhy: string | null;
+  touches: {
+    kind: "decided" | "reviewed" | "reversed";
+    at: string;
+    by: DecisionWireActor;
+    what: string;
+  }[];
+};
+
+export type DecisionWireSessionState =
+  | { kind: "same-run-as-last-verified"; since: string }
+  | { kind: "ended-or-replaced" }
+  | {
+      kind: "unavailable";
+      why:
+        | { kind: "checkpoint-unavailable" }
+        | { kind: "execution-unavailable"; detail: string };
+    };
+
+export type DecisionRow = {
+  record: DecisionWireRecord;
+  ageMs: number;
+  pendingReview: boolean;
+  sessions: { name: string; state: DecisionWireSessionState }[];
+};
+
+export type DecisionWireProblem = {
+  kind:
+    | "unreadable-line"
+    | "unauthorized-review"
+    | "duplicate-decision"
+    | "unknown-decision"
+    | "duplicate-event"
+    | "command-conflict"
+    | "invalid-supersession"
+    | "illegal-transition";
+  why: string;
+  eventId: string | null;
+};
+
+export type DecisionWireCheckpoint =
+  | { kind: "current" }
+  | { kind: "unavailable"; why: string };
+
+export type DecisionWireAggregates =
+  | {
+      kind: "counts";
+      notYetReviewed: number;
+      trailingSevenDays: { decisions: number; reviews: number; reversals: number };
+    }
+  | { kind: "unavailable"; why: string };
+
+/**
+ * `GET /api/decisions`. Every arm carries the instant at which its claim was
+ * composed. The route refuses loudly before either an input file or mandatory
+ * context can exceed the synchronous work and response bounds respectively.
+ */
+export type DecisionsFeed =
+  | { schema: 1; kind: "never-written"; composedAt: string; why: string }
+  | { schema: 1; kind: "unreadable"; composedAt: string; why: string }
+  | {
+      schema: 1;
+      kind: "oversized-file";
+      composedAt: string;
+      why: string;
+      sizeBytes: number;
+      limitBytes: number;
+    }
+  | {
+      schema: 1;
+      kind: "oversized-unreviewed";
+      composedAt: string;
+      why: string;
+      unreviewedCount: number;
+      limitBytes: number;
+    }
+  | {
+      schema: 1;
+      kind: "decisions";
+      version: string;
+      path: string;
+      composedAt: string;
+      checkpoint: DecisionWireCheckpoint;
+      aggregates: DecisionWireAggregates;
+      rows: DecisionRow[];
+      /** History omitted by either the 100-row cap or the 2 MiB byte cap. */
+      historyWithheld: number;
+      problems: DecisionWireProblem[];
+    };
+
 /* ================= CODEX SUBSCRIPTION USAGE ====================== *
  * A uniquely named banner, for the reason the actions block below
  * gives: two sessions appending blocks that both open with the bare
@@ -3249,3 +3400,129 @@ export type Stagger = {
   minMinutes: number;
   windowMinutes: number;
 };
+
+/* ================================================================== *
+ * QUESTIONS VIEW — OBSERVATIONS, REFERENCES, AND NAMED SILENCES
+ *
+ * Appended as one block because this file is shared with the DOM-only client
+ * and may contain types only: no imports and no runtime vocabulary.
+ * ================================================================== */
+
+/**
+ * A session named by a question observation, and whether the same state
+ * snapshot also contained both handles the fleet's steer routes require.
+ *
+ * `addressable` is only a statement about those handles. In particular, it is
+ * not evidence that the execution which asked an inbox prose question still
+ * occupies them; no prose item in this view authorises a write.
+ */
+export type QuestionTarget =
+  /** Written by the server composer after resolving both handles on a fleet row. */
+  | { kind: "addressable"; sessionId: string; sessionName: string }
+  /** Written by the server composer when no row, pane handle, or conversation handle was observed. */
+  | { kind: "unaddressable"; sessionId: string; sessionName: string; why: string };
+
+/**
+ * A reference-only composition of the two independent question observers.
+ * Dialog display data stays on `rows`; prose display data stays attributable
+ * to the attention item whose id is carried beside the copy.
+ */
+export type QuestionItem =
+  /** Written by the server composer for a conversation-gate row with both steerable handles. */
+  | {
+      kind: "dialog";
+      rowId: string;
+      target: Extract<QuestionTarget, { kind: "addressable" }>;
+    }
+  /** Written by the server composer for the same observed dialog when either steerable handle was absent. */
+  | {
+      kind: "dialog-unaddressable";
+      rowId: string;
+      target: Extract<QuestionTarget, { kind: "unaddressable" }>;
+    }
+  /** Written by the server composer for an inbox prose observation whose primary member resolved to both handles. */
+  | {
+      kind: "prose";
+      itemId: string;
+      target: Extract<QuestionTarget, { kind: "addressable" }>;
+      excerpt: string;
+      why: string;
+      waitingSince: string;
+      attentionKind: AttentionKind;
+      /** Each member is resolved independently; one missing row cannot erase its siblings. */
+      duplicates: readonly QuestionTarget[];
+    }
+  /** Written by the server composer when an inbox prose observation's primary member had no steerable row. */
+  | {
+      kind: "prose-unaddressable";
+      itemId: string;
+      target: Extract<QuestionTarget, { kind: "unaddressable" }>;
+      excerpt: string;
+      why: string;
+      waitingSince: string;
+      attentionKind: AttentionKind;
+      /** Each member is resolved independently; one missing row cannot erase its siblings. */
+      duplicates: readonly QuestionTarget[];
+    };
+
+/**
+ * Why this view cannot claim that its items are everything currently waiting.
+ *
+ * Every arm names the failed observation rather than diagnosing a process from
+ * its silence. Arms written only by the browser stay here because they still
+ * cross the component boundary in `QuestionsView`; the server never emits
+ * them.
+ */
+export type QuestionGap =
+  /** Written by the server composer when this server did not read an attention feed. */
+  | { kind: "attention-not-asked" }
+  /** Written by the server composer when no checkpoint existed at the path it inspected. */
+  | { kind: "checkpoint-absent" }
+  /** Written by the server composer when a checkpoint existed but its attention projection could not be read. */
+  | { kind: "checkpoint-unreadable"; why: string }
+  /** Written by the server composer when the attention pass published that it could not judge a list. */
+  | { kind: "attention-list-unknown"; why: string }
+  /** Written by the server composer when a published attention pass counted failed judgements. */
+  | { kind: "attention-sessions-unreadable"; count: number }
+  /** Written by the server composer when the attention pass reported that it scanned zero sessions. */
+  | { kind: "attention-no-sessions-scanned" }
+  /** Written by the server composer when no fleet snapshot has completed. */
+  | { kind: "collection-not-observed" }
+  /** Written by the server composer when the latest collection attempt reported an error beside retained rows. */
+  | { kind: "collection-failed"; why: string }
+  /** Written by the server composer when a needs-you row carried no pane-question reading. */
+  | { kind: "row-question-unreadable"; rowId: string }
+  /** Written by either freshness check when the fleet snapshot's clock was unreadable, ahead, or past its cadence deadline. */
+  | { kind: "fleet-snapshot-stale"; collectedAt: string }
+  /** Written by either freshness check when the checkpoint's clock was unreadable, ahead, or over five minutes old. */
+  | { kind: "checkpoint-stale"; coordinatorWrittenAt: string }
+  /** Written by either freshness check when the attention scan's clock was unreadable, ahead, or over six minutes old. */
+  | { kind: "attention-scan-stale"; scannedAt: string }
+  /** Written only by the browser parser when an older server sent no `questions` field. */
+  | { kind: "questions-not-reported" }
+  /** Written only by the browser parser when a present `questions` field could not be parsed. */
+  | { kind: "questions-unreadable"; why: string }
+  /** Written only by the browser parser when the present attention field could not be parsed. */
+  | { kind: "attention-unreadable"; why: string }
+  /** Written only by the browser parser when one or more rows in the same payload could not be parsed. */
+  | { kind: "rows-unreadable"; count: number }
+  /* THERE IS NO `attention-dialog-not-in-rows` ARM, and its absence is a
+     decision rather than an omission. The inbox and the collector observe on
+     different cadences, so an inbox dialog the pane no longer shows is ordinary
+     lag — `questions.ts` § composeAttentionItem has the whole argument, and the
+     reason the honest version of that arm cannot be written from these clocks. */
+  /** Written only by the browser resolver when a dialog's row reference did not resolve to a parsed question. */
+  | { kind: "dialog-reference-unresolved"; rowId: string; why: string }
+  /** Written only by the browser resolver when a prose id did not resolve to the same parsed attention observation. */
+  | { kind: "attention-reference-unresolved"; itemId: string; why: string }
+  /** Written only by the browser resolver when independently parsed dialog fields contradict the server-only producer path. */
+  | { kind: "dialog-source-inconsistent"; rowId: string; why: string };
+
+/** Only this arm may support the sentence “nothing needs you”. */
+export type QuestionsView =
+  /** Written by the server composer only after both sources supplied fresh positive controls. */
+  | { kind: "complete"; items: readonly QuestionItem[] }
+  /** Written by either composer/parser when at least one observation is usable and at least one named gap remains. */
+  | { kind: "partial"; items: readonly QuestionItem[]; gaps: readonly [QuestionGap, ...QuestionGap[]] }
+  /** Written by either composer/parser when no source supplied a usable observation; the named silences are retained. */
+  | { kind: "not-observed"; gaps: readonly [QuestionGap, ...QuestionGap[]] };

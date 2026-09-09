@@ -242,6 +242,10 @@ function state(over: Partial<FleetState> = {}): FleetState {
        `no-coordinator` would make every fixture quietly assert that
        `~/.overseer/` was looked at and is empty. */
     attention: { kind: "not-asked" },
+    /* The Questions reconciliation is a required pushed field. This fixture
+       represents the same older-server silence as `attention` above, so it is
+       explicitly not an empty complete observation. */
+    questions: { kind: "not-observed", gaps: [{ kind: "attention-not-asked" }] },
     /* And the same for the Overseer's own status: `not-asked` is what
        `parseOverseer` produces for a payload with no `overseer` field, so a
        fixture that does not care gets the page an older server would really

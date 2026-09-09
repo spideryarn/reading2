@@ -18,6 +18,7 @@
 import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { AttentionPanel } from "./AttentionPanel";
+import { DecisionsPanel } from "./DecisionsPanel";
 import { DeploysPanel } from "./DeploysPanel";
 import { Dock } from "./Dock";
 import { FeedPanel } from "./FeedPanel";
@@ -30,6 +31,7 @@ import { SessionsPanel } from "./SessionsPanel";
 import { UsageCard } from "./UsagePanel";
 import { UsageHistory, useUsageHistoryView } from "./UsageHistory";
 import { httpActionsApi, type ActionsApi } from "./actions-client";
+import { httpDecisionsApi, type DecisionsApi } from "./decisions-client";
 import {
   FILTER_KEYS,
   filtersFromParams,
@@ -65,6 +67,7 @@ export function App({
   messagesApi = httpMessagesApi,
   historyApi = httpHistoryApi,
   feedApi = httpFeedApi,
+  decisionsApi = httpDecisionsApi,
   deploysApi = httpDeploysApi,
   usageHistoryApi = httpUsageHistoryApi,
   queueApi = httpQueueApi,
@@ -96,6 +99,8 @@ export function App({
    * FeedPanel.tsx says why.
    */
   feedApi?: FeedApi;
+  /** The decision record, read on demand when its tab is open. */
+  decisionsApi?: DecisionsApi;
   /**
    * The deploy record. Injected here as well as defaulted in `DeploysPanel`, so
    * that no test in this file can reach `fetch` by accident — a suite that
@@ -456,6 +461,12 @@ export function App({
         {mode === "readiness" ? (
           <div className="tw:mx-auto tw:max-w-3xl">
             <ReadinessPanel nowMs={now} skew={skew.current} refreshNonce={refreshNonce} />
+          </div>
+        ) : null}
+
+        {mode === "decisions" ? (
+          <div className="tw:mx-auto tw:max-w-3xl">
+            <DecisionsPanel api={decisionsApi} refreshNonce={refreshNonce} nowMs={now} />
           </div>
         ) : null}
 
