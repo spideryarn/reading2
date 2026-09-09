@@ -195,6 +195,9 @@ output, two rounds.
 - [x] `npm run typecheck` clean; lint clean on the touched files.
 - [x] `zonedLine` from `tools/fleet/zones.ts` swapped in when it landed (`af1ec002`), which was the
   one line the seam existed for.
+- [x] **Looked at in a real browser**, which is the half no jsdom test covers — a Sonnet subagent
+  driving Playwright against a *private* instance on `FLEET_PORT=8799`, never the live dashboard on
+  8787. See § What the browser check found.
 
 ## What the review changed
 
@@ -271,6 +274,24 @@ for, across five sessions on this subsystem; `dashboard-modes-doc` has put the p
 Overseer as a queue item. The others here: a source guard satisfied by the line inside a `//`, a
 `toContain` on copy that flagged a true sentence, and `Record<Mode, …>` proving a half-added mode and
 not a wholly-removed one.
+
+## What the browser check found
+
+Nothing wrong, which is worth recording as a fact rather than assumed: the tab renders correctly at
+1280px and at 390px, **no horizontal overflow at phone width** (checked programmatically —
+`scrollWidth === clientWidth === 390` and zero elements past the viewport edge — rather than by
+looking at a screenshot), no console errors or warnings, and "show more" really does grow the list
+from 10 rows to all 70 remaining. The three-zone time line renders as
+`2026-09-08 05:32 UTC · 06:32 London · 08:32 Athens`.
+
+**One operational trap, and it is worth more than the result.** The agent launched the private server
+with `npx tsx tools/fleet/server.ts &` and captured `$!` as briefed — and that pid was the **`npx`
+wrapper**, which exits immediately and leaves the real server running as a detached child. So
+`kill $!` succeeds, reports nothing wrong, and leaves the server up: a successful kill of the wrong
+process looks exactly like a successful cleanup. It was caught only because the brief also said to
+verify the port stopped answering. The instruction to give next time is *kill by port* —
+`ss -ltnp | grep <port>` names the listener — *and then check the port*. Port 8787 was confirmed
+answering throughout and afterwards.
 
 ## What this deliberately does not do
 
