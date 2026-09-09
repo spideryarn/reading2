@@ -1829,6 +1829,37 @@ describe("the health chart's own clock", () => {
     expect(text).toContain(hhmm(peakAtMs + SKEW_MS));
     expect(text).not.toContain(hhmm(peakAtMs));
   });
+
+  it("keeps verdict colours when the browser cannot parse color-mix", async () => {
+    const nowMs = Date.now();
+    const sample = reading(nowMs - CADENCE, 1);
+    const view: HistoryView = {
+      kind: "history",
+      windowHours: 24,
+      fromMs: nowMs - 24 * 3_600_000,
+      toMs: nowMs,
+      samples: [sample],
+      predecessor: null,
+      holes: [],
+      earliestAtMs: sample.atMs,
+      rotated: false,
+      retention: null,
+      unreadableLines: 0,
+      refreshMs: 60_000,
+      unreadableSamples: 0,
+    };
+
+    window.location.hash = "#health";
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport, historyApi: { window: async () => view } });
+    act(() => feed.push(state({ health: { verdict: { level: "ok", reasons: [] } } })));
+    await act(async () => {});
+
+    const strip = container.querySelector('svg[aria-label^="The box\'s verdict"]');
+    expect(strip).not.toBeNull();
+    expect(strip?.querySelector('rect[fill*="color-mix"]')).toBeNull();
+    expect(strip?.querySelector('rect[fill="var(--work)"][fill-opacity="0.22"]')).not.toBeNull();
+  });
 });
 
 describe("what comes off the wire", () => {
@@ -2579,8 +2610,9 @@ describe("box health, made readable", () => {
     const stats = readHealthStats(report());
     expect(stats.map((s) => s.key)).toEqual(["load", "memory", "swap", "disk", "swapActivity"]);
     expect(stats.every((s) => s.tone === "work")).toBe(true);
-    expect(stats.find((s) => s.key === "load")?.value).toBe("8.0");
-    expect(stats.find((s) => s.key === "disk")?.sub).toBe("50 KiB free on /");
+    expect(stats.find((s) => s.key === "load")?.value).toBe("0.5×");
+    expect(stats.find((s) => s.key === "load")?.sub).toBe("8.0 across 16 cores");
+    expect(stats.find((s) => s.key === "disk")?.sub).toBe("50 KiB of 100 KiB on /");
   });
 
   it("prints memory and swap absolutes in the right order of magnitude", () => {
@@ -2598,7 +2630,7 @@ describe("box health, made readable", () => {
        tens of GiB, and the 1024×-out version reads as tens of thousands. */
     const stats = readHealthStats(report());
     expect(stats.find((s) => s.key === "memory")?.value).toBe("50%");
-    expect(stats.find((s) => s.key === "memory")?.sub).toBe("15 GiB of 30 GiB available");
+    expect(stats.find((s) => s.key === "memory")?.sub).toBe("15 GiB of 30 GiB in use");
     expect(stats.find((s) => s.key === "swap")?.sub).toBe("763 MiB of 7.5 GiB");
   });
 
@@ -2636,16 +2668,93 @@ describe("box health, made readable", () => {
     ).toBe("alarm");
   });
 
-  it("colours memory the other way round, because less is worse", () => {
+  it("shows memory as used, and keeps the collector's cutoffs while flipping the direction", () => {
+    /* **THE BOUNDARY IS THE WHOLE TEST**, and the second case is the one that
+       matters. `computeVerdict` raises strained at `availableFraction < 0.15`.
+       The obvious way to draw this tile as "% used" compares `used > 85`
+       instead — and those two disagree, because a double that survives a
+       subtraction does not come back where it started:
+
+         0.14999999999999997 < 0.15       → strained
+         100 - 0.14999999999999997 * 100  → exactly 85, so `> 85` is ok
+
+       An amber badge over a green tile. So the tone is decided on the
+       collector's own number in the collector's own direction, and only the
+       drawn figure is flipped. GPT Sol found this in the plan; no test that
+       used round numbers could have. */
     const mem = (fraction: number) => ({
       kind: "value",
-      totalKiB: 100,
-      availableKiB: 100 * fraction,
+      totalBytes: 100,
+      availableBytes: 100 * fraction,
       availableFraction: fraction,
     });
+    expect(readHealthStats(report({ memory: mem(0.5) })).find((s) => s.key === "memory")?.value).toBe("50%");
+    expect(readHealthStats(report({ memory: mem(0.4) })).find((s) => s.key === "memory")?.value).toBe("60%");
     expect(toneOf(readHealthStats(report({ memory: mem(0.15) })), "memory")).toBe("work");
     expect(toneOf(readHealthStats(report({ memory: mem(0.14) })), "memory")).toBe("needs");
+    expect(toneOf(readHealthStats(report({ memory: mem(0.05) })), "memory")).toBe("needs");
     expect(toneOf(readHealthStats(report({ memory: mem(0.04) })), "memory")).toBe("alarm");
+    /* The two values where the flipped comparison and the collector's part
+       company. Both are `< the cutoff`, so both must be the worse tone. */
+    expect(100 - 0.14999999999999997 * 100).toBe(85);
+    expect(toneOf(readHealthStats(report({ memory: mem(0.14999999999999997) })), "memory")).toBe("needs");
+    expect(toneOf(readHealthStats(report({ memory: mem(0.049999999999999996) })), "memory")).toBe("alarm");
+  });
+
+  it("gives every readable number a bar, and no unreadable one a bar at all", () => {
+    /* The bar is the glance; an empty track under a dash would be a drawn zero,
+       which is the one thing this panel refuses. */
+    const stats = readHealthStats(report());
+    expect(stats.filter((s) => s.bar === undefined)).toEqual([]);
+    expect(stats.find((s) => s.key === "disk")?.bar?.fill).toBeCloseTo(0.5, 5);
+    expect(stats.find((s) => s.key === "memory")?.bar?.fill).toBeCloseTo(0.5, 5);
+    /* Load has no ceiling of its own, so its track borrows the chart's axis:
+       0.5× of 8×, with the same amber and red the chart's bands use. */
+    expect(stats.find((s) => s.key === "load")?.bar?.fill).toBeCloseTo(0.0625, 5);
+    expect(stats.find((s) => s.key === "load")?.bar?.marks).toEqual([0.25, 0.5]);
+    expect(stats.find((s) => s.key === "swap")?.bar?.marks).toEqual([0.9, 0.98]);
+
+    const unreadable = readHealthStats(report({ memory: { kind: "unknown", why: "free: command not found" } }));
+    expect(unreadable.find((s) => s.key === "memory")?.bar).toBeUndefined();
+    /* Not sampled is not zero either. */
+    const skipped = readHealthStats(report({ swapActivity: { kind: "skipped" } }));
+    expect(skipped.find((s) => s.key === "swapActivity")?.bar).toBeUndefined();
+    /* And when the big number is the word "swapping", the bar has nothing to
+       measure: an empty track under an amber alarm reads as "nothing wrong". */
+    const swapping = readHealthStats(
+      report({ swapActivity: { kind: "value", siKBs: 36, soKBs: 0, waPercent: 0, activelySwapping: true } }),
+    );
+    expect(swapping.find((s) => s.key === "swapActivity")?.value).toBe("swapping");
+    expect(swapping.find((s) => s.key === "swapActivity")?.bar).toBeUndefined();
+    /* No swap configured is not a swap file that is 0% full. */
+    const noSwap = readHealthStats(report({ swap: { kind: "none" } }));
+    expect(noSwap.find((s) => s.key === "swap")?.bar).toBeUndefined();
+    /* A load past the chart's ceiling clips, and says that it clipped — the
+       same argument `overCeiling` makes about the chart's fixed axis. */
+    const spike = readHealthStats(report({ load: { kind: "value", load1: 391, cores: 16, ratio1: 24 } }));
+    expect(spike.find((s) => s.key === "load")?.bar).toEqual({ fill: 1, over: true, marks: [0.25, 0.5] });
+  });
+
+  it("draws an over-ceiling cap that is visible against an alarm-coloured fill", () => {
+    window.location.hash = "#health";
+    const feed = manualTransport();
+    mount(feed.transport);
+    act(() =>
+      feed.push(
+        state({ health: report({ load: { kind: "value", load1: 391, cores: 16, ratio1: 24 } }) }),
+      ),
+    );
+
+    const load = [...container.querySelectorAll("button.explain")].find((button) =>
+      button.textContent?.includes("391.0 across 16 cores"),
+    );
+    const track = load?.querySelector('[aria-hidden="true"]');
+    const fill = track?.children.item(0);
+    const cap = track?.children.item(track.children.length - 1);
+    expect(fill).not.toBeNull();
+    expect(cap).not.toBeNull();
+    expect(cap?.className).toContain("tw:bg-page");
+    expect(cap?.className).not.toBe(fill?.className);
   });
 
   it("treats swap as a cliff rather than a slope", () => {
@@ -2689,8 +2798,13 @@ describe("box health, made readable", () => {
     act(() => feed.push(state({ health: report() })));
 
     const text = container.textContent ?? "";
-    expect(text).toContain("Memory free");
-    expect(text).toContain("50 KiB free on /");
+    expect(text).toContain("Memory used");
+    expect(text).toContain("50 KiB of 100 KiB on /");
+    /* Greg's rule, asserted as an absence as well as a presence: no tile may
+       state a reading as how much is LEFT. A tile that quietly went back to
+       "free" would otherwise pass every other check in this file. */
+    expect(text).not.toContain("Memory free");
+    expect(text).not.toContain("free on /");
 
     /* It read as a debug view when it was the panel. It stays, because it is
        the honest fallback for a shape nobody here recognises — shut, because it

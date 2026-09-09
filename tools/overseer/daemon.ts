@@ -55,7 +55,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import type { AttentionList, StoredUsage, UsageReport } from "../fleet/wire.js";
+import type { AttentionList, OverseerWork, StoredUsage, UsageReport } from "../fleet/wire.js";
 import { chooseUsage } from "./usage-carry.js";
 import { admissible, type AdmissibleSnapshot } from "./admissible.js";
 import {
@@ -73,6 +73,9 @@ import type { ProposingRuleWork } from "./rule-protocol.js";
 import { describeReport, schedulerStandingOf, schedulerTick, type LostRecord, type RuleRun } from "./scheduler.js";
 import { parseAttempt, parseObservation, type JsonValue, type ObservedAttemptClock, type ObservedRow } from "./observation.js";
 import { fleetSource, type SourceMessage, type SourceOptions, type Transport } from "./source.js";
+import { probeProcessTable } from "./work-probe.js";
+import { scanPaneWork } from "./work-reading.js";
+import type { ProcessTableReading } from "./work.js";
 import {
   describeOpening,
   openStore,
@@ -343,6 +346,15 @@ export type DaemonOptions = {
    */
   attention?: { intervalMs?: number; run: () => Promise<AttentionList> };
   /**
+   * Read the process table. Injected so the fold can be driven without a box;
+   * defaults to the real `probeProcessTable`.
+   *
+   * Unlike the attention and usage passes, this is cheap (~40 ms measured) and
+   * synchronous, so it runs inline on the inventory path rather than owning a
+   * timer and a second freshness policy.
+   */
+  probe?: () => ProcessTableReading;
+  /**
    * HOW CLOSE THIS ACCOUNT IS TO A LIMIT, injected for the same reason
    * `attention` is: the pass reads ~2.9 GB of transcripts and shells out to
    * `claude auth status`, and this file does neither.
@@ -534,6 +546,7 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
   const log = options.log ?? ((line: string) => console.log(line));
   const root = options.root ?? storeRoot();
   const tickMs = options.tickMs ?? TICK_MS;
+  const probe = options.probe ?? probeProcessTable;
 
   const opened = openStore({ root, now });
   if (!opened.ok) return { kind: "refused", refusal: opened.refusal };
@@ -665,6 +678,9 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
   // finished yet — in which case the store publishes `attentionNotYetRun`, which
   // says nothing has looked rather than that nothing needs him.
   let attention: AttentionList | null = null;
+  // One instant's process-tree measurement for the next checkpoint, or null
+  // before any inventory has reached the path that will actually write one.
+  let work: OverseerWork | null = null;
   // The usage report the next checkpoint will carry, or null when no pass has
   // decided to replace what the store holds — which is BOTH "no pass has run"
   // and "a pass ran and `chooseUsage` kept the stored one". Absent means the same
@@ -704,6 +720,7 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     // and "present and undefined" different things, and here absent means *keep
     // the list the store already holds*.
     ...(attention === null ? {} : { attention }),
+    ...(work === null ? {} : { work }),
     ...(usage === null ? {} : { usage }),
   });
 
@@ -1166,6 +1183,40 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
       return true;
     }
     write(conditions.restore("baseline", at, `the collection at ${observed.clock.at} could be compared again`));
+
+    // BELOW THE `held` RETURN, deliberately. `admissible()` can accept a
+    // populated inventory whose tmux generation `diff()` cannot place; probing
+    // on the accept arm would spend a process-table read and throw its answer
+    // away because that path writes no checkpoint.
+    let reading: ProcessTableReading;
+    try {
+      reading = probe();
+    } catch (cause) {
+      reading = {
+        read: false,
+        why: `the process table probe threw: ${cause instanceof Error ? cause.message : String(cause)}`,
+      };
+    }
+    try {
+      work = scanPaneWork({
+        rows: observed.rows,
+        reading,
+        sourceCollectedAt: observed.clock.at,
+        sourceCollectedAtMs: observed.clock.atMs,
+        attemptedAt: at,
+      });
+    } catch (cause) {
+      // CONVERSION IS PART OF THE INSTRUMENT. Containing only `probe()` leaves
+      // a malformed or future reading able to throw from timestamp conversion
+      // and stop the fold before its first durable write. That is still
+      // "cannot tell", never a reason for the Overseer itself to stop.
+      work = {
+        kind: "probe-failed",
+        why: `the work scan threw: ${cause instanceof Error ? cause.message : String(cause)}`,
+        attemptedAt: at,
+        sourceCollectedAt: observed.clock.at,
+      };
+    }
 
     // WITH NO BASELINE, THE DIFF CANNOT CLOSE ANYTHING OUT. `diff(null, next)`
     // is every row as `session-seen` and nothing else, so a session that ended

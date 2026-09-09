@@ -13,7 +13,7 @@ import { afterEach, describe, expect, test } from "vitest";
 import { parseArgv } from "../scripts/overseer.js";
 import type { HealthReport } from "../tools/fleet/health.js";
 import { fetchLastLines, messagesUrl, plainTurnText } from "../tools/overseer/cli-messages.js";
-import { directUsageLines, tickLines } from "../tools/overseer/cli-tick.js";
+import { directUsageLines, healthLines, tickLines } from "../tools/overseer/cli-tick.js";
 
 const NOW = Date.parse("2026-09-08T12:00:00.000Z");
 const USAGE_FIXTURES = resolve(import.meta.dirname, "fixtures/overseer-usage");
@@ -138,6 +138,12 @@ describe("the direct usage cache", () => {
 });
 
 describe("tick", () => {
+  test("states memory as percent used, never as what remains", () => {
+    const screen = healthLines(HEALTH_FIXTURE).join("\n");
+    expect(screen).toContain("memory      62.5% used · 20.0 GiB of 32.0 GiB in use");
+    expect(screen).not.toContain("available of");
+  });
+
   test("names mine sessions missing from the snapshot and every session it deliberately did not fetch", async () => {
     // MUTATION: replace the missing-mine branch with `continue`; dead-agent's
     // line disappears and this assertion reddens rather than showing a quiet fleet.

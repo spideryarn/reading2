@@ -524,10 +524,32 @@ describe("the fixed axis", () => {
     expect(load.worst?.value).toBe(24);
   });
 
-  it("reports the LOWEST memory as the worst, because that series runs the other way", () => {
+  it("plots memory as USED, so the fixture's least available minute is its peak", () => {
+    /* The series was "Memory available" until 2026-09-09 and ran the other way
+       from the other three; Greg asked for one direction, and it is used. The
+       reading behind it is still `availableFraction` — this pins the complement
+       being taken, and taken once. */
     const samples = [reading(T0, { memory: 0.4 }), reading(T0 + CADENCE, { memory: 0.03 })];
     const plot = plotHistory(view(samples), T0 + 2 * CADENCE);
-    expect(seriesOf(plot, "memory").worst?.value).toBeCloseTo(3, 5);
+    const memory = seriesOf(plot, "memory");
+    expect(memory.worst?.value).toBeCloseTo(97, 5);
+    /* The cutoffs are the collector's, said the other way round — not new
+       numbers. `availableFraction < 0.15` is `used > 85`. */
+    expect(memory.spec.bands.strained).toBe(85);
+    expect(memory.spec.bands.critical).toBe(95);
+  });
+
+  it("never takes the complement of a reading that was never taken", () => {
+    /* `100 - unknown` is not 100. A memory series that flipped direction by
+       subtracting from a missing number would draw a full bar over a failed
+       reading — the confident zero, upside down. */
+    const base = reading(T0, {});
+    if (base.kind !== "reading") throw new Error("the fixture is a reading");
+    const samples = [{ ...base, report: { ...base.report, memory: { kind: "unknown", why: "free failed" } } }];
+    const plot = plotHistory(view(samples), T0 + 2 * CADENCE);
+    const memory = seriesOf(plot, "memory");
+    expect(memory.segments).toEqual([]);
+    expect(memory.unknowns).toHaveLength(1);
   });
 });
 
@@ -555,7 +577,52 @@ describe("how far one sample speaks for", () => {
     const samples = [reading(T0, { level: "critical" }), reading(T0 + 4 * 3_600_000)];
     const plot = plotHistory(view(samples), T0 + 4 * 3_600_000 + CADENCE);
     const critical = plot.verdict.find((band) => band.level === "critical");
-    expect(critical?.toMs).toBe(T0 + gapAfterMs(reading(T0)));
+    expect(critical?.toMs).toBe(T0 + coverageMs(reading(T0), 60_000));
+  });
+
+  it("counts verdict time only while the normalized coverage says the box was observed", () => {
+    /* A fleet backoff may schedule the next sample much later than the health
+       cadence. The canonical timeline caps how long that schedule counts as an
+       observation; verdict totals must not count the hatched remainder. */
+    const backedOff = { ...reading(T0, { level: "strained" }), nextDueMs: 313_000 };
+    const plot = plotHistory(
+      view([backedOff], { earliestAtMs: T0, refreshMs: 60_000, toMs: T0 + 10 * 60_000 }),
+      T0 + 10 * 60_000,
+    );
+    expect(plot.verdict).toEqual([
+      { fromMs: T0, toMs: T0 + coverageMs(backedOff, 60_000), level: "strained", tone: "needs" },
+    ]);
+    expect(plot.gaps[0]?.fromMs).toBe(T0 + coverageMs(backedOff, 60_000));
+  });
+
+  it("includes predecessor coverage at the left edge and removes corrupt holes", () => {
+    const predecessor = reading(T0 - 60_000, { level: "critical" });
+    const next = reading(T0 + CADENCE, { level: "ok" });
+    const plot = plotHistory(
+      view([next], {
+        predecessor,
+        earliestAtMs: predecessor.atMs,
+        holes: [{ afterAtMs: T0 + 10_000, beforeAtMs: T0 + 20_000 }],
+      }),
+      T0 + 2 * CADENCE,
+    );
+    expect(plot.verdict).toContainEqual({
+      fromMs: T0,
+      toMs: T0 + 10_000,
+      level: "critical",
+      tone: "alarm",
+    });
+    expect(plot.verdict).toContainEqual({
+      fromMs: T0 + 20_000,
+      toMs: next.atMs,
+      level: "critical",
+      tone: "alarm",
+    });
+    for (const band of plot.verdict) {
+      expect(band.fromMs).toBeGreaterThanOrEqual(T0);
+      expect(band.toMs).toBeLessThanOrEqual(T0 + 2 * CADENCE);
+      expect(band.toMs <= T0 + 10_000 || band.fromMs >= T0 + 20_000).toBe(true);
+    }
   });
 
   it("says `now` only when the newest value actually reaches the right-hand edge", () => {

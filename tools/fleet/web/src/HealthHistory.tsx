@@ -8,12 +8,20 @@
  *
  * ## What is drawn, and in what order of importance
  *
- * **The verdict strip first**, because it is the answer. One band per pixel
- * column over the whole window, coloured by the collector's own verdict, worst
- * wins in a shared column — so a single 73-second `critical` at 04:00 is still
- * on screen at 09:00. Under it, four lines with the same x scale: load, memory
- * available, swap used, IO wait. Under those, **a sentence**, which is what a
- * three-minute outage actually looks like at this width.
+ * **A sentence about the record first** — how much of the day was actually
+ * observed — because every shape below it is worth only what that sentence
+ * says. Then four lines on one x scale: load, memory used, swap used, IO wait.
+ * Then **the verdict strip**, one band per pixel column over the whole window
+ * in the colour of the collector's own verdict, worst wins in a shared column,
+ * so a single 73-second `critical` at 04:00 is still on screen at 09:00. It
+ * carries the time axis for all five plots.
+ *
+ * **The strip was at the top until 2026-09-09**, at full saturation, and Greg
+ * asked for it moved down and toned down: it was the loudest thing on a card
+ * whose subject is the four lines, and a box that is routinely *strained* drew
+ * a day-long orange bar over four calm graphs. It is a summary of them, so it
+ * now reads after them, and `stripAppearance` saturates by severity rather than
+ * uniformly.
  *
  * ## The four kinds of nothing, drawn four ways
  *
@@ -50,9 +58,11 @@ import {
   plotHistory,
   type HistoryPlot,
   type SeriesPlot,
+  type VerdictBand,
 } from "./history-series";
 import { shiftMsToBrowserClock, type ClockSkew } from "./types";
 import { Card, SectionHeading, cx, toneClasses } from "./ui";
+import type { Tone } from "./view";
 
 /** The window Greg asked for. A selector is a query parameter away when it is wanted. */
 export const WINDOW_HOURS = 24;
@@ -216,8 +226,11 @@ function HistoryBody({ view, nowMs, at }: { view: HistoryView | null; nowMs: num
 
   return (
     <div>
-      <VerdictStrip plot={plot} at={at} />
-      <p className="tw:mt-2 tw:text-[13px] tw:text-ink-soft">{describeGaps(plot, at)}</p>
+      {/* **THE SENTENCES ABOUT THE RECORD COME FIRST, AND THEY STAYED PUT WHEN
+          THE STRIP MOVED DOWN.** They are about whether there was anything to
+          see, not about what was seen, and reading a break as a fault is the
+          failure this card was built to prevent. */}
+      <p className="tw:text-[13px] tw:text-ink-soft">{describeGaps(plot, at)}</p>
       {/* **BEFORE THE CHART'S OWN SENTENCES**, because if the writer has
           stopped, every break below it is about the writer rather than about
           the box, and reading them the other way round is the whole failure. */}
@@ -240,6 +253,17 @@ function HistoryBody({ view, nowMs, at }: { view: HistoryView | null; nowMs: num
       {plot.series.map((series) => (
         <SeriesChart key={series.spec.key} series={series} plot={plot} at={at} />
       ))}
+
+      {/* **UNDER THE LINES SINCE 2026-09-09, NOT OVER THEM.**
+          > probably move down the bar showing the orange/green Swap and/or make
+          > it less lurid, because it seems to be dominating the graphs — is it
+          > the most important?
+          >
+          > — Greg, 2026-09-09
+          It is a summary of the four plots above, so it reads better after
+          them; and the time axis it carries now sits under all five rather than
+          labelling the first one only. */}
+      <VerdictStrip plot={plot} at={at} />
 
       <Legend />
 
@@ -265,8 +289,8 @@ function HistoryBody({ view, nowMs, at }: { view: HistoryView | null; nowMs: num
 
 const STRIP_TIP: Tip = {
   head: "The 24-hour strip",
-  what: "One band per moment, in the colour of the collector's own verdict at the time — green ok, amber strained, red critical, violet could-not-tell.",
-  how: "Where several readings share one pixel the WORST one wins, never an average: a one-minute spike at 4am is the thing you opened this to find. Hatched means nothing was recorded at all.",
+  what: "One band per moment, in the colour of the collector's own verdict at the time — a green tint for ok, amber for strained, full red for critical, violet for could-not-tell.",
+  how: "The colours are graded by severity rather than drawn at equal strength, so a day of ordinary strain does not read as a day of emergency. Where several readings share one pixel the WORST one wins, never an average: a one-minute spike at 4am is the thing you opened this to find. Hatched means nothing was recorded at all, and the totals beside the label are counted off the record rather than off the picture.",
 };
 
 /** "24 hours", "6 hours", "7 days" — whatever the server actually gave us. */
@@ -275,20 +299,79 @@ function describeWindow(hours: number): string {
   return `${Number.isInteger(hours) ? hours : hours.toFixed(1)} hours`;
 }
 
+/**
+ * How long the day spent at each level, worst first.
+ *
+ * **Read off the UNCOLLAPSED bands**, not off what is drawn: the strip is 360
+ * columns wide and worst-wins inside each, so totting up the picture would
+ * round a 73-second `critical` up to four minutes and a green minute away
+ * entirely. `plotHistory` has already clipped these bands to the requested
+ * window, added predecessor coverage at the left edge, and subtracted holes;
+ * this helper deliberately sums that canonical coverage instead of trying to
+ * infer coverage again. The numbers and the shape answer to the same record
+ * and not to each other.
+ */
+export function verdictTotals(bands: VerdictBand[]): { level: string; tone: Tone; ms: number }[] {
+  const byLevel = new Map<string, { level: string; tone: Tone; ms: number }>();
+  for (const band of bands) {
+    const seen = byLevel.get(band.level);
+    if (seen === undefined) byLevel.set(band.level, { level: band.level, tone: band.tone, ms: band.toMs - band.fromMs });
+    else seen.ms += band.toMs - band.fromMs;
+  }
+  /* Worst first, so the thing worth knowing is the thing read first — and
+     `ORDER` rather than the tone's name so a level this build has never heard
+     of sorts last instead of throwing. */
+  const ORDER = ["critical", "strained", "unknown", "ok"];
+  const rank = (level: string): number => {
+    const at = ORDER.indexOf(level);
+    return at === -1 ? ORDER.length : at;
+  };
+  return [...byLevel.values()].sort((a, b) => rank(a.level) - rank(b.level));
+}
+
 function VerdictStrip({ plot, at }: { plot: HistoryPlot; at: TimeLabel }): ReactNode {
   /* One band per plot unit is far more than any phone has pixels, so the
      collapse happens here at a resolution the SVG can actually show. */
   const bands = collapseVerdict(plot.verdict, plot.fromMs, plot.toMs, 360);
   const x = scaler(plot);
+  const totals = verdictTotals(plot.verdict);
   return (
-    <div>
+    <div className="tw:mt-3">
+      {/* **A LABEL ROW LIKE EVERY OTHER PLOT HAS.** This strip had none, which
+          is most of why it read as one more reading rather than as the summary
+          of them — and the totals beside it are the only place the day's damage
+          is a number rather than a colour, which is what makes it legible to a
+          screen reader and to anyone who reads a page by its words. */}
+      <div className="tw:flex tw:items-baseline tw:justify-between tw:gap-2">
+        <span className="tw:text-[11px] tw:font-semibold tw:tracking-wide tw:text-ink-faint tw:uppercase">
+          Verdict
+        </span>
+        <span className="tw:flex tw:flex-wrap tw:justify-end tw:gap-x-2 tw:text-[12px] tw:text-ink-soft">
+          {totals.length === 0
+            ? "no verdicts recorded"
+            : totals.map((total) => (
+                <span key={total.level} className={cx(total.tone === "work" ? undefined : toneClasses(total.tone).ink)}>
+                  {total.level} {describeDuration(total.ms)}
+                </span>
+              ))}
+        </span>
+      </div>
       <Explain tip={STRIP_TIP} placement="bottom" className="tw:block tw:w-full">
         <svg
           viewBox={`0 0 ${PLOT_W} ${STRIP_H}`}
           preserveAspectRatio="none"
-          className="tw:block tw:h-[22px] tw:w-full tw:rounded-sm"
+          className="tw:mt-1 tw:block tw:h-[22px] tw:w-full tw:rounded-sm"
           role="img"
-          aria-label={`The box's verdict over the last 24 hours. ${describeGaps(plot, at)}`}
+          /* **NO LONGER REPEATS `describeGaps`.** That sentence is visible text
+             at the top of this card, and once the strip moved to the bottom the
+             two copies were far enough apart to be heard as two separate
+             claims about two different things. GPT Sol, on the plan. The
+             totals stay, because they are this element's own content. */
+          aria-label={`The box's verdict over the last 24 hours: ${
+            totals.length === 0
+              ? "none recorded"
+              : totals.map((total) => `${total.level} ${describeDuration(total.ms)}`).join(", ")
+          }.`}
         >
           <Hatch />
           <rect x={0} y={0} width={PLOT_W} height={STRIP_H} fill="var(--quiet-wash)" />
@@ -299,7 +382,7 @@ function VerdictStrip({ plot, at }: { plot: HistoryPlot; at: TimeLabel }): React
               y={0}
               width={Math.max(x(band.toMs) - x(band.fromMs), 1)}
               height={STRIP_H}
-              fill={toneVar(band.tone)}
+              {...stripAppearance(band.tone)}
             />
           ))}
           <Absences plot={plot} height={STRIP_H} />
@@ -341,7 +424,6 @@ function SeriesChart({ series, plot, at }: { series: SeriesPlot; plot: HistoryPl
   const x = scaler(plot);
   const y = (value: number): number => SERIES_H - (Math.min(value, ceiling) / ceiling) * SERIES_H;
 
-  const worseIsHigher = spec.bands.worseIs === "higher";
   const band = (from: number, to: number): { y: number; height: number } => {
     const top = y(Math.max(from, to));
     const bottom = y(Math.min(from, to));
@@ -353,7 +435,7 @@ function SeriesChart({ series, plot, at }: { series: SeriesPlot; plot: HistoryPl
      clamps to the ceiling, giving amber all the way up and a zero-height red. */
   const criticalAt = Math.min(spec.bands.critical, ceiling);
   const strained = band(spec.bands.strained, criticalAt);
-  const critical = worseIsHigher ? band(criticalAt, ceiling) : band(0, criticalAt);
+  const critical = band(criticalAt, ceiling);
 
   /* The two per-series marks are explained HERE rather than in the shared
      legend below, because they belong to one chart each and a legend with seven
@@ -382,7 +464,7 @@ function SeriesChart({ series, plot, at }: { series: SeriesPlot; plot: HistoryPl
     how: `${
       Number.isFinite(spec.bands.critical)
         ? `Amber past ${format(spec.bands.strained)} and red past ${format(spec.bands.critical)} — the same cutoffs the tiles above use, imported from one place so they cannot drift apart.`
-        : `Amber past ${format(spec.bands.strained)}. There is no red band here: the collector calls this critical only in combination with pages actually moving to or from swap, and a band on one axis cannot say that — so the combined judgement stays in the strip at the top, which is the collector's own verdict.`
+        : `Amber past ${format(spec.bands.strained)}. There is no red band here: the collector calls this critical only in combination with pages actually moving to or from swap, and a band on one axis cannot say that — so the combined judgement stays in the verdict strip below, which is the collector's own.`
     } A break in the line means nothing was recorded; violet means the reading could not be taken, which is never drawn as zero.${extra === "" ? "" : ` ${extra}`}`,
   };
 
@@ -504,7 +586,6 @@ function summarise(series: SeriesPlot, at: TimeLabel): string {
   if (series.worst === null) {
     return `no readings in this window${marked}`;
   }
-  const direction = series.spec.bands.worseIs === "lower" ? "low" : "peak";
   /* **"NOW" ONLY WHEN THE RIGHT-HAND EDGE IS ACTUALLY COVERED BY IT.** `latest`
      is the newest VALUE anywhere in the window, which is a different thing: if
      the last few readings were unknown, or the writer is overdue, the newest
@@ -513,7 +594,7 @@ function summarise(series: SeriesPlot, at: TimeLabel): string {
      its time, because the sentence already carries a timestamped extreme and two
      of them would read as a range. */
   const now = series.latestIsCurrent && series.latest !== null ? `now ${format(series.latest.value)}${series.spec.unit} · ` : "";
-  return `${now}${direction} ${format(series.worst.value)}${series.spec.unit} at ${at(series.worst.atMs)}${marked}`;
+  return `${now}peak ${format(series.worst.value)}${series.spec.unit} at ${at(series.worst.atMs)}${marked}`;
 }
 
 function format(value: number): string {
@@ -527,6 +608,50 @@ function format(value: number): string {
 function scaler(plot: HistoryPlot): (ms: number) => number {
   const span = Math.max(plot.toMs - plot.fromMs, 1);
   return (ms) => ((ms - plot.fromMs) / span) * PLOT_W;
+}
+
+/**
+ * The strip's fills: **saturated by severity, not uniformly.**
+ *
+ * > probably move down the bar showing the orange/green Swap and/or make it
+ * > less lurid, because it seems to be dominating the graphs
+ * >
+ * > — Greg, 2026-09-09
+ *
+ * Every band used to be drawn at full strength, so a box that had been
+ * *strained* for six ordinary hours — which this one often has been — looked
+ * like a six-hour emergency, in the loudest element on a card whose subject is
+ * the four lines above it. Turning the whole strip down would have flattened
+ * the step that matters most, so instead the scale is drawn as a scale: `ok`
+ * recedes to a tint, `strained` is halfway, `critical` keeps every bit of its
+ * red. **The gap between amber and red is bigger than it was, not smaller.**
+ *
+ * Direct colour plus SVG opacity, rather than `color-mix()`, is deliberate:
+ * older iOS Safari treats an unsupported SVG fill value as invalid, which can
+ * turn every quiet band black. Opacity produces the same calmer scale while
+ * leaving a valid colour in every browser that understands CSS variables.
+ *
+ * `unknown` sits just below critical rather than beside `ok`: a reading nobody
+ * could take is closer to trouble than to health, which is `health.ts`'s whole
+ * argument for the fourth level.
+ */
+function stripAppearance(tone: string): { fill: string; fillOpacity: number } {
+  switch (tone) {
+    /* **NOT `--work-wash`, WHICH IS WHERE THE FIRST ATTEMPT LANDED.** A 9% tint
+       is so close to the strip's own grey ground that `ok` and *no reading to
+       take* — two entries in the legend below, two different meanings — came
+       out the same colour, which is the collapse this panel exists to refuse.
+       Found in the browser, invisible to every test. It has to be quiet AND
+       unmistakably green. */
+    case "work":
+      return { fill: "var(--work)", fillOpacity: 0.22 };
+    case "needs":
+      return { fill: "var(--needs)", fillOpacity: 0.5 };
+    case "unknown":
+      return { fill: "var(--unknown)", fillOpacity: 0.55 };
+    default:
+      return { fill: toneVar(tone), fillOpacity: 1 };
+  }
 }
 
 function toneVar(tone: string): string {

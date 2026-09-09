@@ -1,25 +1,32 @@
 /**
- * The periodic readiness runner's decisions, without git, tmux, a database or
- * /proc. Every input is a reading the impure loop can take; this file only asks
- * what those readings mean.
+ * The periodic readiness runner's decisions and unattended process boundaries.
+ * Decision tests stay pure; the Git-boundary tests use throwaway repositories
+ * because a fake cannot prove that inherited location overrides really win.
  */
+import { spawnSync } from "node:child_process";
 import { EventEmitter } from "node:events";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   decideAdmission,
   FIXED_RUN_PEAK_BYTES,
   markReadinessAdmissionRefusal,
   PER_WORKER_PEAK_BYTES,
+  READINESS_ADMISSION_TOKEN_ENV,
 } from "../vitest-admission.js";
 import {
   decideTick,
-  initialPreparationNeeds,
+  initialPreparationState,
   MAX_VOIDS_PER_WINDOW,
   preparationAfterChanges,
+  preparationTarget,
   TICK_INTERVAL_MS,
   VOID_RETRY_COOLDOWN_MS,
+  type PreparationState,
   type TickInput,
 } from "../tools/fleet/readiness-loop.js";
 import {
@@ -38,16 +45,69 @@ import {
 } from "../tools/fleet/readiness.js";
 import {
   CHECK_TIMEOUT_MS,
+  ensureFleetClient,
   localDatabaseEnv,
+  prepareRunner,
+  readinessCheckEnv,
+  runCommand,
+  runnerWorktreeProblem,
   TERMINATION_GRACE_MS,
+  type PreparationDeps,
   requireHeldLoopLock,
   waitForReadinessChild,
   worktreeAddArgs,
 } from "../scripts/readiness-loop.js";
+import { checkChildEnv } from "../scripts/readiness-run.js";
+import {
+  GIT_LOCATION_ENV,
+  gitEnv,
+  makeRelationCache,
+  stampTree,
+} from "../tools/fleet/readiness-git.js";
+
+const scratchDirectories: string[] = [];
+
+function git(cwd: string, args: readonly string[], env: NodeJS.ProcessEnv = process.env): string {
+  const result = spawnSync("git", [...args], { cwd, env, encoding: "utf8" });
+  if (result.status !== 0) throw new Error(result.stderr || `git ${args[0]} exited ${result.status}`);
+  return result.stdout.trim();
+}
+
+function makeRepo(name: string, branch: string, body: string): { root: string; sha: string } {
+  const root = mkdtempSync(path.join(tmpdir(), `readiness-${name}-`));
+  scratchDirectories.push(root);
+  git(root, ["init", "--quiet", "-b", branch]);
+  git(root, ["config", "user.email", "test@example.com"]);
+  git(root, ["config", "user.name", "Test"]);
+  writeFileSync(path.join(root, "fixture.txt"), body);
+  git(root, ["add", "--", "fixture.txt"]);
+  git(root, ["commit", "--quiet", "-m", `${name} fixture`]);
+  return { root, sha: git(root, ["rev-parse", "HEAD"]) };
+}
+
+function withGitPoison<T>(elsewhere: string, action: () => T): T {
+  const beforeDir = process.env.GIT_DIR;
+  const beforeWorkTree = process.env.GIT_WORK_TREE;
+  process.env.GIT_DIR = path.join(elsewhere, ".git");
+  process.env.GIT_WORK_TREE = elsewhere;
+  try {
+    return action();
+  } finally {
+    if (beforeDir === undefined) delete process.env.GIT_DIR;
+    else process.env.GIT_DIR = beforeDir;
+    if (beforeWorkTree === undefined) delete process.env.GIT_WORK_TREE;
+    else process.env.GIT_WORK_TREE = beforeWorkTree;
+  }
+}
+
+afterEach(() => {
+  for (const directory of scratchDirectories.splice(0)) rmSync(directory, { recursive: true, force: true });
+});
 
 const NOW_MS = Date.parse("2026-09-09T18:00:00.000Z");
 const SHA_A = "3333333333333333333333333333333333333333";
 const SHA_B = "4444444444444444444444444444444444444444";
+const SHA_C = "5555555555555555555555555555555555555555";
 const GB = 1024 ** 3;
 
 const clean = (sha = SHA_A): Extract<TreeStamp, { kind: "known" }> => ({
@@ -114,6 +174,18 @@ const healthy = {
   swapActivity: { kind: "skipped" } as const,
 };
 
+function knownDev(sha: string): Extract<TickInput["dev"], { kind: "known" }> {
+  return {
+    kind: "known",
+    devSha: sha,
+    primarySha: sha,
+    primaryBehind: 0,
+    trunkGap: 1,
+    observedAt: new Date(NOW_MS).toISOString(),
+    caveat: "cached origin/dev",
+  };
+}
+
 function input(over: Partial<TickInput> = {}): TickInput {
   return {
     nowMs: NOW_MS,
@@ -137,6 +209,53 @@ function input(over: Partial<TickInput> = {}): TickInput {
     health: healthy,
     databaseProblem: null,
     ...over,
+  };
+}
+
+type FakeCommandResult = ReturnType<PreparationDeps["exec"]>;
+
+function commandResult(over: Partial<FakeCommandResult> = {}): FakeCommandResult {
+  return {
+    status: 0,
+    signal: null,
+    stdout: "",
+    stderr: "",
+    error: null,
+    ...over,
+  };
+}
+
+function preparedAt(
+  sha: string,
+  needs: Partial<PreparationState["needs"]> = {},
+): PreparationState {
+  return {
+    preparedFor: sha,
+    needs: { dependencies: false, migrations: false, fleetClient: false, ...needs },
+  };
+}
+
+function preparationFakes(over: Partial<PreparationDeps> = {}): {
+  calls: Array<{ command: string; args: readonly string[] }>;
+  builds: ReturnType<typeof vi.fn<PreparationDeps["buildFleetClient"]>>;
+  deps: PreparationDeps;
+} {
+  const calls: Array<{ command: string; args: readonly string[] }> = [];
+  const execImpl = over.exec ?? (() => commandResult());
+  const exec = vi.fn<PreparationDeps["exec"]>((cwd, command, args, sourceEnv) => {
+    calls.push({ command, args: [...args] });
+    return execImpl(cwd, command, args, sourceEnv);
+  });
+  const builds = vi.fn<PreparationDeps["buildFleetClient"]>(over.buildFleetClient);
+  return {
+    calls,
+    builds,
+    deps: {
+      exec,
+      buildFleetClient: builds,
+      databaseEnv: over.databaseEnv ?? (() => ({})),
+      stamp: over.stamp ?? (() => clean(SHA_B)),
+    },
   };
 }
 
@@ -295,8 +414,27 @@ describe("decideTick", () => {
 });
 
 describe("runner preparation follows the checked-out state", () => {
+  it("does not prepare derived state from a dirty tree", () => {
+    expect(preparationTarget(
+      null,
+      { kind: "known", sha: SHA_B, branch: "readiness-checks", dirty: true },
+      knownDev(SHA_B),
+    )).toBeNull();
+  });
+
+  it("does not prepare a clean runner commit that is not origin/dev", () => {
+    expect(preparationTarget(
+      null,
+      { kind: "known", sha: SHA_C, branch: "readiness-checks", dirty: false },
+      knownDev(SHA_B),
+    )).toBeNull();
+  });
+
   it("starts unprepared so a restart repairs an interrupted install or migration", () => {
-    expect(initialPreparationNeeds()).toEqual({ dependencies: true, migrations: true, fleetClient: true });
+    expect(initialPreparationState()).toEqual({
+      preparedFor: null,
+      needs: { dependencies: true, migrations: true, fleetClient: true },
+    });
   });
 
   it("recognises this repo's drizzle migrations, including metadata", () => {
@@ -306,15 +444,490 @@ describe("runner preparation follows the checked-out state", () => {
     )).toEqual({ dependencies: false, migrations: true, fleetClient: false });
   });
 
+  it("recognises every current fleet-client source root as a build input", () => {
+    expect(preparationAfterChanges(
+      { dependencies: false, migrations: false, fleetClient: false },
+      ["tools/fleet/wire.ts", "src/web/useDictation.ts", "src/dictation-limits.ts"],
+    )).toEqual({ dependencies: false, migrations: false, fleetClient: true });
+  });
+
+  it("recognises npm's project configuration and preferred lockfile as install inputs", () => {
+    expect(preparationAfterChanges(
+      { dependencies: false, migrations: false, fleetClient: false },
+      [".npmrc", "npm-shrinkwrap.json"],
+    )).toEqual({ dependencies: true, migrations: false, fleetClient: true });
+  });
+
   it("marks dependency preparation pending when the lockfile changes", () => {
     expect(preparationAfterChanges(
       { dependencies: false, migrations: false, fleetClient: false },
       ["package-lock.json"],
     )).toEqual({ dependencies: true, migrations: false, fleetClient: true });
   });
+
+  it("keeps an unknown change classification safe by preparing everything", () => {
+    const state = preparedAt(SHA_A);
+    const { calls, deps } = preparationFakes({
+      exec: (_cwd, command, args) =>
+        command === "git" && args[0] === "diff"
+          ? commandResult({ status: 1, stderr: "fatal: temporary object read failure" })
+          : commandResult(),
+    });
+
+    prepareRunner("/runner", state, SHA_B, deps);
+
+    expect(calls).toContainEqual({ command: "npm", args: ["ci", "--prefer-offline", "--dry-run=false"] });
+    expect(calls).toContainEqual({ command: "npm", args: ["run", "db:migrate"] });
+    expect(state.preparedFor).toBe(SHA_B);
+  });
+
+  it("does not spend the sha transition when npm ci fails, and retries it next tick", () => {
+    const state = preparedAt(SHA_A);
+    let diffAttempts = 0;
+    let installAttempts = 0;
+    const { deps } = preparationFakes({
+      exec: (_cwd, command, args) => {
+        if (command === "git" && args[0] === "diff") {
+          diffAttempts += 1;
+          return diffAttempts === 1
+            ? commandResult({ status: 1, stderr: "fatal: temporary object read failure" })
+            : commandResult({ stdout: "package-lock.json\n" });
+        }
+        if (command === "npm" && args[0] === "ci") {
+          installAttempts += 1;
+          return installAttempts === 1
+            ? commandResult({ status: 1, stderr: "npm ci failed" })
+            : commandResult();
+        }
+        return commandResult();
+      },
+    });
+
+    expect(() => prepareRunner("/runner", state, SHA_B, deps)).toThrow(/installing dependencies/);
+    expect(state.preparedFor).toBe(SHA_A);
+
+    prepareRunner("/runner", state, SHA_B, deps);
+    expect(diffAttempts).toBe(2);
+    expect(installAttempts).toBe(2);
+    expect(state.preparedFor).toBe(SHA_B);
+  });
+
+  it("keeps successful partial work pending when a later preparation step fails", () => {
+    const state = preparedAt(SHA_A);
+    let installAttempts = 0;
+    let buildAttempts = 0;
+    let target = SHA_B;
+    const { deps } = preparationFakes({
+      exec: (_cwd, command, args) => {
+        if (command === "git" && args[0] === "diff") {
+          return commandResult({ stdout: target === SHA_B ? "package-lock.json\n" : "" });
+        }
+        if (command === "npm" && args[0] === "ci") installAttempts += 1;
+        return commandResult();
+      },
+      buildFleetClient: () => {
+        buildAttempts += 1;
+        if (buildAttempts === 1) throw new Error("fleet build failed");
+      },
+      stamp: () => clean(target),
+    });
+
+    expect(() => prepareRunner("/runner", state, SHA_B, deps)).toThrow(/fleet build failed/);
+    expect(state.preparedFor).toBe(SHA_A);
+    expect(state.needs.dependencies).toBe(true);
+
+    target = SHA_C;
+    prepareRunner("/runner", state, SHA_C, deps);
+    expect(installAttempts).toBe(2);
+    expect(state.preparedFor).toBe(SHA_C);
+  });
+
+  it("narrows successful classification to the preparation its paths need", () => {
+    const state = preparedAt(SHA_A);
+    const { calls, builds, deps } = preparationFakes({
+      exec: (_cwd, command, args) =>
+        command === "git" && args[0] === "diff"
+          ? commandResult({ stdout: "tools/fleet/web/index.tsx\n" })
+          : commandResult(),
+    });
+
+    prepareRunner("/runner", state, SHA_B, deps);
+
+    expect(calls.some((call) => call.command === "npm" && call.args[0] === "ci")).toBe(false);
+    expect(calls).not.toContainEqual({ command: "npm", args: ["run", "db:migrate"] });
+    expect(builds).toHaveBeenCalledWith("/runner", true);
+    expect(state.preparedFor).toBe(SHA_B);
+  });
+
+  it("does not change preparation without a validated target", () => {
+    const state = preparedAt(SHA_A, { dependencies: true, fleetClient: true });
+    const { calls, builds, deps } = preparationFakes();
+
+    prepareRunner("/runner", state, null, deps);
+
+    expect(calls).toEqual([]);
+    expect(builds).not.toHaveBeenCalled();
+    expect(state).toEqual({
+      preparedFor: SHA_A,
+      needs: { dependencies: true, migrations: false, fleetClient: true },
+    });
+  });
+
+  it("does not latch an npm dry run as dependency preparation", () => {
+    const runner = mkdtempSync(path.join(tmpdir(), "readiness-npm-dry-run-"));
+    scratchDirectories.push(runner);
+    writeFileSync(path.join(runner, "package.json"), JSON.stringify({ name: "fixture", version: "1.0.0" }));
+    writeFileSync(path.join(runner, "package-lock.json"), JSON.stringify({
+      name: "fixture",
+      version: "1.0.0",
+      lockfileVersion: 3,
+      requires: true,
+      packages: { "": { name: "fixture", version: "1.0.0" } },
+    }));
+    mkdirSync(path.join(runner, "node_modules"));
+    const sentinel = path.join(runner, "node_modules", "from-a");
+    writeFileSync(sentinel, "old dependency tree\n");
+    const state = preparedAt(SHA_A);
+    const { deps } = preparationFakes({
+      exec: (cwd, command, args) => {
+        if (command === "git" && args[0] === "diff") {
+          return commandResult({ stdout: "package-lock.json\n" });
+        }
+        if (command === "npm" && args[0] === "ci") {
+          return runCommand(cwd, command, args, 30_000, { ...process.env, npm_config_dry_run: "true" });
+        }
+        return commandResult();
+      },
+      stamp: () => clean(SHA_B),
+    });
+
+    prepareRunner(runner, state, SHA_B, deps);
+
+    expect(existsSync(sentinel)).toBe(false);
+    expect(existsSync(path.join(runner, "node_modules", ".package-lock.json"))).toBe(true);
+  });
+
+  it("does not trust an index.html left by a failed fleet build on the next tick", () => {
+    const runner = mkdtempSync(path.join(tmpdir(), "readiness-fleet-partial-"));
+    scratchDirectories.push(runner);
+    const entry = path.join(runner, "tools", "fleet", "web", "dist", "index.html");
+    mkdirSync(path.dirname(entry), { recursive: true });
+    writeFileSync(entry, "stale\n");
+    let attempts = 0;
+    const exec = (): FakeCommandResult => {
+      attempts += 1;
+      writeFileSync(entry, attempts === 1 ? "partial\n" : "fresh\n");
+      return commandResult(attempts === 1 ? { status: 1, stderr: "vite failed" } : {});
+    };
+
+    expect(() => ensureFleetClient(runner, true, exec)).toThrow(/vite failed/);
+    expect(existsSync(entry)).toBe(false);
+    ensureFleetClient(runner, false, exec);
+    expect(attempts).toBe(2);
+    expect(readFileSync(entry, "utf8")).toBe("fresh\n");
+  });
+
+  it("skips classification when preparation is already latched to the target", () => {
+    const state = preparedAt(SHA_B);
+    const { calls, builds, deps } = preparationFakes();
+
+    prepareRunner("/runner", state, SHA_B, deps);
+
+    expect(calls.some((call) => call.command === "git" && call.args[0] === "diff")).toBe(false);
+    expect(builds).toHaveBeenCalledWith("/runner", false);
+  });
+
+  it("distinguishes an unknown classification from no changed paths", () => {
+    const needs = { dependencies: false, migrations: true, fleetClient: false };
+    expect(preparationAfterChanges(needs, null)).toEqual({
+      dependencies: true,
+      migrations: true,
+      fleetClient: true,
+    });
+    expect(preparationAfterChanges(needs, [])).toEqual(needs);
+  });
+
+  it("treats package.json alone as both a dependency and fleet-client input", () => {
+    expect(preparationAfterChanges(
+      { dependencies: false, migrations: false, fleetClient: false },
+      ["package.json"],
+    )).toEqual({ dependencies: true, migrations: false, fleetClient: true });
+
+    const state = preparedAt(SHA_A);
+    const { calls, builds, deps } = preparationFakes({
+      exec: (_cwd, command, args) =>
+        command === "git" && args[0] === "diff"
+          ? commandResult({ stdout: "package.json\n" })
+          : commandResult(),
+    });
+    prepareRunner("/runner", state, SHA_B, deps);
+    expect(calls).toContainEqual({ command: "npm", args: ["ci", "--prefer-offline", "--dry-run=false"] });
+    expect(builds).toHaveBeenCalledWith("/runner", true);
+    const diff = calls.find((call) => call.command === "git" && call.args[0] === "diff");
+    expect(diff?.args).toContain("package.json");
+  });
+
+  it.each([
+    ["dirty", { ...clean(SHA_B), dirty: true }],
+    ["unknown", { kind: "unknown", why: "git status timed out" }],
+    ["at another sha", clean(SHA_A)],
+  ] as const)("does not latch preparation when the post-preparation tree is %s", (_name, stamp) => {
+    const state = preparedAt(SHA_A);
+    const { deps } = preparationFakes({ stamp: () => stamp });
+
+    prepareRunner("/runner", state, SHA_B, deps);
+
+    expect(state.preparedFor).toBeNull();
+  });
+
+  it("warns with both shas and git's error when classification fails", () => {
+    const state = preparedAt(SHA_A);
+    const warning = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const { deps } = preparationFakes({
+      exec: (_cwd, command, args) =>
+        command === "git" && args[0] === "diff"
+          ? commandResult({ status: 128, stderr: "fatal: bad object bbbb" })
+          : commandResult(),
+    });
+
+    try {
+      prepareRunner("/runner", state, SHA_B, deps);
+
+      expect(warning).toHaveBeenCalledTimes(1);
+      expect(warning.mock.calls[0]?.[0]).toContain(SHA_A);
+      expect(warning.mock.calls[0]?.[0]).toContain(SHA_B);
+      expect(warning.mock.calls[0]?.[0]).toContain("fatal: bad object bbbb");
+    } finally {
+      warning.mockRestore();
+    }
+  });
 });
 
 describe("the unattended process boundary", () => {
+  it("stamps its requested repository when inherited git variables point elsewhere", () => {
+    const home = makeRepo("home", "home-branch", "home contents\n");
+    const elsewhere = makeRepo("elsewhere", "elsewhere-branch", "different contents\n");
+    expect(home.sha).not.toBe(elsewhere.sha);
+
+    withGitPoison(elsewhere.root, () => {
+      const poisoned = git(home.root, ["-C", home.root, "rev-parse", "HEAD"]);
+      expect(poisoned).toBe(elsewhere.sha);
+
+      expect(stampTree(home.root)).toEqual({
+        kind: "known",
+        sha: home.sha,
+        branch: "home-branch",
+        dirty: false,
+      });
+    });
+  });
+
+  it("runs commands in its requested repository despite inherited git variables", () => {
+    const home = makeRepo("command-home", "command-home-branch", "command home\n");
+    const elsewhere = makeRepo("command-elsewhere", "command-elsewhere-branch", "command elsewhere\n");
+
+    withGitPoison(elsewhere.root, () => {
+      const result = runCommand(home.root, "git", ["rev-parse", "HEAD"]);
+      expect(result.status).toBe(0);
+      expect(result.stdout.trim()).toBe(home.sha);
+    });
+  });
+
+  it("resolves ancestry in its requested repository despite inherited git variables", () => {
+    const home = makeRepo("relation-home", "relation-home-branch", "relation one\n");
+    const firstSha = home.sha;
+    writeFileSync(path.join(home.root, "fixture.txt"), "relation two\n");
+    git(home.root, ["add", "--", "fixture.txt"]);
+    git(home.root, ["commit", "--quiet", "-m", "second relation fixture"]);
+    const secondSha = git(home.root, ["rev-parse", "HEAD"]);
+    const elsewhere = makeRepo("relation-elsewhere", "relation-elsewhere-branch", "unrelated\n");
+
+    withGitPoison(elsewhere.root, () => {
+      expect(makeRelationCache(home.root).relate(firstSha, secondSha)).toEqual({
+        kind: "behind-dev",
+        behind: 1,
+      });
+    });
+  });
+
+  it("builds one git environment that removes every location override", () => {
+    const source: NodeJS.ProcessEnv = { KEEP_ME: "yes" };
+    for (const name of GIT_LOCATION_ENV) source[name] = `poison-${name}`;
+
+    const env = gitEnv(source);
+
+    for (const name of GIT_LOCATION_ENV) expect(env).not.toHaveProperty(name);
+    expect(env).toMatchObject({
+      KEEP_ME: "yes",
+      GIT_TERMINAL_PROMPT: "0",
+      GIT_OPTIONAL_LOCKS: "0",
+    });
+    expect(source).toHaveProperty("GIT_DIR", "poison-GIT_DIR");
+  });
+
+  /**
+   * A `refs/replace` ref substitutes one object for another wherever its sha is
+   * mentioned, and `refs/replace/` is shared by every linked worktree — so one
+   * `git replace` on this box reaches the runner. The tree still stamps the true
+   * sha and still reports clean, which is why this needs a test that looks at
+   * the bytes on disk rather than at any stamp.
+   */
+  it("fast-forwards to the commit's real content even when a replace ref substitutes it", () => {
+    const origin = makeRepo("replace-origin", "dev", "honest A\n");
+    const shaA = origin.sha;
+    writeFileSync(path.join(origin.root, "fixture.txt"), "HONEST B CONTENT\n");
+    git(origin.root, ["add", "--", "fixture.txt"]);
+    git(origin.root, ["commit", "--quiet", "-m", "B"]);
+    const shaB = git(origin.root, ["rev-parse", "HEAD"]);
+
+    /* A commit with the same parent and different content, put in B's place. */
+    writeFileSync(path.join(origin.root, "fixture.txt"), "SUBSTITUTED CONTENT\n");
+    git(origin.root, ["add", "--", "fixture.txt"]);
+    const tree = git(origin.root, ["write-tree"]);
+    const fake = git(origin.root, ["commit-tree", tree, "-p", shaA, "-m", "substitute"]);
+    git(origin.root, ["checkout", "--quiet", "--", "fixture.txt"]);
+    git(origin.root, ["replace", shaB, fake]);
+
+    const consumer = mkdtempSync(path.join(tmpdir(), "readiness-replace-consumer-"));
+    scratchDirectories.push(consumer);
+    git(path.dirname(consumer), ["clone", "--quiet", origin.root, consumer]);
+    git(consumer, ["checkout", "--quiet", "-B", "work", shaA]);
+    git(consumer, ["fetch", "--quiet", "origin", "+refs/replace/*:refs/replace/*"]);
+    git(consumer, ["fetch", "--quiet", "origin", "dev"]);
+
+    const merged = runCommand(consumer, "git", ["merge", "--ff-only", "origin/dev"]);
+    expect(merged.status).toBe(0);
+
+    /* The stamp cannot tell the difference — that is the whole point of it. */
+    expect(stampTree(consumer)).toEqual({ kind: "known", sha: shaB, branch: "work", dirty: false });
+    expect(readFileSync(path.join(consumer, "fixture.txt"), "utf8")).toBe("HONEST B CONTENT\n");
+  });
+
+  /* The two spawns that launch the check itself, asked for their real
+     environments rather than pattern-matched in the source. Both build it
+     through a named function that the spawn call then uses, so what is asserted
+     here is what production hands the child. */
+  it("scrubs the environment the check itself is launched with", () => {
+    const runner = mkdtempSync(path.join(tmpdir(), "readiness-check-env-"));
+    scratchDirectories.push(runner);
+    writeFileSync(
+      path.join(runner, ".env.local"),
+      "DATABASE_URL=postgres://postgres:postgres@127.0.0.1:54362/postgres\n",
+    );
+    const elsewhere = makeRepo("check-env-elsewhere", "check-env-branch", "check env\n");
+
+    withGitPoison(elsewhere.root, () => {
+      for (const name of GIT_LOCATION_ENV) {
+        expect(readinessCheckEnv(runner)).not.toHaveProperty(name);
+        expect(checkChildEnv("0123456789abcdef0123456789abcdef")).not.toHaveProperty(name);
+      }
+      /* Both must still carry what they exist to carry. */
+      expect(readinessCheckEnv(runner).DATABASE_URL).toBe(
+        "postgres://postgres:postgres@127.0.0.1:54362/postgres",
+      );
+      expect(checkChildEnv("0123456789abcdef0123456789abcdef")[READINESS_ADMISSION_TOKEN_ENV]).toBe(
+        "0123456789abcdef0123456789abcdef",
+      );
+      /* The premise: process.env really is poisoned while all that is true. */
+      expect(process.env.GIT_DIR).toBe(path.join(elsewhere.root, ".git"));
+    });
+  });
+
+  it("refuses a core.worktree redirect before tick can fetch or merge", () => {
+    const home = makeRepo("redirect-home", "redirect-home-branch", "redirect home\n");
+    const elsewhere = makeRepo("redirect-elsewhere", "redirect-elsewhere-branch", "redirect elsewhere\n");
+    git(home.root, ["config", "core.worktree", elsewhere.root]);
+    expect(git(home.root, ["-C", home.root, "rev-parse", "--path-format=absolute", "--show-toplevel"]))
+      .toBe(elsewhere.root);
+
+    const problem = runnerWorktreeProblem(home.root);
+    expect(problem).toContain("Git reported top-level");
+    expect(problem).toContain(home.root);
+    expect(problem).toContain(elsewhere.root);
+
+    /* A guard nothing calls is not a guard, and `tick` spawns too much to drive
+       from here. So this reads the source: the call has to come before the two
+       commands it exists to hold back. It will break on an innocent reshuffle of
+       those lines, which is the price of the only check available; the message
+       says what to look at when it does. */
+    const source = readFileSync(new URL("../scripts/readiness-loop.ts", import.meta.url), "utf8");
+    const tickStart = source.indexOf("async function tick(");
+    const tickEnd = source.indexOf("\n}\n\nconst HELP", tickStart);
+    const tickSource = source.slice(tickStart, tickEnd);
+    const guard = tickSource.indexOf("runnerWorktreeProblem(runner,");
+    const fetches = tickSource.indexOf('runCommand(runner, "git", ["fetch"');
+    const merges = tickSource.indexOf('runCommand(runner, "git", ["merge"');
+    expect(
+      guard !== -1 && fetches > guard && merges > guard,
+      "tick() must call runnerWorktreeProblem(runner) before it fetches or fast-forwards — " +
+        `found guard at ${guard}, fetch at ${fetches}, merge at ${merges} inside tick()`,
+    ).toBe(true);
+  });
+
+  it("validates the primary before fetch and the created runner before merge or setup", () => {
+    const source = readFileSync(new URL("../scripts/readiness-loop.ts", import.meta.url), "utf8");
+    const start = source.indexOf("function ensureRunnerWorktree(");
+    const end = source.indexOf("\n}\n\n/**", start);
+    const body = source.slice(start, end);
+    const primaryGuard = body.indexOf("runnerWorktreeProblem(primary)");
+    const primaryFetch = body.indexOf('requireCommand(primary, "git", ["fetch"');
+    const runnerGuard = body.indexOf("runnerWorktreeProblem(runner,");
+    const runnerMerge = body.indexOf('requireCommand(runner, "git", ["merge"');
+    expect(primaryGuard).toBeGreaterThan(-1);
+    expect(primaryFetch).toBeGreaterThan(primaryGuard);
+    expect(runnerGuard).toBeGreaterThan(primaryFetch);
+    expect(runnerMerge).toBeGreaterThan(runnerGuard);
+  });
+
+  it("treats an empty successful show-toplevel as a problem", () => {
+    const result = runnerWorktreeProblem(process.cwd(), () => commandResult({ stdout: " \n" }));
+    expect(result).toContain("<empty>");
+  });
+
+  it("canonicalises a symlinked runner path before comparing it with Git", () => {
+    const parent = mkdtempSync(path.join(tmpdir(), "readiness-runner-link-"));
+    scratchDirectories.push(parent);
+    const linked = path.join(parent, "runner");
+    symlinkSync(process.cwd(), linked, "dir");
+    expect(runnerWorktreeProblem(linked, () => commandResult({ stdout: `${process.cwd()}\n` }))).toBeNull();
+  });
+
+  it("turns a missing runner directory into a reason", () => {
+    const parent = mkdtempSync(path.join(tmpdir(), "readiness-runner-missing-"));
+    scratchDirectories.push(parent);
+    expect(runnerWorktreeProblem(path.join(parent, "absent"))).toContain("could not be canonicalised");
+  });
+
+  it.each([
+    ["failure", commandResult({ status: 128, stderr: "fatal: not a repository" })],
+    ["timeout", commandResult({ status: null, signal: "SIGTERM", error: new Error("spawnSync git ETIMEDOUT") })],
+  ])("turns a Git %s into a reason", (_name, result) => {
+    expect(runnerWorktreeProblem(process.cwd(), () => result)).toContain("Git top-level unavailable");
+  });
+
+  it("refuses a linked-worktree pointer copied from another repository", () => {
+    const home = makeRepo("pointer-home", "home", "home\n");
+    const elsewhere = makeRepo("pointer-elsewhere", "elsewhere", "elsewhere\n");
+    const homeWorktree = path.join(home.root, "linked");
+    const elsewhereWorktree = path.join(elsewhere.root, "linked");
+    git(home.root, ["worktree", "add", "--quiet", "-b", "home-linked", homeWorktree]);
+    git(elsewhere.root, ["worktree", "add", "--quiet", "-b", "elsewhere-linked", elsewhereWorktree]);
+    writeFileSync(path.join(homeWorktree, ".git"), readFileSync(path.join(elsewhereWorktree, ".git")));
+
+    expect(git(homeWorktree, ["rev-parse", "--path-format=absolute", "--show-toplevel"]))
+      .toBe(homeWorktree);
+    expect(runnerWorktreeProblem(homeWorktree)).toContain("backlink");
+  });
+
+  it("refuses a valid worktree belonging to a different repository", () => {
+    const intended = makeRepo("intended-repository", "intended", "intended\n");
+    const foreign = makeRepo("foreign-repository", "foreign", "foreign\n");
+    const foreignWorktree = path.join(foreign.root, "linked");
+    git(foreign.root, ["worktree", "add", "--quiet", "-b", "foreign-linked", foreignWorktree]);
+
+    expect(runnerWorktreeProblem(foreignWorktree, undefined, intended.root)).toContain("common directory");
+  });
+
   it("never resets the dedicated branch while recreating its worktree", () => {
     expect(worktreeAddArgs("/repo/runner", false)).toEqual([
       "worktree", "add", "-b", "readiness-checks", "/repo/runner", "origin/dev",
