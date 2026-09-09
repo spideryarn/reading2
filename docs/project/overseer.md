@@ -241,7 +241,13 @@ gate 3's last bullet made mechanical rather than remembered.
 - **Usage limits**, from `tools/overseer/usage.ts` — `npx tsx scripts/overseer.ts usage` prints
   the five-hour and seven-day windows from the account's cache, with the cache's age. A reading whose
   `resets_at` is in the past is **unknown**, never a percentage. Every agent on the box, you included,
-  draws on one Max account, so the hour it runs out freezes you too.
+  draws on one Max account, so the hour it runs out freezes you too. **And there is a second account
+  that matters as much**: the ChatGPT subscription that every Codex run bills, which
+  [260909d](../plans/260909d-read-the-codex-subscription-usage-limits-and-show-them-beside-claude-s.md)
+  reads live from the box and prints beside the Claude reading. Greg, 2026-09-09: *"it's absolutely
+  critical that we have GPT (e.g. for cross-model-family reviews), so if we are running out of
+  ChatGPT usage limits, that's as important as running out of Claude usage limits … Basically we
+  can't continue working without both."*
 
 ### The tick
 
@@ -261,8 +267,12 @@ Every half hour or so, in this order — the first two need no model, the last o
    hours with ten to twelve sessions. When it is short, Greg's standing answer (2026-09-09) is
    *"slow things down a bit, and/or delegate more to GPT via codex-cli-as-subagent.md to
    implement"* — fewer Claude sessions, each managing and reviewing while Codex writes the code
-   (`run-codex.ts --sandbox workspace-write`), which bills the ChatGPT subscription instead. Watch
-   both budgets.
+   (`run-codex.ts --sandbox workspace-write`), which bills the ChatGPT subscription instead. **That
+   shifts the spend; it does not escape the rationing.** Every stage ends in a Sol review and nothing
+   ships without one, so the ChatGPT window running out stops the fleet exactly as the Claude one
+   does, and the same thresholds and the same pause apply to whichever of the two is nearer its
+   limit — slowing Claude sessions down to hand more to Codex is only an answer while Codex has
+   room. Watch both budgets, and ration against the tighter one.
 3. **Then pull from the queue**, if the box, the window and the file sets allow. Every brief quotes
    Greg's words, names the sessions in flight and the files each owns, and says what is *not* this
    agent's — never a queue of agents behind one "owner" of a shared file.
