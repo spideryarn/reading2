@@ -813,7 +813,18 @@ under `~/.codex/sessions/`; capture the id from the `--json` `thread.started` ev
   `~/.zshrc`, so anything they export reaches codex whatever the wrapper passes. Measured above.
 - **Don't export `OPENAI_API_KEY`.** `codex exec` doesn't read it (it wants `CODEX_API_KEY`), so it
   buys nothing, and an exported secret lands in the environment of every subprocess an agent
-  spawns — including its own transcript.
+  spawns — including its own transcript. **Measured on 0.153.4**, 2026-09-09, from an empty
+  `CODEX_HOME` so no login could answer, using a deliberately invalid key as the probe — the two
+  errors differ, which is what makes this a measurement rather than a guess:
+
+  ```
+  OPENAI_API_KEY=sk-…bogus  →  401 "Missing bearer or basic authentication in header"   (not sent)
+  CODEX_API_KEY=sk-…bogus   →  401 "Incorrect API key provided: sk-proj-****0000"       (sent)
+  ```
+
+  Narrow claim, deliberately: this is `codex exec` against `/v1/responses`. It says nothing about
+  `codex login --with-api-key`, which writes a key into `auth.json` rather than reading the
+  environment.
 
 ## Sources
 

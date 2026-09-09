@@ -74,6 +74,7 @@ Moves — so the second account starts empty and builds its own:
 | `plugins/` | installed plugins, marketplace clones, caches |
 | `teams/`, `tasks/`, `sessions/`, `history.jsonl` | agent and session state |
 | **MCP OAuth tokens** | **every OAuth'd MCP server must be re-authorised with `/mcp` in each account** |
+| `daemon/control.key` | **Remote Control pairing.** A new config dir has no `daemon/` at all, so sessions started under it are unreachable from the phone until you re-pair. Nothing breaks retroactively, so the symptom arrives days later as "my phone can't see this session" |
 
 Does **not** move, and needs no thought:
 
@@ -86,11 +87,25 @@ Does **not** move, and needs no thought:
 
 Seed the new dir deliberately rather than copying `.claude.json` wholesale: copy `settings.json` and
 `plugins/`, plus any user-scoped `mcpServers` and the repo's `hasTrustDialogAccepted` if you would
-rather not re-answer the trust dialog. Leave the identity keys alone.
+rather not re-answer the trust dialog. Leave the identity keys alone — beyond the obvious
+`oauthAccount`, that file carries `cachedUsageUtilization.accountUuid`, eligibility caches keyed by
+org UUID, GitHub account ids and live-session metadata, and chasing that denylist is a losing game.
+Let the login create it.
+
+**Copy `projects/<slug>/memory/` — it is the one thing in `projects/` worth moving.** Per-project
+auto-memory is loaded into every session, so a config dir seeded without it starts amnesiac and says
+nothing about it. Do not bulk-copy the rest of the runtime state (`tasks/`, `teams/`, `sessions/`,
+`shell-snapshots/`, `daemon/`, `ide/`, `__store.db`) — stale process and socket references.
 
 **The session history is the one real loss.** It stays under the old config dir and becomes invisible.
 Copying it across is safe when both dirs are the same account, and a judgment call when they are not —
-a resumed transcript is submitted under whichever account resumes it.
+a resumed transcript is submitted under whichever account resumes it, and so is the auto-memory it
+loads. Same human is not the same organisation, retention policy or data-processing terms.
+
+**Arming splits the memory in two, briefly.** The variable is read at startup, so a session that was
+already running keeps writing to the *old* config dir's memory — a long session spanning the cutover
+leaves its memories on the wrong side. Pick one side as canonical the moment you arm, sync once when
+the last pre-arm session ends, and stop writing to the other.
 
 ## Wire it up
 
@@ -106,6 +121,11 @@ CLAUDE_CONFIG_DIR="$D" claude auth login --claudeai --email you@example.com
 
 `--claudeai` is the default but worth typing: `--console` signs you into Anthropic Console and bills
 metered API usage instead, which is a different product wearing the same login flow.
+
+**Then put `"forceLoginMethod": "claudeai"` in the new dir's own `settings.json`.** It is honoured
+per config dir — `auth status` echoes it back as `forcedLoginMethod` — and it stops a stray Console
+or API sign-in taking the directory over later. Worth more than any check made after the fact,
+because it prevents rather than detects.
 
 ### Use a `PATH` script, not a shell function
 
@@ -132,7 +152,7 @@ sanitised and re-derives the answer from the working directory:
 #!/bin/zsh
 set -eu
 REAL_CLAUDE=/Users/greg/.local/bin/claude
-CONF=/Users/greg/.claude-accounts        # "<repo root>:<config dir>", one per line
+CONF=/Users/greg/.claude-accounts   # "<repo root>:<config dir>[:<expected email>]", one per line
 
 if [[ -n "${CLAUDE_ACCOUNT_DIR:-}" ]]; then
   export CLAUDE_CONFIG_DIR="$CLAUDE_ACCOUNT_DIR"      # explicit override wins
@@ -142,12 +162,14 @@ else
   best_len=0                             # path into the repo would slip past the test
   while IFS= read -r line; do            # longest match wins, so a worktree can be
     [[ "$line" == \#* || -z "${line// }" ]] && continue   # carved out of its repo
-    root="${line%%:*}"
+    root="${line%%:*}"; rest="${line#*:}"; dir="${rest%%:*}"  # 3rd field is the email
     if [[ "$here" == "$root/"* && ${#root} -gt $best_len ]]; then
-      best_len=${#root}; export CLAUDE_CONFIG_DIR="${line#*:}"
+      best_len=${#root}; export CLAUDE_CONFIG_DIR="$dir"
     fi
   done < "$CONF"
 fi
+# CLAUDE_SECURESTORAGE_CONFIG_DIR outranks CLAUDE_CONFIG_DIR when the Keychain item
+# is named, so an inherited one would quietly select another account's credential.
 unset CLAUDE_SECURESTORAGE_CONFIG_DIR 2>/dev/null || true
 exec "$REAL_CLAUDE" "$@"
 ```
@@ -155,6 +177,11 @@ exec "$REAL_CLAUDE" "$@"
 The table lives in a file rather than inside the script because `claude-acct` has to answer the same
 question — *which account would this directory use?* — and a table copied into two scripts is a table
 that will disagree with itself.
+
+**The optional third field is the expected email**, and it is what makes arming an assertion rather
+than a hope: `claude-acct-arm` refuses to install unless each routed dir is signed in *as that
+address*. A Keychain item existing proves a credential exists, not whose — see
+[How to know which account you are actually on](#how-to-know-which-account-you-are-actually-on).
 
 Point `REAL_CLAUDE` at the launcher symlink (`~/.local/bin/claude`), never a versioned path — the
 installer moves that forward and a pinned version would quietly stop updating.
@@ -193,7 +220,9 @@ export CLAUDE_CODE_OAUTH_TOKEN_2=…            # then injected per shell / per 
 
 There, several subscriptions form a **pool of dispatch capacity** rather than a set of identities:
 a daemon picks the least-loaded account, and can hot-swap a *running* session onto another one
-mid-conversation. Auth binds to the shell or tmux pane, not to the directory and not to the worktree.
+mid-conversation. The rule that makes it worth the machinery is **asymmetric**: dispatched agents may
+never spend account 1, the orchestrator's, so a sub-agent burning through a window cannot stall the
+thing that dispatched it — while the orchestrator may fall back onto the others. Auth binds to the shell or tmux pane, not to the directory and not to the worktree.
 Each account is signed in twice on purpose — an `auth login` so a usage dashboard can read its quota,
 and a `setup-token` that is the credential actually spent — and the token is minted *before* the
 sign-in, so a half-failed setup cannot file one account's credential under another's export.
@@ -285,6 +314,60 @@ claude auth status --json | jq -e '.loggedIn and .authMethod == "claude.ai" and 
 A Keychain item existing is not this. `/status` inside a session is fine for a human, but it reports
 after startup and possibly after a paid turn.
 
+**And it is necessary, not sufficient.** Stale identity state in `.claude.json` has been reported
+upstream to make `auth status` describe the wrong account
+([#81231](https://github.com/anthropics/claude-code/issues/81231)) — one more reason to let the login
+create that file rather than copying one in.
+
+### The checks worth repeating
+
+Run these after arming, after any edit to the wrapper or the table, **and after every Claude Code
+upgrade** — the Keychain naming scheme was read out of the binary, so an upgrade can in principle
+move it and nothing else would tell you. All are read-only and cost nothing.
+
+```bash
+command -v claude            # must be the wrapper (~/bin/claude), not ~/.local/bin/claude
+claude-acct-arm --check      # every route signed in, as the email its line names
+```
+
+**Route across the tree, and outside it.** The outside one matters most: it proves you pinned a tree
+rather than the whole machine.
+
+```bash
+for d in <tree-root> <tree-root>/src /tmp "$HOME"; do
+  printf '%-40s ' "$d"
+  (cd "$d" && claude auth status --json | jq -r '"\(.email) (\(.subscriptionType), \(.authMethod))"')
+done
+```
+
+**Every worktree**, because they are the easiest thing to leave behind, and a sibling `repo-old` is
+the classic false match:
+
+```bash
+git worktree list | awk '{print $1}' | while read -r wt; do
+  (cd "$wt" && claude auth status --json | jq -r .email)
+done | sort | uniq -c        # expect one line: <count> <expected email>
+```
+
+**The dispatch path**, reproducing how `scripts/run-claude.ts` actually spawns a child — through
+`PATH`, from Node, with the parent environment cloned. This is the check that catches a shell
+function masquerading as a router:
+
+```bash
+node -e '
+const {spawnSync}=require("child_process");
+const r=spawnSync("claude",["auth","status","--json"],{cwd:"<tree-root>",env:{...process.env},encoding:"utf8"});
+console.log(JSON.parse(r.stdout).email);'
+```
+
+**And the negative tests — a router that never refuses is not a pin.** Each must exit 78:
+
+```bash
+cd <tree-root>
+ANTHROPIC_API_KEY=sk-ant-fake claude --version    # a competing credential outranks the login
+CLAUDE_ACCOUNT_DIR=$HOME/.claude claude --version # an override walks the tree onto another account
+```
+
 ## Switching by hand
 
 Per-directory routing covers the steady state; you still want to sign in, look, and occasionally
@@ -304,8 +387,21 @@ override reaches subprocesses too rather than only the interactive shell.
 **There is no supported way to display the active account in the status line.** The `statusLine`
 JSON on stdin carries `model`, `cwd`, `cost`, `context_window`, `rate_limits`, `session_id`,
 `version`, `output_style`, `agent`, `worktree`, `effort` and more — and no account, email or config
-dir field. A statusline script can read `$CLAUDE_CONFIG_DIR` from its inherited environment, or shell
-out to `claude auth status --json` at the cost of a subprocess per refresh.
+dir field. But a routed session already has the answer in its inherited environment, for free:
+
+```bash
+acct_info=""
+if [ -n "${CLAUDE_CONFIG_DIR:-}" ]; then
+    acct_name="${CLAUDE_CONFIG_DIR##*/}"; acct_name="${acct_name#.claude-}"
+    acct_info=$(printf " \033[1;35m(%s)\033[0m" "$acct_name")
+fi
+```
+
+No subprocess, no Keychain prompt. Show it **only when routed**, so the default case stays
+uncluttered and anything non-default is impossible to miss. It names the config dir rather than the
+email signed into it — the strong check is still `claude auth status --json`; this is the ambient
+reminder that you are not on the default account. Shelling out to `auth status` on every refresh is
+the alternative, and it costs a subprocess per refresh.
 
 ## Known gotchas
 
@@ -315,7 +411,18 @@ out to `claude auth status --json` at the cost of a subprocess per refresh.
   the terminal CLI works), [#56370](https://github.com/anthropics/claude-code/issues/56370)
   (shell-integration lock files hardcode `~/.claude/`). JetBrains is unconfirmed but shares the code
   path. **Treat the terminal as the only place the routing is real.**
-- **macOS Keychain caches for around 30 seconds.** A switch can appear not to have taken effect.
+- **macOS Keychain caches for around 30 seconds.** A switch can appear not to have taken effect. A
+  false negative fails *every* new routed launch across the tree, children of running sessions
+  included, so a bounded retry is worth having — availability loss, never mis-billing.
+- **`rehash` after arming.** zsh caches command paths, so the shell you armed from keeps resolving
+  the old binary until you `rehash` (or open a new shell). Already-running sessions never move.
+- **Assert the exit code, not the message.** `claude --version | head` reports `head`'s status, so a
+  wrapper refusal reads as a success in a pipeline. Check for `78` directly.
+- **`forceLoginOrgUUID` is not the companion knob it looks like.** Measured on 2.1.265: it is an
+  MDM key, read only from machine-level `managed-settings.json`. A user-level `settings.json` value
+  is *silently ignored*; setting it where it does work applies to every account on the box, which is
+  the opposite of per-directory; and an invalid one locks all of Claude Code out machine-wide, from a
+  root-owned file. `forceLoginMethod` is the per-config-dir knob; this one is not.
 - **Every OAuth'd MCP server needs re-authorising per account** via `/mcp`.
 - **A trailing slash or a `~` gives you a different account.** Worth restating; it is the failure that
   looks like "it logged me out".
@@ -333,6 +440,11 @@ a profile store at `$ANTHROPIC_CONFIG_DIR` (else `~/.config/anthropic`) holding 
 `user_oauth`. **It is not the answer.** That is the Anthropic Console / workload-identity-federation
 profile store, written by a separate CLI; selecting one switches you to Console API billing rather
 than to a second subscription. `claude --help` exposes no `--profile` flag and no profile subcommand.
+
+**direnv is the community standard here, and it is wrong for this.** The `.envrc` lives inside the
+repo, which commits a machine-local billing decision to a checkout that runs on other boxes; every
+worktree needs its own file and its own `direnv allow`; and direnv hooks the interactive shell, so a
+Node-spawned dispatch never sees it.
 
 Third-party switchers exist and are popular — [claude-swap](https://github.com/realiti4/claude-swap)
 (~2.4k stars, actively maintained) and [clauth](https://github.com/uwuclxdy/clauth) are the two with
@@ -384,9 +496,9 @@ this repo cannot drift onto it by accident.
 Adding a repo is that one line:
 
 ```
-# ~/.claude-accounts  —  <repo root>:<config dir>, both absolute, no trailing slash
+# ~/.claude-accounts  —  <repo root>:<config dir>[:<expected email>], absolute, no trailing slash
 /Users/greg/dev/spideryarn/reading2:/Users/greg/.claude-spideryarn
-/Users/greg/dev/gdconsult_work:/Users/greg/.claude-gdconsult
+/Users/greg/dev/gdconsult_work:/Users/greg/.claude-gdconsult:you@client.example
 ```
 
 These wrappers are machine-local and deliberately outside the repo: the Linux box runs the same
@@ -397,6 +509,10 @@ checkout and must keep its own authentication.
 - [claude-cli-as-subagent.md](claude-cli-as-subagent.md) — dispatching Claude from outside a session
   via `scripts/run-claude.ts`, which is the caller that a shell function would have missed.
 - [silent-success.md](silent-success.md) — the class this doc's loud-failure rule belongs to.
+- `coding-agent-instructions/docs/CLAUDE_ACCOUNT_PER_DIRECTORY.md` in Greg's MindstoneRebel repo —
+  the same mechanism, armed there first, reviewed by two GPT models, and the source of the
+  measurements above that are not ours. Its sibling `SETUP_DISPATCH_ACCOUNTS.md` is the pool model.
+  Machine-local: that submodule is on Greg's Mac, not on the box.
 - [Authentication](https://code.claude.com/docs/en/authentication) ·
   [Settings](https://code.claude.com/docs/en/settings) ·
   [Status line](https://code.claude.com/docs/en/statusline) — the official pages, current 2026-09-08.
