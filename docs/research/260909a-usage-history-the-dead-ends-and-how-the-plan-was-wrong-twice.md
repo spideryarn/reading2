@@ -30,10 +30,40 @@ Both halves are false:
 - `grep -rn 'from "\.\./fleet/' tools/overseer/` returns ~17 hits — mostly `import type` from
   `wire.js`, plus value imports of `pane.js`, `claude-argv.js`, `attempt-clock.js`.
 
-**The actual rule is weight and the store cycle, not direction.** `tools/fleet/attention.ts`'s header
-records the real constraint: a fleet module importing `readCheckpoint` would close a cycle *and* drag
-the Overseer's usage/memory/diff/lock/log modules into the process you reach for when something else
-is broken. `jsonl.ts` and `lock.ts` cross freely because they import only `node:*`.
+**The actual rule is weight and the store cycle, not direction** — and, contrary to what both
+sessions assumed while getting it wrong, **it is mechanically enforced.** Session
+`260908f-roadmap-exec-identity` states it in one sentence:
+
+> `tools/fleet/` may import a module from `tools/overseer/` only if that module cannot reach
+> `tools/overseer/store.ts` — directly or transitively — and closes no cycle; the allowlist in
+> `tests/fleet-attention.test.ts` is the enforcement, and its length is a consequence of that rule
+> rather than a limit of its own.
+
+Verified in this worktree: `OVERSEER_MODULES_FLEET_MAY_IMPORT` (`tests/fleet-attention.test.ts:439`)
+is asserted **by equality** (`:589`), not containment — so removing an entry is a visible change too
+— and the check walks the **transitive closure**, with a test at `:592` for the case it was rewritten
+for: a fleet module importing `lock.js` which itself imports `store.js`. A direct-import scan sees
+`lock.js` and stops; the closure sees both.
+
+**The part worth writing down, because it is what the two of us inferred oppositely: the rule is
+about the store, not about the count.** The list read as "two modules, and a third needs justifying".
+What actually earns a place is being a leaf that does not drag the store in behind it — the store
+pulls usage, memory, diff, lock and log along with it, and it holds the Overseer's *opinion* about
+what a bad checkpoint means, which is precisely what the dashboard must not inherit.
+
+Two consequences of that framing:
+
+- **The end state is a move, not a longer list.** `work.ts`, `work-probe.ts` and `harness.ts` are
+  about panes and processes — the fleet's own domain. The Overseer uses them for *interpretation*,
+  which is a consumer relationship rather than ownership. Moving them under `tools/fleet/` takes the
+  list back to two and puts each module where its subject lives. Named in the 260908f roadmap as
+  later work.
+- **The equality assertion makes widening a decision somebody takes**, rather than a guard that
+  quietly relaxes: a diff extending the list has to answer for itself, and each entry carries its
+  reason.
+
+There is a mild irony in the whole episode: the rule I could not state correctly was the one thing in
+this area with a real test behind it. Neither of us looked.
 
 ### How it got in, from both ends
 

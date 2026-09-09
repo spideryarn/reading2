@@ -377,11 +377,23 @@ is not free, build the read side first against a fixture store — the format is
 Explanatory and polish only; the seam table landed in Stage 4.
 
 - [ ] Propose to Greg, via the Overseer, a sentence in `overseer-direction.md` saying what the
-      `tools/fleet` ↔ `tools/overseer` rule actually is — **weight and the store cycle, not
-      direction** — and quote the *mechanism*, because what went wrong twice in one night was not
-      ignorance of the rule: two sessions each reported a one-directional check as a two-directional
-      conclusion. The usable form: *name the scope you actually searched inside the sentence that
-      reports the result.*
+      `tools/fleet` ↔ `tools/overseer` rule actually is. Use
+      `260908f-roadmap-exec-identity`'s wording, which is better than mine and is already the test
+      comment's:
+      > `tools/fleet/` may import a module from `tools/overseer/` only if that module cannot reach
+      > `tools/overseer/store.ts` — directly or transitively — and closes no cycle; the allowlist in
+      > `tests/fleet-attention.test.ts` is the enforcement, and its length is a consequence of that
+      > rule rather than a limit of its own.
+  - Say **the rule is about the store, not the count** — that is the half two sessions inferred
+    oppositely on 2026-09-09, reading a short allowlist as a quota.
+  - Say it **is enforced**, by an equality assertion over a transitive closure. Both of us argued
+    about a rule that had a test behind it the whole time, which is worth one clause of warning to
+    the next reader.
+  - And carry the general lesson, which is not about this seam: *name the scope you actually searched
+    inside the sentence that reports the result.* "Nothing in `tools/overseer/` imports X" is a claim
+    a reader can size; "the seam is one-way" is one they cannot.
+  - If the doc's wording ends up differing from the test comment, `260908f-roadmap-exec-identity`
+    will make the comment cite the doc rather than restate it — one home per fact.
 - [ ] A line for the tab under the entry point that owns the dashboard docs (signposting needs no
       approval). **Cite by symbol, never `path:NNN`** in `docs/project/`. Link to
       `docs/project/fleet-dashboard-modes.md` rather than duplicating it.
