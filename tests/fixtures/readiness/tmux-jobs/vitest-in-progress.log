@@ -1,0 +1,6 @@
+
+ RUN  v4.1.11 /home/greg/code/spideryarn2
+
+  [private lane] spideryarn_test_260908092810_deadbeef in 5.5s, leased as spideryarn-test-lease-2794477, priced reader/researcher
+ ✓  private-postgres  tests/store-parity.test.ts (108 tests) 12059ms
+       ✓ takes url and fetchedAt from stage 1, never from stage 2  1449ms

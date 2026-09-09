@@ -222,20 +222,36 @@ joins the file set** (it is in nobody's claim).
 
 ## Coordination — asked and answered by the Overseer, 2026-09-09 01:40
 
-1. **No third `Speaker` arm.** `SPEAKER_PREFIX` (`actions.ts:522-525`) has `greg` and `overseer`, and
-   neither fits a notice *from the dashboard to the Overseer*: `greg` is a lie (he pressed a button,
-   he did not write the line), and `overseer` would have the Overseer read a message apparently from
-   itself. Adding `"dashboard"` would widen a union in `wire.ts` that `SPEAKER_PREFIX` and
-   `parseSpeaker` must exhaust, turning the delivery-receipts agent's build red. **Ruled out; build
-   the fallback**, which touches nothing shared: compose the line in `tools/fleet/notify-overseer.ts`
-   with its own named prefix constant, call `sendMessage` directly, and test that the composed line
-   (a) begins with an attribution naming the dashboard and disclaiming Greg, (b) is neither existing
-   `SPEAKER_PREFIX`, and (c) survives `checkText` **after** prefixing.
-   **This is a deliberate exception to the shared attribution machinery**, and the reason it is
-   tolerable is that the text is fixed and reviewed — the same ground `renderSpoken`'s `/compact`
-   exception stands on ([overseer.md § gate 1](../project/overseer.md#1-never-hide-who-decided)).
-   If a second such sender ever appears, that is the moment to add the arm rather than a second
-   constant.
+1. **A third `Speaker` arm, `"dashboard"` — reversed twice, and the second reversal is the right one.**
+   `SPEAKER_PREFIX` (`actions.ts:522-525`) has `greg` and `overseer`, and neither fits a notice *from
+   the dashboard to the Overseer*: `greg` is a lie (he pressed a button, he did not write the line),
+   and `overseer` would have the Overseer read a message apparently from itself.
+
+   The Overseer first ruled the arm out on the ground that widening the union turns the
+   delivery-receipts agent's build red, and I planned a private prefix constant instead. **Sol's F5
+   refused that**, and the Overseer withdrew its ruling: a second hand-written attribution mechanism
+   is exactly what gate 1 forbids, and a scheduling conflict is not a reason to create one.
+
+   **The mechanical detail that settles it beyond the principle:** `SPEAKER_PREFIX` is an exhaustive
+   `Record<Speaker, string>`, so a private constant could never have compiled *honestly* — it would
+   have been a second declaration of the same contract with nothing relating the two, which is the
+   `QueueView` twin that cost this project four dropped fields in one night. The arm is two files,
+   `wire.ts` and `actions.ts`.
+
+   **`claude-agents-dashboard` adds it itself**, in a small commit straight after its Stage 4, and
+   sends the Overseer the sha. **Stage D starts then**, and not before.
+
+   **THE ARM IS FOR REPORTS ONLY, AND THIS IS A CONSTRAINT ON EVERY FUTURE USE OF IT.** Its prefix
+   says *a person acted and software is reporting it*. That sentence is true of "somebody started a
+   session from the web UI" and false of anything the receiving agent is meant to act on. So if
+   anything ever sent under this speaker is an **instruction**, the prefix has become a false
+   statement about its own message and **the arm must be split, not reused** — a reporting speaker
+   and an instructing one are two different claims about authority and must not share a label.
+   The Overseer's constraint, 2026-09-09, and it is written here because the next person to reach for
+   this arm will be reaching for a convenient existing thing.
+
+   One thing comes free: `renderMessage` already refuses a slash command from any speaker but `greg`
+   (`actions.ts:578-583`), so the notify line inherits that and cannot smuggle a command.
 2. **`collect.ts` is queued behind `260908f-roadmap-exec-identity`**, which is at suite-plus-review
    now. Merge `origin/dev` after it lands, then add the ~15 additive lines. That session has been told
    directly that I am queued behind it. If it has not landed by the time Stage 0 is reviewed, the
@@ -419,17 +435,81 @@ New order, the loud band staying on top:
 | 5 | recent messages | waiting to go to it |
 | 6 | where it is | where it is |
 
-- [ ] Split `RecentMessages.tsx` into a latest-message view and an earlier-messages disclosure over the
-      same `useRecentMessages` reading. **The refusal arms (`not-found`, `unreadable`, `no-answer`,
-      "not read yet") surface at the top with the latest message**, not down with the provenance — a
-      reading that could not be taken must not render as silence.
-- [ ] Re-parent `ActionButtons` freely; **change nothing it says**, and leave
-      `DELIVERY_HEADLINE:319-336` byte-identical. If an arm reads badly in the new layout that is a
-      message to the dashboard agent via the Overseer, not an edit.
-- [ ] The idle summary shows only when the session is idle **and** the summary is cached — never a
-      spinner where a sentence goes.
-- [ ] New `describe` blocks in `tests/fleet-web.test.tsx`, appended.
-- [ ] Browser check at 390 px and 1280 px in a Sonnet subagent.
+- [x] Split `RecentMessages.tsx` into `LatestMessage` and `EarlierMessages` over the **same**
+      `useRecentMessages` reading — one fetch, one view, two renderers, so the newest turn and its
+      older siblings cannot disagree about what was read.
+- [x] **The refusal arms surface at the top with the latest message.** `not-found`, `unreadable`,
+      `no-answer` and *not read yet* are the states in which there is no newest turn; leaving them
+      downstairs would have rendered **nothing** at the top, which reads as a session that has said
+      nothing rather than as a transcript we could not read. A test pins it.
+- [x] **The stale note moved up with the turn it qualifies, and the provenance did not.** Same cut
+      `Found` already made one level down: bytes-read changes what you *believe*, age changes what you
+      *do* — and the disclosure is closed by default, so a caveat inside it is a caveat nobody has.
+- [x] Re-parented `ActionButtons` and the queue below the conversation; **nothing they say changed**
+      and `DELIVERY_HEADLINE` is byte-identical.
+- [x] One line of existing copy did change and had to: the shell sentence said "the transcript and the
+      identifiers **below**", and the transcript is now above it.
+- [x] Six `describe` blocks appended to `tests/fleet-web.test.tsx`; nothing reorganised.
+      **All 345 pass, and the new ones are capable of failing** — rendering every turn in `Latest`
+      instead of the newest turns "shows only the newest turn outside the disclosure" red. The order
+      assertions would have failed before the change too, because `Latest message` did not exist.
+- [x] The disclosure is located in tests **by what its summary says**, not by `querySelector("details")`:
+      Rename and *Where it is* are also `<details>` sharing the class, so the first match is whichever
+      sits highest on the page, and "not inside the disclosure" would have passed against the wrong
+      element for a reason unrelated to the claim.
+- [ ] **The idle summary is NOT in this stage** — it needs the describer, which is blocked. The
+      section is built to take it: when it arrives it goes beside the newest turn, shown only when the
+      session is idle *and* the summary is cached, never a spinner where a sentence goes. F9's
+      constraints (summarise the last completed turn, never infer "finished" from `idle`) land with it.
+- [x] Browser check at 390 px and 1280 px, in a subagent driving Playwright against a server run out of
+      this worktree. Not Sonnet, deliberately: those are rate-limited until 2026-09-12 and a 429 kills
+      a spawned agent mid-task rather than at spawn.
+
+**What the browser said, and the one thing it caught that no test could.** Order correct at both
+widths, measured by vertical position rather than by DOM order alone; no horizontal overflow at 390 px
+(`scrollWidth === clientWidth === 390`, open and closed), long `Bash` strings in tool-call lines
+breaking mid-token rather than overflowing; the newest turn readable without pinching; console
+completely silent — zero messages of any type, not even the one error the docs lead you to expect.
+
+**And the finding: the disclosure summary was styled as a section heading, not as a control.** It had
+copied *Where it is*'s summary styling — 11 px, uppercase, tracking-widest, ink-faint — so on screen
+it sat between `LATEST MESSAGE` and `SAY SOMETHING TO IT` reading as a third section label, with
+nothing but the browser's native 8 px triangle to say otherwise. `cursor: pointer` is invisible on a
+phone. The agent's words: *"I'd have scanned past it."* That is the one thing a jsdom test cannot
+answer — every assertion about it passed, because the element was correct and only its appearance was
+wrong — and it is precisely the "button to click" Greg asked for.
+
+Fixed: sentence case at 13 px with a border and a panel fill. **And a second fix from the same
+report**, which was offered as the lower priority and taken anyway because it is two lines: opening
+the disclosure inline pushed the composer ~2,600 px down at 390 px (measured, `y=1576` → `y=2841`), so
+reading back and then replying was a long scroll each way. The content is now capped at `60vh` with
+its own scroll — which is *closer* to the "popup panel" Greg asked for than an unbounded expansion, so
+it costs nothing in fidelity to the request.
+
+**And the cap introduced a defect of its own, which the second browser round caught.** With no
+boundary on the scrolling box, `offsetWidth − clientWidth` was `0` at both widths — overlay
+scrollbars, no gutter, no persistent bar — so the last visible turn simply stopped and the next
+section began. At 390 px the cut landed mid-turn, and a panel holding six more messages read as **a
+conversation that ends here**. That is this tool's own failure mode wearing a new hat: an absence
+rendering as a fact, introduced by a fix for something else. A border and radius matching the control
+that opened it makes the cut legible as a cap. Verified after: the border computes on the scrolling
+div (`1px solid oklch(0.9 0 0)`, all four sides) as well as the summary, `offsetWidth − clientWidth`
+is now `2` — the borders, not a reclaimed gutter — and at maximum scroll the last child's bottom sits
+exactly on the panel's inner bottom edge (`650 === 650` at 1280, `616 === 616` at 390), so the side
+padding clipped nothing. It reads as **two stacked related boxes** — a control with its output panel
+beneath — rather than one unit, which keeps the summary legible as the thing you press while the panel
+is open.
+
+**Two pre-existing defects the move made prominent, and they are Greg's calls rather than this
+stage's.** The turn body renders as raw text, so a message containing `**bold**` or backticks shows
+its markup — deliberate, because `web/src/` is under a glob test forbidding raw HTML and rendering
+markdown is a scope and safety decision, not a tweak. And a long turn is cut mid-word above *"Cut
+short — 2,253 characters in full"*, which is server-side `maxTextChars`. Both were tolerable at the
+bottom of the page and are more noticeable as the first thing you read.
+
+**One thing the check could not observe:** no session on the box had a pending question at the time,
+so *"What it needs from you"* above the latest message is verified by a jsdom test and by source
+order, not by a screenshot.
 
 ### [ ] Stage F — land it
 
@@ -490,8 +570,91 @@ touch it.
 **The fix is a dependency rather than a patch:** a description is renderable only when the row's
 Execution identity is `verified` and its verified conversation id is the id of the transcript that was
 read; `claimed-only` or `unknown` produces `cannot-tell` and never falls back to `CLAUDE_SESSION_ID`.
-That is `FleetRow.execution`, which `260908f-roadmap-exec-identity` is landing tonight — so Stage B
-was already queued behind it, and now *depends* on it rather than merely sharing a file.
+That is `FleetRow.execution`, which `260908f-roadmap-exec-identity` is landing — so Stage B was
+already queued behind it, and now *depends* on it rather than merely sharing a file.
+
+#### The shape it depends on — verified by reading, not by being told
+
+**Not on `dev` as of 2026-09-09 03:10**: `git show origin/dev:tools/fleet/wire.ts | grep -c
+ConversationReading` prints `0` and `tools/fleet/execution-identity.ts` is absent from `origin/dev`.
+The owning session's gates (full suite, Sol review) are still running and it will not push before they
+are dispositioned, which is right.
+
+**But it is checkable anyway, because we are on one box**, and it was cross-checked rather than taken
+on trust — read directly out of
+`/home/greg/code/spideryarn2/.claude/worktrees/260908f-exec-identity/tools/fleet/wire.ts`:
+
+```ts
+export type ExecutionToken = { boot: string; pid: number; startTicks: number };   // :1523
+
+export type ConversationReading =                                                  // :1545
+  | { kind: "not-claimed" }
+  | { kind: "verified"; id: string }
+  | { kind: "conflicting"; claimed: string; observed: string }
+  | { kind: "unverifiable"; claimed: string; why: string };
+
+export type ExecutionReading =                                                     // :1612
+  | { kind: "verified"; token: ExecutionToken; harness: HarnessKind; conversation: ConversationReading }
+  | { kind: "claimed-only"; conversation: ConversationReading; why: string }
+  | { kind: "unknown"; cause: ExecutionUnknownCause; why: string };
+```
+
+**The separation is the whole point and is exactly F1:** knowing which child process is running does
+not prove which transcript it is writing, so those are two readings rather than one. `conversation.id`
+is the id the live process's own `--session-id` carried, not the tmux claim — and `wire.ts:1551-1555`
+says outright which side is stale: *"the claim is the stale one … `observed` is the conversation
+actually in the pane and `claimed` is what every address in this payload would have sent you to."*
+
+**A wrong inference, recorded because the type invites it.** `claimed-only` also carries a
+`conversation`, and I read that as meaning `conflicting` is reachable from two execution arms — that
+we could know a pane had changed hands without having identified the process. **It is not, and the
+reason is structural:** `claimed-only` means the walk ran and could not *name* what it found, so no
+command line was read, so there is no observed conversation id to disagree with the claim.
+`readExecutionIdentity` passes `observed: null` on that path unconditionally
+(`execution-identity.ts:258`) and `conversationOf` (`:302`) maps a null observation to `unverifiable`,
+or `not-claimed` where there is no claim. **`conflicting` comes from `verified` and nowhere else.**
+
+So the coverage is *narrower* than I thought, not wider, and the verified-only predicate was right all
+along. The type does not express the invariant, which is why a careful read reached the opposite
+conclusion; its author has added it to the arm's doc comment.
+
+| reading | what the row shows |
+|---|---|
+| `execution.verified` **and** `conversation.verified` **and** the id matches the transcript read | the description, keyed on `boot:pid:startTicks` |
+| `conversation.conflicting` (reachable from `verified` only) | **"this pane is running a different conversation now"** — never a description |
+| anything else | `cannot-tell`, worded informatively (see the caveat below) |
+
+**A near miss worth knowing about, since it looks like thrown-away information.** When a harness *is*
+named and only its start ticks cannot be read, the reading is `unknown`/`process-start-unreadable`
+and it discards a conversation verdict it briefly held. Promoting that to `claimed-only` carrying the
+real verdict *would* make `conflicting` reachable from two arms — and was rejected deliberately,
+because a failed `/proc` read almost always means the process exited between the `ps` and the read, so
+naming the conversation a dead process was running is a false alarm rather than a rescued fact.
+
+Three refinements from that session, all taken:
+
+- **Key the cache on the execution token, not merely gate rendering on it.** The token stringifies as
+  `boot:pid:startTicks`. With it in the key, conversation B *misses* the cache and generates its own
+  description, so the stale entry becomes **unreachable** rather than merely unrendered. Gating alone
+  leaves a correct-looking record sitting in the cache waiting for some later code path to find it —
+  the difference between a wrong state being invisible and being unrepresentable, which is the rule
+  this project actually holds itself to. Do both.
+- **`conflicting` gets its own copy, not the grey "cannot tell" arm.** When the conversation reading
+  is `conflicting`, we know a great deal: `observed` is what is actually running in that pane and
+  `claimed` is the stale id every other field on the row still names. That is a *positive* statement —
+  **this pane is running a different conversation now** — and it is the single case F1 is about.
+  Collapsing it into the same arm as `unverifiable` throws away the finding.
+- **Do not import `tools/fleet/execution-identity.ts` from the browser**; it reads `node:fs` at module
+  scope, and `tests/fleet-imports.test.ts` is the guard. Its `identityWriteGate` is server-side only.
+  Narrow inline in the client instead — the shape is declared once in `wire.ts` and the compiler
+  enforces the narrowing, so that is not a hand-written second copy of a contract.
+
+**And the caveat that shapes the copy rather than the code:** a live, working Claude can read as
+`claimed-only` — a session launched before `new-claude` began writing `--` has a prompt running past
+the option region, so `claude-argv.ts` refuses the command line. More importantly, **every row parses
+to `unknown` until both the dashboard and the daemon are restarted on that code**, which is the
+Overseer's to arrange. So `cannot-tell` is the **normal case for a while, not an error**, and its
+wording must be informative rather than apologetic or it will read as a broken page.
 
 **F4, and it is partly self-inflicted.** `routes-new.ts:405-423` already documents this and cites an
 earlier Sol finding: a web launch passes an opaque `web-<clock>` name, which makes gjd-remote run
@@ -533,3 +696,146 @@ that a second attribution path is the thing gate 1 forbids, and the Overseer is 
 scheduling problem. They are not actually in conflict — the answer is to add the arm *after* the
 delivery-receipts work lands, which is a sequencing decision the Overseer owns. Put back to it rather
 than settled here; Stage D does not start until it answers.
+
+### One risk carried from a peer, 2026-09-09
+
+**The cache key is built out of a type another session is still having reviewed.** `ExecutionToken`'s
+three fields (`boot`, `pid`, `startTicks`) are what the description cache is keyed on, and Sol has
+been asked specifically to attack that token design and the differ's sampling gap. Its author thinks
+it much more likely the token survives untouched, and flagged it anyway — correctly, because a silent
+change to those three fields is a cache migration for us rather than a rename.
+
+**So the token is consumed through one stringifier and one place**, not spread through the describer,
+and the plan says so here rather than discovering it later: if the token's shape moves, exactly one
+function changes and every stored record is invalidated by its own key rather than by a migration.
+
+## One more coordination, 2026-09-09 — the shared turn renderer
+
+`recent-messages-tab` is building a dock tab showing a rolling window of recent messages across every
+live session, and asked whether to reuse `RecentMessages.tsx`'s rendering or duplicate it while this
+stage is in flight. **Answered: extract it, and the reason is a correctness hazard rather than
+tidiness.**
+
+`Turn` is small, but it renders `SPEAKERS`, a nine-arm map over `MessageSpeaker`, and two of those
+arms are traps. `transcript.ts:60-64` says a `compact-summary` *"reads exactly like a person
+recapping the task"* and is *"the single most convincing wrong answer this module could give"*. A
+second renderer that collapses that into `human`, or falls through on an arm it does not know, shows a
+fabricated recap as something a person said — and a cross-session feed is the **worst** place for that
+bug, because its reader was not watching those sessions and has no independent sense of what was said
+in them. Duplicating markup is cheap; duplicating a nine-arm discrimination with two landmines is not.
+
+**The split, so neither agent edits the other's file:** that session creates a new file holding `Turn`
+and `SPEAKERS`, copied as-is; this one deletes the local copy and changes one import once Stage E is
+green and reviewed. Two copies exist harmlessly in between, and each step has one owner.
+
+## Review ledger — GPT Sol on the Stage E code, round one, 2026-09-09
+
+Verdict **refuse**: four established P1s, two P2s. Artefact:
+[260909a-dashboard-session-descriptions-review-e-sol.md](260909a-dashboard-session-descriptions-review-e-sol.md).
+It ran `tests/fleet-web.test.tsx` itself (345/345 at the time) rather than reasoning about it, and
+changed no files. All six accepted; every one verified against the code first.
+
+| ID | Finding | Disposition |
+|---|---|---|
+| F13 | An incomplete empty read is presented as a silent session | **Fixed** |
+| F14 | An older readable turn can be labelled "Latest message" | **Fixed** |
+| F15 | Uncertainty about which transcript is live is hidden as provenance | **Fixed** |
+| F16 | The zero-turn disclosure invents an "only turn" | **Fixed** |
+| F17 | The tests do not pin the stale warning *outside* the disclosure | **Fixed** |
+| F18 | The split does not make refusal loss unrepresentable | **Fixed** |
+
+**All six are one mistake with six faces, and it is a mistake the move itself created.** This section
+used to sit at the bottom of the page, where a sentence reads as a footnote. It now sits second, where
+a sentence reads as *the session's current state* — and four of its sentences had only ever been true
+as footnotes.
+
+- **F13** — `found` with no turns said *"a session that has not spoken yet"* even when
+  `reachedStartOfFile` was `false` (the read explicitly did not reach the beginning) or `null` (no
+  claim either way). Neither establishes silence. The empty branch also returned **before** the stale
+  warning it had already computed, so the least certain reading was the one shown with the fewest
+  qualifications. Now three distinct sentences, and the caveats are drawn whether or not there is a
+  turn.
+- **F14, and it is the sharpest.** `parseRecentMessages` drops a turn it cannot parse and keeps only a
+  **count** — the *position* is lost (`messages-client.ts:279-288`, verified). So given
+  `[readable, unreadable]` the page renders the readable one under "Latest message", and **the missing
+  one may be newer**. The warning existed and was inside the closed disclosure. Now beside the turn.
+- **F15** — `copies !== 1` means we cannot tell which file is live, and steering on that message may
+  answer a different conversation. That changes what you **do**, so by this file's own do/believe rule
+  it cannot live behind a disclosure. My rule, applied against me.
+- **F16** — an empty `older` slice has two causes that mean opposite things: one turn was read and it
+  is above, or nothing was read and the thing above is an empty-state sentence. The sentence I wrote
+  covered both and contradicted the second.
+- **F17 is a finding about the tests, and a good one.** jsdom's `container.textContent` **includes the
+  descendants of a closed `<details>`**, so every "is the warning on the page" assertion passes whether
+  a reader can see it or not — moving `StaleNote` back inside would have kept the suite green. The new
+  tests assert *containment* against the disclosure element. Verified by mutation: removing `StaleNote`
+  from the visible half turns exactly that test red.
+- **F18** — the two halves were exported separately, and although the only caller paired them
+  correctly, the *API* let a future consumer render the history alone and flatten all four refusal
+  states into nothing. Now one exported `Conversation` owns the exhaustive switch and
+  `EarlierMessages` takes only the `found` arm, so the bad composition is not expressible.
+
+Eight tests added (363 total), typecheck clean across 1765 files.
+
+## Stage D: the module is built, and its wiring hit a design question worth stopping on
+
+**Built, tested and committed (`189e234c`): `tools/fleet/notify-overseer.ts` and its 15 tests.** Who to
+tell, what to say, what to record about what became of it — everything impure injected, so all six
+arms of `NotifyOutcome` are reachable with no tmux, no pane and no gateway. Mutation-checked:
+collapsing `cannot-tell` into `no-holder` turns exactly the test that names that distinction red.
+**Not wired**, and the stage is not done until it is.
+
+### F6 is bigger than "add a field", and the reason is `inFlight === record`
+
+Sol's F6 asks for `LaunchRecord` to become a discriminated union so `{state:"started",
+notification:absent}` is unrepresentable. Sizing it against the code turned up a constraint neither of
+us had:
+
+**The launch record is mutated in place, and its object identity is load-bearing.** `launch()` ends
+with `if (inFlight === record)` (`routes-new.ts:893`) — a **reference** comparison that exists because
+of an earlier Sol finding: before the claim was atomic, two launches could be live at once and the
+first to finish cleared the second's slot. That check is what makes the impossible loud. Replacing the
+record object to move it between union arms **breaks that identity**, and repairing it by comparing
+`id` instead would quietly weaken the thing it was built to protect.
+
+Every type-level formulation that preserves identity moves the discriminant off the top level —
+`record.progress = {state, notification}` assigned wholesale, or `state` becoming an object. Both
+change the **wire shape**. And `LaunchRecord` is a **hand-written twin**: the server declares it in
+`routes-new.ts:182` and the client declares it again in `new-session-client.ts:62`, related by nothing
+but hope, with `parseLaunch` reading `v["state"]` as a string. So a rename is invisible to the
+compiler and shows up as `parseLaunch` returning `null` for every record and the panel rendering
+nothing — the exact silent-break class of
+[260908b](../postmortems/260908b-the-parts-were-all-tested-and-none-of-the-joins-were.md).
+
+**So F6 done properly is "migrate `/api/sessions/new` behind `wire.ts`"**, where one declaration turns
+both ends red on a change. That is not scope creep invented here — it is **item 1 on
+[260907e](260907e-agent-fleet-dashboard.md)'s own "what is left" list**, and `wire.ts` belongs to
+`claude-agents-dashboard` under a "one new block at the END only" agreement that a new block would
+satisfy.
+
+**Three ways to take it, and this is a decision rather than a preference:**
+
+1. **Migrate the endpoint behind `wire.ts` as part of this stage.** Correct, and it closes a known
+   twin. Costs a stage of its own and lands in another workstream's roadmap item.
+2. **Wire the notification with `notification` as a required top-level field**, no union, plus a test
+   that a `started` record never carries `not-attempted`. Ships tonight; leaves F6 satisfied by a test
+   rather than by the compiler, which is the thing this project keeps saying is not enough.
+3. **Leave Stage D unwired** until the migration is scheduled. The module is committed and inert; no
+   half-join exists.
+
+**Not decided here** — it is the Overseer's to sequence, because option 1 collides with somebody
+else's roadmap and option 2 knowingly accepts a weaker guarantee than a P1 finding asked for.
+Recorded rather than chosen at 1:30am at the end of a long session, which is the condition under which
+option 2 looks most attractive and is least likely to be revisited.
+
+### What remains in Stage D whichever way that goes
+
+- The send in a **child process** with one total deadline (F7): `sendMessage` is synchronous
+  `execFileSync` across as many as six tmux and process calls at 10 s each, and `launch()` runs on the
+  dashboard's event loop. The module already takes an async `send`, so this is wiring rather than
+  redesign.
+- A **re-read of the claim immediately before delivery** (F8): a holder can release the role between
+  the snapshot and the send while staying in the same pane, and every one of `sendMessage`'s guards
+  would still pass. Process identity is not current role ownership.
+- Mark the launch `started` **before** notifying, so the notification can never delay the launch result.
+- The panel line, after `record.note` (`NewSessionPanel.tsx:165-167`).

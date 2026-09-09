@@ -34,7 +34,13 @@ import { describe, expect, it } from "vitest";
 import { ACTIONS, type EnactedAction } from "../tools/fleet/actions.js";
 import { classifyGate, type PaneGate } from "../tools/fleet/pane.js";
 import { fleetState } from "../tools/fleet/state.js";
-import type { FleetState as FleetStateWire, QueuedItem } from "../tools/fleet/wire.js";
+import type {
+  FleetState as FleetStateWire,
+  LaunchProgress,
+  LaunchRecordView,
+  NotifyOutcomeView,
+  QueuedItem,
+} from "../tools/fleet/wire.js";
 import { RENAME_STATUS, type RenameErrorCode } from "../tools/fleet/routes-rename.js";
 import { REFUSAL_STATUS } from "../tools/fleet/routes-steer.js";
 import { grantsPermission } from "../tools/fleet/pane.js";
@@ -325,5 +331,72 @@ describe("the shared wire state cannot acquire an optional field", () => {
     expect(payload.collectedAt).toBeNull();
     expect(Object.hasOwn(payload, "attemptedAt")).toBe(true);
     expect(payload.schema).toBe(1);
+  });
+});
+
+/**
+ * The launch record, which moved behind `wire.ts` because it was a twin.
+ *
+ * Same guard as the payload above, pointed at the fourth endpoint to migrate.
+ * The reason this type is here at all is that it was declared twice — once in
+ * `routes-new.ts`, once in `web/src/new-session-client.ts` — and the client's
+ * `parseLaunch` read the discriminant as a raw string, so a shape change was
+ * invisible to the compiler and would have surfaced as the panel rendering
+ * nothing.
+ */
+describe("the launch record's own shape", () => {
+  type EveryKeyRequired<T> = [T] extends [Required<T>] ? true : false;
+
+  it("refuses an optional top-level key on the launch record", () => {
+    const total: EveryKeyRequired<LaunchRecordView> = true;
+    expect(total).toBe(true);
+
+    // @ts-expect-error `false` is assignable ONLY when the type has an optional
+    // key. If this starts compiling the directive goes unused and
+    // `npm run typecheck` fails — which is what makes the guard un-deletable.
+    const optional: EveryKeyRequired<LaunchRecordView> = false;
+    void optional;
+  });
+
+  /**
+   * **THE POINT OF THE NESTING**, asserted rather than only documented.
+   *
+   * `progress` carries the state and its notification together, so the two bad
+   * pairings cannot be written: a launch that is still starting cannot carry an
+   * outcome, and one that has started cannot carry "not attempted". A top-level
+   * `state` beside a top-level `notification` would compile both.
+   */
+  it("cannot express a started launch with no notification state", () => {
+    const starting: LaunchProgress = { state: "starting", notification: { kind: "not-attempted" } };
+    const started: LaunchProgress = { state: "started", notification: { kind: "pending" } };
+    const done: LaunchProgress = { state: "started", notification: { kind: "no-holder" } };
+    expect([starting.state, started.state, done.state]).toEqual(["starting", "started", "started"]);
+
+    // @ts-expect-error a started launch may not carry `not-attempted` — that arm
+    // belongs to `starting`, and this is the pairing the union exists to refuse.
+    const wrong: LaunchProgress = { state: "started", notification: { kind: "not-attempted" } };
+    void wrong;
+
+    // @ts-expect-error and a starting launch may not carry an outcome, because
+    // nothing has been attempted yet for it to be the outcome OF.
+    const alsoWrong: LaunchProgress = { state: "starting", notification: { kind: "no-holder" } };
+    void alsoWrong;
+  });
+
+  /**
+   * `submitted` is the success word and `sent` is not available anywhere in the
+   * union, because nothing on this box can observe reception.
+   */
+  it("has no arm that claims a message was received", () => {
+    const arms: NotifyOutcomeView["kind"][] = [
+      "submitted",
+      "no-holder",
+      "contested",
+      "cannot-tell",
+      "refused",
+      "unknown",
+    ];
+    for (const arm of arms) expect(arm).not.toBe("sent");
+    expect(arms).toContain("submitted");
   });
 });

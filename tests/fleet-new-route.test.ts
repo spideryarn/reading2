@@ -213,7 +213,7 @@ describe("a valid request runs gjd-remote new-claude, with the prompt on stdin",
   it("reports starting, then started with the name it was launched under", async () => {
     const f = fake();
     const accepted = await f.post({ prompt: "hello", name: "wf-new-hello" });
-    expect(accepted.json().launch.state).toBe("starting");
+    expect(accepted.json().launch.progress.state).toBe("starting");
     expect(accepted.json().launch.name).toBe("wf-new-hello");
 
     await f.finish({
@@ -223,7 +223,7 @@ describe("a valid request runs gjd-remote new-claude, with the prompt on stdin",
 
     const state = (await f.get()).json();
     expect(state.busy).toBe(false);
-    expect(state.launches[0].state).toBe("started");
+    expect(state.launches[0].progress.state).toBe("started");
     expect(state.launches[0].name).toBe("wf-new-hello");
     expect(state.launches[0].startedDir).toBe("/home/greg/code/spideryarn2");
     expect(state.launches[0].error).toBeNull();
@@ -614,7 +614,7 @@ describe("one at a time, then a cooldown", () => {
     await f.finish({ code: 1, stderr: "boom\n" });
     const state = (await f.get()).json();
     expect(state.busy).toBe(false);
-    expect(state.launches[0].state).toBe("failed");
+    expect(state.launches[0].progress.state).toBe("failed");
   });
 
   it("refuses outright when the box says it is critical, and runs nothing", async () => {
@@ -723,7 +723,7 @@ describe("a repo launch goes through gjd-remote's setup admission, not around it
       stdout: "gjd-remote new-claude web-1 → greg@1.2.3.4:/home/greg/code/spideryarn2\n✓ started 'web-1'\n",
     });
     const rec = f.routes.launches()[0]!;
-    expect(rec.state).toBe("started");
+    expect(rec.progress.state).toBe("started");
     expect(rec.dir).toBe("/home/greg/code/spideryarn2/.claude/worktrees/x");
     expect(rec.startedDir).toBe("/home/greg/code/spideryarn2");
     expect(rec.note).toMatch(/not \/home\/greg\/code\/spideryarn2\/\.claude\/worktrees\/x/);
@@ -762,7 +762,7 @@ describe("a launch that failed says so, and says whether something may still exi
     await f.finish({ code: 1, stderr: "✗ session 'x' already exists — 'gjd-remote resume x'\n" });
 
     const rec: LaunchRecord = (await f.get()).json().launches[0];
-    expect(rec.state).toBe("failed");
+    expect(rec.progress.state).toBe("failed");
     expect(rec.error).toContain("already exists");
     expect(rec.finishedAt).not.toBeNull();
   });
@@ -836,7 +836,7 @@ describe("a launch that failed says so, and says whether something may still exi
     await Promise.resolve();
     await Promise.resolve();
     const rec = routes.launches()[0]!;
-    expect(rec.state).toBe("failed");
+    expect(rec.progress.state).toBe("failed");
     expect(rec.error).toMatch(/the pipe broke/);
     expect(runs).toHaveLength(1);
   });
@@ -889,9 +889,13 @@ describe("the launch record survives JSON, which is how the client sees it", () 
         "requestedAt",
         "resolution",
         "startedDir",
-        "state",
+        "progress",
       ].sort(),
     );
+    /* The discriminant and its notification travel together under one key --
+       see LaunchProgress in wire.ts for why nesting rather than two top-level
+       fields, which is about the record's object identity surviving mutation. */
+    expect(Object.keys(rec.progress).sort()).toEqual(["notification", "state"]);
     expect(JSON.stringify(rec)).not.toContain("secret");
     expect(rec.promptBytes).toBe(13);
   });

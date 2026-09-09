@@ -122,6 +122,11 @@ import { fileURLToPath } from "node:url";
 
 import { collectHealth, type HealthLevel } from "./health.js";
 import { addressableHost } from "./origin.js";
+import type {
+  LaunchProgress as LaunchProgressView,
+  LaunchRecordView,
+  NewSessionStatusView,
+} from "./wire.js";
 
 // ---------------------------------------------------------------------------
 // The limits. Constants rather than magic numbers, each with the reason it has
@@ -176,63 +181,25 @@ export type NewSessionRequest = {
   unsafeDir: boolean;
 };
 
-export type LaunchState = "starting" | "started" | "failed";
+/**
+ * THE LAUNCH RECORD LIVES IN `wire.ts` NOW, and it moved because it was a twin.
+ *
+ * It used to be declared here and again in `web/src/new-session-client.ts`,
+ * related by nothing but hope — and the client's `parseLaunch` read the
+ * discriminant as a raw string, so a shape change here was invisible to the
+ * compiler and would have surfaced as the panel rendering nothing. A
+ * cross-family review then found that a launch reaching `started` could carry
+ * no notification state at all, and fixing that needs a discriminated union,
+ * which changes the shape. So the migration was the prerequisite for the fix
+ * rather than tidying beside it. See the block at the end of `wire.ts`.
+ *
+ * Re-exported under the old names so the rest of this file and its callers read
+ * as they did; there is still exactly one declaration.
+ */
+export type LaunchRecord = LaunchRecordView;
+export type LaunchProgress = LaunchProgressView;
+export type NewSessionStatus = NewSessionStatusView;
 
-/** One attempt, from the moment it is accepted to whatever became of it. */
-export type LaunchRecord = {
-  /** Ours, not the box's — the handle the client polls with. */
-  id: string;
-  state: LaunchState;
-  /**
-   * The tmux session name: what the caller asked for, or the opaque one this
-   * route minted for them (`webProvisionalName`). Since F11 it is known before
-   * the launch starts and is never null in practice — the type keeps the null
-   * because the wire and `interpretRun`'s read-it-back path still allow one,
-   * and a client that has to handle it anyway is not made worse by saying so.
-   */
-  name: string | null;
-  /** What was ASKED for. In repo mode the box may choose another — `startedDir`. */
-  dir: string;
-  /**
-   * Which admission path this launch took: `repo` is gjd-remote's verified
-   * origin resolution, under the setup lock; `dir` is the `-d` escape hatch.
-   */
-  resolution: "repo" | "dir";
-  /**
-   * The directory the box says it actually started in, once it has said so.
-   * Null while starting, and null afterwards when the output did not carry it.
-   * In repo mode this is the box's checkout for the origin, which is not
-   * necessarily `dir` — a worktree resolves to the checkout it belongs to.
-   */
-  startedDir: string | null;
-  /** The prompt's size. Never the prompt. */
-  promptBytes: number;
-  requestedAt: string;
-  finishedAt: string | null;
-  /** Why it failed, in a sentence for a person. Null unless `state` is failed. */
-  error: string | null;
-  /**
-   * **A FAILURE THAT MAY HAVE STARTED SOMETHING.** True when we lost the answer
-   * rather than got a refusal — a timeout, a launcher that vanished mid-run. The
-   * honest reading is "look at the fleet list, and kill it if it is there", and
-   * a client that renders `failed` as "nothing happened" is wrong on exactly
-   * these.
-   */
-  maybeStarted: boolean;
-  /** Anything true but awkward — a start whose name we could not read back. */
-  note: string | null;
-};
-
-/** Everything the client needs to draw the button's state. */
-export type NewSessionStatus = {
-  ok: true;
-  /** A launch is in flight; a second POST would be refused. */
-  busy: boolean;
-  /** Milliseconds until a POST would be accepted; 0 when it would be now. */
-  retryAfterMs: number;
-  /** Newest first, capped — this is a live view, not a history. */
-  launches: LaunchRecord[];
-};
 
 // ---------------------------------------------------------------------------
 // Pure request parsing. No I/O, no clock — every one of these is a decision
@@ -861,7 +828,12 @@ export function createNewSessionRoutes(options: NewSessionOptions = {}): NewSess
     const tookMs = io.now() - startedAt;
     record.finishedAt = new Date(io.now()).toISOString();
     if (outcome.kind === "started") {
-      record.state = "started";
+      /* ONE ASSIGNMENT, and the record's identity survives it — which is why
+         the discriminant is nested rather than top-level. `inFlight === record`
+         below is a reference comparison an earlier review put there
+         deliberately. `pending` rather than an outcome: the notification has
+         not been attempted yet, and the launch result must never wait on it. */
+      record.progress = { state: "started", notification: { kind: "pending" } };
       record.name = outcome.name;
       record.startedDir = outcome.dir;
       record.note = outcome.note;
@@ -870,7 +842,7 @@ export function createNewSessionRoutes(options: NewSessionOptions = {}): NewSess
           ` at ${record.startedDir ?? "(dir unread)"}`,
       );
     } else {
-      record.state = "failed";
+      record.progress = { state: "failed", notification: { kind: "not-applicable" } };
       record.error = outcome.why;
       record.maybeStarted = outcome.maybeStarted;
       io.log(
@@ -890,7 +862,7 @@ export function createNewSessionRoutes(options: NewSessionOptions = {}): NewSess
     // silent: if the slot has somebody else's launch in it, the bug is
     // upstream, and stamping over it would erase the evidence.
     if (inFlight === record) {
-      const uncertain = record.state === "failed" && record.maybeStarted;
+      const uncertain = record.progress.state === "failed" && record.maybeStarted;
       nextAllowedAt = io.now() + (uncertain ? uncertainCooldownMs : cooldownMs);
       cooldownWhy = uncertain
         ? `the last launch's answer was lost and a session MAY be running that nothing here can see — check the fleet list`
@@ -989,7 +961,7 @@ export function createNewSessionRoutes(options: NewSessionOptions = {}): NewSess
 
     const record: LaunchRecord = {
       id: randomUUID(),
-      state: "starting",
+      progress: { state: "starting", notification: { kind: "not-attempted" } },
       // MINTED HERE WHEN THE CLIENT DID NOT NAME IT, rather than left to
       // gjd-remote, whose placeholder is the first five words of the prompt.
       // webProvisionalName says what that costs.

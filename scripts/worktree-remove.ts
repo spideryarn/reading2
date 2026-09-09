@@ -337,7 +337,7 @@ export function liveness(worktreePath: string, lockReason: string | undefined, p
   }
   const chain = ancestry(proc, pid);
   const standing = ownerStanding(proc, lockReason, chain);
-  const scan = cwdUsersUnder(proc, worktreePath, new Set(chain.map((a) => a.pid)));
+  const scan = cwdUsersUnder(proc, worktreePath, new Set(chain.map((a) => a.pid)), pid);
   return { standing, inUse: composeInUse(standing, scan), authorised: ownerIsAsking(standing) };
 }
 
@@ -393,8 +393,39 @@ function currentToplevel(cwd: string): string | null {
   return top === null ? null : path.resolve(top);
 }
 
-function refExists(cwd: string, branch: string): string | null {
-  return tryGit(["rev-parse", "--verify", "--quiet", `refs/heads/${branch}`], cwd);
+/**
+ * The oid of a branch, or why we do not have one — **and "absent" is not "could
+ * not ask"**.
+ *
+ * `rev-parse --verify --quiet` exits 1 for a ref that is not there and something
+ * else for a failure to look. Folding both into `null` made a transient failure
+ * read as "branch does not exist — nothing to delete", which is a success line
+ * over a branch that is still sitting there. GPT Sol's seventh finding on the
+ * fix round; `reachableOids` had already been corrected for this and this
+ * duplicated read had not.
+ */
+type RefLookup = { kind: "oid"; oid: string } | { kind: "absent" } | { kind: "cannot-tell"; why: string };
+
+function lookupRef(cwd: string, branch: string): RefLookup {
+  const r = spawnSync("git", ["rev-parse", "--verify", "--quiet", `refs/heads/${branch}`], { cwd, encoding: "utf8" });
+  const out = `${r.stdout ?? ""}`.trim();
+  if (r.status === 0 && out !== "") return { kind: "oid", oid: out };
+  if (r.status === 1) return { kind: "absent" };
+  return { kind: "cannot-tell", why: `git rev-parse exited ${String(r.status)}: ${`${r.stderr ?? ""}`.trim()}` };
+}
+
+/**
+ * Is this branch checked out in some worktree right now?
+ *
+ * `git update-ref -d` is not `git branch -D`: it does **not** refuse a branch that
+ * a worktree has checked out. Reproduced by GPT Sol — a peer creates a worktree on
+ * an orphan branch between our resolution and our deletion, the tip never moves so
+ * the compare-and-swap is satisfied, and the peer is left with a symbolic HEAD
+ * pointing at a ref that is gone and a tree reporting "No commits yet". No A→B→A
+ * needed. So the deletion asks this immediately before acting.
+ */
+function checkedOutSomewhere(cwd: string, branch: string): boolean {
+  return listWorktrees(cwd).some((e) => shortBranch(e.branch) === branch);
 }
 
 /**
@@ -423,6 +454,49 @@ export function gitRemoveWorktree(primary: string, worktreePath: string): { ok: 
 }
 
 /**
+ * Clear a stale registration with **`git worktree prune`**, not `worktree remove`.
+ *
+ * The difference is which question git asks at the moment it acts, and it is the
+ * whole of the guard. `worktree remove` on a registered path removes *whatever is
+ * there*: if the original worktree is moved back between our classification and
+ * the call, git finds a valid tree, accepts it, and deletes it — GPT Sol
+ * reproduced exactly that, losing an ignored only-copy file and a detached commit
+ * named only by that tree's HEAD reflog. Dropping `--force` protected an
+ * *unrelated* replacement directory and not this one. `prune` asks instead
+ * whether the registration is *still* stale, and a restored worktree is not —
+ * measured: after moving the directory back, `git worktree prune -v` reports
+ * nothing and leaves it alone.
+ *
+ * **Locked first, because prune exempts locked entries by design** — the note in
+ * `worktree-admin.ts` says that is how they reached sixteen — and a real Claude
+ * worktree is normally locked. Unlocking a registration whose directory is gone
+ * cannot lose anything; if the directory came back in the meantime, the prune
+ * that follows declines to touch it anyway.
+ *
+ * Prune takes no path, so it clears every genuinely stale registration rather
+ * than only ours. That is acceptable where a bulk *removal* would not be: prune
+ * can only ever unregister an absent directory, and it never deletes a file.
+ */
+function pruneGhost(primary: string, entry: WorktreeEntry, steps: string[]): boolean {
+  if (entry.locked) {
+    const un = spawnSync("git", ["worktree", "unlock", entry.path], { cwd: primary, encoding: "utf8" });
+    steps.push(un.status === 0 ? "unlocked the stale registration" : `could not unlock it: ${`${un.stderr ?? ""}`.trim()}`);
+  }
+  const pr = spawnSync("git", ["worktree", "prune", "-v"], { cwd: primary, encoding: "utf8" });
+  if (pr.status !== 0) {
+    steps.push(`refused by git: ${`${pr.stdout ?? ""}${pr.stderr ?? ""}`.trim()}`);
+    return false;
+  }
+  const gone = !listWorktrees(primary).some((e) => e.path === entry.path);
+  steps.push(
+    gone
+      ? `pruned the stale registration at ${entry.path}`
+      : `left ${entry.path} registered — git no longer considers it stale, so something is there now`,
+  );
+  return gone;
+}
+
+/**
  * Prove, then delete, one branch — the shared tail of the ordinary path and the
  * orphan one, so orphan cleanup cannot drift into a weaker check.
  *
@@ -432,11 +506,16 @@ export function gitRemoveWorktree(primary: string, worktreePath: string): { ok: 
  * peer's A→B→A on the branch left the CAS satisfied and the excursion invisible.
  */
 export function proveAndDeleteBranch(primary: string, branch: string, trunkSha: string, steps: string[], dryRun: boolean): boolean {
-  const tip = refExists(primary, branch);
-  if (tip === null) {
+  const found = lookupRef(primary, branch);
+  if (found.kind === "cannot-tell") {
+    steps.push(`left branch ${branch}: could not read it — ${found.why}`);
+    return false;
+  }
+  if (found.kind === "absent") {
     steps.push(`branch ${branch} does not exist — nothing to delete`);
     return true;
   }
+  const tip = found.oid;
 
   const oids = reachableOids(primary, branch, null);
   if (oids.kind === "cannot-tell") {
@@ -461,6 +540,14 @@ export function proveAndDeleteBranch(primary: string, branch: string, trunkSha: 
     steps.push(`would delete branch ${branch}`);
     return true;
   }
+
+  /* Last thing before the delete, because a peer can create a worktree on this
+     branch at any point and the tip CAS would not notice. */
+  if (checkedOutSomewhere(primary, branch)) {
+    steps.push(`left branch ${branch}: a worktree has it checked out now — deleting it would strand that tree`);
+    return false;
+  }
+
   const del = deleteRefIfUnmoved(primary, branch, tip);
   steps.push(del.why);
   return del.ok;
@@ -493,8 +580,13 @@ function resolveTarget(cwd: string, primary: string, wanted: string | undefined,
 
   const entry = entries.find((e) => shortBranch(e.branch) === wanted);
   if (entry !== undefined) return { kind: "worktree", entry, branch: shortBranch(entry.branch) };
-  if (refExists(primary, wanted) === null) {
+
+  const found = lookupRef(primary, wanted);
+  if (found.kind === "absent") {
     return { kind: "refused", steps: [`no worktree is on branch ${wanted}, and no such branch exists`] };
+  }
+  if (found.kind === "cannot-tell") {
+    return { kind: "refused", steps: [`could not tell whether branch ${wanted} exists — ${found.why}`] };
   }
   return { kind: "orphan-branch", branch: wanted };
 }
@@ -544,11 +636,8 @@ export function removeWorktree(cwd: string, wanted: string | undefined, opts: Re
       steps.push(`would unregister it, and would leave branch ${branch ?? "(none)"} alone`);
       return { ok: true, steps };
     }
-    /* No --force: if the directory came back between the listing and now, git
-       revalidates and refuses rather than deleting what is in it. */
-    const rm = gitRemoveWorktree(primary, entry.path);
-    steps.push(rm.why);
-    if (!rm.ok) return { ok: false, steps };
+    const pruned = pruneGhost(primary, entry, steps);
+    if (!pruned) return { ok: false, steps };
     steps.push(`left branch ${branch ?? "(none)"} alone — the tree is gone, but its commits are not this command's to judge`);
     return { ok: true, steps };
   }

@@ -33,65 +33,27 @@
  * than fixed here: `routes-new.ts` is not this agent's file.
  */
 
+import type { LaunchProgress, LaunchRecordView, NotifyState } from "../../wire.js";
+
 export const NEW_SESSION_URL = "api/sessions/new";
 
-export type LaunchState = "starting" | "started" | "failed";
-
 /**
- * **WHICH ADMISSION PATH THE LAUNCH TOOK**, or the fact that the server did not
- * say.
+ * THE LAUNCH RECORD IS SHARED NOW — this file used to declare its own.
  *
- * `repo` is gjd-remote's verified route: the child runs with its cwd set to the
- * requested directory, gjd-remote identifies the checkout by its origin, reads
- * that repo's setup status and creates the session **under the setup lock**.
- * `dir` is `-d`, the escape hatch — an arbitrary path gjd-remote cannot
- * identify, so it skips the setup status and starts the session outside that
- * lock. routes-new.ts § THE DIRECTORY GOES THROUGH gjd-remote's OWN ADMISSION,
- * which was written after this dashboard was caught starting an agent in a
- * checkout `gjd-remote setup` was in the middle of rewriting.
+ * It was a twin of the one in `routes-new.ts`, related by nothing but hope, and
+ * `parseLaunch` below read the discriminant as a raw string. So a shape change
+ * on the server was invisible to the compiler and would have surfaced here as
+ * `parseLaunch` returning `null` for every record and the panel rendering
+ * nothing — `QueueView`'s failure exactly, and the reason `wire.ts` exists.
  *
- * So the two are not a detail of plumbing: they are different promises about
- * the tree the agent woke up in, and a page that draws neither leaves the
- * reader assuming the safe one. **`null` is the third arm and not a default** —
- * a server too old to send the field has made no claim, and printing either
- * word for it would invent one.
+ * **The parse stays.** Sharing the TYPE is not sharing trust: this is still
+ * untrusted JSON off the wire, and `parseLaunch` still refuses a shape it does
+ * not recognise rather than casting. What the shared type buys is that a change
+ * to the shape turns BOTH ends red instead of neither.
  */
-export type LaunchResolution = "repo" | "dir" | null;
-
-/** One attempt, from the moment it was accepted to whatever became of it. */
-export type LaunchRecord = {
-  id: string;
-  state: LaunchState;
-  /** What gjd-remote said it made. Null while starting, since Claude names it. */
-  name: string | null;
-  /** What was ASKED for. The box may have chosen another — see `startedDir`. */
-  dir: string;
-  /** See `LaunchResolution`. Null means the server did not say, never "repo". */
-  resolution: LaunchResolution;
-  /**
-   * **THE DIRECTORY THE BOX SAYS IT ACTUALLY STARTED IN**, once it has said so.
-   *
-   * Null while starting, and null afterwards when the output did not carry it.
-   * In `repo` mode this is the box's checkout for the origin, **which is not
-   * necessarily `dir`**: a worktree resolves to the checkout it belongs to, so
-   * a launch aimed at one tree can land in another. This panel's own header
-   * says *"the record that comes back says which directory was used, which is
-   * the half that matters"* — true of the record, and false of this client,
-   * which parsed `dir` and dropped this. Instance 14 in the table in
-   * docs/postmortems/260908b-the-parts-were-all-tested-and-none-of-the-joins-were.md.
-   */
-  startedDir: string | null;
-  /** The prompt's size. The server never records the prompt, and neither do we. */
-  promptBytes: number;
-  requestedAt: string;
-  finishedAt: string | null;
-  /** Why it failed, in a sentence for a person. */
-  error: string | null;
-  /** **A failure that may have started something.** See the header. */
-  maybeStarted: boolean;
-  /** Anything true but awkward — a start whose name could not be read back. */
-  note: string | null;
-};
+export type LaunchRecord = LaunchRecordView;
+export type LaunchState = LaunchProgress["state"];
+export type LaunchResolution = LaunchRecordView["resolution"];
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
@@ -99,6 +61,69 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 
 function str(v: unknown): string | null {
   return typeof v === "string" ? v : null;
+}
+
+/**
+ * The launch's state and its notification, which travel together.
+ *
+ * **A state this build has never heard of is refused rather than rounded to one
+ * of the three** — the same decision `parseStatus` makes about a session status
+ * and for the same reason: a fourth state drawn as `started` would be a claim
+ * nobody made. The notification is parsed the same way, and an unreadable one
+ * does NOT sink the whole record: the launch itself is the news, and losing it
+ * because we could not read a footnote about a message would be the tail
+ * wagging. It becomes `cannot-tell` instead, which is a true statement.
+ */
+export function parseProgress(v: unknown): LaunchProgress | null {
+  if (!isRecord(v)) return null;
+  const state = str(v["state"]);
+  const notification = parseNotification(v["notification"]);
+  if (state === "starting") return { state, notification: { kind: "not-attempted" } };
+  if (state === "failed") return { state, notification: { kind: "not-applicable" } };
+  if (state !== "started") return null;
+  return {
+    state,
+    notification:
+      notification === null
+        ? { kind: "cannot-tell", why: "this page could not read what the server said about the notification" }
+        : notification,
+  };
+}
+
+/** What became of the line the dashboard sends the Overseer. Never "sent". */
+function parseNotification(v: unknown): NotifyState | null {
+  if (!isRecord(v)) return null;
+  const kind = str(v["kind"]);
+  const to = str(v["to"]);
+  const why = str(v["why"]) ?? "";
+  switch (kind) {
+    case "pending":
+      return { kind };
+    case "no-holder":
+      return { kind };
+    case "contested": {
+      const names = Array.isArray(v["names"]) ? v["names"].filter((n): n is string => typeof n === "string") : [];
+      return { kind, names };
+    }
+    case "cannot-tell":
+      return { kind, why };
+    case "submitted": {
+      const paneId = str(v["paneId"]);
+      if (to === null || paneId === null) return null;
+      return { kind, to, paneId };
+    }
+    case "refused": {
+      const code = str(v["code"]);
+      const delivery = str(v["delivery"]);
+      if (to === null || code === null) return null;
+      if (delivery !== "none" && delivery !== "partial" && delivery !== "unknown") return null;
+      return { kind, to, code, why, delivery };
+    }
+    case "unknown":
+      return to === null ? null : { kind, to, why };
+    default:
+      return null;
+  }
 }
 
 /**
@@ -112,12 +137,12 @@ function str(v: unknown): string | null {
 export function parseLaunch(v: unknown): LaunchRecord | null {
   if (!isRecord(v)) return null;
   const id = str(v["id"]);
-  const state = str(v["state"]);
   if (id === null) return null;
-  if (state !== "starting" && state !== "started" && state !== "failed") return null;
+  const progress = parseProgress(v["progress"]);
+  if (progress === null) return null;
   return {
     id,
-    state,
+    progress,
     name: str(v["name"]),
     dir: str(v["dir"]) ?? "",
     /* Neither word is guessed for a server that sent nothing: the two describe

@@ -33,26 +33,29 @@ import {
 
 interface FakeProc {
   ppid?: number;
+  pgrp?: number;
   start: number;
   /** A path, `{opaque}` for a process the kernel hides, or absent for gone. */
   cwd?: string | { opaque: string };
   uid?: number;
   command?: string;
+  /** `/proc/<pid>/comm`, readable even when cwd is not. */
+  comm?: string;
 }
 
 /** `/proc/<pid>/stat`, spelled the way the kernel spells it. */
-function statLine(pid: number, comm: string, ppid: number, start: number): string {
-  /* Fields 3..21 are placeholders; only state, ppid and starttime are read. The
-     comm deliberately carries a space and a paren in some tests. */
-  const middle = Array.from({ length: 17 }, () => "0").join(" ");
-  return `${pid} (${comm}) S ${ppid} ${middle} ${start} 0 0`;
+function statLine(pid: number, comm: string, ppid: number, start: number, pgrp = pid): string {
+  /* After the closing paren: state, ppid, pgrp, then placeholders up to
+     starttime, which is the 20th of those fields. */
+  const middle = Array.from({ length: 16 }, () => "0").join(" ");
+  return `${pid} (${comm}) S ${ppid} ${pgrp} ${middle} ${start} 0 0`;
 }
 
 function fakeProc(table: Record<number, FakeProc>, self = 1000): ProcTable {
   return {
     stat(pid) {
       const p = table[pid];
-      return p === undefined ? null : statLine(pid, "bash", p.ppid ?? 1, p.start);
+      return p === undefined ? null : statLine(pid, "bash", p.ppid ?? 1, p.start, p.pgrp ?? pid);
     },
     cwd(pid) {
       const p = table[pid];
@@ -66,6 +69,7 @@ function fakeProc(table: Record<number, FakeProc>, self = 1000): ProcTable {
     },
     pids: () => Object.keys(table).map((k) => Number.parseInt(k, 10)),
     command: (pid) => table[pid]?.command ?? "some-command",
+    comm: (pid) => table[pid]?.comm ?? "bash",
     self: () => self,
   };
 }
@@ -94,8 +98,8 @@ describe("parseStat", () => {
   it("counts from the last ')', so a comm with a space and a paren cannot shift the fields", () => {
     /* `tmux: server` is on the box right now. A whitespace split of the whole
        line puts starttime one field left of where it is, silently. */
-    const line = `132280 (tmux: server (x)) S 1 ${Array.from({ length: 17 }, () => "0").join(" ")} 99 0 0`;
-    expect(parseStat(line)).toEqual({ ppid: 1, start: 99 });
+    const line = `132280 (tmux: server (x)) S 1 7 ${Array.from({ length: 16 }, () => "0").join(" ")} 99 0 0`;
+    expect(parseStat(line)).toEqual({ ppid: 1, pgrp: 7, start: 99 });
   });
 
   it("agrees with the real /proc on this very process", () => {
@@ -135,14 +139,14 @@ describe("ownerStanding", () => {
     const proc = fakeProc({ 500: { start: 777, command: "claude" }, 90: { ppid: 1, start: 9 } });
     const standing = ownerStanding(proc, reason, ancestry(proc, 90));
     expect(standing.kind).toBe("alive");
-    expect(composeInUse(standing, { kind: "checked", found: [], opaque: 0 }).kind).toBe("in-use");
+    expect(composeInUse(standing, { kind: "checked", found: [], ambient: 0, unplaceable: [] }).kind).toBe("in-use");
   });
 
   it("ALLOWS: the owner is alive and is in the asker's ancestor chain — the owner is asking", () => {
     const proc = fakeProc({ 500: { ppid: 1, start: 777 }, 90: { ppid: 500, start: 9 } });
     const standing = ownerStanding(proc, reason, ancestry(proc, 90));
     expect(standing.kind).toBe("asking");
-    expect(composeInUse(standing, { kind: "checked", found: [], opaque: 0 }).kind).toBe("idle");
+    expect(composeInUse(standing, { kind: "checked", found: [], ambient: 0, unplaceable: [] }).kind).toBe("idle");
   });
 
   it("ALLOWS: the pid is gone, so the lock is stale", () => {
@@ -170,7 +174,7 @@ describe("ownerStanding", () => {
     const proc = fakeProc({ 90: { ppid: 1, start: 9 } });
     const standing = ownerStanding(proc, "do not touch, mid-migration", ancestry(proc, 90));
     expect(standing.kind).toBe("unrecognised");
-    expect(composeInUse(standing, { kind: "checked", found: [], opaque: 0 }).kind).toBe("unknown");
+    expect(composeInUse(standing, { kind: "checked", found: [], ambient: 0, unplaceable: [] }).kind).toBe("unknown");
   });
 
   it("an unlocked worktree is not an owned one", () => {
@@ -182,10 +186,37 @@ describe("ownerStanding", () => {
 /* ----------------------------------------------------------------- signal B -- */
 
 describe("cwdUsersUnder", () => {
+  it("does not count a sibling in OUR OWN pipeline — measured as a false refusal", () => {
+    /* `npx tsx scripts/worktree-remove.ts | tail -20` refused on a real run, and
+       listed `tail -20` as a process working in the tree. `tail` is a sibling of
+       the node process, not an ancestor, so ancestry alone could not exclude it —
+       and a refusal carrying an obviously bogus reason is how refusals stop being
+       read. The process group is exactly "the job the shell started". */
+    const proc = fakeProc({
+      90: { ppid: 80, pgrp: 90, start: 9, cwd: TREE },
+      91: { ppid: 80, pgrp: 90, start: 9, cwd: TREE, command: "tail -20" },
+      80: { ppid: 1, pgrp: 80, start: 8, cwd: TREE },
+    });
+    const chain = ancestry(proc, 90).map((a: ProcId) => a.pid);
+    const scan = cwdUsersUnder(proc, TREE, new Set(chain), 90);
+    if (scan.kind === "checked") expect(scan.found).toEqual([]);
+  });
+
+  it("control: a peer in its OWN process group is still seen", () => {
+    const proc = fakeProc({
+      90: { ppid: 80, pgrp: 90, start: 9, cwd: TREE },
+      80: { ppid: 1, pgrp: 80, start: 8, cwd: TREE },
+      500: { ppid: 1, pgrp: 500, start: 5, cwd: TREE, command: "a peer's dev server" },
+    });
+    const chain = ancestry(proc, 90).map((a: ProcId) => a.pid);
+    const scan = cwdUsersUnder(proc, TREE, new Set(chain), 90);
+    if (scan.kind === "checked") expect(scan.found.map((f) => f.pid)).toEqual([500]);
+  });
+
   it("REFUSES: a peer's process is sitting in the tree", () => {
     const proc = fakeProc({ 700: { start: 1, cwd: `${TREE}/src`, command: "vitest" } });
     const scan = cwdUsersUnder(proc, TREE, new Set());
-    expect(scan).toMatchObject({ kind: "checked", opaque: 0 });
+    expect(scan).toMatchObject({ kind: "checked", ambient: 0 });
     if (scan.kind === "checked") expect(scan.found.map((f) => f.pid)).toEqual([700]);
   });
 
@@ -196,7 +227,7 @@ describe("cwdUsersUnder", () => {
     });
     const chain = ancestry(proc, 90).map((a: ProcId) => a.pid);
     const scan = cwdUsersUnder(proc, TREE, new Set(chain));
-    expect(scan).toMatchObject({ kind: "checked", opaque: 0 });
+    expect(scan).toMatchObject({ kind: "checked", ambient: 0 });
     if (scan.kind === "checked") expect(scan.found).toEqual([]);
   });
 
@@ -214,18 +245,41 @@ describe("cwdUsersUnder", () => {
     if (scan.kind === "checked") expect(scan.found.map((f) => f.pid)).toEqual([71]);
   });
 
-  it("COUNTS, and does not block on, our own process whose cwd the kernel hides", () => {
+  it("COUNTS, and does not block on, a RECOGNISED ambient daemon that hides its cwd", () => {
     /* Measured on this box 2026-09-09: 6 of 208 same-uid processes are
        permanently opaque — systemd --user, (sd-pam), two sshd, two postgrest.
-       None has ever been in a worktree, and blocking on them made the scan report
-       an unknown on every single run, which took the owner waiver with it. So the
-       count is reported and the verdict stands. */
-    const proc = fakeProc({ 700: { start: 1, cwd: { opaque: "EACCES" } } });
+       Blocking on those makes the scan report an unknown on every single run,
+       which takes the owner waiver with it. */
+    const proc = fakeProc({ 700: { start: 1, cwd: { opaque: "EACCES" }, comm: "sshd" } });
     const scan = cwdUsersUnder(proc, TREE, new Set());
-    expect(scan).toMatchObject({ kind: "checked", opaque: 1 });
+    expect(scan).toMatchObject({ kind: "checked", ambient: 1 });
     const verdict = composeInUse({ kind: "unlocked" }, scan);
     expect(verdict.kind).toBe("idle");
-    if (verdict.kind === "idle") expect(verdict.notes.join(" ")).toContain("would not let us inspect");
+    if (verdict.kind === "idle") expect(verdict.notes.join(" ")).toContain("ambient daemons");
+  });
+
+  it("REFUSES via unknown: an UNRECOGNISED process that hides its cwd", () => {
+    /* GPT Sol disproved "opaque implies daemon" by construction: a same-uid
+       python3 chdir'd into a worktree, called prctl(PR_SET_DUMPABLE, 0), and its
+       cwd went unreadable while genuinely being the worktree. So the ambient set
+       is NAMED and everything else is a hole — the shape worktree-check.ts
+       already uses for gitignored paths. */
+    const proc = fakeProc({ 700: { start: 1, cwd: { opaque: "EACCES" }, comm: "python3" } });
+    const scan = cwdUsersUnder(proc, TREE, new Set());
+    if (scan.kind !== "checked") throw new Error("expected checked");
+    expect(scan.ambient).toBe(0);
+    expect(scan.unplaceable.map((u) => u.comm)).toEqual(["python3"]);
+
+    const verdict = composeInUse({ kind: "unlocked" }, scan);
+    expect(verdict.kind).toBe("unknown");
+    if (verdict.kind === "unknown") expect(verdict.why.join(" ")).toContain("python3");
+  });
+
+  it("an unreadable name is unplaceable too, not quietly ambient", () => {
+    const proc = fakeProc({ 700: { start: 1, cwd: { opaque: "EACCES" } } });
+    /* `comm` defaults to "bash" in the fake, which is not on the allowlist. */
+    const scan = cwdUsersUnder(proc, TREE, new Set());
+    if (scan.kind === "checked") expect(scan.unplaceable).toHaveLength(1);
   });
 
   it("treats a process that EXITED as an absence, not as something it could not read", () => {
@@ -234,14 +288,14 @@ describe("cwdUsersUnder", () => {
        between the listing and the read. */
     const proc = fakeProc({ 700: { start: 1 } });
     const scan = cwdUsersUnder(proc, TREE, new Set());
-    expect(scan).toMatchObject({ kind: "checked", found: [], opaque: 0 });
+    expect(scan).toMatchObject({ kind: "checked", found: [], ambient: 0, unplaceable: [] });
     expect(composeInUse({ kind: "unlocked" }, scan).kind).toBe("idle");
   });
 
   it("ignores other users' processes — 575 of the box's 910 are not ours to block on", () => {
-    const proc = fakeProc({ 700: { start: 1, cwd: { opaque: "EACCES" }, uid: 0 } });
+    const proc = fakeProc({ 700: { start: 1, cwd: { opaque: "EACCES" }, uid: 0, comm: "python3" } });
     const scan = cwdUsersUnder(proc, TREE, new Set());
-    expect(scan).toMatchObject({ kind: "checked", found: [], opaque: 0 });
+    expect(scan).toMatchObject({ kind: "checked", found: [], ambient: 0, unplaceable: [] });
   });
 
   it("does not match a sibling directory whose name starts with the tree's", () => {
@@ -260,7 +314,7 @@ describe("cwdUsersUnder", () => {
 /* -------------------------------------------------------------- composition -- */
 
 describe("composeInUse", () => {
-  const clear: CwdScan = { kind: "checked", found: [], opaque: 0 };
+  const clear: CwdScan = { kind: "checked", found: [], ambient: 0, unplaceable: [] };
   const stale: OwnerStanding = { kind: "stale", owner: { session: "demo", pid: 1, start: 1 }, why: "pid 1 is gone" };
 
   it("is idle only when BOTH signals are conclusively clear", () => {
@@ -275,13 +329,13 @@ describe("composeInUse", () => {
   });
 
   it("an active signal outranks an unknown one", () => {
-    const busy: CwdScan = { kind: "checked", found: [{ pid: 7, command: "vitest" }], opaque: 3 };
+    const busy: CwdScan = { kind: "checked", found: [{ pid: 7, command: "vitest" }], ambient: 3, unplaceable: [] };
     const verdict = composeInUse({ kind: "unrecognised", reason: "x" }, busy);
     expect(verdict.kind).toBe("in-use");
   });
 
   it("names the pid and the command, so the refusal can be acted on", () => {
-    const busy: CwdScan = { kind: "checked", found: [{ pid: 7, command: "npm run dev" }], opaque: 0 };
+    const busy: CwdScan = { kind: "checked", found: [{ pid: 7, command: "npm run dev" }], ambient: 0, unplaceable: [] };
     const verdict = composeInUse(stale, busy);
     if (verdict.kind !== "in-use") throw new Error("expected in-use");
     expect(verdict.reasons.join(" ")).toContain("pid 7");
