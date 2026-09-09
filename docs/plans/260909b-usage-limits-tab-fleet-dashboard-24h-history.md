@@ -266,14 +266,31 @@ a malformed record; a "type and tests only" stage would either write compile-tim
 prove nothing about disk, or smuggle in a parser while claiming to contain no behaviour. Given how
 expensive a wrong V1 is to migrate, this earns its own stage.
 
-- [ ] Tests first: every arm round-trips; a record missing its arm-specific source instant is
-      **rejected at encode time**; an unknown `summarySchema` decodes to an unsupported marker that
-      keeps its position (G7); `nextDueMs` is validated finite and positive on every arm; bounds are
-      enforced on every string and list
-- [ ] Tests for the incident merge contract: earliest/latest instants, max-from-a-conclusive-scan
-      count, disagreeing invariants → unreadable, null `firstHitAt` → listed but unplaced
-- [ ] Write the typed encoder and the loose decoder in a neutral leaf
-- [ ] `npm run typecheck`, commit
+**Status: ✅ done, `ca286ac2`.** Built out of order because Stage 1 is blocked on the usage card
+reaching `dev` and this depends on nothing. `tools/fleet/usage-history-record.ts` +
+`tests/fleet-usage-history-record.test.ts`; 19 tests, typecheck and biome clean, nothing wired to
+anything so the tree is unchanged for everyone else.
+
+- ✅ Tests first, red: every arm round-trips; a record missing its arm-specific source instant is
+      rejected at encode time; an unknown `summarySchema` decodes to an unsupported marker that
+      keeps its position (G7); `nextDueMs` validated finite and positive on every arm; `why` prose
+      truncated visibly; an over-ceiling line throws so the store can write an omission marker
+- ✅ Tests for the merge contract: earliest/latest instants, max-from-a-conclusive-scan count,
+      disagreeing invariants → unreadable, null `firstHitAt` → listed but unplaced, no
+      account identity anywhere on a merged incident
+- ✅ The typed encoder and the loose decoder, in a leaf importing nothing
+- ✅ `npm run typecheck` (exit 0), `npx biome check` clean
+- ✅ **Mutation testing, which found a real hole** — 📔 eight mutations, seven caught, one survived:
+      every merge test happened to put the **conclusive scan first**, and every rule gets that
+      ordering right by accident. Reversed, `Math.max` keeps the stale count from the incomplete
+      scan while `fromConclusiveScan` still flips true — so the UI would label a number from an
+      incomplete scan as "most seen in one complete scan". Exactly the
+      case-you-would-have-picked-by-hand trap; only a mutation found it. Test added, all eight now
+      caught.
+- 📔 `biome` flagged `mergeIncidents` at cognitive complexity 36. Extracting `mergeCounts` fixed it
+      and reads better: the rule is **not "the larger number wins"** — counts are not comparable
+      across scans of different completeness, because a scan that stopped early saw *fewer*
+      rejections rather than a corrected number.
 
 ### Stage 3 — the store
 
