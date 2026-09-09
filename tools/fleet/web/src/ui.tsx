@@ -24,6 +24,9 @@
  */
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 
+/* One direction only: `Tooltip.tsx` imports nothing of this page's, so a
+   heading that can carry a card costs no cycle. */
+import { Explain, type Tip } from "./Tooltip";
 import type { Tone } from "./view";
 
 /** Join class names, dropping the falsy ones. */
@@ -120,11 +123,26 @@ export function Card({
   );
 }
 
-/** A section heading over a group of rows. Quiet, because the rows are the content. */
-export function SectionHeading({ children }: { children: ReactNode }): ReactNode {
+/**
+ * A section heading over a group of rows. Quiet, because the rows are the
+ * content.
+ *
+ * **`tip` is optional and the heading is the trigger.** Every heading on this
+ * page names a group by a word chosen for brevity — *Undated*, *History*,
+ * *Recently settled*, *The tree* — and the reader who has to ask what one means
+ * is the reader who has never seen the tab before. Until 2026-09-09 there was
+ * no way to attach a card to one at all, so each caller either wrapped its own
+ * `Explain` around the children (`DeploysPanel`) or, far more often, left the
+ * word unexplained. One optional prop is cheaper than eight wrappers and it
+ * puts the sentence in the heading's own accessible name.
+ *
+ * A heading WITHOUT a tip is drawn exactly as before — no button, no cursor
+ * change — so nothing about the existing page moves.
+ */
+export function SectionHeading({ children, tip }: { children: ReactNode; tip?: Tip }): ReactNode {
   return (
     <h2 className="tw:px-1 tw:pt-5 tw:pb-2 tw:text-[11px] tw:font-semibold tw:tracking-widest tw:text-ink-faint tw:uppercase">
-      {children}
+      {tip === undefined ? children : <Explain tip={tip} placement="bottom">{children}</Explain>}
     </h2>
   );
 }
