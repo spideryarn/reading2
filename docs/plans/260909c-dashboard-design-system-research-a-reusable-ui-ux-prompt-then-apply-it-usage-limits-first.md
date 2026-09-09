@@ -1,7 +1,8 @@
 # A design system for the fleet dashboard: research, a reusable UI/UX prompt, then apply it
 
-**Status as of 2026-09-09: Stage 1 in progress.** Screenshots and web research dispatched; the
-reusable doc, Sol's read of the screens, and the restyle follow.
+**Status as of 2026-09-09: Stages 1–3 done.** Screenshots and measurements taken, the research done,
+and [design-a-screen.md](../reusable/design-a-screen.md) written. Sol's read of the screens and the
+restyle follow.
 
 Up: [dev-and-deployment-overview.md](../project/dev-and-deployment-overview.md) via
 [fleet-dashboard-modes.md](../project/fleet-dashboard-modes.md);
@@ -119,32 +120,111 @@ one `after/` per applied stage.
 
 ### Stage 1 — measure what is there
 
-*Status: in progress.*
+*Status: done.*
 
 - [x] Capture the live GET routes once; stand up the fixture server on 127.0.0.1:8901.
 - [x] Type and ink censuses (above).
-- [ ] Screenshots of every tab at 1280 and 390, plus full-page at 390, plus the session detail
-      (Sonnet subagent, read-only).
-- [ ] Per-tab measurements: 390px `scrollHeight`, interactive-element count, distinct font sizes,
-      distinct text colours, horizontal overflow.
+- [x] Screenshots of every tab at 1280 and 390, plus full-page at 390, plus the session detail —
+      27 files in `260909c-dashboard-design-system-screenshots/before/`.
+- [x] Per-tab measurements at 390px.
+
+#### What the page measures
+
+| Tab | 390px height | Interactive elements | Font sizes | Text colours | Horiz. scroll |
+|---|---|---|---|---|---|
+| Deploys | **8,839px** | **151** | 5 | 4 | no |
+| Recent messages | 6,932px | 34 | 5 | 6 | no |
+| Sessions | 3,529px | 93 | 6 | 5 | no |
+| Overseer | 3,182px | 26 | 5 | 6 | no |
+| **Usage limits** | 1,922px | 17 | 7 | 6 | no |
+| Box health | 1,525px | 22 | 6 | 7 | no |
+| Queued ideas | 1,149px | 18 | 5 | 5 | no |
+| Readiness | 872px | 12 | 6 | 6 | no |
+
+Nothing overflows horizontally, which is worth saying because it is the one thing that usually goes
+wrong at 390px and here does not. **Usage limits is not the tallest tab — it is the fifth.** So the
+complaint is not about length, and a plan that set out to shorten it would be answering a question
+Greg did not ask.
+
+#### Reading the Usage tab off the pixels, not off the DOM
+
+Mine, from `usage-390-full.png`, having looked at it rather than at a measurement of it:
+
+1. **It is a document, not a dashboard.** Twelve paragraphs, every one full-bleed, left-aligned and
+   the same size. Nothing is a number, nothing is a bar, nothing is a cell.
+2. **The section headings are the quietest text on the page.** `REJECTIONS SEEN` and
+   `CACHED HEADROOM` are 11px uppercase in the faint ink — smaller and paler than the prose they
+   organise. They are the only structure the tab has, and they are drawn to disappear.
+3. **The one real number is `seven_day 58%`, at 13px**, in the middle of the third block, below
+   three non-answers, with nothing drawn against it. The reader's question is *how much headroom is
+   there*; the answer is present, in body copy, in the fourth screenful.
+4. **Every timestamp is printed three times** — `2026-09-09 05:51 UTC · 06:51 London · 08:51
+   Athens` — and there are about ten of them. Greg is bouncing between London and Athens so the
+   zones exist for a reason, but this is a large fraction of the page's height spent on the same
+   instant said three ways.
+5. **One bullet is an eleven-line essay** about a `seven_day` contradiction, at the same weight as
+   the sentence above it that says the account is fine.
+6. **Three of the non-answers are printed twice on one screen** — `nimbus_quill`, `spend` and
+   `member_dashboard_available` each appear in *Cached headroom* and again under the 24-hour chart,
+   word for word.
+7. **The 24-hour chart is mostly empty**: a full-width plot with a 100/50/0 axis carrying one short
+   green segment. It occupies about a screenful and asserts almost nothing.
+
+#### The correction: the tooltips are not on the page
+
+The screenshot agent reported that tooltip text is *"rendered inline as regular flowing text … the
+single biggest driver of the wall-of-text feeling"*. **That is wrong, and it is worth recording why,
+because the mistake is a standard one.** `Explain` puts its sentence in a `tw:sr-only` span
+(`Tooltip.tsx:278`) — visually hidden, present in `textContent`, and returned by `getComputedStyle`.
+An agent measuring the DOM sees it; the reader never does. Checked against the rendered pixels
+before it reached this plan. [written-down-is-not-checked.md](../reusable/written-down-is-not-checked.md)
+is the class; the local lesson is that a screen's own screenshot outranks a census of its DOM.
+
+#### Box health is the model, and the pattern already exists
+
+The best-organised tab is `HealthPanel`, and what makes it work is one repeated shape: a **stat
+card** — an 11px uppercase faint LABEL, a ~22px bold tone-coloured VALUE, and a 12px soft line of
+evidence under it (`4.0` / *0.3× of 16 cores*), two to a row. It is the only place on the whole
+dashboard that uses the 22px size, and it is the only tab where the number that matters is the
+biggest thing in its box.
+
+**So the design system's main job is to name that pattern and spread it**, not to invent one. It
+also happens to be the shape that preserves honest absence: the value slot can hold an em-dash and
+the evidence line the reason, without the card losing its form.
+
+#### And the Sessions list, which is the landing candidate
+
+From `sessions-390.png`: the first screenful answers *is anything needed from me?* well — a
+red-edged card, `AT LEAST 1 WAITING ON YOU · SCANNED 23S AGO`, with its floor caveat under it. Then
+it stops answering anything.
+
+- **Two of the four lines on every session card are constant across all 18 rows** —
+  `spideryarn/reading2` and the monospace id trio. That is Fable's item 3 in
+  [260909b](260909b-unstarted-dashboard-ideas-screenshots-and-fable-product-input-on-the-session-detail-view.md#3-the-misdirection-proxies-which-no-screen-shows-at-all),
+  now confirmed off the pixels.
+- **The *New session* card sits above the list**, spending a block on a rare action.
+- The fold falls on the second `WORKING` card, so *where do things stand?* costs 3,529px of
+  scrolling, and *is anything blocked?* is not asked anywhere on the screen.
 
 ### Stage 2 — what the field actually knows
 
-*Status: in progress.*
-
-- [ ] Sonnet web research over seven areas: scannability and visual hierarchy; status colour
-      semantics and colour-blind safety; empty/unknown/stale/error states; tables versus cards on a
-      phone; typographic scale and numeric data; progressive disclosure; operational-dashboard
-      specifics. Conclusions with sources, and each rule specific enough to fail a design.
+*Status: done.* Seven areas researched with sources; the conclusions are in the doc below rather
+than restated here, per [documentation-policy.md](../reusable/documentation-policy.md) — one home per
+fact. Three widely-repeated claims are flagged there as folklore rather than evidence (the
+Z-pattern for dense screens, "30–50% faster with progressive disclosure", and any "N panels max"
+attributed to Grafana).
 
 ### Stage 3 — the reusable prompt doc
 
-- [ ] Write `docs/reusable/<name>.md`: the questions to ask of a screen before touching it (Greg's,
-      generalised), then the checklist the research yields. **Nothing Spideryarn-specific in it** —
-      it goes in `docs/reusable/`, which is for notes meant to be carried elsewhere.
-- [ ] One line in [docs/reusable/README.md](../reusable/README.md) under the right heading. A new
-      doc and its index line need no approval (AGENTS.md § How we write docs here);
-      `tests/doc-links.test.ts` must stay green.
+*Status: done.*
+
+- [x] [docs/reusable/design-a-screen.md](../reusable/design-a-screen.md) — written as a prompt in
+      two halves: three questions answered in prose before any stylesheet is touched, then the
+      checklist. Greg's question is its first half, generalised; the rule that a screen answers one
+      question, that a caveat stays on screen only if it changes what you do in the next ten
+      seconds, and that zero / unknown / stale / failed are four renderings and not one, are the
+      three it is built around.
+- [x] One line in [docs/reusable/README.md](../reusable/README.md) under *How to do a task*.
 
 ### Stage 4 — Sol on the screens
 
