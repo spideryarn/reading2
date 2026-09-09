@@ -3105,3 +3105,119 @@ export type HoldBasis =
       /** When the previous run wrote down that it was **about to** type. */
       attemptedAt: number;
     };
+
+/* ================================================================== *
+ * DECISIONS MADE — THE ON-DEMAND REVIEW RECORD
+ *
+ * Types only: the node route and browser client both import this leaf.
+ * ================================================================== */
+
+export type DecisionWireClass = "assumption" | "decision" | "decline";
+export type DecisionWireActor = "greg" | "overseer";
+export type DecisionWireAdviser = "sol" | "fable" | "nobody";
+
+export type DecisionWireExecution =
+  | { kind: "verified"; token: string; since: string }
+  | { kind: "not-found" }
+  | { kind: "unavailable"; why: string };
+
+export type DecisionWireRecord = {
+  id: string;
+  recordedBy: DecisionWireActor;
+  class: DecisionWireClass;
+  question: string;
+  options: { name: string; tradeoffs: string }[];
+  chose: { option: string; note: string | null };
+  why: string;
+  advisers: DecisionWireAdviser[];
+  bearsOn: {
+    sessions: { name: string; execution: DecisionWireExecution }[];
+    plan: string | null;
+  };
+  decidedAt: string;
+  supersedes: string | null;
+  supersededBy: string | null;
+  reviewed: boolean;
+  reviewedAt: string | null;
+  reviewNote: string | null;
+  reversed: boolean;
+  reversedAt: string | null;
+  reversedWhy: string | null;
+  touches: {
+    kind: "decided" | "reviewed" | "reversed";
+    at: string;
+    by: DecisionWireActor;
+    what: string;
+  }[];
+};
+
+export type DecisionWireSessionState =
+  | { kind: "live" }
+  | { kind: "ended-or-replaced" }
+  | {
+      kind: "unavailable";
+      why:
+        | { kind: "checkpoint-unavailable" }
+        | { kind: "execution-unavailable"; detail: string };
+    };
+
+export type DecisionRow = {
+  record: DecisionWireRecord;
+  ageMs: number;
+  pendingReview: boolean;
+  sessions: { name: string; state: DecisionWireSessionState }[];
+};
+
+export type DecisionWireProblem = {
+  kind:
+    | "unreadable-line"
+    | "unauthorized-review"
+    | "duplicate-decision"
+    | "unknown-decision"
+    | "duplicate-event"
+    | "command-conflict"
+    | "invalid-supersession"
+    | "illegal-transition";
+  why: string;
+  eventId: string | null;
+};
+
+export type DecisionWireCheckpoint =
+  | { kind: "current" }
+  | { kind: "unavailable"; why: string };
+
+export type DecisionWireAggregates =
+  | {
+      kind: "counts";
+      notYetReviewed: number;
+      trailingSevenDays: { decisions: number; reviews: number; reversals: number };
+    }
+  | { kind: "unavailable"; why: string };
+
+/**
+ * `GET /api/decisions`. The route keeps the record reader's three arms and
+ * adds one loud refusal for mandatory, not-yet-reviewed data over its bound.
+ */
+export type DecisionsFeed =
+  | { schema: 1; kind: "never-written"; why: string }
+  | { schema: 1; kind: "unreadable"; why: string }
+  | {
+      schema: 1;
+      kind: "oversized-unreviewed";
+      why: string;
+      unreviewedCount: number;
+      limitBytes: number;
+    }
+  | {
+      schema: 1;
+      kind: "decisions";
+      version: string;
+      path: string;
+      composedAt: string;
+      checkpoint: DecisionWireCheckpoint;
+      aggregates: DecisionWireAggregates;
+      rows: DecisionRow[];
+      /** History omitted by either the 100-row cap or the 2 MiB byte cap. */
+      reviewedWithheld: number;
+      problems: DecisionWireProblem[];
+    };
