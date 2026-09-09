@@ -405,17 +405,58 @@ session needs it:
 
 | Missing | Needed? |
 |---|---|
-| `mcpServers` — `sentry`, `vercel`, `playwright`, `chrome-devtools` | **Yes.** User-level, so a fresh dir silently loses browser testing and the Sentry/Vercel reads. The repo's own `.mcp.json` is unaffected. |
+| `mcpServers` — `playwright`, `chrome-devtools` only | **Yes**, and only these two. See below. |
+| `mcpServers` — `sentry`, `vercel` | **No — deliberately left out.** See below. |
 | `settings.json`: `model`, `permissions`, `autoMode`, `env` | **Yes** — `permissions` and `autoMode` especially; a fresh dir has a different safety posture and no auto-mode environment. |
 | `settings.json`: `theme`, `tui`, `statusLine`, `agentPushNotifEnabled` | No — cosmetic. |
 | `projects[<repo>].hasTrustDialogAccepted` (4 of 5 entries carry it) | **Yes**, or a session can stop on the trust dialog. |
 | `projects/<slug>/memory/` — 83 files for this repo | **Yes** — this is what the `projects/` symlink is for. |
 | `plugins/` | Probably — plugin-provided skills otherwise vanish. |
-| `hasCompletedOnboarding`, `numStartups`, and ~45 other first-run flags | **Yes**, enough of them to avoid a first-run flow. |
+| `hasCompletedOnboarding` and the few flags a first-run flow actually checks | **Yes** — but see the correction below; "~45 flags" was wrong. |
 
 **This is a script, not a manual step**, and it is Stage 1's job. Seed *surgically* — merge the named
 keys after the login, never copy `.claude.json` wholesale, because it also carries identity,
 eligibility caches and live-session metadata.
+
+##### MCP: configured is not working, so two servers are deliberately not seeded
+
+**Copying `mcpServers` does not make MCP usable.** The server *definitions* live in `.claude.json`,
+but their **OAuth credentials live separately in `.credentials.json`** — so a seeded pool dir would
+list `sentry` and `vercel` and fail to use them. That is the configured-and-unusable shape, which
+reads as working right up until someone needs it.
+
+The Overseer's decision, 2026-09-09, pending Greg:
+
+- **seed only the credential-free servers** — `playwright` and `chrome-devtools`, which is what
+  browser testing needs and is the common case for a dispatched agent;
+- **leave `sentry` and `vercel` out entirely** rather than present and broken. Absent is honest;
+  configured-and-unusable is a trap.
+- **never copy MCP refresh credentials between dirs** — they rotate, and duplicating a rotating
+  credential invites the same class of problem as refreshing an OAuth token behind Claude's back.
+- **the wizard prints one line** saying those two need a `/mcp` login by Greg, under that dir, if a
+  pool session is ever to use them.
+- **Today's answer for a pool session that needs Sentry or Vercel**: say so in its debrief, and the
+  Overseer routes that read to a session on `main`.
+
+##### Two corrections to this list, from Sol's round-2 review
+
+- **The `permissions` worry was overstated.** The user-level settings only add
+  `permissions.defaultMode`; the real ask/deny rules are repo-local, and `gjd-remote` passes
+  `--permission-mode auto` explicitly. **A fresh dir does not widen what a dispatched agent may do.**
+  It does change interactive defaults, and future user-level rules would matter, so it stays on the
+  seed list — but not for the reason first given.
+- **"~45 first-run flags" was unsupported.** Mindstone has already run sessions without most of them.
+  Many are experiment, eligibility, version or account caches that should *not* be copied. Seed only
+  the few a first-run flow actually checks.
+- **Do not copy `settings.json`'s `env` wholesale.** A future credential or provider variable sitting
+  there could defeat account routing entirely. Use a named allowlist.
+
+##### What `projects/` sharing does not cover
+
+`file-history/` and `shell-snapshots/` live **outside** `projects/`, so a conversation resumed under
+a different account keeps its transcript but loses rewind and checkpoint history. **Pin a resume to
+its original account** unless that is separately tested. Plugin manifests also contain absolute
+paths, so copying `plugins/` is not by itself a complete installation.
 
 #### The mechanism decision: the config-dir model
 
