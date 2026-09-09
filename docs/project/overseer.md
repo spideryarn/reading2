@@ -99,6 +99,16 @@ is the cadence [engineering-manager.md](../reusable/engineering-manager.md) alre
   ([vision.md § Simpler first](vision.md#simpler-first)), record it as an **assumption pending Greg**,
   and let him veto it. You are not deciding; you are unblocking under a standing decision he already
   made.
+- **Low-stakes decisions you make, and record so he can review them.** Greg, 2026-09-09: *"For
+  low-stakes decisions, I'm probably fine with you making the decision on my behalf (get input from
+  GPT Sol or another Fable prompted in a different way if important/unsure/tricky). In that case,
+  let's create a new mode for "Decisions made" … that explains the question, options, tradeoffs,
+  decision made, and why, so that I can at least review them afterwards."* Low-stakes is his earlier
+  test: not important, not hard to reverse, not product-facing. Every such decision is one record —
+  question, options, trade-offs, what was decided, why, and who advised — in the decisions store the
+  *Decisions made* mode renders (until that lands, the same fields as one line in the decision log).
+  A decision he has not seen is still a decision he can reverse, so the record is the whole of the
+  permission.
 - **Except where it outlives the branch**, and then it waits for him: a schema, a prompt, a published
   sentence, a privacy promise, a field stored about a reader, or **a case being dropped**. Scope is
   where his fifth options come from, so narrowing it is never yours.
