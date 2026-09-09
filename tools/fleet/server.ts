@@ -55,8 +55,14 @@ import { renameRoute } from "./routes-rename.js";
 import { handleSteerRequest } from "./routes-steer.js";
 import { handleTranscribeRequest } from "./routes-transcribe.js";
 import { describeOne } from "./describe.js";
-import { runDescribePass, type SessionToDescribe } from "./describe-pass.js";
-import { descriptionsRoot, readDescriptionMemory, writeDescriptionMemory, EMPTY_DESCRIPTIONS } from "./describe-store.js";
+import { describeBreakdownBalances, runDescribePass, type SessionToDescribe } from "./describe-pass.js";
+import {
+  descriptionsRoot,
+  readDescriptionMemory,
+  writeDescriptionMemory,
+  EMPTY_DESCRIPTIONS,
+  type DescriptionMemory,
+} from "./describe-store.js";
 import { openRouterKey } from "./transcribe.js";
 import { readOpeningMessages } from "./transcript.js";
 import { notifyLine, notifyOverseer, promptExcerpt } from "./notify-overseer.js";
@@ -516,6 +522,16 @@ const DESCRIBE_MAX_CALLS = Number(process.env.FLEET_DESCRIBE_MAX_CALLS ?? 8);
  * dashboard and the daemon have been restarted onto execution readings. Before
  * that this loop reads no transcripts and makes no calls.
  */
+/**
+ * The describer's memory, held in process — F22.
+ *
+ * A pass whose write fails used to log and discard, so the next pass reread the
+ * unchanged file and **paid for the same sessions again**, every five minutes.
+ * Keeping the result here means a persistence failure costs a stale file rather
+ * than a repeated bill, and the next write retries with everything still in hand.
+ */
+let describeMemory: DescriptionMemory | null = null;
+
 async function describeOnce(): Promise<void> {
   const key = openRouterKey();
   if (key === null) return;
@@ -523,11 +539,17 @@ async function describeOnce(): Promise<void> {
   if (rows.length === 0) return;
 
   const root = descriptionsRoot();
-  const read = readDescriptionMemory(root);
-  /* An unusable file is REPLACED, not repaired — everything in it is
-     recoverable by asking again, and carrying a memory across a gap we cannot
-     vouch for is the mistake this neighbourhood keeps repairing. */
-  const memory = read.kind === "memory" ? read.memory : EMPTY_DESCRIPTIONS;
+  /* WHAT THIS PROCESS ALREADY HOLDS WINS over what is on disk: a write that
+     failed must not make us pay again. The file is only read to seed the first
+     pass after a restart. */
+  let memory = describeMemory;
+  if (memory === null) {
+    const read = readDescriptionMemory(root);
+    /* An unusable file is REPLACED, not repaired — everything in it is
+       recoverable by asking again, and carrying a memory across a gap we cannot
+       vouch for is the mistake this neighbourhood keeps repairing. */
+    memory = read.kind === "memory" ? read.memory : EMPTY_DESCRIPTIONS;
+  }
 
   const sessions: SessionToDescribe[] = rows.map((row) => ({
     id: row.id,
@@ -558,6 +580,15 @@ async function describeOnce(): Promise<void> {
     now: () => new Date(),
   });
 
+  /* HELD BEFORE IT IS WRITTEN, so a failing write costs a stale file rather
+     than a repeated bill. */
+  describeMemory = result.memory;
+  if (!describeBreakdownBalances(result.breakdown)) {
+    /* The self-check runs in production rather than only in tests — F25. A pass
+       whose numbers do not add up has quietly dropped somebody, and a fleet list
+       missing one row looks exactly like a fleet with one fewer session. */
+    console.log(`describe: BOOKKEEPING DOES NOT BALANCE: ${JSON.stringify(result.breakdown)}`);
+  }
   try {
     writeDescriptionMemory(root, result.memory);
   } catch (err) {

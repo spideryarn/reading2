@@ -788,7 +788,19 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
   function safeOnPass(outcome: UsagePassOutcome): void {
     if (usageOptions?.onPass === undefined) return;
     try {
-      usageOptions.onPass(outcome);
+      const returned: unknown = usageOptions.onPass(outcome);
+      /* **AN ASYNC CALLBACK ESCAPES A `try`/`catch`.** TypeScript accepts an
+         `async` function where `(outcome) => void` is expected, and by the time
+         it rejects this block has already returned — so the rejection surfaces
+         as an unhandled one and can terminate the daemon, which is the exact
+         failure this wrapper exists to prevent. The production callback is
+         synchronous today; this is here so that stays a fact about the callback
+         rather than a condition of the containment. GPT Sol H14. */
+      if (typeof (returned as { then?: unknown } | null)?.then === "function") {
+        void (returned as Promise<unknown>).catch((cause: unknown) => {
+          log(`usage pass hook rejected (the reading itself is unaffected): ${String(cause)}`);
+        });
+      }
     } catch (cause: unknown) {
       log(`usage pass hook failed (the reading itself is unaffected): ${String(cause)}`);
     }

@@ -238,6 +238,68 @@ describe("the three absences, kept apart", () => {
   });
 });
 
+describe("what GPT Sol's code review found", () => {
+  it("H6: breaks the series across a line the store could not read", () => {
+    /* `view.holes` was carried faithfully from the store, through the route,
+       into the client — and then ignored here, so the chart drew straight over
+       bytes this build could not parse. */
+    const plot = plotUsageHistory(
+      view([sample(T0), sample(T0 + FIVE_MIN)], {
+        holes: [{ afterAt: new Date(T0).toISOString(), beforeAt: new Date(T0 + FIVE_MIN).toISOString() }],
+        unreadableLines: 1,
+      }),
+    );
+    const series = plot.accounts[0]?.windows[0];
+    expect(series?.breaks.length).toBeGreaterThan(0);
+    /* And the runs are split, which is what the renderer actually draws. */
+    expect(series?.runs.filter((r) => r.length > 0)).toHaveLength(2);
+  });
+
+  it("H7: a clock regression splits the RUNS, not just the breaks list", () => {
+    /* The renderer used to re-derive runs by comparing timestamps, and for
+       file-order points 10:05 then 10:00 its predicate asked `10:05 < 10:00`,
+       got false, and drew one line across the regression it had just shaded. */
+    const plot = plotUsageHistory(view([sample(T0 + FIVE_MIN), sample(T0)]));
+    const series = plot.accounts[0]?.windows[0];
+    expect(plot.clockRegressions).toHaveLength(1);
+    expect(series?.runs.filter((r) => r.length > 0)).toHaveLength(2);
+  });
+
+  it("H8: an incident that ENDED before the window is not in the window", () => {
+    /* They were all kept, and the renderer clamped a negative start to zero
+       while computing width from two negative coordinates — a visible bar at the
+       left edge for rejections that happened before the chart begins. */
+    const longAgo = new Date(T0 - 40 * 60 * 60 * 1000).toISOString();
+    const alsoLongAgo = new Date(T0 - 39 * 60 * 60 * 1000).toISOString();
+    const plot = plotUsageHistory(
+      view([sample(T0, { incidents: [incident({ firstHitAt: longAgo, lastHitAt: alsoLongAgo })] })]),
+    );
+    expect(plot.incidents).toEqual([]);
+  });
+
+  it("H8: one that STRADDLES the left edge is kept, and says it began earlier", () => {
+    const before = new Date(T0 - 40 * 60 * 60 * 1000).toISOString();
+    const plot = plotUsageHistory(
+      view([sample(T0, { incidents: [incident({ firstHitAt: before, lastHitAt: new Date(T0).toISOString() })] })]),
+    );
+    expect(plot.incidents).toHaveLength(1);
+    expect(plot.incidents[0]?.beganBeforeWindow).toBe(true);
+  });
+
+  it("H9: two sightings disagreeing about the window make it unreadable", () => {
+    /* The browser had its own merge that never checked the invariants and
+       published the first label with merged counts. One implementation now. */
+    const plot = plotUsageHistory(
+      view([
+        sample(T0, { incidents: [incident({ window: "five_hour" })] }),
+        sample(T0 + FIVE_MIN, { incidents: [incident({ window: "seven_day" })] }),
+      ]),
+    );
+    expect(plot.incidents).toHaveLength(1);
+    expect(plot.incidents[0]?.unreadable).toBe(true);
+  });
+});
+
 describe("incidents", () => {
   it("draws one incident per cluster however many records carried it", () => {
     /* The same rejection sits in every five-minute scan until it expires. One

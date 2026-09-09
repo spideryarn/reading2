@@ -33,7 +33,7 @@
  * key, B simply misses the cache and describes itself: the stale entry becomes
  * **unreachable** rather than merely unrendered.
  */
-import { readFileSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 
@@ -74,9 +74,26 @@ export type DescriptionRecord = {
 
 export type DescriptionMemory = {
   readonly records: ReadonlyMap<string, DescriptionRecord>;
+  /**
+   * OPENINGS WE ALREADY KNOW WE CANNOT DESCRIBE, keyed by fingerprint — F21.
+   *
+   * A permanent refusal is a fact about the opening: the model read it and it
+   * does not say what the session is for. Re-asking costs money and returns the
+   * same answer, and because the budget picks fresh openings in a deterministic
+   * order, un-remembered refusals monopolise the same slots every pass and starve
+   * every session behind them **for ever**. Measured by the third review: nine
+   * openings, `maxCalls: 8`, the same eight paid for on both passes and the ninth
+   * never described.
+   *
+   * **Transient failures are deliberately NOT in here.** A 429 lasts a second; a
+   * 429 remembered would report the same false silence for as long as that
+   * session said nothing new. Same rule `attention-classify.ts` states about its
+   * own `unreadable` arm.
+   */
+  readonly refusals: ReadonlyMap<string, string>;
 };
 
-export const EMPTY_DESCRIPTIONS: DescriptionMemory = { records: new Map() };
+export const EMPTY_DESCRIPTIONS: DescriptionMemory = { records: new Map(), refusals: new Map() };
 
 /**
  * What a read found — three answers, never two.
@@ -90,7 +107,16 @@ export type DescriptionMemoryRead =
   | { kind: "absent" }
   | { kind: "unusable"; why: string };
 
-function parseRecord(u: unknown): DescriptionRecord | null {
+/**
+ * A record, checked against the key it was filed under.
+ *
+ * **The key is not decoration — F20.** The pass looks its cache up by
+ * fingerprint alone, so a record whose stored token disagrees with its own key
+ * can be fetched by content and then re-filed under a *valid* key: the corrupt
+ * original is refused downstream and its rewritten descendant is accepted. The
+ * cheapest place to stop that is here, before it is ever in memory.
+ */
+function parseRecord(key: string, u: unknown): DescriptionRecord | null {
   if (typeof u !== "object" || u === null || Array.isArray(u)) return null;
   const o = u as Record<string, unknown>;
   const fingerprint = typeof o["fingerprint"] === "string" ? o["fingerprint"] : null;
@@ -106,9 +132,14 @@ function parseRecord(u: unknown): DescriptionRecord | null {
      would reintroduce exactly what the parser refuses at the source. */
   if (title === "" || description === "") return null;
   const token = o["executionToken"];
+  const executionToken = typeof token === "string" ? token : null;
+  /* The key is `<session> <conversation> <token>`, so a coherent record's token
+     is the last field of its own key. A record that fails this is a corrupted
+     memory, refused rather than laundered. */
+  if (executionToken === null || !key.endsWith(` ${executionToken}`)) return null;
   return {
     fingerprint,
-    executionToken: typeof token === "string" ? token : null,
+    executionToken,
     describedAt,
     described: { title, description },
   };
@@ -126,11 +157,22 @@ export function parseDescriptionMemory(u: unknown): DescriptionMemoryRead {
   }
   const records = new Map<string, DescriptionRecord>();
   for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
-    const record = parseRecord(value);
+    const record = parseRecord(key, value);
     if (record === null) return { kind: "unusable", why: `the record under ${JSON.stringify(key)} is not readable` };
     records.set(key, record);
   }
-  return { kind: "memory", memory: { records } };
+
+  /* Refusals are a weaker artefact than records: an unreadable one costs a model
+     call rather than a wrong sentence, so a bad entry is skipped rather than
+     failing the whole file. */
+  const refusals = new Map<string, string>();
+  const rawRefusals = o["refusals"];
+  if (typeof rawRefusals === "object" && rawRefusals !== null && !Array.isArray(rawRefusals)) {
+    for (const [fingerprint, why] of Object.entries(rawRefusals as Record<string, unknown>)) {
+      if (typeof why === "string" && why !== "") refusals.set(fingerprint, why);
+    }
+  }
+  return { kind: "memory", memory: { records, refusals } };
 }
 
 export function readDescriptionMemory(root: string): DescriptionMemoryRead {
@@ -150,12 +192,24 @@ export function readDescriptionMemory(root: string): DescriptionMemoryRead {
   }
 }
 
+/**
+ * Write it, creating the directory if it is not there.
+ *
+ * **The `mkdirSync` is F22 and it was costing money.** `writeAtomically` opens a
+ * sibling temp file and does not create the directory — verified: it throws
+ * `ENOENT`. So on a box without `~/.overseer`, every pass read `absent`, made its
+ * model calls, failed to persist, logged, and paid again five minutes later, for
+ * ever. A fresh box is exactly that state.
+ */
 export function writeDescriptionMemory(root: string, memory: DescriptionMemory): void {
+  mkdirSync(root, { recursive: true });
   const records: Record<string, DescriptionRecord> = {};
   for (const [key, record] of memory.records) records[key] = record;
+  const refusals: Record<string, string> = {};
+  for (const [fingerprint, why] of memory.refusals) refusals[fingerprint] = why;
   writeAtomically(
     path.join(root, DESCRIPTIONS_FILE),
     root,
-    `${JSON.stringify({ schema: DESCRIPTIONS_SCHEMA, writtenAt: new Date().toISOString(), records }, null, 2)}\n`,
+    `${JSON.stringify({ schema: DESCRIPTIONS_SCHEMA, writtenAt: new Date().toISOString(), records, refusals }, null, 2)}\n`,
   );
 }

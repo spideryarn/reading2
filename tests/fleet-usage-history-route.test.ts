@@ -32,11 +32,23 @@ function tempDir(): string {
 
 const T0 = Date.parse("2026-09-09T00:00:00.000Z");
 
+/**
+ * A record, with the APPEND instant a realistic distance after the collection
+ * instant.
+ *
+ * The first version of this helper set them equal, which is precisely the
+ * coincidence that hid GPT Sol's H1: a real pass is stamped `collectedAt` when
+ * it starts and appended 13-16 seconds later, because the transcript scan takes
+ * that long. Every recorder-health test passed against a fixture in which the
+ * distinction did not exist.
+ */
+const SCAN_MS = 15_000;
+
 function line(atMs: number, nextDueMs = 300_000): UsageHistoryLine {
   return {
     lineSchema: 1,
     summarySchema: SUMMARY_SCHEMA,
-    recordedAt: new Date(atMs).toISOString(),
+    recordedAt: new Date(atMs + SCAN_MS).toISOString(),
     nextDueMs,
     pass: {
       kind: "pass",
@@ -152,7 +164,7 @@ describe("recorder health, derived rather than carried", () => {
       [{ kind: "sample", sourceAtMs: T0, line: line(T0) }],
       T0 + 200_000,
     );
-    expect(health.lastRecordedAt).toBe(new Date(T0).toISOString());
+    expect(health.lastRecordedAt).toBe(new Date(T0 + SCAN_MS).toISOString());
     expect(health.expectedEveryMs).toBe(300_000);
     expect(health.overdueByMs).toBeNull();
   });
@@ -163,7 +175,7 @@ describe("recorder health, derived rather than carried", () => {
        crying wolf at its own configuration. */
     const slow = { kind: "sample" as const, sourceAtMs: T0, line: line(T0, 900_000) };
     expect(recorderHealthOf([slow], T0 + 600_000).overdueByMs).toBeNull();
-    expect(recorderHealthOf([slow], T0 + 1_000_000).overdueByMs).toBe(100_000);
+    expect(recorderHealthOf([slow], T0 + 1_000_000).overdueByMs).toBe(100_000 - SCAN_MS);
   });
 
   it("reads the LAST record in file order, not the largest instant", () => {
@@ -177,7 +189,44 @@ describe("recorder health, derived rather than carried", () => {
       ],
       T0 + 100_000,
     );
-    expect(health.lastRecordedAt).toBe(new Date(T0).toISOString());
+    expect(health.lastRecordedAt).toBe(new Date(T0 + SCAN_MS).toISOString());
+  });
+
+  it("measures from the APPEND instant, so a healthy in-flight scan is not overdue", () => {
+    /* GPT Sol H1, reproduced against live records: source gaps of 300,000 ms
+       against append delays of 13,042-15,693 ms. Measuring from `collectedAt`
+       plus the cadence declares the recorder overdue during EVERY healthy scan —
+       an alarm that fires on the normal case. */
+    const health = recorderHealthOf([{ kind: "sample", sourceAtMs: T0, line: line(T0) }], T0 + 310_000);
+    expect(health.lastRecordedAt).toBe(new Date(T0 + SCAN_MS).toISOString());
+    expect(health.overdueByMs).toBeNull();
+  });
+
+  it("uses the PREDECESSOR when the window holds no samples at all", () => {
+    /* GPT Sol H4. If the daemon died 25 hours ago, a 24-hour read returns no
+       samples and that record as the predecessor. Computing from `samples` alone
+       reported "nothing has ever been recorded" — the exact inverse of the
+       truth, on the one screen whose job is to say the recorder stopped. */
+    const old = { kind: "sample" as const, sourceAtMs: T0, line: line(T0) };
+    const health = recorderHealthOf([], T0 + 25 * 60 * 60 * 1000, old);
+    expect(health.lastRecordedAt).toBe(new Date(T0 + SCAN_MS).toISOString());
+    expect(health.overdueByMs).toBeGreaterThan(24 * 60 * 60 * 1000);
+  });
+
+  it("keeps the cadence when the newest record is an OMISSION", () => {
+    /* GPT Sol H3. An omitted record dropped its cadence, so a store whose newest
+       record was one reported `expectedEveryMs: null` for ever — and a recorder
+       that then stopped could never be seen to be overdue. */
+    const omitted = {
+      kind: "omitted" as const,
+      sourceAtMs: T0,
+      recordedAtMs: T0 + SCAN_MS,
+      nextDueMs: 300_000,
+      why: "the record could not be written",
+    };
+    const health = recorderHealthOf([omitted], T0 + 60 * 60 * 1000);
+    expect(health.expectedEveryMs).toBe(300_000);
+    expect(health.overdueByMs).toBeGreaterThan(0);
   });
 
   it("says nothing has been recorded, which is not the same as being late", () => {

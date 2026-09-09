@@ -203,6 +203,19 @@ export function parseUsageHistory(raw: unknown): UsageHistoryView {
   if (r["kind"] === "unreadable") {
     return { kind: "unreadable", why: str(r["why"]) ?? "the server did not say why" };
   }
+  /* THE ENVELOPE'S OWN VERSION, checked before anything is read out of it.
+     Ignoring it defeated the whole point of the tolerant parser: an old cached
+     client handed `{schema: 2}` accepted it as current, and if schema 2 had
+     moved the sample fields it would drop them all and say nothing was
+     recorded — the version boundary failing silently in the one direction it
+     exists to catch. GPT Sol H13. */
+  const schema = num(r["schema"]);
+  if (schema !== null && schema !== 1) {
+    return {
+      kind: "unreadable",
+      why: `this page reads usage history schema 1 and the server sent ${schema}. Reload to get the matching page.`,
+    };
+  }
   const fromMs = num(r["fromMs"]);
   const toMs = num(r["toMs"]);
   if (r["kind"] !== "history" || fromMs === null || toMs === null) {

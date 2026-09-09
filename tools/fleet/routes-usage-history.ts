@@ -94,27 +94,47 @@ export function windowHoursFrom(url: string): number {
   return Math.min(hours, MAX_WINDOW_HOURS);
 }
 
-function sourceMs(sample: UsageHistorySample): number | null {
-  return sample.kind === "unsupported" ? null : sample.sourceAtMs;
-}
-
 /**
- * The newest record's instant and cadence, and how overdue that makes us.
+ * The newest record's **append** instant and cadence, and how overdue that makes
+ * the recorder.
  *
- * Reads the **last timed sample in file order**, not the maximum instant: a
- * clock that stepped backwards should surface as a regression in the series,
- * not be silently smoothed over by picking whichever number is largest.
+ * ## It is measured from `recordedAt`, not `collectedAt`
+ *
+ * A pass is stamped `collectedAt` when it STARTS and appended 13–16 seconds
+ * later, because the transcript scan takes that long (measured on live records:
+ * source gaps of 300,000 ms against append delays of 13,042–15,693 ms). Measuring
+ * from `collectedAt` + the cadence therefore declares the recorder overdue during
+ * every single healthy scan — an alarm that fires on the normal case, which is
+ * the failure this whole area keeps circling. GPT Sol H1.
+ *
+ * "Is anything still being recorded" is a question about *writes*, so it is
+ * answered with the instant of the last write.
+ *
+ * ## It considers the PREDECESSOR
+ *
+ * If the daemon died 25 hours ago, a 24-hour read returns no samples at all and
+ * the last record as `predecessor`. Computing health from `samples` alone then
+ * reports *nothing has ever been recorded* — the exact inverse of the truth,
+ * on the one screen whose job is to say the recorder stopped. GPT Sol H4.
+ *
+ * Reads the LAST record in file order rather than the largest instant: a clock
+ * that stepped backwards should surface as a regression in the series, not be
+ * smoothed over here by picking whichever number is biggest.
  */
-export function recorderHealthOf(samples: readonly UsageHistorySample[], nowMs: number): RecorderHealth {
+export function recorderHealthOf(
+  samples: readonly UsageHistorySample[],
+  nowMs: number,
+  predecessor: UsageHistorySample | null = null,
+): RecorderHealth {
   let lastAtMs: number | null = null;
   let expectedEveryMs: number | null = null;
-  for (const sample of samples) {
-    const at = sourceMs(sample);
-    if (at === null || sample.kind === "unsupported") continue;
-    lastAtMs = at;
-    expectedEveryMs = sample.kind === "sample" ? sample.line.nextDueMs : expectedEveryMs;
+  /* The predecessor first, so an in-window sample always wins over it. */
+  for (const sample of [...(predecessor === null ? [] : [predecessor]), ...samples]) {
+    if (sample.kind === "unsupported") continue;
+    lastAtMs = sample.kind === "sample" ? Date.parse(sample.line.recordedAt) : sample.recordedAtMs;
+    expectedEveryMs = sample.kind === "sample" ? sample.line.nextDueMs : sample.nextDueMs;
   }
-  if (lastAtMs === null) {
+  if (lastAtMs === null || !Number.isFinite(lastAtMs)) {
     return { lastRecordedAt: null, expectedEveryMs: null, overdueByMs: null };
   }
   const late = expectedEveryMs === null ? null : nowMs - lastAtMs - expectedEveryMs;
@@ -157,7 +177,7 @@ export function usageHistoryPayload(deps: UsageHistoryRouteDeps, windowHours: nu
     rotated: read.rotated,
     unreadableLines: read.unreadableLines,
     unsupportedLines: read.unsupportedLines,
-    recorder: recorderHealthOf(read.samples, toMs),
+    recorder: recorderHealthOf(read.samples, toMs, read.predecessor),
     refreshMs: deps.refreshMs,
   };
 }

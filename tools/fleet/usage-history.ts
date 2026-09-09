@@ -131,7 +131,7 @@ export function defaultUsageHistoryDir(env: NodeJS.ProcessEnv = process.env): st
 /** A line, an unsupported line kept in place, or a record the store could not write. */
 export type UsageHistorySample =
   | { kind: "sample"; sourceAtMs: number; line: UsageHistoryLine }
-  | { kind: "omitted"; sourceAtMs: number; why: string }
+  | { kind: "omitted"; sourceAtMs: number; recordedAtMs: number; nextDueMs: number; why: string }
   /**
    * Written by a build this one does not understand. It has **no time**, because
    * a future envelope may not put one where this build looks — so it is placed
@@ -256,6 +256,21 @@ export function openUsageHistoryForWrite(dir: string, options: WriteOptions): Us
       if (status.poisoned) {
         throw new Error(`usage history: refusing to append, the file is poisoned by a partial write (${status.failure})`);
       }
+      /* **ASKED ON EVERY APPEND, NOT ONCE AT OPEN.** A daemon that loses its main
+         lock to another process while a pass is in flight goes on to finish that
+         pass — shutdown deliberately waits for it — and would otherwise append to
+         a history the new daemon may already be writing. Two writers can then
+         rotate concurrently and drop a retained file with nothing to show for it.
+         GPT Sol H12.
+
+         NOTE the predicate at the one production call site is still `() => true`
+         (usage-history-wiring.ts): re-asking it here makes the check structural,
+         but it can only bite once the daemon exposes real lock ownership. That
+         residue is recorded in the plan rather than hidden. */
+      if (!options.daemonLockHeld()) {
+        status.failure = "the Overseer daemon lock is no longer held by this process";
+        throw new Error(`usage history: refusing to append — ${status.failure}`);
+      }
       status.lastAttemptAt = new Date().toISOString();
 
       /* A record too large to write becomes a MARKER standing where it would
@@ -350,7 +365,18 @@ function decodeAll(lines: readonly string[]): Decoded {
     lastGoodMs = at;
     all.push(
       decoded.line.pass.kind === "omitted"
-        ? { kind: "omitted", sourceAtMs: at, why: decoded.line.pass.why }
+        ? {
+            /* THE CADENCE SURVIVES AN OMISSION. It was dropped here, and the
+               consequence was that a store whose newest record was an omission
+               reported `expectedEveryMs: null` for ever — so a recorder that
+               then stopped could never be seen to be overdue. GPT Sol H3,
+               reproduced. */
+            kind: "omitted",
+            sourceAtMs: at,
+            recordedAtMs: Date.parse(decoded.line.recordedAt),
+            nextDueMs: decoded.line.nextDueMs,
+            why: decoded.line.pass.why,
+          }
         : { kind: "sample", sourceAtMs: at, line: decoded.line },
     );
   }
@@ -365,18 +391,44 @@ export function openUsageHistoryForRead(dir: string): UsageHistoryReader {
       const live = join(dir, LIVE_FILE);
       const prev = join(dir, PREV_FILE);
 
+      /* **A ROTATION DURING THIS READ WOULD LOSE A WHOLE FILE, so it is read
+         twice.** The race: we read the old `prev`; the writer renames `live`
+         over `prev` and starts an empty `live`; we then read that empty `live`
+         and return old-prev + new-live, silently omitting everything that was
+         just rotated. On a chart that is a giant hole with no explanation.
+
+         `prev`'s identity before and after is the detector — `health-history.ts`
+         does the same, and this omitted it. One retry only: a rotation inside two
+         consecutive reads is not a thing that happens, and an unbounded retry on
+         a filesystem that keeps changing is worse than a stale answer.
+         GPT Sol H11. */
+      const prevMark = (): string => {
+        try {
+          const st = statSync(prev);
+          return `${st.ino}:${st.size}:${st.mtimeMs}`;
+        } catch {
+          return "absent";
+        }
+      };
+
       let files = 0;
-      const lines: string[] = [];
+      let lines: string[] = [];
       try {
-        /* `prev` first: the read is oldest-first and a rotation moves the OLDER
-           half out of the way. */
-        for (const path of [prev, live]) {
-          if (!existsSync(path)) continue;
-          files += 1;
-          const text = readFile(path);
-          for (const raw of text.split("\n")) {
-            if (raw.length > 0) lines.push(raw);
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+          const before = prevMark();
+          files = 0;
+          lines = [];
+          /* `prev` first: the read is oldest-first and a rotation moves the
+             OLDER half out of the way. */
+          for (const path of [prev, live]) {
+            if (!existsSync(path)) continue;
+            files += 1;
+            const text = readFile(path);
+            for (const raw of text.split("\n")) {
+              if (raw.length > 0) lines.push(raw);
+            }
           }
+          if (prevMark() === before) break;
         }
       } catch (error) {
         return { kind: "unreadable", why: String(error) };
@@ -392,17 +444,28 @@ export function openUsageHistoryForRead(dir: string): UsageHistoryReader {
          position — an unsupported line has no time of its own, so position is
          the only thing that can place it, and dropping it would let the series
          reconnect across data this build could not read. */
-      const firstIn = all.findIndex((s) => s.kind !== "unsupported" && s.sourceAtMs >= sinceMs);
-      const samples = firstIn === -1 ? [] : all.slice(firstIn);
+      /* THE WINDOW IS A POSITION, NOT A FILTER — because an unsupported record
+         has no time of its own and can only be placed by file order.
 
-      let predecessor: UsageHistorySample | null = null;
-      for (let i = (firstIn === -1 ? all.length : firstIn) - 1; i >= 0; i -= 1) {
+         This was `findIndex(timed && >= sinceMs)` and sliced from there, which
+         returned NOTHING when no timed sample fell inside the window: a reader
+         rolled back to schema 1, looking at a file whose recent records are all
+         schema 2, would drop every unsupported marker and report an empty day.
+         The page then says "nothing recorded" over a file that is full. GPT Sol
+         H5.
+
+         Walking to the last timed sample OLDER than the window and slicing after
+         it keeps everything positioned after it, unsupported entries included,
+         and yields the predecessor in the same pass. */
+      let predIndex = -1;
+      for (let i = 0; i < all.length; i += 1) {
         const candidate = all[i];
-        if (candidate !== undefined && candidate.kind !== "unsupported") {
-          predecessor = candidate;
-          break;
-        }
+        if (candidate === undefined || candidate.kind === "unsupported") continue;
+        if (candidate.sourceAtMs >= sinceMs) break;
+        predIndex = i;
       }
+      const samples = all.slice(predIndex + 1);
+      const predecessor = predIndex === -1 ? null : (all[predIndex] ?? null);
 
       return {
         kind: "read",
