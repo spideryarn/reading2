@@ -56,31 +56,36 @@ function clockLabel(ms: number, skew: ClockSkew): string {
  * polyline with holes: an SVG polyline cannot express "no data here", and the
  * version that tried it joined straight across every gap.
  */
-function WindowLine({ plot, series, tone }: { plot: UsagePlot; series: UsagePlot["accounts"][number]["windows"][number]; tone: string }): ReactNode {
+function WindowLine({
+  plot,
+  series,
+  tone,
+}: {
+  plot: UsagePlot;
+  series: UsagePlot["accounts"][number]["windows"][number];
+  tone: string;
+}): ReactNode {
   const x = xOf(plot);
   const y = (pct: number): number => SERIES_H - (Math.max(0, Math.min(100, pct)) / 100) * SERIES_H;
-  const cuts = series.breaks.map((b) => b.fromMs).sort((a, b) => a - b);
-  const runs: { atMs: number; value: number }[][] = [[]];
-  for (const point of series.points) {
-    const broken = cuts.some((c) => c >= (runs.at(-1)?.at(-1)?.atMs ?? -Infinity) && c < point.atMs);
-    if (broken && (runs.at(-1)?.length ?? 0) > 0) runs.push([]);
-    runs.at(-1)?.push(point);
-  }
+  /* THE RUNS ARE THE SERIES LAYER'S, not re-derived here. This used to compare
+     timestamps to decide whether a break fell between two points, which is
+     wrong the moment the clock goes backwards: for file-order points 10:05 then
+     10:00 the predicate asked `10:05 < 10:00`, got false, and drew one line
+     straight across the regression the chart had just shaded in alarm colours.
+     GPT Sol H7. */
+  const runs = series.runs.filter((run) => run.length > 0);
   return (
     <>
-      {runs
-        .filter((run) => run.length > 0)
-        .map((run, i) => (
-          <polyline
-            // biome-ignore lint/suspicious/noArrayIndexKey: runs have no identity beyond their order
-            key={i}
-            fill="none"
-            stroke={tone}
-            strokeWidth={1.5}
-            points={run.map((p) => `${x(p.atMs)},${y(p.value)}`).join(" ")}
-          />
-        ))}
-      {/* A single reading is a point rather than a line, and must still be visible. */}
+      {runs.map((run) => (
+        <polyline
+          key={`${run[0]?.atMs}-${run.length}`}
+          fill="none"
+          stroke={tone}
+          strokeWidth={1.5}
+          points={run.map((p) => `${x(p.atMs)},${y(p.value)}`).join(" ")}
+        />
+      ))}
+      {/* A single reading is a point rather than a line, and must still show. */}
       {runs
         .filter((run) => run.length === 1)
         .map((run) => (
@@ -102,15 +107,36 @@ export function UsageHistory({
 }): ReactNode {
   const [view, setView] = useState<UsageHistoryView | null>(null);
 
+  /* IT REFRESHES ITSELF. It did not: open the tab and leave it, and the chart
+     stayed frozen at the moment it loaded — `toMs` fixed, new records invisible,
+     recorder health stuck — while the page around it went on updating. The
+     client parsed `refreshMs` off the payload and nothing ever used it. GPT Sol
+     H2.
+
+     The server's own `refreshMs` is the cadence, so one place decides how often
+     this box is asked anything. Falls back to 60 s before the first payload. */
+  const [refreshMs, setRefreshMs] = useState(60_000);
+  /* `refreshNonce` is in the dependency list for its effect on identity alone —
+     it is never read in the body. That IS the mechanism: pressing Refresh
+     changes it, which re-runs the effect, which re-fetches. The same idiom and
+     the same suppression as DeploysPanel. */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: refreshNonce is the refresh signal — re-running when it changes is the point.
   useEffect(() => {
     let live = true;
-    void api.window(WINDOW_HOURS).then((next) => {
-      if (live) setView(next);
-    });
+    const load = (): void => {
+      void api.window(WINDOW_HOURS).then((next) => {
+        if (!live) return;
+        setView(next);
+        if (next.kind === "history" && next.refreshMs > 0) setRefreshMs(next.refreshMs);
+      });
+    };
+    load();
+    const timer = setInterval(load, refreshMs);
     return () => {
       live = false;
+      clearInterval(timer);
     };
-  }, [api, refreshNonce]);
+  }, [api, refreshNonce, refreshMs]);
 
   if (view === null) return <p className="tw:text-sm tw:opacity-70">Loading the last {WINDOW_HOURS} hours…</p>;
   if (view.kind === "unreadable") {
@@ -125,18 +151,37 @@ export function UsageHistory({
   const plot = plotUsageHistory(view);
   const x = xOf(plot);
   const hasPoints = plot.accounts.some((a) => a.windows.some((w) => w.points.length > 0));
+  const nothingRecorded = view.samples.length === 0 && view.predecessor === null;
 
   return (
     <section className="tw:mt-6">
       <h3 className="tw:text-sm tw:font-medium">The last {WINDOW_HOURS} hours</h3>
 
-      {/* THE EMPTY STATE CLAIMS NO "SINCE" IT CANNOT KNOW. An empty file has no
-          first line; process start moves the claim on every restart; the
+      {/* **"NOTHING RECORDED" MEANS NO RECORDS, NOT NO LINE TO DRAW.** This was
+          keyed off `hasPoints`, so a window full of collector failures, an
+          unattributed cache, or nothing but named unknown windows and rejections
+          printed "nothing recorded in the last 24 hours" directly above a list
+          of things recorded in the last 24 hours. GPT Sol H10.
+
+          And it claims no "since" it cannot know: an empty file has no first
+          line, process start moves the claim on every restart, and the
           checkpoint's own instant may predate the recorder by days. */}
-      {!hasPoints ? (
+      {nothingRecorded ? (
         <p className="tw:text-sm tw:opacity-80">
           Nothing recorded in the last {WINDOW_HOURS} hours; this fills in as the recorder runs.
           {plot.unreadableLines > 0 ? ` ${plot.unreadableLines} line(s) could not be read.` : ""}
+        </p>
+      ) : null}
+      {!nothingRecorded && !hasPoints ? (
+        <p className="tw:text-sm tw:opacity-80">
+          Records were kept over this period, but none of them carried a utilisation reading to plot.
+          What they did carry is below.
+        </p>
+      ) : null}
+      {plot.unsupportedLines > 0 ? (
+        <p className="tw:mt-1 tw:text-xs tw:opacity-70">
+          {plot.unsupportedLines} record(s) were written by a newer build and cannot be read here — the series is
+          broken across them rather than drawn through them.
         </p>
       ) : null}
 
@@ -258,7 +303,7 @@ export function UsageHistory({
           >
             <rect x={0} y={0} width={PLOT_W} height={STRIP_H} fill="var(--quiet-wash)" />
             {plot.incidents
-              .filter((i) => !i.unplaced && i.fromMs !== null)
+              .filter((i) => !i.unplaced && !i.unreadable && i.fromMs !== null)
               .map((incident) => (
                 <rect
                   key={incident.id}
@@ -278,6 +323,7 @@ export function UsageHistory({
                 {incident.fromConclusiveScan ? "" : " (most seen in a scan that did not finish)"}
                 {incident.beganBeforeWindow ? " · began before this window" : ""}
                 {incident.unplaced ? " · no timestamp, so not placed on the axis" : ""}
+                {incident.unreadable ? ` · records disagree about this one, so it is not drawn: ${incident.why ?? ""}` : ""}
               </li>
             ))}
           </ul>
