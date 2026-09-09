@@ -233,10 +233,38 @@ describe("the join, all five hops", () => {
        satisfy `toContain` while failing the requirement exactly. So count the
        rows, and count the reset instant they would each have repeated.
        GPT Sol's P2(4), 2026-09-09. */
-    /* One incident row, one verdict reason, two cached windows. The count is
-       spelled out so that a change to any of them is a decision rather than a
-       number quietly going up. */
-    expect(container.querySelectorAll("li").length).toBe(1 + 1 + 2);
+    /* **COUNTED WHERE THEY LIVE, NOT AS A TOTAL.** A bare `li` count was the
+       right assertion when the card had one list. It now has three — incidents,
+       verdict reasons, and the cache entries that carried no usable number — so
+       a total would move for a good reason and a bad one indistinguishably, and
+       the number would be edited rather than read. The requirement has not
+       changed and is pinned directly instead: **one incident row**, whatever
+       else the card grows around it (plan 260909c). */
+    expect(container.querySelectorAll('[data-slot="usage-provenance"] li').length).toBe(1);
+    /* Two stats: the one cached window that carries a real reading, and — new
+       on 2026-09-09 — **when work can actually resume**, which is the number
+       this whole card exists to deliver and which used to be reachable only by
+       reading an incident row's third line. It is drawn from `dueBackAt`, the
+       window that frees up LAST, so a reader who acts on it is not caught out by
+       a second window still in force. */
+    expect(container.querySelectorAll('[data-slot="stat-value"], [data-slot="stat-absent"]').length).toBe(2);
+    expect(screen()).toContain("Work can resume in");
+    /* **`nimbus_quill` IS SUMMARISED, NOT DELETED.** It never carried a usable
+       number, so it is not headroom and gets no card — but the count is on the
+       face of the page and the entry and its own reason are one tap behind it.
+       An absence folded away *without* a count is the exact failure this rewrite
+       exists to avoid, so both halves are pinned rather than the fold alone. */
+    expect(screen()).toContain("1 more cache entry carried no usable number");
+    expect(screen()).toContain("nimbus_quill");
+    expect(screen()).toContain("no resets_at, so the utilization (0) cannot be checked for validity");
+    /* **`nimbus_quill` IS SUMMARISED, NOT DELETED.** It never carried a usable
+       number, so it is not headroom and does not get a card — but the count is
+       on the face of the page and the entry and its reason are behind the
+       disclosure. An absence folded away without a count would be the exact
+       failure this rewrite exists to avoid, so both halves are pinned. */
+    expect(screen()).toContain("1 more cache entry carried no usable number");
+    expect(screen()).toContain("nimbus_quill");
+    expect(screen()).toContain("no resets_at, so the utilization (0) cannot be checked for validity");
     expect(screen().match(/five_hour has not reset yet/g)).toHaveLength(1);
     expect(screen()).toContain("five_hour has not reset yet");
     /* **AND IT DOES NOT SAY "IN FORCE".** Only the verdict may claim the
@@ -458,11 +486,19 @@ describe("the card, against its own clock", () => {
       },
     });
     draw(feed, BASE);
-    expect(screen()).toContain("this window has already reset, so the cached number describes nothing");
+    /* **THE STATE WORD CARRIES IT NOW, AND THE PRODUCER'S SENTENCE EXPLAINS IT.**
+       Until 2026-09-09 this pinned a prefix the card wrote — "this window has
+       already reset, so the cached number describes nothing: " — glued in front
+       of a `why` that already said exactly that, so the card printed the fact
+       twice and ran to eleven lines on a phone. The prefix went; the meaning is
+       pinned in two pieces instead, and the second is the producer's own words
+       rather than ours. */
+    expect(container.querySelector('[data-slot="stat-absent"]')?.textContent).toBe("Unknown");
     /* THE STALE NUMBER SURVIVES ONLY AS PROSE. There is no numeric field for a
        renderer to find, so it cannot come back wearing a percentage label. */
     expect(screen()).toContain("the cached 70% describes");
     expect(screen()).not.toMatch(/\b70%\s*resets/);
+    expect(container.querySelector('[data-slot="stat-value"]')).toBeNull();
     /* AN UNKNOWN SCAN IS NOT `no limits hit`. */
     expect(screen()).toContain("this page cannot tell whether anything was rejected");
   });
@@ -501,11 +537,26 @@ describe("the card, against its own clock", () => {
       },
     });
     draw(feed, BASE);
-    expect(screen()).toContain("five_hour — this window reset at");
+    /* **THE VOID NUMBER IS NOWHERE ON THE CARD**, which is the whole assertion
+       and is unchanged. `96%` may not appear as the value, in the evidence, in
+       a tooltip, or anywhere else. */
     expect(screen()).not.toContain("96%");
+    /* The window that has passed says WHICH KIND of absence it is, in a word,
+       rather than drawing a dash — GPT Sol's S2-01, 2026-09-09. It used to read
+       "five_hour — this window reset at …" as one run-on row; it is now a card
+       whose label is the window, whose value is the state, and whose reason is
+       the sentence. The substance is identical and pinned piece by piece. */
+    const five = container.querySelector('[data-slot="stat-absent"]');
+    expect(five?.textContent).toBe("Unknown");
+    expect(screen()).toContain("five_hour");
+    expect(screen()).toContain("this window reset at");
+    expect(screen()).toContain("so its cached number describes nothing");
     /* The window that has NOT passed still shows its number: the rule is about
-       a void reading, not about hiding the cache. */
+       a void reading, not about hiding the cache. Both forms are on screen —
+       the producer's `41% used`, and the `59% left` the reader actually asked
+       for — so the derived number can be checked against the source one. */
     expect(screen()).toContain("41%");
+    expect(screen()).toContain("59% left");
   });
 
   it("will not draw another account's percentages under this account's name", () => {

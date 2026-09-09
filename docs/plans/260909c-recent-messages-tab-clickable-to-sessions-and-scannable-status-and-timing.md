@@ -338,13 +338,35 @@ The fourth round passed all three scroll cases, and `elementFromPoint` at the ba
 the badge rather than the masthead in each: badge top 119.92 against a 116.92 masthead at 1280×600
 scrolled to the bottom, 168.92 at 1280×900 unscrolled, 320.16 against a 255.375 masthead at 390.
 
-**Screenshots: [`260909c-shots/`](260909c-shots/) — two of them, and they are the first images
-committed under `docs/` in this repo.** `git ls-files docs | grep .png` was empty before this, so
-rather than quietly establish a new convention with the eight the browser passes produced, this keeps
-the two that show the thing Greg asked about — a row at 1280 and at 390 — and leaves the rest as the
-numbers above, which are better evidence anyway. There is no "before" shot: the tab was never
-photographed until this change was already on screen. If images in `docs/` are unwanted, deleting
-this folder costs nothing.
+**Screenshots: [`260909c-shots/`](260909c-shots/)** — two of the eight the browser passes produced,
+the ones showing the thing Greg asked about: a row at 1280 and at 390. The rest are the numbers
+above, which are better evidence anyway. There is no "before" shot; the tab was never photographed
+until this change was already on screen.
+
+I wrote here that these were the first images ever committed under `docs/` — `git ls-files docs |
+grep .png` was empty when I checked. **That stopped being true while this branch was open**:
+`dashboard-design-system` landed `260909c-dashboard-design-system-screenshots/` on `dev` in the
+meantime, so a convention I was being careful not to establish alone already exists. Left as a note
+rather than deleted, because the shape of the mistake is worth keeping: a fact about a shared repo,
+measured once and then quoted for four hours as though a measurement were a property.
+
+## The merge with `dev`, which had moved 38 commits
+
+`dashboard-tooltips` and `dashboard-design-system` had been in `FeedPanel.tsx` and
+`SessionsPanel.tsx` the whole time this was being built. Two conflicts, both in `FeedPanel.tsx`, and
+**both sides had independently attacked the same complaint from opposite ends**: that
+`2026-09-09T05:51:02.547Z` on a row is *"unreadable as a time of day, in a city, by a person"*
+([instant.ts](../../tools/fleet/web/src/instant.ts)). `dev` kept the ISO visible and put the three
+zones on a hover card; this branch put a human age in front and the zones behind it.
+
+The resolution keeps both sides' better half rather than picking a winner:
+
+- **The age wins the row**, because that is what Greg asked for — and because `instant.ts`'s own
+  header already says the relative age *"is the right thing to read at a glance"*.
+- **`instantTip` wins the card.** This branch had hand-rolled the same three-zone tooltip inline; the
+  shared helper is better written, gives every instant on the dashboard one heading, and is the only
+  part of the collision that would otherwise exist twice. The inline `zonedLine` call is gone.
+- **`SPEAKER_TIPS` on the speaker label is kept from `dev`** — this branch had the label bare.
 
 ## Coordination
 

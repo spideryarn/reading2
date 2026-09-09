@@ -42,13 +42,18 @@
  * Every string drawn here is agent-authored text. React escapes it; nothing
  * here adds markup. `Turn.tsx` draws the turns and carries the same rule.
  */
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-
-import { zonedLine } from "../../zones.js";
+import { useCallback, useEffect, useMemo, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
 
 import { StatusPill } from "./SessionParts";
-import { SPEAKERS } from "./Turn";
-import { Explain } from "./Tooltip";
+import { SPEAKERS, SPEAKER_TIPS } from "./Turn";
+import { Explain, TipCard, Tooltip, TooltipGroup } from "./Tooltip";
+/* **`instantTip` RATHER THAN A SECOND `zonedLine` CALL.** This branch grew its
+   own inline three-zone tooltip on the age at the same time `dashboard-tooltips`
+   was extracting exactly that into a shared helper, and theirs is the better
+   one: same `zonedLine`, one heading across every surface that prints an
+   instant, and a `how` that says whose clock the number came off rather than
+   how old it is. Two spellings of one card is one to change and one to forget. */
+import { instantTip } from "./instant";
 import {
   NO_FILTERS,
   applyFilters,
@@ -134,18 +139,36 @@ function Chip({
   onClick,
   children,
   label,
+  ...rest
 }: {
   on: boolean;
   onClick: () => void;
   children: ReactNode;
   label: string;
-}): ReactNode {
+  /**
+   * **Everything else goes on the `<button>`, and the `ref` is the reason.**
+   *
+   * A `Tooltip` around a chip clones it and hands it a merged `ref` plus its
+   * hover and focus handlers. Tooltip.tsx's header names the failure exactly:
+   * *"a trigger that swallows the ref opens nothing at all — with no error, and
+   * looking exactly like a page with no tooltips on it."* This component ate
+   * both until 2026-09-09, because it declared four props and dropped the rest.
+   */
+  /* `type`, `aria-pressed` and `className` are this component's invariants, so
+     they are not offered: the spread below sits after them and would otherwise
+     let a caller override the first two, while `className` was accepted by the
+     type and then silently thrown away. GPT Sol's P2. */
+} & Omit<
+  ButtonHTMLAttributes<HTMLButtonElement>,
+  "onClick" | "aria-label" | "type" | "aria-pressed" | "className"
+>): ReactNode {
   return (
     <button
       type="button"
       aria-pressed={on}
       aria-label={label}
       onClick={onClick}
+      {...rest}
       className={cx(
         "tw:inline-flex tw:h-7 tw:shrink-0 tw:items-center tw:rounded-full tw:border tw:px-2.5",
         "tw:text-[12px] tw:whitespace-nowrap tw:transition-colors",
@@ -316,8 +339,8 @@ function TurnAge({ at, now, skew }: { at: string | null; now: number; skew: Cloc
      that is 600 of them a second for a string that cannot have changed. The
      Deploys panel measured the same un-memoised work at 110–126 ms per second
      over 200 rows; GPT Sol raised it here before it was written. */
-  const zoned = useMemo(() => (at === null ? null : zonedLine(at)), [at]);
-  if (at === null) return null;
+  const tip = useMemo(() => (at === null ? null : instantTip(at, "This message was written")), [at]);
+  if (at === null || tip === null) return null;
   const age = turnAge(at, now, skew);
   /* A timestamp this page cannot parse is shown as it came rather than dropped:
      the server said something, and swallowing it would leave the row looking
@@ -337,17 +360,7 @@ function TurnAge({ at, now, skew }: { at: string | null; now: number; skew: Cloc
      words. */
   const uncorrected = skew.kind !== "known";
   return (
-    <Explain
-      tip={{
-        head: "When this was written",
-        what: zoned ?? at,
-        how:
-          skew.kind === "known"
-            ? "The age is measured against this device's clock; the times above are the box's own, unshifted."
-            : "This device's clock has not been checked against the box's, so the age is the box's timestamp subtracted from this device's clock as though they agree. Nothing has bounded how far apart they are. The times above are the box's own.",
-      }}
-      placement="bottom"
-    >
+    <Explain tip={tip} placement="bottom">
       {age.kind === "ahead" ? (
         /* **A TURN STAMPED IN THE FUTURE IS A FINDING, not a zero.** Clamping it
            to "0s ago" would hide a clock disagreement behind the most reassuring
@@ -454,7 +467,23 @@ function Row({
             <Mono>{row.sessionName}</Mono>
           </button>
         )}
-        <span className={cx("tw:font-semibold tw:tracking-wide tw:uppercase", who.tone)}>{who.label}</span>
+        {/* The same card the detail pane's turns carry, from the same map —
+            `SPEAKERS` and `SPEAKER_TIPS` are both in Turn.tsx for the reason
+            this file's header gives about the map itself. Kept from `dev`'s
+            side of the merge; this branch had the label bare. */}
+        <Explain tip={SPEAKER_TIPS[row.turn.speaker]} placement="bottom">
+          <span className={cx("tw:font-semibold tw:tracking-wide tw:uppercase", who.tone)}>{who.label}</span>
+        </Explain>
+        {/* **THE AGE REPLACES THE RAW ISO, AND THE CARD BEHIND IT IS `dev`'s.**
+            Both sides of this merge solved the same complaint — that
+            `2026-09-09T05:51:02.547Z` is *"unreadable as a time of day, in a
+            city, by a person"* (instant.ts) — and solved it at opposite ends.
+            `dev` kept the ISO visible and put the three zones on a card; this
+            branch put a human age in front and the zones behind it. Greg asked
+            for *"human-readable timing"*, and instant.ts's own header agrees
+            that the relative age *"is the right thing to read at a glance"* —
+            so the age wins the row and `instantTip` wins the card, which is
+            also the only part `dev` would have had to write twice. */}
         <TurnAge at={row.turn.at} now={now} skew={skew} />
         {row.attribution.kind === "suspect" ? (
           <Explain tip={{ ...ATTRIBUTION_TIP, how: row.attribution.why }} placement="bottom">
@@ -679,16 +708,26 @@ export function FeedPanel({
 
       {/* Speaker chips. */}
       <div className="tw:mt-1.5 tw:flex tw:flex-wrap tw:gap-1.5">
-        {FILTERABLE.map((s) => (
-          <Chip
-            key={s}
-            on={filters.speakers.includes(s)}
-            onClick={() => onFilters({ ...filters, speakers: toggle(filters.speakers, s) })}
-            label={`Show only ${SPEAKERS[s].label}`}
-          >
-            {SPEAKERS[s].label}
-          </Chip>
-        ))}
+        {/* **`mouseOnly`, and this is the one place on the tab that needs it.**
+            A tap on a chip toggles the filter, so a card opening at the same
+            time would land over the list the tap just changed — the dock's
+            argument exactly (Dock.tsx). The cost is that these nine definitions
+            are unreachable on a phone, which is why the same map is also on the
+            badge over every message, where a tap does nothing and the card
+            opens under a finger. */}
+        <TooltipGroup delay={{ open: 240, close: 90 }}>
+          {FILTERABLE.map((s) => (
+            <Tooltip key={s} content={<TipCard tip={SPEAKER_TIPS[s]} />} placement="top" mouseOnly>
+              <Chip
+                on={filters.speakers.includes(s)}
+                onClick={() => onFilters({ ...filters, speakers: toggle(filters.speakers, s) })}
+                label={`Show only ${SPEAKERS[s].label}`}
+              >
+                {SPEAKERS[s].label}
+              </Chip>
+            </Tooltip>
+          ))}
+        </TooltipGroup>
       </div>
 
       {/* Session chips, from the sessions present in this window. */}
