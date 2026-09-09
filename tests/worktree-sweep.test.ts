@@ -401,7 +401,6 @@ describe("removeOne", () => {
 
   it("unregisters a ghost but leaves its branch, whose commits it cannot judge", () => {
     const wt = freshWorktree("ghosted");
-    commit(wt, "mine.txt", "work\n", "unlanded work on the branch");
     rmSync(wt, { recursive: true, force: true });
 
     const out = removeOne(primary, "worktree-ghosted", { now: now() + 999 * HOUR });
@@ -409,6 +408,23 @@ describe("removeOne", () => {
     expect(out.ok).toBe(true);
     expect(git(["worktree", "list", "--porcelain"], primary)).not.toContain(wt);
     expect(git(["branch", "--list", "worktree-ghosted"], primary)).toContain("worktree-ghosted");
+  });
+
+  it("REFUSES a ghost whose gone tree's reflog names work the trunk does not have", () => {
+    /* This test used to make exactly this unlanded commit and assert the ghost
+       was unregistered anyway — which unregisters the admin directory holding the
+       only reflog that names it. Since 2026-09-09 a ghost gets the same landed
+       proof a live tree gets: the directory is gone, the metadata is not, and
+       reading it is the difference between a stale registration and a loss.
+       docs/project/worktrees.md § Sweeping them up. */
+    const wt = freshWorktree("ghosted-unlanded");
+    commit(wt, "mine.txt", "work\n", "unlanded work on the branch");
+    rmSync(wt, { recursive: true, force: true });
+
+    const out = removeOne(primary, "worktree-ghosted-unlanded", { now: now() + 999 * HOUR });
+
+    expect(out.ok).toBe(false);
+    expect(git(["worktree", "list", "--porcelain"], primary)).toContain(wt);
   });
 
   it("removes a LOCKED worktree, which is what claude --worktree creates", () => {
