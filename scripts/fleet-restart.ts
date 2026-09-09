@@ -33,9 +33,16 @@
  * passwordless sudo and `sudo -n true` succeeds from an agent's shell, so this
  * was never a privilege problem: the Overseer's session runs in auto mode and
  * its command classifier refuses `sudo systemctl restart fleet-dashboard` while
- * allowing `kill -TERM`, `tmux send-keys` and `npx tsx scripts/…`. Whether a
- * script name reads differently to the classifier is an experiment, and it is
- * written up in docs/plans/260909c-a-dashboard-restart-the-overseer-can-run-itself.md.
+ * allowing `kill -TERM`, `tmux send-keys` and `npx tsx scripts/…`.
+ *
+ * **The experiment has been run and the answer is yes.** On 2026-09-09 the
+ * Overseer's own unattended session was allowed `npx tsx scripts/fleet-restart.ts
+ * restart` and it restarted the live dashboard — so this file is not a proposal,
+ * it is the supported way. One `npm run` form was refused in the same session,
+ * but it was run through a shell pipeline and after a restart had already
+ * happened, so what the refusal was about is genuinely unknown; prefer the bare
+ * `npx tsx` form. Both, and the confound, are in
+ * docs/plans/260909c-a-dashboard-restart-the-overseer-can-run-itself.md.
  *
  * ## What is here and what is next door
  *

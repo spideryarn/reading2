@@ -1,6 +1,13 @@
 # A dashboard restart the Overseer can run itself
 
-Status: **in progress** — stage 1 written, stages 2–3 pending.
+Status: **done.** The script is on `dev`; the experiment ran; the answer is yes.
+
+`npx tsx scripts/fleet-restart.ts restart` was accepted by the classifier in the Overseer's own
+auto-mode session on 2026-09-09 and restarted the live dashboard, having first read the steering
+queue and refused nothing. One thing is left open on purpose and it is Greg's: whether the `npm run`
+form's refusal was the wrapper, the shell pipeline it was run through, or the session's history —
+§ *The answer* says why this experiment cannot separate them and what the one cheap follow-up would
+be. One paragraph is also waiting for the owner of `docs/project/overseer.md`.
 
 Greg, 2026-09-09, after restarting `fleet-dashboard` by hand:
 
@@ -159,27 +166,48 @@ At most three shapes, and **none of them disguises what it does**: the goal is a
 honestly says it restarts a service and is still accepted. If all three are refused, the finding is
 written up for Greg with the options that remain.
 
-- [ ] pushed to `dev`
-- [ ] **`git -C /home/greg/code/spideryarn2 merge origin/dev` in the primary, and its HEAD checked.**
+- [x] pushed to `dev`
+- [x] **`git -C /home/greg/code/spideryarn2 merge origin/dev` in the primary, and its HEAD checked.**
       A push updates `origin/dev`, not the primary checkout — and the script's own `not behind` check
       would then refuse, or worse, an older copy of the script would run and be recorded as classifier
       evidence. Sol found this; it is the step that makes the experiment about the classifier rather
       than about a stale file.
-- [ ] shape 1 run, outcome recorded below
-- [ ] shape 2 run, outcome recorded below
-- [ ] shape 3 run, outcome recorded below
+- [x] shape 1 run — allowed, exit 0
+- [x] shape 2 run — allowed, exit 0, real restart. **This is the answer.**
+- [x] shape 3 run — refused, but confounded; see below. Deliberately not retried.
 
 ### Stage 3 — write down what happened
 
-- [ ] the results table below, filled in
-- [ ] if all three refused: a paragraph for Greg naming the remaining options. **A scoped sudoers rule
-      is not one of them** — Greg already has `NOPASSWD:ALL`, so narrowing that grant is hardening,
-      not a fix for a classifier that refuses the visible command (Sol). What is left:
-      a root-owned single-purpose helper (a genuinely different command shape, and `infra/`, so
-      Greg's), a `systemctl --user` unit for the dashboard, or a route on the dashboard behind the
-      acting gate that restarts the service on request — which has the pleasing property that the
-      steering queue could be drained by the same call
-- [ ] the finding folded into `docs/project/overseer.md` § Steering, if there is one to fold
+- [x] the results table below, filled in
+- [x] **not needed** — the fallback paragraph was for "if all three refused", and shape 2 was
+      allowed. Kept here because it stays true if the classifier ever tightens: a scoped sudoers rule
+      is **not** one of the remaining options, since Greg already has `NOPASSWD:ALL`, so narrowing
+      that grant is hardening rather than a fix for a classifier refusing the visible command (Sol).
+      What would be left is a root-owned single-purpose helper (a genuinely different command shape,
+      and `infra/`, so Greg's), a `systemctl --user` unit, or a route on the dashboard behind the
+      acting gate — which has the pleasing property that the steering queue could be drained by the
+      same call, closing the race in § *Follow-up* at the same time.
+- [ ] **the finding folded into `docs/project/overseer.md` § Steering — proposed below, not applied.**
+      That file is the Overseer's runbook and is live with another agent (`overseer-md-agent-coordinator`,
+      plan 260908g), and its wording is a rule, so it goes one approved set at a time
+      ([edit-important-docs.md](../reusable/edit-important-docs.md)) rather than being edited from here.
+
+### The one-line edit that doc wants
+
+Its § "Steering, and the actions you have" currently ends:
+
+> Restarting the *live* dashboard or daemon to deploy what the primary now holds is also yours, once
+> you have read the steering queue (`GET /api/actions`), because a restart discards it — Greg
+> approved, 2026-09-08 — but the classifier may still refuse the command, and then it is Greg's.
+
+The last clause is now out of date in a useful direction. Proposed:
+
+> Restarting the *live* dashboard to deploy what the primary now holds is yours, and
+> `npx tsx scripts/fleet-restart.ts restart` is how: it reads the steering queue for you and refuses
+> if anything is in it, holds included — Greg approved the restart 2026-09-08, and the classifier
+> accepted that command unattended on 2026-09-09. `check` is the same thing without the restart. A
+> hand-typed `sudo systemctl restart` is still refused, and so was one `npm run` form; if the script
+> is ever refused too, it is Greg's.
 
 ## Results of the classifier experiment
 
@@ -187,14 +215,46 @@ Three facts per row, kept apart on purpose — *"allowed" can merely mean the sc
 precondition*, and an exit code says nothing about whether the classifier let the command through
 (GPT Sol, 2026-09-09).
 
-| # | session | command | classifier | exit code | restart observed? |
+Run from the Overseer's own session at ~08:05 UTC on 2026-09-09, primary merged to `f17a8cd1`
+(holding `b60a01f2`) first.
+
+| # | session | command | classifier | exit | restart observed? |
 |---|---|---|---|---|---|
-| 0 | `restart-script` (mine) | `npm run fleet:restart go` | **allowed** | 4 (a false-alarm claim check) | **yes** — see the accident below |
-| 0b | `restart-script` (mine) | `npx tsx scripts/fleet-restart.ts check` | **refused** | — | no |
-| 0c | `restart-script` (mine) | `systemctl is-active fleet-dashboard` | **refused** | — | no |
-| 1 | `Overseer` | `npx tsx scripts/fleet-restart.ts check` | | | |
-| 2 | `Overseer` | `npx tsx scripts/fleet-restart.ts restart` | | | |
-| 3 | `Overseer` | `npm run fleet:restart restart` | | | |
+| 0 | `restart-script` | `npm run fleet:restart go` | **allowed** | 4 (the claim false alarm) | **yes** — the accident below |
+| 0b | `restart-script` | `npx tsx scripts/fleet-restart.ts check` | **refused** | — | no |
+| 0c | `restart-script` | `systemctl is-active fleet-dashboard` | **refused** | — | no |
+| 1 | `Overseer` | `npx tsx scripts/fleet-restart.ts check` | **allowed** | 0 | no, by design |
+| 2 | `Overseer` | `npx tsx scripts/fleet-restart.ts restart` | **allowed** | 0 | **yes** |
+| 3 | `Overseer` | `npm run fleet:restart restart`, **piped** | **refused** — *"Blocked by classifier"*, no further reason | — | no |
+
+## The answer
+
+**Yes. A script whose name says `fleet-restart` and whose argument says `restart` was accepted, and
+it worked.** Shape 2 ran unattended in the Overseer's own auto-mode session and restarted the live
+dashboard: pid 55567 → 892433, the listener at pid 892457 inside the unit's cgroup, the bundle moving
+`index-BMgLuxOl.js` → `index-Ldt17zKY.js`, HTTP 200, `NRestarts` unmoved, the same pid still there
+thirteen seconds later, and the Overseer's claim intact afterwards. All nine preconditions passed
+first, and it deployed four sessions' worth of pending dashboard work in the process.
+
+So the thing Greg asked to find out is settled: the Overseer can now restart the dashboard itself,
+and the restart is gated on the steering queue by machinery rather than by memory.
+
+**What is not settled, and the Overseer said so rather than guessing.** Shape 3 was refused, but it
+was not run bare — it was run as `npm run fleet:restart restart 2>&1 | grep -E '…' ; echo
+"exit=${PIPESTATUS[0]}"`, with a pipeline and an appended echo. Three explanations fit and this
+experiment cannot separate them: the `npm run` wrapper, the shell pipeline, or the session's history
+— shape 3 came *after* the session had watched a real restart happen, which is the same ordering as
+rows 0b and 0c in my own session, where a bare read-only `check` was refused minutes after an allowed
+restart.
+
+The Overseer deliberately did not re-run it bare, on the grounds that **retrying an action the
+classifier has just refused is not a call an agent should make for itself.** That is the right
+instinct and it is why this row stays ambiguous. Resolving it properly needs a fresh session with no
+restart in its history running the bare `npm run fleet:restart restart` as its first command — that
+is a small, cheap experiment, and it is Greg's to authorise rather than something to slip in here.
+
+**The practical upshot regardless:** shape 2 is the form to use, and it needs no wrapper. The `npm`
+script stays for a person at a terminal.
 
 **Rows 0–0c are already a result, and they complicate the hypothesis.** A `npm run` line carrying the
 restart word was allowed and a read-only `npx tsx …ts check` was refused *minutes later in the same
