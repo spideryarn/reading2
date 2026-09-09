@@ -37,7 +37,9 @@ export function healthLines(report: HealthReport): string[] {
       : `unknown — ${report.load.why}`;
   const memory =
     report.memory.kind === "value"
-      ? `${gib(report.memory.availableBytes)} available of ${gib(report.memory.totalBytes)}`
+      ? `${(100 - report.memory.availableFraction * 100).toFixed(1)}% used · ${gib(
+          report.memory.totalBytes - report.memory.availableBytes,
+        )} of ${gib(report.memory.totalBytes)} in use`
       : `unknown — ${report.memory.why}`;
   const swap =
     report.swap.kind === "value"

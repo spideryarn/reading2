@@ -28,8 +28,22 @@
  * readings is a union with an explicit "I could not tell" arm carrying the
  * tool's own words, and that arm is the whole reason the module exists —
  * *"a missing reading must never collapse into looking healthy"*. So an
- * unreadable stat is violet and says why, and a stat that is not in the payload
- * at all produces no tile rather than a zero.
+ * unreadable stat is violet and says why, a stat that is not in the payload at
+ * all produces no tile rather than a zero, and **a reading with no number gets
+ * no bar** — an empty track beside a dash is a drawn zero wearing a different
+ * shape.
+ *
+ * ## One direction, and it is "used"
+ *
+ * > always show X% used rather than 100-X% free
+ * >
+ * > — Greg, 2026-09-09
+ *
+ * This page used to mix them: four readings said *used* and memory said *free*,
+ * and it was the one whose colour ran the other way. `readHealthStats` now
+ * flips memory at the point of display. Its colour is still decided on the
+ * collector's original available fraction, which is the whole risk in that
+ * flip — see `MEMORY_USED_PERCENT`.
  */
 
 import type { Tip } from "./Tooltip";
@@ -47,15 +61,76 @@ import type { Tone } from "./view";
 export const THRESHOLDS = {
   /** load1 / cores. health.ts: ">2x strained, >4x critical", and the doc names no exact multiplier. */
   loadRatio: { strained: 2, critical: 4 },
-  /** availableKiB / totalKiB. health.ts's own cutoffs; the doc only says "near zero". */
+  /** `availableFraction` (`availableBytes / totalBytes`). health.ts's own cutoffs; the doc only says "near zero". */
   memoryAvailable: { strained: 0.15, critical: 0.05 },
-  /** usedKiB / totalKiB. A step function, not a ramp: "swap is a cliff, not a slope". */
+  /** `usedFraction` (`usedBytes / totalBytes`). A step function, not a ramp: "swap is a cliff, not a slope". */
   swapUsed: { strained: 0.9, critical: 0.98 },
   /** `df` percent on `/`. Ordinary sysadmin defaults rather than anything from the doc. */
   diskUsed: { strained: 90, critical: 97 },
   /** Percent of CPU time waiting on IO. health.ts treats >=50 with swapping as thrashing. */
   ioWait: { thrashing: 50 },
 } as const;
+
+/**
+ * The same cutoffs as `memoryAvailable`, said the other way round, in percent —
+ * **for drawing and for words, never for deciding a colour.**
+ *
+ * The obvious version of this file's memory flip compared `used > 85` instead
+ * of `available < 0.15`, on the grounds that they are the same statement. They
+ * are not, once a double has been through a subtraction:
+ *
+ *     availableFraction = 0.14999999999999997
+ *     0.14999999999999997 < 0.15          → true   (the collector: strained)
+ *     100 - 0.14999999999999997 * 100     → 85     (exactly)
+ *     85 > 85                             → false  (the tile: ok)
+ *
+ * An amber badge over a green tile, on one value in ten thousand billion, found
+ * by GPT Sol reading the plan rather than by any test. So **the tone is decided
+ * on the collector's own number in the collector's own direction**, and this
+ * exists for the tile's tooltip, the chart's bands and the label — none of
+ * which is a judgement about a particular reading.
+ *
+ * `Math.round` because `(1 - 0.15) * 100` is 85.00000000000001, and a number
+ * that goes on a page as a threshold should not carry that.
+ */
+export const MEMORY_USED_PERCENT = {
+  strained: Math.round((1 - THRESHOLDS.memoryAvailable.strained) * 100),
+  critical: Math.round((1 - THRESHOLDS.memoryAvailable.critical) * 100),
+} as const;
+
+/**
+ * How far a load bar runs before it clips: twice the critical multiple.
+ *
+ * **Shared with the chart's y axis** (`history-series.ts` § SERIES), so the
+ * tile's bar and the line under it agree about what "half way along" means.
+ * Twice critical puts amber at a quarter of the track and red at half — the
+ * reasoning is on `SeriesSpec.max`, and it is the axis that survived load 391.
+ */
+export const LOAD_BAR_CEILING = THRESHOLDS.loadRatio.critical * 2;
+
+/**
+ * The little track under a tile's number: how full or busy this one is, at a
+ * glance, with the cutoffs drawn on it.
+ *
+ * > if possible show something like a progress bar to indicate visually how
+ * > full/busy things are
+ * >
+ * > — Greg, 2026-09-09
+ *
+ * **The ticks are not decoration.** Swap at 37% looks half full and is nowhere
+ * near its 90% cutoff; a bare bar invites exactly that misread, so every bar
+ * carries the same warning boundaries the chart below it draws as bands, from
+ * the same constants. IO wait has only amber because its critical state also
+ * requires active swapping, which one tick on one numeric axis cannot express.
+ */
+export type StatBar = {
+  /** How far along the track the fill goes, 0–1. Already clipped. */
+  fill: number;
+  /** The value ran off the end of the track, and the track must say so. */
+  over: boolean;
+  /** Where amber and (if the reading has one) red begin, 0–1 along the track. */
+  marks: number[];
+};
 
 export type Stat = {
   /** React key, and the field it was read from. */
@@ -67,7 +142,18 @@ export type Stat = {
   sub: string;
   tone: Tone;
   tip: Tip;
+  /**
+   * **ABSENT WHENEVER THERE IS NO NUMBER**, which is not the same as a bar at
+   * zero: a reading that could not be taken, and a box with no swap at all,
+   * both get a tile with no track under it rather than an empty one.
+   */
+  bar?: StatBar;
 };
+
+/** A bar out of 100%, with its cutoffs as fractions of the same track. */
+function percentBar(percent: number, marks: number[]): StatBar {
+  return { fill: Math.min(Math.max(percent, 0), 100) / 100, over: percent > 100, marks: marks.map((m) => m / 100) };
+}
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
@@ -138,7 +224,7 @@ export function readHealthStats(health: unknown): Stat[] {
     const tip: Tip = {
       head: "Load",
       what: "How many processes are runnable, averaged over the last minute, against the number of cores.",
-      how: `Equal to the core count is busy, not broken. Amber past ${THRESHOLDS.loadRatio.strained}× the cores and red past ${THRESHOLDS.loadRatio.critical}× — the same cutoffs the verdict above uses.`,
+      how: `Equal to the core count is busy, not broken. Amber past ${THRESHOLDS.loadRatio.strained}× the cores and red past ${THRESHOLDS.loadRatio.critical}× — the same cutoffs the collector's verdict uses. The bar runs to ${LOAD_BAR_CEILING}× the cores, which is the chart's axis below, so the two are read the same way.`,
     };
     if (load["kind"] === "value") {
       const load1 = numberAt(load, "load1");
@@ -147,8 +233,11 @@ export function readHealthStats(health: unknown): Stat[] {
       out.push({
         key: "load",
         label: "Load",
-        value: load1 === null ? "—" : load1.toFixed(1),
-        sub: ratio === null || cores === null ? "cores unknown" : `${ratio.toFixed(1)}× of ${cores} cores`,
+        /* Ratio is the number that earns the tone and the one the bar measures.
+           Keeping raw load as the headline made a 6%-full bar sit under "8.0":
+           both true, but not the one-number glance Greg asked the bar to be. */
+        value: ratio === null ? "—" : `${ratio.toFixed(1)}×`,
+        sub: load1 === null || cores === null ? "raw load or cores unknown" : `${load1.toFixed(1)} across ${cores} cores`,
         tone:
           ratio === null
             ? "unknown"
@@ -158,6 +247,18 @@ export function readHealthStats(health: unknown): Stat[] {
                 ? "needs"
                 : "work",
         tip,
+        /* The one bar that is not a percentage of anything: load has no
+           ceiling, so the track borrows the chart's fixed axis rather than
+           inventing a second one. `ratio === null` and there is no bar — a
+           tile that could not read its ratio must not draw a floor. */
+        ...(ratio === null
+          ? {}
+          : {
+              bar: percentBar((ratio / LOAD_BAR_CEILING) * 100, [
+                (THRESHOLDS.loadRatio.strained / LOAD_BAR_CEILING) * 100,
+                (THRESHOLDS.loadRatio.critical / LOAD_BAR_CEILING) * 100,
+              ]),
+            }),
       });
     } else {
       out.push(unreadable("load", "Load", String(load["why"] ?? "no reason given"), tip));
@@ -167,24 +268,27 @@ export function readHealthStats(health: unknown): Stat[] {
   const memory = health["memory"];
   if (isRecord(memory)) {
     const tip: Tip = {
-      head: "Memory available",
-      what: "How much RAM the box could hand out right now, as a share of the total.",
-      how: `This is 'available', not 'free' — Linux spends idle RAM on cache and hands it back on demand, so 'free' near zero is normal and would be a confidently wrong number. Amber below ${THRESHOLDS.memoryAvailable.strained * 100}%, red below ${THRESHOLDS.memoryAvailable.critical * 100}%.`,
+      head: "Memory used",
+      what: "How much RAM is in use or unavailable, as a share of the total — the complement of what Linux estimates it could still hand out.",
+      how: `The other side of this number is 'available', not simply 'free': Linux estimates how much memory it could give a new process without swapping, including reclaimable cache. Amber around ${MEMORY_USED_PERCENT.strained}% and red around ${MEMORY_USED_PERCENT.critical}% — the exact cutoffs use the collector's measured available fraction, so its judgement cannot drift when this displayed number is rounded.`,
     };
     if (memory["kind"] === "value") {
       const fraction = numberAt(memory, "availableFraction");
       const availableBytes = numberAt(memory, "availableBytes");
       const totalBytes = numberAt(memory, "totalBytes");
+      /* **THE FLIP IS FOR THE EYE, NOT FOR THE VERDICT.** `usedPercent` is what
+         is drawn; `fraction` is what is judged, in the collector's own
+         direction — see MEMORY_USED_PERCENT for the exact number where those
+         two stop agreeing. */
+      const usedPercent = fraction === null ? null : 100 - fraction * 100;
       out.push({
         key: "memory",
-        label: "Memory free",
-        value: fraction === null ? "—" : `${Math.round(fraction * 100)}%`,
+        label: "Memory used",
+        value: usedPercent === null ? "—" : `${Math.round(usedPercent)}%`,
         sub:
           availableBytes === null || totalBytes === null
-            ? "available, not merely unused"
-            : `${formatBytes(availableBytes)} of ${formatBytes(totalBytes)} available`,
-        /* Less is worse here, which is why this is spelled out rather than run
-           through the same comparison as the others. */
+            ? "in use or unavailable"
+            : `${formatBytes(totalBytes - availableBytes)} of ${formatBytes(totalBytes)} in use`,
         tone:
           fraction === null
             ? "unknown"
@@ -194,9 +298,12 @@ export function readHealthStats(health: unknown): Stat[] {
                 ? "needs"
                 : "work",
         tip,
+        ...(usedPercent === null
+          ? {}
+          : { bar: percentBar(usedPercent, [MEMORY_USED_PERCENT.strained, MEMORY_USED_PERCENT.critical]) }),
       });
     } else {
-      out.push(unreadable("memory", "Memory free", String(memory["why"] ?? "no reason given"), tip));
+      out.push(unreadable("memory", "Memory used", String(memory["why"] ?? "no reason given"), tip));
     }
   }
 
@@ -214,7 +321,8 @@ export function readHealthStats(health: unknown): Stat[] {
         value: "none",
         sub: "no swap configured",
         /* Grey, not green: no swap is not a health reading, it is the absence
-           of one thing to read. */
+           of one thing to read. And no bar — an empty track under "none" is a
+           swap file that is 0% full, which is a different claim. */
         tone: "idle",
         tip,
       });
@@ -240,6 +348,14 @@ export function readHealthStats(health: unknown): Stat[] {
                 ? "needs"
                 : "work",
         tip,
+        ...(fraction === null
+          ? {}
+          : {
+              bar: percentBar(fraction * 100, [
+                THRESHOLDS.swapUsed.strained * 100,
+                THRESHOLDS.swapUsed.critical * 100,
+              ]),
+            }),
       });
     } else {
       out.push(unreadable("swap", "Swap used", String(swap["why"] ?? "no reason given"), tip));
@@ -255,12 +371,22 @@ export function readHealthStats(health: unknown): Stat[] {
     };
     if (disk["kind"] === "value") {
       const percent = numberAt(disk, "usePercent");
-      const availableKiB = numberAt(disk, "availableKiB");
+      const usedKiB = numberAt(disk, "usedKiB");
+      const totalKiB = numberAt(disk, "totalKiB");
       out.push({
         key: "disk",
         label: "Disk used",
         value: percent === null ? "—" : `${Math.round(percent)}%`,
-        sub: `${formatKiB(availableKiB)} free on /`,
+        /* Used of total, not free of total: Greg's rule applies to the sub-line
+           as much as to the number, and a tile that said "52%" over "139 GiB
+           free" made the reader hold both directions at once. `df`'s own
+           percent and its used/total do not always agree to the digit —
+           reserved blocks — so the percent stays the collector's and this is
+           only the size beside it. */
+        sub:
+          usedKiB === null || totalKiB === null
+            ? "on /"
+            : `${formatKiB(usedKiB)} of ${formatKiB(totalKiB)} on /`,
         tone:
           percent === null
             ? "unknown"
@@ -270,6 +396,9 @@ export function readHealthStats(health: unknown): Stat[] {
                 ? "needs"
                 : "work",
         tip,
+        ...(percent === null
+          ? {}
+          : { bar: percentBar(percent, [THRESHOLDS.diskUsed.strained, THRESHOLDS.diskUsed.critical]) }),
       });
     } else {
       out.push(unreadable("disk", "Disk used", String(disk["why"] ?? "no reason given"), tip));
@@ -304,6 +433,17 @@ export function readHealthStats(health: unknown): Stat[] {
         sub: swapping ? `${waText} · in ${si ?? "?"} / out ${so ?? "?"} KB/s` : `${waText}, not swapping`,
         tone: swapping && thrashing ? "alarm" : swapping || thrashing ? "needs" : "work",
         tip,
+        /* **THE BAR ALWAYS MEASURES THE BIG NUMBER — so this tile loses its bar
+           on the turns when the big number is a word.**
+           The two facts here are a percentage and an event, and only one has a
+           length. Drawn together, a box swapping hard with 0% IO wait showed an
+           empty track under an amber "swapping", which reads as *nothing is
+           wrong* in the one shape a glance takes at face value. GPT Sol raised
+           it as ambiguous; an empty bar beside an alarm is worse than no bar.
+           The cutoff it carries is thrashing alone: the red on this reading
+           needs the event as well, which a mark on one axis cannot say — the
+           chart's IO-wait series stops at amber for the same reason. */
+        ...(wa === null || swapping ? {} : { bar: percentBar(wa, [THRESHOLDS.ioWait.thrashing]) }),
       });
     } else if (activity["kind"] === "skipped") {
       out.push({ key: "swapActivity", label: "Swap & IO", value: "—", sub: "not sampled", tone: "idle", tip });

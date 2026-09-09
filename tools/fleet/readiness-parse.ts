@@ -59,10 +59,16 @@ export function stripAnsi(text: string): string {
 
 /**
  * The sentence `vitest-admission.ts` prints when no test was allowed to run,
- * authenticated by a random token the config consumes before workers start.
- * The token is what keeps an ordinary test, fixture or quoted log line from
+ * matched against a random token the config consumes before workers start. The
+ * token is what keeps an ordinary test, fixture or quoted log line from
  * laundering a genuine failure into `void`. `check.ts` quite properly exits 1
  * because a gate did not run, but that status is not a verdict about the tree.
+ *
+ * **Token-matched, not authenticated**, and the difference is real: the value
+ * survives in `/proc/self/environ` however thoroughly JavaScript deletes it, so
+ * this stops coincidences and not deliberate code in our own suite. The
+ * reasoning for leaving it there is in
+ * docs/plans/260909g-readiness-runner-git-env-and-preparation-latch.md.
  */
 export function parseAdmissionRefusal(text: string, expectedToken: string): string | null {
   const lines = stripAnsi(text)
@@ -83,7 +89,7 @@ export function parseAdmissionRefusal(text: string, expectedToken: string): stri
 }
 
 /**
- * Apply an authenticated admission refusal without erasing an earlier gate.
+ * Apply a token-matched admission refusal without erasing an earlier gate.
  * Exit 1 still belongs on the record as the observed process status. A direct
  * test refusal becomes void; a full check keeps any other failing gate and
  * changes only its misleading test row to `did-not-run`.
@@ -96,7 +102,7 @@ export function outcomeAfterAdmissionRefusal(
 ): { outcome: Outcome; why: string | null; counts: Counts } {
   if (refusalWhy === null) return { ...fallback, counts };
 
-  /* The authenticated sentence proves only that the test gate did not run.
+  /* The token-matched sentence proves only that the test gate did not run.
      Without check.ts's own table there is no evidence about the gates it ran
      first, so the aggregate failure remains the conservative answer. */
   if (check === "check" && counts.kind !== "check") return { ...fallback, counts };
