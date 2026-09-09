@@ -73,13 +73,13 @@ const WAIT_TIP: Tip = {
   how: "Measured on this queue's own events. A duration would need position × how long an item takes, and 'how long an item takes' is not a number this fleet has — sessions run from ten minutes to six hours, and most sessions were never queue items at all.",
 };
 
-const HISTORY_TIP: Tip = {
+export const HISTORY_TIP: Tip = {
   head: "History",
   what: "Every touch this item has had, in order, and who made it — added, moved, edited, approved, dispatched, settled.",
   how: "The reason the queue is an event log rather than a list: provenance is the question a Markdown table could not answer. Nothing is ever rewritten, so an approval that later lapsed is still here, above the edit that lapsed it.",
 };
 
-const SETTLED_TIP: Tip = {
+export const SETTLED_TIP: Tip = {
   head: "Recently settled",
   what: "Items that are finished or abandoned. They stay on the page rather than disappearing when they stop being work.",
   how: "Only the recent ones are drawn and the heading says how many older ones are not — an idea that was considered and rejected is worth more here than a gap, because otherwise the next sweep proposes it again.",
@@ -111,7 +111,7 @@ const APPROVAL_TIP: Tip = {
  * Every `how` is quoted down from `tools/overseer/idea-queue.ts` or from
  * `queue-client.ts` § `badgeFor`, not written here.
  */
-const BADGE_TIPS: Record<string, Tip> = {
+export const BADGE_TIPS: Record<string, Tip> = {
   ready: {
     head: "Ready",
     what: "Authorised, unblocked, and waiting only for a slot. Nothing about this item needs anybody's attention.",
@@ -169,7 +169,7 @@ const BADGE_TIPS: Record<string, Tip> = {
  *
  * Quoted down from where each is emitted in `tools/overseer/idea-queue.ts`.
  */
-const PROBLEM_TIPS: Record<string, Tip> = {
+export const PROBLEM_TIPS: Record<string, Tip> = {
   "unreadable-line": {
     head: "Unreadable line",
     what: "A line of the record could not be parsed at all, so whatever it said has not been applied.",
@@ -216,7 +216,7 @@ const PROBLEM_TIPS: Record<string, Tip> = {
  * never rendered at all. So the row named a field it was not showing and hid
  * the one the label promised. Found while writing these cards, 2026-09-09.
  */
-const FACT_TIPS: Record<string, Tip> = {
+export const FACT_TIPS: Record<string, Tip> = {
   "waiting on": {
     head: "Waiting on",
     what: "What has to happen before this can start, in the queue's own words — “a lull”, “the next gateway edit”.",

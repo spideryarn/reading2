@@ -154,7 +154,34 @@ queue held by a broken file never says those words anywhere on the page. It went
 same trap `Header.tsx` already documents about `STALE`: *"an explanation that quoted the word would
 satisfy that search on every page and quietly retire the check."*
 
-### Stage 4 — the rest, by agreement
+### Stage 4 — the masthead and the Sessions list
 
-*Status: not started. Masthead + Sessions, then the Overseer tab. Usage limits, Readiness and
-Deploys wait on their owners.*
+*Status: built, verifying in the browser.*
+
+These are the elements on screen the most: the masthead is on every tab, and the handles line is on
+every card on the biggest one.
+
+- [x] The masthead's four counts. **`quiet` appears on no row anywhere** — a reader looking for a
+      `quiet` badge in the list below will not find one, because the row says `idle`, `shell`,
+      `waiting 4m` or `no agent`. That is the single thing the card exists to say.
+- [x] The Overseer line, all four states — including that *no Overseer session* is what the box
+      looks like after a reboot rather than a rendering gap.
+- [x] `HANDLE_TIPS` — the five handles on `bwj-quotes · $2705 · %2708`, which nothing anywhere
+      defined. They are not interchangeable and the differences are load-bearing: `steer.ts` checks
+      the pane's **pid** before typing, because that is the one thing that changes when a pane is
+      respawned under the same `%`; and only the conversation uuid survives an agent exiting and
+      another starting in the same pane.
+- [x] The three band headings, through `SectionHeading`'s new `tip` — `Everything else` says nothing
+      at all about what is in it and is the biggest band on a quiet box — and the `Order` control.
+- [ ] Browser verification.
+
+**The copy guard now covers 60+ tips** and asserts a floor on that number, because the three rules
+it enforces are worth exactly what the size of the list is: an import dropped in a refactor would
+leave every assertion passing over a shorter one.
+
+### Stage 5 — the rest, by agreement
+
+*Status: not started.* The Overseer tab's daemon line (`schema 2 · pid … · 351 ticks · instance
+<uuid>` — six technical facts on one line, one of them explained). Usage limits, Readiness and
+Deploys wait on their owners: `dashboard-design-system` restyles Usage limits first by agreement,
+and tooltips go on after it rather than before.

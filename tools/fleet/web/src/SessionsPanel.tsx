@@ -310,6 +310,50 @@ function SessionCard({
   );
 }
 
+/**
+ * **What each band is, keyed by the heading the panel builds.**
+ *
+ * The three bands are Greg's, out of overseer-direction.md, and the words are
+ * only in `SessionsPanel`'s own `bands` array — so a heading that changes there
+ * silently falls through to the general card below rather than describing the
+ * wrong band. `default` is that retreat, and it is a real answer: it says the
+ * bands exist and what orders them, which is true of any of them.
+ */
+export const BAND_TIPS: Record<string, Tip> = {
+  "Needs you": {
+    head: "Needs you",
+    what: "Blocked on a person: a permission prompt, a question, a dialog waiting for an answer. Nothing in here is moving.",
+    how: "First on the page whatever else is happening, because it is the only band anybody can clear. Each row is read off that session's own terminal, so it is a good guess rather than something the box reported.",
+  },
+  Working: {
+    head: "Working",
+    what: "An agent is mid-turn here, with nothing waiting on anybody.",
+    how: "Second, and sorted newest first inside the band. A session can be working and wrong, so the number is about motion rather than progress — what a session is actually doing is in its own card.",
+  },
+  "Everything else": {
+    head: "Everything else",
+    what: "Idle agents, sessions sleeping until a time, and shells with no agent in them at all — one band, not three.",
+    how: "Deliberately not split further: a screen with seven ranks is one nobody reads the bottom of. The distinctions are still on every row, because *sleeping until 4pm* and *nobody is home* are different things to find out at midnight.",
+  },
+};
+
+/** The general card, for a heading `BAND_TIPS` has no entry for — a real answer, not a shrug. */
+export const ANY_BAND_TIP: Tip = {
+  head: "A band",
+  what: "The list is grouped into three: who needs an answer, then what is moving, then everything quiet.",
+  how: "Ordered that way because the first question this page is built to answer is whether anybody is waiting on you, and the second is what is actually running. Inside a band, newest first.",
+};
+
+function bandTip(title: string): Tip {
+  return BAND_TIPS[title] ?? ANY_BAND_TIP;
+}
+
+export const ORDER_TIP: Tip = {
+  head: "Order",
+  what: "How the list is sorted. The default is the three-band triage — needs you, working, everything else — and the others are flat lists of the same sessions.",
+  how: "The alternatives exist for questions triage cannot answer: what has been running all night, what did I just start, where is the one in that worktree. Sorting by repo and worktree is the only way to find a session when you know where it is working but not what it is called.",
+};
+
 /** A band of rows under its own heading. Only ever built for a non-empty one. */
 function Band({
   title,
@@ -328,7 +372,10 @@ function Band({
 }): ReactNode {
   return (
     <section>
-      <SectionHeading>
+      {/* **The band heading, which is the one place the three-way triage is
+          named.** `Everything else` in particular says nothing about what is in
+          it, and it is the biggest band on a quiet box. */}
+      <SectionHeading tip={bandTip(title)}>
         {title} · {rows.length}
       </SectionHeading>
       {rows.map((row) => (
@@ -370,7 +417,12 @@ function ListControls({
         {count} {count === 1 ? "session" : "sessions"}
       </h2>
       <label className="tw:ml-auto tw:flex tw:items-center tw:gap-1.5 tw:text-[12px] tw:text-ink-faint">
-        Order
+        {/* The card is on the word, not on the `<select>`: a native select is
+            the platform's control and wrapping it in a hover trigger would put
+            a card over the menu it opens. */}
+        <Explain tip={ORDER_TIP} placement="bottom">
+          Order
+        </Explain>
         <select
           value={order}
           onChange={(e) => onOrder(e.target.value as Ordering)}

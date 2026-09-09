@@ -47,8 +47,25 @@ import { describe, expect, it } from "vitest";
 
 import { tipText, type Tip } from "../tools/fleet/web/src/Tooltip";
 import { MODE_TIPS } from "../tools/fleet/web/src/Dock";
-import { STATUS_TIPS, UPTIME_TIP } from "../tools/fleet/web/src/SessionParts";
-import { GENERATED_TITLE_TIP, OVERSEER_BADGE_TIP } from "../tools/fleet/web/src/SessionsPanel";
+import { HANDLE_TIPS, STATUS_TIPS, UPTIME_TIP } from "../tools/fleet/web/src/SessionParts";
+import {
+  ANY_BAND_TIP,
+  BAND_TIPS,
+  GENERATED_TITLE_TIP,
+  ORDER_TIP,
+  OVERSEER_BADGE_TIP,
+} from "../tools/fleet/web/src/SessionsPanel";
+import { CLAIM_TIPS, COUNT_TIPS } from "../tools/fleet/web/src/Header";
+import { SPEAKER_TIPS } from "../tools/fleet/web/src/Turn";
+import {
+  BADGE_TIPS,
+  FACT_TIPS,
+  HISTORY_TIP,
+  PROBLEM_TIPS,
+  SETTLED_TIP,
+  badgeTip,
+} from "../tools/fleet/web/src/QueuePanel";
+import { instantTip } from "../tools/fleet/web/src/instant";
 
 const WEB_SRC = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -197,9 +214,30 @@ function everyTip(): [string, Tip][] {
     ["UPTIME_TIP", UPTIME_TIP],
     ["OVERSEER_BADGE_TIP", OVERSEER_BADGE_TIP],
     ["GENERATED_TITLE_TIP", GENERATED_TITLE_TIP],
+    ["ANY_BAND_TIP", ANY_BAND_TIP],
+    ["ORDER_TIP", ORDER_TIP],
+    ["HISTORY_TIP", HISTORY_TIP],
+    ["SETTLED_TIP", SETTLED_TIP],
+    /* The two computed ones, on a value each can read. `instantTip`'s other arm
+       — an instant it cannot parse — is covered in fleet-speaker-tips. */
+    ["instantTip", instantTip("2026-09-08T23:40:00.000Z")],
+    ["badgeTip(unknown)", badgeTip("a badge from a newer server")],
   ];
-  for (const [key, tip] of Object.entries(MODE_TIPS)) out.push([`MODE_TIPS.${key}`, tip]);
-  for (const [key, tip] of Object.entries(STATUS_TIPS)) out.push([`STATUS_TIPS.${key}`, tip]);
+  const maps: [string, Record<string, Tip>][] = [
+    ["MODE_TIPS", MODE_TIPS],
+    ["STATUS_TIPS", STATUS_TIPS],
+    ["HANDLE_TIPS", HANDLE_TIPS],
+    ["BAND_TIPS", BAND_TIPS],
+    ["COUNT_TIPS", COUNT_TIPS],
+    ["CLAIM_TIPS", CLAIM_TIPS],
+    ["SPEAKER_TIPS", SPEAKER_TIPS],
+    ["BADGE_TIPS", BADGE_TIPS],
+    ["PROBLEM_TIPS", PROBLEM_TIPS],
+    ["FACT_TIPS", FACT_TIPS],
+  ];
+  for (const [name, map] of maps) {
+    for (const [key, tip] of Object.entries(map)) out.push([`${name}.${key}`, tip]);
+  }
   return out;
 }
 
@@ -220,6 +258,15 @@ function contentWords(text: string): Set<string> {
 }
 
 describe("the shape of a card, over every tip that can be reached from a module", () => {
+  it("still reaches the tips it thinks it does", () => {
+    /* **A floor, not an exact count**, because new cards arrive weekly and a
+       test that had to be edited for each of them would be edited without being
+       read. What it catches is the other direction: an import quietly dropped in
+       a refactor, which leaves every assertion below passing over a shorter
+       list. The three rules under it are only worth what this number is. */
+    expect(everyTip().length).toBeGreaterThanOrEqual(60);
+  });
+
   it("gives each one a head, a what and a how", () => {
     for (const [name, tip] of everyTip()) {
       expect(`${name}: ${tip.head}`).toMatch(/: \S/);
