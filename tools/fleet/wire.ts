@@ -2824,6 +2824,16 @@ export type QueueDepth = {
   dispatchable: number;
   needsGreg: number;
   unauthorized: number;
+  /**
+   * Rows held only because the FILE has a problem — approved, unblocked, and
+   * still not dispatchable.
+   *
+   * Its own count because without it those rows were reported as
+   * `unauthorized`, so a queue with one bad line said *12 not approved* beside
+   * twelve perfectly approved rows, in the same view as the alarm explaining
+   * that the file was the trouble. GPT Sol's P2-2.
+   */
+  queueHeld: number;
   dispatched: number;
   done: number;
   dropped: number;
@@ -2864,6 +2874,15 @@ export type QueueThroughput = {
  */
 export type QueueItemWait =
   | { kind: "ahead"; ahead: number; why: string }
+  /**
+   * The FILE is the problem, not the item.
+   *
+   * Separate from every per-item reason because it outranks them: while the
+   * record has a hole in it nothing may go out, so *"next in line"* would be a
+   * promise the queue cannot keep — which the panel was making, beside the
+   * alarm saying the opposite. Sol's P2-2.
+   */
+  | { kind: "queue-held"; why: string }
   | { kind: "running"; session: string | null; why: string }
   | { kind: "needs-greg"; waitingOn: string | null; why: string }
   | { kind: "not-authorized"; why: string };

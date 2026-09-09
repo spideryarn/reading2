@@ -76,13 +76,34 @@ export function readPayload(body: unknown): QueueView | null {
   return body as QueueView;
 }
 
+/**
+ * How long to wait before calling it a failure.
+ *
+ * **A read with no deadline is the failure mode GPT Sol found** (its answer 4):
+ * the panel keeps the view it had while a new read is in flight, so a request
+ * that never resolves leaves the last answer on screen indefinitely — and if
+ * that answer was a healthy empty queue, the page goes on quietly asserting it
+ * while the queue may be anything at all.
+ */
+export const FETCH_TIMEOUT_MS = 10_000;
+
 export const httpQueueApi: QueueApi = {
   async fetch(): Promise<QueueView> {
     let response: Response;
+    const abort = new AbortController();
+    const timer = setTimeout(() => abort.abort(), FETCH_TIMEOUT_MS);
     try {
-      response = await fetch(QUEUE_URL, { headers: { accept: "application/json" } });
+      response = await fetch(QUEUE_URL, { headers: { accept: "application/json" }, signal: abort.signal });
     } catch (cause) {
-      return { kind: "no-answer", why: `this browser could not reach the dashboard: ${String(cause)}` };
+      return {
+        kind: "no-answer",
+        why:
+          abort.signal.aborted
+            ? `the dashboard did not answer within ${FETCH_TIMEOUT_MS / 1000}s, so what is on screen may be stale`
+            : `this browser could not reach the dashboard: ${String(cause)}`,
+      };
+    } finally {
+      clearTimeout(timer);
     }
     let body: unknown;
     try {
@@ -147,6 +168,9 @@ export function depthClauses(depth: QueueDepth): string[] {
   if (depth.dispatchable > 0) clauses.push(`${depth.dispatchable} ready`);
   if (depth.needsGreg > 0) clauses.push(`${depth.needsGreg} need you`);
   if (depth.unauthorized > 0) clauses.push(`${depth.unauthorized} not approved`);
+  /* **First in the sentence when it is non-zero**, because it is a fact about
+     the file rather than about the rows, and it makes the other counts moot. */
+  if (depth.queueHeld > 0) clauses.unshift(`${depth.queueHeld} held by a broken queue file`);
   if (depth.dispatched > 0) clauses.push(`${depth.dispatched} running`);
   return clauses;
 }
