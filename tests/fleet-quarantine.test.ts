@@ -310,6 +310,9 @@ function fleetRow(over: Partial<FleetRow> = {}): FleetRow {
     role: { kind: "none" },
     startedAt: "2026-09-09T00:00:00.000Z",
     pause: { kind: "cannot-tell", why: "the fixture did not say", cause: "rate-limits-not-collected" },
+    // Required on a row and not what this file is about: a fixture is not a box
+    // whose process table anybody probed.
+    execution: { kind: "unknown", cause: "not-probed", why: "the fixture did not probe the process table" },
     status: IDLE,
     paneId: PANE,
     panePid: 424242,

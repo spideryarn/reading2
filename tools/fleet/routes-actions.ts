@@ -1228,6 +1228,19 @@ export type ActionRoutes = {
    * the routes filled, because there is no second constructor to call.
    */
   drain(snapshot: FleetSnapshot): DrainResult;
+  /**
+   * Put one free-text line in a session's queue, without going through HTTP.
+   *
+   * Here for the same reason `drain` is: `deps.queue` is private to the
+   * closure, so the only way to reach the queue the routes fill is through the
+   * object that filled it. `enqueueSharedMessage` at the bottom of this file is
+   * the door; see its comment for who uses it and why it is this narrow.
+   */
+  enqueueMessage(
+    target: { sessionId: string; claudeSessionId: string },
+    text: string,
+    speaker: Speaker,
+  ): EnqueueResult;
 };
 
 function respond(res: ServerResponse, status: number, body: ActionResponse, extra: Record<string, string> = {}): void {
@@ -2318,6 +2331,16 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
     drain(snapshot) {
       return drainOnce(snapshot, { queue: deps.queue, cursor: drainCursor, sendMessage: deps.sendMessage, log: deps.log, now: deps.now });
     },
+    /* Straight through to the same queue the HTTP enqueue route fills. It does
+       NOT repeat that route's `drainGate` refusal or its rate limiter: both of
+       those are the HTTP caller's gate on a person tapping a button, and the
+       broadcast route has made its own cut with the same `drainGate` before it
+       gets here. What is not skipped is anything the queue itself enforces —
+       `checkText`, `renderMessage`'s slash rule, the per-session and fleet
+       caps, the double-tap window — because those live in `enqueueMessage`. */
+    enqueueMessage(target, text, speaker) {
+      return deps.queue.enqueueMessage(target, text, speaker);
+    },
     handle(req, res) {
       const pathname = (req.url ?? "/").split("?")[0] ?? "/";
       if (pathname !== "/api/actions" && !pathname.startsWith("/api/actions/")) return false;
@@ -2465,4 +2488,48 @@ export function handleActionRequest(req: IncomingMessage, res: ServerResponse): 
 export function drainSharedQueues(snapshot: FleetSnapshot): DrainResult {
   shared ??= makeActionRoutes();
   return shared.drain(snapshot);
+}
+
+/**
+ * **The broadcast route's way in, THROUGH THE SAME `shared` the routes answer
+ * from.** The third instance of the decision the two comments above already
+ * make: two `SteeringQueue`s would be two queues, and the one the page can see
+ * would be the one nothing delivers from.
+ *
+ * Added on 2026-09-09 for `routes-broadcast.ts`, at that session's request and
+ * with this file's owner's agreement. A free-text broadcast has to reach the
+ * sessions that are WORKING — on this box that is most of them most of the
+ * time, so a fan-out that could only type at sessions already at a prompt
+ * reached about a third of the fleet while calling itself a broadcast to all
+ * agents.
+ *
+ * **NARROW ON PURPOSE, and the narrowness is the whole design.** It would have
+ * been one line shorter to export the queue. A broadcast route has no business
+ * reaching `settle`, `release`, `revive` or the quarantine surface, and the
+ * cheapest moment to decide that is before anything needs them.
+ *
+ * `text` is the RAW line and must stay raw. `enqueueMessage` calls
+ * `renderMessage` only to apply the slash rule and to length-check *with* the
+ * prefix — which counts towards the limit, so a message that fits raw can fail
+ * rendered — and then pushes the raw parameter (`queue.ts:722`); `drain.ts:306`
+ * renders again at delivery. Handing it an already-prefixed string prefixes it
+ * twice, which reads as clumsy rather than as a bug and fails nothing.
+ *
+ * **`rule` TRAVELS, and narrowing it away was the first version of this
+ * function.** `bad-text` is a fact about the MESSAGE — it will fail identically
+ * for every recipient, so a fan-out to twenty sessions has one truth to report,
+ * not twenty — while a queue cap or the double-tap window is a fact about THAT
+ * recipient, and twenty of those really are twenty facts. A caller that cannot
+ * tell them apart cannot render either honestly. Collapsing it is the
+ * lossy-join half of docs/postmortems/260908b: the producer said the careful
+ * thing and the consumer threw the distinction away.
+ */
+export function enqueueSharedMessage(
+  target: { sessionId: string; claudeSessionId: string },
+  text: string,
+  speaker: Speaker,
+): { ok: true; position: number } | { ok: false; rule: EnqueueRefusalRule; why: string } {
+  shared ??= makeActionRoutes();
+  const result = shared.enqueueMessage(target, text, speaker);
+  return result.ok ? { ok: true, position: result.position } : { ok: false, rule: result.rule, why: result.why };
 }
