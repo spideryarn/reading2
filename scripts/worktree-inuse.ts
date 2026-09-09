@@ -123,6 +123,14 @@ export interface ProcTable {
   pids(): number[];
   /** A readable argv, for the refusal message. */
   command(pid: number): string;
+  /**
+   * `/proc/<pid>/comm` — the short executable name.
+   *
+   * Readable **even when `cwd` is not**: measured on the box's opaque processes,
+   * `comm` gives `systemd`, `(sd-pam)`, `sshd`, `postgrest` while the cwd
+   * readlink fails. That is what makes the ambient allowlist possible at all.
+   */
+  comm(pid: number): string | null;
   /** The uid this process runs as. */
   self(): number;
 }
@@ -265,8 +273,43 @@ export interface CwdUser {
   command: string;
 }
 
+/**
+ * Processes whose cwd the kernel hides and whose `comm` is a known ambient
+ * daemon — the ones that are there on every run and have never been in a
+ * worktree.
+ *
+ * **This list is the whole reason the scan is usable, and the whole reason it is
+ * still safe.** Blocking on every opaque process is operationally impossible:
+ * measured on the box, six are opaque on every single run, so the owner waiver —
+ * the point of the feature — would never fire. But "they are all daemons" is not
+ * a fact about opaqueness, it is a fact about *this box on that afternoon*. GPT
+ * Sol disproved the general claim by construction: a same-uid Python process
+ * chdir'd into a worktree, called `prctl(PR_SET_DUMPABLE, 0)`, and its cwd went
+ * unreadable while genuinely being the worktree.
+ *
+ * So the shape is the one `worktree-check.ts` already uses for gitignored paths:
+ * **the known ones are named, and anything else is a blocker.** An opaque process
+ * called `python3` is an unknown and costs you the age floor; an opaque `sshd` is
+ * counted and printed. Adding a name here is a decision somebody makes on
+ * purpose, not a default.
+ */
+export const AMBIENT_OPAQUE_COMMS: readonly string[] = ["systemd", "(sd-pam)", "sshd", "postgrest"];
+
+/** A process we could not see into, and could not place. */
+export interface OpaqueUser {
+  pid: number;
+  comm: string;
+}
+
 export type CwdScan =
-  | { kind: "checked"; found: CwdUser[]; opaque: number }
+  | {
+      kind: "checked";
+      found: CwdUser[];
+      /** Opaque, and recognised as ambient. Reported, never blocking. */
+      ambient: number;
+      /** Opaque and NOT recognised. Each one is a hole in the answer. */
+      unplaceable: OpaqueUser[];
+    }
   | { kind: "cannot-tell"; why: string };
 
 /**
@@ -319,7 +362,8 @@ export function cwdUsersUnder(
   const me = proc.self();
   const prefix = root.endsWith(path.sep) ? root : root + path.sep;
   const found: CwdUser[] = [];
-  let opaque = 0;
+  const unplaceable: OpaqueUser[] = [];
+  let ambient = 0;
 
   for (const pid of pids) {
     if (excluded.has(pid)) continue;
@@ -336,14 +380,17 @@ export function cwdUsersUnder(
        took the owner waiver with it. */
     if (cwd.kind === "gone") continue;
     if (cwd.kind === "opaque") {
-      opaque += 1;
+      /* Named ambient daemon, or a hole. `comm` is readable when cwd is not. */
+      const comm = proc.comm(pid);
+      if (comm !== null && AMBIENT_OPAQUE_COMMS.includes(comm)) ambient += 1;
+      else unplaceable.push({ pid, comm: comm ?? "(name unreadable)" });
       continue;
     }
     if (cwd.path !== root && !cwd.path.startsWith(prefix)) continue;
     found.push({ pid, command: proc.command(pid) });
   }
 
-  return { kind: "checked", found, opaque };
+  return { kind: "checked", found, ambient, unplaceable };
 }
 
 /* --------------------------------------------------------- composition -- */
@@ -396,11 +443,14 @@ export function composeInUse(standing: OwnerStanding, scan: CwdScan): InUse {
     unknowns.push(scan.why);
   } else {
     for (const u of scan.found) reasons.push(`a process is running inside it — pid ${u.pid} (${u.command})`);
-    if (scan.found.length === 0) {
+    for (const u of scan.unplaceable) {
+      unknowns.push(`pid ${u.pid} (${u.comm}) is yours and hides its working directory, and is not a daemon we recognise`);
+    }
+    if (scan.found.length === 0 && scan.unplaceable.length === 0) {
       notes.push(
-        scan.opaque === 0
+        scan.ambient === 0
           ? "no process of yours has its working directory inside it"
-          : `no process of yours has its working directory inside it (${scan.opaque} the kernel would not let us inspect)`,
+          : `no process of yours has its working directory inside it (${scan.ambient} ambient daemons hide theirs)`,
       );
     }
   }
@@ -466,6 +516,10 @@ export function procTable(): ProcTable | null {
       const joined = raw.split("\0").filter((a) => a !== "").join(" ");
       if (joined === "") return "(command unreadable)";
       return joined.length > 120 ? `${joined.slice(0, 117)}...` : joined;
+    },
+    comm: (pid) => {
+      const raw = read(`/proc/${pid}/comm`);
+      return raw === null ? null : raw.trim();
     },
     self: () => process.getuid?.() ?? -1,
   };
