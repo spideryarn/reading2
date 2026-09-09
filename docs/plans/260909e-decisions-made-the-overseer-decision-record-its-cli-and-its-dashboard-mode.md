@@ -1,9 +1,9 @@
 # "Decisions made" — the Overseer's decision record, its CLI, and its dashboard mode
 
-**Status, 2026-09-09: planned and reviewed once by GPT Sol; nothing built.** The first draft was
-rewritten against that review — Sol's verdict on it was *"needs rethinking"*, and the two things it
-was right about are recorded below in § What the plan-stage review changed. Stage checkboxes and a
-status paragraph under each heading are kept current as the work lands.
+**Status, 2026-09-09: planned, reviewed twice by GPT Sol, nothing built yet.** Round one returned
+*"needs rethinking"* (two P0s, seven P1s); round two on the rewrite found **no P0 remaining** and
+*"not yet safe to build exactly as written"* (seven P1s). Both rounds are taken in full — see
+§ What the plan-stage reviews changed. Stage checkboxes and a status paragraph under each heading are kept current as the work lands.
 
 Up: [dev-and-deployment-overview.md](../project/dev-and-deployment-overview.md) via
 [overseer.md](../project/overseer.md), whose gate 1 this turns from a hand-kept Markdown list into a
@@ -42,9 +42,9 @@ Three consequences, and they are the design:
    without them is a problem, not a sparse record.
 2. **Nothing but Greg may make a decision look reviewed.** *"Not yet reviewed"* is the number he
    looks for, and anything that can decrement it can make the page calm without anybody having read
-   anything. This is gate 1's *"never hide who decided"* pointed at the second audience. Three
-   separate mechanisms, because there turned out to be three ways to do it — see § The four ways the
-   count could lie.
+   anything. This is gate 1's *"never hide who decided"* pointed at the second audience, and it took
+   five separate mechanisms because two rounds of review found five ways to do it — see § The five
+   ways the count could lie.
 3. **Log blindness is the failure this cannot recover from** — [overseer.md § The log, and the
    surface Greg reads](../project/overseer.md#the-log-and-the-surface-greg-reads). *"A morning log of
    two hundred entries is unbounded authority with a paper trail."* So unreviewed comes first, and
@@ -71,9 +71,9 @@ actually consumed (§ Stage 1). All four are in Stage 1 because they were named.
 is — `decisions.jsonl`, `decisions.lock`, `decisions.created` — written by a CLI and by nothing else.
 Nothing here touches the daemon, `store.ts`, or `idea-queue.ts`.
 
-## The four ways the count could lie
+## The five ways the count could lie
 
-Sol's review found that "only Greg may review" is one rule guarding one of four doors. All four are
+Sol's reviews found that "only Greg may review" is one rule guarding one of five doors. All five are
 closed in the **fold**, not in the writers, because a rule enforced at one entrance has an unguarded
 second entrance and there are three of them (the CLI, the route, a hand-edited file).
 
@@ -83,10 +83,8 @@ second entrance and there are three of them (the CLI, the route, a hand-edited f
 2. **The decision is edited after the review.** The first draft had an `amended` event with an
    unspecified patch and no revision — so the question, the options, the decision, the why or the
    sessions could all change while the row stayed reviewed. That is the approval-after-edit hole the
-   queue's `revision` mechanism exists to close, and Sol called it a P0. **`amended` is dropped from
-   v1** rather than mitigated: the case it served (a decision that turns out to bear on one more
-   session) is thin, the hole it opens is the central one, and a decision is cheap to supersede with
-   a new record. If a real need appears, it comes back **with** a revision that `reviewed` names.
+   queue's `revision` mechanism exists to close, and Sol called it a P0. **A `decided` record is
+   immutable.** There is no amend event and no revision, because there is nothing to revise.
 3. **A decision hides behind an unrelated parse error.** `appendEvents` must refuse a batch that
    makes the record worse — but the queue's version of that check has a real bypass, and copying it
    literally would inherit it: `current.problems` includes unreadable-line problems, while the
@@ -102,6 +100,16 @@ second entrance and there are three of them (the CLI, the route, a hand-edited f
    act on. So **the count is unavailable, not zero, whenever the view carries any problem** — the
    house rule in
    [fleet-dashboard-modes.md § Absence is stated, never drawn](../project/fleet-dashboard-modes.md#absence-is-stated-never-drawn).
+5. **A correction quietly cancels the thing it corrects.** Dropping `amended` closed door 2 and
+   opened this one, which round two found: **records do get corrected**, and the hand log proves it
+   — an 08:20Z claim about Codex credits was withdrawn at 08:25Z on Sol's evidence. With no link
+   between the two, a correction either masquerades as an unrelated decision or does not get made.
+   So a new `decided` may carry **`supersedes: <id>`**, validated against an existing earlier
+   record, and the fold enforces the property that matters: **superseding never reduces the pending
+   count without replacing it.** A superseded record is marked as such and drops off the unreviewed
+   list only because its successor has taken its place there — never because it was cancelled.
+   Superseding a record Greg has already reviewed leaves the *successor* unreviewed, which is the
+   whole point: he reviewed the old fact, not the new one.
 
 ## The record
 
@@ -110,25 +118,59 @@ the other.
 
 ```
 DecisionEvent = Envelope & (
-  | { kind: "decided"; id; class; question; options[]; decision; why; advisers[]; bearsOn }
+  | { kind: "decided"; id; class; decidedAt; question; options[]; chose; why;
+      advisers[]; bearsOn; supersedes: string | null }
   | { kind: "reviewed"; id; note: string | null }      // GREG ONLY, enforced in the fold
   | { kind: "reversed"; id; why:  string | null }      // GREG ONLY, and terminal
 )
 ```
 
+**There is no `decidedBy`.** The first draft had one and narrowed it to `"overseer"`; round two's
+answer is to delete it. Two reasons, and the second is the interesting one. A constant field is a
+schema invariant wearing a per-row disguise — v1's whole record is Overseer-originated, so say that
+once in the schema. And gate 2 says of a product default: *"record it as an **assumption pending
+Greg** … **You are not deciding**; you are unblocking under a standing decision he already made."*
+So `decidedBy: "overseer"` is **semantically false on the `assumption` class**, which is one of the
+three. The envelope's `by` keeps recording who wrote the line, which is a different and answerable
+question. This slightly sharpens what the tab is: not *"decisions the Overseer made"* but **things
+done in Greg's name that he has not yet reviewed**, of which assumptions are one class.
+
+**`decidedAt` is separate from the envelope's `at`.** When the decision was taken, versus when the
+line was written. They are the same for a live write and different for the one seeded record
+(§ Migration), and conflating them would date a historical decision to its import and compute its
+age from the wrong instant.
+
 - **`class`** — `assumption` | `decision` | `decline`. [overseer.md § gate 1](../project/overseer.md)
-  says *"every decision, assumption and decline goes in the log"* and § The log says the 8am surface
-  shows **assumptions only**. A record with no category cannot implement either sentence, cannot tell
-  a gate-2 product default from a low-stakes call, and cannot later hand one class to `questions-mode`
-  without parsing prose. Sol's P1-3; it was missing from the first draft entirely.
+  says *"every decision, assumption and decline goes in the log"*. A record with no category cannot
+  implement that sentence, cannot tell a gate-2 product default from a low-stakes call, and cannot
+  later hand one class to `questions-mode` without parsing prose. Sol's P1-3; it was missing from the
+  first draft entirely.
+
+  **All three classes go on the tab, and the runbook's "assumptions only" sentence is retired.** That
+  was a question this plan put to the Overseer, and it answered under gate 2 rather than waiting for
+  Greg — 2026-09-09:
+
+  > Greg's words for this mode are *"explains the question, options, tradeoffs, decision made, and
+  > why, so that I can at least review them afterwards"* — assumptions, decisions and declines are
+  > all decisions made in his name, so all three classes belong on the tab, and the first screen is
+  > the not-yet-reviewed count and list, newest first; the runbook's "assumptions only" sentence
+  > predates today's widening and I will retire it against your landed tab.
+  >
+  > — the Overseer, 2026-09-09
+
+  So § The log, and the surface Greg reads is the Overseer's to edit, not this session's, and the
+  ordering below is settled: **not-yet-reviewed first, newest first within that.**
 - **`question`** — plain, per [AGENTS.md § Explain plainly and briefly](../../AGENTS.md). Not a slug,
   not a title: the sentence Greg would have been asked.
 - **`options`** — at least two, each `{ name, tradeoffs }`, both non-blank, names distinct. "The
   options" with one entry is a decision with no alternative considered; two identical entries is the
   same thing wearing a disguise.
-- **`decision`** — what was decided, non-blank. Free text rather than an index into `options`,
-  because [Greg's answer is often a fifth option](../project/overseer.md) — three times in seven, in
-  the fleet's own record — and an index could not hold one.
+- **`chose`** — `{ option: string; note: string | null }`, where `option` **must match one of the
+  `options` by name**. The first draft made this free text on the argument that Greg's answer is
+  often a fifth option; round two's objection is decisive: free text permits *"options A and B …
+  decided C"*, with no trade-offs recorded for the thing actually done, which is the one row on the
+  page that most needs them. **A fifth option is an option**: add it to `options` with its
+  trade-offs, then choose it. `note` carries any prose the choice needs beyond naming it.
 - **`why`** — required, non-blank.
 - **`advisers`** — a non-empty set drawn from `sol` | `fable` | `nobody`, with `nobody` exclusive:
   `["nobody", "sol"]` is a contradiction, and an empty array cannot be told from a field somebody
@@ -172,18 +214,45 @@ live register. Four things are wrong with it, and they are not fixable by arithm
 - the register cannot see a session that has **ended**, so the rows with the most work behind them
   read lowest. Ordering by a known subtotal puts the most expensive row last.
 
-**So v1 shows what it can measure and says what it cannot.** Per row: the decision's age, and the
-sessions it names split three ways — *live* (in the register now), *not found* (ended, or never
-there), and the count of each. No hours, and no ordering by a number that does not exist. Ordering is
-**unreviewed first, then newest first**, which is the thing the surface is actually for.
+**So v1 shows what it can measure and says what it cannot.** Per row: the decision's age (from
+`decidedAt`), and the sessions it names split by their `ExecutionRef` arm — with **"live" meaning the
+stored token still matches the register's verified run for that name**, not merely that the name is
+present. A name whose token has changed is a *different run*, and drawing it as live would be the
+name-reuse error wearing a badge. No hours, and no ordering by a number that does not exist.
+Ordering is **unreviewed first, then newest first**, which is the thing the surface is actually for.
 
-**And the missing measurement is made possible rather than abandoned.** A `SessionRef` is
-`{ name: string; executionToken: string | null }`, and the CLI **looks the token up in the register
-at the moment the decision is written**. That is the one moment the identity is knowable; every later
-reading is guessing. `null` is honest and means *this session was not in the register when the
-decision was recorded*. With the token stored, a later stage can compute real hours against
-`events.jsonl` — off the request path — and tell a reused name from the run that was actually there.
-Cheap now, impossible to add retrospectively.
+**And the missing measurement is made possible rather than abandoned** — but only partly, and round
+two was right that the first version of this paragraph claimed more than the field delivers.
+
+A `SessionRef` is `{ name: string; execution: ExecutionRef }`, where `ExecutionRef` is a **three-arm
+union rather than `string | null`**:
+
+```
+| { kind: "verified"; token: string; since: string }   // the register named a verified run
+| { kind: "not-found" }                                // the register was read; this name was not in it
+| { kind: "unavailable"; why: string }                 // no checkpoint, unreadable, stale, or ambiguous
+```
+
+`null` could not carry those three apart, and *we could not look* rendered as *it was not there* is
+the exact mistake this repo keeps making. The CLI resolves it **at the moment the decision is
+written**, which is the one moment the identity is knowable.
+
+**Three honesty limits, stated because the field is easy to over-read:**
+
+- `RegisterEntry.verifiedExecution` is **sticky by design** — during an observation that could not
+  verify anything it holds the *last* verified run, not proof of what is running now. So `verified`
+  means *the register's last verified run for this name, as of this checkpoint*, and `since` is
+  carried so a reader can see how old that is.
+- A checkpoint that is absent, unreadable, or older than the daemon's own staleness bound is
+  `unavailable`, not `not-found`. So is a name matching two register entries: **an ambiguous
+  identity is not an identity.**
+- **The token makes a later measurement *joinable*, not *correct*.** It can be joined to
+  `session-seen` and `session-execution-changed` in `events.jsonl` to tell a reused name from the run
+  that was actually there — off the request path, never scanned per request. What that would yield is
+  **observed run-lifetime**, which is still not *work attributable to this decision*. Nothing
+  available on this box measures that, and the plan should not imply a later stage will.
+
+Cheap now, impossible to add retrospectively — which is the whole reason it is stored today.
 
 **Where the ranking module lives.** The panel and the CLI both draw these session counts, and two
 renderings of one measurement is how a page and a terminal come to disagree — `scripts/overseer.ts`
@@ -229,10 +298,17 @@ view** on a direct `#decisions` load.
 So the tab needs one small cross-cutting fix to be honest, and it helps all nine modes rather than
 just this one:
 
-- **scroll the active mode button into view** when the dock mounts and when the mode changes
-  (`block: "nearest"`, no smooth scroll — the mode switch cuts it), and
+- **scroll the active mode button into view** when the dock mounts and when the mode changes —
+  `inline: "nearest"`, `block: "nearest"`, no smooth scroll (the mode switch cuts it). It must run
+  **after the fit rung has settled**, and depend on `fitClass` as well as `mode`: the rung changes
+  the button widths, so scrolling first scrolls to the wrong offset. Round two's point, and it is the
+  kind of thing that would have looked like an intermittent bug.
 - **an overflow affordance** so a scrollable bar looks scrollable: an edge fade on whichever side has
-  more to show.
+  more to show. **It must be an overlay or mask that contributes no width to `.dock`**, or it feeds
+  back into `fit.ts`'s measurement and the ladder starts oscillating. Its state updates on manual
+  scroll, on resize, on a fit change, and after a programmatic scroll.
+
+Tested at **left, middle and right overflow**, not only the direct `#decisions` load.
 
 That is a `Dock.tsx` and `tailwind.css` change of maybe thirty lines, and `flex: 8 → 9` goes with it
 for correctness even though it changes nothing at 390. **It is recorded here as a deliberate
@@ -242,8 +318,16 @@ product's own bar has — it buys ~11px, which does not close a 360px floor agai
 so it postpones the problem by one tab rather than fixing it.
 
 **If the browser stage shows the active tab still unreachable on a direct phone load, the work does
-not ship the tab.** The fallback — a section on the Overseer tab — is a product deviation from what
-Greg asked for, not a panel move, so it goes to him rather than being taken here.
+not ship the tab** — and it does not ship the fallback either. The Overseer settled that on
+2026-09-09: *"If the active tab is still unreachable at 390px on a direct `#decisions` load, that
+goes to Greg as you say, and you record it as important work left rather than shipping a section on
+the Overseer tab."* A section on the Overseer tab is a product deviation from what Greg asked for,
+not a panel move, so nobody here takes it.
+
+The Overseer confirmed the `Dock.tsx` change is welcome and that nobody else was in that file as of
+2026-09-09 10:20Z, with the lines to be announced to it when they exist. **That is a reading, not a
+lock** — round two's correction — so the sequence is: merge `origin/dev`, *then* verify visually, and
+verify again after any later merge that touches the dock.
 
 Six places in three files, per
 [fleet-dashboard-modes.md § The registrations](../project/fleet-dashboard-modes.md#the-registrations):
@@ -256,10 +340,18 @@ every open tab on every cycle. So: a route module, an exact path, a stated maxim
 with an injectable seam, an injected-and-defaulted `App.tsx` API prop, and a lifecycle test.
 
 **What "a stated maximum" means here, since a general row cap could hide an unreviewed decision:**
-every **unreviewed** record is sent, always. Reviewed history is capped, with the withheld count on
-the payload and drawn on the page. If the unreviewed set alone exceeds the byte ceiling, the route
-**fails loudly** rather than truncating — a decision Greg has not seen must never be the row that
-fell off the end.
+every **unreviewed** record is sent, always. Reviewed history is capped at **the most recent 100
+records**, with the exact withheld count on the payload and drawn on the page. The whole response is
+bounded at **2 MiB**; if the unreviewed set alone exceeds that, the route **fails loudly** with a
+named arm rather than truncating — a decision Greg has not seen must never be the row that fell off
+the end. (Round two's objection to the first draft was that "a stated maximum" with no number is not
+one.)
+
+**Every aggregate is unavailable under problems, not just the headline.** A corrupt line could have
+hidden a decision, a review *or* a reversal, so the seven-day counts go the same way as the pending
+count. And the payload carries **the instant it was composed**, drawn on the page: this is an
+on-demand route, so a dashboard left open overnight would otherwise show a plausible pending count
+from twelve hours ago with nothing to say so.
 
 **Read-only, for the same reason `GET /api/queue` is.** The dashboard has no authentication;
 reachability is the whole boundary. A `POST …/reviewed` would let anything able to reach the port
@@ -288,103 +380,168 @@ lint the touched files; then a GPT Sol review of the scoped diff and the raw tes
 commit. Implementation goes to Codex (`gpt-5.6-sol`, `--sandbox workspace-write`) with a prompt file;
 I run the checks, review, and commit. Which stages Codex implemented is recorded here as they land.
 
-### Stage 1 — the record and the CLI
+### Stage 1 — the record, and the CLI's writes
 
 - [ ] `tools/overseer/decisions.ts`: schema constant, `DecisionEvent`, envelope, strict `parseEvent`
-      (every non-blank and uniqueness rule above), `foldDecisions` → `DecisionView`, `appendEvents`
-      under its own lock with the **clean-prefix** candidate comparison, `mintId` (`dec-` + eight of
-      the queue's alphabet), `commandId` consumption.
+      (every non-blank and uniqueness rule in § The record), `foldDecisions` → `DecisionView`,
+      `appendEvents` under its own lock with the **clean-prefix** candidate comparison, `mintId`
+      (`dec-` + eight of the queue's alphabet), `commandId` handling.
 - [ ] The fold's teeth, **each with a test seen red when the rule is removed**: only Greg's
-      `reviewed`/`reversed`; `<2` or duplicate options; blank `question`/`decision`/`why`; empty or
-      contradictory `advisers`; duplicate ids; an event for an unknown id; out-of-order review;
-      post-reversal events; a duplicate `commandId`.
+      `reviewed`/`reversed`; `<2`, duplicate or blank options; a `chose.option` naming no option;
+      blank `question`/`why`; empty, duplicated or contradictory `advisers` (`nobody` is exclusive);
+      blank or duplicated session names; a malformed `ExecutionRef`; duplicate decision ids;
+      duplicate `eventId`; an event for an unknown id; a review dated before its decision; repeated
+      `reviewed`; `reversed` terminal, and implying reviewed; `supersedes` naming a missing or later
+      record; and **superseding never reducing the pending count without replacing it**.
+- [ ] **`commandId` is a conflict key, not a mute button.** Same key + byte-identical payload → the
+      original result, nothing appended. Same key + different payload → **refused as a conflict**,
+      never silently treated as the retry. Duplicate-`commandId` handling must not mask a duplicate
+      `eventId`, which is a separate problem with a separate test.
 - [ ] The clean-prefix comparison specifically: a fixture with one unreadable line plus one illegal
-      new event must be **refused**, and that test must go red against the queue's count-only shape.
-- [ ] `scripts/overseer-decisions.ts` on Commander (as `scripts/overseer.ts` is; the queue CLI's
-      hand-rolled parser is not the shape to copy): `template`, `add --file <path|->`,
-      `list`, `show <id>`, `export`, `reviewed <id>`, `reversed <id>`. `--by` required on every write
-      and never defaulted. `add` resolves each named session's `executionToken` from the register at
-      write time.
+      new event must be **refused**, and the test written so that swapping the baseline for the
+      queue's count-only shape turns it green. This is the test `queue-priority` can copy.
+- [ ] `scripts/overseer-decisions.ts` on Commander: `template`, `add --file <path|->`, `show <id>`,
+      `export`, `reviewed <id>`, `reversed <id>`. `--by` required on every write, never defaulted.
+      `add` resolves each session's `ExecutionRef` from the register at write time, with the three
+      arms kept apart.
 - [ ] Three read arms carried through, not flattened: `never-written`, `decisions` (possibly empty),
       `unreadable`.
 
-### Stage 2 — the view module and the seed
+**`list` is deliberately not in this stage.** It needs the age and live/not-found rendering, which is
+Stage 2's module — round two caught that the first split made Stage 1 un-green on its own.
 
-- [ ] `tools/fleet/decisions-view.ts`: per-record age and the live / not-found session split from
-      the checkpoint; the trailing-seven-day factual counts; the unreviewed-first ordering; and the
-      **count-unavailable** arm whenever the view carries problems.
-- [ ] Mutation-checked: rendering a not-found session as live must go red; the headline count
-      surviving a problem in the view must go red; ordering falling back to newest-first while
-      unreviewed rows exist must go red.
+### Stage 2 — the view module, `list`, and the seed
+
+- [ ] `tools/fleet/decisions-view.ts`: per-record age from `decidedAt`; the session split, where
+      **live means the stored token still matches the register's verified run**; the trailing
+      seven-day factual counts; unreviewed-first then newest-first ordering; the composed-at instant;
+      and the **all-aggregates-unavailable** arm whenever the view carries problems.
+- [ ] Mutation-checked: rendering `not-found` or `unavailable` as live must go red; matching on name
+      rather than token must go red; any aggregate surviving a problem in the view must go red;
+      ordering falling back to newest-first while unreviewed rows exist must go red.
 - [ ] The CLI's `list` prints the same numbers from the same module.
-- [ ] The one hand-authored seed record for the 08:12Z decision, `unreviewed`.
+- [ ] **The seed, with a real application step.** A checked-in fixture is not a populated store, so:
+      `overseer-decisions seed` — idempotent by `commandId`, safe to run twice, and it must be run
+      for the record to exist. It preserves the historical `decidedAt` (2026-09-09 08:12Z) against
+      its own envelope `at`, and stores `execution: { kind: "unavailable", why: "seeded from the
+      hand-kept log" }` for its named session rather than resolving a token against a later
+      same-named launch.
 
 ### Stage 3 — the route and the mode
 
 - [ ] `tools/fleet/routes-decisions.ts` (`GET /api/decisions`), mounted in `server.ts`, with a
       **comment-stripped** source guard on the mount — the needle survives inside a `//`, which is
       how such a line actually dies.
-- [ ] The maximum: every unreviewed record always; reviewed history capped with a withheld count;
-      a loud failure rather than a truncation if the unreviewed set alone exceeds the ceiling.
+- [ ] The maximum, with numbers: every unreviewed record always; reviewed history capped at 100 with
+      an exact withheld count; 2 MiB overall; a named loud failure rather than truncation if the
+      unreviewed set alone exceeds it.
 - [ ] Wire types in **one additive end block** of `wire.ts` (types only, no runtime values); any
       vocabulary array stays in the node module with `as const satisfies`.
 - [ ] `decisions-client.ts` with an injectable `DecisionsApi` seam; strict client parsing; a
-      *this browser never got an answer* arm distinct from the server's own two silences.
+      *this browser never got an answer* arm distinct from the server's own silences.
 - [ ] `DecisionsPanel.tsx`; the six registrations; the `Dock.tsx` active-into-view scroll and the
-      overflow affordance (§ The mode).
+      overflow affordance (§ The mode). Copy: the tab is **things done in Greg's name that he has not
+      yet reviewed**, not "decisions the Overseer made" — assumptions are one of the three classes and
+      gate 2 says of those that the Overseer *is not deciding*.
 - [ ] Tests: `fleet-feed-panel.test.tsx`'s four assertions (`MODES` contains it with its label; the
       hash opens into it — mutate the `App.tsx` arm and watch it red; the button writes the hash; the
       empty state names **which** nothing it is), asserted against `MODES` and never a literal list,
       driven by `mountFull()`. Plus: a complete row renders every required field; problems suppress
-      the headline count; route composition through the same path `server.ts` uses; timeout and
-      no-answer.
+      **every** aggregate; all unreviewed records survive the reviewed cap; the withheld count is
+      exact; oversized unreviewed data produces the specified failure; the global Refresh reloads
+      this panel; a failed refresh invalidates rather than leaves a stale headline; route composition
+      through the same path `server.ts` uses; timeout and no-answer.
 
 ### Stage 4 — see it, and land it
 
+- [ ] **Merge `origin/dev` first**, then browser-verify — round two's ordering, and it matters
+      because the dock is the shared file. Re-verify after any later merge that touches it.
 - [ ] Browser-verified at 390×844 and 1280 by a Sonnet subagent on its own throwaway port
       (`FLEET_PORT=8791`), never `:8787`'s process, killed by its own pid. **The gating check: on a
-      direct `#decisions` load at 390px, is the active tab visible and reachable?** If not, the tab
-      does not ship and the question goes to Greg (§ The mode).
+      direct `#decisions` load at 390px, is the active tab visible and reachable?** Plus left, middle
+      and right overflow states of the bar. If the gating check fails, the tab does not ship and this
+      is recorded as *important work left* for Greg (§ The mode).
 - [ ] `npm run typecheck` **on the post-merge tree**, and count the mode entries — a merge can drop
       one with no conflict marker.
+- [ ] The stale mode-count comments, since this work is in those files anyway: `Dock.tsx`'s header
+      still says three modes, `fit.ts` reasons from four buttons, and `fleet-dashboard-modes.md`
+      still cites `flex: 3` where the code says 8. Round one raised these and the first rewrite did
+      not take them.
 - [ ] Docs: a line under the entry point that owns a new `decisions.md`, and a link back up. The
-      before/after for `overseer.md`'s gate 1 **NOT BUILT** block and § The log, and the surface Greg
-      reads goes in the debrief for the Overseer to land, since that wording is a rule.
+      before/after for `overseer.md`'s gate 1 **NOT BUILT** block **and** for § The log, and the
+      surface Greg reads goes in the debrief as a **proposal for Greg** — gate 3 forbids the Overseer
+      changing a constraint on its own decision log, and it agreed (§ Needs Greg).
 
-## What the plan-stage review changed
+## What the plan-stage reviews changed
 
-GPT Sol reviewed the first draft on 2026-09-09 and returned *"needs rethinking"*, with two P0s and
-seven P1s. Taken in full: `amended` dropped; the clean-prefix comparison; the count unavailable under
-problems; the `class` field; `decidedBy` narrowed back to `overseer`; the wider parse and transition
-validation; `commandId` actually consumed; the route's unreviewed-always maximum; the seven-day
-verdict deferred; the one-row seed; the over-citation of `tests/fleet-imports.test.ts` corrected.
+**Round one** returned *"needs rethinking"* — two P0s and seven P1s. Taken in full: `amended`
+dropped; the clean-prefix comparison; the count unavailable under problems; the `class` field;
+`decidedBy` narrowed; wider parse and transition validation; `commandId` actually consumed; the
+route's unreviewed-always maximum; the seven-day verdict deferred; the one-row seed; the
+over-citation of `tests/fleet-imports.test.ts` corrected.
 
-**The largest change is the ranking.** The first draft's agent-hours number was *"not an honest
-measurement"* and it was right — the answer is to store the execution identity at decision time,
-which makes the real measurement possible later, and to show only age and a live/not-found split now.
+Its largest finding was that the agent-hours ranking was *"not an honest measurement"*, and it was
+right — hence storing the execution identity at decision time and showing only age and a session
+split now.
 
-**And the first draft doubted the brief where the brief was right.** It said the claim that the dock
-is out of room at eight tabs *"is not in `design-a-screen.md` or `fleet-dashboard-modes.md`"*, which
-is true and was the wrong place to look: it is in the Overseer's hand log at 06:12Z, measured by
-`readiness-tab`. An unverified brief claim is worth flagging; concluding it is unfounded because two
+**And round one's brief was right where the first draft doubted it.** The draft said the claim that
+the dock is out of room at eight tabs *"is not in `design-a-screen.md` or `fleet-dashboard-modes.md`"*
+— true, and the wrong place to look: it is in the Overseer's hand log at 06:12Z, measured by
+`readiness-tab`. Flagging an unverified brief claim is right; concluding it is unfounded because two
 greps missed it is not the same thing.
+
+**Round two** on the rewrite found **no P0 remaining** and *"not yet safe to build exactly as
+written"*, with seven P1s. Every one is taken, and four of them changed the design rather than
+tightening it:
+
+- **`SessionRef` claimed more than it could deliver.** `verifiedExecution` is *sticky*, so it holds
+  the last verified run rather than proof of what is running now; and `string | null` could not tell
+  *not there* from *we could not look*. Hence the three-arm `ExecutionRef`, "live" meaning the token
+  still matches, and the explicit statement that a later metric would be **observed run-lifetime**,
+  not work attributable to a decision.
+- **Dropping `amended` left no way to correct a record**, and the hand log proves the case: an
+  08:20Z claim was withdrawn at 08:25Z. Hence `supersedes`, and the rule that superseding never
+  reduces the pending count without replacing it.
+- **`decidedBy: "overseer"` is semantically false on the `assumption` class**, since gate 2 says of
+  a product default *"you are not deciding"*. Removed; Overseer-origin is a schema invariant. The
+  Overseer agreed and asked for the sharper name to be used in the tab's own copy.
+- **A free-text `decision` permits "options A and B, decided C"** with no trade-offs for what was
+  actually done. Hence `chose.option` must name a listed option: a fifth option is an option, and it
+  gets its trade-offs written down before it is chosen.
+
+Plus: real numbers on the route maximum (100 reviewed, 2 MiB, a loud failure); every aggregate
+unavailable under problems, not just the headline; a composed-at instant on the payload; `commandId`
+as a **conflict** key rather than a mute button; the stages re-split so each is green on its own
+(`list` moved to Stage 2, the seed given a real idempotent application step, merge-then-browser in
+Stage 4); and the dock fix specified properly — after the fit rung settles, `inline: "nearest"`, the
+fade as an overlay contributing no width, tested at three overflow positions.
+
+**Round two also caught a governance error that was not in the plan at all.** The Overseer had
+retired the runbook's *"assumptions only"* sentence under gate 2. Gate 3's list includes *"modifying
+your own constraints — these gates, the queue that authorises you, **the decision log** … You may
+*propose* a change to any of them"*, and a rule bounding what the decision log's surface may show is
+exactly that. Raised with the Overseer, which agreed: the tab's classes and ordering stay its gate-2
+default, the runbook sentence stays as written, and its retirement goes to Greg as a proposal at the
+debrief.
 
 ## Needs Greg
 
 1. **A review button on the page needs an identity story.** Until then a decision can only be marked
    reviewed from a terminal. The cheap shape the queue plan already proposes: mutations only from
    allowlisted Greg-device tailnet identities, loopback read-only. One answer unblocks both.
-2. **The 8am surface currently says *assumptions only*.** This mode shows assumptions, decisions and
-   declines with the class visible, which broadens that rule. Confirm, or say which classes belong on
-   the first screen.
-3. **Only if the browser stage fails**: whether "Decisions made" may live as a section of the
-   Overseer tab rather than its own tab, if a ninth tab cannot be made reachable at 390px.
+2. **Only if the browser stage fails**: whether "Decisions made" may live somewhere other than its
+   own tab, if a ninth tab cannot be made reachable at 390px. Not decided here, and not decided by
+   the Overseer either — it would be recorded as *important work left*.
+
+*(A third — whether all three classes belong on the first screen — was put to the Overseer and
+**decided** by it under gate 2 on 2026-09-09; see § The record. Reversible by Greg at the debrief.)*
 
 ## Needs the Overseer
 
-- **`idea-queue.ts` has a live authorisation bypass** (§ The four ways the count could lie, item 3).
-  Not this session's file. It should go to whoever holds `tools/overseer/idea-queue.ts`.
-- `questions-mode` was not running when this was planned, so the decision/question boundary — theirs
-  is what still blocks Greg, mine is what no longer does, with *assumptions pending Greg* landing
-  here — is a proposal rather than an agreement. Pass it on when that session starts.
+- ~~**`idea-queue.ts` has a live authorisation bypass**~~ (§ The four ways the count could lie,
+  item 3) — reported 2026-09-09 and **routed by the Overseer to `queue-priority`**, whose file it is
+  today, with the fix and the red-first test. Stage 1's test #8 is written to be copyable there.
+- ~~the decision/question boundary~~ — passed on: it is written into `questions-mode`'s brief for
+  when that session starts.
 - A dashboard restart, for the tab to be live. Not mine to do.
+- The `Dock.tsx` lines, announced to the Overseer once they exist (agreed 2026-09-09).
