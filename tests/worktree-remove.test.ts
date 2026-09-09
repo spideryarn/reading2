@@ -54,10 +54,18 @@ function commit(cwd: string, file: string, body: string, message: string): void 
   git(["commit", "--quiet", "-m", message], cwd);
 }
 
-/** A worktree that has landed everything: branched, committed, pushed to dev. */
+/**
+ * A worktree that has landed everything: branched, committed, pushed to dev.
+ *
+ * **Branched from `origin/dev`, not from the primary's HEAD.** The primary's HEAD
+ * does not move when a worktree pushes, so a second call branching from it forks
+ * behind the trunk and its push is rejected non-fast-forward — which is the real
+ * workflow's shape too, and cost a test that needed two landed worktrees at once.
+ */
 function landedWorktree(name: string): string {
   const wt = path.join(root, name);
-  git(["worktree", "add", "--quiet", "-b", name, wt], primary);
+  git(["fetch", "--quiet", "origin", "dev"], primary);
+  git(["worktree", "add", "--quiet", "-b", name, wt, "origin/dev"], primary);
   commit(wt, `${name}.txt`, "work", `work in ${name}`);
   git(["push", "--quiet", "origin", "HEAD:dev"], wt);
   git(["fetch", "--quiet", "origin", "dev"], primary);
@@ -521,6 +529,49 @@ describe("the ghost path", () => {
 
     expect(existsSync(path.join(wt, "only-copy.json"))).toBe(true);
     expect(out.ok).toBe(false);
+  });
+
+  it("does NOT destroy ANOTHER ghost's reflog while clearing this one", () => {
+    /* The regression `git worktree prune` introduced, reproduced by GPT Sol:
+       prune takes no path, so clearing ghost A deleted ghost B's
+       .git/worktrees/<name> — and with it the only name for a commit B had made
+       on a detached HEAD. A scoped removal touches no other registration. */
+    const a = landedWorktree("worktree-ghost-a");
+    const b = landedWorktree("worktree-ghost-b");
+    git(["checkout", "--quiet", "--detach"], b);
+    commit(b, "b-detached.txt", "only in B's reflog", "B detached work");
+    const strayInB = git(["rev-parse", "HEAD"], b);
+    git(["checkout", "--quiet", "worktree-ghost-b"], b);
+    git(["push", "--quiet", "origin", "HEAD:dev"], b);
+    git(["fetch", "--quiet", "origin", "dev"], primary);
+
+    rmSync(a, { recursive: true, force: true });
+    renameSync(b, `${b}-away`);
+
+    const out = removeWorktree(primary, "worktree-ghost-a", LONG_AGO);
+    expect(out.ok).toBe(true);
+
+    /* B is still a ghost, and its reflog still names the commit. */
+    const reflog = spawnSync("git", ["reflog", "--all", "--format=%H"], { cwd: primary, encoding: "utf8" });
+    expect(`${reflog.stdout ?? ""}`).toContain(strayInB);
+  });
+
+  it("REFUSES a ghost whose HEAD reflog names something the trunk does not have", () => {
+    /* The directory is gone; the metadata is not, and it is the only name for
+       that commit. No earlier version read it. */
+    const wt = landedWorktree("worktree-ghost-unlanded");
+    git(["checkout", "--quiet", "--detach"], wt);
+    commit(wt, "never.txt", "never pushed", "unlanded detached work");
+    const stray = git(["rev-parse", "HEAD"], wt);
+    git(["checkout", "--quiet", "worktree-ghost-unlanded"], wt);
+    rmSync(wt, { recursive: true, force: true });
+
+    const out = removeWorktree(primary, "worktree-ghost-unlanded", LONG_AGO);
+
+    expect(out.ok).toBe(false);
+    expect(listWorktrees(primary).some((e) => e.path === wt)).toBe(true);
+    const reflog = spawnSync("git", ["reflog", "--all", "--format=%H"], { cwd: primary, encoding: "utf8" });
+    expect(`${reflog.stdout ?? ""}`).toContain(stray);
   });
 
   it("control: a genuinely absent registration is cleared", () => {

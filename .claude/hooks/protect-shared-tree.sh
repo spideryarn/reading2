@@ -149,10 +149,10 @@ Deleting a branch by hand is banned in this repo. Nothing here needs it:
   npm run worktree:remove -- --branch <name>
 
 removes the worktree AND deletes its branch, but only after proving that every
-commit the branch has ever pointed at — its tip and every reflog entry — is
-already on origin/dev, and it deletes with a compare-and-swap so a branch that
-moved under it is left alone. It also cleans up a branch whose worktree is
-already gone, so there is no stuck state this ban creates.
+commit named by its tip and by the reflogs that still exist is already on
+origin/dev, and it deletes with a compare-and-swap so a branch that moved under
+it is left alone. It also cleans up a branch whose worktree is already gone, so
+there is no stuck state this ban creates.
 
 See AGENTS.md and docs/project/worktrees.md § Removing one.
 
