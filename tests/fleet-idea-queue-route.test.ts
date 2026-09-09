@@ -128,7 +128,7 @@ describe("the payload", () => {
     expect(feed.rows[1]?.authorizedRevision).toBeNull();
   });
 
-  it("carries priority on both a queued row and a settled row", () => {
+  it("carries priority and its provenance on both a queued row and a settled row", () => {
     const feed = payload(
       readerFor([
         added("qi-aaaaaaaa"),
@@ -140,8 +140,18 @@ describe("the payload", () => {
     );
     expect(feed.kind).toBe("queue");
     if (feed.kind !== "queue") return;
-    expect(feed.rows[0]).toMatchObject({ id: "qi-aaaaaaaa", priority: 0.8 });
-    expect(feed.settled[0]).toMatchObject({ id: "qi-bbbbbbbb", priority: 0.2 });
+    expect(feed.rows[0]).toMatchObject({
+      id: "qi-aaaaaaaa",
+      priority: 0.8,
+      priorityBy: "overseer",
+      priorityAt: "2026-09-19T00:00:00.000Z",
+    });
+    expect(feed.settled[0]).toMatchObject({
+      id: "qi-bbbbbbbb",
+      priority: 0.2,
+      priorityBy: "greg",
+      priorityAt: "2026-09-19T00:00:00.000Z",
+    });
   });
 
   it("`why` is null exactly when `ready` — the two cannot disagree", () => {

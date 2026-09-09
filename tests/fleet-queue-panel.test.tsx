@@ -68,6 +68,8 @@ const ROW: QueueRow = {
   droppedWhy: null,
   history: [{ kind: "added", at: "2026-09-09T00:00:00.000Z", by: "greg", what: "added" }],
   priority: 0.7,
+  priorityBy: "overseer",
+  priorityAt: "2026-09-09T08:30:00.000Z",
 };
 
 /**
@@ -339,7 +341,11 @@ describe("rows", () => {
       }),
     );
     const text = container.textContent ?? "";
-    expect(text.indexOf("first from server")).toBeLessThan(text.indexOf("second from server"));
+    const first = text.indexOf("first from server");
+    const second = text.indexOf("second from server");
+    expect(first).toBeGreaterThanOrEqual(0);
+    expect(second).toBeGreaterThanOrEqual(0);
+    expect(first).toBeLessThan(second);
   });
 
   it("shows a stated priority and makes an unstated one visibly unstated", async () => {
@@ -380,6 +386,8 @@ describe("rows", () => {
     expect(container.textContent).toContain("History");
     expect(container.textContent).toContain("the whole text of the idea");
     expect(container.textContent).toContain("docs/reusable/engineering-manager.md");
+    expect(container.textContent).toContain("priority set");
+    expect(container.textContent).toContain("set by overseer, 2026-09-09");
     expect(container.textContent).toContain("granted for revision 0");
   });
 
@@ -422,6 +430,17 @@ describe("readPayload", () => {
     expect(readPayload({ schema: 1, kind: "unreadable" })).toBeNull(); // no `why`
     expect(readPayload({ schema: 1, kind: "queue", rows: [] })).toBeNull(); // no settled, no version
     expect(readPayload({ schema: 1, kind: "queue", rows: [], settled: [] })).toBeNull(); // no version
+  });
+
+  it("normalises absent and non-numeric row priorities to honestly unstated", () => {
+    const queued = { ...ROW } as Record<string, unknown>;
+    delete queued["priority"];
+    const settled = { ...ROW, priority: "urgent" } as Record<string, unknown>;
+    const parsed = readPayload({ ...queueView(), rows: [queued], settled: [settled] });
+    expect(parsed?.kind).toBe("queue");
+    if (parsed?.kind !== "queue") return;
+    expect(parsed.rows[0]?.priority).toBeNull();
+    expect(parsed.settled[0]?.priority).toBeNull();
   });
 });
 

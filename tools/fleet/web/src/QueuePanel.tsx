@@ -337,6 +337,12 @@ function Row({ row, queueHasProblems }: { row: QueueRow; queueHasProblems: boole
     [badge.label, badgeTip(badge.label).what],
     ["id", row.id],
     ["priority", row.priority === null ? "unstated — below every ranked item" : String(row.priority)],
+    [
+      "priority set",
+      row.priorityBy === null || row.priorityAt === null
+        ? null
+        : `set by ${row.priorityBy}, ${row.priorityAt.slice(0, 10)}`,
+    ],
     ["waiting on", row.waitingOn],
     ["size", row.size],
     ["source", row.source],

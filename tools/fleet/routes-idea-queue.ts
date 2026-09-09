@@ -138,6 +138,8 @@ export function queuePayload(deps: QueueRouteDeps): QueueFeed {
     droppedWhy: item.droppedWhy,
     history: item.history.map((touch) => ({ kind: touch.kind, at: touch.at, by: touch.by, what: touch.what })),
     priority: item.priority,
+    priorityBy: item.priorityBy,
+    priorityAt: item.priorityAt,
   }));
 
   const settled: QueueRow[] = view.settled.slice(0, SETTLED_LIMIT).map((item) => ({
@@ -166,6 +168,8 @@ export function queuePayload(deps: QueueRouteDeps): QueueFeed {
     droppedWhy: item.droppedWhy,
     history: item.history.map((touch) => ({ kind: touch.kind, at: touch.at, by: touch.by, what: touch.what })),
     priority: item.priority,
+    priorityBy: item.priorityBy,
+    priorityAt: item.priorityAt,
   }));
 
   return {

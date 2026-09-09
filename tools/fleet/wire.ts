@@ -2947,6 +2947,10 @@ export type QueueRow = {
   history: QueueTouch[];
   /** `null` means nobody has ranked it. Ordering only; never part of dispatch authority. */
   priority: number | null;
+  /** Who set the priority now governing the row's position; null with an unstated priority. */
+  priorityBy: QueueActor | null;
+  /** When that priority was set, as ISO; null with an unstated priority. */
+  priorityAt: string | null;
 };
 
 /**

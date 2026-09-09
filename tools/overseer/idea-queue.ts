@@ -1042,6 +1042,43 @@ function asStringOrNull(u: unknown): string | null | undefined {
   return undefined;
 }
 
+const EVENT_ENVELOPE_KEYS = ["schema", "eventId", "commandId", "at", "by", "kind", "id"] as const;
+
+/**
+ * The complete top-level vocabulary of each event kind.
+ *
+ * A pair of one-off `priority` checks used to protect only `added` and
+ * `edited`, while `moved`, `authorized` and `done` silently ignored the same
+ * misplaced key. One allowed-key rule prevents that inconsistency for every
+ * field, including fields added later.
+ *
+ * This strictness was checked against the live record on 2026-09-09: 85 lines,
+ * 0 unparseable, and exactly three shapes — `added` with `{at, by, commandId,
+ * eventId, id, kind, metadata, needsGreg, placement, schema, text, title}`,
+ * `authorized` with the envelope plus `revision`, and `dispatched` with the
+ * envelope plus `plan, session`. It invalidates none of them.
+ *
+ * It deliberately also makes a newer writer's extra field fail loudly on an
+ * older reader. Silently applying the understood half would let the writer
+ * believe the whole event happened, and this module chooses loud refusal at
+ * every such version boundary.
+ */
+const EVENT_KEYS: Readonly<Record<IdeaEventKind, readonly string[]>> = {
+  added: [...EVENT_ENVELOPE_KEYS, "text", "title", "metadata", "placement", "needsGreg"],
+  edited: [...EVENT_ENVELOPE_KEYS, "text", "title", "metadata", "needsGreg"],
+  authorized: [...EVENT_ENVELOPE_KEYS, "revision"],
+  moved: [...EVENT_ENVELOPE_KEYS, "placement"],
+  prioritized: [...EVENT_ENVELOPE_KEYS, "priority"],
+  dispatched: [...EVENT_ENVELOPE_KEYS, "session", "plan"],
+  done: EVENT_ENVELOPE_KEYS,
+  dropped: [...EVENT_ENVELOPE_KEYS, "why"],
+};
+
+function hasOnlyEventKeys(json: Record<string, unknown>, kind: IdeaEventKind): boolean {
+  const allowed = EVENT_KEYS[kind];
+  return Object.keys(json).every((key) => allowed.includes(key));
+}
+
 /**
  * Metadata, or null when a field is present and wrong.
  *
@@ -1149,7 +1186,14 @@ export function parseEvent(line: string): IdeaEvent | null {
   const commandId = typeof json["commandId"] === "string" ? json["commandId"] : null;
   const envelope: Envelope = { schema: IDEA_QUEUE_SCHEMA, eventId, commandId, at, by };
 
-  switch (json["kind"]) {
+  const kind = json["kind"];
+  /* `in` would accept inherited names such as `toString`, then hand a function
+     to the allowed-key check and make this supposedly total parser throw. Only
+     the eight own declarations above are event kinds. */
+  if (typeof kind !== "string" || !Object.hasOwn(EVENT_KEYS, kind)) return null;
+  if (!hasOnlyEventKeys(json, kind as IdeaEventKind)) return null;
+
+  switch (kind) {
     case "added": {
       const text = json["text"];
       if (typeof text !== "string" || text.trim() === "") return null;
@@ -1164,12 +1208,6 @@ export function parseEvent(line: string): IdeaEvent | null {
          `json["needsGreg"] === true`, which read `"yes"` as *no* — turning a
          blocked item into a dispatchable one by way of a typo. */
       if ("needsGreg" in json && typeof json["needsGreg"] !== "boolean") return null;
-      /* **PRIORITY MUST NOT RIDE ON `added`, EVEN AS `null`.** An older reader
-         ignores an unknown key on a known event, calls the queue healthy and
-         orders by placement. Requiring a separate `prioritized` event makes
-         every stated priority something that reader rejects loudly instead of
-         selecting the wrong next item in silence. */
-      if ("priority" in json) return null;
       return {
         ...envelope,
         kind: "added",
@@ -1182,11 +1220,6 @@ export function parseEvent(line: string): IdeaEvent | null {
       };
     }
     case "edited": {
-      /* A separate `prioritized` kind buys honest history and atomic
-         composition, **not structural authorisation safety** (GPT Sol P2-1).
-         Reject the misplaced key even when real edit fields accompany it, so a
-         buggy writer cannot believe the priority changed when it did not. */
-      if ("priority" in json) return null;
       if ("text" in json && typeof json["text"] !== "string") return null;
       const text = typeof json["text"] === "string" ? json["text"] : undefined;
       const title = "title" in json ? asStringOrNull(json["title"]) : undefined;
@@ -1434,9 +1467,43 @@ export type AppendResult =
   | { ok: true; view: QueueView; path: string; repaired: JsonlRepair }
   | {
       ok: false;
-      code: "stale-version" | "locked" | "unreadable" | "refused" | "would-break";
+      code: "stale-version" | "locked" | "unreadable" | "refused" | "would-break" | "invalid-event";
       why: string;
+      /** Whether opening the record repaired a torn final line, even though this append was refused. */
+      repaired: JsonlRepair;
     };
+
+const NO_REPAIR: JsonlRepair = { torn: false };
+
+/**
+ * Equality for the JSON persistence boundary, not general application data.
+ *
+ * Object key order is immaterial, and an absent key equals an `undefined` key
+ * because JSON omits both. Arrays retain their positions, so `undefined`
+ * inside one does not equal the `null` JSON would write. `NaN` is unequal to
+ * everything including itself: accepting it at this boundary would turn it
+ * into a legitimate `null` on disk and silently clear a priority.
+ */
+function structurallyEqualForPersistence(left: unknown, right: unknown): boolean {
+  if (typeof left === "number" && Number.isNaN(left)) return false;
+  if (typeof right === "number" && Number.isNaN(right)) return false;
+  if (left === right) return true;
+  if (Array.isArray(left) || Array.isArray(right)) {
+    if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) return false;
+    return left.every((value, index) => structurallyEqualForPersistence(value, right[index]));
+  }
+  if (!isRecord(left) || !isRecord(right)) return false;
+  const leftKeys = Object.keys(left).filter((key) => left[key] !== undefined);
+  const rightKeys = Object.keys(right).filter((key) => right[key] !== undefined);
+  if (leftKeys.length !== rightKeys.length) return false;
+  return leftKeys.every(
+    (key) => Object.hasOwn(right, key) && structurallyEqualForPersistence(left[key], right[key]),
+  );
+}
+
+function shownEventKind(event: unknown): string {
+  return isRecord(event) && typeof event["kind"] === "string" ? event["kind"] : "unknown kind";
+}
 
 /**
  * Append events under the lock, then re-read — Sol's P1-1 transaction.
@@ -1459,18 +1526,65 @@ export function appendEvents(
 ): AppendResult {
   const root = options.root ?? queueRoot();
   if (!path.isAbsolute(root)) {
-    return { ok: false, code: "refused", why: `the queue directory must be an absolute path, not '${root}'` };
+    return {
+      ok: false,
+      code: "refused",
+      why: `the queue directory must be an absolute path, not '${root}'`,
+      repaired: NO_REPAIR,
+    };
   }
-  if (events.length === 0) return { ok: false, code: "refused", why: "nothing to append" };
+  if (events.length === 0) return { ok: false, code: "refused", why: "nothing to append", repaired: NO_REPAIR };
+
+  /* **VALIDATE THE BYTES BEFORE TAKING THE LOCK OR TOUCHING THE ROOT.** Field
+     checks alone protect only the fields somebody remembered today. Requiring
+     every encoded line to parse back as the event handed in generalises to
+     every field and every future kind. The structural comparison is essential:
+     `JSON.stringify(NaN)` is `null`, which the parser quite correctly accepts
+     as a priority clear, but it is not the event the caller supplied. Keep the
+     encoded strings: the bytes checked here are the bytes appended below. */
+  const serialized: string[] = [];
+  for (let index = 0; index < events.length; index += 1) {
+    const event = events[index];
+    let line: string;
+    try {
+      const encoded = JSON.stringify(event);
+      if (typeof encoded !== "string") throw new Error("JSON.stringify returned no bytes");
+      line = encoded;
+    } catch (cause) {
+      return {
+        ok: false,
+        code: "invalid-event",
+        why:
+          `event ${index} (${shownEventKind(event)}) failed its persistence round trip: ` +
+          `it could not be encoded as JSON (${String(cause)})`,
+        repaired: NO_REPAIR,
+      };
+    }
+    const parsed = parseEvent(line);
+    if (parsed === null || !structurallyEqualForPersistence(event, parsed)) {
+      return {
+        ok: false,
+        code: "invalid-event",
+        why:
+          `event ${index} (${shownEventKind(event)}) failed its persistence round trip: ` +
+          `the bytes about to be appended do not read back as the event supplied`,
+        repaired: NO_REPAIR,
+      };
+    }
+    serialized.push(line);
+  }
+
   try {
     mkdirSync(root, { recursive: true });
   } catch (cause) {
-    return { ok: false, code: "refused", why: `could not make ${root}: ${String(cause)}` };
+    return { ok: false, code: "refused", why: `could not make ${root}: ${String(cause)}`, repaired: NO_REPAIR };
   }
 
   const lockPath = path.join(root, QUEUE_LOCK_FILE);
   const taken = takeLock(lockPath, options.now ?? (() => new Date()));
-  if (!taken.ok) return { ok: false, code: "locked", why: describeLockRefusal(taken.refusal, lockPath) };
+  if (!taken.ok) {
+    return { ok: false, code: "locked", why: describeLockRefusal(taken.refusal, lockPath), repaired: NO_REPAIR };
+  }
   const lock: HeldLock = taken.lock;
 
   try {
@@ -1479,14 +1593,19 @@ export function appendEvents(
     try {
       repaired = truncateToLastLine(file);
     } catch (cause) {
-      return { ok: false, code: "refused", why: `could not repair ${file}: ${String(cause)}` };
+      return { ok: false, code: "refused", why: `could not repair ${file}: ${String(cause)}`, repaired: NO_REPAIR };
     }
     if (!stillOurs(lock, lockPath)) {
-      return { ok: false, code: "locked", why: "lost the queue lock while repairing the file; nothing was written" };
+      return {
+        ok: false,
+        code: "locked",
+        why: "lost the queue lock while repairing the file; nothing was written",
+        repaired,
+      };
     }
 
     const before = readQueue(root);
-    if (before.kind === "unreadable") return { ok: false, code: "unreadable", why: before.why };
+    if (before.kind === "unreadable") return { ok: false, code: "unreadable", why: before.why, repaired };
     const current = viewOf(before) ?? EMPTY_VIEW;
     if (options.expect !== undefined && !sameVersion(options.expect, current.version)) {
       return {
@@ -1495,15 +1614,9 @@ export function appendEvents(
         why:
           `the queue has moved on: you sent version ${spellVersion(options.expect)} and it is now ` +
           `${spellVersion(current.version)}. Nothing was written — look again before writing.`,
+        repaired,
       };
     }
-
-    /* **THE MARKER GOES DOWN BEFORE THE FIRST RECORD, not after.** Written the
-       other way round, a crash in between leaves a log with no marker — which
-       reads as a brand-new queue, which is the exact false sentence the marker
-       exists to prevent. The opposite order fails safe: a marker with no log is
-       reported as LOST, which is the reading that makes somebody look. */
-    writeInitMarker(root);
 
     /* **FOLD THE CANDIDATE BEFORE WRITING IT, AND REFUSE IF IT WOULD ADD A
        PROBLEM.** GPT Sol's P1-3 in round two, and the sharpest finding of the
@@ -1531,10 +1644,18 @@ export function appendEvents(
           `refusing to write: these ${events.length} event(s) would put ${added.length} new problem(s) into the ` +
           `record, and an append-only log has no way to take them back — ` +
           added.map((p) => `${p.kind}: ${p.why}`).join("; "),
+        repaired,
       };
     }
 
-    const body = events.map((event) => `${JSON.stringify(event)}\n`).join("");
+    /* **THE MARKER GOES DOWN AFTER VALIDATION AND BEFORE THE FIRST RECORD.**
+       Validation is pure, so putting the marker above it let a refused first
+       append poison an untouched root into reading as LOST. It still precedes
+       the append itself: a crash in the remaining gap fails safe as LOST,
+       while record-first could leave a real log with no proof it had begun. */
+    writeInitMarker(root);
+
+    const body = serialized.map((line) => `${line}\n`).join("");
     const fd = openSync(file, "a");
     try {
       writeAll(fd, body);
@@ -1547,7 +1668,7 @@ export function appendEvents(
     }
 
     const after = readQueue(root);
-    if (after.kind === "unreadable") return { ok: false, code: "unreadable", why: after.why };
+    if (after.kind === "unreadable") return { ok: false, code: "unreadable", why: after.why, repaired };
     return { ok: true, view: viewOf(after) ?? EMPTY_VIEW, path: file, repaired };
   } finally {
     releaseLock(lock, lockPath);

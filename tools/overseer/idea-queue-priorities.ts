@@ -27,8 +27,9 @@
  * wrote, and there is nothing on the page afterwards to say which half arrived.
  *
  * Nothing here writes. `parsePriorityFile` reads text, `planPriorities` compares
- * a wish against a folded view, and the CLI turns the plan into events — so the
- * dry run and the apply cannot drift, because they are the same function.
+ * a wish against a folded view, and the CLI turns the plan into events. The CLI
+ * separately pins the raw file bytes: sharing this function prevents logic
+ * drift, but it cannot prevent the file changing between two invocations.
  */
 import { ID_RULE, isPriority, type IdeaItem, type QueueView } from "./idea-queue.js";
 
@@ -145,11 +146,12 @@ export function planPriorities(view: QueueView, wanted: readonly PriorityWish[])
  *
  * Kept beside `planPriorities` rather than copied into the CLI so the two
  * all-or-nothing refusals can be driven without importing a script that runs
- * on import. Unnamed live items deliberately are not a refusal: the file bands
- * what Greg chose to band, while `absent` catches the typo-shaped case where a
- * misspelt id could otherwise leave the intended live item quietly unnamed.
+ * on import. An unnamed live item is refused unless the command says
+ * `--allow-unnamed`: in a band-everything migration, forgetting an item and
+ * deliberately omitting it have the same shape, so only an explicit acceptance
+ * can distinguish them. `absent` separately catches a stale or misspelt id.
  */
-export function priorityApplyRefusals(view: QueueView, plan: PriorityPlan): string[] {
+export function priorityApplyRefusals(view: QueueView, plan: PriorityPlan, allowUnnamed: boolean): string[] {
   const refusals: string[] = [];
   if (view.problems.length > 0) {
     refusals.push(
@@ -159,6 +161,12 @@ export function priorityApplyRefusals(view: QueueView, plan: PriorityPlan): stri
   if (plan.absent.length > 0) {
     refusals.push(
       `the priority file names ${plan.absent.join(", ")}, but ${plan.absent.length === 1 ? "that id is" : "those ids are"} absent from the live queue. Fix the typo or remove the stale line before applying`,
+    );
+  }
+  if (plan.unnamed.length > 0 && !allowUnnamed) {
+    refusals.push(
+      `the live queue also contains ${plan.unnamed.join(", ")}, which the priority file does not name. ` +
+        `Add them to the file, or pass --allow-unnamed to say explicitly that they should keep their current priorities`,
     );
   }
   return refusals;

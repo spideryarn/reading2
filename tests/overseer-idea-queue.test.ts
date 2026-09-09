@@ -21,6 +21,7 @@
  * `withRoot` is the only way a test gets a path.
  */
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { appendFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -541,6 +542,7 @@ describe("parseEvent", () => {
     expect(parseEvent("not json")).toBeNull();
     expect(parseEvent("[]")).toBeNull();
     expect(parseEvent(JSON.stringify({ ...env(), kind: "invented", id: A }))).toBeNull();
+    expect(parseEvent(JSON.stringify({ ...env(), kind: "toString", id: A }))).toBeNull();
   });
 
   it("distinguishes an absent title from a cleared one on an edit", () => {
@@ -548,6 +550,25 @@ describe("parseEvent", () => {
     const cleared = parseEvent(JSON.stringify({ ...env(), kind: "edited", id: A, title: null }));
     expect(absent && "title" in absent).toBe(false);
     expect(cleared && "title" in cleared).toBe(true);
+  });
+
+  it("refuses every key outside the vocabulary of that event kind", () => {
+    /* One allowed-key rule for every kind, rather than a pair of special cases
+       for `priority`: a newer writer's field must make an older reader stop
+       loudly instead of letting the writer believe half its event happened. */
+    const events: IdeaEvent[] = [
+      added(A),
+      { ...env(), kind: "edited", id: A, text: "changed" },
+      { ...env(), kind: "authorized", id: A, revision: 0 },
+      { ...env(), kind: "moved", id: A, placement: { at: "front" } },
+      { ...env(), kind: "prioritized", id: A, priority: 0.8 },
+      { ...env(), kind: "dispatched", id: A, session: "s", plan: null },
+      { ...env(), kind: "done", id: A },
+      { ...env(), kind: "dropped", id: A, why: null },
+    ];
+    for (const event of events) {
+      expect(parseEvent(JSON.stringify({ ...event, unexpected: "silently ignored" })), event.kind).toBeNull();
+    }
   });
 
   describe("asPlacement", () => {
@@ -647,6 +668,74 @@ describe("the file", () => {
     const lines = readFileSync(join(root, QUEUE_FILE), "utf8").trimEnd().split("\n");
     expect(lines).toHaveLength(2);
     for (const line of lines) expect(parseEvent(line)).not.toBeNull();
+  });
+
+  it("refuses in-memory events that do not survive the exact persistence round trip", () => {
+    const root = withRoot();
+    appendEvents([added(A)], { root });
+    const before = readFileSync(join(root, QUEUE_FILE));
+
+    for (const priority of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, 9, -0.1]) {
+      const result = appendEvents([prioritized(A, priority)], { root });
+      expect(result.ok, String(priority)).toBe(false);
+      if (!result.ok) {
+        expect(result.code).toBe("invalid-event");
+        expect(result.why).toContain("event 0");
+        expect(result.why).toContain("prioritized");
+        expect(result.why).toContain("round trip");
+      }
+      expect(readFileSync(join(root, QUEUE_FILE))).toEqual(before);
+    }
+
+    const valid = appendEvents([prioritized(A, 0.75)], { root });
+    expect(valid.ok).toBe(true);
+    expect(viewOf(readQueue(root))?.items[0]?.priority).toBe(0.75);
+  });
+
+  it("an invalid in-memory first event creates neither the record nor its marker", () => {
+    const root = withRoot();
+    const result = appendEvents([prioritized(A, Number.NaN)], { root });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe("invalid-event");
+    expect(existsSync(join(root, QUEUE_FILE))).toBe(false);
+    expect(existsSync(join(root, QUEUE_INIT_FILE))).toBe(false);
+    expect(readQueue(root).kind).toBe("never-written");
+  });
+
+  it("a valid but fold-refused first event leaves the queue genuinely never-written", () => {
+    const root = withRoot();
+    const result = appendEvents([prioritized(A, 0.8)], { root });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe("would-break");
+    expect(existsSync(join(root, QUEUE_FILE))).toBe(false);
+    expect(existsSync(join(root, QUEUE_INIT_FILE))).toBe(false);
+    expect(readQueue(root).kind).toBe("never-written");
+  });
+
+  it("reports a torn-line repair even when the append is subsequently refused", () => {
+    const root = withRoot();
+    appendEvents([added(A)], { root });
+    appendFileSync(join(root, QUEUE_FILE), '{"kind":"moved","schema":1,"at":"2026');
+
+    const result = appendEvents([{ ...env(), kind: "moved", id: A, placement: { at: "after", anchor: B } }], { root });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe("would-break");
+      expect(result.repaired).toMatchObject({ torn: true });
+    }
+  });
+
+  it("the CLI prints a repair notice before reporting a refused append", () => {
+    const root = withRoot();
+    appendEvents([added(A)], { root });
+    appendFileSync(join(root, QUEUE_FILE), '{"kind":"moved","schema":1,"at":"2026');
+
+    const result = runCli(root, ["move", A, "--by", "overseer", "--after", B]);
+
+    expect(result.status).toBe(2);
+    expect(result.stdout).toContain("repaired a torn final line first");
+    expect(result.stderr).toContain("would-break");
   });
 
   it("refuses a relative queue directory rather than resolving it against cwd", () => {
@@ -1145,7 +1234,7 @@ describe("round two: an append that would break the record is refused", () => {
   it("refuses `done` on an unknown id", () => {
     const root = withRoot();
     appendEvents([added(A)], { root });
-    const result = appendEvents([{ ...env(), kind: "done", id: "qi-nosuchid" }], { root });
+    const result = appendEvents([{ ...env(), kind: "done", id: B }], { root });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.code).toBe("would-break");
   });
@@ -1554,11 +1643,144 @@ describe("set-priorities: Greg's banding as a file somebody can read", () => {
       { id: A, priority: 0.8 },
       { id: C, priority: 0.2 },
     ]);
-    const refusals = priorityApplyRefusals(broken, plan);
+    const refusals = priorityApplyRefusals(broken, plan, false);
     expect(refusals).toHaveLength(2);
     expect(refusals[0]).toContain("problem");
     expect(refusals[1]).toContain(C);
     expect(refusals.join(" ")).not.toContain("unnamed");
+  });
+
+  it("requires unnamed live items to be accepted explicitly", () => {
+    const queue = foldQueue([added(A), added(B)]);
+    const plan = planPriorities(queue, [{ id: A, priority: 0.8 }]);
+    expect(priorityApplyRefusals(queue, plan, false).join(" ")).toContain(B);
+    expect(priorityApplyRefusals(queue, plan, true)).toEqual([]);
+  });
+
+  function priorityFile(root: string, source: string): { path: string; digest: string } {
+    const file = join(root, "priorities.txt");
+    writeFileSync(file, source);
+    return { path: file, digest: createHash("sha256").update(source).digest("hex").slice(0, 12) };
+  }
+
+  function queueVersion(root: string): string {
+    const queue = viewOf(readQueue(root));
+    if (queue === null) throw new Error("test queue should be readable");
+    return spellVersion(queue.version);
+  }
+
+  it("prints a copyable command pinning the raw file, the queue, and any unnamed acceptance", () => {
+    const root = withRoot();
+    appendEvents([added(A), added(B)], { root });
+    const source = `${A} 0.8 # the comment is part of what was reviewed\n`;
+    const file = priorityFile(root, source);
+
+    const dry = runCli(root, ["set-priorities", "--from", file.path, "--by", "overseer"]);
+
+    expect(dry.status, dry.stderr).toBe(0);
+    expect(dry.stdout).toContain(`--expect-version ${queueVersion(root)}`);
+    expect(dry.stdout).toContain(`--expect-file ${file.digest}`);
+    expect(dry.stdout).toContain("--allow-unnamed");
+  });
+
+  it("the CLI refuses apply without --expect-version and leaves the record byte-identical", () => {
+    const root = withRoot();
+    appendEvents([added(A)], { root });
+    const file = priorityFile(root, `${A} 0.8\n`);
+    const before = readFileSync(join(root, QUEUE_FILE));
+
+    const result = runCli(root, [
+      "set-priorities", "--from", file.path, "--by", "overseer", "--apply", "--expect-file", file.digest,
+    ]);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("--expect-version is required");
+    expect(readFileSync(join(root, QUEUE_FILE))).toEqual(before);
+  });
+
+  it("the CLI refuses apply without --expect-file and leaves the record byte-identical", () => {
+    const root = withRoot();
+    appendEvents([added(A)], { root });
+    const file = priorityFile(root, `${A} 0.8\n`);
+    const before = readFileSync(join(root, QUEUE_FILE));
+
+    const result = runCli(root, [
+      "set-priorities", "--from", file.path, "--by", "overseer", "--apply", "--expect-version", queueVersion(root),
+    ]);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("--expect-file is required");
+    expect(readFileSync(join(root, QUEUE_FILE))).toEqual(before);
+  });
+
+  it("the CLI refuses a stale queue version and leaves the record byte-identical", () => {
+    const root = withRoot();
+    appendEvents([added(A)], { root });
+    const file = priorityFile(root, `${A} 0.8\n`);
+    const before = readFileSync(join(root, QUEUE_FILE));
+
+    const result = runCli(root, [
+      "set-priorities", "--from", file.path, "--by", "overseer", "--apply",
+      "--expect-version", "0", "--expect-file", file.digest,
+    ]);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("queue has moved since the reviewed dry run");
+    expect(readFileSync(join(root, QUEUE_FILE))).toEqual(before);
+  });
+
+  it("the CLI refuses when even a comment changed after review and leaves the record byte-identical", () => {
+    const root = withRoot();
+    appendEvents([added(A)], { root });
+    const file = priorityFile(root, `${A} 0.8 # reviewed wording\n`);
+    const before = readFileSync(join(root, QUEUE_FILE));
+    writeFileSync(file.path, `${A} 0.8 # changed wording\n`);
+
+    const result = runCli(root, [
+      "set-priorities", "--from", file.path, "--by", "overseer", "--apply",
+      "--expect-version", queueVersion(root), "--expect-file", file.digest,
+    ]);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("priority file has changed");
+    expect(readFileSync(join(root, QUEUE_FILE))).toEqual(before);
+  });
+
+  it("the CLI refuses a queue with a problem and leaves the record byte-identical", () => {
+    const root = withRoot();
+    appendEvents([added(A)], { root });
+    appendFileSync(join(root, QUEUE_FILE), "{not json}\n");
+    const file = priorityFile(root, `${A} 0.8\n`);
+    const before = readFileSync(join(root, QUEUE_FILE));
+
+    const result = runCli(root, [
+      "set-priorities", "--from", file.path, "--by", "overseer", "--apply",
+      "--expect-version", queueVersion(root), "--expect-file", file.digest,
+    ]);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("unresolved problem");
+    expect(readFileSync(join(root, QUEUE_FILE))).toEqual(before);
+  });
+
+  it("the CLI refuses unnamed live items unless the explicit dry-run flag is present", () => {
+    const root = withRoot();
+    appendEvents([added(A), added(B)], { root });
+    const file = priorityFile(root, `${A} 0.8\n`);
+    const before = readFileSync(join(root, QUEUE_FILE));
+    const args = [
+      "set-priorities", "--from", file.path, "--by", "overseer", "--apply",
+      "--expect-version", queueVersion(root), "--expect-file", file.digest,
+    ];
+
+    const refused = runCli(root, args);
+    expect(refused.status).not.toBe(0);
+    expect(refused.stderr).toContain("--allow-unnamed");
+    expect(readFileSync(join(root, QUEUE_FILE))).toEqual(before);
+
+    const accepted = runCli(root, [...args, "--allow-unnamed"]);
+    expect(accepted.status, accepted.stderr).toBe(0);
+    expect(viewOf(readQueue(root))?.items.find((item) => item.id === A)?.priority).toBe(0.8);
   });
 
 });

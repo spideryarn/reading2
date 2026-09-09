@@ -27,6 +27,7 @@
  * `console.log` rather than src/log.ts, per docs/project/logging.md's rule: the
  * destination is a terminal.
  */
+import { createHash } from "node:crypto";
 import { readFileSync, writeSync } from "node:fs";
 
 import { seedEvents } from "../tools/overseer/idea-queue-seed.js";
@@ -78,7 +79,8 @@ const USAGE = `overseer-queue — the Overseer's queue of ideas
                                     clear a field with --clear-title, --clear-source,
                                     --clear-waiting-on, --clear-size, --clear-runs
   set-priorities --from <file> --by <who>
-                                    [--apply --expect-version <v>]
+                                    [--apply --expect-version <v> --expect-file <sha>]
+                                    [--allow-unnamed]
   dispatched <id> --by <who> --session <name> [--plan P]
   done <id> --by <who>
   drop <id> --by <who> [--why W]
@@ -371,11 +373,17 @@ function metadataPatch(flags: Flags["flags"]): Partial<IdeaMetadata> | undefined
  */
 function write(dir: string, events: readonly IdeaEvent[], expect: QueueVersion, said: string): void {
   const result = appendEvents(events, { root: dir, expect });
-  if (!result.ok) fail(`${result.why}${result.code === "stale-version" ? "" : ` [${result.code}]`}`);
   if (result.repaired.torn) {
-    console.log(`⚠ repaired a torn final line first — ${result.repaired.droppedBytes} byte(s) were lost:`);
-    console.log(`  ${result.repaired.droppedText.slice(0, 200)}`);
+    /* A refusal exits immediately below, so buffered console output can vanish
+       from a pipe and hide the irreversible repair. This notice is part of the
+       result, not decoration; write it synchronously like `fail`. */
+    writeSync(
+      1,
+      `⚠ repaired a torn final line first — ${result.repaired.droppedBytes} byte(s) were lost:\n` +
+        `  ${result.repaired.droppedText.slice(0, 200)}\n`,
+    );
   }
+  if (!result.ok) fail(`${result.why}${result.code === "stale-version" ? "" : ` [${result.code}]`}`);
   console.log(`✓ ${said}`);
   console.log(`  ${result.path} · version ${spellVersion(result.view.version)}`);
 }
@@ -466,7 +474,7 @@ function printPriorityPlan(plan: PriorityPlan): void {
   if (plan.unnamed.length > 0) {
     lines.push(
       `unnamed: ${plan.unnamed.join(", ")}`,
-      "  Queued but not named by the file; these keep their current priority and do not prevent applying.",
+      "  Queued but not named by the file; applying requires the printed --allow-unnamed acceptance.",
     );
   } else {
     lines.push("unnamed: none");
@@ -521,11 +529,32 @@ function main(): void {
       const from = str(parsed.flags, "from");
       if (from === null || from.trim() === "") fail("--from is required: the priority file a person reviewed");
       const by = actor(parsed.flags);
-      let source: string;
+      const applying = parsed.flags.get("apply") !== undefined;
+      let sourceBytes: Buffer;
       try {
-        source = readFileSync(from, "utf8");
+        sourceBytes = readFileSync(from);
       } catch (cause) {
         fail(`could not read the priority file ${from}: ${String(cause)}`);
+      }
+      const source = sourceBytes.toString("utf8");
+      /* Raw bytes deliberately, rather than normalised wishes: the reviewer
+         read the comments too, so “the file you reviewed” means literally
+         those bytes. A shared parser cannot pin two separate reads of a file. */
+      const fileDigest = createHash("sha256").update(sourceBytes).digest("hex").slice(0, 12);
+      if (applying) {
+        const expectedFile = str(parsed.flags, "expect-file");
+        if (expectedFile === null) {
+          fail("--expect-file is required with --apply: apply only the priority file whose dry run was reviewed");
+        }
+        if (!/^[0-9a-f]{12}$/.test(expectedFile)) {
+          fail(`'${expectedFile}' is not a priority-file digest — use the exact value printed by the dry run`);
+        }
+        if (expectedFile !== fileDigest) {
+          fail(
+            `the priority file has changed since the reviewed dry run: expected ${expectedFile}, now ${fileDigest}. ` +
+              `Nothing was written — dry-run the file again.`,
+          );
+        }
       }
       const parsedFile = parsePriorityFile(source);
       if (!parsedFile.ok) fail(parsedFile.why);
@@ -533,13 +562,19 @@ function main(): void {
       const plan = planPriorities(queue, parsedFile.wanted);
       printPriorityPlan(plan);
 
-      const applying = parsed.flags.get("apply") !== undefined;
       if (!applying) {
-        if (plan.changes.length === 0) console.log("\nNothing would change, so the dry run wrote nothing.");
-        console.log(
+        const nothing = plan.changes.length === 0 ? "\nNothing would change, so the dry run wrote nothing.\n" : "";
+        const allowUnnamed = plan.unnamed.length > 0 ? " --allow-unnamed" : "";
+        /* The command is the safety artefact, so write it synchronously just as
+           the plan above and every refusal are. A captured CLI process can exit
+           0 before buffered `console.log` reaches its pipe, which would report
+           a successful dry run without the only command that pins its review. */
+        writeSync(
+          1,
+          nothing +
           `\nTo apply exactly this reviewed version:\n  npx tsx scripts/overseer-queue.ts set-priorities ` +
             `--from ${shellWord(from)} --by ${by} --apply --expect-version ${spellVersion(queue.version)} ` +
-            `--root ${shellWord(dir)}`,
+            `--expect-file ${fileDigest}${allowUnnamed} --root ${shellWord(dir)}\n`,
         );
         return;
       }
@@ -560,12 +595,9 @@ function main(): void {
             `${spellVersion(queue.version)}. Nothing was written — dry-run the file again.`,
         );
       }
-      const refusals = priorityApplyRefusals(queue, plan);
+      const allowUnnamed = parsed.flags.get("allow-unnamed") !== undefined;
+      const refusals = priorityApplyRefusals(queue, plan, allowUnnamed);
       if (refusals.length > 0) fail(`cannot apply this priority plan:\n  ${refusals.join("\n  ")}`);
-      /* Unnamed items are loud in the plan but deliberately do not need an
-         `--allow-unnamed` escape hatch. The file bands what Greg chose to band;
-         `absent` above catches the typo case where a misspelling could hide the
-         intended live item among the legitimately unnamed ones. */
       if (plan.changes.length === 0) {
         console.log("\nNothing changed; every named live item already has that priority.");
         return;

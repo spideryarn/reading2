@@ -1,6 +1,6 @@
 # A priority on every queued idea, and the queue ordered by it
 
-**Status, 2026-09-09: built; round-two review changes incorporated.** Up:
+**Status, 2026-09-09: built; the final code-review blockers are closed.** Up:
 [dev-and-deployment-overview.md](../project/dev-and-deployment-overview.md) via
 [overseer-queue.md](../project/overseer-queue.md). It continues
 [260909b](260909b-queued-ideas-mode-the-overseer-queue-as-ndjson.md), which built the queue as an
@@ -142,7 +142,25 @@ decision beyond the P1-5 mitigation, and P2-2.
 | **P1-2** | Priority on `added` let an old reader ignore the field and select the wrong item without a problem. | `added` cannot carry the key; `add --priority` atomically appends `added` then `prioritized`. |
 | **P1-4** | One existing parse problem could mask one new fold problem during append preflight. | Baseline and candidate are now folds of the same parsed event stream, with parse problems on neither side. |
 | **P2-1** | The separate event kind was overclaimed as structural safety while empty and priority-bearing `edited` events still parsed. | Both forms are rejected; the separate kind is justified by honest history and atomic composition. |
-| **P1-5 mitigation** | Who changed the ordering constraint was visible only by replaying history while standing authority remains undecided. | Folded items expose `priorityBy` and `priorityAt`, cleared with the priority; no route or wire change is part of this stage. |
+| **P1-5 mitigation** | Who changed the ordering constraint was visible only by replaying history while standing authority remains undecided. | Folded items expose `priorityBy` and `priorityAt`, cleared with the priority; the later code review carries both through the route and shows them in the opened dashboard row. |
+
+## What the code review changed
+
+GPT Sol reviewed the completed work on 2026-09-09. Its verdict was *"do not ship it until the three
+P1s are fixed"*. All seven findings were reproduced before the review was handed over, and the
+fixes below were each driven through the boundary the finding concerned rather than through a
+source-grep assertion.
+
+| finding | what was wrong | change taken |
+|---|---|---|
+| **P1-1** | `appendEvents` accepted `NaN`, infinities and out-of-range priorities. `NaN` became `null`, while `9` wrote a line the same module refused to read. | Before the lock or any file work, each event is encoded, parsed back and structurally compared with the original. A mismatch is `invalid-event`; rejected batches leave existing and never-created records byte-identical. |
+| **P1-2** | A refused first append left `queue.created`, falsely turning an untouched root into a LOST queue; a torn-line repair on a later refusal was omitted from the result. | Candidate validation now precedes marker creation while the marker still precedes the first record. Every append result carries repair information, and the CLI prints a repair before its refusal. |
+| **P1-3** | `--expect-version` pinned the queue but not the priority file, so an apply could use different bytes from the dry run. | The dry run prints the first twelve hexadecimal characters of the raw file's SHA-256 and `--apply` requires the same value with `--expect-file`. Raw bytes are deliberate: comments were part of the file the reviewer read. |
+| **P2-1** | Only `added` and `edited` rejected a misplaced `priority`; the other event kinds silently ignored extra fields. | One allowed top-level key set per event kind now rejects every extra key. This is compatible with the 85-line live record checked on 2026-09-09 and makes newer-writer fields fail loudly on older readers. |
+| **P2-2** | A schema-1 row with no `priority` reached the detail list as the string `undefined`. | The client normalises an absent or non-numeric row priority to `null`, preserving schema-1 compatibility and the honest meaning *unstated*. |
+| **P2-3** | `priorityBy` and `priorityAt` stopped at the fold even though the comment claimed the act was visible on the row. | Both fields are additive wire fields, projected for queued and settled rows and rendered in the opened detail as who set the priority and on what date. |
+| **P2-4** | The order assertion passed when the first row vanished, persistence was untested for non-finite numbers, and helper tests did not exercise the CLI's apply guards. | The order test first proves both rows exist; append tests assert byte-identical records; subprocess tests cover missing and stale queue/file tokens and a queue problem. Each guard was mutation-checked separately. |
+| **`--allow-unnamed`** | In a band-everything migration, a forgotten live item and an intentional omission were indistinguishable. | Apply refuses unnamed live items unless `--allow-unnamed` is present. A dry run with unnamed items includes the flag in its copyable command, making the accepted omission explicit without asking the operator to invent the flag. |
 
 ## An out-of-range priority rejects the line
 
@@ -159,7 +177,8 @@ Greg's banding is **data, not logic**. Compiling *"Overseer tooling 0.8–0.9, d
 Spideryarn product 0.1–0.2"* into the CLI would make a one-off decision permanent and unreadable, so
 the bands live in a file the Overseer writes and Greg can read.
 
-    overseer-queue set-priorities --from <file> --by <who> [--apply --expect-version <v>]
+    overseer-queue set-priorities --from <file> --by <who>
+        [--apply --expect-version <v> --expect-file <digest> [--allow-unnamed]]
 
 The file is one item per line, because the file **is** the argument Greg reviews and a JSON blob is
 not something anybody reads twice:
@@ -173,31 +192,35 @@ whole file**. Nothing is applied from a file that was half-understood — the sa
 
 Without `--apply` it prints the plan and writes nothing: every item's current priority and its new
 one, the rows it would not change, the ids in the file that are not in the queue, and the queued
-items the file does not name. The apply command it prints names the exact queue version just read,
-so an item arriving after review cannot be left silently unranked by a different operation.
+items the file does not name. The apply command it prints names the exact queue version just read
+and a digest of the exact raw file bytes. An item arriving after review or any edit to the reviewed
+file — comments included — therefore refuses rather than applying a different ordering. When live
+items are unnamed, the printed command also includes `--allow-unnamed`, so the accepted omission is
+said out loud.
 
 The banding file names **all sixteen Spideryarn product clusters**, including the ones marked
 `needsGreg`, because Greg's quoted brief says all the product ideas go low. A `?` beside those rows
 is information for the person reviewing the file, not a rule the command enforces: priority orders
 the list and cannot answer the question or make the item dispatchable.
 
-With `--apply`, `--expect-version` is required. It appends one `prioritized` event per **changed**
-item, in one batch under one lock against that reviewed version, and refuses a queue with problems
-or ids in the file that are absent from the live queue. Unnamed live items are shown loudly but are
-allowed: the file bands the items Greg chose to band. Unchanged items produce no event: a log line
-that changes nothing is noise in a record whose value is that every line means something.
+With `--apply`, both `--expect-version` and `--expect-file` are required. It appends one
+`prioritized` event per **changed** item, in one batch under one lock against the reviewed queue
+version, and refuses a changed priority file, a queue with problems, ids absent from the live queue,
+or unnamed live items without `--allow-unnamed`. Unchanged items produce no event: a log line that
+changes nothing is noise in a record whose value is that every line means something.
 
 ## Stages
 
-- [ ] **Stage 1 — the field, the event, the sort, and the CLI.**
+- [x] **Stage 1 — the field, the event, the sort, and the CLI.**
       `tools/overseer/idea-queue.ts` (the `priority` field, the `prioritized` event, its parse arm,
       its fold arm, the comparator), `scripts/overseer-queue.ts` (`add --priority`,
       `edit --priority`, `set-priorities`, the priority column in `list` and `show`),
       `tests/overseer-idea-queue.test.ts`. Red first, then green, and **the comparator
       mutation-checked**: swap the two keys and watch the ordering tests fail.
-- [ ] **Stage 2 — the wire, the route and the tab.** `wire.ts` gains one additive field on
-      `QueueRow` at the end of the type; `routes-idea-queue.ts` carries it; `QueuePanel.tsx` shows it
-      on the row and renders in the order the server sent, sorting nothing itself.
+- [x] **Stage 2 — the wire, the route and the tab.** `wire.ts` gains three additive fields on
+      `QueueRow` at the end of the type; `routes-idea-queue.ts` carries them; `QueuePanel.tsx` shows priority
+      on the collapsed row and its provenance in the opened details, and renders in the order the server
+      sent, sorting nothing itself.
       `tests/fleet-idea-queue-route.test.ts` and `tests/fleet-queue-panel.test.tsx`.
       Then `npm test`, `npm run typecheck`, lint, and the GPT Sol code review.
 
@@ -219,9 +242,9 @@ from the page, and the absence of a wait forecast — are unchanged by this.
 
 ## File set
 
-Mine: `tools/overseer/idea-queue.ts`, `scripts/overseer-queue.ts`,
-`tools/fleet/routes-idea-queue.ts`, `tools/fleet/web/src/QueuePanel.tsx`, and their tests. One
-additive field at the **end** of `QueueRow` in `tools/fleet/wire.ts` and nothing else in that file.
+Mine: `tools/overseer/idea-queue.ts`, `tools/overseer/idea-queue-priorities.ts`, `scripts/overseer-queue.ts`,
+`tools/fleet/routes-idea-queue.ts`, `tools/fleet/web/src/QueuePanel.tsx`, and their tests. Three
+additive fields at the **end** of `QueueRow` in `tools/fleet/wire.ts` and nothing else in that file.
 
 Not mine: the daemon, `tools/overseer/jobs.ts`, `scheduler.ts`, `tools/fleet/queue.ts` (the
 dashboard's *steering* queue — a different thing with a confusingly similar name),
