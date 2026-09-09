@@ -95,19 +95,29 @@ function DecisionCard({ row, elapsedSinceReadMs }: { row: DecisionRow; elapsedSi
         type="button"
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}
-        className="tw:flex tw:w-full tw:flex-wrap tw:items-start tw:gap-2 tw:p-3 tw:text-left"
+        className="tw:block tw:w-full tw:p-3 tw:text-left"
       >
-        <Pill tone={status.tone}>{status.label}</Pill>
-        <span className="tw:min-w-0 tw:flex-1">
-          <span className="tw:block tw:text-[13px] tw:font-semibold tw:text-ink">{record.question}</span>
-          <span className="tw:mt-0.5 tw:block tw:text-[12px] tw:text-ink-soft">
-            Chose {record.chose.option}
-            {record.chose.note === null ? "" : ` — ${record.chose.note}`}
+        {/* **THE BADGES GET THEIR OWN ROW, AND THE QUESTION GETS THE WIDTH.**
+            These were one flex row with the question as a `flex-1 min-w-0`
+            sibling of two pills and the meta. At 390px that is not a wrap — the
+            question shrinks to about one word per line and its text overflows
+            its own box, so the class pill paints on top of it. Nothing in the
+            suite could see it: jsdom has no layout, every assertion passed, and
+            it took a screenshot to find. Two rows need no breakpoint and read
+            the same at 390 and 1280. */}
+        <span className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
+          <Pill tone={status.tone}>{status.label}</Pill>
+          <Pill tone={CLASS_TONE[record.class]}>{record.class}</Pill>
+          <span className="tw:text-[11px] tw:text-ink-faint">
+            {open ? "hide details" : "show details"} · {formatDuration(row.ageMs + elapsedSinceReadMs)} ago
           </span>
         </span>
-        <Pill tone={CLASS_TONE[record.class]}>{record.class}</Pill>
-        <span className="tw:shrink-0 tw:text-[11px] tw:text-ink-faint">
-          {open ? "hide details" : "show details"} · {formatDuration(row.ageMs + elapsedSinceReadMs)} ago
+        <span className="tw:mt-1.5 tw:block tw:text-[13px] tw:font-semibold tw:break-words tw:text-ink">
+          {record.question}
+        </span>
+        <span className="tw:mt-0.5 tw:block tw:text-[12px] tw:break-words tw:text-ink-soft">
+          Chose {record.chose.option}
+          {record.chose.note === null ? "" : ` — ${record.chose.note}`}
         </span>
       </button>
 
