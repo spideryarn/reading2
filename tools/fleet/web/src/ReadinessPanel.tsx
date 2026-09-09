@@ -48,12 +48,27 @@ import type { Tone } from "./view";
 /** The checks that get a row, in the order a person asks about them. */
 const ROWS = ["test", "typecheck", "check", "lint", "build"] as const;
 
-const STATE_TONE: Record<ReadingView["state"], Tone> = {
-  pass: "idle",
-  fail: "alarm",
-  void: "unknown",
-  running: "work",
+/**
+ * **The mark colours, which are NOT `toneClasses(...).pill`.**
+ *
+ * That was the first version and it was wrong in a way a screenshot showed and
+ * no test could: `idle.pill` is `bg-quiet-wash`, a near-white **chip
+ * background** meant to sit behind dark text. Rendered as a 2px bar it came out
+ * at RGB(239,239,239) on a white track — about 6% luminance difference, which a
+ * browser subagent could only find by sampling pixels. So the most important
+ * mark on the page, *a passing run on dev*, was the least visible thing on it.
+ *
+ * These are the solid tokens instead. A chip and a mark are different visual
+ * roles and the design system has both; reaching for the one already imported
+ * is how they got confused.
+ */
+const MARK_COLOUR: Record<ReadingView["state"], string> = {
+  pass: "tw:bg-quiet",
+  fail: "tw:bg-alarm",
+  void: "tw:bg-unknown",
+  running: "tw:bg-work",
 };
+
 
 const VERDICT_TONE: Record<VerdictView["kind"], Tone> = {
   ready: "idle",
@@ -138,21 +153,24 @@ function DayBand({
       {readings.map((reading) => {
         const left = Math.min(100, Math.max(0, ((reading.atMs - fromMs) / span) * 100));
         const provenance = provenanceOf(reading, devSha);
-        const tone = toneClasses(STATE_TONE[reading.state]);
         return (
           <span
             key={`${reading.atMs}-${reading.check}-${reading.source}-${reading.commandLine ?? ""}`}
             className={cx(
               /* **Two pixels, not one.** A 24-hour band is about 200px on a
-                 phone, and a 1px mark at 45% opacity was invisible in the first
-                 screenshot — a graph that draws its data where nobody can see it
-                 is the same as not drawing it. */
-              "tw:absolute tw:top-0.5 tw:h-4 tw:w-0.5 tw:min-w-[2px] tw:rounded-sm",
-              tone.pill,
-              /* The two weaker provenances recede — they are history, and the
-                 eye should not read them as the answer — but they stay legible.
-                 Receding is not disappearing. */
-              provenance === "dev" ? "tw:opacity-100 tw:ring-1 tw:ring-ink-faint" : "tw:opacity-70",
+                 phone, and a 1px mark was invisible in the first screenshot — a
+                 graph that draws its data where nobody can see it is the same as
+                 not drawing it. */
+              "tw:absolute tw:w-0.5 tw:min-w-[2px] tw:rounded-sm",
+              MARK_COLOUR[reading.state],
+              /* **Provenance is HEIGHT, not opacity.** Fading was the first
+                 attempt and it traded away the one thing a mark must have. A
+                 full-height ringed bar is a run that counts; a half-height one
+                 is history — unmistakably different, at full colour, so no mark
+                 has to be hunted for. */
+              provenance === "dev"
+                ? "tw:top-0.5 tw:h-4 tw:ring-1 tw:ring-ink-faint"
+                : "tw:top-1.5 tw:h-2",
             )}
             style={{ left: `${left}%` }}
             title={`${formatTime(reading.atMs)} · ${reading.state}${
@@ -310,7 +328,7 @@ export function ReadinessPanel({
       <Card className="tw:p-3">
         <Explain tip={PROVENANCE_TIP}>
           <span className="tw:text-[11px] tw:text-ink-faint">
-            Marks are runs, not coverage. Ringed marks are full runs on this commit — the only ones that count.
+            Marks are runs, not coverage. Tall ringed marks are full runs on this commit — the only ones that count; short ones are history.
           </span>
         </Explain>
         <div className="tw:flex tw:flex-col tw:gap-2 tw:pt-3">
