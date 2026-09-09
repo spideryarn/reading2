@@ -550,12 +550,20 @@ the two shared loads sit at different scroll positions and different bar totals 
 label, and unreadable. Written down because somebody will reach for it later —
 `questions-mode-s2`, 2026-09-09.
 
-### STILL OPEN, and not closed by Greg's answer: Refresh is unreachable at rest
+### ALSO ANSWERED by Greg, 2026-09-09: scrolling to reach Refresh is fine
 
-**A scrolling strip is the right answer to *the bar is full*. It is not an answer to *a control is
-unreachable at rest*, and the second should not be marked answered by the first.**
-`questions-mode-s2`'s point, and it is right: the dock's *shape* is settled; this is a different
-question with its own evidence below, and the Overseer is putting it to Greg separately.
+> It's fine if they need to scroll to see Refresh.
+>
+> — Greg, 2026-09-09, relayed by the Overseer
+
+**Closed, and nothing is built for it.** This was deliberately kept open when the dock's *shape*
+question was answered, because a scrolling strip answers *the bar is full* and does not answer *a
+control is unreachable at rest* — `questions-mode-s2`'s distinction, and it was worth making even
+though the answer turned out the same way. Asking the second question separately is what makes
+"fine" a decision rather than an omission.
+
+The evidence below stays: it is why the question was answerable, and it records that the condition
+predates both new tabs rather than being caused by them.
 
 **One seam this work leaves, stated because it cannot be cleared from here.** The product's dock
 gets focus-scrolling from the browser natively; this one now *also* makes an explicit
@@ -931,12 +939,21 @@ debrief.
 1. **A review button on the page needs an identity story.** Until then a decision can only be marked
    reviewed from a terminal. The cheap shape the queue plan already proposes: mutations only from
    allowlisted Greg-device tailnet identities, loopback read-only. One answer unblocks both.
-2. **Only if the browser stage fails**: whether "Decisions made" may live somewhere other than its
-   own tab, if a ninth tab cannot be made reachable at 390px. Not decided here, and not decided by
-   the Overseer either — it would be recorded as *important work left*.
+2. **The runbook's § The log, and the surface Greg reads.** It specifies a ranking by agent-hours
+   that cannot be built honestly (§ What a session reference carries) and an assumptions-only
+   surface that today's widening outgrew. The before/after is in the debrief. **Not the Overseer's
+   to take** — gate 3 forbids it changing a constraint on its own decision log and allows only a
+   proposal; it agreed and logged a correction against its earlier attempt.
 
-*(A third — whether all three classes belong on the first screen — was put to the Overseer and
-**decided** by it under gate 2 on 2026-09-09; see § The record. Reversible by Greg at the debrief.)*
+**Answered and closed on 2026-09-09**, all three within the day:
+
+- *Which classes belong on the first screen* — the Overseer, under gate 2: all three, unreviewed
+  first, newest within that (§ The record). Reversible by Greg.
+- *The dock's shape* — Greg: a scrolling strip, reuse Spideryarn's (§ The joint question). Already
+  implemented; parity confirmed, nothing built.
+- *Refresh unreachable at rest* — Greg: *"It's fine if they need to scroll to see Refresh."*
+- *Whether the tab may live somewhere other than its own tab* — **moot**: the browser stage passed
+  its worst case, so the fallback was never reached.
 
 ## Needs the Overseer
 
