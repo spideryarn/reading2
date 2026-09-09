@@ -10,7 +10,7 @@
  * So these drive `makeReadinessRetention()` itself, the same function
  * `server.ts` calls, rather than assembling the pieces a second way.
  */
-import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { hostname, tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -24,6 +24,7 @@ import {
   type ReadinessSnapshot,
 } from "../tools/fleet/readiness-wiring.js";
 import { openReadinessStore } from "../tools/fleet/readiness-store.js";
+import { MODES, MODE_LABELS } from "../tools/fleet/web/src/mode.js";
 import type { FinishedRecord } from "../tools/fleet/readiness.js";
 
 const SHA = "1111111111111111111111111111111111111111";
@@ -216,5 +217,56 @@ describe("the readiness route", () => {
     const q = fakeRes();
     expect(route.handle({ url: `${READINESS_PATH}?hours=6`, headers: {} } as never, q.res)).toBe(true);
     expect(q.status()).toBe(200);
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * The tab's own registrations.
+ * ------------------------------------------------------------------ */
+
+/**
+ * **A merge can remove all five registrations at once and still typecheck.**
+ *
+ * `Mode` is derived FROM `MODES`, so the `Record<Mode, …>` maps that catch a
+ * half-added mode cannot see a mode removed from every one of them together —
+ * which is exactly what a merge does when two sessions add tabs to the same
+ * array. `docs/project/fleet-dashboard-modes.md` § When several sessions add a
+ * tab at once, and the Overseer's standing rule: add your own entries with your
+ * panel, never touch another's, and assert your own here.
+ *
+ * The mount in `App.tsx` is the fifth place and the one nothing else checks: a
+ * mode registered in all four with no arm there compiles, draws a button,
+ * switches the hash, and shows an empty page.
+ */
+describe("the readiness mode's registrations", () => {
+  it("is in MODES, so the Dock draws it and the hash keeps it", () => {
+    expect(MODES).toContain("readiness");
+  });
+
+  it("has a label, which is the one place it is spelled for a person", () => {
+    expect(MODE_LABELS["readiness"]).toBe("Readiness");
+  });
+
+  it("is mounted in App.tsx, which no type can check", () => {
+    /* A source check, the same kind `tests/fleet-web.test.tsx` uses for the
+       other modes: the alternative is a button that switches to a blank page. */
+    const app = readFileSync(join(__dirname, "..", "tools", "fleet", "web", "src", "App.tsx"), "utf8");
+    expect(app).toContain('mode === "readiness"');
+    expect(app).toContain("<ReadinessPanel");
+  });
+
+  it("has an icon and a tip in the Dock", () => {
+    const dock = readFileSync(join(__dirname, "..", "tools", "fleet", "web", "src", "Dock.tsx"), "utf8");
+    expect(dock).toMatch(/readiness:\s*\w+,/);
+    expect(dock).toContain('head: "Readiness"');
+  });
+
+  it("is served by a route the server actually mounts", () => {
+    /* The other half of the same worry, one layer down: `server.ts` cannot be
+       imported by a test — it binds port 8787 — so the line that calls
+       `readinessApi.handle` is checked by reading it. */
+    const server = readFileSync(join(__dirname, "..", "tools", "fleet", "server.ts"), "utf8");
+    expect(server).toContain("readinessApi.handle(req, res)");
+    expect(server).toContain("refreshReadiness()");
   });
 });

@@ -26,6 +26,7 @@ import { Header, SHELL, freshness } from "./Header";
 import { HealthPanel } from "./HealthPanel";
 import { OverseerPanel } from "./OverseerPanel";
 import { QueuePanel } from "./QueuePanel";
+import { ReadinessPanel } from "./ReadinessPanel";
 import { SessionsPanel } from "./SessionsPanel";
 import { UsageCard } from "./UsagePanel";
 import { UsageHistory } from "./UsageHistory";
@@ -357,6 +358,12 @@ export function App({
             <QueuePanel api={queueApi} refreshNonce={refreshNonce} />
           </div>
         ) : null}
+        {mode === "readiness" ? (
+          <div className="tw:mx-auto tw:max-w-3xl">
+            <ReadinessPanel nowMs={now} skew={skew.current} refreshNonce={refreshNonce} />
+          </div>
+        ) : null}
+
         {mode === "deploys" ? (
           <div className="tw:mx-auto tw:max-w-3xl">
             <DeploysPanel api={deploysApi} now={now} refreshNonce={refreshNonce} />
