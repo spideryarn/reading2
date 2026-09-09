@@ -443,6 +443,77 @@ describe("prose stays observational", () => {
     expect(card?.textContent).toContain("duplicate-agent");
   });
 
+  /**
+   * **A CARD TALLER THAN THE PHONE ANSWERS THE WRONG QUESTION.** This tab exists
+   * to answer three things and the third is *which one first?*, which nobody can
+   * do when the first card fills the viewport. `AttentionPanel.tsx` found this on
+   * live data on 2026-09-08 — real excerpts of 1,116 and 1,736 characters, 17 and
+   * 21 lines — and this panel was built the way that file had already tried and
+   * rejected. Reproduced at 390 x 844 on 2026-09-09: one card, whole screen, cut
+   * off mid-sentence.
+   *
+   * jsdom has no layout, so this asserts the two things that are structural
+   * rather than visual: the acted-on sentence comes FIRST, and the evidence
+   * carries the clamp. The measurement itself is the screenshot.
+   */
+  it("leads with the sentence a person acts on and clamps the evidence", () => {
+    const long = Array.from({ length: 25 }, (_, i) => `line ${i} of a very tall terminal tail`).join("\n");
+    const item = {
+      kind: "prose" as const,
+      itemId: "prose-1",
+      target: { kind: "addressable" as const, sessionId: "$1", sessionName: "questions-agent" },
+      excerpt: long,
+      why: "the turn ended by handing over a product decision",
+      waitingSince: "2026-09-09T11:30:00.000Z",
+      attentionKind: "product" as const,
+      duplicates: [],
+    };
+    drawPanel({ kind: "complete", items: [item] }, []);
+    const text = host.textContent ?? "";
+    expect(text.indexOf(item.why)).toBeGreaterThan(-1);
+    /* The sentence precedes the evidence in DOM order, which is what decides
+       what a reader sees first when the card is cut off by the fold. */
+    expect(text.indexOf(item.why)).toBeLessThan(text.indexOf("line 0 of a very tall terminal tail"));
+    const excerpt = [...host.querySelectorAll("p")].find((p) => p.textContent?.startsWith("line 0 "));
+    expect(excerpt?.className).toContain("line-clamp-3");
+    /* And the caveat the producer's by-position selection makes necessary,
+       which is stated ONCE for the class rather than on the card — see below. */
+    expect(text).toContain("taken by position");
+  });
+
+  /**
+   * **A CAVEAT ON EVERY CARD IS READ AS NOISE WITHIN A DAY**, which is the
+   * plan's own rule (§ No badge, in either direction) and which the first build
+   * of this card broke twice over: a by-position note and a one-tap-away note on
+   * every prose card, identical on all of them and about as much small print as
+   * content. Both are facts about the prose CLASS, so they are stated once.
+   *
+   * Two assertions, because only the pair is the rule: the sentence appears once
+   * however many prose cards there are, and it does not appear at all when there
+   * is nothing for it to caveat.
+   */
+  it("states the prose caveat once for the class, and not at all without prose", () => {
+    const prose = (id: string) => ({
+      kind: "prose" as const,
+      itemId: id,
+      target: { kind: "addressable" as const, sessionId: "$1", sessionName: "questions-agent" },
+      excerpt: "a tail",
+      why: "the turn ended by handing over a product decision",
+      waitingSince: "2026-09-09T11:30:00.000Z",
+      attentionKind: "product" as const,
+      duplicates: [],
+    });
+    drawPanel({ kind: "complete", items: [prose("a"), prose("b"), prose("c")] }, []);
+    const occurrences = (host.textContent ?? "").split("taken by position").length - 1;
+    expect(occurrences).toBe(1);
+
+    /* A dialog-only list has nothing to caveat, and a caveat with nothing to
+       caveat is the noise the gap vocabulary exists to avoid. */
+    act(() => root.render(<div />));
+    drawPanel({ kind: "complete", items: [] }, []);
+    expect(host.textContent).not.toContain("taken by position");
+  });
+
   it("selects the asking session in one hash write and clears stale selpid", () => {
     vi.setSystemTime(NOW);
     window.location.hash = "#questions?sel=%24old&selpid=999";

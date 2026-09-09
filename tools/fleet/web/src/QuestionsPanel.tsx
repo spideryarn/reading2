@@ -249,13 +249,54 @@ function ProseContents({ item, now }: { item: ProseItem; now: number }): ReactNo
         <span className="tw:ml-auto tw:text-[12px] tw:text-ink-faint">{waitAge(item.waitingSince, now)}</span>
       </div>
       <h3 className="tw:mt-2 tw:font-medium tw:break-words">{item.target.sessionName}</h3>
-      <p className="tw:mt-2 tw:break-words tw:whitespace-pre-wrap">{item.excerpt}</p>
-      <p className="tw:mt-2 tw:text-[13px] tw:text-ink-soft">{item.why}</p>
+      {/* **THE `why` LEADS AND THE EXCERPT IS CLAMPED, AND BOTH HALVES ARE
+          AttentionPanel.tsx's FINDING RATHER THAN A PREFERENCE.** That file
+          built this the other way round first, and live data on 2026-09-08
+          settled it: two real prose excerpts were 1,116 and 1,736 characters —
+          17 and 21 lines — so "one card is 21 lines tall on a 390px phone and
+          the second item is off the bottom of the screen". Reproduced here at
+          390 × 844 on 2026-09-09 before this was changed: one card filled the
+          whole viewport and was cut off mid-sentence.
+
+          That is fatal on THIS tab specifically, because the third question it
+          exists to answer is *which one first?* — and nobody can rank six
+          waiting things when the first is taller than the screen.
+
+          The `why` is one human-written sentence and is what a person acts on;
+          the excerpt is what they check the inference against, which changes
+          what you would believe rather than what you would do in the next ten
+          seconds. So the sentence is never truncated and the evidence is.
+
+          **CLAMPED RATHER THAN PUT BEHIND A `<details>`, which is where this
+          tab differs from that one.** AttentionPanel's disclosure needed a CSS
+          lift (`.attention-evidence`) because its card is a stretched link and
+          the overlay painted above the summary, leaving it unreachable by tap —
+          measured, in Chrome, on the box. This card is a whole-card tap target
+          for the same reason, so a disclosure inside it would inherit exactly
+          that trap. The full text is already one tap away in Sessions, which is
+          where this card sends you, so v1 clamps and does not re-solve it. */}
+      <p className="tw:mt-2 tw:text-[13px] tw:text-ink">{item.why}</p>
+      <p className="tw:mt-2 tw:line-clamp-3 tw:break-words tw:whitespace-pre-wrap tw:text-[13px] tw:text-ink-soft">
+        {item.excerpt}
+      </p>
+      {/* **THE TWO CAVEATS THAT USED TO BE HERE ARE NOW STATED ONCE, ABOVE THE
+          LIST**, and moving them is this plan's own rule applied to itself.
+          § No badge, in either direction: "a caveat on every card is read as
+          noise within a day. That is A17." It says that about
+          `sessionsUnreadable`; the first build of this card broke it twice over,
+          with a by-position note and a one-tap-away note on every prose card —
+          about as much small print as content, and identical on all of them.
+          Both facts are true of the whole prose class rather than of any card,
+          which is exactly what makes one statement the honest place for them.
+          Seen at 390 x 844 on 2026-09-09; `ProseCaveat` is where they went. */}
       <DuplicateList duplicates={item.duplicates} />
       {item.kind === "prose" ? (
-        <p className="tw:mt-2 tw:text-[12px] tw:text-ink-faint">
-          Answering is one tap away in Sessions because this address cannot yet be proved to belong to the asker.
-        </p>
+        /* An affordance rather than a sentence: what this card DOES is the one
+           thing a reader cannot guess from looking at it, and the reason it is
+           not answerable here is a fact about every prose card, stated once
+           above. Not a `<button>` — the whole card is already the tap target,
+           and a button inside it would be a control inside a control. */
+        <p className="tw:mt-2 tw:text-[12px] tw:font-medium tw:text-needs-ink">Open in Sessions →</p>
       ) : (
         <p className="tw:mt-2 tw:text-[13px] tw:text-alarm-ink">This observation has no usable session address: {item.target.why}.</p>
       )}
@@ -289,6 +330,24 @@ function SelectableProse({ item, now, onSelect }: {
   );
 }
 
+/**
+ * The two things that are true of every prose card, said once for the class.
+ *
+ * Drawn only when a prose item is actually on screen, for the reason it was
+ * lifted off the cards at all: a caveat with nothing to caveat is the noise
+ * this panel's gap vocabulary exists to avoid. A dialog-only list never sees it.
+ */
+function ProseCaveat(): ReactNode {
+  return (
+    <p className="tw:mt-3 tw:px-1 tw:text-[12px] tw:text-ink-faint">
+      A handover is inferred from the tail of a session's screen, and the excerpt is taken by position
+      rather than by search — so it may not be the part its sentence is about. Answering one is a tap
+      away in Sessions rather than here, because the address cannot yet be proved to belong to the
+      agent that asked.
+    </p>
+  );
+}
+
 function QuestionItems({ items, rows, answeringEnabled, onSelect, steer, now }: {
   items: readonly QuestionItem[];
   rows: readonly FleetRow[];
@@ -298,8 +357,10 @@ function QuestionItems({ items, rows, answeringEnabled, onSelect, steer, now }: 
   now: number;
 }): ReactNode {
   const rowsById = new Map(rows.map((row) => [row.id, row]));
+  const anyProse = items.some((item) => item.kind === "prose" || item.kind === "prose-unaddressable");
   return (
     <div className="tw:mt-3">
+      {anyProse ? <ProseCaveat /> : null}
       {items.map((item) => {
         const row = rowsById.get(
           item.kind === "dialog" || item.kind === "dialog-unaddressable" ? item.rowId : item.target.sessionId,
