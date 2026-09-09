@@ -199,7 +199,13 @@ What we are not trading away is design: write code that will still be good to wo
 months. It loosens nothing in **Real data belongs to the reader** below.
 
 **Explain plainly and briefly.** Whenever you explain, summarise or ask a question — in chat, in a
-doc, in a commit message.
+doc, in a commit message. **A question to Greg is not a question until he can understand it.** Greg,
+2026-09-09: *"Often I get asked a question and I don't understand what the question is asking, or the
+options, or how to choose between them."* So before the question itself: what the work is for, the
+background, and any jargon, in plain words; then each option explained fully and plainly — an ASCII
+diagram where shape matters, an example of what each would look like in use, what it costs and what
+it gives up; then what would make you pick one over the other. A bare "A, B or C?" with a one-line
+label each is the shape he cannot answer, and it will come back to you to be rewritten.
 
 **Real data belongs to the reader, not to us.** There is one production database and no staging copy
 of it, and what is in it is real people's articles, comments, notes and profiles. Reading it is fine.
