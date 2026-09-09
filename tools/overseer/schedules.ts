@@ -70,13 +70,39 @@ export type ScheduleConfig = {
    * How long a run may be unsettled before the scheduler stops believing it is
    * coming back and releases the job.
    *
-   * **It is in the schedule rather than in the behaviour, and that is a
-   * deliberate loosening with a named cost.** A shortened lease lets a second
-   * session start while the first is still running, and it now does so without a
-   * re-pin. The split's rule is *the fingerprint covers what a job does*, and a
-   * deadline for disbelieving a run is a clock fact; the guard against an
-   * abusive value is `MINIMUM_LEASE_MS` below, which is checked before any job
-   * is built.
+   * **It is in the schedule rather than in the behaviour, and it costs nothing
+   * to put it there** — which is not what this comment used to say. It claimed
+   * "a shortened lease lets a second session start while the first is still
+   * running". **That is false, and the arithmetic is two functions away:**
+   * `lastRunOf` turns a stuck occurrence into `{kind: "unresolved", at:
+   * reservedAt}`, and `due` then measures `everyMs` from that `at` exactly as it
+   * does for a settled run. So a stuck job's next launch is at
+   * `reservedAt + max(leaseMs, everyMs)`. **Shortening the lease below the
+   * cadence is a no-op on launch timing**; all it does is surface the `stuck`
+   * report sooner, which is the direction you want.
+   *
+   * The lease is therefore a knob about the **launcher**, not about the job: it
+   * catches a hung `gjd-remote` (see `dispatch.ts` on the open-stdin case). In
+   * the ordinary path it is never consulted at all, because the launcher exits
+   * within seconds and the occurrence settles then — the six-hour Claude session
+   * that follows is invisible to the ledger.
+   *
+   * **What actually decides whether two sessions coexist is `everyMs` against
+   * how long a session really runs**, and that knob is outside the fingerprint
+   * too, on GPT Sol's explicit instruction (S8-1). Hashing the lease would put a
+   * ceremony on a knob that guards nothing while the one carrying the real
+   * exposure stayed free — a guard describing coverage it does not provide,
+   * which is the shape gate 4's own NOT BUILT note exists to warn about.
+   *
+   * The real duplicate-session guard is already in the right place and is
+   * pinned: `FEEDBACK_SWEEP_PROMPT` tells the session to check `gjd-remote ls`
+   * for its own claim prefix before doing anything. `GET_READY_TO_DEPLOY_PROMPT`
+   * has no such self-check — if a seven-hour deploy sweep beside a fresh one
+   * matters, that is the one-line change worth making, and it correctly costs a
+   * re-pin.
+   *
+   * Settled by Fable on 2026-09-09, against my own instinct, and the arithmetic
+   * above was verified in `jobs.ts` rather than taken on trust.
    */
   readonly leaseMs: number;
   /**
@@ -166,9 +192,42 @@ export const LAUNCH_SEPARATION_MS = minutes(30);
  * short a cadence spends, too long a lease wedges a job for a day, too short a
  * lease permits overlap.
  */
-export const MINIMUM_EVERY_MS = minutes(15);
+
+/**
+ * **AN HOUR, AND THE FLOOR IS DOING THE WORK GATE 4 IS NOT DOING YET.**
+ *
+ * It was fifteen minutes for about an hour of this stage, which is what you pick
+ * when you are writing bounds rather than thinking about what they cost. Two
+ * jobs at fifteen minutes is 192 Claude sessions a day; the schedules Greg
+ * actually asked for are twelve. Sol's S8-2 is explicit that a per-component
+ * "locally sensible number" is not a budget, and gate 4's shared reservation is
+ * unbuilt — so until it exists this number is the only thing between a mistyped
+ * `hours(6)` and a day's subscription. An hour makes the worst case 48, which is
+ * still bad and is at least the same order as the intended twelve.
+ *
+ * **It is not a budget and must not be mistaken for one.** Raise it, or lower it
+ * once gate 4 exists and the real ceiling lives there.
+ */
+export const MINIMUM_EVERY_MS = hours(1);
 export const MAXIMUM_EVERY_MS = hours(24 * 7);
-export const MINIMUM_LEASE_MS = minutes(5);
+/**
+ * **THE FLOOR HERE GUARDS ALMOST NOTHING, AND THE CEILING IS THE ONE THAT MATTERS.**
+ *
+ * This comment used to say the floor guarded overlap. It does not: the effective
+ * floor on when a stuck job is released is `MINIMUM_EVERY_MS`, because `due`
+ * measures `everyMs` from the unresolved occurrence's `reservedAt` — see
+ * `ScheduleConfig.leaseMs` for the walk-through, and `jobs.ts` for the two lines
+ * that decide it. A lease shorter than the cadence changes no launch time.
+ *
+ * So this floor's only honest job is refusing `0` and typos. Anything from a few
+ * minutes upward is fine, and **lower is arguably better**, because a hung
+ * launcher then shows up in the `stuck` report sooner.
+ *
+ * **`MAXIMUM_LEASE_MS` is the bound worth caring about.** A 24-hour lease on a
+ * 3-hour job hides a hung `gjd-remote` for a day — the failure this lease exists
+ * to catch, defeated by its own configuration.
+ */
+export const MINIMUM_LEASE_MS = hours(1);
 export const MAXIMUM_LEASE_MS = hours(24);
 export const MAXIMUM_INITIAL_DELAY_MS = hours(24);
 
