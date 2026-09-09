@@ -52,7 +52,7 @@ import { NewSessionPanel } from "./NewSessionPanel";
 import { PauseLine } from "./PauseLine";
 import { MissingSession, SessionDetail } from "./SessionDetail";
 import { Handles, LaunchMode, QuestionCard, StatusPill, Uptime } from "./SessionParts";
-import { Explain } from "./Tooltip";
+import { Explain, type Tip } from "./Tooltip";
 import { COLUMN_MIN_PX, chooseColumns, choosePanes, spreadIntoColumns, useContainerWidth } from "./fit";
 import type { NewSessionApi } from "./new-session-client";
 import type { MessagesApi } from "./messages-client";
@@ -91,6 +91,32 @@ import {
  * session; that is the one place on the card where a tap does something else,
  * and it is the place a reader taps when they want to know what the word means.
  */
+/**
+ * **The two chips a card can wear, and what each one is claiming.**
+ *
+ * Exported so that tests/fleet-tooltip-copy.test.ts can assert the house rules
+ * over them without mounting a panel that takes fifteen props. Both were native
+ * `title=` attributes until 2026-09-09 — a sentence that does not exist on a
+ * phone — and each `how` is the half a reader could not have guessed from the
+ * word: for the Overseer badge, that a *missing* badge is not the same as there
+ * being no Overseer; for `generated`, who wrote the words.
+ */
+export const OVERSEER_BADGE_TIP: Tip = {
+  head: "Overseer",
+  what: "This session holds the Overseer claim — the box is meant to have exactly one, supervising all the others.",
+  /* The claim is a variable in that session's tmux environment
+     (overseer-claim.ts), so it dies with the tmux server; and a per-row badge
+     structurally cannot draw an absence. The masthead is where `none` and
+     `contested` are said out loud, which is why this points at it. */
+  how: "The claim lives in that session's tmux environment, so a reboot leaves nobody holding it. No badge anywhere on the list does not mean the fleet is unsupervised — the line under the tally in the masthead is the one that can say so.",
+};
+
+export const GENERATED_TITLE_TIP: Tip = {
+  head: "Generated title",
+  what: "A model's one-line guess at what this session is for, written from its opening messages — not a title the session gave itself.",
+  how: "Marked because a guess drawn like a fact is the thing this page is written against. A session that has named itself shows that name instead, unmarked, and one that has done neither falls back to its tmux handle in grey.",
+};
+
 /**
  * WHAT TO CALL A SESSION, IN ORDER OF WHO SAID IT.
  *
@@ -164,12 +190,17 @@ function SessionCard({
             this page does not know: it is not the Overseer, and a badge for it
             would read as one. */}
         {row.role.kind === "overseer" ? (
-          <span
-            className="tw:rounded tw:bg-ink/10 tw:px-1.5 tw:py-0.5 tw:text-[11px] tw:font-semibold tw:tracking-wide tw:uppercase tw:text-ink-soft"
-            title="This session holds the Overseer claim — the box has exactly one."
-          >
-            Overseer
-          </span>
+          /* **A card rather than the `title=` this carried until 2026-09-09.**
+             The browser's own tooltip shows something under a mouse and nothing
+             at all under a finger, on the page Tooltip.tsx's header says is
+             mostly read on a phone — so the badge explained itself only to the
+             reader least likely to need it. `Explain` puts the same sentence in
+             the accessible name, which is also where a screen reader finds it. */
+          <Explain tip={OVERSEER_BADGE_TIP} placement="bottom">
+            <span className="tw:rounded tw:bg-ink/10 tw:px-1.5 tw:py-0.5 tw:text-[11px] tw:font-semibold tw:tracking-wide tw:uppercase tw:text-ink-soft">
+              Overseer
+            </span>
+          </Explain>
         ) : null}
         <Uptime row={row} now={now} className="tw:ml-auto" />
       </div>
@@ -205,12 +236,13 @@ function SessionCard({
              column to miss. The same chip the Overseer badge uses, so the page
              has one way of saying "this is a tag about the row" — and it costs
              the title nothing, which was the point of un-greying it. */
-          <span
-            className="tw:ml-1.5 tw:align-middle tw:rounded tw:bg-ink/10 tw:px-1.5 tw:py-0.5 tw:text-[10px] tw:font-semibold tw:tracking-wide tw:text-ink-soft tw:uppercase"
-            title="A generated description of this session, not a title it gave itself."
-          >
-            generated
-          </span>
+          /* The card, for the same reason as the Overseer badge above: what
+             this chip means was a `title=` and therefore invisible on a phone. */
+          <Explain tip={GENERATED_TITLE_TIP} placement="bottom" className="tw:ml-1.5 tw:align-middle">
+            <span className="tw:rounded tw:bg-ink/10 tw:px-1.5 tw:py-0.5 tw:text-[10px] tw:font-semibold tw:tracking-wide tw:text-ink-soft tw:uppercase">
+              generated
+            </span>
+          </Explain>
         ) : null}
       </h3>
 
