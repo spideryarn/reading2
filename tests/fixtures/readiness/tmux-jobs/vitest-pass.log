@@ -1,0 +1,17 @@
+
+ RUN  v4.1.11 /home/greg/code/spideryarn2
+
+  [private lane] spideryarn_test_260908092810_deadbeef in 5.5s, leased as spideryarn-test-lease-2794477, priced reader/researcher
+ ✓  private-postgres  tests/store-parity.test.ts (108 tests) 12059ms
+       ✓ takes url and fetchedAt from stage 1, never from stage 2  1449ms
+       ✓ takes url and fetchedAt from stage 1, never from stage 2  383ms
+       ✓ takes url and fetchedAt from stage 1, never from stage 2  533ms
+…
+
+ Test Files  2 passed (2)
+      Tests  371 passed (371)
+   Start at  10:28:08
+   Duration  36.58s (transform 3.36s, setup 418ms, import 7.32s, tests 21.66s, environment 1ms)
+
+  [private lane] dropped spideryarn_test_260908092810_deadbeef
+EXIT=0

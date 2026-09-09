@@ -1,0 +1,9 @@
+cwd: /home/greg/code/spideryarn2  key length: 73 (value not printed)
+scheduler: OFF — OVERSEER_JOBS_ENABLED is not "1", so nothing will be dispatched however due it is. The definitions that would run: get-ready-to-deploy, feedback-sweep; rules: OVERSEER_RULES_ENABLED is not "1", so no deterministic rule will run. The rules that would: wedged-work (propose), launch-mode (propose)
+2026-09-08T22:47:34.007Z started (pid 1178932, instance 00000000-0000-4000-8000-000000000000) watching http://127.0.0.1:8787 — Resumed from a checkpoint written 2026-09-08T22:36:21.228Z, 0 events replayed past its cursor. Read 0 bytes of the log. Baseline: restored from the collection at 2026-09-08T22:36:00.555Z
+2026-09-08T22:47:34.091Z 8 events from the collection at 2026-09-08T22:47:14.086Z (via sse)
+2026-09-08T22:49:22.267Z 1 events from the collection at 2026-09-08T22:49:21.151Z (via sse)
+…
+2026-09-08T23:54:32.890Z 2 events from the collection at 2026-09-08T23:54:31.736Z (via sse)
+2026-09-08T23:55:38.903Z 2 events from the collection at 2026-09-08T23:55:37.742Z (via sse)
+2026-09-08T23:56:45.154Z 1 events from the collection at 2026-09-08T23:56:44.005Z (via sse)
