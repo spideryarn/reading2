@@ -1502,3 +1502,139 @@ export type BroadcastRecipientOutcome =
   | "blocked"
   /** The fan-out ran out of time before this row. Nothing was sent. */
   | "not-reached";
+
+/* ------------------------------------------------------------------ *
+ * The Deploys tab: what shipped to production, and how stale the record is.
+ * ------------------------------------------------------------------ */
+
+/**
+ * The three headings a deploy's reader-facing entries appear under.
+ *
+ * A type rather than the `as const` array, which is a runtime value and belongs
+ * in `deploys.ts` — this file may not hold one. docs/project/changelog.md
+ * § The file has the reasoning for three rather than four: there is no section
+ * for engineering, because a change a reader would notice is a headline change
+ * whatever it took to build.
+ */
+export type DeploySection = "headline" | "enhancement" | "fix";
+
+/** One thing a reader would notice, as the changelog pipeline wrote it. */
+export type DeployEntry = {
+  section: DeploySection;
+  title: string;
+  body: string;
+  /** Where in the app, in the pipeline's words. Null when it named nowhere. */
+  where: string | null;
+  /** Full 40-character shas. The panel renders them as links into the repository. */
+  commits: string[];
+};
+
+/**
+ * One production deploy, as `src/web/changelog-versions.ndjson` has it.
+ *
+ * **Declared here rather than in `deploys.ts` because both ends read it**, and
+ * this file's whole existence is the four fields that reached the browser and
+ * were dropped by a client holding its own unrelated copy of a type. The reader
+ * and the panel import this one.
+ */
+export type DeployVersion = {
+  /** The deploy's timestamp, UTC. It is also the version's id. */
+  version: string;
+  /** Which release this is, counted from the OLDEST line — the number `/changelog` shows. */
+  release: number;
+  deploymentId: string;
+  sha: string;
+  previousSha: string | null;
+  /**
+   * How many commits this deploy shipped, or null when the line does not say.
+   *
+   * **A NON-MERGE COUNT** — the changelog pipeline drops merge commits, because
+   * every one of them here is a `Merge remote-tracking branch 'origin/dev'`
+   * carrying no change of its own. Anything drawn beside it must be counted the
+   * same way or the two are not comparable. **Null is not zero**: a line that
+   * has forgotten what it shipped has not shipped nothing.
+   */
+  commitCount: number | null;
+  /** Nothing a reader would notice. The common case, and not a fault. */
+  invisible: boolean;
+  /** When the changelog job wrote this line — **not** when the deploy happened. */
+  generatedAt: string | null;
+  entries: DeployEntry[];
+};
+
+/**
+ * Production's tip, as the dashboard's checkout last heard it.
+ *
+ * `lastFetchAtMs` is the age of **the view, not of the commit**. The dashboard
+ * never fetches — see `tools/fleet/git-probe.ts` — so a ref nobody has updated
+ * in a week looks exactly like a week with no deploys unless the page can tell
+ * the two apart.
+ */
+export type MainRef =
+  | { kind: "ref"; sha: string; committedAt: string; lastFetchAtMs: number | null }
+  | { kind: "unavailable"; why: string };
+
+/**
+ * Whether the newest recorded deploy is behind production's tip.
+ *
+ * **Three arms, and the third is why this is not a boolean.** `not-ancestor`
+ * means a rollback or a deploy from somebody's working directory; `unknown`
+ * means we could not ask. Collapsed into one `false`, a git that would not run
+ * renders as a rollback that never happened.
+ */
+export type AncestryReading =
+  | { kind: "ancestor" }
+  | { kind: "not-ancestor" }
+  | { kind: "unknown"; why: string };
+
+/**
+ * How many commits separate the newest recorded deploy from production's tip.
+ *
+ * Non-merge, to match `DeployVersion.commitCount`. **`unknown` rather than a
+ * fallback of `0`**: every failure of this question has a plausible, reassuring
+ * wrong answer, and "0 commits behind" is the most reassuring possible way to
+ * say we have no idea.
+ */
+export type CountReading = { kind: "count"; commits: number } | { kind: "unknown"; why: string };
+
+/**
+ * `GET /api/deploys`.
+ *
+ * **`deploys` with an empty `versions` and `unreadable` are different claims** —
+ * *we read the record and it is empty* against *we could not read it* — and the
+ * page must never draw them the same way. Same discipline as the health chart's
+ * blank day, and the same reason: the collapsed version is a confident sentence
+ * about production that nobody checked.
+ *
+ * On `commitsSince`, read `routes-deploys.ts` before writing a sentence about
+ * the number. **It is not undeployed work.** Everything on `main` has shipped or
+ * is shipping, since `main` is written only by `npm run deploy`; the number
+ * lumps together deploys the changelog job has not recorded yet and a tip that
+ * has not been deployed, and nothing on this box can separate those without a
+ * Vercel token.
+ */
+export type DeploysPayload =
+  | {
+      schema: 1;
+      kind: "deploys";
+      /** Newest first, at most `limit` of them. */
+      versions: DeployVersion[];
+      /** How many the record holds altogether, so "show more" knows there is more. */
+      total: number;
+      /** What was served, after clamping — so the page can say if it got less. */
+      limit: number;
+      /** A sentence per line of the record that would not parse. Never merely counted. */
+      unreadable: string[];
+      /** Non-blank lines in the record, parsed or not. The denominator. */
+      recordLines: number;
+      /** When the changelog job last wrote a line. **Not** when anything deployed. */
+      lastGeneratedAt: string | null;
+      /** The newest deploy the record knows about, or null for an empty record. */
+      newestRecordedSha: string | null;
+      main: MainRef;
+      ancestry: AncestryReading;
+      commitsSince: CountReading;
+      /** The server's clock, so the page can age the record against it. */
+      servedAtMs: number;
+    }
+  | { schema: 1; kind: "unreadable"; why: string };
