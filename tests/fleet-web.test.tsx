@@ -4341,7 +4341,7 @@ describe("starting a session", () => {
   it("sends the prompt and nothing else — in particular no name, so Claude titles it", async () => {
     const starting = {
       id: "L1",
-      state: "starting",
+      progress: { state: "starting", notification: { kind: "not-attempted" } },
       name: null,
       dir: "/home/greg/code/spideryarn2",
       promptBytes: 12,
@@ -4427,7 +4427,7 @@ describe("starting a session", () => {
   it("says 'check the list and kill it' for a failure that may have started something", async () => {
     const record = parseLaunch({
       id: "L2",
-      state: "failed",
+      progress: { state: "failed", notification: { kind: "not-applicable" } },
       name: null,
       dir: "/home/greg/code/spideryarn2",
       promptBytes: 9,
@@ -4491,7 +4491,7 @@ describe("starting a session", () => {
       vi.setSystemTime(new Date());
       const record = parseLaunch({
         id: "L5",
-        state: "starting",
+        progress: { state: "starting", notification: { kind: "not-attempted" } },
         name: null,
         dir: "/home/greg/code/spideryarn2",
         promptBytes: 7,
@@ -4575,7 +4575,7 @@ describe("starting a session", () => {
       vi.setSystemTime(new Date());
       const record = parseLaunch({
         id: "L6",
-        state: "starting",
+        progress: { state: "starting", notification: { kind: "not-attempted" } },
         name: null,
         dir: "/home/greg/code/spideryarn2",
         promptBytes: 7,
@@ -4653,7 +4653,7 @@ describe("starting a session", () => {
       vi.setSystemTime(new Date());
       const record = parseLaunch({
         id: "L7",
-        state: "starting",
+        progress: { state: "starting", notification: { kind: "not-attempted" } },
         name: null,
         dir: "/home/greg/code/spideryarn2",
         promptBytes: 7,
@@ -4723,7 +4723,7 @@ describe("starting a session", () => {
       vi.setSystemTime(new Date());
       const record = parseLaunch({
         id: "L8",
-        state: "starting",
+        progress: { state: "starting", notification: { kind: "not-attempted" } },
         name: null,
         dir: "/home/greg/code/spideryarn2",
         promptBytes: 7,
@@ -4792,7 +4792,7 @@ describe("starting a session", () => {
       vi.setSystemTime(new Date());
       const record = parseLaunch({
         id: "L10",
-        state: "starting",
+        progress: { state: "starting", notification: { kind: "not-attempted" } },
         name: null,
         dir: "/home/greg/code/spideryarn2",
         promptBytes: 7,
@@ -4855,7 +4855,7 @@ describe("starting a session", () => {
       vi.setSystemTime(new Date());
       const starting = parseLaunch({
         id: "L11",
-        state: "starting",
+        progress: { state: "starting", notification: { kind: "not-attempted" } },
         name: null,
         dir: "/home/greg/code/spideryarn2",
         promptBytes: 7,
@@ -4867,7 +4867,7 @@ describe("starting a session", () => {
       });
       const finished = parseLaunch({
         id: "L11",
-        state: "started",
+        progress: { state: "started", notification: { kind: "pending" } },
         name: "late-arrival",
         dir: "/home/greg/code/spideryarn2",
         promptBytes: 7,
@@ -4936,7 +4936,7 @@ describe("starting a session", () => {
       vi.setSystemTime(new Date());
       const record = parseLaunch({
         id: "L9",
-        state: "starting",
+        progress: { state: "starting", notification: { kind: "not-attempted" } },
         name: null,
         dir: "/home/greg/code/spideryarn2",
         promptBytes: 7,
@@ -4991,13 +4991,35 @@ describe("starting a session", () => {
   });
 
   it("refuses a launch state it has never heard of rather than rounding it to started", () => {
-    expect(parseLaunch({ id: "L3", state: "reticulating" })).toBeNull();
-    expect(parseLaunch({ id: "L3", state: "started" })?.state).toBe("started");
+    expect(parseLaunch({ id: "L3", progress: { state: "reticulating" } })).toBeNull();
+    expect(
+      parseLaunch({ id: "L3", progress: { state: "started", notification: { kind: "pending" } } })?.progress.state,
+    ).toBe("started");
+  });
+
+  /**
+   * The launch is the news; the notification is a footnote about a message we
+   * sent. So an unreadable notification must not sink the record — losing the
+   * fact that a session started because we could not parse what became of a
+   * line about it would be the tail wagging. It becomes `cannot-tell`, which is
+   * a true statement, and the launch still renders.
+   */
+  it("keeps the launch when it cannot read what became of the notification", () => {
+    const rec = parseLaunch({ id: "L20", progress: { state: "started", notification: { kind: "reticulating" } } });
+    expect(rec?.progress.state).toBe("started");
+    expect(rec?.progress.notification.kind).toBe("cannot-tell");
+  });
+
+  /** The whole point of the union: a started launch always carries some state. */
+  it("never leaves a started launch with no notification state at all", () => {
+    const rec = parseLaunch({ id: "L21", progress: { state: "started" } });
+    expect(rec?.progress.state).toBe("started");
+    expect(rec?.progress.notification.kind).toBe("cannot-tell");
   });
 
   it("reads maybeStarted as false only when the server actually said so", () => {
-    expect(parseLaunch({ id: "L4", state: "failed" })?.maybeStarted).toBe(false);
-    expect(parseLaunch({ id: "L4", state: "failed", maybeStarted: true })?.maybeStarted).toBe(true);
+    expect(parseLaunch({ id: "L4", progress: { state: "failed" } })?.maybeStarted).toBe(false);
+    expect(parseLaunch({ id: "L4", progress: { state: "failed" }, maybeStarted: true })?.maybeStarted).toBe(true);
   });
 });
 
@@ -8637,7 +8659,11 @@ describe("resolution and startedDir — what new-session actually did", () => {
   }
 
   it("reads both, and refuses to guess `repo` for a server that did not say", () => {
-    const base = { id: "L9", state: "started", dir: "/home/greg/code/spideryarn2" };
+    const base = {
+      id: "L9",
+      progress: { state: "started", notification: { kind: "pending" } },
+      dir: "/home/greg/code/spideryarn2",
+    };
     expect(parseLaunch({ ...base, resolution: "repo", startedDir: "/home/greg/code/other" })).toMatchObject({
       resolution: "repo",
       startedDir: "/home/greg/code/other",
@@ -8653,7 +8679,7 @@ describe("resolution and startedDir — what new-session actually did", () => {
   it("draws the directory the box CHOSE when it is not the one that was asked for", async () => {
     const record = parseLaunch({
       id: "L10",
-      state: "started",
+      progress: { state: "started", notification: { kind: "pending" } },
       name: "w2-something",
       dir: "/home/greg/code/spideryarn2/.claude/worktrees/w2",
       resolution: "repo",
@@ -8692,7 +8718,7 @@ describe("resolution and startedDir — what new-session actually did", () => {
   it("says out loud when a launch went in through the -d escape hatch", async () => {
     const record = parseLaunch({
       id: "L11",
-      state: "started",
+      progress: { state: "started", notification: { kind: "pending" } },
       name: "loose",
       dir: "/tmp/somewhere",
       resolution: "dir",
@@ -8745,7 +8771,7 @@ describe("resolution and startedDir — what new-session actually did", () => {
   async function renderDashD(over: Record<string, unknown>): Promise<string> {
     const record = parseLaunch({
       id: "L12",
-      state: "starting",
+      progress: { state: "starting", notification: { kind: "not-attempted" } },
       name: "loose",
       dir: "/tmp/somewhere",
       resolution: "dir",
@@ -8788,7 +8814,11 @@ describe("resolution and startedDir — what new-session actually did", () => {
   it("does not say a -d launch STARTED after it failed", async () => {
     /* The one that cost the most to read: "Failed. Nothing was started." with
        "Started with -d" directly beneath it, on one card. */
-    const text = await renderDashD({ state: "failed", error: "gjd-remote refused", finishedAt: "" });
+    const text = await renderDashD({
+      progress: { state: "failed", notification: { kind: "not-applicable" } },
+      error: "gjd-remote refused",
+      finishedAt: "",
+    });
     expect(text).toContain("Failed. Nothing was started.");
     expect(text).toContain("outside the repo's setup lock");
     expect(text).not.toContain("Started with");
