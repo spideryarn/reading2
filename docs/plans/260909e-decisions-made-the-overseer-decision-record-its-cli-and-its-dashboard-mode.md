@@ -71,6 +71,28 @@ actually consumed (§ Stage 1). All four are in Stage 1 because they were named.
 is — `decisions.jsonl`, `decisions.lock`, `decisions.created` — written by a CLI and by nothing else.
 Nothing here touches the daemon, `store.ts`, or `idea-queue.ts`.
 
+## The boundary with `questions-mode`
+
+Session `questions-mode` (queue item `qi-25bs5ysg`) builds the surface for what still needs Greg.
+This was proposed here on 2026-09-09 while that session had not yet started, carried into its brief by
+the Overseer, and **accepted by it as written** when it began.
+
+**The line: theirs is what is still blocking; mine is what no longer is.** A question stops work
+until Greg answers. A decision unblocked the work at the cost of a review he is owed. The two
+surfaces answer different questions of his — *"is anything waiting on me?"* and *"what was done in
+my name?"* — which is why they are two tabs rather than one list with a filter.
+
+**The awkward case is an *assumption pending Greg*, and it belongs here.** Gate 2's product default
+is a decision that was taken and that he may veto; the work carried on, so nothing is blocked on him.
+It is a record in this file with `reviewed: false`, and the not-yet-reviewed count is what makes it
+visible. `questions-mode` agreed, and will link to a row here rather than duplicate it if one of its
+items ever wants to point at a decision.
+
+**Neither tab may quietly become the other.** The failure to watch for is a question being recorded
+as a decision to get it off the blocking list — which is the same act as calming the count, and is
+what gate 1 is about. If a decision turns out to have been a question, the honest repair is a record
+here saying so, superseded when Greg answers.
+
 ## The five ways the count could lie
 
 Sol's reviews found that "only Greg may review" is one rule guarding one of five doors. All five are
