@@ -26,6 +26,7 @@
  * in a test that has none.
  */
 import type { DeploysPayload, DeployVersion } from "../../wire";
+import { zonedLine } from "../../zones";
 
 export const DEPLOYS_URL = "api/deploys";
 
@@ -186,16 +187,17 @@ export const httpDeploysApi: DeploysApi = makeDeploysApi();
  * 23:40 UTC is 02:40 Athens *the next day*, and printed bare beside the UTC time
  * it reads as three hours in the past.
  *
- * Until that module is on `dev` this spells the UTC time only, which is true and
- * not yet useful to somebody in Athens. **When it lands, this function's body
- * becomes `return zonedLine(iso) ?? …` and nothing else in this tab changes** —
- * which is the whole reason it is a function here rather than four lines inside
- * the panel's JSX.
+ * **Landed 2026-09-09** (`af1ec002`), and the swap was one line, which is the
+ * whole reason this was a function rather than four lines inside the panel's
+ * JSX. It returns `null` rather than throwing on anything unreadable, and the
+ * panel already draws `null` as "at a time this page cannot read".
  */
 export function deployWhen(iso: string): string | null {
-  const at = Date.parse(iso);
-  if (Number.isNaN(at)) return null;
-  return `${iso.replace("T", " ").replace("Z", "")} UTC`;
+  /* No `zones` argument, so this gets `DISPLAY_ZONES` — UTC, London, Athens.
+     **Pass a set rather than editing that constant** if a caller ever wants a
+     different one: it is Greg's "I'm bouncing between London/Athens" and it is
+     read by the usage card and `scripts/overseer.ts` too. zones.ts says so. */
+  return zonedLine(iso);
 }
 
 /**
