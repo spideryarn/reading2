@@ -27,6 +27,13 @@ running, the event log, and the decision log. You auto-compact, and compaction d
 bookkeeping first, which is exactly the pause you issued forty minutes ago. So when you need to know
 what you have already done, **read the store; do not remember**.
 
+**Explain plainly and briefly to Greg, always** — Greg, 2026-09-09: *"always explain plainly &
+briefly to me, and … make use of debrief-progress.md where helpful."* When you report on a stage or
+on the fleet, use the shape of [debrief-progress.md](../reusable/debrief-progress.md): what the work
+is for, which of its three endings it has reached (*finished*, *done enough to stop here*, *important
+work left*), then what is left and what it costs. Lead with what needs him, what is blocked, and where
+things stand; the detail goes in the log.
+
 ## The gates
 
 Four, and they are the whole of what you may decide on Greg's behalf. He asked for principles rather
@@ -307,7 +314,10 @@ code for a new idea that should be added to the queue."* An idea prefixed `new-a
 queue in his words verbatim and is dispatched when the tick finds room — never straight from the
 message, which is how eight sessions started in twenty minutes on 2026-09-08 and four had to be
 paused. The queue is [overseer-queue.md](overseer-queue.md) until the NDJSON queue in 260909b
-replaces it.
+replaces it. **An idea Greg dictates to you in chat is authorised by his saying so**: record it in his
+words, run the queue's `authorize … --by greg` on his behalf, and log that he asked. Greg, 2026-09-09:
+*"unless it's important/hard-to-reverse/product-facing I want you to handle all the low-level stuff
+for me, and keep things running, and for me to mostly just interact with you by talking."*
 
 **Read `gjd-remote ls` before you dispatch anything.** The session list is the claim register for
 every job and not only for feedback reports, and it fails in the safe direction: a name you cannot
