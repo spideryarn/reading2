@@ -146,7 +146,13 @@ function provenanceOf(reading: ReadingView, devSha: string | null): "dev" | "oth
   /* Only a log reconstruction is `nosha`. A WRAPPER run whose tree we cannot
      read is `other` — it is a real run about something, and labelling it
      "reconstructed from a log" was simply false. */
-  if (reading.source !== "wrapper") return "nosha";
+  /* **`nosha` is for a log reconstruction and nothing else.** Adding the
+     client's third `source` arm re-opened the mislabelling it was added to
+     close: `!== "wrapper"` swept `unknown` in here too, and the tooltip would
+     have called a run from some future source "reconstructed from a log", which
+     is a specific claim about where it came from and would be a guess. */
+  if (reading.source === "tmux-log") return "nosha";
+  if (reading.source !== "wrapper") return "other";
   if (reading.scope !== "full") return "other";
   if (devSha === null) return "other";
   const { treeAtStart, treeAtEnd } = reading;

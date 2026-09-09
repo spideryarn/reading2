@@ -161,6 +161,14 @@ describe("which marks are drawn as counting", () => {
     expect(provenance(reading({ source: "tmux-log" }))).toBe("nosha");
     expect(provenance(reading({ treeAtStart: { kind: "unknown", why: "git failed" } }))).toBe("other");
   });
+
+  it("does not call a run from an UNRECOGNISED source a log reconstruction either", () => {
+    /* Adding the client's third `source` arm re-opened the very mislabelling it
+       was added to close: `!== "wrapper"` swept `unknown` into `nosha`, and the
+       tooltip would then make a specific claim about where a run came from that
+       is really a guess. Found by re-reading the fix, not by the fix's own test. */
+    expect(provenance(reading({ source: "unknown" }))).toBe("other");
+  });
 });
 
 describe("two runs that want the same pixel", () => {
