@@ -62,7 +62,7 @@ settled. Each one changed the plan.
 3. **`cachedUsageUtilization` is one slot per config dir, not a map per account.** In
    `<config dir>/.claude.json` there is exactly one object: `{fetchedAtMs, accountUuid, utilization}`.
    It carries the uuid of whichever account last wrote it. There is no per-account history in there
-   at all. **This is the finding that shapes deliverable 4** — see [Stage 4](#stage-4-usage-read-per-account).
+   at all. **This is the finding that shapes deliverable 4** — see [Stage 4](#stage-3-usage-read-per-account).
 
 4. **Nothing free refreshes that cache.** `claude auth status` leaves `fetchedAtMs` untouched; the
    reading on the box right now is about five hours stale. Only a real session refreshes it. So an
@@ -105,7 +105,7 @@ transcript would land somewhere the fleet does not look, and its MCP servers wou
 re-authorising. Under (B), all of that is untouched and only the bill moves.
 
 The price of (B) is measurement 3 — the usage cache becomes a shared slot — and
-[Stage 4](#stage-4-usage-read-per-account) is how we pay it.
+[Stage 4](#stage-3-usage-read-per-account) is how we pay it.
 
 **Config dirs still appear, in one narrow role.** Per the doc, each account is signed in *twice on
 purpose*: an `auth login` into its own config dir, which is what lets us read that account's quota
@@ -868,7 +868,7 @@ Greg's separate low-priority tidy (qi-3sr3jht6: *X% used* only, parallel Claude/
 readings collapsed) is **folded in only where it falls out naturally** — the per-account section
 layout is the same work — and not widened into.
 
-**Superseded in part by [Stage 5](#stage-5--a-web-interface-that-drives-the-setup).** Greg asked for
+**Superseded in part by [Stage 5](#stage-5-a-web-interface-that-drives-the-setup).** Greg asked for
 the sub-mode to *drive* the setup rather than print commands, so the read-only version above is now
 the fallback if the pty flow proves brittle — not the target. The per-account section layout is
 unchanged and still belongs here.
@@ -1041,7 +1041,7 @@ not yet registered is harmless**: nothing will dispatch onto it until it is in t
 > fiddly to add the new accounts, and I think I might have missed some steps. Can you write a CLI
 > script that I can call, that asks me questions, and then does everything for me."* So this is now
 > **the wizard's specification**, not his instructions —
-> [Stage 1](#stage-1--the-wizard-greg-runs-and-the-account-registry) is what he runs.
+> [Stage 1](#stage-1-the-wizard-greg-runs-and-the-account-registry) is what he runs.
 >
 > **Two things changed since it was written and both would mislead:** steps 4 and 5 minted a
 > `setup-token`, which the config-dir model does not use at all and which Greg should *not* run; and
