@@ -30,7 +30,12 @@ import { isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { attentionRunner, DEFAULT_MAX_CALLS, runAttentionCommand } from "../tools/overseer/attention-cli.js";
-import { runOverseer, TICK_MS, type DaemonOptions } from "../tools/overseer/daemon.js";
+import {
+  runOverseer,
+  TICK_MS,
+  USAGE_INTERVAL_MS,
+  type DaemonOptions,
+} from "../tools/overseer/daemon.js";
 import { gjdRemoteDispatch, jobsEnabled, JOBS_ENABLED_VAR } from "../tools/overseer/dispatch.js";
 import { describeRuleJobs, ruleJobs } from "../tools/overseer/rule-jobs.js";
 import { RULES_ENABLED_VAR, ruleWork, rulesEnabled } from "../tools/overseer/rule-work.js";
@@ -45,6 +50,7 @@ import { type OverseerClaim, claimFromSnapshot, describeClaim } from "../tools/f
    allowed direction of the seam — and two renderings of one measurement is how
    a page and a terminal come to disagree about how many things happened. */
 import { groupUsageIncidents } from "../tools/fleet/usage-feed.js";
+import { makeUsageRetention } from "../tools/fleet/usage-history-wiring.js";
 import { zonedLine } from "../tools/fleet/zones.js";
 import type { OverseerEvent } from "../tools/overseer/diff.js";
 import { reconcileArming } from "../tools/overseer/arming.js";
@@ -1130,6 +1136,21 @@ async function main(argv: readonly string[]): Promise<number> {
       const usageOff = argv.includes("--no-usage");
       if (usageOff) console.log("usage: off (--no-usage)");
 
+      /*
+       * THE USAGE HISTORY, composed HERE because this file is the only one
+       * allowed to join the two halves: the store and the mapping are
+       * `tools/fleet/`'s, the pass that feeds them is `tools/overseer/`'s, and
+       * an import either way would breach the seam that
+       * `tests/fleet-attention.test.ts` enforces.
+       *
+       * Why it opens lazily, and why that is the lock argument rather than a
+       * convenience, is in `tools/fleet/usage-history-wiring.ts`'s header.
+       */
+      const usageRetention = makeUsageRetention(root, {
+        nextDueMs: USAGE_INTERVAL_MS,
+        log: (line) => console.log(line),
+      });
+
       // THE ARMING INSTANT, RECONCILED BEFORE THE DAEMON STARTS.
       //
       // Here rather than inside `daemon.ts` because it is a decision about this
@@ -1159,7 +1180,7 @@ async function main(argv: readonly string[]): Promise<number> {
         // apart, and absent is what "take the default" means.
         ...(tickMs === undefined ? {} : { tickMs: Number(tickMs) }),
         ...(attentionRun === null ? {} : { attention: { run: attentionRun } }),
-        ...(usageOff ? {} : { usage: { run: () => collectUsage() } }),
+        ...(usageOff ? {} : { usage: { run: () => collectUsage(), onPass: usageRetention.onPass } }),
         // ABSENT rather than present-and-empty when disarmed: an absent `jobs`
         // is what makes `daemon.ts` build no scheduler timer at all, and it is
         // also what it reads to decide the checkpoint says OFF.
@@ -1169,6 +1190,11 @@ async function main(argv: readonly string[]): Promise<number> {
         ...(wiring.jobs === undefined ? {} : { jobs: wiring.jobs }),
         schedulerDetail: wiring.detail,
       });
+      /* The history fd, released when the daemon stops. `runOverseer` has
+         already awaited any pass in flight by this point — it does that so a
+         shutdown cannot leave two writers on the store — so there is no append
+         racing this close. */
+      usageRetention.close();
       switch (outcome.kind) {
         case "refused":
           console.error(`✗ ${describeRefusal(outcome.refusal)}`);
