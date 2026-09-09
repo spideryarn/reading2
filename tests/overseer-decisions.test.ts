@@ -453,6 +453,31 @@ describe("the fold protects the review state", () => {
     expect(view.problems.map((problem) => problem.kind)).toEqual(["illegal-transition", "illegal-transition"]);
   });
 
+  test("a second review is a problem, not a second touch — it would inflate the seven-day count", () => {
+    const first = decided();
+    const one: DecisionEvent = { ...eventEnvelope("greg", "2026-09-09T10:00:00.000Z"), kind: "reviewed", id: A, note: "read it" };
+    const two: DecisionEvent = { ...eventEnvelope("greg", "2026-09-09T11:00:00.000Z"), kind: "reviewed", id: A, note: "again" };
+    const view = foldDecisions([first, one, two]);
+    /* The first review stands: its note and its instant are what happened, and a
+       later duplicate must not move either. `trailingSevenDays.reviews` counts
+       reviewed TOUCHES, so a second touch here is a review that never occurred. */
+    expect(only(view)).toMatchObject({ reviewed: true, reviewNote: "read it", reviewedAt: "2026-09-09T10:00:00.000Z" });
+    expect(only(view).touches.map((touch) => touch.kind)).toEqual(["decided", "reviewed"]);
+    expect(view.problems.map((problem) => problem.kind)).toEqual(["illegal-transition"]);
+  });
+
+  test("a command retry is the SAME intent written later, so the envelope clock is not part of it", () => {
+    /* Without this the retry arm is unreachable: every retry is written at a
+       different instant, so including `at` makes each one a conflict and the
+       idempotency key buys nothing it was added for. `decidedAt` IS part of the
+       intent and stays in — see the conflict test below. */
+    const one = decided(A, { commandId: "cmd-1", at: "2026-09-09T10:00:00.000Z", eventId: "11111111-1111-4111-8111-111111111111" });
+    const two = decided(A, { commandId: "cmd-1", at: "2026-09-09T10:00:05.000Z", eventId: "22222222-2222-4222-8222-222222222222" });
+    const view = foldDecisions([one, two]);
+    expect(view.records).toHaveLength(1);
+    expect(view.problems).toEqual([]);
+  });
+
   test("seed problems are retained without making the fold throw", () => {
     const seed = [{ kind: "unreadable-line", why: "line 1 is bad", eventId: null }] as const;
     expect(foldDecisions([decided()], seed).problems).toEqual(seed);

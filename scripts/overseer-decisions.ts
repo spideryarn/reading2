@@ -394,6 +394,34 @@ function existingSeed(root: string): Extract<DecisionEvent, { kind: "decided" }>
   return null;
 }
 
+/**
+ * The decision already written under this command id, or null.
+ *
+ * Reads the raw lines rather than the folded view on purpose: a retry must be
+ * recognised even when the record is one the fold rejected, because writing a
+ * SECOND copy of a decision behind an existing problem is the worst available
+ * outcome. An unparseable line simply is not a match.
+ */
+function existingDecisionFor(commandId: string, root: string): string | null {
+  let text: string;
+  try {
+    text = readFileSync(path.join(root, DECISIONS_FILE), "utf8");
+  } catch (cause) {
+    if ((cause as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw cause;
+  }
+  for (const line of text.split("\n")) {
+    if (line.trim() === "") continue;
+    const event = parseEvent(line);
+    if (event === null || event.commandId !== commandId) continue;
+    if (event.kind !== "decided") {
+      throw new Error(`command id ${commandId} is already used by a ${event.kind} event`);
+    }
+    return event.id;
+  }
+  return null;
+}
+
 function seedEvent(root: string): Extract<DecisionEvent, { kind: "decided" }> {
   const existing = existingSeed(root);
   if (existing !== null) {
@@ -488,6 +516,27 @@ export function runParsed(
     case "add": {
       const text = parsed.file === "-" ? readStdin() : readFileSync(path.resolve(parsed.file), "utf8");
       const input = parseAddInput(text);
+      /* **READ BEFORE WRITING, BECAUSE DETERMINISM CANNOT DELIVER THE RETRY.**
+         A command id promises that running the same command twice writes once.
+         The fold keeps that promise by comparing payloads — but everything this
+         command generates moves between runs: a freshly minted decision id, a
+         later `decidedAt`, and session executions re-resolved against a register
+         that has changed. So an honest retry would read as a conflict, and the
+         arm the key exists for would be unreachable.
+
+         The check is therefore here, where the intent is known, and the fold's
+         comparison stays as the safety net for writers this file knows nothing
+         about. The gap between reading and appending is not a hole: a racing
+         writer loses the version check or trips the conflict, which fails
+         safely rather than duplicating a decision. */
+      if (parsed.commandId !== null) {
+        const already = existingDecisionFor(parsed.commandId, root);
+        if (already !== null) {
+          console.log(already);
+          console.log(`already recorded under command id ${parsed.commandId}; nothing was written`);
+          return 0;
+        }
+      }
       const bearsOn: BearsOn = { sessions: resolveSessions(input.sessionNames, env), plan: input.plan };
       const eventEnvelope = envelope(parsed.by, { commandId: parsed.commandId });
       const event: DecisionEvent = {

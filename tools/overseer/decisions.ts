@@ -251,10 +251,14 @@ function describeTouch(event: DecisionEvent): string {
 
 /** Stable schema order makes "same bytes apart from eventId" independent of object insertion order. */
 function commandPayload(event: DecisionEvent): string {
+  /* **`at` IS DELIBERATELY ABSENT.** A retry is the same intent written LATER, so
+     folding the envelope clock into this comparison makes every retry a conflict
+     and leaves the retry arm unreachable — the idempotency key would then buy
+     nothing it was added for. What the decision was ABOUT is `decidedAt`, which
+     is in the per-kind fields below and does separate two different intents. */
   const common = {
     schema: event.schema,
     commandId: event.commandId,
-    at: event.at,
     by: event.by,
     kind: event.kind,
     id: event.id,
@@ -448,6 +452,18 @@ export function foldDecisions(
     }
 
     if (event.kind === "reviewed") {
+      /* **A SECOND REVIEW IS A PROBLEM, NOT AN UPDATE.** Overwriting would move
+         the review's instant and note onto a later duplicate, and — because
+         `trailingSevenDays.reviews` counts reviewed TOUCHES — would report a
+         review that never happened. The first one is what Greg actually did. */
+      if (record.reviewed) {
+        problem(
+          "illegal-transition",
+          `${event.id} was already reviewed at ${record.reviewedAt ?? "an unrecorded time"}; the later review was ignored`,
+          event.eventId,
+        );
+        continue;
+      }
       record.reviewed = true;
       record.reviewedAt = event.at;
       record.reviewNote = event.note;

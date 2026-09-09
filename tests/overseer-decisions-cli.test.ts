@@ -176,6 +176,29 @@ describe("Commander grammar", () => {
 });
 
 describe("add and register identity", () => {
+  test("re-running add with the same command id is a no-op naming the existing decision", () => {
+    /* **THE RETRY THE COMMAND ID EXISTS FOR**: the append succeeded and the
+       answer was lost, so the Overseer runs the same command again.
+       Determinism cannot deliver this — a second run mints a fresh decision id,
+       stamps a later `decidedAt`, and re-resolves every session against a
+       register that has moved — so the CLI reads before it writes. The fold's
+       payload comparison stays as the safety net for OTHER writers. */
+    const root = tempRoot();
+    const file = join(root, "decision.json");
+    writeFileSync(file, JSON.stringify(payload(["not-in-register"])));
+
+    const first = run(root, ["add", "--file", file, "--by", "overseer", "--command-id", "retry-me"]);
+    const second = run(root, ["add", "--file", file, "--by", "overseer", "--command-id", "retry-me"]);
+
+    expect(first.status).toBe(0);
+    expect(second.status).toBe(0);
+    expect(second.stderr).toBe("");
+    expect(records(root)).toHaveLength(1);
+    const id = /dec-[23456789abcdefghjkmnpqrstvwxyz]{8}/.exec(first.stdout)?.[0];
+    expect(id).toBeDefined();
+    expect(second.stdout).toContain(id as string);
+  });
+
   test("add writes a well-formed decided event and prints its id and version", () => {
     const root = tempRoot();
     const file = join(root, "decision.json");
