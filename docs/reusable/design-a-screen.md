@@ -294,6 +294,21 @@ you start.
       the scale — consider whether it is expressible as a test or a lint rule. Not everything is
       worth one; the ones guarding an *absence* usually are, because absences are what nobody
       notices breaking.
+- [ ] **Then look at the picture anyway, yourself.** A suite that asserts *which words appear*
+      cannot see *how a screen reads*, and that gap is where the interesting defects live. Two
+      failures it will never catch:
+      - **An honest state drawn as the wrong honest state.** *Nobody measured this*, *this cannot be
+        shown to be yours* and *the source broke* are all legitimate, so every arm passes every
+        assertion — and picking the loudest one paints a page of red alarms over what is merely a
+        gap. Only a person looking at the rendering sees that the screen is shouting.
+      - **Saying the same thing twice.** A caption you wrote in front of a message the system
+        already produced reads as two facts in a diff and as one long paragraph on screen. It is
+        the most common way a redesign to remove a wall of text adds to it.
+
+      So the last step is not a command. Open the screenshot, ask the question from Half One, and
+      see whether the answer is where you put it. **If you delegated the screenshots, look at them
+      yourself** — a report saying "nothing is broken" is an answer to a different question, and an
+      agent measuring the DOM cannot see what is `sr-only`, what is off-screen, or what is loud.
 
 ## Source quality, briefly
 

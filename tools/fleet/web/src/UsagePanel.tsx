@@ -51,10 +51,10 @@
 import type { ReactNode } from "react";
 
 import { zonedLine } from "../../zones.js";
-import { Explain } from "./Tooltip";
+import { Explain, type Tip } from "./Tooltip";
 import type { ClockSkew, ScanCoverage, UsageIncident, UsageSummary, UsageView, UsageWindowCard } from "./types";
 import { shiftMsToBrowserClock } from "./types";
-import { Card, cx, Pill } from "./ui";
+import { Card, cx, Pill, StatCard, toneClasses, type StatValue } from "./ui";
 import { formatDuration, type Tone } from "./view";
 
 /**
@@ -115,6 +115,54 @@ function untilReset(at: string, asOf: number, skew: ClockSkew): { kind: "ahead";
  */
 function whenLine(at: string): string {
   return zonedLine(at) ?? "at a time this page cannot read";
+}
+
+/**
+ * **The cards this tab's stats carry, exported so a guard can reach them.**
+ *
+ * `tests/fleet-tooltip-copy.test.ts` only sees tips it can import — a stated
+ * limit rather than an oversight — so a tip written inline in a component gets
+ * none of the three house rules and does not count towards the floor. Session
+ * `dashboard-tooltips` pointed this out on 2026-09-09, and it is cheap to fix:
+ * a named map is the difference between the guard covering this rewrite and
+ * silently not.
+ */
+export const USAGE_TIPS: Record<string, Tip> = {
+  dueBack: {
+    head: "When the limit lifts",
+    what: "The moment work can start again, from the verdict's own attributed limit.",
+    how: "Where several windows are in force it names whichever frees up LAST, not the first to clear — a reader acting on the earliest would be rejected again immediately. `UsageVerdict.activeLimit` decides it, rather than this card reading the incidents for itself.",
+  },
+  account: {
+    head: "Whose headroom this is",
+    what: "The account the last usage pass read, from `claude auth status` and ~/.claude.json.",
+    how: "Recorded, never rotated: swapping between Max subscriptions is Greg's `/login`, not this page's. It matters because a cached utilisation can belong to the PREVIOUS account after a swap — the reading refuses to use one that does.",
+  },
+  reading: {
+    head: "When this reading was taken",
+    what: "The usage pass's own clock, not the moment the Overseer wrote the checkpoint carrying it.",
+    how: "A full transcript scan runs 30-45 seconds over ~2.9 GB and does not always finish, and an earlier report is deliberately republished when a fresh pass falls over — because a rejection whose window resets on Friday is still in force. The two clocks come apart by hours routinely, and only this one sizes the age of the headroom above.",
+  },
+  cached: {
+    head: "A hint, not ground truth",
+    what: "~/.claude.json's cache of the utilisation headers returned on the last request.",
+    how: "Measured on 2026-09-08: a file 48 minutes old still claimed 70% about a window that had reset 27 minutes earlier. So `resets_at` is a validity check rather than decoration, and a window past its reset is drawn with no percentage at all — a void number that reaches a renderer eventually gets rendered.",
+  },
+};
+
+/**
+ * One window's card. Computed rather than a map entry, because half of it is
+ * the window's own name and reset instant — the same shape as `instantTip`.
+ */
+export function usageWindowTip(window: UsageWindowCard): Tip {
+  return {
+    head: `The ${window.window} window`,
+    what:
+      window.kind === "value"
+        ? `How much of this window remains, and the instant it refills: ${whenLine(window.resetsAt)}.`
+        : "This window arrived with no usable percentage on it.",
+    how: USAGE_TIPS["cached"]!.how,
+  };
 }
 
 /** The quiet one-line-with-detail shape both other panels on this tab use. */
@@ -207,11 +255,7 @@ function AccountLine({ account }: { account: UsageSummary["account"] }): ReactNo
   return (
     <p className="tw:mt-2 tw:text-[13px] tw:text-ink-soft">
       <Explain
-        tip={{
-          head: "Whose headroom this is",
-          what: "The account the last usage pass read, from `claude auth status` and ~/.claude.json.",
-          how: "Recorded, never rotated: swapping between Max subscriptions is Greg's `/login`, not this page's. It matters because a cached utilisation can belong to the PREVIOUS account after a swap — the reading refuses to use one that does.",
-        }}
+        tip={USAGE_TIPS["account"]!}
       >
         {account.email ?? "an account with no email on it"}
         {account.subscriptionType === null ? "" : ` · ${account.subscriptionType}`}
@@ -221,50 +265,113 @@ function AccountLine({ account }: { account: UsageSummary["account"] }): ReactNo
   );
 }
 
-/** One cached window. The `expired` arm has no percentage, and there is nowhere here to put one. */
-function WindowRow({ window, asOf, skew }: { window: UsageWindowCard; asOf: number; skew: ClockSkew }): ReactNode {
+/**
+ * **One cached window, as the number the reader came for.**
+ *
+ * Rewritten from a list row on 2026-09-09 (plan 260909c). The row it replaced
+ * put the one real number on this tab — a percentage — at 13px in the middle of
+ * the third block, indistinguishable in size and colour from the three
+ * non-answers beside it. The reader's question is *how much headroom is there*;
+ * `StatCard` makes the answer the biggest thing in its box.
+ *
+ * ## `% LEFT`, NOT `% USED`, AND BOTH ARE ON SCREEN
+ *
+ * The wire carries `utilizationPercent` — how much is *gone*. The reader is
+ * asking how much is *left*, and a card answering the complement of the
+ * question makes them do the subtraction. So the value slot is `42% left` and
+ * the evidence line under it says `58% used`, which keeps the producer's own
+ * number visible and checkable rather than replacing it. GPT Sol's S2-01.
+ *
+ * ## EVERY WAY THIS CAN FAIL TO BE A NUMBER IS A DIFFERENT WORD
+ *
+ * The three `absent` states are not interchangeable, and picking between them
+ * is this function's real job:
+ *
+ *  - **`unknown`** — the window has reset, so a cached number describes nothing.
+ *    Ordinary. Both the typed `expired` arm and a `value` arm whose reset has
+ *    since passed land here, because to a reader they are the same news.
+ *  - **`unavailable`** — the cache entry could not be read at all. A fault
+ *    rather than a gap, and drawn louder.
+ *
+ * **THE PERCENTAGE IS NOT DRAWN ONCE THE WINDOW HAS GONE**, on either path. The
+ * producer said `value` because the window was live when it looked; a five-hour
+ * window resets while a page is open, and an older report is deliberately
+ * carried forward when a scan falls over. Drawing "96% — which has now passed,
+ * so this number is void" is the exact failure `UsageWindowCard`'s `expired` arm
+ * exists to prevent, arriving through the renderer instead of through the type.
+ * GPT Sol's P1(1), 2026-09-09, and `StatValue` now refuses it structurally: the
+ * absent arms have nowhere to put a number.
+ */
+function windowStat(window: UsageWindowCard, asOf: number, skew: ClockSkew): {
+  value: StatValue;
+  evidence: ReactNode;
+  tone: Tone;
+} {
   if (window.kind === "unknown") {
-    return (
-      <li className="tw:text-[13px] tw:text-ink-faint">
-        <span className="tw:font-mono tw:text-[12px]">{window.window}</span> — {window.why}
-      </li>
-    );
+    /* **`withheld`, NOT `unavailable`** — corrected on 2026-09-09 after looking
+       at the rendered tab rather than at the code. This arm is *a number arrived
+       and cannot be shown to be valid* — typically no `resets_at`, so nothing
+       says whether it describes a window that still exists. Nothing failed. The
+       first draft filed it under `unavailable`, and the consequence was three
+       red alarm cards on a tab whose verdict is "cannot tell": a gap painted as
+       a fault, which is alert fatigue and a misattribution at once. The tests
+       could not catch it because both are honest absences; only the screenshot
+       could. `design-a-screen.md` § Absence is the rule it broke, in the
+       component written to enforce it. */
+    return { value: { kind: "absent", state: "withheld", why: window.why }, evidence: null, tone: "unknown" };
   }
   if (window.kind === "expired") {
-    return (
-      <li className="tw:text-[13px] tw:text-ink-faint">
-        <span className="tw:font-mono tw:text-[12px]">{window.window}</span> — this window has already reset, so the
-        cached number describes nothing: {window.why}
-      </li>
-    );
+    /* THE PRODUCER'S SENTENCE, NOT A PREFIX AND THEN THE PRODUCER'S SENTENCE.
+       The first draft wrote "this window has already reset, so the cached number
+       describes nothing: " in front of `why` — and `why` already says exactly
+       that, so the card printed the same fact twice and ran to eleven lines.
+       Restating a measurement's own words is the thing this file's header
+       forbids; doing it immediately before quoting them is just long. */
+    return { value: { kind: "absent", state: "unknown", why: window.why }, evidence: null, tone: "unknown" };
   }
   const until = untilReset(window.resetsAt, asOf, skew);
   if (until.kind !== "ahead") {
-    /* **THE PERCENTAGE IS NOT DRAWN ONCE THE WINDOW HAS GONE.** The producer
-       said `value` because the window was live when it looked; a five-hour
-       window resets while a page is open, and an older report is deliberately
-       carried forward when a scan falls over. Drawing "96% — which has now
-       passed, so this number is void" is the exact failure `UsageWindowCard`'s
-       `expired` arm exists to prevent, arriving through the renderer instead of
-       through the type: a void number, on screen, in a numeric field, with a
-       caveat beside it that nobody reads before the number.
-       GPT Sol's P1(1), 2026-09-09. */
-    return (
-      <li className="tw:text-[13px] tw:text-ink-faint">
-        <span className="tw:font-mono tw:text-[12px]">{window.window}</span> — this window reset at{" "}
-        {whenLine(window.resetsAt)}
-        {until.kind === "passed" ? `, ${formatDuration(until.ms)} ago` : ""}, so its cached number describes nothing
-      </li>
-    );
+    return {
+      value: {
+        kind: "absent",
+        state: "unknown",
+        why: `this window reset at ${whenLine(window.resetsAt)}${
+          until.kind === "passed" ? `, ${formatDuration(until.ms)} ago` : ""
+        }, so its cached number describes nothing`,
+      },
+      evidence: null,
+      tone: "unknown",
+    };
   }
+  const left = 100 - window.utilizationPercent;
+  return {
+    value: { kind: "value", text: `${left}% left` },
+    /* The producer's own number stays on screen beside the one derived from it,
+       so a reader can check the arithmetic without leaving the page — and the
+       reset is a DURATION, because that is the form that survives being read in
+       another timezone. The three zoned instants are one tap away, not gone. */
+    evidence: (
+      <>
+        {window.utilizationPercent}% used · resets in {formatDuration(until.ms)}
+      </>
+    ),
+    /* The colour is earned, and the thresholds are the card's own rather than
+       the verdict's: this is one window, and `level` is about the account. */
+    tone: left <= 10 ? "alarm" : left <= 25 ? "needs" : "work",
+  };
+}
+
+/** One cached window as a card, with its zoned reset instant in the tip rather than on the page. */
+function WindowStatCard({ window, asOf, skew }: { window: UsageWindowCard; asOf: number; skew: ClockSkew }): ReactNode {
+  const { value, evidence, tone } = windowStat(window, asOf, skew);
   return (
-    <li className="tw:flex tw:flex-wrap tw:items-baseline tw:gap-x-2 tw:text-[13px]">
-      <span className="tw:font-mono tw:text-[12px] tw:text-ink-faint">{window.window}</span>
-      <strong className="tw:tabular-nums">{window.utilizationPercent}%</strong>
-      <span className="tw:text-ink-soft">
-        resets {whenLine(window.resetsAt)} (in {formatDuration(until.ms)})
-      </span>
-    </li>
+    <StatCard
+      label={window.window}
+      value={value}
+      evidence={evidence}
+      tone={tone}
+      tip={usageWindowTip(window)}
+    />
   );
 }
 
@@ -524,33 +631,109 @@ function Reading({
 
   return (
     <>
-      <div className="tw:flex tw:flex-wrap tw:items-baseline tw:gap-2">
-        <h2 className="tw:font-medium">{head.text}</h2>
+      {/* ------------------------------------------------------ 1 · THE ANSWER --
+          The decision the reader came for, and nothing between it and the top
+          of the card. `lead` rather than the body size, because until
+          2026-09-09 this <h2> inherited 15px from `body` and the eleven
+          paragraphs under it were 13px — a 2px gap doing the work of a
+          hierarchy. Plan 260909c § Reading the Usage tab off the pixels. */}
+      <div data-slot="usage-verdict" className="tw:flex tw:flex-wrap tw:items-baseline tw:gap-2">
+        <h2 className={cx("tw:text-lead tw:font-semibold", toneClasses(head.tone).ink)}>{head.text}</h2>
         <Pill tone={head.tone}>{head.cleared ? "cleared" : summary.level}</Pill>
       </div>
 
-      <AccountLine account={summary.account} />
+      {/* **WHEN WORK CAN RESUME SITS WITH THE VERDICT, NOT WITH THE CACHE.**
+          It is the second half of the answer — *you are blocked* is only half
+          of *and here is when you are not* — and it comes from the verdict's
+          own attributed limit rather than from `~/.claude.json`, so filing it
+          under "cached headroom" would attribute it to the wrong source. */}
+      {summary.dueBackAt === null ? null : (
+        <div className="tw:mt-3">
+          <DueBackCard dueBackAt={summary.dueBackAt} asOf={asOf} skew={skew} />
+        </div>
+      )}
 
-      <p className={cx("tw:mt-2 tw:text-[13px]", stale ? "tw:font-medium tw:text-alarm-ink" : "tw:text-ink-soft")}>
-        <Explain
-          tip={{
-            head: "When this reading was taken",
-            what: "The usage pass's own clock — not the checkpoint's.",
-            how: "A full transcript scan is 30-45 seconds over ~2.9 GB and does not always finish, and the Overseer deliberately republishes an earlier pass's report when a fresh one falls over, because a rejection whose window resets on Friday is still in force. So this number and the Overseer's own write clock come apart routinely, and only this one says how old the headroom above is.",
-          }}
-        >
-          Reading taken <strong className="tw:tabular-nums">{reading.text}</strong>
-        </Explain>
-        {" — "}
-        {whenLine(summary.collectedAt)}
-        {". "}
-        <span className="tw:text-ink-faint">
-          The Overseer wrote the checkpoint carrying it {written.text} — {whenLine(coordinatorWrittenAt)}.
-        </span>
-      </p>
+      {/* ------------------------------------------ 2 · THE NUMBERS, IF THERE ARE ANY --
+          One card per window. Every arm of `cache` reaches this block, because
+          "there is no number and here is why" is an answer and drawing nothing
+          is not — the reader who sees an empty space concludes the page is
+          broken, or worse, that everything is fine.
 
+          **THE HEADING SAYS "CACHED" AND THAT WORD IS LOAD-BEARING.** These
+          numbers are a hint and the rejections are the ground truth — this
+          file's header, and `UsageSummary.cache`'s. The first draft of this
+          rewrite dropped the heading, on the grounds that each card now carries
+          its own label; the existing suite caught it, which is what it is for.
+          A tooltip saying "a hint, not ground truth" is not the page saying it. */}
+      <h3 className="tw:mt-3 tw:text-label tw:font-semibold tw:tracking-widest tw:text-ink-faint tw:uppercase">
+        Cached headroom
+      </h3>
+      <div data-slot="usage-headroom" className="tw:mt-1 tw:grid tw:grid-cols-2 tw:gap-2">
+        {summary.cache.kind === "attributed" && summary.cache.windows.length > 0
+          ? summary.cache.windows.map((window) => (
+              <WindowStatCard key={window.window} window={window} asOf={asOf} skew={skew} />
+            ))
+          : null}
+        {summary.cache.kind === "attributed" && summary.cache.windows.length === 0 ? (
+          <StatCard
+            label="Headroom"
+            value={{ kind: "absent", state: "unknown", why: "The cache carried no windows at all." }}
+            tone="unknown"
+          />
+        ) : null}
+        {summary.cache.kind === "unknown" ? (
+          <StatCard
+            label="Headroom"
+            value={{
+              kind: "absent",
+              state: "unavailable",
+              why: `The cached utilisation could not be read — ${summary.cache.why}`,
+            }}
+            tone="unknown"
+          />
+        ) : null}
+        {summary.cache.kind === "unattributed" ? (
+          /* **`withheld`, NOT `unknown`, AND THE DISTINCTION IS THE WHOLE POINT.**
+              The arm carries no windows — wire.ts § `UsageSummary.cache` — so
+              this is not a component choosing to hold numbers back; it is a
+              component that has none. The failure it closes: after a `/login`
+              swap the file can still hold the previous subscription's numbers,
+              and a card naming account B over account A's *96% used* is somebody
+              else's headroom reported as this one's. GPT Sol's P0(1),
+              2026-09-09. A reader who saw `Unknown` here would think nobody had
+              looked; `Withheld` says a number exists and has not earned the
+              right to be shown. */
+          <StatCard
+            label="Headroom"
+            value={{
+              kind: "absent",
+              state: "withheld",
+              why: `${summary.cache.why}${
+                summary.cache.fetchedAt === null
+                  ? ""
+                  : ` (cached ${ago(summary.cache.fetchedAt, asOf, skew).text})`
+              }`,
+            }}
+            tone="unknown"
+            tip={{
+              head: "This cached utilisation cannot be shown to be this account's",
+              what: "A cache was read, and nothing establishes that it belongs to the account named here.",
+              how: "~/.claude.json holds whichever account was logged in when it was written, so after a /login swap it can still carry the previous subscription's percentages. Rather than draw somebody else's headroom under this account's name, the numbers are not carried at all. The rejections are unaffected: they are ground truth about a limit, whoever's it was.",
+            }}
+          />
+        ) : null}
+      </div>
+
+      {/* ------------------------------------------------------- 3 · WHY --
+          The producer's reasons stay on the page rather than going into a
+          disclosure, and that is a deliberate reading of the ten-second rule
+          rather than an oversight: a reader who does not trust the verdict goes
+          and checks it by hand, which costs more than these lines do. What went
+          into the disclosure below is the material that explains the MECHANISM
+          rather than qualifying the READING.
+          docs/reusable/design-a-screen.md § what does the reader do next. */}
       {summary.reasons.length > 0 ? (
-        <>
+        <div data-slot="usage-why" className="tw:mt-3">
           {/* **THE TENSE IS THE CARD'S TO SET, THE SENTENCES ARE NOT.** The
               producer's reasons are present tense and true of the moment the
               reading was taken — "a five_hour rejection is still in force". Once
@@ -560,12 +743,10 @@ function Reading({
               it without editing a word the producer wrote, which is the thing
               that must not happen: re-writing a measurement's own sentences is
               how a second interpretation gets in. GPT Sol's P1(2), 2026-09-09. */}
-          {head.cleared ? (
-            <p className="tw:mt-2 tw:text-[13px] tw:text-ink-faint">
-              At the time of this reading, {reading.text}:
-            </p>
-          ) : null}
-          <ul className="tw:mt-2 tw:space-y-1 tw:text-[13px] tw:text-ink-soft">
+          <h3 className="tw:text-label tw:font-semibold tw:tracking-widest tw:text-ink-faint tw:uppercase">
+            {head.cleared ? `Why — at the time of this reading, ${reading.text}` : "Why"}
+          </h3>
+          <ul className="tw:mt-1 tw:space-y-1 tw:text-body tw:text-ink-soft">
             {/* THE PRODUCER'S OWN SENTENCES, VERBATIM. The reading rules live in
                 tools/overseer/usage.ts and re-deriving a headline from the parts
                 here would be a second interpretation of one measurement. */}
@@ -573,88 +754,105 @@ function Reading({
               <li key={reason}>{reason}</li>
             ))}
           </ul>
-        </>
+        </div>
       ) : null}
 
-      <h3 className="tw:mt-4 tw:text-[11px] tw:font-semibold tw:tracking-widest tw:text-ink-faint tw:uppercase">
-        Rejections seen
-      </h3>
-      {summary.limits.kind === "incidents" ? (
-        <Incidents
-          incidents={summary.limits.incidents}
-          dueBackAt={summary.dueBackAt}
-          dueBackWindow={summary.dueBackWindow}
-          asOf={asOf}
-          skew={skew}
-        />
-      ) : null}
-      {summary.limits.kind === "none" ? (
-        <p className="tw:mt-2 tw:text-[13px] tw:text-ink-soft">
-          No rejection was found in the window this scan covered.
+      {/* -------------------------------------------------- 4 · THE EVIDENCE --
+          What makes the answer above believable, and no more than that: who it
+          is about, how old it is, and what the scan actually opened. One
+          timestamp for the reading rather than one per fact — the rule in
+          design-a-screen.md § Absence, whose naive per-tile form produces
+          exactly the wall this rewrite is removing. */}
+      <div data-slot="usage-evidence" className="tw:mt-3 tw:border-t tw:border-rule tw:pt-2">
+        <AccountLine account={summary.account} />
+        <p className={cx("tw:mt-1 tw:text-note", stale ? "tw:font-medium tw:text-alarm-ink" : "tw:text-ink-faint")}>
+          <Explain
+            tip={{
+              head: "When this reading was taken",
+              what: `The usage pass's own clock — not the checkpoint's. This one was taken ${whenLine(summary.collectedAt)}, and the Overseer wrote the checkpoint carrying it ${written.text}, ${whenLine(coordinatorWrittenAt)}.`,
+              how: "A full transcript scan is 30-45 seconds over ~2.9 GB and does not always finish, and the Overseer deliberately republishes an earlier pass's report when a fresh one falls over, because a rejection whose window resets on Friday is still in force. So this number and the Overseer's own write clock come apart routinely, and only this one says how old the headroom above is.",
+            }}
+          >
+            Reading taken <strong className="tw:tabular-nums">{reading.text}</strong>
+          </Explain>
         </p>
-      ) : null}
-      {summary.limits.kind === "unknown" ? (
-        <Note
-          head="The rejection scan could not answer"
-          what="It opened what it could and cannot say whether anything was rejected."
-          how="This is NOT `no limits hit`. The scan refuses to report an absence it cannot size, so an unknown here means the ground truth is missing and only the cached hint above is left — and that is a hint."
-          loud
-        >
-          this page cannot tell whether anything was rejected — {summary.limits.why}
-        </Note>
-      ) : null}
-      <Coverage coverage={summary.limits.coverage} />
-
-      <h3 className="tw:mt-4 tw:text-[11px] tw:font-semibold tw:tracking-widest tw:text-ink-faint tw:uppercase">
-        Cached headroom
-      </h3>
-      {summary.cache.kind === "unknown" ? (
-        <p className="tw:mt-2 tw:text-[13px] tw:text-ink-faint">The cached utilisation could not be read — {summary.cache.why}</p>
-      ) : null}
-      {summary.cache.kind === "unattributed" ? (
-        /* **NO PERCENTAGES ON THIS PATH, AND NONE TO DRAW.** The arm carries no
-            windows — wire.ts § `UsageSummary.cache` — so this is not a component
-            that chooses to withhold them; it is a component that has none. The
-            failure it closes: after a `/login` swap the file can still hold the
-            previous subscription's numbers, and a card naming account B over
-            account A's *96% used* is somebody else's headroom reported as this
-            one's. GPT Sol's P0(1), 2026-09-09. */
-        <Note
-          head="This cached utilisation cannot be shown to be this account's"
-          what="A cache was read, and nothing establishes that it belongs to the account named above."
-          how="~/.claude.json holds whichever account was logged in when it was written, so after a /login swap it can still carry the previous subscription's percentages. Rather than draw somebody else's headroom under this account's name, the numbers are not carried at all. The rejections above are unaffected: they are ground truth about a limit, whoever's it was."
-        >
-          {summary.cache.why}
-          {summary.cache.fetchedAt === null ? "" : ` (cached ${ago(summary.cache.fetchedAt, asOf, skew).text} — ${whenLine(summary.cache.fetchedAt)})`}
-        </Note>
-      ) : null}
-      {summary.cache.kind === "attributed" ? (
-        <>
-          <p className="tw:mt-2 tw:text-[12px] tw:text-ink-faint">
-            <Explain
-              tip={{
-                head: "A hint, not ground truth",
-                what: "~/.claude.json's cache of the utilisation headers from the last request, for this account.",
-                how: "A stale entry reads exactly like a current one: measured on 2026-09-08, a file 48 minutes old still said 70% about a window that had reset 27 minutes earlier. So `resets_at` is the validity check, not decoration — a window whose reset has passed is shown with no percentage at all, because a void number that reaches a renderer eventually gets rendered.",
-              }}
-            >
-              cached {ago(summary.cache.fetchedAt, asOf, skew).text}
-            </Explain>
-            {" — "}
-            {whenLine(summary.cache.fetchedAt)}
+        {summary.limits.kind === "unknown" ? (
+          <Note
+            head="The rejection scan could not answer"
+            what="It opened what it could and cannot say whether anything was rejected."
+            how="This is NOT `no limits hit`. The scan refuses to report an absence it cannot size, so an unknown here means the ground truth is missing and only the cached hint above is left — and that is a hint."
+            loud
+          >
+            this page cannot tell whether anything was rejected — {summary.limits.why}
+          </Note>
+        ) : null}
+        {summary.limits.kind === "none" ? (
+          <p className="tw:mt-1 tw:text-note tw:text-ink-soft">
+            No rejection was found in the window this scan covered.
           </p>
-          {summary.cache.windows.length === 0 ? (
-            <p className="tw:mt-2 tw:text-[13px] tw:text-ink-faint">The cache carried no windows at all.</p>
-          ) : (
-            <ul className="tw:mt-2 tw:space-y-1">
-              {summary.cache.windows.map((window) => (
-                <WindowRow key={window.window} window={window} asOf={asOf} skew={skew} />
-              ))}
-            </ul>
-          )}
-        </>
+        ) : null}
+        {/* THE POSITIVE CONTROL STAYS ABOVE THE FOLD, NOT IN THE DISCLOSURE.
+            It is what makes a reassuring absence falsifiable, and an absence
+            whose evidence is one tap away is an absence nobody checks. */}
+        <Coverage coverage={summary.limits.coverage} />
+      </div>
+
+      {/* --------------------------------------------- 5 · THE PROVENANCE --
+          Closed by default, and this is the only part of the card that is.
+          Everything here changes what a reader BELIEVES about the machinery
+          rather than what they do about the account in the next ten seconds:
+          old rejection clusters, the second clock, the full scan mechanics.
+          Nothing that qualifies the verdict is in here — that is § Why, above,
+          and putting it here would be the redesign quietly demoting a caveat,
+          which is the failure this whole plan is pointed at. */}
+      {summary.limits.kind === "incidents" ? (
+        <details data-slot="usage-provenance" className="tw:mt-3">
+          <summary className="tw:cursor-pointer tw:text-note tw:text-ink-faint">
+            Rejections seen, in full
+          </summary>
+          <Incidents
+            incidents={summary.limits.incidents}
+            dueBackAt={summary.dueBackAt}
+            dueBackWindow={summary.dueBackWindow}
+            asOf={asOf}
+            skew={skew}
+          />
+        </details>
       ) : null}
     </>
+  );
+}
+
+/**
+ * **When work can resume** — the one instant on this card that a reader acts
+ * *at* rather than judges freshness by.
+ *
+ * So it is the one that keeps its wall-clock form, in the tip: the rest of the
+ * card's timestamps became durations on 2026-09-09 because
+ * `05:51 UTC · 06:51 London · 08:51 Athens` is one fact said three times, ten
+ * of them on the old tab, and a duration survives being read in a timezone
+ * nobody predicted. A deadline does not: *in 3h* is useless for deciding
+ * whether to wait up.
+ */
+function DueBackCard({ dueBackAt, asOf, skew }: { dueBackAt: string; asOf: number; skew: ClockSkew }): ReactNode {
+  const until = untilReset(dueBackAt, asOf, skew);
+  const value: StatValue =
+    until.kind === "ahead"
+      ? { kind: "value", text: formatDuration(until.ms) }
+      : until.kind === "passed"
+        ? { kind: "absent", state: "unknown", why: `that reset passed ${formatDuration(until.ms)} ago` }
+        : /* AN UNREADABLE INSTANT IS A FAULT, NOT A GAP. `ago` and `untilReset`
+             both refuse to coerce one, and a card that said "unknown" here would
+             file a broken timestamp under the same word as an honest absence. */
+          { kind: "absent", state: "unavailable", why: "that instant could not be read" };
+  return (
+    <StatCard
+      label="Work can resume in"
+      value={value}
+      evidence={until.kind === "ahead" ? whenLine(dueBackAt) : null}
+      tone="needs"
+      tip={USAGE_TIPS["dueBack"]!}
+    />
   );
 }
 
