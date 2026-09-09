@@ -218,8 +218,10 @@ is required:
    `scope: full`;
 3. `treeAtStart.sha === treeAtEnd.sha === devSha`, and neither end dirty;
 4. all required checks on **that same sha** — or one full `npm run check` pass, which contains them;
-5. no later `started`, `running` or `void` attempt on that sha, which would make the state unknown
-   rather than green.
+5. no later `started`, `running` or `void` attempt on that sha, which makes the state unknown
+   rather than green — **except over a failure**, which is sticky: a check that failed has not
+   stopped having failed because somebody pressed go again, and only a later *settled* pass clears
+   it.
 
 Anything short of all five is **not** "not ready" — it is `unknown`, with the clause that failed
 named in a sentence. A tab that says *unknown, because typecheck has no reading on this commit* is
@@ -245,8 +247,9 @@ which lands in its own tmux log; the scan skips any log naming a runId the store
 What the scan may recover, and nothing else:
 
 - **when it finished** — the file's mtime, and only for a log that has terminated;
-- **how it ended** — the `EXIT=` line; **a signal-like status (129–159) is void, not fail**, because
-  `sh` writes 128+signal and `EXIT=137` under a page of green ticks is the OOM killer;
+- **how it ended** — the `EXIT=` line; **a signal-like status is void, not fail**, because `sh`
+  writes 128 + signal and `EXIT=137` under a page of green ticks is the OOM killer. The range runs
+  to 192, not 159: Linux's real-time signals go past 31;
 - **what it was** — npm's own two banner lines. The second carries the arguments, so
   `> vitest run tests/one.test.ts` and `> tsx scripts/check.ts --fast` are recorded as `narrowed`
   with the command shown, not flattened into the plain check;
@@ -268,8 +271,9 @@ made one request perform 100,000 opens, and **a FIFO named `something.log` block
 which on a single-threaded dashboard is the whole page hanging. Only regular files are considered,
 and the mtime comes from a `stat` rather than an open.
 
-**How many entries and files were skipped is reported**, because a truncated scan that says nothing
-is a scan that turns into "no reading". Likewise a log that looks like a check but would not parse is
+**Truncation is reported** — as a flag rather than a count, because once you abandon a directory
+listing you do not know what is left in it, and a number there would be the confident wrong figure
+this feature exists to avoid. A truncated scan that says nothing turns into "no reading". Likewise a log that looks like a check but would not parse is
 **counted and shown with its reason** — otherwise a format change silently deletes history.
 
 Measured across this box's 14 checkouts: 45 readings in 43 ms.

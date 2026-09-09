@@ -654,6 +654,9 @@ export function parseRunRecord(text: string): RunRecord | null {
   if (outcome === "pass" && exit !== 0) return null;
   if (outcome === "fail" && (exit === null || exit === 0 || isSignalledExit(exit))) return null;
 
+  const counts = asCounts(parsed["counts"]);
+  if (outcome === "pass" && countsContradictPass(counts)) return null;
+
   return {
     ...common,
     state: "finished",
@@ -661,9 +664,49 @@ export function parseRunRecord(text: string): RunRecord | null {
     durationMs: asFiniteNumber(parsed["durationMs"]),
     outcome,
     exit,
-    counts: asCounts(parsed["counts"]),
+    counts,
     treeAtEnd,
     logPath: asString(parsed["logPath"]),
     why: asString(parsed["why"]),
   };
+}
+
+/**
+ * Does a record's own detail contradict its claim to have passed?
+ *
+ * **The verdict and the counts are two views of one run, and a record where they
+ * disagree is not a reading.** GPT Sol drove both of these to a green verdict:
+ *
+ * > a full `check` record with `outcome: "pass"`, `exit: 0`, clean stamps on
+ * > dev, and a summary row saying `test FAILED` … emits passes for every
+ * > required check. The same class exists for a standalone test record whose
+ * > accepted Vitest tally contains failures but whose outcome says pass.
+ *
+ * Neither is producible by the wrapper — `npm run check` exiting 0 has no
+ * `FAILED` row — so what this catches is a corrupt or hand-written record. That
+ * is precisely the case the whole unreadable-record machinery exists for: a
+ * record that cannot be trusted must make the verdict `unknown`, not vote. It
+ * is the same rule as `{"outcome":"pass","exit":1}`, one field along.
+ *
+ * **Only `pass` is checked.** A failing run whose numbers look clean is
+ * ordinary — a suite can fail in its setup with every test green — and refusing
+ * those would throw away real failures to tidy up a shape.
+ */
+export function countsContradictPass(counts: Counts): boolean {
+  switch (counts.kind) {
+    case "vitest":
+      return (counts.tests?.failed ?? 0) > 0 || (counts.files?.failed ?? 0) > 0;
+    case "check":
+      return counts.steps.some((step) => step.verdict === "failed");
+    case "typecheck":
+    case "none":
+      /* `typecheck`'s error count is deliberately not a verdict — that file
+         writes to stderr and its exit status is what decides — so a non-zero
+         count beside a pass is not a contradiction here. */
+      return false;
+    default: {
+      const never: never = counts;
+      throw new Error(`unhandled counts kind: ${JSON.stringify(never)}`);
+    }
+  }
 }

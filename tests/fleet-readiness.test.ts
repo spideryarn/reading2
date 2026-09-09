@@ -789,6 +789,35 @@ describe("scanning a directory of logs", () => {
     }
   });
 
+  it("stops LISTING worktrees at the cap, like the log discovery does", () => {
+    /* The cap was applied after `readdirSync`, which materialises every entry —
+       the exact bug that had just been fixed one function down, left in place
+       here. GPT Sol, round 3. */
+    const many = mkdtempSync(join(tmpdir(), "readiness-many-"));
+    try {
+      for (let i = 0; i < 150; i += 1) mkdirSync(join(many, ".claude", "worktrees", `w${i}`), { recursive: true });
+      const found = checkoutRoots(many);
+      expect(found.roots.length).toBe(100);
+      expect(found.truncated).toBe(true);
+    } finally {
+      rmSync(many, { recursive: true, force: true });
+    }
+  });
+
+  it("reports a worktrees directory it cannot list, rather than calling it absent", () => {
+    const locked = mkdtempSync(join(tmpdir(), "readiness-lockedroots-"));
+    try {
+      mkdirSync(join(locked, ".claude", "worktrees"), { recursive: true });
+      chmodSync(join(locked, ".claude", "worktrees"), 0o000);
+      const found = checkoutRoots(locked);
+      expect(found.why).not.toBeNull();
+      expect(found.roots).toEqual([locked]);
+    } finally {
+      chmodSync(join(locked, ".claude", "worktrees"), 0o755);
+      rmSync(locked, { recursive: true, force: true });
+    }
+  });
+
   it("bounds the checkout roots and distinguishes absent from unreadable", () => {
     const bare = mkdtempSync(join(tmpdir(), "readiness-roots-"));
     try {
@@ -1001,6 +1030,98 @@ describe("the readiness verdict", () => {
             steps: [
               { name: "typecheck", gate: "unknown", verdict: "clean", findings: null },
               { name: "test", gate: "unknown", verdict: "findings", findings: 3 },
+            ],
+          },
+        }),
+      ),
+    ]);
+    expect(out.kind).toBe("unknown");
+  });
+
+  it("refuses a passing check record whose own table says a gate FAILED", () => {
+    /* GPT Sol drove this to `ready`. The outer outcome said pass, so the table
+       was never consulted, and passes were emitted for every required check.
+       A record whose verdict and detail disagree is not a reading — the same
+       rule as {"outcome":"pass","exit":1}, one field along. */
+    const contradictory = {
+      ...finished(),
+      check: "check",
+      counts: {
+        kind: "check",
+        steps: [
+          { name: "typecheck", gate: "unknown", verdict: "clean", findings: null },
+          { name: "test", gate: "gate", verdict: "failed", findings: null },
+        ],
+      },
+    };
+    expect(parseRunRecord(JSON.stringify(contradictory))).toBeNull();
+  });
+
+  it("refuses a passing test record whose own tally contains failures", () => {
+    const contradictory = {
+      ...finished(),
+      counts: { kind: "vitest", files: null, tests: { passed: 4, failed: 1, skipped: 0, total: 5 } },
+    };
+    expect(parseRunRecord(JSON.stringify(contradictory))).toBeNull();
+  });
+
+  it("allows a FAILING run whose numbers look clean, which is ordinary", () => {
+    /* A suite can fail in its setup with every test green. Refusing those would
+       throw away real failures to tidy up a shape. */
+    const setupFailure = {
+      ...finished(),
+      outcome: "fail",
+      exit: 1,
+      counts: { kind: "vitest", files: null, tests: { passed: 371, failed: 0, skipped: 0, total: 371 } },
+    };
+    expect(parseRunRecord(JSON.stringify(setupFailure))).not.toBeNull();
+  });
+
+  it("takes the WORST of duplicate rows for one check, not the last", () => {
+    /* `test FAILED` then `test clean` in one table used to resolve to clean by
+       arriving later, and produced a green verdict. A table that contradicts
+       itself is not evidence that the good half is true. */
+    const out = verdict([
+      reading(finished({ check: "typecheck", runId: "tc" })),
+      reading(
+        finished({
+          check: "check",
+          runId: "chk",
+          at: "2026-09-09T10:30:00.000Z",
+          outcome: "fail",
+          exit: 1,
+          counts: {
+            kind: "check",
+            steps: [
+              { name: "typecheck", gate: "unknown", verdict: "clean", findings: null },
+              { name: "test", gate: "gate", verdict: "failed", findings: null },
+              { name: "test", gate: "gate", verdict: "clean", findings: null },
+            ],
+          },
+        }),
+      ),
+    ]);
+    expect(out.kind).toBe("not-ready");
+  });
+
+  it("treats `DID NOT RUN` on a required check as unknown, not as a failure", () => {
+    /* A false RED rather than a false green, and still wrong: the tool did not
+       run, so no verdict about the check exists. Reporting it as a failing suite
+       sends somebody to look for a bug when what broke was the tool. */
+    const out = verdict([
+      reading(finished({ check: "typecheck", runId: "tc" })),
+      reading(
+        finished({
+          check: "check",
+          runId: "chk",
+          at: "2026-09-09T10:30:00.000Z",
+          outcome: "fail",
+          exit: 1,
+          counts: {
+            kind: "check",
+            steps: [
+              { name: "typecheck", gate: "unknown", verdict: "clean", findings: null },
+              { name: "test", gate: "gate", verdict: "did-not-run", findings: null },
             ],
           },
         }),
