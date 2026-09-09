@@ -15,6 +15,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   LINE_SCHEMA,
+  MAX_EPOCH_MS,
   MAX_LINE_BYTES,
   MAX_WHY_CHARS,
   SUMMARY_SCHEMA,
@@ -126,6 +127,32 @@ describe("encode/decode", () => {
         pass({ nextDueMs: Number.NaN, pass: { kind: "collector-failed", at: "2026-09-09T00:55:00.000Z", why: "x" } }),
       ),
     ).toThrow(/nextDueMs/);
+  });
+
+  it("REFUSES an epoch that is finite but not representable as a Date", () => {
+    /* Finite is not the same as in range, and this is the check that gets
+       skipped. `new Date(1e100)` is an ordinary Invalid Date and
+       `.toISOString()` on it THROWS — so a number that passed a
+       `Number.isFinite` guard at the boundary detonates later, in a renderer,
+       with no idea where it came from. The Overseer's own `usage.ts` had the
+       same gap on external epochs; caught there first and passed to me by the
+       Overseer before I shipped it here. */
+    for (const bad of [1e100, -1e100, Number.NaN, 8.64e15 + 1]) {
+      const l = pass();
+      if (l.pass.kind !== "pass" || l.pass.cache.kind !== "attributed") throw new Error("fixture");
+      const w = l.pass.cache.windows[0];
+      if (w?.kind !== "value") throw new Error("fixture");
+      w.resetsAtMs = bad;
+      expect(() => encodeUsageHistoryLine(l), `accepted ${bad}`).toThrow(/resetsAtMs/);
+    }
+    /* And the boundary itself is fine, so the guard is not off by one. */
+    const ok = pass();
+    if (ok.pass.kind !== "pass" || ok.pass.cache.kind !== "attributed") throw new Error("fixture");
+    const w = ok.pass.cache.windows[0];
+    if (w?.kind !== "value") throw new Error("fixture");
+    w.resetsAtMs = MAX_EPOCH_MS;
+    expect(() => encodeUsageHistoryLine(ok)).not.toThrow();
+    expect(() => new Date(MAX_EPOCH_MS).toISOString()).not.toThrow();
   });
 
   it("truncates an over-long `why` rather than writing an unbounded line", () => {
