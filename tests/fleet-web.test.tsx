@@ -1128,6 +1128,25 @@ describe("the deploys tab", () => {
     expect(container.textContent).toContain("at an unreadable time");
   });
 
+  it("does not cry corruption at an older server that never reported it", async () => {
+    /* **A false alarm invented by version skew.** `newestLineRead` arrived after
+       the schema number did, so an older schema-1 server sends a payload without
+       it — and a cast makes that `undefined`, which is falsy, which announced
+       that the record's newest line was corrupt when nothing was wrong. Absence
+       here means "an older server never looked", not "the line is bad".
+       GPT Sol's F8. */
+    window.location.hash = "#deploys";
+    const feed = manualTransport();
+    const full = deploysView();
+    if (full.kind !== "deploys") throw new Error("unreachable");
+    const { newestLineRead: _dropped, ...withoutTheField } = full;
+    mount(feed.transport, recordingDeploys(() => withoutTheField as DeploysView).api);
+    await act(async () => undefined);
+
+    expect(container.textContent).not.toContain("newest line could not be read");
+    expect(container.textContent).toContain("Release 74");
+  });
+
   it("counts the lines it could not read rather than showing a quietly short list", async () => {
     window.location.hash = "#deploys";
     const feed = manualTransport();
