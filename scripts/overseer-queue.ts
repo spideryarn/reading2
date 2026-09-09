@@ -33,6 +33,7 @@ import {
   ID_RULE,
   appendEvents,
   asPlacement,
+  isPriority,
   envelope,
   isDispatchable,
   mintId,
@@ -56,7 +57,7 @@ const USAGE = `overseer-queue — the Overseer's queue of ideas
   list                              the queue in order, with why each item is or is not ready
   show <id>                         one item in full: authority, revision, and its history
   add --by <who> --text <words>     [--title T] [--source P] [--waiting-on W] [--size S]
-                                    [--runs D] [--areas a,b] [--needs-greg]
+                                    [--runs D] [--areas a,b] [--needs-greg] [--priority 0..1]
                                     where: --front | --back (default) | --before <id> | --after <id>
   authorize <id> --by greg          Greg says yes to the item AS IT NOW READS
   move <id> --by <who>              --front | --back | --before <id> | --after <id>
@@ -350,6 +351,33 @@ function write(dir: string, events: readonly IdeaEvent[], expect: QueueVersion, 
 }
 
 /** `--front`/`--back`/`--before ID`/`--after ID` to a placement. Defaults to the back. */
+/**
+ * `--priority 0.85`, `--clear-priority`, or neither.
+ *
+ * Three answers, because **"nobody has said" and "0" are different claims** and
+ * one flag cannot carry both — `idea-queue.ts` § `isPriority`. `undefined` is
+ * *do not touch*, `null` is *put it back to unstated*, a number is the number.
+ * Out of range is a refusal here as well as in the parser, so the message is a
+ * sentence rather than a rejected append.
+ */
+function priorityFrom(flags: Flags["flags"]): number | null | undefined {
+  const cleared = flags.get("clear-priority") !== undefined;
+  const given = str(flags, "priority");
+  if (cleared && given !== null) fail("--priority and --clear-priority say different things");
+  if (cleared) return null;
+  if (given === null) return undefined;
+  /* `Number("")` is 0 and `Number(" ")` is 0 — the trap that once made an empty
+     version string parse as *the queue is empty*. An empty flag value cannot
+     reach here (`str` refuses a bare `--priority`), and `isPriority` refuses a
+     NaN, but the two guards are cheap and the failure they prevent is a queue
+     silently topped by a typo. */
+  const value = Number(given);
+  if (given.trim() === "" || !isPriority(value) || value === null) {
+    fail(`--priority must be a number from 0 to 1 (1 is the most urgent), not '${given}'`);
+  }
+  return value;
+}
+
 function placementFrom(flags: Flags["flags"]): Placement {
   const before = str(flags, "before");
   const after = str(flags, "after");
@@ -462,6 +490,7 @@ function main(): void {
       if (text === null || text.trim() === "") fail("--text is required: the idea, in the words you want kept");
       const queue = view(dir);
       const placement = placementFrom(parsed.flags);
+      const priority = priorityFrom(parsed.flags) ?? null;
       const event: IdeaEvent = {
         ...envelope(by, { commandId: str(parsed.flags, "command-id") }),
         kind: "added",
@@ -471,11 +500,25 @@ function main(): void {
         metadata: { ...EMPTY_METADATA, ...metadataFrom(parsed.flags) },
         placement,
         needsGreg: parsed.flags.get("needs-greg") !== undefined,
+        priority,
       };
       /* Said out loud, because it is the one thing about this command that is
          not obvious: the Overseer adding an item does not authorise it. */
       const note = by === "overseer" ? " as a PROPOSAL — only Greg can authorise it" : "";
       write(dir, [event], queue.version, `queued ${event.id} at the ${placement.at}${note}`);
+      /* **`--front` WITH NO PRIORITY DOES NOT REACH THE FRONT, and the person
+         who just typed it should hear that from the command rather than
+         discover it on the page.** An unstated priority sorts below every
+         stated one (`idea-queue.ts` § `isPriority`), so `--front` puts the item
+         at the front of the unranked band, which is the bottom of the list.
+         Inheriting the top item's priority instead was considered and rejected:
+         it invents an opinion, which is the thing `null` exists to avoid. */
+      if (priority === null && placement.at !== "back") {
+        console.log(
+          `  note: no --priority, so this sits below every item that has one, wherever ` +
+            `--${placement.at} put it.\n  Pass --priority (0..1) to rank it.`,
+        );
+      }
       return;
     }
     case "move": {

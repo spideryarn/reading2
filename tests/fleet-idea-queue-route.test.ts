@@ -41,7 +41,10 @@ function env(by: "greg" | "overseer" = "greg", at = "2026-09-19T00:00:00.000Z") 
   return { schema: IDEA_QUEUE_SCHEMA as typeof IDEA_QUEUE_SCHEMA, eventId: `ev-${n}`, commandId: null, at, by };
 }
 
-function added(id: string, over: { by?: "greg" | "overseer"; needsGreg?: boolean; placement?: Placement } = {}): IdeaEvent {
+function added(
+  id: string,
+  over: { by?: "greg" | "overseer"; needsGreg?: boolean; placement?: Placement; priority?: number | null } = {},
+): IdeaEvent {
   return {
     ...env(over.by ?? "greg"),
     kind: "added",
@@ -51,6 +54,7 @@ function added(id: string, over: { by?: "greg" | "overseer"; needsGreg?: boolean
     metadata: { ...EMPTY_METADATA, waitingOn: "a lull", size: "M" },
     placement: over.placement ?? { at: "back" },
     needsGreg: over.needsGreg ?? false,
+    priority: over.priority ?? null,
   };
 }
 

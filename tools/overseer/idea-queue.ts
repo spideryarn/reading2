@@ -207,6 +207,52 @@ export type IdeaMetadata = {
 export const EMPTY_METADATA: IdeaMetadata = { source: null, waitingOn: null, size: null, areas: [], runs: null };
 
 /**
+ * **A PRIORITY IS `0`–`1`, OR `null` FOR NOBODY HAS SAID** — and `null` is not
+ * a missing number, it is a different claim.
+ *
+ * Greg, 2026-09-09: *"add a `priority` 0-1 (where 1 is very-high-priority) …
+ * so that important stuff can jump to the top."*
+ *
+ * The three candidate defaults for an item nobody has ranked, and why this is
+ * the only honest one:
+ *
+ *  - `0.5` says *"of middling importance"*, which is an opinion nobody expressed;
+ *  - `0` says *"worthless"*, which is a judgement nobody made;
+ *  - `null` says *"nobody has said"*, which is what is true.
+ *
+ * `comparePriority` then sorts the unstated **below** everything stated, which
+ * also buys a property worth having: a newly added item cannot silently
+ * leapfrog work Greg ranked. The cost is that `add --front` without a priority
+ * no longer reaches the front, and the CLI says so out loud rather than leaving
+ * it to be discovered.
+ *
+ * **Out of range REJECTS THE LINE** — see `parseEvent`. Clamping `1000` to `1`
+ * would turn a typo into a legitimate-looking top of the queue, and ignoring it
+ * would turn the same typo into silence. Both are the silent success this
+ * module exists against
+ * ([silent-success.md](../../docs/reusable/silent-success.md)).
+ */
+export function isPriority(u: unknown): u is number | null {
+  return u === null || (typeof u === "number" && Number.isFinite(u) && u >= 0 && u <= 1);
+}
+
+/**
+ * Higher first; the unstated last. **Ordering only — it decides nothing about
+ * whether an item may go out.**
+ *
+ * That separation is the whole basis for priority not lapsing an authorisation
+ * (see `IdeaItem.priority`), so it matters that it is visible here: this
+ * function returns a sort order and touches no other field. `isDispatchable`
+ * has never heard of it.
+ */
+export function comparePriority(a: number | null, b: number | null): number {
+  if (a === b) return 0;
+  if (a === null) return 1;
+  if (b === null) return -1;
+  return b - a;
+}
+
+/**
  * Where a move puts an item.
  *
  * **ONE PLACEMENT, NOT A REORDERED ARRAY**, which was Sol's answer to the
@@ -257,6 +303,8 @@ export type IdeaEvent = Envelope &
         readonly placement: Placement;
         /** True when this is waiting on a person, not on a slot. */
         readonly needsGreg: boolean;
+        /** `null` when the add did not say. Never invented — see `isPriority`. */
+        readonly priority: number | null;
       }
     | {
         readonly kind: "edited";
@@ -275,6 +323,20 @@ export type IdeaEvent = Envelope &
     /** Greg says yes, to the revision named. Nobody else's is honoured. */
     | { readonly kind: "authorized"; readonly id: string; readonly revision: number }
     | { readonly kind: "moved"; readonly id: string; readonly placement: Placement }
+    /**
+     * **ITS OWN KIND, NOT A KEY INSIDE `edited`**, and that is a fix for a bug
+     * rather than a matter of taste.
+     *
+     * `needsGreg` is a key inside `edited` that `changesContent` deliberately
+     * does not count, and the consequence was GPT Sol's round-two P0-2:
+     * `edit --by overseer --ready` cleared Greg's blocker with no revision bump.
+     * That hole is a *condition inside a function*, which the next person adding
+     * an optional key to `edited` has to already know about. A separate kind
+     * makes the exclusion **structural**: `changesContent` never sees one of
+     * these, so there is no way to write a priority change that accidentally
+     * counts as content. `null` clears it back to unstated.
+     */
+    | { readonly kind: "prioritized"; readonly id: string; readonly priority: number | null }
     | {
         readonly kind: "dispatched";
         readonly id: string;
@@ -322,6 +384,36 @@ export type IdeaItem = {
   readonly authority: Authority;
   readonly lifecycle: Lifecycle;
   readonly needsGreg: boolean;
+  /**
+   * How much somebody wants this done, or `null` for nobody has said —
+   * `isPriority` and `comparePriority` above.
+   *
+   * **PRIORITY IS ORDERING, NOT CONTENT, and that is the call this whole field
+   * turns on.** Every content edit bumps `revision`, and an edit by anyone but
+   * Greg therefore lapses his approval (Sol's P0-2). A priority does neither,
+   * for three reasons:
+   *
+   *  - the queue already has an ordering axis and it lapses nothing — `moved`
+   *    is writable by the Overseer today and bumps no revision, and a priority
+   *    is a coarser spelling of the same intent. `move --front` preserving an
+   *    approval while `--priority 0.9` lapsed it would be incoherent;
+   *  - it grants the Overseer no power it lacks. It already chooses which
+   *    dispatchable item to take (the queue is explicitly not FIFO), and it can
+   *    already move anything to the front. What this adds is that the choice
+   *    becomes durable, attributed and visible instead of living in one
+   *    session's head — strictly more auditable, not less;
+   *  - what must not move does not move. **`isDispatchable` never reads this
+   *    field.** An unauthorised item at `1` sorts to the top of the list and is
+   *    still not dispatchable, and its row still says *proposal*.
+   *
+   * **The residual risk, named rather than waved off: this is a salience
+   * vector.** An Overseer proposal at `0.9` sits at the top of the list Greg
+   * reads on his phone, which is a way of pressing for attention it did not
+   * have before. It is not an authorisation vector, and Greg asked the Overseer
+   * to apply his banding — so every `prioritized` event carries `by`, and *who
+   * pushed this up the list* stays answerable.
+   */
+  readonly priority: number | null;
   /**
    * Bumped by every content edit. **The number an authorisation names**, and
    * what makes "approved, then changed" visible — see the header, Sol's P0-2.
@@ -450,6 +542,7 @@ type Mutable = {
   authority: Authority;
   lifecycle: Lifecycle;
   needsGreg: boolean;
+  priority: number | null;
   revision: number;
   addedBy: IdeaActor;
   addedAt: string;
@@ -541,6 +634,8 @@ function describeTouch(event: IdeaEvent): string {
       return `authorised revision ${event.revision}`;
     case "moved":
       return `moved ${describePlacement(event.placement)}`;
+    case "prioritized":
+      return event.priority === null ? "priority cleared" : `prioritised at ${event.priority}`;
     case "dispatched":
       return `dispatched as ${event.session}`;
     case "done":
@@ -597,6 +692,7 @@ export function foldQueue(events: readonly IdeaEvent[], seedProblems: readonly Q
           event.by === "greg" ? { kind: "authorized", by: "greg", at: event.at, revision: 0 } : { kind: "proposed" },
         lifecycle: "queued",
         needsGreg: event.needsGreg,
+        priority: event.priority,
         revision: 0,
         addedBy: event.by,
         addedAt: event.at,
@@ -711,6 +807,24 @@ export function foldQueue(events: readonly IdeaEvent[], seedProblems: readonly Q
         item.history.push({ kind: event.kind, at: event.at, by: event.by, what: describeTouch(event) });
         break;
       }
+      case "prioritized": {
+        /* **THE SAME GUARD `moved` HAS, FOR THE SAME REASON.** A settled item
+           is out of the ordering, so a priority written against it is a stale
+           intent getting a defined answer — and a defined answer to a stale
+           intent is worse than a refusal, because nothing says it happened.
+
+           Note what is NOT here: no actor check, and no revision bump. Anybody
+           may reorder — that is what `moved` already allows — and reordering is
+           not editing. `changesContent` never sees this event. */
+        if (!IN_PLAY.includes(item.lifecycle)) {
+          problem("illegal-transition", `${event.id} was prioritised while ${item.lifecycle}`, event.eventId);
+          break;
+        }
+        item.priority = event.priority;
+        item.lastTouchedAt = event.at;
+        item.history.push({ kind: event.kind, at: event.at, by: event.by, what: describeTouch(event) });
+        break;
+      }
       case "dispatched": {
         /* **THE FOLD CHECKS WHAT THE GATE WOULD HAVE CHECKED, not merely the
            lifecycle.** GPT Sol's P1-3 in round two: this arm asked only
@@ -787,6 +901,7 @@ export function foldQueue(events: readonly IdeaEvent[], seedProblems: readonly Q
     authority: m.authority,
     lifecycle: m.lifecycle,
     needsGreg: m.needsGreg,
+    priority: m.priority,
     revision: m.revision,
     addedBy: m.addedBy,
     addedAt: m.addedAt,
@@ -798,11 +913,30 @@ export function foldQueue(events: readonly IdeaEvent[], seedProblems: readonly Q
     history: m.history,
   });
 
-  const items: IdeaItem[] = [];
+  /* **THE ORDER THE QUEUE IS ACTUALLY IN IS DECIDED HERE**, once, rather than
+     at the three edges that render it (`list`, the route, the panel).
+
+     That is the same argument 260909b makes for computing `ready` server-side:
+     three call sites is three chances to forget, and the two that forgot would
+     disagree with the one that did not. It matters more than it looks, because
+     `waitingAhead` and `itemWait` walk this array to say *"N items ahead of
+     it"* — sorted at the edges, they would be counting an order nobody sees.
+
+     `order` itself stays PLACEMENT order and is not touched, so `--front` and
+     `--before` keep their meaning and still decide the order within a band.
+     The index tiebreak is written out rather than leaning on
+     `Array.prototype.sort` being stable: stability would do the job, but the
+     explicit key says what the second key IS to the next reader, and it is what
+     a mutation check swaps. */
+  const placed: IdeaItem[] = [];
   for (const id of order) {
     const item = byId.get(id);
-    if (item !== undefined && IN_PLAY.includes(item.lifecycle)) items.push(freeze(item));
+    if (item !== undefined && IN_PLAY.includes(item.lifecycle)) placed.push(freeze(item));
   }
+  const items: IdeaItem[] = placed
+    .map((item, index) => ({ item, index }))
+    .sort((a, b) => comparePriority(a.item.priority, b.item.priority) || a.index - b.index)
+    .map((decorated) => decorated.item);
   const settled = [...byId.values()]
     .filter((m) => !IN_PLAY.includes(m.lifecycle))
     .sort((a, b) => (b.settledAt ?? "").localeCompare(a.settledAt ?? ""))
@@ -987,6 +1121,10 @@ export function parseEvent(line: string): IdeaEvent | null {
          `json["needsGreg"] === true`, which read `"yes"` as *no* — turning a
          blocked item into a dispatchable one by way of a typo. */
       if ("needsGreg" in json && typeof json["needsGreg"] !== "boolean") return null;
+      /* Absent means nobody has said, which is `null`. Present and not a
+         priority rejects the line — never clamped, never dropped. */
+      if ("priority" in json && !isPriority(json["priority"])) return null;
+      const priority = "priority" in json && isPriority(json["priority"]) ? json["priority"] : null;
       return {
         ...envelope,
         kind: "added",
@@ -996,6 +1134,7 @@ export function parseEvent(line: string): IdeaEvent | null {
         metadata,
         placement,
         needsGreg: json["needsGreg"] === true,
+        priority,
       };
     }
     case "edited": {
@@ -1026,6 +1165,13 @@ export function parseEvent(line: string): IdeaEvent | null {
       const placement = asPlacement(json["placement"]);
       if (placement === null) return null;
       return { ...envelope, kind: "moved", id, placement };
+    }
+    case "prioritized": {
+      /* **MUST BE PRESENT.** Absent is not "clear it": an event that names no
+         priority is a writer that lost its argument, and treating that as an
+         intentional clear would silently un-rank an item. */
+      if (!("priority" in json) || !isPriority(json["priority"])) return null;
+      return { ...envelope, kind: "prioritized", id, priority: json["priority"] };
     }
     case "dispatched": {
       const session = json["session"];
