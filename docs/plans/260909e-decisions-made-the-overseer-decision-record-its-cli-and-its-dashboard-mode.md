@@ -515,6 +515,54 @@ worth instrumenting.
 **Neither session is asking to build B or C now.** Both are shipping A's fix because a scrolling bar
 should be honest whatever else happens. The question is whether C is worth queueing.
 
+## The nine-mode reading, taken 2026-09-09 on `692fd230`
+
+Measured, not derived. Chrome via `playwright-core`, a context with
+`hasTouch: true` at 390×844 (`(pointer: coarse)` confirmed `true` in the page,
+so this is the bar the 40px floor applies to), read **after the fit rung
+settled**. `questions-mode-s2` takes the ten-mode reading; `#deploys` is the
+shared load.
+
+| load | rung | scrollWidth | clientWidth | overflow | scrollLeft | active fully visible |
+|---|---|---|---|---|---|---|
+| `#sessions` (first) | 2 | 479 | 390 | 89 | 0 | yes |
+| `#decisions` (mid) | 2 | 484 | 390 | 94 | 0 | yes |
+| `#deploys` (**last**) | 2 | 475 | 390 | 85 | **30** | **yes** |
+
+Bar height 48px at every load; Refresh sits **past the right edge** in all three,
+exactly as `readiness-tab` observed at eight; the page itself never scrolls
+sideways. At 1280 there is no overflow at all — `scrollWidth` 1280, all nine
+labelled, nothing clipped.
+
+**The gating check passes, and the counterfactual is why that means something.**
+With the scroll-into-view disabled and the client rebuilt, `#deploys` reads
+`scrollLeft: 0`, active right edge **416** against a 390 viewport,
+`activeFullyVisible: false`. With it, the bar scrolls 30px and the active button
+ends at 386. So the fix is what makes the last tab reachable, measured rather
+than inferred.
+
+**And the corrected gating check earned itself.** `#sessions` and `#decisions`
+pass *either way*. The original check — load `#decisions` and look — would have
+passed against a build with no fix in it and told me nothing.
+
+### The predictions, scored
+
+Committed at `b32acbe3` before any measurement:
+
+- **`clientWidth` identical** — 390 at every load. Holds; the pair will be
+  comparable.
+- **~41px per mode, ~440 at eight → ~481 at nine.** Measured 475–484. **Holds**,
+  within about 1%.
+- **Rung reported as a rung** — rung 2 at every load, so the bar is already
+  icon-only with the active mode keeping its label.
+
+**One thing the prediction did not anticipate, and it matters for the ten-mode
+comparison:** `scrollWidth` varies by *which* mode is active, because the active
+button keeps its label at rung 2 and labels differ in width — 475 with "Deploys"
+against 484 with "Decisions", a 9px spread. So the nine-to-ten delta must be read
+on **the same load**, or label width confounds it. That is why sharing `#deploys`
+was worth doing, and the number to compare against is **475**.
+
 ## Migration: one hand-authored seed, and no importer
 
 **No prose importer.** The lines in
