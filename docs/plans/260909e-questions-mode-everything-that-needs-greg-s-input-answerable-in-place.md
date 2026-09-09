@@ -1215,8 +1215,11 @@ a filter would make *what is blocking* and *what was decided in my name* one pil
 - ~~**The dock's shape at ten tabs**~~ — **answered 2026-09-09: a scrolling strip, reusing the
   product's, which is already what the fleet dock is.** § Where the tab goes has his words and the
   evidence that it needs no build. **What came out of it and is still open is a different question**,
-  now with Greg via the Overseer: *Refresh is off screen at eight, nine and ten modes, including at
-  rest.* The strip answers the crowding; it does not answer that.
+  put to Greg via the Overseer — *Refresh is off screen at eight, nine and ten modes, including at
+  rest* — and **he answered that too, 2026-09-09: *"It's fine if they need to scroll to see
+  Refresh."*** So both dock questions are closed and nothing is built for either. Recorded rather
+  than dropped, because the measurement stands and the next session to find Refresh off screen
+  should find the decision beside it rather than re-raise it.
 - **There is no way to ask a session to rewrite a question Greg cannot act on.** The AGENTS.md rule
   landed this morning and the dashboard cannot enforce it for a dialog question, because the message
   route refuses a pane showing a dialog and a queued copy drains only after he has answered. His
