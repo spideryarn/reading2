@@ -30,12 +30,12 @@
  */
 import {
   closeSync,
+  constants,
   fstatSync,
   openSync,
   opendirSync,
   readFileSync,
   readSync,
-  readdirSync,
   statSync,
   type Dir,
   type Dirent,
@@ -153,13 +153,18 @@ export type ScanResult = {
    */
   skippedForBudget: number;
   /**
-   * A directory held more entries than the discovery cap, so the listing was
-   * abandoned part way.
+   * The listing was abandoned at the discovery cap, so the answer may be
+   * incomplete.
+   *
+   * **"May be" is exact.** Reaching the cap sets this without probing for EOF,
+   * so a directory holding precisely the cap reports truncation and has in fact
+   * lost nothing. Erring that way is deliberate: the alternative is one more
+   * `readSync` to find out, and a page that says "possibly incomplete" when it
+   * is complete costs a reader nothing, where the reverse costs them the truth.
    *
    * A boolean rather than a count, because once you stop reading a directory you
-   * genuinely do not know how much of it is left — and inventing a number for it
-   * would be exactly the sort of confident wrong figure this feature is built to
-   * avoid. What the page needs is that the answer is incomplete.
+   * do not know how much is left — and inventing a number would be exactly the
+   * confident wrong figure this feature exists to avoid.
    */
   discoveryTruncated: boolean;
   unreadable: { file: string; why: string }[];
@@ -174,9 +179,22 @@ const MARKER = /^readiness-run ([0-9a-f]{6,32}) (\S+)/m;
 
 /** Read the first and last chunk of a file without pulling the middle through memory. */
 function readEnds(path: string): { head: string; text: string; sizeBefore: number; sizeAfter: number; mtimeMs: number } {
-  const fd = openSync(path, "r");
+  /**
+   * **`O_NONBLOCK`, and then check what we actually opened.**
+   *
+   * `Dirent.isFile()` in `discoverLogs` excludes a FIFO that already exists, but
+   * there is a window between that listing and this open in which a regular file
+   * could be replaced by one — and opening a FIFO with no writer blocks for ever,
+   * which on a single-threaded dashboard is the whole page. `O_NONBLOCK` makes
+   * the open return immediately whatever it found, and `fstat` on the fd we hold
+   * says what it really is. GPT Sol, round 3.
+   */
+  const fd = openSync(path, constants.O_RDONLY | constants.O_NONBLOCK);
   try {
     const before = fstatSync(fd);
+    if (!before.isFile()) {
+      throw new Error("it is not a regular file — something replaced it between the listing and the read");
+    }
     const head = Buffer.alloc(Math.min(HEAD_BYTES, before.size));
     if (head.length > 0) readSync(fd, head, 0, head.length, 0);
     const tailLength = Math.min(TAIL_BYTES, before.size);
@@ -537,23 +555,41 @@ export const MAX_ROOTS = 100;
 export function checkoutRoots(primary: string): { roots: string[]; truncated: boolean; why: string | null } {
   const roots = [primary];
   const worktrees = join(primary, ".claude", "worktrees");
+  let handle: Dir;
+  try {
+    handle = opendirSync(worktrees);
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    /* No worktrees directory is a checkout nobody has branched from — normal,
+       and not a fault. Anything else IS a fault, and this used to swallow both
+       identically, so a permissions problem read as "no worktrees" and the scan
+       quietly covered a fraction of the box. */
+    if (code === "ENOENT") return { roots, truncated: false, why: null };
+    return { roots, truncated: false, why: (err as Error).message };
+  }
+
+  /* **`opendirSync`, for the same reason `discoverLogs` uses it.** This was
+     `readdirSync` with the cap applied afterwards — which materialises every
+     entry before returning, so the cap bounded the loop and not the listing:
+     exactly the bug that had just been fixed one function down, left in place
+     here. GPT Sol, round 3. */
   let truncated = false;
   try {
-    for (const name of readdirSync(worktrees, { withFileTypes: true })) {
-      if (!name.isDirectory()) continue;
+    for (;;) {
       if (roots.length >= MAX_ROOTS) {
         truncated = true;
         break;
       }
-      roots.push(join(worktrees, name.name));
+      const entry: Dirent | null = handle.readSync();
+      if (entry === null) break;
+      if (entry.isDirectory()) roots.push(join(worktrees, entry.name));
     }
-  } catch (err) {
-    const code = (err as NodeJS.ErrnoException).code;
-    /* No worktrees directory is a checkout nobody has branched from — normal,
-       and not a fault. Anything else is a fault, and this used to swallow both
-       identically, so a permissions problem read as "no worktrees" and the scan
-       quietly covered a fraction of the box. */
-    if (code !== "ENOENT") return { roots, truncated: false, why: (err as Error).message };
+  } finally {
+    try {
+      handle.closeSync();
+    } catch {
+      /* Already closed, or the directory went away under us. */
+    }
   }
   return { roots, truncated, why: null };
 }
