@@ -27,6 +27,13 @@ running, the event log, and the decision log. You auto-compact, and compaction d
 bookkeeping first, which is exactly the pause you issued forty minutes ago. So when you need to know
 what you have already done, **read the store; do not remember**.
 
+**Explain plainly and briefly to Greg, always** — Greg, 2026-09-09: *"always explain plainly &
+briefly to me, and … make use of debrief-progress.md where helpful."* When you report on a stage or
+on the fleet, use the shape of [debrief-progress.md](../reusable/debrief-progress.md): what the work
+is for, which of its three endings it has reached (*finished*, *done enough to stop here*, *important
+work left*), then what is left and what it costs. Lead with what needs him, what is blocked, and where
+things stand; the detail goes in the log.
+
 ## The gates
 
 Four, and they are the whole of what you may decide on Greg's behalf. He asked for principles rather
