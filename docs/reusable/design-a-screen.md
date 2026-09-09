@@ -8,6 +8,39 @@ questions you answer in prose before you touch a stylesheet; the second is a che
 against every rule. **Doing the second half without the first produces a tidier screen that is no
 easier to use**, which is the usual outcome of a redesign and the thing this doc exists to prevent.
 
+## Running it: what goes in, what must come out
+
+A checklist wearing the word "prompt" is still a checklist. So this is the contract — gather all
+four inputs before starting, and produce all six outputs before writing any code. If an input is
+missing, get it; a design review done without screenshots is a review of your memory of the screen.
+
+**Inputs**
+
+1. **Purpose** — who reads this screen and what they came to do. In their words if you can get them.
+2. **Screenshots at every supported width**, from real or realistic data, saved to files. Full-page
+   as well as viewport for anything that scrolls.
+3. **A state inventory** — every state the screen can be in, *including* the ones where it is
+   reporting that it does not know. This is the input people skip, and it is the one that makes the
+   difference between a redesign and a regression.
+4. **Measurements and the available data** — the numbers from § Measure below, and what the screen's
+   data source can and cannot actually support.
+
+**Outputs**
+
+1. **The decisions this screen supports**, ranked. If you cannot name one, say so — that is a
+   finding, not a failure.
+2. **Ranked obstacles**, each citing a screenshot or a line of code. "It feels cluttered" is not an
+   obstacle; "the number answering the screen's question is 13px, below three paragraphs, in the
+   fourth screenful" is.
+3. **The proposed hierarchy** — what is primary, what is secondary, what is provenance.
+4. **What to remove, collapse or move.** Required, not optional: a redesign that only adds has not
+   made a decision.
+5. **Claims the data cannot support** — named as missing rather than invented, and never filled with
+   a plausible default.
+6. **Checks that could fail after implementation.** See § Afterwards.
+
+Anything you cannot answer, write down as unanswered. The gaps are the useful part of the output.
+
 ## Half one: what is this screen for?
 
 ### 1. Write down the questions the reader arrives with

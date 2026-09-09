@@ -47,26 +47,39 @@ in this worktree at `447d70f4`:
 | `Card`, `Pill`, `SectionHeading`, `Button` with one height and one radius | Any **spacing scale** — `controls.md` says outright it does not invent one |
 | A `danger` variant that is deliberately not `loud` | Any statement of **what each screen is for**, so nothing can be judged off-plan |
 
-The two censuses that make the diagnosis concrete, both from `grep` over `tools/fleet/web/src/`:
+Two censuses make it concrete. Both are `grep` over `tools/fleet/web/src/`, so **both are counts of
+source, not of rendered screen** — a distinction Sol made and the first version of this plan blurred.
 
-- **Type.** `text-[12px]` ×156, `text-[13px]` ×149, `text-[11px]` ×41, `text-[10px]` ×3, and then
-  one each of `17px` and `22px`. Two weights, `font-medium` ×85 and `font-semibold` ×49. So the
-  whole page is drawn in a 3px band. **Nothing can be dominant, because nothing is bigger than
-  anything else.** That is the mechanical cause of "hard to scan", and it is why the fix is not
-  more colour.
-- **Ink.** `text-ink-faint` ×177, `text-ink-soft` ×129, `text-ink` ×69. The *quietest* colour is the
-  *most common* one, and the loud one is the rarest. **When the whisper is the majority voice,
-  nothing is quiet** — the reader's eye has nothing to land on, so it lands on the accent colours
-  instead, which are then spent on whatever happened to be coloured rather than on what matters.
+- **Type.** 355 arbitrary sizes — `text-[12px]` ×156, `text-[13px]` ×149, `text-[11px]` ×41,
+  `text-[10px]` ×3, `text-[14px]` ×2, `text-[15px]` ×2, and one each of `17px` and `22px` — plus 13
+  named ones the first census missed (`text-xs` ×7, which is 12px, and `text-sm` ×6, 14px). So of
+  **368 sizing utilities, 356 are in the 10–13px band.** Two weights, `font-medium` ×85 and
+  `font-semibold` ×49. The page is drawn in a 3px band: **nothing can be dominant, because nothing
+  is bigger than anything else.**
+- **Ink.** `text-ink-faint` ×177, `text-ink-soft` ×129, `text-ink` ×69 — exact.
 
-So the work is: a **type and emphasis scale** on top of the palette that already exists, plus a
-written statement of what each screen is for — and then applying both, starting where Greg pointed.
+**The inference from the ink census was wrong, and Sol's is better.** The first version of this plan
+said *when the whisper is the majority voice, nothing is quiet*. That is rhetoric standing in for an
+argument: a majority of quiet text is perfectly good hierarchy when the quiet text really is
+secondary. What the ratio actually indicates is the thing worth acting on —
+
+> it more strongly indicates that most of the visible page is secondary material. Making those
+> paragraphs quieter will not make the yes/no, percentage and reset time sufficiently easy to find.
+>
+> — GPT Sol, P1(1), 2026-09-09
+
+So the work is not mainly a type scale. **It is information hierarchy: deciding what is primary and
+deleting, collapsing or demoting the rest.** The scale is necessary and nowhere near sufficient, and
+Stage 6 is reframed below accordingly.
 
 **The simpler option passed over:** restyle the Usage tab alone, no doc, no research, no scale.
 Rejected because Greg asked for the general thing ("in general, I think we need a design system"),
-because the same 3px band and the same faint-is-the-majority problem is on all seven tabs, and
-because a one-tab fix would be re-litigated by the next agent who adds a tab. The cost of the
-general version is one stage: the doc.
+because the same 3px band and the same secondary-material problem show up across the eight tabs, and
+because a one-tab fix would be re-litigated by the next agent who adds a tab. **What that costs is
+not "one stage: the doc"** — another sentence the first version got wrong. It costs the research,
+the full-screen measurement, Sol's analysis, the shared primitives, two pilot surfaces and then
+every remaining tab, and the honest form of the trade is that the general version is severalfold the
+cost of the narrow one and is worth it only if the tabs after the pilots actually get done.
 
 **A second simpler option passed over:** adopt a third-party design system (Carbon, Polaris, shadcn
 proper). Rejected on [vision.md § Principles](../project/vision.md#principles) — *prefer boring*,
@@ -232,7 +245,7 @@ attributed to Grafana).
       ask his question per screen and for the ranked changes per tab.
 - [ ] Sol reviews this plan, as the engineering-manager cadence requires, before any code.
 
-### Stage 5 — the landing surface: Greg's three questions in one screenful
+### Stage 5a — the landing surface's data contract, before any of it is built
 
 Dispatched into this plan by the Overseer on 2026-09-09, and it outranks the Usage restyle because
 it is the thing Greg actually asked for. It absorbs
@@ -240,9 +253,24 @@ it is the thing Greg actually asked for. It absorbs
 items 1 and 2 (*on a phone the detail is the whole page*; *the detail should show what the inbox
 knows*); that session stays idle.
 
-- [ ] Say, per question, **what data already exists and what is missing** — named as missing, never
-      invented.
-- [ ] Design and build it.
+Split out of a single Stage 5 on Sol's P1(2), which is right: *"landing-first as product priority is
+defensible; landing implementation before its data contract is not."* The original stage postponed
+its own feasibility work until inside the build.
+
+- [ ] For each of the three questions: the **supported answer**, its **completeness condition**, and
+      its **honest non-answer** when the condition fails.
+- [ ] A 390px wireframe, and a stated acceptance criterion for "one screenful" — currently the
+      plan's weakest word, since an attention list of six cards has no screenful. Proposal to be
+      settled here: *the answer to all three questions, and the first item of any of them, fit above
+      840px at 390px wide* — the rest is a count and a scroll.
+- [ ] **No build in this stage.** If 5a shows the landing needs another session or new collection
+      work, the Usage rewrite becomes the first code pilot instead and the landing waits, rather
+      than the whole job waiting for it.
+
+### Stage 5b — build the landing surface
+
+- [ ] Build only what 5a showed to be supported. State unknown coverage rather than inventing a
+      generic "blocked" count.
 
 #### What the data can already support, from the captured snapshot
 
@@ -273,12 +301,138 @@ conclusion the three questions push towards, which is a reason to believe it rat
 coincidence: if one screen answers *needed from me / blocked / where things stand*, several of the
 eight tabs stop being top-level navigation.
 
-### Stage 6 — Usage limits, the tab Greg named
+### Stage 6 — Usage limits: an information-hierarchy rewrite, not a restyle
 
-- [ ] Restyle against the doc. Before/after pair at both widths in this plan.
-- [ ] Every honest-absence state re-checked by name, not by eye.
+Reframed on Sol's P1(1). A restyle cannot fix this tab, because what is wrong with it is not how its
+paragraphs look but that **there are seventeen of them and they are all equally primary**. The
+component's own header says the question is *can this account afford more work?* and the rendering is
+a careful evidentiary document rather than a decision display. The order to build to:
 
-### Stage 7+ — the remaining tabs, one stage each
+1. **The decision** — available / limited / approaching / cannot tell.
+2. **The one valid number and the next reset time**, where they exist.
+3. **Any caveat that changes that decision**, immediately adjacent to it.
+4. **Provenance, old incidents and the second clock**, progressively disclosed.
+
+- [ ] Rewrite to that hierarchy, using `StatCard` for (2). Before/after pair at both widths.
+- [ ] Cut the duplication found in Stage 1: three non-answers printed twice on one screen.
+- [ ] Decide the three-zone timestamps. They are deliberate — Greg moves between London and Athens —
+      but they are a large fraction of the tab's height, and the ten-second test says a wall-clock
+      instant in three zones changes belief rather than action for every line except the *next
+      reset*. Proposal: the reset keeps all three zones; everything else becomes an age with the
+      zones one tap away. **This changes what the reader sees, so it goes to Greg** rather than
+      being decided here.
+- [ ] The fail-capable checks below, red before green.
+
+#### The check that could actually fail — Sol's P1(3), adopted
+
+The existing `tests/fleet-usage-card.test.tsx` is genuinely good: it already fails on lost strings,
+resurfaced expired percentages, missing coverage, misbadged incidents and collapsed absence arms.
+**And it stays green through every way this stage could go wrong** — it would not notice the
+coverage moving into a closed disclosure, an unknown caveat becoming 10px faint, or the answer being
+pushed below the phone fold.
+
+So the states most at risk, named rather than gestured at:
+
+- `limits.kind === "none"` versus `"unknown"`, and the `unreadable` / `malformed` / `TRUNCATED`
+  qualifiers on the coverage line.
+- A typed `expired` window, **and** a live `value` window whose reset passes while the page is open —
+  neither may show its percentage.
+- An unattributed cache after a `/login` swap: no percentages at all.
+- A `limited` verdict whose attributed reset has passed: cleared/history, not live alarm, with the
+  producer's reasons framed in the past tense.
+- An unreset but *unattributed* incident: may say "has not reset", must not look like the active block.
+- A future or unreadable `collectedAt`: stale or unknown, never fresh.
+- The seven outer absences — `not-asked`, `no-report`, `report-unreadable`, checkpoint absent,
+  checkpoint unreadable, unsupported schema, feed unreadable. **Only `usage === null` may draw
+  nothing.**
+
+And the check, which is a shape the existing suite cannot express:
+
+- [ ] Give the decision, the valid number/reset, and any decision-changing caveat **explicit
+      `data-*` roles**, so a test can find them without knowing the markup.
+- [ ] One browser fixture test at **390px** over four representative states — `limited`,
+      `ok`-with-coverage, `expired`/unattributed, `unknown`/stale — asserting **relational
+      invariants, not pixels**: the verdict and any applicable reset are inside the first viewport;
+      no critical region has a hidden or closed ancestor; the verdict's computed font size exceeds
+      the provenance text's; unknown and error text is not assigned the quietest role.
+- [ ] Keep every existing negative assertion that an expired or unattributed percentage appears
+      nowhere.
+
+A snapshot of every computed style would be brittle and is explicitly not what this is. Mutate the
+finished code and check the suite notices, per [silent-success.md](../reusable/silent-success.md).
+
+### Readiness: a handover, a constraint, and a question answered
+
+`readiness-tab` handed the panel over and stopped. Three things came with it, recorded here because
+the session that knew them is gone.
+
+**A constraint that must not be broken.** The sparkline marks carry two axes at once: **colour is
+state** (green pass, red fail, violet void, hollow outline for running) and **height plus a ring is
+provenance** — full-height ringed is a run that counts towards the verdict, half-height is history
+that can never vote. On this box most runs are bare `npx vitest run`, so most marks are history, and
+if the two treatments collapsed *a green mark between two red ones would read as a recovery that
+never happened*. The legend makes the same promise in words. Any resizing keeps both axes
+distinguishable, and it gets checked at 390px specifically, because a ring is what disappears first.
+
+**Their own diagnosis of the tab, which I agree with:** the cards are in the order the data arrives
+— verdict, history, tree — rather than the order a reader needs them, which is why
+`dev → main: 323 commits not deployed` is the last line of the third card at 13px. That is the
+ordinary mistake, not a careless one, and naming it is the whole fix.
+
+**And a real design question they asked rather than defended:**
+
+> the headline currently says "we do not know" in the tone colour, and that will be the answer
+> almost all the time, because a run only counts if it went through `scripts/readiness-run.ts` and
+> nothing on the box does that yet … A permanently-unknown headline at that weight may be shouting
+> a shrug.
+
+**One absence is doing the work of two, and splitting them resolves it without shouting or hiding.**
+This is [design-a-screen.md § Absence](../reusable/design-a-screen.md)'s rule biting somewhere I had
+not expected it to:
+
+- *Nothing on this box runs `scripts/readiness-run.ts`, so no run can ever count* is a fact about the
+  **instrumentation**. It is stable, it is the same tomorrow, and it has a fix somebody could type.
+  It is not news about this commit.
+- *A run was attempted and could not be read*, or a reading is stale, or a gate genuinely went red,
+  **is** news about this commit.
+
+Drawn as one thing, the permanent case teaches the reader to skip the loudest element on the tab —
+the alert-fatigue failure, which costs you the day it finally says something. Receding generally
+would make an unknown look calm, which is the worse failure. So the instrumentation gap becomes a
+**quiet, permanent, unmissable standing line** stating the gap and the command that closes it, and
+the loud slot is kept for a verdict about this commit, which then means something whenever it
+appears.
+
+So Readiness's stage is: promote `dev → main` to a headline `StatCard`; split the two unknowns;
+give the sparkline band weight without collapsing its two axes.
+
+### The Sol plan review, and what it changed
+
+Round 1 at `af0b6928`:
+[260909c-dashboard-design-system-plan-review-sol-r1.md](260909c-dashboard-design-system-plan-review-sol-r1.md).
+No P0. **All three P1s accepted and all three P2s acted on** — an unusually clean review to receive,
+and the reason is that it attacked the plan's *reasoning* rather than its taste.
+
+| Finding | What I did |
+|---|---|
+| **P1(1)** the diagnosis names a symptom, not the cause: form and information architecture, not type | Accepted. Rewrote § What "design system" means here, replaced my ink-census inference with Sol's, and reframed Stage 6 from *restyle* to *information-hierarchy rewrite* with a four-step order |
+| **P1(2)** Stage 5 postpones its feasibility work into its own build | Accepted. Split into 5a (data contract, wireframe, no build) and 5b, with an escape hatch so the whole job does not wait on the landing |
+| **P1(3)** "re-check every state by name" cannot fail | Accepted, and it is the most valuable finding here. `data-*` roles plus one 390px browser fixture test asserting relational invariants — now written out in Stage 6 |
+| **P2(1)** the census arithmetic is wrong and misses 13 named sizes; there are eight modes, not seven | Accepted; re-ran both greps myself and Sol is right. 349 of 355 arbitrary are 10–13px, not 355; with the named ones it is 356 of 368. Corrected, and relabelled as a source census rather than screen evidence |
+| **P2(2)** make the reusable doc a runnable prompt, not only a checklist | Accepted; see below |
+| **P2(3)** several plan facts are only intentions | Half of it was already stale — the screenshots and measurements are committed now. The two that stood: "one screenful" had no acceptance criterion (Stage 5a now proposes one) and *"the cost of the general version is one stage: the doc"* was simply false (corrected above) |
+
+**Two of Sol's findings were already answered by work it could not see**, which is worth recording
+rather than claiming as agreement: it flagged that no `blocked` predicate exists and that
+last-written / last-commit are missing, and the data table in Stage 5a says the same from the
+captured payload. Two independent routes to one conclusion is a stronger reason to believe it than
+either alone.
+
+Sol's own recommended order and mine now differ in one place only: it would *"stop and reassess
+before mechanically restyling every remaining tab"*. Adopted as written — Stage 7 is explicitly a
+reassessment, not a queue.
+
+### Stage 7+ — the remaining tabs: a reassessment, not a queue
 
 Each with a before/after pair, the gates, and a Sol code review. Order decided after Stage 4's
 ranking.
@@ -292,7 +446,7 @@ agreements, so the next agent does not have to re-negotiate them:
 |---|---|
 | `dashboard-tooltips` | **Their tooltips land on a tab first, my restyle after** — a restyle that moves prose into a card changes what an `Explain` is attached to. Their order: Recent messages → Queued ideas → Sessions/masthead → Overseer. **Usage limits, Readiness and Deploys are unclaimed by them and mine to take now** |
 | `deploys-ui` | Deploys stays in the sweep; they message me when their rework lands and I do the visual pass **on top of it**, not underneath. They decline `StatCard` for their tab, with a reason I accept: the freshness header's facts are qualified sentences, not stats, and turning them into big numbers is the "punchier" move that file exists to warn against |
-| `readiness-tab` | Theirs until they say otherwise; I offered two changes rather than making them |
+| `readiness-tab` | **Handed to me outright** — *"ReadinessPanel.tsx is finished and I'm stopping, so restyle it freely."* Their session has since ended; see § Readiness below for what they asked and my answer |
 | `claude-agents-dashboard` | `ActionButtons.tsx` and the detail's action machinery stay theirs; **the narrow-width layout question in `App.tsx` is mine**. An extraction of shared shapes out of `ActionButtons.tsx` is welcome *after* Stages 5–6, on the condition that the copy tests move with the components and **no string is tidied on the way** — several are worded around what the code can and cannot know, and the awkward ones are awkward on purpose |
 
 **And a correction I did not have: `SessionDetail.tsx` is owned by neither of us.** It went to
