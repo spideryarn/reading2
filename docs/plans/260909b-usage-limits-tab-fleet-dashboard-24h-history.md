@@ -116,17 +116,27 @@ checked hard — a schema-2 line replayed as schema 3 would produce a confidentl
 error. We avoid that class entirely by storing the projection, but the provenance field is what
 makes a future migration possible at all.
 
-**D4 — Dedupe on `collectedAt`, never on `writtenAt`.** This is the correction that would otherwise
-have been a silent bug. `TICK_MS = 30_000` and the checkpoint is **rewritten on every tick**, so
-`writtenAt` advances every 30 seconds whether or not a usage pass ran — deduping on it yields
-~2,880 lines/day, ~90% of them the same reading re-stored. `UsageSummary.collectedAt` is the
-reading's own clock and moves only when `collectUsage` actually produced something.
+**D4 — One line per collection pass, three kinds. Hook the pass, never the tick.**
 
-And the duplicate case is **meaningful, not merely redundant**: `chooseUsage`
-(`tools/overseer/usage-carry.ts`) deliberately republishes an earlier pass's report when a fresh
-scan falls over, because a rejection whose window resets on Friday is still in force. An unchanged
-`collectedAt` therefore means *no new reading was taken*, and the series should not get a point for
-it. The resulting gaps are real signal about the collector, not noise.
+*Revised 2026-09-09 once the writer became the daemon; the original text is kept below because the
+trap it names is still live.*
+
+The daemon appends one line per `collectUsage` pass, carrying which of three things happened:
+`take-fresh` (a new reading), `keep-stored` (the fresh scan fell over and `chooseUsage` republished
+an earlier report — no new reading, and the `why` says so), or a throw. There is **no dedupe key**,
+because the writer is the process that knows.
+
+**The trap that survives the revision**, and the reason this decision is numbered: `TICK_MS = 30_000`
+and the checkpoint is **rewritten on every tick**, so `writtenAt` advances every 30 seconds whether
+or not a usage pass ran. A writer hooked to the checkpoint *write* — the obvious place — would emit
+~2,880 lines/day, ~90% of them the same reading re-stored, and would blur exactly the collector
+failures the series exists to show. The hook goes in the `.then`/`.catch` of the 300 s timer.
+
+Before the writer moved, this decision read "dedupe on `collectedAt`, never on `writtenAt`", which
+was the right answer to the question as then posed: `UsageSummary.collectedAt` is the reading's own
+clock and moves only when a pass produced something. That answer is now unnecessary rather than
+wrong — and it is worth noticing that **the better design made a correctness question disappear
+instead of answering it.**
 
 **D5 — Two series, drawn differently, because they carry different claims.**
 - **Utilisation is per-account and safe to plot.** It comes from the cache's `attributed` arm,
@@ -163,7 +173,12 @@ epoch milliseconds and ISO instants only. Expiry is re-derived by the *renderer*
 skew-corrected clock — `projectUsage` deliberately takes no clock and reads nothing live, so that a
 server-computed "expired" never ships an answer as old as the payload.
 
-**D9 — Being locked out is not a refusal to open.** Proved on this box on 2026-09-08: a second
+**D9 — MOOT since the writer became the daemon (2026-09-09).** There is one daemon by contract, and
+the dashboard reads this store lock-free exactly as it reads `current.json`, so the race below
+cannot arise for it. Kept because the reasoning still binds `~/.fleet-health/`, and because if this
+store ever acquires a second writer, this is the rule it must adopt.
+
+~~Being locked out is not a refusal to open.~~ Proved on this box on 2026-09-08: a second
 dashboard on `FLEET_PORT=8799` shares the same directory as the live one on 8787, and two starts can
 race before either sees an async bind failure. `health-history.ts` already learned this — the store
 still **reads**, the page still draws the day, writes silently no-op, and `status().lockedOutBy`
@@ -177,17 +192,69 @@ key, no export from `~/.claude.json` beyond the utilisation fields already read,
 
 ### The seam, and where the file goes
 
-The history lands at **`~/.fleet-usage/usage.jsonl`**, not under `~/.overseer/`. That makes a rule
-rather than an exception:
+**SETTLED 2026-09-09, arbitrated by Fable after I got it wrong once.** The history lands at
+**`~/.overseer/usage.jsonl`**, written by **the daemon**, through a callback composed in
+`scripts/overseer.ts`. The dashboard reads it lock-free, exactly as it reads `current.json`.
 
-> `~/.overseer/` is what the **daemon** writes. `~/.fleet-*/` is what the **dashboard** writes.
+This keeps `overseer-direction.md`'s existing statement true — *"the daemon is the only writer of
+any of them"* — so the seam table gains a row rather than an exception, and the
+`~/.fleet-usage/` idea below is abandoned. **D9 becomes moot**: nothing in the dashboard takes a
+lock, so the two-dashboards-on-8799 race cannot arise for this store at all.
 
-`docs/project/overseer-direction.md`'s seam table currently enumerates only the daemon's six files
-and does not say why `~/.fleet-health/` is not among them. Stage 5 writes the rule down there.
+The section below is kept rather than deleted, because how the first answer was reached wrongly is
+the part worth having.
 
-**Who writes it: REOPENED on 2026-09-09.** This section first said "the dashboard", and its
-decisive reason was **wrong**. The reason is recorded here rather than deleted, because the way it
-was wrong is the interesting part.
+#### Why the daemon, and the fifth option that made it cheap
+
+The writer should be the process that **knows when a reading happened**. Every awkward part of the
+dashboard design — the dedupe key, a lock on the `/api/state` path, the two-dashboards race, history
+that stops when the dashboard restarts — is a workaround for not being that process.
+
+And the daemon knows **more** than the dashboard, not merely as much:
+
+- `daemon.ts:712-729` produces a clean **three-arm, once-per-pass** event: `take-fresh` sets the
+  report, `keep-stored` leaves the local `usage` untouched (so `collectedAt` does not move), and a
+  throw sets `{kind: "none", why, at}`. That is exactly the series, read off values that already
+  exist.
+- On `keep-stored` the daemon still **holds the discarded incomplete fresh report and its
+  `coverage`**. The dashboard never sees it — it gets the held report and a log line. So a
+  `kind: "scan-incomplete"` history line carrying the gap *reason* is available daemon-side only.
+  "Gaps are real signal about the collector" becomes signal **with a reason**, rather than an
+  inferred silence.
+
+**The condition that makes this correct — hook the pass, not the tick.** `checkpointUpdate()`
+(`daemon.ts:634`) re-spreads the same `usage` object every 30 s. A writer hooked to the checkpoint
+write would reproduce the `writtenAt` bug exactly, in a new place. The hook goes in the `.then` /
+`.catch` of the 300 s timer.
+
+**The fifth option** (Fable's, and neither the card's author nor I had it): do **not** import
+`projectUsage` into `daemon.ts`. `DaemonOptions.usage` is already `{intervalMs?, run}`
+(`daemon.ts:331`) — add `onPass?: (outcome) => void`, called at the three sites above. `daemon.ts`
+changes by ~5 lines and **imports nothing from `tools/fleet/`**. The composition happens in
+`scripts/overseer.ts`, which already straddles the seam (`:42` imports
+`../tools/fleet/overseer-claim.js`, `:59` imports `collectUsage`, `:975` builds `usage.run`).
+
+That is worth stating as the general shape, because it is better than the argument it settles: **the
+coupling belongs in the composition root, not in either module.** `tools/fleet/usage-history.ts`
+stays where this plan already put it; the daemon gains a callback and no dependency; and the
+`daemon.ts` diff is small enough to hand to `260908f-roadmap-exec-identity` as a one-line request
+rather than a merge conflict.
+
+#### Three corrections Fable made to my facts
+
+- **`projectUsage` is not free to call from the daemon.** It takes the *parsed checkpoint*, not a
+  `UsageReport`, and it imports `attention.ts`, which imports `node:fs`. So the composition either
+  wraps the report in a `{schema, writtenAt, usage}` envelope or calls `groupUsageIncidents`
+  (which takes hits directly) plus the smaller pieces. Not disqualifying — but "just call
+  `projectUsage`" overstated it, and I had written that.
+- **"The daemon is the long-lived one" is weaker than I claimed.** Both processes are systemd units
+  with `Restart=always`. The honest version is: *the dashboard is the one people restart and run
+  twice on port 8799.* The argument survives on that, not on uptime.
+- **`usage-feed.ts`, `usage-absence.ts` and `UsagePanel.tsx` exist on no branch at all** — they are
+  uncommitted in a sibling worktree. Every line number this plan cites into them is a citation into
+  code that is not in git yet, and they must be re-checked once that work lands.
+
+#### The reason that was wrong
 
 #### The reason that was wrong
 
@@ -406,9 +473,17 @@ limits tab showing the current reading, and only the chart is missing.
 ### Stage 0: plan, and get it reviewed
 
 - [x] Sonnet research over transcripts, docs and code (two halves, both landed)
-- [x] Settle the writer fork with `260908f-roadmap-usage` — dashboard, on `collectedAt`
-- [ ] Commit this doc pre-critique
-- [ ] GPT Sol review of the plan; record rulings in a decision-log section below
+- [x] ~~Settle the writer fork with `260908f-roadmap-usage` — dashboard, on `collectedAt`~~
+      — reopened after I checked the seam claim it rested on and found it false
+- [x] Measure the real cost against the live checkpoint rather than inheriting health's numbers
+- [x] Fable arbitrated the reopened fork: **daemon, via an `onPass` callback composed in
+      `scripts/overseer.ts`**
+- [x] Commit this doc pre-critique (`924f2209`)
+- [ ] GPT Sol round 1 — **running against `924f2209`**, which is three revisions behind. It was
+      explicitly asked to check the seam claim, so expect it to find independently what Fable and I
+      already found; that is a confirmation, not new work. Anything else it finds is the value.
+- [ ] Fold Sol's findings in, and send round 2 against the **current** revision with the writer
+      change in it — the design it reviewed is not the design being built
 - [ ] Revise and commit
 
 ### Stage 1: the store
@@ -418,9 +493,11 @@ one can read the other.
 
 - [ ] Write `tests/fleet-usage-history.test.ts` **first**, and watch it go red:
   - [ ] a line round-trips: append then read returns the same record
-  - [ ] **dedupe on `collectedAt`** — appending twice with an unchanged `collectedAt` writes one
-        line; a changed one writes two (this is D4, the highest-value test in the stage)
-  - [ ] `writtenAt` changing while `collectedAt` holds still writes **nothing** (the 30 s tick)
+  - [ ] **one line per pass, three kinds** — a `take-fresh` outcome writes a reading, a
+        `keep-stored` writes a `scan-incomplete` line **carrying `chooseUsage`'s `why`**, and a
+        thrown pass writes a `collector-failed` line. This is D4 and the highest-value test here.
+  - [ ] a `keep-stored` line does **not** carry a utilisation point — it is a gap with a reason, not
+        a repeat of the held reading (the failure this whole design exists to avoid)
   - [ ] rotation at the byte cap moves live → prev and keeps reading across both
   - [ ] an over-long single line is truncated, not dropped, and says it was truncated
   - [ ] a corrupt/partial trailing line is counted in `unreadableLines`, not thrown
@@ -429,35 +506,61 @@ one can read the other.
   - [ ] a line whose `checkpointSchema` is **not** the current one still reads back, tagged, rather
         than being dropped or silently reinterpreted (D3 provenance — the case that matters the day
         the checkpoint schema moves, which `260908g` makes live)
-  - [ ] the lock: a second writer no-ops and reports `lockedOutBy`, **and reads still work** (D9)
-  - [ ] a stale lock held by a dead pid is stolen
-  - [ ] `FLEET_USAGE_DIR` redirects the whole store
+  - [ ] `OVERSEER_STORE_DIR` redirects the whole store, so a test never touches the real
+        `~/.overseer/` (the daemon's own override; **not** a new `FLEET_USAGE_DIR` — that idea died
+        with the dashboard-writer design)
 - [ ] Write `tools/fleet/usage-history.ts`: `openUsageHistory(dir, options)`, append + bounded read.
-  - Line shape: `{schema: 1, at, collectedAt, checkpointSchema, checkpointWrittenAt, accountUuid,
-    kind: "reading" | "collector-failed" | "sample-omitted", summary: Record<string, unknown>}`
+  - Line shape: `{schema: 1, at, collectedAt, checkpointSchema, accountUuid, intervalMs,
+    kind: "reading" | "scan-incomplete" | "collector-failed", why?, summary?: Record<string, unknown>}`
   - `summary` stays a loose record (D3). Do **not** re-type it as `UsageSummary`.
-  - Cadence for gap width is recorded per line, mirroring `nextDueMs` (D6) — the collector's 300 s,
-    not the dashboard's request rate.
+  - `intervalMs` is recorded per line so gap width comes from the collector's own cadence, mirroring
+    health's `nextDueMs` (D6) — never from an interval assumed at read time.
+  - Reuse `../overseer/jsonl.js` and `../overseer/lock.js` rather than copying them, as
+    `health-history.ts:81-82` already does. **No lock is taken on the read path.**
 - [ ] Green, then **mutate the finished code and check the suite notices** (silent-success)
 - [ ] `npm run typecheck`, lint the touched files, commit
 
-### Stage 2: the wiring and the route
+### Stage 2: the writer hook, and the read route
 
-- [ ] Write `tests/fleet-usage-history-wiring.test.ts` first — **the join test**, which exists
-      because the health version was written after separately-tested pieces failed to be connected.
-      It must fail if the retain hook is not actually called on the request path.
-- [ ] Write `tests/fleet-usage-history-route.test.ts` first, against the pure `usageHistoryPayload`:
+Two halves that meet nowhere except the file on disk, which is the point.
+
+**The write side — a callback, not an import.**
+
+- [ ] Write `tests/overseer-daemon-usage-pass.test.ts` first — **the join test**, which must fail if
+      `onPass` is not actually called. The health version of this test exists precisely because
+      separately-tested pieces were once wired to nothing.
+  - [ ] `onPass` fires once per **pass**, with the right arm for each of `take-fresh`,
+        `keep-stored` and a throw
+  - [ ] **it does not fire on a tick.** Drive several `checkpointUpdate()`s with no usage pass and
+        assert zero calls — this is the `writtenAt` trap relocated, and the one test that would
+        catch it coming back.
+- [ ] `tools/overseer/daemon.ts`: add `onPass?` to `DaemonOptions.usage` (already `{intervalMs?,
+      run}` at `:331`), called at the three sites around `:712-729`. **~5 lines, importing nothing
+      from `tools/fleet/`.** Hand this to `260908f-roadmap-exec-identity` as a one-line request
+      rather than editing their file under them; do not proceed until they have it.
+- [ ] `scripts/overseer.ts`: compose `openUsageHistory` + the projection + the append, next to the
+      existing `usage: { run: … }` at `:975`. **This is the composition root and the only place the
+      coupling lives.** Note Fable's correction: `projectUsage` takes a parsed *checkpoint* and
+      pulls in `node:fs` via `attention.ts`, so either wrap the report in a
+      `{schema, writtenAt, usage}` envelope here, or call `groupUsageIncidents` plus the smaller
+      pieces. Decide which when the file is in front of you, and write down which and why.
+
+**The read side — no writer, no lock.**
+
+- [ ] Write `tests/fleet-usage-history-route.test.ts` first, against a pure `usageHistoryPayload`:
   - [ ] `hours` clamped to `[24, 168]`; junk `hours` falls back rather than throwing
   - [ ] an **empty** store returns the "no history yet" arm carrying an instant — never an empty
         series that a chart would draw as a flat line at zero (D6)
-  - [ ] holes are reported as holes
+  - [ ] holes are reported as holes, and a `scan-incomplete` line is a hole **with a reason**
   - [ ] an unreadable store returns `{kind: "unreadable", why}`
-- [ ] `tools/fleet/usage-history-wiring.ts`: `makeUsageRetention(options)` composing open + route +
-      `retainUsage` + startup lines in one place, mirroring `health-wiring.ts:41`
+  - [ ] the read takes **no lock** and works while the daemon is mid-append
 - [ ] `tools/fleet/routes-usage-history.ts`: `GET /api/usage/history?hours=N`, gzip above 8 KiB
-- [ ] Hook into `server.ts` at the existing checkpoint read — **additive only**, and announce the
-      `server.ts` touch to the Overseer before making it
+- [ ] Mount it in `server.ts` — one line, additive, announced to the Overseer first
 - [ ] Focused suites green, `npm test`, `npm run typecheck`, commit
+
+**Sequencing note.** The write side needs another session's file and the read side does not. If
+`daemon.ts` is not free when this stage starts, build the read side first against a hand-written
+fixture store — the format is settled in Stage 1, so nothing blocks.
 
 ### Stage 3: the tab, current reading only
 
@@ -469,6 +572,18 @@ The first stage Greg can see. Ends with a genuinely useful tab even if Stage 4 n
       "nothing here needs touching"; that is true of the bar's layout logic only, and both records
       are `Record<Mode, …>` so they must be extended. Do not edit `MODE_TIPS.overseer` — that
       wording belongs to session `overseer-tab-messaging` tonight.)
+  - **The tip never opens on a phone.** `Dock.tsx` passes `mouseOnly`, so on touch a tap switches
+    the tab and the card never appears; it survives only as the button's `aria-describedby`. Since
+    this page is mostly read on a phone, **the label and the icon must stand alone** and nothing
+    load-bearing may live only in the tip. "Usage limits" carries itself; pick an icon that reads as
+    a limit rather than as a chart, so it is not confused with Box health at a glance.
+  - Tip register is **the artefact, not the gesture**: first sentence is what you will see here,
+    second is where it comes from or what it does not promise. Switching a tab spends nothing, so a
+    "opening this runs X" framing would be false as well as unhelpful. (Session
+    `dashboard-modes-doc`'s ruling from the code, not Greg's — if he overturns it, this tip changes
+    with everyone else's.) Draft: *what* — the limits we are up against and how they moved today;
+    *how* — read from the Overseer's own 5-minute pass, so it is only as fresh as the last one, and
+    a rejection cannot be tied to an account.
 - [ ] `App.tsx:207-220` — one additive `{mode === "usage" ? … : null}` block. Keep it to that;
       `dashboard-titles-descriptions-detail` also has a small edit here.
 - [ ] Mount `UsageCard` from `UsagePanel.tsx` **unchanged** (D1), fed from the same
@@ -507,12 +622,26 @@ The first stage Greg can see. Ends with a genuinely useful tab even if Stage 4 n
 
 ### Stage 5: docs, and the multi-account writeup
 
-- [ ] `docs/project/overseer-direction.md` — add the `~/.overseer/` vs `~/.fleet-*/` rule to the
-      seam table, and a row for `~/.fleet-usage/usage.jsonl`. **This file's wording is a rule**, so
-      the edit goes to Greg one approved set at a time per `edit-important-docs.md` — prepare the
+- [ ] `docs/project/overseer-direction.md` — add a row for `~/.overseer/usage.jsonl` to the seam
+      table. The table's existing claim that *"the daemon is the only writer of any of them"* stays
+      true, so this is an addition and not a rewrite. **This file's wording is a rule**, so the edit
+      goes to Greg one approved set at a time per `edit-important-docs.md` — prepare the
       before/after and put it in the debrief rather than landing it unilaterally.
+  - Worth proposing to Greg in the same set, since it is the question that cost this plan two hours:
+    a sentence saying what the `tools/fleet` ↔ `tools/overseer` rule actually is. It is **weight and
+    the store cycle, not direction** — `jsonl.ts` and `lock.ts` cross freely because they import
+    only `node:*`, while a fleet module importing `readCheckpoint` would close a cycle and drag the
+    daemon's graph into the process you reach for when something else is broken. Two sessions got
+    this wrong tonight in opposite directions, which is the evidence that it is not written down
+    anywhere findable.
 - [ ] A line for the new tab under the entry point that owns the reading view / dashboard docs, so
       `tests/doc-links.test.ts` stays green (signposting needs no approval)
+  - **Cite by symbol, never `path:NNN`, in anything under `docs/project/`** — `doc-links.test.ts`
+    rejects line-number citations in evergreen docs. Line numbers are fine in this plan, which is a
+    record rather than documentation.
+  - Cross-check against `docs/project/fleet-dashboard-modes.md` (session `dashboard-modes-doc`,
+    landing tonight) rather than duplicating it — that doc owns "how to add a mode", so this one
+    links to it and describes only the usage tab itself.
 - [ ] Write the appendix below into whichever `docs/project/` doc owns usage, per "a plan is a
       record, not the documentation"
 - [ ] `npm run check` last (~26 min, silent until done) — read its verdict, do not gate the commit
@@ -538,7 +667,29 @@ Recorded so the medium-term work is a stage, not a rewrite. **None of this is in
   `260908f-roadmap-usage`: `TICK_MS = 30_000` rewrites the checkpoint every tick, so `writtenAt`
   would have produced ~2,880 lines/day, ~90% duplicates — and would have hidden the collector
   failures that an unchanged `collectedAt` makes visible. Caught before a line was written.
-- **2026-09-09, writer.** Dashboard, not daemon. Decisive reason is the one-way module seam
-  (`tools/fleet/` must not import `tools/overseer/`), not the health precedent.
+- **2026-09-09, writer — first answer, WRONG.** ~~Dashboard, not daemon. Decisive reason is the
+  one-way module seam (`tools/fleet/` must not import `tools/overseer/`), not the health
+  precedent.~~ The seam claim is false in both directions; see "The reason that was wrong". I took
+  it from a peer's message because it was plausible and matched a rule I half-believed, and did not
+  run the grep. The peer had grepped one direction and concluded about both.
+- **2026-09-09, writer — settled, arbitrated by Fable.** The **daemon**, via an `onPass` callback on
+  `DaemonOptions.usage`, composed in `scripts/overseer.ts`. File at `~/.overseer/usage.jsonl`.
+  Reasons in order: the daemon *knows* when a reading happened (`chooseUsage` already returns
+  `{take-fresh | keep-stored}` with a `why`, `usage-carry.ts:55-57`) where the dashboard can only
+  infer it; the daemon additionally holds the discarded incomplete report and its coverage, so a gap
+  gets a reason instead of a silence; and the dashboard is downstream of the sole collector, so it
+  adds a liveness dependency and buys no resilience anywhere.
+
+  The callback is the part worth carrying elsewhere: **the coupling belongs in the composition root,
+  not in either module.** `daemon.ts` gains ~5 lines and no import; `tools/fleet/usage-history.ts`
+  stays put; `scripts/overseer.ts`, which already straddles the seam, joins them.
+
+  Consequences: D9 (lock-out behaviour) is moot — the dashboard reads lock-free and there is one
+  daemon by contract. `FLEET_USAGE_DIR` is not needed; `OVERSEER_STORE_DIR` already exists.
+  `overseer-direction.md`'s "the daemon is the only writer of any of them" stays **true**, so Stage 5
+  adds a row rather than an exception.
+- **2026-09-09, what this cost and what it bought.** Two hours of plan time, no code. It removed an
+  entire correctness question (the dedupe key) rather than answering it, which is the better outcome
+  and would not have been found by building the first design and reviewing it afterwards.
 - **2026-09-09, storage.** Projection, not raw, on the measured 60,970-byte usage blob. Given up:
   per-hit ids and transcript paths in history.
