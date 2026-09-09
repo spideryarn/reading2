@@ -10,17 +10,28 @@
  *
  *  1. **What it needs from you**, which is the reason the page exists, so it is
  *     first and it is the only thing here drawn in the loud colour.
- *  2. **Do something to it** — the vocabulary as buttons (ActionButtons.tsx),
- *     with the two classes of action kept apart: a sentence the agent may
- *     ignore, and a command that runs whether or not it cooperates.
+ *  2. **Latest message** — the last thing the agent actually said, with the
+ *     turns before it behind a disclosure (RecentMessages.tsx). See below.
  *  3. **Say something to it** — a message, typed at the pane now, or queued to
  *     go in order with everything else pressed.
- *  4. **Waiting to go to it** — the queue, because a queue you cannot see
+ *  4. **Do something to it** — the vocabulary as buttons (ActionButtons.tsx),
+ *     with the two classes of action kept apart: a sentence the agent may
+ *     ignore, and a command that runs whether or not it cooperates.
+ *  5. **Waiting to go to it** — the queue, because a queue you cannot see
  *     surprises you an hour later in somebody else's conversation.
- *  5. **Recent messages** — the tail of the session's own transcript, drawn for
- *     every row whatever its status (RecentMessages.tsx). See below.
  *  6. **Where it is**, the identifiers and the directory, last because they are
  *     what you read when two rows look the same rather than what you came for.
+ *
+ * **The conversation moved from last to second on 2026-09-09**, which is the
+ * only reordering this file has had that changes what the page is *for*. Greg:
+ * *"show the most recent message (perhaps with a summary if idle) prominently
+ * near the top, with the input-box and command-lists underneath, with a button
+ * to click to open up the previous messages"*. The reading is unchanged — one
+ * `useRecentMessages`, one fetch — and only the rendering is split, so the
+ * newest turn and its older siblings cannot disagree about what was read.
+ *
+ * The loud band stays above it. A session that needs you is the reason to open
+ * this page at all, and it outranks what the session happens to have said.
  *
  * The session's **name** is editable in place under the title, because it is a
  * property of the session rather than something you do to it — and only here,
@@ -98,7 +109,7 @@ import { useCallback, useRef, useState, type ReactNode } from "react";
 import { ActionOutcomeCard, SessionActions, SessionQueue } from "./ActionButtons";
 import { DictationControl, useFleetDictation } from "./DictationControl";
 import { PauseLine } from "./PauseLine";
-import { RecentMessages, useRecentMessages } from "./RecentMessages";
+import { EarlierMessages, LatestMessage, useRecentMessages } from "./RecentMessages";
 import { Handles, Handoff, LaunchMode, QuestionCard, StatusPill, Uptime } from "./SessionParts";
 import { Explain } from "./Tooltip";
 import { hasDeliverable, queueFor, type ActionOutcome } from "./actions-client";
@@ -915,12 +926,28 @@ export function SessionDetail({
         <p className="tw:mt-2 tw:text-[13px] tw:text-alarm-ink">{unaddressable}</p>
       )}
 
+      {/* ------------------------------------- 2. the conversation -- */}
+      {/* MOVED UP FROM THE BOTTOM, 2026-09-09. Greg: "show the most recent
+          message ... prominently near the top, with the input-box and
+          command-lists underneath". The last thing the agent said is what you
+          came to read; the composer is what you do about it, and it is now
+          underneath rather than above.
+
+          ABOVE THE SHELL SHORT-CIRCUIT, deliberately: this is drawn for EVERY
+          row whatever its status, because a shell has no transcript and the
+          honest answer there is the reader's own sentence rather than a section
+          that quietly removed itself. See RecentMessages.tsx. */}
+      <Section title="Latest message">
+        <LatestMessage row={row} now={now} reading={reading} />
+        <EarlierMessages view={reading.view} row={row} now={now} />
+      </Section>
+
       {/* A SHELL GETS ONE SENTENCE AND NONE OF THE CONTROLS. See the header's
           "what this file decides, and what it does not". */}
       {row.status.kind === "shell" ? (
         <p className="tw:mt-3 tw:text-[13px] tw:text-ink-soft">
           A shell. Nothing can be typed at it: a shell would <em>run</em> the message rather than read it. The
-          transcript and the identifiers below are still worth having; there is nothing here to press.
+          transcript above and the identifiers below are still worth having; there is nothing here to press.
         </p>
       ) : (
         <>
@@ -1053,13 +1080,6 @@ export function SessionDetail({
         </>
       )}
 
-      {/* ------------------------------------- 5. the conversation -- */}
-      {/* Drawn for EVERY row, whatever its status. A shell has no transcript
-          and the honest answer there is the reader's own sentence, not a
-          section that quietly removed itself. See RecentMessages.tsx. */}
-      <Section title="Recent messages">
-        <RecentMessages row={row} now={now} reading={reading} />
-      </Section>
 
       {/* --------------------------------------------- 6. where it is -- */}
       {/* COLLAPSED. This is what you read when two rows look the same, not what

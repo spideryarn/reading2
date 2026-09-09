@@ -8266,3 +8266,128 @@ describe("resolution and startedDir — what new-session actually did", () => {
     expect(text).not.toContain("Started with");
   });
 });
+
+/**
+ * THE CONVERSATION MOVED TO THE TOP, AND THE ORDER IS THE FEATURE.
+ *
+ * Greg, 2026-09-09: *"show the most recent message (perhaps with a summary if
+ * idle) prominently near the top, with the input-box and command-lists
+ * underneath, with a button to click to open up the previous messages"*.
+ *
+ * **Every one of these passed before the change, which is why they are here.**
+ * The existing "recent messages, on the page" block asserts what is rendered
+ * and never where, so the section could have been anywhere on the page — or
+ * back at the bottom — without a single test noticing. Order is the whole of
+ * what Greg asked for, so order is what is pinned.
+ */
+describe("the newest message first, and the rest behind a disclosure", async () => {
+  /** The headings this page draws, in the order the DOM has them. */
+  function headings(): string[] {
+    return [...container.querySelectorAll("h3")].map((h) => (h.textContent ?? "").trim());
+  }
+
+  /**
+   * The conversation's own disclosure, found by what its summary SAYS.
+   *
+   * Not `querySelector("details")`: Rename and Where it is are `<details>` too
+   * and share the class, so the first match is whichever happens to be highest
+   * on the page. A test that asserted "not inside the disclosure" against the
+   * Rename block would pass for a reason that has nothing to do with the claim.
+   */
+  function disclosure(): HTMLDetailsElement | null {
+    return (
+      [...container.querySelectorAll("details")].find((d) => {
+        const summary = d.querySelector("summary")?.textContent ?? "";
+        return summary.includes("earlier message") || summary.includes("Where this came from");
+      }) ?? null
+    );
+  }
+
+  async function openWithTurns(turns: Record<string, unknown>[]): Promise<void> {
+    const { api } = recordingMessages(() => messagesWire({ turns }));
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport, messagesApi: api });
+    act(() => feed.push(state({ rows: [steerable({ id: "$1", title: "one" })] })));
+    openSession("one");
+    await act(async () => {});
+  }
+
+  it("puts the latest message above the composer and the buttons", async () => {
+    await openWithTurns([turnWire({ uuid: "a", text: "first thing" }), turnWire({ uuid: "b", text: "last thing" })]);
+    const order = headings();
+    const latest = order.indexOf("Latest message");
+    const say = order.indexOf("Say something to it");
+    const ask = order.findIndex((h) => h.startsWith("Ask it to"));
+    expect(latest).toBeGreaterThanOrEqual(0);
+    expect(say).toBeGreaterThan(latest);
+    expect(ask).toBeGreaterThan(latest);
+  });
+
+  /** The loud band is the reason the page exists and outranks what was said. */
+  it("keeps what it needs from you above the latest message", async () => {
+    const { api } = recordingMessages(() => messagesWire({ turns: [turnWire()] }));
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport, messagesApi: api });
+    act(() =>
+      feed.push(
+        state({ rows: [steerable({ id: "$1", title: "one", status: { kind: "needs-you" }, question: question() })] }),
+      ),
+    );
+    openSession("one");
+    await act(async () => {});
+    const order = headings();
+    expect(order.indexOf("What it needs from you")).toBeLessThan(order.indexOf("Latest message"));
+  });
+
+  it("shows only the newest turn outside the disclosure", async () => {
+    await openWithTurns([turnWire({ uuid: "a", text: "an older thing" }), turnWire({ uuid: "b", text: "the newest thing" })]);
+    const details = disclosure();
+    const outside = [...container.querySelectorAll(".transcript-turn")].filter((t) => !details?.contains(t));
+    expect(outside).toHaveLength(1);
+    expect(outside[0]?.textContent).toContain("the newest thing");
+    expect(outside[0]?.textContent).not.toContain("an older thing");
+  });
+
+  it("puts the earlier turns inside a disclosure that says how many", async () => {
+    await openWithTurns([
+      turnWire({ uuid: "a", text: "older one" }),
+      turnWire({ uuid: "b", text: "older two" }),
+      turnWire({ uuid: "c", text: "newest" }),
+    ]);
+    const summaries = [...container.querySelectorAll("summary")].map((s) => s.textContent ?? "");
+    const mine = summaries.find((s) => s.includes("earlier message"));
+    expect(mine).toContain("2 earlier messages");
+  });
+
+  it("says so rather than counting to one when the newest turn is the only one", async () => {
+    await openWithTurns([turnWire({ uuid: "a", text: "the only thing said" })]);
+    const summaries = [...container.querySelectorAll("summary")].map((s) => s.textContent ?? "");
+    expect(summaries.some((s) => s.includes("Where this came from"))).toBe(true);
+    expect(summaries.some((s) => s.includes("earlier message"))).toBe(false);
+  });
+
+  /**
+   * THE HALF THAT WOULD HAVE BEEN A SILENT REGRESSION.
+   *
+   * A transcript we could not read has no newest turn. If the refusal had
+   * stayed downstairs with the provenance, the top of the page would render
+   * NOTHING and read as a session that has said nothing — which is the failure
+   * this whole page is written against, arriving through a layout change.
+   */
+  it("renders a refusal at the top, not inside the disclosure", async () => {
+    const { api } = recordingMessages(() => ({
+      kind: "not-found",
+      reason: "no-transcript",
+      why: "nothing on disk names this conversation",
+    }));
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport, messagesApi: api });
+    act(() => feed.push(state({ rows: [steerable({ id: "$1", title: "one" })] })));
+    openSession("one");
+    await act(async () => {});
+    const details = disclosure();
+    const text = container.textContent ?? "";
+    expect(text).toContain("There is no transcript to read for this session.");
+    expect(details?.textContent ?? "").not.toContain("There is no transcript to read");
+  });
+});

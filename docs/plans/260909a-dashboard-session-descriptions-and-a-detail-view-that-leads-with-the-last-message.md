@@ -435,17 +435,81 @@ New order, the loud band staying on top:
 | 5 | recent messages | waiting to go to it |
 | 6 | where it is | where it is |
 
-- [ ] Split `RecentMessages.tsx` into a latest-message view and an earlier-messages disclosure over the
-      same `useRecentMessages` reading. **The refusal arms (`not-found`, `unreadable`, `no-answer`,
-      "not read yet") surface at the top with the latest message**, not down with the provenance — a
-      reading that could not be taken must not render as silence.
-- [ ] Re-parent `ActionButtons` freely; **change nothing it says**, and leave
-      `DELIVERY_HEADLINE:319-336` byte-identical. If an arm reads badly in the new layout that is a
-      message to the dashboard agent via the Overseer, not an edit.
-- [ ] The idle summary shows only when the session is idle **and** the summary is cached — never a
-      spinner where a sentence goes.
-- [ ] New `describe` blocks in `tests/fleet-web.test.tsx`, appended.
-- [ ] Browser check at 390 px and 1280 px in a Sonnet subagent.
+- [x] Split `RecentMessages.tsx` into `LatestMessage` and `EarlierMessages` over the **same**
+      `useRecentMessages` reading — one fetch, one view, two renderers, so the newest turn and its
+      older siblings cannot disagree about what was read.
+- [x] **The refusal arms surface at the top with the latest message.** `not-found`, `unreadable`,
+      `no-answer` and *not read yet* are the states in which there is no newest turn; leaving them
+      downstairs would have rendered **nothing** at the top, which reads as a session that has said
+      nothing rather than as a transcript we could not read. A test pins it.
+- [x] **The stale note moved up with the turn it qualifies, and the provenance did not.** Same cut
+      `Found` already made one level down: bytes-read changes what you *believe*, age changes what you
+      *do* — and the disclosure is closed by default, so a caveat inside it is a caveat nobody has.
+- [x] Re-parented `ActionButtons` and the queue below the conversation; **nothing they say changed**
+      and `DELIVERY_HEADLINE` is byte-identical.
+- [x] One line of existing copy did change and had to: the shell sentence said "the transcript and the
+      identifiers **below**", and the transcript is now above it.
+- [x] Six `describe` blocks appended to `tests/fleet-web.test.tsx`; nothing reorganised.
+      **All 345 pass, and the new ones are capable of failing** — rendering every turn in `Latest`
+      instead of the newest turns "shows only the newest turn outside the disclosure" red. The order
+      assertions would have failed before the change too, because `Latest message` did not exist.
+- [x] The disclosure is located in tests **by what its summary says**, not by `querySelector("details")`:
+      Rename and *Where it is* are also `<details>` sharing the class, so the first match is whichever
+      sits highest on the page, and "not inside the disclosure" would have passed against the wrong
+      element for a reason unrelated to the claim.
+- [ ] **The idle summary is NOT in this stage** — it needs the describer, which is blocked. The
+      section is built to take it: when it arrives it goes beside the newest turn, shown only when the
+      session is idle *and* the summary is cached, never a spinner where a sentence goes. F9's
+      constraints (summarise the last completed turn, never infer "finished" from `idle`) land with it.
+- [x] Browser check at 390 px and 1280 px, in a subagent driving Playwright against a server run out of
+      this worktree. Not Sonnet, deliberately: those are rate-limited until 2026-09-12 and a 429 kills
+      a spawned agent mid-task rather than at spawn.
+
+**What the browser said, and the one thing it caught that no test could.** Order correct at both
+widths, measured by vertical position rather than by DOM order alone; no horizontal overflow at 390 px
+(`scrollWidth === clientWidth === 390`, open and closed), long `Bash` strings in tool-call lines
+breaking mid-token rather than overflowing; the newest turn readable without pinching; console
+completely silent — zero messages of any type, not even the one error the docs lead you to expect.
+
+**And the finding: the disclosure summary was styled as a section heading, not as a control.** It had
+copied *Where it is*'s summary styling — 11 px, uppercase, tracking-widest, ink-faint — so on screen
+it sat between `LATEST MESSAGE` and `SAY SOMETHING TO IT` reading as a third section label, with
+nothing but the browser's native 8 px triangle to say otherwise. `cursor: pointer` is invisible on a
+phone. The agent's words: *"I'd have scanned past it."* That is the one thing a jsdom test cannot
+answer — every assertion about it passed, because the element was correct and only its appearance was
+wrong — and it is precisely the "button to click" Greg asked for.
+
+Fixed: sentence case at 13 px with a border and a panel fill. **And a second fix from the same
+report**, which was offered as the lower priority and taken anyway because it is two lines: opening
+the disclosure inline pushed the composer ~2,600 px down at 390 px (measured, `y=1576` → `y=2841`), so
+reading back and then replying was a long scroll each way. The content is now capped at `60vh` with
+its own scroll — which is *closer* to the "popup panel" Greg asked for than an unbounded expansion, so
+it costs nothing in fidelity to the request.
+
+**And the cap introduced a defect of its own, which the second browser round caught.** With no
+boundary on the scrolling box, `offsetWidth − clientWidth` was `0` at both widths — overlay
+scrollbars, no gutter, no persistent bar — so the last visible turn simply stopped and the next
+section began. At 390 px the cut landed mid-turn, and a panel holding six more messages read as **a
+conversation that ends here**. That is this tool's own failure mode wearing a new hat: an absence
+rendering as a fact, introduced by a fix for something else. A border and radius matching the control
+that opened it makes the cut legible as a cap. Verified after: the border computes on the scrolling
+div (`1px solid oklch(0.9 0 0)`, all four sides) as well as the summary, `offsetWidth − clientWidth`
+is now `2` — the borders, not a reclaimed gutter — and at maximum scroll the last child's bottom sits
+exactly on the panel's inner bottom edge (`650 === 650` at 1280, `616 === 616` at 390), so the side
+padding clipped nothing. It reads as **two stacked related boxes** — a control with its output panel
+beneath — rather than one unit, which keeps the summary legible as the thing you press while the panel
+is open.
+
+**Two pre-existing defects the move made prominent, and they are Greg's calls rather than this
+stage's.** The turn body renders as raw text, so a message containing `**bold**` or backticks shows
+its markup — deliberate, because `web/src/` is under a glob test forbidding raw HTML and rendering
+markdown is a scope and safety decision, not a tweak. And a long turn is cut mid-word above *"Cut
+short — 2,253 characters in full"*, which is server-side `maxTextChars`. Both were tolerable at the
+bottom of the page and are more noticeable as the first thing you read.
+
+**One thing the check could not observe:** no session on the box had a pending question at the time,
+so *"What it needs from you"* above the latest message is verified by a jsdom test and by source
+order, not by a screenshot.
 
 ### [ ] Stage F — land it
 
@@ -541,17 +605,31 @@ is the id the live process's own `--session-id` carried, not the tmux claim — 
 says outright which side is stale: *"the claim is the stale one … `observed` is the conversation
 actually in the pane and `claimed` is what every address in this payload would have sent you to."*
 
-**One thing the cross-check found that its author did not mention, and it is load-bearing:
-`claimed-only` carries a `conversation` too.** So a `conflicting` conversation is reachable from *two*
-execution arms, not one — the process need not be verified for us to know the pane has changed hands.
-That means the loudest and most useful state is detectable in strictly more cases than the
-verified-only predicate would suggest, and the three rendering rules fall out as:
+**A wrong inference, recorded because the type invites it.** `claimed-only` also carries a
+`conversation`, and I read that as meaning `conflicting` is reachable from two execution arms — that
+we could know a pane had changed hands without having identified the process. **It is not, and the
+reason is structural:** `claimed-only` means the walk ran and could not *name* what it found, so no
+command line was read, so there is no observed conversation id to disagree with the claim.
+`readExecutionIdentity` passes `observed: null` on that path unconditionally
+(`execution-identity.ts:258`) and `conversationOf` (`:302`) maps a null observation to `unverifiable`,
+or `not-claimed` where there is no claim. **`conflicting` comes from `verified` and nowhere else.**
+
+So the coverage is *narrower* than I thought, not wider, and the verified-only predicate was right all
+along. The type does not express the invariant, which is why a careful read reached the opposite
+conclusion; its author has added it to the arm's doc comment.
 
 | reading | what the row shows |
 |---|---|
 | `execution.verified` **and** `conversation.verified` **and** the id matches the transcript read | the description, keyed on `boot:pid:startTicks` |
-| `conversation.conflicting`, from **either** execution arm | **"this pane is running a different conversation now"** — never a description |
+| `conversation.conflicting` (reachable from `verified` only) | **"this pane is running a different conversation now"** — never a description |
 | anything else | `cannot-tell`, worded informatively (see the caveat below) |
+
+**A near miss worth knowing about, since it looks like thrown-away information.** When a harness *is*
+named and only its start ticks cannot be read, the reading is `unknown`/`process-start-unreadable`
+and it discards a conversation verdict it briefly held. Promoting that to `claimed-only` carrying the
+real verdict *would* make `conflicting` reachable from two arms — and was rejected deliberately,
+because a failed `/proc` read almost always means the process exited between the `ps` and the read, so
+naming the conversation a dead process was running is a false alarm rather than a rescued fact.
 
 Three refinements from that session, all taken:
 
@@ -630,3 +708,22 @@ change to those three fields is a cache migration for us rather than a rename.
 **So the token is consumed through one stringifier and one place**, not spread through the describer,
 and the plan says so here rather than discovering it later: if the token's shape moves, exactly one
 function changes and every stored record is invalidated by its own key rather than by a migration.
+
+## One more coordination, 2026-09-09 — the shared turn renderer
+
+`recent-messages-tab` is building a dock tab showing a rolling window of recent messages across every
+live session, and asked whether to reuse `RecentMessages.tsx`'s rendering or duplicate it while this
+stage is in flight. **Answered: extract it, and the reason is a correctness hazard rather than
+tidiness.**
+
+`Turn` is small, but it renders `SPEAKERS`, a nine-arm map over `MessageSpeaker`, and two of those
+arms are traps. `transcript.ts:60-64` says a `compact-summary` *"reads exactly like a person
+recapping the task"* and is *"the single most convincing wrong answer this module could give"*. A
+second renderer that collapses that into `human`, or falls through on an arm it does not know, shows a
+fabricated recap as something a person said — and a cross-session feed is the **worst** place for that
+bug, because its reader was not watching those sessions and has no independent sense of what was said
+in them. Duplicating markup is cheap; duplicating a nine-arm discrimination with two landmines is not.
+
+**The split, so neither agent edits the other's file:** that session creates a new file holding `Turn`
+and `SPEAKERS`, copied as-is; this one deletes the local copy and changes one import once Stage E is
+green and reviewed. Two copies exist harmlessly in between, and each step has one owner.
