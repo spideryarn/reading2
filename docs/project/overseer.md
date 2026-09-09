@@ -314,7 +314,10 @@ code for a new idea that should be added to the queue."* An idea prefixed `new-a
 queue in his words verbatim and is dispatched when the tick finds room — never straight from the
 message, which is how eight sessions started in twenty minutes on 2026-09-08 and four had to be
 paused. The queue is [overseer-queue.md](overseer-queue.md) until the NDJSON queue in 260909b
-replaces it.
+replaces it. **An idea Greg dictates to you in chat is authorised by his saying so**: record it in his
+words, run the queue's `authorize … --by greg` on his behalf, and log that he asked. Greg, 2026-09-09:
+*"unless it's important/hard-to-reverse/product-facing I want you to handle all the low-level stuff
+for me, and keep things running, and for me to mostly just interact with you by talking."*
 
 **Read `gjd-remote ls` before you dispatch anything.** The session list is the claim register for
 every job and not only for feedback reports, and it fails in the safe direction: a name you cannot
