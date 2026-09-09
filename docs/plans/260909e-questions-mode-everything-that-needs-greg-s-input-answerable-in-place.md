@@ -4,7 +4,8 @@ Up: [overseer-direction.md](../project/overseer-direction.md) ·
 [fleet-dashboard-modes.md](../project/fleet-dashboard-modes.md) ·
 queue item `qi-25bs5ysg` · session `questions-mode` · worktree `questions-mode`
 
-Status: **plan written, not yet reviewed, nothing built.**
+Status: **plan revised after GPT Sol's round-one review returned *not fit to build*; round two
+pending; nothing built.** § What the review changed.
 
 ---
 
@@ -65,11 +66,16 @@ and then answering it.**
 |---|---|---|
 | a live multiple-choice dialog | picks an option | **yes** — a button per option |
 | a decision handed over in prose | says which, in words | **yes** — a text box and a microphone |
-| a question he cannot understand | asks for it to be rewritten | **yes** — a canned reply chip (§ The rule) |
-| a queued idea awaiting his authority | authorises it | **no** — a link to Queued ideas (§ What v1 leaves out) |
+| a question he cannot understand | asks for it to be rewritten | **no, and nothing can** — § The chip cannot be built |
+| a queued idea awaiting his authority | authorises it | **no** — a counted link to Queued ideas |
 
-Three of the four finish here. The fourth cannot: the queue refuses writers other than the Overseer
-by design, so a button here would be a lie about who may write.
+**Two of the four finish here, and the other two cannot — for two different reasons, neither of them
+a choice this plan made.** A queued idea is not answerable because the queue refuses writers other
+than the Overseer by design, so a control here would be a lie about who may write; a counted pointer
+is the honest whole of what this tab can offer, and it is acceptance-critical rather than optional.
+A rewrite request is not sendable because the message route refuses a pane showing a dialog. The
+second is a gap in the fleet's write vocabulary rather than in this tab, and it is carried to the
+Overseer as such.
 
 ### 3. What the screen must never do
 
@@ -153,8 +159,9 @@ rather than about scope:
 to hold onto: *this mode introduces a write path from a card.* That is what agreement (a) refused,
 it is what Greg has now asked for, and every further control this tab grows is one more thing down a
 path that now exists. So the question for anything added later is not *may a card write?* — that is
-settled — but *does this control bind to something mechanical?* The option buttons and the rewrite
-chip do; that is why both are on dialog cards only.
+settled — but *does this control bind to something mechanical?* The option buttons do, and they are
+the only control on a dialog card. The prose text box does not, and § Answering a prose item is what
+that costs and what is done about it.
 
 ---
 
@@ -184,125 +191,211 @@ happened. This panel's composition function cannot reach the decision record at 
 
 ## The design
 
+**This section was rewritten after GPT Sol's plan review returned *not fit to build*.** What it
+found is recorded in § What the review changed, and every claim here is traceable to one of its
+numbers.
+
+### What can actually be answered, and where — the constraint everything else follows from
+
+The plan's first draft offered a text box on every card and a canned "rewrite this" chip on dialog
+cards. **Neither can work, and the reason is one function.** `sendMessage` in
+[`steer.ts`](../../tools/fleet/steer.ts) reads the screen and refuses:
+
+```
+case "dialog":
+  return no("pane-is-asking",
+    `pane ${target.paneId} is asking a question, and a message typed at one would answer it`);
+```
+
+`empty-input` is the only surface it proceeds on. So **free text cannot reach a session while a
+dialog is open** — which is exactly when a dialog card is on screen. Verified in the source, and
+verified again downstream: `queue.ts` grades a dialog-parked session `later` rather than `never`, so
+a *queued* message drains only once the dialog is gone. There is no path, immediate or deferred, by
+which words reach a session parked on a menu.
+
+That is not a limitation to work around. It is the machine telling us the truth about the two cases,
+and the design becomes narrower and better for taking it:
+
+| Card | Pane is at | Controls | Route |
+|---|---|---|---|
+| **dialog** | a conversation-gate dialog | **one button per option** | `POST /api/steer/answer` |
+| **prose** | an empty input box | **a text box and a microphone** | `POST /api/steer/message` |
+
+Which maps exactly onto what Greg asked for — *"if they're multiple choice, let me click, but also
+type and use voice dictation"* — with the two halves landing on the two kinds of card rather than
+both on every card. `answerHere` as a separate axis is deleted: **the capability lives inside the
+arm**, so *prose + option buttons* and *dialog + text box* are states the compiler refuses rather
+than states a renderer has to avoid (Sol P1-2).
+
 ### The join, which is the one idea in this plan
 
-There are two readings of the same fact and they are **not interchangeable**:
+Two observations of the same session, and the first draft joined them on `sessionId` alone. Sol's
+P0-1 is that this **attaches one question's age and consequence to another question's buttons** —
+the inbox may hold dialog A while the row holds dialog B, and the answer route's `sameQuestion`
+proves only that B is still on the pane when clicked, never that the ranking belonged to B.
+
+**The identity to join on already exists and is already on the wire.** `AttentionItem.id` is
+`group.key`, and the producer says so in a comment: *"The id is the QUESTION's, not the session's."*
+For a dialog it is `dialogFingerprint(q)` — `dialog:${q.material.fingerprint}` where the material was
+read, else a base64 of the prompt and the option labels. And `material.fingerprint` is minted by
+[`pane.ts`](../../tools/fleet/pane.ts), which is **this side of the fence**: the producer is
+fingerprinting with our parser's output, so re-deriving the same string in `tools/fleet/` is four
+lines over inputs we already own.
 
 ```
-  the attention inbox                      the live payload row
-  (Overseer, ~2 min old, judged)           (collector, ~73 s old, mechanical)
-  ┌──────────────────────────┐             ┌──────────────────────────┐
-  │ AttentionItem            │             │ FleetRow                 │
-  │  sessionId  ────────────────── join ────── id                     │
-  │  waitingSince  (FIRST seen)│            │  question   (live)      │
-  │  kind (consequence)       │             │  rawQuestion (opaque)   │
-  │  evidence: dialog | prose │             │  paneId, panePid,       │
-  │  answerability            │             │  claudeSessionId        │
-  └──────────────────────────┘             └──────────────────────────┘
-        ↓ supplies                                ↓ supplies
-   WHY it matters, HOW LONG                  WHAT MAY BE CLICKED
-   it has waited, and the words              and the ADDRESS to click it at
+  the attention inbox                        the collected row
+  scannedAt (~2 min)                         collectedAt (~73 s)
+  ┌─────────────────────────┐                ┌─────────────────────────┐
+  │ AttentionItem           │                │ FleetRow                │
+  │  id  = dialog:<fp>  ────────┐   ┌────────── question.material.fp   │
+  │  waitingSince           │   │   │        │  rawQuestion (opaque)   │
+  │  kind (consequence)     │   ▼   ▼        │  paneId, panePid,       │
+  │  duplicates             │  same fp?      │  claudeSessionId        │
+  └─────────────────────────┘   │   │        └─────────────────────────┘
+                          yes ──┘   └── no
+                           │             │
+                  matched-dialog   observations-disagree
+             (ranked AND clickable)  (drawn, never merged)
 ```
 
-**The inbox says why it matters. The row says what may be clicked.** An option button is drawn from
-`FleetRow.question` and answered with `steerAnswerBody(row, index)`, which passes `row.rawQuestion`
-through untouched — never anything rebuilt from the inbox's copy, which is up to two minutes old and
-was reconstructed by a different parser. `steer-client.ts`'s header is emphatic about this and the
-reason bites later: the server is adding a field describing *what is actually being approved*, and a
-client that re-derived the object would drop it silently.
+**Drift here fails safe, which is what makes the second implementation acceptable** — normally this
+repo's answer to a second reader is *it will drift and a fixture cannot tell you it has*
+([fleet-dashboard-modes.md](../project/fleet-dashboard-modes.md#ask-this-before-you-design-the-panel-may-the-fleet-touch-what-your-tab-is-about)).
+Here a disagreement between the two fingerprint implementations produces `observations-disagree`,
+which withholds the ranking and keeps the buttons bound to the live row. Drift makes this tab more
+conservative, never less. The test is nevertheless the strong one that section demands: **import the
+producer's `dialogFingerprint` in the test** — legal, since `fleet-imports.test.ts` walks the graph
+rooted at `tools/`, not at `tests/` — and assert the two agree over the real fixture panes, so the
+day they part is the day a test goes red.
 
-Consequences, each of which is a rule the code will hold:
+**Neither clock is assumed newer.** The first draft called the row "live" and the inbox "~2 minutes
+old", and Sol is right that this is not guaranteed: `scannedAt` and `collectedAt` fail independently,
+and either can lead. So both are carried, both are drawn, and **`dialog-gone` is not inferred from
+the row's silence** — that arm is deleted. An inbox dialog with no matching row question is
+`observations-disagree` when the row observation is newer, and *"the inbox saw this after our last
+collection"* when it is not.
 
-- An inbox item whose session has no row in this payload is **not dropped** — it is drawn without
-  option buttons and with a line saying the row could not be found. Dropping it would turn a join
-  failure into a quiet reduction of the count Greg is reading.
-- An inbox item that says `dialog` but whose row carries no live question gets **no buttons**, and
-  says so: *the dialog it was parked on is no longer on the pane*. That is the ghost-prompt and
-  moved-on case, refused at the surface as well as at the server.
-- A row with a live question and **no** inbox item still appears. The inbox is a ~2-minute judgement
-  and a dialog that opened forty seconds ago is genuinely waiting; leaving it out would make the
-  list's freshness the Overseer's cadence rather than the collector's. It is drawn with
-  `kind: "other"` and no waiting-since from the inbox.
+### The item arms
+
+One arm per kind of item, each carrying only what it can support (Sol P1-2). Final wording in
+Stage 1; the shape is settled:
+
+- **`matched-dialog`** — the inbox and the row agree by fingerprint. Ranked, aged, and **clickable**:
+  one button per option, answered with `steerAnswerBody(row, index)`, which passes `row.rawQuestion`
+  through untouched. Carries the **material** as well as the prompt and options — Sol P1-2, and it is
+  the finding with the sharpest edge, because `sameMaterial` refuses an `unreadable` material against
+  *anything, including another unreadable*, so an item whose material could not be read is one whose
+  buttons are guaranteed to be refused. Such an item is drawn **without buttons and with the reason**,
+  rather than with controls that cannot work.
+- **`row-dialog`** — a dialog on the pane that the inbox has not ranked. **Admitted only when
+  `question.gate.kind === "conversation"`** (Sol P1-3, and it is the one that would have shipped a
+  real defect): the producer *deliberately* excludes permission-class dialogs — `grantsPermission` in
+  `attention-pass.ts` counts them into `permissionDialogs` and makes no item — because
+  [a permission dialog is a launcher regression, not a question for Greg](../project/overseer.md).
+  The first draft would have published every one of them into "needed from me" wearing a fabricated
+  `kind: "other"`. **No `AttentionKind` is ever synthesised**; unranked is its own state.
+- **`attention-prose`** — the inbox's inferred prose item, with the row at an empty input box. Words
+  only. The excerpt is drawn **above** the box, at full size, because it is the thing Greg must check
+  before he answers.
+- **`observations-disagree`** — both sides have something and they are not the same thing. Drawn,
+  never merged, never silently resolved to one side. Both observations and both clocks on the card.
+- **`attention-item-without-row`** — the inbox has an item and no row in this payload carries it.
+  Drawn without controls. Never dropped: a join failure must not quietly reduce the count Greg reads.
+
+**Duplicates are kept** (Sol P1-4). `AttentionItem.duplicates` is other sessions parked on the same
+question, and dropping the field would hide blocked sessions. **One grouped card listing every
+waiting session**, with the controls targeting the named primary explicitly — *"Answering sends to
+`fb2p-quotes`; three other sessions are waiting on the same question."* Fan-out answering stays out
+of v1, but the sessions are visible, which is the part that was going to be lost.
+
+**Card state is keyed by session identity plus question identity, never by `AttentionItem.id`**
+(Sol P0-2, second half). That id is the *group's*, and the primary session changes when the previous
+primary disappears — so a draft begun for session A could stay mounted while the card starts
+targeting session B, and the server would verify B and return a green receipt. Any change to either
+identity discards the draft and the receipt rather than carrying them across.
+
+### Answering a prose item: what is guarded, and what is accepted
+
+Sol's P0-2 is that the prose text box still violates `AttentionPanel`'s agreement (a): the free-text
+send binds to a *destination row*, not to the *excerpt that caused the card to exist*, and nothing
+verifies that an agent asked anything at all. **This is partially accepted and partially overruled,
+and the disagreement goes to the Overseer rather than past it** (the brief's rule for an overruled
+P0).
+
+**Accepted, and built:**
+
+- The draft-keying fix above, which is a real defect and was going to ship.
+- A **local staleness refusal**: the card will not send if the row's status is no longer the one the
+  item was composed against. A session that has started working, or opened a dialog, since the card
+  was drawn is one whose prose question is no longer on screen — and that is checkable from the
+  payload, without a route change.
+- The excerpt drawn at full size above the box, so the premise is on screen with the control.
+
+**Overruled, with the reason stated:** Sol's remedy is either read-only prose cards or a new guarded
+prose-answer operation that re-captures and compares a tail fingerprint at send time. Read-only prose
+guts the feature — prose is *ten of the fifteen* genuinely-waiting sessions measured on 2026-09-08,
+and *"let me type and use voice dictation"* is half of what Greg asked for. The guarded operation is
+the right long-term answer and is **not this session's to build**: it is a new write path in
+`steer.ts` and `routes-steer.ts`, which the brief puts outside this file set.
+
+The residual risk, stated plainly rather than argued away: **if the classifier presents Greg's own
+words back as an agent's question, this card invites him to reply to nobody.** What that costs is one
+confusing user turn in an agent's context and one of Greg's answers — recoverable, visible, and not
+in the same class as answering a permission dialog, which remains impossible here by construction.
+What would close it is the tail-fingerprint guard, and it is carried in the debrief as work this
+session identified and did not own.
 
 ### Where the composition happens: the server
 
 Pure function, `tools/fleet/questions.ts`, called from `state.ts`'s `statePayload` beside the
-attention feed. The precedent is `QueueRow.ready`/`why`:
+attention feed, off the **same single checkpoint read**. The precedent is `QueueRow.ready`/`why`:
 
 > **`ready` and `why` are computed on the SERVER**, and that is not an optimisation. […] a second
 > implementation of it in browser TypeScript would be a second answer to *"may this go out?"*
 
-Same argument. *Is this answerable, and is it well-formed?* must have one answer.
+**It is I/O-free but it is not free**, which the first draft got wrong and Sol measured (P2-1). It
+adds no capture, subprocess, file read or model call — but a pushed field would duplicate data
+already on the payload, and prose evidence is capped at 4,000 characters, so twenty prose items is on
+the order of **80 KB before JSON overhead, every cycle, to every reader**. Not a problem at ~20
+sessions; not "nothing" either. So:
 
-**It costs nothing new on the refresh path.** The composition is pure over two things `statePayload`
-already has in hand — `deps.snapshot`'s rows and `checkpoint.attention` from the single checkpoint
-read. No file is opened, no session is fanned out over, no subprocess is spawned. That is the rule
-in [fleet-dashboard-modes.md § Where the panel's data comes from](../project/fleet-dashboard-modes.md#where-the-panels-data-comes-from-the-end-to-end-path)
-satisfied by construction rather than by measurement.
+- the composition publishes **a reconciliation, not a copy**: source references, the match or
+  conflict decision, and the clocks — with the panel rendering the `attention` and row records that
+  are already on the payload beside it;
+- and Stage 1 adds a **payload-size regression fixture**, so the day this stops being cheap is a day
+  a test says so rather than a day a phone gets slow.
 
-The field goes on the wire as a **required** key, per that doc and
-`tests/fleet-compile-guards.test.ts`.
+### What the empty list has to prove before it may reassure
 
-### The wire type
-
-One additive end block in `tools/fleet/wire.ts`. Sketch (final wording in Stage 1):
+Sol's P0-3, and it is the finding that most changes the type. The first draft's `list` arm could
+render `items: []` as *nothing needs you* without establishing any of: that a collection completed,
+that no rows were dropped, that the snapshot is fresh, that the checkpoint and the scan are fresh,
+that the scan judged every session, or that the client parsed the new field at all.
 
 ```ts
-/** Why we are showing this, and what may be done about it. Named after what was OBSERVED. */
-export type QuestionAsk =
-  /** A live dialog on the pane right now. Mechanical. `optionCount` is what may be clicked. */
-  | { kind: "dialog"; question: string; options: readonly string[] }
-  /** The turn ended handing Greg a decision in prose. INFERRED — it may be wrong. */
-  | { kind: "prose"; excerpt: string; why: string }
-  /** The inbox says a dialog, and the row no longer carries one. NOT a dialog with zero options. */
-  | { kind: "dialog-gone"; question: string; why: string }
-  /** We have an item and cannot say what it is asking. Never rendered as an empty question. */
-  | { kind: "unreadable"; why: string };
-
-/** Whether the option buttons may be drawn, and if not, whose refusal it is. */
-export type QuestionAnswerHere =
-  | { kind: "options"; count: number }
-  | { kind: "words-only"; why: string }
-  | { kind: "not-addressable"; why: string };
-
-export type QuestionItem = {
-  /** Stable across snapshots, so a card cannot move under a finger. */
-  id: string;
-  sessionId: string;
-  sessionName: string;
-  /** From the inbox when there is one. `null` means we only know it is waiting NOW. */
-  waitingSince: string | null;
-  /** What the work is for — the session's description, or the plan it names. */
-  about: string | null;
-  kind: AttentionKind;
-  ask: QuestionAsk;
-  answerHere: QuestionAnswerHere;
-};
-
 export type QuestionsView =
-  | { kind: "list"; items: readonly QuestionItem[]; /* …the inbox's positive controls… */ }
-  | { kind: "inbox-unavailable"; why: string; rowsOnly: readonly QuestionItem[] }
-  | { kind: "not-asked" };
+  /** Every source was observed and complete. THE ONLY ARM THAT MAY SAY "nothing needs you". */
+  | { kind: "complete"; items: readonly QuestionItem[]; observed: QuestionsObserved }
+  /** Some items, and a non-empty list of what we could not establish. */
+  | { kind: "partial"; items: readonly QuestionItem[]; gaps: readonly [QuestionGap, ...QuestionGap[]] }
+  /** Nothing was observed. Never an empty list. */
+  | { kind: "not-observed"; cause: QuestionsNotObserved };
 ```
 
-Four things about that shape are the point of it, and each is an honest arm the brief asked for:
+`gaps` is a non-empty tuple, so `partial` cannot be constructed without saying what is missing, and
+each gap keeps its **exact** cause rather than being folded into one word: checkpoint absent,
+checkpoint unreadable, list `unknown`, the client's own field unreadable, rows never collected, rows
+dropped, source stale. `inbox-unavailable` and `rowsOnly` are gone — Sol's point that `rowsOnly`
+"gives the shape of a complete answer" is right, and the replacement is a `partial` whose copy says
+what it is: *"Live-dialog observations only — prose questions and ranking are unavailable."*
 
-- **`dialog-gone` is a separate arm from `dialog` with no options.** `types.ts` already refuses a
-  `dialog` with an empty question or empty options at the parse boundary, for exactly this reason:
-  *"A `dialog` with no question and no options must not cross into the renderer wearing the first
-  arm's name."* This arm is where such an item goes instead of vanishing.
-- **`answerHere` is separate from `ask`.** *We know what it is asking* and *you may click it from
-  here* are two facts, and the second can be false for reasons that have nothing to do with the
-  first — a row with no `paneId`, no `claudeSessionId`, or a permission-class gate. Merging them
-  would make "no buttons" indistinguishable from "no question".
-- **`inbox-unavailable` still carries `rowsOnly`.** When the Overseer's judgement is missing, live
-  dialogs are still observable facts and are still shown — with the list saying plainly that the
-  ranking and the prose items are missing. A total blank would be the worst outcome of the
-  Overseer's own outage.
-- **`waitingSince: null` is expressible.** A row-only item genuinely does not know when it started
-  waiting, and inventing "now" would draw a fresh-looking card over an unknown age.
+### What v1 leaves out
 
-### The rule: enforcement is one tap, not a machine's verdict
+- **Fan-out answering** across `duplicates`. The sessions are shown; answering targets one.
+- **The rewrite chip.** § The rule.
+- Nothing else. **The queue pointer is no longer droppable** — § The rule's last paragraph.
+
+### The rule, and why no detector is built
 
 The brief asked for a detector — *an item whose question lacks goal/background/options is shown as
 not yet answerable* — and told this session to settle its strictness with Fable. **Fable's answer
@@ -337,28 +430,18 @@ is the one that turns a nuisance into a defect:
 > again, the menu reopens, the detector flags it again. That is a loop […] And each false send-back
 > teaches Greg the control is wrong, after which he stops using it when it's right.
 
-**What is built instead.** The rule is enforced at the surface, in one tap, by the only judge whose
-verdict is correct by definition — Greg, after he has failed to understand the menu. Every **dialog**
-card carries a canned reply chip, *"Rewrite this so I can choose"*, which sends the AGENTS.md
-sentence to that session **as the Overseer** (`speaker: "overseer"`, the existing prefix) — not as
-Greg, because nobody may mint his authority for a sentence he did not write, which is A12.
-
-Its value over typing the same thing is real and small, and worth being honest about: one tap on a
-phone, and it sends the canonical wording rather than whatever "explain it properly" comes out of
-dictation. Its cost is one chip — **no wire arm, no threshold, no new state, and no false-positive
-loop.** The `QuestionRule` type this plan's first draft proposed is deleted rather than defaulted.
-
-**The chip is on dialog cards only in v1.** `AttentionPanel`'s agreement (a) exists because a prose
-card may quote Greg's own sentence back at him, and a chip on such a card could tell a session to
-rewrite a question it never asked. Dialog evidence is mechanical; prose evidence is inferred. It
-moves to prose cards once answering-in-place on prose has been used for a while and that bug has
-stayed dead.
+**So no detector is built, and the `QuestionRule` type this plan's first draft proposed is deleted
+rather than defaulted.** Fable's proposed replacement — enforcement in one tap by the only judge
+whose verdict is correct by definition, Greg, after he has failed to understand the menu — was a
+canned reply chip on every dialog card. **That cannot be sent either**, which Sol found and this
+session confirmed; the next section is why, and it is a better finding than the chip would have been
+a feature.
 
 **And the words *"not yet answerable"* are dropped from the design**, Fable's point and a good one:
 the item *is* answerable — Greg may perfectly well understand a three-word menu whose context he set
 five minutes ago. *Not answerable* is a claim about him, and this page does not get to make it.
 
-#### If this is overruled
+#### If the detector decision is overruled
 
 Recorded here so a reviewer can overrule it cheaply rather than by re-deriving it. The **only**
 defensible detector is one that reports an *absence in the captured screen* rather than a length: the
@@ -367,7 +450,31 @@ the gate `conversation`), it has ≥2 options, **and** the captured lines above 
 agent prose at all. That arm is named `no-explanation-on-screen` — never `bare-menu` or
 `falls-short` — because it says what was seen and cannot say the agent gave none. It is never run on
 prose items: a judgement stacked on an inference is where the *quoted Greg back at himself* bug came
-from.
+from. Sol reviewed the decision independently and agreed with it.
+
+### The chip cannot be built, and that is a finding worth carrying
+
+Fable's replacement for the detector was a canned *"Rewrite this so I can choose"* chip on dialog
+cards. **Sol found that it cannot be sent, and the finding survives checking:** `sendMessage` refuses
+a pane showing a dialog with `pane-is-asking`, and `queue.ts` grades such a session `later`, so a
+queued copy drains only once the dialog is gone — that is, only once Greg has already answered the
+menu he could not understand. The chip is refused exactly when it is relevant.
+
+So **v1 ships no chip**, and the honest statement of what that means is worth more than the control
+was:
+
+> **The AGENTS.md rule cannot currently be enforced from the dashboard for a dialog question.** If an
+> agent opens a menu Greg cannot act on, there is no way — from the phone, immediately or deferred —
+> to ask it to explain itself. His only routes are to answer the menu anyway or to go to a terminal.
+
+That goes to the Overseer in the debrief. It is not a gap in this tab; it is a gap in the fleet's
+write vocabulary, and the shape of the fix is a new operation that leaves a dialog safely and then
+sends — which is a `steer.ts` change and outside this session's file set.
+
+A chip **on prose cards** would work, since the message route accepts an empty input box. It is not
+built: it would be a second way to say what the text box on that same card already says, and § Prefer
+simple says not to add one. If Greg wants a one-tap version later it is a `SPOKEN` vocabulary entry,
+reviewed once, rather than a string assembled at a call site.
 
 ### No badge, in either direction
 
@@ -378,21 +485,24 @@ step it wraps and nothing above it"* — and the second is the permanent caveat 
 `sessionsUnreadable` is deliberately rendered only when non-zero, because a caveat on every card is
 read as noise within a day. That is A17, healthy operation spending most of its time alarming.
 
-### What v1 leaves out, named rather than discovered later
+### The queued ideas waiting on Greg, which are acceptance-critical rather than droppable
 
-- **Queue rows waiting on Greg.** `QueueItemWait`'s `needs-greg` arm is genuinely "needed from me",
-  and it is **not answerable here**: `overseer-queue.ts` refuses writers other than the Overseer by
-  design, so any control on this card would be a lie about who may write. Stage 3 adds a
-  **pointer with a real count**, fetched through the seam the Queued ideas tab already has
-  (`queue-client.ts`) on entering the tab — an on-demand read, not a new field on the refresh path.
-  If Stage 3 runs out of budget this is the thing that is dropped, and the tab ships without it
-  rather than with a countless link, because a pointer that cannot say whether anything is behind it
-  fails Greg's own question.
-- **Answering several sessions at once.** `AttentionItem.duplicates` exists and *answer once, apply
-  to all* is a real want. It is a fan-out write, it is the shape that goes wrong at scale, and it is
-  not what was asked for. Named here so it is a decision rather than an omission.
-- **Editing the ranking.** The producer sorts and this must not re-sort —
-  `AttentionPanel`'s agreement (b), which is not superseded.
+`QueueItemWait`'s `needs-greg` arm is genuinely *needed from me*, and it is **not answerable here**:
+`overseer-queue.ts` refuses writers other than the Overseer by design, so any control on such a card
+would be a lie about who may write. The first draft made a counted pointer to them the droppable part
+of Stage 3.
+
+**Sol's P1-5 is that this makes the tab's own promise knowingly false**, and it is right. A tab that
+answers *"is anything needed from me?"* while silently excluding a whole class of things needed from
+him is worse than one that does not exist, because he will stop checking the other place. Two ways
+out, and this plan takes the first:
+
+1. **Make the counted pointer acceptance-critical.** One fetch on entering the tab, through the seam
+   `queue-client.ts` already exposes — an on-demand read, not a new field on the refresh path. If it
+   cannot be shipped, the tab does not ship.
+2. Rename the tab *Agent questions* and say in its own copy that queued authority requests are
+   excluded. Rejected: it answers a narrower question than the one Greg asked, and the dock is not
+   short of tabs that answer narrow questions.
 
 ---
 
@@ -462,34 +572,58 @@ writes the task prompts, runs the tests and the typecheck, reviews, and commits.
 
 ### Stage 1 — the contract and the composition (server side, all pure)
 
-- [ ] `wire.ts`: one additive end block, the types above, each arm's comment saying what was
-      *observed*.
-- [ ] `tools/fleet/questions.ts`: `composeQuestions(rows, attentionFeed) → QuestionsView`, pure, no
-      I/O, no clock beyond one injected `now`.
+- [ ] `wire.ts`: one additive end block — `QuestionItem`'s five arms, `QuestionsView`'s three, the
+      gap and observed vocabularies. Every arm's name and comment says what was **observed**.
+- [ ] `tools/fleet/questions.ts`: `composeQuestions(rows, attentionFeed, collectedAt) →
+      QuestionsView`, pure, no I/O, no clock beyond one injected `now`. Includes the re-derived
+      dialog fingerprint.
 - [ ] Wired into `state.ts` beside `attention`, off the **same single checkpoint read**.
-- [ ] `web/src/types.ts`: the client's parser and its own fifth arm for *this payload's field was
-      present and unreadable*.
-- [ ] Tests, each **watched red first**: the join in both directions; `dialog-gone`; a row with no
-      inbox item; an inbox item with no row; every silence arm; the detector's flag and its silence;
-      and the composition asserted through the same `statePayload` composition `server.ts` calls,
-      never a graph the test rebuilds.
+- [ ] `web/src/types.ts`: the client's parser, and its own arm for *this payload's field was present
+      and unreadable* — which is a `gap`, not a silence.
+- [ ] A **payload-size regression fixture** (Sol P2-1).
+
+Tests, each **watched red first**. Sol's P2-2 is that the first draft's list omitted every dangerous
+case, so it is replaced by his rather than extended:
+
+- [ ] dialog A in the inbox against dialog B on the row → `observations-disagree`, never a merge;
+- [ ] prose in the inbox against a dialog on the row, and the reverse;
+- [ ] **either source newer**, both ways round, with `dialog-gone` never inferred;
+- [ ] a **permission**-gate and an **unknown**-gate row-only question → admitted by neither, and a
+      malformed gate likewise;
+- [ ] material `unreadable` → drawn without buttons, with the reason;
+- [ ] an inbox item with no row; a row with no inbox item;
+- [ ] every `gap` cause, and `not-observed`; and **a genuinely empty but partial observation**, which
+      must not say *nothing needs you*;
+- [ ] the two fingerprint implementations agreed field by field against the real fixture panes, by
+      importing the producer's `dialogFingerprint` in the test;
+- [ ] the composition asserted through the same `statePayload` composition `server.ts` calls, never
+      a graph the test rebuilds.
 
 **Delegated to Codex** (`gpt-5.6-sol`, `--sandbox workspace-write`). Status: *not started.*
 
 ### Stage 2 — the panel, the answering, and the registrations
 
 - [ ] `QuestionsPanel.tsx`, modelled on `MessageOverseerCard.tsx`: per item, who is asking, how long
-      it has waited, what the work is for, then the question; option buttons where `answerHere` is
-      `options`; a text box with `DictationControl` on every item; `SteerReceipt` for the outcome.
+      it has waited, what the work is for, then the question; option buttons on a `matched-dialog`
+      or a `row-dialog`; a text box with `DictationControl` on an `attention-prose`; `SteerReceipt`
+      for the outcome. One arm per item kind, with a `never` default.
 - [ ] The submit rule at the action boundary, not only on the button: `dictate.sendBlocked` guards
       the send, or Enter mid-sentence sends the rough live guesses (or, on Safari and Firefox,
       nothing that was said).
-- [ ] The *"Rewrite this so I can choose"* chip, `speaker: "overseer"`, **on dialog cards only**.
+- [ ] Card state keyed by **session identity plus question identity**, never `AttentionItem.id`,
+      and discarded when either changes (Sol P0-2).
+- [ ] The **local staleness refusal** on prose cards: no send once the row's status has moved off the
+      one the item was composed against.
 - [ ] The six registrations, plus the custom-property fix if agreed.
 - [ ] The four tests from
       [§ The test](../project/fleet-dashboard-modes.md#the-test), driven through `SteerApi`'s seam
-      rather than a stub of `fetch`; and one more that is this tab's own: **a click on an option
-      sends the row's `rawQuestion`, verbatim, and refuses when the row no longer carries one.**
+      rather than a stub of `fetch`; and three that are this tab's own: **a click on an option sends
+      the row's `rawQuestion` verbatim and refuses when the row no longer carries one**; **a draft
+      does not survive a change of primary session**; and **a successful, a `partial` and an
+      `unknown` send each leave the card's controls in the right state** rather than inviting a
+      retry that would append to half-sent text.
+- [ ] `answeringEnabled` in both its `false` and its not-reported readings, drawn as two different
+      things.
 
 **Delegated to Codex.** Status: *not started.*
 
@@ -501,13 +635,51 @@ writes the task prompts, runs the tests and the typecheck, reviews, and commits.
 - [ ] **The screenshots are looked at by this session, not only reported on.** Delegated
       descriptions of a layout are wrong often enough to distrust on their own.
 - [ ] Every state from § 3 above forced and looked at individually — including each silence.
-- [ ] The queue pointer with a real count, through `queue-client.ts`'s seam. **Droppable**; if
-      dropped, said so in the debrief.
+- [ ] The queue pointer with a real count, through `queue-client.ts`'s seam. **Acceptance-critical**
+      (Sol P1-5): without it the tab's own promise is knowingly false, so if it cannot ship, the tab
+      does not.
 - [ ] `docs/project/` — a line under the entry point that owns it, and this plan kept matching the
       code.
 
 Status: *not started.*
 
+---
+
+## What the review changed
+
+GPT Sol reviewed the first draft on 2026-09-09 and returned **not fit to build** —
+[`260909e-questions-mode-plan-review-sol-r1.md`](260909e-questions-mode-plan-review-sol-r1.md).
+The verdict was right and the plan above is the revision. Every finding was checked in the source
+rather than accepted on the review's word, per
+[an unchecked brief claim becomes a source comment](../reusable/silent-success.md); the three that
+changed the design most were each confirmed, and one was found to be understated.
+
+| # | The finding | Checked | Outcome |
+|---|---|---|---|
+| P0-1 | Joining on `sessionId` attaches one question's ranking to another's buttons; and neither clock is guaranteed newer | `steer.ts` § `sameQuestion`; `attention.ts:268` | **Accepted.** Join on the question fingerprint, which was already on the wire as `AttentionItem.id`; `dialog-gone` deleted |
+| P0-2 | Prose free text binds to a row, not to the excerpt; and card state keyed by the grouped `AttentionItem.id` can target the wrong session | `attention.ts:257` | **Split.** Draft-keying accepted and fixed; read-only prose overruled — § Answering a prose item |
+| P0-3 | `items: []` could reassure without establishing anything | — | **Accepted.** `complete` / `partial` / `not-observed`, with a non-empty `gaps` tuple |
+| P1-1 | The text box and the rewrite chip cannot be sent while a dialog is open | `steer.ts:1351`, `queue.ts:222` | **Accepted, and understated.** Also true of a *queued* copy, so there is no deferred path either — § The chip cannot be built |
+| P1-2 | `ask` × `answerHere` is an invalid Cartesian product; the dialog arm omits `material` | `web/src/types.ts:137`, `steer.ts` § `sameMaterial` | **Accepted.** One arm per item kind, capability inside the arm, material carried |
+| P1-3 | A row question with no inbox item may be a *deliberately excluded* permission dialog | `attention-pass.ts:163` | **Accepted.** This would have shipped a real defect: permission dialogs republished into "needed from me" wearing a fabricated `kind` |
+| P1-4 | `duplicates` dropped, hiding other blocked sessions | — | **Accepted.** One grouped card listing every waiting session |
+| P1-5 | A droppable queue pointer makes the tab's promise knowingly false | — | **Accepted.** Acceptance-critical |
+| P2-1 | "Costs nothing" is false — ~80 KB of duplicated prose per cycle | `state.ts:175` | **Accepted.** Publish a reconciliation rather than a copy, plus a size fixture |
+| P2-2 | The test list contradicted the detector decision and missed every dangerous case | — | **Accepted.** Stage 1's list replaced with Sol's |
+
+Sol independently agreed that **dropping the automatic rule detector is correct**, having read
+`dialogText()` itself. That is the one place where two models and one human reading of the source
+converged, and it is the decision this plan was least sure of going in.
+
+### The one finding this plan overrules
+
+**P0-2's remedy, not its diagnosis.** Sol would make prose cards read-only, or gate them behind a new
+tail-fingerprint operation. The diagnosis is accepted in full and three of its consequences are
+built; the remedy is refused because read-only prose removes half of what Greg asked for and *ten of
+the fifteen* genuinely-waiting sessions, and because the guarded operation is a `steer.ts` write path
+outside this session's file set. The reasoning, the residual risk and what would close it are in
+§ Answering a prose item, and the disagreement goes to the Overseer in the debrief rather than past
+it — the brief's rule for an overruled P0.
 ---
 
 ## The simpler option this passed over
@@ -544,11 +716,24 @@ a filter would make *what is blocking* and *what was decided in my name* one pil
 - **Session `decisions-mode`**, 2026-09-09, by `SendMessage`: § The boundary, the dock arithmetic,
   and the ordering on `tailwind.css`. Their § The boundary is the authority for the split and is
   cited rather than restated.
-- **GPT Sol** reviews this plan before Stage 1, and the built code at the end of every stage.
+- **GPT Sol**, round one, 2026-09-09 —
+  [`260909e-questions-mode-plan-review-sol-r1.md`](260909e-questions-mode-plan-review-sol-r1.md).
+  Verdict *not fit to build*; § What the review changed. Round two follows this revision, and
+  the built code goes back at the end of every stage.
 
 ## Open, and going to Greg rather than being decided here
 
 - **The dock's shape at ten tabs** — joint with `decisions-mode`, drafted by them (§ Where the tab
   goes).
-- Nothing else yet. Anything that outlives this branch and turns up during the stages is added here
-  and carried in the debrief as *needs Greg*, per the brief.
+- **There is no way to ask a session to rewrite a question Greg cannot act on.** The AGENTS.md rule
+  landed this morning and the dashboard cannot enforce it for a dialog question, because the message
+  route refuses a pane showing a dialog and a queued copy drains only after he has answered. His
+  routes are to answer the menu anyway or to go to a terminal. Closing it needs a new fleet write
+  operation — leave the dialog safely, then send — which is a `steer.ts` change outside this
+  session's file set. **To the Overseer**, since it is a fleet capability rather than a product call.
+- **The prose-answer guard this plan overrules Sol on.** A tail fingerprint sent with the message and
+  re-checked against a fresh capture would close the residual risk in § Answering a prose item. Same
+  file set, same reason. **To the Overseer**, with Sol's finding attached rather than summarised.
+
+Anything else that outlives this branch and turns up during the stages is added here and carried in
+the debrief as *needs Greg*, per the brief.
